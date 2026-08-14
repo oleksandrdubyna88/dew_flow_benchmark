@@ -96,7 +96,7 @@ public sealed class CliContractTests
     {
         var output = new StringWriter();
         var error = new StringWriter();
-        var code = Bench.Cli.Cli.Run(args, output, error);
+        var code = Bench.Cli.Program.Run(args, output, error);
         return (code, output.ToString(), error.ToString());
     }
 

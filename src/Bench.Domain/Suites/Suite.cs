@@ -37,7 +37,7 @@ public sealed record Suite
     public Outcome<Suite> With(Question question) =>
         IsFrozen
             ? Outcome<Suite>.Failure($"suite {Id} v{Version} is frozen — call Amend() to start version {Version + 1}")
-            : Outcome<Suite>.Success(this with { Questions = [.. Questions, question] });
+            : Outcome<Suite>.Success(new Suite(Id, Version, [.. Questions, question], frozen: false, hash: string.Empty));
 
     /// <summary>Freezes the draft as version <c>Version + 1</c> and stamps its content hash.</summary>
     public Outcome<Suite> Freeze()

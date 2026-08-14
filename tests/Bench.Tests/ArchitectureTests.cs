@@ -13,7 +13,7 @@ public sealed class ArchitectureTests
     public void Domain_references_nothing_beyond_the_runtime()
     {
         Referenced("Bench.Domain.dll").Should().OnlyContain(
-            IsRuntime,
+            r => IsRuntime(r),
             "Bench.Domain depends on NOTHING — that is the whole point of the layer");
     }
 
@@ -21,7 +21,7 @@ public sealed class ArchitectureTests
     public void Contracts_reference_nothing_beyond_the_runtime()
     {
         Referenced("Bench.Contracts.dll").Should().OnlyContain(
-            IsRuntime,
+            r => IsRuntime(r),
             "a wire contract that can reference the domain is a contract that leaks it");
     }
 

@@ -1,0 +1,29 @@
+{
+  "id": "demo",
+  "questions": [
+    {
+      "id": "order-total",
+      "prompt": "Where is an order's total computed, and what does it do about discounts?",
+      "referenceAnswer": "OrderService.Total sums the lines and then applies the discount policy.",
+      "expectations": [
+        { "kind": "Member", "file": "src/Orders/OrderService.cs", "member": "OrderService.Total", "start": 42, "end": 68 },
+        { "kind": "File", "file": "src/Orders/DiscountPolicy.cs", "required": false }
+      ]
+    },
+    {
+      "id": "cache-invalidation",
+      "prompt": "What invalidates the read cache, and is it per-tenant?",
+      "expectations": [
+        { "kind": "Member", "file": "src/Caching/ReadCache.cs", "member": "ReadCache.Invalidate", "start": 15, "end": 31 },
+        { "kind": "AnswerContains", "text": "tenant" }
+      ]
+    },
+    {
+      "id": "startup-sweep",
+      "prompt": "How does the system recover work that was in flight when the process died?",
+      "expectations": [
+        { "kind": "Member", "file": "src/Hosting/StartupSweep.cs", "member": "StartupSweep.RunAsync", "start": 20, "end": 55 }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ using Bench.Domain;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
+using Bench.Domain.Trace;
 
 namespace Bench.Application;
 
