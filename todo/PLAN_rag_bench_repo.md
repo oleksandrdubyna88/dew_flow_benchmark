@@ -41,7 +41,7 @@ a lost session, or real money. They are carried as *specification*, not as files
 |---|---|---|
 | Leg order must balance across the whole matrix | `repeatIndex % 2` alone is 2:1 at odd repeat counts (the old `BenchmarkOrderPlan`) | order planning is a domain concern with its own tests, not a loop index |
 | A refused tool call ≠ an executed one | a read-only guarantee was asserted for months and was false; `is_error` carried the reason while the ledger read only the result's LENGTH | every tool observation records **outcome**, not just size |
-| An engine can index its own answer keys | defect 9 of the v6 series; runtime path lists policed it | see §5.4 — the problem changes shape here, it does not disappear |
+| An engine can index its own answer keys | defect 9 of the v6 series; runtime path lists policed it | see §5.5 — the problem changes shape here, it does not disappear |
 | `n = 1` is not a result | repeat spread reached 4 points — *the same size as the effect*; repeated control legs of one configuration diverged 65 % on input tokens | the report refuses to rank configurations whose repeats overlap |
 | An unset model id is not "the local model" | an empty reranker `modelId` resolved to the SYSTEM DEFAULT `claude-opus-4-8` and would have sent ~100 reranks to a paid API inside a "$0 local" arm ([MEASURED_LESSONS §3](../research/MEASURED_LESSONS.md)) | unset is a **refusal**. Never a fallback, never a default |
 | A budget knob that never arrives | `CompactAtTokens` is a local-tool-loop knob that reached no CLI arm, so a whole degradation was misattributed to a flooded context window | every budget records the runtime that **accepted** it; unverified ⇒ the run is marked, not scored |
@@ -178,7 +178,49 @@ Tool time · model thinking · infrastructure wait (accelerator lease, queue, co
 enough: the existing stage instrument had to split `admit` — GPU-lease wait plus eviction — off from the rest
 precisely because a busy card otherwise reads as a slow model.
 
-### 5.4 Answer-key hygiene, in its new shape
+### 5.4 Tool-call telemetry, from the SERVER side
+
+The trace in §5.2 is what the harness sees, and the harness only ever sees its own runs. The MCP server
+sees something different and, in one respect, more valuable: **every call, including the ones no
+benchmark made.** Both vantage points are needed, and neither substitutes for the other.
+
+| | bench-side trace (§5.2) | server-side tool telemetry |
+|---|---|---|
+| covers | benchmark legs only | **all traffic**, benchmark and real sessions alike |
+| knows the prompt, the model's answer, its cost | yes | no |
+| knows server-side processing time, the payload it actually returned, which project it was scoped to | only by inference | **yes, exactly** |
+| survives the harness not being involved | no | yes |
+
+Every tool invocation is recorded with:
+
+- **which tool**, how many times, and against **which project / target** it was scoped;
+- **who called it** — runtime family (a Claude CLI session, a cloud model over an API, a local model)
+  **and which model specifically**. Where the transport does not carry that, it is recorded as *not
+  captured*, never guessed and never defaulted to the popular answer;
+- **what went in** — the arguments, in full where they fit a per-call byte budget and truncated with
+  the truncation recorded where they do not;
+- **what came out** — the payload's size always, its body within the budget, and the **outcome**
+  (answered / refused / error), because a refused call and an answered one are otherwise identical from
+  the outside, which is exactly how a read-only guarantee was once asserted for months and was false;
+- **tokens**, where the surface knows them — for a tool that embeds or reranks it does, for a pure file
+  read it does not, and the difference must be visible rather than rendered as zero;
+- **server-side processing time**, which is not the caller's latency: the wait for an accelerator lease
+  belongs to the third bucket of §5.3 and must not be folded into either.
+
+**This crosses a repository boundary and is a contract, not a feature this repository can ship alone.**
+The tool surface lives in `dew_flow_mcp` and the engine behind it in `dew_flow_rag_qln`; what belongs
+here is the schema, the ingestion port and the report. It has the same shape as the white-box trace
+question — define the contract, version it from v0, accept a black-box degradation when a server does
+not implement it — and it should reuse that versioning rather than invent a second one.
+
+Two things to get right at design time, both cheap now and expensive later. **Aggregate on a key that
+includes the caller and the engine**, or a mid-day switch of model or engine silently blends two
+populations into one row — an upstream system shipped daily aggregates without an engine column and
+then could not attribute a latency change to the switch that caused it. And **decide retention before
+the first write**: full arguments and payloads across all production traffic is the largest table in
+the system by an order of magnitude, so the budget belongs in the schema, not in a later clean-up job.
+
+### 5.5 Answer-key hygiene, in its new shape
 
 A separate repository does **not** retire this problem; it moves it. The suites now live outside the measured
 tree, which is a real structural win — but the **target repository may itself contain prior results**.
@@ -240,7 +282,13 @@ point: nothing of the kind existed before, and that is how the old coupling accu
 1. **Repository skeleton + CI + architecture guard**, mirroring the three existing `dew_flow_*` repos.
 2. **Domain types + the measurement contract** (§3) — suite freeze/hash and the commit-scoped expectation as
    the first tests.
-3. **Checkout cache** (§7) — everything downstream needs a pinned tree.
+3. ~~**Checkout cache** (§7)~~ — **DONE 2026-08-14.** `GitCheckoutProvider`: one bare mirror per url, one
+   worktree per commit, directory names from a hash of the url (a url is operator input, and a url pasted
+   into a path is how `../` gets a say), per-url lock, everything under one cache root. `ProcessRunner` is
+   the single launcher — exe + argv, never a shell string, timeout as a VALUE rather than an exception.
+   The read-only guarantee is proven rather than asserted: the guard test was watched failing after the
+   historical defect (checkout in place on the source) was deliberately reintroduced, and it failed on the
+   right line — the source's HEAD had moved.
 4. **CLI over an in-memory store**: create suite → run → report, with the exit-code contract. First
    end-to-end value, no database yet.
 5. **Postgres adapter** + durability (persist-before-enqueue, claim/settle, startup sweep).
@@ -278,6 +326,8 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 - [ ] The white-box contract is derived from a captured payload, is version-stamped, names its stages explicitly, and degrades to black-box on an unknown version; engines declare supported stages rather than the payload being generic.
 - [ ] *(separate, and later)* A live engine emits the funnel and it is persisted per question — the only item here that depends on an external owner (open question 3).
 - [ ] Hardware sampling is out-of-band, joined by timestamp, cannot fail a run; runs serialize on the accelerator.
+- [ ] Server-side tool telemetry (§5.4) has a versioned schema, an ingestion port and a report: per tool — count, project/target, caller runtime AND model, arguments in, payload out with its outcome, tokens where the surface knows them, server-side time. Unknown caller or unknown tokens render as *not captured*, never as a default or a zero.
+- [ ] Tool-telemetry aggregates key on caller and engine, so a mid-day switch cannot blend two populations into one row; retention is decided in the schema, not deferred.
 - [ ] Time is reported in three buckets; wait is never counted as thinking.
 - [ ] Caps exist per phase and per question; a cap hit is a terminal outcome.
 - [ ] Sampling is recorded as sent; every budget records the runtime that accepted it.
@@ -292,4 +342,5 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 2. **Who authors the ground truth at scale, and how.** Running thousands of tests is cheap; authoring them is not, and this is the real bottleneck of the stated horizon. No public repository-QA set can be borrowed — the surveyed ones are Python, and the only C# set found is patch-and-test rather than question-answering — so the METHODOLOGY is borrowed and the data is authored: pull request → gold answer → discrete facts, whose last step is what an `AnswerContains` expectation already is. Two properties belong on every question and are cheap to forget: a seed change newer than any plausible training cutoff, and a deliberate memorisation trap. Open: who does the authoring, at what rate, and with what review.
 3. **Who implements the white-box trace contract first, and when — no longer a blocker, but still open, and now on a weaker footing.** `dew_flow_rag_qln` is at skeleton stage, and the engine that already had a stage instrument is out of scope and is not touched — so there is no live emitter and, unlike the first draft of this plan, **no captured payload to derive the contract from either** (see §5.2). The contract, the port, a hand-authored fixture and the report columns still ship without an emitter, which keeps this off the critical path of build step 6. What is genuinely open: when QLN grows retrieval far enough to emit a funnel, and how much the provisional v0 contract has to change when it does. Until then no run carries a real funnel, and the DoD distinguishes the two states rather than blurring them.
 4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context in the embed text, and gating the description pass while every member still gets questions — three experiments carried over from the earlier programme, each with recorded measured support and each a change to *an engine*. The engine they were written against is out of scope now, so they are homeless: they survive as experiments this bench can run, and they need a host engine named before any of them means anything.
-5. **Repository visibility.** `dew_flow_mcp` and `dew_flow_sidecar_rust` are public, `dew_flow_rag_qln` is not. A benchmark that measures other people's engines has a different publication calculus than either.
+5. **Who owns the tool-telemetry contract, and when does it land.** The schema, the ingestion port and the report belong here; the emitters live in `dew_flow_mcp` (the surface) and `dew_flow_rag_qln` (the engine behind it), so §5.4 cannot ship end to end from this repository alone. It should reuse the trace contract's versioning rather than invent a second scheme — but that means the two contracts need one owner, and they do not have one yet.
+6. **Repository visibility.** `dew_flow_mcp` and `dew_flow_sidecar_rust` are public, `dew_flow_rag_qln` is not. A benchmark that measures other people's engines has a different publication calculus than either.
