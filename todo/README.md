@@ -30,6 +30,14 @@ plan rather than holding the whole document hostage.
 - Verified references to real code as `file.cs:line` — not guesses.
 - A build order, a test plan, and a Definition of Done checklist.
 
+## Related documents
+
+- [../research/README.md](../research/README.md) — what belongs in `research/`, and what is there now.
+- [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) — the evidence base the founding
+  plan cites. Carried over so no plan here depends on another checkout being present.
+- [../CLAUDE.md](../CLAUDE.md) — the project rules; [../.claude/rules/](../.claude/rules/) holds the
+  always-loaded and path-scoped ones.
+
 ## Cross-repository citations
 
 This repository benchmarks software that lives elsewhere, so its plans cite other checkouts. Those citations

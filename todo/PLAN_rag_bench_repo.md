@@ -6,15 +6,11 @@
 > Authored in the `claudeRag` repository and moved here the same day, replacing an earlier plan
 > (`PLAN_rag_experiment_matrix.md`) whose build order targeted that repository and was closed unbuilt.
 >
-> **Citations marked `DewFlow ·` point into the `claudeRag` repository** (`d:\rsd\ClaudeRag`), where the
-> measurement history lives. They are paths with line numbers, not links: this repository stands alone and a
-> link that only resolves on one machine is worse than a citation that names its source.
->
-> Key sources: `DewFlow · research/RESULTS_rag_eval_v3.md` (eval series 3 — most numbers below),
-> `DewFlow · research/PLAN_eval_v8/PLAN.md` (the census series and the cost grid),
-> `DewFlow · todo/PLAN_rag_mcp_product_repo.md` (the three-repository family this joins, and the CI +
-> architecture-guard shape to copy), `DewFlow · todo/PLAN_semantic_search_latency_attribution.md` (the stage
-> instrument the white-box trace generalises).
+> **Every measurement quoted below is carried over into this repository** as
+> [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md), section by section. The earlier
+> programme ran against a different codebase (DewFlow / `claudeRag`); that repository is **out of scope
+> and is not touched**, so nothing here requires it to be checked out. Citations point at the local
+> document; its §8 records where the findings originally came from.
 
 ## 1. Goal
 
@@ -31,7 +27,7 @@ Five operator decisions fix the shape:
 
 Decision 2 is a win rather than a requirement. The most expensive lesson of the whole measurement history is
 *"every configuration measured before 2026-08-04 was measured on a corpus that no longer exists… any of
-those results is a hypothesis again, not a conclusion"* (`DewFlow · research/RESULTS_rag_eval_v3.md:1111-1114`).
+those results is a hypothesis again, not a conclusion"* ([MEASURED_LESSONS §1](../research/MEASURED_LESSONS.md)).
 A commit-pinned target makes that failure **structurally impossible** instead of policing it with a
 fingerprint column.
 
@@ -47,11 +43,11 @@ a lost session, or real money. They are carried as *specification*, not as files
 | A refused tool call ≠ an executed one | a read-only guarantee was asserted for months and was false; `is_error` carried the reason while the ledger read only the result's LENGTH | every tool observation records **outcome**, not just size |
 | An engine can index its own answer keys | defect 9 of the v6 series; runtime path lists policed it | see §5.4 — the problem changes shape here, it does not disappear |
 | `n = 1` is not a result | repeat spread reached 4 points — *the same size as the effect*; repeated control legs of one configuration diverged 65 % on input tokens | the report refuses to rank configurations whose repeats overlap |
-| An unset model id is not "the local model" | an empty reranker `modelId` resolved to the SYSTEM DEFAULT `claude-opus-4-8` and would have sent ~100 reranks to a paid API inside a "$0 local" arm (`DewFlow · research/RESULTS_rag_eval_v3.md:807-812`) | unset is a **refusal**. Never a fallback, never a default |
+| An unset model id is not "the local model" | an empty reranker `modelId` resolved to the SYSTEM DEFAULT `claude-opus-4-8` and would have sent ~100 reranks to a paid API inside a "$0 local" arm ([MEASURED_LESSONS §3](../research/MEASURED_LESSONS.md)) | unset is a **refusal**. Never a fallback, never a default |
 | A budget knob that never arrives | `CompactAtTokens` is a local-tool-loop knob that reached no CLI arm, so a whole degradation was misattributed to a flooded context window | every budget records the runtime that **accepted** it; unverified ⇒ the run is marked, not scored |
 | Sampling read back from settings is not evidence | Ollama's OpenAI-compatible route substitutes its own defaults over the Modelfile | temperature/seed are recorded **as sent**, from the request |
 | A crash loses the request totally and invisibly | the rescore queue committed its whole pass in one `SaveChangesAsync` | persist-before-enqueue, claim/settle, startup sweep |
-| "Newest run" is not a run selector | the old `RunStore.ResolveAsync` returned the newest run whatever its status and `--label` was silently dropped; ~14 evaluations overwrote each other in one session (`DewFlow · research/RESULTS_rag_eval_v3.md:1059-1072`) | there is **no implicit run selection**. A command either creates a run or names one |
+| "Newest run" is not a run selector | the old `RunStore.ResolveAsync` returned the newest run whatever its status and `--label` was silently dropped; ~14 evaluations overwrote each other in one session ([MEASURED_LESSONS §3](../research/MEASURED_LESSONS.md)) | there is **no implicit run selection**. A command either creates a run or names one |
 
 ## 3. The measurement contract
 
@@ -87,9 +83,9 @@ but a *right measurement of noise*, and it has already happened three times, eac
 
 | the sweep said | the check said |
 |---|---|
-| pool 20 is best — 32 matched, ΣMRR 1.628 against the shipped 50's 29 / 1.352 (`…RESULTS_rag_eval_v3.md:978-986`) | the full set reversed it: **88/182 at pool 50 against 80/182 at pool 20**, `opq` 31 vs 25 (`:994-1010`) |
-| `SemanticAdmission=opaque` is "the first configuration that improves both sides", 60/107 (`:525-537`) | two days later on the re-described corpus: **64/182 against 88/182**, `opq` 31 → 14, reverted within the hour (`:1074-1109`) |
-| the 28-cell signal × profile grid would separate the registers | predicted flat **before it ran**, and was (`:216-221`) |
+| pool 20 is best — 32 matched, ΣMRR 1.628 against the shipped 50's 29 / 1.352  | the full set reversed it: **88/182 at pool 50 against 80/182 at pool 20**, `opq` 31 vs 25 |
+| `SemanticAdmission=opaque` is "the first configuration that improves both sides", 60/107 | two days later on the re-described corpus: **64/182 against 88/182**, `opq` 31 → 14, reverted within the hour |
+| the 28-cell signal × profile grid would separate the registers | predicted flat **before it ran**, and was |
 
 Multiply the cells and the rate of false winners goes with them. The assignment is deterministic per question
 (stable hash, never random, so a re-run assigns identically), every report carries both columns, and a
@@ -108,7 +104,7 @@ not a courtesy:
 - **No retrieval at all** — plain filesystem tools over the checkout. First-class, because the series'
   central comparison has always been *tools against no tools* and the measured answer stays uncomfortable:
   the native tool-set scored **36/63 against the full retrieval bridge's 37/63**, while retrieval cost 52 %
-  more wall-clock (`DewFlow · todo/RESULTS_native_toolset_arms.md`). If this is not an engine, the question
+  more wall-clock ([MEASURED_LESSONS §4](../research/MEASURED_LESSONS.md)). If this is not an engine, the question
   stops being asked.
 
 An engine **declares** its capabilities; the bench never assumes them. An engine claiming a trace-contract
@@ -138,7 +134,7 @@ meaningless and every latency number a queue measurement. A run takes a lease; t
 
 The funnel is the highest-value artefact here. Answering *"is this a recall failure or a ranking failure"*
 once required a hand-built one-off probe, and the answer — the target absent from a **126–145 candidate pool
-for 9 of 10 queries** (`DewFlow · research/RESULTS_rag_eval_v3.md:963-968`) — closed a whole class of proposed
+for 9 of 10 queries** ([MEASURED_LESSONS §2](../research/MEASURED_LESSONS.md)) — closed a whole class of proposed
 fixes. Every run should produce it as a by-product.
 
 Both implementations satisfy the same port, so a report renders identically and simply carries empty funnel
@@ -149,25 +145,32 @@ render as a zero.
 #### The contract ships before its first live emitter — under three conditions
 
 The white-box contract is defined, ported and reported here **without waiting for an engine to implement
-it** (see open question 3 for why no engine can yet). That is legitimate rather than speculative, because
-the funnel is not hypothetical: the v2 engine's `SearchShape` / `LogSearchShape` already emits
-`embed · dense · semantic · sparse · fuse · load`, plus rerank, graph, `admit`, `freshness`, `other` and a
-real wall-clock total. **The first emitter effectively exists; it writes to a log instead of to a response.**
+it** (see open question 3 for why no engine can yet).
+
+**The condition this was originally justified by no longer holds, and saying so is the point.** The first
+version of this section leaned on an existing emitter: the earlier engine's stage instrument already
+produced `embed · dense · semantic · sparse · fuse · load`, plus rerank, graph, lease-wait, freshness and a
+real wall-clock total, so the contract could be *derived from a captured payload* rather than imagined.
+That engine is now out of scope and is not touched, which leaves the contract with **no live source to be
+derived from**. It is therefore authored from the stage list in
+[MEASURED_LESSONS §6](../research/MEASURED_LESSONS.md) and marked **provisional** until a real engine emits
+it. That is a weaker footing than a captured payload and must not be quietly upgraded: the failure this
+project has retracted more than once is *a claim about a system taken from a description of the system*.
 
 Three conditions keep the interface honest, and they are not optional:
 
-1. **Derive the contract from a captured payload, not from this document.** Take one live search, capture
-   what the existing stage instrument prints plus the counts the pipeline already holds, and make that the
-   fixture. Designing from prose is exactly the failure this project has retracted three times — *a claim
-   about the system taken from a description of the system*.
-2. **Two real implementations from day one.** Black-box (live) and white-box **replayed from the captured
-   fixture**, the latter used by tests and by the report. An interface with one implementation proves
-   nothing about its shape; two is the minimum tirage at which it is visible whether the abstraction has
-   grown into one engine.
-3. **Keep the contract SPECIFIC.** The characteristic failure of an unimplemented interface is that it turns
-   into a bag of key-value pairs "so any engine can fill it" — carrying no schema, no guarantees, and
-   nothing a report can compute on. Named stages with typed counts, and an engine **declares** which stages
-   it supports. Generality belongs in the capability declaration, never in the payload shape.
+1. **The contract is versioned from v0 and its first version is explicitly provisional.** When the first
+   engine emits a real funnel, the payload is compared against v0 and the difference is recorded as a
+   deviation — not smoothed away. A provisional contract that silently becomes canonical is the same
+   defect as an unfrozen suite version.
+2. **Two real implementations from day one.** Black-box (live) and white-box **replayed from a fixture**,
+   the latter used by tests and by the report. An interface with one implementation proves nothing about
+   its shape; two is the minimum tirage at which it is visible whether the abstraction has grown into one
+   engine. Until a real payload exists the fixture is hand-authored and labelled as such.
+3. **Keep the contract SPECIFIC.** The characteristic failure of an unimplemented interface is that it
+   turns into a bag of key-value pairs "so any engine can fill it" — carrying no schema, no guarantees,
+   and nothing a report can compute on. Named stages with typed counts, and an engine **declares** which
+   stages it supports. Generality belongs in the capability declaration, never in the payload shape.
 
 ### 5.3 Time, in three buckets
 
@@ -179,7 +182,7 @@ precisely because a busy card otherwise reads as a slow model.
 
 A separate repository does **not** retire this problem; it moves it. The suites now live outside the measured
 tree, which is a real structural win — but the **target repository may itself contain prior results**.
-Benchmarking the DewFlow repository at any commit puts `research/RESULTS_rag_eval_v3.md` in the tree, answers
+Benchmarking a repository that publishes its own findings puts those results in the tree, answers
 and all. Therefore `target.exclusions[]` is a first-class input, validated before a run starts, and every run
 records what it excluded.
 
@@ -188,7 +191,7 @@ records what it excluded.
 **CLI first, and shaped for an agent.** The measured reason: the same four tools scored 4/63 over the MCP
 wire against 37/63 in bridge shape — *from the form of the surface alone*. Concretely:
 
-- **Exit codes mean something**, copied from `DewFlow · tools/http-smoke`: `0` pass · `1` a real regression ·
+- **Exit codes mean something**, copied from the http-smoke suite of the earlier programme: `0` pass · `1` a real regression ·
   `3`/`4`/`5` environment / configuration / no report. Never conflate "the measurement failed" with "the
   harness could not run".
 - **JSON output beside human output**, on every command.
@@ -285,8 +288,8 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 
 ## 12. Open questions
 
-1. **Language scope of the first version.** Ground-truth authoring and symbol identity are language-specific. Recommend C# first — every existing seed is C# and the `Seed/aspnet/` corpus points the same way — but decide it rather than discover it.
-2. **Who authors the ground truth at scale.** Running thousands of tests is cheap; *authoring* them is not. Today a Claude session does it against an indexed corpus. This is the actual bottleneck of the stated horizon and it has no plan.
-3. **Who implements the white-box trace contract first, and when — no longer a blocker, but still open.** `dew_flow_rag_qln` is at skeleton stage and implementing it in the current v2 engine would contradict "the product is not modified", so no engine can emit the funnel yet. The resolution is the one in §5.2: **the contract, the port, the fixture-replay implementation and the report columns ship without a live emitter**, which takes this off the critical path of build step 6. What remains genuinely open is only *when* and *by whom* the first live emitter arrives — QLN as it grows, or a decision to touch v2 after all. Until then no run carries a real funnel, and the DoD distinguishes the two states rather than blurring them.
-4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context (`DewFlow · todo/PLAN_class_context_in_embed_text.md`), and the describe gate with questions re-authored from source are changes to *an engine* — and the engine they were written against is the one no longer being touched. They survive as experiments this bench runs; they need a host engine named.
+1. **Language scope, and the first target.** Ground-truth authoring and symbol identity are language-specific; C# first is the obvious call. The sharper half of this question is the TARGET: every finding carried over came from one small self-authored repository, which is a confound large enough to invert the headline result ([MEASURED_LESSONS §4](../research/MEASURED_LESSONS.md)). The first serious target should therefore be a large unfamiliar C# codebase, and the first measurement worth running is whether the carried-over findings survive it at all.
+2. **Who authors the ground truth at scale, and how.** Running thousands of tests is cheap; authoring them is not, and this is the real bottleneck of the stated horizon. No public repository-QA set can be borrowed — the surveyed ones are Python, and the only C# set found is patch-and-test rather than question-answering — so the METHODOLOGY is borrowed and the data is authored: pull request → gold answer → discrete facts, whose last step is what an `AnswerContains` expectation already is. Two properties belong on every question and are cheap to forget: a seed change newer than any plausible training cutoff, and a deliberate memorisation trap. Open: who does the authoring, at what rate, and with what review.
+3. **Who implements the white-box trace contract first, and when — no longer a blocker, but still open, and now on a weaker footing.** `dew_flow_rag_qln` is at skeleton stage, and the engine that already had a stage instrument is out of scope and is not touched — so there is no live emitter and, unlike the first draft of this plan, **no captured payload to derive the contract from either** (see §5.2). The contract, the port, a hand-authored fixture and the report columns still ship without an emitter, which keeps this off the critical path of build step 6. What is genuinely open: when QLN grows retrieval far enough to emit a funnel, and how much the provisional v0 contract has to change when it does. Until then no run carries a real funnel, and the DoD distinguishes the two states rather than blurring them.
+4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context in the embed text, and gating the description pass while every member still gets questions — three experiments carried over from the earlier programme, each with recorded measured support and each a change to *an engine*. The engine they were written against is out of scope now, so they are homeless: they survive as experiments this bench can run, and they need a host engine named before any of them means anything.
 5. **Repository visibility.** `dew_flow_mcp` and `dew_flow_sidecar_rust` are public, `dew_flow_rag_qln` is not. A benchmark that measures other people's engines has a different publication calculus than either.
