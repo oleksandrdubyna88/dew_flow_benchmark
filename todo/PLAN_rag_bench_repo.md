@@ -146,6 +146,29 @@ columns for a black-box engine. **"Not captured" is distinct from "empty"**: for
 response text is unobtainable (a CLI stream keeps a result's size, not its text), and an unknown must never
 render as a zero.
 
+#### The contract ships before its first live emitter — under three conditions
+
+The white-box contract is defined, ported and reported here **without waiting for an engine to implement
+it** (see open question 3 for why no engine can yet). That is legitimate rather than speculative, because
+the funnel is not hypothetical: the v2 engine's `SearchShape` / `LogSearchShape` already emits
+`embed · dense · semantic · sparse · fuse · load`, plus rerank, graph, `admit`, `freshness`, `other` and a
+real wall-clock total. **The first emitter effectively exists; it writes to a log instead of to a response.**
+
+Three conditions keep the interface honest, and they are not optional:
+
+1. **Derive the contract from a captured payload, not from this document.** Take one live search, capture
+   what the existing stage instrument prints plus the counts the pipeline already holds, and make that the
+   fixture. Designing from prose is exactly the failure this project has retracted three times — *a claim
+   about the system taken from a description of the system*.
+2. **Two real implementations from day one.** Black-box (live) and white-box **replayed from the captured
+   fixture**, the latter used by tests and by the report. An interface with one implementation proves
+   nothing about its shape; two is the minimum tirage at which it is visible whether the abstraction has
+   grown into one engine.
+3. **Keep the contract SPECIFIC.** The characteristic failure of an unimplemented interface is that it turns
+   into a bag of key-value pairs "so any engine can fill it" — carrying no schema, no guarantees, and
+   nothing a report can compute on. Named stages with typed counts, and an engine **declares** which stages
+   it supports. Generality belongs in the capability declaration, never in the payload shape.
+
 ### 5.3 Time, in three buckets
 
 Tool time · model thinking · infrastructure wait (accelerator lease, queue, cold start). Two buckets are not
@@ -218,8 +241,9 @@ point: nothing of the kind existed before, and that is how the old coupling accu
 4. **CLI over an in-memory store**: create suite → run → report, with the exit-code contract. First
    end-to-end value, no database yet.
 5. **Postgres adapter** + durability (persist-before-enqueue, claim/settle, startup sweep).
-6. **Engine port + the four kinds.** Black-box trace first, the white-box contract defined in the same pass
-   so the two never diverge.
+6. **Engine port + the four kinds.** Black-box trace live, the white-box contract defined and implemented
+   against a captured fixture in the same pass (§5.2) so the two never diverge — this step does **not** wait
+   for an engine to emit the funnel.
 7. **Hardware sampler** + accelerator lease.
 8. **Judge port** — arbiter selectable per suite, re-score without re-running legs.
 9. **API** over the same domain.
@@ -247,7 +271,9 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 - [ ] A run is identified by the §3 tuple; results outside one tuple cannot be compared by the report.
 - [ ] Suite versions are frozen and hashed; expectations are commit-scoped; re-target is explicit.
 - [ ] Models, lanes and engines are data; adding one needs no migration, demonstrated in a test.
-- [ ] Both trace modes ship behind one port; the funnel is persisted per question for white-box engines.
+- [ ] Both trace modes ship behind one port, with **two real implementations** — live black-box and fixture-replay white-box; an interface with a single implementation does not satisfy this item.
+- [ ] The white-box contract is derived from a captured payload, is version-stamped, names its stages explicitly, and degrades to black-box on an unknown version; engines declare supported stages rather than the payload being generic.
+- [ ] *(separate, and later)* A live engine emits the funnel and it is persisted per question — the only item here that depends on an external owner (open question 3).
 - [ ] Hardware sampling is out-of-band, joined by timestamp, cannot fail a run; runs serialize on the accelerator.
 - [ ] Time is reported in three buckets; wait is never counted as thinking.
 - [ ] Caps exist per phase and per question; a cap hit is a terminal outcome.
@@ -261,6 +287,6 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 
 1. **Language scope of the first version.** Ground-truth authoring and symbol identity are language-specific. Recommend C# first — every existing seed is C# and the `Seed/aspnet/` corpus points the same way — but decide it rather than discover it.
 2. **Who authors the ground truth at scale.** Running thousands of tests is cheap; *authoring* them is not. Today a Claude session does it against an indexed corpus. This is the actual bottleneck of the stated horizon and it has no plan.
-3. **Who implements the white-box trace contract first.** The engine is a parameter and both modes ship together, but the contract needs a first implementer. `dew_flow_rag_qln` is at skeleton stage, and implementing it in the current v2 engine would contradict "the product is not modified". **Until this is answered the funnel — the most valuable artefact in §5 — has no host.**
+3. **Who implements the white-box trace contract first, and when — no longer a blocker, but still open.** `dew_flow_rag_qln` is at skeleton stage and implementing it in the current v2 engine would contradict "the product is not modified", so no engine can emit the funnel yet. The resolution is the one in §5.2: **the contract, the port, the fixture-replay implementation and the report columns ship without a live emitter**, which takes this off the critical path of build step 6. What remains genuinely open is only *when* and *by whom* the first live emitter arrives — QLN as it grows, or a decision to touch v2 after all. Until then no run carries a real funnel, and the DoD distinguishes the two states rather than blurring them.
 4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context (`DewFlow · todo/PLAN_class_context_in_embed_text.md`), and the describe gate with questions re-authored from source are changes to *an engine* — and the engine they were written against is the one no longer being touched. They survive as experiments this bench runs; they need a host engine named.
 5. **Repository visibility.** `dew_flow_mcp` and `dew_flow_sidecar_rust` are public, `dew_flow_rag_qln` is not. A benchmark that measures other people's engines has a different publication calculus than either.
