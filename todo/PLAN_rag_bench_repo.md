@@ -1,0 +1,266 @@
+# PLAN — the benchmark as its own product: engine-agnostic, commit-pinned, CLI first
+
+> Status: **plan only, nothing implemented yet, 2026-08-14.** Scope: this repository, from empty. The
+> product it measures is **not** modified — operator decision, 2026-08-14.
+>
+> Authored in the `claudeRag` repository and moved here the same day, replacing an earlier plan
+> (`PLAN_rag_experiment_matrix.md`) whose build order targeted that repository and was closed unbuilt.
+>
+> **Citations marked `DewFlow ·` point into the `claudeRag` repository** (`d:\rsd\ClaudeRag`), where the
+> measurement history lives. They are paths with line numbers, not links: this repository stands alone and a
+> link that only resolves on one machine is worse than a citation that names its source.
+>
+> Key sources: `DewFlow · research/RESULTS_rag_eval_v3.md` (eval series 3 — most numbers below),
+> `DewFlow · research/PLAN_eval_v8/PLAN.md` (the census series and the cost grid),
+> `DewFlow · todo/PLAN_rag_mcp_product_repo.md` (the three-repository family this joins, and the CI +
+> architecture-guard shape to copy), `DewFlow · todo/PLAN_semantic_search_latency_attribution.md` (the stage
+> instrument the white-box trace generalises).
+
+## 1. Goal
+
+A benchmark that answers *"is configuration A better than configuration B"* about **any code repository at
+any commit, measured by any retrieval engine**, and that can be trusted at the scale of thousands of tests.
+
+Five operator decisions fix the shape:
+
+1. **Greenfield.** Nothing is reused as code from the existing `v2.RagBench` / `v2.Eval` / `v2.Data`.
+2. **The target is `(repository URL, commit sha)`.** The thing measured is pinned, not ambient.
+3. **The engine is a parameter**, exactly like the repository. Ours is one value of it.
+4. **CLI first, API alongside, UI last** — so an agent can drive it before a human can click it.
+5. **Its own Postgres**, isolated from any product database.
+
+Decision 2 is a win rather than a requirement. The most expensive lesson of the whole measurement history is
+*"every configuration measured before 2026-08-04 was measured on a corpus that no longer exists… any of
+those results is a hypothesis again, not a conclusion"* (`DewFlow · research/RESULTS_rag_eval_v3.md:1111-1114`).
+A commit-pinned target makes that failure **structurally impossible** instead of policing it with a
+fingerprint column.
+
+## 2. What greenfield costs, and the only real mitigation
+
+The risk is not the volume of code. It is that **lessons already paid for in measurement live in the old
+code, not in prose**, and a fresh repository re-earns them at full price. Each row below cost a wrong number,
+a lost session, or real money. They are carried as *specification*, not as files, and each becomes a test.
+
+| lesson | what it cost | what this repository must do |
+|---|---|---|
+| Leg order must balance across the whole matrix | `repeatIndex % 2` alone is 2:1 at odd repeat counts (the old `BenchmarkOrderPlan`) | order planning is a domain concern with its own tests, not a loop index |
+| A refused tool call ≠ an executed one | a read-only guarantee was asserted for months and was false; `is_error` carried the reason while the ledger read only the result's LENGTH | every tool observation records **outcome**, not just size |
+| An engine can index its own answer keys | defect 9 of the v6 series; runtime path lists policed it | see §5.4 — the problem changes shape here, it does not disappear |
+| `n = 1` is not a result | repeat spread reached 4 points — *the same size as the effect*; repeated control legs of one configuration diverged 65 % on input tokens | the report refuses to rank configurations whose repeats overlap |
+| An unset model id is not "the local model" | an empty reranker `modelId` resolved to the SYSTEM DEFAULT `claude-opus-4-8` and would have sent ~100 reranks to a paid API inside a "$0 local" arm (`DewFlow · research/RESULTS_rag_eval_v3.md:807-812`) | unset is a **refusal**. Never a fallback, never a default |
+| A budget knob that never arrives | `CompactAtTokens` is a local-tool-loop knob that reached no CLI arm, so a whole degradation was misattributed to a flooded context window | every budget records the runtime that **accepted** it; unverified ⇒ the run is marked, not scored |
+| Sampling read back from settings is not evidence | Ollama's OpenAI-compatible route substitutes its own defaults over the Modelfile | temperature/seed are recorded **as sent**, from the request |
+| A crash loses the request totally and invisibly | the rescore queue committed its whole pass in one `SaveChangesAsync` | persist-before-enqueue, claim/settle, startup sweep |
+| "Newest run" is not a run selector | the old `RunStore.ResolveAsync` returned the newest run whatever its status and `--label` was silently dropped; ~14 evaluations overwrote each other in one session (`DewFlow · research/RESULTS_rag_eval_v3.md:1059-1072`) | there is **no implicit run selection**. A command either creates a run or names one |
+
+## 3. The measurement contract
+
+One result row is identified by, and can only be compared within, this tuple:
+
+```
+target   = (repoUrl, commitSha, exclusions[])
+engine   = (kind, endpoint, engineVersion, indexFingerprint)
+suite    = (suiteId, suiteVersion)          -- frozen, hashed
+subject  = (modelConfigId, samplingAsSent)  -- 1..N per suite
+lane     = (toolSurface, preamble)          -- 1..N per suite
+repeat   = ordinal                          -- n >= 2 to rank anything
+budgets  = (cost, wall, turns, context) x (per phase, per question)
+```
+
+**3.1 Ground truth is commit-scoped.** An expectation naming `Foo.cs:120` is true at one commit. Re-running
+the same questions at a newer commit is the *point* — regression detection — but it is not free: a
+**re-target** operation re-validates every expectation against the new tree and flags the ones whose anchor
+moved or vanished. Silent reuse across commits is forbidden; it is the same class of error as the corpus
+that no longer exists, one level down.
+
+**3.2 A suite version is frozen and hashed.** The recorded failure: the measured v8 set exists only in
+Postgres while its seed file on disk is still a version-4 ancestor. A version that can be edited in place is
+not a version. Editing a frozen suite creates the next version; every result names the version hash that
+produced it.
+
+**3.3 Models, lanes and engines are sets, not fields.** A run is the materialised cross product
+`question × repeat × subject × lane`. Adding a fifth lane or a third model is data, never a migration.
+
+**3.4 A suite splits into a selection half and a held-out half, and the split is load-bearing.** At the
+stated horizon — thousands of tests, sweeping configurations — the failure mode is not a wrong measurement
+but a *right measurement of noise*, and it has already happened three times, each time convincingly:
+
+| the sweep said | the check said |
+|---|---|
+| pool 20 is best — 32 matched, ΣMRR 1.628 against the shipped 50's 29 / 1.352 (`…RESULTS_rag_eval_v3.md:978-986`) | the full set reversed it: **88/182 at pool 50 against 80/182 at pool 20**, `opq` 31 vs 25 (`:994-1010`) |
+| `SemanticAdmission=opaque` is "the first configuration that improves both sides", 60/107 (`:525-537`) | two days later on the re-described corpus: **64/182 against 88/182**, `opq` 31 → 14, reverted within the hour (`:1074-1109`) |
+| the 28-cell signal × profile grid would separate the registers | predicted flat **before it ran**, and was (`:216-221`) |
+
+Multiply the cells and the rate of false winners goes with them. The assignment is deterministic per question
+(stable hash, never random, so a re-run assigns identically), every report carries both columns, and a
+configuration that won only on the half that selected it renders as **unproven, not as a result**. This is a
+different guard from `n ≥ 2`: repeats defend against variance within one configuration, the split defends
+against choosing among many.
+
+## 4. Engines, including the ones that are not ours
+
+An engine is `(kind, endpoint, version)` behind one port. Four kinds exist from day one, and the fourth is
+not a courtesy:
+
+- **QLN** (`dew_flow_rag_qln`) — white-box capable.
+- **Mindex** — black-box.
+- **Any external HTTP retrieval service** — black-box.
+- **No retrieval at all** — plain filesystem tools over the checkout. First-class, because the series'
+  central comparison has always been *tools against no tools* and the measured answer stays uncomfortable:
+  the native tool-set scored **36/63 against the full retrieval bridge's 37/63**, while retrieval cost 52 %
+  more wall-clock (`DewFlow · todo/RESULTS_native_toolset_arms.md`). If this is not an engine, the question
+  stops being asked.
+
+An engine **declares** its capabilities; the bench never assumes them. An engine claiming a trace-contract
+version the bench does not know **degrades to black-box** rather than failing the run.
+
+## 5. Metrics — two independent modules, one with two implementations
+
+Both are **out-of-band**: sampled or received asynchronously, written in batches, breaker-guarded. Neither
+may fail a run, and neither may sit in the measured path — a synchronous metrics write inside the search
+path measures the instrument.
+
+### 5.1 Hardware (`IHardwareSampler`)
+
+A time series — GPU utilisation, VRAM, CPU, disk, wall — sampled at a fixed interval, stamped, joined to
+`(run, question, phase)` by timestamp rather than by call boundaries.
+
+**Runs serialize on the accelerator.** With N models and one card, concurrent runs make every hardware number
+meaningless and every latency number a queue measurement. A run takes a lease; the wait is its own bucket
+(§5.3), never thinking time.
+
+### 5.2 Trace (`IRunTrace`) — two implementations behind one port
+
+| mode | what it yields | works against |
+|---|---|---|
+| **black-box** | prompt sent · response returned · every tool call with arguments and outcome · per-call latency · token split (fresh / cache-read / cache-write) · cost | any engine, any runtime |
+| **white-box** | the above **plus the retrieval funnel**: candidates per channel → fused → sent to reranker → returned → graph-enriched (and how) → assembled into context → what actually reached the model | engines implementing the versioned trace contract |
+
+The funnel is the highest-value artefact here. Answering *"is this a recall failure or a ranking failure"*
+once required a hand-built one-off probe, and the answer — the target absent from a **126–145 candidate pool
+for 9 of 10 queries** (`DewFlow · research/RESULTS_rag_eval_v3.md:963-968`) — closed a whole class of proposed
+fixes. Every run should produce it as a by-product.
+
+Both implementations satisfy the same port, so a report renders identically and simply carries empty funnel
+columns for a black-box engine. **"Not captured" is distinct from "empty"**: for some runtimes the raw
+response text is unobtainable (a CLI stream keeps a result's size, not its text), and an unknown must never
+render as a zero.
+
+### 5.3 Time, in three buckets
+
+Tool time · model thinking · infrastructure wait (accelerator lease, queue, cold start). Two buckets are not
+enough: the existing stage instrument had to split `admit` — GPU-lease wait plus eviction — off from the rest
+precisely because a busy card otherwise reads as a slow model.
+
+### 5.4 Answer-key hygiene, in its new shape
+
+A separate repository does **not** retire this problem; it moves it. The suites now live outside the measured
+tree, which is a real structural win — but the **target repository may itself contain prior results**.
+Benchmarking the DewFlow repository at any commit puts `research/RESULTS_rag_eval_v3.md` in the tree, answers
+and all. Therefore `target.exclusions[]` is a first-class input, validated before a run starts, and every run
+records what it excluded.
+
+## 6. Surfaces
+
+**CLI first, and shaped for an agent.** The measured reason: the same four tools scored 4/63 over the MCP
+wire against 37/63 in bridge shape — *from the form of the surface alone*. Concretely:
+
+- **Exit codes mean something**, copied from `DewFlow · tools/http-smoke`: `0` pass · `1` a real regression ·
+  `3`/`4`/`5` environment / configuration / no report. Never conflate "the measurement failed" with "the
+  harness could not run".
+- **JSON output beside human output**, on every command.
+- **Idempotent and resumable.** Thousands of tests run for hours; re-invoking must resume, not restart or
+  duplicate.
+- **No implicit selection.** A command creates a run or names one (§2, last row).
+
+**API** alongside the CLI over the same domain — not a second implementation. **UI last**, and in a Razor
+Class Library from birth, mirroring the WASM-ready RCL `dew_flow_mcp` already ships.
+
+## 7. Infrastructure
+
+Its own AppHost and Postgres container, following `dew_flow_rag_qln`'s precedent of owning its Qdrant and
+Neo4j. Plus one component with no precedent to copy:
+
+**A read-only checkout cache.** A bare clone per repository URL and a worktree per commit — never a checkout
+in a directory anyone works in. The old `CodeRepoProvider.EnsureAsync` runs `git checkout` in place on the
+configured `RepositoryPath`; a benchmark doing that would rewrite a developer's working tree to a commit they
+did not ask for.
+
+## 8. Architecture
+
+Ports and adapters, with the domain as a pure leaf — the one property of the old `v2.Eval` worth reproducing
+deliberately (22 files, no EF, no HTTP).
+
+- **Domain**: target / suite / question / expectation / run / trace as pure types; scoring, matching, order
+  planning, cap policy, the funnel model; judges, engines, runtimes and samplers as interfaces.
+- **Ports**: `IBenchStore`, `IEngine`, `IModelRuntime`, `IRunTrace`, `IHardwareSampler`, `IJudge`,
+  `ICheckoutProvider`.
+- **Adapters**: EF/Postgres · engine clients (QLN, mindex, HTTP, filesystem) · model runtimes (cloud CLI,
+  local) · the sampler · git.
+- **Hosts**: CLI and API, both thin.
+- **One append-only trace table**, keyed by `(run, question, repeat, subject, lane, phase)`. This is what
+  keeps a new metric an INSERT instead of a migration — and its absence is what produced two parallel
+  expectation schemas in the old system, the single reason this is a rewrite rather than an extension.
+
+**The extensibility test, applied while designing and asserted in the suite:** adding a fifth lane, a sixth
+metric, a third judge or a fourth engine must require **no schema migration**. Demonstrate it by doing one of
+the four in a test.
+
+Copy the architecture guard from `dew_flow_mcp` (8 passing tests over layering). The enforcement is the
+point: nothing of the kind existed before, and that is how the old coupling accumulated.
+
+## 9. Build order
+
+1. **Repository skeleton + CI + architecture guard**, mirroring the three existing `dew_flow_*` repos.
+2. **Domain types + the measurement contract** (§3) — suite freeze/hash and the commit-scoped expectation as
+   the first tests.
+3. **Checkout cache** (§7) — everything downstream needs a pinned tree.
+4. **CLI over an in-memory store**: create suite → run → report, with the exit-code contract. First
+   end-to-end value, no database yet.
+5. **Postgres adapter** + durability (persist-before-enqueue, claim/settle, startup sweep).
+6. **Engine port + the four kinds.** Black-box trace first, the white-box contract defined in the same pass
+   so the two never diverge.
+7. **Hardware sampler** + accelerator lease.
+8. **Judge port** — arbiter selectable per suite, re-score without re-running legs.
+9. **API** over the same domain.
+10. **RCL + UI.**
+
+Steps 1–4 are the walking skeleton; a real measurement becomes possible at step 6.
+
+## 10. Test plan
+
+- Suite freeze: editing a frozen version creates a new version; a result always names a hash that resolves.
+- Re-target: an expectation whose anchor moved between commits is flagged, never silently matched.
+- Order plan: a matrix with an odd repeat count balances across the whole matrix, not per task — the measured
+  2:1 defect, RED first.
+- Caps: cost / wall / turns / context each produce their own terminal outcome, distinguishable from a crash
+  and from a wrong answer, and excluded from paired deltas.
+- An unset model id is refused: a test asserts no paid runtime is reachable from an unset field.
+- Trace port: the same report renders from black-box and white-box; "not captured" never renders as 0.
+- Sampler: a sampler failure neither fails nor delays a run (fault injection).
+- Resume: killing the host mid-run resumes without duplicating or losing questions.
+- Extensibility: add a lane in a test, with no migration.
+
+## 11. Definition of Done
+
+- [ ] The measured product was not modified to make this work.
+- [ ] A run is identified by the §3 tuple; results outside one tuple cannot be compared by the report.
+- [ ] Suite versions are frozen and hashed; expectations are commit-scoped; re-target is explicit.
+- [ ] Models, lanes and engines are data; adding one needs no migration, demonstrated in a test.
+- [ ] Both trace modes ship behind one port; the funnel is persisted per question for white-box engines.
+- [ ] Hardware sampling is out-of-band, joined by timestamp, cannot fail a run; runs serialize on the accelerator.
+- [ ] Time is reported in three buckets; wait is never counted as thinking.
+- [ ] Caps exist per phase and per question; a cap hit is a terminal outcome.
+- [ ] Sampling is recorded as sent; every budget records the runtime that accepted it.
+- [ ] The report refuses to rank configurations whose repeats overlap (`n ≥ 2`), and refuses to crown a winner proved only on the half that selected it (§3.4).
+- [ ] `target.exclusions[]` is validated before a run and recorded with it.
+- [ ] CLI honours the exit-code contract, emits JSON, is resumable; no command selects a run implicitly.
+- [ ] The §2 carried-lessons table exists as a checklist, each row naming the test that pins it.
+
+## 12. Open questions
+
+1. **Language scope of the first version.** Ground-truth authoring and symbol identity are language-specific. Recommend C# first — every existing seed is C# and the `Seed/aspnet/` corpus points the same way — but decide it rather than discover it.
+2. **Who authors the ground truth at scale.** Running thousands of tests is cheap; *authoring* them is not. Today a Claude session does it against an indexed corpus. This is the actual bottleneck of the stated horizon and it has no plan.
+3. **Who implements the white-box trace contract first.** The engine is a parameter and both modes ship together, but the contract needs a first implementer. `dew_flow_rag_qln` is at skeleton stage, and implementing it in the current v2 engine would contradict "the product is not modified". **Until this is answered the funnel — the most valuable artefact in §5 — has no host.**
+4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context (`DewFlow · todo/PLAN_class_context_in_embed_text.md`), and the describe gate with questions re-authored from source are changes to *an engine* — and the engine they were written against is the one no longer being touched. They survive as experiments this bench runs; they need a host engine named.
+5. **Repository visibility.** `dew_flow_mcp` and `dew_flow_sidecar_rust` are public, `dew_flow_rag_qln` is not. A benchmark that measures other people's engines has a different publication calculus than either.
