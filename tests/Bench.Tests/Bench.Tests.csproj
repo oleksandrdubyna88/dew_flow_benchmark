@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bench.Domain\Bench.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Api\Bench.Api.csproj" />
+    <ProjectReference Include="..\..\hosts\Cli\Cli.csproj" />
+  </ItemGroup>
+
+</Project>

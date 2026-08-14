@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Minimal-API endpoint group over the same use cases the CLI drives. Thin by construction. -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bench.Application\Bench.Application.csproj" />
+  </ItemGroup>
+
+</Project>

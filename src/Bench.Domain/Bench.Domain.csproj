@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The measurement contract itself: targets, suites, questions, expectations, budgets, the
+       matrix and its ordering. Depends on NOTHING — the architecture test enforces it. -->
+
+</Project>

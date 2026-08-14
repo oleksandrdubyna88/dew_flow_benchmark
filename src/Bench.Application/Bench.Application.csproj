@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Use cases and PORTS. Every interface an adapter implements is declared here and nowhere else:
+       IBenchStore, IEngine, IModelRuntime, IRunTrace, IHardwareSampler, IJudge, ICheckoutProvider. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bench.Domain\Bench.Domain.csproj" />
+    <ProjectReference Include="..\Bench.Contracts\Bench.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

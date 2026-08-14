@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The wire shapes shared by the CLI, the API and (later) the UI. No behaviour, no dependencies:
+       a contract that can reference the domain is a contract that leaks it. -->
+
+</Project>

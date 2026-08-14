@@ -1,0 +1,76 @@
+namespace Bench.Domain.Suites;
+
+/// <summary>What an expectation points at in the target tree, and the commit it was authored against.
+/// <para>
+/// The commit is not decoration. <c>Foo.cs:120</c> is true at exactly one tree; carrying the same
+/// anchor forward to a newer commit without re-validating it is how a suite starts scoring an engine
+/// against lines that moved. Re-targeting is therefore an explicit operation, never a silent reuse.
+/// </para></summary>
+public sealed record SourceAnchor(string FilePath, string MemberKey, LineSpan Lines, Targets.CommitSha AuthoredAt)
+{
+    public static SourceAnchor File(string filePath, Targets.CommitSha authoredAt) =>
+        new(Normalise(filePath), string.Empty, LineSpan.Whole, authoredAt);
+
+    public static SourceAnchor Member(string filePath, string memberKey, LineSpan lines, Targets.CommitSha authoredAt) =>
+        new(Normalise(filePath), memberKey, lines, authoredAt);
+
+    public bool IsWholeFile => MemberKey.Length == 0;
+
+    public string Canonical => $"{FilePath}#{MemberKey}@{Lines.Canonical}";
+
+    /// <summary>Forward slashes always: the same suite is authored on Windows and replayed on the CI
+    /// runner, and a backslash would make an anchor machine-specific.</summary>
+    private static string Normalise(string filePath) => filePath.Replace('\\', '/').TrimStart('/');
+}
+
+/// <summary>An inclusive 1-based line range, or <see cref="Whole"/> for "the file, no line claim".</summary>
+public readonly record struct LineSpan(int Start, int End)
+{
+    public static LineSpan Whole => new(0, 0);
+
+    public bool IsWhole => Start == 0 && End == 0;
+
+    public string Canonical => IsWhole ? "*" : $"{Start}-{End}";
+}
+
+public enum ExpectationKind
+{
+    /// <summary>The engine must surface this file at all.</summary>
+    File,
+
+    /// <summary>The engine must surface this member — the strict form, and the one worth measuring.</summary>
+    Member,
+
+    /// <summary>The produced answer must contain this text.</summary>
+    AnswerContains,
+
+    /// <summary>The produced answer must NOT contain this text.</summary>
+    AnswerExcludes,
+}
+
+/// <summary>One thing that must be true of a leg's result. <see cref="Required"/> separates the
+/// expectations a question is about from the ones that merely enrich its score.</summary>
+public sealed record Expectation(ExpectationKind Kind, SourceAnchor Anchor, string Text, bool Required)
+{
+    public static Expectation Member(SourceAnchor anchor, bool required = true) =>
+        new(ExpectationKind.Member, anchor, string.Empty, required);
+
+    public static Expectation File(SourceAnchor anchor, bool required = true) =>
+        new(ExpectationKind.File, anchor, string.Empty, required);
+
+    public bool IsRetrieval => Kind is ExpectationKind.File or ExpectationKind.Member;
+
+    public string Canonical => $"{Kind}:{Anchor.Canonical}:{Text}:{(Required ? "req" : "opt")}";
+}
+
+/// <summary>One question, its expectations, and the reference answer a judge may read.</summary>
+public sealed record Question(string Id, string Prompt, IReadOnlyList<Expectation> Expectations, string ReferenceAnswer)
+{
+    public static Question Ask(string id, string prompt, params Expectation[] expectations) =>
+        new(id, prompt, expectations, string.Empty);
+
+    public IReadOnlyList<Expectation> RetrievalExpectations => [.. Expectations.Where(e => e.IsRetrieval)];
+
+    public string Canonical =>
+        $"{Id}|{Prompt}|{ReferenceAnswer}|{string.Join(';', Expectations.Select(e => e.Canonical))}";
+}

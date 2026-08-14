@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Adapters: the store, git checkouts, engine clients, model runtimes, the hardware sampler.
+       Implements the Application's ports; nothing here is referenced back by Application. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bench.Application\Bench.Application.csproj" />
+  </ItemGroup>
+
+</Project>

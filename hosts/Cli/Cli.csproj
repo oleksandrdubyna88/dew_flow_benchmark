@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The first surface, and the one an agent drives. Thin: parse, call a use case, render, exit. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>bench</AssemblyName>
+    <RootNamespace>Bench.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
