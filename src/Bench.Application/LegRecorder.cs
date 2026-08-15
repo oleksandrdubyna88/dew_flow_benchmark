@@ -1,3 +1,4 @@
+using Bench.Domain;
 using Bench.Domain.Engines;
 using Bench.Domain.Trace;
 
@@ -11,7 +12,7 @@ namespace Bench.Application;
 /// unobtainable — a CLI stream keeps a result's SIZE, not its body — and a recorder that initialised
 /// those fields to empty strings would turn a gap in instrumentation into a claim about the subject.
 /// </para></summary>
-public sealed class LegRecorder
+public sealed class LegRecorder : IFunnelSink
 {
     private const string NotReported = "the runtime did not report it";
 
@@ -24,6 +25,8 @@ public sealed class LegRecorder
     private TimeSpan _infrastructureWait;
     private TokenSplit _tokens;
     private decimal _cost;
+    private RetrievalFunnel _funnel = RetrievalFunnel.None;
+    private string _funnelNote = string.Empty;
 
     /// <summary>One tool call, with how it ENDED. The duration goes into the tools bucket here and
     /// nowhere else, so a call can never be counted twice or forgotten.</summary>
@@ -70,8 +73,37 @@ public sealed class LegRecorder
     /// not its body.</summary>
     public void CouldNotCaptureResponse(string reason) => _response = Captured.Unavailable(reason);
 
+    /// <summary>A funnel an engine reported for a retrieval it performed during this leg.
+    /// <para>
+    /// A failure is recorded rather than discarded, and that is the whole reason this takes an
+    /// <see cref="Outcome{T}"/>. An engine that claimed a trace contract and then sent something this
+    /// build cannot read renders exactly like a black-box engine once the reason is dropped — and a
+    /// contract mismatch that looks like a design decision is one nobody goes and fixes.
+    /// </para>
+    /// <para>
+    /// Several retrievals in one leg keep the LAST funnel. That is a real limit rather than a
+    /// preference, and it is stated here because a leg with three searches has three funnels: the
+    /// per-question funnel is what the measured question needs ("was the target ever admitted"), and
+    /// carrying all of them is a change to <see cref="LegTrace"/> rather than to this method.
+    /// </para></summary>
+    public void Retrieved(Outcome<RetrievalFunnel> funnel) =>
+        funnel.Match(
+            ok =>
+            {
+                _funnel = ok;
+                _funnelNote = string.Empty;
+                return 0;
+            },
+            reason =>
+            {
+                _funnel = RetrievalFunnel.None;
+                _funnelNote = reason;
+                return 0;
+            });
+
     /// <summary>The trace as observed. A funnel is never invented here: a black-box observer sees the
-    /// calls a subject made, and nothing about what happened inside the engine that served them.</summary>
+    /// calls a subject made, and nothing about what happened inside the engine that served them — so
+    /// what appears below is only ever what an engine reported through <see cref="Retrieved"/>.</summary>
     public LegTrace Assemble() => new(
         _prompt,
         _response,
@@ -79,5 +111,8 @@ public sealed class LegRecorder
         new TimeBuckets(_tools, _thinking, _infrastructureWait),
         _tokens,
         _cost,
-        RetrievalFunnel.None);
+        _funnel)
+    {
+        FunnelNote = _funnelNote,
+    };
 }

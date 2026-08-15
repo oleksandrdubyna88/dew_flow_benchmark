@@ -114,6 +114,18 @@ public sealed record LegTrace(
         0m,
         RetrievalFunnel.None);
 
+    /// <summary>Why the funnel is absent, when an engine CLAIMED one and its payload could not be read.
+    /// <para>
+    /// Empty for an engine that never claimed a contract — that case is already legible from the
+    /// funnel's absence. This field exists for the case that is not: an engine declaring
+    /// <c>trace/v0</c> and then sending stages this build does not define renders exactly like a
+    /// black-box engine unless the mismatch is carried, and a contract mismatch that looks like a
+    /// design decision is a mismatch nobody fixes.
+    /// </para>
+    /// <para>An <c>init</c> property rather than a positional parameter so that adding it cannot break
+    /// a caller that constructs a trace positionally.</para></summary>
+    public string FunnelNote { get; init; } = string.Empty;
+
     public bool IsWhiteBox => Funnel.IsPresent;
 }
 

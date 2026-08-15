@@ -25,17 +25,25 @@ public static class TraceReport
         $"time       tools {Ms(trace.Time.Tools)} · thinking {Ms(trace.Time.Thinking)} · waiting {Ms(trace.Time.InfrastructureWait)}",
         $"tokens     fresh {trace.Tokens.Fresh} · cache-read {trace.Tokens.CacheRead} · cache-write {trace.Tokens.CacheWrite}",
         $"cost       ${trace.CostUsd:F4}",
-        $"funnel     {Funnel(trace.Funnel)}",
+        $"funnel     {Funnel(trace)}",
         $"accounted  {Accounting(trace.Funnel)}",
         $"absent     {Absent(trace.Funnel)}",
     ];
 
     /// <summary>The funnel as one line. Absent for a black-box engine, and it SAYS absent — a report
     /// that printed an empty funnel would let a reader conclude that retrieval admitted nothing.</summary>
-    private static string Funnel(RetrievalFunnel funnel) =>
-        funnel.IsPresent
-            ? $"[{funnel.ContractVersion}] " + string.Join(" → ", funnel.Stages.Select(s => $"{s.Name} {s.In}/{s.Out}"))
-            : NotCaptured + " (black-box engine)";
+    private static string Funnel(LegTrace trace) =>
+        trace.Funnel.IsPresent
+            ? $"[{trace.Funnel.ContractVersion}] "
+              + string.Join(" → ", trace.Funnel.Stages.Select(s => $"{s.Name} {s.In}/{s.Out}"))
+            : $"{NotCaptured} ({Why(trace)})";
+
+    /// <summary>Why there is no funnel. An engine that never claimed a contract and one that claimed
+    /// <c>trace/v0</c> and then sent something unreadable are different events, and they render
+    /// identically the moment the reason is dropped — at which point a contract mismatch looks like a
+    /// design decision and nobody goes and fixes it.</summary>
+    private static string Why(LegTrace trace) =>
+        trace.FunnelNote.Length > 0 ? trace.FunnelNote : "black-box engine";
 
     /// <summary>Where the funnel's own time went, and what it could not account for.
     /// <para>
