@@ -195,6 +195,60 @@ public sealed class TracePortTests
     }
 
     [Fact]
+    public async Task Opening_one_leg_twice_keeps_writing_into_the_same_recording()
+    {
+        var trace = new LiveTrace();
+
+        // A leg has phases — investigate, fix, verify — and each opens the recorder for the leg it
+        // belongs to. Handing out a fresh one per call would silently throw away every phase but the
+        // last, and the trace would still look perfectly well-formed.
+        trace.Open(Tuple()).Called("read_file", "{}", ToolAnswer.Success("x"), Ms(5));
+        trace.Open(Tuple()).Called("read_file", "{}", ToolAnswer.Success("y"), Ms(7));
+
+        var captured = (await trace.CaptureAsync(Tuple(), TestContext.Current.CancellationToken)).Ok();
+
+        captured.ToolCalls.Should().HaveCount(2);
+        captured.Time.Tools.Should().Be(Ms(12));
+    }
+
+    [Fact]
+    public async Task A_missing_fixture_file_is_a_failure_that_names_the_path()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "absent-" + Guid.NewGuid().ToString("N") + ".json");
+
+        var captured = await new FixtureTrace(missing).CaptureAsync(Tuple(), TestContext.Current.CancellationToken);
+
+        captured.Failed().Should().BeTrue();
+        captured.Reason().Should().Contain(missing);
+    }
+
+    [Fact]
+    public async Task A_malformed_fixture_is_refused_rather_than_thrown()
+    {
+        var path = Path.Combine(Directory.CreateTempSubdirectory("bench-fixture").FullName, "broken.json");
+        await File.WriteAllTextAsync(path, "{not json", TestContext.Current.CancellationToken);
+
+        var captured = await new FixtureTrace(path).CaptureAsync(Tuple(), TestContext.Current.CancellationToken);
+
+        captured.Failed().Should().BeTrue();
+        captured.Reason().Should().Contain("malformed");
+    }
+
+    [Fact]
+    public async Task A_replayed_trace_does_not_pretend_to_know_the_prompt_or_the_answer()
+    {
+        var captured = (await new FixtureTrace(FixturePath("whitebox-funnel-v0.json"))
+            .CaptureAsync(Tuple(), TestContext.Current.CancellationToken)).Ok();
+
+        // The fixture carries the funnel — the one thing a black-box observer cannot see — and nothing
+        // else. Filling in a prompt here would make a replay look like a measurement.
+        captured.Prompt.WasCaptured.Should().BeFalse();
+        captured.Response.WasCaptured.Should().BeFalse();
+        captured.ToolCalls.Should().BeEmpty();
+        captured.Prompt.Reason.Should().Contain("fixture");
+    }
+
+    [Fact]
     public async Task The_same_report_renders_from_both_modes_and_never_prints_an_unknown_as_zero()
     {
         var live = new LiveTrace();

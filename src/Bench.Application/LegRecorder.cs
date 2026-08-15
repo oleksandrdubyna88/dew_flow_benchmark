@@ -56,18 +56,19 @@ public sealed class LegRecorder
 
     public void Answered(string response) => _response = Captured.Text(response);
 
-    /// <summary>Records that a field could not be obtained, and why. Calling this is how "not captured"
-    /// gets a REASON instead of being the silent default.</summary>
-    public void CouldNotCapture(string what, string reason)
-    {
-        if (what == nameof(LegTrace.Prompt))
-        {
-            _prompt = Captured.Unavailable(reason);
-            return;
-        }
+    /// <summary>Records that the prompt could not be obtained, and why.
+    /// <para>
+    /// Two named methods rather than one taking a field name. The first version took a string and fell
+    /// back to the response for anything it did not recognise, so a typo would have silently
+    /// overwritten the wrong field with the right reason — a mislabelled gap, which is worse than an
+    /// unlabelled one because it reads as deliberate.
+    /// </para></summary>
+    public void CouldNotCapturePrompt(string reason) => _prompt = Captured.Unavailable(reason);
 
-        _response = Captured.Unavailable(reason);
-    }
+    /// <summary>Records that the response could not be obtained, and why. This is the common one: for
+    /// some runtimes the answer's text is simply unobtainable — a CLI stream keeps a result's SIZE,
+    /// not its body.</summary>
+    public void CouldNotCaptureResponse(string reason) => _response = Captured.Unavailable(reason);
 
     /// <summary>The trace as observed. A funnel is never invented here: a black-box observer sees the
     /// calls a subject made, and nothing about what happened inside the engine that served them.</summary>

@@ -190,6 +190,97 @@ public sealed class FilesystemEngineTests
     }
 
     [Fact]
+    public async Task A_file_that_is_not_there_is_a_refusal_rather_than_an_empty_read()
+    {
+        var (engine, _) = Build();
+
+        var answer = await Invoke(engine, FilesystemEngine.ReadFile, """{"path":"absent.txt"}""");
+
+        // An empty read would let a subject conclude the file exists and says nothing — which is how a
+        // wrong answer gets built on a tool that worked correctly.
+        answer.Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("no such file");
+    }
+
+    [Fact]
+    public async Task Reading_without_a_path_is_refused_by_naming_the_argument()
+    {
+        var (engine, _) = Build();
+
+        var answer = await Invoke(engine, FilesystemEngine.ReadFile, """{}""");
+
+        answer.Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("'path' is required");
+    }
+
+    [Fact]
+    public async Task A_search_without_text_and_a_find_without_a_pattern_are_refused_the_same_way()
+    {
+        var (engine, _) = Build();
+
+        (await Invoke(engine, FilesystemEngine.SearchLiteral, """{}"""))
+            .Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("'text' is required");
+        (await Invoke(engine, FilesystemEngine.FindFiles, """{}"""))
+            .Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("'pattern' is required");
+    }
+
+    [Fact]
+    public async Task A_search_honours_its_hit_cap()
+    {
+        var (engine, root) = Build();
+        await File.WriteAllLinesAsync(
+            Path.Combine(root, "many.txt"), Enumerable.Repeat("needle", 50), TestContext.Current.CancellationToken);
+
+        var answer = await Invoke(engine, FilesystemEngine.SearchLiteral, """{"text":"needle","maxHits":5}""");
+
+        // A tool that returns everything makes a subject pay for a context window it did not ask for,
+        // and it will keep doing it — a cap that is ignored is a cap that does not exist.
+        answer.Should().BeOfType<ToolAnswer.Ok>()
+            .Which.Content.Split('\n').Should().HaveCount(5);
+    }
+
+    [Fact]
+    public async Task Listing_a_directory_outside_the_checkout_is_refused()
+    {
+        var (engine, _) = Build();
+
+        var answer = await Invoke(engine, FilesystemEngine.ListDirectory, """{"path":".."}""");
+
+        answer.Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("outside the repository");
+    }
+
+    [Fact]
+    public async Task Listing_a_directory_that_is_not_there_is_refused_rather_than_answered_empty()
+    {
+        var (engine, _) = Build();
+
+        var answer = await Invoke(engine, FilesystemEngine.ListDirectory, """{"path":"nowhere"}""");
+
+        answer.Should().BeOfType<ToolAnswer.Refused>().Which.Reason.Should().Contain("no such directory");
+    }
+
+    [Fact]
+    public async Task A_pattern_that_matches_no_file_says_so()
+    {
+        var (engine, root) = Build();
+        await File.WriteAllTextAsync(Path.Combine(root, "a.txt"), "x", TestContext.Current.CancellationToken);
+
+        var answer = await Invoke(engine, FilesystemEngine.FindFiles, """{"pattern":"**/*.rs"}""");
+
+        answer.Should().BeOfType<ToolAnswer.Ok>().Which.Content.Should().Be("no files match");
+    }
+
+    [Fact]
+    public async Task Warming_a_real_checkout_answers_with_the_engine_it_warmed()
+    {
+        var (engine, root) = Build();
+
+        var warmed = await engine.WarmAsync(root, TestContext.Current.CancellationToken);
+
+        // There is no index to build, and saying so plainly beats a no-op that looks like success by
+        // accident: a run records which engine actually served it.
+        warmed.Ok().Should().Be(EngineRef.Filesystem().Canonical);
+    }
+
+    [Fact]
     public void Every_tool_describes_what_it_is_FOR_and_what_its_odd_parameters_cost()
     {
         var (engine, _) = Build();
