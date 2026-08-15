@@ -69,6 +69,96 @@ public sealed class TelemetryCommandTests
     }
 
     [Fact]
+    public async Task A_spool_holding_a_newer_version_is_kept_so_a_later_build_can_read_it()
+    {
+        using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
+
+        var (_, output, _) = await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
+
+        // Refusing an unknown version by name so somebody can ship a build that reads it, and then
+        // retiring the file that held those records, breaks the promise in the same breath as it is
+        // made: the upgrade arrives to find a .ingested file nobody looks at any more.
+        Directory.GetFiles(spool.Path, "*.jsonl", SearchOption.AllDirectories).Should().ContainSingle();
+        Directory.GetFiles(spool.Path, "*" + TelemetryCommand.IngestedSuffix, SearchOption.AllDirectories)
+            .Should().BeEmpty();
+        output.Should().Contain("retained 1 file(s)").And.Contain("kept for a later build");
+    }
+
+    [Fact]
+    public async Task A_later_build_re_reads_a_retained_spool_and_stores_only_what_is_new()
+    {
+        using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
+        var store = new FakeStore();
+
+        await Run(store, "telemetry", "ingest", "--spool", spool.Path);
+        await Run(store, "telemetry", "ingest", "--spool", spool.Path);
+
+        // The point of keeping the file: a second pass reaches it at all. The already-stored record
+        // arrives again and the real store absorbs it as a duplicate — proven against Postgres in
+        // PostgresTelemetryStoreTests; here it is enough that the file was read twice.
+        store.Received.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task A_half_written_last_line_still_retires_the_file()
+    {
+        using var spool = new TempSpool(Fixture.Text + """{"schema":"telemetry/v0","at":"2026""");
+
+        var (code, output, _) = await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
+
+        // The normal shape of a killed emitter. Nothing will ever read that line, so keeping the file
+        // for a retry that cannot succeed would make every ordinary spool immortal.
+        code.Should().Be(ExitCodes.Regression, "a corrupt line is still worth reporting");
+        output.Should().Contain("retained 0 file(s)");
+        Directory.GetFiles(spool.Path, "*" + TelemetryCommand.IngestedSuffix, SearchOption.AllDirectories)
+            .Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Pruning_retires_drained_files_and_never_touches_an_unread_one()
+    {
+        using var spool = new TempSpool(Fixture.Text);
+        await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
+
+        var drained = Directory.GetFiles(spool.Path, "*" + TelemetryCommand.IngestedSuffix, SearchOption.AllDirectories).Single();
+        File.SetLastWriteTimeUtc(drained, DateTime.UtcNow.AddDays(-30));
+        var unread = Path.Combine(Path.GetDirectoryName(drained)!, "still-waiting.jsonl");
+        await File.WriteAllTextAsync(unread, Fixture.Text, TestContext.Current.CancellationToken);
+
+        var (code, output, _) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path, "--older-than", "7");
+
+        code.Should().Be(ExitCodes.Pass);
+        output.Should().Contain("pruned 1");
+        File.Exists(drained).Should().BeFalse();
+        File.Exists(unread).Should().BeTrue("a spool still holding unread records is not a candidate at any age");
+    }
+
+    [Fact]
+    public async Task Pruning_without_an_age_is_refused_rather_than_given_a_default()
+    {
+        using var spool = new TempSpool(Fixture.Text);
+
+        var (code, _, error) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path);
+
+        // Deleting somebody's only copy of their data is not a thing to have a default for.
+        code.Should().Be(ExitCodes.Configuration);
+        error.Should().Contain("--older-than");
+    }
+
+    [Fact]
+    public async Task A_drained_file_younger_than_the_cut_off_survives()
+    {
+        using var spool = new TempSpool(Fixture.Text);
+        await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
+
+        var (_, output, _) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path, "--older-than", "7");
+
+        output.Should().Contain("pruned 0");
+        Directory.GetFiles(spool.Path, "*" + TelemetryCommand.IngestedSuffix, SearchOption.AllDirectories)
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task A_report_over_an_empty_store_is_no_report_rather_than_a_pass()
     {
         var (code, output, _) = await Run(new FakeStore(), "telemetry", "report");
@@ -93,6 +183,35 @@ public sealed class TelemetryCommandTests
         output.Should().Contain("rt_read_local_file").And.Contain("claude-code/?/stdio");
         output.Should().Contain("'?' = not captured", "an unknown must be legible as an unknown, not read as a name");
         output.Should().Contain(ToolTelemetry.ContractVersion);
+    }
+
+    [Fact]
+    public async Task A_report_states_its_window_and_defaults_to_all_time()
+    {
+        var store = new FakeStore
+        {
+            Totals = [new ToolTelemetryTotals("k", "rt_read_local_file", "claude-code/?/stdio", 3, 1, 1, 1, 13.4, 20.0)],
+        };
+
+        var (_, output, _) = await Run(store, "telemetry", "report");
+
+        // A total whose span is not stated is a number two readers will scale differently.
+        store.SinceAsked.Should().Be(DateTimeOffset.MinValue);
+        output.Should().Contain("window all time");
+    }
+
+    [Fact]
+    public async Task A_windowed_report_asks_the_store_for_that_window()
+    {
+        var store = new FakeStore
+        {
+            Totals = [new ToolTelemetryTotals("k", "rt_read_local_file", "claude-code/?/stdio", 3, 1, 1, 1, 13.4, 20.0)],
+        };
+
+        var (_, output, _) = await Run(store, "telemetry", "report", "--days", "7");
+
+        store.SinceAsked.Should().BeCloseTo(DateTimeOffset.UtcNow.AddDays(-7), TimeSpan.FromMinutes(1));
+        output.Should().Contain("window last 7 day(s)");
     }
 
     [Fact]
@@ -163,11 +282,17 @@ public sealed class TelemetryCommandTests
             IReadOnlyList<ToolTelemetry> records, CancellationToken cancellationToken)
         {
             Received.AddRange(records);
-            return Task.FromResult(new IngestReport(records.Count, 0, 0, []));
+            return Task.FromResult(new IngestReport(records.Count, 0, 0, 0, []));
         }
 
-        public Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Totals);
+        public DateTimeOffset SinceAsked { get; private set; }
+
+        public Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(
+            DateTimeOffset since, CancellationToken cancellationToken)
+        {
+            SinceAsked = since;
+            return Task.FromResult(Totals);
+        }
 
         public Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(string leg, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<PhaseTelemetryTotals>>([]);

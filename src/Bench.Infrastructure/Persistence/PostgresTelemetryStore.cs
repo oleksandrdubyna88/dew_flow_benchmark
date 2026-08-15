@@ -35,7 +35,9 @@ public sealed class PostgresTelemetryStore(BenchDbContext db) : ITelemetryStore
         db.ToolTelemetry.AddRange(fresh.Select(kv => ToRow(kv.Key, kv.Value)));
         await db.SaveChangesAsync(cancellationToken);
 
-        return new IngestReport(fresh.Count, duplicatesInBatch + known.Count, 0, []);
+        // Refused and Retained are the FILE reader's business, not the store's: this port is handed
+        // records that already parsed.
+        return new IngestReport(fresh.Count, duplicatesInBatch + known.Count, 0, 0, []);
     }
 
     public async Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(string leg, CancellationToken cancellationToken)
@@ -64,55 +66,70 @@ public sealed class PostgresTelemetryStore(BenchDbContext db) : ITelemetryStore
         return [.. groups.OrderBy(g => g.Phase, StringComparer.Ordinal)];
     }
 
-    public async Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken)
+    /// <summary>Per-key totals, computed entirely in the database.
+    /// <para>
+    /// <b>This was a client-side aggregation and that was a defect</b>, worth recording because the
+    /// comment justifying it was confidently wrong. LINQ cannot express a percentile, so the first
+    /// version projected each group's durations with <c>g.Select(t =&gt; t.ServerMs).ToList()</c> and
+    /// sorted them here — reasoning that the cost was "cheap next to the scan that produced it". The
+    /// scan happens in the DATABASE; the transfer does not. Every <c>ServerMs</c> in the largest table
+    /// in the system crossed the wire and was held in memory to compute two numbers.
+    /// </para>
+    /// <para>
+    /// So: raw SQL. <c>percentile_disc</c> rather than <c>percentile_cont</c> deliberately — the
+    /// discrete form returns a value some call actually took, which is what anyone reading
+    /// "p95 = 3.5 s" believes they are looking at, while the continuous form interpolates between two
+    /// calls and reports a duration nobody experienced.
+    /// </para></summary>
+    public async Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(
+        DateTimeOffset since, CancellationToken cancellationToken)
     {
-        // Grouped in the database; only the latency percentiles come back per row, because a median is
-        // not an aggregate SQL gives us portably and a client-side one over a group's durations is
-        // cheap next to the scan that produced it.
-        var groups = await db.ToolTelemetry.AsNoTracking()
-            .GroupBy(t => new { t.Tool, t.CallerKey })
-            .Select(g => new
-            {
-                g.Key.Tool,
-                g.Key.CallerKey,
-                Calls = g.Count(),
-                Answered = g.Count(t => t.Outcome == ToolOutcome.Answered),
-                Refused = g.Count(t => t.Outcome == ToolOutcome.Refused),
-                Errored = g.Count(t => t.Outcome == ToolOutcome.Error),
-                Durations = g.Select(t => t.ServerMs).ToList(),
-            })
-            .ToListAsync(cancellationToken);
+        var connection = db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
 
-        return
-        [
-            .. groups
-                .Select(g => new ToolTelemetryTotals(
-                    $"{g.Tool}|{g.CallerKey}",
-                    g.Tool,
-                    g.CallerKey,
-                    g.Calls,
-                    g.Answered,
-                    g.Refused,
-                    g.Errored,
-                    Percentile(g.Durations, 0.50),
-                    Percentile(g.Durations, 0.95)))
-                .OrderByDescending(t => t.Calls)
-                .ThenBy(t => t.Key, StringComparer.Ordinal),
-        ];
-    }
+        // The outcome column is stored as its NAME (HasConversion<string>), so these are text
+        // comparisons rather than ordinals — which is the point of storing it that way.
+        command.CommandText =
+            """
+            SELECT "Tool", "CallerKey",
+                   COUNT(*)                                                    AS calls,
+                   COUNT(*) FILTER (WHERE "Outcome" = 'Answered')              AS answered,
+                   COUNT(*) FILTER (WHERE "Outcome" = 'Refused')               AS refused,
+                   COUNT(*) FILTER (WHERE "Outcome" = 'Error')                 AS errored,
+                   percentile_disc(0.50) WITHIN GROUP (ORDER BY "ServerMs")    AS median_ms,
+                   percentile_disc(0.95) WITHIN GROUP (ORDER BY "ServerMs")    AS p95_ms
+            FROM tool_telemetry
+            WHERE "At" >= @since
+            GROUP BY "Tool", "CallerKey"
+            ORDER BY calls DESC, "Tool", "CallerKey"
+            """;
 
-    /// <summary>Nearest-rank percentile. Chosen over interpolation because the value it reports is one
-    /// a call actually took, which is what anyone reading "p95 = 3.5 s" believes they are looking at.</summary>
-    private static double Percentile(List<double> values, double fraction)
-    {
-        if (values.Count == 0)
+        var window = command.CreateParameter();
+        window.ParameterName = "since";
+        window.Value = since;
+        command.Parameters.Add(window);
+
+        await db.Database.OpenConnectionAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var totals = new List<ToolTelemetryTotals>();
+        while (await reader.ReadAsync(cancellationToken))
         {
-            return 0;
+            var tool = reader.GetString(0);
+            var caller = reader.GetString(1);
+            totals.Add(new ToolTelemetryTotals(
+                $"{tool}|{caller}",
+                tool,
+                caller,
+                (int)reader.GetInt64(2),
+                (int)reader.GetInt64(3),
+                (int)reader.GetInt64(4),
+                (int)reader.GetInt64(5),
+                reader.GetDouble(6),
+                reader.GetDouble(7)));
         }
 
-        values.Sort();
-        var rank = (int)Math.Ceiling(fraction * values.Count) - 1;
-        return values[Math.Clamp(rank, 0, values.Count - 1)];
+        return totals;
     }
 
     private static ToolTelemetryRow ToRow(string fingerprint, ToolTelemetry record) => new()

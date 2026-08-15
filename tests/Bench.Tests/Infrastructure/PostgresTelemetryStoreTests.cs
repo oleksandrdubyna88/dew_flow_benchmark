@@ -70,7 +70,7 @@ public sealed class PostgresTelemetryStoreTests(PostgresFixture postgres)
         };
 
         await store.AppendAsync([records[0], codex], TestContext.Current.CancellationToken);
-        var totals = await NewStore().TotalsAsync(TestContext.Current.CancellationToken);
+        var totals = await NewStore().TotalsAsync(DateTimeOffset.MinValue, TestContext.Current.CancellationToken);
 
         // An upstream system shipped daily aggregates without a caller column and then could not
         // attribute a change to the switch that caused it. Two callers, two rows, always.
@@ -83,7 +83,7 @@ public sealed class PostgresTelemetryStoreTests(PostgresFixture postgres)
     {
         await NewStore().AppendAsync(Records(), TestContext.Current.CancellationToken);
 
-        var row = (await NewStore().TotalsAsync(TestContext.Current.CancellationToken))
+        var row = (await NewStore().TotalsAsync(DateTimeOffset.MinValue, TestContext.Current.CancellationToken))
             .Single(t => t.Caller.StartsWith("claude-code", StringComparison.Ordinal) && t.Tool == "rt_read_local_file");
 
         // Three numbers rather than a rate: a rate over four calls and a rate over four thousand read
@@ -109,6 +109,44 @@ public sealed class PostgresTelemetryStoreTests(PostgresFixture postgres)
         back.Caller.Model.WasCaptured.Should().BeFalse();
         back.Caller.Model.Reason.Should().NotBeEmpty();
         back.Tokens.WasCaptured.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task The_window_excludes_what_falls_outside_it()
+    {
+        var records = Records();
+        var old = records[0] with { At = DateTimeOffset.UtcNow.AddDays(-30), Scope = records[0].Scope + "#old" };
+        var recent = records[1] with { At = DateTimeOffset.UtcNow.AddHours(-1), Scope = records[1].Scope + "#recent" };
+        await NewStore().AppendAsync([old, recent], TestContext.Current.CancellationToken);
+
+        var windowed = await NewStore().TotalsAsync(
+            DateTimeOffset.UtcNow.AddDays(-7), TestContext.Current.CancellationToken);
+        var allTime = await NewStore().TotalsAsync(DateTimeOffset.MinValue, TestContext.Current.CancellationToken);
+
+        // The report's window has to reach the DATABASE, not trim a list the client already paid to
+        // fetch — this table holds every call ever served, benchmark and real session alike.
+        var windowedCalls = windowed.Sum(t => t.Calls);
+        var allTimeCalls = allTime.Sum(t => t.Calls);
+        windowedCalls.Should().BeLessThan(allTimeCalls);
+    }
+
+    [Fact]
+    public async Task Percentiles_come_back_as_a_duration_some_call_actually_took()
+    {
+        var seed = Records()[0];
+        var spread = new[] { 5.0, 10.0, 15.0, 900.0 }
+            .Select((ms, i) => seed with { ServerTime = TimeSpan.FromMilliseconds(ms), Scope = $"{seed.Scope}#p{i}", Tool = "percentile_probe" })
+            .ToList();
+        await NewStore().AppendAsync(spread, TestContext.Current.CancellationToken);
+
+        var row = (await NewStore().TotalsAsync(DateTimeOffset.MinValue, TestContext.Current.CancellationToken))
+            .Single(t => t.Tool == "percentile_probe");
+
+        // percentile_disc, not percentile_cont: the discrete form returns a value some call actually
+        // took, while the continuous one interpolates and reports a duration nobody experienced.
+        row.Calls.Should().Be(4);
+        new[] { 5.0, 10.0, 15.0, 900.0 }.Should().Contain(row.MedianServerMs);
+        row.P95ServerMs.Should().Be(900.0);
     }
 
     [Fact]

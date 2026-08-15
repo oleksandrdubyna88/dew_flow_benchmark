@@ -4,12 +4,12 @@ using Bench.Domain.Telemetry;
 
 namespace Bench.Cli;
 
-/// <summary>`bench telemetry ingest` and `bench telemetry report` — draining the spools an MCP server
-/// writes, and reading what they say.
+/// <summary>`bench telemetry ingest`, `report` and `prune` — draining the spools an MCP server writes,
+/// reading what they say, and retiring what has been read.
 /// <para>
 /// The spool is the transport on purpose. A server that had to reach this host to record a call would
 /// couple a product's tool surface to a benchmark being up; a file it appends to and someone else
-/// drains couples them to nothing. Ingest is therefore idempotent and resumable: a file is renamed
+/// drains couples them to nothing. Ingest is therefore idempotent and resumable: a file is retired
 /// only after every line of it is committed, and re-reading one changes nothing.
 /// </para></summary>
 public static class TelemetryCommand
@@ -24,11 +24,12 @@ public static class TelemetryCommand
         {
             "ingest" => await IngestAsync(command, store, output, error),
             "report" => await ReportAsync(command, store, output),
+            "prune" => Prune(command, output, error),
             var other => Fail(
                 error,
                 other.Length == 0
-                    ? "bench telemetry needs an action — 'ingest' or 'report'"
-                    : $"unknown telemetry action '{other}' — try 'ingest' or 'report'",
+                    ? "bench telemetry needs an action — 'ingest', 'report' or 'prune'"
+                    : $"unknown telemetry action '{other}' — try 'ingest', 'report' or 'prune'",
                 ExitCodes.Configuration),
         };
 
@@ -67,33 +68,109 @@ public static class TelemetryCommand
         return report.Refused > 0 ? ExitCodes.Regression : ExitCodes.Pass;
     }
 
-    /// <summary>One file: read, store, then rename. The order is the resume guarantee — a host killed
-    /// between the store and the rename re-reads the file next time and finds every record already
-    /// known, which is why <see cref="IngestReport.Duplicate"/> is an ordinary outcome rather than a
-    /// warning.</summary>
+    /// <summary>One file: read, store, then retire it — unless a later build could still read it.
+    /// <para>
+    /// Read-store-rename is the resume guarantee: a host killed between the store and the rename
+    /// re-reads the file next time and finds every record already known, which is why
+    /// <see cref="IngestReport.Duplicate"/> is an ordinary outcome rather than a warning.
+    /// </para>
+    /// <para>
+    /// A file carrying a RETRYABLE refusal is left alone. Refusing an unknown schema version by name so
+    /// somebody can ship a build that reads it, and then retiring the file that held those records, is
+    /// a promise broken in the same breath as it is made — the upgrade would arrive to find nothing to
+    /// re-read but a <c>.ingested</c> file it no longer looks at. A half-written last line is the
+    /// opposite case and retires normally: nothing will ever read it, so keeping the file would make
+    /// every ordinary spool immortal.
+    /// </para></summary>
     private static async Task<IngestReport> IngestFileAsync(string file, ITelemetryStore store)
     {
         var (records, refused) = SpoolIngest.Read(await File.ReadAllTextAsync(file));
         var stored = await store.AppendAsync(records, CancellationToken.None);
 
-        File.Move(file, file + IngestedSuffix, overwrite: true);
+        var retryable = refused.Any(r => r.Retryable);
+        if (!retryable)
+        {
+            File.Move(file, file + IngestedSuffix, overwrite: true);
+        }
 
-        return stored.Plus(new IngestReport(0, 0, refused.Count, [.. refused.Select(r => $"{Path.GetFileName(file)} {r}")]));
+        var name = Path.GetFileName(file);
+        var reasons = refused.Select(r => $"{name} {r}").ToList();
+        if (retryable)
+        {
+            reasons.Add($"{name} kept for a later build — it holds records this one cannot read");
+        }
+
+        return stored.Plus(new IngestReport(0, 0, refused.Count, retryable ? 1 : 0, reasons));
+    }
+
+    /// <summary>Retires drained spool files older than a cut-off.
+    /// <para>
+    /// A separate action, never a step of ingest, and never automatic. Payload retention was decided in
+    /// the schema — byte budgets applied at emit — but the FILES are a second question with a different
+    /// owner: they sit on the emitting server's disk, and this benchmark is the component that renamed
+    /// them, not the one that gets to decide unprompted that somebody's only copy has expired.
+    /// </para>
+    /// <para>Only <c>*.ingested</c> is ever touched. A spool still holding unread records is not a
+    /// candidate for deletion at any age.</para></summary>
+    private static int Prune(CommandLine command, TextWriter output, TextWriter error)
+    {
+        var spool = command.Value("spool");
+        var days = command.Int("older-than", 0);
+
+        if (spool.Length == 0)
+        {
+            return Fail(error, "--spool is required", ExitCodes.Configuration);
+        }
+
+        if (days <= 0)
+        {
+            return Fail(error, "--older-than <days> is required, and must be positive — pruning has no default", ExitCodes.Configuration);
+        }
+
+        if (!Directory.Exists(spool))
+        {
+            return Fail(error, $"spool directory not found: {spool}", ExitCodes.Environment);
+        }
+
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var stale = Directory
+            .GetFiles(spool, "*" + IngestedSuffix, SearchOption.AllDirectories)
+            .Select(path => new FileInfo(path))
+            .Where(f => f.LastWriteTimeUtc < cutoff)
+            .ToList();
+
+        var bytes = stale.Sum(f => f.Length);
+        foreach (var file in stale)
+        {
+            file.Delete();
+        }
+
+        output.WriteLine(command.Has("json")
+            ? JsonSerializer.Serialize(new { pruned = stale.Count, bytes, olderThanDays = days })
+            : $"pruned {stale.Count} drained file(s), {bytes / 1024} KB, older than {days} day(s)");
+
+        return ExitCodes.Pass;
     }
 
     private static async Task<int> ReportAsync(CommandLine command, ITelemetryStore store, TextWriter output)
     {
-        var totals = await store.TotalsAsync(CancellationToken.None);
+        var days = command.Int("days", 0);
+        var since = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
+        var window = days > 0 ? $"last {days} day(s)" : "all time";
+
+        var totals = await store.TotalsAsync(since, CancellationToken.None);
 
         if (command.Has("json"))
         {
-            output.WriteLine(JsonSerializer.Serialize(totals, new JsonSerializerOptions { WriteIndented = true }));
+            output.WriteLine(JsonSerializer.Serialize(
+                new { window, since = days > 0 ? since : (DateTimeOffset?)null, totals },
+                new JsonSerializerOptions { WriteIndented = true }));
             return totals.Count == 0 ? ExitCodes.NoReport : ExitCodes.Pass;
         }
 
         if (totals.Count == 0)
         {
-            output.WriteLine("no telemetry stored");
+            output.WriteLine($"no telemetry stored ({window})");
             return ExitCodes.NoReport;
         }
 
@@ -106,8 +183,10 @@ public static class TelemetryCommand
         }
 
         // "?" in a caller key is a field the transport could not tell us — an unknown, never a default.
+        // The window is printed even when it is "all time": a total whose span is not stated is a
+        // number two readers will scale differently.
         output.WriteLine();
-        output.WriteLine($"caller key = client/model/transport; '?' = not captured ({ToolTelemetry.ContractVersion})");
+        output.WriteLine($"window {window}; caller key = client/model/transport; '?' = not captured ({ToolTelemetry.ContractVersion})");
         return ExitCodes.Pass;
     }
 
@@ -119,7 +198,9 @@ public static class TelemetryCommand
             return;
         }
 
-        output.WriteLine($"ingested {report.Ingested}, duplicate {report.Duplicate}, refused {report.Refused}");
+        output.WriteLine(
+            $"ingested {report.Ingested}, duplicate {report.Duplicate}, refused {report.Refused}, " +
+            $"retained {report.Retained} file(s)");
         foreach (var reason in report.Reasons)
         {
             output.WriteLine($"refused  {reason}");

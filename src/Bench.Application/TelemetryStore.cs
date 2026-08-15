@@ -27,7 +27,9 @@ public readonly record struct ToolTelemetryTotals(
 /// over a spool it has already drained must be a no-op, and the number that proves it is this one.
 /// <paramref name="Refused"/> counts lines this build would not read — an unknown schema version or a
 /// malformed line — and it is deliberately NOT folded into the others, because "we ingested 900 of
-/// 1000" is a materially different report from "we ingested 900".
+/// 1000" is a materially different report from "we ingested 900". <paramref name="Retained"/> counts
+/// the FILES left in place for a later build to re-read, which is the whole difference between
+/// refusing a line and losing it.
 /// </para></summary>
 /// <remarks>
 /// <b>Do not compare two of these with <c>==</c>.</b> A record struct compares its members with
@@ -36,14 +38,20 @@ public readonly record struct ToolTelemetryTotals(
 /// that an empty collection expression is a singleton. Compare the counts, and the reasons as a
 /// sequence.
 /// </remarks>
-public readonly record struct IngestReport(int Ingested, int Duplicate, int Refused, IReadOnlyList<string> Reasons)
+public readonly record struct IngestReport(
+    int Ingested,
+    int Duplicate,
+    int Refused,
+    int Retained,
+    IReadOnlyList<string> Reasons)
 {
-    public static IngestReport Empty => new(0, 0, 0, []);
+    public static IngestReport Empty => new(0, 0, 0, 0, []);
 
     public IngestReport Plus(IngestReport other) => new(
         Ingested + other.Ingested,
         Duplicate + other.Duplicate,
         Refused + other.Refused,
+        Retained + other.Retained,
         [.. Reasons, .. other.Reasons]);
 }
 
@@ -66,8 +74,14 @@ public interface ITelemetryStore
     /// resumed ingest can report "0 new" rather than claiming success over data it re-read.</summary>
     Task<IngestReport> AppendAsync(IReadOnlyList<ToolTelemetry> records, CancellationToken cancellationToken);
 
-    /// <summary>Per-key totals across everything stored, most-called first.</summary>
-    Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken);
+    /// <summary>Per-key totals, most-called first.
+    /// <para>
+    /// <paramref name="since"/> bounds the window; <see cref="DateTimeOffset.MinValue"/> means all
+    /// time. A window is not a convenience here: this table holds ALL traffic — benchmark legs and
+    /// every real session — so "totals since the beginning" is both the most expensive question
+    /// available and rarely the one being asked.
+    /// </para></summary>
+    Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(DateTimeOffset since, CancellationToken cancellationToken);
 
     /// <summary>One leg's server-side cost, split across its phases.
     /// <para>

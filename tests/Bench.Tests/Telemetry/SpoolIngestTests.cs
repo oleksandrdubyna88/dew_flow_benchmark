@@ -27,7 +27,13 @@ public sealed class SpoolIngestTests
         var (records, refused) = SpoolIngest.Read(truncated);
 
         records.Should().HaveCount(3, "everything written before the interruption is still evidence");
-        refused.Should().ContainSingle().Which.Should().Contain("line 4").And.Contain("malformed");
+
+        var loss = refused.Should().ContainSingle().Subject;
+        loss.ToString().Should().Contain("line 4").And.Contain("malformed");
+
+        // Permanent, and that decides the FILE's fate: nothing will ever read a half-written line, so
+        // keeping the spool for a retry that cannot succeed would make every ordinary spool immortal.
+        loss.Retryable.Should().BeFalse();
     }
 
     [Fact]
@@ -38,7 +44,13 @@ public sealed class SpoolIngestTests
         var (records, refused) = SpoolIngest.Read(mixed);
 
         records.Should().HaveCount(2, "a refusal is per line, never per file");
-        refused.Should().ContainSingle().Which.Should().Contain("line 2").And.Contain("telemetry/v9");
+
+        var refusal = refused.Should().ContainSingle().Subject;
+        refusal.ToString().Should().Contain("line 2").And.Contain("telemetry/v9");
+
+        // Retryable, and that is the opposite decision: the line is fine and this build is simply
+        // older than the emitter, so the file must survive until a build that reads it runs.
+        refusal.Retryable.Should().BeTrue();
     }
 
     [Fact]
@@ -57,8 +69,8 @@ public sealed class SpoolIngestTests
     [Fact]
     public void An_ingest_report_adds_up_across_files_without_losing_a_category()
     {
-        var first = new IngestReport(3, 1, 0, []);
-        var second = new IngestReport(2, 0, 1, ["file.jsonl line 9: malformed"]);
+        var first = new IngestReport(3, 1, 0, 0, []);
+        var second = new IngestReport(2, 0, 1, 1, ["file.jsonl line 9: malformed"]);
 
         var total = first.Plus(second);
 
@@ -70,6 +82,7 @@ public sealed class SpoolIngestTests
         total.Ingested.Should().Be(5);
         total.Duplicate.Should().Be(1);
         total.Refused.Should().Be(1);
+        total.Retained.Should().Be(1);
         total.Reasons.Should().Equal("file.jsonl line 9: malformed");
     }
 

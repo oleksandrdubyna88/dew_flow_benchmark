@@ -17,24 +17,47 @@ namespace Bench.Application;
 /// can be killed mid-write, and a codec that gives up on the first bad line loses everything after a
 /// half-written last one.
 /// </para></summary>
+/// <summary>What one spool line turned out to be. A closed union rather than a success-or-reason pair,
+/// because the two ways of failing have OPPOSITE consequences for the file that carried the line.
+/// <para>
+/// A malformed line is permanent: nothing will ever read it, and the spool file it came from can be
+/// retired. An unknown version is the opposite — the line is fine, this build is simply older than the
+/// emitter, and a build shipped next week reads it. Retiring that file would put the records out of
+/// reach of the very upgrade that was supposed to rescue them, which makes "refuse by name so somebody
+/// can fix it" a promise the reader then breaks.
+/// </para></summary>
+public abstract record LineVerdict
+{
+    private LineVerdict() { }
+
+    public sealed record Read(ToolTelemetry Record) : LineVerdict;
+
+    /// <summary>Permanent. Nothing will ever read this line — a truncated last record, corrupt bytes.</summary>
+    public sealed record Unreadable(string Reason) : LineVerdict;
+
+    /// <summary>Retryable. A LATER build reads this line; this one must not consume it.</summary>
+    public sealed record UnknownVersion(string Version, string Reason) : LineVerdict;
+}
+
 public static class TelemetryCodec
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    public static Outcome<ToolTelemetry> ReadLine(string line)
+    public static LineVerdict ReadLine(string line)
     {
         var wire = Parse(line);
         if (wire is Outcome<TelemetryWire>.Fail fail)
         {
-            return Outcome<ToolTelemetry>.Failure(fail.Reason);
+            return new LineVerdict.Unreadable(fail.Reason);
         }
 
         var record = ((Outcome<TelemetryWire>.Ok)wire).Value;
 
         return record.Schema != ToolTelemetry.ContractVersion
-            ? Outcome<ToolTelemetry>.Failure(
+            ? new LineVerdict.UnknownVersion(
+                record.Schema,
                 $"unknown telemetry schema '{record.Schema}' — this build reads {ToolTelemetry.ContractVersion}")
-            : Outcome<ToolTelemetry>.Success(ToDomain(record));
+            : new LineVerdict.Read(ToDomain(record));
     }
 
     /// <summary>A stable identity for one record, used to make ingest idempotent: re-reading a spool

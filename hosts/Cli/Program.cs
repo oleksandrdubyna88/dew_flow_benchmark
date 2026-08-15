@@ -33,6 +33,14 @@ public static class Program
     /// listening.</summary>
     private static int Telemetry(CommandLine command, TextWriter output, TextWriter error)
     {
+        // Pruning is a file operation and touches no database, so it must not demand a connection
+        // string. Requiring one would make retiring drained files impossible on a machine that has the
+        // spool but not the store — which is every machine that emits.
+        if (command.Operand(0) == "prune")
+        {
+            return TelemetryCommand.RunAsync(command, new NoTelemetryStore(), output, error).GetAwaiter().GetResult();
+        }
+
         var connection = command.Value("connection", Environment.GetEnvironmentVariable("ConnectionStrings__bench") ?? string.Empty);
         if (connection.Length == 0)
         {
@@ -76,7 +84,8 @@ public static class Program
         output.WriteLine("             [--repeats N] [--subjects id@local,id@cloud] [--lanes a,b]");
         output.WriteLine("             [--engine qln|mindex|http|noretrieval] [--exclude glob,glob] [--json]");
         output.WriteLine("  bench telemetry ingest --spool <dir> [--connection <npgsql>] [--json]");
-        output.WriteLine("  bench telemetry report [--connection <npgsql>] [--json]");
+        output.WriteLine("  bench telemetry report [--days N] [--connection <npgsql>] [--json]");
+        output.WriteLine("  bench telemetry prune  --spool <dir> --older-than <days> [--json]");
         output.WriteLine("  bench version");
         output.WriteLine();
         output.WriteLine("exit codes: 0 pass · 1 regression · 3 environment · 4 configuration · 5 no report");
@@ -87,5 +96,23 @@ public static class Program
     {
         error.WriteLine($"bench: unknown command '{verb}' — try 'bench help'");
         return ExitCodes.Configuration;
+    }
+
+    /// <summary>Stands in for the store on the one path that has no database. Every member throws
+    /// rather than returning an empty result: a silent empty answer here would render as "no telemetry
+    /// stored", which is a claim about the data instead of an admission that nothing was consulted.</summary>
+    private sealed class NoTelemetryStore : ITelemetryStore
+    {
+        public Task<IngestReport> AppendAsync(
+            IReadOnlyList<Bench.Domain.Telemetry.ToolTelemetry> records, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
+
+        public Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(
+            DateTimeOffset since, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
+
+        public Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(
+            string leg, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
     }
 }

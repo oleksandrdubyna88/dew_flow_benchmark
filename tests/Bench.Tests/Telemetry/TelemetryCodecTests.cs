@@ -55,20 +55,26 @@ public sealed class TelemetryCodecTests
     {
         var future = Fixture.Lines[0].Replace("telemetry/v0", "telemetry/v9", StringComparison.Ordinal);
 
-        var outcome = TelemetryCodec.ReadLine(future);
+        var verdict = TelemetryCodec.ReadLine(future);
 
         // Both alternatives produce the same artefact — an ingest reporting success over data it did
         // not understand. The version must be named so the operator knows WHICH emitter to look at.
-        outcome.Should().BeOfType<Outcome<ToolTelemetry>.Fail>()
-            .Which.Reason.Should().Contain("telemetry/v9").And.Contain("telemetry/v0");
+        //
+        // And it is its own case, not a generic failure: this line is FINE and this build is older
+        // than the emitter, so the file that carried it has to survive until a build that reads it
+        // runs. A malformed line is the opposite, and the two must not share a verdict.
+        var unknown = verdict.Should().BeOfType<LineVerdict.UnknownVersion>().Subject;
+        unknown.Version.Should().Be("telemetry/v9");
+        unknown.Reason.Should().Contain("telemetry/v9").And.Contain("telemetry/v0");
     }
 
     [Fact]
-    public void A_malformed_line_is_refused_rather_than_thrown()
+    public void A_malformed_line_is_refused_as_permanently_unreadable()
     {
-        var outcome = TelemetryCodec.ReadLine("{not json");
+        var verdict = TelemetryCodec.ReadLine("{not json");
 
-        outcome.Should().BeOfType<Outcome<ToolTelemetry>.Fail>()
+        // Permanent: no future build will read these bytes, so the spool holding them may be retired.
+        verdict.Should().BeOfType<LineVerdict.Unreadable>()
             .Which.Reason.Should().Contain("malformed");
     }
 

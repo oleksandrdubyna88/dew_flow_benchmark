@@ -1,12 +1,24 @@
-using Bench.Domain;
 using Bench.Domain.Telemetry;
 
 namespace Bench.Application;
 
+/// <summary>One line this build did not take, and whether anything ever could.
+/// <para>
+/// <paramref name="Retryable"/> decides the FILE's fate, not just the line's: a spool holding a record
+/// written by a newer emitter must survive until a build that understands it runs, while a spool whose
+/// only fault is a half-written last line — the normal shape of a killed emitter — has nothing left to
+/// give and can be retired.
+/// </para></summary>
+public sealed record SpoolRefusal(int Line, string Reason, bool Retryable)
+{
+    public override string ToString() => $"line {Line}: {Reason}";
+}
+
 /// <summary>Turns a spool file's text into records, without touching a disk or a database.
 /// <para>
 /// Pure on purpose: everything that decides what a spool MEANS — which lines are readable, which are
-/// refused and why — is testable without a filesystem, and the host is left with nothing but the IO.
+/// refused, and whether the file may be retired — is testable without a filesystem, and the host is
+/// left with nothing but the IO.
 /// </para></summary>
 public static class SpoolIngest
 {
@@ -16,20 +28,23 @@ public static class SpoolIngest
     /// mid-write, so the last line of a file is routinely half a record — a reader that aborts on the
     /// first failure would discard a whole run's telemetry over its final byte.
     /// </para></summary>
-    public static (IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<string> Refused) Read(string text)
+    public static (IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<SpoolRefusal> Refused) Read(string text)
     {
         var records = new List<ToolTelemetry>();
-        var refused = new List<string>();
+        var refused = new List<SpoolRefusal>();
 
         foreach (var (line, number) in NumberedLines(text))
         {
             switch (TelemetryCodec.ReadLine(line))
             {
-                case Outcome<ToolTelemetry>.Ok ok:
-                    records.Add(ok.Value);
+                case LineVerdict.Read read:
+                    records.Add(read.Record);
                     break;
-                case Outcome<ToolTelemetry>.Fail fail:
-                    refused.Add($"line {number}: {fail.Reason}");
+                case LineVerdict.UnknownVersion unknown:
+                    refused.Add(new SpoolRefusal(number, unknown.Reason, Retryable: true));
+                    break;
+                case LineVerdict.Unreadable unreadable:
+                    refused.Add(new SpoolRefusal(number, unreadable.Reason, Retryable: false));
                     break;
             }
         }

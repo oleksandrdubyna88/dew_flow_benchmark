@@ -28,7 +28,26 @@ const string DockerGroup = "dew-flow-bench";
 // parsed out of the image tag, and a digest pin CLEARS the tag — leaving no version to parse, mounting the
 // volume one level above PGDATA, and initdb'ing an empty cluster while the real data sits unmounted in the
 // volume. Measured in a sibling repository, and the failure looks like "the database lost everything".
-var postgres = builder.AddPostgres("postgres")
+// The password is a PARAMETER, not Aspire's per-run generated one, and this is not a preference —
+// it is a defect this file already had. A generated password is regenerated on every start, while the
+// data volume below is persistent, and postgres only reads POSTGRES_PASSWORD when it INITIALISES a
+// cluster. So the second run of this AppHost hands the daemon a password the existing cluster has
+// never heard of, and every connection fails with "password authentication failed for user postgres"
+// against a database that is running perfectly. Observed here on the second run.
+//
+// Parameters resolve from configuration and persist across runs. The dev value lives in this project's
+// launchSettings.json — dev-only, never published, the same precedent dew_flow_rag_qln uses for its
+// Neo4j password — and a real deployment overrides it with `dotnet user-secrets set
+// Parameters:bench-postgres-password <value>` or the matching environment variable. Marked secret so
+// it is redacted in the dashboard rather than printed beside the connection string.
+//
+// launchSettings also sets DOTNET_ENVIRONMENT=Development, and that part is load-bearing: without it
+// the AppHost starts in Production, user secrets are not loaded at all, and an unresolved parameter
+// leaves the orchestrator waiting with a running dashboard and no containers — which looks like a hang
+// rather than a missing value. Observed here before the file existed.
+var password = builder.AddParameter("bench-postgres-password", secret: true);
+
+var postgres = builder.AddPostgres("postgres", password: password)
     .WithImage("postgres", "17.10")
     .WithDataVolume("bench-postgres-data")
     // Persistent: the container belongs to the DATA, not to one AppHost session. A benchmark's whole value

@@ -126,6 +126,48 @@ inserts.
 mid-day switch of client or model cannot blend two populations into one row (the §5.4 lesson from the
 upstream system that shipped daily aggregates without an engine column).
 
+## Addendum, 2026-08-15 — five things this plan got wrong, found by re-reading the shipped code
+
+Recorded here rather than quietly fixed, because three of the four were *defended in a comment* at the
+time they were written, and a wrong justification outlives the code it was attached to.
+
+**1. The report aggregated on the client and the comment called it cheap.** LINQ cannot express a
+percentile, so `TotalsAsync` projected each group's durations with `g.Select(t => t.ServerMs).ToList()`
+and sorted them in memory — reasoning that this was "cheap next to the scan that produced it". The scan
+happens in the database; the transfer does not. Every `ServerMs` in the table this plan calls *the
+largest in the system by an order of magnitude* crossed the wire to compute two numbers. It is now raw
+SQL with `percentile_disc` — the **discrete** form deliberately, because it returns a duration some
+call actually took, while `percentile_cont` interpolates between two calls and reports one nobody
+experienced.
+
+**2. The report had no time window at all**, while an index on `At` sat unused by any query. `--days N`
+now bounds it, the window reaches the database rather than trimming a list already paid for, and the
+footer states the span even when it is "all time" — a total whose span is unstated is a number two
+readers scale differently.
+
+**3. Refusing a line by name and then retiring the file that held it is a promise broken in the same
+breath as it is made.** A spool with an unknown-version line was renamed `*.ingested` like any other,
+so the build shipped to read those records would arrive to find a file the ingest no longer looks at.
+The codec now returns a three-case `LineVerdict`, and the distinction is real rather than cosmetic:
+`UnknownVersion` is **retryable** and keeps the file in place, `Unreadable` is **permanent** — a
+half-written last line is the normal shape of a killed emitter, and keeping those files would make
+every ordinary spool immortal.
+
+**4. The AppHost's database password was regenerated while its data volume persisted.** Aspire's
+default is a per-run generated password; postgres reads `POSTGRES_PASSWORD` only when it *initialises*
+a cluster. So the first run works and the **second** hands out a password the existing cluster has
+never heard of — "password authentication failed for user postgres" against a database that is running
+perfectly, which reads as a broken connection string rather than as a rotated secret. Found by
+restarting the AppHost, not by a test. The password is now a parameter resolved from user secrets, so
+it survives a restart the way the data does.
+
+**5. Payload retention was decided; FILE retention was not.** `*.ingested` files accumulated on the
+emitting server forever. `bench telemetry prune --spool <dir> --older-than <days>` retires them, as a
+separate action that is never a step of ingest and never automatic, with **no default age** — deleting
+somebody's only copy of their data is not a thing to have a default for. It touches `*.ingested` only:
+a spool still holding unread records is not a candidate at any age. It needs no database, so it does
+not ask for a connection string; requiring one would make pruning impossible on the machine that emits.
+
 ## Infrastructure this stands up (founding plan §7, the unbuilt half)
 
 - **`hosts/AppHost`** — Aspire, mirroring `dew_flow_rag_qln`'s precedent: its own Postgres container
