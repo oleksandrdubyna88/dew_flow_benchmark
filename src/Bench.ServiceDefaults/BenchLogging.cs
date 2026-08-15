@@ -26,7 +26,7 @@ public static class BenchLogging
     /// several hosts at once is a wall of sentences with no attribution.
     /// </summary>
     private const string Template =
-        "[{Timestamp:HH:mm:ss} {Level:u3}] {App}/{Pid} {SourceContext}: {Message:lj}{NewLine}{Exception}";
+        "[{Utc:HH:mm:ss} {Level:u3}] {App}/{Pid} {SourceContext}: {Message:lj}{NewLine}{Exception}";
 
     /// <summary>
     /// Configures Serilog and installs it as the host's logging provider.
@@ -56,6 +56,7 @@ public static class BenchLogging
         var configuration = new LoggerConfiguration()
             .ReadFrom.Configuration(appConfiguration)
             .Enrich.FromLogContext()
+            .Enrich.With(new UtcTimestampEnricher())
             .Enrich.WithProperty("App", appName)
             .Enrich.WithProperty("Pid", Environment.ProcessId);
 
