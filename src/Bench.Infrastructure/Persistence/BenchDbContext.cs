@@ -1,0 +1,98 @@
+using Bench.Domain.Runs;
+using Microsoft.EntityFrameworkCore;
+
+namespace Bench.Infrastructure.Persistence;
+
+/// <summary>A run, flattened for storage. The measurement target and the engine live here as columns
+/// rather than as a foreign key to "current configuration": what a run measured must be readable from the
+/// run itself, years later, without trusting whatever the settings say by then.</summary>
+public sealed class RunRow
+{
+    public Guid Id { get; set; }
+
+    public string Label { get; set; } = string.Empty;
+
+    public string RepoUrl { get; set; } = string.Empty;
+
+    public string CommitSha { get; set; } = string.Empty;
+
+    public List<string> Exclusions { get; set; } = [];
+
+    public EngineKind EngineKind { get; set; }
+
+    public string EngineEndpoint { get; set; } = string.Empty;
+
+    public string EngineVersion { get; set; } = string.Empty;
+
+    public string IndexFingerprint { get; set; } = string.Empty;
+
+    public string SuiteStamp { get; set; } = string.Empty;
+
+    public RunStatus Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public List<CellRow> Cells { get; set; } = [];
+}
+
+public sealed class CellRow
+{
+    public Guid Id { get; set; }
+
+    public Guid RunId { get; set; }
+
+    public string QuestionId { get; set; } = string.Empty;
+
+    public int Repeat { get; set; }
+
+    public string Leg { get; set; } = string.Empty;
+
+    public int Position { get; set; }
+
+    public CellState State { get; set; }
+
+    public int Attempts { get; set; }
+
+    public string Owner { get; set; } = string.Empty;
+
+    public DateTimeOffset ClaimedAt { get; set; }
+
+    public LegOutcomeKind OutcomeKind { get; set; }
+
+    public string OutcomeDetail { get; set; } = string.Empty;
+
+    public RunRow? Run { get; set; }
+}
+
+public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : DbContext(options)
+{
+    public DbSet<RunRow> Runs => Set<RunRow>();
+
+    public DbSet<CellRow> Cells => Set<CellRow>();
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        builder.Entity<RunRow>(run =>
+        {
+            run.ToTable("runs");
+            run.HasKey(r => r.Id);
+            run.Property(r => r.Status).HasConversion<string>();
+            run.Property(r => r.EngineKind).HasConversion<string>();
+            run.HasMany(r => r.Cells).WithOne(c => c.Run!).HasForeignKey(c => c.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CellRow>(cell =>
+        {
+            cell.ToTable("cells");
+            cell.HasKey(c => c.Id);
+            cell.Property(c => c.State).HasConversion<string>();
+            cell.Property(c => c.OutcomeKind).HasConversion<string>();
+
+            // The claim query orders by (Position, QuestionId, Repeat) within one run's pending cells, and
+            // the sweep scans claimed ones by age. Both are the hot paths of a run with tens of thousands
+            // of cells, and neither should ever become a sequential scan.
+            cell.HasIndex(c => new { c.RunId, c.State, c.Position });
+            cell.HasIndex(c => new { c.State, c.ClaimedAt });
+        });
+    }
+}

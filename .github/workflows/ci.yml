@@ -21,5 +21,11 @@ jobs:
 
       # xUnit v3 on Microsoft Testing Platform: the test project builds into a self-contained
       # runner executable. `dotnet test` has no VSTest host here and would abort — never use it.
+      #
+      # This step needs Docker (present on ubuntu-latest): the durability tests run against a real
+      # Postgres via Testcontainers, because claim/settle/sweep are guarantees about concurrency and a
+      # fake would only prove the fake agrees with what we assumed. They fail loudly rather than
+      # skipping if Docker is absent — a durability suite that quietly does not run reports green
+      # while guarding nothing.
       - name: Test
         run: ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests

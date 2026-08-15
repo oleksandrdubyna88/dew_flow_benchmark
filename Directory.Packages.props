@@ -3,9 +3,20 @@
   <ItemGroup>
     <!-- Monthly policy: bump to the latest STABLE each month (previews never; this product is strictly .NET 10). -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <!-- Pinned explicitly, and it has to be. Npgsql 10.0.3 depends on EF Core 10.0.4, so without this the
+         graph resolves Relational to 10.0.4 while EF Core itself is 10.0.11 — which builds clean and then
+         fails at RUN time loading Relational. A carried lesson: see research/MEASURED_LESSONS.md for the
+         family of defects that only appear after the compiler is happy. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
+    <!-- Real Postgres for the durability tests. Claim/settle/sweep are about what happens under genuine
+         concurrency, and a fake would only prove that the fake agrees with what we assumed. -->
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
   </ItemGroup>
 
 </Project>

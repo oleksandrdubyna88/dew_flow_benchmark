@@ -291,7 +291,15 @@ point: nothing of the kind existed before, and that is how the old coupling accu
    right line — the source's HEAD had moved.
 4. **CLI over an in-memory store**: create suite → run → report, with the exit-code contract. First
    end-to-end value, no database yet.
-5. **Postgres adapter** + durability (persist-before-enqueue, claim/settle, startup sweep).
+5. ~~**Postgres adapter** + durability~~ — **DONE 2026-08-14.** `BenchRun` + `RunCell` with the
+   claim/settle/sweep transitions as PURE functions in the domain, so the database is left with the one
+   job only it can do: making a claim atomic. `PostgresRunStore` does every state change as a **guarded**
+   update — the condition lives in the WHERE clause, never in an `if` above it. Schema ships as a
+   versioned EF migration rather than `EnsureCreated`, and the durability suite applies that migration,
+   so a migration that does not run is a red test. Teeth proven: replacing the guarded update with a
+   check-then-act turned the race test red with the real symptom — **12 winners instead of 1**.
+   `MaxAttempts = 3` makes the sweep terminate: a cell that kills its host is abandoned, not requeued
+   forever. Not yet wired to a host — no worker exists to drain a queue until the engine port lands.
 6. **Engine port + the four kinds.** Black-box trace live, the white-box contract defined and implemented
    against a captured fixture in the same pass (§5.2) so the two never diverge — this step does **not** wait
    for an engine to emit the funnel.
