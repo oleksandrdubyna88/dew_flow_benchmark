@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- Deliberately does NOT import the repository root props. A spike is throwaway code whose whole job
+       is to find out what a library really does, so it must not inherit the production rules (central
+       package versions, warnings-as-errors) that would make it fight back while we are still asking. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

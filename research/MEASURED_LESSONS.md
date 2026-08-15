@@ -101,6 +101,44 @@ authored question and both are cheap to forget: a seed change **newer than any p
 cutoff**, and a deliberate **memorisation trap** — a question whose obvious answer is the well-known one
 and whose correct answer is not.
 
+## 4b. Reading saturates; fixing does not (2026-08-15)
+
+Measured against `dotnet/aspnetcore` on a reading set built to be hard — chain depth, precision plus
+rewrite, breadth over three implementations, diagnosis from a symptom:
+
+| task | shape | Opus | threshold ≤80 % reached? |
+|---|---|---|---|
+| q1 | chain depth | 9,9,8,9 of 9 | no |
+| q2 | precision + rewrite | 17–19 of 19 | no |
+| q3 | breadth, three implementations | 23/23 twice | no |
+| q4 | diagnosis from a symptom | 17/18 | no |
+
+The single miss is worth recording because it is the honest kind: both DI files carrying
+`AddAuthorization` were named line by line, and only the first link was absent — that
+`AddInteractiveServerComponents` pulls in `AddSignalR`, which is why those calls execute at all. Verified
+from the call ledger that no leg reached the internet.
+
+**A subject that answers perfectly measures its own ceiling and nothing else.** So the reading lane keeps
+its value as a regression guard and stops being the interesting question; the discriminator is fixing a
+real bug, where the scoring is mechanical rather than judged.
+
+### And an issue tracker is not evidence about a tree
+
+The fix intended for issue #51132 turned out to be **already implemented on HEAD** — as a warning, commit
+`294cab2f9b`, six days before the task was picked. The bug was formally open and half-closed quietly.
+
+Two consequences, both now design constraints rather than anecdotes: a task must verify its bug
+**reproduces at the pinned commit**, and this is a second independent argument for measuring a pinned
+checkout rather than trusting anything about a model's weights — the tracker and the tree disagreed, and
+only one of them can be run.
+
+### The trap that produces a false red
+
+During the pilot the working tree was restored but the **binary** was not rebuilt, so it still carried
+the fix. A solver invoked with `--no-build` would have been handed a passing tree described as failing,
+and would have "fixed" a bug that was not there. Rebuild to the buggy state and confirm the failure
+before handing over. Cycle cost measured: rebuild ~7 s, tests ~90 ms.
+
 ## 5. How agents actually search
 
 A model working with no retrieval tools, five tasks, every call recorded: **not one of 37 searches was

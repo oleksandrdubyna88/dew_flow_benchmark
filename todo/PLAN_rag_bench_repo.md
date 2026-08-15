@@ -110,6 +110,68 @@ not a courtesy:
 An engine **declares** its capabilities; the bench never assumes them. An engine claiming a trace-contract
 version the bench does not know **degrades to black-box** rather than failing the run.
 
+## 4b. Task kinds: reading is saturated, so the discriminator is FIXING
+
+Measured 2026-08-15 against `dotnet/aspnetcore`, on a reading set built to be hard — chain depth,
+precision-plus-rewrite, breadth across three implementations, and diagnosis from a symptom. Opus scored
+**89–100 % on all four**, against a discrimination threshold of ≤80 %. The one miss was honest and small:
+it named both DI files line by line and omitted only the first link of the chain.
+
+**Reading, in any form including abduction, saturates.** A benchmark whose tasks a subject answers
+perfectly measures nothing but its own ceiling, so the reading lane keeps its value as a regression guard
+and stops being the interesting question. The discriminator is **fixing a real bug**.
+
+### The fix lane
+
+A task is a real open issue in the target repository, at a commit where the bug is **verified live**.
+
+**Authoring is itself a model's job.** A stronger reader (Fable) investigates the bug and prepares
+**hidden tests** — held outside the corpus so the solver cannot read them — and a reference fix. That
+authoring pass is what proves the task is well-formed at all, and it is where the two traps below get
+caught.
+
+**Solving runs in three phases**, each with its own budget from §3: **investigate → fix → verify**. This
+is the one place the adopted evaluation library does not reach — its unit is a single evaluation with no
+notion of phases (see [SPIKE_dotnet_eval_library.md](../research/SPIKE_dotnet_eval_library.md), follow-up
+1) — so the phase model is ours to build.
+
+**An arbiter closes the leg**, over evidence that is mostly not its opinion.
+
+### Scoring is deterministic, and that is the point
+
+Unlike a reading answer, a fix is checkable by machine. Four signals, all mechanical:
+
+1. the diff lands in the right file;
+2. the **hidden** tests go green;
+3. the solver's **own** test exists *and has teeth* — it goes red when the fix is reverted;
+4. the neighbouring tests are intact.
+
+Signal 3 is the one that separates a fix from a plausible edit, and it is the same teeth-proof discipline
+this repository applies to its own tests. An arbiter is still worth having for the parts no assertion
+covers — was the diagnosis right, or did it patch a symptom — but it grades a leg whose facts are
+already established.
+
+### Two traps, both hit during the pilot
+
+**Rebuild to the buggy state before the solver starts.** The pilot restored the tree but the *binary* was
+still the fixed one; a solver running `--no-build` would have seen a false red and "fixed" a bug that was
+not there. The harness rebuilds and confirms the failure before handing the task over.
+
+**A bug that is formally open may be half-fixed on HEAD already.** Issue #51132's intended fix turned out
+to be implemented as a warning in commit `294cab2f9b`, six days before it was picked. The authoring pass
+must verify the bug reproduces **at the pinned commit**, which is another argument for a commit-pinned
+target over a model's weights: the issue tracker says one thing and the tree says another.
+
+The cycle is cheap enough to iterate: rebuild ~7 s, tests ~90 ms.
+
+### Pilot, already proven end to end
+
+Issue #59854 — `NavigationManager.Refresh(forceReload)` silently discards its argument, `forceLoad: true`
+hard-wired in the base implementation while all three overrides pass it through honestly. Hidden tests
+red on the unpatched tree (2 of 4, `ForceLoad=true` where false was expected), a one-line reference fix,
+4 of 4 green, 147 of 147 neighbours intact. That task is the pilot of the mechanism, not the bar; the next
+charge is #52514, whose root is the ordering of two runtimes' document listeners across two codebases.
+
 ## 5. Metrics — two independent modules, one with two implementations
 
 Both are **out-of-band**: sampled or received asynchronously, written in batches, breaker-guarded. Neither
