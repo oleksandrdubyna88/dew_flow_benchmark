@@ -1,4 +1,5 @@
 using Bench.Domain;
+using Bench.Domain.Engines;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -40,7 +41,21 @@ public interface IEngine
     /// <summary>The trace-contract version this engine emits; empty when it emits none.</summary>
     string TraceContractVersion { get; }
 
+    /// <summary>What the subject can call. An engine is not something that "returns results" — it is
+    /// the SURFACE a model works through, and the model decides what to call and when.
+    /// <para>
+    /// That distinction is measured rather than stylistic: the same four tools behind a different
+    /// surface shape scored 4/63 against 37/63 on identical tasks. An engine port that exposed a single
+    /// <c>SearchAsync</c> would measure retrieval quality while the thing that actually moves the score
+    /// — how an agent works a surface — became invisible.
+    /// </para></summary>
+    IReadOnlyList<EngineTool> Tools { get; }
+
     Task<Outcome<string>> WarmAsync(string checkoutPath, CancellationToken cancellationToken);
+
+    /// <summary>Runs one tool call. Expected refusals are VALUES: a path outside the checkout is an
+    /// answer the subject can read and correct itself from, never an exception that ends the leg.</summary>
+    Task<ToolAnswer> InvokeAsync(string tool, string argumentsJson, CancellationToken cancellationToken);
 }
 
 /// <summary>A model that can answer a question, local or cloud.</summary>

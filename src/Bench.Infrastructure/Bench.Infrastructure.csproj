@@ -10,6 +10,10 @@
     <!-- Design-time only: the migrations tool needs it, the shipped adapter must not carry it. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Glob matching for the baseline engine's find_files. Microsoft-owned, MIT, and already in this
+         graph transitively — writing a second glob matcher by hand is how the baseline's behaviour
+         starts differing from every other tool the subject has ever used. -->
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
   </ItemGroup>
 
   <ItemGroup>

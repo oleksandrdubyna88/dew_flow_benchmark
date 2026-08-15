@@ -1,0 +1,16 @@
+{
+  "contractVersion": "trace/v0",
+  "authored": "HAND-AUTHORED, 2026-08-15, and RECONCILED the same day against the first real emitter (dew_flow_rag_qln SearchService). The stage names, the per-channel qualifiers and the independently measured total now match what that engine actually produces; the counts are still shaped after a measured probe rather than captured from a run — ten natural-language queries returned 126-145 candidates out of 7239 and the target was in none of them for nine of ten (research/MEASURED_LESSONS.md, section 2). Replace this file with a captured payload the first time a run produces one, and record the difference as a deviation rather than editing it in place.",
+  "totalMs": 8010,
+  "absent": ["graph-enrich"],
+  "stages": [
+    { "name": "collection", "in": 1, "out": 1, "ms": 4 },
+    { "name": "embed-query", "in": 1, "out": 1, "ms": 380 },
+    { "name": "retrieve", "in": 200, "out": 145, "ms": 210 },
+    { "name": "retrieve:dense", "in": 100, "out": 100, "ms": 0 },
+    { "name": "retrieve:sparse", "in": 100, "out": 45, "ms": 0 },
+    { "name": "fuse", "in": 145, "out": 145, "ms": 2 },
+    { "name": "rerank", "in": 50, "out": 20, "ms": 3500 },
+    { "name": "cut", "in": 145, "out": 20, "ms": 1 }
+  ]
+}

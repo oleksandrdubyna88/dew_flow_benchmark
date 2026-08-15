@@ -282,6 +282,18 @@ Three conditions keep the interface honest, and they are not optional:
    engine emits a real funnel, the payload is compared against v0 and the difference is recorded as a
    deviation — not smoothed away. A provisional contract that silently becomes canonical is the same
    defect as an unfrozen suite version.
+
+   > **This happened on 2026-08-15, and the condition paid for itself.** `dew_flow_rag_qln` emitted its
+   > first funnel, and **five of the seven drafted stage names were wrong** — the draft was authored
+   > from the stage list of an engine that had gone out of scope, which is a description of a system
+   > rather than a payload from one. Where draft and emitter disagreed the **emitter won**: a contract
+   > whose names no producer uses produces empty columns. Recorded in `TraceContract.Deviation` and
+   > pinned by a test. The reconciliation also found three things the draft was missing outright —
+   > per-stage time, an **independently measured total** (so the unattributed remainder is arithmetic
+   > rather than trust — the draft structurally repeated the "sum of the stages we know about" failure
+   > it was written to prevent), and `Absent[]` for stages an engine does not perform. One thing was
+   > needed from the emitter in return: the funnel now stamps its `ContractVersion`, without which the
+   > degrade-to-black-box rule has nothing to read.
 2. **Two real implementations from day one.** Black-box (live) and white-box **replayed from a fixture**,
    the latter used by tests and by the report. An interface with one implementation proves nothing about
    its shape; two is the minimum tirage at which it is visible whether the abstraction has grown into one

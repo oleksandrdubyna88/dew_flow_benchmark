@@ -48,8 +48,14 @@ public readonly record struct TokenSplit(long Fresh, long CacheRead, long CacheW
 /// </para></summary>
 public sealed record ToolCall(string Name, string ArgumentsJson, bool Refused, string Error, TimeSpan Duration);
 
-/// <summary>One stage of the retrieval funnel: how many candidates went in, how many came out.</summary>
-public sealed record FunnelStage(string Name, int In, int Out)
+/// <summary>One stage of the retrieval funnel: how many candidates went in, how many came out, and what
+/// it cost.
+/// <para>
+/// <see cref="Ms"/> was missing from this contract's first draft and had to be added the moment a real
+/// engine emitted a funnel — a stage that reports only counts can say a pool was starved but never that
+/// it was slow, and "where did the eight seconds go" is half of what a funnel is for.
+/// </para></summary>
+public sealed record FunnelStage(string Name, int In, int Out, long Ms)
 {
     public int Dropped => Math.Max(0, In - Out);
 }
@@ -61,11 +67,31 @@ public sealed record FunnelStage(string Name, int In, int Out)
 /// ten) closed a whole class of proposed fixes at a stroke. Every run should produce that as a
 /// by-product instead of as an expedition.
 /// </para></summary>
-public sealed record RetrievalFunnel(string ContractVersion, IReadOnlyList<FunnelStage> Stages)
+/// <param name="TotalMs">Measured END TO END, independently of the stages — never their sum.</param>
+/// <param name="Absent">Contract stages this engine does not perform, by NAME. Not reported as
+/// <c>0 in / 0 out</c>, because that reads as "it ran and found nothing", which is a different claim
+/// from "it does not exist here".</param>
+public sealed record RetrievalFunnel(
+    string ContractVersion,
+    IReadOnlyList<FunnelStage> Stages,
+    long TotalMs,
+    IReadOnlyList<string> Absent)
 {
-    public static RetrievalFunnel None => new(string.Empty, []);
+    public static RetrievalFunnel None => new(string.Empty, [], 0, []);
 
     public bool IsPresent => Stages.Count > 0;
+
+    public long AccountedMs => Stages.Sum(s => s.Ms);
+
+    /// <summary>Time inside the call that no stage claimed.
+    /// <para>
+    /// The single most valuable number here, and the reason <see cref="TotalMs"/> is measured
+    /// separately rather than summed. An instrument upstream printed the sum of the stages it knew
+    /// about and called that the total: measured components came to ~4.3 s of an ~8 s call, and
+    /// roughly half the time belonged to nobody with nothing saying so. A sum cannot show a missing
+    /// part; a remainder can, and it points at which direction to look.
+    /// </para></summary>
+    public long UnattributedMs => Math.Max(0, TotalMs - AccountedMs);
 }
 
 /// <summary>Everything observed about one leg. The funnel is absent for a black-box engine and the
