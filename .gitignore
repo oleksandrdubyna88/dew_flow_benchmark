@@ -58,3 +58,6 @@ nunit-*.xml
 
 # Host logs: a folder per day, a file per run (.claude/rules/common/logging-serilog.md)
 logs/
+
+# Visual Studio's per-solution state — machine-local, and it appears the moment the solution is opened
+.vs/

@@ -5,9 +5,11 @@
     <Project Path="src/Bench.Infrastructure/Bench.Infrastructure.csproj" />
     <Project Path="src/Bench.Contracts/Bench.Contracts.csproj" />
     <Project Path="src/Bench.Api/Bench.Api.csproj" />
+    <Project Path="src/Bench.ServiceDefaults/Bench.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/hosts/">
     <Project Path="hosts/Cli/Cli.csproj" />
+    <Project Path="hosts/AppHost/AppHost.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Bench.Tests/Bench.Tests.csproj" />

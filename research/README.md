@@ -15,6 +15,7 @@ Yes → `todo/`. No → `research/`.
 | Document | What it is |
 |---|---|
 | [MEASURED_LESSONS.md](MEASURED_LESSONS.md) | The evidence base this project is built on — carried over from an earlier measurement programme against a different codebase, so nothing here depends on that repository being checked out. Every guard in the domain traces to a numbered finding in it |
+| [PLAN_tool_telemetry_v0.md](PLAN_tool_telemetry_v0.md) | Design record, IMPLEMENTED 2026-08-15 — the founding plan's §5.4 made concrete: this repository owns the `telemetry/v0` schema, a local spool is the transport, `bench telemetry ingest` is idempotent and resumable, and the §7 AppHost stands up this benchmark's own Postgres. Emitter half: `dew_flow_mcp · research/PLAN_usage_telemetry.md` |
 
 ## Conventions
 

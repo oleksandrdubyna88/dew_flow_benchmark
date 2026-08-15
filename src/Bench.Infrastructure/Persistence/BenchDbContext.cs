@@ -74,8 +74,27 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<MetricRow> Metrics => Set<MetricRow>();
 
+    public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        builder.Entity<ToolTelemetryRow>(telemetry =>
+        {
+            telemetry.ToTable("tool_telemetry");
+            telemetry.HasKey(t => t.Id);
+            telemetry.Property(t => t.Outcome).HasConversion<string>();
+
+            // The idempotency guard, in the DATABASE rather than in a read-then-write: two ingests
+            // racing over one spool would both find nothing and both insert. A unique index makes the
+            // second one a conflict the adapter can absorb.
+            telemetry.HasIndex(t => t.Fingerprint).IsUnique();
+
+            // The report groups by (tool, caller) and windows by time; neither should ever become a
+            // sequential scan over the largest table in the system.
+            telemetry.HasIndex(t => new { t.Tool, t.CallerKey });
+            telemetry.HasIndex(t => t.At);
+        });
+
         builder.Entity<ResultRow>(result =>
         {
             result.ToTable("results");

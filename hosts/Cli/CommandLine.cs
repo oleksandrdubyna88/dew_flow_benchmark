@@ -6,14 +6,21 @@ namespace Bench.Cli;
 public sealed class CommandLine
 {
     private readonly Dictionary<string, string> _values;
+    private readonly List<string> _operands;
 
-    private CommandLine(string verb, Dictionary<string, string> values)
+    private CommandLine(string verb, Dictionary<string, string> values, List<string> operands)
     {
         Verb = verb;
         _values = values;
+        _operands = operands;
     }
 
     public string Verb { get; }
+
+    /// <summary>Positional words after the verb — <c>bench telemetry <b>ingest</b></c>. A sub-verb is a
+    /// word, not a flag: <c>--action ingest</c> would read as configuration when it is the command.</summary>
+    public string Operand(int index, string fallback = "") =>
+        index >= 0 && index < _operands.Count ? _operands[index] : fallback;
 
     public bool Has(string name) => _values.ContainsKey(name);
 
@@ -30,19 +37,31 @@ public sealed class CommandLine
     {
         var verb = args.Length > 0 && !args[0].StartsWith("--", StringComparison.Ordinal) ? args[0] : string.Empty;
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var operands = new List<string>();
+        var consumed = new HashSet<int>();
 
         for (var i = verb.Length > 0 ? 1 : 0; i < args.Length; i++)
         {
             if (!args[i].StartsWith("--", StringComparison.Ordinal))
             {
+                // A bare word that was not eaten as the previous flag's value is a sub-verb.
+                if (!consumed.Contains(i))
+                {
+                    operands.Add(args[i]);
+                }
+
                 continue;
             }
 
             var name = args[i][2..];
             values[name] = NextValue(args, i);
+            if (values[name] != "true" || (i + 1 < args.Length && args[i + 1] == "true"))
+            {
+                consumed.Add(i + 1);
+            }
         }
 
-        return new CommandLine(verb, values);
+        return new CommandLine(verb, values, operands);
     }
 
     private static string NextValue(string[] args, int index) =>

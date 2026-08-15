@@ -13,6 +13,17 @@ public sealed record Captured(bool WasCaptured, string Value, string Reason)
     public static Captured Unavailable(string reason) => new(false, string.Empty, reason);
 }
 
+/// <summary>The same distinction for a COUNT, and the sharper half of it: a zero that means "none" and
+/// a zero that means "nobody counted" are opposite readings of one number, and only one of them is
+/// safe to average. A tool that embeds or reranks knows its tokens; a file read does not, and the
+/// difference must be visible rather than rendered as zero.</summary>
+public sealed record CapturedCount(bool WasCaptured, long Value, string Reason)
+{
+    public static CapturedCount Number(long value) => new(true, value, string.Empty);
+
+    public static CapturedCount Unavailable(string reason) => new(false, 0, reason);
+}
+
 /// <summary>Where a leg's wall-clock went. Three buckets, not two.
 /// <para>
 /// The third exists because a busy accelerator otherwise reads as a slow model: time spent waiting for

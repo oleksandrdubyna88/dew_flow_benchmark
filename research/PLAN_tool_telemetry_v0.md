@@ -1,8 +1,37 @@
 # PLAN — server-side tool telemetry v0: schema, spool ingest, and the bench's own infrastructure
 
-> Status: **plan only, nothing implemented yet, 2026-08-15.** Scope: this repository (domain type,
-> Postgres table, `bench telemetry ingest`/`report` verbs, AppHost + Postgres container) plus the
-> emitter in `dew_flow_mcp` (its own plan: `dew_flow_mcp · todo/PLAN_usage_telemetry.md`).
+> Status: **IMPLEMENTED, 2026-08-15** — authored and shipped the same day, both halves. 124 tests green
+> in this repository, 0 warnings; the emitter shipped alongside in `dew_flow_mcp` (54 tests green) and
+> its design record is `dew_flow_mcp · research/PLAN_usage_telemetry.md`. Scope as built: domain record
+> + codec, Postgres table + migration, `bench telemetry ingest`/`report`, and the AppHost with this
+> benchmark's own Postgres container.
+>
+> **Deviations.**
+> 1. **The fixture is the emitter's real output, not a hand-authored sample.**
+>    `tests/Bench.Tests/Fixtures/mcp-spool-v0.jsonl` was produced by `dew_flow_mcp`'s own sink tests and
+>    copied verbatim. A fixture written here would have proven only that this codec agrees with our idea
+>    of the other repository — which is the one thing a cross-repository contract must rule out.
+> 2. **`IngestReport` carries a documented equality trap.** It is a record struct holding a list, so
+>    `==` compares the reasons by REFERENCE. Found by a test that asserted value equality and failed;
+>    the type now says so in its remarks and callers compare counts.
+> 3. **Ingest exit codes are sharper than planned.** A line this build cannot read exits `1` (a real
+>    finding: an emitter writing a version we do not know), an unreadable spool exits `3`, and an empty
+>    spool exits `0` — "nothing to ingest" is the normal state of an already-drained spool, not a failure.
+> 4. **`bench telemetry report` over an empty store exits `5`, not `0`.** Nothing measured must not read
+>    as "no problems found".
+> 5. **A sub-verb is a WORD, not a flag** (`bench telemetry ingest`), so `CommandLine` grew positional
+>    operands. `--action ingest` would have read as configuration when it is the command.
+> 6. **The AppHost orchestrates a database and nothing else.** The CLI is a command an agent runs, not a
+>    service an orchestrator supervises; it takes its connection string from `--connection` or
+>    `ConnectionStrings__bench`. The API host joins when it exists.
+> 7. **The logging rule was mirrored into this repository** (`src/Bench.ServiceDefaults`) because it
+>    gained its first orchestrated host. The CLI deliberately does NOT take it: its stdout IS its
+>    product (a report, or JSON), and a logging provider writing to that stream would corrupt the
+>    contract the exit codes exist to keep.
+>
+> **Open tail.** No spool has yet been drained from a REAL server run: the product host
+> (`dew_flow_rag_qln · hosts/Daemon/Program.cs`) does not register the sink, so only the standalone MCP
+> host emits. The end-to-end path is proven from the emitter's own output, not yet from live traffic.
 >
 > Related: [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.4 (the contract this implements) and
 > §7 (the AppHost/Postgres this stands up); [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md)
@@ -31,45 +60,67 @@ data lands. Both are now decided (operator, 2026-08-15):
 
 ## The v0 record — one tool call, as JSON on the spool and one row in Postgres
 
+As shipped, copied from a real spool line rather than transcribed
+(`tests/Bench.Tests/Fixtures/mcp-spool-v0.jsonl`, reformatted here):
+
 ```jsonc
 {
   "schema": "telemetry/v0",
-  "at": "2026-08-15T12:34:56.789Z",          // UTC, emitter clock
-  "emitter": { "app": "mcp-host", "pid": 1234, "machine": "…", "session": "…" },
+  "at": "2026-08-15T09:30:01+00:00",          // UTC, emitter clock
+  "emitter": { "app": "mcp-stdio", "pid": 1234, "machine": "JINX" },
   "caller": {
-    "clientName":    { "captured": true,  "value": "claude-code" },   // from MCP initialize
-    "clientVersion": { "captured": true,  "value": "2.x" },
-    "model":         { "captured": false, "reason": "not carried by the MCP protocol" },
-    "transport": "stdio"                      // stdio | http
+    "clientName":    { "captured": true,  "value": "claude-code", "reason": "" },
+    "clientVersion": { "captured": true,  "value": "2.0.0",       "reason": "" },
+    "model":         { "captured": false, "value": "",            "reason": "the MCP protocol carries no model identity for the caller" },
+    "transport": "stdio"                      // stdio | http | in-process
   },
   "tool": "rt_read_local_file",
-  "scope": { "workspaceRoot": "…" },          // what the call was scoped to; project id when known
-  "argumentsJson": "…",                       // within the byte budget; truncation RECORDED
+  "scope": "D:/work/repo",                    // what the call was scoped to
+  "argumentsJson": "{\"path\":\"a.txt\"}",    // within the byte budget; truncation RECORDED
   "argumentsTruncatedBytes": 0,
   "outcome": "answered",                      // answered | refused | error — three states, not two
   "error": "",                                // the refusal/error text when outcome != answered
-  "responseChars": 8192,
-  "responseBody": "…",                        // within its own byte budget; size is always exact
+  "responseChars": 42,                        // ALWAYS exact, even when the body below was cut
+  "responseBody": "lines 1-3 of 3",           // within its own byte budget
   "responseTruncatedBytes": 0,
-  "tokens": { "captured": false, "reason": "surface does not count tokens" },
+  "tokens": { "captured": false, "value": 0, "reason": "this surface does not count tokens" },
   "serverMs": 13.4                            // server-side processing, never the caller's latency
 }
 ```
 
+**Three differences from this plan's first draft, and they are worth naming** because each was a place
+where the drafted shape was more elaborate than the truth. `scope` is a **string**, not an object: the
+emitting surface has exactly one thing to say about scope, and an object invites a consumer to expect
+fields nobody fills. `emitter` carries no `session`: nothing in the pipeline has a session identity
+that outlives a call, so the field would have been empty on every line. And every captured value ships
+**both** `value` and `reason` even when unused — a consumer must never infer "unknown" from an absent
+key.
+
 The shape mirrors the domain's existing vocabulary deliberately: the captured/not-captured split is
 `Captured` (`src/Bench.Domain/Trace/LegTrace.cs:9`), and the three-state outcome is the same lesson as
-`ToolCall.Refused` (`src/Bench.Domain/Trace/LegTrace.cs:38`) — a refused call and an answered one are
-otherwise identical from the outside.
+`ToolCall.Refused` (`src/Bench.Domain/Trace/LegTrace.cs:49`) — a refused call and an answered one are
+otherwise identical from the outside. The emitter's own record of what it writes is
+`dew_flow_mcp · research/telemetry_v0_wire.md`.
 
 **Retention is decided here, before the first write** (§5.4's explicit requirement): the byte budgets
 on arguments and response body are applied **at emit time** — the spool never contains more than the
 budget (default 4 KB each, emitter-configurable), so no later clean-up job exists to forget. Rows are
 kept as written; aggregates are computed by the report, not stored.
 
-**Idempotent ingest**: every record's SHA-256 (over the canonical JSON line) is the dedupe key — a
-unique index in Postgres, `ON CONFLICT DO NOTHING` on insert. Re-ingesting a spool file, or killing
-ingest mid-file and re-running, changes nothing. A spool file is renamed `*.ingested` only after every
-line of it is committed.
+**Idempotent ingest**: every record's SHA-256 over its CANONICAL form — re-serialised from the domain
+record, never hashed from the raw bytes, so two spellings of one call cannot become two identities — is
+the dedupe key, behind a unique index. Re-ingesting a spool file, or killing ingest mid-file and
+re-running, changes nothing. A spool file is renamed `*.ingested` only after every line of it is
+committed.
+
+*As built*, the adapter reads the batch's known fingerprints and inserts the rest, rather than the
+drafted `ON CONFLICT DO NOTHING`. Two reasons, and the second is the load-bearing one: the report needs
+to distinguish *ingested* from *duplicate* (a resumed ingest reporting "0 new" is the proof it resumed
+rather than re-inserted), and `ON CONFLICT` would silently absorb that number. The batch is also
+deduplicated **within itself** first — a spool may legitimately contain one line twice, and the unique
+index would otherwise reject the whole `SaveChanges` rather than the repeat, losing the file. The index
+remains the real guard: it is what makes two ingests racing over one spool a conflict rather than two
+inserts.
 
 **Aggregation keys on the report include the caller** — `(tool, clientName, model, transport)` — so a
 mid-day switch of client or model cannot blend two populations into one row (the §5.4 lesson from the

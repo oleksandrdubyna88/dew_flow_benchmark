@@ -33,6 +33,9 @@ plan rather than holding the whole document hostage.
 ## Related documents
 
 - [../research/README.md](../research/README.md) — what belongs in `research/`, and what is there now.
+  Most recently promoted: [PLAN_tool_telemetry_v0.md](../research/PLAN_tool_telemetry_v0.md) — the
+  §5.4 tool-telemetry contract, its spool ingest, and the AppHost that stands up this benchmark's own
+  Postgres (2026-08-15).
 - [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) — the evidence base the founding
   plan cites. Carried over so no plan here depends on another checkout being present.
 - [../CLAUDE.md](../CLAUDE.md) — the project rules; [../.claude/rules/](../.claude/rules/) holds the
@@ -49,5 +52,4 @@ means the `claudeRag` repository, where the measurement history that justifies t
 
 | Plan | Status |
 |---|---|
-| [PLAN_tool_telemetry_v0.md](PLAN_tool_telemetry_v0.md) | **plan only, 2026-08-15** — the §5.4 contract made concrete: the benchmark owns `telemetry/v0`, everything lands in the benchmark's own Postgres, the transport is a local spool drained by an idempotent `bench telemetry ingest`, and caller identity is recorded to the limit the transport knows (client name/version yes; model *not captured* for real sessions, self-declared by benchmark legs). Also stands up the founding plan's §7 AppHost + Postgres container. Emitter half: `dew_flow_mcp · todo/PLAN_usage_telemetry.md` |
 | [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) | **plan only, 2026-08-14** — the founding plan for this repository. A benchmark for **any repository at any commit, measured by any engine**: target is `(repoUrl, commitSha, exclusions)`, the engine is a parameter (ours, mindex, any HTTP service, and *no retrieval at all* as a first-class engine), suites are frozen and hashed with commit-scoped ground truth, and results are only comparable inside one measurement tuple. Two out-of-band metric modules — a hardware sampler with runs serialised on the accelerator, and a trace port with **both** black-box and white-box implementations, the latter carrying the retrieval funnel. Time in three buckets (tools · thinking · infrastructure wait). CLI first and shaped for an agent, API alongside, UI last in an RCL. Carries a §2 table of nine lessons already paid for in wrong numbers and near-misses, as specification rather than as copied code |

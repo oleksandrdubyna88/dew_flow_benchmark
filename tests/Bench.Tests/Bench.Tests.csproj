@@ -14,6 +14,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Produced by dew_flow_mcp's own emitter tests and copied verbatim: the cross-repository
+         contract is only proven by the other side's real output. -->
+    <Content Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Bench.Domain\Bench.Domain.csproj" />
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
