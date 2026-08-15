@@ -5,6 +5,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- Adopted: the evaluator/metric model. The Domain stays package-free; this layer is where the
+         boundary to it lives (MetricCodec), which the architecture test still allows. -->
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation" />
   </ItemGroup>
 
   <ItemGroup>

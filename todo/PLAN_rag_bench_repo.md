@@ -362,6 +362,15 @@ point: nothing of the kind existed before, and that is how the old coupling accu
    check-then-act turned the race test red with the real symptom — **12 winners instead of 1**.
    `MaxAttempts = 3` makes the sweep terminate: a cell that kills its host is abandoned, not requeued
    forever. Not yet wired to a host — no worker exists to drain a queue until the engine port lands.
+5b. **Adopt the evaluation library, and the phase model** — **DONE 2026-08-15.** Their metric model and
+   report writers are in; their orchestration and their disk store are not. `MetricCodec` is the boundary
+   and round-trips both ways. Results are stored with metrics as ROWS, joined to the cell and the run, so
+   "average this metric per engine" is a group-by rather than a scan that parses a directory name — the
+   query their store cannot answer, and the whole reason storage stayed ours. Ratings are stored as NAMES,
+   not ordinals. Phases are ours (`TaskKind`, `LegPhase`, `PhasePlan`): a fix task runs
+   investigate → fix → verify → judge, a phase cannot start before its predecessors end, and a ceiling or a
+   crash stops the LEG rather than only the phase.
+
 6. **Engine port + the four kinds.** Black-box trace live, the white-box contract defined and implemented
    against a captured fixture in the same pass (§5.2) so the two never diverge — this step does **not** wait
    for an engine to emit the funnel.

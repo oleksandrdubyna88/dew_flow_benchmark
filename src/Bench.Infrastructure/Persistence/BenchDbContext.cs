@@ -70,8 +70,34 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<CellRow> Cells => Set<CellRow>();
 
+    public DbSet<ResultRow> Results => Set<ResultRow>();
+
+    public DbSet<MetricRow> Metrics => Set<MetricRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        builder.Entity<ResultRow>(result =>
+        {
+            result.ToTable("results");
+            result.HasKey(r => r.Id);
+            result.HasIndex(r => r.CellId).IsUnique();
+            result.HasOne(r => r.Cell!).WithMany().HasForeignKey(r => r.CellId).OnDelete(DeleteBehavior.Cascade);
+            result.HasMany(r => r.Metrics).WithOne(m => m.Result!).HasForeignKey(m => m.ResultId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<MetricRow>(metric =>
+        {
+            metric.ToTable("metrics");
+            metric.HasKey(m => m.Id);
+            metric.Property(m => m.Kind).HasConversion<string>();
+            metric.Property(m => m.MetadataJson).HasColumnType("jsonb");
+
+            // The aggregate this schema exists for: one metric across a run, grouped by a dimension of
+            // the measurement key. An index on the name keeps that a lookup rather than a scan.
+            metric.HasIndex(m => new { m.ResultId, m.Name });
+            metric.HasIndex(m => m.Name);
+        });
+
         builder.Entity<RunRow>(run =>
         {
             run.ToTable("runs");

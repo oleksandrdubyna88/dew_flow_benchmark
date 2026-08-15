@@ -11,6 +11,11 @@
          family of defects that only appear after the compiler is happy. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Adopted after the spike (research/SPIKE_dotnet_eval_library.md): their evaluator/metric model,
+         their stored result shape and their report writers. NOT their orchestration — the measurement key
+         and the execution stay ours. .NLP is preview-only and stays out under the no-previews rule. -->
+    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation.Reporting" Version="10.9.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
