@@ -47,6 +47,13 @@ public sealed class CellRow
 
     public string Leg { get; set; } = string.Empty;
 
+    /// <summary>Leg's two axes as their own columns. "Average by subject" and "pass rate per model" are
+    /// group-bys or they are string parsing, and the metric-as-row decision already settled which of those
+    /// this schema is for.</summary>
+    public string SubjectModelId { get; set; } = string.Empty;
+
+    public string LaneName { get; set; } = string.Empty;
+
     public int Position { get; set; }
 
     public CellState State { get; set; }

@@ -199,6 +199,8 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
         QuestionId = cell.QuestionId,
         Repeat = cell.Repeat,
         Leg = cell.Leg,
+        SubjectModelId = cell.SubjectModelId,
+        LaneName = cell.LaneName,
         Position = cell.Position,
         State = cell.State,
         Attempts = cell.Attempts,
@@ -209,8 +211,8 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     };
 
     private static RunCell ToDomain(CellRow row) => new(
-        row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.Position,
-        row.State, row.Attempts, row.Owner, row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
+        row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.SubjectModelId, row.LaneName,
+        row.Position, row.State, row.Attempts, row.Owner, row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
 
     private static Outcome<BenchRun> ToDomain(RunRow row) =>
         RepoUrl.Parse(row.RepoUrl).Match(

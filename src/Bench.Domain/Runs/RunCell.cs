@@ -38,6 +38,13 @@ public sealed record RunCell(
     string QuestionId,
     int Repeat,
     string Leg,
+    /// <summary>The two axes of <paramref name="Leg"/>, carried BESIDE its canonical form rather than
+    /// parsed back out of it. Everything downstream — a judge attributing a verdict to a subject, a
+    /// discrimination reading grouping by model tier — needs these as values; recovering them by splitting
+    /// a composite string is the exact trade this project refuses in its storage, and it would be no better
+    /// here for being in memory.</summary>
+    string SubjectModelId,
+    string LaneName,
     int Position,
     CellState State,
     int Attempts,
@@ -52,6 +59,8 @@ public sealed record RunCell(
         cell.QuestionId,
         cell.Repeat,
         cell.Leg.Canonical,
+        cell.Leg.Subject.Model.Id,
+        cell.Leg.Lane.Name,
         cell.Position,
         CellState.Pending,
         Attempts: 0,

@@ -180,6 +180,36 @@ must not have been", the opposite verdict. The first consumer of this output is 
 the answer had to do rather than what must not have been: `'throughput' was absent, and the answer had to
 contain it`. **Never write a verdict whose two readings are opposite conclusions.**
 
+## 4d. A model marking its own homework passed every answer it got wrong (2026-08-15)
+
+The arbiter went in the same day as the first live run, so the first thing it was pointed at was that run's
+six legs — three Polly questions, two repeats, one local subject with no tools, every answer already stored.
+Two arbiters read the SAME six answers, at temperature 0 with a fixed seed, over the same prompt:
+
+| arbiter | relationship to the subject | verdict |
+|---|---|---|
+| `Gemma4-26B-A4B-Uncensored_vk64` | independent | **0 of 6 pass** |
+| `qwen2.5-coder-14b-uncensored_64kv` | **is the subject** | **6 of 6 pass** |
+
+Total disagreement, in the direction anyone would have predicted and at a size nobody would have guessed:
+not a lean, a reversal. The mechanical scorer and the independent arbiter agree exactly (0 of 6), and the
+independent arbiter's reasons name the actual defect — *"describes physical electrical circuit breakers,
+whereas the reference describes a specific software implementation"*, *"provides a generic implementation
+instead of naming the specific functions (`DecorrelatedJitterBackoffV2`)"*. The self-judge read the same
+answer as *"describes the mechanism of computing the delay between attempts…"* and passed it.
+
+Six legs, three questions, one model pair, one prompt — so this measures THIS pair, not self-judging in
+general. It is enough for the design consequence, which was already in the code and now has a number behind
+it: **every verdict carries `selfJudged` in its metadata and the runner counts them separately**, so a
+report cannot quietly average an independent reading together with a self-issued one. Self-judging is not
+refused — it is a legitimate reading, and one this project will want when a model is the only arbiter
+available — but it is not the SAME reading, and the schema has to be able to say which it was after the
+fact rather than only while someone is watching.
+
+The mechanical scorer is what makes this legible at all. Had the run been judged only, the two arbiters
+would be two opinions with no third thing to check them against; because the deterministic score sits
+beside them in the same result, one of the two is demonstrably the outlier.
+
 ## 5. How agents actually search
 
 A model working with no retrieval tools, five tasks, every call recorded: **not one of 37 searches was

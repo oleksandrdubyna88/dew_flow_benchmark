@@ -50,7 +50,41 @@ public sealed class PostgresResultStore(BenchDbContext db) : IResultStore
 
     public Task<IReadOnlyList<MetricByDimension>> AverageByLaneAsync(
         Guid runId, string metricName, CancellationToken cancellationToken) =>
-        AverageAsync(runId, metricName, r => r.Cell!.Leg, cancellationToken);
+        AverageAsync(runId, metricName, r => r.Cell!.LaneName, cancellationToken);
+
+    /// <summary>Legs of this run that no arbiter of this name has read yet.
+    /// <para>
+    /// A NOT-EXISTS against the metric name, which is what makes the whole judge lane restartable: it is
+    /// the same query whether nothing has been judged, half has, or a second arbiter is starting from
+    /// scratch, and it cannot produce a duplicate because the row it would duplicate is the row that
+    /// excludes it.
+    /// </para></summary>
+    public async Task<IReadOnlyList<JudgeableLeg>> WithoutMetricAsync(
+        Guid runId, string metricName, CancellationToken cancellationToken)
+    {
+        var rows = await db.Results.AsNoTracking()
+            .Include(r => r.Cell!)
+            .Where(r => r.Cell!.RunId == runId && !r.Metrics.Any(m => m.Name == metricName))
+            .OrderBy(r => r.CreatedAt)
+            .Select(r => new JudgeableLeg(r.Id, r.Cell!.QuestionId, r.Cell!.SubjectModelId, r.Prompt, r.Answer))
+            .ToListAsync(cancellationToken);
+
+        return rows;
+    }
+
+    public async Task<Outcome<int>> AppendMetricsAsync(
+        Guid resultId, IReadOnlyList<StoredMetric> metrics, CancellationToken cancellationToken)
+    {
+        if (!await db.Results.AnyAsync(r => r.Id == resultId, cancellationToken))
+        {
+            return Outcome<int>.Failure($"no result {resultId} — a verdict about nothing is not evidence");
+        }
+
+        db.Metrics.AddRange(metrics.Select(m => ToRow(resultId, m)));
+        await db.SaveChangesAsync(cancellationToken);
+
+        return Outcome<int>.Success(metrics.Count);
+    }
 
     /// <summary>One metric across a run, grouped by a dimension of the key.
     /// <para>
@@ -90,18 +124,20 @@ public sealed class PostgresResultStore(BenchDbContext db) : IResultStore
         Prompt = result.Prompt,
         Answer = result.Answer,
         CreatedAt = result.CreatedAt,
-        Metrics = [.. result.Metrics.Select(m => new MetricRow
-        {
-            Id = Guid.CreateVersion7(),
-            ResultId = result.Id,
-            Name = m.Name,
-            Kind = m.Kind,
-            Value = m.Value,
-            Reason = m.Reason,
-            Failed = m.Failed,
-            Rating = m.Rating,
-            MetadataJson = JsonSerializer.Serialize(m.Metadata, Json),
-        })],
+        Metrics = [.. result.Metrics.Select(m => ToRow(result.Id, m))],
+    };
+
+    private static MetricRow ToRow(Guid resultId, StoredMetric metric) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        ResultId = resultId,
+        Name = metric.Name,
+        Kind = metric.Kind,
+        Value = metric.Value,
+        Reason = metric.Reason,
+        Failed = metric.Failed,
+        Rating = metric.Rating,
+        MetadataJson = JsonSerializer.Serialize(metric.Metadata, Json),
     };
 
     private static LegResult ToDomain(ResultRow row) => new(

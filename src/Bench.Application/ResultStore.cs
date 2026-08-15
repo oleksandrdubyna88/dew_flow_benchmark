@@ -15,6 +15,13 @@ public readonly record struct MetricByDimension(string Dimension, double Average
 /// about evidence. Results are immutable once written — a leg is scored, not edited — so nothing here
 /// updates anything.
 /// </para></summary>
+/// <param name="QuestionId">Which suite question this leg answered — the judge needs the reference
+/// answer, and that lives in the suite rather than in the result.</param>
+/// <param name="SubjectModelId">Recorded on the verdict so self-judging is a filter after the fact,
+/// not something only the person watching the run could have noticed.</param>
+public readonly record struct JudgeableLeg(
+    Guid ResultId, string QuestionId, string SubjectModelId, string Prompt, string Answer);
+
 public interface IResultStore
 {
     /// <summary>Stores a leg's result. One result per cell: a second write is a bug, not a revision.</summary>
@@ -38,4 +45,25 @@ public interface IResultStore
 
     Task<IReadOnlyList<MetricByDimension>> AverageByLaneAsync(
         Guid runId, string metricName, CancellationToken cancellationToken);
+
+    /// <summary>Stored legs of a run that do NOT yet carry <paramref name="metricName"/>.
+    /// <para>
+    /// The filter is what makes re-judging cheap and interruptible in one stroke: a second arbiter sees
+    /// every leg because its metric name differs, the SAME arbiter re-run after a crash sees only what it
+    /// never finished, and neither can produce a duplicate. The same shape as the telemetry ingest, for the
+    /// same reason — resumability that depends on nobody killing the process is not resumability.
+    /// </para></summary>
+    Task<IReadOnlyList<JudgeableLeg>> WithoutMetricAsync(
+        Guid runId, string metricName, CancellationToken cancellationToken);
+
+    /// <summary>Appends metrics to a stored leg.
+    /// <para>
+    /// Appending is not editing, and the distinction is the reason this sits beside an otherwise
+    /// write-once port: the subject's answer and its mechanical score are never touched. A judgement is a
+    /// LATER, separately-attributed reading of the same evidence, and it must be able to arrive without
+    /// the run that produced the evidence being re-run — which is the entire justification for storing the
+    /// answer in the first place.
+    /// </para></summary>
+    Task<Outcome<int>> AppendMetricsAsync(
+        Guid resultId, IReadOnlyList<StoredMetric> metrics, CancellationToken cancellationToken);
 }

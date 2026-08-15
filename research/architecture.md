@@ -147,6 +147,29 @@ Its first live execution — Polly, three questions, no tools, two repeats — s
 zero is the SUITE's result, not the model's: it is the mechanical memorisation check, and it is recorded in
 [MEASURED_LESSONS.md](MEASURED_LESSONS.md) §4c.
 
+## The arbiter, and why it never re-runs a leg
+
+`bench judge` reads a finished run's STORED answers and appends one metric row per leg. It re-scores; it
+never re-measures. That is the property the port exists for: the expensive artefact is the subject's output,
+so changing the arbiter — or adding a second one that disagrees — costs its own inference and nothing else.
+
+- **Named per arbiter.** The metric is `Judge verdict · {modelId}`, so two arbiters over one run are two
+  series that cannot collide, and the same arbiter re-run sees only what it never finished. Work is selected
+  by NOT-EXISTS against that name, which makes idempotency and crash-resumability the same query.
+- **Asked a binary, at temperature 0.** A judge asked for a score invents a scale and drifts along it
+  between runs. YES/NO means the same thing in March and in August.
+- **An unreadable verdict is a refusal, never a NO.** Defaulting to NO makes a broken arbiter look exactly
+  like a wrong subject, on every leg it touched.
+- **No reference answer is a gap in the SUITE**, recorded as *not judgeable* — not a failing leg.
+- **Self-judging is marked, not refused.** Measured the day it shipped: the subject model passed 6 of 6 of
+  its own answers that an independent arbiter and the mechanical scorer both failed
+  ([MEASURED_LESSONS.md](MEASURED_LESSONS.md) §4d).
+- **The wrong suite is refused whole.** A verdict issued against a reference from a different suite is the
+  one wrong result this system could not detect later, because it would look like a normal one.
+
+The judge sits BESIDE the mechanical score, never instead of it. Two arbiters need a third thing to be
+checked against, and the deterministic metrics in the same result are it.
+
 ## Guards that shape the API
 
 Each is here because something went wrong that it now prevents; the catalogue is
@@ -174,8 +197,6 @@ Stated because a description that quietly implies more than is built is the same
   asks the model exactly once. Every lane is therefore currently a no-tools lane, and anchor recall reads
   *not applicable* everywhere. This is what `bench run` measures today, and it is a real measurement rather
   than a placeholder — see *The one verb that spends money* below.
-- **No judge.** `IJudge` is declared; nothing implements it. Scoring is entirely mechanical, deliberately —
-  the first measurement must not depend on a second model.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.

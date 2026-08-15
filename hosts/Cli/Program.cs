@@ -28,6 +28,7 @@ public static class Program
         {
             "plan" => PlanCommand.Run(command, output, error),
             "run" => RunCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
+            "judge" => JudgeCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error),
             "version" => Version(output),
             "" or "help" => Help(output),
@@ -98,6 +99,9 @@ public static class Program
         output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
         output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
+        output.WriteLine("  bench judge --run <id> --suite-file <path> --db <connection>");
+        output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
+        output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg");
         output.WriteLine("  bench version");
         output.WriteLine();
         output.WriteLine("exit codes: 0 pass · 1 regression · 3 environment · 4 configuration · 5 no report");
