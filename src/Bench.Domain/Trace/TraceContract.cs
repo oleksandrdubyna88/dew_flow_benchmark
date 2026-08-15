@@ -3,12 +3,18 @@ namespace Bench.Domain.Trace;
 /// <summary>The white-box trace contract: which stages a retrieval funnel may name, and what happens
 /// when an engine claims a version this build does not know.
 /// <para>
-/// <b>v0 is PROVISIONAL, and its first reconciliation has already happened.</b> The stage names here
-/// were originally authored from the stage list of an engine that went out of scope — a description of
-/// a system rather than a payload from one, which is the footing this project has retracted claims
-/// from before. On 2026-08-15 a real engine (<c>dew_flow_rag_qln</c>) emitted its first funnel, and the
-/// difference was recorded rather than smoothed away: <b>five of the seven drafted names were wrong</b>.
-/// See <see cref="Deviation"/> for what changed and why the emitter won every disagreement.
+/// <b>v0 was provisional and is no longer.</b> The stage names here were originally authored from the
+/// stage list of an engine that went out of scope — a description of a system rather than a payload
+/// from one, which is the footing this project has retracted claims from before. On 2026-08-15 a real
+/// engine (<c>dew_flow_rag_qln</c>) emitted its first funnel, and the difference was recorded rather
+/// than smoothed away: <b>five of the seven drafted names were wrong</b>. See <see cref="Deviation"/>
+/// for what changed and why the emitter won every disagreement.
+/// </para>
+/// <para>
+/// <b>Observed the same day, end to end.</b> A live search over a 75 218-point aspnetcore index
+/// returned a funnel every stage of which this contract defines, stamped <c>trace/v0</c>, with 2 ms of
+/// a 3 104 ms call unattributed. So these names are no longer a claim about what an engine might emit —
+/// they are a record of what one did. <c>QlnEngineLiveTests</c> keeps it that way.
 /// </para>
 /// <para>
 /// Generality lives in the CAPABILITY DECLARATION, never in the payload shape. The characteristic

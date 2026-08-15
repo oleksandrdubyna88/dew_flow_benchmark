@@ -1,6 +1,6 @@
 {
   "contractVersion": "trace/v0",
-  "authored": "HAND-AUTHORED, 2026-08-15, and RECONCILED the same day against the first real emitter (dew_flow_rag_qln SearchService). The stage names, the per-channel qualifiers and the independently measured total now match what that engine actually produces; the counts are still shaped after a measured probe rather than captured from a run — ten natural-language queries returned 126-145 candidates out of 7239 and the target was in none of them for nine of ten (research/MEASURED_LESSONS.md, section 2). Replace this file with a captured payload the first time a run produces one, and record the difference as a deviation rather than editing it in place.",
+  "authored": "HAND-AUTHORED 2026-08-15, reconciled the same day against dew_flow_rag_qln's SearchService, and its SHAPE has since been confirmed against a live payload from that engine (a 75218-point aspnetcore index: every stage name accepted, contractVersion stamped, 2 ms of 3104 ms unattributed). The stage names, the per-channel qualifiers and the independently measured total are therefore observed rather than imagined. The COUNTS here remain shaped after a measured probe rather than captured — ten natural-language queries returned 126-145 candidates out of 7239 with the target in none of them for nine of ten (research/MEASURED_LESSONS.md, section 2) — because this fixture exists to exercise a funnel worth reasoning about, and a live capture is what QlnEngineLiveTests does instead.",
   "totalMs": 8010,
   "absent": ["graph-enrich"],
   "stages": [
