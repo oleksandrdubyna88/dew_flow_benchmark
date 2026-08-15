@@ -1,5 +1,6 @@
 using Bench.Domain;
 using Bench.Domain.Engines;
+using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -67,6 +68,30 @@ public interface IModelRuntime
     /// stamp on <see cref="Budget.AcceptedBy"/>, or a failure when the knob does not exist here —
     /// which is the case that must be visible rather than assumed.</summary>
     Task<Outcome<string>> AcceptBudgetAsync(Budget budget, CancellationToken cancellationToken);
+
+    /// <summary>Asks the model once.
+    /// <para>
+    /// A refusal is a VALUE: an endpoint that is down, a model that is not pulled, a request the runtime
+    /// rejects are all answers a leg records and moves on from — never exceptions that end a run of ten
+    /// thousand legs over one unlucky call.
+    /// </para></summary>
+    Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken);
+}
+
+/// <param name="Endpoint">Where to ask, and what its tokens cost.</param>
+/// <param name="Sampling">What to ask FOR. What actually went out is reported back on the answer,
+/// because at least one runtime substitutes its own defaults over a request it was handed.</param>
+/// <param name="Budgets">The ceilings this call must respect. Any the runtime cannot enforce were already
+/// refused by <see cref="IModelRuntime.AcceptBudgetAsync"/> — passing them here does not make them real.</param>
+public sealed record ModelRequest(
+    ModelEndpoint Endpoint,
+    Sampling Sampling,
+    string SystemPrompt,
+    string UserPrompt,
+    IReadOnlyList<Budget> Budgets)
+{
+    public static ModelRequest Of(ModelEndpoint endpoint, Sampling sampling, string userPrompt) =>
+        new(endpoint, sampling, string.Empty, userPrompt, []);
 }
 
 public enum TraceMode

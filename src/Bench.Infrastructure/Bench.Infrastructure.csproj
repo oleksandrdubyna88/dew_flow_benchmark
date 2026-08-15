@@ -5,6 +5,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- Pooled sockets for the model runtime: a benchmark opens one connection per leg and a
+         run has tens of thousands of them. Microsoft-published, so it clears the package policy. -->
+    <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <!-- Design-time only: the migrations tool needs it, the shipped adapter must not carry it. -->
