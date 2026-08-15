@@ -177,3 +177,31 @@ upstream system that shipped daily aggregates without an engine column).
 - [ ] The AppHost runs its own Postgres container; no product database is touched.
 - [ ] The emitter side ships from `dew_flow_mcp` per its plan; a spool produced there ingests here —
       proven by a fixture spool file committed in this repository's tests.
+
+## Addendum, 2026-08-15 — correlation, added while v0 was still v0
+
+The contract shipped without any way to say which leg a call belonged to. For the reading lane that is
+survivable; for the **fix lane it is not** — a fix task budgets *investigate*, *fix* and *verify*
+separately, and without correlation the server's own time and tokens can only be attributed to the whole
+leg, which makes a phase that blew its ceiling indistinguishable from one that was cheap.
+
+`TelemetryCorrelation(Leg, Phase)` is now on the record, and three properties make it safe:
+
+- **It is what the CALLER said**, not what the server knows. An MCP server has no idea what a benchmark
+  leg is, and giving it one would make the surface unshippable to anyone not running this harness. The
+  harness puts its cell id in; a real session puts nothing, and reads as unattributed — the same honest
+  absence as `Caller.Model`.
+- **It is additive within v0.** A line written before the field existed carries no `correlation` object
+  and still reads, as unattributed. The evidence is the fixture: it is a verbatim copy of what
+  `dew_flow_mcp`'s emitter actually wrote before this existed, and the compatibility test reads it rather
+  than a line authored to agree with the reader.
+- **It reaches the fingerprint**, so two identical calls from different legs — or different phases of one
+  leg — are different records and the idempotency guard cannot merge them. Proven by removing correlation
+  from the wire: three tests went red on one shared hash.
+
+`ByPhaseAsync(leg)` is the query it exists for. Unattributed traffic is excluded from it entirely rather
+than folded in, and tokens are summed only over the calls that reported them — a file read has no tokens,
+and its absence is not a zero.
+
+**Still open:** nothing writes a correlation yet. The emitter half lives in the other repository, and the
+harness will supply the cell id when the engine port lands.

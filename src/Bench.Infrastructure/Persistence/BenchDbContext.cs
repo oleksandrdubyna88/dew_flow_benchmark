@@ -93,6 +93,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             // sequential scan over the largest table in the system.
             telemetry.HasIndex(t => new { t.Tool, t.CallerKey });
             telemetry.HasIndex(t => t.At);
+
+            // Splitting server time and tokens across a leg's phases is the join this vantage point
+            // could not otherwise make; it must not be a scan over the largest table in the system.
+            telemetry.HasIndex(t => new { t.Leg, t.Phase });
         });
 
         builder.Entity<ResultRow>(result =>

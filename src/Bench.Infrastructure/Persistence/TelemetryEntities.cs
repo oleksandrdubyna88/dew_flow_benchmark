@@ -83,4 +83,19 @@ public sealed class ToolTelemetryRow
     /// accelerator — that is infrastructure wait, and folding it in here makes a busy card read as a
     /// slow tool.</summary>
     public double ServerMs { get; set; }
+
+    /// <summary>What the CALLER said this call belongs to. Empty and uncaptured for every real session —
+    /// see <see cref="Bench.Domain.Telemetry.TelemetryCorrelation"/>. Present, it is what lets server-side
+    /// time and tokens be split across a fix task's investigate / fix / verify phases.</summary>
+    public bool LegCaptured { get; set; }
+
+    public string Leg { get; set; } = string.Empty;
+
+    public string LegReason { get; set; } = string.Empty;
+
+    public bool PhaseCaptured { get; set; }
+
+    public string Phase { get; set; } = string.Empty;
+
+    public string PhaseReason { get; set; } = string.Empty;
 }

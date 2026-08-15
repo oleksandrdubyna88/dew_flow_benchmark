@@ -37,6 +37,32 @@ public sealed record TelemetryCaller(
     private static string Read(Captured value) => value.WasCaptured ? value.Value : "?";
 }
 
+/// <summary>What the caller said this call belongs to.
+/// <para>
+/// Opaque to the emitter by design: an MCP server has no idea what a benchmark leg is, and inventing a
+/// dependency on one would make the surface unshippable to anyone not running this harness. It is a token
+/// the CLIENT supplies, and the harness supplies its cell id.
+/// </para>
+/// <para>
+/// Absent for every real session, exactly like <see cref="TelemetryCaller.Model"/> — and absent is the
+/// honest reading rather than a gap to be filled. What it buys where it IS present is the join this
+/// vantage point could not otherwise make: server-side time and tokens split across
+/// <b>investigate / fix / verify</b>, which is what a fix task's per-phase budgets are measured against.
+/// </para></summary>
+public sealed record TelemetryCorrelation(Captured Leg, Captured Phase)
+{
+    public static TelemetryCorrelation None => new(
+        Captured.Unavailable("the caller declared no leg"),
+        Captured.Unavailable("the caller declared no phase"));
+
+    public static TelemetryCorrelation Of(string leg, string phase) =>
+        new(Captured.Text(leg), Captured.Text(phase));
+
+    /// <summary>Whether this record can be attributed to a leg at all. A report that averages over
+    /// unattributed rows as though they belonged to a leg is inventing the attribution.</summary>
+    public bool IsAttributed => Leg.WasCaptured;
+}
+
 /// <summary>One tool call as the SERVER saw it — the other vantage point from the bench-side trace.
 /// <para>
 /// The harness only ever sees its own runs; this covers all traffic, benchmark and real sessions
@@ -62,7 +88,8 @@ public sealed record ToolTelemetry(
     string ResponseBody,
     int ResponseTruncatedBytes,
     CapturedCount Tokens,
-    TimeSpan ServerTime)
+    TimeSpan ServerTime,
+    TelemetryCorrelation Correlation)
 {
     /// <summary>The contract version this domain understands. Stamped on every record and checked on
     /// the way in: a consumer meeting a version it does not know must refuse that line BY NAME rather

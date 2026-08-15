@@ -47,6 +47,12 @@ public readonly record struct IngestReport(int Ingested, int Duplicate, int Refu
         [.. Reasons, .. other.Reasons]);
 }
 
+/// <param name="Phase">The phase the caller declared — for a fix task, investigate / fix / verify.</param>
+/// <param name="Tokens">Summed only over the calls that actually reported tokens; <paramref name="CallsWithTokens"/>
+/// says how many those were, because a total over an unknown denominator is not a measurement.</param>
+public readonly record struct PhaseTelemetryTotals(
+    string Phase, int Calls, int Answered, int Refused, int Errored, double ServerMs, long Tokens, int CallsWithTokens);
+
 /// <summary>Where server-side tool telemetry lands.
 /// <para>
 /// Separate from <see cref="IResultStore"/> because it is a different vantage point, not a different
@@ -62,4 +68,16 @@ public interface ITelemetryStore
 
     /// <summary>Per-key totals across everything stored, most-called first.</summary>
     Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken);
+
+    /// <summary>One leg's server-side cost, split across its phases.
+    /// <para>
+    /// The reason correlation exists. A fix task budgets investigate, fix and verify separately, and
+    /// without this the server's own time and tokens can only be attributed to the whole leg — which
+    /// means a phase that blew its ceiling is indistinguishable from one that was cheap.
+    /// </para>
+    /// <para>
+    /// Unattributed records are not in here at all. They are the majority — every real session — and
+    /// folding them into a leg's total would invent the attribution the emitter never made.
+    /// </para></summary>
+    Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(string leg, CancellationToken cancellationToken);
 }

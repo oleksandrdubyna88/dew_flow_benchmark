@@ -38,6 +38,32 @@ public sealed class PostgresTelemetryStore(BenchDbContext db) : ITelemetryStore
         return new IngestReport(fresh.Count, duplicatesInBatch + known.Count, 0, []);
     }
 
+    public async Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(string leg, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(leg))
+        {
+            return [];
+        }
+
+        var groups = await db.ToolTelemetry.AsNoTracking()
+            .Where(t => t.LegCaptured && t.Leg == leg)
+            .GroupBy(t => t.Phase)
+            .Select(g => new PhaseTelemetryTotals(
+                g.Key,
+                g.Count(),
+                g.Count(t => t.Outcome == ToolOutcome.Answered),
+                g.Count(t => t.Outcome == ToolOutcome.Refused),
+                g.Count(t => t.Outcome == ToolOutcome.Error),
+                g.Sum(t => t.ServerMs),
+                // Only the calls that reported tokens contribute. A file read has no tokens, and adding
+                // its zero into the sum would report a smaller total over a denominator nobody stated.
+                g.Sum(t => t.TokensCaptured ? t.Tokens : 0),
+                g.Count(t => t.TokensCaptured)))
+            .ToListAsync(cancellationToken);
+
+        return [.. groups.OrderBy(g => g.Phase, StringComparer.Ordinal)];
+    }
+
     public async Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken)
     {
         // Grouped in the database; only the latency percentiles come back per row, because a median is
@@ -121,6 +147,12 @@ public sealed class PostgresTelemetryStore(BenchDbContext db) : ITelemetryStore
         Tokens = record.Tokens.Value,
         TokensReason = record.Tokens.Reason,
         ServerMs = record.ServerTime.TotalMilliseconds,
+        LegCaptured = record.Correlation.Leg.WasCaptured,
+        Leg = record.Correlation.Leg.Value,
+        LegReason = record.Correlation.Leg.Reason,
+        PhaseCaptured = record.Correlation.Phase.WasCaptured,
+        Phase = record.Correlation.Phase.Value,
+        PhaseReason = record.Correlation.Phase.Reason,
     };
 
     /// <summary>Reading a row back. Present so a consumer never has to reconstruct the
@@ -144,5 +176,8 @@ public sealed class PostgresTelemetryStore(BenchDbContext db) : ITelemetryStore
         row.ResponseBody,
         row.ResponseTruncatedBytes,
         new CapturedCount(row.TokensCaptured, row.Tokens, row.TokensReason),
-        TimeSpan.FromMilliseconds(row.ServerMs));
+        TimeSpan.FromMilliseconds(row.ServerMs),
+        new TelemetryCorrelation(
+            new Captured(row.LegCaptured, row.Leg, row.LegReason),
+            new Captured(row.PhaseCaptured, row.Phase, row.PhaseReason)));
 }

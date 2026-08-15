@@ -94,7 +94,15 @@ public static class TelemetryCodec
         wire.ResponseBody,
         wire.ResponseTruncatedBytes,
         new CapturedCount(wire.Tokens.Captured, wire.Tokens.Value, wire.Tokens.Reason),
-        TimeSpan.FromMilliseconds(wire.ServerMs));
+        TimeSpan.FromMilliseconds(wire.ServerMs),
+        ToDomain(wire.Correlation));
+
+    /// <summary>Correlation is ADDITIVE within v0: a line written before it existed carries no
+    /// `correlation` object, and must still read — as unattributed, which is what it truthfully is.
+    /// Refusing those lines would discard every record an emitter wrote yesterday to gain a field it
+    /// could not have known about.</summary>
+    private static TelemetryCorrelation ToDomain(CorrelationWire wire) =>
+        new(ToDomain(wire.Leg), ToDomain(wire.Phase));
 
     private static Captured ToDomain(CapturedTextWire wire) =>
         new(wire.Captured, wire.Value, wire.Reason);
@@ -132,6 +140,11 @@ public static class TelemetryCodec
             Reason = record.Tokens.Reason,
         },
         ServerMs = record.ServerTime.TotalMilliseconds,
+        Correlation = new CorrelationWire
+        {
+            Leg = ToWire(record.Correlation.Leg),
+            Phase = ToWire(record.Correlation.Phase),
+        },
     };
 
     private static CapturedTextWire ToWire(Captured value) =>
@@ -150,6 +163,9 @@ internal sealed record TelemetryWire
     [JsonPropertyName("emitter")] public EmitterWire Emitter { get; init; } = new();
 
     [JsonPropertyName("caller")] public CallerWire Caller { get; init; } = new();
+
+    /// <summary>Absent on a line an older emitter wrote; the default reads as unattributed.</summary>
+    [JsonPropertyName("correlation")] public CorrelationWire Correlation { get; init; } = new();
 
     [JsonPropertyName("tool")] public string Tool { get; init; } = string.Empty;
 
@@ -172,6 +188,15 @@ internal sealed record TelemetryWire
     [JsonPropertyName("tokens")] public CapturedNumberWire Tokens { get; init; } = new();
 
     [JsonPropertyName("serverMs")] public double ServerMs { get; init; }
+}
+
+internal sealed record CorrelationWire
+{
+    [JsonPropertyName("leg")] public CapturedTextWire Leg { get; init; } =
+        new() { Captured = false, Value = "", Reason = "the caller declared no leg" };
+
+    [JsonPropertyName("phase")] public CapturedTextWire Phase { get; init; } =
+        new() { Captured = false, Value = "", Reason = "the caller declared no phase" };
 }
 
 internal sealed record EmitterWire

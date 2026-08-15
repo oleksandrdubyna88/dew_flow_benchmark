@@ -168,5 +168,8 @@ public sealed class TelemetryCommandTests
 
         public Task<IReadOnlyList<ToolTelemetryTotals>> TotalsAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Totals);
+
+        public Task<IReadOnlyList<PhaseTelemetryTotals>> ByPhaseAsync(string leg, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PhaseTelemetryTotals>>([]);
     }
 }
