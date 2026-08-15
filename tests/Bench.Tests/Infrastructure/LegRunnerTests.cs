@@ -45,7 +45,9 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var result = (await runner.RunNextAsync(runId, "worker-1", plan, Ct)).Ok();
 
         result.Passed.Should().BeFalse();
-        result.Metrics.Single(m => m.Name.Contains("contains")).Reason.Should().Contain("must not have been");
+        result.Metrics.Single(m => m.Name.Contains("contains")).Reason
+            .Should().Be("'DecorrelatedJitter' was absent, and the answer had to contain it",
+                "an agent reads this line, so it must not also parse as the opposite verdict");
     }
 
     [Fact]

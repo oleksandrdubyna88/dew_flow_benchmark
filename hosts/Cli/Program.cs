@@ -9,7 +9,14 @@ namespace Bench.Cli;
 /// behaviours wearing one name.</summary>
 public static class Program
 {
-    public static int Main(string[] args) => Run(args, Console.Out, Console.Error);
+    public static int Main(string[] args)
+    {
+        // The first live run printed every separator as a replacement character: the default Windows
+        // console codepage is not UTF-8, and this output is read by an agent. Set on the streams the
+        // process actually owns — Run() takes writers, so a test never reaches this.
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        return Run(args, Console.Out, Console.Error);
+    }
 
     /// <summary>The testable seam: writers are injected so the contract can be asserted without a
     /// process launch — and the exit-code contract is the part most worth asserting.</summary>
@@ -20,6 +27,7 @@ public static class Program
         return command.Verb switch
         {
             "plan" => PlanCommand.Run(command, output, error),
+            "run" => RunCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error),
             "version" => Version(output),
             "" or "help" => Help(output),
@@ -86,6 +94,10 @@ public static class Program
         output.WriteLine("  bench telemetry ingest --spool <dir> [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry report [--days N] [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry prune  --spool <dir> --older-than <days> [--json]");
+        output.WriteLine();
+        output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
+        output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
+        output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
         output.WriteLine("  bench version");
         output.WriteLine();
         output.WriteLine("exit codes: 0 pass · 1 regression · 3 environment · 4 configuration · 5 no report");

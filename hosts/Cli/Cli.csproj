@@ -9,6 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The run verb builds a small container: a DbContext, the two stores, a model runtime and an http
+         factory. Hand-wiring four scoped services would be the same code with a worse failure mode. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
   </ItemGroup>

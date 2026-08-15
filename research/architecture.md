@@ -19,7 +19,7 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — bench"]
+        cli["Cli — bench plan · run · telemetry"]
         apphost["AppHost — Aspire, own Postgres"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
@@ -131,6 +131,22 @@ Telemetry records carry a **caller-supplied** correlation (leg + phase). The emi
 benchmark leg is, so a real session records as unattributed — and unattributed traffic is excluded from a
 leg's totals rather than folded in.
 
+## The one verb that spends money
+
+`bench run` is the only command that reaches a model. It plans the matrix, persists every cell, then drains
+the queue leg by leg through `LegRunner` — one claim at a time, so a second process running the same
+command is a second worker rather than a duplicate run.
+
+**It reports; it does not judge.** No bar has been agreed, so the exit code answers *did the measurement
+happen* — never *was the subject good*. `0` a run that produced legs, `5` a run that produced none, `3` an
+unreachable store or a missing checkout, `4` a malformed invocation. A low score exits `0`, and that is the
+whole point of the split: an agent that reads "the model answered badly" as "the harness is broken" will
+keep reporting the wrong news.
+
+Its first live execution — Polly, three questions, no tools, two repeats — settled 6 legs and passed 0. That
+zero is the SUITE's result, not the model's: it is the mechanical memorisation check, and it is recorded in
+[MEASURED_LESSONS.md](MEASURED_LESSONS.md) §4c.
+
 ## Guards that shape the API
 
 Each is here because something went wrong that it now prevents; the catalogue is
@@ -156,7 +172,8 @@ Stated because a description that quietly implies more than is built is the same
 
 - **No tool-calling loop.** `IEngine` exposes tools and `FilesystemEngine` implements them, but `LegRunner`
   asks the model exactly once. Every lane is therefore currently a no-tools lane, and anchor recall reads
-  *not applicable* everywhere.
+  *not applicable* everywhere. This is what `bench run` measures today, and it is a real measurement rather
+  than a placeholder — see *The one verb that spends money* below.
 - **No judge.** `IJudge` is declared; nothing implements it. Scoring is entirely mechanical, deliberately —
   the first measurement must not depend on a second model.
 - **No cloud runtime.** Only the OpenAI-compatible local one.

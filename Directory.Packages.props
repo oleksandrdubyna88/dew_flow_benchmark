@@ -4,6 +4,7 @@
     <!-- Monthly policy: bump to the latest STABLE each month (previews never; this product is strictly .NET 10). -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.11" />
     <!-- Aspire SDK and Hosting packages must move as a matched pair — a straddled version spawns a

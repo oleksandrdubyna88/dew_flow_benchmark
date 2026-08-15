@@ -139,6 +139,47 @@ the fix. A solver invoked with `--no-build` would have been handed a passing tre
 and would have "fixed" a bug that was not there. Rebuild to the buggy state and confirm the failure
 before handing over. Cycle cost measured: rebuild ~7 s, tests ~90 ms.
 
+## 4c. The no-tools floor on Polly is zero, and that is the number the suite needed (2026-08-15)
+
+The first live run this harness ever executed, and its first result is about the SUITE rather than the
+subject. `bench run` against `App-vNext/Polly@a603169f`, `polly-smoke` (3 questions), one local model,
+lane `no-tools`, two repeats:
+
+| | legs | passed every expectation |
+|---|---|---|
+| `qwen2.5-coder-14b-uncensored_64kv` · no tools | 6 settled, 0 abandoned | **0** |
+
+Zero is the good outcome here. A no-tools lane is a mechanical **memorisation check**: the subject
+answers from its weights and nothing else, so a pass would mean the question is answerable without ever
+reading the tree — and a question like that measures training data, not retrieval. Both repeats agreed on
+every leg, so the floor is stable rather than lucky.
+
+What the answers actually said is the stronger evidence:
+
+- *circuit-open-condition* — the model answered about **electrical** circuit breakers ("excessive current",
+  "overvoltage"). The question names no library, and without a tree there is nothing to disambiguate it.
+- *retry-jitter-formula* — a generic Python `exponential_backoff_with_jitter` with an independent random
+  factor per attempt. Which is precisely the wrong mechanism: Polly's is decorrelated and carries state
+  between attempts.
+- *timeout-vs-caller-cancellation* — hedged across Java, C# and "the framework being used".
+
+The `AnswerExcludes 'consecutive'` trap fired on both repeats: the textbook answer ("a number of
+consecutive failures") is exactly what a subject with no access to `AdvancedCircuitBehavior` produces, and
+the trap was written to catch it. **A trap that never fires is not evidence that it works.**
+
+### The reason line has to be readable in one pass
+
+The same run printed, for a required term that was MISSING:
+
+```
+'throughput' was absent, and must not have been
+```
+
+Grammatically an elision of "must not have been absent" — and it parses just as easily as "was present and
+must not have been", the opposite verdict. The first consumer of this output is an agent. Fixed to say what
+the answer had to do rather than what must not have been: `'throughput' was absent, and the answer had to
+contain it`. **Never write a verdict whose two readings are opposite conclusions.**
+
 ## 5. How agents actually search
 
 A model working with no retrieval tools, five tasks, every call recorded: **not one of 37 searches was

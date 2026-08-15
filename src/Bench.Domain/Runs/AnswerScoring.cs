@@ -57,12 +57,25 @@ public static class AnswerScoring
         return StoredMetric.Boolean(
             Name(expectation),
             present == wanted,
-            present == wanted
-                ? $"'{expectation.Text}' was {(wanted ? "present" : "absent")}, as required"
-                : $"'{expectation.Text}' was {(present ? "present" : "absent")}, and must not have been",
+            Reason(expectation.Text, present, wanted),
             failed: present != wanted && expectation.Required,
             present == wanted ? "Good" : "Unacceptable");
     }
+
+    /// <summary>Why the expectation held or did not, said so that one reading is possible.
+    /// <para>
+    /// This line is read by an agent, so an elision it has to resolve is a defect. The first live run
+    /// printed <c>'throughput' was absent, and must not have been</c> for a MISSING required term — which
+    /// parses just as easily as "it was there and should not have been", the opposite verdict. The rule
+    /// here: never say what must not have been, always say what the answer had to do.
+    /// </para></summary>
+    private static string Reason(string term, bool present, bool wanted) => (present, wanted) switch
+    {
+        (true, true) => $"'{term}' was present, as required",
+        (false, false) => $"'{term}' was absent, as required",
+        (false, true) => $"'{term}' was absent, and the answer had to contain it",
+        (true, false) => $"'{term}' was present, and the answer had to avoid it",
+    };
 
     /// <summary>Anchor recall — or an honest statement that it does not apply here.
     /// <para>
