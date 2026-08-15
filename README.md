@@ -8,21 +8,27 @@ dotnet build dew_flow_benchmark.slnx -c Release
 ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
 
 ./hosts/Cli/bin/Release/net10.0/bench plan \
-  --repo https://github.com/dotnet/aspnetcore.git \
-  --commit 3f1acb59718cadf111a0a796681e3d3509bb3381 \
-  --suite-file samples/demo-suite.json \
-  --subjects qwen3-coder@local,claude-opus-5@cloud \
-  --lanes native,retrieval --repeats 3 --exclude "research/**"
+  --repo https://github.com/App-vNext/Polly.git \
+  --commit a603169f460df708206ecf907096848f584c9003 \
+  --suite-file samples/polly-smoke-suite.json \
+  --subjects qwen3-coder@local --lanes native --repeats 2 \
+  --engine NoRetrieval --exclude "**/*.md"
 ```
 
 ```
-target   https://github.com/dotnet/aspnetcore.git@3f1acb59…[research/**]
-suite    demo@v1#99f955867676  (3 question(s))
-matrix   3 x 3 repeat(s) x 4 leg(s) = 36 cell(s)
-first    qwen@native=3, qwen@retrieval=2, opus@native=2, opus@retrieval=2
-split    order-total=Selection, cache-invalidation=HeldOut, startup-sweep=Selection
-warn     claude-opus-5 is a billable cloud model — set per-phase and per-question cost ceilings
+target   https://github.com/App-vNext/Polly.git@a603169f…[**/*.md]
+suite    polly-smoke@v1#1923a90239c4  (3 question(s))
+engine   NoRetrieval|||
+matrix   3 x 2 repeat(s) x 1 leg(s) = 6 cell(s)
+first    qwen3-coder|t=0,s=1@native=6
+split    retry-jitter-formula=Selection, circuit-open-condition=HeldOut, timeout-vs-caller-cancellation=HeldOut
+warn     the engine reports no index fingerprint — results cannot later be attributed to the index that served them
 ```
+
+That is a real suite against a real tree nobody here wrote, with every anchor verified at the pinned
+commit — see [samples/README.md](samples/README.md) for the target, the verification and why each
+question resists being answered from memory. It is three questions: enough to exercise every link,
+far too few to rank anything.
 
 ## Why it is shaped this way
 

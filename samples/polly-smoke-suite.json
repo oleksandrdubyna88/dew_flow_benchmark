@@ -1,0 +1,71 @@
+{
+  "id": "polly-smoke",
+  "questions": [
+    {
+      "id": "retry-jitter-formula",
+      "prompt": "When a retry strategy is configured with exponential backoff AND jitter, what actually computes the delay between attempts? Name the function and say what it does differently from a plain randomised exponential backoff.",
+      "referenceAnswer": "RetryHelper.GetRetryDelayCore dispatches Exponential+jitter to DecorrelatedJitterBackoffV2, which is a decorrelated formula carrying state between attempts (the previous value is subtracted from the current one) rather than multiplying each delay by an independent random factor. The simpler ApplyJitter — a plus-or-minus band around the delay — is used only for Constant and Linear backoff.",
+      "expectations": [
+        {
+          "kind": "Member",
+          "file": "src/Polly.Core/Retry/RetryHelper.cs",
+          "member": "RetryHelper.DecorrelatedJitterBackoffV2",
+          "start": 75,
+          "end": 111
+        },
+        {
+          "kind": "Member",
+          "file": "src/Polly.Core/Retry/RetryHelper.cs",
+          "member": "RetryHelper.GetRetryDelayCore",
+          "start": 113,
+          "end": 143,
+          "required": false
+        },
+        {
+          "kind": "AnswerContains",
+          "text": "DecorrelatedJitter"
+        }
+      ]
+    },
+    {
+      "id": "circuit-open-condition",
+      "prompt": "What has to be true for the circuit breaker to move from closed to open, and what happens to a failure that arrives after it is already open?",
+      "referenceAnswer": "AdvancedCircuitBehavior.OnActionFailure breaks only when BOTH conditions hold at once: the sampled throughput is at least the configured minimum AND the failure rate is at least the configured ratio. A failure arriving while the circuit is already Open or Isolated is counted in the metrics and nothing else — it does not re-signal onBreak and does not extend how long the circuit stays broken, because the call was placed before the circuit opened.",
+      "expectations": [
+        {
+          "kind": "Member",
+          "file": "src/Polly.Core/CircuitBreaker/Controller/AdvancedCircuitBehavior.cs",
+          "member": "AdvancedCircuitBehavior.OnActionFailure",
+          "start": 20,
+          "end": 44
+        },
+        {
+          "kind": "AnswerContains",
+          "text": "throughput"
+        },
+        {
+          "kind": "AnswerExcludes",
+          "text": "consecutive"
+        }
+      ]
+    },
+    {
+      "id": "timeout-vs-caller-cancellation",
+      "prompt": "A call is running under a timeout strategy and the CALLER cancels it before the timeout elapses. Does the caller receive TimeoutRejectedException, and what decides that?",
+      "referenceAnswer": "No. TimeoutResilienceStrategy.ExecuteCore converts a cancellation into TimeoutRejectedException only when its own linked source fired AND the caller's original token was not already cancelled. When the caller cancelled, the original OperationCanceledException is returned unchanged, so the timeout never claims a cancellation it did not cause.",
+      "expectations": [
+        {
+          "kind": "Member",
+          "file": "src/Polly.Core/Timeout/TimeoutResilienceStrategy.cs",
+          "member": "TimeoutResilienceStrategy.ExecuteCore",
+          "start": 26,
+          "end": 94
+        },
+        {
+          "kind": "AnswerContains",
+          "text": "OperationCanceledException"
+        }
+      ]
+    }
+  ]
+}
