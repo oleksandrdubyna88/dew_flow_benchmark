@@ -172,6 +172,63 @@ red on the unpatched tree (2 of 4, `ForceLoad=true` where false was expected), a
 4 of 4 green, 147 of 147 neighbours intact. That task is the pilot of the mechanism, not the bar; the next
 charge is #52514, whose root is the ordering of two runtimes' document listeners across two codebases.
 
+## 4c. Where ground truth comes from, and why nothing is ever deleted
+
+Running is cheap and authoring is not: a machine gets through a thousand questions overnight, a person
+writes one good one in half an hour. So authoring is the real bottleneck of the stated horizon, and the
+answer is not one source but a **combination**, chosen per batch.
+
+### Sources, combinable, chosen in the UI
+
+| source | what it produces | why it is here |
+|---|---|---|
+| **Repository history** | a merged pull request: its description is the gold answer, its changed files are the anchors, decomposed into discrete facts | **the answer key is written by the project's own maintainers, not by us** — we cannot tune it to what our retrieval happens to be good at, and it scales with the repository's history rather than with our labour |
+| **Bugs and tests** | a real issue plus the commit that fixed it | for a fix task this IS the ground truth: the correct answer is the actual fix |
+| **Synthetic (self-retrieval)** | a question generated from a member's own description, checked to return that member | unlimited and free, but it measures the index against itself and cannot say whether a HUMAN's question would find it. A metric, not a benchmark — included because combining it with the others is cheap, never as a set on its own |
+| **A person** | one authored question | the highest quality and the rarest case. Needs the same shape as the rest, with the human as the source |
+
+They are **checkboxes, not a radio button**: a batch may draw from several at once. Which implies two
+things the UI must handle rather than discover — **deduplication**, because two sources routinely produce
+the same question about the same anchor, and a **review state**, because a source produces *candidates*
+and a suite must contain nothing nobody vouched for. Candidate → accepted → frozen into a version.
+
+### The authoring model is chosen, never assumed
+
+For every source that needs a model, the UI offers **the available model list** — cloud and local alike —
+and the choice is recorded with the batch. Two reasons it must be a choice and not a constant. An author
+model only writes questions it can itself answer, so the set's ceiling becomes the author's ceiling; and
+when author and subject share a family, the questions quietly inherit that family's blind spots.
+
+Two properties are mandatory on every authored question, whatever the source:
+
+- **the seed is newer than any plausible training cutoff** — otherwise the measurement is of memory, not of work;
+- **a memorisation trap** — a question whose obvious answer is the memorised one and whose correct answer is not.
+
+### Difficulty is LABELLED, never pruned
+
+An earlier draft of this section proposed retiring questions that every subject answers — as carrying no
+information. **That is wrong, and the reason matters more than the correction.**
+
+Discrimination is not a property of a question. It is a property of a question *against a particular set
+of subjects*. A question that Opus and Fable both answer is uninformative for separating Opus from Fable,
+and may be the hardest item in the set for a local 7B. Pruning by what saturates the strongest models
+deletes precisely the range in which cheaper and smaller models still differ — and that range is where
+the commercially interesting question lives, given the measured finding that the cheap model on the cheap
+engine bought ~90 % of the expensive result for ~20 % of the money
+([MEASURED_LESSONS §4](../research/MEASURED_LESSONS.md)).
+
+So nothing is deleted. Instead:
+
+1. Each question accumulates a **measured pass rate per subject tier**, as runs happen.
+2. From that comes a label — *"saturated at Opus and above"* — which is a statistic about the question,
+   not a verdict on it.
+3. **Discrimination is computed per comparison, not stored on the question.** When a report ranks two
+   configurations it uses the questions that discriminate *within that comparison's own subject set*, and
+   says how many those were. The same question is excluded from an Opus-vs-Fable comparison and central to
+   a Haiku-vs-local one.
+
+The set therefore only ever grows, and the labels are what make it usable at both ends of the range.
+
 ## 5. Metrics — two independent modules, one with two implementations
 
 Both are **out-of-band**: sampled or received asynchronously, written in batches, breaker-guarded. Neither
@@ -420,13 +477,15 @@ Steps 1–4 are the walking skeleton; a real measurement becomes possible at ste
 - [ ] Sampling is recorded as sent; every budget records the runtime that accepted it.
 - [ ] The report refuses to rank configurations whose repeats overlap (`n ≥ 2`), and refuses to crown a winner proved only on the half that selected it (§3.4).
 - [ ] `target.exclusions[]` is validated before a run and recorded with it.
+- [ ] Ground-truth sources are combinable checkboxes with deduplication and a candidate → accepted → frozen review state; the authoring model is chosen from the available list and recorded with the batch.
+- [ ] No question is ever deleted for being easy. Difficulty is a measured label per subject tier, and discrimination is computed PER COMPARISON against that comparison's own subjects.
 - [ ] CLI honours the exit-code contract, emits JSON, is resumable; no command selects a run implicitly.
 - [ ] The §2 carried-lessons table exists as a checklist, each row naming the test that pins it.
 
 ## 12. Open questions
 
 1. **Language scope, and the first target.** Ground-truth authoring and symbol identity are language-specific; C# first is the obvious call. The sharper half of this question is the TARGET: every finding carried over came from one small self-authored repository, which is a confound large enough to invert the headline result ([MEASURED_LESSONS §4](../research/MEASURED_LESSONS.md)). The first serious target should therefore be a large unfamiliar C# codebase, and the first measurement worth running is whether the carried-over findings survive it at all.
-2. **Who authors the ground truth at scale, and how.** Running thousands of tests is cheap; authoring them is not, and this is the real bottleneck of the stated horizon. No public repository-QA set can be borrowed — the surveyed ones are Python, and the only C# set found is patch-and-test rather than question-answering — so the METHODOLOGY is borrowed and the data is authored: pull request → gold answer → discrete facts, whose last step is what an `AnswerContains` expectation already is. Two properties belong on every question and are cheap to forget: a seed change newer than any plausible training cutoff, and a deliberate memorisation trap. Open: who does the authoring, at what rate, and with what review.
+2. **Authoring throughput, now that the sources are decided.** §4c fixes WHERE ground truth comes from — repository history as the backbone, a chosen model for volume, a person for the hard cases, all combinable — and that nothing is ever pruned by difficulty. What stays open is the rate: how many accepted questions per week the review step can actually pass, and whether the memorisation-trap property can be checked mechanically or needs a human every time. Both are answerable only by authoring a first real batch.
 3. **Who implements the white-box trace contract first, and when — no longer a blocker, but still open, and now on a weaker footing.** `dew_flow_rag_qln` is at skeleton stage, and the engine that already had a stage instrument is out of scope and is not touched — so there is no live emitter and, unlike the first draft of this plan, **no captured payload to derive the contract from either** (see §5.2). The contract, the port, a hand-authored fixture and the report columns still ship without an emitter, which keeps this off the critical path of build step 6. What is genuinely open: when QLN grows retrieval far enough to emit a funnel, and how much the provisional v0 contract has to change when it does. Until then no run carries a real funnel, and the DoD distinguishes the two states rather than blurring them.
 4. **Where the three pending retrieval arms run.** Graph header out of the embed text, class/file context in the embed text, and gating the description pass while every member still gets questions — three experiments carried over from the earlier programme, each with recorded measured support and each a change to *an engine*. The engine they were written against is out of scope now, so they are homeless: they survive as experiments this bench can run, and they need a host engine named before any of them means anything.
 5. ~~**Who owns the tool-telemetry contract, and when does it land.**~~ **CLOSED 2026-08-15** — operator decision: **this repository owns both versioned contracts** (the white-box funnel and the tool telemetry) under one scheme, and everything lands in this benchmark's own Postgres. Shipped as [research/PLAN_tool_telemetry_v0.md](../research/PLAN_tool_telemetry_v0.md), with the emitter in `dew_flow_mcp · research/PLAN_usage_telemetry.md`. The transport is a **local spool** rather than a live connection, which is what let the two halves ship independently: a server that had to reach this host to record a call would couple a product's tool surface to a benchmark being up. What remains is not ownership but coverage — the private product host does not register the sink yet, so only the standalone MCP host emits.
