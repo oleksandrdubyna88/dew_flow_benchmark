@@ -30,6 +30,9 @@ public sealed class PostgresResultStore(BenchDbContext db) : IResultStore
         return Outcome<LegResult>.Success(result);
     }
 
+    public Task<bool> HasResultAsync(Guid cellId, CancellationToken cancellationToken) =>
+        db.Results.AsNoTracking().AnyAsync(r => r.CellId == cellId, cancellationToken);
+
     public async Task<IReadOnlyList<LegResult>> ForRunAsync(Guid runId, CancellationToken cancellationToken)
     {
         var rows = await db.Results.AsNoTracking()

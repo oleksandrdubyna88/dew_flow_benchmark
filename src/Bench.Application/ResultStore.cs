@@ -20,6 +20,11 @@ public interface IResultStore
     /// <summary>Stores a leg's result. One result per cell: a second write is a bug, not a revision.</summary>
     Task<Outcome<LegResult>> SaveAsync(LegResult result, CancellationToken cancellationToken);
 
+    /// <summary>Whether this leg has already been scored. The runner asks before it settles a cell: a
+    /// crash between storing a result and settling leaves the cell claimed, the sweep hands it back, and the
+    /// retry must be able to finish the job rather than deadlock against its own earlier write.</summary>
+    Task<bool> HasResultAsync(Guid cellId, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<LegResult>> ForRunAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>The aggregate the schema exists for: one metric, averaged per engine across a run.

@@ -448,7 +448,14 @@ point: nothing of the kind existed before, and that is how the old coupling accu
    investigate → fix → verify → judge, a phase cannot start before its predecessors end, and a ceiling or a
    crash stops the LEG rather than only the phase.
 
-6. **Engine port + the four kinds.** Black-box trace live, the white-box contract defined and implemented
+6. ~~**Model runtime + the leg runner**~~ — **DONE 2026-08-15.** `OpenAiCompatibleRuntime` asks a local
+   model and REFUSES the ceilings it cannot impose (cost, turns), which is the `CompactAtTokens` lesson made
+   structural. `LegRunner` is the assembly — claim, ask, score, store, settle — result-first and re-entrant
+   across the crash window. Scoring is mechanical (`AnswerScoring`); a retrieval expectation in a lane with
+   no retrieval reads *not applicable* rather than a miss, so the no-tools baseline is not biased against
+   itself. **Still single-shot: no tool-calling loop, so every lane is currently a no-tools lane.**
+
+7. **Engine port + the four kinds.** Black-box trace live, the white-box contract defined and implemented
    against a captured fixture in the same pass (§5.2) so the two never diverge — this step does **not** wait
    for an engine to emit the funnel.
 7. **Hardware sampler** + accelerator lease.
