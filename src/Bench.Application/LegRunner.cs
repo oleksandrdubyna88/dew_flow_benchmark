@@ -7,17 +7,23 @@ using Microsoft.Extensions.Logging;
 namespace Bench.Application;
 
 /// <param name="Suite">The frozen suite this run measures. Questions are found in it by the id on the cell.</param>
-/// <param name="Endpoint">Where the subject lives and what its tokens cost.</param>
+/// <param name="Subjects">Every subject of this run, and where each one's legs are sent. A LIST, because a
+/// run has always been able to plan several while the runner held one endpoint — which would have sent
+/// every leg to the first model and labelled the results with the cell's subject.</param>
 /// <param name="Budgets">Only ceilings a runtime has ACCEPTED belong here.</param>
 public sealed record LegPlan(
     Suite Suite,
-    ModelEndpoint Endpoint,
-    Sampling Sampling,
+    SubjectRoster Subjects,
     IReadOnlyList<Budget> Budgets,
     TaskKind Kind)
 {
+    /// <summary>A single-subject reading plan — the ad-hoc shape, and what a test with one subject
+    /// collapses to.</summary>
     public static LegPlan Reading(Suite suite, ModelEndpoint endpoint, Sampling sampling) =>
-        new(suite, endpoint, sampling, [], TaskKind.Reading);
+        new(suite, SubjectRoster.Of(endpoint, sampling), [], TaskKind.Reading);
+
+    public static LegPlan Reading(Suite suite, SubjectRoster subjects) =>
+        new(suite, subjects, [], TaskKind.Reading);
 }
 
 /// <summary>One leg, end to end: claim a cell, run its phases, score the answer, store it, settle.
@@ -82,10 +88,19 @@ public sealed class LegRunner(
     private async Task<Outcome<LegResult>> AskAsync(
         RunCell cell, WorkerIdentity owner, LegPlan plan, Question question, CancellationToken cancellationToken)
     {
+        // The cell says which subject this leg is FOR, so the endpoint is looked up rather than assumed.
+        // A miss is settled, never defaulted: a leg sent to another subject's endpoint would carry this
+        // cell's label and be invisible in every number built afterwards.
+        if (plan.Subjects.For(cell.SubjectModelId) is not Outcome<RosterEntry>.Ok(var subject))
+        {
+            return await AbandonAsync(
+                cell, owner, plan.Subjects.For(cell.SubjectModelId).Match(_ => string.Empty, reason => reason), cancellationToken);
+        }
+
         var deadline = LegDeadline.For(plan.Budgets, clock.GetUtcNow());
 
         var asked = await runtime.AskAsync(
-            new ModelRequest(plan.Endpoint, plan.Sampling, string.Empty, question.Prompt, deadline.ForCall(clock.GetUtcNow())),
+            new ModelRequest(subject.Endpoint, subject.Sampling, string.Empty, question.Prompt, deadline.ForCall(clock.GetUtcNow())),
             cancellationToken);
 
         return asked is Outcome<ModelAnswer>.Fail failed

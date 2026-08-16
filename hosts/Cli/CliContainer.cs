@@ -1,5 +1,6 @@
 using Bench.Application;
 using Bench.Application.Bank;
+using Bench.Application.Registry;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +51,10 @@ public static class CliContainer
             .AddScoped<IResultStore>(s => s.GetRequiredService<PostgresResultStore>())
             .AddScoped<IQuestionBank, PostgresQuestionBank>()
             .AddScoped<IRunQuestionStore, PostgresRunQuestionStore>()
+            .AddScoped<IModelRegistry, PostgresModelRegistry>()
+            .AddScoped<IRunRoleStore, PostgresRunRoleStore>()
+            // The one place a secret or a machine path enters the process — the registry stores the NAME.
+            .AddSingleton<ISecretSource, EnvironmentSecrets>()
             .AddSingleton(TimeProvider.System)
             // dispose: false — the logger belongs to the PROCESS, which flushes it in its own finally.
             // A container that closed it would silence whatever the shutdown path still has to say.

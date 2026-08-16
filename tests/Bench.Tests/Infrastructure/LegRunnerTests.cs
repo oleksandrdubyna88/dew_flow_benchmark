@@ -153,6 +153,44 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         plan with { Budgets = [Budget.Of(BudgetKind.Wall, BudgetScope.Question, seconds).ConfirmedBy("fake")] };
 
     [Fact]
+    public async Task Each_subjects_leg_is_sent_to_THAT_subjects_endpoint()
+    {
+        var clock = new TestClock(Noon);
+        var runtime = new RecordingRuntime(clock);
+        var (runId, plan, runner, _, _) = await ArrangeAsync(runtime, clock, TwoSubjects());
+
+        await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
+        await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
+
+        // A run has always been able to plan several subjects while the runner held ONE endpoint — so both
+        // legs went to the first model and were labelled with the cell's subject. Nothing in the report
+        // would have shown it: two models named, one measured.
+        runtime.Sent.Select(s => s.BaseUrl).Should().BeEquivalentTo(
+            ["http://127.0.0.1:11434/v1", "http://127.0.0.1:11435/v1"],
+            "each cell names its subject, and the endpoint is looked up rather than assumed");
+        runtime.Sent.Select(s => s.ModelId).Should().BeEquivalentTo(["qwen3-coder:latest", "gemma3:latest"]);
+    }
+
+    [Fact]
+    public async Task A_cell_whose_subject_this_run_cannot_reach_is_settled_rather_than_sent_somewhere_else()
+    {
+        var clock = new TestClock(Noon);
+        var runtime = new RecordingRuntime(clock);
+        var (runId, plan, runner, runs, _) = await ArrangeAsync(runtime, clock, TwoSubjects());
+
+        // A roster holding only the FIRST subject: the second subject's cell has nowhere honest to go.
+        var partial = plan with { Subjects = SubjectRoster.Of([plan.Subjects.Entries[0]]) };
+
+        await runner.RunNextAsync(runId, Worker("worker-1"), partial, Ct);
+        var second = await runner.RunNextAsync(runId, Worker("worker-1"), partial, Ct);
+
+        second.Reason().Should().Contain("no endpoint for subject",
+            "a leg sent to another subject's endpoint would carry this cell's label and be invisible afterwards");
+        runtime.Sent.Should().ContainSingle("the unreachable subject's leg is settled, never sent");
+        (await runs.ProgressAsync(runId, Ct)).Settled.Should().Be(2);
+    }
+
+    [Fact]
     public async Task A_leg_scored_but_never_settled_is_finished_rather_than_measured_twice()
     {
         var (runId, plan, runner, runs, results) = await ArrangeAsync(new FakeRuntime("DecorrelatedJitter"));
@@ -215,30 +253,40 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     private Task<(Guid RunId, LegPlan Plan, LegRunner Runner, PostgresRunStore Runs, PostgresResultStore Results)>
         ArrangeAsync(IModelRuntime runtime) => ArrangeAsync(runtime, new TestClock(Noon));
 
+    private Task<(Guid RunId, LegPlan Plan, LegRunner Runner, PostgresRunStore Runs, PostgresResultStore Results)>
+        ArrangeAsync(IModelRuntime runtime, TestClock clock) => ArrangeAsync(runtime, clock, OneSubject());
+
     private async Task<(Guid RunId, LegPlan Plan, LegRunner Runner, PostgresRunStore Runs, PostgresResultStore Results)>
-        ArrangeAsync(IModelRuntime runtime, TestClock clock)
+        ArrangeAsync(IModelRuntime runtime, TestClock clock, SubjectRoster roster)
     {
         var suite = SuiteOf("polly-smoke", "retry-jitter-formula");
         var target = MeasurementTarget.At(RepoUrl.Parse("https://github.com/App-vNext/Polly.git").Ok(), Commit);
         var run = BenchRun.Planned("first", target, EngineRef.Filesystem(), suite.Stamp, Noon);
 
-        var cells = Matrix.Plan(
-            suite.Questions, repeats: 1,
-            [new Subject(ModelRef.Parse("qwen3-coder:latest", ModelHosting.Local).Ok(), Sampling.Deterministic(7))],
-            [Lane.Named("no-tools")]).Ok()
+        var cells = Matrix.Plan(suite.Questions, repeats: 1, roster.Subjects, [Lane.Named("no-tools")]).Ok()
             .Select(c => RunCell.Pending(run.Id, c)).ToList();
 
         var runs = new PostgresRunStore(postgres.NewContext(), clock);
         var results = new PostgresResultStore(postgres.NewContext());
         await runs.CreateAsync(run, cells, Ct);
 
-        var plan = LegPlan.Reading(
-            suite,
-            ModelEndpoint.Parse(ModelRef.Parse("qwen3-coder:latest", ModelHosting.Local).Ok(), "http://127.0.0.1:11434/v1").Ok(),
-            Sampling.Deterministic(7));
+        var plan = LegPlan.Reading(suite, roster);
 
         return (run.Id, plan, new LegRunner(runs, results, runtime, clock, NullLogger<LegRunner>.Instance), runs, results);
     }
+
+    private static SubjectRoster OneSubject() => Roster(("qwen3-coder:latest", "http://127.0.0.1:11434/v1"));
+
+    /// <summary>Two subjects at two endpoints — the shape a test with a model registry actually has, and
+    /// the one a single-endpoint runner measured wrong while naming both.</summary>
+    private static SubjectRoster TwoSubjects() => Roster(
+        ("qwen3-coder:latest", "http://127.0.0.1:11434/v1"),
+        ("gemma3:latest", "http://127.0.0.1:11435/v1"));
+
+    private static SubjectRoster Roster(params (string ModelId, string BaseUrl)[] subjects) =>
+        SubjectRoster.Of([.. subjects.Select(s => new RosterEntry(
+            ModelEndpoint.Parse(ModelRef.Parse(s.ModelId, ModelHosting.Local).Ok(), s.BaseUrl).Ok(),
+            Sampling.Deterministic(7)))]);
 
     private static Suite SuiteOf(string suiteId, string questionId) =>
         Suite.Draft(suiteId).With(new Question(
@@ -251,6 +299,34 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
                 new Expectation(ExpectationKind.AnswerExcludes, SourceAnchor.File("", Commit), "consecutive", true),
             ],
             string.Empty)).Ok().Freeze().Ok();
+
+    /// <summary>A runtime that records WHERE each leg was sent. The multi-subject defect is invisible in a
+    /// result — both legs succeed and both carry their cell's label — so the only place it can be observed
+    /// is the request itself.</summary>
+    private sealed class RecordingRuntime(TestClock clock) : IModelRuntime
+    {
+        public List<(string ModelId, string BaseUrl)> Sent { get; } = [];
+
+        public ModelHosting Hosting => ModelHosting.Local;
+
+        public Task<Outcome<string>> AcceptBudgetAsync(Budget budget, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<string>.Success("fake"));
+
+        public Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
+        {
+            Sent.Add((request.Endpoint.Model.Id, request.Endpoint.BaseUrl));
+            clock.Now += TimeSpan.FromSeconds(1);
+
+            return Task.FromResult(Outcome<ModelAnswer>.Success(new ModelAnswer(
+                Captured.Text("DecorrelatedJitter"),
+                CapturedCount.Number(10),
+                CapturedCount.Number(5),
+                TimeSpan.FromSeconds(1),
+                SamplingAsSent.From(request.Sampling, "request-body"),
+                StopReason.Completed,
+                "stop")));
+        }
+    }
 
     /// <summary>A runtime that BURNS TIME. The wall budget is a statement about elapsed time, so the only
     /// fake that can test it is one that moves the clock the runner reads — a fake that answers instantly

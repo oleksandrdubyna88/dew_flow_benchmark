@@ -62,7 +62,7 @@ One result row is identified by, and comparable only within, this tuple:
 target   = (repoUrl, commitSha, exclusions[])     -- pinned, never ambient
 engine   = (kind, endpoint, version, indexFingerprint)
 suite    = (suiteId, suiteVersion)                -- frozen and hashed, from a file or a bank selection
-subject  = (modelId, samplingAsSent)              -- 1..N
+subject  = (modelId, samplingAsSent)              -- 1..N, each with its OWN endpoint (SubjectRoster)
 lane     = (toolSurface, preamble)                -- 1..N
 variant  = (name, definitionHash)                 -- 1..N, from the catalog; absent on a run planned without it
 repeat   = ordinal                                -- n >= 2 to rank anything
@@ -122,6 +122,36 @@ Three properties carry the weight:
 `bench questions import|list|groups|review|accept|reject|move` is the surface; `bench run --bank-group`
 freezes a selection instead of reading a suite file. A file-selected run writes no snapshot rows, which is
 the honest reading rather than a gap: a file has no groups.
+
+### The model registry
+
+Models are configuration, never constants. A row is a key, a runtime, a hosting, and a configuration that
+holds **references, never values** — the NAME of the environment variable that holds an endpoint or a key,
+resolved on this machine at use. That is the publication rule with teeth: this database is meant to go out
+unedited, and a guarantee scoped to result rows while the registry sits in the same schema would be a
+redaction pass nobody has scheduled. Sampling and prices stay as values — neither is secret nor
+machine-specific, and a run must be able to say what it asked for and what its tokens cost. `ModelConfig`
+refuses a url or an absolute path *by name*, and a test re-reads every stored row through that same rule.
+
+A test chooses its **subjects** and its ordered **arbiters** from the enabled rows, and the choice is
+stored on the run (`run_subjects`, `run_judges`): the registry can change afterwards without rewriting
+what a finished test says it measured. Resolution happens before a single cell exists — a disabled model,
+an unknown key, a runtime this build cannot drive, and a reference that is unset on this machine are each
+refused by name, rather than discovered three hours into a sweep as a wall of identical transport
+failures. A subject may be ADDED to an existing test (that is how a settled test reopens); removing one is
+not, because its settled cells would dangle. An arbiter added later continues the order rather than
+restarting it.
+
+**One endpoint per SUBJECT, looked up per cell.** `SubjectRoster` closed a defect the registry uncovered:
+the matrix has always planned a list of subjects while the runner held a single endpoint, so a two-subject
+run would have sent every leg to the first model and labelled the results with the cell's subject — two
+models named, one measured, invisible in every report. A cell whose subject this run cannot reach is
+settled with that reason, never redirected.
+
+`bench models add|list|disable|enable` is the surface — the listing says which references resolve *here* —
+and `bench run --subjects <keys> [--judges <keys>]` composes a test from them. The ad-hoc `--model` pair
+still works for pointing the harness at something once; such a run records no roles, because a role names
+a registry key and it named none.
 
 ## One leg, end to end
 
@@ -317,5 +347,8 @@ Stated because a description that quietly implies more than is built is the same
 - **Nothing AUTHORS questions.** The bank holds them, reviews them and freezes selections from them, but
   candidates arrive by import: the pipeline that drives CLI agents to write and review them is a later
   plan, and the schema is already the shape it needs so that plan adds verbs rather than tables.
-- **A test's engine, subjects and arbiters are still `bench run` flags**, not rows chosen per test —
-  that is the model registry, step 3 of `todo/PLAN_variant_matrix.md`.
+- **A test's ENGINE is still one value per run**, not an axis: variants exist as a catalog and as a column
+  on a cell, but `bench run` does not yet plan one leg per variant or wire an engine into a leg — that is
+  step 4 of `todo/PLAN_variant_matrix.md`, and it waits on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`.
+- **Nothing checks the target out.** `ICheckoutProvider` is written and tested and no run path calls it,
+  so a run records its commit without verifying it.

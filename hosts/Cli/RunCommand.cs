@@ -1,8 +1,10 @@
 using Bench.Application;
 using Bench.Application.Bank;
+using Bench.Application.Registry;
 using Bench.Domain;
 using Bench.Domain.Bank;
 using Bench.Domain.Models;
+using Bench.Domain.Registry;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -157,8 +159,15 @@ public static class RunCommand
         CancellationToken stopping)
     {
         var frozen = selection.Suite;
+        var resolved = await RosterAsync(scope, settings, stopping);
+
+        if (resolved is not Outcome<SubjectRoster>.Ok(var roster))
+        {
+            return Refuse(error, resolved.Match(_ => string.Empty, reason => reason));
+        }
+
         var run = BenchRun.Planned(settings.Label, settings.Target, EngineRef.Filesystem(), frozen.Stamp, DateTimeOffset.UtcNow);
-        var cells = Matrix.Plan(frozen.Questions, settings.Repeats, [settings.Subject], [settings.Lane]);
+        var cells = Matrix.Plan(frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane]);
 
         if (cells is Outcome<IReadOnlyList<MatrixCell>>.Fail badMatrix)
         {
@@ -188,11 +197,92 @@ public static class RunCommand
             return Refuse(error, unsnapshotted.Reason);
         }
 
-        var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
-        Announce(output, settings, run, selection, planned.Count, confirmed);
+        var roles = await RolesAsync(scope, run.Id, settings, stopping);
 
-        return (run, LegPlan.Reading(frozen, settings.Endpoint, settings.Sampling) with { Budgets = confirmed });
+        if (roles is Outcome<int>.Fail unrecorded)
+        {
+            return Refuse(error, unrecorded.Reason);
+        }
+
+        var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
+        Announce(output, settings, run, selection, roster, planned.Count, confirmed);
+
+        return (run, LegPlan.Reading(frozen, roster) with { Budgets = confirmed });
     }
+
+    /// <summary>Who this run measures, resolved before a single cell exists.
+    /// <para>
+    /// Either the registry — every key looked up, every reference resolved on THIS machine, a disabled
+    /// model refused by name — or the ad-hoc <c>--model</c> pair. Discovering that a key is disabled or
+    /// that an environment variable is unset belongs here, not three hours into a sweep as a wall of
+    /// identical transport failures.
+    /// </para></summary>
+    private static async Task<Outcome<SubjectRoster>> RosterAsync(
+        AsyncServiceScope scope, RunInputs settings, CancellationToken stopping)
+    {
+        if (settings.AdHoc.Entries.Count > 0)
+        {
+            return Outcome<SubjectRoster>.Success(settings.AdHoc);
+        }
+
+        var registry = scope.ServiceProvider.GetRequiredService<IModelRegistry>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretSource>();
+        var entries = new List<RosterEntry>(settings.SubjectKeys.Count);
+
+        foreach (var key in settings.SubjectKeys)
+        {
+            var resolved = await ResolveAsync(registry, secrets, key, stopping);
+
+            if (resolved is not Outcome<RosterEntry>.Ok(var entry))
+            {
+                return Outcome<SubjectRoster>.Failure(resolved.Match(_ => string.Empty, reason => reason));
+            }
+
+            entries.Add(entry);
+        }
+
+        return Outcome<SubjectRoster>.Success(SubjectRoster.Of(entries));
+    }
+
+    private static async Task<Outcome<RosterEntry>> ResolveAsync(
+        IModelRegistry registry, ISecretSource secrets, string key, CancellationToken stopping)
+    {
+        var found = await registry.FindAsync(key, stopping);
+
+        return found.Match(
+            model => ModelResolution.Endpoint(model, secrets).Match(
+                endpoint => Outcome<RosterEntry>.Success(new RosterEntry(endpoint, model.Config.Sampling)),
+                Outcome<RosterEntry>.Failure),
+            Outcome<RosterEntry>.Failure);
+    }
+
+    /// <summary>Records what the test chose, so a registry edit next month cannot change what a finished
+    /// test says it measured.
+    /// <para>
+    /// An ad-hoc run — one named with <c>--model</c> rather than with registry keys — records no roles, and
+    /// that absence is honest: a role names a REGISTRY key, and this run named none. Its subject is still
+    /// on every cell.
+    /// </para></summary>
+    private static async Task<Outcome<int>> RolesAsync(
+        AsyncServiceScope scope, Guid runId, RunInputs settings, CancellationToken stopping)
+    {
+        if (settings.SubjectKeys.Count == 0)
+        {
+            return Outcome<int>.Success(0);
+        }
+
+        var roles = scope.ServiceProvider.GetRequiredService<IRunRoleStore>();
+        var saved = await roles.SaveSubjectsAsync(runId, Keys(settings.SubjectKeys), DateTimeOffset.UtcNow, stopping);
+
+        return saved is Outcome<int>.Fail || settings.JudgeKeys.Count == 0
+            ? saved
+            : await roles.SaveJudgesAsync(runId, Keys(settings.JudgeKeys), DateTimeOffset.UtcNow, stopping);
+    }
+
+    /// <summary>Keys already parsed once by <see cref="Read"/>; this is the second half of that parse, and
+    /// a key that fails here cannot reach the store.</summary>
+    private static IReadOnlyList<ModelKey> Keys(IReadOnlyList<string> keys) =>
+        [.. keys.Select(k => ModelKey.Parse(k)).OfType<Outcome<ModelKey>.Ok>().Select(ok => ok.Value)];
 
     /// <summary>Freezes which group each selected question was in. Written once, right after the cells, so
     /// a test that exists always has the snapshot its per-group report will read — and a re-filing next
@@ -209,6 +299,7 @@ public static class RunCommand
         RunInputs settings,
         BenchRun run,
         BankSelection selection,
+        SubjectRoster roster,
         int cells,
         IReadOnlyList<Budget> budgets)
     {
@@ -217,7 +308,16 @@ public static class RunCommand
         output.WriteLine($"run      {run.Id}");
         output.WriteLine($"target   {settings.Target.Canonical}");
         output.WriteLine($"suite    {frozen.Stamp}  ({frozen.Questions.Count} question(s))");
-        output.WriteLine($"matrix   {cells} cell(s) · {settings.Subject.Model.Id} · lane {settings.Lane.Name}");
+        output.WriteLine($"matrix   {cells} cell(s) · lane {settings.Lane.Name}");
+
+        // The resolved model ids, not the keys the operator typed: a registry key and the model it names
+        // are two different strings, and the one a result carries is the second.
+        output.WriteLine($"subjects {roster.Describe}");
+
+        if (settings.JudgeKeys.Count > 0)
+        {
+            output.WriteLine($"arbiters {string.Join(", ", settings.JudgeKeys)}  (in order; the first is the primary)");
+        }
 
         if (selection.Questions.Count > 0)
         {
@@ -370,36 +470,77 @@ public static class RunCommand
                 "--leg-wall-seconds must be positive — an unbounded leg is what turns one hung endpoint into days of wall clock");
         }
 
+        var subjectKeys = Keys(command, "subjects");
+
+        if (subjectKeys is not Outcome<IReadOnlyList<string>>.Ok(var subjects))
+        {
+            return Outcome<RunInputs>.Failure(subjectKeys.Match(_ => string.Empty, reason => reason));
+        }
+
+        var judgeKeys = Keys(command, "judges");
+
+        if (judgeKeys is not Outcome<IReadOnlyList<string>>.Ok(var judges))
+        {
+            return Outcome<RunInputs>.Failure(judgeKeys.Match(_ => string.Empty, reason => reason));
+        }
+
         return RepoUrl.Parse(command.Value("repo")).Match(
             repo => CommitSha.Parse(command.Value("commit")).Match(
-                commit => Subject(command).Match(
-                    subject => ModelEndpoint.Parse(
-                        subject.Model,
-                        command.Value("model-url"),
-                        Money(command, "input-cost"),
-                        Money(command, "output-cost")).Match(
-                        endpoint => Outcome<RunInputs>.Success(new RunInputs(
-                            MeasurementTarget.At(repo, commit).Excluding([.. command.List("exclude")]),
-                            suiteFile,
-                            subject,
-                            endpoint,
-                            Lane.Named(command.Value("lane", "no-tools")),
-                            command.Int("repeats", 1),
-                            command.Value("label", "run"),
-                            connection,
-                            [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)],
-                            Selection(command),
-                            command.Value("suite-id", "bank-selection"))),
-                        Outcome<RunInputs>.Failure),
+                commit => AdHoc(command, subjects).Match(
+                    adHoc => Outcome<RunInputs>.Success(new RunInputs(
+                        MeasurementTarget.At(repo, commit).Excluding([.. command.List("exclude")]),
+                        suiteFile,
+                        adHoc,
+                        subjects,
+                        judges,
+                        Lane.Named(command.Value("lane", "no-tools")),
+                        command.Int("repeats", 1),
+                        command.Value("label", "run"),
+                        connection,
+                        [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)],
+                        Selection(command),
+                        command.Value("suite-id", "bank-selection"))),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
     }
 
-    private static Outcome<Subject> Subject(CommandLine command) =>
-        ModelRef.Parse(command.Value("model"), Hosting(command)).Match(
-            model => Outcome<Subject>.Success(new Subject(model, Sampling.Deterministic(command.Int("seed", 1)))),
-            Outcome<Subject>.Failure);
+    /// <summary>Registry keys, parsed here so a typo is refused before anything is created.</summary>
+    private static Outcome<IReadOnlyList<string>> Keys(CommandLine command, string flag)
+    {
+        var keys = command.List(flag);
+
+        foreach (var key in keys)
+        {
+            if (ModelKey.Parse(key) is Outcome<ModelKey>.Fail bad)
+            {
+                return Outcome<IReadOnlyList<string>>.Failure($"--{flag}: {bad.Reason}");
+            }
+        }
+
+        return Outcome<IReadOnlyList<string>>.Success(keys);
+    }
+
+    /// <summary>The ad-hoc subject pair — <c>--model</c> plus <c>--model-url</c> — or an empty roster when
+    /// the run names registry keys instead.
+    /// <para>
+    /// Both doors stay open on purpose: the registry is how a real test is composed, and the pair is how an
+    /// operator points the harness at something once without registering it. What is not allowed is
+    /// neither, which is the case the model-id refusal has always covered.
+    /// </para></summary>
+    private static Outcome<SubjectRoster> AdHoc(CommandLine command, IReadOnlyList<string> subjectKeys) =>
+        subjectKeys.Count > 0
+            ? Outcome<SubjectRoster>.Success(SubjectRoster.Of([]))
+            : ModelRef.Parse(command.Value("model"), Hosting(command)).Match(
+                model => ModelEndpoint.Parse(
+                    model,
+                    command.Value("model-url"),
+                    Money(command, "input-cost"),
+                    Money(command, "output-cost")).Match(
+                    endpoint => Outcome<SubjectRoster>.Success(
+                        SubjectRoster.Of(endpoint, Sampling.Deterministic(command.Int("seed", 1)))),
+                    Outcome<SubjectRoster>.Failure),
+                Outcome<SubjectRoster>.Failure);
 
     private static ModelHosting Hosting(CommandLine command) =>
         command.Value("hosting", "local").Equals("cloud", StringComparison.OrdinalIgnoreCase)
@@ -421,6 +562,11 @@ public static class RunCommand
     private static BankQuery Selection(CommandLine command) =>
         BankQuery.Selection(command.Value("bank-group"), command.Int("bank-from", 0), command.Int("bank-to", 0));
 
+    /// <param name="AdHoc">The <c>--model</c> pair as a one-subject roster, or EMPTY when the run names
+    /// registry keys. Empty rather than nullable: "resolve these keys" and "use this endpoint" are two
+    /// states of one thing, and a roster with no entries says the first without a second field to forget.</param>
+    /// <param name="SubjectKeys">Registry keys, resolved before any cell exists.</param>
+    /// <param name="JudgeKeys">The test's arbiters, in the order given: the first is the primary.</param>
     /// <param name="Budgets">The ceilings this run ASKS for. They reach a leg only after the runtime has
     /// confirmed each one — an unconfirmed budget is a budget that does not exist.</param>
     /// <param name="Selection">Which bank questions this run freezes, when it is not reading a suite file.</param>
@@ -429,16 +575,14 @@ public static class RunCommand
     private sealed record RunInputs(
         MeasurementTarget Target,
         string SuiteFile,
-        Subject Subject,
-        ModelEndpoint Endpoint,
+        SubjectRoster AdHoc,
+        IReadOnlyList<string> SubjectKeys,
+        IReadOnlyList<string> JudgeKeys,
         Lane Lane,
         int Repeats,
         string Label,
         string ConnectionString,
         IReadOnlyList<Budget> Budgets,
         BankQuery Selection,
-        string SuiteId)
-    {
-        public Sampling Sampling => Subject.Sampling;
-    }
+        string SuiteId);
 }

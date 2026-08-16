@@ -113,9 +113,16 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<RunQuestionRow> RunQuestions => Set<RunQuestionRow>();
 
+    public DbSet<ModelRow> Models => Set<ModelRow>();
+
+    public DbSet<RunSubjectRow> RunSubjects => Set<RunSubjectRow>();
+
+    public DbSet<RunJudgeRow> RunJudges => Set<RunJudgeRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         Bank(builder);
+        Registry(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {
@@ -275,6 +282,49 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
                 .HasForeignKey(m => m.QuestionId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        Snapshot(builder);
+    }
+
+    /// <summary>The model registry and the roles a test chose from it. The choices live on the RUN, so a
+    /// registry edit next month cannot change what a finished test says it measured.</summary>
+    private static void Registry(ModelBuilder builder)
+    {
+        builder.Entity<ModelRow>(model =>
+        {
+            model.ToTable("models");
+            model.HasKey(m => m.Id);
+            model.Property(m => m.Runtime).HasConversion<string>();
+            model.Property(m => m.Hosting).HasConversion<string>();
+            model.Property(m => m.ConfigJson).HasColumnType("jsonb");
+
+            // The key is the identity every role names, so uniqueness is held where concurrency happens.
+            model.HasIndex(m => m.Key).IsUnique();
+            model.HasIndex(m => m.Enabled);
+        });
+
+        builder.Entity<RunSubjectRow>(subject =>
+        {
+            subject.ToTable("run_subjects");
+            subject.HasKey(s => new { s.RunId, s.ModelKey });
+            subject.HasOne(s => s.Run!).WithMany()
+                .HasForeignKey(s => s.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RunJudgeRow>(judge =>
+        {
+            judge.ToTable("run_judges");
+            judge.HasKey(j => new { j.RunId, j.ModelKey });
+            judge.HasIndex(j => new { j.RunId, j.Ordinal });
+            judge.HasOne(j => j.Run!).WithMany()
+                .HasForeignKey(j => j.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // No foreign key from either role table to `models`, deliberately: a role names a KEY, and a run
+        // must stay readable even for a subject added ad hoc from the command line without a registry row.
+    }
+
+    private static void Snapshot(ModelBuilder builder)
+    {
         builder.Entity<RunQuestionRow>(selected =>
         {
             selected.ToTable("run_questions");

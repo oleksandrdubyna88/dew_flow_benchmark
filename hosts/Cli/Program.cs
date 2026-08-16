@@ -1,5 +1,6 @@
 using Bench.Application;
 using Bench.Application.Bank;
+using Bench.Application.Registry;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,6 +65,7 @@ public static class Program
             "telemetry" => Telemetry(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
             "questions" => Questions(command, output, error, stopping),
+            "models" => Models(command, output, error, stopping),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -179,6 +181,42 @@ public static class Program
             .GetAwaiter().GetResult();
     }
 
+    /// <summary>The registry every role draws from. Same refusal as the other stateful verbs: no default
+    /// connection, because one would write a benchmark's configuration into whatever database happened to
+    /// be listening.</summary>
+    private static int Models(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var provider = CliContainer.ForBank(connection, CliLogging.Start());
+        using var scope = provider.CreateScope();
+
+        try
+        {
+            scope.ServiceProvider.GetRequiredService<BenchDbContext>().Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return ModelsCommand.RunAsync(
+                command,
+                scope.ServiceProvider.GetRequiredService<IModelRegistry>(),
+                scope.ServiceProvider.GetRequiredService<ISecretSource>(),
+                TimeProvider.System,
+                output,
+                error,
+                stopping)
+            .GetAwaiter().GetResult();
+    }
+
     private static int Version(TextWriter output)
     {
         output.WriteLine("bench 0.1.0");
@@ -205,6 +243,15 @@ public static class Program
         output.WriteLine("  bench variants retire --name <slug> --db <connection>");
         output.WriteLine("             a variant is added and retired, never edited: results name what they ran under");
         output.WriteLine();
+        output.WriteLine("  bench models add     --key <slug> --model-id <id> [--display <text>]");
+        output.WriteLine("             [--runtime openaiendpoint|cliclaude|clicodex|cligemini|bridgelocal]");
+        output.WriteLine("             [--hosting local|cloud] --base-url-ref <ENV_VAR_NAME> [--api-key-ref <NAME>]");
+        output.WriteLine("             [--executable-ref <NAME>] [--seed N] [--input-cost X] [--output-cost X] --db <connection>");
+        output.WriteLine("             REFERENCES, never values: this database is published unedited, so an");
+        output.WriteLine("             endpoint or a key stored here would leave with the results");
+        output.WriteLine("  bench models list    [--all] --db <connection>   says which references resolve HERE");
+        output.WriteLine("  bench models disable|enable --key <slug> --db <connection>");
+        output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");
         output.WriteLine("  bench questions list   [--group <key>] [--from N] [--to N] [--accepted] --db <connection>");
         output.WriteLine("  bench questions groups --db <connection>");
@@ -215,7 +262,9 @@ public static class Program
         output.WriteLine("             a move never touches a finished test: its snapshot keeps the group it froze");
         output.WriteLine();
         output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
-        output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
+        output.WriteLine("             --subjects <registry keys> [--judges <registry keys, in order>]");
+        output.WriteLine("             (or the ad-hoc pair --model <id> --model-url <openai-compatible base>)");
+        output.WriteLine("             --db <connection>");
         output.WriteLine("             (or --bank-group <key> [--bank-from N] [--bank-to N] [--suite-id <name>]");
         output.WriteLine("              to freeze a selection from the bank instead of reading a file)");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");

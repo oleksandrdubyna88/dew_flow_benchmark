@@ -1,6 +1,30 @@
 # PLAN — the variant matrix: a question bank in five groups, reviewer marks, engine axes in the grid, and the console
 
-> Status: **steps 1 and 2 of §5 IMPLEMENTED 2026-08-16; steps 3–11 open.** Step 1, the variant catalog:
+> Status: **steps 1, 2 and 3 of §5 IMPLEMENTED 2026-08-16; steps 4–11 open.** Step 3, the model registry:
+> `models` / `run_subjects` / `run_judges` (migration `ModelRegistry`), `bench models add|list|disable|enable`,
+> and `bench run --subjects <keys> [--judges <keys>]` resolving every key — and every reference — BEFORE a
+> single cell exists. `ConfigJson` holds references and refuses values by name, so the database stays
+> publishable unedited; `bench judge` with no `--judge-model` uses the arbiters the test chose, in order.
+>
+> Deviations, step 3:
+> - **A defect found while wiring it, not by a test: the runner had ONE endpoint.** `Matrix.Plan` has
+>   always taken a LIST of subjects while `LegPlan` held a single `ModelEndpoint`, so a two-subject run
+>   would have sent every leg to the first model and labelled the results with the cell's subject — two
+>   models named, one measured, and nothing in any report able to show it. `SubjectRoster` is the fix: the
+>   endpoint is looked up by the cell's subject, and a cell this run cannot reach is SETTLED rather than
+>   redirected (`Each_subjects_leg_is_sent_to_THAT_subjects_endpoint`, red before the change).
+> - **The ad-hoc `--model` pair stays**, and records no roles — a role names a REGISTRY key, and such a run
+>   names none. Its subject is still on every cell, so nothing is lost.
+> - **`bench judge` runs EVERY arbiter of the test, in order**, when none is given. Per-group rollups are
+>   step 10; what this step owed was that the choice travels with the test — and a stored role nothing
+>   reads is the `SweepAsync` shape this repository has already paid for once.
+> - **An arbiter added later continues the order** instead of restarting it; a subject may be ADDED to an
+>   existing test (that is step 6's expansion) but never twice.
+> - **No foreign key from the role tables to `models`**: a role names a key, and a run must stay readable
+>   for a subject named ad hoc. `enable` ships beside the plan's `add|disable|list` — a disabled row that
+>   could never come back is a dead row.
+>
+> Step 1, the variant catalog:
 > `Bench.Domain/Variants` (definition + hash + immutable catalog row + selection), the variant axis in
 > `Matrix.Plan`, `variants` table and `cells.VariantId`, `bench variants add|list|retire`.
 > Step 2, the question bank: `question_groups` / `bank_questions` / `reviewers` / `question_reviews` /
@@ -91,8 +115,9 @@ Concretely:
 | Drain loop | `LegDrain` — per-leg `try`, consecutive-failure breaker, bounded backoff, typed `DrainStop`, grace on cancel | `src/Bench.Application/LegDrain.cs:82-121`, driven from `hosts/Cli/RunCommand.cs:153` |
 | Checkout cache | bare mirror + worktree per commit, written and tested, **not wired into any run path** | `src/Bench.Infrastructure/Git/GitCheckoutProvider.cs:37-135` |
 | QLN adapter | exists, parses the funnel, degrades honestly — but is **test-only** and sends exactly one axis (`limit`) | `src/Bench.Infrastructure/Engines/QlnEngine.cs:112-144, 222-238` |
-| Execution | `LegRunner` single-shot ask, no engine wired, no tool loop | `src/Bench.Application/LegRunner.cs:44-137` |
-| Judges | multiple arbiters by design (`Judge verdict · {modelId}` per-arbiter series, NOT-EXISTS work selection) | `src/Bench.Application/JudgeRunner.cs`, `src/Bench.Domain/Runs/JudgeScoring.cs` |
+| Execution | `LegRunner` single-shot ask, no engine wired, no tool loop — but **multi-subject since 2026-08-16**: the endpoint is looked up per cell from `SubjectRoster`, and a leg with a wall budget cannot be multiplied by a turn count | `src/Bench.Application/LegRunner.cs`, `src/Bench.Domain/Runs/SubjectRoster.cs` |
+| Judges | multiple arbiters by design (`Judge verdict · {modelId}` per-arbiter series, NOT-EXISTS work selection); **the test's own ordered arbiters are used when none is given** (2026-08-16) | `src/Bench.Application/JudgeRunner.cs`, `hosts/Cli/JudgeCommand.cs` |
+| Model registry | **implemented 2026-08-16** — `models` with references-never-values config, `run_subjects`/`run_judges` on the test, resolution refused by name at creation | `src/Bench.Domain/Registry/*`, `src/Bench.Infrastructure/Persistence/PostgresModelRegistry.cs` |
 | API / UI | `MapBenchApi` (health + plan) hosted by **nobody**; no web project at all | `src/Bench.Api/BenchApi.cs:15-27`, `hosts/AppHost/AppHost.cs:60-63` |
 | Comparison queries | `AverageByEngineAsync`/`AverageByLaneAsync` exist, surfaced by nothing | `src/Bench.Application/ResultStore.cs:43-48` |
 
@@ -612,8 +637,11 @@ precedes the API + CLI it renders.**
    (collision, empty, and a duplicate id the plan did not anticipate) are asserted in `BankFreezeTests`;
    the concurrency rules — one key, one suite-facing id, one mark per reviewer per question, one snapshot
    per test — are asserted against real Postgres in `PostgresQuestionBankTests`.
-3. **Model registry** — `models`/`run_subjects`/`run_judges` tables + `bench models` verbs; `bench run`
-   learns to read subjects and arbiters from the test instead of its `--model` singletons.
+3. ~~**Model registry**~~ — **IMPLEMENTED 2026-08-16.** The three tables, `bench models
+   add|list|disable|enable`, and `bench run --subjects/--judges` reading registry keys. Resolution happens
+   before any cell exists: a disabled model, an unknown key and an environment variable that is unset on
+   THIS machine are each refused by name. The multi-subject defect this uncovered — one endpoint for a
+   matrix that always planned several — is in the status block.
 4. **Checkout + engine wiring** — `ICheckoutProvider` into run start; `QlnEngine` full `AxesWire`;
    engine-per-variant resolution in `LegRunner`; single-shot RAG prompt assembly; funnel + hits + thinking
    persistence (§3.5 migrations); retrieval metrics. Verify the `collapse` repair end to end here.
