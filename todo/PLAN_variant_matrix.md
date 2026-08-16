@@ -17,10 +17,12 @@ question* — and to keep answering it as the configuration space grows.
 
 Concretely:
 
-1. A **question bank** of five named groups (~100 questions each, eventually): direct code lookup,
-   semantic/architectural intent, PR/diff-based, bug/root-cause, adversarial cross-class. Every question
-   carries **reviewer marks** — who reviewed it (minimum three reviewers: `claude`, `codex`, `gemini`;
-   the set must be extensible) — rendered as checkmarks in a UI.
+1. A **question bank** of five named reading groups (~100 questions each, eventually): direct code
+   lookup, semantic/architectural intent, PR/diff-based, bug/root-cause, adversarial cross-class — plus
+   a sixth group, **code writing**, whose lifecycle is different enough to have its own plan
+   ([PLAN_code_lane.md](PLAN_code_lane.md)): the bank carries it, this plan does not run it. Every
+   question carries **reviewer marks** — who reviewed it (minimum three reviewers: `claude`, `codex`,
+   `gemini`; the set must be extensible) — rendered as checkmarks in a UI.
 2. A **test** = a fixed selection of questions (e.g. group 1, questions 1–10) × **all active variants** ×
    the chosen subjects × repeats, pinned to one repository commit. Created from the UI with one button.
 3. A **matrix page** per test: one cell per variant (× subject), each showing done / in-progress (with %)
@@ -131,9 +133,10 @@ No parallel aggregate. The existing `BenchRun` + `RunCell` machinery **is** the 
 New tables — the persistence the `Authoring` domain never got:
 
 ```
-question_groups:  Id, Key ("code-lookup" | "semantic-intent" | "pr-diff" | "bug-root-cause" | "adversarial"),
-                  Title, Ordinal
+question_groups:  Id, Key ("code-lookup" | "semantic-intent" | "pr-diff" | "bug-root-cause"
+                  | "adversarial" | "code-writing"), Title, Ordinal
 bank_questions:   Id, GroupId (FK), Ordinal (the number the operator quotes: "group 1, questions 1–10"),
+                  TaskKind (Reading | Code), CodeTaskJson (null for Reading — see PLAN_code_lane.md §3.1),
                   Prompt, ReferenceAnswer, ExpectationsJson (same wire shape SuiteJsonLoader reads),
                   TargetRepoUrl, AuthoredAtCommit, SourceKind (RepositoryHistory|BugsAndTests|Synthetic|Human),
                   AuthorModel, State (Proposed|Accepted|Rejected), CreatedAt
@@ -305,6 +308,10 @@ tool surface a customer's agent would actually see. The lane axis therefore grow
 
 ### 3.9 What this plan deliberately does not do
 
+- **No code-lane execution** — group 6 lives in the bank here (a `TaskKind`, a payload, reviewer marks
+  like any other question) and runs in [PLAN_code_lane.md](PLAN_code_lane.md), which owns the phases,
+  the sandbox, the mechanical signals and the delivered-work score. The two plans meet at the bank and
+  at the matrix axes, nowhere else.
 - No `bench author`/`bench review` automation — phase 2, its own plan, on top of §3.3's tables (the
   model registry already carries the roles it will need).
 - No public mirror/export design — operator: "Postgres now, public later"; §3.5 keeps rows publication-safe.
