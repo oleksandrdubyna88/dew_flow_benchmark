@@ -51,7 +51,9 @@ public sealed record RunCell(
     int Position,
     CellState State,
     int Attempts,
-    string Owner,
+    /// <summary>Who holds it — label, host and pid together. A label alone cannot be swept correctly:
+    /// see <see cref="WorkerIdentity"/>.</summary>
+    WorkerIdentity Owner,
     DateTimeOffset ClaimedAt,
     LegOutcomeKind OutcomeKind,
     string OutcomeDetail)
@@ -68,7 +70,7 @@ public sealed record RunCell(
         cell.Position,
         CellState.Pending,
         Attempts: 0,
-        Owner: string.Empty,
+        Owner: WorkerIdentity.Nobody,
         ClaimedAt: default,
         LegOutcomeKind.None,
         OutcomeDetail: string.Empty);
@@ -92,11 +94,12 @@ public static class CellLifecycle
     /// </para></summary>
     public const int MaxAttempts = 3;
 
-    public static Outcome<RunCell> Claim(RunCell cell, string owner, DateTimeOffset now)
+    public static Outcome<RunCell> Claim(RunCell cell, WorkerIdentity owner, DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(owner))
+        if (!owner.CanClaim)
         {
-            return Outcome<RunCell>.Failure("a claim needs an owner — an unowned claim can never be swept correctly");
+            return Outcome<RunCell>.Failure(
+                "a claim needs an owner with a host and a pid — an unowned claim can never be swept correctly");
         }
 
         return cell.State == CellState.Pending
@@ -133,13 +136,18 @@ public static class CellLifecycle
                 ? cell with
                 {
                     State = CellState.Abandoned,
-                    Owner = string.Empty,
+                    Owner = WorkerIdentity.Nobody,
                     OutcomeKind = LegOutcomeKind.Crashed,
                     OutcomeDetail = $"abandoned after {cell.Attempts} attempts — a cell that kills its host will kill the next one",
                 }
-                : cell with { State = CellState.Pending, Owner = string.Empty, ClaimedAt = default };
+                : cell with { State = CellState.Pending, Owner = WorkerIdentity.Nobody, ClaimedAt = default };
 
-    /// <summary>Whether a claim has gone quiet long enough to be treated as a dead host's.</summary>
+    /// <summary>Whether a claim has gone quiet long enough to be a sweep CANDIDATE.
+    /// <para>
+    /// Staleness alone is not grounds to take a cell back — it makes a row worth asking about, and
+    /// <see cref="WorkerIdentity.IsProvablyGoneOn"/> answers. The two were the same question until
+    /// 2026-08-16, which meant a worker legitimately past the window was requeued under it.
+    /// </para></summary>
     public static bool IsStale(RunCell cell, DateTimeOffset now, TimeSpan staleAfter) =>
         cell.State == CellState.Claimed && now - cell.ClaimedAt >= staleAfter;
 }

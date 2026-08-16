@@ -67,7 +67,16 @@ public sealed class CellRow
 
     public int Attempts { get; set; }
 
+    /// <summary>The owner's LABEL — what a refusal quotes back at an operator. It is not the identity:
+    /// two machines may honestly both call themselves "cli", which is why the two columns below exist.</summary>
     public string Owner { get; set; } = string.Empty;
+
+    /// <summary>The machine and the process that hold the claim, so a sweep can ask whether the owner is
+    /// still running instead of inferring it from elapsed time. Empty/zero on a row claimed before these
+    /// columns existed — an owner nothing can vouch for, which the sweep treats as gone.</summary>
+    public string OwnerHost { get; set; } = string.Empty;
+
+    public int OwnerPid { get; set; }
 
     public DateTimeOffset ClaimedAt { get; set; }
 

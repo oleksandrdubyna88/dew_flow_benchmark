@@ -29,7 +29,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var (runId, plan, runner, runs, results) = await ArrangeAsync(
             new FakeRuntime("the retry uses a DecorrelatedJitter backoff"));
 
-        var result = (await runner.RunNextAsync(runId, "worker-1", plan, Ct)).Ok();
+        var result = (await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct)).Ok();
 
         result.Answer.Should().Contain("DecorrelatedJitter");
         result.Passed.Should().BeTrue();
@@ -42,7 +42,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     {
         var (runId, plan, runner, _, _) = await ArrangeAsync(new FakeRuntime("it multiplies the delay by a random factor"));
 
-        var result = (await runner.RunNextAsync(runId, "worker-1", plan, Ct)).Ok();
+        var result = (await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct)).Ok();
 
         result.Passed.Should().BeFalse();
         result.Metrics.Single(m => m.Name.Contains("contains")).Reason
@@ -56,7 +56,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var (runId, plan, runner, _, _) = await ArrangeAsync(
             new FakeRuntime("DecorrelatedJitter, applied after N consecutive failures"));
 
-        var result = (await runner.RunNextAsync(runId, "worker-1", plan, Ct)).Ok();
+        var result = (await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct)).Ok();
 
         result.Metrics.Single(m => m.Name.Contains("excludes")).Failed.Should().BeTrue(
             "the memorisation trap is the point of that expectation");
@@ -67,7 +67,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     {
         var (runId, plan, runner, _, _) = await ArrangeAsync(new FakeRuntime("DecorrelatedJitter"));
 
-        var result = (await runner.RunNextAsync(runId, "worker-1", plan, Ct)).Ok();
+        var result = (await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct)).Ok();
 
         var recall = result.Metrics.Single(m => m.Name == AnswerScoring.AnchorRecall);
         recall.Kind.Should().Be(MetricKind.Text);
@@ -81,7 +81,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     {
         var (runId, plan, runner, runs, results) = await ArrangeAsync(FakeRuntime.Unreachable("connection refused"));
 
-        var refused = await runner.RunNextAsync(runId, "worker-1", plan, Ct);
+        var refused = await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
 
         refused.Reason().Should().Contain("connection refused");
         (await results.ForRunAsync(runId, Ct)).Should().BeEmpty("a subject that was never reached did not get anything wrong");
@@ -94,7 +94,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var (runId, plan, runner, runs, _) = await ArrangeAsync(
             new FakeRuntime("DecorrelatedJitter", StopReason.LengthCapped));
 
-        await runner.RunNextAsync(runId, "worker-1", plan, Ct);
+        await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
 
         var cell = await CellAsync(runId);
         cell.OutcomeKind.Should().Be(LegOutcomeKind.CapExceeded, "scored as a wrong answer it would measure the ceiling");
@@ -105,13 +105,13 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     public async Task A_leg_scored_but_never_settled_is_finished_rather_than_measured_twice()
     {
         var (runId, plan, runner, runs, results) = await ArrangeAsync(new FakeRuntime("DecorrelatedJitter"));
-        await runner.RunNextAsync(runId, "worker-1", plan, Ct);
+        await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
 
         // The crash window: the result is durable, the cell is not settled. The sweep hands it back.
         var cell = await CellAsync(runId);
         await ReopenAsync(cell.Id);
 
-        var second = await runner.RunNextAsync(runId, "worker-2", plan, Ct);
+        var second = await runner.RunNextAsync(runId, Worker("worker-2"), plan, Ct);
 
         second.Reason().Should().Contain("already scored");
         (await results.ForRunAsync(runId, Ct)).Should().ContainSingle("the leg is measured once, not once per crash");
@@ -122,9 +122,9 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     public async Task Nothing_to_claim_is_an_answer_rather_than_a_fault()
     {
         var (runId, plan, runner, _, _) = await ArrangeAsync(new FakeRuntime("DecorrelatedJitter"));
-        await runner.RunNextAsync(runId, "worker-1", plan, Ct);
+        await runner.RunNextAsync(runId, Worker("worker-1"), plan, Ct);
 
-        (await runner.RunNextAsync(runId, "worker-2", plan, Ct))
+        (await runner.RunNextAsync(runId, Worker("worker-2"), plan, Ct))
             .Reason().Should().Contain("no pending cell", "several workers draining a queue is the expected shape");
     }
 
@@ -134,11 +134,15 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var (runId, plan, runner, runs, _) = await ArrangeAsync(new FakeRuntime("x"));
         var otherSuite = plan with { Suite = SuiteOf("different", "other-question") };
 
-        var refused = await runner.RunNextAsync(runId, "worker-1", otherSuite, Ct);
+        var refused = await runner.RunNextAsync(runId, Worker("worker-1"), otherSuite, Ct);
 
         refused.Reason().Should().Contain("has no question");
         (await runs.ProgressAsync(runId, Ct)).Pending.Should().Be(0, "a cell nobody can run must not stay claimed forever");
     }
+
+    /// <summary>A worker on this machine — a real host and a real pid, because a claim that records
+    /// neither is one the sweep would take back the moment the window passed.</summary>
+    private static WorkerIdentity Worker(string label) => WorkerIdentity.Here(label);
 
     private async Task<CellRow> CellAsync(Guid runId)
     {
@@ -152,6 +156,8 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         var cell = db.Cells.First(c => c.Id == cellId);
         cell.State = CellState.Pending;
         cell.Owner = string.Empty;
+        cell.OwnerHost = string.Empty;
+        cell.OwnerPid = 0;
         await db.SaveChangesAsync(Ct);
     }
 

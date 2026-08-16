@@ -1,3 +1,4 @@
+using Bench.Domain.Runs;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
@@ -56,6 +57,22 @@ public sealed class PostgresFixture : IAsyncLifetime
 
 [CollectionDefinition("postgres")]
 public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>;
+
+/// <summary>The owners the durability tests claim as.
+/// <para>
+/// Since the sweep became ownership-checked, "a dead host" is a specific shape rather than any string: this
+/// machine, and a process that cannot be running. Written once because two test classes strand cells and a
+/// second copy of the magic pid is a second thing to keep true.
+/// </para></summary>
+internal static class TestWorkers
+{
+    /// <summary>A pid no operating system will hand out — Linux caps pids far below this and Windows' are
+    /// lower still — so a claim recorded against it is a claim whose owner cannot be running.</summary>
+    private const int NoSuchPid = int.MaxValue;
+
+    public static WorkerIdentity Dead(string label) =>
+        WorkerIdentity.Stored(label, Environment.MachineName, NoSuchPid);
+}
 
 /// <summary>A clock the test owns. Staleness is a decision about elapsed time, and a test that has to
 /// really wait thirty minutes to check a thirty-minute rule is a test nobody runs.</summary>

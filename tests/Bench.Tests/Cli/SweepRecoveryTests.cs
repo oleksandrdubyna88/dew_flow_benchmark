@@ -68,7 +68,13 @@ public sealed class SweepRecoveryTests(PostgresFixture postgres)
         error.Should().Contain("--db");
     }
 
-    /// <summary>A run whose host was killed two hours ago, holding one claim.</summary>
+    /// <summary>A run whose host was killed two hours ago, holding one claim.
+    /// <para>
+    /// The owner is recorded as this MACHINE with a pid no operating system hands out, which is what a
+    /// killed host actually leaves behind. Since 2026-08-16 that is also the only shape the sweep will
+    /// take a cell back from: a claim is stale when the clock says so, but it is only <i>stranded</i> when
+    /// its owner is provably gone.
+    /// </para></summary>
     private async Task<Guid> StrandAsync(string owner)
     {
         var store = postgres.NewStore(new TestClock(DateTimeOffset.UtcNow.AddHours(-2)));
@@ -85,7 +91,7 @@ public sealed class SweepRecoveryTests(PostgresFixture postgres)
 
         await store.CreateAsync(run, cells, Ct);
 
-        return (await store.ClaimNextAsync(run.Id, owner, Ct)).Ok().Id;
+        return (await store.ClaimNextAsync(run.Id, TestWorkers.Dead(owner), Ct)).Ok().Id;
     }
 
     private async Task<CellState> StateAsync(Guid cellId)

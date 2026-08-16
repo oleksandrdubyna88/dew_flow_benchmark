@@ -107,7 +107,7 @@ sequenceDiagram
     participant D as AnswerScoring (domain)
     participant V as IResultStore (Postgres)
 
-    R->>S: ClaimNextAsync(run, owner)
+    R->>S: ClaimNextAsync(run, owner = label@host#pid)
     Note over S: guarded UPDATE — exactly one worker wins
     S-->>R: cell
     R->>V: HasResultAsync(cell)
@@ -186,6 +186,17 @@ campaign of ten thousand cells has to live through overnight:
   come back. `bench sweep --db … [--stale-after-minutes 30]` is the same recovery as an operator verb, for
   after a `kill -9`. The store had this from its first commit and *nothing called it*, which is the audit
   finding this whole section exists to prevent repeating.
+- **And it is ownership-checked, because the sweep is now live.** A claim records the worker's LABEL, HOST
+  and PID (`WorkerIdentity`, `cells.owner_host` / `cells.owner_pid`); the sweep loads only the stale
+  candidates and hands back the ones whose owner is provably gone. Time alone would be wrong the moment a
+  second `bench run` starts — the architecture invites exactly that — because "claimed longer than the
+  window" also describes a colleague on a slow leg, and requeuing it puts two workers on one measurement
+  and refuses the honest one's settle. The window (30 min against a 10-min leg wall) is a MARGIN, not a
+  death certificate. Three rules decide: an owner with no host/pid recorded is gone by definition (it
+  predates the columns and nothing can vouch for it); an owner on **another machine is left alone** — that
+  host's process table is the only one that can answer, and ending a live leg is worse than leaving a stale
+  row for its own host's next sweep; a live pid here is not gone, whatever the clock says. Mirrors
+  `dew_flow_rag_qln · src/Rag.Infrastructure/Indexing/IndexPassStore.cs:191` (`SweepOrphansAsync`).
 
 The CLI is a host like any other: `run`, `judge` and `sweep` build a container wired to the same Serilog
 sinks as the AppHost — coloured console, one file per run under `logs/{yyyy-MM-dd}/`. `help` and `version`

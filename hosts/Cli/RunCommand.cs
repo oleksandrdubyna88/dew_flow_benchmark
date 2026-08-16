@@ -143,7 +143,9 @@ public static class RunCommand
         TextWriter output,
         CancellationToken stopping)
     {
-        var owner = $"cli-{Environment.ProcessId}";
+        // Host AND pid, not a pid alone: a sweep running on another machine would otherwise test this pid
+        // against ITS own process table and confidently requeue a cell this process is still measuring.
+        var owner = WorkerIdentity.Here("cli");
         var console = new LegConsole(output);
 
         output.WriteLine();
@@ -163,7 +165,7 @@ public static class RunCommand
     /// outside that guard is the same crash through a side door.
     /// </para></summary>
     private static async Task<Outcome<LegResult>> LegAsync(
-        ServiceProvider provider, Guid runId, string owner, LegPlan plan, CancellationToken cancellationToken)
+        ServiceProvider provider, Guid runId, WorkerIdentity owner, LegPlan plan, CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
         var runner = scope.ServiceProvider.GetRequiredService<LegRunner>();

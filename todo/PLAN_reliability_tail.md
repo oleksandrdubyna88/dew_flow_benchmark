@@ -1,6 +1,6 @@
 # PLAN — the reliability tail the 24/7 audit left open
 
-> Status: **item 1 landed 2026-08-16; items 2–6 open.** Scope: `hosts/Cli`,
+> Status: **items 1 and 7 landed 2026-08-16; items 2–6 open.** Scope: `hosts/Cli`,
 > `src/Bench.Infrastructure` (models, persistence, trace, git, process). The four CRITICAL/HIGH
 > defects of the same audit — the unguarded drain loop, the uninvoked sweep, the missing signal
 > handling and the null logger — were fixed in a separate task, and item 1 below came with them
@@ -109,10 +109,48 @@ retention owner — see `.claude/rules/shared/common/logging-serilog.md` § Rete
 best-effort, logged at Information — or a named operator job recorded in the README. Pick one; the
 rule forbids leaving it unnamed.
 
+### 7. The sweep decided on elapsed time alone — HIGH · **LANDED 2026-08-16**
+
+Found the day after the sweep was wired in, by running the full suite in **Debug**: the previous change was
+verified in Release only, where the cross-test interference below did not surface.
+
+`PostgresRunStore.SweepAsync` selected purely on `ClaimedAt <= cutoff`. While the method was dead code that
+was harmless. From the moment it ran at every `bench run` startup and gained a `bench sweep` verb, it was a
+live defect: this architecture explicitly invites several workers ("a second process running the same
+command is a second worker"), so worker B starting a campaign would requeue a cell worker A was
+legitimately still measuring — two workers on one leg, and A's `SettleAsync` then refused for an owner
+mismatch it did nothing to cause. The 30-minute window against the 10-minute leg wall is a **margin**, not
+a guarantee, and this system is about to run unattended for weeks.
+
+The owner was also unusable for the check even in principle: `hosts/Cli/RunCommand.cs` recorded
+`cli-{ProcessId}` — a pid with no machine — so a sweep on host B would have tested that pid against **its
+own** process table and reached a confident wrong answer.
+
+Two defects, because the tests said `Requeued.Should().Be(1)`: the sweep has no run filter (it is a
+database-wide repair, deliberately), so in the shared Postgres that count included the cells
+`SweepRecoveryTests` had stranded, and `A_cell_stranded_by_a_dead_host_is_handed_back` failed with
+`Expected report.Requeued to be 1, but found 2` in the full suite while passing alone. That is the
+shared-store rule in `.claude/rules/shared/common/testing.md` exactly: a count of what a run created is
+history, not the guarantee.
+
+**Shipped:** `WorkerIdentity` (label + host + pid) in `src/Bench.Domain/Runs/WorkerIdentity.cs`, carried
+through `IRunStore`, `LegRunner` and the CLI; `cells.OwnerHost`/`OwnerPid` via migration
+`20260816104702_CellOwnerIdentity`; `SweepAsync` keeps the staleness predicate in SQL and decides ownership
+in memory over that small candidate set (`WorkerLiveness.ProcessIsAlive`). Rules mirrored from
+`dew_flow_rag_qln · src/Rag.Infrastructure/Indexing/IndexPassStore.cs:191`: an unrecorded owner is an
+orphan by definition, **another machine's row is left alone**, a live pid here is not an orphan.
+**Deviation:** an owner this machine refuses to answer about (`Win32Exception`) counts as ALIVE rather than
+gone — being refused an answer is not being told the process ended, and a stale row costs one retry where a
+requeued live one costs a duplicated measurement. Every sweep assertion in `PostgresRunStoreTests` now
+states the guarantee about THIS run through `ProgressAsync(run.Id)`; the abandon-before-requeue ordering
+and the `SweepReport` shape are unchanged.
+
 ## Build order
 
 1. ~~**(1) circuit breaker**~~ — landed 2026-08-16 with the CRITICAL fixes; its wall-budget tail is
    still open (see the item).
+1a. ~~**(7) ownership-checked sweep**~~ — landed 2026-08-16, the day after the sweep went live; it had to
+   precede any second worker, which is the deployment shape items 2 and 4 assume.
 2. **(5) `Win32Exception`** — one line, and it must land before the launcher is copied elsewhere.
 3. **(3) summary counts** and **(4) chunked ingest** — independent, either order.
 4. **(2) bounded dictionaries** — must precede the long-running worker; after it, they are live leaks.
@@ -127,6 +165,7 @@ guarantee, observed failing for the real symptom:
 |---|---|
 | ~~1~~ | shipped as `A_systemically_broken_environment_ends_the_campaign_instead_of_grinding_through_every_cell` (`tests/Bench.Tests/Application/LegDrainTests.cs`) |
 | ~~1~~ | shipped as `A_leg_that_merely_scored_badly_never_trips_the_breaker` |
+| ~~7~~ | shipped as `A_cell_whose_owner_is_still_running_is_not_handed_back` and `A_cell_claimed_on_another_machine_is_left_for_that_machine_to_sweep` (`tests/Bench.Tests/Infrastructure/PostgresRunStoreTests.cs`), with the rule itself in `WorkerIdentityTests` |
 | 2 | `A_captured_leg_is_evicted_from_the_trace_and_does_not_accumulate` |
 | 3 | `The_run_summary_does_not_hydrate_the_run_to_count_it` (assert via query count / no-tracking materialization, not timing) |
 | 4 | `A_spool_larger_than_one_chunk_is_ingested_in_bounded_batches` |

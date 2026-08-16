@@ -32,16 +32,22 @@ public interface IRunStore
     /// <summary>Takes ownership of one pending cell, atomically. A failure here is the ordinary answer
     /// "there is nothing to claim", not an error — several workers racing to drain a queue is the
     /// expected shape, and the losers must not treat losing as a fault.</summary>
-    Task<Outcome<RunCell>> ClaimNextAsync(Guid runId, string owner, CancellationToken cancellationToken);
+    Task<Outcome<RunCell>> ClaimNextAsync(Guid runId, WorkerIdentity owner, CancellationToken cancellationToken);
 
     /// <summary>Records how a claimed cell ended. Refuses a cell this owner does not hold — a settle from
     /// a worker whose claim was already swept away must not overwrite the retry that replaced it.</summary>
     Task<Outcome<RunCell>> SettleAsync(
-        Guid cellId, string owner, LegOutcome outcome, CancellationToken cancellationToken);
+        Guid cellId, WorkerIdentity owner, LegOutcome outcome, CancellationToken cancellationToken);
 
-    /// <summary>Hands back every cell claimed longer ago than <paramref name="staleAfter"/>, abandoning
-    /// those past the attempt cap. Returns what it did. Run this at startup: the cells a crash stranded
-    /// are the ones nobody is coming back for.</summary>
+    /// <summary>Hands back the cells claimed longer ago than <paramref name="staleAfter"/> <b>whose owner
+    /// is provably gone</b>, abandoning those past the attempt cap. Returns what it did. Run this at
+    /// startup: the cells a crash stranded are the ones nobody is coming back for.
+    /// <para>
+    /// <b>Time alone is not sufficient and never was.</b> A second process running the same command is a
+    /// second worker, so "claimed longer than the window" also describes a colleague having a slow leg;
+    /// requeuing it puts two workers on one measurement and refuses the honest one's settle. Ownership is
+    /// checked against the recorded host and pid — see <see cref="WorkerIdentity"/>.
+    /// </para></summary>
     Task<SweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken);
 
     Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken);

@@ -79,7 +79,7 @@ public sealed class PostgresVariantCatalogTests(PostgresFixture postgres)
         var store = postgres.NewStore(new TestClock(Noon));
         await store.CreateAsync(run, cells, Ct);
 
-        var claimed = (await store.ClaimNextAsync(run.Id, "worker", Ct)).Ok();
+        var claimed = (await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("worker"), Ct)).Ok();
 
         claimed.Variant.Should().Be(variant.Select());
         claimed.Leg.Should().Contain("#cell-bound");
@@ -92,7 +92,7 @@ public sealed class PostgresVariantCatalogTests(PostgresFixture postgres)
         var store = postgres.NewStore(new TestClock(Noon));
         await store.CreateAsync(run, cells, Ct);
 
-        var claimed = (await store.ClaimNextAsync(run.Id, "worker", Ct)).Ok();
+        var claimed = (await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("worker"), Ct)).Ok();
 
         claimed.Variant.Should().Be(VariantSelection.None);
     }

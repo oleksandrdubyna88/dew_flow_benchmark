@@ -11,6 +11,13 @@ namespace Bench.Tests.Infrastructure;
 /// Three of these tests are the reason the store exists at all: a run is written whole before any work
 /// starts, exactly one worker can own a cell however many race for it, and a cell stranded by a dead host
 /// comes back — but only so many times.
+/// </para>
+/// <para>
+/// <b>The store is shared and the sweep has no run filter</b> — it is a database-wide repair, deliberately,
+/// because a dead host strands cells across every run it touched. So no assertion here counts what the
+/// SWEEP did globally: that number includes the cells other tests stranded in the same container, and an
+/// assertion about it passes once and fails forever after. Every guarantee is stated about THIS run's
+/// cells, through <c>ProgressAsync(run.Id)</c>.
 /// </para></summary>
 [Collection("postgres")]
 public sealed class PostgresRunStoreTests(PostgresFixture postgres)
@@ -64,7 +71,7 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         await postgres.NewStore(new TestClock(Noon)).CreateAsync(run, cells, Ct);
 
         var claims = await Task.WhenAll(Enumerable.Range(0, 12).Select(i =>
-            postgres.NewStore(new TestClock(Noon)).ClaimNextAsync(run.Id, $"worker-{i}", Ct)));
+            postgres.NewStore(new TestClock(Noon)).ClaimNextAsync(run.Id, WorkerIdentity.Here($"worker-{i}"), Ct)));
 
         claims.Count(c => !c.Failed()).Should().Be(1, "the guard is in the WHERE clause, so only one update can see a row change");
         claims.Where(c => c.Failed()).Should().OnlyContain(c => c.Reason().Contains("no pending cell"));
@@ -90,14 +97,14 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         var (run, cells) = Plan(1, 1, 1);
         var store = postgres.NewStore(new TestClock(Noon));
         await store.CreateAsync(run, cells, Ct);
-        var cell = (await store.ClaimNextAsync(run.Id, "worker-a", Ct)).Ok();
+        var cell = (await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("worker-a"), Ct)).Ok();
 
-        var byStranger = await store.SettleAsync(cell.Id, "worker-b", new LegOutcome.Completed(), Ct);
-        var byOwner = await store.SettleAsync(cell.Id, "worker-a", new LegOutcome.Completed(), Ct);
+        var byStranger = await store.SettleAsync(cell.Id, WorkerIdentity.Here("worker-b"), new LegOutcome.Completed(), Ct);
+        var byOwner = await store.SettleAsync(cell.Id, WorkerIdentity.Here("worker-a"), new LegOutcome.Completed(), Ct);
 
         byStranger.Reason().Should().Contain("held by 'worker-a'").And.Contain("must not overwrite the retry");
         byOwner.Ok().State.Should().Be(CellState.Settled);
-        (await store.SettleAsync(cell.Id, "worker-a", new LegOutcome.Completed(), Ct))
+        (await store.SettleAsync(cell.Id, WorkerIdentity.Here("worker-a"), new LegOutcome.Completed(), Ct))
             .Reason().Should().Contain("is Settled, not Claimed");
     }
 
@@ -108,14 +115,48 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         var (run, cells) = Plan(1, 1, 1);
         var store = postgres.NewStore(clock);
         await store.CreateAsync(run, cells, Ct);
-        await store.ClaimNextAsync(run.Id, "host-that-dies", Ct);
+        await store.ClaimNextAsync(run.Id, TestWorkers.Dead("host-that-dies"), Ct);
 
         clock.Now = Noon.AddHours(2);
-        var report = await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
+        await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
 
-        report.Requeued.Should().Be(1);
-        report.Abandoned.Should().Be(0);
-        (await store.ProgressAsync(run.Id, Ct)).Pending.Should().Be(1, "it is available again");
+        var progress = await store.ProgressAsync(run.Id, Ct);
+        progress.Pending.Should().Be(1, "it is available again");
+        progress.Claimed.Should().Be(0, "the host that held it is gone");
+        progress.Abandoned.Should().Be(0, "one hand-back is nowhere near the attempt cap");
+    }
+
+    [Fact]
+    public async Task A_cell_whose_owner_is_still_running_is_not_handed_back()
+    {
+        var clock = new TestClock(Noon);
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(clock);
+        await store.CreateAsync(run, cells, Ct);
+        await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("worker-alive"), Ct);
+
+        clock.Now = Noon.AddHours(2);
+        await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
+
+        (await store.ProgressAsync(run.Id, Ct)).Claimed.Should().Be(1,
+            "the owner is this very process and it is running — elapsed time is a margin, not a death certificate");
+    }
+
+    [Fact]
+    public async Task A_cell_claimed_on_another_machine_is_left_for_that_machine_to_sweep()
+    {
+        var clock = new TestClock(Noon);
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(clock);
+        await store.CreateAsync(run, cells, Ct);
+        await store.ClaimNextAsync(run.Id, WorkerIdentity.Stored("worker-elsewhere", "some-other-machine", 4242), Ct);
+
+        clock.Now = Noon.AddHours(2);
+        await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
+
+        (await store.ProgressAsync(run.Id, Ct)).Claimed.Should().Be(1,
+            "pid 4242 on THIS host is a different process from pid 4242 on that one — ending a live worker's "
+            + "leg is a worse error than leaving a stale row for its own host to sweep");
     }
 
     [Fact]
@@ -125,12 +166,13 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         var (run, cells) = Plan(1, 1, 1);
         var store = postgres.NewStore(clock);
         await store.CreateAsync(run, cells, Ct);
-        await store.ClaimNextAsync(run.Id, "worker-a", Ct);
+        await store.ClaimNextAsync(run.Id, TestWorkers.Dead("worker-a"), Ct);
 
         clock.Now = Noon.AddMinutes(5);
+        await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
 
-        (await store.SweepAsync(TimeSpan.FromMinutes(30), Ct)).Total
-            .Should().Be(0, "a worker that is still working is not a dead host");
+        (await store.ProgressAsync(run.Id, Ct)).Claimed.Should().Be(1,
+            "the window has not passed, so the owner is not even asked about — a worker inside it is working");
     }
 
     [Fact]
@@ -143,7 +185,7 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
 
         for (var attempt = 1; attempt <= CellLifecycle.MaxAttempts; attempt++)
         {
-            (await store.ClaimNextAsync(run.Id, $"host-{attempt}", Ct)).Failed().Should().BeFalse();
+            (await store.ClaimNextAsync(run.Id, TestWorkers.Dead($"host-{attempt}"), Ct)).Failed().Should().BeFalse();
             clock.Now = clock.Now.AddHours(2);
             await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
         }
@@ -154,7 +196,9 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         progress.Describe.Should().Contain("ABANDONED");
 
         clock.Now = clock.Now.AddDays(1);
-        (await store.SweepAsync(TimeSpan.FromMinutes(30), Ct)).Total.Should().Be(0, "abandoned is terminal");
+        await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
+
+        (await store.ProgressAsync(run.Id, Ct)).Should().Be(progress, "abandoned is terminal");
     }
 
     [Fact]
@@ -163,10 +207,11 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         var (run, cells) = Plan(1, 1, 1);
         var store = postgres.NewStore(new TestClock(Noon));
         await store.CreateAsync(run, cells, Ct);
-        var cell = (await store.ClaimNextAsync(run.Id, "w", Ct)).Ok();
+        var worker = WorkerIdentity.Here("w");
+        var cell = (await store.ClaimNextAsync(run.Id, worker, Ct)).Ok();
 
         var settled = (await store.SettleAsync(
-            cell.Id, "w", new LegOutcome.CapExceeded(BudgetKind.Wall, BudgetScope.Phase, 600m, 731m), Ct)).Ok();
+            cell.Id, worker, new LegOutcome.CapExceeded(BudgetKind.Wall, BudgetScope.Phase, 600m, 731m), Ct)).Ok();
 
         settled.OutcomeKind.Should().Be(LegOutcomeKind.CapExceeded);
         settled.OutcomeDetail.Should().Contain("Wall/Phase").And.Contain("731");
@@ -175,7 +220,7 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     [Fact]
     public async Task Claiming_a_run_that_does_not_exist_is_an_answer_not_an_exception()
     {
-        (await postgres.NewStore(new TestClock(Noon)).ClaimNextAsync(Guid.CreateVersion7(), "w", Ct))
+        (await postgres.NewStore(new TestClock(Noon)).ClaimNextAsync(Guid.CreateVersion7(), WorkerIdentity.Here("w"), Ct))
             .Reason().Should().Contain("no pending cell");
 
         (await postgres.NewStore(new TestClock(Noon)).LoadAsync(Guid.CreateVersion7(), Ct))
@@ -185,11 +230,12 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     private async Task<List<Guid>> DrainAsync(Guid runId, string owner)
     {
         var store = postgres.NewStore(new TestClock(Noon));
+        var identity = WorkerIdentity.Here(owner);
         List<Guid> mine = [];
 
         while (true)
         {
-            var claim = await store.ClaimNextAsync(runId, owner, Ct);
+            var claim = await store.ClaimNextAsync(runId, identity, Ct);
 
             if (claim.Failed())
             {

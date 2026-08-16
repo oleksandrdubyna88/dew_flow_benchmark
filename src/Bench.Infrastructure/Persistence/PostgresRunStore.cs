@@ -3,6 +3,7 @@ using Bench.Domain;
 using Bench.Domain.Runs;
 using Bench.Domain.Targets;
 using Bench.Domain.Variants;
+using Bench.Infrastructure.Process;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
@@ -52,11 +53,13 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             : ToDomain(row);
     }
 
-    public async Task<Outcome<RunCell>> ClaimNextAsync(Guid runId, string owner, CancellationToken cancellationToken)
+    public async Task<Outcome<RunCell>> ClaimNextAsync(
+        Guid runId, WorkerIdentity owner, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(owner))
+        if (!owner.CanClaim)
         {
-            return Outcome<RunCell>.Failure("a claim needs an owner — an unowned claim can never be swept correctly");
+            return Outcome<RunCell>.Failure(
+                "a claim needs an owner with a host and a pid — an unowned claim can never be swept correctly");
         }
 
         for (var attempt = 0; attempt < ClaimAttempts; attempt++)
@@ -78,12 +81,18 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     }
 
     public async Task<Outcome<RunCell>> SettleAsync(
-        Guid cellId, string owner, LegOutcome outcome, CancellationToken cancellationToken)
+        Guid cellId, WorkerIdentity owner, LegOutcome outcome, CancellationToken cancellationToken)
     {
         var (kind, detail) = LegOutcomeCodec.Encode(outcome);
 
+        // The whole identity is in the WHERE, not just the label: two hosts may both call themselves
+        // "cli", and a settle that matched on the label alone would let one of them close the other's leg.
         var settled = await db.Cells
-            .Where(c => c.Id == cellId && c.State == CellState.Claimed && c.Owner == owner)
+            .Where(c => c.Id == cellId
+                     && c.State == CellState.Claimed
+                     && c.Owner == owner.Label
+                     && c.OwnerHost == owner.Host
+                     && c.OwnerPid == owner.Pid)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(c => c.State, CellState.Settled)
                       .SetProperty(c => c.OutcomeKind, kind)
@@ -95,28 +104,36 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             : await ExplainSettleRefusalAsync(cellId, owner, cancellationToken);
     }
 
+    /// <summary>Hands back the cells whose OWNER is gone, and only those.
+    /// <para>
+    /// Staleness selects the candidates; ownership decides. Until 2026-08-16 elapsed time decided alone,
+    /// which was harmless only while nothing called this method — the moment it ran at every
+    /// <c>bench run</c> startup, worker B beginning a campaign could requeue a cell worker A was
+    /// legitimately still measuring, and A's settle would then be refused for an owner mismatch it did
+    /// nothing to cause. The 30-minute window against a 10-minute leg wall is a MARGIN, not a guarantee,
+    /// and this system is meant to run unattended for weeks.
+    /// </para>
+    /// <para>
+    /// The candidates are loaded and filtered in memory because a set-based <c>ExecuteUpdate</c> cannot
+    /// ask the operating system whether a pid is alive. That is affordable precisely because the staleness
+    /// predicate stays in SQL: claimed-and-stale rows are ~0 in a healthy system, so the list is empty on
+    /// almost every sweep. The updates themselves stay GUARDED — <c>State == Claimed</c> and the same
+    /// cutoff are still in the WHERE, so a cell that settled or was re-claimed between the read and the
+    /// write is not clobbered by a decision taken about its previous life.
+    /// </para></summary>
     public async Task<SweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken)
     {
         var cutoff = clock.GetUtcNow() - staleAfter;
+        var stranded = await StrandedAsync(cutoff, cancellationToken);
 
-        // Abandon first, then requeue. The two predicates are disjoint on Attempts, so the order does not
-        // change the result — but abandoning first means a cell can never be requeued and abandoned in one
-        // sweep, which would report it twice.
-        var abandoned = await db.Cells
-            .Where(c => c.State == CellState.Claimed && c.ClaimedAt <= cutoff && c.Attempts >= CellLifecycle.MaxAttempts)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(c => c.State, CellState.Abandoned)
-                      .SetProperty(c => c.Owner, string.Empty)
-                      .SetProperty(c => c.OutcomeKind, LegOutcomeKind.Crashed)
-                      .SetProperty(c => c.OutcomeDetail, $"abandoned after {CellLifecycle.MaxAttempts} attempts"),
-                cancellationToken);
+        // Abandon first, then requeue. The two sets are disjoint on Attempts, so the order does not change
+        // the result — but abandoning first means a cell can never be requeued and abandoned in one sweep,
+        // which would report it twice.
+        var abandoned = await AbandonAsync(
+            Ids(stranded, c => c.Attempts >= CellLifecycle.MaxAttempts), cutoff, cancellationToken);
 
-        var requeued = await db.Cells
-            .Where(c => c.State == CellState.Claimed && c.ClaimedAt <= cutoff && c.Attempts < CellLifecycle.MaxAttempts)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(c => c.State, CellState.Pending)
-                      .SetProperty(c => c.Owner, string.Empty),
-                cancellationToken);
+        var requeued = await RequeueAsync(
+            Ids(stranded, c => c.Attempts < CellLifecycle.MaxAttempts), cutoff, cancellationToken);
 
         return new SweepReport(requeued, abandoned);
     }
@@ -136,6 +153,49 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             counts.GetValueOrDefault(CellState.Abandoned));
     }
 
+    /// <summary>The stale claims whose owner is provably gone. Everything else a stale row can be — a
+    /// colleague on this host still working, or any row belonging to ANOTHER machine — is left alone.</summary>
+    private async Task<List<CellRow>> StrandedAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
+    {
+        var stale = await db.Cells.AsNoTracking()
+            .Where(c => c.State == CellState.Claimed && c.ClaimedAt <= cutoff)
+            .ToListAsync(cancellationToken);
+
+        return [.. stale.Where(IsOrphan)];
+    }
+
+    private static bool IsOrphan(CellRow row) =>
+        WorkerIdentity.Stored(row.Owner, row.OwnerHost, row.OwnerPid)
+            .IsProvablyGoneOn(WorkerLiveness.ThisHost, WorkerLiveness.ProcessIsAlive);
+
+    private static List<Guid> Ids(IEnumerable<CellRow> rows, Func<CellRow, bool> matching) =>
+        [.. rows.Where(matching).Select(r => r.Id)];
+
+    private async Task<int> AbandonAsync(
+        List<Guid> ids, DateTimeOffset cutoff, CancellationToken cancellationToken) =>
+        ids.Count == 0 ? 0 : await Claimed(ids, cutoff).ExecuteUpdateAsync(
+            s => s.SetProperty(c => c.State, CellState.Abandoned)
+                  .SetProperty(c => c.Owner, string.Empty)
+                  .SetProperty(c => c.OwnerHost, string.Empty)
+                  .SetProperty(c => c.OwnerPid, 0)
+                  .SetProperty(c => c.OutcomeKind, LegOutcomeKind.Crashed)
+                  .SetProperty(c => c.OutcomeDetail, $"abandoned after {CellLifecycle.MaxAttempts} attempts"),
+            cancellationToken);
+
+    private async Task<int> RequeueAsync(
+        List<Guid> ids, DateTimeOffset cutoff, CancellationToken cancellationToken) =>
+        ids.Count == 0 ? 0 : await Claimed(ids, cutoff).ExecuteUpdateAsync(
+            s => s.SetProperty(c => c.State, CellState.Pending)
+                  .SetProperty(c => c.Owner, string.Empty)
+                  .SetProperty(c => c.OwnerHost, string.Empty)
+                  .SetProperty(c => c.OwnerPid, 0),
+            cancellationToken);
+
+    /// <summary>The guard the sweep's two updates share: still claimed, and still claimed as of the same
+    /// cutoff the decision was taken against.</summary>
+    private IQueryable<CellRow> Claimed(List<Guid> ids, DateTimeOffset cutoff) =>
+        db.Cells.Where(c => ids.Contains(c.Id) && c.State == CellState.Claimed && c.ClaimedAt <= cutoff);
+
     private async Task<Guid> NextPendingIdAsync(Guid runId, CancellationToken cancellationToken) =>
         await db.Cells.AsNoTracking()
             .Where(c => c.RunId == runId && c.State == CellState.Pending)
@@ -145,12 +205,15 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
 
     /// <summary>The atomic step. <c>State == Pending</c> lives in the WHERE, so exactly one of any number
     /// of concurrent callers can see a row change and the rest see zero.</summary>
-    private async Task<bool> TryClaimAsync(Guid cellId, string owner, CancellationToken cancellationToken) =>
+    private async Task<bool> TryClaimAsync(
+        Guid cellId, WorkerIdentity owner, CancellationToken cancellationToken) =>
         await db.Cells
             .Where(c => c.Id == cellId && c.State == CellState.Pending)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(c => c.State, CellState.Claimed)
-                      .SetProperty(c => c.Owner, owner)
+                      .SetProperty(c => c.Owner, owner.Label)
+                      .SetProperty(c => c.OwnerHost, owner.Host)
+                      .SetProperty(c => c.OwnerPid, owner.Pid)
                       .SetProperty(c => c.ClaimedAt, clock.GetUtcNow())
                       .SetProperty(c => c.Attempts, c => c.Attempts + 1),
                 cancellationToken) == 1;
@@ -163,7 +226,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     }
 
     private async Task<Outcome<RunCell>> ExplainSettleRefusalAsync(
-        Guid cellId, string owner, CancellationToken cancellationToken)
+        Guid cellId, WorkerIdentity owner, CancellationToken cancellationToken)
     {
         var row = await db.Cells.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cellId, cancellationToken);
 
@@ -173,7 +236,8 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             { State: not CellState.Claimed } => Outcome<RunCell>.Failure(
                 $"cell {cellId} is {row.State}, not Claimed — only a claimed cell can settle"),
             _ => Outcome<RunCell>.Failure(
-                $"cell {cellId} is held by '{row.Owner}', not '{owner}' — a swept-away claim must not overwrite the retry that replaced it"),
+                $"cell {cellId} is held by '{row.Owner}' ({Owner(row).Canonical}), not '{owner.Label}' ({owner.Canonical}) "
+                + "— a swept-away claim must not overwrite the retry that replaced it"),
         };
     }
 
@@ -211,7 +275,9 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             Position = cell.Position,
             State = cell.State,
             Attempts = cell.Attempts,
-            Owner = cell.Owner,
+            Owner = cell.Owner.Label,
+            OwnerHost = cell.Owner.Host,
+            OwnerPid = cell.Owner.Pid,
             ClaimedAt = cell.ClaimedAt,
             OutcomeKind = cell.OutcomeKind,
             OutcomeDetail = cell.OutcomeDetail,
@@ -221,7 +287,10 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     private static RunCell ToDomain(CellRow row) => new(
         row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.SubjectModelId, row.LaneName,
         VariantSelectionCodec.Decode(row.VariantId, row.VariantName),
-        row.Position, row.State, row.Attempts, row.Owner, row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
+        row.Position, row.State, row.Attempts, Owner(row), row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
+
+    private static WorkerIdentity Owner(CellRow row) =>
+        WorkerIdentity.Stored(row.Owner, row.OwnerHost, row.OwnerPid);
 
     private static Outcome<BenchRun> ToDomain(RunRow row) =>
         RepoUrl.Parse(row.RepoUrl).Match(

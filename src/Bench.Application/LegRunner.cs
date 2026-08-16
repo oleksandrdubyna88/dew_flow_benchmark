@@ -42,7 +42,7 @@ public sealed class LegRunner(
     /// <summary>Claims one cell and runs it. "Nothing to claim" is a VALUE — several workers draining a
     /// queue is the expected shape, and a loser must not treat losing as a fault.</summary>
     public async Task<Outcome<LegResult>> RunNextAsync(
-        Guid runId, string owner, LegPlan plan, CancellationToken cancellationToken)
+        Guid runId, WorkerIdentity owner, LegPlan plan, CancellationToken cancellationToken)
     {
         var claim = await runs.ClaimNextAsync(runId, owner, cancellationToken);
 
@@ -55,7 +55,7 @@ public sealed class LegRunner(
     }
 
     private async Task<Outcome<LegResult>> RunAsync(
-        RunCell cell, string owner, LegPlan plan, CancellationToken cancellationToken)
+        RunCell cell, WorkerIdentity owner, LegPlan plan, CancellationToken cancellationToken)
     {
         if (await results.HasResultAsync(cell.Id, cancellationToken))
         {
@@ -88,7 +88,7 @@ public sealed class LegRunner(
 
     private async Task<Outcome<LegResult>> ScoreAsync(
         RunCell cell,
-        string owner,
+        WorkerIdentity owner,
         LegPlan plan,
         Question question,
         ModelAnswer answer,
@@ -130,7 +130,7 @@ public sealed class LegRunner(
             : new LegOutcome.Completed();
 
     private async Task<Outcome<LegResult>> AbandonAsync(
-        RunCell cell, string owner, string reason, CancellationToken cancellationToken)
+        RunCell cell, WorkerIdentity owner, string reason, CancellationToken cancellationToken)
     {
         await runs.SettleAsync(cell.Id, owner, new LegOutcome.Crashed(reason), cancellationToken);
         return Outcome<LegResult>.Failure(reason);
