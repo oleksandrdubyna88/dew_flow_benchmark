@@ -121,7 +121,8 @@ public sealed class VariantsCommandTests
         var output = new StringWriter();
         var error = new StringWriter();
         var code = VariantsCommand
-            .RunAsync(CommandLine.Parse(["variants", .. args]), catalog, new FixedClock(Noon), output, error)
+            .RunAsync(CommandLine.Parse(["variants", .. args]), catalog, new FixedClock(Noon), output, error,
+                TestContext.Current.CancellationToken)
             .GetAwaiter().GetResult();
 
         return (code, output.ToString(), error.ToString());

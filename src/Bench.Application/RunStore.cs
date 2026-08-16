@@ -47,6 +47,19 @@ public interface IRunStore
     Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken);
 }
 
+/// <summary>The one phrase that means "there is nothing left to claim".
+/// <para>
+/// A drain loop has to tell "the queue is empty" apart from "this claim went wrong", and today it does
+/// that by reading the refusal's text. That is a substring check, which is exactly what a loop exit
+/// should not be — so the phrase lives HERE, on the port, written once and consumed by both sides,
+/// rather than hand-typed in an adapter and hand-matched in a host. The typed replacement is a change
+/// to <see cref="IRunStore.ClaimNextAsync"/>'s return shape and belongs to its own task.
+/// </para></summary>
+public static class ClaimRefusal
+{
+    public const string NoPendingCell = "no pending cell to claim";
+}
+
 /// <param name="Requeued">Cells handed back to Pending for another attempt.</param>
 /// <param name="Abandoned">Cells that had used up their attempts. Reported separately because a silent
 /// abandonment is indistinguishable from a cell that was never planned.</param>

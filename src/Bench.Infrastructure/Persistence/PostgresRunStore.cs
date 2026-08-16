@@ -65,7 +65,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
 
             if (candidate == Guid.Empty)
             {
-                return Outcome<RunCell>.Failure($"run {runId} has no pending cell to claim");
+                return Outcome<RunCell>.Failure($"run {runId} has {ClaimRefusal.NoPendingCell}");
             }
 
             if (await TryClaimAsync(candidate, owner, cancellationToken))

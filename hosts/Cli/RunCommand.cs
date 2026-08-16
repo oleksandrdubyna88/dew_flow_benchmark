@@ -4,24 +4,32 @@ using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
-using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Bench.Cli;
 
-/// <summary>`bench run` — plan a run, then actually execute its legs.
+/// <summary>`bench run` — plan a run, recover what a crash stranded, then actually execute its legs.
 /// <para>
 /// <b>It reports; it does not judge.</b> There is no bar yet, so a leg that scored badly is a number rather
 /// than a failure, and the exit code says whether the MEASUREMENT happened — not whether the subject did
 /// well. Turning scores into a pass before anybody has agreed a threshold is how a harness starts arguing
 /// with its operator.
+/// </para>
+/// <para>
+/// <b>It is built to be stopped and resumed.</b> The startup sweep hands back cells a dead host claimed, the
+/// drain survives one leg's failure and ends the campaign when the failures stop being one leg's, and a
+/// signal leaves the run resumable instead of stranded.
 /// </para></summary>
 public static class RunCommand
 {
-    public static async Task<int> RunAsync(CommandLine command, TextWriter output, TextWriter error)
+    /// <summary>The summary's own budget. It runs after a stop as well as after a clean drain, so it
+    /// cannot use the root token — but every wait has a ceiling, so it does not use none either.</summary>
+    private static readonly TimeSpan SummaryBudget = TimeSpan.FromSeconds(30);
+
+    public static async Task<int> RunAsync(
+        CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         // Same two-step as `plan`, and the split is the contract rather than pedantry: an unset flag is the
         // caller's mistake (4), a named file that is not there is the machine's (3).
@@ -44,28 +52,37 @@ public static class RunCommand
             return Fail(error, bad.Reason, ExitCodes.Configuration);
         }
 
-        var settings = ((Outcome<RunInputs>.Ok)inputs).Value;
+        return await StartAsync(((Outcome<RunInputs>.Ok)inputs).Value, command, output, error, stopping);
+    }
+
+    private static async Task<int> StartAsync(
+        RunInputs settings, CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
         await using var provider = Services(settings.ConnectionString);
 
-        var prepared = await PrepareAsync(provider, settings, output, error);
+        var prepared = await PrepareAsync(provider, settings, output, error, stopping);
 
         if (prepared is null)
         {
             return ExitCodes.Environment;
         }
 
-        return await ExecuteAsync(provider, prepared.Value.Run, prepared.Value.Plan, command, output);
+        // Recovery BEFORE work, always: the cells a crash stranded are the ones nobody is coming back for,
+        // and a harness that only ever adds cells to a queue it cannot repair fills that queue with ghosts.
+        await SweepCommand.RecoverAsync(provider, SweepCommand.StaleAfter(command), output, stopping);
+
+        return await ExecuteAsync(provider, prepared.Value.Run, prepared.Value.Plan, command, output, stopping);
     }
 
     private static async Task<(BenchRun Run, LegPlan Plan)?> PrepareAsync(
-        ServiceProvider provider, RunInputs settings, TextWriter output, TextWriter error)
+        ServiceProvider provider, RunInputs settings, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         await using var scope = provider.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BenchDbContext>();
 
         try
         {
-            await db.Database.MigrateAsync();
+            await db.Database.MigrateAsync(stopping);
         }
         catch (Exception ex)
         {
@@ -95,7 +112,7 @@ public static class RunCommand
         var runs = scope.ServiceProvider.GetRequiredService<PostgresRunStore>();
         var planned = ((Outcome<IReadOnlyList<MatrixCell>>.Ok)cells).Value.Select(c => RunCell.Pending(run.Id, c)).ToList();
 
-        var created = await runs.CreateAsync(run, planned, CancellationToken.None);
+        var created = await runs.CreateAsync(run, planned, stopping);
 
         if (created is Outcome<BenchRun>.Fail badRun)
         {
@@ -123,87 +140,101 @@ public static class RunCommand
         BenchRun run,
         LegPlan plan,
         CommandLine command,
-        TextWriter output)
+        TextWriter output,
+        CancellationToken stopping)
     {
         var owner = $"cli-{Environment.ProcessId}";
-        var done = 0;
+        var console = new LegConsole(output);
 
         output.WriteLine();
 
-        while (true)
-        {
-            await using var scope = provider.CreateAsyncScope();
-            var runner = scope.ServiceProvider.GetRequiredService<LegRunner>();
+        var drained = await provider.GetRequiredService<LegDrain>().DrainAsync(
+            token => LegAsync(provider, run.Id, owner, plan, token),
+            console.Write,
+            Limits(command),
+            stopping);
 
-            var leg = await runner.RunNextAsync(run.Id, owner, plan, CancellationToken.None);
-
-            if (leg is Outcome<LegResult>.Fail stop)
-            {
-                if (stop.Reason.Contains("no pending cell", StringComparison.Ordinal))
-                {
-                    break;
-                }
-
-                output.WriteLine($"  leg    REFUSED — {stop.Reason}");
-                continue;
-            }
-
-            Report(output, ((Outcome<LegResult>.Ok)leg).Value, ++done);
-        }
-
-        return await SummariseAsync(provider, run.Id, done, command, output);
+        return await SummariseAsync(provider, run.Id, drained, command, output);
     }
 
-    private static void Report(TextWriter output, LegResult result, int index)
+    /// <summary>One leg, and the whole of it: the scope, the resolution and the work.
+    /// <para>
+    /// It is a single delegate on purpose — the drain wraps this in its per-unit <c>try</c>, and setup left
+    /// outside that guard is the same crash through a side door.
+    /// </para></summary>
+    private static async Task<Outcome<LegResult>> LegAsync(
+        ServiceProvider provider, Guid runId, string owner, LegPlan plan, CancellationToken cancellationToken)
     {
-        output.WriteLine($"  leg {index,-3} {(result.Passed ? "pass" : "FAIL")}  {Trim(result.Prompt, 58)}");
+        await using var scope = provider.CreateAsyncScope();
+        var runner = scope.ServiceProvider.GetRequiredService<LegRunner>();
 
-        foreach (var metric in result.Metrics)
-        {
-            output.WriteLine($"         {(metric.Failed ? "✗" : "·")} {metric.Name} = {metric.Value}  ({metric.Reason})");
-        }
+        return await runner.RunNextAsync(runId, owner, plan, cancellationToken);
     }
+
+    private static DrainLimits Limits(CommandLine command) =>
+        DrainLimits.Default with
+        {
+            ConsecutiveFailureBudget = Math.Max(
+                1, command.Int("max-consecutive-failures", DrainLimits.Default.ConsecutiveFailureBudget)),
+        };
 
     private static async Task<int> SummariseAsync(
-        ServiceProvider provider, Guid runId, int done, CommandLine command, TextWriter output)
+        ServiceProvider provider, Guid runId, DrainReport drained, CommandLine command, TextWriter output)
     {
+        // NOT the root token: this summary is the shutdown report itself, and a Ctrl+C that also cancelled
+        // it would leave the operator with a stopped run and no idea what it did. A ceiling instead.
+        using var budget = new CancellationTokenSource(SummaryBudget);
+
         await using var scope = provider.CreateAsyncScope();
         var results = scope.ServiceProvider.GetRequiredService<PostgresResultStore>();
         var runs = scope.ServiceProvider.GetRequiredService<PostgresRunStore>();
 
-        var progress = await runs.ProgressAsync(runId, CancellationToken.None);
-        var scored = await results.ForRunAsync(runId, CancellationToken.None);
+        var progress = await runs.ProgressAsync(runId, budget.Token);
+        var scored = await results.ForRunAsync(runId, budget.Token);
 
         output.WriteLine();
         output.WriteLine($"legs     {progress.Describe}");
+        output.WriteLine($"drain    {drained.Describe}");
         output.WriteLine($"scored   {scored.Count(r => r.Passed)} of {scored.Count} passed every expectation");
 
         if (command.Has("json"))
         {
             output.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-                new { runId, progress.Settled, progress.Abandoned, scored = scored.Count, passed = scored.Count(r => r.Passed) },
+                new
+                {
+                    runId,
+                    progress.Settled,
+                    progress.Abandoned,
+                    scored = scored.Count,
+                    passed = scored.Count(r => r.Passed),
+                    stop = drained.Stop.ToString(),
+                    drained.Reason,
+                    faulted = drained.Faulted,
+                    refused = drained.Refused,
+                },
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         }
 
-        // Nothing measured is NOT a pass. And a low score is not a failure either: without an agreed bar,
-        // the exit code answers "did the measurement happen", never "was the subject good".
-        return done == 0 ? ExitCodes.NoReport : ExitCodes.Pass;
+        return Exit(drained);
     }
 
+    /// <summary>Nothing measured is NOT a pass. And a low score is not a failure either: without an agreed
+    /// bar, the exit code answers "did the measurement happen", never "was the subject good".
+    /// <para>
+    /// The two early exits are separate answers again: a campaign that gave up after N failures in a row is
+    /// an ENVIRONMENT verdict, and a campaign an operator stopped has simply not finished — both must stay
+    /// distinguishable from "the subject did badly", which is not an exit code at all.
+    /// </para></summary>
+    private static int Exit(DrainReport drained) =>
+        drained.Stop switch
+        {
+            DrainStop.TooManyFailures => ExitCodes.Environment,
+            DrainStop.Cancelled => ExitCodes.NoReport,
+            _ => drained.Scored == 0 ? ExitCodes.NoReport : ExitCodes.Pass,
+        };
+
     private static ServiceProvider Services(string connectionString) =>
-        new ServiceCollection()
-            .AddHttpClient()
-            .AddDbContext<BenchDbContext>(options => options.UseNpgsql(connectionString))
-            .AddScoped<PostgresRunStore>()
-            .AddScoped<PostgresResultStore>()
-            .AddScoped<IRunStore>(s => s.GetRequiredService<PostgresRunStore>())
-            .AddScoped<IResultStore>(s => s.GetRequiredService<PostgresResultStore>())
-            .AddScoped<IModelRuntime, OpenAiCompatibleRuntime>()
-            .AddSingleton(TimeProvider.System)
-            .AddScoped<LegRunner>()
-            .AddLogging()
-            .AddSingleton(NullLoggerFactory.Instance)
-            .BuildServiceProvider();
+        CliContainer.ForRun(connectionString, CliLogging.Start());
 
     private static Outcome<RunInputs> Read(CommandLine command)
     {
@@ -251,9 +282,6 @@ public static class RunCommand
     private static decimal Money(CommandLine command, string name) =>
         decimal.TryParse(command.Value(name, "0"), System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
-
-    private static string Trim(string text, int max) =>
-        text.Length <= max ? text : text[..max].TrimEnd() + "…";
 
     private static int Fail(TextWriter error, string reason, int code)
     {

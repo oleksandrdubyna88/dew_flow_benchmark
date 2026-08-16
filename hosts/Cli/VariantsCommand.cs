@@ -14,12 +14,17 @@ namespace Bench.Cli;
 public static class VariantsCommand
 {
     public static async Task<int> RunAsync(
-        CommandLine command, IVariantCatalog catalog, TimeProvider clock, TextWriter output, TextWriter error) =>
+        CommandLine command,
+        IVariantCatalog catalog,
+        TimeProvider clock,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken) =>
         command.Operand(0) switch
         {
-            "add" => await AddAsync(command, catalog, clock, output, error),
-            "list" => await ListAsync(command, catalog, output, error),
-            "retire" => await RetireAsync(command, catalog, clock, output, error),
+            "add" => await AddAsync(command, catalog, clock, output, error, cancellationToken),
+            "list" => await ListAsync(command, catalog, output, error, cancellationToken),
+            "retire" => await RetireAsync(command, catalog, clock, output, error, cancellationToken),
             var other => Fail(
                 error,
                 other.Length == 0
@@ -28,7 +33,12 @@ public static class VariantsCommand
         };
 
     private static async Task<int> AddAsync(
-        CommandLine command, IVariantCatalog catalog, TimeProvider clock, TextWriter output, TextWriter error)
+        CommandLine command,
+        IVariantCatalog catalog,
+        TimeProvider clock,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
     {
         var definition = ReadDefinition(command);
         if (definition is not Outcome<VariantDefinition>.Ok(var recipe))
@@ -44,7 +54,7 @@ public static class VariantsCommand
             return Fail(error, variant.Reason());
         }
 
-        var added = await catalog.AddAsync(created, CancellationToken.None);
+        var added = await catalog.AddAsync(created, cancellationToken);
 
         return added.Match(
             value =>
@@ -56,9 +66,13 @@ public static class VariantsCommand
     }
 
     private static async Task<int> ListAsync(
-        CommandLine command, IVariantCatalog catalog, TextWriter output, TextWriter error)
+        CommandLine command,
+        IVariantCatalog catalog,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
     {
-        var listed = await catalog.ListAsync(command.Has("all"), CancellationToken.None);
+        var listed = await catalog.ListAsync(command.Has("all"), cancellationToken);
 
         return listed.Match(
             variants =>
@@ -78,7 +92,12 @@ public static class VariantsCommand
     }
 
     private static async Task<int> RetireAsync(
-        CommandLine command, IVariantCatalog catalog, TimeProvider clock, TextWriter output, TextWriter error)
+        CommandLine command,
+        IVariantCatalog catalog,
+        TimeProvider clock,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
     {
         var name = command.Value("name");
         if (name.Length == 0)
@@ -86,7 +105,7 @@ public static class VariantsCommand
             return Fail(error, "--name is required");
         }
 
-        var retired = await catalog.RetireAsync(name, clock.GetUtcNow(), CancellationToken.None);
+        var retired = await catalog.RetireAsync(name, clock.GetUtcNow(), cancellationToken);
 
         return retired.Match(
             variant =>

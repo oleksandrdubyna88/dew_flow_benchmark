@@ -238,7 +238,7 @@ public sealed class TelemetryCommandTests
         var output = new StringWriter();
         var error = new StringWriter();
 
-        var code = Program.Run(["telemetry", "report", "--connection", ""], output, error);
+        var code = Program.Run(["telemetry", "report", "--connection", ""], output, error, TestContext.Current.CancellationToken);
 
         // A default connection string would silently write a benchmark's data into whatever database
         // happened to be listening on this machine — of which there are several.
@@ -251,7 +251,8 @@ public sealed class TelemetryCommandTests
     {
         var output = new StringWriter();
         var error = new StringWriter();
-        var code = await TelemetryCommand.RunAsync(CommandLine.Parse(args), store, output, error);
+        var code = await TelemetryCommand.RunAsync(
+            CommandLine.Parse(args), store, output, error, TestContext.Current.CancellationToken);
         return (code, output.ToString(), error.ToString());
     }
 

@@ -83,6 +83,10 @@ public static class ProcessRunner
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeout);
 
+        // None, deliberately, and this is the reason rather than an omission: on a timeout the child is
+        // killed and its output is still MERGED into the report below. A cancelled read would throw
+        // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
+        // unavailable at the only moment it matters. The reads end on their own when the pipes close.
         var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
 

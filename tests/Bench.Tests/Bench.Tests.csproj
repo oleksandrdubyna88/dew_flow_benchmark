@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Bench.Api\Bench.Api.csproj" />
+    <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\hosts\Cli\Cli.csproj" />
   </ItemGroup>
 

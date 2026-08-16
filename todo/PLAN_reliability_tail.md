@@ -1,9 +1,10 @@
 # PLAN — the reliability tail the 24/7 audit left open
 
-> Status: **plan only, nothing implemented yet, 2026-08-16.** Scope: `hosts/Cli`,
+> Status: **item 1 landed 2026-08-16; items 2–6 open.** Scope: `hosts/Cli`,
 > `src/Bench.Infrastructure` (models, persistence, trace, git, process). The four CRITICAL/HIGH
 > defects of the same audit — the unguarded drain loop, the uninvoked sweep, the missing signal
-> handling and the null logger — are being fixed in a separate task and are **not** in this plan.
+> handling and the null logger — were fixed in a separate task, and item 1 below came with them
+> because the breaker and the per-leg guard are the same loop.
 >
 > Related: `.claude/rules/shared/common/reliability.md` (the doctrine this audit produced),
 > `dew_flow_conventions · common/reliability.md:1` (its source of truth).
@@ -22,7 +23,7 @@ Work that is written down but never triggered is the failure mode this family ha
 
 ## The symptom, per item
 
-### 1. A dead model endpoint burns the wall clock for every remaining leg — HIGH
+### 1. A dead model endpoint burns the wall clock for every remaining leg — HIGH · **LANDED 2026-08-16**
 
 `src/Bench.Infrastructure/Models/OpenAiCompatibleRuntime.cs:150-153` defaults the per-leg wall budget
 to **10 minutes** when the caller passes no budgets, and `hosts/Cli/RunCommand.cs:118` passes `[]`.
@@ -34,6 +35,17 @@ On a 10 000-cell run that is weeks of wall clock spent learning what the first f
 reason in a row ends the campaign with a reason naming the endpoint and the last error. The count and
 the window are configuration, not constants. Distinguish a *transport* failure (breaker counts it)
 from a *scored badly* leg (breaker ignores it) — the harness reports, it does not judge.
+
+**Shipped** as `src/Bench.Application/LegDrain.cs` (`DrainLimits.ConsecutiveFailureBudget`, default 20,
+`--max-consecutive-failures` on `bench run`), with a bounded backoff between consecutive failures so a
+lost claim race can no longer spin at zero delay. **Deviation:** the breaker counts every leg that
+produced no RESULT — a refusal or a fault — rather than classifying "transport" specifically, because
+today a claim refusal is distinguishable only by its text and a typed `ClaimNextAsync` outcome is its
+own change. The plan's real requirement is met exactly: a scored leg resets the run, so a subject
+answering badly never trips it (`A_leg_that_merely_scored_badly_never_trips_the_breaker`). What is
+still open here is the **wall-budget** half of the symptom — `bench run` still passes `[]` budgets, so
+each of the N legs before the breaker fires can still cost the 10-minute default when the endpoint
+hangs rather than refuses.
 
 ### 2. Two dictionaries that only ever grow — MEDIUM, latent today
 
@@ -99,7 +111,8 @@ rule forbids leaving it unnamed.
 
 ## Build order
 
-1. **(1) circuit breaker** — the only item on this list that changes what a running campaign does.
+1. ~~**(1) circuit breaker**~~ — landed 2026-08-16 with the CRITICAL fixes; its wall-budget tail is
+   still open (see the item).
 2. **(5) `Win32Exception`** — one line, and it must land before the launcher is copied elsewhere.
 3. **(3) summary counts** and **(4) chunked ingest** — independent, either order.
 4. **(2) bounded dictionaries** — must precede the long-running worker; after it, they are live leaks.
@@ -112,8 +125,8 @@ guarantee, observed failing for the real symptom:
 
 | item | test name |
 |---|---|
-| 1 | `A_transport_that_fails_N_times_in_a_row_ends_the_campaign_naming_the_endpoint` |
-| 1 | `A_leg_that_merely_scored_badly_does_not_trip_the_breaker` |
+| ~~1~~ | shipped as `A_systemically_broken_environment_ends_the_campaign_instead_of_grinding_through_every_cell` (`tests/Bench.Tests/Application/LegDrainTests.cs`) |
+| ~~1~~ | shipped as `A_leg_that_merely_scored_badly_never_trips_the_breaker` |
 | 2 | `A_captured_leg_is_evicted_from_the_trace_and_does_not_accumulate` |
 | 3 | `The_run_summary_does_not_hydrate_the_run_to_count_it` (assert via query count / no-tracking materialization, not timing) |
 | 4 | `A_spool_larger_than_one_chunk_is_ingested_in_bounded_batches` |

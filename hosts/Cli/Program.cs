@@ -15,22 +15,52 @@ public static class Program
         // console codepage is not UTF-8, and this output is read by an agent. Set on the streams the
         // process actually owns — Run() takes writers, so a test never reaches this.
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        return Run(args, Console.Out, Console.Error);
+
+        // Ctrl+C and SIGTERM become the root token every verb runs under, so a planned stop leaves a
+        // resumable run instead of a stranded one.
+        using var shutdown = ShutdownSignal.Install(Console.Error);
+
+        try
+        {
+            return Run(args, Console.Out, Console.Error, shutdown.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A signal that arrived while the verb was still setting itself up. Not a fault, and not a
+            // pass either: whatever was already claimed comes back at the next run's startup sweep.
+            Console.Error.WriteLine("bench: stopped before the measurement finished — the next run's sweep reclaims what was held");
+            return ExitCodes.NoReport;
+        }
+        catch (Exception ex)
+        {
+            // The last frame before "nobody above me". Without it an unhandled fault leaves a stack trace
+            // on a terminal nobody is watching and an exit code nothing agreed on.
+            Serilog.Log.Fatal(ex, "bench exited on an unhandled exception");
+            Console.Error.WriteLine($"bench: unhandled {ex.GetType().Name} — {ex.Message.Split('\n')[0]}");
+            return ExitCodes.Environment;
+        }
+        finally
+        {
+            // A file sink that is never closed loses whatever the last seconds had to say — which is
+            // reliably the part somebody needs.
+            Serilog.Log.CloseAndFlush();
+        }
     }
 
     /// <summary>The testable seam: writers are injected so the contract can be asserted without a
     /// process launch — and the exit-code contract is the part most worth asserting.</summary>
-    public static int Run(string[] args, TextWriter output, TextWriter error)
+    public static int Run(string[] args, TextWriter output, TextWriter error, CancellationToken stopping = default)
     {
         var command = CommandLine.Parse(args);
 
         return command.Verb switch
         {
             "plan" => PlanCommand.Run(command, output, error),
-            "run" => RunCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
-            "judge" => JudgeCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
-            "telemetry" => Telemetry(command, output, error),
-            "variants" => Variants(command, output, error),
+            "run" => RunCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "judge" => JudgeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "telemetry" => Telemetry(command, output, error, stopping),
+            "variants" => Variants(command, output, error, stopping),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -41,14 +71,15 @@ public static class Program
     /// connection string — and refuses, rather than guessing at localhost, when it has none. A default
     /// connection here would silently write a benchmark's data into whatever database happened to be
     /// listening.</summary>
-    private static int Telemetry(CommandLine command, TextWriter output, TextWriter error)
+    private static int Telemetry(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         // Pruning is a file operation and touches no database, so it must not demand a connection
         // string. Requiring one would make retiring drained files impossible on a machine that has the
         // spool but not the store — which is every machine that emits.
         if (command.Operand(0) == "prune")
         {
-            return TelemetryCommand.RunAsync(command, new NoTelemetryStore(), output, error).GetAwaiter().GetResult();
+            return TelemetryCommand.RunAsync(command, new NoTelemetryStore(), output, error, stopping)
+                .GetAwaiter().GetResult();
         }
 
         var connection = command.Value("connection", Environment.GetEnvironmentVariable("ConnectionStrings__bench") ?? string.Empty);
@@ -76,14 +107,14 @@ public static class Program
             return ExitCodes.Environment;
         }
 
-        return TelemetryCommand.RunAsync(command, new PostgresTelemetryStore(db), output, error)
+        return TelemetryCommand.RunAsync(command, new PostgresTelemetryStore(db), output, error, stopping)
             .GetAwaiter().GetResult();
     }
 
     /// <summary>The catalog lives in the database, so this verb needs one — and refuses rather than
     /// guessing at localhost, for the same reason telemetry does: a default connection would write a
     /// configuration into whatever database happened to be listening.</summary>
-    private static int Variants(CommandLine command, TextWriter output, TextWriter error)
+    private static int Variants(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
         if (connection.Length == 0)
@@ -106,7 +137,7 @@ public static class Program
         }
 
         return VariantsCommand
-            .RunAsync(command, new PostgresVariantCatalog(db), TimeProvider.System, output, error)
+            .RunAsync(command, new PostgresVariantCatalog(db), TimeProvider.System, output, error, stopping)
             .GetAwaiter().GetResult();
     }
 
@@ -139,6 +170,11 @@ public static class Program
         output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
         output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
+        output.WriteLine("             [--stale-after-minutes 30] [--max-consecutive-failures 20]");
+        output.WriteLine("             sweeps what a crash left claimed before it drains; Ctrl+C / SIGTERM stop it");
+        output.WriteLine("             cleanly — the leg in flight settles and the rest stay Pending for the next run");
+        output.WriteLine("  bench sweep --db <connection> [--stale-after-minutes 30] [--json]");
+        output.WriteLine("             hands back the cells a dead host left claimed; run it after any kill -9");
         output.WriteLine("  bench judge --run <id> --suite-file <path> --db <connection>");
         output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
         output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg");

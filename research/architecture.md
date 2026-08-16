@@ -168,6 +168,29 @@ Its first live execution — Polly, three questions, no tools, two repeats — s
 zero is the SUITE's result, not the model's: it is the mechanical memorisation check, and it is recorded in
 [MEASURED_LESSONS.md](MEASURED_LESSONS.md) §4c.
 
+### What the drain survives, and what ends it
+
+The loop is `LegDrain` (`src/Bench.Application/LegDrain.cs`), and it is a separate unit because of what a
+campaign of ten thousand cells has to live through overnight:
+
+- **One failed leg is recorded and skipped.** Every leg — its scope, its service resolution and its work —
+  runs inside its own `try`. A transient `NpgsqlException` on leg 3 001 fails *that* leg and the remaining
+  7 000 still run. Until 2026-08-16 it did not, and one blip took the process with every pending cell.
+- **A run of failures ends the campaign.** `--max-consecutive-failures` (default 20) stops a run whose
+  environment is broken, with a reason naming the last error, and exits `3`. A leg that merely SCORED badly
+  resets the run — the harness still reports rather than judges.
+- **A stop is planned.** Ctrl+C / SIGTERM cancel a root token: no further cell is claimed, the leg in flight
+  keeps its token for a 30-second grace so it can settle, and the verb exits `5` — the run is resumable, not
+  finished, and an orchestrator must be able to tell that from a completed one.
+- **Recovery runs first.** Every `bench run` sweeps before it drains, so cells a killed host left `Claimed`
+  come back. `bench sweep --db … [--stale-after-minutes 30]` is the same recovery as an operator verb, for
+  after a `kill -9`. The store had this from its first commit and *nothing called it*, which is the audit
+  finding this whole section exists to prevent repeating.
+
+The CLI is a host like any other: `run`, `judge` and `sweep` build a container wired to the same Serilog
+sinks as the AppHost — coloured console, one file per run under `logs/{yyyy-MM-dd}/`. `help` and `version`
+touch nothing and write nothing.
+
 ## The arbiter, and why it never re-runs a leg
 
 `bench judge` reads a finished run's STORED answers and appends one metric row per leg. It re-scores; it

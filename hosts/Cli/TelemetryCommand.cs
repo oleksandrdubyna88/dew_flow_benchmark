@@ -19,11 +19,15 @@ public static class TelemetryCommand
     public const string IngestedSuffix = ".ingested";
 
     public static async Task<int> RunAsync(
-        CommandLine command, ITelemetryStore store, TextWriter output, TextWriter error) =>
+        CommandLine command,
+        ITelemetryStore store,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken) =>
         command.Operand(0) switch
         {
-            "ingest" => await IngestAsync(command, store, output, error),
-            "report" => await ReportAsync(command, store, output),
+            "ingest" => await IngestAsync(command, store, output, error, cancellationToken),
+            "report" => await ReportAsync(command, store, output, cancellationToken),
             "prune" => Prune(command, output, error),
             var other => Fail(
                 error,
@@ -34,7 +38,11 @@ public static class TelemetryCommand
         };
 
     private static async Task<int> IngestAsync(
-        CommandLine command, ITelemetryStore store, TextWriter output, TextWriter error)
+        CommandLine command,
+        ITelemetryStore store,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
     {
         var spool = command.Value("spool");
         if (spool.Length == 0)
@@ -57,7 +65,7 @@ public static class TelemetryCommand
         var report = IngestReport.Empty;
         foreach (var file in files)
         {
-            report = report.Plus(await IngestFileAsync(file, store));
+            report = report.Plus(await IngestFileAsync(file, store, cancellationToken));
         }
 
         Write(command, output, report);
@@ -82,10 +90,11 @@ public static class TelemetryCommand
     /// opposite case and retires normally: nothing will ever read it, so keeping the file would make
     /// every ordinary spool immortal.
     /// </para></summary>
-    private static async Task<IngestReport> IngestFileAsync(string file, ITelemetryStore store)
+    private static async Task<IngestReport> IngestFileAsync(
+        string file, ITelemetryStore store, CancellationToken cancellationToken)
     {
-        var (records, refused) = SpoolIngest.Read(await File.ReadAllTextAsync(file));
-        var stored = await store.AppendAsync(records, CancellationToken.None);
+        var (records, refused) = SpoolIngest.Read(await File.ReadAllTextAsync(file, cancellationToken));
+        var stored = await store.AppendAsync(records, cancellationToken);
 
         var retryable = refused.Any(r => r.Retryable);
         if (!retryable)
@@ -152,13 +161,14 @@ public static class TelemetryCommand
         return ExitCodes.Pass;
     }
 
-    private static async Task<int> ReportAsync(CommandLine command, ITelemetryStore store, TextWriter output)
+    private static async Task<int> ReportAsync(
+        CommandLine command, ITelemetryStore store, TextWriter output, CancellationToken cancellationToken)
     {
         var days = command.Int("days", 0);
         var since = days > 0 ? DateTimeOffset.UtcNow.AddDays(-days) : DateTimeOffset.MinValue;
         var window = days > 0 ? $"last {days} day(s)" : "all time";
 
-        var totals = await store.TotalsAsync(since, CancellationToken.None);
+        var totals = await store.TotalsAsync(since, cancellationToken);
 
         if (command.Has("json"))
         {

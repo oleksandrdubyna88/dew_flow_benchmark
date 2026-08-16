@@ -8,7 +8,6 @@ using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Bench.Cli;
 
@@ -20,7 +19,8 @@ namespace Bench.Cli;
 /// </para></summary>
 public static class JudgeCommand
 {
-    public static async Task<int> RunAsync(CommandLine command, TextWriter output, TextWriter error)
+    public static async Task<int> RunAsync(
+        CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         var suiteFile = command.Value("suite-file");
 
@@ -41,11 +41,16 @@ public static class JudgeCommand
             return Fail(error, bad.Reason, ExitCodes.Configuration);
         }
 
-        return await JudgeAsync(((Outcome<JudgeInputs>.Ok)inputs).Value, suiteFile, command, output, error);
+        return await JudgeAsync(((Outcome<JudgeInputs>.Ok)inputs).Value, suiteFile, command, output, error, stopping);
     }
 
     private static async Task<int> JudgeAsync(
-        JudgeInputs inputs, string suiteFile, CommandLine command, TextWriter output, TextWriter error)
+        JudgeInputs inputs,
+        string suiteFile,
+        CommandLine command,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken stopping)
     {
         await using var provider = Services(inputs.ConnectionString);
         await using var scope = provider.CreateAsyncScope();
@@ -54,7 +59,7 @@ public static class JudgeCommand
 
         try
         {
-            await db.Database.MigrateAsync();
+            await db.Database.MigrateAsync(stopping);
         }
         catch (Exception ex)
         {
@@ -77,7 +82,7 @@ public static class JudgeCommand
         output.WriteLine($"metric   {JudgeScoring.MetricName(judge.Model.Id)}");
         output.WriteLine();
 
-        var judged = await runner.JudgeRunAsync(inputs.RunId, ((Outcome<Suite>.Ok)suite).Value, judge, CancellationToken.None);
+        var judged = await runner.JudgeRunAsync(inputs.RunId, ((Outcome<Suite>.Ok)suite).Value, judge, stopping);
 
         return judged.Match(
             report => Write(command, output, report),
@@ -115,16 +120,7 @@ public static class JudgeCommand
     private static CommitSha AnyCommit => CommitSha.Parse(new string('0', 40)).Match(c => c, _ => throw new InvalidOperationException());
 
     private static ServiceProvider Services(string connectionString) =>
-        new ServiceCollection()
-            .AddHttpClient()
-            .AddDbContext<BenchDbContext>(options => options.UseNpgsql(connectionString))
-            .AddScoped<PostgresResultStore>()
-            .AddScoped<IResultStore>(s => s.GetRequiredService<PostgresResultStore>())
-            .AddScoped<IModelRuntime, OpenAiCompatibleRuntime>()
-            .AddScoped<JudgeRunner>()
-            .AddLogging()
-            .AddSingleton(NullLoggerFactory.Instance)
-            .BuildServiceProvider();
+        CliContainer.ForJudge(connectionString, CliLogging.Start());
 
     private static Outcome<JudgeInputs> Read(CommandLine command)
     {
