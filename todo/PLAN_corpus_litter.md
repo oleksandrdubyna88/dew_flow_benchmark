@@ -21,6 +21,15 @@ and roughly 2 GB**; a matrix of 24 variants is ~1.2 million points. A sweep that
 fills a disk in an afternoon, and the failure arrives as "no space" during an unrelated run rather than as
 anything pointing at the benchmark.
 
+**And 24 was the number before the engine plans landed.** `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`
+adds `ChunkTokens` (256 | 512, §3.3) and a second dense embedder (§3.4) to the recipe, and collection identity
+already fingerprints model, shape, window and overlap field by field
+(`dew_flow_rag_qln · src/Rag.Domain/Corpus/CorpusVariant.cs:92-93`). So the resident set is 24 × 2 × 2 =
+**96 corpora per target repository** — roughly **190 GB of Qdrant for one repo**, against the 24.38 GB that
+was already the crisis above. The budget and the eviction rule for that set are
+[PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4a; what this plan owns is which corpora may be deleted at
+all, which is the paragraph below.
+
 ## What makes this tractable
 
 A collection's NAME is its claim: `code_{projectId}_{branchHash}_{recipeHash}`. So ownership is decidable by
@@ -33,12 +42,23 @@ reading the catalog — no extra bookkeeping, and no risk of a registry drifting
 | shape | who owns the corpus | clean-up |
 |---|---|---|
 | the arm reuses an existing project's index | the operator | **never** delete — it is someone's working index |
-| the arm builds a corpus for the cell | the run | delete when the run ends, unless kept deliberately |
+| the arm builds an AD-HOC corpus for the cell | the run | delete when the run ends, unless kept deliberately |
 | the arm builds one to be compared across runs | the matrix | keep, and account for it |
 
-The middle row is the one that leaks. The rule proposed: **a corpus a run created is deleted when that run
-finishes**, and a run that wants to keep one says so — the opposite default from today, where keeping is
-implicit and free until it isn't.
+The middle row is the one that leaks. The rule proposed: **an ad-hoc corpus a run created is deleted when
+that run finishes**, and a run that wants to keep one says so — the opposite default from today, where
+keeping is implicit and free until it isn't.
+
+**Delete-on-finish applies to the middle row only, and this is worth stating because the sibling plan
+assumes the opposite for its own corpora.** A variant-matrix corpus is the THIRD row, not the second: it is
+built to be compared across runs by construction, and `ExpandAsync`
+([PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.2) exists precisely so a settled test reopens weeks
+later when a variant or a subject is added. Deleting its corpus when the run finishes would make that
+expansion a full re-index of a tree that never changed — 24 minutes per corpus, on the exact operation the
+matrix was designed around. So a corpus is tagged with its ownership row at creation, and only the second row
+is swept on finish. A corpus with no recorded owner is treated as the second row, because the default that
+leaks is the one that must not be the default; a matrix corpus that failed to be tagged is a bug the sweep
+will announce by deleting something, which is better than one that silently accumulates.
 
 **Retention when a corpus outlives its run.** A cell's corpus may be worth keeping while its results are being
 read. Then: keep it for a stated window, and surface it rather than hide it — "4 corpora from runs older than
@@ -53,9 +73,13 @@ thing to do.
 ## Build order
 
 1. **Name benchmark corpora under their own prefix.** Nothing else can be swept safely until "ours" is
-   decidable from the name alone.
-2. **Delete-on-finish** for corpora a run created, including on a failed or cancelled run — the failure path
-   is the one that leaks in practice.
+   decidable from the name alone. The engine half already has the seam and it is not exposed: the prefix is
+   a per-request field on both sides (`dew_flow_rag_qln · src/Rag.Application/Indexing/FastLanePipeline.cs:20`
+   and `src/Rag.Application/Search/SearchService.cs:21`, both defaulting to `"code"`), but no HTTP surface
+   carries it, so a caller cannot choose one today. Widening those endpoints is the whole change — named on
+   the engine side in `dew_flow_rag_qln · todo/PLAN_corpus_variants.md`.
+2. **Delete-on-finish** for AD-HOC corpora a run created, including on a failed or cancelled run — the
+   failure path is the one that leaks in practice. Matrix corpora are excluded by their ownership tag.
 3. **A retention listing**: what exists, whose run made it, how old, how big, and a delete button.
 4. **Report it in the run's own output**: a run that created and removed 24 corpora should say so, because a
    number nobody prints is a number nobody notices growing.
@@ -69,6 +93,9 @@ thing to do.
 ## Definition of Done
 
 - [ ] A corpus created by a benchmark run is identifiable from its name alone.
-- [ ] A finished run leaves none behind unless it was told to keep them; a crashed run leaves none either.
+- [ ] Every corpus carries which ownership row it belongs to; delete-on-finish selects the ad-hoc row only,
+      and a matrix corpus survives the run that built it.
+- [ ] A finished run leaves no AD-HOC corpus behind unless it was told to keep it; a crashed run leaves none
+      either.
 - [ ] What is deliberately kept is listed with its age and size, and removable in one action.
 - [ ] Runs report how much they created and released.

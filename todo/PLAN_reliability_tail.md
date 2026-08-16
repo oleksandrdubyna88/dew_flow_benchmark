@@ -26,7 +26,9 @@ Work that is written down but never triggered is the failure mode this family ha
 ### 1. A dead model endpoint burns the wall clock for every remaining leg — HIGH · **LANDED 2026-08-16**
 
 `src/Bench.Infrastructure/Models/OpenAiCompatibleRuntime.cs:150-153` defaults the per-leg wall budget
-to **10 minutes** when the caller passes no budgets, and `hosts/Cli/RunCommand.cs:118` passes `[]`.
+to **10 minutes** when the caller passes no budgets, and `bench run` passes none —
+`hosts/Cli/RunCommand.cs:135` builds its plan through `LegPlan.Reading(...)`, whose budget list is
+literally `[]` (`src/Bench.Application/LegRunner.cs:19-20`).
 There is no consecutive-failure counter anywhere. So an endpoint that is simply *down* mid-campaign
 does not fail the campaign — it costs up to 10 minutes × every remaining cell before anyone looks.
 On a 10 000-cell run that is weeks of wall clock spent learning what the first failure already said.
@@ -47,6 +49,26 @@ still open here is the **wall-budget** half of the symptom — `bench run` still
 each of the N legs before the breaker fires can still cost the 10-minute default when the endpoint
 hangs rather than refuses.
 
+**And that tail stops being a tail the moment a leg loops.** The agentic lane now being designed
+(`todo/PLAN_tool_benchmark.md`) runs a leg as many turns rather than one completion, and the wall
+budget above is per COMPLETION: the default it falls back to is applied inside
+`OpenAiCompatibleRuntime`, once per call. Under the 25-turn cap the measured doctrine arms used, one
+leg against a hanging endpoint is 25 × 10 minutes = **4 h 10 m**, and the breaker — which counts
+consecutive failures, correctly, and fires at 20 by default — needs twenty of those before it stops
+anything. That is **~3.5 days** of wall clock to learn what the first hang already said, on a campaign
+whose whole premise is running unattended for weeks.
+
+So, stated here rather than in the loop's own plan, because this is the item that owns it:
+
+- A looping lane requires a **per-LEG wall budget, enforced across the whole loop** — one deadline for
+  the leg, checked between turns and passed down as the remaining time for each call. A per-turn wall
+  is not a budget; it is a budget multiplied by a number nobody bounded.
+- The leg that exhausts it settles as `CapExceeded(BudgetKind.Wall, …)` — a recorded outcome the
+  campaign continues past, never a `Crashed` and never a silent truncation.
+- **The loop must not land before this is closed.** The wall budget is a `LegPlan.Budgets` entry and a
+  check between turns; retrofitting it after the first long agentic campaign means discovering it from
+  a three-day gap in a log.
+
 ### 2. Two dictionaries that only ever grow — MEDIUM, latent today
 
 - `src/Bench.Infrastructure/Trace/LiveTrace.cs:23,29` — `_byLeg.GetOrAdd(...)` per leg, and no
@@ -56,19 +78,24 @@ hangs rather than refuses.
   repository key, never removed, never disposed.
 
 Both are **inert right now**: `LegRunner` takes no `IRunTrace`, and `bench run` does not call
-`ICheckoutProvider.EnsureAsync` (`RunCommand.cs:110` warns the target was not checked out). They stop
+`ICheckoutProvider.EnsureAsync` (`RunCommand.cs:127` warns the target was not checked out). They stop
 being inert the moment the long-running worker of `PLAN_variant_matrix.md` wires them in — which is
 the deployment shape this whole audit is about.
 
 **Fix:** give the trace a `Close(tuple)` that evicts after capture, and the checkout provider a
 bounded or evicting lock map. Do it **before** the worker lands, not after.
 
+**Named on both sides.** `PLAN_variant_matrix.md` §3.6 and its build-order step 9 now carry the
+reciprocal gate: `BenchRunWorker` may not land until this item has. A boundary named from one side is
+not a boundary (`.claude/rules/shared/common/planning-docs.md`), and this one is the difference between
+two dictionaries that are a footnote and two that leak for the life of a three-week campaign.
+
 ### 3. Two counts cost a full hydration of the run — MEDIUM
 
-`hosts/Cli/RunCommand.cs:167-179` calls `results.ForRunAsync(...)`, which at
+`hosts/Cli/RunCommand.cs:195` calls `results.ForRunAsync(...)`, which at
 `src/Bench.Infrastructure/Persistence/PostgresResultStore.cs:36-45` materializes every result row with
 `.Include(r => r.Metrics)` — every prompt, every answer, every metric with its `MetadataJson`
-deserialized — so that line 179 can compute `scored.Count` and `scored.Count(r => r.Passed)`.
+deserialized — so that line 200 can compute `scored.Count` and `scored.Count(r => r.Passed)`.
 At the "tens of thousands of cells" the schema comment itself targets
 (`BenchDbContext.cs:148-151`), that is the whole run pulled into memory to print two integers.
 
@@ -151,9 +178,14 @@ and the `SweepReport` shape are unchanged.
    still open (see the item).
 1a. ~~**(7) ownership-checked sweep**~~ — landed 2026-08-16, the day after the sweep went live; it had to
    precede any second worker, which is the deployment shape items 2 and 4 assume.
+1b. **(1's wall-budget tail)** — **blocks the agentic loop** of `todo/PLAN_tool_benchmark.md`. Placed
+   here rather than last because it is the only item on this list whose absence costs days of wall clock
+   rather than megabytes of disk, and because it is small: a `LegPlan.Budgets` entry and a between-turns
+   deadline check.
 2. **(5) `Win32Exception`** — one line, and it must land before the launcher is copied elsewhere.
 3. **(3) summary counts** and **(4) chunked ingest** — independent, either order.
-4. **(2) bounded dictionaries** — must precede the long-running worker; after it, they are live leaks.
+4. **(2) bounded dictionaries** — **blocks `PLAN_variant_matrix.md` step 9** (`BenchRunWorker`), the
+   change that makes both dictionaries live. Named on that plan's side too, in its §3.6 and build order.
 5. **(6) log retention** — independent of everything above.
 
 ## Test plan
@@ -166,6 +198,7 @@ guarantee, observed failing for the real symptom:
 | ~~1~~ | shipped as `A_systemically_broken_environment_ends_the_campaign_instead_of_grinding_through_every_cell` (`tests/Bench.Tests/Application/LegDrainTests.cs`) |
 | ~~1~~ | shipped as `A_leg_that_merely_scored_badly_never_trips_the_breaker` |
 | ~~7~~ | shipped as `A_cell_whose_owner_is_still_running_is_not_handed_back` and `A_cell_claimed_on_another_machine_is_left_for_that_machine_to_sweep` (`tests/Bench.Tests/Infrastructure/PostgresRunStoreTests.cs`), with the rule itself in `WorkerIdentityTests` |
+| 1 (tail) | `A_looping_leg_stops_at_its_wall_budget_rather_than_at_the_budget_times_its_turns` |
 | 2 | `A_captured_leg_is_evicted_from_the_trace_and_does_not_accumulate` |
 | 3 | `The_run_summary_does_not_hydrate_the_run_to_count_it` (assert via query count / no-tracking materialization, not timing) |
 | 4 | `A_spool_larger_than_one_chunk_is_ingested_in_bounded_batches` |
@@ -179,6 +212,8 @@ Run the test project's executable — never `dotnet test`; the platform has no V
 - [ ] Every item above is either implemented, or explicitly declined here with the reason recorded.
 - [ ] Each implemented item has a RED-then-GREEN test, and the summary quotes both observations.
 - [ ] The circuit breaker's thresholds and the retention window are configuration, not constants.
+- [ ] A leg carries a wall budget enforced across its WHOLE loop, not per turn — no lane can multiply a
+      per-call default by an unbounded turn count.
 - [ ] `logs/` retention has a named owner, per the shared logging rule.
 - [ ] The whole suite passes against a freshly built binary — timestamps checked, per
       `.claude/rules/shared/common/development-workflow.md` § Verify the ARTEFACT.

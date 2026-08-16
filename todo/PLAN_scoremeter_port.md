@@ -125,6 +125,35 @@ Scores land as the existing metric rows (raw AND applied, with the rule that cha
 figures as metric rows per leg. A `bench rescore` verb recomputes policy over stored payloads — proving
 the property, not just claiming it.
 
+#### What grows, and who owns it
+
+`stage_payloads` is append-only and it is the largest row this plan writes: the decompose stage's payload
+is a step-by-step account of a whole diff, and there are three stages per result. A code-lane leg at
+`repeats ≥ 2` (§5.3) therefore stores the diff twice over in a form that is several times the diff's own
+size — call it **tens of kilobytes per leg**, which at this repository's stated target of *"tens of
+thousands of cells"* (`src/Bench.Infrastructure/Persistence/BenchDbContext.cs:165,171`) is **tens of
+gigabytes** for this table alone. The shared rule is that an append-only table names its retention or
+rollup before the first write (`.claude/rules/shared/common/reliability.md` § Everything that grows has an
+owner), and the founding plan put the reason plainly: the budget belongs in the schema, not in a clean-up
+job written after the disk fills.
+
+**The owner here is: kept forever, deliberately, and it is the one table where that is the correct
+answer.** The whole property this section exists to preserve is that policy and figures recompute over
+historical runs without one model call — and a payload that has been rolled up or aged out is a run that
+can no longer be rescored, which is the property gone. So:
+
+- `stage_payloads` is **permanent**, and its projected size is a budget line the retention listing prints
+  rather than a cleanup target. At the matrix sizes of `PLAN_variant_matrix.md` §3.4a this is the number
+  to watch, so it is stated rather than discovered.
+- What may be dropped without losing the property is the **prompt text** — reconstructible from
+  `Protocol` + `PromptHash`, which is why both are columns. Kept raw for a configured window, dropped
+  after, with the hash and the protocol version retained so a rescore still proves which prompt produced
+  the payload. Reference shape: `dew_flow_rag_qln · src/Rag.Infrastructure/Runtime/SizeHistoryStore.cs:76,159-204`
+  (7 days raw, rollup beyond).
+- Nothing in a payload may carry an absolute local path or a machine-specific value; a diff is repository
+  content and belongs in a publishable database, a path from the operator's disk does not
+  (`PLAN_variant_matrix.md` §3.5).
+
 ### 4.3 Protocol and provenance
 
 Every score carries a protocol string, source acknowledged inside it:

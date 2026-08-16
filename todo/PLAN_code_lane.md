@@ -105,8 +105,35 @@ Lanes differ in what the solver may use, and that is the comparison the operator
   never the operator's working tree, never shared between legs (two legs of one matrix run concurrently
   by design).
 - Build and test run as **exe + argv with a timeout**, per the family security rule; no shell string.
-- **Network is denied to the build and test steps** where the platform allows it, and the decision is
-  recorded per leg either way: a task whose tests reach the internet is not reproducible.
+- **Network is denied to the build and test steps**, and the decision is recorded per leg either way: a
+  task whose tests reach the internet is not reproducible. "Where the platform allows it" is not the
+  standard — see the gate below.
+
+#### Isolation is a GATE, not an open question
+
+What this lane actually does is take a diff **written by a model** and run `dotnet build` over it,
+unattended, on the operator's own machine. MSBuild is not a compiler invocation: it executes targets,
+tasks and `Exec` commands declared **by the repository being built**, and after this lane's own step the
+repository being built contains model-authored changes. A test project then runs whatever the produced
+code does. That is arbitrary code execution by design — it is what the measurement *is* — and today it
+would run on the machine that holds Docker, three Postgres instances, the operator's PATs and the agent
+credential pool.
+
+The soft version ("denied where the platform allows it", §10 open question 2 deciding the mechanism later)
+is what turns this into an incident rather than a control: an unattended campaign is exactly the condition
+under which nobody notices that the answer on this platform was *not allowed*, and it ran anyway. So the
+isolation decision moves ahead of the lane rather than beside it:
+
+> **The code lane does not run unattended until build and test execute inside a container, or inside a
+> Windows job object with a restricted token.** Until one of those exists, the lane is **attended-only**:
+> it may be run by an operator watching it, on a task at a time, and it may not be scheduled, queued into
+> a sweep, or drained by `BenchRunWorker`.
+
+Attended-only is a real intermediate state and not a euphemism — it makes the lane usable for the
+authoring and calibration work of §7 steps 4–7 while keeping it out of the deployment shape (thousands of
+legs, 24/7) that the whole family's reliability doctrine was written for. What the isolation must
+guarantee is three things, each of which is a test rather than an assumption: the leg cannot write outside
+its own worktree, cannot reach the network, and cannot read the operator's secret store.
 - Everything the executor observed is persisted: exit codes, stdout/stderr (size-capped with the cap
   recorded), durations, and the **byte size** of each — the operator's "how many megabytes of logs"
   is a measured field here, not an estimate.
@@ -202,7 +229,9 @@ Every number above is stored per leg, so the comparisons are queries, not new pi
 1. **Task kind + payload** — `TaskKind` on bank questions, `CodeTaskJson`, the `Code` phase plan, and
    `LegRunner` finally starting phases. No execution yet: phases record, budgets enforce.
 2. **The sandbox executor** — worktree per leg, build + test as exe+argv with per-phase timeouts,
-   captured output with sizes, cleanup on every path including failure.
+   captured output with sizes, cleanup on every path including failure, **and the isolation boundary of
+   §4.2 with its three assertions**. The lane is attended-only until those assertions pass; that is the
+   step where the open question about the mechanism is closed, not deferred past it.
 3. **Mechanical signals 0–4** — including the teeth-proof (revert the solver's non-test changes, expect
    red), each stored as its own metric row.
 4. **The authoring pass** — a model authors statement + hidden tests + reference fix; the three gates
@@ -223,7 +252,9 @@ Every number above is stored per leg, so the comparisons are queries, not new pi
 - Domain: phase transitions (no start before previous done; cap stops the leg), signal computation from
   fixture outputs, the teeth-proof logic, `ScoringPolicy` corrections against hand-built inputs.
 - Infrastructure: sandbox executor over a temp git repo — build failure, test failure, timeout, cleanup
-  after each; a leg may never write outside its worktree (asserted).
+  after each. The three isolation assertions of §4.2, each its own test over a deliberately hostile
+  fixture — a build target that writes outside the worktree, one that opens a socket, one that reads the
+  user-secrets store — all three refused rather than merely unobserved.
 - Authoring gates: a task whose hidden tests are green at `baseCommit` is refused with that reason.
 - Parity: ported cleaned-LOC figures reproduce the source product's published values for the same diffs
   (its own `test_churn.py` gate is the precedent — port the gate, not just the code).
@@ -235,6 +266,9 @@ Every number above is stored per leg, so the comparisons are queries, not new pi
       a build verdict, hidden tests, neighbour tests, the teeth-proof.
 - [ ] A solution that does not compile is `BuildFailed` with compiler output — never scored as "wrong".
 - [ ] Hidden tests and the reference fix are provably outside anything the solver can read.
+- [ ] An unattended code-lane leg cannot write outside its worktree, reach the network, or read the
+      operator's secret store — **asserted, not assumed**; until those assertions pass, the lane is
+      attended-only and refuses to be queued.
 - [ ] Reviewers' marks and their attached tests are attributed per reviewer.
 - [ ] Delivered-work scores carry a protocol version, raw **and** applied values, and the rule that
       changed them; an inherited-calibration badge until §7.7 lands.
@@ -249,8 +283,11 @@ Every number above is stored per leg, so the comparisons are queries, not new pi
 1. **Target repository for code tasks.** `dotnet/aspnetcore` is indexed and has real issues, but its
    build and test cycle is long; a smaller C# repository may be the practical first corpus. Decided
    with a measured build+test wall time, not by preference.
-2. **Network denial mechanism** on Windows for the test step — container, job object, or accepted and
-   recorded as "not denied". Decided at step 2 against what the platform actually offers.
+2. **Which isolation mechanism** on Windows — container or job object with a restricted token. Decided at
+   step 2 against what the platform actually offers, and measured (a container that adds four minutes to
+   every leg is a different plan than one that adds ten seconds). What is **no longer** open is whether
+   there is one: "accepted and recorded as not denied" was the third option here and §4.2 removes it for
+   unattended runs. An attended run may still record "not denied" and say so on every leg it produced.
 3. **Who authors at scale.** The authoring pass is a model job with gates, but throughput is unmeasured
    (the founding plan's open question 2). One well-formed code task may cost more than ten reading
    questions; the bank's code group will be smaller than 100 for a while, and that is fine.
