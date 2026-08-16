@@ -51,6 +51,11 @@ public static class TraceContract
         "embed-query",
         "retrieve",
         "fuse",
+        // collapse: several chunks of one member reduced to its best, BEFORE the reranker so its pool
+        // covers distinct members. Added 2026-08-15, after the emitter shipped it and every funnel it
+        // produced was refused by this contract — the first mirror crack, and it arrived days after the
+        // two lists were reconciled by hand.
+        "collapse",
         "rerank",
         "cut",
         "graph-enrich",
@@ -66,7 +71,11 @@ public static class TraceContract
         + "request, so splitting the STAGE would have invented a time split that does not exist; the "
         + "per-channel counts arrive as qualifiers instead. 'semantic' was dropped: no such channel "
         + "exists in a shipping engine. 'assemble' became 'cut' — the last step is a truncation to the "
-        + "requested count, not an assembly. 'collection' was added, and it earns its place.";
+        + "requested count, not an assembly. 'collection' was added, and it earns its place. "
+        + "'collapse' was added 2026-08-15, additively within v0: the emitter began reducing several "
+        + "chunks of one member to its best before reranking, and a consumer that refuses by name "
+        + "rejected every funnel it produced. Adding a stage is not a breaking change to a contract whose "
+        + "refusal is by name — omitting one is.";
 
     public static bool Knows(string version) => version == V0;
 

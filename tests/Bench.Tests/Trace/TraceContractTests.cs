@@ -19,8 +19,13 @@ public sealed class TraceContractTests
         // Reconciled 2026-08-15 against dew_flow_rag_qln's SearchService, which is the first engine to
         // emit a funnel. Five of the seven drafted names were wrong; where the draft and the emitter
         // disagreed, the emitter won — a contract whose names no producer uses produces empty columns.
+        //
+        // 'collapse' was added later the same day, after the emitter shipped it and this contract refused
+        // EVERY funnel it produced. Both suites stayed green throughout, because each compared its own
+        // hand-typed list against itself. Reconciling by hand is what failed; the live test below is the
+        // only check that actually compares the two mirrors.
         TraceContract.Stages.Should().Equal(
-            "collection", "embed-query", "retrieve", "fuse", "rerank", "cut", "graph-enrich");
+            "collection", "embed-query", "retrieve", "fuse", "collapse", "rerank", "cut", "graph-enrich");
     }
 
     [Fact]
