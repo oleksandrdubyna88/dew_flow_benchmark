@@ -268,7 +268,7 @@ and the `SweepReport` shape are unchanged.
 4. ~~**(2) bounded dictionaries**~~ — landed, which **clears one of the three gates** on
    [../todo/PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) step 9 (`BenchRunWorker`). The other
    two remain: that plan's own step 6a (the accelerator lease) and
-   `dew_flow_rag_qln · todo/PLAN_reliability_tail.md` item 6.
+   `dew_flow_rag_qln · research/PLAN_reliability_tail.md` item 6.
 5. ~~**(6) log retention**~~ — landed.
 
 ## Test plan

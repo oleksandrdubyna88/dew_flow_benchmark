@@ -496,7 +496,7 @@ domain; UI in an RCL from birth") and the qln console's conventions:
      an `<a target="_blank">` to the variant page. A banner when the catalog has variants the test has no
      cells for: "3 new variants → 120 new cells · [Plan them]" → `ExpandAsync`. Poll while anything is
      claimed — the `CompanyProjects` poll shape (start only when in-flight, stop when quiet) **as
-     repaired by `dew_flow_rag_qln · todo/PLAN_reliability_tail.md` item 6 — done 2026-08-16, and it is no
+     repaired by `dew_flow_rag_qln · research/PLAN_reliability_tail.md` item 6 — done 2026-08-16, and it is no
      longer a shape to copy but a TYPE to reuse**: `dew_flow_rag_qln · src/Rag.Ui/Services/LivePoller.cs`,
      about seventy lines with no dependency beyond `ILogger`. Port it rather than re-deriving it, and keep
      its two findings, both of which cost a session of silent staleness each: the catch-all logs and sets a
