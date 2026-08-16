@@ -1,0 +1,487 @@
+# PLAN — the tool benchmark: a lane is a catalog row, the doctrine is an axis, and the loop finally turns
+
+> Status: **plan only, nothing implemented yet.** Scope: `Bench.Domain` (new `Lanes/`, extensions to
+> `Runs/` and `Suites/`), `Bench.Application` (the tool loop and its ports), `Bench.Infrastructure`
+> (a new engine, a new runtime, two migrations), `Bench.Api`, `hosts/Cli`, and later `src/Bench.Ui`.
+> One new cross-repository edge: this repository vendors `dew_flow_mcp` as a submodule.
+>
+> The sibling half — file-driven tool descriptions, a tool subset chosen at startup, a surface
+> fingerprint and telemetry correlation — is `dew_flow_mcp · todo/PLAN_tool_surface_config.md`. A change
+> that crosses the boundary is named in both plans.
+>
+> Related: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) (this plan is the design of its §3.8 agent
+> lane), [PLAN_code_lane.md](PLAN_code_lane.md) (meets this plan at `PhaseKind`, nowhere else),
+> [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) (founding plan; its §3 tuple already reserves the
+> axis this plan fills), [../research/architecture.md](../research/architecture.md),
+> [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md).
+
+## 1. The goal, before any solution
+
+We are about to add tools to a product whose entire pitch is that the tools are good. Right now, when a
+tool ships, nobody can answer three questions about it:
+
+1. **Does it work at all** — not "does the unit test pass", but *does a model presented with this tool
+   actually reach for it, and can it form arguments the tool accepts*.
+2. **Is it better than the agent's own native tools, and in which concrete cases** — the honest answer
+   has never been "always", and the one time it was measured the margin was one point out of
+   sixty-three.
+3. **Which description text, and which ordering doctrine, makes it get used correctly** — because this
+   is measurably the largest effect in the entire system, and it is currently unmeasurable here.
+
+The same three questions for a **local** model through the bridge and for a **cloud CLI agent** with its
+native tools plus our server. Those are different subjects, not one subject at two prices.
+
+### 1.1 The measured priors that fix this plan's shape
+
+Carried in [MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md); the doctrine numbers are new here and
+come from `DewFlow · todo/RESULTS_native_toolset_arms.md:169-236`. Every one of them either refutes
+something plausible or explains a decision below.
+
+| what was varied | effect | why it shapes this plan |
+|---|---|---|
+| **The ordering doctrine text alone** — one paragraph telling the model which channel to use when, three wordings (`cover` / `first` / `late`), same 18 tools, same model, same 9 questions, same 25-turn cap | avg **30.0 → 46.5 of 63**, a **16.5-point** spread; the ranges do not overlap (`first` [44,49] > `cover` [36,41] > `late` [29,31]) | The doctrine is the **primary axis**, not a detail of the preamble. §3.2 |
+| The **toolbox** — 4 plain filesystem tools against the full 18-tool retrieval surface, same everything else | **36/63 against 37/63** — one point, at 52 % more wall-clock | Adding a tool is not self-evidently an improvement. The no-tools and native-tools baselines are first-class arms, never a formality. §3.6 |
+| The **shape of the surface** — the same four tools over the MCP wire against the in-process bridge | **4/63 against 36/63**, nine times, from the form alone; replicated at 16 tools as 4/47 against 11/47 | `Presentation` is part of a lane's identity, and the in-process bridge must be measured genuinely in-process. §3.11 |
+| The **register** a model searches in — native tools against an MCP surface | **not one of 37 searches** was in natural language natively; on the MCP surface the same models wrote full behavioural sentences | A tool can be unreachable not because it is bad but because nothing makes the model ask in the register it answers. That is a description/doctrine effect, and it is what §3.7's `ToolUsed` expectations detect. |
+| **Reading tasks**, strong model | 89–100 %, against a ≤80 % discrimination threshold | Reading saturates. The discriminating instruments here are the **micro-task** (did it pick the right tool) and, later, the fix lane. §3.6 |
+| Repeat spread **within** one doctrine at temperature 0 with a pinned seed | **5, 5 and 2 points** — a noise floor of ≈±5 against ≈8 between doctrines | `n ≥ 2` is not optional, and a wording difference smaller than ~8 points is not a finding. §3.10 |
+
+And the three ways the earlier programme's own numbers turned out to be wrong, each now a guard rather
+than a memory: an **unpinned sampler** produced a fake 2× (6/14/7 of 47 on identical setups) because the
+OpenAI-compatible route substitutes its own defaults over a model file; **answer-key leakage** into the
+measured tree contaminated 10 of 13 legs of one arm and retracted a published headline; a **self-judging
+model passed 6 of 6 answers** an independent arbiter failed 0 of 6.
+
+## 2. What exists today, verified
+
+| capability | state | where |
+|---|---|---|
+| `Lane(Name, Preamble)` as a matrix axis | **`Preamble` is dead** — nothing reads it; `LegRunner` sends `SystemPrompt = string.Empty` unconditionally. Only `Lane.Name` is persisted and grouped on | `src/Bench.Domain/Runs/Axes.cs:79-84`, `src/Bench.Application/LegRunner.cs:76` |
+| The tool loop | **does not exist.** `LegRunner` asks the model exactly once; `Retrieval(plan)` returns `RetrievalObservation.None` unconditionally, so every lane is a no-tools lane | `src/Bench.Application/LegRunner.cs:75-77, 122` |
+| `IEngine` as *the surface a model works through* (not a search API), `EngineTool(Name, Description, ArgumentsSchema)` | built, tested, **driven by nothing** | `src/Bench.Application/Ports.cs:38-60`, `src/Bench.Domain/Engines/EngineTool.cs:10` |
+| `BudgetKind.Turns` | declared, and `OpenAiCompatibleRuntime` already **refuses** it: *"one completion has no turns — a turn ceiling belongs to an agentic loop, not to this runtime"* | `src/Bench.Domain/Runs/Budgets.cs:7`, `src/Bench.Infrastructure/Models/OpenAiCompatibleRuntime.cs:45-46` |
+| `ToolCall(Name, ArgumentsJson, Refused, Error, Duration)`, `TimeBuckets`, `Captured`/`CapturedCount` | built; `LegTrace` is never captured by `bench run` | `src/Bench.Domain/Trace/LegTrace.cs:33-49, 99-130` |
+| `TelemetryCorrelation(Leg, Phase)` + `IsAttributed`, and the ingest codec that **already reads** an absent `correlation` as unattributed | built here; **nothing writes it** — the emitter has no such field | `src/Bench.Domain/Telemetry/ToolTelemetry.cs:52-64`, `src/Bench.Application/TelemetryCodec.cs:123-128, 191`; emitter gap: `dew_flow_mcp · src/Mcp.Telemetry/TelemetryRecord.cs:14-29` |
+| The catalog pattern to mirror — immutable row, typed slug, `StableHash`, `Create`/`Rehydrate`/`Retire`, `Stamp`, never `Update` | **implemented 2026-08-16** as step 1 of the variant matrix; steps 2–11 of that plan remain open | `src/Bench.Domain/Variants/RetrievalVariant.cs:41-123`, `Variants/VariantSelection.cs:9-59`, `src/Bench.Domain/StableHash.cs:18-19` |
+| `ExpectationKind` (4 values), `Expectation(Kind, Anchor, Text, Required)`, `Question.RetrievalExpectations` | built; no notion of a tool | `src/Bench.Domain/Suites/SuiteItems.cs:36-72` |
+| `RetrievalObservation(Available, …)` and the *not applicable* honesty rule for a lane that surfaces nothing | built and load-bearing — the exact shape §3.7 mirrors | `src/Bench.Domain/Runs/AnswerScoring.cs:9-15, 87-104` |
+| `AverageByLaneAsync` / `AverageByEngineAsync` | built on both sides of the port, **surfaced by nothing** | `src/Bench.Application/ResultStore.cs:43-48`, `src/Bench.Infrastructure/Persistence/PostgresResultStore.cs:47-53` |
+| The MCP surface it will measure | one real tool; descriptions are **C# string literals compiled into the binary**; the catalog is built once per process from all registered providers, and there is no way to serve a subset | `dew_flow_mcp · src/Workspace.Application/WorkspaceToolProvider.cs:14-37`, `src/Mcp.Application/ToolCatalog.cs:61-72` |
+| The submodule precedent | `dew_flow_rag_qln` vendors this exact repository and project-references five of its projects | `dew_flow_rag_qln · .gitmodules`, `hosts/Daemon/Daemon.csproj:26-30` |
+
+**Two facts are worth reading twice.** The measurement tuple has carried `lane = (toolSurface,
+preamble)` since the founding plan — the axis that moved the score sixteen times harder than the toolbox
+was *declared on day one and never connected to anything*. And the runtime already refuses a turn
+ceiling with a sentence naming the component this plan builds. This is not a redesign; it is finishing a
+sentence the domain started.
+
+**Boundary with the variant matrix.** `Bench.Domain/Variants/*` and `Bench.Application/Variants/*` landed
+on 2026-08-16 as that plan's step 1, and its steps 2–11 are still open and still being worked.
+**This plan touches none of those files.** It builds a structurally parallel catalog in new files,
+mirroring their shape; the two axes meet only in the matrix, where a test crosses retrieval variants with
+tool lanes — which is where "does retrieval help, and for which tool surface" finally becomes one grid
+rather than two separate campaigns. The only ordering constraint is step 3 below, against that plan's own
+step 4, and it is named there.
+
+## 3. The shape — decisions
+
+### 3.1 A lane is a catalog row, immutable and hashed
+
+New table `lanes`, mirroring `variants` row for row. One row = one named tool surface.
+
+```csharp
+// Bench.Domain/Lanes/LaneDefinition.cs
+public enum ToolPresentation { None, Bridge, McpStdio, CliNative, CliNativeWithMcp }
+
+public sealed record LaneDefinition(
+    IReadOnlyList<string> ToolNames,   // [] = every tool the surface offers, unfiltered
+    string DescriptionSet,             // names a set on the MCP side; "" = each tool's compiled literal
+    string Doctrine,                   // the ordering instruction — the 16.5-point axis, §3.2
+    ToolPresentation Presentation,
+    int MaxTurns);                     // 1 = a single-turn selection micro-task; > 1 = an agentic leg
+```
+
+- **Never edited.** Changing a wording mints a new row and retires the old one, exactly as
+  `RetrievalVariant` does and for the same reason: every result names the lane it ran under, so an edit
+  in place would silently relabel numbers already measured.
+- **Unknown fields are refused, not dropped** — `JsonUnmappedMemberHandling.Disallow`, the discipline
+  `VariantJson` already applies to retrieval axes.
+- `Canonical` composes the tool names (ordinal-sorted), the description-set name, the presentation, the
+  turn ceiling and `StableHash.Of(Doctrine)`. `Hash` is `StableHash.Of(Canonical)`. `Stamp` is
+  `{name}#{hash[..12]}`.
+
+**No `cells.LaneId` column, and that is a decision rather than an omission.** The variant catalog needed
+a foreign key because *variant* was a brand-new axis. *Lane* has been an axis since the first matrix:
+`RunCell.LaneName` already carries a stable, never-renamed identity, and a catalog changes what a lane
+name **resolves to**, not how a cell stores it. So this ships with zero schema change to `cells` — one
+fewer migration racing the parallel session. A `LaneId` may be added later for join speed; it buys no
+correctness that the unique name does not already buy.
+
+**Four hashes are stored as columns beside the JSON definition** — `ToolsHash`, `DescriptionSet`,
+`DoctrineHash`, `Presentation` — so "which wording wins, holding the tool set fixed" is a `GROUP BY`
+rather than JSON parsing in SQL. The definition JSON remains the source of truth; the columns are its
+projection, written once at insert and never updated (the row is immutable, so they cannot drift).
+
+### 3.2 The doctrine is `Lane.Preamble`, revived — not a new field
+
+`Lane.Preamble` exists, is documented, and is read by nothing. `LaneDefinition.Doctrine` becomes its
+value, and `LegRunner` finally sends it as `ModelRequest.SystemPrompt` instead of `string.Empty`
+(`LegRunner.cs:76`). Reviving the dead field is cheaper than deprecating it and building a parallel
+concept, and it makes the axis legible in the one place a reader already looks for it.
+
+Three doctrines ship as the first measured arms, ported as **text, not as code**, from the series that
+measured them (`DewFlow · prompts/benchmarks/eval_channels_{cover,first,late}.md`): *cover all channels*,
+*retrieval first, then confirm, then read*, *investigate freely, then close the gaps with retrieval*.
+They are the control: if this harness cannot reproduce a spread of roughly that size on a comparable
+setup, the instrument is wrong before any new tool is judged by it.
+
+**A doctrine's effect is not portable across presentations.** The bridge places it verbatim as a system
+message; a CLI agent receives it through that CLI's own mechanism, whose effect on the model's real
+context is not something this harness can confirm. Cross-presentation doctrine comparisons carry that
+caveat; same-presentation is the trustworthy default (§3.10).
+
+### 3.3 The surface is echoed, never assumed
+
+A lane names a tool subset and a description set; the server resolves them. If the harness stores only
+what it *asked for*, then "every result names the exact description text that produced it" is a hope.
+This is the `QlnEngine` axes-echo discipline applied to tool surfaces, and it is also the L0 rung of the
+ladder.
+
+The sibling plan makes `Mcp.Host --print-surface` emit a `SurfaceFingerprint` and exit: tool names, the
+exact description text served for each, the description-set name, and hashes over all of it. Then:
+
+- `bench lanes verify --lane <name> --server <path-or-url>` runs it, compares against the lane's stored
+  definition, and exits `0` match / `1` mismatch (a real regression in what is served) / `3`
+  unreachable. This needs no model at all.
+- At run start, the same fingerprint is fetched once per leg-process and recorded on the run. A mismatch
+  **blocks the cell with a named reason** rather than measuring a surface nobody chose — the same move
+  `PLAN_variant_matrix.md` §3.4 makes for an index whose commit does not match.
+
+### 3.4 The tool loop — one collaborator, and the existing runner keeps its shape
+
+`LegPlan` gains one field whose default is today's behaviour, so every existing caller and test compiles
+and behaves identically:
+
+```csharp
+// Bench.Application/ToolSurface.cs — closed union, the LegOutcome shape
+public abstract record ToolSurface
+{
+    public sealed record None : ToolSurface;
+    public sealed record Looping(IEngine Engine, IReadOnlyList<EngineTool> Tools, int MaxTurns) : ToolSurface;
+    public static ToolSurface Off { get; } = new None();
+}
+
+// LegPlan (LegRunner.cs:12-21) gains `ToolSurface Surface`; LegPlan.Reading(...) passes ToolSurface.Off
+```
+
+The conversation shapes are minimal additions to the model types:
+
+```csharp
+// Bench.Domain/Models/ModelTurn.cs
+public sealed record RequestedToolCall(string Id, string Name, string ArgumentsJson);
+public abstract record ModelTurn
+{
+    public sealed record Assistant(string Text, IReadOnlyList<RequestedToolCall> ToolCalls) : ModelTurn;
+    public sealed record ToolResult(string ToolCallId, string ToolName, string Content, bool Refused) : ModelTurn;
+}
+```
+
+`ModelRequest` gains `Tools` and `Transcript` with a new `OfTurn(...)` factory; the existing
+`ModelRequest.Of(...)` (`Ports.cs:93-94`) keeps its signature and passes `[]` for both, so a no-tools
+request is still exactly what it was. `ModelAnswer` gains `ToolCalls` and `IsFinal => ToolCalls.Count == 0`.
+`OpenAiCompatibleRuntime.Body()` (`OpenAiCompatibleRuntime.cs:91-117`) folds the transcript into
+`messages` and emits `tools:[…]` when the request carries any; `Read()` (`:119-139`) parses
+`message.tool_calls[]`.
+
+`ToolLoopRunner` (new, `Bench.Application`) owns the loop so `LegRunner.RunAsync` stays a dispatch:
+ask → if final, done → otherwise invoke each requested call through `IEngine.InvokeAsync`, append the
+`ToolAnswer` as a tool message, next turn. Per call it records a `Trace.ToolCall` with **outcome**, not
+size — `ToolAnswer.WasRefused` is already the right shape, and "a refused call and an executed one were
+indistinguishable" is the defect that made a false read-only guarantee stand for months.
+
+**The `Turns` budget is confirmed by the loop, never by the runtime.** The runtime is right to refuse it
+and must keep refusing it; `ToolLoopRunner` is the component its refusal message names. A leg that
+exhausts its turns settles as `LegOutcome.CapExceeded(BudgetKind.Turns, …)` — never `Crashed`, never a
+wrong answer — which keeps it out of paired deltas through the existing `CountsInPairedDelta`
+(`Budgets.cs:58-60`). This mirrors, one arm wider, the `WasCutOff` handling already at
+`LegRunner.cs:127-130`.
+
+**Warn before spending.** `PlanRun` already warns on a billable cloud subject; a looping lane with no
+cost ceiling gets the same warning. An agentic loop against a billed model is the one configuration here
+that can spend without bound.
+
+### 3.5 Two kinds of tool-call record, and they are never blended
+
+| | directly observed | reconstructed |
+|---|---|---|
+| who saw it | `ToolLoopRunner` — the harness drove every turn | the MCP server's spool, joined by `TelemetryCorrelation` |
+| lanes | `Bridge`, `McpStdio` | `CliNative*` — the CLI runs its own loop and the harness cannot see inside it |
+| carries | arguments, outcome, duration, and the turn it happened on | arguments, outcome, server time, scope — but no turn ordering relative to the model's thinking |
+| arrives | during the leg | after `bench telemetry ingest`, in a later pass |
+
+Every stored tool call carries which of the two it is. A report may show them side by side and may never
+average them together — the same rule `architecture.md` already states for the bench trace against the
+server telemetry, one level down. A CLI-agent leg is therefore settled on what is directly observable
+(final answer, exit, wall time) and **re-scored later** for tool usage, exactly as `JudgeRunner` re-scores
+stored answers without re-running a leg.
+
+### 3.6 The ladder: L0, L1, L2 — and L1/L2 are one mechanism at two turn ceilings
+
+- **L0 — does the tool work at all, no model involved.** Ordinary xUnit tests in whichever repository
+  owns the tool, plus `bench lanes verify` (§3.3) for "is the surface actually serving what the lane
+  says". A tool that fails L0 never reaches a model, and a benchmark number produced against a broken
+  tool is worse than no number.
+- **L1 — does a model pick it, and can it form the arguments.** A suite of one-turn micro-questions run
+  under a lane with `MaxTurns = 1`. The model is given the surface and a situation; the expectation is
+  about **which tool it called**, not about the prose it produced. Cheap, deterministic, and it isolates
+  the failure this whole plan exists to catch: a good tool nobody calls.
+- **L2 — does it help.** Real tasks, `MaxTurns` high enough to finish, the same expectations plus the
+  answer expectations already in every suite. Compared against the native-tools lane and the no-tools
+  floor.
+
+L1 and L2 are the same code path at different `MaxTurns`. That is the point: a ladder made of three
+mechanisms would have three sets of bugs, and the rung that measures "did it pick the tool" must be the
+same instrument as the rung that measures "did picking it help".
+
+**Reading saturates, so L2 alone is not enough.** Group 6 of the question bank — fixing a real bug —
+stays where it is, in [PLAN_code_lane.md](PLAN_code_lane.md). This plan supplies the loop and the phases
+it will run through; it does not duplicate its sandbox or its scoring.
+
+### 3.7 Two expectation kinds, and the not-applicable honesty rule
+
+```csharp
+public enum ExpectationKind { File, Member, AnswerContains, AnswerExcludes, ToolUsed, ToolNotUsed }
+```
+
+The tool name rides in the existing `Expectation.Text` field — no new field, and **no change to
+`SuiteJsonLoader` at all**: `ToExpectation` parses the kind with a case-insensitive `Enum.TryParse` and
+passes `Text` straight through (`src/Bench.Application/SuiteJsonLoader.cs:61-73`), so
+`{"kind": "ToolUsed", "text": "rt_read_local_file"}` loads the day the enum values exist.
+
+**One defect found while verifying that, and it gets fixed here because this plan makes it likelier.**
+That same parse falls back to `ExpectationKind.File` when the kind does not match
+(`SuiteJsonLoader.cs:63-65`), so a misspelt `"ToolUsedd"` is not refused — it silently becomes a file
+expectation against an empty path, which then scores as a retrieval miss the suite author never wrote.
+Every other unknown value in this system is refused by name (`VariantJson`'s `Disallow`, the trace
+contract's unknown stage, the telemetry codec's unknown version); this one is not, and adding two new
+kind names is exactly the change that turns a latent typo trap into a live one. An unknown expectation
+kind must refuse the suite, naming the kind and the question. RED test first, per the repository's rule.
+
+Scoring mirrors `RetrievalObservation` member for member:
+
+```csharp
+public sealed record ToolUsageObservation(bool Available, IReadOnlyList<string> ToolsCalled)
+{
+    public static ToolUsageObservation None => new(false, []);
+    public static ToolUsageObservation Of(IReadOnlyList<string> names) => new(true, names);
+}
+```
+
+`AnswerScoring.Score` gains the observation as a parameter and emits one metric per tool expectation.
+**A `ToolUsed` expectation in a lane with no tools is *not applicable*, never a miss** — the identical
+rule `RecallMetric` already applies at `AnswerScoring.cs:96-104`, and for the identical reason: the
+no-tools floor exists to be compared fairly, and scoring it zero for not calling a tool it never had
+would make the baseline look worse than it is and flatter every tool lane by exactly that much.
+
+`ToolNotUsed` is the trap half, and it matters as much: a description that makes a model call a tool
+where it should not have is a defect in the description, and it is invisible unless something asserts
+the negative.
+
+**Per-question tool affinity.** `Question` gains an optional `ToolAffinity` label (empty by default) —
+"this question is one `graf_`-shaped question", "this one is a literal lookup". It is what turns the
+operator's question (b) from *"is the tool better on average"* — which the measured answer says is
+roughly a wash — into *"on which kind of question is it better"*, which is where the one violent
+inversion in the record lived (8/8 in 254 s against 0/8 in 1 058 s on a single task).
+
+### 3.8 What may be compared with what
+
+A leaderboard over wordings is only meaningful inside one tool set and one presentation. Ranking a
+verbose description on an 18-tool bridge lane against a terse one on a 4-tool stdio lane attributes to
+wording what belongs to the surface — which is precisely the confound the 9× finding is made of.
+
+So a comparison scope is computed and **refused by name** when it is mixed: same `ToolsHash`, same
+`Presentation`, same subject, same suite, same target. Everything else is an axis to compare along.
+Beside it, the existing rule stands unchanged: `n ≥ 2`, and a difference inside the repeat spread is
+reported as unproven rather than as a result.
+
+### 3.9 What is persisted
+
+Two migrations, both additive, neither touching a column the parallel session is writing:
+
+```
+lanes       Id uuid PK, Name text UNIQUE, DisplayName text, DefinitionJson jsonb, Hash text,
+            ToolsHash text, DescriptionSet text, DoctrineHash text, Presentation text,
+            CreatedAt timestamptz, RetiredAt timestamptz          -- RetiredAt default = active
+tool_calls  Id uuid PK, ResultId uuid FK, Ordinal int, Turn int, Phase text,
+            ToolName text, ArgumentsJson text, Refused bool, Error text, DurationMs bigint,
+            Source text                                           -- observed | reconstructed (§3.5)
+runs        + SurfaceFingerprintJson text                         -- what the server actually served (§3.3)
+```
+
+The doctrine text itself lives in `lanes.DefinitionJson`, so a published database explains its own
+numbers without a second artefact. Nothing stores an absolute local path, a token or a machine name —
+the database must survive publication unedited, per the founding rule.
+
+### 3.10 The reports, and the three questions they answer
+
+Every one of these reads existing tables plus the two above; none needs a new store.
+
+| operator question | the report |
+|---|---|
+| (a) does tool T work at all | `bench lanes verify` (L0, no model) and the L1 rollup: per tool, how often it was *offered*, *called*, *refused*, *errored*, and how often its arguments were rejected. A tool with a healthy L0 and a zero call rate is the headline finding, not a footnote |
+| (b) is T better than native, and where | paired deltas per `ToolAffinity` group between two lanes at the same question and repeat, using only `Completed` legs — the existing `CountsInPairedDelta` rule. Reported per group, with totals shown last, because the totals are what hid the inversion last time |
+| (c) which description / doctrine wins | a leaderboard inside one comparison scope (§3.8), with the repeat spread printed beside every mean and any gap inside it labelled unproven |
+
+`AverageByLaneAsync` — which today has no caller outside its own Postgres tests — is what the lane
+rollup is built on.
+
+### 3.11 How the harness reaches the surface: a submodule
+
+`dew_flow_benchmark` vendors `dew_flow_mcp` at `external/dew_flow_mcp` and project-references
+`Mcp.Contracts`, `Mcp.Application`, `Mcp.Bridge`, `Workspace.Application`, `Workspace.Infrastructure`
+from `Bench.Infrastructure`. The precedent is exact: `dew_flow_rag_qln` already does this
+(`hosts/Daemon/Daemon.csproj:26-30`), and the direction is the allowed one — the measurer references the
+measured, never the reverse.
+
+This is what makes the `Bridge` presentation honest. The in-process bridge is not a transport detail; it
+is the arm that scored 36/63 where its wire twin scored 4/63, and measuring it through an HTTP hop would
+measure a third thing. `McpBridgeEngine : IEngine` therefore constructs a real `ToolCatalog` in this
+process and dispatches through `LocalLlmToolBridge` — the same code a customer's in-process host runs.
+`McpStdio` spawns `Mcp.Host --stdio` per leg and speaks the protocol; `CliNativeWithMcp` hands that same
+subprocess to a CLI agent as its own MCP server.
+
+Explicitly rejected: putting a conversation runner into `dew_flow_mcp` so the benchmark could drive a
+model over one HTTP call. That repository is public and is a tool server; a loop that drives models is
+half a harness, and it would also duplicate the hashing that §3.3 relies on into a second codebase that
+must agree byte for byte.
+
+### 3.12 What this plan deliberately does not do
+
+- **No question bank, no model registry, no console shell** — those are [PLAN_variant_matrix.md](PLAN_variant_matrix.md)'s
+  §3.3 and §3.7 and §3.6. This plan's UI pages mount in the console that plan builds; if it has not
+  landed when step 9 is reached, the pages wait rather than a second shell appearing.
+- **No fix-lane execution** — [PLAN_code_lane.md](PLAN_code_lane.md) owns the sandbox, the mechanical
+  signals and the delivered-work score. The two meet at `PhaseKind` and at `ToolSurface`, nowhere else.
+- **No new judge** — L1 is mechanical by construction; L2 uses the arbiters that already exist. A
+  self-judged verdict stays marked, per the 6-of-6 against 0-of-6 finding.
+- **No editing tools anywhere** — the measured surface stays read-only, per the sibling repository's own
+  Phase 4 boundary.
+
+## 4. The cross-repository contract
+
+What this plan needs from `dew_flow_mcp · todo/PLAN_tool_surface_config.md`, named identically in both:
+
+1. **A tool subset chosen at process start** — `--tools a,b,c`; unset means every tool, today's behaviour.
+2. **Descriptions from a file catalog** — `--descriptions <dir> --description-set <name>`; a missing or
+   empty file falls back to the compiled literal, which is never empty.
+3. **`--print-surface`** — emit the `SurfaceFingerprint` (tool names, exact description text per tool,
+   set name, hashes) and exit. This is L0's instrument and the run-start echo.
+4. **`--correlation <legId[/phase]>`** — stamp every telemetry record this process emits, additively
+   within `telemetry/v0`. Honest only for a per-leg process; the shared HTTP transport must not use it.
+5. **Parity holds through the configuration** — the protocol surface and the bridge must still advertise
+   byte-identical schemas after a subset and a description set are applied.
+
+## 5. Build order
+
+Each step ships alone, tests green, before the next. **CLI and API first, UI strictly after the endpoints
+it renders** — the API-first gate the family already applies.
+
+1. **Lane catalog** — `Bench.Domain/Lanes/*` (definition, catalog entry, selection, slug), the `lanes`
+   table and migration, `ILaneCatalog` + `PostgresLaneCatalog`, `bench lanes add|list|retire`.
+   Independent of the parallel session; touches no file under `Variants/`.
+2. **Multi-turn model plumbing** — `ModelTurn`, `ModelAnswer.ToolCalls`, `ModelRequest.Tools/Transcript/OfTurn`,
+   `OpenAiCompatibleRuntime` body and parse. The existing runtime tests must pass **unchanged** — that is
+   the proof the addition is backward compatible.
+3. **`ToolSurface` + `ToolLoopRunner` + `LegRunner` wiring** — including the doctrine finally reaching
+   `SystemPrompt`, the `Turns` confirmation, and `CapExceeded(Turns)`. Land **before** the parallel
+   plan's engine-per-variant work reaches `LegRunner`; whoever is second reads the other's diff rather
+   than assuming.
+4. **Tool expectations and scoring** — `ExpectationKind.ToolUsed/ToolNotUsed`, `ToolUsageObservation`,
+   `AnswerScoring` extension, `Question.ToolAffinity`. Pure domain, no infrastructure. **Includes the
+   §3.7 loader fix**: an unknown expectation kind refuses the suite instead of silently becoming a `File`
+   expectation — its RED test is watched failing on the current fallback first.
+5. **Sibling repository, steps 1–2** — see §4 items 1–3 and 5. Can ship in parallel with 1–4; nothing
+   here depends on the order between them.
+6. **Submodule + `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references, implement the
+   engine, `bench lanes verify` against `--print-surface`. **First end-to-end milestone**: a local model
+   through the real bridge, temperature 0 and seed as-sent, tool calls recorded with outcomes.
+7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
+   reconstructed source flag, result-store round-trip.
+8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the
+   instrument's own calibration. If the doctrine spread does not appear, stop and fix the harness before
+   judging any tool with it.
+9. **API + reports** — the lane, tool-usage, affinity-delta and doctrine-leaderboard endpoints in
+   `Bench.Api`, plus `bench report` verbs over the same use cases. Comparison-scope refusal lands here.
+10. **UI** — `Bench.Ui` pages over the step-9 endpoints only: lanes catalog with the definition echoed,
+    a tool-health page answering (a), an affinity page answering (b), a wording leaderboard answering (c)
+    with the unproven label rendered, and a leg detail showing every tool call with its outcome and its
+    source. Mounted in the console shell `PLAN_variant_matrix.md` §3.6 builds.
+11. **`CliAgentRuntime` + telemetry correlation** — the second subject: a cloud CLI headless over the
+    worktree with its native tools, and the per-leg `Mcp.Host --stdio --correlation <cell>` attached; the
+    reconstruction pass that turns ingested spool rows into `tool_calls` with `Source = reconstructed`.
+    Gated, as `PLAN_variant_matrix.md` §3.8 already states, on the retrieval tool existing at all — an
+    agent lane over an empty surface measures nothing.
+
+## 6. Test plan
+
+- xUnit v3 executables only, never `dotnet test`; `PostgresFixture`/Testcontainers for every table.
+- **Domain**: lane immutability and retire-not-edit; an unknown definition field is refused by name;
+  `Canonical`/`Hash` stability (the same definition hashes identically across processes — the property
+  `StableHash` exists for); a doctrine edit produces a different hash.
+- **Loop**: a fake `IEngine` and a fake runtime prove — a final answer ends the loop; a refused tool call
+  is recorded as refused and the loop continues; malformed argument JSON comes back as a tool failure the
+  model can retry rather than an exception; turns exhausted settles `CapExceeded(Turns)` and **not**
+  `Crashed`; tool time lands in `TimeBuckets.Tools`.
+- **Scoring**: `ToolUsed` in a no-tools lane renders *not applicable* and does not fail the leg — the
+  test that pins the fairness rule; `ToolNotUsed` fires when the tool was called; an unanswered leg is
+  not scored as a wrong one.
+- **Loader**: a suite naming an unknown expectation kind is refused, and the message names the kind and
+  the question. Watched RED against today's silent `File` fallback before the fix — the failure message
+  must show a `File` expectation where a `ToolUsed` was written, which is the actual symptom.
+- **Backward compatibility**: the existing `LegRunner` and `OpenAiCompatibleRuntime` tests pass with no
+  edit — a changed assertion there means the addition was not additive.
+- **Comparison scope**: two lanes with different tool sets are refused for a wording leaderboard, by name.
+- **Surface echo**: a fingerprint that disagrees with the lane blocks the cell with a reason, and the
+  reason names both sides.
+- **Engine (L0)**: `McpBridgeEngine` advertises exactly the subset it was configured with, and a call to
+  a tool outside the subset is refused rather than dispatched.
+- Every defect found while building gets its RED test first, watched failing for the real symptom.
+
+## 7. Definition of Done
+
+- [ ] A lane is a catalog row; adding a wording, a doctrine or a tool subset needs no migration and no
+      recompile of the runner.
+- [ ] The doctrine text reaches the model — proven by a test that asserts the outgoing system prompt,
+      not by reading the configuration.
+- [ ] `bench run` drives a real tool loop; every tool call is stored with its **outcome** (answered /
+      refused / failed), its duration, its turn, and whether it was observed or reconstructed.
+- [ ] A leg that exhausts its turns settles `CapExceeded`, is excluded from paired deltas, and is never
+      scored as a wrong answer.
+- [ ] A `ToolUsed` expectation in a no-tools lane reads *not applicable*, and the no-tools floor is
+      therefore not penalised for lacking tools.
+- [ ] An unknown expectation kind refuses the suite by name instead of silently loading as a `File`
+      expectation.
+- [ ] Every result names the exact surface that produced it — tool names, description-set, description
+      text hash, doctrine hash, presentation — and a mismatch between what was asked for and what was
+      served blocks the cell instead of measuring it.
+- [ ] The three doctrine arms reproduce a spread larger than the measured repeat noise on this harness,
+      or the harness is fixed before any tool is judged by it.
+- [ ] The three operator questions are answerable from the CLI, from the API, and from a UI page, in
+      that order of arrival.
+- [ ] Rows are publication-safe: no local path, no secret, no machine name.
+- [ ] `todo/README.md` updated; `research/architecture.md` records the new submodule edge and the loop;
+      the sibling plan's DoD is met on its side.
+
+## 8. Open questions
+
+1. **Which CLI agents, and with what headless flags.** Claude Code first, per the operator. The exact
+   invocation, the MCP-config injection point, and what each CLI exposes as "thinking" are measured at
+   step 11 against the real binaries, not guessed here — the same call `PLAN_variant_matrix.md` §8.2
+   already makes.
+2. **Whether a tool's JSON Schema is itself an axis.** A schema with described parameters against a bare
+   one is plausibly as large an effect as the description prose, and nothing in the record measures it.
+   Cheap to add later — it is another field of a description set — and deliberately not in scope now.
+3. **How many turns is a fair ceiling per presentation.** A CLI agent's own loop and our
+   `ToolLoopRunner` do not count turns identically, so a shared number may quietly favour one. Left as a
+   per-lane value until there is data; the comparison-scope rule (§3.8) keeps a mixed comparison from
+   being reported as a clean one in the meantime.
