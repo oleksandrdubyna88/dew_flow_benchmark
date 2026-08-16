@@ -36,7 +36,7 @@ differently on them:
 | **B** | **Time to the first usable result after a cold start** | MIGraphX compiles **per distinct input shape**: 2–4 minutes and ~2.5 GB of on-disk cache each, measured on an R9700 (`dew_flow_sidecar_rust · src/inference.rs:24-27`). DirectML takes dynamic shapes natively, so the same transition is a session rebuild of tens of seconds. |
 | **C** | **A whole index pass, end to end** | Where A and B compose with the rung ladder and with VRAM behaviour — including a failure mode that has no throughput number at all (§2b). |
 
-**So the deliverable is three numbers per arm, reported side by side and never averaged into one.** That
+**So the deliverable is these quantities reported side by side per arm, never averaged into one.** That
 is this repository's existing rule applied to a new subject: observed and reconstructed tool calls are stored
 beside each other and never folded together ([../research/architecture.md](../research/architecture.md), *Two
 vantage points*), for exactly the reason that folding them would produce a single figure nobody can act on.
@@ -152,6 +152,12 @@ Also missing, and both already have owners:
   never a fairness correction applied to W.
 - **Warm-up is excluded from A and reported as B.** It is not noise to be discarded; on the MIGraphX arm it is
   the most expensive thing in the measurement and the single number most likely to decide the deployment.
+- **A cold start means an EMPTY compiled-model cache, and each arm gets its own.** `ORT_MIGRAPHX_MODEL_CACHE_PATH`
+  pointed at a directory a previous arm filled turns measurement **B** from "how long does a compile take"
+  into "how long does a cache load take" — the same number the field reports either way, differing by two
+  orders of magnitude. Give every arm its own directory, wipe it before any B measurement, and record the
+  directory's size afterwards: that size **is** the per-shape cache cost, and it is half of what the operator
+  is choosing between.
 - **Provenance, not labels.** Each arm records the serving process's `/health`: `active_provider`,
   `compiled_providers`, `adapter`, and the two build hashes (`exe_sha256`, `runtime_manifest_sha256` —
   `dew_flow_sidecar_rust · src/provider.rs:241-245`). The string "wsl" in a config file is not evidence that
@@ -198,19 +204,118 @@ throughput.
 
 W and D answer the operator's question; I is what makes the answer actionable, since the real decision is
 which flavour serves indexing and which serves search; C₁/C₂ are what keep the answer from being mislabelled.
+**W′** `wsl/migraphx/R9700, PIN_INPUT_SHAPE=0` is optional and belongs to §3's pinning control — it prices
+the workaround, and it is never a substitute for W.
 
-**The probe:** for each arm, against identical payloads, one at a time on the card —
+### 4a. The modes that exist — four independent layers, and only some are per-arm
 
-1. **Warm-up** — one call at the production shape. Excluded from A, recorded whole as **B**, with
-   `session_build_ms` and `compile_cache_grew_mb` reported separately from the inference.
-2. **Steady state (A)** — N ≥ 10 calls at a fixed `(max_batch, max_length)`; report the median and the spread
-   of `inference_ms`, and assert `compile_cache_grew_mb == 0` throughout. A non-zero value there means the
-   shape was not actually pinned and the arm measured compilation, not throughput.
-3. **Shape churn (B′)** — the same total row count delivered in batches of *varying* length. This is the
-   measurement that separates the two flavours most sharply and the one closest to a real incremental pass;
-   on the MIGraphX arm every new shape is a fresh compile, on DirectML it is nothing.
-4. **Rerank, separately** — never folded into the embed numbers, and gated: the arm must show real scores, for
-   the reason recorded in §2.
+Written out because three of the four have a way of being set to something that quietly measures the wrong
+thing, and because a probe run twice from memory is a probe run twice differently.
+
+| layer | choices | selected by | the trap |
+|---|---|---|---|
+| **build flavour** *(compile-time)* | `dml` (default) · `cuda` · `migraphx` · none = CPU-only | `cargo` features | An EP that is not compiled in cannot be chosen at runtime. It is refused **by name** with a rebuild instruction (`preflight_provider`), which is the one failure here that cannot be mistaken for slowness |
+| **runtime provider** | `auto` \| `cuda` \| `dml` \| `migraphx` \| `cpu` | `ORT_PROVIDER` | Empty ⇒ the first request's hint, else `auto` (cuda → migraphx → dml → cpu). **Always set it explicitly for a measurement** — an explicit choice fails hard, `auto` silently ranks |
+| **which card** | — | **Windows/DirectML:** `ORT_DEVICE_ID`, DXGI **high-performance order** (0 = fastest), translated internally to the plain-enumeration index the legacy DML EP wants. **WSL/ROCm:** `HIP_VISIBLE_DEVICES` on the launch line — `ORT_DEVICE_ID` does **not** select the card there | the single most common way to measure the wrong card. Two sidecars once landed on card 0 together because one configured value was baked into both launch lines |
+| **shape pinning** | `auto` (⇒ on for `migraphx` only) \| `1` \| `0` | `PIN_INPUT_SHAPE` | leave it `auto` on every arm but W′ — §3 |
+
+The envelope rides on top and is **per request**, not only per launch: `max_batch` and `max_length` on the
+`/embed` body override `MAX_BATCH` / `EMBED_MAX_LENGTH`. So the launch values only decide the window before
+the first call — the probe states the envelope in the payload and reads back what `/health` says it ran.
+`EMBED_ENGINE_CACHE_RUNGS` (default **1**) decides whether crossing an envelope boundary evicts;
+`ORT_THREADS` matters only on the CPU arms.
+
+**MIGraphX-only, and all three are mandatory rather than optimisations:** `ORT_DYLIB_PATH` (the flavour is
+`load-dynamic` — nothing is linked), `ORT_MIGRAPHX_MODEL_CACHE_PATH` (unset ⇒ the EP saves to `""`, the write
+fails and takes the kernel call with it — every `/embed` answered 500 after a two-minute compile the day this
+was diagnosed), and `MODEL_CACHE_DIR` on ext4 with `MODEL_CACHE_SEED_DIR` pointing back at the repo copy —
+DrvFs reads the 2.27 GB of weights at ~123 MB/s, about 19 s of every session build.
+
+**The trap that catches C₁.** Both startup preflights are compiled in by the `migraphx` **feature**, not by
+the chosen provider, and both `std::process::exit(1)` on failure (`dew_flow_sidecar_rust · src/main.rs:121-124`).
+So the WSL **CPU** arm — which touches neither ROCm nor the cache — still refuses to start without
+`ORT_DYLIB_PATH` and `ORT_MIGRAPHX_MODEL_CACHE_PATH` set. That is correct behaviour for the deployed flavour
+and a surprise for a control arm; set them and move on.
+
+### 4b. How each arm is launched
+
+**Two builds cover all six arms** — `cpu` needs no flavour of its own, because ort falls through to CPU when
+no EP is registered and `compiled_providers` therefore always lists it:
+
+```bash
+cargo build --release                                    # D · I · C₂  (dml is the default feature)
+# inside the distro, separate target dir so the two OS flavours never clobber each other:
+cargo build --release --no-default-features --features migraphx --target-dir target-wsl   # W · W′ · C₁
+```
+
+```powershell
+# D — windows/dml/R9700 ; 0 = fastest card in DXGI high-performance order
+$env:PORT='5321'; $env:ORT_PROVIDER='dml'; $env:ORT_DEVICE_ID='0'
+.\target\release\bge-sidecar.exe
+
+# I — windows/dml/890M
+$env:PORT='5322'; $env:ORT_PROVIDER='dml'; $env:ORT_DEVICE_ID='1'; .\target\release\bge-sidecar.exe
+
+# C2 — windows/cpu ; same binary, no EP registered
+$env:PORT='5323'; $env:ORT_PROVIDER='cpu'; $env:ORT_THREADS='0'; .\target\release\bge-sidecar.exe
+```
+
+```bash
+# W — wsl/migraphx/R9700 ; HIP_VISIBLE_DEVICES is what picks the card, ORT_DEVICE_ID is not
+SIDE=/mnt/d/rsd/dew_flow_sidecar_rust
+HIP_VISIBLE_DEVICES=0 ORT_PROVIDER=migraphx PORT=5324 \
+ORT_DYLIB_PATH=/opt/onnxruntime-migraphx/lib/libonnxruntime.so \
+ORT_MIGRAPHX_MODEL_CACHE_PATH=$HOME/.cache/bench-W ORT_MIGRAPHX_CACHE_PATH=$HOME/.cache/bench-W \
+MODEL_CACHE_DIR=$HOME/.cache/bge-sidecar-models MODEL_CACHE_SEED_DIR=$SIDE/.model-cache \
+exec ./target-wsl/release/bge-sidecar
+
+# W' — the same, plus PIN_INPUT_SHAPE=0 and its OWN cache dir (bench-Wp)
+# C1 — wsl/cpu ; ORT_PROVIDER=cpu, but the two MIGraphX env vars are still required to start (4a)
+```
+
+**Gate zero, before any number is recorded.** `GET /health` on each arm must report the card it was supposed
+to get: `active_provider` matching the arm, and `adapter` naming the right one. On this box the DXGI mapping
+is the **reverse** of Windows' PnP listing — requested `0` → *AMD Radeon AI PRO R9700*, requested `1` →
+*AMD Radeon(TM) 890M Graphics* — so verify, never assume. An arm that fails gate zero is not re-labelled; it
+is fixed or dropped.
+
+### 4c. The payload, stated so two people run the same probe
+
+- **Corpus:** the sidecar repository's own `src/**/*.rs`, split into ~500-character chunks, sorted by path
+  and taken from the top. No randomness, no external download, and the same bytes visible to both hosts (the
+  WSL side reads it over `/mnt`). The absolute numbers are not the point; identity across arms is.
+- **Envelope:** `max_batch = 64`, `max_length = 256` — the shipped defaults, which mirror the host's own
+  (`SidecarMemory.DefaultMaxLength`). Sent **in the request body**, not only as launch env, and read back
+  from `/health`.
+- Every step below is preceded by a cache wipe where §3 requires one, and repeated ≥ 3 times.
+
+**The probe:** for each arm, one at a time on the card —
+
+1. **Cold start (B)** — empty cache, one call of 64 texts. Record `session_build_ms`,
+   `compile_cache_grew_mb` and total wall separately; then record the cache directory's size on disk. On W
+   this is the 2–4 minutes and the ~2.5 GB; on D it is a session build of tens of seconds and no cache at all.
+2. **Steady state (A)** — 10 calls of 64 texts at the same envelope. Median and spread of `inference_ms`, and
+   `compile_cache_grew_mb == 0` asserted throughout: a non-zero value means this is not steady state and the
+   number measures a compile.
+3. **Row churn (B′)** — 10 calls whose row counts vary (8, 61, 64, 17, 40, …) at the SAME envelope. This does
+   **not** trigger a recompile on W, and that is the finding rather than a flaw: `pin_shape` absorbs the
+   variation into ruler padding, so W pays a full 64-row batch for an 8-text call while D pays only for what
+   it was sent. It prices the workaround. `compile_cache_grew_mb` must stay 0 on W — if it does not, pinning
+   is not doing its job and the arm is misconfigured.
+4. **Envelope change (B″)** — the actual recompile trigger, and the one closest to a real Fast pass, which
+   crosses the boundary twice: alternate `max_length` between 256 and 1024 across four calls. On W each new
+   envelope is a fresh compile and a fresh ~2.5 GB; `EMBED_ENGINE_CACHE_RUNGS` decides whether returning to
+   the first one pays again. Run it at the shipped **1** and note what **2** would change rather than
+   measuring both, unless the numbers make it interesting.
+5. **Rerank, separately** — never folded into the embed numbers, and gated: the arm must return distinct,
+   ordered scores, for the reason recorded in §2. This is where the existing 3.06 s / 45–75 s figure is
+   reproduced or contradicted.
+
+**Which step answers which question of §1.** A ← step 2, with step 3 as the realistic-input version of it.
+B ← step 1, plus step 4 for the envelope boundary a real pass actually crosses. **C is not measured here and
+must not be claimed**: its dominant term is a driver timeout that removes the D3D12 device, which has no mean
+and cannot be provoked on demand — the honest treatment is to report it as a hazard of arm D with its
+observed frequency (three in an hour) beside the timings, not to fold it into one.
 
 Output: a table under `research/`, plus an entry in
 [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) — the lessons file is where a finding goes
@@ -289,8 +394,13 @@ which numbers were observed, on which binaries by hash, and what could not be ru
 
 ## 9. Definition of Done
 
-- [ ] Phase 1 published three separate quantities per arm (steady state · cold start · shape churn), each with
-      its spread, never averaged into one headline.
+- [ ] Phase 1 published its measurements per arm separately — cold start · steady state · row churn ·
+      envelope change · rerank — each with its spread, never averaged into one headline, and **C reported as
+      a hazard rather than as a number** (§4c).
+- [ ] Every arm names its build (`cargo` line), its launch (env, verbatim) and its cache directory, so the
+      probe can be re-run without reconstructing it from a summary.
+- [ ] **Gate zero passed on every arm**: `/health` reported the intended `active_provider` and `adapter`
+      before any timing was recorded. An arm that failed it was fixed or dropped, never re-labelled.
 - [ ] Every arm's flavour, card and binary are quoted from the serving process's `/health` and build hashes —
       not from the configuration that launched it.
 - [ ] **No column, chart or sentence is labelled by host alone.** Host and EP are confounded by construction
