@@ -1,31 +1,26 @@
-using System.Text.RegularExpressions;
-
 namespace Bench.Domain.Variants;
 
 /// <summary>A variant's name: short, lower-case, quotable in a report and safe in a column heading.
 /// <para>
 /// Typed rather than a string because it is an identity every result carries. A name that differs only in
 /// case would pass a unique index and read as two configurations in one report — the exact class of
-/// defect the catalog exists to prevent.
+/// defect the catalog exists to prevent. The shape itself is <see cref="Slug"/>, shared with the bank's
+/// group and reviewer keys: these identities appear side by side in a report, so they cannot be allowed
+/// to drift into three nearly-identical rules.
 /// </para></summary>
-public sealed partial record VariantName
+public sealed record VariantName
 {
     private VariantName(string value) => Value = value;
 
     public string Value { get; }
 
-    [GeneratedRegex("^[a-z0-9][a-z0-9-]{2,63}$")]
-    private static partial Regex Slug { get; }
-
     public static Outcome<VariantName> Parse(string? value)
     {
-        var trimmed = (value ?? string.Empty).Trim();
+        var trimmed = Slug.Clean(value);
 
-        return Slug.IsMatch(trimmed)
+        return Slug.IsValid(trimmed)
             ? Outcome<VariantName>.Success(new VariantName(trimmed))
-            : Outcome<VariantName>.Failure(
-                $"'{trimmed}' is not a usable variant name — 3 to 64 characters of lower-case letters, digits and "
-                + "hyphens, starting with a letter or digit");
+            : Outcome<VariantName>.Failure($"'{trimmed}' is not a usable variant name — {Slug.Rule}");
     }
 
     public override string ToString() => Value;

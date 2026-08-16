@@ -61,7 +61,7 @@ One result row is identified by, and comparable only within, this tuple:
 ```
 target   = (repoUrl, commitSha, exclusions[])     -- pinned, never ambient
 engine   = (kind, endpoint, version, indexFingerprint)
-suite    = (suiteId, suiteVersion)                -- frozen and hashed
+suite    = (suiteId, suiteVersion)                -- frozen and hashed, from a file or a bank selection
 subject  = (modelId, samplingAsSent)              -- 1..N
 lane     = (toolSurface, preamble)                -- 1..N
 variant  = (name, definitionHash)                 -- 1..N, from the catalog; absent on a run planned without it
@@ -94,6 +94,34 @@ existed still mean what they said.
 **Identity is separate from configuration.** `ModelRef` is an id; `ModelEndpoint` holds the address and the
 prices. Every aggregate, every discrimination reading and every saturation label is keyed by the id, so
 folding an address into it would make the same model at a different port a different subject.
+
+### The question bank
+
+Questions live in Postgres in named **groups**, with per-**reviewer** marks — both rows rather than enum
+members, so a sixth group and a fourth reviewer each cost one insert instead of a migration and a redeploy.
+A question carries the suite-facing id every cell and every result quotes, the ordinal an operator selects
+by ("group 1, questions 1–10"), what it was authored against, and the **seed** it was derived from with the
+date that material entered the world — the memorisation check's only input, and deliberately not the import
+date, which would certify every question as clear against every subject's cutoff.
+
+Three properties carry the weight:
+
+- **One way to mint a suite stamp.** A selection from the bank is promoted through the same
+  `AuthoringBatch.Promote` + `Suite.Freeze` a file goes through (`BankFreeze`), so a test built either way
+  names the same kind of hashed stamp and a result cannot tell which door its questions came through.
+  Freezing inherits the refusals already written there: nothing accepted, two questions about the same
+  lines, and — added here — one suite-facing id twice.
+- **Only what somebody vouched for is selectable.** `BankQuery.Selection` is accepted-only by construction
+  rather than by a filter each caller remembers, and admission itself is `QuestionCandidate.Propose`'s rule
+  rather than a second one written for the store.
+- **Group membership is versioned, and a report does not move.** The current home is a column, the moves
+  are rows (`question_group_moves`, refused without a reason), and `run_questions` is the per-test snapshot
+  of which group each question was in **when the test was created**. A report reads the snapshot; re-filing
+  a question next month cannot move a finished test's numbers into a different column.
+
+`bench questions import|list|groups|review|accept|reject|move` is the surface; `bench run --bank-group`
+freezes a selection instead of reading a suite file. A file-selected run writes no snapshot rows, which is
+the honest reading rather than a gap: a file has no groups.
 
 ## One leg, end to end
 
@@ -286,3 +314,8 @@ Stated because a description that quietly implies more than is built is the same
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
+- **Nothing AUTHORS questions.** The bank holds them, reviews them and freezes selections from them, but
+  candidates arrive by import: the pipeline that drives CLI agents to write and review them is a later
+  plan, and the schema is already the shape it needs so that plan adds verbs rather than tables.
+- **A test's engine, subjects and arbiters are still `bench run` flags**, not rows chosen per test —
+  that is the model registry, step 3 of `todo/PLAN_variant_matrix.md`.

@@ -1,6 +1,8 @@
 using Bench.Application;
+using Bench.Application.Bank;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Bench.Cli;
 
@@ -61,6 +63,7 @@ public static class Program
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
+            "questions" => Questions(command, output, error, stopping),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -141,6 +144,41 @@ public static class Program
             .GetAwaiter().GetResult();
     }
 
+    /// <summary>The bank lives in the database, so this verb needs one — and refuses rather than guessing,
+    /// for the same reason the other two do: a default connection would import somebody's question set into
+    /// whatever database happened to be listening.</summary>
+    private static int Questions(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var provider = CliContainer.ForBank(connection, CliLogging.Start());
+        using var scope = provider.CreateScope();
+
+        try
+        {
+            scope.ServiceProvider.GetRequiredService<BenchDbContext>().Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return QuestionsCommand.RunAsync(
+                command,
+                scope.ServiceProvider.GetRequiredService<IQuestionBank>(),
+                TimeProvider.System,
+                output,
+                error,
+                stopping)
+            .GetAwaiter().GetResult();
+    }
+
     private static int Version(TextWriter output)
     {
         output.WriteLine("bench 0.1.0");
@@ -167,8 +205,19 @@ public static class Program
         output.WriteLine("  bench variants retire --name <slug> --db <connection>");
         output.WriteLine("             a variant is added and retired, never edited: results name what they ran under");
         output.WriteLine();
+        output.WriteLine("  bench questions import --file <path> --db <connection>");
+        output.WriteLine("  bench questions list   [--group <key>] [--from N] [--to N] [--accepted] --db <connection>");
+        output.WriteLine("  bench questions groups --db <connection>");
+        output.WriteLine("  bench questions review --question <id> --reviewer <key> [--verdict approved|rejected]");
+        output.WriteLine("             [--note <text>] --db <connection>   one mark per reviewer per question");
+        output.WriteLine("  bench questions accept|reject --question <id> --db <connection>");
+        output.WriteLine("  bench questions move   --question <id> --to <group> --reason <text> --db <connection>");
+        output.WriteLine("             a move never touches a finished test: its snapshot keeps the group it froze");
+        output.WriteLine();
         output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
         output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
+        output.WriteLine("             (or --bank-group <key> [--bank-from N] [--bank-to N] [--suite-id <name>]");
+        output.WriteLine("              to freeze a selection from the bank instead of reading a file)");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
         output.WriteLine("             [--stale-after-minutes 30] [--max-consecutive-failures 20]");
         output.WriteLine("             [--leg-wall-seconds 600]  one ceiling for the WHOLE leg, not per call:");

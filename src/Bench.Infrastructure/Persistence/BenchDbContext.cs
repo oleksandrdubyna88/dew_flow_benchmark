@@ -101,8 +101,22 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<VariantRow> Variants => Set<VariantRow>();
 
+    public DbSet<QuestionGroupRow> QuestionGroups => Set<QuestionGroupRow>();
+
+    public DbSet<ReviewerRow> Reviewers => Set<ReviewerRow>();
+
+    public DbSet<BankQuestionRow> BankQuestions => Set<BankQuestionRow>();
+
+    public DbSet<QuestionReviewRow> QuestionReviews => Set<QuestionReviewRow>();
+
+    public DbSet<QuestionGroupMoveRow> QuestionGroupMoves => Set<QuestionGroupMoveRow>();
+
+    public DbSet<RunQuestionRow> RunQuestions => Set<RunQuestionRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        Bank(builder);
+
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {
             telemetry.ToTable("tool_telemetry");
@@ -190,6 +204,87 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
             // "Is this the same recipe under another name" — a lookup, never a scan that re-parses rows.
             variant.HasIndex(v => v.Hash);
+        });
+    }
+
+    /// <summary>The question bank. Separate method because the model configuration is where this schema's
+    /// guarantees actually live — the unique keys below are the ones a read-then-write above them cannot
+    /// hold when two sessions import the same file at the same moment.</summary>
+    private static void Bank(ModelBuilder builder)
+    {
+        builder.Entity<QuestionGroupRow>(group =>
+        {
+            group.ToTable("question_groups");
+            group.HasKey(g => g.Id);
+            group.HasIndex(g => g.Key).IsUnique();
+        });
+
+        builder.Entity<ReviewerRow>(reviewer =>
+        {
+            reviewer.ToTable("reviewers");
+            reviewer.HasKey(r => r.Id);
+            reviewer.HasIndex(r => r.Key).IsUnique();
+        });
+
+        builder.Entity<BankQuestionRow>(question =>
+        {
+            question.ToTable("bank_questions");
+            question.HasKey(q => q.Id);
+            question.Property(q => q.Kind).HasConversion<string>();
+            question.Property(q => q.SourceKind).HasConversion<string>();
+            question.Property(q => q.State).HasConversion<string>();
+            question.Property(q => q.ExpectationsJson).HasColumnType("jsonb");
+
+            // The suite-facing identity every cell and every result carries. Unique across the BANK, not
+            // per group: a question keeps its id when it is re-filed, and a report joins on it.
+            question.HasIndex(q => q.QuestionId).IsUnique();
+
+            // How a selection reads: one group, an ordinal range. The operator quotes exactly that.
+            question.HasIndex(q => new { q.GroupId, q.Ordinal });
+            question.HasIndex(q => q.State);
+
+            // Restrict: deleting a group that questions live in would orphan them. A group is emptied by
+            // moving its questions, which leaves the history row that explains where they went.
+            question.HasOne(q => q.Group!).WithMany()
+                .HasForeignKey(q => q.GroupId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<QuestionReviewRow>(review =>
+        {
+            review.ToTable("question_reviews");
+            review.HasKey(r => r.Id);
+            review.Property(r => r.Verdict).HasConversion<string>();
+
+            // One mark per reviewer per question, held where concurrency happens. Without it, two sessions
+            // marking the same question would both find nothing and both insert, and the page would render
+            // one reviewer twice with opposite verdicts.
+            review.HasIndex(r => new { r.QuestionId, r.ReviewerId }).IsUnique();
+
+            review.HasOne<BankQuestionRow>().WithMany()
+                .HasForeignKey(r => r.QuestionId).OnDelete(DeleteBehavior.Cascade);
+            review.HasOne<ReviewerRow>().WithMany()
+                .HasForeignKey(r => r.ReviewerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<QuestionGroupMoveRow>(move =>
+        {
+            move.ToTable("question_group_moves");
+            move.HasKey(m => m.Id);
+            move.HasIndex(m => new { m.QuestionId, m.At });
+            move.HasOne<BankQuestionRow>().WithMany()
+                .HasForeignKey(m => m.QuestionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RunQuestionRow>(selected =>
+        {
+            selected.ToTable("run_questions");
+
+            // The pair IS the row: one question appears once in a test's selection, and the composite key
+            // is what makes a second write of the same snapshot a conflict rather than a duplicate.
+            selected.HasKey(q => new { q.RunId, q.QuestionId });
+            selected.HasIndex(q => new { q.RunId, q.GroupKey });
+            selected.HasOne(q => q.Run!).WithMany()
+                .HasForeignKey(q => q.RunId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

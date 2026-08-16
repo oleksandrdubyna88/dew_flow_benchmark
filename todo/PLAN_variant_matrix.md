@@ -1,11 +1,36 @@
 # PLAN — the variant matrix: a question bank in five groups, reviewer marks, engine axes in the grid, and the console
 
-> Status: **step 1 of §5 (the variant catalog) IMPLEMENTED 2026-08-16; steps 2–11 open.** What shipped:
+> Status: **steps 1 and 2 of §5 IMPLEMENTED 2026-08-16; steps 3–11 open.** Step 1, the variant catalog:
 > `Bench.Domain/Variants` (definition + hash + immutable catalog row + selection), the variant axis in
 > `Matrix.Plan`, `variants` table and `cells.VariantId`, `bench variants add|list|retire`.
-> One deviation, found by a smoke run rather than by the tests: the stored definition was written in
-> PascalCase while this plan documents camelCase — fixed, with reading left case-insensitive so rows
-> written before the fix still resolve. Scope: `Bench.Domain`, `Bench.Application`,
+> Step 2, the question bank: `question_groups` / `bank_questions` / `reviewers` / `question_reviews` /
+> `question_group_moves` / `run_questions` (migration `QuestionBank`), `bench questions
+> import|list|groups|review|accept|reject|move`, and `bench run --bank-group` freezing a selection through
+> the EXISTING suite machinery — a test built from the bank and one built from a file mint the same kind of
+> hashed stamp, and a result cannot tell which door it came through.
+>
+> Deviations, step 2:
+> - **The bank stores the SEED** (`SeedKind`/`SeedReference`/`SeedAt`), three columns §3.3's schema does
+>   not list. The memorisation check is computed from the seed's DATE, and the only date the plan's columns
+>   offered was the import date — which would certify every imported question as clear against every
+>   subject's cutoff. A question that declares no seed gets `unstated` at the beginning of time, so it reads
+>   as *may recall* rather than as safe.
+> - **Admission reuses `QuestionCandidate.Propose`** instead of a second rule: a non-human source must name
+>   its author model, and a question with no retrieval expectation has nothing to score against the code.
+>   Two admission rules would drift, and the drifted one would be the unread one.
+> - **`QuestionJson` was extracted from `SuiteJsonLoader`** so a suite file and a bank row share ONE wire
+>   shape and one mapping to `Question`; `Slug` was extracted so `VariantName`, `GroupKey` and
+>   `ReviewerKey` share one rule rather than three copies of a regex.
+> - **More verbs than the plan named.** `import` alone could not make a question selectable or exercise
+>   `question_group_moves`, so `accept`/`reject`/`move`/`review`/`groups` ship with it. A move REFUSES
+>   without `--reason`: the history row exists to explain a finished report's snapshot, and one with no
+>   reason records that something changed and nothing about why.
+> - **A file-selected run writes no snapshot rows**, and that absence is the honest reading — the snapshot
+>   records which GROUP each question was in, and a file has no groups.
+> - **`BankFreeze` refuses a duplicate suite-facing id** before promotion. `Suite.With` would have taken
+>   both, and the suite would then have scored one question twice under one id, invisibly.
+>
+> Scope: `Bench.Domain`, `Bench.Application`,
 > `Bench.Infrastructure` (persistence + engines), `Bench.Api`, a NEW `hosts/Web` + `hosts/Web.Client` +
 > `src/Bench.Ui`, `hosts/Cli`. The engine-side half lives in the sibling plan
 > `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md` — a change that crosses the repository boundary is
@@ -60,8 +85,8 @@ Concretely:
 |---|---|---|
 | Matrix planning | question × repeat × subject × lane; **engine is one value per run, not an axis** | `src/Bench.Domain/Runs/Matrix.cs:23-74`, `src/Bench.Application/PlanRun.cs:20-38` |
 | Durable cells | claim/settle/sweep, guarded UPDATE, result-first-settle-second, `MaxAttempts=3` | `src/Bench.Domain/Runs/RunCell.cs:81-141`, `src/Bench.Infrastructure/Persistence/PostgresRunStore.cs:54-121` |
-| Reviewer/authoring domain | **designed, unwired** — `QuestionCandidate` (author model, `Proposed→Accepted/Rejected`, review note, dedup, memorisation check, batch promotion into a frozen suite); no store, no CLI, no UI | `src/Bench.Domain/Authoring/QuestionCandidate.cs`, `AuthoringRules.cs` |
-| Suites | frozen + hashed, stamp `id@vN#hash12`; live **only as JSON files**, never in Postgres | `src/Bench.Domain/Suites/Suite.cs:30-77`, `src/Bench.Application/SuiteJsonLoader.cs:75-108` |
+| Reviewer/authoring domain | ~~designed, unwired~~ — **wired 2026-08-16**: the bank is its store (`Bench.Domain/Bank`, `PostgresQuestionBank`), admission goes through `QuestionCandidate.Propose`, and a selection is promoted by `AuthoringBatch.Promote`. What is still unwritten is the pipeline that GENERATES candidates — a later plan's verbs, not tables | `src/Bench.Domain/Authoring/*`, `src/Bench.Domain/Bank/*` |
+| Suites | frozen + hashed, stamp `id@vN#hash12`; from a JSON file **or from a bank selection** (2026-08-16), both through the same freeze | `src/Bench.Domain/Suites/Suite.cs:30-77`, `src/Bench.Domain/Bank/BankFreeze.cs` |
 | Commit pinning | `MeasurementTarget` demands a full 40-char sha; `bench run` **never checks out** (prints a warning) | `src/Bench.Domain/Targets/MeasurementTarget.cs:36-62`, `hosts/Cli/RunCommand.cs:127` |
 | Drain loop | `LegDrain` — per-leg `try`, consecutive-failure breaker, bounded backoff, typed `DrainStop`, grace on cancel | `src/Bench.Application/LegDrain.cs:82-121`, driven from `hosts/Cli/RunCommand.cs:153` |
 | Checkout cache | bare mirror + worktree per commit, written and tested, **not wired into any run path** | `src/Bench.Infrastructure/Git/GitCheckoutProvider.cs:37-135` |
@@ -581,9 +606,12 @@ precedes the API + CLI it renders.**
 
 1. **Variant catalog** — `variants` table + domain type + immutability tests + `bench variants` verbs.
    `cells.VariantId` migration. `Matrix.Plan` variant axis + rotation-balance tests.
-2. **Question bank** — groups/questions/reviewers/reviews/`question_group_moves` tables + import verb +
-   selection freeze into the existing suite stamp + `run_questions` snapshot. Unit: promotion refusals
-   (collision, empty) now hit Postgres-backed tests.
+2. ~~**Question bank**~~ — **IMPLEMENTED 2026-08-16.** All five tables plus `run_questions`, the import
+   verb (and the four the plan did not name — see the status block), selection freeze through
+   `AuthoringBatch.Promote` + `Suite.Freeze`, and `bench run --bank-group`. The promotion refusals
+   (collision, empty, and a duplicate id the plan did not anticipate) are asserted in `BankFreezeTests`;
+   the concurrency rules — one key, one suite-facing id, one mark per reviewer per question, one snapshot
+   per test — are asserted against real Postgres in `PostgresQuestionBankTests`.
 3. **Model registry** — `models`/`run_subjects`/`run_judges` tables + `bench models` verbs; `bench run`
    learns to read subjects and arbiters from the test instead of its `--model` singletons.
 4. **Checkout + engine wiring** — `ICheckoutProvider` into run start; `QlnEngine` full `AxesWire`;

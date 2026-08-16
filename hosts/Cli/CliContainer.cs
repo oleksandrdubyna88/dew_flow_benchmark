@@ -1,4 +1,5 @@
 using Bench.Application;
+using Bench.Application.Bank;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,11 @@ public static class CliContainer
     public static ServiceProvider ForSweep(string connectionString, Serilog.ILogger logger) =>
         Store(connectionString, logger).BuildServiceProvider();
 
+    /// <summary>`bench questions` — the bank and nothing else. Importing or reviewing questions must not
+    /// need a model endpoint any more than recovery does.</summary>
+    public static ServiceProvider ForBank(string connectionString, Serilog.ILogger logger) =>
+        Store(connectionString, logger).BuildServiceProvider();
+
     private static IServiceCollection Store(string connectionString, Serilog.ILogger logger) =>
         new ServiceCollection()
             .AddDbContext<BenchDbContext>(options => options.UseNpgsql(connectionString))
@@ -42,6 +48,8 @@ public static class CliContainer
             .AddScoped<PostgresResultStore>()
             .AddScoped<IRunStore>(s => s.GetRequiredService<PostgresRunStore>())
             .AddScoped<IResultStore>(s => s.GetRequiredService<PostgresResultStore>())
+            .AddScoped<IQuestionBank, PostgresQuestionBank>()
+            .AddScoped<IRunQuestionStore, PostgresRunQuestionStore>()
             .AddSingleton(TimeProvider.System)
             // dispose: false — the logger belongs to the PROCESS, which flushes it in its own finally.
             // A container that closed it would silence whatever the shutdown path still has to say.

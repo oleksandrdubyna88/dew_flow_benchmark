@@ -1,5 +1,7 @@
 using Bench.Application;
+using Bench.Application.Bank;
 using Bench.Domain;
+using Bench.Domain.Bank;
 using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
@@ -44,12 +46,17 @@ public static class RunCommand
         // caller's mistake (4), a named file that is not there is the machine's (3).
         var suiteFile = command.Value("suite-file");
 
-        if (suiteFile.Length == 0)
+        // Two doors to one place: a suite file, or a selection from the bank. Both end as a FROZEN, hashed
+        // suite, so a result cannot tell which door its questions came through — the stamp is the identity.
+        if (suiteFile.Length == 0 && command.Value("bank-group").Length == 0)
         {
-            return Fail(error, "--suite-file is required", ExitCodes.Configuration);
+            return Fail(
+                error,
+                "--suite-file or --bank-group is required — a run measures a frozen question set, from a file or from the bank",
+                ExitCodes.Configuration);
         }
 
-        if (!File.Exists(suiteFile))
+        if (suiteFile.Length > 0 && !File.Exists(suiteFile))
         {
             return Fail(error, $"suite file not found: {suiteFile}", ExitCodes.Environment);
         }
@@ -93,11 +100,35 @@ public static class RunCommand
             return null;
         }
 
-        var suite = SuiteJsonLoader.Load(File.ReadAllText(settings.SuiteFile), settings.Target.Commit);
+        var selection = await SelectAsync(scope, settings, stopping);
 
-        return suite is Outcome<Suite>.Fail badSuite
+        return selection is Outcome<BankSelection>.Fail badSuite
             ? Refuse(error, badSuite.Reason)
-            : await CreateAsync(scope, settings, ((Outcome<Suite>.Ok)suite).Value, output, error, stopping);
+            : await CreateAsync(scope, settings, ((Outcome<BankSelection>.Ok)selection).Value, output, error, stopping);
+    }
+
+    /// <summary>The question set, from a file or from the bank — one frozen suite either way.
+    /// <para>
+    /// A file-selected test carries no snapshot rows, and that absence is the honest reading: the per-test
+    /// snapshot records which GROUP each question was in, and a file has no groups. A test built from the
+    /// bank carries one row per question, so a later re-filing cannot move a finished report's numbers into
+    /// a different column.
+    /// </para></summary>
+    private static async Task<Outcome<BankSelection>> SelectAsync(
+        AsyncServiceScope scope, RunInputs settings, CancellationToken stopping)
+    {
+        if (settings.SuiteFile.Length > 0)
+        {
+            return SuiteJsonLoader.Load(File.ReadAllText(settings.SuiteFile), settings.Target.Commit)
+                .Match(suite => Outcome<BankSelection>.Success(new BankSelection(suite, [])), Outcome<BankSelection>.Failure);
+        }
+
+        var bank = scope.ServiceProvider.GetRequiredService<IQuestionBank>();
+        var found = await bank.QuestionsAsync(settings.Selection, stopping);
+
+        return found.Match(
+            entries => BankFreeze.Freeze(settings.SuiteId, entries),
+            Outcome<BankSelection>.Failure);
     }
 
     private static async Task<bool> MigrateAsync(AsyncServiceScope scope, TextWriter error, CancellationToken stopping)
@@ -120,11 +151,12 @@ public static class RunCommand
     private static async Task<(BenchRun Run, LegPlan Plan)?> CreateAsync(
         AsyncServiceScope scope,
         RunInputs settings,
-        Suite frozen,
+        BankSelection selection,
         TextWriter output,
         TextWriter error,
         CancellationToken stopping)
     {
+        var frozen = selection.Suite;
         var run = BenchRun.Planned(settings.Label, settings.Target, EngineRef.Filesystem(), frozen.Stamp, DateTimeOffset.UtcNow);
         var cells = Matrix.Plan(frozen.Questions, settings.Repeats, [settings.Subject], [settings.Lane]);
 
@@ -149,19 +181,49 @@ public static class RunCommand
             return Refuse(error, badRun.Reason);
         }
 
+        var snapshot = await SnapshotAsync(scope, run.Id, selection, stopping);
+
+        if (snapshot is Outcome<int>.Fail unsnapshotted)
+        {
+            return Refuse(error, unsnapshotted.Reason);
+        }
+
         var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
-        Announce(output, settings, run, frozen, planned.Count, confirmed);
+        Announce(output, settings, run, selection, planned.Count, confirmed);
 
         return (run, LegPlan.Reading(frozen, settings.Endpoint, settings.Sampling) with { Budgets = confirmed });
     }
 
+    /// <summary>Freezes which group each selected question was in. Written once, right after the cells, so
+    /// a test that exists always has the snapshot its per-group report will read — and a re-filing next
+    /// month cannot move this test's numbers into a different column.</summary>
+    private static async Task<Outcome<int>> SnapshotAsync(
+        AsyncServiceScope scope, Guid runId, BankSelection selection, CancellationToken stopping) =>
+        selection.Questions.Count == 0
+            ? Outcome<int>.Success(0)
+            : await scope.ServiceProvider.GetRequiredService<IRunQuestionStore>()
+                .SaveAsync(runId, selection.Questions, stopping);
+
     private static void Announce(
-        TextWriter output, RunInputs settings, BenchRun run, Suite frozen, int cells, IReadOnlyList<Budget> budgets)
+        TextWriter output,
+        RunInputs settings,
+        BenchRun run,
+        BankSelection selection,
+        int cells,
+        IReadOnlyList<Budget> budgets)
     {
+        var frozen = selection.Suite;
+
         output.WriteLine($"run      {run.Id}");
         output.WriteLine($"target   {settings.Target.Canonical}");
         output.WriteLine($"suite    {frozen.Stamp}  ({frozen.Questions.Count} question(s))");
         output.WriteLine($"matrix   {cells} cell(s) · {settings.Subject.Model.Id} · lane {settings.Lane.Name}");
+
+        if (selection.Questions.Count > 0)
+        {
+            output.WriteLine(
+                $"bank     {settings.Selection.Describe} — {selection.Questions.Count} question(s) frozen with their groups");
+        }
 
         // Printed rather than assumed: this ceiling is what stands between a hung endpoint and a campaign
         // that spends days learning what its first leg already said, and it is only real once accepted.
@@ -325,7 +387,9 @@ public static class RunCommand
                             command.Int("repeats", 1),
                             command.Value("label", "run"),
                             connection,
-                            [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)])),
+                            [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)],
+                            Selection(command),
+                            command.Value("suite-id", "bank-selection"))),
                         Outcome<RunInputs>.Failure),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
@@ -352,8 +416,16 @@ public static class RunCommand
         return code;
     }
 
+    /// <summary>The bank selection, always accepted-only. A test may not measure a question nobody vouched
+    /// for, and putting the filter here rather than at a call site means no future caller can forget it.</summary>
+    private static BankQuery Selection(CommandLine command) =>
+        BankQuery.Selection(command.Value("bank-group"), command.Int("bank-from", 0), command.Int("bank-to", 0));
+
     /// <param name="Budgets">The ceilings this run ASKS for. They reach a leg only after the runtime has
     /// confirmed each one — an unconfirmed budget is a budget that does not exist.</param>
+    /// <param name="Selection">Which bank questions this run freezes, when it is not reading a suite file.</param>
+    /// <param name="SuiteId">The name the frozen bank selection is minted under. It appears in the stamp
+    /// every result carries, so it is an operator's choice rather than a generated string.</param>
     private sealed record RunInputs(
         MeasurementTarget Target,
         string SuiteFile,
@@ -363,7 +435,9 @@ public static class RunCommand
         int Repeats,
         string Label,
         string ConnectionString,
-        IReadOnlyList<Budget> Budgets)
+        IReadOnlyList<Budget> Budgets,
+        BankQuery Selection,
+        string SuiteId)
     {
         public Sampling Sampling => Subject.Sampling;
     }
