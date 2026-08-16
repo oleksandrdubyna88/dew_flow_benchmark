@@ -28,6 +28,15 @@ public static class RunCommand
     /// cannot use the root token — but every wait has a ceiling, so it does not use none either.</summary>
     private static readonly TimeSpan SummaryBudget = TimeSpan.FromSeconds(30);
 
+    /// <summary>The wall ceiling for a WHOLE leg, in seconds, when the operator names none.
+    /// <para>
+    /// Ten minutes, which is what the model runtime was already falling back to per completion — so the
+    /// default changes no timing, only who owns it. The difference that matters is the scope: this one is
+    /// the ceiling for the leg, and a lane that loops cannot multiply it by a turn count nobody bounded.
+    /// It is configuration (<c>--leg-wall-seconds</c>), never a constant a call site edits.
+    /// </para></summary>
+    private const int DefaultLegWallSeconds = 600;
+
     public static async Task<int> RunAsync(
         CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
@@ -78,52 +87,89 @@ public static class RunCommand
         ServiceProvider provider, RunInputs settings, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         await using var scope = provider.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<BenchDbContext>();
 
-        try
+        if (!await MigrateAsync(scope, error, stopping))
         {
-            await db.Database.MigrateAsync(stopping);
-        }
-        catch (Exception ex)
-        {
-            error.WriteLine($"bench: the store is not reachable — {ex.Message.Split('\n')[0]}");
             return null;
         }
 
         var suite = SuiteJsonLoader.Load(File.ReadAllText(settings.SuiteFile), settings.Target.Commit);
 
-        if (suite is Outcome<Suite>.Fail badSuite)
+        return suite is Outcome<Suite>.Fail badSuite
+            ? Refuse(error, badSuite.Reason)
+            : await CreateAsync(scope, settings, ((Outcome<Suite>.Ok)suite).Value, output, error, stopping);
+    }
+
+    private static async Task<bool> MigrateAsync(AsyncServiceScope scope, TextWriter error, CancellationToken stopping)
+    {
+        try
         {
-            error.WriteLine($"bench: {badSuite.Reason}");
-            return null;
+            await scope.ServiceProvider.GetRequiredService<BenchDbContext>().Database.MigrateAsync(stopping);
+            return true;
         }
+        catch (Exception ex)
+        {
+            error.WriteLine($"bench: the store is not reachable — {ex.Message.Split('\n')[0]}");
+            return false;
+        }
+    }
 
-        var frozen = ((Outcome<Suite>.Ok)suite).Value;
+    /// <summary>The matrix, the confirmed ceilings, and the cells — in that order, because the order is
+    /// the guarantee: a ceiling this runtime cannot impose stops the run BEFORE any cell exists, rather
+    /// than being discovered later as a gap in a log the size of a weekend.</summary>
+    private static async Task<(BenchRun Run, LegPlan Plan)?> CreateAsync(
+        AsyncServiceScope scope,
+        RunInputs settings,
+        Suite frozen,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken stopping)
+    {
         var run = BenchRun.Planned(settings.Label, settings.Target, EngineRef.Filesystem(), frozen.Stamp, DateTimeOffset.UtcNow);
-
         var cells = Matrix.Plan(frozen.Questions, settings.Repeats, [settings.Subject], [settings.Lane]);
 
         if (cells is Outcome<IReadOnlyList<MatrixCell>>.Fail badMatrix)
         {
-            error.WriteLine($"bench: {badMatrix.Reason}");
-            return null;
+            return Refuse(error, badMatrix.Reason);
         }
 
-        var runs = scope.ServiceProvider.GetRequiredService<PostgresRunStore>();
-        var planned = ((Outcome<IReadOnlyList<MatrixCell>>.Ok)cells).Value.Select(c => RunCell.Pending(run.Id, c)).ToList();
+        var budgets = await BudgetConfirmation.ConfirmAsync(
+            scope.ServiceProvider.GetRequiredService<IModelRuntime>(), settings.Budgets, stopping);
 
-        var created = await runs.CreateAsync(run, planned, stopping);
+        if (budgets is Outcome<IReadOnlyList<Budget>>.Fail refused)
+        {
+            return Refuse(error, refused.Reason);
+        }
+
+        var planned = ((Outcome<IReadOnlyList<MatrixCell>>.Ok)cells).Value.Select(c => RunCell.Pending(run.Id, c)).ToList();
+        var created = await scope.ServiceProvider.GetRequiredService<PostgresRunStore>().CreateAsync(run, planned, stopping);
 
         if (created is Outcome<BenchRun>.Fail badRun)
         {
-            error.WriteLine($"bench: {badRun.Reason}");
-            return null;
+            return Refuse(error, badRun.Reason);
         }
 
+        var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
+        Announce(output, settings, run, frozen, planned.Count, confirmed);
+
+        return (run, LegPlan.Reading(frozen, settings.Endpoint, settings.Sampling) with { Budgets = confirmed });
+    }
+
+    private static void Announce(
+        TextWriter output, RunInputs settings, BenchRun run, Suite frozen, int cells, IReadOnlyList<Budget> budgets)
+    {
         output.WriteLine($"run      {run.Id}");
         output.WriteLine($"target   {settings.Target.Canonical}");
         output.WriteLine($"suite    {frozen.Stamp}  ({frozen.Questions.Count} question(s))");
-        output.WriteLine($"matrix   {planned.Count} cell(s) · {settings.Subject.Model.Id} · lane {settings.Lane.Name}");
+        output.WriteLine($"matrix   {cells} cell(s) · {settings.Subject.Model.Id} · lane {settings.Lane.Name}");
+
+        // Printed rather than assumed: this ceiling is what stands between a hung endpoint and a campaign
+        // that spends days learning what its first leg already said, and it is only real once accepted.
+        foreach (var budget in budgets)
+        {
+            output.WriteLine($"budget   {budget.Describe}");
+        }
+
         output.WriteLine("warn     the target was not checked out, so its commit is recorded but unverified");
 
         if (!settings.Lane.Name.Contains("tool", StringComparison.OrdinalIgnoreCase))
@@ -131,8 +177,12 @@ public static class RunCommand
             output.WriteLine("warn     this lane surfaces nothing — anchor recall reads 'not applicable', and a correct");
             output.WriteLine("         answer here means the subject answered from its WEIGHTS, which is the memorisation check");
         }
+    }
 
-        return (run, LegPlan.Reading(frozen, settings.Endpoint, settings.Sampling));
+    private static (BenchRun Run, LegPlan Plan)? Refuse(TextWriter error, string reason)
+    {
+        error.WriteLine($"bench: {reason}");
+        return null;
     }
 
     private static async Task<int> ExecuteAsync(
@@ -192,12 +242,15 @@ public static class RunCommand
         var runs = scope.ServiceProvider.GetRequiredService<PostgresRunStore>();
 
         var progress = await runs.ProgressAsync(runId, budget.Token);
-        var scored = await results.ForRunAsync(runId, budget.Token);
+
+        // Counted in the database. This line used to read every result of the run — prompt, answer and
+        // every metric with its metadata — to render the two integers below.
+        var scored = await results.ScoreboardAsync(runId, budget.Token);
 
         output.WriteLine();
         output.WriteLine($"legs     {progress.Describe}");
         output.WriteLine($"drain    {drained.Describe}");
-        output.WriteLine($"scored   {scored.Count(r => r.Passed)} of {scored.Count} passed every expectation");
+        output.WriteLine($"scored   {scored.Passed} of {scored.Scored} passed every expectation");
 
         if (command.Has("json"))
         {
@@ -207,8 +260,8 @@ public static class RunCommand
                     runId,
                     progress.Settled,
                     progress.Abandoned,
-                    scored = scored.Count,
-                    passed = scored.Count(r => r.Passed),
+                    scored = scored.Scored,
+                    passed = scored.Passed,
                     stop = drained.Stop.ToString(),
                     drained.Reason,
                     faulted = drained.Faulted,
@@ -242,10 +295,17 @@ public static class RunCommand
     {
         var suiteFile = command.Value("suite-file");
         var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        var wallSeconds = command.Int("leg-wall-seconds", DefaultLegWallSeconds);
 
         if (connection.Length == 0)
         {
             return Outcome<RunInputs>.Failure("--db (or BENCH_DB) is required — a run that is not durable is not a run");
+        }
+
+        if (wallSeconds <= 0)
+        {
+            return Outcome<RunInputs>.Failure(
+                "--leg-wall-seconds must be positive — an unbounded leg is what turns one hung endpoint into days of wall clock");
         }
 
         return RepoUrl.Parse(command.Value("repo")).Match(
@@ -264,7 +324,8 @@ public static class RunCommand
                             Lane.Named(command.Value("lane", "no-tools")),
                             command.Int("repeats", 1),
                             command.Value("label", "run"),
-                            connection)),
+                            connection,
+                            [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)])),
                         Outcome<RunInputs>.Failure),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
@@ -291,6 +352,8 @@ public static class RunCommand
         return code;
     }
 
+    /// <param name="Budgets">The ceilings this run ASKS for. They reach a leg only after the runtime has
+    /// confirmed each one — an unconfirmed budget is a budget that does not exist.</param>
     private sealed record RunInputs(
         MeasurementTarget Target,
         string SuiteFile,
@@ -299,7 +362,8 @@ public static class RunCommand
         Lane Lane,
         int Repeats,
         string Label,
-        string ConnectionString)
+        string ConnectionString,
+        IReadOnlyList<Budget> Budgets)
     {
         public Sampling Sampling => Subject.Sampling;
     }

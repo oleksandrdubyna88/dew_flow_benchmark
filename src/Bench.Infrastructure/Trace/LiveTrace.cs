@@ -24,15 +24,33 @@ public sealed class LiveTrace : IRunTrace
 
     public TraceMode Mode => TraceMode.BlackBox;
 
+    /// <summary>How many legs are being recorded right now. A campaign settles tens of thousands of legs
+    /// through one worker, so this number staying near the count of legs IN FLIGHT — rather than near the
+    /// count of legs ever run — is the whole guarantee.</summary>
+    public int Recording => _byLeg.Count;
+
     /// <summary>Opens a recorder for one leg. Called before the leg runs; the leg writes into it.</summary>
     public LegRecorder Open(MeasurementTuple tuple) =>
         _byLeg.GetOrAdd(tuple.Canonical, _ => new LegRecorder());
 
+    /// <summary>Reads a leg's trace, and RETIRES it in the same step.
+    /// <para>
+    /// Capture is the handover: after it, the trace lives in the result store and this recorder — its tool
+    /// calls, its captured prompt and its response text — is only a copy nobody will read again. Keeping
+    /// it meant one dictionary entry per leg for the life of the process, which for the long-running
+    /// worker this is being wired into is the life of a three-week campaign.
+    /// </para></summary>
     public Task<Outcome<LegTrace>> CaptureAsync(MeasurementTuple tuple, CancellationToken cancellationToken) =>
-        Task.FromResult(_byLeg.TryGetValue(tuple.Canonical, out var recorder)
+        Task.FromResult(_byLeg.TryRemove(tuple.Canonical, out var recorder)
             ? Outcome<LegTrace>.Success(recorder.Assemble())
             // Not an empty trace. A leg nobody recorded and a leg that did nothing are different facts,
             // and returning LegTrace.Empty here would make the second indistinguishable from the first
-            // in every report built afterwards.
-            : Outcome<LegTrace>.Failure($"no leg was recorded for {tuple.Canonical}"));
+            // in every report built afterwards. The reason names BOTH ways there is nothing to hand over,
+            // because since capture retires the recording, "already taken" is now one of them.
+            : Outcome<LegTrace>.Failure(
+                $"no leg was recorded for {tuple.Canonical} — it was never opened, or its trace was already captured"));
+
+    /// <summary>Retires a recording nobody will capture — the leg crashed, was abandoned, or its cell was
+    /// handed back. Returns whether there was one, so a caller can tell a cleanup from a no-op.</summary>
+    public bool Close(MeasurementTuple tuple) => _byLeg.TryRemove(tuple.Canonical, out _);
 }

@@ -44,6 +44,27 @@ public sealed class PostgresResultStore(BenchDbContext db) : IResultStore
         return [.. rows.Select(ToDomain)];
     }
 
+    /// <summary>Two counts, both computed in the database.
+    /// <para>
+    /// The passed predicate mirrors <c>LegResult.Passed</c> exactly — metrics present, none of them
+    /// failed — as an EXISTS pair rather than a fold over hydrated rows. Two round trips instead of one
+    /// grouped query, deliberately: a single <c>COUNT(*) FILTER</c> over a correlated collection is at the
+    /// mercy of the provider's translation, and a summary that silently falls back to client evaluation is
+    /// the very defect this replaced.
+    /// </para></summary>
+    public async Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var scored = await db.Results.AsNoTracking()
+            .CountAsync(r => r.Cell!.RunId == runId, cancellationToken);
+
+        var passed = await db.Results.AsNoTracking()
+            .CountAsync(
+                r => r.Cell!.RunId == runId && r.Metrics.Count > 0 && !r.Metrics.Any(m => m.Failed),
+                cancellationToken);
+
+        return new RunScoreboard(scored, passed);
+    }
+
     public Task<IReadOnlyList<MetricByDimension>> AverageByEngineAsync(
         Guid runId, string metricName, CancellationToken cancellationToken) =>
         AverageAsync(runId, metricName, r => r.Cell!.Run!.EngineKind.ToString(), cancellationToken);

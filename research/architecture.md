@@ -113,7 +113,8 @@ sequenceDiagram
     S-->>R: cell
     R->>V: HasResultAsync(cell)
     Note over R,V: re-entrancy: a leg scored but never settled is FINISHED, not re-measured
-    R->>M: AskAsync(prompt, sampling, budgets)
+    R->>R: LegDeadline.For(budgets, now) — ONE deadline for the whole leg
+    R->>M: AskAsync(prompt, sampling, deadline.ForCall(now))
     M-->>R: answer · tokens · latency · samplingAsSent · stopReason
     R->>D: Score(question, answer, retrieval)
     D-->>R: metrics
@@ -127,6 +128,17 @@ invisibly.
 
 **An answer cut off at a ceiling settles as `CapExceeded`, not `Completed`** — scored as a wrong answer it
 would measure the ceiling, and only a recorded cap keeps the leg out of paired deltas.
+
+**One wall budget per LEG, not per call** (`LegDeadline`, `src/Bench.Domain/Runs/LegDeadline.cs`). The
+deadline is computed when the leg's model work starts, and every call is handed the REMAINDER through
+`ForCall(now)`; a leg that spends it settles `CapExceeded(Wall, …)` and stores no result, while a leg that
+failed inside its budget still settles `Crashed`. The distinction is what a per-completion timeout cannot
+express: under a 25-turn lane, a 10-minute per-call ceiling is 4 h 10 m of one leg, and a breaker that
+fires at twenty consecutive failures needs ~3.5 days to say what the first hang already said. `bench run`
+asks for the ceiling with `--leg-wall-seconds` (default 600) and **confirms it with the runtime before any
+cell exists** (`BudgetConfirmation`) — a budget the runtime refuses ends the preparation instead of being
+believed. When the tool-calling loop arrives it turns inside `LegRunner.AskAsync`, checking
+`Exhausted(now)` between turns; nothing else may introduce a second deadline.
 
 ## Phases
 
@@ -203,6 +215,22 @@ The CLI is a host like any other: `run`, `judge` and `sweep` build a container w
 sinks as the AppHost — coloured console, one file per run under `logs/{yyyy-MM-dd}/`. `help` and `version`
 touch nothing and write nothing.
 
+**`logs/` has a named retention owner: the host, at startup.** Creating the logger also retires day-folders
+older than `Serilog:RetentionDays` (default 14), best effort — a folder another host holds open is skipped
+rather than fatal, and a folder whose name is not a `yyyy-MM-dd` day is never deleted, because the method
+removes directory trees. Zero disables it, which is the shared rule's other option: an operator job owns
+the folder instead. A file per run with no reaper is a disk that fills, and on a machine running 24/7 the
+"eventually" is a date.
+
+**Nothing in a long run accumulates per leg.** `LiveTrace` retires a leg's recorder in the capture that
+hands its trace over (`Close` covers the abandon path), and `GitCheckoutProvider`'s per-repository gates are
+reference-counted — created on first use, disposed when the last caller leaves, including when the checkout
+failed. Both were `GetOrAdd`-forever maps: harmless while only the CLI drives one leg at a time, and a leak
+with a shape the moment a long-running worker wires them in. `bench telemetry ingest` streams its spools and
+commits in chunks (`--chunk-size`, default 500) so memory and the store's parameter list are bounded by a
+size this process chose rather than by how productive the emitter has been, and the run summary counts its
+two integers in SQL instead of hydrating every prompt, answer and metric of the run to fold them here.
+
 ## The arbiter, and why it never re-runs a leg
 
 `bench judge` reads a finished run's STORED answers and appends one metric row per leg. It re-scores; it
@@ -252,7 +280,9 @@ Stated because a description that quietly implies more than is built is the same
 - **No tool-calling loop.** `IEngine` exposes tools and `FilesystemEngine` implements them, but `LegRunner`
   asks the model exactly once. Every lane is therefore currently a no-tools lane, and anchor recall reads
   *not applicable* everywhere. This is what `bench run` measures today, and it is a real measurement rather
-  than a placeholder — see *The one verb that spends money* above.
+  than a placeholder — see *The one verb that spends money* above. The loop's per-leg wall budget already
+  exists (`LegDeadline`) and is deliberately in place first: retrofitting it after the first long agentic
+  campaign means discovering it from a multi-day gap in a log.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.

@@ -67,23 +67,54 @@ public sealed class LegRunner(
 
         var question = plan.Suite.Questions.FirstOrDefault(q => q.Id == cell.QuestionId);
 
-        if (question is null)
-        {
-            return await AbandonAsync(cell, owner, $"suite {plan.Suite.Stamp} has no question '{cell.QuestionId}'", cancellationToken);
-        }
+        return question is null
+            ? await AbandonAsync(cell, owner, $"suite {plan.Suite.Stamp} has no question '{cell.QuestionId}'", cancellationToken)
+            : await AskAsync(cell, owner, plan, question, cancellationToken);
+    }
+
+    /// <summary>The measured part of the leg, under ONE deadline.
+    /// <para>
+    /// The deadline is created here rather than per call, and that placement is the point: a lane that
+    /// answers in one completion and a lane that loops twenty-five times must cost the same wall clock
+    /// ceiling. When the loop lands it turns here, reading <see cref="LegDeadline.Exhausted"/> between
+    /// turns and passing <see cref="LegDeadline.ForCall"/> down — never a fresh budget per turn.
+    /// </para></summary>
+    private async Task<Outcome<LegResult>> AskAsync(
+        RunCell cell, WorkerIdentity owner, LegPlan plan, Question question, CancellationToken cancellationToken)
+    {
+        var deadline = LegDeadline.For(plan.Budgets, clock.GetUtcNow());
 
         var asked = await runtime.AskAsync(
-            new ModelRequest(plan.Endpoint, plan.Sampling, string.Empty, question.Prompt, plan.Budgets),
+            new ModelRequest(plan.Endpoint, plan.Sampling, string.Empty, question.Prompt, deadline.ForCall(clock.GetUtcNow())),
             cancellationToken);
 
-        if (asked is Outcome<ModelAnswer>.Fail failed)
+        return asked is Outcome<ModelAnswer>.Fail failed
+            ? await UnansweredAsync(cell, owner, deadline, failed.Reason, cancellationToken)
+            : await ScoreAsync(cell, owner, plan, question, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
+    }
+
+    /// <summary>A leg that produced no answer: a CEILING when its own wall ran out, a crash otherwise.
+    /// <para>
+    /// The distinction is the reason this method exists. Both cases used to settle as
+    /// <see cref="LegOutcome.Crashed"/>, which reads as "the harness is broken" — so a campaign against a
+    /// merely slow endpoint would report its own instrument as faulty, and a genuinely broken one would
+    /// look identical to it. Neither is scored: a subject that was never reached, and one cut off at a
+    /// ceiling, did not get anything wrong.
+    /// </para></summary>
+    private async Task<Outcome<LegResult>> UnansweredAsync(
+        RunCell cell, WorkerIdentity owner, LegDeadline deadline, string reason, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+
+        if (!deadline.Exhausted(now))
         {
-            // A leg that produced no answer has nothing to score. It is settled as crashed rather than
-            // stored as a zero, because a subject that was never reached did not get anything wrong.
-            return await AbandonAsync(cell, owner, failed.Reason, cancellationToken);
+            return await AbandonAsync(cell, owner, reason, cancellationToken);
         }
 
-        return await ScoreAsync(cell, owner, plan, question, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
+        await runs.SettleAsync(cell.Id, owner, deadline.Cap(now), cancellationToken);
+        logger.LogInformation("Cell {Cell} spent its {Budget} leg wall budget", cell.Id, deadline.Describe);
+
+        return Outcome<LegResult>.Failure($"{reason} — the leg spent its {deadline.Describe} wall budget");
     }
 
     private async Task<Outcome<LegResult>> ScoreAsync(

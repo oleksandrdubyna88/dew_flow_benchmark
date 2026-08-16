@@ -14,6 +14,9 @@ public sealed record SpoolRefusal(int Line, string Reason, bool Retryable)
     public override string ToString() => $"line {Line}: {Reason}";
 }
 
+/// <summary>One bounded batch of a spool: what it yielded, and what it refused.</summary>
+public sealed record SpoolChunk(IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<SpoolRefusal> Refused);
+
 /// <summary>Turns a spool file's text into records, without touching a disk or a database.
 /// <para>
 /// Pure on purpose: everything that decides what a spool MEANS — which lines are readable, which are
@@ -28,12 +31,66 @@ public static class SpoolIngest
     /// mid-write, so the last line of a file is routinely half a record — a reader that aborts on the
     /// first failure would discard a whole run's telemetry over its final byte.
     /// </para></summary>
-    public static (IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<SpoolRefusal> Refused) Read(string text)
+    public static (IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<SpoolRefusal> Refused) Read(string text) =>
+        Read(NumberedLines(text));
+
+    /// <summary>The same reading, in BOUNDED batches, over lines that arrive one at a time.
+    /// <para>
+    /// The whole-text overload is fine for a fixture and wrong for a spool: the ingest read a file with
+    /// <c>ReadAllTextAsync</c> and handed every record to the store in one call, so both the memory and
+    /// the store's parameter list were bounded by how productive the emitter had been rather than by
+    /// anything this process chose. A 24/7 emitter is exactly the case that makes that a size nobody
+    /// picked.
+    /// </para>
+    /// <para>
+    /// Refusals travel with the chunk that produced them and keep their FILE line numbers, because the
+    /// caller's decision — retire this file, or keep it for a build that can read it — is about the file
+    /// as a whole and must survive being made one chunk at a time.
+    /// </para></summary>
+    public static async IAsyncEnumerable<SpoolChunk> ReadChunksAsync(
+        IAsyncEnumerable<string> lines,
+        int chunkSize,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Capacity is capped independently of the chunk: the size is operator input, and a list asked to
+        // reserve a billion slots up front fails with an allocation error rather than a bounded read —
+        // which would be this method's own guarantee breaking in its first line.
+        var buffer = new List<(string Line, int Number)>(Math.Min(chunkSize, 1024));
+        var number = 0;
+
+        await foreach (var line in lines.WithCancellation(cancellationToken))
+        {
+            buffer.Add((line.Trim('\r', ' '), ++number));
+
+            if (buffer.Count < chunkSize)
+            {
+                continue;
+            }
+
+            yield return Chunk(buffer);
+            buffer.Clear();
+        }
+
+        if (buffer.Count > 0)
+        {
+            yield return Chunk(buffer);
+        }
+    }
+
+    private static SpoolChunk Chunk(IReadOnlyList<(string Line, int Number)> lines)
+    {
+        var (records, refused) = Read(lines.Where(x => x.Line.Length > 0));
+
+        return new SpoolChunk(records, refused);
+    }
+
+    private static (IReadOnlyList<ToolTelemetry> Records, IReadOnlyList<SpoolRefusal> Refused) Read(
+        IEnumerable<(string Line, int Number)> lines)
     {
         var records = new List<ToolTelemetry>();
         var refused = new List<SpoolRefusal>();
 
-        foreach (var (line, number) in NumberedLines(text))
+        foreach (var (line, number) in lines)
         {
             switch (TelemetryCodec.ReadLine(line))
             {

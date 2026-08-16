@@ -94,6 +94,36 @@ public sealed class GitCheckoutTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_finished_checkout_leaves_no_lock_behind()
+    {
+        var provider = Provider();
+
+        await provider.EnsureAsync(Target(_source.FirstCommit), TestContext.Current.CancellationToken);
+        await provider.EnsureAsync(Target(_source.SecondCommit), TestContext.Current.CancellationToken);
+        await provider.EnsureAsync(Target(new string('f', 40)), TestContext.Current.CancellationToken);
+
+        // Including the failing one: a gate released only on the happy path is a leak that only shows up
+        // on a campaign that is already going badly.
+        provider.Gates.Should().Be(0, "a semaphore per repository url, never removed and never disposed, is a leak with a shape");
+    }
+
+    [Fact]
+    public async Task Concurrent_callers_share_one_gate_and_it_survives_until_the_last_of_them_leaves()
+    {
+        var provider = Provider();
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(i =>
+            provider.EnsureAsync(
+                Target(i % 2 == 0 ? _source.FirstCommit : _source.SecondCommit),
+                TestContext.Current.CancellationToken)));
+
+        // The property the reference counting exists for: nobody disposes a gate somebody else is queued
+        // on. A premature dispose would surface here as an ObjectDisposedException, not as a bad result.
+        results.Should().AllSatisfy(r => r.Failed().Should().BeFalse());
+        provider.Gates.Should().Be(0);
+    }
+
+    [Fact]
     public async Task A_commit_the_repository_does_not_have_is_an_answer_not_an_exception()
     {
         var absent = CommitSha.Parse(new string('f', 40)).Ok();

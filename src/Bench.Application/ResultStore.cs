@@ -9,6 +9,11 @@ namespace Bench.Application;
 /// two hundred are different claims, and the report must be able to refuse to rank the first.</param>
 public readonly record struct MetricByDimension(string Dimension, double Average, int Legs);
 
+/// <param name="Scored">How many legs of the run carry a result.</param>
+/// <param name="Passed">How many of those failed no expectation. Same rule as
+/// <see cref="LegResult.Passed"/> — a leg with no metrics at all has not passed anything.</param>
+public readonly record struct RunScoreboard(int Scored, int Passed);
+
 /// <summary>Where scored legs live.
 /// <para>
 /// Separate from <see cref="IRunStore"/> on purpose: that port is about a queue of work, this one is
@@ -33,6 +38,16 @@ public interface IResultStore
     Task<bool> HasResultAsync(Guid cellId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<LegResult>> ForRunAsync(Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>The two integers a run summary prints, COUNTED where the rows are.
+    /// <para>
+    /// Separate from <see cref="ForRunAsync"/> because the summary used to call that one: every prompt,
+    /// every answer and every metric with its metadata crossed the wire and was deserialized so a
+    /// finished campaign could print "N of M passed". At the tens of thousands of cells this schema
+    /// targets, that is the whole run pulled into memory to render one line. The store has learned this
+    /// lesson before — <c>TotalsAsync</c> carries the same diagnosis in its own comment.
+    /// </para></summary>
+    Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>The aggregate the schema exists for: one metric, averaged per engine across a run.
     /// <para>

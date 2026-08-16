@@ -32,7 +32,21 @@ public sealed record CheckoutCacheOptions(string Root, TimeSpan Timeout)
 public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<GitCheckoutProvider> logger)
     : ICheckoutProvider
 {
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RepositoryGate> _gates = new(StringComparer.Ordinal);
+
+    /// <summary>How many per-repository gates are held right now. Zero between calls: a gate exists while
+    /// somebody is inside it and not one moment longer, which is what stops a campaign against many
+    /// repositories from accumulating one undisposed semaphore per url for the life of the process.</summary>
+    public int Gates
+    {
+        get
+        {
+            lock (_gates)
+            {
+                return _gates.Count;
+            }
+        }
+    }
 
     public async Task<Outcome<string>> EnsureAsync(MeasurementTarget target, CancellationToken cancellationToken)
     {
@@ -47,17 +61,73 @@ public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<Gi
             return Outcome<string>.Failure($"refusing to work outside the cache root '{options.Root}'");
         }
 
-        var gate = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken);
+        var gate = Rent(key);
 
         try
         {
-            return await EnsureUnderLockAsync(target, bare, worktree, cancellationToken);
+            await gate.Semaphore.WaitAsync(cancellationToken);
+
+            try
+            {
+                return await EnsureUnderLockAsync(target, bare, worktree, cancellationToken);
+            }
+            finally
+            {
+                gate.Semaphore.Release();
+            }
         }
         finally
         {
-            gate.Release();
+            Return(key, gate);
         }
+    }
+
+    /// <summary>Takes a share of this repository's gate, creating it if this caller is the first.
+    /// <para>
+    /// Counted rather than cached, because the alternative was a dictionary that only ever grew: one
+    /// <see cref="SemaphoreSlim"/> per distinct url, never removed and never disposed. One repository makes
+    /// that a footnote; a campaign whose whole premise is measuring many repositories over weeks makes it a
+    /// leak with a shape.
+    /// </para>
+    /// <para>
+    /// The share is taken BEFORE the wait, which is what makes disposal safe: a gate cannot reach zero
+    /// users while anybody is still queued on it.
+    /// </para></summary>
+    private RepositoryGate Rent(string key)
+    {
+        lock (_gates)
+        {
+            if (!_gates.TryGetValue(key, out var gate))
+            {
+                gate = new RepositoryGate();
+                _gates[key] = gate;
+            }
+
+            gate.Users++;
+            return gate;
+        }
+    }
+
+    private void Return(string key, RepositoryGate gate)
+    {
+        lock (_gates)
+        {
+            if (--gate.Users > 0)
+            {
+                return;
+            }
+
+            _gates.Remove(key);
+            gate.Semaphore.Dispose();
+        }
+    }
+
+    /// <summary>One repository's serialization point, and how many callers are currently holding it.</summary>
+    private sealed class RepositoryGate
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+
+        public int Users { get; set; }
     }
 
     private async Task<Outcome<string>> EnsureUnderLockAsync(

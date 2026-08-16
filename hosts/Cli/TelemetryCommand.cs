@@ -18,6 +18,13 @@ public static class TelemetryCommand
     /// only copy until they say otherwise, and a benchmark is not the right component to decide that.</summary>
     public const string IngestedSuffix = ".ingested";
 
+    /// <summary>Lines per store round trip when the operator names none (<c>--chunk-size</c>).
+    /// <para>
+    /// A number this process chose, which is the whole point: before it, the batch was however many
+    /// records the emitter happened to have written since the last drain.
+    /// </para></summary>
+    private const int DefaultChunkSize = 500;
+
     public static async Task<int> RunAsync(
         CommandLine command,
         ITelemetryStore store,
@@ -62,10 +69,12 @@ public static class TelemetryCommand
             return ExitCodes.Pass;
         }
 
+        var chunkSize = Math.Max(1, command.Int("chunk-size", DefaultChunkSize));
+
         var report = IngestReport.Empty;
         foreach (var file in files)
         {
-            report = report.Plus(await IngestFileAsync(file, store, cancellationToken));
+            report = report.Plus(await IngestFileAsync(file, store, chunkSize, cancellationToken));
         }
 
         Write(command, output, report);
@@ -90,11 +99,23 @@ public static class TelemetryCommand
     /// opposite case and retires normally: nothing will ever read it, so keeping the file would make
     /// every ordinary spool immortal.
     /// </para></summary>
+    /// <param name="chunkSize">How many lines cross into the store at once. Bounded by this rather than by
+    /// the emitter's productivity — see <see cref="SpoolIngest.ReadChunksAsync"/>.</param>
     private static async Task<IngestReport> IngestFileAsync(
-        string file, ITelemetryStore store, CancellationToken cancellationToken)
+        string file, ITelemetryStore store, int chunkSize, CancellationToken cancellationToken)
     {
-        var (records, refused) = SpoolIngest.Read(await File.ReadAllTextAsync(file, cancellationToken));
-        var stored = await store.AppendAsync(records, cancellationToken);
+        var stored = IngestReport.Empty;
+        var refused = new List<SpoolRefusal>();
+
+        // Streamed, and stored as it is read. The file is still retired only after the LAST chunk commits,
+        // so a host killed halfway re-reads the whole file and the store absorbs what it already has —
+        // the same read-store-rename guarantee, now with a memory ceiling.
+        await foreach (var chunk in SpoolIngest.ReadChunksAsync(
+            File.ReadLinesAsync(file, cancellationToken), chunkSize, cancellationToken))
+        {
+            stored = stored.Plus(await store.AppendAsync(chunk.Records, cancellationToken));
+            refused.AddRange(chunk.Refused);
+        }
 
         var retryable = refused.Any(r => r.Retryable);
         if (!retryable)

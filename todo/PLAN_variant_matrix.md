@@ -16,7 +16,8 @@
 > [PLAN_corpus_litter.md](PLAN_corpus_litter.md) (every cell this plan adds is a corpus this plan must not leak),
 > [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) (the design of this plan's §3.8 agent lane — boundary in §3.8a),
 > [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md) (two more corpus identity axes and the recipe echo),
-> [PLAN_reliability_tail.md](PLAN_reliability_tail.md) (items 2 and 1's wall-budget tail both gate step 9).
+> [../research/PLAN_reliability_tail.md](../research/PLAN_reliability_tail.md) (implemented 2026-08-16 —
+> its items 2 and 1's wall-budget tail were two of step 9's gates, and both are now clear).
 
 ## 1. The goal, before any solution
 
@@ -135,7 +136,8 @@ No parallel aggregate. The existing `BenchRun` + `RunCell` machinery **is** the 
   as one transaction from a UI button that is one click from a settled test, that is a long lock over the
   table every cell claim contends on, held while an operator wonders whether the page is stuck. So:
   inserts go in **chunks of a fixed size** (the `PostgresTelemetryStore` unbounded-`IN` lesson —
-  `PLAN_reliability_tail.md` item 4 — is the same shape one layer down), and an expansion whose computed
+  `research/PLAN_reliability_tail.md` item 4, since shipped as `SpoolIngest.ReadChunksAsync` — is the
+  same shape one layer down), and an expansion whose computed
   size exceeds a configured cap is **refused by name**, with its number, until the caller confirms it
   explicitly. The "what would expansion cost" preview of §3.6 page 5 is what produces that number; it is
   the thing the confirmation confirms, not a decoration beside the button.
@@ -424,11 +426,12 @@ domain; UI in an RCL from birth") and the qln console's conventions:
   lifetime. Writing a second drain is a defect from the moment it compiles — the two would drift, and the
   copy would be the one running unattended for weeks
   (`.claude/rules/shared/common/reuse-first.md`).
-- **Two dictionaries stop being inert when this worker lands.** `LiveTrace._byLeg` and
-  `GitCheckoutProvider._locks` both `GetOrAdd` and never remove; they are harmless today only because
-  nothing long-running wires them in, and [PLAN_reliability_tail.md](PLAN_reliability_tail.md) item 2
-  says in bold that this worker is what changes that. It is a build-order gate, recorded in §5: item 2
-  lands before step 9, not after.
+- **Two dictionaries stopped being a gate on 2026-08-16.** `LiveTrace._byLeg` and
+  `GitCheckoutProvider`'s lock map both `GetOrAdd`-ed and never removed; they were harmless only while
+  nothing long-running wired them in, and this worker is what would have changed that.
+  [../research/PLAN_reliability_tail.md](../research/PLAN_reliability_tail.md) item 2 shipped first, as
+  its build order required: capture now evicts the recorder it hands over, and the checkout gates are
+  reference-counted. This worker may wire them in.
 - **The accelerator lease of §3.4b is the other gate.** This worker is what makes two concurrent drains
   real, and two drains are what invalidate the sibling plan's only stated VRAM mitigation.
 - **API-first is a gate, not a preference** (operator decision 2026-08-16): every capability ships
@@ -602,8 +605,9 @@ precedes the API + CLI it renders.**
    settings, questions, matrix and variant pages over the step-7 endpoints.
 9. **Console, write paths** — new-test flow, `BenchRunWorker` hosting `LegDrain` (§3.6), start/expand
    buttons, polling, sweep on startup. **Gated on three things, all of them cheaper before than after:**
-   step 6a's accelerator lease (two drains against one card), `PLAN_reliability_tail.md` **item 2** (the
-   two unbounded dictionaries this worker makes live), and
+   step 6a's accelerator lease (two drains against one card), ~~`PLAN_reliability_tail.md` **item 2**~~
+   (the two unbounded dictionaries this worker makes live — **cleared 2026-08-16**, see
+   `research/PLAN_reliability_tail.md`), and
    `dew_flow_rag_qln · PLAN_reliability_tail.md` **item 6** (the poll shape §3.6 page 3 copies).
 10. **Judges** — ordered per-test arbiters from the registry, per-group rollups + the analysis block.
 11. ~~**Agent lane**~~ — **superseded by [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md)**, which owns

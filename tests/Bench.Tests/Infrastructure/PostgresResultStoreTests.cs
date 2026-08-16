@@ -2,7 +2,9 @@ using Bench.Application;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
+using Bench.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI.Evaluation;
 using Xunit;
 
@@ -137,6 +139,50 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
         back.Interpretation!.Rating.Should().Be(EvaluationRating.Exceptional, "a rating stored as a name survives someone inserting an enum member");
         back.Metadata.Should().Contain("anchor", "src/A.cs#A.Foo");
     }
+
+    [Fact]
+    public async Task The_run_summary_does_not_hydrate_the_run_to_count_it()
+    {
+        var (runId, cells) = await SeedAsync(EngineKind.Qln, questions: 3, lanes: 1);
+        var sql = new List<string>();
+
+        await using var db = Recording(sql);
+        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(db);
+
+        await store.SaveAsync(Result(cells[0], recall: 1), Ct);
+        await store.SaveAsync(Result(cells[1], recall: 1), Ct);
+        await store.SaveAsync(Result(cells[2], recall: 0), Ct);
+        sql.Clear();
+
+        var board = await store.ScoreboardAsync(runId, Ct);
+
+        board.Scored.Should().Be(3);
+        board.Passed.Should().Be(2, "a leg is passed when it failed no expectation");
+        sql.Should().NotBeEmpty("the counting has to reach the database at all");
+        sql.Should().AllSatisfy(statement => statement.Should().NotContain(
+            "\"Prompt\"",
+            "at tens of thousands of cells, hydrating every prompt and answer to print two integers IS the defect"));
+        sql.Should().AllSatisfy(statement => statement.Should().NotContain("\"MetadataJson\""));
+        string.Join(" ", sql).Should().Contain("count(", "two integers are a COUNT, not a scan the client folds");
+    }
+
+    [Fact]
+    public async Task A_run_nobody_has_scored_yet_counts_zero_rather_than_failing()
+    {
+        var (runId, _) = await SeedAsync(EngineKind.Qln, questions: 1, lanes: 1);
+        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+
+        (await store.ScoreboardAsync(runId, Ct)).Should().Be(new RunScoreboard(0, 0));
+    }
+
+    /// <summary>A context that keeps every SQL statement it issued, so the QUERY SHAPE can be asserted.
+    /// Timing would prove nothing here — the defect is invisible at three rows and fatal at fifty
+    /// thousand, which is exactly the range a stopwatch cannot distinguish.</summary>
+    private BenchDbContext Recording(List<string> sql) =>
+        new(new DbContextOptionsBuilder<BenchDbContext>()
+            .UseNpgsql(postgres.ConnectionString)
+            .LogTo(sql.Add, [DbLoggerCategory.Database.Command.Name])
+            .Options);
 
     private static LegResult Result(Guid cellId, double recall, double latency = 0) => LegResult.Of(
         cellId, "q", "a",

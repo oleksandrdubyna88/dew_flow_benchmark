@@ -20,6 +20,17 @@ public static class BenchLogging
     /// <summary>Where a run's file lands, relative to the content root.</summary>
     public const string LogFolder = "logs";
 
+    /// <summary>How long a day-folder survives when configuration names no window.
+    /// <para>
+    /// This repository's named retention owner is <b>the host, at startup</b> — the first of the two the
+    /// shared logging rule allows. A file per run with no reaper is a disk that eventually fills, and on a
+    /// machine running 24/7 the "eventually" is a date. Override with <c>Serilog:RetentionDays</c>; set it
+    /// to zero to keep everything, which is only correct when an operator job owns the folder instead.
+    /// </para></summary>
+    public const int DefaultRetentionDays = 14;
+
+    private const string DayFormat = "yyyy-MM-dd";
+
     /// <summary>
     /// The template. Short enough to read in a terminal, structured enough to grep: the level is fixed-width
     /// so columns line up, and <c>SourceContext</c> is the type that logged — without it, a dashboard showing
@@ -74,7 +85,77 @@ public static class BenchLogging
             shared: false,
             flushToDiskInterval: TimeSpan.FromSeconds(2));
 
-        return configuration.CreateLogger();
+        var logger = configuration.CreateLogger();
+        Retire(logger, contentRoot, RetentionDays(appConfiguration));
+
+        return logger;
+    }
+
+    /// <summary>
+    /// Retires day-folders past the window, at startup, best effort.
+    ///
+    /// <para>Startup is the right moment and not merely a convenient one: it is cheap, it is idempotent, and a
+    /// host that never restarts is not producing new files either. Best effort because a folder another host
+    /// still holds open is a reason to skip it, never a reason to fail the run that was about to start.</para>
+    /// </summary>
+    public static IReadOnlyList<string> PruneLogFolders(string contentRoot, int retentionDays, DateTimeOffset now)
+    {
+        var root = Path.Combine(contentRoot, LogFolder);
+
+        if (retentionDays <= 0 || !Directory.Exists(root))
+        {
+            return [];
+        }
+
+        var cutoff = now.UtcDateTime.Date.AddDays(-retentionDays);
+
+        return [.. Directory.EnumerateDirectories(root).Where(folder => Expired(folder, cutoff) && Delete(folder))
+            .Select(Path.GetFileName)!];
+    }
+
+    /// <summary>Whether this folder is a day-folder old enough to retire.
+    /// <para>
+    /// A name that does not parse as a day is never expired, and therefore never deleted. That is the whole
+    /// safety property: this method decides to remove a directory tree, so anything it does not positively
+    /// recognise stays where it is.
+    /// </para></summary>
+    private static bool Expired(string folder, DateTime cutoff) =>
+        DateTime.TryParseExact(
+            Path.GetFileName(folder),
+            DayFormat,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var day)
+        && day < cutoff;
+
+    private static bool Delete(string folder)
+    {
+        try
+        {
+            Directory.Delete(folder, recursive: true);
+            return true;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            // Another host is writing in there, or the file system said no. Retention is not worth failing
+            // a startup over — the next run tries again.
+            return false;
+        }
+    }
+
+    private static int RetentionDays(IConfiguration configuration) =>
+        int.TryParse(configuration["Serilog:RetentionDays"], out var days) ? days : DefaultRetentionDays;
+
+    private static void Retire(Serilog.ILogger logger, string contentRoot, int retentionDays)
+    {
+        var pruned = PruneLogFolders(contentRoot, retentionDays, DateTimeOffset.UtcNow);
+
+        if (pruned.Count > 0)
+        {
+            logger.Information(
+                "Retired {Count} log day-folder(s) older than {RetentionDays} day(s): {Folders}",
+                pruned.Count, retentionDays, string.Join(", ", pruned));
+        }
     }
 
     /// <summary>

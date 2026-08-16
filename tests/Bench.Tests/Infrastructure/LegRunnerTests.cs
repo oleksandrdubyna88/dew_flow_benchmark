@@ -102,6 +102,57 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_leg_stopped_by_its_own_wall_budget_is_a_cap_rather_than_a_crash()
+    {
+        var clock = new TestClock(Noon);
+        var (runId, plan, runner, runs, results) = await ArrangeAsync(
+            SlowRuntime.Taking(clock, TimeSpan.FromSeconds(90), "qwen3-coder:latest did not answer within 60s"), clock);
+
+        await runner.RunNextAsync(runId, Worker("worker-1"), Capped(plan, seconds: 60), Ct);
+
+        var cell = await CellAsync(runId);
+        cell.OutcomeKind.Should().Be(
+            LegOutcomeKind.CapExceeded,
+            "a leg its OWN ceiling stopped is a recorded outcome the campaign continues past, not a broken harness");
+        cell.OutcomeDetail.Should().Contain("Wall").And.Contain("60", "the ceiling that stopped it is the fact worth storing");
+        (await results.ForRunAsync(runId, Ct)).Should().BeEmpty("a subject cut off at a ceiling did not get anything wrong");
+        (await runs.ProgressAsync(runId, Ct)).Settled.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_leg_that_failed_INSIDE_its_wall_budget_is_still_a_crash()
+    {
+        var clock = new TestClock(Noon);
+        var (runId, plan, runner, _, _) = await ArrangeAsync(
+            SlowRuntime.Taking(clock, TimeSpan.FromSeconds(2), "connection refused"), clock);
+
+        await runner.RunNextAsync(runId, Worker("worker-1"), Capped(plan, seconds: 60), Ct);
+
+        (await CellAsync(runId)).OutcomeKind.Should().Be(
+            LegOutcomeKind.Crashed,
+            "an endpoint that refused in two seconds is broken — calling that a ceiling would hide the real fault");
+    }
+
+    [Fact]
+    public async Task Every_call_of_a_leg_is_handed_what_the_LEG_has_left_rather_than_the_whole_budget()
+    {
+        var clock = new TestClock(Noon);
+        var runtime = SlowRuntime.Answering(clock, TimeSpan.FromSeconds(10), "DecorrelatedJitter");
+        var (runId, plan, runner, _, _) = await ArrangeAsync(runtime, clock);
+
+        // The leg starts 0s in with a 60s ceiling, so the first call may spend all 60. What this asserts is
+        // that the ceiling travels as a value at all — the loop that will call twice reads the remainder
+        // from the same deadline rather than starting a fresh 60s per turn.
+        await runner.RunNextAsync(runId, Worker("worker-1"), Capped(plan, seconds: 60), Ct);
+
+        runtime.WallSeen.Should().BeGreaterThan(0m, "a call sent with no wall entry falls back to the runtime's 10-minute default");
+        runtime.WallSeen.Should().BeLessThanOrEqualTo(60m, "no single call may be given more than the leg has left");
+    }
+
+    private static LegPlan Capped(LegPlan plan, int seconds) =>
+        plan with { Budgets = [Budget.Of(BudgetKind.Wall, BudgetScope.Question, seconds).ConfirmedBy("fake")] };
+
+    [Fact]
     public async Task A_leg_scored_but_never_settled_is_finished_rather_than_measured_twice()
     {
         var (runId, plan, runner, runs, results) = await ArrangeAsync(new FakeRuntime("DecorrelatedJitter"));
@@ -161,10 +212,12 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         await db.SaveChangesAsync(Ct);
     }
 
+    private Task<(Guid RunId, LegPlan Plan, LegRunner Runner, PostgresRunStore Runs, PostgresResultStore Results)>
+        ArrangeAsync(IModelRuntime runtime) => ArrangeAsync(runtime, new TestClock(Noon));
+
     private async Task<(Guid RunId, LegPlan Plan, LegRunner Runner, PostgresRunStore Runs, PostgresResultStore Results)>
-        ArrangeAsync(IModelRuntime runtime)
+        ArrangeAsync(IModelRuntime runtime, TestClock clock)
     {
-        var clock = new TestClock(Noon);
         var suite = SuiteOf("polly-smoke", "retry-jitter-formula");
         var target = MeasurementTarget.At(RepoUrl.Parse("https://github.com/App-vNext/Polly.git").Ok(), Commit);
         var run = BenchRun.Planned("first", target, EngineRef.Filesystem(), suite.Stamp, Noon);
@@ -198,6 +251,44 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
                 new Expectation(ExpectationKind.AnswerExcludes, SourceAnchor.File("", Commit), "consecutive", true),
             ],
             string.Empty)).Ok().Freeze().Ok();
+
+    /// <summary>A runtime that BURNS TIME. The wall budget is a statement about elapsed time, so the only
+    /// fake that can test it is one that moves the clock the runner reads — a fake that answers instantly
+    /// proves the ceiling was configured, never that it was enforced.</summary>
+    private sealed class SlowRuntime(TestClock clock, TimeSpan takes, string answer, string failure) : IModelRuntime
+    {
+        public static SlowRuntime Taking(TestClock clock, TimeSpan takes, string failure) =>
+            new(clock, takes, string.Empty, failure);
+
+        public static SlowRuntime Answering(TestClock clock, TimeSpan takes, string answer) =>
+            new(clock, takes, answer, string.Empty);
+
+        /// <summary>The wall ceiling this runtime was actually handed, in seconds. Zero means the request
+        /// carried none — which is the defect, since the runtime then falls back to its own default.</summary>
+        public decimal WallSeen { get; private set; }
+
+        public ModelHosting Hosting => ModelHosting.Local;
+
+        public Task<Outcome<string>> AcceptBudgetAsync(Budget budget, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<string>.Success("fake"));
+
+        public Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
+        {
+            WallSeen = request.Budgets.FirstOrDefault(b => b.Kind == BudgetKind.Wall)?.Limit ?? 0m;
+            clock.Now += takes;
+
+            return Task.FromResult(failure.Length > 0
+                ? Outcome<ModelAnswer>.Failure(failure)
+                : Outcome<ModelAnswer>.Success(new ModelAnswer(
+                    Captured.Text(answer),
+                    CapturedCount.Number(100),
+                    CapturedCount.Number(20),
+                    takes,
+                    SamplingAsSent.From(request.Sampling, "request-body"),
+                    StopReason.Completed,
+                    "stop")));
+        }
+    }
 
     private sealed class FakeRuntime(string answer, StopReason stop = StopReason.Completed, string failure = "")
         : IModelRuntime

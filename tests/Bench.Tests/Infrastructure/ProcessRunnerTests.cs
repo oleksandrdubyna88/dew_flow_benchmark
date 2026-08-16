@@ -31,6 +31,25 @@ public sealed class ProcessRunnerTests
     }
 
     [Fact]
+    public void A_process_that_exits_between_the_check_and_the_kill_is_not_an_error()
+    {
+        // Both are the same fact — there is nothing left to kill — and only the first was ever caught.
+        // A race is not something a test can schedule, so the rule is asserted directly rather than by
+        // trying to make a real process die on cue.
+        ProcessRunner.IsAlreadyGone(new InvalidOperationException("No process is associated with this object"))
+            .Should().BeTrue();
+        ProcessRunner.IsAlreadyGone(new System.ComponentModel.Win32Exception(5))
+            .Should().BeTrue("access denied on a dying pid is the OTHER way a kill is refused, and it escaped a best-effort path");
+    }
+
+    [Fact]
+    public void A_kill_that_failed_for_any_other_reason_still_propagates()
+    {
+        ProcessRunner.IsAlreadyGone(new IOException("the pipe is broken"))
+            .Should().BeFalse("a guard that swallowed everything would turn a real fault into silence");
+    }
+
+    [Fact]
     public async Task Arguments_travel_as_argv_so_a_hostile_value_is_never_re_parsed()
     {
         // If this were built into a shell string, the semicolon and quotes would be syntax. As argv it

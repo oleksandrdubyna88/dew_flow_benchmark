@@ -112,10 +112,27 @@ public static class ProcessRunner
         {
             process.Kill(entireProcessTree: true);
         }
-        catch (InvalidOperationException)
+        catch (Exception failure) when (IsAlreadyGone(failure))
         {
             // Best effort: it exited between the timeout firing and this call. Nothing to kill, and
             // nothing the caller can do about it either — the timeout is already the answer.
         }
     }
+
+    /// <summary>Whether a refused kill means there was nothing left to kill.
+    /// <para>
+    /// A named rule rather than a catch list, because the two exceptions are not obviously the same fact
+    /// and the guard was wrong for exactly that reason: it caught <see cref="InvalidOperationException"/>
+    /// alone, so the OTHER way a dying process refuses a kill — a
+    /// <see cref="System.ComponentModel.Win32Exception"/> for access denied, or for a pid that stopped
+    /// existing between the check and the call — escaped as an unhandled exception out of a best-effort
+    /// cleanup path. This launcher is the family's reference implementation and is being copied into a
+    /// sibling repository, so the gap would have been copied with it.
+    /// </para>
+    /// <para>
+    /// Everything else still propagates. A guard that swallowed every exception would turn a real fault
+    /// in this method into silence, which is the failure mode a best-effort path invites.
+    /// </para></summary>
+    public static bool IsAlreadyGone(Exception failure) =>
+        failure is InvalidOperationException or System.ComponentModel.Win32Exception;
 }

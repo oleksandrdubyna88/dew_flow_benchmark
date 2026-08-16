@@ -154,7 +154,7 @@ public static class Program
         output.WriteLine("  bench plan --repo <url> --commit <40-hex> --suite-file <path>");
         output.WriteLine("             [--repeats N] [--subjects id@local,id@cloud] [--lanes a,b]");
         output.WriteLine("             [--engine qln|mindex|http|noretrieval] [--exclude glob,glob] [--json]");
-        output.WriteLine("  bench telemetry ingest --spool <dir> [--connection <npgsql>] [--json]");
+        output.WriteLine("  bench telemetry ingest --spool <dir> [--connection <npgsql>] [--chunk-size 500] [--json]");
         output.WriteLine("  bench telemetry report [--days N] [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry prune  --spool <dir> --older-than <days> [--json]");
         output.WriteLine();
@@ -171,6 +171,8 @@ public static class Program
         output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
         output.WriteLine("             [--stale-after-minutes 30] [--max-consecutive-failures 20]");
+        output.WriteLine("             [--leg-wall-seconds 600]  one ceiling for the WHOLE leg, not per call:");
+        output.WriteLine("             a looping lane must not multiply it by a turn count nobody bounded");
         output.WriteLine("             sweeps what a crash left claimed before it drains; Ctrl+C / SIGTERM stop it");
         output.WriteLine("             cleanly — the leg in flight settles and the rest stay Pending for the next run");
         output.WriteLine("  bench sweep --db <connection> [--stale-after-minutes 30] [--json]");

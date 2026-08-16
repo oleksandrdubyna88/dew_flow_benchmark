@@ -212,6 +212,46 @@ public sealed class TracePortTests
     }
 
     [Fact]
+    public async Task A_captured_leg_is_evicted_from_the_trace_and_does_not_accumulate()
+    {
+        var trace = new LiveTrace();
+
+        for (var leg = 1; leg <= 50; leg++)
+        {
+            trace.Open(Tuple(leg)).Called("read_file", "{}", ToolAnswer.Success("x"), Ms(5));
+            (await trace.CaptureAsync(Tuple(leg), TestContext.Current.CancellationToken)).Failed().Should().BeFalse();
+        }
+
+        // Fifty legs measured, none in flight. Before this, the count here was 50 — one recorder per leg,
+        // each holding its tool calls and its captured text, for the life of a three-week campaign.
+        trace.Recording.Should().Be(0, "a black-box recorder is retired by the capture that hands its trace over");
+    }
+
+    [Fact]
+    public async Task A_trace_already_captured_says_so_rather_than_claiming_the_leg_never_ran()
+    {
+        var trace = new LiveTrace();
+        trace.Open(Tuple()).Called("read_file", "{}", ToolAnswer.Success("x"), Ms(5));
+        await trace.CaptureAsync(Tuple(), TestContext.Current.CancellationToken);
+
+        var second = await trace.CaptureAsync(Tuple(), TestContext.Current.CancellationToken);
+
+        second.Failed().Should().BeTrue();
+        second.Reason().Should().Contain("already captured", "eviction must not turn a second read into a claim about the leg");
+    }
+
+    [Fact]
+    public void A_leg_that_crashed_before_its_trace_was_read_is_closed_rather_than_left_behind()
+    {
+        var trace = new LiveTrace();
+        trace.Open(Tuple()).Called("read_file", "{}", ToolAnswer.Success("x"), Ms(5));
+
+        trace.Close(Tuple()).Should().BeTrue("the abandon path retires a recording nobody will capture");
+        trace.Recording.Should().Be(0);
+        trace.Close(Tuple()).Should().BeFalse("and closing what is not there is a no-op, not an error");
+    }
+
+    [Fact]
     public async Task A_missing_fixture_file_is_a_failure_that_names_the_path()
     {
         var missing = Path.Combine(Path.GetTempPath(), "absent-" + Guid.NewGuid().ToString("N") + ".json");
@@ -285,6 +325,8 @@ public sealed class TracePortTests
 
     private static string FixturePath(string name) =>
         Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
+
+    private static MeasurementTuple Tuple(int repeat) => Tuple() with { Repeat = repeat };
 
     private static MeasurementTuple Tuple() => new(
         new MeasurementTarget(

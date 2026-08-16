@@ -75,6 +75,50 @@ public sealed class CliLoggingTests
             "two containers with one composition cannot drift apart on this");
     }
 
+    [Fact]
+    public void A_day_folder_older_than_the_window_is_pruned_at_startup()
+    {
+        using var root = new TempLogRoot();
+        var now = new DateTimeOffset(2026, 8, 16, 9, 0, 0, TimeSpan.Zero);
+        Day(root, "2026-07-01");
+        Day(root, "2026-08-10");
+        Day(root, "2026-08-16");
+
+        var pruned = BenchLogging.PruneLogFolders(root.Path, BenchLogging.DefaultRetentionDays, now);
+
+        // A file per run with no reaper is a disk that fills, and on a 24/7 machine the "eventually" is
+        // a date. Fourteen days back from the 16th keeps the 10th and retires July.
+        pruned.Should().Equal("2026-07-01");
+        root.Days().Should().BeEquivalentTo(["2026-08-10", "2026-08-16"]);
+    }
+
+    [Fact]
+    public void A_folder_whose_name_is_not_a_day_is_never_deleted()
+    {
+        using var root = new TempLogRoot();
+        Day(root, "archive-do-not-touch");
+        Day(root, "2026-07-01");
+
+        BenchLogging.PruneLogFolders(root.Path, 14, new DateTimeOffset(2026, 8, 16, 9, 0, 0, TimeSpan.Zero));
+
+        // This method deletes directory TREES. Anything it does not positively recognise as a day-folder
+        // it has no business removing, whoever put it there.
+        root.Days().Should().Contain("archive-do-not-touch");
+    }
+
+    [Fact]
+    public void A_retention_window_of_zero_keeps_everything_for_the_operator_job_that_owns_it()
+    {
+        using var root = new TempLogRoot();
+        Day(root, "2020-01-01");
+
+        BenchLogging.PruneLogFolders(root.Path, 0, DateTimeOffset.UtcNow).Should().BeEmpty();
+        root.Days().Should().ContainSingle("the rule allows exactly two owners, and zero names the other one");
+    }
+
+    private static void Day(TempLogRoot root, string name) =>
+        Directory.CreateDirectory(Path.Combine(root.Path, BenchLogging.LogFolder, name));
+
     private sealed class TempLogRoot : IDisposable
     {
         public TempLogRoot() =>
@@ -82,6 +126,12 @@ public sealed class CliLoggingTests
                 System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-logs-{Guid.NewGuid():N}")).FullName;
 
         public string Path { get; }
+
+        public IReadOnlyList<string> Days() =>
+            Directory.Exists(System.IO.Path.Combine(Path, BenchLogging.LogFolder))
+                ? [.. Directory.GetDirectories(System.IO.Path.Combine(Path, BenchLogging.LogFolder))
+                    .Select(d => System.IO.Path.GetFileName(d)!)]
+                : [];
 
         public IReadOnlyList<string> Files() =>
             Directory.Exists(System.IO.Path.Combine(Path, BenchLogging.LogFolder))

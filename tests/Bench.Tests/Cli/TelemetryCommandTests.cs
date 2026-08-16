@@ -55,6 +55,35 @@ public sealed class TelemetryCommandTests
     }
 
     [Fact]
+    public async Task A_spool_larger_than_one_chunk_is_ingested_in_bounded_batches()
+    {
+        // A 24/7 emitter's file, in miniature: more records than anybody sized a batch for.
+        using var spool = new TempSpool(string.Join('\n', Enumerable.Range(0, 25).Select(i => Fixture.Lines[i % 3])));
+        var store = new FakeStore();
+
+        var (code, output, _) = await Run(store, "telemetry", "ingest", "--spool", spool.Path, "--chunk-size", "10");
+
+        code.Should().Be(ExitCodes.Pass);
+        store.Batches.Should().Equal(
+            [10, 10, 5],
+            "memory and the store's parameter list must be bounded by a size THIS process chose, not by how "
+            + "productive the emitter has been");
+        store.Received.Should().HaveCount(25, "chunking bounds the batch, never the data");
+        output.Should().Contain("ingested 25");
+    }
+
+    [Fact]
+    public async Task A_spool_smaller_than_a_chunk_is_still_one_round_trip()
+    {
+        using var spool = new TempSpool(Fixture.Text);
+        var store = new FakeStore();
+
+        await Run(store, "telemetry", "ingest", "--spool", spool.Path, "--chunk-size", "500");
+
+        store.Batches.Should().Equal([3], "chunking must not turn the ordinary case into a call per line");
+    }
+
+    [Fact]
     public async Task A_line_this_build_cannot_read_is_a_regression_rather_than_a_silent_pass()
     {
         using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
@@ -277,12 +306,17 @@ public sealed class TelemetryCommandTests
     {
         public List<ToolTelemetry> Received { get; } = [];
 
+        /// <summary>How many records each call carried. The batch SIZES are the guarantee — a store that
+        /// only counted what it received could not tell one call of 25 from five of five.</summary>
+        public List<int> Batches { get; } = [];
+
         public IReadOnlyList<ToolTelemetryTotals> Totals { get; init; } = [];
 
         public Task<IngestReport> AppendAsync(
             IReadOnlyList<ToolTelemetry> records, CancellationToken cancellationToken)
         {
             Received.AddRange(records);
+            Batches.Add(records.Count);
             return Task.FromResult(new IngestReport(records.Count, 0, 0, 0, []));
         }
 
