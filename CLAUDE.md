@@ -109,7 +109,7 @@ A test's name states the guarantee (`First_position_is_balanced_across_the_whole
 never a ticket number. Where a test exists to pin a specific historical defect, reproduce the refuted
 approach in the test so the defect has a shape — see `MatrixOrderTests`.
 
-Full rule: [.claude/rules/common/testing.md](.claude/rules/common/testing.md).
+Full rule: [.claude/rules/shared/common/testing.md](.claude/rules/shared/common/testing.md).
 
 ## 9. Plans and documentation
 
@@ -117,7 +117,7 @@ Full rule: [.claude/rules/common/testing.md](.claude/rules/common/testing.md).
 line 2–3, the goal before any solution, verified `file.cs:line` references, a build order, a test plan
 and a Definition of Done. When a plan's work lands, promote it with its **deviations** recorded — what
 shipped differently is the most valuable part. Full rule:
-[.claude/rules/common/planning-docs.md](.claude/rules/common/planning-docs.md).
+[.claude/rules/shared/common/planning-docs.md](.claude/rules/shared/common/planning-docs.md).
 
 **Cross-repository citations are paths, not links.** A relative link that resolves on one machine is
 worse than a citation naming its source.
@@ -129,7 +129,7 @@ preview. Before adding any package, establish its **licence** and its maintenanc
 a private individual always needs the operator's approval first. Two pins are load-bearing and
 documented in place: **FluentAssertions stays at 7.2.2** (8.x moved to a non-commercial licence), and
 Aspire SDK + Hosting packages move as a matched pair. Full rule:
-[.claude/rules/csharp/nuget-packages.md](.claude/rules/csharp/nuget-packages.md).
+[.claude/rules/shared/csharp/nuget-packages.md](.claude/rules/shared/csharp/nuget-packages.md).
 
 ## 11. Security
 
