@@ -496,12 +496,16 @@ domain; UI in an RCL from birth") and the qln console's conventions:
      an `<a target="_blank">` to the variant page. A banner when the catalog has variants the test has no
      cells for: "3 new variants → 120 new cells · [Plan them]" → `ExpandAsync`. Poll while anything is
      claimed — the `CompanyProjects` poll shape (start only when in-flight, stop when quiet) **as
-     repaired by `dew_flow_rag_qln · todo/PLAN_reliability_tail.md` item 6**, and only as repaired: the
-     shape as it stands today runs its loop in a detached `Task.Run` catching `OperationCanceledException`
-     and nothing else, with no logger in the file
-     (`dew_flow_rag_qln · src/Rag.Ui/Pages/CompanyProjects.razor.cs:102-135`), so any other exception ends
-     polling for the rest of the session and records nothing. Copying it before item 6 lands would copy
-     that. Item 6 is sequenced first, and it is a two-line repair there against a page rewrite here.
+     repaired by `dew_flow_rag_qln · todo/PLAN_reliability_tail.md` item 6 — done 2026-08-16, and it is no
+     longer a shape to copy but a TYPE to reuse**: `dew_flow_rag_qln · src/Rag.Ui/Services/LivePoller.cs`,
+     about seventy lines with no dependency beyond `ILogger`. Port it rather than re-deriving it, and keep
+     its two findings, both of which cost a session of silent staleness each: the catch-all logs and sets a
+     `StoppedReason` the page renders as *"live updates stopped — reload"*, and the quiet path is filtered
+     on **the token** rather than on the exception type — `TaskCanceledException` derives from
+     `OperationCanceledException`, so an unfiltered catch swallows every HTTP timeout as a normal ending.
+     The shape as it stood before that fix ran its loop in a detached `Task.Run` catching
+     `OperationCanceledException` and nothing else, with no logger in the file, so any other exception ended
+     polling for the rest of the session and recorded nothing.
   4. **Variant page** (`/tests/{run}/variants/{variant}?subject=`) — short name + full definition echo;
      per-question table (retrieval metrics, answer metrics, judge verdicts per arbiter, duration, bytes);
      **rollups per question group**; the summary comparison table; an analysis block (best/worst
@@ -664,7 +668,9 @@ precedes the API + CLI it renders.**
    step 6a's accelerator lease (two drains against one card), ~~`PLAN_reliability_tail.md` **item 2**~~
    (the two unbounded dictionaries this worker makes live — **cleared 2026-08-16**, see
    `research/PLAN_reliability_tail.md`), and
-   `dew_flow_rag_qln · PLAN_reliability_tail.md` **item 6** (the poll shape §3.6 page 3 copies).
+   ~~`dew_flow_rag_qln · PLAN_reliability_tail.md` **item 6** (the poll shape §3.6 page 3 copies)~~ —
+   **cleared 2026-08-16**: it shipped as `LivePoller`, so page 3 reuses a type instead of copying a shape.
+   Only step 6a's lease still gates this step.
 10. **Judges** — ordered per-test arbiters from the registry, per-group rollups + the analysis block.
 11. ~~**Agent lane**~~ — **superseded by [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md)**, which owns
     `CliAgentRuntime`, the `agent-mcp` lane and telemetry correlation as its own step 11 (boundary table,
