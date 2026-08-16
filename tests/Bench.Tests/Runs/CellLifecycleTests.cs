@@ -112,7 +112,7 @@ public sealed class CellLifecycleTests
 
     private static RunCell Cell() => RunCell.Pending(
         Guid.CreateVersion7(),
-        new MatrixCell("q1", 0, new Leg(
+        new MatrixCell("q1", 0, Leg.Of(
             new Subject(ModelRef.Parse("m", ModelHosting.Local).Ok(), Sampling.Deterministic(1)),
             Lane.Named("native")), 0));
 }

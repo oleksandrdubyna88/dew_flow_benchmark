@@ -31,6 +31,12 @@ dotnet build dew_flow_benchmark.slnx -c Release
 ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*MatrixOrderTests"
 
 # The CLI
+# The variant catalog — retrieval configurations as rows, added and retired, never edited
+./hosts/Cli/bin/Release/net10.0/bench variants add --name hybrid-rrf-256 --db "$BENCH_DB" \
+  --engine qln --channels hybrid --fusion rrf --k 60 \
+  --text-shape src --chunk-tokens 256 --embed-model bge-m3 --rerank-pool 50 --limit 20
+./hosts/Cli/bin/Release/net10.0/bench variants list --all --db "$BENCH_DB"
+
 ./hosts/Cli/bin/Release/net10.0/bench plan \
   --repo https://github.com/org/repo.git --commit <40-hex> --suite-file samples/demo-suite.json \
   --subjects qwen@local,opus@cloud --lanes native,retrieval --repeats 3 [--json]

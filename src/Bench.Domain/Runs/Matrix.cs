@@ -1,11 +1,23 @@
 using Bench.Domain.Suites;
+using Bench.Domain.Variants;
 
 namespace Bench.Domain.Runs;
 
-/// <summary>One (model, tool surface) pair — the unit whose execution order has to be balanced.</summary>
-public sealed record Leg(Subject Subject, Lane Lane)
+/// <summary>One (model, tool surface, retrieval variant) triple — the unit whose execution order has to
+/// be balanced.</summary>
+public sealed record Leg(Subject Subject, Lane Lane, VariantSelection Variant)
 {
-    public string Canonical => $"{Subject.Canonical}@{Lane.Canonical}";
+    /// <summary>A leg with no variant — a run planned without the catalog.</summary>
+    public static Leg Of(Subject subject, Lane lane) => new(subject, lane, VariantSelection.None);
+
+    /// <summary>The variant is appended only when there is one, so a run planned without the catalog
+    /// stores the identity it always stored. The axis is additive: it must not silently rewrite what
+    /// earlier results are keyed by.</summary>
+    public string Canonical => Variant switch
+    {
+        VariantSelection.Selected selected => $"{Subject.Canonical}@{Lane.Canonical}#{selected.Name}",
+        _ => $"{Subject.Canonical}@{Lane.Canonical}",
+    };
 }
 
 /// <summary>One planned execution: a question, a repeat, a leg, and the position that leg runs in.</summary>
@@ -22,19 +34,33 @@ public sealed record MatrixCell(string QuestionId, int Repeat, Leg Leg, int Posi
 /// </para></summary>
 public static class Matrix
 {
+    /// <summary>A matrix over one implicit configuration — every leg carries
+    /// <see cref="VariantSelection.None"/>. Kept so a run planned before the catalog existed plans
+    /// identically today.</summary>
     public static Outcome<IReadOnlyList<MatrixCell>> Plan(
         IReadOnlyList<Question> questions,
         int repeats,
         IReadOnlyList<Subject> subjects,
-        IReadOnlyList<Lane> lanes)
+        IReadOnlyList<Lane> lanes) =>
+        Plan(questions, repeats, subjects, lanes, [VariantSelection.None]);
+
+    /// <summary>The full matrix: question × repeat × subject × lane × <b>variant</b>. The variant is an
+    /// axis rather than one value fixed for a whole run, which is what lets a finished test grow when the
+    /// catalog does.</summary>
+    public static Outcome<IReadOnlyList<MatrixCell>> Plan(
+        IReadOnlyList<Question> questions,
+        int repeats,
+        IReadOnlyList<Subject> subjects,
+        IReadOnlyList<Lane> lanes,
+        IReadOnlyList<VariantSelection> variants)
     {
-        var refusal = Validate(questions, repeats, subjects, lanes);
+        var refusal = Validate(questions, repeats, subjects, lanes, variants);
         if (refusal.Length > 0)
         {
             return Outcome<IReadOnlyList<MatrixCell>>.Failure(refusal);
         }
 
-        var legs = Legs(subjects, lanes);
+        var legs = Legs(subjects, lanes, variants);
         var cells = Slots(questions, repeats)
             .SelectMany((slot, slotIndex) => Rotated(legs, slotIndex)
                 .Select((leg, position) => new MatrixCell(slot.QuestionId, slot.Repeat, leg, position)));
@@ -49,8 +75,9 @@ public static class Matrix
             .GroupBy(c => c.Leg.Canonical)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
-    private static IReadOnlyList<Leg> Legs(IReadOnlyList<Subject> subjects, IReadOnlyList<Lane> lanes) =>
-        [.. subjects.SelectMany(s => lanes.Select(l => new Leg(s, l)))];
+    private static IReadOnlyList<Leg> Legs(
+        IReadOnlyList<Subject> subjects, IReadOnlyList<Lane> lanes, IReadOnlyList<VariantSelection> variants) =>
+        [.. subjects.SelectMany(s => lanes.SelectMany(l => variants.Select(v => new Leg(s, l, v))))];
 
     private static IEnumerable<(string QuestionId, int Repeat)> Slots(IReadOnlyList<Question> questions, int repeats) =>
         questions.SelectMany(q => Enumerable.Range(0, repeats).Select(r => (q.Id, r)));
@@ -62,13 +89,19 @@ public static class Matrix
     }
 
     private static string Validate(
-        IReadOnlyList<Question> questions, int repeats, IReadOnlyList<Subject> subjects, IReadOnlyList<Lane> lanes) =>
-        (questions.Count, repeats, subjects.Count, lanes.Count) switch
+        IReadOnlyList<Question> questions,
+        int repeats,
+        IReadOnlyList<Subject> subjects,
+        IReadOnlyList<Lane> lanes,
+        IReadOnlyList<VariantSelection> variants) =>
+        (questions.Count, repeats, subjects.Count, lanes.Count, variants.Count) switch
         {
-            (0, _, _, _) => "a matrix needs at least one question",
-            (_, < 1, _, _) => $"repeats must be at least 1, got {repeats}",
-            (_, _, 0, _) => "a matrix needs at least one subject — and an unset model id is a refusal, not a default",
-            (_, _, _, 0) => "a matrix needs at least one lane",
+            (0, _, _, _, _) => "a matrix needs at least one question",
+            (_, < 1, _, _, _) => $"repeats must be at least 1, got {repeats}",
+            (_, _, 0, _, _) => "a matrix needs at least one subject — and an unset model id is a refusal, not a default",
+            (_, _, _, 0, _) => "a matrix needs at least one lane",
+            (_, _, _, _, 0) => "a matrix needs at least one variant — pass the not-applicable selection for a run "
+                + "planned without the catalog, so that 'no variant' is stated rather than assumed",
             _ => string.Empty,
         };
 }

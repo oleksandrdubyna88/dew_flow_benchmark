@@ -45,6 +45,9 @@ public sealed record RunCell(
     /// here for being in memory.</summary>
     string SubjectModelId,
     string LaneName,
+    /// <summary>Which catalog variant produced this cell, beside the canonical leg for the same reason
+    /// the other two axes are: a report grouping by configuration must group, not parse.</summary>
+    Variants.VariantSelection Variant,
     int Position,
     CellState State,
     int Attempts,
@@ -61,6 +64,7 @@ public sealed record RunCell(
         cell.Leg.Canonical,
         cell.Leg.Subject.Model.Id,
         cell.Leg.Lane.Name,
+        cell.Leg.Variant,
         cell.Position,
         CellState.Pending,
         Attempts: 0,

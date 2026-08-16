@@ -2,6 +2,7 @@ using Bench.Application;
 using Bench.Domain;
 using Bench.Domain.Runs;
 using Bench.Domain.Targets;
+using Bench.Domain.Variants;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
@@ -192,26 +193,34 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
         CreatedAt = run.CreatedAt,
     };
 
-    private static CellRow ToRow(RunCell cell) => new()
+    private static CellRow ToRow(RunCell cell)
     {
-        Id = cell.Id,
-        RunId = cell.RunId,
-        QuestionId = cell.QuestionId,
-        Repeat = cell.Repeat,
-        Leg = cell.Leg,
-        SubjectModelId = cell.SubjectModelId,
-        LaneName = cell.LaneName,
-        Position = cell.Position,
-        State = cell.State,
-        Attempts = cell.Attempts,
-        Owner = cell.Owner,
-        ClaimedAt = cell.ClaimedAt,
-        OutcomeKind = cell.OutcomeKind,
-        OutcomeDetail = cell.OutcomeDetail,
-    };
+        var (variantId, variantName) = VariantSelectionCodec.Encode(cell.Variant);
+
+        return new CellRow
+        {
+            Id = cell.Id,
+            RunId = cell.RunId,
+            QuestionId = cell.QuestionId,
+            Repeat = cell.Repeat,
+            Leg = cell.Leg,
+            SubjectModelId = cell.SubjectModelId,
+            LaneName = cell.LaneName,
+            VariantId = variantId,
+            VariantName = variantName,
+            Position = cell.Position,
+            State = cell.State,
+            Attempts = cell.Attempts,
+            Owner = cell.Owner,
+            ClaimedAt = cell.ClaimedAt,
+            OutcomeKind = cell.OutcomeKind,
+            OutcomeDetail = cell.OutcomeDetail,
+        };
+    }
 
     private static RunCell ToDomain(CellRow row) => new(
         row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.SubjectModelId, row.LaneName,
+        VariantSelectionCodec.Decode(row.VariantId, row.VariantName),
         row.Position, row.State, row.Attempts, row.Owner, row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
 
     private static Outcome<BenchRun> ToDomain(RunRow row) =>

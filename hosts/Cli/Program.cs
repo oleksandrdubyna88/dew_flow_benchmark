@@ -30,6 +30,7 @@ public static class Program
             "run" => RunCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
             "judge" => JudgeCommand.RunAsync(command, output, error).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error),
+            "variants" => Variants(command, output, error),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -79,6 +80,36 @@ public static class Program
             .GetAwaiter().GetResult();
     }
 
+    /// <summary>The catalog lives in the database, so this verb needs one — and refuses rather than
+    /// guessing at localhost, for the same reason telemetry does: a default connection would write a
+    /// configuration into whatever database happened to be listening.</summary>
+    private static int Variants(CommandLine command, TextWriter output, TextWriter error)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var db = new BenchDbContext(
+            new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).Options);
+
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return VariantsCommand
+            .RunAsync(command, new PostgresVariantCatalog(db), TimeProvider.System, output, error)
+            .GetAwaiter().GetResult();
+    }
+
     private static int Version(TextWriter output)
     {
         output.WriteLine("bench 0.1.0");
@@ -95,6 +126,15 @@ public static class Program
         output.WriteLine("  bench telemetry ingest --spool <dir> [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry report [--days N] [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry prune  --spool <dir> --older-than <days> [--json]");
+        output.WriteLine();
+        output.WriteLine("  bench variants add    --name <slug> [--display <text>] --db <connection>");
+        output.WriteLine("             --engine qln|mindex|http|noretrieval --channels dense|sparse|hybrid");
+        output.WriteLine("             --fusion rrf|wsum [--k 60] [--dense-weight 1] [--sparse-weight 1]");
+        output.WriteLine("             [--norm none|minmax] --text-shape <name> --chunk-tokens N --embed-model <id>");
+        output.WriteLine("             [--rerank-pool N] [--limit 20]   (or --definition-file <path> | --definition <json>)");
+        output.WriteLine("  bench variants list   [--all] --db <connection>");
+        output.WriteLine("  bench variants retire --name <slug> --db <connection>");
+        output.WriteLine("             a variant is added and retired, never edited: results name what they ran under");
         output.WriteLine();
         output.WriteLine("  bench run  --repo <url> --commit <40-hex> --suite-file <path>");
         output.WriteLine("             --model <id> --model-url <openai-compatible base> --db <connection>");

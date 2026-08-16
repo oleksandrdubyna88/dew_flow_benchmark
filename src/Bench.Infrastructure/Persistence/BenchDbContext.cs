@@ -54,6 +54,13 @@ public sealed class CellRow
 
     public string LaneName { get; set; } = string.Empty;
 
+    /// <summary>Which catalog variant this cell ran under. Absent — not an empty guid — for a cell planned
+    /// before the catalog existed: "no variant was chosen" and "a variant nobody can look up" are
+    /// different facts, and only one of them is true here.</summary>
+    public Guid? VariantId { get; set; }
+
+    public string VariantName { get; set; } = string.Empty;
+
     public int Position { get; set; }
 
     public CellState State { get; set; }
@@ -82,6 +89,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
     public DbSet<MetricRow> Metrics => Set<MetricRow>();
 
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
+
+    public DbSet<VariantRow> Variants => Set<VariantRow>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -149,6 +158,29 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             // of cells, and neither should ever become a sequential scan.
             cell.HasIndex(c => new { c.RunId, c.State, c.Position });
             cell.HasIndex(c => new { c.State, c.ClaimedAt });
+
+            // The matrix page's question: how far along is each variant of this test. Without the index it
+            // is a scan over every cell of a run that may hold tens of thousands.
+            cell.HasIndex(c => new { c.RunId, c.VariantId, c.State });
+
+            // Restrict, not cascade: deleting a variant that legs were measured under would delete the
+            // measurements. A variant leaves the catalog by being RETIRED, which keeps every row resolvable.
+            cell.HasOne<VariantRow>().WithMany()
+                .HasForeignKey(c => c.VariantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<VariantRow>(variant =>
+        {
+            variant.ToTable("variants");
+            variant.HasKey(v => v.Id);
+            variant.Property(v => v.DefinitionJson).HasColumnType("jsonb");
+
+            // The name is an identity results quote, so uniqueness is enforced where concurrency actually
+            // happens rather than by a read-then-write two sessions can both pass.
+            variant.HasIndex(v => v.Name).IsUnique();
+
+            // "Is this the same recipe under another name" — a lookup, never a scan that re-parses rows.
+            variant.HasIndex(v => v.Hash);
         });
     }
 }

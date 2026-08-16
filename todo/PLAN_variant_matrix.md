@@ -1,6 +1,11 @@
 # PLAN — the variant matrix: a question bank in five groups, reviewer marks, engine axes in the grid, and the console
 
-> Status: **plan only, nothing implemented yet.** Scope: `Bench.Domain`, `Bench.Application`,
+> Status: **step 1 of §5 (the variant catalog) IMPLEMENTED 2026-08-16; steps 2–11 open.** What shipped:
+> `Bench.Domain/Variants` (definition + hash + immutable catalog row + selection), the variant axis in
+> `Matrix.Plan`, `variants` table and `cells.VariantId`, `bench variants add|list|retire`.
+> One deviation, found by a smoke run rather than by the tests: the stored definition was written in
+> PascalCase while this plan documents camelCase — fixed, with reading left case-insensitive so rows
+> written before the fix still resolve. Scope: `Bench.Domain`, `Bench.Application`,
 > `Bench.Infrastructure` (persistence + engines), `Bench.Api`, a NEW `hosts/Web` + `hosts/Web.Client` +
 > `src/Bench.Ui`, `hosts/Cli`. The engine-side half lives in the sibling plan
 > `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md` — a change that crosses the repository boundary is

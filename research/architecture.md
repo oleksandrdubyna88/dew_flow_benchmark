@@ -63,11 +63,32 @@ engine   = (kind, endpoint, version, indexFingerprint)
 suite    = (suiteId, suiteVersion)                -- frozen and hashed
 subject  = (modelId, samplingAsSent)              -- 1..N
 lane     = (toolSurface, preamble)                -- 1..N
+variant  = (name, definitionHash)                 -- 1..N, from the catalog; absent on a run planned without it
 repeat   = ordinal                                -- n >= 2 to rank anything
 ```
 
 `ComparisonScope` is the part that must match before two results may be put beside each other: the target
 and the suite. Everything else is an axis you compare *along*.
+
+### The variant catalog
+
+A **variant** is one named retrieval configuration — engine, channels, fusion, corpus recipe, reranker,
+result limit — held as a row rather than as code, so a new configuration is a catalog entry and not a
+migration. Three properties carry the weight:
+
+- **A definition is never edited.** Results name the variant they ran under, so changing a recipe in place
+  would relabel numbers already measured. A variant is added and retired; both states resolve forever
+  (`RetrievalVariant`, mirroring `Suite`'s freeze).
+- **The recipe is hashed.** Two rows with the same hash are the same configuration under two names — a
+  duplicate the catalog can detect rather than a coincidence a report has to explain.
+- **An axis this build does not know is refused, never dropped.** The definition is stored as JSON and
+  read with unknown members disallowed, so a configuration nobody can honour fails by name instead of
+  running as something else. The stored shape is camelCase because that row is published with the results.
+
+`VariantSelection` is what a leg carries: `Selected(id, name)` or `NotApplicable` — a distinct state for a
+run planned before the catalog existed, deliberately not an empty id that reads as a variant nobody can
+look up. `Leg.Canonical` appends the variant only when there is one, so identities stored before the axis
+existed still mean what they said.
 
 **Identity is separate from configuration.** `ModelRef` is an id; `ModelEndpoint` holds the address and the
 prices. Every aggregate, every discrimination reading and every saturation label is keyed by the id, so
