@@ -2,8 +2,14 @@
 
 > Status: **plan only, 2026-08-16 — nothing implemented.** Scope: a MEASUREMENT first (phase 1 needs no code
 > in this repository), then the engine's backend echo in `Bench.Domain`/`Bench.Contracts`, then the run
-> matrix. **Phase 1 cannot run on this machine today** — the WSL arm is blocked on a prerequisite named in §6,
-> which is the same blocker as `dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1.
+> matrix. **Three of phase 1's five arms run today; the two WSL ones do not** — they are blocked on the
+> prerequisite named in §6, which is the same blocker as
+> `dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1.
+>
+> **Read §1b before the rest.** The host and the execution provider cannot be separated on this hardware —
+> MIGraphX exists only under Linux/WSL and DirectML only on Windows — so "WSL against Windows" is
+> unavoidably also "MIGraphX against DirectML", and the plan is shaped around saying so rather than around
+> hiding it.
 >
 > Related: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) (step 4 wires an engine into a leg; phase 3 here
 > cannot land before it), [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.1 (the accelerator lease this
@@ -39,6 +45,26 @@ A single "WSL is 1.4× faster" headline would be the wrong artefact here even if
 operator's real decision — which flavour serves indexing, which serves search — is decided by B and C far
 more often than by A.
 
+### 1b. The host and the execution provider cannot be separated — a property of the hardware, not of the harness
+
+**MIGraphX exists only under Linux/WSL.** No prebuilt ONNX Runtime ships that EP at all; the library this
+machine uses was built from source inside the distro, and the sidecar's `migraphx` flavour therefore loads a
+machine-local `libonnxruntime.so` through `ORT_DYLIB_PATH` at runtime rather than linking anything
+(`dew_flow_sidecar_rust · Cargo.toml:83-88`). On Windows it is not present to be selected. DirectML is the
+mirror image: a Windows API with no Linux counterpart.
+
+So **there is no WSL+DirectML arm and no Windows+MIGraphX arm.** "WSL against Windows" and "MIGraphX against
+DirectML" are one comparison with two names, and every result of it must be labelled with both — a table
+column headed *WSL* invites the reading "Linux is faster", which this measurement cannot support and did not
+test.
+
+One arm can separate them, and it is the reason to run it: **the CPU execution provider exists on both
+hosts** — `compiled_providers` always contains `cpu`, because ort falls through to it when no EP is
+registered (`dew_flow_sidecar_rust · src/provider.rs:161-162`). A CPU arm on each host holds the EP constant
+and measures the pure host cost: weights read over DrvFs against ext4, WSL2 localhost forwarding, process
+launch. It will be slow in absolute terms and that is irrelevant — it is the only arm in this plan that
+isolates the operating system, and without it the two headline arms have a confound nobody can quantify.
+
 ---
 
 ## 2. What is already known, so that it is not re-measured
@@ -60,11 +86,24 @@ reproduce; a probe that rediscovers them has spent a day learning what was writt
   degraded — 177 HTTP 500s across a day, invisible until someone read the sidecar log
   (`DewFlow · src/v2/v2.Shared/Services/RerankSidecarPlan.cs:11-18`). Any rerank arm of this comparison must
   therefore prove it actually reranked, not that it returned 200.
-- **A mixed-flavour deployment does not exist.** One key selects the flavour for the whole embed fleet
-  (`DewFlow · src/v2/v2.AppHost/AppHost.cs:235-238` and `AddBgeSidecar` at `:285-320` — one exe path, one
-  distro, for every spawned sidecar), and this is recorded as unbuilt Phase 2 work at
-  `DewFlow · todo/PLAN_bge_sidecar_igpu_cpu_offload_probe.md:33-35`. The two arms of this comparison are
-  therefore **two runs**, never two concurrent processes — which §3 requires anyway.
+- **The mixed WSL+Windows deployment exists, it shipped, and for two days it was the DEFAULT** — which is
+  why it is an arm of this comparison rather than a hypothetical. Between 2026-07-30 and 2026-07-31 the
+  embed fleet ran WSL/MIGraphX on the discrete card while a **separate Windows/DirectML sidecar served
+  `/rerank` on the integrated GPU**: `RerankSidecarPlan` was opt-**out** (`IsOff`) with `Host` defaulting to
+  `windows` and `DeviceId` to `1`, "the integrated GPU in both numbering schemes, which keeps the discrete
+  card entirely for embedding passes" (`DewFlow · git show 47235cd0^:src/v2/v2.Shared/Services/RerankSidecarPlan.cs`).
+  It became opt-**in** on 2026-07-31 (`DewFlow · 47235cd0`) once the MIGraphX rerank defect was fixed at its
+  root, and the mechanism is still there today (`DewFlow · src/v2/v2.AppHost/AppHost.cs:397-415`).
+  What has **never** existed is a mixed *embed fleet*: one key picks the flavour for every spawned embed
+  sidecar (`:235-238`, `AddBgeSidecar` at `:285-320` — one exe path, one distro for the whole loop), and that
+  is recorded as unbuilt Phase 2 work at `DewFlow · todo/PLAN_bge_sidecar_igpu_cpu_offload_probe.md:33-35`.
+  So the topology axis is real but asymmetric: **rerank can cross hosts per instance, embedding cannot.**
+- **One cross-host number already exists, and it is 15–25×.** At the shape the application actually sends
+  (batch 64, pinned `(64, 1024)`, 50 candidates): **3.06 s** reranking on the discrete R9700 against
+  **45–75 s** on the integrated 890M (`DewFlow · 47235cd0`, commit message). That single figure confounds
+  host, EP and card all at once — which is exactly what §1b says is unavoidable, and exactly why this plan
+  adds a CPU control rather than pretending otherwise. It is the number any new measurement must first
+  reproduce before its other columns are believed.
 
 ### 2b. What the benchmark cannot express today — the structural gap
 
@@ -121,6 +160,10 @@ Also missing, and both already have owners:
   (`DewFlow · research/PLAN_eval_v6/RESULTS.md:455-465`).
 - **Repeats ≥ 3, and the spread is published.** A single pass per arm cannot separate a backend difference
   from a thermal one.
+- **Never label a result with the host alone.** Per §1b the host and the EP move together on this hardware,
+  so every column, every chart axis and every sentence names **both** — `wsl/migraphx`, `windows/dml` — and
+  the CPU control is what any claim about the operating system has to rest on. A column headed *WSL* is a
+  claim this measurement cannot make.
 
 ---
 
@@ -142,6 +185,18 @@ recently: it is now scoped to the engine's own cache slice, so a rerank compile 
 longer charged to an embed pass (`dew_flow_sidecar_rust · src/compile_cache.rs:9-24`, the `CompileWatch` doc).
 A comparison built on the pre-2026-08-16 field would have attributed one engine's compile to the other's
 throughput.
+
+**The arms.** Named as `host/provider/card`, because §1b says none of the three may be dropped from a label:
+
+| arm | what it is | why it is here |
+|---|---|---|
+| **W** `wsl/migraphx/R9700` | the indexing flavour | the discrete card's only GPU EP under Linux |
+| **D** `windows/dml/R9700` | the same card, the other host | the only other way to reach it at all |
+| **I** `windows/dml/890M` | the integrated card | the search half of the shipped mixed topology; the 15–25× figure of §2 lives here |
+| **C₁** `wsl/cpu/—` · **C₂** `windows/cpu/—` | the control pair | the ONLY arms that hold the EP constant across hosts, and therefore the only evidence about the operating system itself |
+
+W and D answer the operator's question; I is what makes the answer actionable, since the real decision is
+which flavour serves indexing and which serves search; C₁/C₂ are what keep the answer from being mislabelled.
 
 **The probe:** for each arm, against identical payloads, one at a time on the card —
 
@@ -193,7 +248,12 @@ why the sidecar preflights the dylib through the stable C ABI and exits with the
 
 So phase 1 needs, first: **ONNX Runtime v1.24.x built from source with `--use_migraphx`**, then
 `cargo build --release --no-default-features --features migraphx --target-dir target-wsl` inside the distro.
-Until that exists there is exactly one arm, and one arm is not a comparison.
+Until that exists, three of the five arms of §4 are runnable — **D**, **I** and **C₂**, all Windows-hosted —
+and neither of the two the operator's question is actually about. **W** is the question, and **C₁** is what
+keeps its answer from being mislabelled as a statement about the operating system. Running the Windows three
+early is still worth doing: they are the arms whose absolute numbers the WSL pair will be read against, and
+measuring them now costs nothing and removes a variable later. What must not happen is publishing them as a
+partial answer — a table with the WSL column empty reads as a result, and it is a prerequisite.
 
 This is the same prerequisite that blocks `dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1 (the
 MIGraphX cache-path race), so the two unblock together — and item 1 should be verified on the wire during the
@@ -203,11 +263,15 @@ same session the toolchain first works, because it is the only opportunity that 
 
 ## 7. Build order
 
-1. **(prerequisite)** ONNX Runtime 1.24.x `--use_migraphx`, and the WSL sidecar built against it. Not this
-   repository's work; named here because nothing below is runnable without it.
-2. **Phase 1, the probe** — the operator's answer. No code here; a script and a discipline.
-3. **Phase 2, the echo** — small, independent of the matrix, and useful the moment two arms exist.
-4. **Phase 3, the axis** — after [PLAN_variant_matrix.md](PLAN_variant_matrix.md) step 4.
+1. **The Windows-hosted arms (D · I · C₂)** — runnable today, and the baseline the rest is read against.
+   Recorded, not published as an answer (§6).
+2. **(prerequisite)** ONNX Runtime 1.24.x `--use_migraphx`, and the WSL sidecar built against it. Not this
+   repository's work; named here because arms W and C₁ — the operator's actual question and its control —
+   do not exist without it.
+3. **Phase 1 completed (W · C₁)** — the operator's answer, published whole. No code here; a script and a
+   discipline.
+4. **Phase 2, the echo** — small, independent of the matrix, and useful the moment two arms exist.
+5. **Phase 3, the axis** — after [PLAN_variant_matrix.md](PLAN_variant_matrix.md) step 4.
 
 ## 8. Test plan
 
@@ -228,6 +292,9 @@ which numbers were observed, on which binaries by hash, and what could not be ru
       its spread, never averaged into one headline.
 - [ ] Every arm's flavour, card and binary are quoted from the serving process's `/health` and build hashes —
       not from the configuration that launched it.
+- [ ] **No column, chart or sentence is labelled by host alone.** Host and EP are confounded by construction
+      on this hardware (§1b); the CPU control pair is what any claim about the operating system rests on, and
+      a report published without it says so.
 - [ ] The controls of §3 are each either satisfied or recorded as unsatisfied with the effect on the reading.
 - [ ] The finding is written into `research/MEASURED_LESSONS.md` so a later plan can cite it without re-running
       anything.
