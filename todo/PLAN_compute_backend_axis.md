@@ -36,7 +36,7 @@ differently on them:
 | **B** | **Time to the first usable result after a cold start** | MIGraphX compiles **per distinct input shape**: 2–4 minutes and ~2.5 GB of on-disk cache each, measured on an R9700 (`dew_flow_sidecar_rust · src/inference.rs:24-27`). DirectML takes dynamic shapes natively, so the same transition is a session rebuild of tens of seconds. |
 | **C** | **A whole index pass, end to end** | Where A and B compose with the rung ladder and with VRAM behaviour — including a failure mode that has no throughput number at all (§2b). |
 
-**So the deliverable is three numbers per flavour, reported side by side and never averaged into one.** That
+**So the deliverable is three numbers per arm, reported side by side and never averaged into one.** That
 is this repository's existing rule applied to a new subject: observed and reconstructed tool calls are stored
 beside each other and never folded together ([../research/architecture.md](../research/architecture.md), *Two
 vantage points*), for exactly the reason that folding them would produce a single figure nobody can act on.
@@ -113,8 +113,8 @@ differing only in which sidecar they call have the **same** kind, possibly the s
 corpus is unchanged — the same index fingerprint. They differ in `endpoint`, which is a machine-local address
 and not a description of anything.
 
-So today the two arms of this comparison would be stored as two rows that no report can tell apart, and a
-sweep that merged them would produce a mean over two different pieces of hardware. That is the same defect
+So today the arms of §4 would be stored as rows no report can tell apart, and a sweep that merged them would
+produce a mean over several different pieces of hardware — and over two operating systems. That is the same defect
 `PLAN_corpus_axis_integrity.md` was written for — two variants resolving to one configuration and being
 reported as a comparison of nothing — and it takes the same fix: **the engine echoes the compute backend it
 actually served on, and a cell whose echo contradicts its arm is blocked with both named.**
@@ -132,8 +132,9 @@ Also missing, and both already have owners:
 
 ## 3. The controls — skip one and the comparison is void
 
-- **One at a time on the card.** Both arms target the same physical R9700; run them concurrently and every
-  number is a contention measurement. The accelerator lease ([PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md)
+- **One at a time on the card.** W and D target the same physical R9700 and I shares the machine with it; run
+  any two concurrently and every number is a contention measurement. The CPU control pair is not exempt — it
+  competes for the same cores an EP arm needs to feed the card. The accelerator lease ([PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md)
   §5.1, [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4b) is not optional here even for a hand-run
   probe, and Ollama is a third consumer on this machine that never evicts (`OLLAMA_KEEP_ALIVE=-1`).
 - **The same weights.** The WSL flavour seeds its ext4 model cache from the repo copy at startup
@@ -147,8 +148,8 @@ Also missing, and both already have owners:
 - **Shape pinning is NOT equalised.** Forcing it on for DirectML would charge that flavour the padding cost of
   a workaround it does not need; forcing it off for MIGraphX would measure a configuration nobody deploys.
   The flavours are compared **as they are actually deployed**, and the padding overhead belongs to the
-  MIGraphX column. `PIN_INPUT_SHAPE=0` under MIGraphX is a legitimate *third arm*, labelled as such — never a
-  fairness correction to the first two.
+  MIGraphX column. `PIN_INPUT_SHAPE=0` under MIGraphX is a legitimate arm of its own — **W′** in §4's naming, labelled as such —
+  never a fairness correction applied to W.
 - **Warm-up is excluded from A and reported as B.** It is not noise to be discarded; on the MIGraphX arm it is
   the most expensive thing in the measurement and the single number most likely to decide the deployment.
 - **Provenance, not labels.** Each arm records the serving process's `/health`: `active_provider`,
@@ -238,7 +239,7 @@ cannot be executed.
 
 ---
 
-## 6. The prerequisite that blocks phase 1 today — stated, not worked around
+## 6. The prerequisite that blocks phase 1's WSL half — stated, not worked around
 
 **The WSL arm cannot be launched on this machine as it stands.** The `migraphx` flavour loads a machine-local
 `libonnxruntime.so` at runtime, and `ort` rc.12 requires ONNX Runtime ≥ 1.24; the build present under `/opt`
