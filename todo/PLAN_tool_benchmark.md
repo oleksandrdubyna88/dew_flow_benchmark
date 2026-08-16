@@ -6,7 +6,7 @@
 > One new cross-repository edge: this repository vendors `dew_flow_mcp` as a submodule.
 >
 > The sibling half — file-driven tool descriptions, a tool subset chosen at startup, a surface
-> fingerprint and telemetry correlation — is `dew_flow_mcp · todo/PLAN_tool_surface_config.md`. A change
+> fingerprint and telemetry correlation — is `dew_flow_mcp · research/PLAN_tool_surface_config.md`. A change
 > that crosses the boundary is named in both plans.
 >
 > Related: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) (this plan is the design of its §3.8 agent
@@ -369,7 +369,25 @@ must agree byte for byte.
 
 ## 4. The cross-repository contract
 
-What this plan needs from `dew_flow_mcp · todo/PLAN_tool_surface_config.md`, named identically in both:
+What this plan needs from `dew_flow_mcp · research/PLAN_tool_surface_config.md`, named identically in both.
+
+> **All five shipped 2026-08-16** — that plan is now IMPLEMENTED and lives in its repository's
+> `research/`. Two things it decided differently, both of which this side must know:
+>
+> - **The fingerprint carries no `BuiltAt`.** Deterministic builds leave no honest build timestamp, so
+>   it reports `version` as a `captured / value / reason` triple (the assembly's informational version,
+>   which resolves to `1.0.0+<sha>`) plus `takenAt`. Read the two hashes, not a build time, when
+>   deciding whether two runs saw the same surface.
+> - **`correlation` is ALWAYS written**, unattributed included, with the *same* reason strings this
+>   repository substitutes for a missing object — so "the line predates the field" and "the caller
+>   declared nothing" stay one fact rather than two.
+>
+> Verified live against `TelemetryCodec.ReadLine` here: a real emitter line with a correlation parses
+> and reads as attributed. One consequence for this repository: `Fixtures/mcp-spool-v0.jsonl` is
+> documented as being REPLACED from a fresh emitter run whenever the emitter's shape changes, but
+> `A_line_written_before_correlation_existed_still_reads_and_reads_as_unattributed` needs a
+> pre-`correlation` line. **One file can no longer be both — this needs a second fixture, not a
+> replaced one.**
 
 1. **A tool subset chosen at process start** — `--tools a,b,c`; unset means every tool, today's behaviour.
 2. **Descriptions from a file catalog** — `--descriptions <dir> --description-set <name>`; a missing or
@@ -400,8 +418,8 @@ it renders** — the API-first gate the family already applies.
    `AnswerScoring` extension, `Question.ToolAffinity`. Pure domain, no infrastructure. **Includes the
    §3.7 loader fix**: an unknown expectation kind refuses the suite instead of silently becoming a `File`
    expectation — its RED test is watched failing on the current fallback first.
-5. **Sibling repository, steps 1–2** — see §4 items 1–3 and 5. Can ship in parallel with 1–4; nothing
-   here depends on the order between them.
+5. ~~**Sibling repository, steps 1–2**~~ **DONE 2026-08-16, in `dew_flow_mcp`** — all five §4 items,
+   not just 1–3 and 5: `--correlation` shipped in the same pass. Nothing is owed by that side.
 6. **Submodule + `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references, implement the
    engine, `bench lanes verify` against `--print-surface`. **First end-to-end milestone**: a local model
    through the real bridge, temperature 0 and seed as-sent, tool calls recorded with outcomes.
