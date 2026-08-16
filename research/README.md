@@ -15,6 +15,7 @@ Yes → `todo/`. No → `research/`.
 | Document | What it is |
 |---|---|
 | [architecture.md](architecture.md) | The system as it is — the layers and why two projects depend on nothing, the measurement tuple, one leg end to end as a sequence, the two vantage points on a tool call, the guards that shape the API, and an explicit list of what does NOT exist yet |
+| [SPIKE_dotnet_eval_library.md](SPIKE_dotnet_eval_library.md) | Whether `Microsoft.Extensions.AI.Evaluation` could carry this benchmark's scoring, and what it does and does not answer — the record of a question asked before a dependency was taken |
 | [MEASURED_LESSONS.md](MEASURED_LESSONS.md) | The evidence base this project is built on — carried over from an earlier measurement programme against a different codebase, so nothing here depends on that repository being checked out. Every guard in the domain traces to a numbered finding in it |
 | [PLAN_tool_telemetry_v0.md](PLAN_tool_telemetry_v0.md) | Design record, IMPLEMENTED 2026-08-15 — the founding plan's §5.4 made concrete: this repository owns the `telemetry/v0` schema, a local spool is the transport, `bench telemetry ingest` is idempotent and resumable, and the §7 AppHost stands up this benchmark's own Postgres. Emitter half: `dew_flow_mcp · research/PLAN_usage_telemetry.md` |
 

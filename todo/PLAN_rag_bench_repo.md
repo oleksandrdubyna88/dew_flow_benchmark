@@ -1,6 +1,12 @@
 # PLAN — the benchmark as its own product: engine-agnostic, commit-pinned, CLI first
 
-> Status: **plan only, nothing implemented yet, 2026-08-14.** Scope: this repository, from empty. The
+> Status: **partially implemented, 2026-08-15.** The domain, the trace port with both black-box and white-box
+> implementations, the `telemetry/v0` spool and its ingest, the run store and this repository's own Postgres
+> all exist, and `QlnEngine` has measured a live engine end to end — 344 tests, and five live legs against a
+> running `dew_flow_rag_qln`. Open: the suites, the hardware sampler, the CLI surface and the UI.
+> *(Corrected 2026-08-15: the line below said "nothing implemented yet" long after a live run.)*
+>
+> Scope: this repository, from empty. The
 > product it measures is **not** modified — operator decision, 2026-08-14.
 >
 > Authored in the `claudeRag` repository and moved here the same day, replacing an earlier plan
@@ -11,6 +17,24 @@
 > programme ran against a different codebase (DewFlow / `claudeRag`); that repository is **out of scope
 > and is not touched**, so nothing here requires it to be checked out. Citations point at the local
 > document; its §8 records where the findings originally came from.
+
+
+## The ground-truth anchor has a SHAPE, and it can move — raised 2026-08-15 by `dew_flow_rag_qln`
+
+A suite records the symbol keys a question should retrieve. Those keys are produced by the engine, and the
+engine is about to change how it makes them: per-project compilation exists precisely so that two members
+sharing a fully-qualified name stop colliding — 536 of aspnetcore's 52 617 members do today — and that means
+**the key of every member can change**.
+
+The failure is silent and the worst kind: a suite frozen against today's keys does not error, it simply stops
+matching, and the score falls for a reason no column explains.
+
+So, before that lands upstream:
+
+- treat the key's shape as a **versioned contract** (`symbol/v0` today), recorded beside a suite;
+- a suite frozen against one version **refuses** against another rather than under-scoring;
+- and own it here, like `trace/v0` and `telemetry/v0` — the consumer that must still read its own results in
+  six months is the one that defines the shape it reads.
 
 ## 1. Goal
 
