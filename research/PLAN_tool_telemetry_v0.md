@@ -29,9 +29,13 @@
 >    product (a report, or JSON), and a logging provider writing to that stream would corrupt the
 >    contract the exit codes exist to keep.
 >
-> **Open tail.** No spool has yet been drained from a REAL server run: the product host
-> (`dew_flow_rag_qln · hosts/Daemon/Program.cs`) does not register the sink, so only the standalone MCP
-> host emits. The end-to-end path is proven from the emitter's own output, not yet from live traffic.
+> **Open tail — narrowed 2026-08-16.** The producer half is closed: the product host now registers the
+> sink (`dew_flow_rag_qln · hosts/Daemon/Program.cs:120-121`, `AddTelemetrySpool(spoolDirectory, "daemon")`
+> from the config key `Rag:Telemetry:SpoolDirectory`), so real product traffic can be metered — opt-in, a
+> blank directory leaving `NullUsageSink` in place. What is still open is the *drain*: no spool from a real
+> server run has been ingested through `bench telemetry ingest`, so the end-to-end path remains proven from
+> the emitter's own output rather than from live traffic. That is the one claim this plan cannot close by
+> reading code — it needs a run.
 >
 > Related: [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.4 (the contract this implements) and
 > §7 (the AppHost/Postgres this stands up); [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md)

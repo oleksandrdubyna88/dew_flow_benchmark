@@ -1,6 +1,6 @@
 # Architecture — the system as it is
 
-> Status: **current as of 2026-08-15.** Describes what exists and runs, not what is planned; the plan is
+> Status: **current as of 2026-08-16.** Describes what exists and runs, not what is planned; the plan is
 > [todo/PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) and the evidence behind the design is
 > [MEASURED_LESSONS.md](MEASURED_LESSONS.md). Where the two disagree, this file is wrong and should be
 > corrected — a description that has drifted from the code is the failure this convention exists to catch.
@@ -19,19 +19,20 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — bench plan · run · telemetry"]
+        cli["Cli — plan · run · judge · sweep<br/>telemetry · variants · version/help"]
         apphost["AppHost — Aspire, own Postgres"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
-        runner["LegRunner"]
+        runner["LegRunner · LegDrain · LegRecorder"]
         plan["PlanRun / PlanRequestHandler"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader"]
-        ports["IRunStore · IResultStore · IEngine · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore"]
+        ports["IRunStore · IResultStore · IEngine · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IFunnelSink · IHardwareSampler"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
         scoring["AnswerScoring · Discrimination · PhasePlan"]
         obs["Trace · Telemetry · Models"]
+        axes["Variants · Authoring · Engines"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
         pg["Postgres: runs · results · telemetry"]
@@ -251,7 +252,7 @@ Stated because a description that quietly implies more than is built is the same
 - **No tool-calling loop.** `IEngine` exposes tools and `FilesystemEngine` implements them, but `LegRunner`
   asks the model exactly once. Every lane is therefore currently a no-tools lane, and anchor recall reads
   *not applicable* everywhere. This is what `bench run` measures today, and it is a real measurement rather
-  than a placeholder — see *The one verb that spends money* below.
+  than a placeholder — see *The one verb that spends money* above.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
