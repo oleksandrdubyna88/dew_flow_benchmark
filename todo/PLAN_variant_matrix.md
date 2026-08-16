@@ -111,9 +111,9 @@ Concretely:
 | Durable cells | claim/settle/sweep, guarded UPDATE, result-first-settle-second, `MaxAttempts=3` | `src/Bench.Domain/Runs/RunCell.cs:81-141`, `src/Bench.Infrastructure/Persistence/PostgresRunStore.cs:54-121` |
 | Reviewer/authoring domain | ~~designed, unwired~~ — **wired 2026-08-16**: the bank is its store (`Bench.Domain/Bank`, `PostgresQuestionBank`), admission goes through `QuestionCandidate.Propose`, and a selection is promoted by `AuthoringBatch.Promote`. What is still unwritten is the pipeline that GENERATES candidates — a later plan's verbs, not tables | `src/Bench.Domain/Authoring/*`, `src/Bench.Domain/Bank/*` |
 | Suites | frozen + hashed, stamp `id@vN#hash12`; from a JSON file **or from a bank selection** (2026-08-16), both through the same freeze | `src/Bench.Domain/Suites/Suite.cs:30-77`, `src/Bench.Domain/Bank/BankFreeze.cs` |
-| Commit pinning | `MeasurementTarget` demands a full 40-char sha; `bench run` **never checks out** (prints a warning) | `src/Bench.Domain/Targets/MeasurementTarget.cs:36-62`, `hosts/Cli/RunCommand.cs:127` |
+| Commit pinning | `MeasurementTarget` demands a full 40-char sha, and since 2026-08-16 `bench run` **checks the target out** before it creates anything — a commit that is not in the repository ends the run by name | `src/Bench.Domain/Targets/MeasurementTarget.cs:36-62`, `hosts/Cli/RunCommand.cs` (`CheckoutAsync`) |
 | Drain loop | `LegDrain` — per-leg `try`, consecutive-failure breaker, bounded backoff, typed `DrainStop`, grace on cancel | `src/Bench.Application/LegDrain.cs:82-121`, driven from `hosts/Cli/RunCommand.cs:153` |
-| Checkout cache | bare mirror + worktree per commit, written and tested, **not wired into any run path** | `src/Bench.Infrastructure/Git/GitCheckoutProvider.cs:37-135` |
+| Checkout cache | bare mirror + worktree per commit — ~~not wired into any run path~~ **wired into `bench run` 2026-08-16**; gates the run, and its lock map no longer leaks | `src/Bench.Infrastructure/Git/GitCheckoutProvider.cs`, `hosts/Cli/RunCommand.cs` |
 | QLN adapter | exists, parses the funnel, degrades honestly — but is **test-only** and sends exactly one axis (`limit`) | `src/Bench.Infrastructure/Engines/QlnEngine.cs:112-144, 222-238` |
 | Execution | `LegRunner` single-shot ask, no engine wired, no tool loop — but **multi-subject since 2026-08-16**: the endpoint is looked up per cell from `SubjectRoster`, and a leg with a wall budget cannot be multiplied by a turn count | `src/Bench.Application/LegRunner.cs`, `src/Bench.Domain/Runs/SubjectRoster.cs` |
 | Judges | multiple arbiters by design (`Judge verdict · {modelId}` per-arbiter series, NOT-EXISTS work selection); **the test's own ordered arbiters are used when none is given** (2026-08-16) | `src/Bench.Application/JudgeRunner.cs`, `hosts/Cli/JudgeCommand.cs` |
@@ -646,7 +646,10 @@ precedes the API + CLI it renders.**
    before any cell exists: a disabled model, an unknown key and an environment variable that is unset on
    THIS machine are each refused by name. The multi-subject defect this uncovered — one endpoint for a
    matrix that always planned several — is in the status block.
-4. **Checkout + engine wiring** — `ICheckoutProvider` into run start; `QlnEngine` full `AxesWire`;
+4. **Checkout + engine wiring** — ~~`ICheckoutProvider` into run start~~ **(landed 2026-08-16:
+   `bench run` mirrors and checks out the pinned commit before anything is created, `--no-checkout` keeps
+   the old behaviour and its warning, `RunCommand`'s unconditional "unverified" line is gone)**;
+   `QlnEngine` full `AxesWire`;
    engine-per-variant resolution in `LegRunner`; single-shot RAG prompt assembly; funnel + hits + thinking
    persistence (§3.5 migrations); retrieval metrics. Verify the `collapse` repair end to end here.
 5. **Index preparations** — the table with its owner + heartbeat, the qln index-state poll, the writable

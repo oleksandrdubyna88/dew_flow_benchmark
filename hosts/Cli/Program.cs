@@ -269,6 +269,9 @@ public static class Program
         output.WriteLine("              to freeze a selection from the bank instead of reading a file)");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
         output.WriteLine("             [--stale-after-minutes 30] [--max-consecutive-failures 20]");
+        output.WriteLine("             [--checkout-root <dir>] [--no-checkout]  the target is mirrored read-only and");
+        output.WriteLine("             checked out at its commit before anything is measured; --no-checkout skips");
+        output.WriteLine("             that and says plainly that the commit is UNVERIFIED");
         output.WriteLine("             [--leg-wall-seconds 600]  one ceiling for the WHOLE leg, not per call:");
         output.WriteLine("             a looping lane must not multiply it by a turn count nobody bounded");
         output.WriteLine("             sweeps what a crash left claimed before it drains; Ctrl+C / SIGTERM stop it");

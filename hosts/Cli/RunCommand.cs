@@ -41,6 +41,17 @@ public static class RunCommand
     /// </para></summary>
     private const int DefaultLegWallSeconds = 600;
 
+    /// <summary>Where the read-only checkout cache lives when the operator names no root.
+    /// <para>
+    /// Under the user's local application data, and deliberately NOT under any repository: this cache holds
+    /// a bare mirror per url and a worktree per commit, and the one thing a benchmark must never do is
+    /// write into a tree somebody works in. The equivalent component upstream ran <c>git checkout</c> in
+    /// place on a configured path, which for a benchmark means rewriting whatever a developer had open.
+    /// </para></summary>
+    private static string DefaultCheckoutRoot =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "bench", "checkouts");
+
     public static async Task<int> RunAsync(
         CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
@@ -76,7 +87,7 @@ public static class RunCommand
     private static async Task<int> StartAsync(
         RunInputs settings, CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
-        await using var provider = Services(settings.ConnectionString);
+        await using var provider = Services(settings);
 
         var prepared = await PrepareAsync(provider, settings, output, error, stopping);
 
@@ -102,11 +113,51 @@ public static class RunCommand
             return null;
         }
 
+        var checkout = await CheckoutAsync(scope, settings, output, stopping);
+
+        if (checkout is Outcome<string>.Fail unavailable)
+        {
+            return Refuse(error, unavailable.Reason);
+        }
+
         var selection = await SelectAsync(scope, settings, stopping);
 
         return selection is Outcome<BankSelection>.Fail badSuite
             ? Refuse(error, badSuite.Reason)
             : await CreateAsync(scope, settings, ((Outcome<BankSelection>.Ok)selection).Value, output, error, stopping);
+    }
+
+    /// <summary>Puts the target's tree on disk at the pinned commit, before anything is created.
+    /// <para>
+    /// The provider has existed, tested, since the first commits and <b>nothing called it</b>: every run
+    /// printed "the target was not checked out, so its commit is recorded but unverified" and measured
+    /// against a sha nobody had confirmed exists. A commit that is unpushed, on a fork, or garbage-collected
+    /// now ends the run here, by name, instead of producing a campaign of results labelled with a tree that
+    /// was never seen.
+    /// </para>
+    /// <para>
+    /// Read-only, always: a bare mirror per url and a worktree per commit under a cache root this process
+    /// owns. <c>--no-checkout</c> keeps the old behaviour for a target this machine cannot clone — and keeps
+    /// the warning that says the commit is unverified, because then it is.
+    /// </para></summary>
+    private static async Task<Outcome<string>> CheckoutAsync(
+        AsyncServiceScope scope, RunInputs settings, TextWriter output, CancellationToken stopping)
+    {
+        if (settings.SkipCheckout)
+        {
+            return Outcome<string>.Success(string.Empty);
+        }
+
+        var ensured = await scope.ServiceProvider.GetRequiredService<ICheckoutProvider>()
+            .EnsureAsync(settings.Target, stopping);
+
+        return ensured.Match(
+            path =>
+            {
+                output.WriteLine($"checkout {path}");
+                return Outcome<string>.Success(path);
+            },
+            reason => Outcome<string>.Failure($"the target could not be checked out — {reason}"));
     }
 
     /// <summary>The question set, from a file or from the bank — one frozen suite either way.
@@ -332,7 +383,10 @@ public static class RunCommand
             output.WriteLine($"budget   {budget.Describe}");
         }
 
-        output.WriteLine("warn     the target was not checked out, so its commit is recorded but unverified");
+        if (settings.SkipCheckout)
+        {
+            output.WriteLine("warn     --no-checkout: the target's commit is recorded but UNVERIFIED, and no tree was fetched");
+        }
 
         if (!settings.Lane.Name.Contains("tool", StringComparison.OrdinalIgnoreCase))
         {
@@ -450,8 +504,8 @@ public static class RunCommand
             _ => drained.Scored == 0 ? ExitCodes.NoReport : ExitCodes.Pass,
         };
 
-    private static ServiceProvider Services(string connectionString) =>
-        CliContainer.ForRun(connectionString, CliLogging.Start());
+    private static ServiceProvider Services(RunInputs settings) =>
+        CliContainer.ForRun(settings.ConnectionString, settings.CheckoutRoot, CliLogging.Start());
 
     private static Outcome<RunInputs> Read(CommandLine command)
     {
@@ -499,7 +553,9 @@ public static class RunCommand
                         connection,
                         [Budget.Of(BudgetKind.Wall, BudgetScope.Question, wallSeconds)],
                         Selection(command),
-                        command.Value("suite-id", "bank-selection"))),
+                        command.Value("suite-id", "bank-selection"),
+                        command.Value("checkout-root", DefaultCheckoutRoot),
+                        command.Has("no-checkout"))),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
@@ -584,5 +640,7 @@ public static class RunCommand
         string ConnectionString,
         IReadOnlyList<Budget> Budgets,
         BankQuery Selection,
-        string SuiteId);
+        string SuiteId,
+        string CheckoutRoot,
+        bool SkipCheckout);
 }

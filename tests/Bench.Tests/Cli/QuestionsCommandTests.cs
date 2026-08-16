@@ -90,7 +90,7 @@ public sealed class QuestionsCommandTests(PostgresFixture postgres)
         Run("questions", "import", "--file", file.Path, "--db", postgres.ConnectionString);
 
         var (code, output, _) = Run(
-            "run", "--repo", Repo, "--commit", Sha,
+            "run", "--repo", Repo, "--commit", Sha, "--no-checkout",
             "--bank-group", $"lookup-{suffix}", "--suite-id", $"bank-{suffix}",
             "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint);
 
@@ -117,7 +117,7 @@ public sealed class QuestionsCommandTests(PostgresFixture postgres)
         Run("questions", "reject", "--question", $"q1-{suffix}", "--db", postgres.ConnectionString);
 
         var (code, _, error) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--bank-group", $"lookup-{suffix}",
+            "run", "--repo", Repo, "--commit", Sha, "--no-checkout", "--bank-group", $"lookup-{suffix}",
             "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint);
 
         code.Should().Be(ExitCodes.Environment);
@@ -128,7 +128,7 @@ public sealed class QuestionsCommandTests(PostgresFixture postgres)
     public void A_run_that_names_neither_a_suite_file_nor_a_bank_group_says_so()
     {
         var (code, _, error) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--db", postgres.ConnectionString,
+            "run", "--repo", Repo, "--commit", Sha, "--no-checkout", "--db", postgres.ConnectionString,
             "--model", "qwen@local", "--model-url", DeadEndpoint);
 
         code.Should().Be(ExitCodes.Configuration);

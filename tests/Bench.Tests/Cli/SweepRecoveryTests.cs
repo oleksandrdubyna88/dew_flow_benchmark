@@ -36,7 +36,7 @@ public sealed class SweepRecoveryTests(PostgresFixture postgres)
         using var suite = new TempSuite();
 
         var (code, output, _) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint);
 
         (await StateAsync(stranded)).Should().Be(CellState.Pending,

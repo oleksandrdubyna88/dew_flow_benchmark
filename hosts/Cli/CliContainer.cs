@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Infrastructure.Git;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -20,9 +21,13 @@ namespace Bench.Cli;
 /// </para></summary>
 public static class CliContainer
 {
-    /// <summary>`bench run` — the stores, a model runtime, one leg at a time, and the drain around them.</summary>
-    public static ServiceProvider ForRun(string connectionString, Serilog.ILogger logger) =>
+    /// <summary>`bench run` — the stores, a model runtime, the checkout cache, one leg at a time, and the
+    /// drain around them.</summary>
+    public static ServiceProvider ForRun(
+        string connectionString, string checkoutRoot, Serilog.ILogger logger) =>
         Model(Store(connectionString, logger))
+            .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
+            .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
             .AddScoped<LegRunner>()
             .AddSingleton<LegDrain>()
             .BuildServiceProvider();

@@ -229,6 +229,14 @@ leg's totals rather than folded in.
 the queue leg by leg through `LegRunner` — one claim at a time, so a second process running the same
 command is a second worker rather than a duplicate run.
 
+**It checks the target out first.** A bare mirror per url and a worktree per commit, under a cache root
+this process owns (`--checkout-root`, default under the user's local application data) — never a directory
+anyone works in. A commit that is unpushed, on a fork, or garbage-collected ends the run *there*, by name,
+instead of producing a campaign of results labelled with a tree nobody ever saw. The provider had existed,
+tested, since the first commits with **no caller**; until it was wired in, every run printed that its
+commit was "recorded but unverified" and measured anyway. `--no-checkout` keeps that older behaviour for a
+target this machine cannot clone, and keeps the warning, because then it is true.
+
 **It reports; it does not judge.** No bar has been agreed, so the exit code answers *did the measurement
 happen* — never *was the subject good*. `0` a run that produced legs, `5` a run that produced none, `3` an
 unreachable store or a missing checkout, `4` a malformed invocation. A low score exits `0`, and that is the
@@ -350,5 +358,6 @@ Stated because a description that quietly implies more than is built is the same
 - **A test's ENGINE is still one value per run**, not an axis: variants exist as a catalog and as a column
   on a cell, but `bench run` does not yet plan one leg per variant or wire an engine into a leg — that is
   step 4 of `todo/PLAN_variant_matrix.md`, and it waits on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`.
-- **Nothing checks the target out.** `ICheckoutProvider` is written and tested and no run path calls it,
-  so a run records its commit without verifying it.
+- **The checked-out tree is verified but not yet USED.** `bench run` mirrors and checks out the target
+  before it measures (below), which is what makes a commit real rather than recorded — but no lane reads
+  the worktree yet, because there is no tool loop and no engine wired into a leg.

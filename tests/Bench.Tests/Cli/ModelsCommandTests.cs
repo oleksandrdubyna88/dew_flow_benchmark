@@ -87,7 +87,7 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
 
         using var suite = new TempSuite();
         var (code, output, _) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--subjects", $"{first},{second}", "--judges", first,
             "--db", postgres.ConnectionString);
 
@@ -113,7 +113,7 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
 
         using var suite = new TempSuite();
         var (code, _, error) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--subjects", key, "--db", postgres.ConnectionString);
 
         code.Should().Be(ExitCodes.Environment);
@@ -128,7 +128,7 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
 
         using var suite = new TempSuite();
         var (code, _, error) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--subjects", key, "--db", postgres.ConnectionString);
 
         // Three hours into a sweep this reads as a wall of identical transport failures. Here it names the
@@ -143,7 +143,7 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
         using var suite = new TempSuite();
 
         var (code, _, error) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--subjects", "no-such-model", "--db", postgres.ConnectionString);
 
         code.Should().Be(ExitCodes.Environment);
@@ -156,7 +156,7 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
         using var suite = new TempSuite();
 
         var (code, output, _) = Run(
-            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path,
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--model", "qwen@local", "--model-url", DeadEndpoint, "--db", postgres.ConnectionString);
 
         // Pointing the harness at something once, without registering it, stays possible — and records no

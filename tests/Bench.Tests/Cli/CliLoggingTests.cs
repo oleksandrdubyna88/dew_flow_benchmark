@@ -28,7 +28,7 @@ public sealed class CliLoggingTests
         using var root = new TempLogRoot();
         var logger = BenchLogging.CreateLogger(new ConfigurationBuilder().Build(), root.Path, "bench");
 
-        using (var provider = CliContainer.ForRun(Connection, logger))
+        using (var provider = CliContainer.ForRun(Connection, root.Path, logger))
         {
             provider.GetRequiredService<ILogger<LegRunner>>().LogWarning(
                 "Cell {Cell} was scored but not settled: {Reason}", Guid.Empty, "the store refused the settle");
