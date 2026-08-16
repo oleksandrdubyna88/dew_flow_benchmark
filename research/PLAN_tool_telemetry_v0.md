@@ -37,7 +37,7 @@
 > the emitter's own output rather than from live traffic. That is the one claim this plan cannot close by
 > reading code — it needs a run.
 >
-> Related: [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.4 (the contract this implements) and
+> Related: [PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) §5.4 (the contract this implements) and
 > §7 (the AppHost/Postgres this stands up); [research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md)
 > §3 (why "refused ≠ answered" and "not captured ≠ zero" are load-bearing).
 
