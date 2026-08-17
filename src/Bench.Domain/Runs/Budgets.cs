@@ -55,6 +55,17 @@ public abstract record LegOutcome
     /// <summary>The leg died. Something is broken in the harness or the runtime, not in the model.</summary>
     public sealed record Crashed(string Reason) : LegOutcome;
 
+    /// <summary>The leg was never run, because something about its ARM could not be trusted: an engine that
+    /// applied an axis differently from the way it was asked, a corpus that is not the recipe's, an index
+    /// built from another tree.
+    /// <para>
+    /// A fourth state rather than a crash, and the distinction is the whole point. A crash says this harness
+    /// or that runtime is broken and invites somebody to fix a bug; a block says the CONFIGURATION does not
+    /// hold together and invites them to fix a variant or rebuild an index. Scored as a wrong answer it would
+    /// be worse still: the subject never saw the question.
+    /// </para></summary>
+    public sealed record Blocked(string Reason) : LegOutcome;
+
     /// <summary>Whether this leg may enter a paired delta. A capped or crashed leg may not: pairing it
     /// against a completed one measures the ceiling, not the configuration.</summary>
     public bool CountsInPairedDelta => this is Completed;
@@ -65,6 +76,7 @@ public abstract record LegOutcome
             Completed => "completed",
             CapExceeded c => $"cap {c.Kind}/{c.Scope} at {c.Reached} of {c.Limit}",
             Crashed c => $"crashed: {c.Reason}",
+            Blocked b => $"blocked: {b.Reason}",
             _ => "unknown",
         };
 }

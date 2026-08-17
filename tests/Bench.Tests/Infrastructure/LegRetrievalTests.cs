@@ -138,6 +138,44 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task An_axis_the_engine_did_not_echo_BLOCKS_the_cell_and_stores_no_result()
+    {
+        var (runId, plan, runner, runs) = await ArrangeAsync(
+            new EchoRuntime(), Ignoring(Hit("src/Retry/RetryHelper.cs", 70, 120)));
+
+        var blocked = await runner.RunNextAsync(runId, Worker(), plan, Ct);
+
+        // The engine answered 200 with hits — this is the failure mode that looks like success. Its echo simply
+        // lacks the axis, so nothing on this side could tell whether the recipe applied, and storing the result
+        // would record a configuration that may never have run.
+        blocked.Reason().Should().Contain("blocked").And.Contain("does not carry it at all");
+        (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().BeEmpty(
+            "a leg measured under a recipe the engine ignored is a permanently mislabelled number");
+
+        var cell = await CellAsync(runId);
+        cell.OutcomeKind.Should().Be(
+            LegOutcomeKind.Blocked,
+            "not Crashed: a crash says this harness is broken and invites a bug hunt, while a block says the "
+            + "configuration does not hold together and invites fixing a variant");
+        cell.OutcomeDetail.Should().Contain("fusion");
+        (await runs.ProgressAsync(runId, Ct)).Settled.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_echo_that_differs_only_in_BOOLEAN_CASING_does_not_block()
+    {
+        var (runId, plan, runner, _) = await ArrangeAsync(
+            new EchoRuntime(), Shouting(Hit("src/Retry/RetryHelper.cs", 70, 120)));
+
+        var result = await runner.RunNextAsync(runId, Worker(), plan, Ct);
+
+        // Measured live: this side sends `dense=true` and the engine echoes `dense=True`. A string comparison
+        // would have blocked every cell of the matrix on its first real run.
+        result.Failed().Should().BeFalse();
+        (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task A_retrieval_that_outlives_the_legs_wall_is_a_CAP_rather_than_a_crash()
     {
         var clock = new TestClock(Noon);
@@ -241,6 +279,12 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
     /// <summary>A retriever that answers, in the wrong file. The engine worked; the recall did not.</summary>
     private static FakeRetriever Missing() => new(Hit("src/Timeout/TimeoutHelper.cs", 10, 40));
 
+    /// <summary>An engine that answers 200 with hits and drops an axis from its echo.</summary>
+    private static FakeRetriever Ignoring(params RetrievedHit[] hits) => new(Echo.Ignoring, hits);
+
+    /// <summary>An engine that echoes its booleans in its own casing, as the live one does.</summary>
+    private static FakeRetriever Shouting(params RetrievedHit[] hits) => new(Echo.Shouting, hits);
+
     private static RetrievedHit Hit(string path, int start, int end) => new(
         1, path, start, end, "RetryHelper.Backoff", "csharp|Polly.Retry|RetryHelper|Backoff`0|(int)",
         "internal static TimeSpan Backoff(int attempt)", 0.91, "rerank", ["dense", "sparse"], [1, 4],
@@ -302,22 +346,45 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
             ],
             string.Empty)).Ok().Freeze().Ok();
 
+    /// <summary>How a fake engine echoes the axes it was asked for.</summary>
+    private enum Echo
+    {
+        /// <summary>Back verbatim — an engine that applied what it was handed.</summary>
+        Faithful,
+
+        /// <summary>The fusion axis missing from the echo. The failure that LOOKS like success: a 200 with
+        /// hits, and no way for this side to tell whether the recipe applied.</summary>
+        Ignoring,
+
+        /// <summary>Booleans in the engine's own casing — `True` for a `true` that was sent. What the live
+        /// daemon actually does, and what a string comparison would have blocked every cell over.</summary>
+        Shouting,
+    }
+
     /// <summary>A retriever that answers with a fixed list, or refuses with a fixed reason.</summary>
     private sealed class FakeRetriever : IRetriever
     {
         private readonly RetrievedHit[] _hits;
         private readonly string _refusal;
+        private readonly Echo _echo;
 
         public FakeRetriever(params RetrievedHit[] hits)
+            : this(Echo.Faithful, hits)
+        {
+        }
+
+        public FakeRetriever(Echo echo, params RetrievedHit[] hits)
         {
             _hits = hits;
             _refusal = string.Empty;
+            _echo = echo;
         }
 
         public FakeRetriever(string refusal)
         {
             _hits = [];
             _refusal = refusal;
+            _echo = Echo.Faithful;
         }
 
         public EngineRef Describe => new(EngineKind.Qln, "http://fake", string.Empty, string.Empty);
@@ -332,6 +399,28 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
             VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken) =>
             Task.FromResult(Outcome<IndexState>.Failure("this fake serves the leg runner, which never inspects an index"));
 
+        /// <summary>What the run asked for — a limit and the two channel flags, which is enough for the echo
+        /// assertion to have something boolean to disagree about.</summary>
+        private static EngineAxes Asked(RetrievalRequest request) => new(
+        [
+            new Axis("limit", request.Recipe.Limit.ToString()),
+            new Axis("fusion", request.Recipe.Fusion.Mode),
+            new Axis("dense", "true"),
+        ]);
+
+        private EngineAxes Applied(RetrievalRequest request) => _echo switch
+        {
+            Echo.Ignoring => new EngineAxes(
+                [new Axis("limit", request.Recipe.Limit.ToString()), new Axis("dense", "true")]),
+            Echo.Shouting => new EngineAxes(
+            [
+                new Axis("limit", request.Recipe.Limit.ToString()),
+                new Axis("fusion", request.Recipe.Fusion.Mode),
+                new Axis("dense", "True"),
+            ]),
+            _ => Asked(request),
+        };
+
         public Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(_refusal.Length > 0
@@ -341,8 +430,8 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
                     _hits,
                     new RetrievalFunnel(TraceContract.V0, [new FunnelStage("rerank", 50, 20, 900)], 1200, []),
                     string.Empty,
-                    new EngineAxes([new Axis("limit", request.Recipe.Limit.ToString())]),
-                    new EngineAxes([new Axis("limit", request.Recipe.Limit.ToString())]),
+                    Asked(request),
+                    Applied(request),
                     2048,
                     1300)));
     }

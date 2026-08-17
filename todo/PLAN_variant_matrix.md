@@ -129,6 +129,37 @@
 >     members — **and both scored the same anchor recall of 0.5.** The metric agreed while the retrieval did
 >     not. A report showing recall alone would have said "no difference"; the stored `retrieved_hits` say the
 >     lists share one position out of five. This is the clearest argument the schema has produced for itself.
+> - **The echo assertion landed with the trap it was warned about** (step 5). Every axis a run asked for must
+>   appear in the engine's echo with the same value, and a mismatch settles the cell as a NEW outcome kind —
+>   `Blocked`, a fourth state beside Completed/CapExceeded/Crashed. The distinction earns its place: a crash
+>   says this harness or that runtime is broken and invites a bug hunt, a block says the CONFIGURATION does not
+>   hold together and invites fixing a variant. Nothing is scored either way — the subject never saw the
+>   question. Comparison is BY MEANING: the live daemon echoes `dense=True` for a `dense=true` that was sent,
+>   and a string comparison would have blocked every cell of the matrix on its first real run. Numbers compare
+>   as numbers (`1` is `1.0`), and the echo may legitimately carry MORE than was asked.
+> - **`index_preparations` shipped with an owner, a heartbeat and a sweep** (step 5). Keyed
+>   `(commit, corpus-recipe hash, engine endpoint)` under a unique index — the CORPUS half, never the whole
+>   variant, because two variants differing only in their result limit share one index and keying by the
+>   variant would build it twice and then compare a corpus against itself. Two daemons are two indexes. Every
+>   transition is owner-guarded in the database, and the sweep is the `SweepAsync` lesson a third time: an
+>   engine restart mid-pass leaves a row `Building` forever, and because every cell of that corpus waits on it,
+>   one stranded row stalls a whole variant for the life of the deployment. Staleness selects, OWNERSHIP
+>   decides — a live worker past the window is watching a legitimate 24-minute pass, and a worker on another
+>   machine cannot be interrogated from here. `WorkerLiveness` is reused rather than re-probed: its three catch
+>   clauses encode that being REFUSED an answer about a pid is not being told the process ended.
+> - **A found index is recorded as FOUND, not built** — so a report can tell a corpus this benchmark built from
+>   one it merely happened to find, which is the difference between a measurement it can reproduce and one it
+>   cannot.
+> - **Still open in step 5**: the pass TRIGGER over HTTP. The engine's half is ready and better than the plan
+>   assumed — `POST /passes` takes `WindowTokens` (so 256 and 512 corpora can be built) and an
+>   `ExpectedCommit` it REFUSES a mismatched checkout against. What is missing on this side is only the caller.
+>   The plan's writable indexing checkout and its lease stay unbuilt deliberately: without them the benchmark
+>   never moves a tree, so pinning `ExpectedCommit` and letting the engine refuse is the honest first slice, and
+>   the lease belongs with §3.4b where it is a gate.
+> - **The sweep needed its own test database, for the second time today.** It is database-wide by design — a
+>   sweep scoped to one run would leave a corpus stalled for every other run that wants it — so a Building row
+>   another test had left behind was stranded by the live-worker test and counted as its own. Same fix as the
+>   hit-retention tests, same reason.
 > - **Still open in step 4**: `chunkTokens` and `embedModel` are not request axes at all — the engine derives
 >   them from its configured recipe — so a variant differing only in chunk size is one this engine cannot
 >   distinguish. That is the corpus half, and it lands with the index preparations (step 5) and the sibling

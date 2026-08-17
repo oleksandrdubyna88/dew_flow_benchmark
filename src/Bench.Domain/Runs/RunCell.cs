@@ -23,6 +23,11 @@ public enum LegOutcomeKind
     Completed,
     CapExceeded,
     Crashed,
+
+    /// <summary>Never run, because its arm could not be trusted — a mislabelled variant, a corpus that is not
+    /// the recipe's, an engine that applied an axis differently from the request. Stored as a NAME like every
+    /// other member here, so adding this one changed no existing row.</summary>
+    Blocked,
 }
 
 /// <summary>One unit of work in a run: a question, a repeat, a leg, and the position it runs in.
@@ -169,6 +174,7 @@ public static class LegOutcomeCodec
             LegOutcome.Completed => (LegOutcomeKind.Completed, string.Empty),
             LegOutcome.CapExceeded c => (LegOutcomeKind.CapExceeded, $"{c.Kind}/{c.Scope}: reached {c.Reached} of {c.Limit}"),
             LegOutcome.Crashed c => (LegOutcomeKind.Crashed, c.Reason),
+            LegOutcome.Blocked b => (LegOutcomeKind.Blocked, b.Reason),
             _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "unknown leg outcome"),
         };
 }

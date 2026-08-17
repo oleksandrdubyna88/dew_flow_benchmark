@@ -101,6 +101,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<RetrievedHitRow> RetrievedHits => Set<RetrievedHitRow>();
 
+    public DbSet<PreparationRow> Preparations => Set<PreparationRow>();
+
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
 
     public DbSet<VariantRow> Variants => Set<VariantRow>();
@@ -244,6 +246,21 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
             funnel.HasOne(f => f.Result!).WithOne(r => r.Funnel!)
                 .HasForeignKey<FunnelRow>(f => f.ResultId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<PreparationRow>(preparation =>
+        {
+            preparation.ToTable("index_preparations");
+            preparation.HasKey(p => p.Id);
+            preparation.Property(p => p.State).HasConversion<string>();
+
+            // The concurrency story of this whole table, and it is the DATABASE's rather than a read-then-write
+            // above it: two runs that want the same index at the same moment must reach ONE row, or the matrix
+            // holds two readiness answers for one collection with nothing able to say which is current.
+            preparation.HasIndex(p => new { p.CommitSha, p.RecipeHash, p.EngineEndpoint }).IsUnique();
+
+            // The sweep's own query — building rows by how long ago they were last heard from.
+            preparation.HasIndex(p => new { p.State, p.Heartbeat });
         });
 
         builder.Entity<RetrievedHitRow>(hit =>

@@ -137,11 +137,34 @@ public sealed class LegRunner(
         // UnansweredAsync, not AbandonAsync: retrieval is INSIDE the leg's wall, so an engine that ran the
         // clock out is a recorded CAP and an engine that failed inside the budget is a crash. Settling both
         // as crashes would report the harness as broken over a merely slow index.
-        return retrieved is Outcome<RetrievedContext>.Fail unretrieved
-            ? await UnansweredAsync(cell, owner, deadline, unretrieved.Reason, cancellationToken)
+        if (retrieved is Outcome<RetrievedContext>.Fail unretrieved)
+        {
+            return await UnansweredAsync(cell, owner, deadline, unretrieved.Reason, cancellationToken);
+        }
+
+        var context = ((Outcome<RetrievedContext>.Ok)retrieved).Value;
+        var echoed = context.Requested.AssertAppliedIn(context.Applied);
+
+        return echoed is Outcome<EngineAxes>.Fail ignored
+            ? await BlockAsync(cell, owner, ignored.Reason, cancellationToken)
             : await AnswerAsync(
-                new LegWork(cell, owner, plan, question, subject, deadline, ((Outcome<RetrievedContext>.Ok)retrieved).Value),
-                cancellationToken);
+                new LegWork(cell, owner, plan, question, subject, deadline, context), cancellationToken);
+    }
+
+    /// <summary>A leg whose ARM could not be trusted, settled without being run.
+    /// <para>
+    /// Distinct from a crash on purpose: a crash says this harness or that runtime is broken, and a block says
+    /// the configuration does not hold together — an engine that applied an axis differently from the way it
+    /// was asked, a recipe whose corpus is not the one answering. The subject never saw the question, so it is
+    /// not scored either; a blocked cell is cheap and visible, and a mislabelled measurement is permanent.
+    /// </para></summary>
+    private async Task<Outcome<LegResult>> BlockAsync(
+        RunCell cell, WorkerIdentity owner, string reason, CancellationToken cancellationToken)
+    {
+        await runs.SettleAsync(cell.Id, owner, new LegOutcome.Blocked(reason), cancellationToken);
+        logger.LogWarning("Cell {Cell} was blocked rather than measured: {Reason}", cell.Id, reason);
+
+        return Outcome<LegResult>.Failure($"blocked: {reason}");
     }
 
     /// <summary>Retrieval, for the arms that have any, under what the LEG has left.
