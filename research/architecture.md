@@ -204,6 +204,50 @@ days, `--hit-retention-days 0` keeps everything. It is an `ExecuteUpdate` filter
 `CreatedAt` — denormalised from the result on write — so the largest table in the system is never joined to
 `results` to decide what is old.
 
+### Where questions come from
+
+Two doors, one set of rules. **Import** takes a hand-authored file; **author** drives a CLI coding agent to
+write candidates for one group (`bench questions author`, `todo/PLAN_question_authoring.md`). Both land as the
+same rows through the same admission rules, and authored ones are `Proposed` until something vouches for them
+— which is what keeps "a machine wrote a thousand overnight" from meaning "a thousand are measurable".
+
+Authoring exists because it is the project's one unavoidable bottleneck, in the founding plan's words:
+*"Running is cheap and authoring is not."* Every axis built — variants, subjects, lanes, repeats — multiplies
+over a question set, and the set is the one factor nothing else compensates for.
+
+- **`ICliAgentRuntime` is not `IModelRuntime`.** One launches a process to do work FOR the harness; the other
+  is a completion endpoint measured AS a subject. The same executable will be measured through the second port
+  with turn ceilings and telemetry (`todo/PLAN_tool_benchmark.md` step 11), and conflating them would make
+  measuring an agent indistinguishable from using one.
+- **Over the one launcher**, which grew stdin for this: a prompt runs to kilobytes and an argument list caps
+  out around 32 KB, so argv would have failed on the machine with the biggest target repository.
+- **The agent is launched inside the target's checkout.** An author that cannot read the repository cannot
+  anchor a question in it — asked to write about a commit it had no access to, the agent refused and said so
+  rather than inventing line numbers.
+- **The answer is `BankQuestionFile`** — the shape `import` already reads, seed and all — so an authored batch
+  is literally an importable file and there is one format, not two that agree until somebody edits one.
+- **Nothing repairs an answer.** A malformed reply is a rejection carrying the parse error and a SAMPLE of what
+  was said, because the next edit to the prompt is made from exactly that text. The array is EXTRACTED from a
+  fence or a prose preface — that changes no question — and anything the author said outside it is reported as
+  a note rather than dropped. That note is how the environment finding below became visible at all.
+- **Prompts are a hashed catalog** (`prompts/author`, `prompts/review`): shared contract plus per-group brief,
+  and the hash covers both, so editing the contract changes every group's identity. A prompt in a string
+  literal would be an unversioned axis with the largest measured effect in the system — one rewritten ordering
+  instruction moved a score 16.5 points of 63 where swapping 4 tools for 18 moved 1.
+- **A seed date is never invented.** Unknown reads as *may recall*; a guessed date reads as *safe*, which is
+  the lie the whole memorisation check would rest on. `QuestionSeed` normalises to UTC in the domain, because a
+  date written `2026-05-14` deserialises to the reading machine's offset and Postgres accepts only UTC.
+- **`code-writing` is refused by name.** Its authoring needs three gates — the bug reproduces, the reference
+  fix works, the tree is rebuilt to the buggy state — which need a sandbox worktree and a build
+  (`todo/PLAN_code_lane.md`).
+
+Measured on the first live batch (2026-08-17, Claude CLI 2.1.216, target `dew_flow_rag_qln` at `64865c68`):
+two questions authored and stored, both anchored at members the agent verified in the checked-out tree. Two
+environment facts came out of it and are not yet fixed: **git history is not readable inside the worktree** (a
+`git worktree` makes `.git` a redirect file, which the agent treats as untrusted and declines), so seed dates
+came back `unstated` — which the `pr-diff` group depends on entirely; and a CLI that prints diagnostics beside
+its answer is why the runtime reads **stdout alone** rather than the merged output.
+
 ### The question bank
 
 Questions live in Postgres in named **groups**, with per-**reviewer** marks — both rows rather than enum

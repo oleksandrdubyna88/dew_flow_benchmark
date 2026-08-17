@@ -1,6 +1,35 @@
 # PLAN — question authoring: three CLI agents write the bank, three review it
 
-> Status: **steps 1–4 of §4 IMPLEMENTED 2026-08-17; steps 5–6 open.** Step 3: `prompts/author` and
+> Status: **steps 1–4 of §4 IMPLEMENTED 2026-08-17 and the first live batch AUTHORED; step 5 (vetting) and
+> step 6 (the throughput number) open.** `bench questions author` drives the Claude CLI inside the target's
+> checkout and stored **two questions** for `code-lookup` against `dew_flow_rag_qln@64865c68`, both anchored at
+> members the agent verified in the tree (`StoreNaming.KindOf` 45–49, `RrfFusion.Fuse` 27–28).
+>
+> **Four defects the live batch found, in order — none of them visible from a stub:**
+> 1. **The agent was launched in the wrong directory.** It refused to write anything, saying it needed read
+>    access to the repository at that commit — the correct answer, and a defect in how it was called. Now the
+>    pass checks the target out (reusing `ICheckoutProvider`) and launches the agent in that worktree.
+> 2. **The launcher merges stderr into stdout.** Right for git, where "what did it print before it failed" does
+>    not care which pipe carried it; wrong for an agent whose stdout is the PAYLOAD. The Claude CLI prints a
+>    workspace-trust warning beside its answer, so every merged reading began with prose and the parser refused
+>    it. `ProcessResult` now carries stdout separately and the agent runtime reads that.
+> 3. **A rejection said nothing about WHAT was answered.** The next edit to a prompt is made from exactly that
+>    text, so a parse failure now carries a 200-character sample. Every subsequent fix came from reading it.
+> 4. **First-bracket-to-last-bracket is not a way to find JSON.** The prose around one answer contained
+>    `int[] SourceLine`, so the slice began at a C# array type. Replaced with a balanced scan that only accepts a
+>    slice which PARSES as a non-empty array.
+>
+> **Two environment facts that are NOT fixed**, and the first one blocks a whole group:
+> - **Git history is unreadable inside the worktree.** `git worktree` makes `.git` a redirect file, which the
+>   agent treats as untrusted and declines to follow — so seed dates came back `unstated`. The `pr-diff` group
+>   depends entirely on merge dates, so it cannot be authored this way at all until the author gets a tree whose
+>   history it can read.
+> - **Prose before JSON is the agent's instinct**, not a prompt defect that one more sentence fixes: it wrote a
+>   preface twice after being told twice not to. The extraction handles it and the preface is reported as a
+>   note — which is how finding (1) surfaced. The durable fix is probably a FILE handoff (the agent writes
+>   `questions.json` into the worktree and the pass reads it), which is how a coding agent naturally works.
+>
+> Steps 3–4 as designed: Step 3: `prompts/author` and
 > `prompts/review`, five reading groups each, shared contract plus per-group brief, hashed. Step 4:
 > `AuthoringPass` drives an agent, parses its answer as the shape `bench questions import` already reads, and
 > admits it through `QuestionCandidate.Propose` + `Dedup` — no second format and no second admission rule. The

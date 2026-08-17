@@ -159,7 +159,7 @@ public static class Program
             return ExitCodes.Environment;
         }
 
-        using var provider = CliContainer.ForBank(connection, CliLogging.Start());
+        using var provider = CliContainer.ForBank(connection, CheckoutRoot(command), CliLogging.Start());
         using var scope = provider.CreateScope();
 
         try
@@ -175,6 +175,10 @@ public static class Program
         return QuestionsCommand.RunAsync(
                 command,
                 scope.ServiceProvider.GetRequiredService<IQuestionBank>(),
+                scope.ServiceProvider.GetRequiredService<ICliAgentRuntime>(),
+                scope.ServiceProvider.GetRequiredService<IModelRegistry>(),
+                scope.ServiceProvider.GetRequiredService<ISecretSource>(),
+                scope.ServiceProvider.GetRequiredService<ICheckoutProvider>(),
                 TimeProvider.System,
                 output,
                 error,
@@ -194,7 +198,7 @@ public static class Program
             return ExitCodes.Environment;
         }
 
-        using var provider = CliContainer.ForBank(connection, CliLogging.Start());
+        using var provider = CliContainer.ForBank(connection, CheckoutRoot(command), CliLogging.Start());
         using var scope = provider.CreateScope();
 
         try
@@ -217,6 +221,14 @@ public static class Program
                 stopping)
             .GetAwaiter().GetResult();
     }
+
+    /// <summary>Where the read-only checkout cache lives. The same default `bench run` uses, so a target
+    /// mirrored for a run is the tree an authoring pass reads rather than a second clone of it.</summary>
+    private static string CheckoutRoot(CommandLine command) =>
+        command.Value(
+            "checkout-root",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "bench", "checkouts"));
 
     private static int Version(TextWriter output)
     {
@@ -254,6 +266,11 @@ public static class Program
         output.WriteLine("  bench models disable|enable --key <slug> --db <connection>");
         output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");
+        output.WriteLine("  bench questions author --group <key> --authors <registry keys> --repo <url>");
+        output.WriteLine("             --commit <40-hex> [--count 5] [--ordinal 1] [--wall-seconds 600]");
+        output.WriteLine("             [--prompts prompts] --db <connection>   a CLI agent writes candidates:");
+        output.WriteLine("             they land Proposed, through the same admission rules an import passes,");
+        output.WriteLine("             and the prompt that wrote them is recorded by hash");
         output.WriteLine("  bench questions list   [--group <key>] [--from N] [--to N] [--accepted] --db <connection>");
         output.WriteLine("  bench questions groups --db <connection>");
         output.WriteLine("  bench questions review --question <id> --reviewer <key> [--verdict approved|rejected]");

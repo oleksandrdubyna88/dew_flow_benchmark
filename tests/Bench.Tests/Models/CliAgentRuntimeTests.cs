@@ -105,13 +105,46 @@ public sealed class CliAgentRuntimeTests
     public void An_answer_carries_its_size_and_the_time_it_took()
     {
         var read = CliAgentRuntime.Read(
-            new ProcessAttempt.Completed(new ProcessResult(0, "  {\"id\":\"q1\"}  ")),
+            new ProcessAttempt.Completed(new ProcessResult(0, "warning\n{\"id\":\"q1\"}", "{\"id\":\"q1\"}")),
             Ask,
             TimeSpan.FromSeconds(12)).Ok();
 
-        read.Text.Should().Be("{\"id\":\"q1\"}", "trimmed, because a CLI's trailing newline is not part of an answer");
+        read.Text.Should().Be("{\"id\":\"q1\"}");
         read.Elapsed.Should().Be(TimeSpan.FromSeconds(12));
         read.ResponseBytes.Should().BeGreaterThan(0, "the only honest per-call measure of what a batch cost");
+    }
+
+    [Fact]
+    public void The_answer_is_STDOUT_alone_and_never_the_merged_output()
+    {
+        var read = CliAgentRuntime.Read(
+            new ProcessAttempt.Completed(new ProcessResult(
+                0,
+                "Ignoring 5 permissions.allow entries: this workspace has not been trusted.\n[{\"id\":\"q1\"}]",
+                "[{\"id\":\"q1\"}]")),
+            Ask,
+            TimeSpan.FromSeconds(9)).Ok();
+
+        // Found live, and it cost three batches: the Claude CLI prints a workspace-trust warning beside its
+        // answer, and the launcher MERGES stdout with stderr — right for git, where "what did it print before
+        // it failed" does not care which pipe carried it, and wrong for an agent whose stdout is the payload.
+        // Read merged, the answer began with prose and the JSON parser refused it, correctly.
+        read.Text.Should().StartWith("[", "an answer that begins with a warning is not the agent's answer");
+        read.Text.Should().NotContain("permissions.allow");
+    }
+
+    [Fact]
+    public void An_agent_that_printed_only_to_STDERR_is_a_refusal_that_quotes_it()
+    {
+        var read = CliAgentRuntime.Read(
+            new ProcessAttempt.Completed(new ProcessResult(0, "not logged in", string.Empty)),
+            Ask,
+            TimeSpan.FromSeconds(2));
+
+        // Exit zero, nothing on stdout, something on stderr: the shape of a CLI that declined without failing.
+        // Stored as an empty answer it would be a question nobody wrote; reported without the stderr text it
+        // would be a refusal nobody can act on.
+        read.Reason().Should().Contain("printed nothing on stdout").And.Contain("not logged in");
     }
 
     private static CliAgentRuntime Runtime() => new(NullLogger<CliAgentRuntime>.Instance);

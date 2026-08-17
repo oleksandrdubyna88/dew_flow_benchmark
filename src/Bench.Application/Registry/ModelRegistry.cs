@@ -80,6 +80,43 @@ public static class ModelResolution
                 + "— the agent lane is owned by the tool benchmark plan");
     }
 
+    /// <summary>The executable a CLI agent is launched as, resolved on THIS machine.
+    /// <para>
+    /// The counterpart of <see cref="Endpoint"/> for the other kind of runtime, and it refuses the same three
+    /// things by name at the same moment: a disabled row, a runtime that is not a CLI at all, and a reference
+    /// that resolves to nothing here. Discovering any of them at question forty of a batch is discovering it
+    /// three hundred launches too late.
+    /// </para>
+    /// <para>
+    /// This does NOT make a CLI model resolvable as a measurement SUBJECT — <see cref="AsSubject"/> and
+    /// <see cref="Endpoint"/> still refuse it, because measuring an agent needs turn ceilings and telemetry
+    /// that belong to the tool-benchmark plan. It makes it usable as a WORKER for the harness, which is a
+    /// different role with a different port.
+    /// </para></summary>
+    public static Outcome<string> Executable(RegisteredModel model, ISecretSource secrets)
+    {
+        if (!model.Enabled)
+        {
+            return Outcome<string>.Failure(
+                $"model '{model.Key}' is disabled — a disabled model is refused when the batch is created, by name");
+        }
+
+        if (model.Runtime is ModelRuntimeKind.OpenAiEndpoint or ModelRuntimeKind.BridgeLocal)
+        {
+            return Outcome<string>.Failure(
+                $"model '{model.Key}' runs as {model.Runtime.ToString().ToLowerInvariant()} — it is answered over "
+                + "HTTP, and launching it as a process would launch nothing");
+        }
+
+        return model.Config.ExecutableRef.Length == 0
+            ? Outcome<string>.Failure(
+                $"model '{model.Key}' names no executable reference — a CLI agent with no path is a refusal, not a "
+                + "guess at whatever is on PATH")
+            : secrets.Resolve(model.Config.ExecutableRef).Match(
+                Outcome<string>.Success,
+                reason => Outcome<string>.Failure($"model '{model.Key}': {reason}"));
+    }
+
     private static Outcome<ModelEndpoint> Resolve(RegisteredModel model, ISecretSource secrets)
     {
         if (model.Config.BaseUrlRef.Length == 0)

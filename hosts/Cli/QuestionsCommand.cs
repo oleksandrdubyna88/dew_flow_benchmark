@@ -1,22 +1,30 @@
+using Bench.Application;
 using Bench.Application.Bank;
+using Bench.Application.Registry;
 using Bench.Domain;
 using Bench.Domain.Authoring;
 using Bench.Domain.Bank;
+using Bench.Domain.Registry;
+using Bench.Domain.Targets;
 
 namespace Bench.Cli;
 
 /// <summary>The question bank, from the command line.
 /// <para>
-/// Phase 1 of the bank: questions arrive by IMPORT — authored elsewhere, reviewed elsewhere — and this
-/// verb is what puts them somewhere a test can select from. The authoring pipeline that drives three CLI
-/// agents to write and review candidates is a later plan; the schema underneath is already the shape it
-/// needs, so that plan adds verbs rather than tables.
+/// Questions arrive two ways now. By IMPORT — authored elsewhere, reviewed elsewhere — and by AUTHOR, which
+/// drives a CLI agent to write them (`todo/PLAN_question_authoring.md`). Both land as the same rows through
+/// the same admission rules, and the authored ones are <c>Proposed</c> until something vouches for them —
+/// which is what keeps "a machine wrote a thousand overnight" from meaning "a thousand are measurable".
 /// </para></summary>
 public static class QuestionsCommand
 {
     public static async Task<int> RunAsync(
         CommandLine command,
         IQuestionBank bank,
+        ICliAgentRuntime agents,
+        IModelRegistry registry,
+        ISecretSource secrets,
+        ICheckoutProvider checkouts,
         TimeProvider clock,
         TextWriter output,
         TextWriter error,
@@ -24,6 +32,7 @@ public static class QuestionsCommand
         command.Operand(0) switch
         {
             "import" => await ImportAsync(command, bank, clock, output, error, cancellationToken),
+            "author" => await AuthorAsync(command, bank, agents, registry, secrets, checkouts, clock, output, error, cancellationToken),
             "list" => await ListAsync(command, bank, output, error, cancellationToken),
             "groups" => await GroupsAsync(bank, output, error, cancellationToken),
             "review" => await ReviewAsync(command, bank, clock, output, error, cancellationToken),
@@ -32,9 +41,200 @@ public static class QuestionsCommand
             var other => Fail(
                 error,
                 other.Length == 0
-                    ? "bench questions needs an action — 'import', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"
-                    : $"unknown questions action '{other}' — try 'import', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"),
+                    ? "bench questions needs an action — 'import', 'author', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"
+                    : $"unknown questions action '{other}' — try 'import', 'author', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"),
         };
+
+    /// <summary>`bench questions author` — a CLI agent writes candidates for one group.
+    /// <para>
+    /// Every author is resolved BEFORE any launch: a disabled row, a runtime that is not a CLI, and an
+    /// executable reference that resolves to nothing on this machine are each refused by name. Discovering any
+    /// of them at question forty of a batch is discovering it three hundred launches too late — the same rule
+    /// <c>bench run</c> follows for its subjects.
+    /// </para>
+    /// <para>
+    /// Candidates land <c>Proposed</c>, and nothing here accepts anything. A pipeline that both wrote and
+    /// vouched for its own questions would produce a bank whose quality is its author's opinion of itself.
+    /// </para></summary>
+    private static async Task<int> AuthorAsync(
+        CommandLine command,
+        IQuestionBank bank,
+        ICliAgentRuntime agents,
+        IModelRegistry registry,
+        ISecretSource secrets,
+        ICheckoutProvider checkouts,
+        TimeProvider clock,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        var inputs = AuthoringInputs.Read(command);
+
+        if (inputs is Outcome<AuthoringInputs>.Fail bad)
+        {
+            return Fail(error, bad.Reason);
+        }
+
+        var settings = ((Outcome<AuthoringInputs>.Ok)inputs).Value;
+        var found = await GroupAsync(bank, settings.Group, cancellationToken);
+
+        if (found is not Outcome<QuestionGroup>.Ok(var group))
+        {
+            error.WriteLine($"bench: {found.Match(_ => string.Empty, reason => reason)}");
+            return ExitCodes.Environment;
+        }
+
+        // The target's TREE, at the pinned commit, before any agent is launched. Found live on the first
+        // batch: asked to write about a commit it had no access to, the agent refused and said so rather than
+        // inventing line numbers — the correct answer, and a defect in how it had been called. An author with
+        // no repository cannot anchor a question in one.
+        var tree = await checkouts.EnsureAsync(MeasurementTarget.At(settings.Target, settings.Commit), cancellationToken);
+
+        if (tree is not Outcome<string>.Ok(var worktree))
+        {
+            error.WriteLine($"bench: the target could not be checked out — {tree.Match(_ => string.Empty, reason => reason)}");
+            return ExitCodes.Environment;
+        }
+
+        output.WriteLine($"group    {group.Key} — {group.Title}");
+        output.WriteLine($"target   {settings.Target.Value}@{settings.Commit.Value[..12]}");
+        output.WriteLine($"tree     {worktree}");
+
+        var request = new AuthoringRequest(
+            group, settings.Target, settings.Commit, settings.Count, settings.Ordinal, settings.Wall, worktree);
+
+        var written = 0;
+
+        foreach (var key in settings.Authors)
+        {
+            var author = await ResolveAuthorAsync(registry, secrets, key, cancellationToken);
+
+            if (author is not Outcome<ResolvedAuthor>.Ok(var resolved))
+            {
+                error.WriteLine($"bench: {author.Match(_ => string.Empty, reason => reason)}");
+                return ExitCodes.Environment;
+            }
+
+            var report = await AuthoringPass.RunAsync(
+                agents,
+                bank,
+                settings.PromptRoot,
+                request with { Ordinal = request.Ordinal + written },
+                resolved.Model,
+                resolved.Executable,
+                clock.GetUtcNow(),
+                cancellationToken);
+
+            output.WriteLine($"authored {report.Describe}");
+
+            if (report.PromptHash.Length > 0)
+            {
+                output.WriteLine($"prompt   {report.PromptHash[..12]}  (prompts/author/{group.Key})");
+            }
+
+            if (report.Note.Length > 0)
+            {
+                // What the author said outside its JSON. The first live batch reported a blocked git in the
+                // worktree this way, and nothing else in the system could have carried that fact.
+                output.WriteLine($"  note   {report.Note.Split('\n')[0]}");
+            }
+
+            foreach (var rejection in report.Rejected)
+            {
+                // Printed, never counted and dropped: a rejection is the only record of what a source gets
+                // wrong, and it is what the next edit to the prompt gets made from.
+                output.WriteLine($"  reject {rejection}");
+            }
+
+            written += report.Proposed;
+        }
+
+        output.WriteLine();
+        output.WriteLine($"proposed {written} question(s) — none accepted, because nothing has vouched for them yet");
+
+        return written > 0 ? ExitCodes.Pass : ExitCodes.NoReport;
+    }
+
+    private sealed record ResolvedAuthor(RegisteredModel Model, string Executable);
+
+    private static async Task<Outcome<ResolvedAuthor>> ResolveAuthorAsync(
+        IModelRegistry registry, ISecretSource secrets, string key, CancellationToken cancellationToken)
+    {
+        var found = await registry.FindAsync(key, cancellationToken);
+
+        return found.Match(
+            model => ModelResolution.Executable(model, secrets).Match(
+                executable => Outcome<ResolvedAuthor>.Success(new ResolvedAuthor(model, executable)),
+                Outcome<ResolvedAuthor>.Failure),
+            Outcome<ResolvedAuthor>.Failure);
+    }
+
+    private static async Task<Outcome<QuestionGroup>> GroupAsync(
+        IQuestionBank bank, string key, CancellationToken cancellationToken)
+    {
+        var groups = await bank.GroupsAsync(cancellationToken);
+
+        return groups.Match(
+            all => all.FirstOrDefault(g => string.Equals(g.Key.Value, key, StringComparison.OrdinalIgnoreCase)) is { } group
+                ? Outcome<QuestionGroup>.Success(group)
+                : Outcome<QuestionGroup>.Failure(
+                    $"the bank has no group '{key}' — it holds "
+                    + (all.Count == 0 ? "none" : string.Join(", ", all.Select(g => g.Key.Value)))),
+            Outcome<QuestionGroup>.Failure);
+    }
+
+    /// <param name="PromptRoot">Where the catalog lives. Configuration rather than a constant, because the
+    /// prompt is the largest measured axis in this system and an operator comparing two of them needs to be
+    /// able to point at two directories.</param>
+    private sealed record AuthoringInputs(
+        string Group,
+        IReadOnlyList<string> Authors,
+        RepoUrl Target,
+        CommitSha Commit,
+        int Count,
+        int Ordinal,
+        TimeSpan Wall,
+        string PromptRoot)
+    {
+        /// <summary>Ten minutes. An agent asked for ten questions about an unfamiliar repository reads files
+        /// before it writes any, and a ceiling tight enough to feel brisk is one that reports working authors
+        /// as hangs.</summary>
+        private const int DefaultWallSeconds = 600;
+
+        public static Outcome<AuthoringInputs> Read(CommandLine command)
+        {
+            var group = command.Value("group");
+            var authors = command.List("authors");
+            var count = command.Int("count", 5);
+            var wall = command.Int("wall-seconds", DefaultWallSeconds);
+
+            if (group.Length == 0 || authors.Count == 0)
+            {
+                return Outcome<AuthoringInputs>.Failure(
+                    "--group and --authors are required — an authoring pass with no author writes nothing, and one "
+                    + "with no group has nowhere to put what it writes");
+            }
+
+            if (count < 1 || wall < 1)
+            {
+                return Outcome<AuthoringInputs>.Failure("--count and --wall-seconds must both be positive");
+            }
+
+            return RepoUrl.Parse(command.Value("repo")).Match(
+                repo => CommitSha.Parse(command.Value("commit")).Match(
+                    commit => Outcome<AuthoringInputs>.Success(new AuthoringInputs(
+                        group,
+                        authors,
+                        repo,
+                        commit,
+                        count,
+                        command.Int("ordinal", 1),
+                        TimeSpan.FromSeconds(wall),
+                        command.Value("prompts", "prompts"))),
+                    Outcome<AuthoringInputs>.Failure),
+                Outcome<AuthoringInputs>.Failure);
+        }
+    }
 
     private static async Task<int> ImportAsync(
         CommandLine command,

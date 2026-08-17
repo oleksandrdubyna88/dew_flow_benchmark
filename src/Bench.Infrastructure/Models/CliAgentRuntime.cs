@@ -108,15 +108,19 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             ProcessAttempt.Completed { Result.Ok: false } failed => Outcome<AgentAnswer>.Failure(
                 $"the {ask.Runtime} agent exited {failed.Result.ExitCode}: {Short(failed.Result.Output)}"),
 
-            ProcessAttempt.Completed done when done.Result.Output.Trim().Length == 0 =>
+            ProcessAttempt.Completed done when done.Result.StandardOutput.Length == 0 =>
                 Outcome<AgentAnswer>.Failure(
-                    $"the {ask.Runtime} agent exited 0 and printed nothing — an empty answer stored as a "
-                    + "candidate would be a question nobody wrote"),
+                    $"the {ask.Runtime} agent exited 0 and printed nothing on stdout — an empty answer stored as "
+                    + "a candidate would be a question nobody wrote"
+                    + (done.Result.Output.Length > 0 ? $". It did say: {Short(done.Result.Output)}" : string.Empty)),
 
+            // STDOUT alone, never the merged text. Found live: the Claude CLI prints a workspace-trust warning
+            // beside its answer, and a merged reading therefore begins with prose — which the JSON parser then
+            // refuses, correctly, having been handed something that is not the agent's answer.
             ProcessAttempt.Completed done => Outcome<AgentAnswer>.Success(new AgentAnswer(
-                done.Result.Output.Trim(),
+                done.Result.StandardOutput,
                 elapsed,
-                System.Text.Encoding.UTF8.GetByteCount(done.Result.Output))),
+                System.Text.Encoding.UTF8.GetByteCount(done.Result.StandardOutput))),
 
             _ => Outcome<AgentAnswer>.Failure($"the {ask.Runtime} agent produced an attempt this build cannot read"),
         };

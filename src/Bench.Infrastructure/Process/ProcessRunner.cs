@@ -2,7 +2,16 @@ using System.Diagnostics;
 
 namespace Bench.Infrastructure.Process;
 
-public sealed record ProcessResult(int ExitCode, string Output)
+/// <param name="Output">Stdout and stderr MERGED, which is what a diagnostic report wants: "what did it print
+/// before it failed" does not care which pipe carried it.</param>
+/// <param name="StandardOutput">Stdout ALONE, for a caller whose stdout is a PAYLOAD rather than a log.
+/// <para>
+/// Added 2026-08-17, from a live run: the Claude CLI prints a workspace-trust warning on stdout/stderr beside
+/// its answer, and the merged text therefore started with prose. The JSON parser refused it — correctly, since
+/// it was handed something that was not the agent's answer. Merging is right for git and wrong for an agent,
+/// so both are available and the caller says which it means.
+/// </para></param>
+public sealed record ProcessResult(int ExitCode, string Output, string StandardOutput = "")
 {
     public bool Ok => ExitCode == 0;
 }
@@ -150,11 +159,17 @@ public static class ProcessRunner
             return new ProcessAttempt.TimedOut(timeout, await Merge(stdout, stderr));
         }
 
-        return new ProcessAttempt.Completed(new ProcessResult(process.ExitCode, await Merge(stdout, stderr)));
+        var printed = await stdout;
+
+        return new ProcessAttempt.Completed(
+            new ProcessResult(process.ExitCode, await Merge(printed, stderr), printed.Trim()));
     }
 
+    private static async Task<string> Merge(string stdout, Task<string> stderr) =>
+        (stdout + await stderr).Trim();
+
     private static async Task<string> Merge(Task<string> stdout, Task<string> stderr) =>
-        (await stdout + await stderr).Trim();
+        await Merge(await stdout, stderr);
 
     private static void Kill(System.Diagnostics.Process process)
     {

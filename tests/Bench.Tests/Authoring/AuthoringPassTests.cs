@@ -167,7 +167,7 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
             agent,
             Bank(),
             Prompts,
-            new AuthoringRequest(group, Target, Commit, Count: 3, ordinal, TimeSpan.FromMinutes(2)),
+            new AuthoringRequest(group, Target, Commit, Count: 3, ordinal, TimeSpan.FromMinutes(2), Path.GetTempPath()),
             Author(),
             "claude",
             Noon,

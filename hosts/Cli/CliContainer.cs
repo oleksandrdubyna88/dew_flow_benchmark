@@ -45,10 +45,22 @@ public static class CliContainer
     public static ServiceProvider ForSweep(string connectionString, Serilog.ILogger logger) =>
         Store(connectionString, logger).BuildServiceProvider();
 
-    /// <summary>`bench questions` — the bank and nothing else. Importing or reviewing questions must not
-    /// need a model endpoint any more than recovery does.</summary>
-    public static ServiceProvider ForBank(string connectionString, Serilog.ILogger logger) =>
-        Store(connectionString, logger).BuildServiceProvider();
+    /// <summary>`bench questions` and `bench models` — the bank, the registry, and a CLI agent runtime.
+    /// <para>
+    /// The agent is registered even for the verbs that never launch one: it costs a delegate, and the
+    /// alternative is two containers whose difference nobody can predict from the verb name. Importing or
+    /// reviewing still needs no model ENDPOINT — that is a different port, and it stays out.
+    /// </para></summary>
+    public static ServiceProvider ForBank(string connectionString, string checkoutRoot, Serilog.ILogger logger) =>
+        Store(connectionString, logger)
+            .AddSingleton<ICliAgentRuntime, CliAgentRuntime>()
+            // The authoring pass needs the TARGET'S TREE on disk, because an author that cannot read the
+            // repository cannot anchor a question in it. Found live: asked to write about a commit it had no
+            // access to, the agent refused rather than inventing line numbers — which is the correct answer and
+            // a defect in how it was called.
+            .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
+            .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
+            .BuildServiceProvider();
 
     private static IServiceCollection Store(string connectionString, Serilog.ILogger logger) =>
         new ServiceCollection()

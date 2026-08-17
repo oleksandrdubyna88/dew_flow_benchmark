@@ -28,6 +28,16 @@ A single JSON array and **nothing else**. No prose before it, no explanation aft
 ]
 ```
 
+## There is no reader for prose here
+
+**Whatever happens, answer with the array.** If something stops you filling a field — you cannot date a
+member, you are unsure of a line number, you have a caveat about the repository — **omit that field and
+answer anyway.** Put the caveat in `referenceAnswer` if it belongs to the question.
+
+Nothing downstream reads prose. An answer that opens with an explanation is discarded whole, by a parser,
+and the work you did to find the code is lost with it. If you truly cannot write a single question, answer
+with an empty array `[]` — that is a legible outcome; a paragraph is not.
+
 ## Rules that decide whether a question is accepted
 
 1. **At least one `Member` or `File` expectation, pointing at real code in that repository at that commit.**
