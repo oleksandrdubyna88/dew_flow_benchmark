@@ -14,7 +14,7 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void A_v0_line_from_the_real_emitter_reads_into_the_domain()
     {
-        var record = TelemetryCodec.ReadLine(Fixture.Lines[0]).Ok();
+        var record = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[0]).Ok();
 
         record.Tool.Should().Be("rt_read_local_file");
         record.Scope.Should().Be("D:/work/repo");
@@ -27,7 +27,7 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void The_three_outcomes_survive_the_wire_as_three_distinct_states()
     {
-        var outcomes = Fixture.Lines.Select(line => TelemetryCodec.ReadLine(line).Ok().Outcome);
+        var outcomes = Fixture.CorrelatedLines.Select(line => TelemetryCodec.ReadLine(line).Ok().Outcome);
 
         // A refused call and a broken one are different events with different remedies; a codec that
         // collapsed them would make both uncountable forever, and nothing downstream could recover it.
@@ -37,7 +37,7 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void An_uncaptured_field_arrives_uncaptured_with_its_reason_intact()
     {
-        var caller = TelemetryCodec.ReadLine(Fixture.Lines[0]).Ok().Caller;
+        var caller = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[0]).Ok().Caller;
 
         caller.ClientName.WasCaptured.Should().BeTrue();
         caller.ClientName.Value.Should().Be("claude-code");
@@ -53,7 +53,7 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void An_unknown_schema_version_is_refused_by_name_rather_than_read_or_skipped()
     {
-        var future = Fixture.Lines[0].Replace("telemetry/v0", "telemetry/v9", StringComparison.Ordinal);
+        var future = Fixture.CorrelatedLines[0].Replace("telemetry/v0", "telemetry/v9", StringComparison.Ordinal);
 
         var verdict = TelemetryCodec.ReadLine(future);
 
@@ -81,7 +81,7 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void The_caller_key_renders_an_uncaptured_field_as_unknown_never_as_a_default()
     {
-        var caller = TelemetryCodec.ReadLine(Fixture.Lines[0]).Ok().Caller;
+        var caller = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[0]).Ok().Caller;
 
         // The key aggregates on caller and model precisely so a mid-day switch cannot blend two
         // populations into one row — and an unknown must be its own bucket, not the popular one.
@@ -91,9 +91,9 @@ public sealed class TelemetryCodecTests
     [Fact]
     public void One_record_has_one_fingerprint_and_two_different_records_do_not_share_it()
     {
-        var first = TelemetryCodec.ReadLine(Fixture.Lines[0]).Ok();
-        var again = TelemetryCodec.ReadLine(Fixture.Lines[0]).Ok();
-        var other = TelemetryCodec.ReadLine(Fixture.Lines[1]).Ok();
+        var first = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[0]).Ok();
+        var again = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[0]).Ok();
+        var other = TelemetryCodec.ReadLine(Fixture.CorrelatedLines[1]).Ok();
 
         // The whole idempotency guarantee rests on this: re-reading a spool must produce the same
         // identity, and two genuinely different calls must not collide into one.

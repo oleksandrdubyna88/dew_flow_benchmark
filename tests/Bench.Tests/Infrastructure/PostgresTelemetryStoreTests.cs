@@ -172,7 +172,7 @@ public sealed class PostgresTelemetryStoreTests(PostgresFixture postgres)
     /// </para></summary>
     private static IReadOnlyList<ToolTelemetry> Records([CallerMemberName] string test = "")
     {
-        var (records, _) = SpoolIngest.Read(Fixture.Text);
+        var (records, _) = SpoolIngest.Read(Fixture.CorrelatedText);
         return [.. records.Select(r => r with { Scope = $"{r.Scope}#{test}" })];
     }
 }

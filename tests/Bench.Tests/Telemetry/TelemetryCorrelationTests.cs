@@ -16,15 +16,49 @@ public sealed class TelemetryCorrelationTests
         // The fixture is a verbatim copy of what the emitter in the other repository actually wrote,
         // produced before this field existed. That makes it real evidence of backward compatibility
         // rather than a line authored to agree with the reader under test.
-        Fixture.Lines.Should().NotBeEmpty();
+        Fixture.PreCorrelationLines.Should().NotBeEmpty();
 
-        foreach (var line in Fixture.Lines)
+        foreach (var line in Fixture.PreCorrelationLines)
         {
             var record = TelemetryCodec.ReadLine(line).Ok();
 
             record.Correlation.IsAttributed.Should().BeFalse(
                 "refusing these lines would discard every record an emitter wrote yesterday, to gain a field it could not have known about");
             record.Correlation.Leg.Reason.Should().NotBeEmpty("an absence has a reason, and the reason is what a reader needs");
+        }
+    }
+
+    /// <summary>The other half, and the one that was missing: the field is not merely tolerated, it is
+    /// READ. Until this fixture existed, every assertion in this class ran against a line that could not
+    /// carry a correlation — so a reader that silently discarded the field would have been green.</summary>
+    [Fact]
+    public void A_line_the_emitter_writes_today_carries_its_leg_and_phase_through_the_reader()
+    {
+        Fixture.CorrelatedLines.Should().NotBeEmpty();
+
+        foreach (var line in Fixture.CorrelatedLines)
+        {
+            var record = TelemetryCodec.ReadLine(line).Ok();
+
+            record.Correlation.IsAttributed.Should().BeTrue("the emitter stamped this run with --correlation");
+            record.Correlation.Leg.Value.Should().Be("cell-17");
+            record.Correlation.Phase.Value.Should().Be("verify");
+        }
+    }
+
+    /// <summary>Both shapes are the SAME schema version, which is the claim `correlation` being additive
+    /// rests on. A reader that needed a version bump to accept the new field would have made every spool
+    /// already on disk unreadable to gain one member.</summary>
+    [Fact]
+    public void Both_wire_shapes_are_telemetry_v0_and_agree_on_everything_but_the_correlation()
+    {
+        foreach (var (shape, lines) in Fixture.BothShapes)
+        {
+            var record = TelemetryCodec.ReadLine(lines[0]).Ok();
+
+            record.Tool.Should().Be("rt_read_local_file", $"the {shape} fixture records the same call");
+            record.Outcome.Should().Be(ToolOutcome.Answered);
+            record.Emitter.App.Should().Be("mcp-test");
         }
     }
 

@@ -388,6 +388,25 @@ What this plan needs from `dew_flow_mcp · research/PLAN_tool_surface_config.md`
 > `A_line_written_before_correlation_existed_still_reads_and_reads_as_unattributed` needs a
 > pre-`correlation` line. **One file can no longer be both — this needs a second fixture, not a
 > replaced one.**
+>
+> **Done 2026-08-17.** Two fixtures now: `mcp-spool-v0-precorrelation.jsonl` (the old file, `git mv`-d so
+> its provenance survives) and `mcp-spool-v0-correlated.jsonl`, emitted by a new `SpoolFixtureTests` in
+> `dew_flow_mcp` that writes it beside its own test binary for exactly this copy — still the real emitter,
+> never hand-authored. `Fixture` exposes both plus `BothShapes`, and two tests were added: the correlated
+> line reads as attributed, and both shapes agree on everything except the field that distinguishes them.
+>
+> The split earned itself immediately. With `TelemetryCodec`'s correlation mapping deliberately broken to
+> `TelemetryCorrelation.None`, the new test failed — *"Expected record.Correlation.IsAttributed to be True
+> … but found False"* — and **the pre-correlation test still passed**. A reader that silently discarded
+> the field was green under the single-fixture arrangement, which is precisely the hole a second fixture
+> closes.
+>
+> **The end-to-end path is also proven on live traffic now** (it had only ever been proven from the
+> emitter's own test output). A real MCP client drove the shipped `Mcp.Host` over stdio; the production
+> sink wrote two records; `bench telemetry ingest` reported *"ingested 2, duplicate 0, refused 0"* and
+> retired the file, a re-run said *"nothing to ingest"*, `bench telemetry report` rendered
+> `rt_read_local_file · live-check/?/stdio · 2 calls · 1 ans · 1 ref · p50 0.8 ms`, and the rows in
+> Postgres carry `Leg = cell-live` / `Phase = verify`.
 
 1. **A tool subset chosen at process start** — `--tools a,b,c`; unset means every tool, today's behaviour.
 2. **Descriptions from a file catalog** — `--descriptions <dir> --description-set <name>`; a missing or

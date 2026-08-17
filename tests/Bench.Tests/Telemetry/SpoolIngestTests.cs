@@ -11,7 +11,7 @@ public sealed class SpoolIngestTests
     [Fact]
     public void Every_line_of_a_real_spool_file_reads()
     {
-        var (records, refused) = SpoolIngest.Read(Fixture.Text);
+        var (records, refused) = SpoolIngest.Read(Fixture.CorrelatedText);
 
         records.Should().HaveCount(3);
         refused.Should().BeEmpty();
@@ -22,7 +22,7 @@ public sealed class SpoolIngestTests
     {
         // The normal shape of a killed emitter: the file ends mid-record. A reader that aborted on the
         // first failure would discard a whole run's telemetry over its final byte.
-        var truncated = Fixture.Text + """{"schema":"telemetry/v0","at":"2026-08""";
+        var truncated = Fixture.CorrelatedText + """{"schema":"telemetry/v0","at":"2026-08""";
 
         var (records, refused) = SpoolIngest.Read(truncated);
 
@@ -39,7 +39,7 @@ public sealed class SpoolIngestTests
     [Fact]
     public void A_refused_line_names_its_position_so_an_operator_can_find_it()
     {
-        var mixed = string.Join('\n', Fixture.Lines[0], """{"schema":"telemetry/v9"}""", Fixture.Lines[1]);
+        var mixed = string.Join('\n', Fixture.CorrelatedLines[0], """{"schema":"telemetry/v9"}""", Fixture.CorrelatedLines[1]);
 
         var (records, refused) = SpoolIngest.Read(mixed);
 
@@ -56,7 +56,7 @@ public sealed class SpoolIngestTests
     [Fact]
     public void Blank_lines_are_not_records_and_are_not_refusals_either()
     {
-        var padded = "\n\n" + Fixture.Text + "\n\n";
+        var padded = "\n\n" + Fixture.CorrelatedText + "\n\n";
 
         var (records, refused) = SpoolIngest.Read(padded);
 
@@ -89,7 +89,7 @@ public sealed class SpoolIngestTests
     [Fact]
     public void The_records_carry_the_three_outcomes_the_emitter_wrote()
     {
-        var (records, _) = SpoolIngest.Read(Fixture.Text);
+        var (records, _) = SpoolIngest.Read(Fixture.CorrelatedText);
 
         records.Select(r => r.Outcome).Should()
             .Equal(ToolOutcome.Answered, ToolOutcome.Refused, ToolOutcome.Error);

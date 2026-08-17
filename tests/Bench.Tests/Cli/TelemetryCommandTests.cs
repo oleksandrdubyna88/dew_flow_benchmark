@@ -38,7 +38,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_spool_file_is_ingested_and_then_marked_so_it_is_not_read_twice()
     {
-        using var spool = new TempSpool(Fixture.Text);
+        using var spool = new TempSpool(Fixture.CorrelatedText);
         var store = new FakeStore();
 
         var (code, output, _) = await Run(store, "telemetry", "ingest", "--spool", spool.Path);
@@ -58,7 +58,7 @@ public sealed class TelemetryCommandTests
     public async Task A_spool_larger_than_one_chunk_is_ingested_in_bounded_batches()
     {
         // A 24/7 emitter's file, in miniature: more records than anybody sized a batch for.
-        using var spool = new TempSpool(string.Join('\n', Enumerable.Range(0, 25).Select(i => Fixture.Lines[i % 3])));
+        using var spool = new TempSpool(string.Join('\n', Enumerable.Range(0, 25).Select(i => Fixture.CorrelatedLines[i % 3])));
         var store = new FakeStore();
 
         var (code, output, _) = await Run(store, "telemetry", "ingest", "--spool", spool.Path, "--chunk-size", "10");
@@ -75,7 +75,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_spool_smaller_than_a_chunk_is_still_one_round_trip()
     {
-        using var spool = new TempSpool(Fixture.Text);
+        using var spool = new TempSpool(Fixture.CorrelatedText);
         var store = new FakeStore();
 
         await Run(store, "telemetry", "ingest", "--spool", spool.Path, "--chunk-size", "500");
@@ -86,7 +86,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_line_this_build_cannot_read_is_a_regression_rather_than_a_silent_pass()
     {
-        using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
+        using var spool = new TempSpool(Fixture.CorrelatedLines[0] + "\n" + """{"schema":"telemetry/v9"}""");
 
         var (code, output, _) = await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
 
@@ -100,7 +100,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_spool_holding_a_newer_version_is_kept_so_a_later_build_can_read_it()
     {
-        using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
+        using var spool = new TempSpool(Fixture.CorrelatedLines[0] + "\n" + """{"schema":"telemetry/v9"}""");
 
         var (_, output, _) = await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
 
@@ -116,7 +116,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_later_build_re_reads_a_retained_spool_and_stores_only_what_is_new()
     {
-        using var spool = new TempSpool(Fixture.Lines[0] + "\n" + """{"schema":"telemetry/v9"}""");
+        using var spool = new TempSpool(Fixture.CorrelatedLines[0] + "\n" + """{"schema":"telemetry/v9"}""");
         var store = new FakeStore();
 
         await Run(store, "telemetry", "ingest", "--spool", spool.Path);
@@ -131,7 +131,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_half_written_last_line_still_retires_the_file()
     {
-        using var spool = new TempSpool(Fixture.Text + """{"schema":"telemetry/v0","at":"2026""");
+        using var spool = new TempSpool(Fixture.CorrelatedText + """{"schema":"telemetry/v0","at":"2026""");
 
         var (code, output, _) = await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
 
@@ -146,13 +146,13 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task Pruning_retires_drained_files_and_never_touches_an_unread_one()
     {
-        using var spool = new TempSpool(Fixture.Text);
+        using var spool = new TempSpool(Fixture.CorrelatedText);
         await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
 
         var drained = Directory.GetFiles(spool.Path, "*" + TelemetryCommand.IngestedSuffix, SearchOption.AllDirectories).Single();
         File.SetLastWriteTimeUtc(drained, DateTime.UtcNow.AddDays(-30));
         var unread = Path.Combine(Path.GetDirectoryName(drained)!, "still-waiting.jsonl");
-        await File.WriteAllTextAsync(unread, Fixture.Text, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(unread, Fixture.CorrelatedText, TestContext.Current.CancellationToken);
 
         var (code, output, _) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path, "--older-than", "7");
 
@@ -165,7 +165,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task Pruning_without_an_age_is_refused_rather_than_given_a_default()
     {
-        using var spool = new TempSpool(Fixture.Text);
+        using var spool = new TempSpool(Fixture.CorrelatedText);
 
         var (code, _, error) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path);
 
@@ -177,7 +177,7 @@ public sealed class TelemetryCommandTests
     [Fact]
     public async Task A_drained_file_younger_than_the_cut_off_survives()
     {
-        using var spool = new TempSpool(Fixture.Text);
+        using var spool = new TempSpool(Fixture.CorrelatedText);
         await Run(new FakeStore(), "telemetry", "ingest", "--spool", spool.Path);
 
         var (_, output, _) = await Run(new FakeStore(), "telemetry", "prune", "--spool", spool.Path, "--older-than", "7");
