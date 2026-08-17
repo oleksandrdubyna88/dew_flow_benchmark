@@ -272,6 +272,9 @@ public static class Program
         output.WriteLine("              --variants <catalog names>]  single-shot RAG: the harness retrieves per cell,");
         output.WriteLine("             assembles the prompt from the hits, and stores the funnel, the hits and the");
         output.WriteLine("             axes the engine echoed. Without them the run measures the no-retrieval baseline");
+        output.WriteLine("             the corpus that will ANSWER is read before any cell exists and a recipe it");
+        output.WriteLine("             disagrees with ends the run; [--allow-unstamped-index] measures an index whose");
+        output.WriteLine("             commit the engine never recorded, and says so");
         output.WriteLine("             [--hit-retention-days 7]  how long a hit keeps its source TEXT; ranks, scores");
         output.WriteLine("             and spans are kept forever, so every retrieval metric stays recomputable");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");

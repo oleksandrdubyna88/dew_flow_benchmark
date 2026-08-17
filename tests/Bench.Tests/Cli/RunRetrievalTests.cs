@@ -87,19 +87,24 @@ public sealed class RunRetrievalTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task A_recipe_the_engine_CAN_serve_gets_as_far_as_the_matrix()
+    public async Task A_recipe_the_engine_can_express_still_has_its_CORPUS_read_before_any_cell_exists()
     {
         using var suite = new TempSuiteFile();
         var name = await VariantNamed("GraphHeader");
 
-        var (_, output, error) = Run(
+        var (code, _, error) = Run(
             "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
             "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint,
             "--engine-url", "http://127.0.0.1:5311", "--engine-project", Guid.NewGuid().ToString(),
             "--variants", name);
 
-        error.Should().NotContain("corpus text shape");
-        output.Should().Contain("variants ").And.Contain(name);
+        // Two checks, in order, and this asserts BOTH: the recipe passed the mapping (no complaint about a
+        // shape or a fusion mode), and the run then went on to read what is actually in the index — which
+        // here is nothing, because no engine answers at that port. Before that read existed, a variant
+        // declaring 512 embed tokens was measured against a 256-token index.
+        code.Should().Be(ExitCodes.Environment);
+        error.Should().NotContain("corpus text shape").And.NotContain("fusion");
+        error.Should().Contain($"variant '{name}'").And.Contain("the index state could not be read");
     }
 
     /// <summary>A catalog row differing only in the corpus shape it names, under a name unique to this test —

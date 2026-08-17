@@ -58,6 +58,78 @@ public sealed class QlnRetriever(
     public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
         QlnRequest.From(recipe).Match(request => Outcome<string>.Success(request.Asked.Canonical), Outcome<string>.Failure);
 
+    /// <summary>What is in the index a search for this recipe will actually reach.
+    /// <para>
+    /// <b>The window size is deliberately NOT sent.</b> This engine's index-state read accepts one
+    /// (<c>?windowTokens=</c>) and will happily describe the collection a 512-token corpus WOULD live in —
+    /// but its <c>/search</c> endpoint has no such parameter, so a search always goes to whatever the
+    /// resolver's default window produces. Asking about a collection nobody can query would confirm a corpus
+    /// that is not the one serving the run, which is the mislabelling this read exists to catch rather than a
+    /// subtler version of it. So the read describes the SERVING corpus, and the recipe is compared against
+    /// that.
+    /// </para></summary>
+    public async Task<Outcome<IndexState>> InspectAsync(
+        VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken)
+    {
+        var wire = QlnRequest.From(recipe);
+
+        if (wire is Outcome<QlnRequest>.Fail unexpressible)
+        {
+            return Outcome<IndexState>.Failure(unexpressible.Reason);
+        }
+
+        var shape = ((Outcome<QlnRequest>.Ok)wire).Value.TextShape ?? string.Empty;
+        var query = $"api/rag/projects/{projectId:D}/index-state?textShape={Uri.EscapeDataString(shape)}"
+            + (branch.Length > 0 ? $"&branch={Uri.EscapeDataString(branch)}" : string.Empty);
+
+        try
+        {
+            var response = await http.GetAsync(query, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            return response.IsSuccessStatusCode
+                ? ReadState(body)
+                : Outcome<IndexState>.Failure($"the index state could not be read: HTTP {(int)response.StatusCode}: {Trim(body)}");
+        }
+        catch (HttpRequestException ex)
+        {
+            return Outcome<IndexState>.Failure($"the index state could not be read: unreachable: {ex.Message}");
+        }
+    }
+
+    private static Outcome<IndexState> ReadState(string body)
+    {
+        IndexStateWire? wire;
+
+        try
+        {
+            wire = JsonSerializer.Deserialize<IndexStateWire>(body, Json);
+        }
+        catch (JsonException ex)
+        {
+            return Outcome<IndexState>.Failure($"the index state could not be read: {ex.Message}");
+        }
+
+        return wire is null
+            ? Outcome<IndexState>.Failure("the engine described the index with an empty body")
+            : Outcome<IndexState>.Success(new IndexState(
+                wire.Collection,
+                wire.Exists,
+                wire.Points,
+                new CorpusIdentity(
+                    wire.TextShape, wire.WindowTokens, wire.OverlapTokens, wire.EmbedModel, wire.Tokenizer),
+                wire.Fingerprint,
+                IndexCommit.Read(wire.IndexedCommit),
+                wire.WorkingTreeDirty,
+                // No pass row at all is NOT a success: it means nothing this engine remembers wrote that
+                // collection, so whatever is in it has no provenance.
+                wire.PassStatus == SucceededStatus));
+    }
+
+    /// <summary>The engine's <c>IndexPassStatus.Succeeded</c>, as its JSON renders it — an ordinal, which is
+    /// why the constant is named here rather than inlined at the comparison.</summary>
+    private const int SucceededStatus = 2;
+
     /// <summary>One retrieval for the single-shot lane: the variant's recipe out, hits and funnel back.
     /// <para>
     /// The recipe becomes a request through <see cref="QlnRequest.From"/>, which REFUSES what this engine
@@ -479,6 +551,40 @@ internal sealed record HitWire
     /// <summary>Its rank within each channel that found it. What separates "the sparse head found it and
     /// fusion buried it" from "nothing found it".</summary>
     [JsonPropertyName("ranks")] public IReadOnlyList<int> Ranks { get; init; } = [];
+}
+
+/// <summary>The index-state response, pinned to <c>Platform.Contracts.IndexStateVm</c> as it stood on
+/// 2026-08-17. Every field is DERIVED there — the collection name from the same resolver the pass and the
+/// search use, the counts from the vector store, the stamp from the newest succeeded pass — so this read
+/// cannot describe a collection nobody would write to.</summary>
+internal sealed record IndexStateWire
+{
+    [JsonPropertyName("collection")] public string Collection { get; init; } = string.Empty;
+
+    [JsonPropertyName("exists")] public bool Exists { get; init; }
+
+    [JsonPropertyName("points")] public long Points { get; init; }
+
+    [JsonPropertyName("embedModel")] public string EmbedModel { get; init; } = string.Empty;
+
+    [JsonPropertyName("textShape")] public string TextShape { get; init; } = string.Empty;
+
+    [JsonPropertyName("windowTokens")] public int WindowTokens { get; init; }
+
+    [JsonPropertyName("overlapTokens")] public int OverlapTokens { get; init; }
+
+    [JsonPropertyName("tokenizer")] public string Tokenizer { get; init; } = string.Empty;
+
+    [JsonPropertyName("fingerprint")] public string Fingerprint { get; init; } = string.Empty;
+
+    /// <summary>Empty for an index built before the engine began stamping its commit. Not a different
+    /// commit — a thing nobody knows, which is its own state.</summary>
+    [JsonPropertyName("indexedCommit")] public string IndexedCommit { get; init; } = string.Empty;
+
+    [JsonPropertyName("workingTreeDirty")] public bool WorkingTreeDirty { get; init; }
+
+    /// <summary>Absent when no pass this engine remembers wrote the collection.</summary>
+    [JsonPropertyName("passStatus")] public int? PassStatus { get; init; }
 }
 
 internal sealed record FunnelWire

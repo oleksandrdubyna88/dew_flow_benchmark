@@ -89,6 +89,17 @@ public interface IRetriever
     /// </para></summary>
     Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe);
 
+    /// <summary>What is actually in the index that will answer this recipe.
+    /// <para>
+    /// A round trip, unlike <see cref="CanServe"/>, and the one that closes the half of a variant no request
+    /// can select. A corpus is built by an indexing pass and a search reaches whatever collection the engine
+    /// resolves, so the chunk size and the embedder a recipe names are claims until something reads them
+    /// back. Missing that read cost exactly one measurement: a variant declaring 512 embed tokens recorded
+    /// against a 256-token index, with every number in it real.
+    /// </para></summary>
+    Task<Outcome<IndexState>> InspectAsync(
+        VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken);
+
     /// <summary>One retrieval, with its funnel and its echoed axes. A refusal is a VALUE: an engine that is
     /// down, a collection that was never built, or a recipe this build cannot express honestly are all
     /// facts a leg records — never exceptions that end a campaign of ten thousand.</summary>

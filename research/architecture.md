@@ -129,9 +129,29 @@ they were refused here, because the engine would have accepted the request, igno
 rank fusion under a record that said `wsum` — the reranker scar exactly.
 
 Still not request axes: **chunk size and embed model**. The engine derives those from its own configured
-recipe, so they are neither sent nor verifiable, and what a run records instead is the collection that
-answered. Two variants differing only in chunk size are therefore two variants this engine cannot yet
-distinguish — closing that is the index-preparation step.
+recipe, so a search cannot select them — two variants differing only in chunk size are two variants it cannot
+yet distinguish.
+
+**They are verified instead of selected.** Before a single cell exists, one GET reads what is actually in the
+index a search will reach — collection, point count, text shape, window and overlap tokens, embedder,
+tokenizer, and the commit of the newest succeeded pass that wrote it — and a recipe that disagrees ends the
+run naming both values (`IRetriever.InspectAsync`, `IndexReadiness`). This was missing for exactly one
+measurement: on 2026-08-17 a variant declaring 512 embed tokens was recorded against a 256-token index, every
+number in it real and the row naming them describing a corpus that would have produced different ones.
+
+Two comparisons in that check are not verbatim, and both directions matter:
+
+- **The embedder name.** An operator types `bge-m3` into a catalog row and the engine reports
+  `BAAI/bge-m3 (dense, FP32)`. Vendor prefix and parenthetical detail are dropped before comparing, because
+  verbatim equality would refuse every correct recipe — while a CONTAINMENT rule would accept `bge-m3`
+  against a `bge-m3-large` index, and a false accept is indistinguishable from a correct measurement
+  afterwards.
+- **The commit, in three states.** Matched, differing, or **unstamped** — and the third is not the second.
+  Every index built before the engine began recording its commit is unstamped, so strict equality would have
+  blocked every cell against every index in existence on the day the stamp landed. Unstamped is refused by
+  default and passable with `--allow-unstamped-index`, which keeps printing that the tree is UNVERIFIED — the
+  same shape as `--no-checkout`. An index built from a DIRTY tree is refused outright: its stamp then names a
+  commit the index does not contain, which is worse than no stamp because it reads as evidence.
 
 Two refusals remain, and both happen **before any cell exists**: a recipe naming another engine, and a
 corpus shape this one does not have. `IRetriever.CanServe` is the check — a mapping, not a round trip — asked

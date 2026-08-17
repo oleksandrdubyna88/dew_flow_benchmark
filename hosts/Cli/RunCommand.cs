@@ -6,6 +6,7 @@ using Bench.Domain;
 using Bench.Domain.Bank;
 using Bench.Domain.Models;
 using Bench.Domain.Registry;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -238,7 +239,7 @@ public static class RunCommand
             return Refuse(error, resolved.Match(_ => string.Empty, reason => reason));
         }
 
-        var chosen = await VariantsAsync(scope, settings, stopping);
+        var chosen = await VariantsAsync(scope, settings, output, stopping);
 
         if (chosen is not Outcome<VariantRoster>.Ok(var variants))
         {
@@ -299,7 +300,7 @@ public static class RunCommand
     /// is what every run planned before this axis existed already did.
     /// </para></summary>
     private static async Task<Outcome<VariantRoster>> VariantsAsync(
-        AsyncServiceScope scope, RunInputs settings, CancellationToken stopping)
+        AsyncServiceScope scope, RunInputs settings, TextWriter output, CancellationToken stopping)
     {
         if (settings.VariantNames.Count == 0)
         {
@@ -319,7 +320,7 @@ public static class RunCommand
 
         foreach (var name in settings.VariantNames)
         {
-            var resolved = await ResolveAsync(catalog, retriever, name, stopping);
+            var resolved = await ResolveAsync(catalog, retriever, name, settings, output, stopping);
 
             if (resolved is not Outcome<VariantChoice>.Ok(var choice))
             {
@@ -341,7 +342,12 @@ public static class RunCommand
     /// express from ten thousand identical leg failures into one refusal before any cell exists.
     /// </para></summary>
     private static async Task<Outcome<VariantChoice>> ResolveAsync(
-        IVariantCatalog catalog, IRetriever retriever, string name, CancellationToken stopping)
+        IVariantCatalog catalog,
+        IRetriever retriever,
+        string name,
+        RunInputs settings,
+        TextWriter output,
+        CancellationToken stopping)
     {
         var found = await catalog.FindAsync(name, stopping);
 
@@ -356,9 +362,56 @@ public static class RunCommand
             return Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition));
         }
 
-        return retriever.CanServe(recipe).Match(
-            _ => Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition)),
-            reason => Outcome<VariantChoice>.Failure($"variant '{name}': {reason}"));
+        if (retriever.CanServe(recipe) is Outcome<string>.Fail unexpressible)
+        {
+            return Outcome<VariantChoice>.Failure($"variant '{name}': {unexpressible.Reason}");
+        }
+
+        return await ApproveCorpusAsync(retriever, variant, recipe, name, settings, output, stopping);
+    }
+
+    /// <summary>Reads what is actually in the index that will answer, and refuses a recipe it disagrees with.
+    /// <para>
+    /// The half of a variant no request can select. A corpus is built by an indexing pass and a search reaches
+    /// whichever collection the engine resolves, so a recipe's chunk size and embedder are CLAIMS until
+    /// something reads them back — and one measurement was already recorded on 2026-08-17 under a variant
+    /// declaring 512 embed tokens against a 256-token index, every number in it real and its label wrong.
+    /// </para>
+    /// <para>
+    /// One GET per variant, before a single cell exists, so a corpus disagreement ends the run at its start
+    /// rather than producing a campaign whose rows describe something else.
+    /// </para></summary>
+    private static async Task<Outcome<VariantChoice>> ApproveCorpusAsync(
+        IRetriever retriever,
+        RetrievalVariant variant,
+        VariantDefinition.RetrievalRecipe recipe,
+        string name,
+        RunInputs settings,
+        TextWriter output,
+        CancellationToken stopping)
+    {
+        var inspected = await retriever.InspectAsync(recipe, stopping);
+
+        if (inspected is not Outcome<IndexState>.Ok(var state))
+        {
+            return Outcome<VariantChoice>.Failure($"variant '{name}': {inspected.Match(_ => string.Empty, r => r)}");
+        }
+
+        var approved = IndexReadiness.Of(state, recipe.Corpus, settings.Target.Commit, settings.AllowUnstampedIndex);
+
+        if (approved is not Outcome<IndexApproval>.Ok(var approval))
+        {
+            return Outcome<VariantChoice>.Failure($"variant '{name}': {approved.Match(_ => string.Empty, r => r)}");
+        }
+
+        output.WriteLine($"corpus   {name} → {approval.Describe}");
+
+        if (approval.Warning.Length > 0)
+        {
+            output.WriteLine($"warn     {approval.Warning}");
+        }
+
+        return Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition));
     }
 
     /// <summary>The variant axis as the matrix takes it. A run with no variants passes the not-applicable
@@ -706,7 +759,8 @@ public static class RunCommand
                         command.Has("no-checkout"),
                         retrieval,
                         command.List("variants"),
-                        retentionDays)),
+                        retentionDays,
+                        command.Has("allow-unstamped-index"))),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
@@ -785,6 +839,10 @@ public static class RunCommand
     /// so several is the normal case rather than the exception.</param>
     /// <param name="HitRetentionDays">How long a retrieved hit keeps its source text. The owner of the only
     /// surface in this schema that grows without bound.</param>
+    /// <param name="AllowUnstampedIndex">Whether to measure a corpus whose commit the engine never recorded.
+    /// Refused by default: an anchor is true at exactly one tree. The escape hatch exists because every index
+    /// built before the engine began stamping is in that state, and it keeps its warning — the same shape as
+    /// <c>--no-checkout</c>.</param>
     private sealed record RunInputs(
         MeasurementTarget Target,
         string SuiteFile,
@@ -802,5 +860,6 @@ public static class RunCommand
         bool SkipCheckout,
         QlnEngineOptions Engine,
         IReadOnlyList<string> VariantNames,
-        int HitRetentionDays);
+        int HitRetentionDays,
+        bool AllowUnstampedIndex);
 }

@@ -20,6 +20,10 @@ public sealed class NoRetriever : IRetriever
     public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
         Outcome<string>.Failure(Refusal(recipe));
 
+    public Task<Outcome<IndexState>> InspectAsync(
+        VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken) =>
+        Task.FromResult(Outcome<IndexState>.Failure(Refusal(recipe)));
+
     public Task<Outcome<RetrievedContext>> RetrieveAsync(
         RetrievalRequest request, CancellationToken cancellationToken) =>
         Task.FromResult(Outcome<RetrievedContext>.Failure(Refusal(request.Recipe)));

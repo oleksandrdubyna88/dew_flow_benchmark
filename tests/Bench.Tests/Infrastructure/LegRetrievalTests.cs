@@ -325,6 +325,13 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
         public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
             _refusal.Length > 0 ? Outcome<string>.Failure(_refusal) : Outcome<string>.Success(recipe.Canonical);
 
+        /// <summary>Never called: the leg runner does not inspect an index — the CLI does, once per variant,
+        /// while planning. A refusal rather than a fabricated state, so a caller that appears later fails
+        /// loudly instead of measuring against a corpus this fake invented.</summary>
+        public Task<Outcome<IndexState>> InspectAsync(
+            VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<IndexState>.Failure("this fake serves the leg runner, which never inspects an index"));
+
         public Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(_refusal.Length > 0
@@ -352,6 +359,13 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
 
         public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
             Outcome<string>.Success(recipe.Canonical);
+
+        /// <summary>Never called: the leg runner does not inspect an index — the CLI does, once per variant,
+        /// while planning. A refusal rather than a fabricated state, so a caller that appears later fails
+        /// loudly instead of measuring against a corpus this fake invented.</summary>
+        public Task<Outcome<IndexState>> InspectAsync(
+            VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<IndexState>.Failure("this fake serves the leg runner, which never inspects an index"));
 
         public async Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken)
@@ -385,6 +399,13 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
 
         public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
             Outcome<string>.Success(recipe.Canonical);
+
+        /// <summary>Never called: the leg runner does not inspect an index — the CLI does, once per variant,
+        /// while planning. A refusal rather than a fabricated state, so a caller that appears later fails
+        /// loudly instead of measuring against a corpus this fake invented.</summary>
+        public Task<Outcome<IndexState>> InspectAsync(
+            VariantDefinition.RetrievalRecipe recipe, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<IndexState>.Failure("this fake serves the leg runner, which never inspects an index"));
 
         public async Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken)

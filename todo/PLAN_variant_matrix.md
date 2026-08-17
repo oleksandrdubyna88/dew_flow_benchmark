@@ -105,6 +105,30 @@
 >   assertion has to compare values by their meaning, and it must compare only the axes this side ASKED for:
 >   the echo legitimately carries more (`denseWidth`, `rerankFloor`, `collapseMembers`, and `wsumNorm` under
 >   rrf, which we deliberately do not send).
+> - **The corpus half became VERIFIABLE without becoming selectable** (2026-08-17, step 5's first slice).
+>   The engine's index-state read — landed that morning as the sibling plan's step 2 — answers what is
+>   actually in the collection a search will reach, so `IRetriever.InspectAsync` + `IndexReadiness` refuse a
+>   recipe that disagrees before a single cell exists. It immediately refused the run recorded an hour
+>   earlier: *"the corpus that answers was built at 256 embed tokens and the recipe names 512"*. Two
+>   comparisons are deliberately not verbatim — the embedder name is normalised (`BAAI/bge-m3 (dense, FP32)`
+>   is `bge-m3`, but `bge-m3-large` is not, because a false ACCEPT is invisible afterwards), and the commit has
+>   THREE states, since every index predating the stamp is *unstamped* rather than *different*
+>   (`--allow-unstamped-index`, keeping its warning, the `--no-checkout` shape). A dirty-tree index is refused
+>   outright: its stamp names a commit the index does not contain, which is worse than no stamp.
+> - **The mislabelled row was retired, not edited** — `hybrid-live#800a058aafd3` claimed 512 against a
+>   256-token index. Variants are immutable by design, so the fix is a new row (`truth-rrf`, `truth-wsum`,
+>   both declaring 256) and a retirement; the run measured under the wrong label stays in the database as it
+>   is, because results are not edited either. **`live-lane-persistent` is therefore unusable as a
+>   measurement** and is recorded here as such.
+> - **First comparison, and it is a lesson about the instrument rather than a result** (n=1, no repeats, so
+>   nothing is ranked). rrf against wsum over aspnetcore at limit 5:
+>   - **With the reranker ON the two fusions returned BYTE-IDENTICAL lists.** The cross-encoder reorders the
+>     pool after fusion, so the fusion axis is masked entirely — a fusion comparison run with rerank on
+>     measures nothing about fusion. That is an experimental-design constraint the matrix has to carry.
+>   - **With the reranker OFF the lists genuinely differed** — only rank 1 agreed, ranks 2–5 were different
+>     members — **and both scored the same anchor recall of 0.5.** The metric agreed while the retrieval did
+>     not. A report showing recall alone would have said "no difference"; the stored `retrieved_hits` say the
+>     lists share one position out of five. This is the clearest argument the schema has produced for itself.
 > - **Still open in step 4**: `chunkTokens` and `embedModel` are not request axes at all — the engine derives
 >   them from its configured recipe — so a variant differing only in chunk size is one this engine cannot
 >   distinguish. That is the corpus half, and it lands with the index preparations (step 5) and the sibling
