@@ -1,0 +1,227 @@
+# PLAN — question authoring: three CLI agents write the bank, three review it
+
+> Status: **steps 1 and 2 of §4 IMPLEMENTED 2026-08-17; steps 3–6 open.** The one launcher grew stdin
+> (`ProcessRunner.RunAsync` with an input overload — 200 KB verified through `git hash-object --stdin`, which
+> also proves the pipe is CLOSED, since a CLI reading to end-of-input would otherwise hang), and
+> `ICliAgentRuntime` + `CliAgentRuntime` can ask a CLI agent one question and read its answer, with every
+> failure a recorded value. **Verified against the real Claude CLI 2.1.216**, not only stubbed: a prompt on
+> stdin comes back answered, a prompt far larger than an argument list still arrives, and a one-second wall
+> fires and kills the child rather than hanging the batch.
+>
+> Deviations, steps 1–2:
+> - **`CliArgv` is a switch over the runtime kind**, not a configured flag string. A wrong flag produces an
+>   interactive session waiting on a terminal nobody watches, and the symptom is a timeout rather than a
+>   message; a switch fails at a compiler error when a kind is added. Only `claude -p` is verified —
+>   `codex exec -` and `gemini -p` are written from documented usage and marked UNVERIFIED in the code, which
+>   is where somebody would otherwise trust them.
+> - **An agent that exits ZERO and prints nothing is a REFUSAL.** The failure mode that looks like success: an
+>   empty answer stored as a candidate would be a question nobody wrote, and it would pass every admission rule
+>   that checks shape rather than content.
+> - **Stdin is redirected only when there is something to write.** A child that reads stdin and finds an open
+>   empty pipe waits forever, and the timeout would then report a hang this launcher caused.
+> - **`ProcessRunner` grew an overload rather than gaining a sibling.** An adapter that started its own process
+>   because the launcher could not take input is how this family got a duplicated launcher the first time.
+>
+> Scope: `Bench.Domain/Authoring` (extensions
+> only), `Bench.Application` (the authoring and vetting use cases + one new port), `Bench.Infrastructure`
+> (a CLI agent adapter over the existing `ProcessRunner`), `hosts/Cli` (two verbs), and a new `prompts/`
+> catalog. No new tables: the bank's schema was built to this shape and phase 2 adds VERBS.
+>
+> Related docs: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.3 (which names this as *"phase 2, a
+> follow-up plan, not this one"* — this is that plan), [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md)
+> (the authoring rules this obeys), [PLAN_code_lane.md](PLAN_code_lane.md) (group 6, whose authoring has
+> three extra gates and is deliberately NOT in scope here),
+> [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) §5 step 11 (`CliAgentRuntime` — the boundary in §2a),
+> [../research/architecture.md](../research/architecture.md).
+
+## 1. The goal, before any solution
+
+The bank holds questions, reviews them, freezes selections from them, and **nothing writes any**.
+Candidates arrive by `bench questions import` from a hand-authored file, which means the only question set
+this benchmark can measure is one a person typed.
+
+That is the stated bottleneck of the whole project, in the founding plan's own words: *"Running is cheap and
+authoring is not: a machine gets through a thousand questions overnight, a person writes one good one in
+half an hour."* Every axis built so far — variants, subjects, lanes, repeats — multiplies over a question
+set. With six groups at ~100 questions each as the target, the set is the one factor nothing else can
+compensate for.
+
+**The symptom, measured today (2026-08-17).** The first live retrieval comparison ran on **two** questions,
+and both of their anchors were taken from the engine's own returned list, because that is the only way to
+author an anchor without reading the target repository. Anchor recall was therefore 1.0 by construction. The
+instrument works; it has nothing honest to measure. A comparison over questions authored from the engine's
+output measures the person who authored them.
+
+**What this plan does NOT try to fix.** Question QUALITY is not a thing a pipeline can assert. What a
+pipeline can do is produce volume that a review step then filters, and make the filtering cheap enough to
+happen at all — which is exactly the shape the bank already has (`Proposed → Accepted | Rejected`, one mark
+per reviewer per question).
+
+## 2. What exists today, verified
+
+| Fact | Where |
+|---|---|
+| Admission rules for a candidate: a non-human source must name its author model, and a question with no retrieval expectation is refused | `src/Bench.Domain/Authoring/QuestionCandidate.cs:75-92` |
+| `Accept` / `Reject`, and a rejection without a reason is refused | `src/Bench.Domain/Authoring/QuestionCandidate.cs:96-102` |
+| Deduplication by collision key across sources | `src/Bench.Domain/Authoring/AuthoringRules.cs:22-36` |
+| Memorisation risk from the SEED against a model's cutoff | `src/Bench.Domain/Authoring/AuthoringRules.cs:64-79` |
+| `AuthoringBatch.Promote` — candidates to a frozen suite | `src/Bench.Domain/Authoring/AuthoringRules.cs:89` |
+| The bank's five tables + `run_questions`, one mark per reviewer per question held by a unique index | `src/Bench.Infrastructure/Persistence/BenchDbContext.cs` (`Bank`), migration `QuestionBank` |
+| Six groups named as keys | `PLAN_variant_matrix.md` §3.3: `code-lookup`, `semantic-intent`, `pr-diff`, `bug-root-cause`, `adversarial`, `code-writing` |
+| Reviewers are DATA, not an enum — a fourth reviewer is one row | `reviewers` table; `bench questions review --reviewer <key>` |
+| `bench questions import|list|groups|review|accept|reject|move` | `hosts/Cli/QuestionsCommand.cs:26-30` |
+| One sanctioned process launcher: exe + argv, never a shell string, with a timeout and a typed `ProcessAttempt` (`Completed`/`TimedOut`/`NotFound`) | `src/Bench.Infrastructure/Process/ProcessRunner.cs:40-60` |
+| The registry can NAME a CLI model — `ModelRuntimeKind.CliClaude|CliCodex|CliGemini` with an `ExecutableRef` | `src/Bench.Domain/Registry/ModelConfig.cs` |
+| …and nothing can RUN one: a non-OpenAI runtime is refused by name | `src/Bench.Application/Registry/ModelRegistry.cs:79` |
+| The Claude CLI is installed on this machine, `2.1.216` | `~/.local/bin/claude` |
+| No `prompts/` directory exists in this repository | — |
+
+**So the gap is exactly three things**: something that runs a CLI agent, a use case that turns its output
+into candidates, and a use case that turns a candidate into three reviewer marks.
+
+### 2a. The boundary with `PLAN_tool_benchmark.md` — named in both
+
+That plan's step 11 owns `CliAgentRuntime`: a cloud CLI as a measurement SUBJECT, with native tools, turn
+budgets, and telemetry correlated per leg. This plan needs a CLI agent as an AUTHOR — one shot, one prompt,
+one JSON answer, no tool loop and no telemetry.
+
+| Item | Built here | That plan's part |
+|---|---|---|
+| Launching a CLI agent once and reading its answer | **§3.1** — `ICliAgentRuntime`, one prompt in, text out, bounded | consumes it |
+| A CLI agent as a measured subject: turn ceilings, native tools, `agent-mcp` lane, per-leg telemetry | — | **its step 11** |
+| `ModelResolution` learning to resolve a CLI runtime | **§3.1** | extends it with the lane axis |
+
+Stated so that the second one to arrive extends the first rather than writing a second launcher. This
+repository has paid for a duplicated process launcher once already (`ProcessRunner`, moved to a shared
+project after being written twice).
+
+## 3. The shape — decisions
+
+### 3.1 `ICliAgentRuntime`: one prompt, one answer, bounded
+
+```csharp
+public sealed record AgentAsk(string Executable, string Prompt, string WorkingDirectory, TimeSpan Wall);
+public sealed record AgentAnswer(string Text, TimeSpan Elapsed, long ResponseBytes);
+
+public interface ICliAgentRuntime
+{
+    Task<Outcome<AgentAnswer>> AskAsync(AgentAsk ask, CancellationToken cancellationToken);
+}
+```
+
+- **Over `ProcessRunner`, never a second launcher.** exe + argv, no shell string: this pipeline will be
+  handed repository paths and question text, and text concatenated into a shell command is arbitrary code
+  execution wearing a prompt.
+- **The prompt travels on stdin**, not as an argument. A 4 KB prompt in argv hits the platform's command
+  length limit at the worst possible moment — on the machine that has the biggest target repository.
+  `ProcessRunner` therefore grows stdin support, which is an extension of the one launcher rather than a
+  bypass of it.
+- **Headless flags belong to the ADAPTER, one per runtime kind.** `claude -p` is not `codex exec` is not
+  `gemini -p`. A single flag string in configuration would be a knob nobody can validate; a mapping from
+  `ModelRuntimeKind` to argv is a switch that fails at a compiler error when a kind is added.
+- **A refusal is a value**, exactly as `IModelRuntime`'s is: an executable that is not there, a CLI that
+  exits non-zero, a run that outlives its wall are all facts the batch records and continues past. One
+  agent's bad afternoon must not end an authoring run of six groups.
+- **The executable comes from the registry's `ExecutableRef`**, resolved through `ISecretSource` on THIS
+  machine — the same discipline that keeps the results database publishable. A reference that resolves to
+  nothing here is refused before anything is launched.
+
+### 3.2 The author's answer is JSON, and it is refused rather than repaired
+
+The agent is asked for the exact wire shape the bank already reads (`QuestionJson`'s `QuestionFile`), so an
+authored question and an imported one are the same thing by construction — there is no second format and no
+mapping to keep true.
+
+- **A malformed answer is a rejected candidate with the parse error as its reason**, never a repair. An
+  authoring pass that fixes its author's JSON is a pass whose output nobody can attribute: the question that
+  reaches the bank must be the question the model wrote.
+- **Every candidate goes through `QuestionCandidate.Propose`**, which already refuses a question with no
+  retrieval expectation and demands the author model be named. No second admission rule.
+- **The seed is mandatory and comes from the TASK, not from the clock.** The author is asked to name what its
+  question is anchored to (a member key, a PR, an issue) and when that thing dates from; a candidate whose
+  seed cannot be read gets `unstated` at the beginning of time, which reads as *may recall* rather than as
+  safe — the rule the bank import already follows.
+- **Deduplication runs over the batch before anything is stored** (`Dedup.Find`), because three authors on
+  one group will independently write the same question about the most obvious member in the repository.
+
+### 3.3 Vetting: three reviewers, one mark each, and a rejection must say why
+
+`bench questions vet` walks `Proposed` questions and asks each configured reviewer for a verdict, storing it
+through the path `bench questions review` already uses — so a mark written by an agent and one typed by a
+person are indistinguishable afterwards, which is correct: a review is a judgement, not a provenance.
+
+- **A reviewer never reviews its own authorship.** The mark records the reviewer key, and the question
+  records its author model; the pairing is refused when they are the same model. Self-review is the
+  cheapest way to manufacture agreement, and this project already refuses self-judging in the arbiter lane.
+- **Only `Accepted` questions are selectable into a test**, which is already enforced by the bank's query.
+- **Acceptance is not a vote.** This plan stores marks and does nothing clever with them; what threshold
+  promotes a candidate is an operator decision recorded per batch, and the default is the strict one — every
+  configured reviewer approves. A majority rule invented here would be a quality claim nobody measured.
+
+### 3.4 Prompts are a catalog, not string literals
+
+A new `prompts/` directory, one file per role per group: `prompts/author/<group-key>.md`,
+`prompts/review/<group-key>.md`. Read from disk at run time, and the file's own hash is recorded with the
+batch.
+
+The reason is the measured one this project keeps re-learning: **rewriting one ordering instruction moved a
+score 16.5 points of 63 where swapping 4 tools for 18 moved 1** (`PLAN_tool_benchmark.md`). A prompt that
+lives in a C# string literal is an unversioned axis with the largest measured effect in the system. The hash
+on the batch is what makes "these hundred questions were written by that prompt" a fact rather than a
+recollection.
+
+### 3.5 What this plan deliberately does not do
+
+- **Group 6 (`code-writing`) authoring.** Its three gates — the bug reproduces, the reference fix works, the
+  tree is rebuilt to the buggy state — need a sandbox worktree and a build, and they belong to
+  `PLAN_code_lane.md`. This plan authors the five READING groups and refuses group 6 by name.
+- **No UI.** API-first is a gate in the sibling plan and it applies here: verbs first.
+- **No automatic promotion to a suite.** `AuthoringBatch.Promote` already exists and `bench run --bank-group`
+  already freezes a selection; nothing here needs to duplicate that.
+
+## 4. Build order
+
+Each step ships alone, tests green, before the next starts.
+
+1. **`ProcessRunner` grows stdin**, with a test that a prompt larger than the platform's argv limit still
+   arrives. The one launcher stays the one launcher.
+2. **`ICliAgentRuntime` + `CliAgentRuntime`** — argv per `ModelRuntimeKind`, executable from the registry
+   reference, refusal as a value, bounded by a wall. `ModelResolution` learns to resolve a CLI runtime for
+   this ROLE without becoming resolvable as a measurement subject (that is step 11 of the other plan).
+3. **`prompts/author/*.md` + `prompts/review/*.md`** for the five reading groups, with a loader that hashes
+   what it read.
+4. **`bench questions author`** — one group, N candidates per author, through `Propose` and `Dedup`, stored
+   `Proposed` with the batch's prompt hash and author model. **First exercised with `claude` alone**
+   (operator decision 2026-08-17): three authors are the design and one is the first measurement, because a
+   pipeline that has never produced one good question does not need three ways to produce none.
+5. **`bench questions vet`** — marks from each configured reviewer, self-review refused, rejection reasons
+   mandatory.
+6. **The first real batch**, and the number the founding plan says can only be learned by running: how many
+   accepted questions per week the review step passes, and whether the memorisation-trap property can be
+   checked mechanically or needs a person every time.
+
+## 5. Test plan
+
+- xUnit v3 exe (never `dotnet test`), `PostgresFixture` for anything touching the bank.
+- Domain: the self-review refusal; a seedless candidate reading as *may recall*; dedup across three authors
+  writing the same obvious question.
+- Runtime: a fake executable (a script that echoes a fixture) proves argv, stdin, the wall and the
+  three refusal shapes — `NotFound`, non-zero exit, `TimedOut` — without a cloud call.
+- Authoring: a malformed answer becomes a `Rejected` candidate carrying the parse error, and NOTHING is
+  repaired; a well-formed one lands `Proposed` with its author model and prompt hash.
+- **A live-trait test with the real `claude` CLI**, skipped when the reference is unset — the lesson of
+  2026-08-17 is that a stub agrees with whatever the caller assumed, and only a live run catches a wire
+  spelling. It is not optional before this pipeline is called working.
+
+## 6. Definition of Done
+
+- [ ] One process launcher still, now with stdin; no shell strings anywhere.
+- [ ] A CLI agent can be asked one question and its answer read, with every failure a recorded value.
+- [ ] Prompts live in `prompts/`, are hashed, and the hash is stored with the batch.
+- [ ] `bench questions author` produces `Proposed` candidates through the EXISTING admission rules, with
+      dedup, and refuses group 6 by name.
+- [ ] `bench questions vet` records one mark per reviewer per question and refuses self-review.
+- [ ] A malformed author answer is a rejection with its reason, never a repair.
+- [ ] The live-trait test has actually been RUN against the real `claude` CLI, and the result reported.
+- [ ] `research/architecture.md` describes the authoring pipeline; this plan is promoted to `research/` when
+      the first batch has been authored and vetted.

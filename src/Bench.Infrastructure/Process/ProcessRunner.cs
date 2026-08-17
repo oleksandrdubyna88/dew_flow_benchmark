@@ -39,11 +39,32 @@ public abstract record ProcessAttempt
 /// </para></summary>
 public static class ProcessRunner
 {
+    public static Task<ProcessAttempt> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        RunAsync(executable, arguments, workingDirectory, timeout, string.Empty, cancellationToken);
+
+    /// <summary>The same launch, with something written to the child's STDIN.
+    /// <para>
+    /// Added for the authoring pipeline, and the reason is a limit rather than a preference: a CLI agent's
+    /// prompt runs to kilobytes, and an argument list has a platform maximum — around 32 KB on Windows, and
+    /// the failure arrives on the machine with the biggest target repository, at the moment the prompt grows.
+    /// Passing it on stdin has no such ceiling.
+    /// </para>
+    /// <para>
+    /// An extension of the one launcher rather than a second one beside it. The alternative — an adapter that
+    /// starts its own process because this one could not take input — is how this repository ended up with a
+    /// duplicated process launcher the first time.
+    /// </para></summary>
     public static async Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
+        string input,
         CancellationToken cancellationToken)
     {
         var start = new ProcessStartInfo
@@ -52,6 +73,9 @@ public static class ProcessRunner
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Redirected only when there is something to write. A child that reads stdin and finds an OPEN
+            // empty pipe waits forever, and the timeout would then report a hang the caller caused.
+            RedirectStandardInput = input.Length > 0,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -74,7 +98,33 @@ public static class ProcessRunner
             return new ProcessAttempt.NotFound(executable);
         }
 
+        if (input.Length > 0)
+        {
+            await WriteAsync(process, input, cancellationToken);
+        }
+
         return await AwaitAsync(process, timeout, cancellationToken);
+    }
+
+    /// <summary>Writes the input and CLOSES the pipe.
+    /// <para>
+    /// The close is the load-bearing half: a CLI reading until end-of-input keeps waiting while the pipe is
+    /// open, so a writer that forgets it turns every call into a timeout. Disposing the writer is what sends
+    /// the EOF.
+    /// </para></summary>
+    private static async Task WriteAsync(
+        System.Diagnostics.Process process, string input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stdin = process.StandardInput;
+            await stdin.WriteAsync(input.AsMemory(), cancellationToken);
+        }
+        catch (IOException)
+        {
+            // The child exited before reading its prompt — a refusal it is about to explain on stdout, and
+            // one this method must not turn into an exception that hides that explanation.
+        }
     }
 
     private static async Task<ProcessAttempt> AwaitAsync(
