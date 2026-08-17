@@ -18,9 +18,7 @@ A single JSON array and **nothing else**. No prose before it, no explanation aft
     "id": "short-kebab-id",
     "prompt": "The question, as a person would ask it.",
     "referenceAnswer": "What a correct answer says. One or two sentences.",
-    "seedKind": "member",
-    "seedReference": "Type.Member or a PR/issue reference",
-    "seedAt": "2026-05-14",
+    "seed": { "kind": "member", "reference": "Type.Member or a PR/issue reference", "at": "2026-05-14" },
     "expectations": [
       { "kind": "Member", "file": "src/Path/File.cs", "member": "Type.Member", "start": 75, "end": 111 },
       { "kind": "AnswerContains", "text": "a term a correct answer must use" },
@@ -36,10 +34,10 @@ A single JSON array and **nothing else**. No prose before it, no explanation aft
    A question with nothing to find measures nothing. Line numbers must be the real ones — if you are not
    certain of them, give the file and the member and set `start` and `end` to 0.
 
-2. **The seed must be a real thing, with its real date.** `seedKind` is `member`, `pr`, `issue` or `human`;
-   `seedReference` names it; `seedAt` is when that thing dates from. This is how the benchmark decides
+2. **The seed must be a real thing, with its real date.** `seed.kind` is `member`, `pr`, `issue` or `human`;
+   `seed.reference` names it; `seed.at` is when that thing dates from. This is how the benchmark decides
    whether a subject could have memorised the answer instead of working it out. **Never invent a date.** If
-   you do not know it, say `"seedAt": ""` — unknown reads as *may recall*, which is honest, while a guessed
+   you do not know it, omit `at` entirely — unknown reads as *may recall*, which is honest, while a guessed
    date reads as *safe*, which is a lie the whole measurement rests on.
 
 3. **A memorisation trap where the group calls for one.** A question whose obvious answer is the widely

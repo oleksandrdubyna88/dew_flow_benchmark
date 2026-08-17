@@ -271,15 +271,28 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             // The index, not the check above, is what actually held: two imports of one file racing is the
             // normal shape of an operator re-running a command they were not sure took.
-            return Outcome<T>.Failure(conflict);
+            //
+            // But it is not the ONLY thing that can refuse a write, and until 2026-08-17 this said the id was
+            // taken whatever went wrong. It cost an hour: an authored question whose seed date carried a local
+            // offset was refused by Postgres for that, and reported as a duplicate id — a refusal that sent the
+            // reader looking for a row that did not exist. The database's own sentence is appended so the two
+            // cases are never again one message.
+            return Outcome<T>.Failure($"{conflict}. The store said: {Cause(ex)}");
         }
 
         return Outcome<T>.Success(value);
     }
+
+    /// <summary>The innermost reason, which is the one that names the constraint or the column. The outer
+    /// sentence is always the same generic "an error occurred while saving the entity changes".</summary>
+    private static string Cause(Exception failure) =>
+        failure.InnerException is { } inner ? Cause(inner) : Line(failure.Message);
+
+    private static string Line(string message) => message.Split('\n')[0].Trim();
 
     /// <summary>Reads every row or fails by name. A row that cannot be read is never skipped: a listing
     /// quietly missing a question is a selection quietly missing a question.</summary>

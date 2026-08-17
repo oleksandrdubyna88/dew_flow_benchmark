@@ -30,6 +30,20 @@ public enum AuthoringSource
 /// </para></summary>
 public sealed record QuestionSeed(string Kind, string Reference, DateTimeOffset At)
 {
+    /// <summary>Always UTC, normalised HERE rather than at each call site.
+    /// <para>
+    /// Found 2026-08-17 by the first authoring pass: an author writes <c>"at": "2026-05-14"</c>, a date with no
+    /// zone, which deserialises to the READING MACHINE's offset — and Postgres accepts only UTC in a
+    /// <c>timestamptz</c> parameter, so the insert failed. The bank import had the same hazard on the same
+    /// line, unfixed, because nothing had yet imported a file whose seed date omitted a zone.
+    /// </para>
+    /// <para>
+    /// In the domain type because every path that builds a seed is then correct at once, and no future one can
+    /// forget. A seed's date is also compared against a model's training cutoff, and comparing two instants in
+    /// different offsets is the other half of the same bug.
+    /// </para></summary>
+    public DateTimeOffset At { get; init; } = At.ToUniversalTime();
+
     public static QuestionSeed PullRequest(string reference, DateTimeOffset mergedAt) =>
         new("pull-request", reference, mergedAt);
 

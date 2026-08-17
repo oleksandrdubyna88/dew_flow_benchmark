@@ -1,6 +1,33 @@
 # PLAN — question authoring: three CLI agents write the bank, three review it
 
-> Status: **steps 1 and 2 of §4 IMPLEMENTED 2026-08-17; steps 3–6 open.** The one launcher grew stdin
+> Status: **steps 1–4 of §4 IMPLEMENTED 2026-08-17; steps 5–6 open.** Step 3: `prompts/author` and
+> `prompts/review`, five reading groups each, shared contract plus per-group brief, hashed. Step 4:
+> `AuthoringPass` drives an agent, parses its answer as the shape `bench questions import` already reads, and
+> admits it through `QuestionCandidate.Propose` + `Dedup` — no second format and no second admission rule. The
+> CLI verb and the first live batch are what remain of step 4; steps 5 (vetting) and 6 (the first real batch's
+> numbers) are open.
+>
+> Deviations, steps 3–4:
+> - **Shared contract plus per-group brief**, not one file per group carrying a copy of the JSON shape and the
+>   seed rules. Five copies are five things to keep true. The hash covers BOTH, so editing the shared contract
+>   changes every group's identity — correct, because the prompt did change.
+> - **The author answers as `BankQuestionFile`**, the import's own shape, rather than a shape of its own or
+>   `QuestionFile` (which carries no seed, and the seed is the input to the whole memorisation check). An
+>   authored batch is therefore literally an importable file.
+> - **An unfilled placeholder is refused.** A prompt sent with a literal `{{commit}}` in it does not fail: the
+>   agent answers anyway, plausibly, about no particular commit, and its questions look exactly like correct
+>   ones.
+> - **A code fence is unwrapped and nothing else is.** Agents wrap JSON in a fence often enough that refusing
+>   it would reject good work over a habit, while any further repair would start editing the questions.
+> - **Two defects found by the first pass, both stored-data bugs.** (1) A seed date written as `2026-05-14` —
+>   no zone — deserialises to the reading machine's offset, and Postgres accepts only UTC in a `timestamptz`
+>   parameter, so the insert failed. Fixed in `QuestionSeed` itself so every path is correct at once; the bank
+>   IMPORT had the same hazard on the same line, unfixed, because nothing had yet imported a file whose seed
+>   omitted a zone. (2) The bank reported **"the question id is already in the bank" for ANY write failure**,
+>   so that offset error read as a duplicate id and sent the reader hunting a row that did not exist. It now
+>   appends the store's own innermost sentence.
+>
+> Steps 1 and 2 (2026-08-17, earlier): The one launcher grew stdin
 > (`ProcessRunner.RunAsync` with an input overload — 200 KB verified through `git hash-object --stdin`, which
 > also proves the pipe is CLOSED, since a CLI reading to end-of-input would otherwise hang), and
 > `ICliAgentRuntime` + `CliAgentRuntime` can ask a CLI agent one question and read its answer, with every
