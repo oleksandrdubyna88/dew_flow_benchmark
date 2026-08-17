@@ -89,6 +89,16 @@
 >   question's own prompt returns a different top five, which is a true measurement rather than a defect. Then
 >   anchors taken from what the engine actually returns: recall 1.0, MRR 0.6 at ranks 1 and 5 — arithmetic that
 >   checks by hand, (1 + 1/5)/2.
+> - **And the AppHost could not start, which is why that first verification went into the wrong database.**
+>   Its only launch profile declared an `http` dashboard url, and Aspire refuses one unless
+>   `ASPIRE_ALLOW_UNSECURED_TRANSPORT` is set — so `dotnet run --project hosts/AppHost` died in startup
+>   validation with no container at all. The AppHost is the only thing that provides the PERSISTENT store
+>   (`bench-postgres-data`, `ContainerLifetime.Persistent`, and that file's own comment about a measurement
+>   taken in March still being comparable in August), so an unstartable profile means results have nowhere to
+>   live: the first live campaign went into a hand-rolled throwaway Postgres and had to be re-run. Fixed to an
+>   https profile, matching the sibling AppHost, and guarded by `AppHostLaunchProfileTests` — a config test,
+>   because what broke was a JSON file. Re-run into the real store, where it now sits beside the four
+>   model-registry runs from 2026-08-15: five runs, one database, which is the whole point.
 > - **A trap for step 5's echo assertion, found in that live data.** The engine's echoed booleans render as
 >   `True`/`False` (its own `ToString`), while this side's requested axes carry `true`/`false`. A string
 >   comparison of the pair would therefore flag EVERY boolean axis as a mismatch and block every cell. The

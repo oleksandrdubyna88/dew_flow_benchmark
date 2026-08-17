@@ -1,16 +1,16 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "http": {
+    "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15310",
+      "applicationUrl": "https://localhost:17310;http://localhost:15310",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:21310",
-        "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:22310",
+        "DOTNET_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21310",
+        "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22310",
         "Parameters__bench-postgres-password": "bench-local-dev"
       }
     }
