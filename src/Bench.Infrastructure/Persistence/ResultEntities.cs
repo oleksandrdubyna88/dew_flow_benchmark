@@ -15,9 +15,34 @@ public sealed class ResultRow
     /// <summary>The subject's answer, stored so a second arbiter costs its own inference and nothing else.</summary>
     public string Answer { get; set; } = string.Empty;
 
+    /// <summary>The model's own reasoning, when its runtime returned any separately from the answer.
+    /// <para>
+    /// Kept forever with the prompt and the answer — the trio is the artefact, and a published number that
+    /// cannot be re-read against the text that produced it is a number nobody can check. Its size is a
+    /// budget line rather than a cleanup target.
+    /// </para></summary>
+    public string ThinkingText { get; set; } = string.Empty;
+
+    /// <summary>Why there is no thinking text, when there is none. Empty exactly when the text WAS captured,
+    /// which is what keeps "this model hides its reasoning" distinguishable from "it thought about nothing" —
+    /// the distinction <c>Captured</c> exists for, carried through storage rather than dropped at it.</summary>
+    public string ThinkingReason { get; set; } = string.Empty;
+
+    /// <summary>Tokens in and out, latency, stop reason, response size, and the sampling AS SENT. Every one
+    /// unrecoverable after the fact, since a re-run is a different call.</summary>
+    public string ResponseMetaJson { get; set; } = "{}";
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public List<MetricRow> Metrics { get; set; } = [];
+
+    /// <summary>The hits retrieval surfaced for this leg, empty for the control arm.</summary>
+    public List<RetrievedHitRow> Hits { get; set; } = [];
+
+    /// <summary>The funnel of this leg's retrieval; absent for a leg that performed none. Nullable because
+    /// EF models an optional one-to-one that way — the domain reads it as
+    /// <c>RetrievedContext.NotPerformed</c>, which is a state rather than a null.</summary>
+    public FunnelRow? Funnel { get; set; }
 
     public CellRow? Cell { get; set; }
 }

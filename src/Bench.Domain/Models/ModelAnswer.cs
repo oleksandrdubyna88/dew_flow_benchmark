@@ -106,6 +106,20 @@ public sealed record ModelAnswer(
     StopReason Stop,
     string StopDetail)
 {
+    /// <summary>The model's reasoning text, when the runtime returns it separately from the answer.
+    /// <para>
+    /// <see cref="Captured"/> rather than a string, and that is the whole point: most endpoints return no
+    /// thinking at all, and an empty string would make "this model does not expose its reasoning"
+    /// indistinguishable from "it thought about nothing". It is stored because a wrong answer with visible
+    /// reasoning is the only evidence that says WHERE the run went wrong.
+    /// </para>
+    /// <para>An <c>init</c> property rather than a positional parameter, so adding it cannot break a caller
+    /// that constructs an answer positionally — the shape <see cref="LegTrace.FunnelNote"/> established.</para></summary>
+    public Captured Thinking { get; init; } = Captured.Unavailable("the runtime returned no separate reasoning");
+
+    /// <summary>Bytes of the runtime's response payload, as this process received it.</summary>
+    public long ResponseBytes { get; init; }
+
     public bool WasCutOff => Stop == StopReason.LengthCapped;
 
     public string Describe =>

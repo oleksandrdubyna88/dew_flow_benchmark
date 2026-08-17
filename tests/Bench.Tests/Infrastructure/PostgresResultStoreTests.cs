@@ -27,7 +27,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task A_scored_leg_round_trips_with_its_metrics_and_their_metadata()
     {
         var (runId, cells) = await SeedAsync(EngineKind.Qln, questions: 1, lanes: 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         var metric = StoredMetric.Numeric("Anchor recall", 1, "surfaced", failed: false, "Exceptional")
             .With(new Dictionary<string, string> { ["anchor"] = "src/A.cs#A.Foo", ["hitCount"] = "3" });
@@ -45,7 +45,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task A_leg_is_scored_once_and_a_second_write_is_refused()
     {
         var (_, cells) = await SeedAsync(EngineKind.Qln, 1, 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
         var metric = StoredMetric.Boolean("Answered", true, "", false, "Good");
 
         await store.SaveAsync(LegResult.Of(cells[0], "q", "a", [metric], Noon), Ct);
@@ -57,7 +57,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     [Fact]
     public async Task A_result_without_a_leg_is_refused_because_it_would_have_no_measurement_key()
     {
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         var orphan = await store.SaveAsync(
             LegResult.Of(Guid.CreateVersion7(), "q", "a", [StoredMetric.Boolean("x", true, "", false, "Good")], Noon), Ct);
@@ -69,7 +69,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task The_average_of_one_metric_per_engine_is_a_query_not_a_full_scan()
     {
         var (qlnRun, qlnCells) = await SeedAsync(EngineKind.Qln, questions: 2, lanes: 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         // Two legs on one engine: one found its anchor, one did not. Each also carries a SECOND metric
         // with a deliberately different value, so an implementation that forgot to filter by name would
@@ -93,7 +93,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task Averaging_by_lane_separates_the_lanes_of_one_run()
     {
         var (runId, cells) = await SeedAsync(EngineKind.NoRetrieval, questions: 1, lanes: 2);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         await store.SaveAsync(Result(cells[0], recall: 1), Ct);
         await store.SaveAsync(Result(cells[1], recall: 0), Ct);
@@ -108,7 +108,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task A_boolean_metric_aggregates_as_a_pass_rate()
     {
         var (runId, cells) = await SeedAsync(EngineKind.Qln, questions: 2, lanes: 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         await store.SaveAsync(LegResult.Of(cells[0], "q", "a", [StoredMetric.Boolean("Hidden tests", true, "", false, "Good")], Noon), Ct);
         await store.SaveAsync(LegResult.Of(cells[1], "q", "a", [StoredMetric.Boolean("Hidden tests", false, "", true, "Unacceptable")], Noon), Ct);
@@ -121,7 +121,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task A_metric_the_library_produced_survives_the_round_trip_back_into_its_own_model()
     {
         var (runId, cells) = await SeedAsync(EngineKind.Qln, 1, 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         var theirs = new NumericMetric("Anchor recall", 1)
         {
@@ -147,7 +147,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
         var sql = new List<string>();
 
         await using var db = Recording(sql);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(db);
+        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(db, TimeProvider.System);
 
         await store.SaveAsync(Result(cells[0], recall: 1), Ct);
         await store.SaveAsync(Result(cells[1], recall: 1), Ct);
@@ -170,7 +170,7 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
     public async Task A_run_nobody_has_scored_yet_counts_zero_rather_than_failing()
     {
         var (runId, _) = await SeedAsync(EngineKind.Qln, questions: 1, lanes: 1);
-        var store = new Bench.Infrastructure.Persistence.PostgresResultStore(postgres.NewContext());
+        var store = postgres.NewResults();
 
         (await store.ScoreboardAsync(runId, Ct)).Should().Be(new RunScoreboard(0, 0));
     }

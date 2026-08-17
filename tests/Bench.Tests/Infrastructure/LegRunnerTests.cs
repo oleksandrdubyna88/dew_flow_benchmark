@@ -267,12 +267,20 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
             .Select(c => RunCell.Pending(run.Id, c)).ToList();
 
         var runs = new PostgresRunStore(postgres.NewContext(), clock);
-        var results = new PostgresResultStore(postgres.NewContext());
+        var results = postgres.NewResults();
         await runs.CreateAsync(run, cells, Ct);
 
         var plan = LegPlan.Reading(suite, roster);
 
-        return (run.Id, plan, new LegRunner(runs, results, runtime, clock, NullLogger<LegRunner>.Instance), runs, results);
+        // NoRetriever, because every cell here is planned without a variant and therefore runs the control
+        // arm: the runner must not ask a retriever anything, and a retriever that refuses everything is the
+        // fake that proves it.
+        return (
+            run.Id,
+            plan,
+            new LegRunner(runs, results, runtime, new NoRetriever(), clock, NullLogger<LegRunner>.Instance),
+            runs,
+            results);
     }
 
     private static SubjectRoster OneSubject() => Roster(("qwen3-coder:latest", "http://127.0.0.1:11434/v1"));

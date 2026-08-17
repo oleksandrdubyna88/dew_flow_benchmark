@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Cli;
 using Bench.Diagnostics;
+using Bench.Infrastructure.Engines;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +29,7 @@ public sealed class CliLoggingTests
         using var root = new TempLogRoot();
         var logger = BenchLogging.CreateLogger(new ConfigurationBuilder().Build(), root.Path, "bench");
 
-        using (var provider = CliContainer.ForRun(Connection, root.Path, logger))
+        using (var provider = CliContainer.ForRun(Connection, root.Path, QlnEngineOptions.None, logger))
         {
             provider.GetRequiredService<ILogger<LegRunner>>().LogWarning(
                 "Cell {Cell} was scored but not settled: {Reason}", Guid.Empty, "the store refused the settle");

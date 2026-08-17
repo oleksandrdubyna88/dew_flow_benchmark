@@ -67,8 +67,15 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
                     $"{request.Endpoint.Model.Id} answered {(int)response.StatusCode}: {Short(detail)}");
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-            return Outcome<ModelAnswer>.Success(Read(payload, request, clock.Elapsed));
+            // Text first, then parse: the response's SIZE is part of what a cell records, and a
+            // deserializer that consumed the stream leaves nothing left to measure.
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            return Outcome<ModelAnswer>.Success(
+                Read(JsonDocument.Parse(payload).RootElement, request, clock.Elapsed) with
+                {
+                    ResponseBytes = System.Text.Encoding.UTF8.GetByteCount(payload),
+                });
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -135,7 +142,27 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
             // from a setting somewhere.
             SamplingAsSent.From(request.Sampling, "request-body"),
             Stop(finish),
-            finish);
+            finish)
+        {
+            Thinking = Thinking(choice.TryGetProperty("message", out var thought) ? thought : default),
+        };
+    }
+
+    /// <summary>The model's reasoning, when the endpoint separates it from the answer.
+    /// <para>
+    /// Two field names because two conventions exist for the same thing and neither is standard:
+    /// <c>reasoning_content</c> (Ollama, vLLM, DeepSeek's own API) and <c>reasoning</c>. An endpoint that
+    /// sends neither reports that it sends neither — an empty string here would make a model that hides its
+    /// reasoning indistinguishable from one that did none.
+    /// </para></summary>
+    private static Captured Thinking(JsonElement message)
+    {
+        var reasoning = Text(message, "reasoning_content");
+        var fallback = reasoning.Length > 0 ? reasoning : Text(message, "reasoning");
+
+        return fallback.Length > 0
+            ? Captured.Text(fallback)
+            : Captured.Unavailable("the response carried no reasoning field");
     }
 
     private static StopReason Stop(string finishReason) =>

@@ -1,3 +1,7 @@
+using Bench.Domain.Models;
+using Bench.Domain.Retrieval;
+using Bench.Domain.Trace;
+
 namespace Bench.Domain.Runs;
 
 public enum MetricKind
@@ -69,6 +73,20 @@ public sealed record LegResult(
 {
     public static LegResult Of(Guid cellId, string prompt, string answer, IReadOnlyList<StoredMetric> metrics, DateTimeOffset now) =>
         new(Guid.CreateVersion7(), cellId, prompt, answer, metrics, now);
+
+    /// <summary>The model's own reasoning, when its runtime returned any. Kept forever with the prompt and
+    /// the answer: this trio IS the artefact, and a published number that cannot be re-read against the text
+    /// that produced it is a number nobody can check.</summary>
+    public Captured Thinking { get; init; } = Captured.Unavailable("the runtime returned no separate reasoning");
+
+    /// <summary>Tokens, latency, stop reason and the sampling as SENT. Unrecoverable after the fact, since a
+    /// re-run is a different call.</summary>
+    public ResponseMeta Meta { get; init; } = ResponseMeta.None;
+
+    /// <summary>What retrieval surfaced for this leg — the funnel, the hits and the axes that served it.
+    /// <see cref="RetrievedContext.NotPerformed"/> for the control arm, which is a statement about the arm
+    /// rather than an empty result.</summary>
+    public RetrievedContext Retrieval { get; init; } = RetrievedContext.NotPerformed;
 
     public bool Passed => Metrics.Count > 0 && Metrics.All(m => !m.Failed);
 }

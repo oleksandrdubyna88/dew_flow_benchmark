@@ -1,6 +1,6 @@
 # Architecture — the system as it is
 
-> Status: **current as of 2026-08-16.** Describes what exists and runs, not what is planned; the plan is
+> Status: **current as of 2026-08-17.** Describes what exists and runs, not what is planned; the plan is
 > [todo/PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) and the evidence behind the design is
 > [MEASURED_LESSONS.md](MEASURED_LESSONS.md). Where the two disagree, this file is wrong and should be
 > corrected — a description that has drifted from the code is the failure this convention exists to catch.
@@ -19,25 +19,25 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — plan · run · judge · sweep<br/>telemetry · variants · version/help"]
+        cli["Cli — plan · run · judge · sweep · prune<br/>telemetry · variants · questions · models · version/help"]
         apphost["AppHost — Aspire, own Postgres"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
         runner["LegRunner · LegDrain · LegRecorder"]
         plan["PlanRun / PlanRequestHandler"]
-        codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader"]
-        ports["IRunStore · IResultStore · IEngine · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IFunnelSink · IHardwareSampler"]
+        codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
-        scoring["AnswerScoring · Discrimination · PhasePlan"]
-        obs["Trace · Telemetry · Models"]
-        axes["Variants · Authoring · Engines"]
+        scoring["AnswerScoring · RetrievalScoring<br/>Discrimination · PhasePlan"]
+        obs["Trace · Telemetry · Models · Retrieval"]
+        axes["Variants · Authoring · Engines · Bank · Registry"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · telemetry"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry"]
         git["GitCheckoutProvider + ProcessRunner"]
-        eng["FilesystemEngine · QlnEngine"]
+        eng["FilesystemEngine · QlnEngine · QlnRetriever"]
         rt["OpenAiCompatibleRuntime"]
         tr["LiveTrace · FixtureTrace"]
     end
@@ -94,6 +94,78 @@ existed still mean what they said.
 **Identity is separate from configuration.** `ModelRef` is an id; `ModelEndpoint` holds the address and the
 prices. Every aggregate, every discrimination reading and every saturation label is keyed by the id, so
 folding an address into it would make the same model at a different port a different subject.
+
+### The retrieval lane (single-shot RAG)
+
+A cell whose variant names a retrieval recipe gets retrieval performed **for** it by the harness, and its
+prompt is assembled from what came back. This is the single-shot lane; the agentic loop where a subject
+decides what to search and when is a separate measurement (see *What does NOT exist yet*).
+
+Two ports, not one, and the separation is measured rather than stylistic:
+
+| port | what it models | who serves it |
+|---|---|---|
+| `IEngine` | retrieval as a **surface** a subject works — tools, refusals, whatever it decides to call | `FilesystemEngine`, `QlnEngine` |
+| `IRetriever` | retrieval as a **call** the harness makes for one question | `QlnRetriever`, `NoRetriever` |
+
+The same four tools behind a different surface shape once scored 4/63 against 37/63 on identical tasks, so
+collapsing these into a single `SearchAsync` would make the surface measurement inexpressible — and folding
+the single-shot lane into a tool loop would make its funnel unattributable, since a subject that never
+searched produces no funnel at all. `QlnEngine` composes `QlnRetriever` for its search tool: one round trip,
+one funnel path, whichever lane asked.
+
+**A recipe becomes a request in exactly one place** (`AxesWire.From`), which is also where the stored
+"asked for" axes come from — so what a run records is literally what went out, not a second mapping that
+agrees with the first until somebody edits one. An axis the run did not set is **omitted** from the JSON
+rather than sent as a C# default: a call that meant to set only a limit would otherwise send
+`rerank: false, rerankPool: 0, rrfK: 0`, and the engine would clamp those into a configuration in no catalog
+row.
+
+**A recipe this engine cannot express is refused before the round trip.** The engine fuses by reciprocal
+rank only and has no fusion-mode or normalization axis, and its axes contract does not refuse members it
+does not know — so a `wsum` request would be accepted, the field ignored, and the run would record a
+weighted sum while measuring rank fusion. That is the reranker scar exactly, and the refusal names the
+sibling plan that closes it (`dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`).
+
+**The variant is looked up per cell, exactly as the subject is.** `VariantRoster.For(cell.Variant)` mirrors
+`SubjectRoster.For(cell.SubjectModelId)`: a run holds several recipes because the variant is an axis, and a
+cell whose recipe is not in the roster is **settled** rather than measured under another one. A cell planned
+without a variant resolves to the control arm, which is what every run planned before this lane existed is.
+
+**The prompt is the artefact.** `RagPrompt` assembles it deterministically in rank order — path, span,
+signature and the hit's own text — and stores it on the result. It says when a snippet was truncated and when
+the engine returned no text for a hit, because the stored prompt has to describe what the model actually
+read. There is deliberately **no cap on the number of hits**: that is the variant's `limit` axis, with a name
+and a hash, and a second cap here would be an unnamed axis applied to every arm.
+
+**Anchor recall stops reading *not applicable*.** `RetrievalScoring` matches the returned hits against the
+question's anchors and feeds `AnswerScoring`'s existing recall metric — one definition of recall in the
+system — then adds recall@5, recall@10, MRR and a first-hit rank. Matching is by the readable `Type.Member`
+identity or by **line overlap**, never by member name alone: a suffix rule would let `NoRetry` answer for
+`Retry`, and a recall figure inflated that way is indistinguishable from a real one. A leg that performed no
+retrieval gets **no** rank metrics at all, so the control arm keeps exactly the metric set it had before this
+lane existed instead of entering every retrieval aggregate at the bottom.
+
+### What a retrieval leg stores, and who owns its growth
+
+| surface | holds | owner |
+|---|---|---|
+| `results.Prompt` / `Answer` / `ThinkingText` | the artefact — a published number re-checked against the text that produced it | **kept forever**; its size is a budget line, not a cleanup target |
+| `results.ResponseMetaJson` | tokens in/out, latency, stop reason, response bytes, sampling AS SENT | kept forever; unrecoverable after the fact, since a re-run is a different call |
+| `funnels` | one row per leg: contract version, stages, total, absent stages, degraded + reason, payload bytes, elapsed, collection, **requested and applied axes** | kept forever — small, fixed-size, and the white-box evidence |
+| `retrieved_hits` | rank, path, span, both member identities, signature, score, ordering, channels, per-channel ranks, snippet | **rolled up**: everything a metric computes from is kept forever, the snippet TEXT is released after a window |
+
+`results.ThinkingReason` sits beside the text and is empty exactly when the text was captured — a model that
+hides its reasoning and one that reasoned about nothing are different facts, and an empty string alone
+merges them. The same three-state discipline covers a hit's snippet: **present**, **never reported by the
+engine**, or **released by retention** — a row whose text was dropped must never read as a hit the engine
+sent no text for, so the byte count survives the drop.
+
+Retention is `bench prune` and a pass at every `bench run` startup, beside the crash sweep and for the same
+reason: a budget that only runs when somebody remembers to run it is not a budget. Default window seven
+days, `--hit-retention-days 0` keeps everything. It is an `ExecuteUpdate` filtered on the hit row's **own**
+`CreatedAt` — denormalised from the result on write — so the largest table in the system is never joined to
+`results` to decide what is old.
 
 ### The question bank
 
@@ -162,8 +234,9 @@ the seams are actually proved.
 sequenceDiagram
     participant R as LegRunner
     participant S as IRunStore (Postgres)
+    participant E as IRetriever
     participant M as IModelRuntime
-    participant D as AnswerScoring (domain)
+    participant D as Answer + RetrievalScoring (domain)
     participant V as IResultStore (Postgres)
 
     R->>S: ClaimNextAsync(run, owner = label@host#pid)
@@ -171,12 +244,17 @@ sequenceDiagram
     S-->>R: cell
     R->>V: HasResultAsync(cell)
     Note over R,V: re-entrancy: a leg scored but never settled is FINISHED, not re-measured
+    R->>R: Subjects.For(cell.subject) · Variants.For(cell.variant) — looked up, never assumed
     R->>R: LegDeadline.For(budgets, now) — ONE deadline for the whole leg
+    R->>E: RetrieveAsync(question, recipe)
+    Note over R,E: skipped entirely for the control arm — NotPerformed is a state, not an empty list
+    E-->>R: hits · funnel · collection · axes asked and applied
+    R->>R: RagPrompt.Assemble(question, context) — the stored prompt IS what was sent
     R->>M: AskAsync(prompt, sampling, deadline.ForCall(now))
-    M-->>R: answer · tokens · latency · samplingAsSent · stopReason
-    R->>D: Score(question, answer, retrieval)
-    D-->>R: metrics
-    R->>V: SaveAsync(result)
+    M-->>R: answer · thinking · tokens · latency · samplingAsSent · stopReason
+    R->>D: Score(question, answer, observed) + Score(question, context)
+    D-->>R: metrics — expectations, anchor recall, recall@k, MRR, first-hit rank
+    R->>V: SaveAsync(result + funnel + hits + thinking + meta)
     R->>S: SettleAsync(cell, outcome)
 ```
 
@@ -215,9 +293,14 @@ ceiling or a crash stops the **leg**, not just the phase.
 | shipped by | this repository | `dew_flow_mcp` / `dew_flow_rag_qln`, ingested here from a spool |
 
 The trace port has **two** implementations — live black-box and fixture-replay white-box — because an
-interface with one implementation proves nothing about its own shape. The white-box funnel (candidates →
-fused → reranker in/out → enriched → sent) is what answers *"recall failure or ranking failure"*, and no
-engine emits a real one yet: it lives on a fixture until an engine we control grows retrieval.
+interface with one implementation proves nothing about its own shape. The white-box funnel
+(collection → embed-query → retrieve → fuse → collapse → rerank → cut) is what answers *"recall failure or
+ranking failure"*, and it is no longer a fixture: `dew_flow_rag_qln` emitted its first real one on
+2026-08-15 (five of `trace/v0`'s seven drafted stage names were wrong, and the emitter won every
+disagreement), and since 2026-08-17 every retrieval leg **persists** it to `funnels` — including a degraded
+one, with the reason it could not be read. In the single-shot lane the funnel travels back as part of
+`RetrievedContext` rather than through the sink; the sink remains the tool lane's path, where the subject
+makes the call and the funnel has no return value to ride on.
 
 Telemetry records carry a **caller-supplied** correlation (leg + phase). The emitter cannot know what a
 benchmark leg is, so a real session records as unattributed — and unattributed traffic is excluded from a
@@ -265,6 +348,9 @@ campaign of ten thousand cells has to live through overnight:
   come back. `bench sweep --db … [--stale-after-minutes 30]` is the same recovery as an operator verb, for
   after a `kill -9`. The store had this from its first commit and *nothing called it*, which is the audit
   finding this whole section exists to prevent repeating.
+- **And retention runs beside it**, for the same reason: `bench run` releases hit snippets past the window
+  before it drains, and `bench prune --db … [--hit-retention-days 7]` is the same pass as an operator verb.
+  A policy that only runs when somebody remembers to run it is the pattern above, one table larger.
 - **And it is ownership-checked, because the sweep is now live.** A claim records the worker's LABEL, HOST
   and PID (`WorkerIdentity`, `cells.owner_host` / `cells.owner_pid`); the sweep loads only the stale
   candidates and hands back the ones whose owner is provably gone. Time alone would be wrong the moment a
@@ -343,21 +429,31 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
-- **No tool-calling loop.** `IEngine` exposes tools and `FilesystemEngine` implements them, but `LegRunner`
-  asks the model exactly once. Every lane is therefore currently a no-tools lane, and anchor recall reads
-  *not applicable* everywhere. This is what `bench run` measures today, and it is a real measurement rather
-  than a placeholder — see *The one verb that spends money* above. The loop's per-leg wall budget already
-  exists (`LegDeadline`) and is deliberately in place first: retrofitting it after the first long agentic
-  campaign means discovering it from a multi-day gap in a log.
+- **No tool-calling loop.** `IEngine` exposes tools and both engines implement them, but `LegRunner` asks the
+  model exactly once. Retrieval now happens for a cell that names a variant — the harness performs it and
+  puts the hits in the prompt (*The retrieval lane*, above) — so anchor recall is a real number there; what
+  does not exist is the lane where the **subject** decides what to search and when. That is the other
+  measurement, and the two are not interchangeable: the same four tools behind a different surface shape
+  scored 4/63 against 37/63. The loop's per-leg wall budget already exists (`LegDeadline`) and is
+  deliberately in place first: retrofitting it after the first long agentic campaign means discovering it
+  from a multi-day gap in a log.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
 - **Nothing AUTHORS questions.** The bank holds them, reviews them and freezes selections from them, but
   candidates arrive by import: the pipeline that drives CLI agents to write and review them is a later
   plan, and the schema is already the shape it needs so that plan adds verbs rather than tables.
-- **A test's ENGINE is still one value per run**, not an axis: variants exist as a catalog and as a column
-  on a cell, but `bench run` does not yet plan one leg per variant or wire an engine into a leg — that is
-  step 4 of `todo/PLAN_variant_matrix.md`, and it waits on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`.
-- **The checked-out tree is verified but not yet USED.** `bench run` mirrors and checks out the target
-  before it measures (below), which is what makes a commit real rather than recorded — but no lane reads
-  the worktree yet, because there is no tool loop and no engine wired into a leg.
+- **Half the variant axes cannot be honoured yet.** `bench run --variants` plans one leg per variant and the
+  engine serves the axes it has — channels, weights, the rank constant, the reranker and its pool, the result
+  limit. It has no fusion-MODE axis, no score normalization, and no way to select a corpus recipe per
+  request; a variant naming one of those is refused by name at the request boundary rather than sent and
+  ignored. Those axes wait on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`, still *plan only* as of
+  2026-08-17.
+- **The echoed axes are stored but not ASSERTED.** `funnels` keeps what the run asked for beside what the
+  engine said it applied, which is the evidence a mismatch would need — but nothing compares them yet, so an
+  engine that silently ignored an axis it does not know would be caught only by reading the row. Comparing
+  them and BLOCKING the cell is step 5 of `todo/PLAN_variant_matrix.md`, where a blocked cell has a state to
+  go to; the same step verifies that the collection which answered is the one the recipe named.
+- **The checked-out tree is verified but not yet READ.** `bench run` mirrors and checks out the target before
+  it measures, which is what makes a commit real rather than recorded — but no lane reads the worktree yet:
+  the retrieval lane reads the engine's index, and there is no tool loop to read files.

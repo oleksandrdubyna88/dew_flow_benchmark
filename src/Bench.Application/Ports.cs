@@ -1,10 +1,12 @@
 using Bench.Domain;
 using Bench.Domain.Engines;
 using Bench.Domain.Models;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
 using Bench.Domain.Trace;
+using Bench.Domain.Variants;
 
 namespace Bench.Application;
 
@@ -57,6 +59,31 @@ public interface IEngine
     /// <summary>Runs one tool call. Expected refusals are VALUES: a path outside the checkout is an
     /// answer the subject can read and correct itself from, never an exception that ends the leg.</summary>
     Task<ToolAnswer> InvokeAsync(string tool, string argumentsJson, CancellationToken cancellationToken);
+}
+
+/// <param name="Query">What to retrieve for — the question's own text, in the single-shot lane.</param>
+/// <param name="Recipe">The variant's recipe. A <see cref="VariantDefinition.Baseline"/> can never reach a
+/// retriever: the runner does not call one for the control arm, and the type says so.</param>
+public sealed record RetrievalRequest(string Query, VariantDefinition.RetrievalRecipe Recipe);
+
+/// <summary>Retrieval as a CALL, for the single-shot lane — distinct from <see cref="IEngine"/>, which is
+/// retrieval as a SURFACE a subject works.
+/// <para>
+/// Two ports rather than a <c>SearchAsync</c> on the engine, and the distinction is measured rather than
+/// stylistic. In the single-shot lane the harness retrieves and the subject reads what it was given; in the
+/// agentic lane the subject decides what to call and when, and the same four tools behind a different
+/// surface shape scored 4/63 against 37/63 on identical tasks. Folding them into one method would make the
+/// second measurement impossible to express — and folding the first into a tool loop would make it
+/// impossible to attribute, since a subject that never searched would produce an empty funnel.
+/// </para></summary>
+public interface IRetriever
+{
+    EngineRef Describe { get; }
+
+    /// <summary>One retrieval, with its funnel and its echoed axes. A refusal is a VALUE: an engine that is
+    /// down, a collection that was never built, or a recipe this build cannot express honestly are all
+    /// facts a leg records — never exceptions that end a campaign of ten thousand.</summary>
+    Task<Outcome<RetrievedContext>> RetrieveAsync(RetrievalRequest request, CancellationToken cancellationToken);
 }
 
 /// <summary>A model that can answer a question, local or cloud.</summary>

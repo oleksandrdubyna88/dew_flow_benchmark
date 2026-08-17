@@ -1,6 +1,8 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Application.Variants;
+using Bench.Infrastructure.Engines;
 using Bench.Infrastructure.Git;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
@@ -21,13 +23,14 @@ namespace Bench.Cli;
 /// </para></summary>
 public static class CliContainer
 {
-    /// <summary>`bench run` — the stores, a model runtime, the checkout cache, one leg at a time, and the
-    /// drain around them.</summary>
+    /// <summary>`bench run` — the stores, a model runtime, the retrieval engine, the checkout cache, one leg
+    /// at a time, and the drain around them.</summary>
     public static ServiceProvider ForRun(
-        string connectionString, string checkoutRoot, Serilog.ILogger logger) =>
-        Model(Store(connectionString, logger))
+        string connectionString, string checkoutRoot, QlnEngineOptions engine, Serilog.ILogger logger) =>
+        Retrieval(Model(Store(connectionString, logger)), engine)
             .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
             .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
+            .AddScoped<IVariantCatalog, PostgresVariantCatalog>()
             .AddScoped<LegRunner>()
             .AddSingleton<LegDrain>()
             .BuildServiceProvider();
@@ -69,4 +72,32 @@ public static class CliContainer
         services
             .AddHttpClient()
             .AddScoped<IModelRuntime, OpenAiCompatibleRuntime>();
+
+    /// <summary>The retrieval half. A run that named no engine gets <see cref="NoRetriever"/>, which refuses
+    /// by name rather than answering with an empty context — an empty context stored as evidence would read
+    /// as an index that found nothing.
+    /// <para>
+    /// The funnel sink is <see cref="NoFunnelSink"/> here on purpose: in the single-shot lane the harness
+    /// performs the retrieval itself, so the funnel arrives inside <c>RetrievedContext</c> and is persisted
+    /// from there. The sink is the tool lane's path, where a subject makes the call.
+    /// </para></summary>
+    private static IServiceCollection Retrieval(IServiceCollection services, QlnEngineOptions engine) =>
+        services
+            .AddSingleton(engine)
+            .AddSingleton<IFunnelSink, NoFunnelSink>()
+            .AddScoped<IRetriever>(provider => engine.IsConfigured
+                ? new QlnRetriever(
+                    Client(provider, engine),
+                    engine.ProjectId,
+                    engine.Branch,
+                    provider.GetRequiredService<IFunnelSink>())
+                : new NoRetriever());
+
+    private static HttpClient Client(IServiceProvider provider, QlnEngineOptions engine)
+    {
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("retrieval-engine");
+        client.BaseAddress = new Uri(engine.BaseUrl + "/");
+
+        return client;
+    }
 }

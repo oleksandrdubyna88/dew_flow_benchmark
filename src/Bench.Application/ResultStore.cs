@@ -27,10 +27,43 @@ public readonly record struct RunScoreboard(int Scored, int Passed);
 public readonly record struct JudgeableLeg(
     Guid ResultId, string QuestionId, string SubjectModelId, string Prompt, string Answer);
 
+/// <summary>What one retention pass dropped.</summary>
+/// <param name="Hits">Rows whose snippet text was released. The rows themselves survive — every retrieval
+/// metric recomputes from their ranks, scores, paths and spans.</param>
+/// <param name="BytesFreed">What that text weighed. Reported because a retention pass that cannot say what
+/// it reclaimed is a retention pass nobody can size a disk from.</param>
+public readonly record struct SnippetPruning(int Hits, long BytesFreed)
+{
+    public string Describe =>
+        Hits == 0
+            ? "no hit snippets were old enough to release"
+            : $"released the text of {Hits} hit(s), {BytesFreed / 1024} KiB — ranks, scores and spans kept";
+}
+
 public interface IResultStore
 {
-    /// <summary>Stores a leg's result. One result per cell: a second write is a bug, not a revision.</summary>
+    /// <summary>Stores a leg's result. One result per cell: a second write is a bug, not a revision.
+    /// <para>
+    /// The result, its metrics, its funnel and its hits go in ONE write. Not an optimisation: a leg whose
+    /// answer is durable and whose evidence is not would be a scored number nobody can re-check, and the
+    /// re-entrancy check that follows a crash reads the result's presence as "this leg is finished".
+    /// </para></summary>
     Task<Outcome<LegResult>> SaveAsync(LegResult result, CancellationToken cancellationToken);
+
+    /// <summary>Releases the source TEXT of hits older than a window, keeping every row intact.
+    /// <para>
+    /// The owner of the one surface in this schema that grows without bound
+    /// (<c>todo/PLAN_variant_matrix.md</c> §3.5): at a limit of 20 hits, snippets are most of a cell's bytes,
+    /// and they are the one part that is reproducible — the corpus at the pinned commit contains them. So
+    /// they are kept raw for a configured window and dropped after, which leaves ranks, scores, spans and
+    /// channels — everything a retrieval metric is computed from — untouched and recomputable forever.
+    /// </para>
+    /// <para>
+    /// Decided BEFORE the first write, per the founding plan: a budget that lives in the schema is a budget;
+    /// one that lives in a clean-up job somebody writes after the disk fills is a hope. The reference shape
+    /// is <c>dew_flow_rag_qln · SizeHistoryStore</c> — raw for days, rolled up beyond, one place, tested.
+    /// </para></summary>
+    Task<SnippetPruning> PruneHitSnippetsAsync(DateTimeOffset olderThan, CancellationToken cancellationToken);
 
     /// <summary>Whether this leg has already been scored. The runner asks before it settles a cell: a
     /// crash between storing a result and settling leaves the cell claimed, the sweep hands it back, and the

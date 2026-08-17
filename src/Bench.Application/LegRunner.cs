@@ -1,7 +1,9 @@
 using Bench.Domain;
 using Bench.Domain.Models;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
+using Bench.Domain.Variants;
 using Microsoft.Extensions.Logging;
 
 namespace Bench.Application;
@@ -17,6 +19,18 @@ public sealed record LegPlan(
     IReadOnlyList<Budget> Budgets,
     TaskKind Kind)
 {
+    /// <summary>Every retrieval recipe this run measures, looked up per cell.
+    /// <para>
+    /// <see cref="VariantRoster.Baseline"/> by default and an <c>init</c> property rather than a positional
+    /// parameter, so the retrieval lane is additive: a run planned without the catalog resolves every cell to
+    /// the control arm and behaves exactly as it did before this axis existed.
+    /// </para></summary>
+    public VariantRoster Variants { get; init; } = VariantRoster.Baseline;
+
+    /// <summary>How much of one hit's text reaches the prompt. Configuration rather than a constant, because
+    /// it changes what the subject read and therefore belongs to the run's record.</summary>
+    public RagPromptLimits Prompt { get; init; } = RagPromptLimits.Default;
+
     /// <summary>A single-subject reading plan — the ad-hoc shape, and what a test with one subject
     /// collapses to.</summary>
     public static LegPlan Reading(Suite suite, ModelEndpoint endpoint, Sampling sampling) =>
@@ -25,6 +39,17 @@ public sealed record LegPlan(
     public static LegPlan Reading(Suite suite, SubjectRoster subjects) =>
         new(suite, subjects, [], TaskKind.Reading);
 }
+
+/// <summary>One leg's resolved context, carried as a value so the methods below take four arguments instead
+/// of nine. Everything here was decided before the model was asked, and none of it changes afterwards.</summary>
+internal sealed record LegWork(
+    RunCell Cell,
+    WorkerIdentity Owner,
+    LegPlan Plan,
+    Question Question,
+    RosterEntry Subject,
+    LegDeadline Deadline,
+    RetrievedContext Retrieved);
 
 /// <summary>One leg, end to end: claim a cell, run its phases, score the answer, store it, settle.
 /// <para>
@@ -42,6 +67,7 @@ public sealed class LegRunner(
     IRunStore runs,
     IResultStore results,
     IModelRuntime runtime,
+    IRetriever retriever,
     TimeProvider clock,
     ILogger<LegRunner> logger)
 {
@@ -97,15 +123,99 @@ public sealed class LegRunner(
                 cell, owner, plan.Subjects.For(cell.SubjectModelId).Match(_ => string.Empty, reason => reason), cancellationToken);
         }
 
+        // And the same for the other axis: the cell names its variant, so the recipe is looked up rather
+        // than taken from whichever one the run resolved first.
+        if (plan.Variants.For(cell.Variant) is not Outcome<VariantChoice>.Ok(var variant))
+        {
+            return await AbandonAsync(
+                cell, owner, plan.Variants.For(cell.Variant).Match(_ => string.Empty, reason => reason), cancellationToken);
+        }
+
         var deadline = LegDeadline.For(plan.Budgets, clock.GetUtcNow());
+        var retrieved = await RetrieveAsync(question, variant, deadline, cancellationToken);
+
+        // UnansweredAsync, not AbandonAsync: retrieval is INSIDE the leg's wall, so an engine that ran the
+        // clock out is a recorded CAP and an engine that failed inside the budget is a crash. Settling both
+        // as crashes would report the harness as broken over a merely slow index.
+        return retrieved is Outcome<RetrievedContext>.Fail unretrieved
+            ? await UnansweredAsync(cell, owner, deadline, unretrieved.Reason, cancellationToken)
+            : await AnswerAsync(
+                new LegWork(cell, owner, plan, question, subject, deadline, ((Outcome<RetrievedContext>.Ok)retrieved).Value),
+                cancellationToken);
+    }
+
+    /// <summary>Retrieval, for the arms that have any, under what the LEG has left.
+    /// <para>
+    /// The control arm is not asked, and that is the whole reason the definition is a closed union rather
+    /// than a recipe with retrieval switched off: a baseline leg must produce
+    /// <see cref="RetrievedContext.NotPerformed"/>, which every metric downstream reads as "this arm
+    /// surfaces nothing" — never as a search that came back empty.
+    /// </para>
+    /// <para>
+    /// <b>Bounded by the leg's own deadline, not by a transport default.</b> A retrieval is a wait inside a
+    /// leg, and the whole argument for one deadline per leg is that every wait inside it shares that ceiling
+    /// — otherwise a hung engine adds its own timeout to the model's, and the leg costs more than the arm
+    /// allowed. The remainder is what the model call then receives through <c>ForCall</c>, so slow retrieval
+    /// eats into thinking time rather than extending the leg.
+    /// </para></summary>
+    private async Task<Outcome<RetrievedContext>> RetrieveAsync(
+        Question question, VariantChoice variant, LegDeadline deadline, CancellationToken cancellationToken)
+    {
+        if (variant.Definition is not VariantDefinition.RetrievalRecipe recipe)
+        {
+            return Outcome<RetrievedContext>.Success(RetrievedContext.NotPerformed);
+        }
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        if (deadline.IsBounded)
+        {
+            budget.CancelAfter(deadline.Remaining(clock.GetUtcNow()));
+        }
+
+        try
+        {
+            return await retriever.RetrieveAsync(new RetrievalRequest(question.Prompt, recipe), budget.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Our ceiling, not the operator stopping the run. A value, so the leg settles as a cap rather
+            // than the campaign unwinding over one slow index.
+            return Outcome<RetrievedContext>.Failure(
+                $"the retrieval did not answer inside the {deadline.Describe} the leg had");
+        }
+    }
+
+    /// <summary>The model half: the prompt is assembled from the question AND whatever retrieval surfaced,
+    /// then sent under what the leg has left of its own deadline.
+    /// <para>
+    /// <b>The deadline is checked BETWEEN the two steps.</b> This is the between-turns check the deadline was
+    /// designed for, arriving with the first leg that has more than one step: a leg whose wall went while
+    /// retrieval was working has nothing left to think with, and asking anyway would spend a completion to
+    /// produce an answer generated under no budget — measuring the ceiling and calling it a score.
+    /// </para></summary>
+    private async Task<Outcome<LegResult>> AnswerAsync(LegWork work, CancellationToken cancellationToken)
+    {
+        if (work.Deadline.Exhausted(clock.GetUtcNow()))
+        {
+            return await UnansweredAsync(
+                work.Cell, work.Owner, work.Deadline, "retrieval used the whole leg", cancellationToken);
+        }
+
+        var prompt = RagPrompt.Assemble(work.Question, work.Retrieved, work.Plan.Prompt);
 
         var asked = await runtime.AskAsync(
-            new ModelRequest(subject.Endpoint, subject.Sampling, string.Empty, question.Prompt, deadline.ForCall(clock.GetUtcNow())),
+            new ModelRequest(
+                work.Subject.Endpoint,
+                work.Subject.Sampling,
+                string.Empty,
+                prompt,
+                work.Deadline.ForCall(clock.GetUtcNow())),
             cancellationToken);
 
         return asked is Outcome<ModelAnswer>.Fail failed
-            ? await UnansweredAsync(cell, owner, deadline, failed.Reason, cancellationToken)
-            : await ScoreAsync(cell, owner, plan, question, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
+            ? await UnansweredAsync(work.Cell, work.Owner, work.Deadline, failed.Reason, cancellationToken)
+            : await ScoreAsync(work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
     }
 
     /// <summary>A leg that produced no answer: a CEILING when its own wall ran out, a crash otherwise.
@@ -132,18 +242,18 @@ public sealed class LegRunner(
         return Outcome<LegResult>.Failure($"{reason} — the leg spent its {deadline.Describe} wall budget");
     }
 
+    /// <summary>Scoring and persisting one leg: the answer's metrics, retrieval's metrics, and every piece
+    /// of evidence the two were computed from — in ONE write, before the cell settles.</summary>
     private async Task<Outcome<LegResult>> ScoreAsync(
-        RunCell cell,
-        WorkerIdentity owner,
-        LegPlan plan,
-        Question question,
-        ModelAnswer answer,
-        CancellationToken cancellationToken)
+        LegWork work, string prompt, ModelAnswer answer, CancellationToken cancellationToken)
     {
-        var metrics = AnswerScoring.Score(question, answer, Retrieval(plan));
-
         var stored = await results.SaveAsync(
-            LegResult.Of(cell.Id, question.Prompt, answer.Text.Value, metrics, clock.GetUtcNow()),
+            LegResult.Of(work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer), clock.GetUtcNow()) with
+            {
+                Thinking = answer.Thinking,
+                Meta = ResponseMeta.Of(answer),
+                Retrieval = work.Retrieved,
+            },
             cancellationToken);
 
         if (stored is Outcome<LegResult>.Fail unsaved)
@@ -151,21 +261,30 @@ public sealed class LegRunner(
             return Outcome<LegResult>.Failure(unsaved.Reason);
         }
 
-        var settled = await runs.SettleAsync(cell.Id, owner, Outcome(answer), cancellationToken);
+        var settled = await runs.SettleAsync(work.Cell.Id, work.Owner, Outcome(answer), cancellationToken);
 
         if (settled is Outcome<RunCell>.Fail unsettled)
         {
             // The result is already durable, so this is a report rather than a loss — and it is the exact
             // window the re-entrancy check above exists to close.
-            logger.LogWarning("Cell {Cell} was scored but not settled: {Reason}", cell.Id, unsettled.Reason);
+            logger.LogWarning("Cell {Cell} was scored but not settled: {Reason}", work.Cell.Id, unsettled.Reason);
         }
 
         return stored;
     }
 
-    /// <summary>What this lane could surface. A lane with no tools surfaces nothing, and that is a fact
-    /// about the ARM — the scorer must not read it as the subject missing an anchor.</summary>
-    private static RetrievalObservation Retrieval(LegPlan plan) => RetrievalObservation.None;
+    /// <summary>Both mechanical readings of one leg.
+    /// <para>
+    /// Anchor recall stays where it was — inside <see cref="AnswerScoring"/>, fed by an observation — so
+    /// there is exactly one definition of recall in the system. The rank-sensitive metrics are additive and
+    /// empty for the control arm, which keeps the no-retrieval baseline carrying precisely the metric set it
+    /// carried before this lane existed.
+    /// </para></summary>
+    private static IReadOnlyList<StoredMetric> Metrics(LegWork work, ModelAnswer answer) =>
+    [
+        .. AnswerScoring.Score(work.Question, answer, RetrievalScoring.Observe(work.Question, work.Retrieved)),
+        .. RetrievalScoring.Score(work.Question, work.Retrieved),
+    ];
 
     /// <summary>An answer cut off at a ceiling ends the leg as a CAP, not as a completion. Scored as a
     /// wrong answer it would measure the ceiling, and a capped leg is excluded from paired deltas — which

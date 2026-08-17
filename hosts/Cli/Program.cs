@@ -62,6 +62,7 @@ public static class Program
             "run" => RunCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "judge" => JudgeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
             "questions" => Questions(command, output, error, stopping),
@@ -267,6 +268,12 @@ public static class Program
         output.WriteLine("             --db <connection>");
         output.WriteLine("             (or --bank-group <key> [--bank-from N] [--bank-to N] [--suite-id <name>]");
         output.WriteLine("              to freeze a selection from the bank instead of reading a file)");
+        output.WriteLine("             [--engine-url <qln base> --engine-project <guid> [--engine-branch main]");
+        output.WriteLine("              --variants <catalog names>]  single-shot RAG: the harness retrieves per cell,");
+        output.WriteLine("             assembles the prompt from the hits, and stores the funnel, the hits and the");
+        output.WriteLine("             axes the engine echoed. Without them the run measures the no-retrieval baseline");
+        output.WriteLine("             [--hit-retention-days 7]  how long a hit keeps its source TEXT; ranks, scores");
+        output.WriteLine("             and spans are kept forever, so every retrieval metric stays recomputable");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");
         output.WriteLine("             [--stale-after-minutes 30] [--max-consecutive-failures 20]");
         output.WriteLine("             [--checkout-root <dir>] [--no-checkout]  the target is mirrored read-only and");
@@ -278,6 +285,9 @@ public static class Program
         output.WriteLine("             cleanly — the leg in flight settles and the rest stay Pending for the next run");
         output.WriteLine("  bench sweep --db <connection> [--stale-after-minutes 30] [--json]");
         output.WriteLine("             hands back the cells a dead host left claimed; run it after any kill -9");
+        output.WriteLine("  bench prune --db <connection> [--hit-retention-days 7] [--json]");
+        output.WriteLine("             releases the source TEXT of old retrieved hits, keeping every row: the corpus");
+        output.WriteLine("             at the pinned commit reproduces it. `bench run` does this at startup too");
         output.WriteLine("  bench judge --run <id> --suite-file <path> --db <connection>");
         output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
         output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg");

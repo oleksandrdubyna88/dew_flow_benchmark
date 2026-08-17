@@ -2,6 +2,7 @@ using Bench.Application;
 using Bench.Domain;
 using Bench.Domain.Runs;
 using Bench.Domain.Trace;
+using Bench.Domain.Variants;
 using Bench.Infrastructure.Engines;
 using FluentAssertions;
 using Xunit;
@@ -115,6 +116,38 @@ public sealed class QlnEngineLiveTests
         content.Should().MatchRegex(@"\[(rerank|fusion) ");
     }
 
+    [Fact]
+    public async Task A_live_retrieval_collapses_members_and_echoes_the_axes_it_applied()
+    {
+        var retriever = LiveRetriever();
+
+        var context = (await retriever.RetrieveAsync(
+            new RetrievalRequest(
+                "how is the retry delay with jitter computed",
+                (VariantDefinition.RetrievalRecipe)VariantDefinition.Retrieval(
+                    EngineKind.Qln,
+                    RetrievalChannels.Hybrid,
+                    FusionSpec.Rrf(60).Ok(),
+                    CorpusSpec.Parse("member", 512, "bge-m3").Ok(),
+                    Bench.Domain.Variants.RerankSpec.Pooled(50).Ok(),
+                    limit: 5).Ok()),
+            TestContext.Current.CancellationToken)).Ok();
+
+        // `collapse` is the stage that was added to trace/v0 after the emitter shipped it and every funnel it
+        // produced was refused by name. This is the end-to-end half of that repair: a real daemon, a real
+        // collapse, and a consumer that accepts it (todo/PLAN_variant_matrix.md §5 step 4).
+        var collapse = context.Funnel.Stages.Should().ContainSingle(s => s.Name == "collapse").Subject;
+        collapse.Out.Should().BeLessThanOrEqualTo(
+            collapse.In, "collapsing several chunks of one member cannot produce more than it was given");
+
+        // And the echo, which is what step 5 will assert against the request. Storing it is worthless if a
+        // live engine turns out not to send it.
+        context.Applied.Values.Should().NotBeEmpty("the axes AS APPLIED are the proof of what served the query");
+        context.Applied.Canonical.Should().Contain("limit=5");
+        context.Collection.Should().NotBeEmpty();
+        context.Hits.Should().OnlyContain(h => h.Rank > 0);
+    }
+
     /// <summary>The engine, or a skip that says exactly what is missing.</summary>
     private static (QlnEngine Engine, LegRecorder Recorder) Live()
     {
@@ -135,5 +168,23 @@ public sealed class QlnEngineLiveTests
             funnels: recorder);
 
         return (engine, recorder);
+    }
+
+    /// <summary>The single-shot lane's retriever against the same live daemon. The funnel comes back in the
+    /// return value here rather than through a sink, so no recorder is needed.</summary>
+    private static QlnRetriever LiveRetriever()
+    {
+        var url = Environment.GetEnvironmentVariable(UrlVariable) ?? string.Empty;
+        var project = Environment.GetEnvironmentVariable(ProjectVariable) ?? string.Empty;
+
+        Assert.SkipWhen(
+            url.Length == 0 || !Guid.TryParse(project, out _),
+            $"set {UrlVariable} and {ProjectVariable} to run against a live QLN daemon");
+
+        return new QlnRetriever(
+            new HttpClient { BaseAddress = new Uri(url), Timeout = TimeSpan.FromMinutes(3) },
+            Guid.Parse(project),
+            branch: string.Empty,
+            funnels: new NoFunnelSink());
     }
 }

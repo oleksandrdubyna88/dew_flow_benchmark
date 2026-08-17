@@ -97,6 +97,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<MetricRow> Metrics => Set<MetricRow>();
 
+    public DbSet<FunnelRow> Funnels => Set<FunnelRow>();
+
+    public DbSet<RetrievedHitRow> RetrievedHits => Set<RetrievedHitRow>();
+
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
 
     public DbSet<VariantRow> Variants => Set<VariantRow>();
@@ -123,6 +127,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
     {
         Bank(builder);
         Registry(builder);
+        Retrieval(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {
@@ -150,8 +155,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             result.ToTable("results");
             result.HasKey(r => r.Id);
             result.HasIndex(r => r.CellId).IsUnique();
+            result.Property(r => r.ResponseMetaJson).HasColumnType("jsonb");
             result.HasOne(r => r.Cell!).WithMany().HasForeignKey(r => r.CellId).OnDelete(DeleteBehavior.Cascade);
             result.HasMany(r => r.Metrics).WithOne(m => m.Result!).HasForeignKey(m => m.ResultId).OnDelete(DeleteBehavior.Cascade);
+            result.HasMany(r => r.Hits).WithOne(h => h.Result!).HasForeignKey(h => h.ResultId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<MetricRow>(metric =>
@@ -211,6 +218,51 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
             // "Is this the same recipe under another name" — a lookup, never a scan that re-parses rows.
             variant.HasIndex(v => v.Hash);
+        });
+    }
+
+    /// <summary>What retrieval surfaced, per leg. The funnel is the white-box evidence and the hits are the
+    /// list every retrieval metric recomputes from — which is why they are rows rather than a blob on the
+    /// result.</summary>
+    private static void Retrieval(ModelBuilder builder)
+    {
+        builder.Entity<FunnelRow>(funnel =>
+        {
+            funnel.ToTable("funnels");
+            funnel.HasKey(f => f.Id);
+            funnel.Property(f => f.StagesJson).HasColumnType("jsonb");
+            funnel.Property(f => f.AbsentJson).HasColumnType("jsonb");
+            funnel.Property(f => f.RequestedAxesJson).HasColumnType("jsonb");
+            funnel.Property(f => f.AppliedAxesJson).HasColumnType("jsonb");
+
+            // One funnel per leg, held where concurrency happens: a retry that raced its own earlier write
+            // would otherwise leave two readings of one search and no way to say which served the answer.
+            funnel.HasIndex(f => f.ResultId).IsUnique();
+
+            // "How many legs degraded to black-box, and on which engine" — a lookup, not a scan.
+            funnel.HasIndex(f => f.Degraded);
+
+            funnel.HasOne(f => f.Result!).WithOne(r => r.Funnel!)
+                .HasForeignKey<FunnelRow>(f => f.ResultId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RetrievedHitRow>(hit =>
+        {
+            hit.ToTable("retrieved_hits");
+            hit.HasKey(h => h.Id);
+            hit.Property(h => h.ChannelsJson).HasColumnType("jsonb");
+            hit.Property(h => h.RanksJson).HasColumnType("jsonb");
+
+            // One rank per result: the list a search returned has no duplicate positions, and a retry that
+            // half-wrote its hits must not be able to produce one.
+            hit.HasIndex(h => new { h.ResultId, h.Rank }).IsUnique();
+
+            // Retention's own query — the oldest rows that still hold text — over the largest table in the
+            // system. Without this index the prune is a sequential scan of everything ever retrieved.
+            hit.HasIndex(h => new { h.CreatedAt, h.SnippetPrunedAt });
+
+            // "Which file did this engine keep surfacing" — the question a retrieval report asks first.
+            hit.HasIndex(h => h.RelativePath);
         });
     }
 

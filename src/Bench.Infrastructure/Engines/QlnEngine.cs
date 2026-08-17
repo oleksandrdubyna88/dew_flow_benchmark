@@ -1,6 +1,4 @@
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Bench.Application;
 using Bench.Domain;
 using Bench.Domain.Engines;
@@ -9,14 +7,7 @@ using Bench.Domain.Trace;
 
 namespace Bench.Infrastructure.Engines;
 
-/// <summary>The QLN retrieval engine, over HTTP.
-/// <para>
-/// <b>No project reference to that repository, deliberately.</b> This benchmark measures engines it does
-/// not compile against — a third-party service, a competitor's index — so the coupling that matters is
-/// the WIRE, and an adapter that referenced QLN's assemblies would be an adapter only QLN could ever
-/// have. It also means this file is the one place a change in their JSON shows up, rather than a
-/// compile error scattered across a solution.
-/// </para>
+/// <summary>The QLN retrieval engine as a tool SURFACE a subject works.
 /// <para>
 /// <b>It offers file tools as well as search, by composing the baseline engine.</b> Not a convenience:
 /// the measured retrieval arm made 63 file reads beside its 39 searches, and an engine that offered
@@ -25,18 +16,11 @@ namespace Bench.Infrastructure.Engines;
 /// superset.
 /// </para>
 /// <para>
-/// <b>The funnel goes to a sink, and a rejected one goes there too.</b> An engine that claims
-/// <c>trace/v0</c> and then sends stages this build does not define renders exactly like a black-box
-/// engine once the reason is dropped — see <see cref="IFunnelSink"/>.
+/// The wire itself lives in <see cref="QlnRetriever"/>, which this class composes and which also serves the
+/// single-shot lane directly. One round trip, one funnel path, whichever lane asked — and the single-shot
+/// lane does not have to be handed a filesystem root it would never read.
 /// </para></summary>
-public sealed class QlnEngine(
-    HttpClient http,
-    Guid projectId,
-    string branch,
-    IEngine files,
-    IFunnelSink funnels,
-    string engineVersion = "",
-    string indexFingerprint = "") : IEngine
+public sealed class QlnEngine(QlnRetriever retrieval, IEngine files) : IEngine
 {
     public const string SearchCode = "rag_search_code";
 
@@ -45,9 +29,22 @@ public sealed class QlnEngine(
     /// result count is a measured axis rather than a taste.</summary>
     private const int DefaultLimit = 20;
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    /// <summary>The shape every existing caller and test builds: an endpoint, a project, a branch, the file
+    /// tools and a funnel sink. Kept so that splitting the wire out did not become a change to everything
+    /// that constructs an engine.</summary>
+    public QlnEngine(
+        HttpClient http,
+        Guid projectId,
+        string branch,
+        IEngine files,
+        IFunnelSink funnels,
+        string engineVersion = "",
+        string indexFingerprint = "")
+        : this(new QlnRetriever(http, projectId, branch, funnels, engineVersion, indexFingerprint), files)
+    {
+    }
 
-    public EngineRef Describe => new(EngineKind.Qln, http.BaseAddress?.ToString() ?? string.Empty, engineVersion, indexFingerprint);
+    public EngineRef Describe => retrieval.Describe;
 
     /// <summary>Declared, never assumed. This engine is expected to emit <c>trace/v0</c>; whether the
     /// payload actually validates is decided per response, and a mismatch degrades that response to
@@ -75,11 +72,11 @@ public sealed class QlnEngine(
     /// </para></summary>
     public async Task<Outcome<string>> WarmAsync(string checkoutPath, CancellationToken cancellationToken)
     {
-        var probe = await PostAsync("does this index answer at all", 1, cancellationToken);
+        var probe = await retrieval.SearchAsync(
+            "does this index answer at all", AxesWire.Limited(1), cancellationToken);
 
         return probe.Match(
-            response => Outcome<string>.Success(
-                $"{Describe.Canonical}|collection={response.Collection}"),
+            response => Outcome<string>.Success($"{Describe.Canonical}|collection={response.Wire.Collection}"),
             reason => Outcome<string>.Failure($"the QLN index did not answer: {reason}"));
     }
 
@@ -103,67 +100,10 @@ public sealed class QlnEngine(
             return ToolAnswer.Refusal("argument 'query' is required — ask what the code does, in a sentence");
         }
 
-        var result = await PostAsync(query, Number(args, "limit", DefaultLimit), cancellationToken);
+        var result = await retrieval.SearchAsync(
+            query, AxesWire.Limited(Number(args, "limit", DefaultLimit)), cancellationToken);
 
-        return result.Match(Render, ToolAnswer.Failure);
-    }
-
-    /// <summary>One search, and the funnel it produced handed to the sink either way.</summary>
-    private async Task<Outcome<SearchWire>> PostAsync(string query, int limit, CancellationToken cancellationToken)
-    {
-        HttpResponseMessage response;
-        try
-        {
-            response = await http.PostAsJsonAsync(
-                $"api/rag/projects/{projectId:D}/search",
-                new SearchInputWire { Query = query, Branch = branch, Axes = new AxesWire { Limit = limit } },
-                Json,
-                cancellationToken);
-        }
-        catch (HttpRequestException ex)
-        {
-            // An engine that is down is an environment fact about the run, not an exception that ends
-            // ten thousand legs — the leg records it and the report says which engine was unreachable.
-            return Outcome<SearchWire>.Failure($"unreachable: {ex.Message}");
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return Outcome<SearchWire>.Failure($"HTTP {(int)response.StatusCode}: {Trim(body)}");
-        }
-
-        var wire = await response.Content.ReadFromJsonAsync<SearchWire>(Json, cancellationToken);
-        if (wire is null)
-        {
-            return Outcome<SearchWire>.Failure("the engine answered with an empty body");
-        }
-
-        funnels.Retrieved(ToFunnel(wire.Funnel));
-        return Outcome<SearchWire>.Success(wire);
-    }
-
-    /// <summary>Their funnel as ours, or the reason it could not be read.
-    /// <para>
-    /// The version is taken from the PAYLOAD rather than from what the engine declared, and the two are
-    /// not the same claim: an engine can be configured to say <c>trace/v0</c> while a newer build behind
-    /// the same endpoint answers with something else. What served the request is what counts.
-    /// </para></summary>
-    private static Outcome<RetrievalFunnel> ToFunnel(FunnelWire? funnel)
-    {
-        if (funnel is null)
-        {
-            return Outcome<RetrievalFunnel>.Failure(
-                "the engine declared a trace contract but sent no funnel with its answer");
-        }
-
-        var version = funnel.ContractVersion.Length == 0 ? "(none stamped)" : funnel.ContractVersion;
-
-        return TraceContract.Validate(new RetrievalFunnel(
-            version,
-            [.. funnel.Stages.Select(s => new FunnelStage(s.Name, s.In, s.Out, s.Ms))],
-            funnel.TotalMs,
-            funnel.Absent));
+        return result.Match(response => Render(response.Wire), ToolAnswer.Failure);
     }
 
     /// <summary>The hits as a subject reads them.
@@ -188,8 +128,6 @@ public sealed class QlnEngine(
 
         return ToolAnswer.Success(string.Join('\n', lines));
     }
-
-    private static string Trim(string body) => body.Length <= 400 ? body : body[..400] + "…";
 
     private static Outcome<JsonElement> Parse(string argumentsJson)
     {
@@ -217,78 +155,4 @@ public sealed class QlnEngine(
         && value.TryGetInt32(out var number)
             ? number
             : fallback;
-}
-
-/// <summary>The request shape, as their endpoint reads it.</summary>
-internal sealed record SearchInputWire
-{
-    [JsonPropertyName("query")] public string Query { get; init; } = string.Empty;
-
-    [JsonPropertyName("branch")] public string Branch { get; init; } = string.Empty;
-
-    [JsonPropertyName("axes")] public AxesWire? Axes { get; init; }
-}
-
-/// <summary>Only the axis this adapter sets. Every other knob keeps the engine's shipped default, and
-/// the response echoes back what actually applied — so a run records what served it rather than what it
-/// asked for.</summary>
-internal sealed record AxesWire
-{
-    [JsonPropertyName("limit")] public int Limit { get; init; }
-}
-
-/// <summary>The response shape, pinned to what `dew_flow_rag_qln` emitted on 2026-08-15
-/// (<c>Platform.Contracts.SearchResponse</c>). Anything this record does not name is ignored, so their
-/// adding a field cannot break a run — only a RENAME can, and that is what the contract version is
-/// for.</summary>
-internal sealed record SearchWire
-{
-    [JsonPropertyName("hits")] public IReadOnlyList<HitWire> Hits { get; init; } = [];
-
-    [JsonPropertyName("collection")] public string Collection { get; init; } = string.Empty;
-
-    [JsonPropertyName("funnel")] public FunnelWire? Funnel { get; init; }
-}
-
-internal sealed record HitWire
-{
-    [JsonPropertyName("relativePath")] public string RelativePath { get; init; } = string.Empty;
-
-    [JsonPropertyName("startLine")] public int StartLine { get; init; }
-
-    [JsonPropertyName("endLine")] public int EndLine { get; init; }
-
-    [JsonPropertyName("typeName")] public string TypeName { get; init; } = string.Empty;
-
-    [JsonPropertyName("memberName")] public string MemberName { get; init; } = string.Empty;
-
-    [JsonPropertyName("signature")] public string Signature { get; init; } = string.Empty;
-
-    [JsonPropertyName("score")] public double Score { get; init; }
-
-    [JsonPropertyName("ordering")] public string Ordering { get; init; } = string.Empty;
-
-    [JsonPropertyName("channels")] public IReadOnlyList<string> Channels { get; init; } = [];
-}
-
-internal sealed record FunnelWire
-{
-    [JsonPropertyName("contractVersion")] public string ContractVersion { get; init; } = string.Empty;
-
-    [JsonPropertyName("stages")] public IReadOnlyList<StageWire> Stages { get; init; } = [];
-
-    [JsonPropertyName("totalMs")] public long TotalMs { get; init; }
-
-    [JsonPropertyName("absent")] public IReadOnlyList<string> Absent { get; init; } = [];
-}
-
-internal sealed record StageWire
-{
-    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
-
-    [JsonPropertyName("in")] public int In { get; init; }
-
-    [JsonPropertyName("out")] public int Out { get; init; }
-
-    [JsonPropertyName("ms")] public long Ms { get; init; }
 }

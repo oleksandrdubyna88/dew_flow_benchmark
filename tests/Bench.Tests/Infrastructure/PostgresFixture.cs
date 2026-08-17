@@ -53,6 +53,51 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>A store with its own context — EF's context is not thread-safe, so every concurrent
     /// worker in a test needs its own, exactly as it would in production.</summary>
     public PostgresRunStore NewStore(TimeProvider clock) => new(NewContext(), clock);
+
+    /// <summary>The result store, with its own context and the system clock. It needs a clock because
+    /// retention stamps the moment it released a hit's text; a test that cares about that moment passes
+    /// its own through the overload below.</summary>
+    public PostgresResultStore NewResults() => NewResults(TimeProvider.System);
+
+    public PostgresResultStore NewResults(TimeProvider clock) => new(NewContext(), clock);
+
+    /// <summary>A migrated database of its OWN on the same server.
+    /// <para>
+    /// For guarantees that are database-WIDE. Retention is the case that forced this: it releases the text of
+    /// every hit older than a window, deliberately — a budget that only applied to the run which asked for it
+    /// would not be a budget — so on the shared database the first retention test releases every other test's
+    /// snippets and counts them as its own. Observed while writing those tests: five of nine failed on rows
+    /// they had never written, and the pruned-at stamp came from whichever test pruned first.
+    /// </para>
+    /// <para>
+    /// Cheap enough to be the right answer — one <c>CREATE DATABASE</c> and one migration on a container that
+    /// is already running, rather than a second container per test.
+    /// </para></summary>
+    public async Task<string> NewDatabaseAsync(string name)
+    {
+        // CREATE DATABASE takes no parameters in any provider, so the name has to be interpolated. It is
+        // checked against a character class first rather than trusted: the callers all build it from a Guid,
+        // and a check that costs one line is cheaper than relying on that staying true.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-z0-9_]{1,60}$"))
+        {
+            throw new ArgumentException($"'{name}' is not a safe database name for this fixture", nameof(name));
+        }
+
+        await using var server = NewContext();
+#pragma warning disable EF1002 // Validated above; a database name cannot travel as a parameter.
+        await server.Database.ExecuteSqlRawAsync($"CREATE DATABASE \"{name}\"");
+#pragma warning restore EF1002
+
+        var connection = new Npgsql.NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ToString();
+
+        await using var db = Context(connection);
+        await db.Database.MigrateAsync();
+
+        return connection;
+    }
+
+    public static BenchDbContext Context(string connectionString) =>
+        new(new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connectionString).Options);
 }
 
 [CollectionDefinition("postgres")]

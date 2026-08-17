@@ -1,6 +1,68 @@
 # PLAN — the variant matrix: a question bank in five groups, reviewer marks, engine axes in the grid, and the console
 
-> Status: **steps 1, 2 and 3 of §5 IMPLEMENTED 2026-08-16; steps 4–11 open.** Step 3, the model registry:
+> Status: **steps 1, 2 and 3 of §5 IMPLEMENTED 2026-08-16; step 4's retrieval lane IMPLEMENTED
+> 2026-08-17, its engine-axes tail open; steps 5–11 open.**
+>
+> Step 4, the retrieval lane (2026-08-17): `IRetriever` beside `IEngine`, `QlnRetriever` carrying the wire,
+> the axes a recipe becomes, `VariantRoster` resolving a cell's recipe the way `SubjectRoster` resolves its
+> endpoint, `RagPrompt` assembling the single-shot prompt from the hits, `RetrievalScoring` turning the
+> returned list into recall@5/@10, MRR and a first-hit rank, and §3.5's persistence — `funnels`,
+> `retrieved_hits`, `results.ThinkingText`/`ThinkingReason`/`ResponseMetaJson` (migration
+> `RetrievalEvidence`) — with `bench prune` and a startup pass owning the one surface that grows.
+> `bench run --engine-url --engine-project [--engine-branch] --variants` is the front door.
+>
+> Deviations, step 4:
+> - **Retrieval is a SECOND port, not a method on `IEngine`.** That interface is deliberately a tool
+>   SURFACE ("an engine is not something that returns results"), because the same four tools behind a
+>   different surface shape scored 4/63 against 37/63. The single-shot lane needs retrieval as a CALL, and
+>   folding the two together would have made the surface measurement inexpressible — so `IRetriever` is its
+>   own port and `QlnRetriever` is its own class, which `QlnEngine` now composes for its search tool. One
+>   round trip, one funnel path, whichever lane asked.
+> - **The axes this engine cannot express are REFUSED at the boundary, before a round trip.** `wsum`, any
+>   normalization other than `none`, and another engine's recipe each come back as a named failure that
+>   quotes the sibling plan. This is the request-side half of §3.4 step 3; the response-side half — asserting
+>   the echo and BLOCKING the cell — stays with step 5, where a blocked cell has somewhere honest to go. What
+>   step 4 owed was that the echo is *stored*, and it is: `funnels.RequestedAxesJson` and
+>   `AppliedAxesJson`, two columns §3.5's list did not name.
+> - **Two more columns for the same reason**: `funnels.Collection` (which corpus answered — the only record
+>   of the corpus half of a recipe until step 5 can verify it) and `funnels.ElapsedMs` (what THIS process
+>   waited, as against the engine's own `TotalMs`; reporting one as the other turns a slow network into a
+>   slow reranker).
+> - **`retrieved_hits` carries TWO member identities.** `Member` is the readable `Type.Member` a suite's
+>   anchors are authored in and the only one a metric can compare; `MemberKey` is the engine's own
+>   (`csharp|Ns|Type|Member`0|(args)`), stored verbatim and never matched on. Matching is by that readable
+>   identity or by LINE OVERLAP, never by member name alone — a suffix rule would let `NoRetry` answer for
+>   `Retry`, and a recall figure inflated that way is indistinguishable from a real one.
+> - **`ThinkingReason` beside `ThinkingText`.** §3.5 said "empty when the runtime returns none", which
+>   merges "this model hides its reasoning" with "it reasoned about nothing". The reason column keeps them
+>   apart, and it is empty exactly when the text was captured.
+> - **`retrieved_hits.CreatedAt` is denormalised** from the result so retention selects from the largest
+>   table alone rather than joining `results` to decide what is old. Its snippet has three states — present,
+>   never reported, pruned — because a row whose text retention dropped must never read as a hit the engine
+>   sent no text for.
+> - **Retrieval is a wait INSIDE the leg, so it shares the leg's wall.** The call is handed a token narrowed
+>   to `LegDeadline.Remaining`, and the deadline is re-checked BETWEEN retrieval and the model call — which is
+>   the between-turns check `LegDeadline` was designed for, arriving with the first leg that has more than one
+>   step. Both were missing in the first version: retrieval was bounded only by `HttpClient`'s 100-second
+>   default, so a hung engine added its own timeout to the model's; and a leg whose wall went during retrieval
+>   went on to spend a completion under no budget and score whatever came back. The second was caught by a
+>   test that expected a cap and observed `Completed`.
+> - **Two more defects found by the tests, not by review.** (1) The computed `Axes` property on the request record
+>   was being SERIALISED into the outgoing JSON as a nested `axes.axes` object; harmless while the engine
+>   ignores unknown members, and §4 item 5 is to make it refuse them — which would have turned every
+>   retrieval into a 400 on the day it landed. (2) The "this lane surfaces nothing" warning asked whether the
+>   lane name CONTAINS "tool", and the only lane this harness runs is `no-tools` — so the warning written for
+>   the memorisation baseline never printed for it. Both are fixed with the tests that observed them.
+> - **A prompt-side cap was deliberately NOT added.** How many hits a subject sees is the variant's `limit`
+>   axis, with a name and a hash; a second cap in the prompt assembler would be an unnamed axis applied to
+>   every arm, and the run would report the recipe it asked for while feeding the model something else. Only
+>   the per-snippet character ceiling exists, and when it fires the prompt says so.
+> - **Still open in step 4**: the full `AxesWire` (fusion mode, normalization, `textShape`, `embedModel`)
+>   waits on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`, which is still *plan only* as of
+>   2026-08-17. The `collapse` stage is asserted against a stubbed payload and in the live-trait tests;
+>   verifying it end to end needs a running daemon.
+>
+> Step 3, the model registry:
 > `models` / `run_subjects` / `run_judges` (migration `ModelRegistry`), `bench models add|list|disable|enable`,
 > and `bench run --subjects <keys> [--judges <keys>]` resolving every key — and every reference — BEFORE a
 > single cell exists. `ConfigJson` holds references and refuses values by name, so the database stays
@@ -649,9 +711,15 @@ precedes the API + CLI it renders.**
 4. **Checkout + engine wiring** — ~~`ICheckoutProvider` into run start~~ **(landed 2026-08-16:
    `bench run` mirrors and checks out the pinned commit before anything is created, `--no-checkout` keeps
    the old behaviour and its warning, `RunCommand`'s unconditional "unverified" line is gone)**;
-   `QlnEngine` full `AxesWire`;
-   engine-per-variant resolution in `LegRunner`; single-shot RAG prompt assembly; funnel + hits + thinking
-   persistence (§3.5 migrations); retrieval metrics. Verify the `collapse` repair end to end here.
+   ~~engine-per-variant resolution in `LegRunner`~~, ~~single-shot RAG prompt assembly~~, ~~funnel + hits +
+   thinking persistence (§3.5 migrations)~~, ~~retrieval metrics~~ **(landed 2026-08-17 — see the status
+   block: `IRetriever`/`QlnRetriever`, `VariantRoster`, `RagPrompt`, `RetrievalScoring`, migration
+   `RetrievalEvidence`, `bench prune`)**. Still open: `QlnEngine` full `AxesWire` — the fusion mode,
+   normalization, `textShape` and `embedModel` axes, which wait on
+   `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md` (still *plan only*, 2026-08-17). Until then a
+   recipe naming one of them is refused by name at the request boundary rather than sent and ignored.
+   Verifying the `collapse` repair end to end needs a running daemon; it is asserted against a pinned
+   payload and in the `Category=Live` tests.
 5. **Index preparations** — the table with its owner + heartbeat, the qln index-state poll, the writable
    indexing checkout **and its lease**, the block-with-reason path, the echo assertion of §3.4 step 3.
    (Depends on sibling plan §3.2 landing first; until then cells block honestly.)

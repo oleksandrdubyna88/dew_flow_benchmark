@@ -20,3 +20,21 @@ public interface IFunnelSink
 {
     void Retrieved(Outcome<RetrievalFunnel> funnel);
 }
+
+/// <summary>The sink of the single-shot lane, where the funnel does NOT need one.
+/// <para>
+/// In that lane the harness performs the retrieval itself, so the funnel comes back as part of
+/// <see cref="Bench.Domain.Retrieval.RetrievedContext"/> and is persisted from there — the sink exists for
+/// the tool lane, where a subject makes the call and the funnel has no return path to travel on.
+/// </para>
+/// <para>
+/// Named and documented rather than an anonymous lambda in a container: a sink that drops funnels is
+/// exactly the shape of a real defect, and the only thing that separates this from that defect is the
+/// sentence above.
+/// </para></summary>
+public sealed class NoFunnelSink : IFunnelSink
+{
+    public void Retrieved(Outcome<RetrievalFunnel> funnel)
+    {
+    }
+}

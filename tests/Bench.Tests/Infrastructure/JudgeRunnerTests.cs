@@ -126,7 +126,7 @@ public sealed class JudgeRunnerTests(PostgresFixture postgres)
             .Select(c => RunCell.Pending(run.Id, c)).ToList();
 
         var runs = new PostgresRunStore(postgres.NewContext(), clock);
-        var results = new PostgresResultStore(postgres.NewContext());
+        var results = postgres.NewResults();
         await runs.CreateAsync(run, cells, Ct);
 
         await results.SaveAsync(LegResult.Of(cells[0].Id, suite.Questions[0].Prompt, answer,

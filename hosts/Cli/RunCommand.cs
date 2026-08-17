@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Application.Variants;
 using Bench.Domain;
 using Bench.Domain.Bank;
 using Bench.Domain.Models;
@@ -8,6 +9,8 @@ using Bench.Domain.Registry;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
+using Bench.Domain.Variants;
+using Bench.Infrastructure.Engines;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +44,10 @@ public static class RunCommand
     /// </para></summary>
     private const int DefaultLegWallSeconds = 600;
 
+    /// <summary>The lane that surfaces nothing at all — the memorisation baseline, and this harness's default.
+    /// One name, used both as the default and by the warning about it, so the two cannot drift apart.</summary>
+    private const string NoToolsLane = "no-tools";
+
     /// <summary>Where the read-only checkout cache lives when the operator names no root.
     /// <para>
     /// Under the user's local application data, and deliberately NOT under any repository: this cache holds
@@ -51,6 +58,16 @@ public static class RunCommand
     private static string DefaultCheckoutRoot =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "bench", "checkouts");
+
+    /// <summary>How long a retrieved hit keeps its source text — <see cref="PruneCommand.DefaultRetentionDays"/>,
+    /// read rather than repeated, because two defaults for one retention policy would prune a database to two
+    /// different windows depending on which door the pass came through.
+    /// <para>
+    /// Zero means keep everything, and it is a legitimate choice for a small run whose database will be
+    /// published as-is. It is not the default, because the default has to be the one that still works at
+    /// fifty thousand cells.
+    /// </para></summary>
+    private static int DefaultHitRetentionDays => PruneCommand.DefaultRetentionDays;
 
     public static async Task<int> RunAsync(
         CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
@@ -99,6 +116,10 @@ public static class RunCommand
         // Recovery BEFORE work, always: the cells a crash stranded are the ones nobody is coming back for,
         // and a harness that only ever adds cells to a queue it cannot repair fills that queue with ghosts.
         await SweepCommand.RecoverAsync(provider, SweepCommand.StaleAfter(command), output, stopping);
+
+        // And retention beside it, for the same reason the log folders are pruned at startup: a budget that
+        // only runs when somebody remembers to run it is not a budget. `bench prune` is the same call.
+        await PruneCommand.ReleaseAsync(provider, settings.HitRetentionDays, output, stopping);
 
         return await ExecuteAsync(provider, prepared.Value.Run, prepared.Value.Plan, command, output, stopping);
     }
@@ -217,8 +238,16 @@ public static class RunCommand
             return Refuse(error, resolved.Match(_ => string.Empty, reason => reason));
         }
 
-        var run = BenchRun.Planned(settings.Label, settings.Target, EngineRef.Filesystem(), frozen.Stamp, DateTimeOffset.UtcNow);
-        var cells = Matrix.Plan(frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane]);
+        var chosen = await VariantsAsync(scope, settings, stopping);
+
+        if (chosen is not Outcome<VariantRoster>.Ok(var variants))
+        {
+            return Refuse(error, chosen.Match(_ => string.Empty, reason => reason));
+        }
+
+        var run = BenchRun.Planned(settings.Label, settings.Target, Engine(settings), frozen.Stamp, DateTimeOffset.UtcNow);
+        var cells = Matrix.Plan(
+            frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants));
 
         if (cells is Outcome<IReadOnlyList<MatrixCell>>.Fail badMatrix)
         {
@@ -256,10 +285,63 @@ public static class RunCommand
         }
 
         var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
-        Announce(output, settings, run, selection, roster, planned.Count, confirmed);
+        Announce(output, settings, run, selection, roster, variants, planned.Count, confirmed);
 
-        return (run, LegPlan.Reading(frozen, roster) with { Budgets = confirmed });
+        return (run, LegPlan.Reading(frozen, roster) with { Budgets = confirmed, Variants = variants });
     }
+
+    /// <summary>Which retrieval recipes this run measures, resolved from the catalog before a single cell
+    /// exists.
+    /// <para>
+    /// Resolved here rather than per leg for the same reason the subjects are: a retired variant, a name
+    /// nobody added, or a recipe this engine cannot express must be a refusal at the start, not a wall of
+    /// identical leg failures three hours into a sweep. A run that names none measures the control arm, which
+    /// is what every run planned before this axis existed already did.
+    /// </para></summary>
+    private static async Task<Outcome<VariantRoster>> VariantsAsync(
+        AsyncServiceScope scope, RunInputs settings, CancellationToken stopping)
+    {
+        if (settings.VariantNames.Count == 0)
+        {
+            return Outcome<VariantRoster>.Success(VariantRoster.Baseline);
+        }
+
+        if (!settings.Engine.IsConfigured)
+        {
+            return Outcome<VariantRoster>.Failure(
+                $"--variants names {settings.VariantNames.Count} retrieval recipe(s) and no engine serves them — "
+                + "pass --engine-url and --engine-project, or drop --variants to measure the no-retrieval baseline");
+        }
+
+        var catalog = scope.ServiceProvider.GetRequiredService<IVariantCatalog>();
+        var chosen = new List<VariantChoice>(settings.VariantNames.Count);
+
+        foreach (var name in settings.VariantNames)
+        {
+            var found = await catalog.FindAsync(name, stopping);
+
+            if (found is not Outcome<RetrievalVariant>.Ok(var variant))
+            {
+                return Outcome<VariantRoster>.Failure(found.Match(_ => string.Empty, reason => reason));
+            }
+
+            chosen.Add(new VariantChoice(variant.Select(), variant.Definition));
+        }
+
+        return Outcome<VariantRoster>.Success(VariantRoster.Of(chosen));
+    }
+
+    /// <summary>The variant axis as the matrix takes it. A run with no variants passes the not-applicable
+    /// selection, so "no variant" is STATED on every cell rather than assumed by a planner default.</summary>
+    private static IReadOnlyList<VariantSelection> Planned(VariantRoster variants) =>
+        variants.Entries.Count == 0 ? [VariantSelection.None] : variants.Selections;
+
+    /// <summary>What this run measured through. The engine is recorded on the RUN, so a report years later
+    /// reads it from the run itself rather than from whatever the settings say by then.</summary>
+    private static EngineRef Engine(RunInputs settings) =>
+        settings.Engine.IsConfigured
+            ? new EngineRef(EngineKind.Qln, settings.Engine.BaseUrl, string.Empty, string.Empty)
+            : EngineRef.Filesystem();
 
     /// <summary>Who this run measures, resolved before a single cell exists.
     /// <para>
@@ -351,6 +433,7 @@ public static class RunCommand
         BenchRun run,
         BankSelection selection,
         SubjectRoster roster,
+        VariantRoster variants,
         int cells,
         IReadOnlyList<Budget> budgets)
     {
@@ -360,6 +443,15 @@ public static class RunCommand
         output.WriteLine($"target   {settings.Target.Canonical}");
         output.WriteLine($"suite    {frozen.Stamp}  ({frozen.Questions.Count} question(s))");
         output.WriteLine($"matrix   {cells} cell(s) · lane {settings.Lane.Name}");
+
+        // The engine and the recipes, printed because they are what a retrieval number means. A run that
+        // measured the baseline while its operator believed it measured a variant is the failure this line
+        // exists to make impossible.
+        if (settings.Engine.IsConfigured)
+        {
+            output.WriteLine($"engine   {settings.Engine.BaseUrl} · project {settings.Engine.ProjectId:D} · branch {settings.Engine.Branch}");
+            output.WriteLine($"variants {variants.Describe}");
+        }
 
         // The resolved model ids, not the keys the operator typed: a registry key and the model it names
         // are two different strings, and the one a result carries is the second.
@@ -388,7 +480,18 @@ public static class RunCommand
             output.WriteLine("warn     --no-checkout: the target's commit is recorded but UNVERIFIED, and no tree was fetched");
         }
 
-        if (!settings.Lane.Name.Contains("tool", StringComparison.OrdinalIgnoreCase))
+        // Two conditions, and BOTH were wrong before this lane landed.
+        //
+        // The retrieval half is new: a variant is now one of the two ways a leg can surface something, so
+        // without this check the line would have kept announcing "this lane surfaces nothing" over a run whose
+        // every cell was fed retrieved context — with anchor recall a real number underneath it.
+        //
+        // The lane half was a defect from the start. It asked whether the lane's name CONTAINS "tool", and the
+        // only lane this harness has ever run is called "no-tools" — which contains it. So the warning written
+        // for the memorisation baseline was suppressed for precisely the baseline it describes, and printed
+        // for nothing, since a genuine tool lane would also match. Named equality instead: an unknown lane
+        // prints no warning, which is honest, because nobody here knows what it surfaces.
+        if (!settings.Engine.IsConfigured && settings.Lane.Name.Equals(NoToolsLane, StringComparison.OrdinalIgnoreCase))
         {
             output.WriteLine("warn     this lane surfaces nothing — anchor recall reads 'not applicable', and a correct");
             output.WriteLine("         answer here means the subject answered from its WEIGHTS, which is the memorisation check");
@@ -505,13 +608,14 @@ public static class RunCommand
         };
 
     private static ServiceProvider Services(RunInputs settings) =>
-        CliContainer.ForRun(settings.ConnectionString, settings.CheckoutRoot, CliLogging.Start());
+        CliContainer.ForRun(settings.ConnectionString, settings.CheckoutRoot, settings.Engine, CliLogging.Start());
 
     private static Outcome<RunInputs> Read(CommandLine command)
     {
         var suiteFile = command.Value("suite-file");
         var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
         var wallSeconds = command.Int("leg-wall-seconds", DefaultLegWallSeconds);
+        var retentionDays = command.Int("hit-retention-days", DefaultHitRetentionDays);
 
         if (connection.Length == 0)
         {
@@ -522,6 +626,20 @@ public static class RunCommand
         {
             return Outcome<RunInputs>.Failure(
                 "--leg-wall-seconds must be positive — an unbounded leg is what turns one hung endpoint into days of wall clock");
+        }
+
+        if (retentionDays < 0)
+        {
+            return Outcome<RunInputs>.Failure(
+                "--hit-retention-days cannot be negative — pass 0 to keep every hit's text forever");
+        }
+
+        var engine = QlnEngineOptions.Parse(
+            command.Value("engine-url"), command.Value("engine-project"), command.Value("engine-branch"));
+
+        if (engine is not Outcome<QlnEngineOptions>.Ok(var retrieval))
+        {
+            return Outcome<RunInputs>.Failure(engine.Match(_ => string.Empty, reason => reason));
         }
 
         var subjectKeys = Keys(command, "subjects");
@@ -547,7 +665,7 @@ public static class RunCommand
                         adHoc,
                         subjects,
                         judges,
-                        Lane.Named(command.Value("lane", "no-tools")),
+                        Lane.Named(command.Value("lane", NoToolsLane)),
                         command.Int("repeats", 1),
                         command.Value("label", "run"),
                         connection,
@@ -555,7 +673,10 @@ public static class RunCommand
                         Selection(command),
                         command.Value("suite-id", "bank-selection"),
                         command.Value("checkout-root", DefaultCheckoutRoot),
-                        command.Has("no-checkout"))),
+                        command.Has("no-checkout"),
+                        retrieval,
+                        command.List("variants"),
+                        retentionDays)),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
@@ -628,6 +749,12 @@ public static class RunCommand
     /// <param name="Selection">Which bank questions this run freezes, when it is not reading a suite file.</param>
     /// <param name="SuiteId">The name the frozen bank selection is minted under. It appears in the stamp
     /// every result carries, so it is an operator's choice rather than a generated string.</param>
+    /// <param name="Engine">Where retrieval is served from, or <c>None</c> for a run that measures the
+    /// no-retrieval baseline.</param>
+    /// <param name="VariantNames">Catalog names of the recipes this run measures — an AXIS of the matrix,
+    /// so several is the normal case rather than the exception.</param>
+    /// <param name="HitRetentionDays">How long a retrieved hit keeps its source text. The owner of the only
+    /// surface in this schema that grows without bound.</param>
     private sealed record RunInputs(
         MeasurementTarget Target,
         string SuiteFile,
@@ -642,5 +769,8 @@ public static class RunCommand
         BankQuery Selection,
         string SuiteId,
         string CheckoutRoot,
-        bool SkipCheckout);
+        bool SkipCheckout,
+        QlnEngineOptions Engine,
+        IReadOnlyList<string> VariantNames,
+        int HitRetentionDays);
 }
