@@ -314,21 +314,51 @@ public static class RunCommand
         }
 
         var catalog = scope.ServiceProvider.GetRequiredService<IVariantCatalog>();
+        var retriever = scope.ServiceProvider.GetRequiredService<IRetriever>();
         var chosen = new List<VariantChoice>(settings.VariantNames.Count);
 
         foreach (var name in settings.VariantNames)
         {
-            var found = await catalog.FindAsync(name, stopping);
+            var resolved = await ResolveAsync(catalog, retriever, name, stopping);
 
-            if (found is not Outcome<RetrievalVariant>.Ok(var variant))
+            if (resolved is not Outcome<VariantChoice>.Ok(var choice))
             {
-                return Outcome<VariantRoster>.Failure(found.Match(_ => string.Empty, reason => reason));
+                return Outcome<VariantRoster>.Failure(resolved.Match(_ => string.Empty, reason => reason));
             }
 
-            chosen.Add(new VariantChoice(variant.Select(), variant.Definition));
+            chosen.Add(choice);
         }
 
         return Outcome<VariantRoster>.Success(VariantRoster.Of(chosen));
+    }
+
+    /// <summary>One catalog name as a recipe the ENGINE has confirmed it can serve.
+    /// <para>
+    /// The second half is the one that was missing while this method already claimed it: finding the row
+    /// proves the operator spelled the name right, and says nothing about whether the engine behind
+    /// <c>--engine-url</c> has a field for every axis the row names. Asking it here costs no round trip
+    /// (<see cref="IRetriever.CanServe"/> is a mapping, not a call) and turns a recipe this engine cannot
+    /// express from ten thousand identical leg failures into one refusal before any cell exists.
+    /// </para></summary>
+    private static async Task<Outcome<VariantChoice>> ResolveAsync(
+        IVariantCatalog catalog, IRetriever retriever, string name, CancellationToken stopping)
+    {
+        var found = await catalog.FindAsync(name, stopping);
+
+        if (found is not Outcome<RetrievalVariant>.Ok(var variant))
+        {
+            return Outcome<VariantChoice>.Failure(found.Match(_ => string.Empty, reason => reason));
+        }
+
+        if (variant.Definition is not VariantDefinition.RetrievalRecipe recipe)
+        {
+            // A baseline row in the --variants list: legal, and it needs no engine.
+            return Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition));
+        }
+
+        return retriever.CanServe(recipe).Match(
+            _ => Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition)),
+            reason => Outcome<VariantChoice>.Failure($"variant '{name}': {reason}"));
     }
 
     /// <summary>The variant axis as the matrix takes it. A run with no variants passes the not-applicable

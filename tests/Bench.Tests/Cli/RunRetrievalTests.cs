@@ -1,7 +1,11 @@
 using Bench.Cli;
+using Bench.Domain.Runs;
+using Bench.Domain.Variants;
 using Bench.Infrastructure.Engines;
+using Bench.Infrastructure.Persistence;
 using Bench.Tests.Infrastructure;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Bench.Tests.Cli;
@@ -60,6 +64,69 @@ public sealed class RunRetrievalTests(PostgresFixture postgres)
 
         code.Should().Be(ExitCodes.Environment);
         error.Should().Contain("no-such-variant");
+    }
+
+    [Fact]
+    public async Task A_recipe_this_engine_cannot_serve_ends_the_run_before_a_single_cell_exists()
+    {
+        using var suite = new TempSuiteFile();
+        var name = await VariantNamed("member");
+
+        var (code, _, error) = Run(
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
+            "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint,
+            "--engine-url", "http://127.0.0.1:5311", "--engine-project", Guid.NewGuid().ToString(),
+            "--variants", name);
+
+        // Finding the catalog row proves the operator spelled the NAME right and says nothing about whether
+        // the engine has a field for every axis the row names. Left unasked, this run would have created its
+        // cells and then failed every leg with the same sentence.
+        code.Should().Be(ExitCodes.Environment);
+        error.Should().Contain($"variant '{name}'").And.Contain("no corpus text shape called 'member'");
+        error.Should().Contain("GraphHeader", "a refusal that names the legal values is worth more than a 400");
+    }
+
+    [Fact]
+    public async Task A_recipe_the_engine_CAN_serve_gets_as_far_as_the_matrix()
+    {
+        using var suite = new TempSuiteFile();
+        var name = await VariantNamed("GraphHeader");
+
+        var (_, output, error) = Run(
+            "run", "--repo", Repo, "--commit", Sha, "--suite-file", suite.Path, "--no-checkout",
+            "--db", postgres.ConnectionString, "--model", "qwen@local", "--model-url", DeadEndpoint,
+            "--engine-url", "http://127.0.0.1:5311", "--engine-project", Guid.NewGuid().ToString(),
+            "--variants", name);
+
+        error.Should().NotContain("corpus text shape");
+        output.Should().Contain("variants ").And.Contain(name);
+    }
+
+    /// <summary>A catalog row differing only in the corpus shape it names, under a name unique to this test —
+    /// the catalog holds one row per name and this fixture's database is shared with the suite.</summary>
+    private async Task<string> VariantNamed(string textShape)
+    {
+        var name = $"shape-{Guid.NewGuid():N}"[..20];
+
+        await using var db = postgres.NewContext();
+        await db.Database.MigrateAsync(TestContext.Current.CancellationToken);
+
+        var variant = RetrievalVariant.Create(
+            name,
+            name,
+            VariantDefinition.Retrieval(
+                EngineKind.Qln,
+                RetrievalChannels.Hybrid,
+                FusionSpec.Rrf(60).Ok(),
+                CorpusSpec.Parse(textShape, 512, "bge-m3").Ok(),
+                RerankSpec.Pooled(50).Ok(),
+                20).Ok(),
+            DateTimeOffset.UtcNow).Ok();
+
+        (await new PostgresVariantCatalog(db).AddAsync(variant, TestContext.Current.CancellationToken))
+            .Failed().Should().BeFalse();
+
+        return name;
     }
 
     [Fact]

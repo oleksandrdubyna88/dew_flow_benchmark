@@ -57,9 +57,23 @@
 >   axis, with a name and a hash; a second cap in the prompt assembler would be an unnamed axis applied to
 >   every arm, and the run would report the recipe it asked for while feeding the model something else. Only
 >   the per-snippet character ceiling exists, and when it fires the prompt says so.
-> - **Still open in step 4**: the full `AxesWire` (fusion mode, normalization, `textShape`, `embedModel`)
->   waits on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`, which is still *plan only* as of
->   2026-08-17. The `collapse` stage is asserted against a stubbed payload and in the live-trait tests;
+> - **The axes tail closed the same day** (2026-08-17, later): the sibling plan's step 1 landed
+>   `fusion=rrf|wsum` + `wsumNorm` as real axes, and `textShape` turned out to have been per-request all
+>   along, so the wire now carries the whole recipe except chunk size and embed model. The `wsum` refusal
+>   became the defect it had been guarding against — a recipe the engine can serve, declined by its own
+>   client — and was replaced by the request. Two details the mapping has to get right: `wsumNorm` is sent
+>   ONLY under a weighted sum, because this system spells "no normalization" as `none` and the engine's legal
+>   set is `minmax` alone (an rrf recipe forwarding its own `none` would 400 — every default row in the
+>   catalog, at the first cell); and `textShape` is mapped onto the engine's four shape names, with an unknown
+>   one refused by name rather than sent.
+> - **`IRetriever.CanServe`, because this plan's own comment claimed a check that did not exist.**
+>   `VariantsAsync` said a recipe the engine cannot express is refused at the START rather than as a wall of
+>   leg failures — and only looked the catalog row up. The port now answers "what would this recipe become on
+>   your wire", without a round trip, and `bench run` asks once per variant while planning.
+> - **Still open in step 4**: `chunkTokens` and `embedModel` are not request axes at all — the engine derives
+>   them from its configured recipe — so a variant differing only in chunk size is one this engine cannot
+>   distinguish. That is the corpus half, and it lands with the index preparations (step 5) and the sibling
+>   plan's steps 3–4. The `collapse` stage is asserted against a pinned payload and in the live-trait tests;
 >   verifying it end to end needs a running daemon.
 >
 > Step 3, the model registry:

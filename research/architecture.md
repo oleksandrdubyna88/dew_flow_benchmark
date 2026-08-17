@@ -114,18 +114,35 @@ the single-shot lane into a tool loop would make its funnel unattributable, sinc
 searched produces no funnel at all. `QlnEngine` composes `QlnRetriever` for its search tool: one round trip,
 one funnel path, whichever lane asked.
 
-**A recipe becomes a request in exactly one place** (`AxesWire.From`), which is also where the stored
+**A recipe becomes a request in exactly one place** (`QlnRequest.From`), which is also where the stored
 "asked for" axes come from — so what a run records is literally what went out, not a second mapping that
 agrees with the first until somebody edits one. An axis the run did not set is **omitted** from the JSON
 rather than sent as a C# default: a call that meant to set only a limit would otherwise send
 `rerank: false, rerankPool: 0, rrfK: 0`, and the engine would clamp those into a configuration in no catalog
 row.
 
-**A recipe this engine cannot express is refused before the round trip.** The engine fuses by reciprocal
-rank only and has no fusion-mode or normalization axis, and its axes contract does not refuse members it
-does not know — so a `wsum` request would be accepted, the field ignored, and the run would record a
-weighted sum while measuring rank fusion. That is the reranker scar exactly, and the refusal names the
-sibling plan that closes it (`dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`).
+**What the engine can serve, and what it cannot.** As of 2026-08-17 a recipe reaches it whole: the channels,
+both weights, the rank constant, the fusion **algorithm** and its normalization, the reranker and its pool,
+the result limit, and the corpus **text shape** (which rides beside the axes, since it selects a collection
+rather than a knob). Fusion and normalization arrived that morning in the sibling plan's step 1; before it
+they were refused here, because the engine would have accepted the request, ignored the field, and served
+rank fusion under a record that said `wsum` — the reranker scar exactly.
+
+Still not request axes: **chunk size and embed model**. The engine derives those from its own configured
+recipe, so they are neither sent nor verifiable, and what a run records instead is the collection that
+answered. Two variants differing only in chunk size are therefore two variants this engine cannot yet
+distinguish — closing that is the index-preparation step.
+
+Two refusals remain, and both happen **before any cell exists**: a recipe naming another engine, and a
+corpus shape this one does not have. `IRetriever.CanServe` is the check — a mapping, not a round trip — asked
+once per variant while the run is being planned, for the same reason the model registry is resolved there: a
+recipe the engine has no field for would otherwise arrive as ten thousand identical leg failures. Its
+success value is the axes it WOULD send, so an operator can read what a variant actually becomes.
+
+**Its axes contract refuses members it does not know** (`JsonUnmappedMemberHandling.Disallow`, landed the
+same day). So a stray field in this side's request record is now a broken retrieval rather than harmless
+noise — which is exactly how one was found, a computed property that had been serialising itself into the
+request all along.
 
 **The variant is looked up per cell, exactly as the subject is.** `VariantRoster.For(cell.Variant)` mirrors
 `SubjectRoster.For(cell.SubjectModelId)`: a run holds several recipes because the variant is an axis, and a
@@ -443,12 +460,12 @@ Stated because a description that quietly implies more than is built is the same
 - **Nothing AUTHORS questions.** The bank holds them, reviews them and freezes selections from them, but
   candidates arrive by import: the pipeline that drives CLI agents to write and review them is a later
   plan, and the schema is already the shape it needs so that plan adds verbs rather than tables.
-- **Half the variant axes cannot be honoured yet.** `bench run --variants` plans one leg per variant and the
-  engine serves the axes it has — channels, weights, the rank constant, the reranker and its pool, the result
-  limit. It has no fusion-MODE axis, no score normalization, and no way to select a corpus recipe per
-  request; a variant naming one of those is refused by name at the request boundary rather than sent and
-  ignored. Those axes wait on `dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`, still *plan only* as of
-  2026-08-17.
+- **Two variant axes cannot be honoured yet, and they are the corpus ones.** `bench run --variants` plans one
+  leg per variant and the engine serves everything a recipe names except **chunk size** and **embed model**,
+  which it derives from its own configured recipe rather than from a request. So two variants differing only
+  in chunk size are two variants it cannot distinguish, and what a run records instead is the collection that
+  answered. They land with the index preparations below and with `dew_flow_rag_qln ·
+  todo/PLAN_search_variant_axes.md` steps 3–4.
 - **The echoed axes are stored but not ASSERTED.** `funnels` keeps what the run asked for beside what the
   engine said it applied, which is the evidence a mismatch would need — but nothing compares them yet, so an
   engine that silently ignored an axis it does not know would be caught only by reading the row. Comparing

@@ -126,7 +126,7 @@ public sealed class QlnRetrieverTests
 
         axes.EnumerateObject().Select(p => p.Name).Should().BeSubsetOf(
             ["limit", "dense", "sparse", "denseWidth", "sparseWidth", "denseWeight", "sparseWeight",
-             "rrfK", "collapseMembers", "rerank", "rerankPool", "rerankFloor"],
+             "rrfK", "collapseMembers", "rerank", "rerankPool", "rerankFloor", "fusion", "wsumNorm"],
             "an axis name this engine does not define is a field it will one day refuse");
     }
 
@@ -146,19 +146,57 @@ public sealed class QlnRetrieverTests
     }
 
     [Fact]
-    public async Task A_wsum_recipe_is_REFUSED_before_a_round_trip_rather_than_ignored_by_the_engine()
+    public async Task A_weighted_sum_recipe_reaches_the_wire_now_that_the_engine_has_a_fusion_axis()
     {
         var (retriever, calls) = Build(Answer());
 
-        var refused = await Retrieve(retriever, Weighted());
+        var context = (await Retrieve(retriever, Weighted())).Ok();
 
-        // The engine's axes contract has no fusion-mode field and does not refuse unknown ones, so sending
-        // this would be accepted, ignored, and recorded as a weighted sum that measured rank fusion. That is
-        // the reranker scar exactly.
-        refused.Failed().Should().BeTrue();
-        refused.Reason().Should().Contain("wsum").And.Contain("rank fusion");
-        refused.Reason().Should().Contain("PLAN_search_variant_axes", "the engine's half of this has a name and a home");
-        calls.Should().BeEmpty("a recipe this engine cannot express must not cost it a query");
+        // Until 2026-08-17 this was a REFUSAL: the engine fused by rank only, its axes contract dropped
+        // fields it did not know, and sending `fusion: wsum` would have recorded a weighted sum while
+        // measuring rank fusion. PLAN_search_variant_axes step 1 landed the axis, so the refusal became the
+        // defect — a recipe the engine can serve, declined by its own client.
+        var body = calls.Single().Body;
+        body.Should().Contain("\"fusion\":\"wsum\"").And.Contain("\"wsumNorm\":\"minmax\"");
+        body.Should().Contain("\"denseWeight\":0.7").And.Contain("\"sparseWeight\":0.3");
+        context.Requested.Canonical.Should().Contain("fusion=wsum").And.Contain("wsumNorm=minmax");
+    }
+
+    [Fact]
+    public async Task Rank_fusion_does_not_send_a_normalization_the_engine_has_no_value_for()
+    {
+        var (retriever, calls) = Build(Answer());
+
+        await Retrieve(retriever, Recipe(RetrievalChannels.Hybrid, 20, 50));
+
+        // This system spells "no normalization" as `none`; the engine's legal set is `minmax` alone, and it
+        // refuses an unknown axis VALUE. So an rrf recipe that forwarded its own `none` would 400 — every
+        // default recipe in the catalog, at the first cell.
+        calls.Single().Body.Should().Contain("\"fusion\":\"rrf\"").And.NotContain("wsumNorm");
+    }
+
+    [Fact]
+    public async Task The_corpus_text_shape_is_sent_in_the_engines_own_vocabulary()
+    {
+        var (retriever, calls) = Build(Answer());
+
+        var context = (await Retrieve(retriever, Shaped("graphheader"))).Ok();
+
+        // Index-time, so it selects a COLLECTION rather than a knob — which is why it rides beside the axes
+        // rather than inside them. Matched case-insensitively, because a catalog row is written by hand.
+        calls.Single().Body.Should().Contain("\"textShape\":\"GraphHeader\"");
+        context.Requested.Canonical.Should().Contain("textShape=GraphHeader");
+    }
+
+    [Fact]
+    public async Task A_corpus_shape_this_engine_does_not_have_is_refused_with_the_ones_it_does()
+    {
+        var (retriever, calls) = Build(Answer());
+
+        var refused = await Retrieve(retriever, Shaped("member"));
+
+        refused.Reason().Should().Contain("no corpus text shape called 'member'").And.Contain("GraphHeader");
+        calls.Should().BeEmpty("a shape it does not have would come back a 400 — the refusal is worth more");
     }
 
     [Fact]
@@ -279,7 +317,7 @@ public sealed class QlnRetrieverTests
             engine,
             channels,
             FusionSpec.Rrf(60).Ok(),
-            CorpusSpec.Parse("member", 512, "bge-m3").Ok(),
+            Corpus("GraphHeader"),
             rerankPool > 0 ? RerankSpec.Pooled(rerankPool).Ok() : RerankSpec.Off,
             limit).Ok();
 
@@ -288,9 +326,22 @@ public sealed class QlnRetrieverTests
             EngineKind.Qln,
             RetrievalChannels.Hybrid,
             FusionSpec.Parse(FusionSpec.WeightedSum, 60, 0.7, 0.3, FusionSpec.MinMax).Ok(),
-            CorpusSpec.Parse("member", 512, "bge-m3").Ok(),
+            Corpus("GraphHeader"),
             RerankSpec.Off,
             20).Ok();
+
+    /// <summary>A recipe that differs only in the corpus shape it names.</summary>
+    private static VariantDefinition.RetrievalRecipe Shaped(string textShape) =>
+        (VariantDefinition.RetrievalRecipe)VariantDefinition.Retrieval(
+            EngineKind.Qln,
+            RetrievalChannels.Hybrid,
+            FusionSpec.Rrf(60).Ok(),
+            Corpus(textShape),
+            RerankSpec.Off,
+            20).Ok();
+
+    private static CorpusSpec Corpus(string textShape) =>
+        CorpusSpec.Parse(textShape, 512, "bge-m3").Ok();
 
     private static (QlnRetriever Retriever, List<Recorded> Calls) Build(
         string body, HttpStatusCode status = HttpStatusCode.OK)

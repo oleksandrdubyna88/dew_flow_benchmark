@@ -128,11 +128,11 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
         var (runId, plan, runner, _) = await ArrangeAsync(
             new EchoRuntime(),
             new FakeRetriever(
-                "this engine fuses by rrf only and its axes contract has no fusion-mode field"));
+                "this engine has no corpus text shape called 'member' — it serves SourceOnly, GraphHeader"));
 
         var refused = await runner.RunNextAsync(runId, Worker(), plan, Ct);
 
-        refused.Reason().Should().Contain("no fusion-mode field");
+        refused.Reason().Should().Contain("no corpus text shape");
         (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().BeEmpty(
             "a cell measured under a recipe the engine ignored would be a permanently mislabelled number");
     }
@@ -230,7 +230,7 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
                 EngineKind.Qln,
                 channels,
                 FusionSpec.Rrf(60).Ok(),
-                CorpusSpec.Parse("member", 512, "bge-m3").Ok(),
+                CorpusSpec.Parse("GraphHeader", 512, "bge-m3").Ok(),
                 RerankSpec.Pooled(50).Ok(),
                 20).Ok(),
             Noon).Ok();
@@ -322,6 +322,9 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
 
         public EngineRef Describe => new(EngineKind.Qln, "http://fake", string.Empty, string.Empty);
 
+        public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
+            _refusal.Length > 0 ? Outcome<string>.Failure(_refusal) : Outcome<string>.Success(recipe.Canonical);
+
         public Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(_refusal.Length > 0
@@ -346,6 +349,9 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
             new(clock, takes, hits);
 
         public EngineRef Describe => new(EngineKind.Qln, "http://slow", string.Empty, string.Empty);
+
+        public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
+            Outcome<string>.Success(recipe.Canonical);
 
         public async Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken)
@@ -376,6 +382,9 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
         public bool WasCancelled { get; private set; }
 
         public EngineRef Describe => new(EngineKind.Qln, "http://hangs", string.Empty, string.Empty);
+
+        public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
+            Outcome<string>.Success(recipe.Canonical);
 
         public async Task<Outcome<RetrievedContext>> RetrieveAsync(
             RetrievalRequest request, CancellationToken cancellationToken)

@@ -73,7 +73,7 @@ public sealed class QlnEngine(QlnRetriever retrieval, IEngine files) : IEngine
     public async Task<Outcome<string>> WarmAsync(string checkoutPath, CancellationToken cancellationToken)
     {
         var probe = await retrieval.SearchAsync(
-            "does this index answer at all", AxesWire.Limited(1), cancellationToken);
+            "does this index answer at all", QlnRequest.Limited(1), cancellationToken);
 
         return probe.Match(
             response => Outcome<string>.Success($"{Describe.Canonical}|collection={response.Wire.Collection}"),
@@ -101,7 +101,7 @@ public sealed class QlnEngine(QlnRetriever retrieval, IEngine files) : IEngine
         }
 
         var result = await retrieval.SearchAsync(
-            query, AxesWire.Limited(Number(args, "limit", DefaultLimit)), cancellationToken);
+            query, QlnRequest.Limited(Number(args, "limit", DefaultLimit)), cancellationToken);
 
         return result.Match(response => Render(response.Wire), ToolAnswer.Failure);
     }

@@ -52,26 +52,36 @@ public sealed class QlnRetriever(
     public EngineRef Describe =>
         new(EngineKind.Qln, http.BaseAddress?.ToString() ?? string.Empty, engineVersion, indexFingerprint);
 
+    /// <summary>What this recipe becomes on the wire, or why it cannot. The same decision
+    /// <see cref="RetrieveAsync"/> makes, asked before any cell exists — so a run whose variant names an axis
+    /// this engine has no field for ends at its start rather than as ten thousand identical leg failures.</summary>
+    public Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe) =>
+        QlnRequest.From(recipe).Match(request => Outcome<string>.Success(request.Asked.Canonical), Outcome<string>.Failure);
+
     /// <summary>One retrieval for the single-shot lane: the variant's recipe out, hits and funnel back.
     /// <para>
-    /// The recipe is mapped to this engine's axes by <see cref="AxesWire.From"/>, which REFUSES a recipe
-    /// this engine cannot express rather than sending it and hoping. That refusal is the point: the axes
-    /// contract has no <c>JsonUnmappedMemberHandling.Disallow</c>, so an engine handed a field it does not
-    /// know ignores it and echoes back a well-formed set that merely lacks it — which would record
-    /// <c>wsum</c> in a variant's definition and rank fusion in its numbers, with nothing anywhere
-    /// disagreeing. That is the reranker scar exactly.
+    /// The recipe becomes a request through <see cref="QlnRequest.From"/>, which REFUSES what this engine
+    /// cannot serve rather than sending it and hoping. Since 2026-08-17 that refusal covers only a foreign
+    /// engine's recipe and a corpus shape this one does not have: the fusion algorithm and its normalization —
+    /// the two that used to be refused — became real axes when the sibling plan's step 1 landed.
+    /// </para>
+    /// <para>
+    /// The engine's own axes contract now carries <c>JsonUnmappedMemberHandling.Disallow</c>, so a field it
+    /// does not know is a 400 rather than a silent drop. That is the guarantee this side no longer has to
+    /// catch — and it is why a stray member in the request record is now a broken retrieval rather than
+    /// harmless noise.
     /// </para></summary>
     public async Task<Outcome<RetrievedContext>> RetrieveAsync(
         RetrievalRequest request, CancellationToken cancellationToken)
     {
-        var axes = AxesWire.From(request.Recipe);
+        var wire = QlnRequest.From(request.Recipe);
 
-        if (axes is Outcome<AxesWire>.Fail unexpressible)
+        if (wire is Outcome<QlnRequest>.Fail unexpressible)
         {
             return Outcome<RetrievedContext>.Failure(unexpressible.Reason);
         }
 
-        var sent = ((Outcome<AxesWire>.Ok)axes).Value;
+        var sent = ((Outcome<QlnRequest>.Ok)wire).Value;
         var searched = await SearchAsync(request.Query, sent, cancellationToken);
 
         return searched.Match(
@@ -83,7 +93,7 @@ public sealed class QlnRetriever(
     /// <see cref="QlnEngine"/> serves its search TOOL through the same call — one round trip, one funnel
     /// path, whichever lane asked.</summary>
     internal async Task<Outcome<Searched>> SearchAsync(
-        string query, AxesWire axes, CancellationToken cancellationToken)
+        string query, QlnRequest request, CancellationToken cancellationToken)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         HttpResponseMessage response;
@@ -92,7 +102,13 @@ public sealed class QlnRetriever(
         {
             response = await http.PostAsJsonAsync(
                 $"api/rag/projects/{projectId:D}/search",
-                new SearchInputWire { Query = query, Branch = branch, Axes = axes },
+                new SearchInputWire
+                {
+                    Query = query,
+                    Branch = branch,
+                    Axes = request.Axes,
+                    TextShape = request.TextShape,
+                },
                 Json,
                 cancellationToken);
         }
@@ -142,7 +158,7 @@ public sealed class QlnRetriever(
     /// network and deserialization included — while the funnel's total is what the engine measured inside
     /// itself. Reporting one as the other is how a slow network becomes a slow reranker.
     /// </para></summary>
-    private static RetrievedContext Context(Searched response, AxesWire sent)
+    private static RetrievedContext Context(Searched response, QlnRequest sent)
     {
         var funnel = ToFunnel(response.Wire.Funnel);
 
@@ -151,7 +167,7 @@ public sealed class QlnRetriever(
             [.. response.Wire.Hits.Select((hit, index) => ToHit(hit, index + 1))],
             funnel.Match(ok => ok, _ => RetrievalFunnel.None),
             funnel.Match(_ => string.Empty, reason => reason),
-            sent.Axes,
+            sent.Asked,
             Echoed(response.Wire.Axes),
             response.PayloadBytes,
             response.ElapsedMs);
@@ -229,6 +245,80 @@ internal sealed record SearchInputWire
     [JsonPropertyName("branch")] public string Branch { get; init; } = string.Empty;
 
     [JsonPropertyName("axes")] public AxesWire? Axes { get; init; }
+
+    /// <summary>Which corpus variant answers. Index-time, so it selects a COLLECTION rather than a knob —
+    /// which is why it rides beside the axes rather than inside them. Omitted keeps the engine's default.</summary>
+    [JsonPropertyName("textShape")] public string? TextShape { get; init; }
+}
+
+/// <summary>One recipe as this engine's request: the query-time axes, and the corpus variant that answers.
+/// <para>
+/// Two levels of the same JSON, so one type carries both — and one type produces the stored
+/// <see cref="Asked"/>, which therefore covers the whole recipe rather than only the half that happens to
+/// live under <c>axes</c>.
+/// </para></summary>
+internal sealed record QlnRequest(AxesWire Axes, string? TextShape)
+{
+    /// <summary>The corpus variants this engine can select per request, by their own names.
+    /// <para>
+    /// Its vocabulary, not ours: a variant's <c>textShape</c> is a string the ADAPTER maps onto the engine
+    /// it serves, because this benchmark measures engines it does not compile against. A shape this engine
+    /// does not have is refused by name rather than sent — the request would otherwise be rejected at the
+    /// boundary anyway, and a refusal that names the four legal values is worth more than a 400.
+    /// </para></summary>
+    public static IReadOnlyList<string> TextShapes => ["SourceOnly", "GraphHeader", "ClassContext", "LeadingDoc"];
+
+    /// <summary>A result count and nothing else — the tool-surface path, where the subject asks for a search
+    /// and every other knob, the corpus included, is the engine's own.</summary>
+    public static QlnRequest Limited(int limit) => new(AxesWire.Limited(limit), TextShape: null);
+
+    /// <summary>A catalog recipe as this engine's request, or a refusal naming what it cannot serve.
+    /// <para>
+    /// <b>What it CAN serve, as of 2026-08-17:</b> the channels, both weights, the rank constant, the fusion
+    /// ALGORITHM and its normalization, the reranker and its pool, the result limit, and the corpus text
+    /// shape. Fusion and normalization arrived that morning in
+    /// <c>dew_flow_rag_qln · todo/PLAN_search_variant_axes.md</c> step 1; before it, a <c>wsum</c> recipe was
+    /// refused here because the engine would have accepted the request, ignored the field, and served rank
+    /// fusion under a record that said otherwise.
+    /// </para>
+    /// <para>
+    /// <b>What it still cannot:</b> chunk size and embed model. Those are not request axes at all — the
+    /// engine derives them from its own configured recipe — so they are neither sent nor verifiable here, and
+    /// what a run records instead is the COLLECTION that answered. Making that collection provably the
+    /// recipe's is the index-preparation step (`todo/PLAN_variant_matrix.md` §3.4 step 2), and until it lands
+    /// a variant that differs only in chunk size is a variant this engine cannot distinguish.
+    /// </para></summary>
+    public static Outcome<QlnRequest> From(VariantDefinition.RetrievalRecipe recipe)
+    {
+        var refusal = Refuse(recipe);
+
+        return refusal.Length > 0
+            ? Outcome<QlnRequest>.Failure(refusal)
+            : Outcome<QlnRequest>.Success(new QlnRequest(AxesWire.From(recipe), Shape(recipe.Corpus.TextShape)));
+    }
+
+    /// <summary>What this run asked for, as named values — the axes plus the corpus shape, since both are
+    /// axes of the MEASUREMENT even though they ride at different levels of the request.</summary>
+    public EngineAxes Asked =>
+        new([.. Axes.Axes.Values, .. TextShape is { } shape ? new[] { new Axis("textShape", shape) } : []]);
+
+    private static string Refuse(VariantDefinition.RetrievalRecipe recipe) =>
+        (recipe.Engine == EngineKind.Qln, Shape(recipe.Corpus.TextShape)) switch
+        {
+            (false, _) =>
+                $"this adapter serves {EngineKind.Qln}, and the recipe names {recipe.Engine} — an engine that "
+                + "measured another engine's recipe would label the result with the recipe and the numbers with itself",
+            (_, null) =>
+                $"this engine has no corpus text shape called '{recipe.Corpus.TextShape}' — it serves "
+                + $"{string.Join(", ", TextShapes)}. A shape it does not have would come back a 400, and a "
+                + "refusal that names the legal ones is worth more than that",
+            _ => string.Empty,
+        };
+
+    /// <summary>The engine's own spelling of a shape name, or nothing when it has no such shape. Matched
+    /// case-insensitively: the catalog is written by hand and <c>graphheader</c> is the same corpus.</summary>
+    private static string? Shape(string textShape) =>
+        TextShapes.FirstOrDefault(s => string.Equals(s, textShape, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>The query-time axes, as this engine's contract spells them.
@@ -260,43 +350,39 @@ internal sealed record AxesWire
 
     [JsonPropertyName("rerankPool")] public int? RerankPool { get; init; }
 
+    /// <summary>Which algorithm fuses the channels — this engine knows <c>rrf</c> and <c>wsum</c>.</summary>
+    [JsonPropertyName("fusion")] public string? Fusion { get; init; }
+
+    /// <summary>How a weighted sum makes the channels comparable. Sent only UNDER a weighted sum: this
+    /// system's "none" means no normalization is applied, which under rank fusion is simply true and is
+    /// expressed by the engine ignoring the field — not by sending it a value it does not have, which its
+    /// axes contract would refuse.</summary>
+    [JsonPropertyName("wsumNorm")] public string? WsumNorm { get; init; }
+
     /// <summary>A result count and nothing else — the tool-surface path, where the subject asks for a search
     /// and every other knob is the engine's own.</summary>
     public static AxesWire Limited(int limit) => new() { Limit = limit };
 
-    /// <summary>A catalog recipe as this engine's axes, or a refusal naming what it cannot express.
+    /// <summary>A catalog recipe as this engine's query-time axes.
     /// <para>
-    /// The refusals matter more than the mapping. This engine fuses by reciprocal rank only: it has no
-    /// fusion-MODE axis and no normalization axis, so a <c>wsum</c> recipe cannot be served here — and
-    /// because its axes contract ignores fields it does not know, sending one would produce a run that
-    /// records a weighted sum and measures rank fusion. Both halves of that guarantee are named in
-    /// <c>todo/PLAN_variant_matrix.md</c> §4 items 1 and 5; until the engine's half lands, a variant that
-    /// needs it is refused HERE, loudly, rather than measured wrongly.
-    /// </para>
-    /// <para>
-    /// The corpus half of a recipe — text shape, chunk size, embed model — is not an axis at all: it selects
-    /// a COLLECTION, chosen by the engine's own recipe machinery. What comes back is the collection that
-    /// answered, and it is stored; verifying that the collection IS this recipe's needs the index
-    /// preparations of §3.4 step 2 and is build-order step 5.
+    /// No refusal here any more: what this engine cannot serve is decided by <see cref="QlnRequest.From"/>,
+    /// which owns the whole request. Every axis below has existed since
+    /// <c>dew_flow_rag_qln · PLAN_search_variant_axes</c> step 1 landed on 2026-08-17 — the fusion algorithm
+    /// and its normalization are the two that were refused before it.
     /// </para></summary>
-    public static Outcome<AxesWire> From(VariantDefinition.RetrievalRecipe recipe)
+    public static AxesWire From(VariantDefinition.RetrievalRecipe recipe) => new()
     {
-        var refusal = Refuse(recipe);
-
-        return refusal.Length > 0
-            ? Outcome<AxesWire>.Failure(refusal)
-            : Outcome<AxesWire>.Success(new AxesWire
-            {
-                Limit = recipe.Limit,
-                Dense = recipe.Channels is RetrievalChannels.Dense or RetrievalChannels.Hybrid,
-                Sparse = recipe.Channels is RetrievalChannels.Sparse or RetrievalChannels.Hybrid,
-                DenseWeight = recipe.Fusion.DenseWeight,
-                SparseWeight = recipe.Fusion.SparseWeight,
-                RrfK = recipe.Fusion.K,
-                Rerank = recipe.Rerank.Enabled,
-                RerankPool = recipe.Rerank.Enabled ? recipe.Rerank.Pool : null,
-            });
-    }
+        Limit = recipe.Limit,
+        Dense = recipe.Channels is RetrievalChannels.Dense or RetrievalChannels.Hybrid,
+        Sparse = recipe.Channels is RetrievalChannels.Sparse or RetrievalChannels.Hybrid,
+        DenseWeight = recipe.Fusion.DenseWeight,
+        SparseWeight = recipe.Fusion.SparseWeight,
+        RrfK = recipe.Fusion.K,
+        Rerank = recipe.Rerank.Enabled,
+        RerankPool = recipe.Rerank.Enabled ? recipe.Rerank.Pool : null,
+        Fusion = recipe.Fusion.Mode,
+        WsumNorm = recipe.Fusion.Mode == FusionSpec.WeightedSum ? recipe.Fusion.Normalization : null,
+    };
 
     /// <summary>What this run asked for, as named values, derived from the fields actually set above.
     /// <para>
@@ -317,24 +403,13 @@ internal sealed record AxesWire
         .. Named("rrfK", RrfK),
         .. Named("rerank", Rerank),
         .. Named("rerankPool", RerankPool),
+        .. Text("fusion", Fusion),
+        .. Text("wsumNorm", WsumNorm),
     ]);
 
-    private static string Refuse(VariantDefinition.RetrievalRecipe recipe) =>
-        (recipe.Engine, recipe.Fusion.Mode, recipe.Fusion.Normalization) switch
-        {
-            (not EngineKind.Qln, _, _) =>
-                $"this adapter serves {EngineKind.Qln}, and the recipe names {recipe.Engine} — an engine that "
-                + "measured another engine's recipe would label the result with the recipe and the numbers with itself",
-            (_, not FusionSpec.ReciprocalRank, _) =>
-                $"this engine fuses by {FusionSpec.ReciprocalRank} only and its axes contract has no fusion-mode "
-                + $"field, so a '{recipe.Fusion.Mode}' recipe cannot be served: the request would be accepted, the "
-                + "field ignored, and the run would record a weighted sum while measuring rank fusion. The engine's "
-                + "half of this is PLAN_search_variant_axes in dew_flow_rag_qln",
-            (_, _, not FusionSpec.NoNormalization) =>
-                $"this engine has no score-normalization axis, so '{recipe.Fusion.Normalization}' cannot be served "
-                + "— and a normalization that is recorded but not applied is the same defect as an ignored fusion mode",
-            _ => string.Empty,
-        };
+    /// <summary>A named axis whose value is already text, or nothing when it was not set.</summary>
+    private static IEnumerable<Axis> Text(string name, string? value) =>
+        value is { Length: > 0 } set ? [new Axis(name, set)] : [];
 
     /// <summary>One axis, or nothing at all when it was not set. A spread over an empty sequence is how
     /// "this axis was omitted" stays absent from the record instead of appearing as a default.</summary>

@@ -128,7 +128,7 @@ public sealed class QlnEngineLiveTests
                     EngineKind.Qln,
                     RetrievalChannels.Hybrid,
                     FusionSpec.Rrf(60).Ok(),
-                    CorpusSpec.Parse("member", 512, "bge-m3").Ok(),
+                    CorpusSpec.Parse("GraphHeader", 512, "bge-m3").Ok(),
                     Bench.Domain.Variants.RerankSpec.Pooled(50).Ok(),
                     limit: 5).Ok()),
             TestContext.Current.CancellationToken)).Ok();

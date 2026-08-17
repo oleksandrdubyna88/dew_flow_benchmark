@@ -80,6 +80,15 @@ public interface IRetriever
 {
     EngineRef Describe { get; }
 
+    /// <summary>Whether this engine can serve a recipe AT ALL, answered without a round trip.
+    /// <para>
+    /// Asked once per variant before a single cell exists, for the reason the model registry is resolved
+    /// there too: a recipe naming an axis this engine has no field for, or a corpus shape it does not have,
+    /// would otherwise be discovered as a wall of identical leg failures hours into a sweep. On success it
+    /// returns the axes it WOULD send, so an operator can read what a variant actually becomes.
+    /// </para></summary>
+    Outcome<string> CanServe(VariantDefinition.RetrievalRecipe recipe);
+
     /// <summary>One retrieval, with its funnel and its echoed axes. A refusal is a VALUE: an engine that is
     /// down, a collection that was never built, or a recipe this build cannot express honestly are all
     /// facts a leg records — never exceptions that end a campaign of ten thousand.</summary>
