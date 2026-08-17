@@ -80,6 +80,21 @@
 >   repository, and the only thing that can catch a wire-SPELLING defect is
 >   `QlnEngineLiveTests` — which existed, covered this exact call, and had not been run. A lane is not verified
 >   until the `Category=Live` tests have actually run against a daemon.
+> - **Verified against a live daemon and a live model, 2026-08-17.** `Category=Live` 6/6, then two real
+>   campaigns over the indexed `aspnetcore` corpus (75k points) at `07d11eb5`: hits into the prompt (5 051
+>   chars from 5 excerpts), `trace/v0` funnel not degraded with 9 stages and `graph-enrich` absent, the
+>   engine's 5 355 ms beside this process's 5 407 ms, 1 136/106 tokens captured, sampling as sent, 15 hit rows
+>   and 10 824 bytes of snippet under retention. The first run's anchor recall came back **0** and the stored
+>   hits explained it without re-running anything — the anchor had been authored from a shorter query and the
+>   question's own prompt returns a different top five, which is a true measurement rather than a defect. Then
+>   anchors taken from what the engine actually returns: recall 1.0, MRR 0.6 at ranks 1 and 5 — arithmetic that
+>   checks by hand, (1 + 1/5)/2.
+> - **A trap for step 5's echo assertion, found in that live data.** The engine's echoed booleans render as
+>   `True`/`False` (its own `ToString`), while this side's requested axes carry `true`/`false`. A string
+>   comparison of the pair would therefore flag EVERY boolean axis as a mismatch and block every cell. The
+>   assertion has to compare values by their meaning, and it must compare only the axes this side ASKED for:
+>   the echo legitimately carries more (`denseWidth`, `rerankFloor`, `collapseMembers`, and `wsumNorm` under
+>   rrf, which we deliberately do not send).
 > - **Still open in step 4**: `chunkTokens` and `embedModel` are not request axes at all — the engine derives
 >   them from its configured recipe — so a variant differing only in chunk size is one this engine cannot
 >   distinguish. That is the corpus half, and it lands with the index preparations (step 5) and the sibling
