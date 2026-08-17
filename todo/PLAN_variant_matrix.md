@@ -70,6 +70,16 @@
 >   `VariantsAsync` said a recipe the engine cannot express is refused at the START rather than as a wall of
 >   leg failures — and only looked the catalog row up. The port now answers "what would this recipe become on
 >   your wire", without a round trip, and `bench run` asks once per variant while planning.
+> - **A stub agreed with an assumption, and only the live daemon disagreed.** Every axes test here passes
+>   against a stubbed wire, and the `textShape` those tests asserted — the engine's own shape NAME — was
+>   rejected 400 by the running daemon: minimal APIs bind an enum from a number by default, so
+>   `"textShape": "GraphHeader"` could not be read at all. Every retrieval leg of the first real campaign would
+>   have failed at the boundary. Fixed on the engine's side (`dew_flow_rag_qln@5d6aec9`, the name binds now and
+>   the ordinal still does), because a non-contiguous enum's ordinal is not a wire value. **The standing lesson
+>   is about the instrument, not the bug:** a stub proves this codec agrees with our idea of the other
+>   repository, and the only thing that can catch a wire-SPELLING defect is
+>   `QlnEngineLiveTests` — which existed, covered this exact call, and had not been run. A lane is not verified
+>   until the `Category=Live` tests have actually run against a daemon.
 > - **Still open in step 4**: `chunkTokens` and `embedModel` are not request axes at all — the engine derives
 >   them from its configured recipe — so a variant differing only in chunk size is one this engine cannot
 >   distinguish. That is the corpus half, and it lands with the index preparations (step 5) and the sibling

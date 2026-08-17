@@ -17,6 +17,13 @@ namespace Bench.Tests.Engines;
 /// promotes <c>trace/v0</c> from "authored from a stage list" to "observed from a payload".
 /// </para>
 /// <para>
+/// <b>And it is not optional before calling a lane verified.</b> On 2026-08-17 the stubbed tests asserted a
+/// request this daemon answers 400 to — the corpus shape sent as its name, which minimal APIs could not bind
+/// from a string — and every one of them was green. The class below covers that exact call and had simply not
+/// been run. A stub proves this codec agrees with our IDEA of the other repository; only these tests prove it
+/// agrees with the repository.
+/// </para>
+/// <para>
 /// Excluded from the default run by its trait, and SKIPPED rather than failed when the endpoint is not
 /// configured: a suite that goes red because somebody's daemon is not running teaches people to ignore
 /// red. Run it deliberately:
