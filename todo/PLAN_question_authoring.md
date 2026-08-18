@@ -54,11 +54,16 @@
 >   rejection as a value. **It cleared on its own within the hour** and 33 marks were taken afterwards, so it is a
 >   transient ceiling rather than a wall — the first reading of it here, that step 6 could not proceed until an
 >   admin raised it, was wrong.
-> - **Docker Desktop's `docker-desktop` WSL distro stopped twice in one hour**, taking the bank's Postgres with it
->   and killing a vetting run 50 minutes in. Restarting Docker Desktop brings the engine back in ~15 s (the
->   privileged service cannot be started from a non-elevated session), and the container's published port changes
->   every restart, so a recorded connection string is stale after one. Nothing was lost either time: every mark is
->   written as it is taken. This is the real obstacle to a long run, not the spend limit.
+> - **A long run shares fate with WSL, and that is structural rather than a fault.** Two vetting runs died when
+>   the `docker-desktop` distro stopped — which was **not** Docker misbehaving, as first recorded here, but the
+>   operator restarting WSL deliberately for the Windows-against-WSL sidecar measurements
+>   (`PLAN_compute_backend_axis.md`). The bank's Postgres is a Docker container, Docker's engine is a WSL distro,
+>   so **every `wsl --shutdown` takes the benchmark's database with it**, and an authoring or vetting run of hours
+>   cannot overlap that work. Two consequences worth keeping: a run must be resumable rather than long — which it
+>   is, because every mark is written as it is taken and only `Proposed` questions are walked — and a recorded
+>   connection string is stale after any restart, since the container's published port is ephemeral (51393 → 51391
+>   → 49377 over three restarts today). Restarting Docker Desktop brings the engine back in ~15 s; its privileged
+>   service cannot be started from a non-elevated session.
 >
 > **Step 6's second question is partly answered, and by reading rather than by launching.** The plan asks
 > whether a question's properties can be checked mechanically or need a person every time. Measured over the 20
