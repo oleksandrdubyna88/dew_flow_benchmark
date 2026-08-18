@@ -97,15 +97,47 @@ The two groups that already hold Claude-only questions do not need pruning: **th
 the SELECTION, not of the bank.** `code-lookup` holds 9 accepted and `bug-root-cause` 8, all Claude; adding three
 from each of the other two authors makes a 4/3/3 selection of ten available, and the surplus stays in the bank.
 
-### 3.3 A second real model on the panel
+### 3.3 The panel is three models now — DONE, with one tier caveat
 
-The measured cost of three slots on one model: two rejections in 57 marks, both reproducible by substring
-arithmetic, plus one question approved that carried the same defect class the panel rejected elsewhere. A
-fourth slot on the same model would add nothing; a second *model* is what makes a disagreement possible.
+Shipped 2026-08-18. The measured cost of the single-model panel was two rejections in 57 marks, both
+reproducible by substring arithmetic, plus one question approved that carried the same defect class the panel
+had rejected elsewhere. A fourth slot on the same model would have added nothing.
 
-`CliArgv` already maps `codex exec -` and `gemini -p`, both marked UNVERIFIED in the code. Verifying one of
-them is a live test, not a build: bind it to `reviewer-2` and vet a group that already has marks, so the two
-panels can be compared on the same questions.
+| Slot | Registry row | Model | Probe |
+|---|---|---|---|
+| `reviewer-1` | `claude-reviewer` | `claude-sonnet-4-6` | 5.5 s |
+| `reviewer-2` | `codex-terra` | `gpt-5.6-terra` | 4.7 s |
+| `reviewer-3` | `gemini-flash` | `gemini-3.1-flash` | 10.2 s |
+
+**The caveat, recorded rather than hidden.** This account's Gemini entitlement is flash-tier: `gemini-3-pro`
+and `gemini-2.5-pro` both answer 404 here. So one third of every group is authored — and one slot of every
+panel is judged — by a lighter model than the other two. Operator decision 2026-08-18: proceed on this tier
+now, buy proper subscriptions later. That is legitimate because `AuthorModel` is truthful per question, so the
+asymmetry is **measurable afterwards** rather than baked in invisibly: "did the flash-authored third produce
+easier questions" is a query, not a guess.
+
+#### Upgrading a model when a subscription arrives — three commands, no code
+
+A registry row is never edited: a run names the key it measured under, and rewriting a model id would relabel
+questions already authored. So an upgrade is an ADD, a REBIND and a PROBE:
+
+```bash
+# 1. what does the CLI actually run now? (the id must be what answered, not what was bought)
+echo "hi" | codex exec -            # its header prints `model: …`
+echo "hi" | gemini -o json          # its envelope prints stats.models.<id>
+
+# 2. add the row, disable the old one, rebind the slot
+bench models add --key gemini-pro --model-id <the id from step 1> --runtime cligemini      --hosting cloud --base-url-ref BENCH_GEMINI_EXE --executable-ref BENCH_GEMINI_EXE --seed 1
+bench models disable --key gemini-flash
+bench questions bind --reviewer reviewer-3 --model gemini-pro
+
+# 3. prove it answers through our own path before any batch
+bench models probe --key gemini-pro
+```
+
+Then edit `AUTHORS` in `scripts/bank-thirds.sh` to the new key. Questions already in the bank keep the author
+they were written by, which is the point: the bank becomes a record of two tiers, comparable by
+`AuthorModel`.
 
 ### 3.4 Fix or retire the three gate-blocked questions
 
