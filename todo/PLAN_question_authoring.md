@@ -52,6 +52,22 @@
 >   rejection as a value. **External, and it blocks every further authoring or vetting launch.** Step 6's number
 >   cannot be produced until it is raised.
 >
+> **Step 6's second question is partly answered, and by reading rather than by launching.** The plan asks
+> whether a question's properties can be checked mechanically or need a person every time. Measured over the 20
+> proposed questions while the spend limit blocked all launches:
+> - **Anchor resolution is fully mechanical, and it is what the reviewers spent most of their notes on.**
+>   Checking that each expectation's file exists at the pinned commit and that the member's name falls inside the
+>   claimed line span: **20 of 20 correct**. All three live reviewer notes led with exactly this check, so a
+>   mechanical pre-gate would take the most-cited half of a review off the launch budget entirely.
+> - **"The prompt must not name the identifier" is mechanical only where a brief forbids it.** Seven
+>   `code-lookup` prompts name their member outright — and that is the brief working as written, not a defect:
+>   `code-lookup` is *"findable by NAME or by an obvious identifier"*, the deliberate control group. The rule
+>   belongs to `semantic-intent`, which produced nothing in this batch, so it is still unmeasured.
+> - **The looser version of that check is unusable.** Decomposing a member name into words and looking for any of
+>   them fired on 17 of 22 questions: `gpu` in a GPU bug report, `min`/`max` in a question about min-max
+>   normalisation, `credential` in one about a credential pool. A gate with that false-positive rate would refuse
+>   correct work, which is worse than no gate.
+>
 > **Four defects the live batch found, in order — none of them visible from a stub:**
 > 1. **The agent was launched in the wrong directory.** It refused to write anything, saying it needed read
 >    access to the repository at that commit — the correct answer, and a defect in how it was called. Now the
