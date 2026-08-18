@@ -1,0 +1,32 @@
+{
+  // The bank's own shape: the SIX question groups the project measures, and the three reviewer slots that
+  // mark them. Committed, because "how many groups are there" was answered from memory once and got the
+  // number wrong — the sixth exists, it is simply the one nothing can author yet.
+  //
+  // Apply with:  bench questions import --file data/bank-seed.json --db <connection>
+  // Re-applying is safe: a group or reviewer already present is refused by name and counted as a refusal,
+  // and nothing else in the file changes.
+  //
+  // The reviewer slots deliberately name NO model. Binding one is a local decision with a stated cost
+  // (`bench questions bind --reviewer reviewer-1 --model <registry key>`), and a committed default would
+  // read as the project's recommendation — which three slots on one model is not.
+  "groups": [
+    { "key": "code-lookup", "title": "Code lookup", "ordinal": 1 },
+    { "key": "semantic-intent", "title": "Semantic intent", "ordinal": 2 },
+    { "key": "pr-diff", "title": "PR diff", "ordinal": 3 },
+    { "key": "bug-root-cause", "title": "Bug root cause", "ordinal": 4 },
+    { "key": "adversarial", "title": "Adversarial", "ordinal": 5 },
+
+    // The sixth. Its questions carry a bug that reproduces, a reference fix that works, and a tree rebuilt
+    // to the buggy state — three gates that need a sandbox worktree and a build, which is why
+    // `bench questions author` refuses this group by name and `todo/PLAN_code_lane.md` owns it. The row
+    // exists so a hand-authored code task has a home, and so every report that groups by key counts six.
+    { "key": "code-writing", "title": "Code writing", "ordinal": 6 }
+  ],
+  "reviewers": [
+    { "key": "reviewer-1", "displayName": "Reviewer 1", "ordinal": 1 },
+    { "key": "reviewer-2", "displayName": "Reviewer 2", "ordinal": 2 },
+    { "key": "reviewer-3", "displayName": "Reviewer 3", "ordinal": 3 }
+  ],
+  "questions": []
+}

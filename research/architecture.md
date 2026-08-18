@@ -248,6 +248,48 @@ environment facts came out of it and are not yet fixed: **git history is not rea
 came back `unstated` — which the `pr-diff` group depends on entirely; and a CLI that prints diagnostics beside
 its answer is why the runtime reads **stdout alone** rather than the merged output.
 
+**There are SIX groups, and five of them can be authored.** `code-writing` is a real group of this benchmark —
+`data/bank-seed.json` seeds it as a row and `BankSeedTests` holds the count at six — and it is the one
+`bench questions author` refuses by name, because its three gates need a sandbox worktree and a build. The row
+exists so a hand-authored code task has a home and so every report that groups by key counts six; the seed file
+is committed because the number was once answered from memory and was wrong by one.
+
+### Vetting: who marks a machine's questions
+
+`bench questions vet` walks a group's `Proposed` questions and asks every **bound** reviewer slot for a verdict,
+storing each mark through the same path `bench questions review` uses — so a mark written by an agent and one
+typed by a person are indistinguishable afterwards. That is correct rather than sloppy: a review is a
+judgement, and its provenance is the slot, which is recorded either way.
+
+- **A reviewer slot names its model, as data.** `reviewers.ModelKey` is a registry key, empty for a person. It
+  is a column and not a command-line flag because the self-review rule compares a reviewer's model against the
+  question's author model, and "who is reviewer-2" has to be answerable from the bank years later. Three slots
+  were seeded on 2026-08-17 naming nobody, and this pass could not be written until they did.
+- **A model never marks its own writing** — refused before any launch, comparing the resolved **model id**
+  rather than the slot or registry key, because two rows bound to two keys that both resolve to
+  `claude-sonnet-4-6` are one opinion. `--allow-self-review` takes the mark anyway and **prints what it costs**;
+  the run's report carries that sentence, so a batch marked this way cannot be quoted without it.
+- **The reviewer is shown the question, not its provenance.** `BankExport.ForReview` omits `authorModel`,
+  `state` and the other reviewers' marks: a mark that knows who wrote the question, or how the others voted, is
+  partly about the author and partly about agreement. The seed IS shown — the reviewer is asked whether the date
+  looks invented.
+- **An unreadable verdict is never an approval.** The pass reads its own wire shape rather than the import's
+  `ReviewFile`, whose verdict defaults to `Approved` — right for a file a person wrote, and the failure that
+  looks like success for an agent whose answer lost a field. A rejection with no note is refused outright: it is
+  the only record of what an author gets wrong.
+- **Promotion is the strict rule and there is no threshold knob.** `Promotion.Decide` accepts only when EVERY
+  configured reviewer row has approved, rejects on any single rejection (a defect somebody named outranks any
+  count of approvals), and otherwise waits. An empty `reviewers` table promotes nothing — "every configured
+  reviewer approved" is vacuously true of none, and would accept a whole machine-written bank on an empty table.
+  A majority rule would be a quality claim nobody here has measured.
+- **A decided question is not re-vetted.** Only `Proposed` rows are walked, so a machine cannot overwrite a
+  person's mark.
+
+**Today all three slots are bound to one model** (`claude-reviewer` → `claude-sonnet-4-6`, the operator's
+decision of 2026-08-18 while one CLI author is verified). That is *one opinion sampled three times, not three
+reviewers*, `bench questions reviewers` says so when it sees identical bindings, and every number derived from
+such a batch has to be reported that way.
+
 ### The question bank
 
 Questions live in Postgres in named **groups**, with per-**reviewer** marks — both rows rather than enum
@@ -272,8 +314,8 @@ Three properties carry the weight:
   of which group each question was in **when the test was created**. A report reads the snapshot; re-filing
   a question next month cannot move a finished test's numbers into a different column.
 
-`bench questions import|list|groups|review|accept|reject|move` is the surface; `bench run --bank-group`
-freezes a selection instead of reading a suite file. A file-selected run writes no snapshot rows, which is
+`bench questions import|author|vet|list|groups|reviewers|bind|review|accept|reject|move` is the surface;
+`bench run --bank-group` freezes a selection instead of reading a suite file. A file-selected run writes no snapshot rows, which is
 the honest reading rather than a gap: a file has no groups.
 
 ### The model registry
@@ -521,20 +563,23 @@ Stated because a description that quietly implies more than is built is the same
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler**, no UI, and the API route group is not hosted.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
-- **Nothing AUTHORS questions.** The bank holds them, reviews them and freezes selections from them, but
-  candidates arrive by import: the pipeline that drives CLI agents to write and review them is a later
-  plan, and the schema is already the shape it needs so that plan adds verbs rather than tables.
+- **The authoring pipeline exists but has no THROUGHPUT number.** `author` and `vet` both run against the real
+  Claude CLI, and what nobody knows yet is the only figure the founding plan says can be learned by running:
+  how many accepted questions a week of this produces. Two facts bound it and neither is fixed —
+  **`pr-diff` cannot be authored at all** while git history is unreadable inside the worktree, and **all three
+  reviewer slots are one model**, so today's approvals are one opinion sampled three times. A number produced
+  before those are addressed would be a number about this compromise rather than about the pipeline.
 - **Two variant axes cannot be honoured yet, and they are the corpus ones.** `bench run --variants` plans one
   leg per variant and the engine serves everything a recipe names except **chunk size** and **embed model**,
   which it derives from its own configured recipe rather than from a request. So two variants differing only
   in chunk size are two variants it cannot distinguish, and what a run records instead is the collection that
   answered. They land with the index preparations below and with `dew_flow_rag_qln ·
   todo/PLAN_search_variant_axes.md` steps 3–4.
-- **The echoed axes are stored but not ASSERTED.** `funnels` keeps what the run asked for beside what the
-  engine said it applied, which is the evidence a mismatch would need — but nothing compares them yet, so an
-  engine that silently ignored an axis it does not know would be caught only by reading the row. Comparing
-  them and BLOCKING the cell is step 5 of `todo/PLAN_variant_matrix.md`, where a blocked cell has a state to
-  go to; the same step verifies that the collection which answered is the one the recipe named.
+- **A pass cannot be TRIGGERED from here.** The echoed axes are now asserted and a mismatched cell is blocked
+  (`EngineAxes.AssertAppliedIn` → `LegRunner.BlockAsync`), and `index_preparations` holds a preparation's owner,
+  heartbeat and stranding sweep — but nothing starts an index pass over HTTP, so a corpus the engine has not
+  built is a refusal the operator satisfies by hand. That is the tail of step 5 in
+  `todo/PLAN_variant_matrix.md`.
 - **The checked-out tree is verified but not yet READ.** `bench run` mirrors and checks out the target before
   it measures, which is what makes a commit real rather than recorded — but no lane reads the worktree yet:
   the retrieval lane reads the engine's index, and there is no tool loop to read files.

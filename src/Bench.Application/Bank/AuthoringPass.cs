@@ -122,7 +122,7 @@ public static class AuthoringPass
     /// </para></summary>
     private static Outcome<IReadOnlyList<BankQuestionFile>> Parse(string text)
     {
-        var json = Unfence(text);
+        var json = AgentJson.Unfence(text);
 
         try
         {
@@ -147,93 +147,16 @@ public static class AuthoringPass
     private static string Sample(string text) =>
         text.Length <= 200 ? text : text[..200] + "…";
 
-    /// <param name="Said">What the author wrote outside the array. Empty when it answered as asked.</param>
-    private sealed record Payloaded(string Json, string Said);
-
     /// <summary>The JSON array out of an answer that may be wrapped in a fence or prefaced with prose.
     /// <para>
-    /// <b>Extraction, not repair, and the line is worth stating.</b> Taking the array out of its surroundings
-    /// changes no question — the same reason a code fence is unwrapped. Editing a question's fields to make it
-    /// parse would be the other thing entirely, and it is what makes a set unattributable.
-    /// </para>
-    /// <para>
-    /// It exists because of the first live batch. Twice the agent had done the work — read the tree, found the
-    /// members, verified the line numbers — and prefaced the array with a caveat about what it could NOT do.
-    /// Discarding the whole answer for that threw away real work and told the operator only that something was
-    /// unreadable. So the array is taken, and the caveat is REPORTED, which is how the environment finding
-    /// underneath it became visible at all.
+    /// Through <see cref="AgentJson"/>, which the vetting pass shares. It exists because of the first live
+    /// batch: twice the agent had done the work — read the tree, found the members, verified the line numbers —
+    /// and prefaced the array with a caveat about what it could NOT do. Discarding the whole answer for that
+    /// threw away real work and told the operator only that something was unreadable. So the array is taken and
+    /// the caveat is REPORTED, which is how the environment finding underneath it became visible at all.
     /// </para></summary>
-    private static Payloaded Payload(string text)
-    {
-        var unfenced = Unfence(text);
-
-        if (unfenced.StartsWith('['))
-        {
-            return new Payloaded(unfenced, string.Empty);
-        }
-
-        for (var opens = unfenced.IndexOf('['); opens >= 0; opens = unfenced.IndexOf('[', opens + 1))
-        {
-            // Balanced, and only accepted if it PARSES as a non-empty array. First-bracket-to-last-bracket was
-            // the obvious rule and it was wrong within one live batch: the prose around the answer contained
-            // `int[] SourceLine`, so the slice began at a C# array type and ended somewhere else entirely.
-            if (Balanced(unfenced, opens) is { } candidate && Parse(candidate) is Outcome<IReadOnlyList<BankQuestionFile>>.Ok)
-            {
-                return new Payloaded(candidate, unfenced[..opens].Trim());
-            }
-        }
-
-        return new Payloaded(unfenced, string.Empty);
-    }
-
-    /// <summary>The bracket-balanced slice starting at <paramref name="opens"/>, or null when it never closes.
-    /// String literals are skipped so a bracket inside a prompt cannot unbalance the count.</summary>
-    private static string? Balanced(string text, int opens)
-    {
-        var depth = 0;
-        var inString = false;
-        var escaped = false;
-
-        for (var index = opens; index < text.Length; index++)
-        {
-            var character = text[index];
-
-            if (escaped)
-            {
-                escaped = false;
-                continue;
-            }
-
-            escaped = inString && character == '\\';
-            inString = character == '"' ? !inString : inString;
-            depth += !inString && character == '[' ? 1 : 0;
-            depth -= !inString && character == ']' ? 1 : 0;
-
-            if (depth == 0 && !inString && character == ']')
-            {
-                return text[opens..(index + 1)];
-            }
-        }
-
-        return null;
-    }
-
-    private static string Unfence(string text)
-    {
-        var trimmed = text.Trim();
-
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
-        {
-            return trimmed;
-        }
-
-        var firstBreak = trimmed.IndexOf('\n');
-        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-
-        return firstBreak > 0 && lastFence > firstBreak
-            ? trimmed[(firstBreak + 1)..lastFence].Trim()
-            : trimmed;
-    }
+    private static AgentPayload Payload(string text) =>
+        AgentJson.Extract(text, '[', ']', candidate => Parse(candidate) is Outcome<IReadOnlyList<BankQuestionFile>>.Ok);
 
     private static async Task<AuthoringReport> StoreAsync(
         IQuestionBank bank,

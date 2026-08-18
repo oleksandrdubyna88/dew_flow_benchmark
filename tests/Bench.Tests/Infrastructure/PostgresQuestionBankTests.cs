@@ -197,6 +197,44 @@ public sealed class PostgresQuestionBankTests(PostgresFixture postgres)
         refused.Reason().Should().Contain("measures nothing");
     }
 
+    [Fact]
+    public async Task A_reviewer_slot_remembers_which_model_answers_for_it()
+    {
+        var bank = Bank();
+        var key = $"reviewer-{Unique()}";
+        await bank.AddReviewerAsync(Reviewer.Create(key, "Reviewer", 9).Ok(), Ct);
+
+        var bound = await bank.BindReviewerAsync(key, "claude-author", Ct);
+
+        // The self-review rule compares a reviewer's model with the question's author model, so this has to be
+        // a stored fact. Three slots were seeded on 2026-08-17 naming nobody, and the pass that needed them
+        // could not be written until they did.
+        bound.Ok().ModelKey.Should().Be("claude-author");
+        (await bank.ReviewersAsync(Ct)).Ok().Single(r => r.Key.Value == key).IsHuman.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Binding_an_EMPTY_model_hands_the_slot_back_to_a_person()
+    {
+        var bank = Bank();
+        var key = $"reviewer-{Unique()}";
+        await bank.AddReviewerAsync(Reviewer.Create(key, "Reviewer", 9, "claude-author").Ok(), Ct);
+
+        await bank.BindReviewerAsync(key, "   ", Ct);
+
+        // A slot nothing answers for is a legitimate row — it is a person — and it makes the strict promotion
+        // rule unsatisfiable by machines alone, which is the honest consequence rather than a defect.
+        (await bank.ReviewersAsync(Ct)).Ok().Single(r => r.Key.Value == key).IsHuman.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Binding_a_reviewer_the_bank_does_not_have_says_so()
+    {
+        var refused = await Bank().BindReviewerAsync($"nobody-{Unique()}", "claude-author", Ct);
+
+        refused.Reason().Should().Contain("a reviewer is a row");
+    }
+
     private PostgresQuestionBank Bank() => new(postgres.NewContext());
 
     /// <summary>A per-test suffix, because this store is SHARED across the suite: a bank key is unique in

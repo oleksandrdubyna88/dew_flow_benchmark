@@ -48,6 +48,11 @@ public interface IQuestionBank
 
     Task<Outcome<IReadOnlyList<Reviewer>>> ReviewersAsync(CancellationToken cancellationToken);
 
+    /// <summary>Binds the registry model that answers for a reviewer slot, or clears it back to a person.
+    /// Separate from adding a reviewer, because an insert that quietly rewrote an existing slot's binding
+    /// would change who reviewed what without saying so.</summary>
+    Task<Outcome<Reviewer>> BindReviewerAsync(string reviewerKey, string modelKey, CancellationToken cancellationToken);
+
     /// <summary>The questions a query names, each with the group it lives in NOW. A test freezes what this
     /// returns; the snapshot is what reports read afterwards.</summary>
     Task<Outcome<IReadOnlyList<BankEntry>>> QuestionsAsync(BankQuery query, CancellationToken cancellationToken);

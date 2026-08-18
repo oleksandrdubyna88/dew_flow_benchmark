@@ -74,7 +74,10 @@ public static class QuestionJson
         return new Expectation(kind, anchor, expectation.Text, expectation.Required);
     }
 
-    private static ExpectationFile FromExpectation(Expectation expectation) => new()
+    /// <summary>One expectation as the JSON a file carries. Public because a stored question is also shown to
+    /// a REVIEWER, and a second mapping of the same seven fields is the duplication this class exists to
+    /// prevent.</summary>
+    public static ExpectationFile FromExpectation(Expectation expectation) => new()
     {
         Kind = expectation.Kind.ToString(),
         File = expectation.Anchor.FilePath,

@@ -271,8 +271,15 @@ public static class Program
         output.WriteLine("             [--prompts prompts] --db <connection>   a CLI agent writes candidates:");
         output.WriteLine("             they land Proposed, through the same admission rules an import passes,");
         output.WriteLine("             and the prompt that wrote them is recorded by hash");
+        output.WriteLine("  bench questions vet    --group <key> --repo <url> --commit <40-hex> [--limit 10]");
+        output.WriteLine("             [--wall-seconds 300] [--allow-self-review] [--prompts prompts] --db <connection>");
+        output.WriteLine("             every BOUND reviewer slot marks the group's proposed questions; a question");
+        output.WriteLine("             becomes selectable only when every configured slot approved it");
         output.WriteLine("  bench questions list   [--group <key>] [--from N] [--to N] [--accepted] --db <connection>");
         output.WriteLine("  bench questions groups --db <connection>");
+        output.WriteLine("  bench questions reviewers --db <connection>   the slots, and which model answers each");
+        output.WriteLine("  bench questions bind   --reviewer <key> [--model <registry key>] --db <connection>");
+        output.WriteLine("             an empty --model hands the slot back to a person");
         output.WriteLine("  bench questions review --question <id> --reviewer <key> [--verdict approved|rejected]");
         output.WriteLine("             [--note <text>] --db <connection>   one mark per reviewer per question");
         output.WriteLine("  bench questions accept|reject --question <id> --db <connection>");

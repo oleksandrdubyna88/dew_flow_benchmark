@@ -49,6 +49,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             Key = reviewer.Key.Value,
             DisplayName = reviewer.DisplayName,
             Ordinal = reviewer.Ordinal,
+            ModelKey = reviewer.ModelKey,
         });
 
         return await SaveAsync(reviewer, $"the reviewer '{reviewer.Key}' is already in the bank", cancellationToken);
@@ -81,7 +82,33 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             .OrderBy(r => r.Ordinal).ThenBy(r => r.Key)
             .ToListAsync(cancellationToken);
 
-        return All(rows, row => Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal));
+        return All(rows, row => Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey));
+    }
+
+    /// <summary>Binds a model to an existing slot, or clears the binding back to a person.
+    /// <para>
+    /// A separate operation rather than an upsert on <see cref="AddReviewerAsync"/>: refusing a duplicate key
+    /// there is a rule worth keeping, and an insert that silently rewrote an existing reviewer's binding would
+    /// change who reviewed what without saying so.
+    /// </para></summary>
+    public async Task<Outcome<Reviewer>> BindReviewerAsync(
+        string reviewerKey, string modelKey, CancellationToken cancellationToken)
+    {
+        var row = await db.Reviewers.FirstOrDefaultAsync(r => r.Key == reviewerKey, cancellationToken);
+
+        if (row is null)
+        {
+            return Outcome<Reviewer>.Failure(
+                $"no reviewer '{reviewerKey}' in the bank — a reviewer is a row, so add it before binding a model to it");
+        }
+
+        row.ModelKey = modelKey.Trim();
+
+        return await SaveAsync(
+            Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey).Match(r => r, _ => throw new InvalidOperationException(
+                "a reviewer row that rehydrated on the way in cannot fail to rehydrate on the way out")),
+            $"the reviewer '{reviewerKey}' could not be bound",
+            cancellationToken);
     }
 
     public async Task<Outcome<IReadOnlyList<BankEntry>>> QuestionsAsync(

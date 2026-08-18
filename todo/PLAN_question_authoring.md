@@ -1,9 +1,39 @@
 # PLAN — question authoring: three CLI agents write the bank, three review it
 
-> Status: **steps 1–4 of §4 IMPLEMENTED 2026-08-17 and the first live batch AUTHORED; step 5 (vetting) and
-> step 6 (the throughput number) open.** `bench questions author` drives the Claude CLI inside the target's
-> checkout and stored **two questions** for `code-lookup` against `dew_flow_rag_qln@64865c68`, both anchored at
-> members the agent verified in the tree (`StoreNaming.KindOf` 45–49, `RrfFusion.Fuse` 27–28).
+> Status: **steps 1–5 of §4 IMPLEMENTED (1–4 on 2026-08-17, 5 on 2026-08-18); step 6 — the throughput number —
+> open.** `bench questions author` drives the Claude CLI inside the target's checkout and stored **two
+> questions** for `code-lookup` against `dew_flow_rag_qln@64865c68`, both anchored at members the agent verified
+> in the tree (`StoreNaming.KindOf` 45–49, `RrfFusion.Fuse` 27–28). `bench questions vet` then asks every bound
+> reviewer slot for a verdict and moves a question's state only under the strict rule.
+>
+> **Deviations, step 5:**
+> - **A reviewer slot names its model as DATA** (`reviewers.ModelKey`, migration `ReviewerModelBinding`, verb
+>   `bench questions bind`). The plan said "reviewers are rows" and the rows named nobody — so the self-review
+>   rule, which compares a reviewer's model against the question's author model, had nothing to compare. Found
+>   by reading the schema on 2026-08-18, a day after seeding three slots and reporting them ready.
+> - **The comparison is on the resolved MODEL ID**, never the slot key or the registry key. Two registry rows
+>   both resolving to `claude-sonnet-4-6` are one opinion, and comparing keys would call that pairing clean.
+> - **`--allow-self-review` prints what it costs**, and the run's report carries the sentence, so a batch marked
+>   this way cannot be quoted without it. The escape hatch exists because the operator's decision is three
+>   Claude slots against a Claude author while one CLI author is verified; a silent hatch is one nobody
+>   remembers taking.
+> - **The reviewer is shown the question, not its provenance** (`BankExport.ForReview` omits `authorModel`,
+>   `state`, other marks). A mark that knows who wrote the question is partly about the author. The seed is
+>   shown, because the reviewer is asked whether its date looks invented.
+> - **The verdict has its own wire shape.** Reusing the import's `ReviewFile` was tempting and wrong: its
+>   verdict defaults to `Approved`, so an agent answer that lost the field would silently approve everything.
+>   Proved by breaking it — with the default restored, `An_answer_with_NO_verdict_field_is_not_an_approval` went
+>   red with *"Skipped … the collection is empty"*, i.e. the note-only answer had been taken as an approval.
+> - **No threshold knob.** `Promotion.Decide` accepts only on unanimity of every configured reviewer row,
+>   rejects on any single rejection, waits otherwise, and refuses to promote anything when the table is EMPTY —
+>   "every configured reviewer approved" is vacuously true of none.
+> - **The prose-before-JSON extractor is now shared** (`AgentJson`), parameterised by the bracket pair, because
+>   the reviewer answers an object where the author answers an array. A second copy of that lesson would have
+>   been a second chance to lose it.
+> - **The sixth group is now a row.** `data/bank-seed.json` seeds all six groups and the three slots, and
+>   `BankSeedTests` holds the count — `code-writing` had never been created, so the bank had five groups while
+>   the design has six. The seed file names no reviewer model on purpose: binding one is a local decision with a
+>   stated cost, and a committed default would read as this project's recommendation.
 >
 > **Four defects the live batch found, in order — none of them visible from a stub:**
 > 1. **The agent was launched in the wrong directory.** It refused to write anything, saying it needed read
@@ -271,13 +301,15 @@ Each step ships alone, tests green, before the next starts.
 
 ## 6. Definition of Done
 
-- [ ] One process launcher still, now with stdin; no shell strings anywhere.
-- [ ] A CLI agent can be asked one question and its answer read, with every failure a recorded value.
-- [ ] Prompts live in `prompts/`, are hashed, and the hash is stored with the batch.
-- [ ] `bench questions author` produces `Proposed` candidates through the EXISTING admission rules, with
+- [x] One process launcher still, now with stdin; no shell strings anywhere.
+- [x] A CLI agent can be asked one question and its answer read, with every failure a recorded value.
+- [x] Prompts live in `prompts/`, are hashed, and the hash is stored with the batch.
+- [x] `bench questions author` produces `Proposed` candidates through the EXISTING admission rules, with
       dedup, and refuses group 6 by name.
-- [ ] `bench questions vet` records one mark per reviewer per question and refuses self-review.
-- [ ] A malformed author answer is a rejection with its reason, never a repair.
-- [ ] The live-trait test has actually been RUN against the real `claude` CLI, and the result reported.
-- [ ] `research/architecture.md` describes the authoring pipeline; this plan is promoted to `research/` when
-      the first batch has been authored and vetted.
+- [x] `bench questions vet` records one mark per reviewer per question and refuses self-review — and a slot
+      names its model as data, without which the refusal had nothing to compare.
+- [x] A malformed author answer is a rejection with its reason, never a repair — and so is a reviewer's.
+- [x] The live-trait test has actually been RUN against the real `claude` CLI, and the result reported.
+- [ ] `research/architecture.md` describes the authoring pipeline (**done** — *Where questions come from* and
+      *Vetting*); this plan is promoted to `research/` when step 6 has a throughput number, which is the one
+      thing still outstanding.

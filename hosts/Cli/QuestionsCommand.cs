@@ -35,15 +35,21 @@ public static class QuestionsCommand
             "author" => await AuthorAsync(command, bank, agents, registry, secrets, checkouts, clock, output, error, cancellationToken),
             "list" => await ListAsync(command, bank, output, error, cancellationToken),
             "groups" => await GroupsAsync(bank, output, error, cancellationToken),
+            "reviewers" => await ReviewersAsync(bank, output, error, cancellationToken),
+            "bind" => await BindAsync(command, bank, registry, output, error, cancellationToken),
+            "vet" => await VetAsync(command, bank, agents, registry, secrets, checkouts, clock, output, error, cancellationToken),
             "review" => await ReviewAsync(command, bank, clock, output, error, cancellationToken),
             "accept" or "reject" => await StateAsync(command, bank, output, error, cancellationToken),
             "move" => await MoveAsync(command, bank, clock, output, error, cancellationToken),
             var other => Fail(
                 error,
                 other.Length == 0
-                    ? "bench questions needs an action — 'import', 'author', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"
-                    : $"unknown questions action '{other}' — try 'import', 'author', 'list', 'groups', 'review', 'accept', 'reject' or 'move'"),
+                    ? $"bench questions needs an action — {Actions}"
+                    : $"unknown questions action '{other}' — try {Actions}"),
         };
+
+    private const string Actions =
+        "'import', 'author', 'vet', 'list', 'groups', 'reviewers', 'bind', 'review', 'accept', 'reject' or 'move'";
 
     /// <summary>`bench questions author` — a CLI agent writes candidates for one group.
     /// <para>
@@ -430,6 +436,267 @@ public static class QuestionsCommand
                 return ExitCodes.Pass;
             },
             failure => Fail(error, failure));
+    }
+
+    /// <summary>`bench questions reviewers` — the slots, and which model answers for each.
+    /// <para>
+    /// Read-only and printed in ordinal order, mirroring <c>groups</c>. The interesting column is the binding:
+    /// a slot with none is a slot only a person can complete, so no automatic pass can ever satisfy the strict
+    /// promotion rule while it exists.
+    /// </para></summary>
+    private static async Task<int> ReviewersAsync(
+        IQuestionBank bank, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var listed = await bank.ReviewersAsync(cancellationToken);
+
+        return listed.Match(
+            reviewers =>
+            {
+                output.WriteLine($"{reviewers.Count} reviewer slot(s)");
+
+                foreach (var reviewer in reviewers)
+                {
+                    output.WriteLine($"  {reviewer.Ordinal,3}  {reviewer.Key.Value,-14}  "
+                        + $"{(reviewer.IsHuman ? "— a person marks this slot" : reviewer.ModelKey)}");
+                }
+
+                return Bound(reviewers, output);
+            },
+            reason => Fail(error, reason));
+    }
+
+    /// <summary>Says what the current bindings mean before anything is run with them, because the one thing an
+    /// operator cannot see from a list of three identical model keys is that it is one opinion.</summary>
+    private static int Bound(IReadOnlyList<Reviewer> reviewers, TextWriter output)
+    {
+        var models = reviewers.Where(r => !r.IsHuman).Select(r => r.ModelKey).ToList();
+
+        if (models.Count > 1 && models.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
+        {
+            output.WriteLine();
+            output.WriteLine($"note     {models.Count} slots are bound to '{models[0]}' — {SelfReview.OneOpinion}");
+        }
+
+        return ExitCodes.Pass;
+    }
+
+    /// <summary>`bench questions bind` — names the model that answers for a reviewer slot.
+    /// <para>
+    /// A separate verb rather than a flag on the pass: which model reviewed a question has to be readable from
+    /// the bank years later, and a binding typed on one command line would leave the marks unattributable.
+    /// </para></summary>
+    private static async Task<int> BindAsync(
+        CommandLine command,
+        IQuestionBank bank,
+        IModelRegistry registry,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        var reviewer = command.Value("reviewer");
+        var model = command.Value("model");
+
+        if (reviewer.Length == 0)
+        {
+            return Fail(error, "--reviewer is required — it names the slot being bound");
+        }
+
+        // Refused here rather than at the first launch of a batch: a binding to a registry key that does not
+        // exist is a configuration mistake, and finding it forty launches in is finding it too late.
+        if (model.Length > 0 && await registry.FindAsync(model, cancellationToken) is Outcome<RegisteredModel>.Fail unknown)
+        {
+            return Fail(error, unknown.Reason);
+        }
+
+        var bound = await bank.BindReviewerAsync(reviewer, model, cancellationToken);
+
+        return bound.Match(
+            slot =>
+            {
+                output.WriteLine(slot.IsHuman
+                    ? $"{slot.Key} is now a human slot — no pass will mark it"
+                    : $"{slot.Key} is answered by {slot.ModelKey}");
+                return ExitCodes.Pass;
+            },
+            reason => Fail(error, reason));
+    }
+
+    /// <summary>`bench questions vet` — every bound reviewer slot marks a group's proposed questions.
+    /// <para>
+    /// The target is checked out first, exactly as authoring does: a reviewer is asked whether an expectation
+    /// resolves at that commit, which is not a question anything can answer without the tree.
+    /// </para>
+    /// <para>
+    /// Nothing here decides a threshold. The marks go in, and <see cref="Promotion"/>'s strict rule — every
+    /// configured reviewer approved — is what moves a question's state.
+    /// </para></summary>
+    private static async Task<int> VetAsync(
+        CommandLine command,
+        IQuestionBank bank,
+        ICliAgentRuntime agents,
+        IModelRegistry registry,
+        ISecretSource secrets,
+        ICheckoutProvider checkouts,
+        TimeProvider clock,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        var inputs = VettingInputs.Read(command);
+
+        if (inputs is Outcome<VettingInputs>.Fail bad)
+        {
+            return Fail(error, bad.Reason);
+        }
+
+        var settings = ((Outcome<VettingInputs>.Ok)inputs).Value;
+        var found = await GroupAsync(bank, settings.Group, cancellationToken);
+
+        if (found is not Outcome<QuestionGroup>.Ok(var group))
+        {
+            error.WriteLine($"bench: {found.Reason()}");
+            return ExitCodes.Environment;
+        }
+
+        var slots = await SlotsAsync(bank, registry, secrets, cancellationToken);
+
+        if (slots is not Outcome<IReadOnlyList<ReviewerSlot>>.Ok(var resolved))
+        {
+            error.WriteLine($"bench: {slots.Reason()}");
+            return ExitCodes.Environment;
+        }
+
+        var tree = await checkouts.EnsureAsync(MeasurementTarget.At(settings.Target, settings.Commit), cancellationToken);
+
+        if (tree is not Outcome<string>.Ok(var worktree))
+        {
+            error.WriteLine($"bench: the target could not be checked out — {tree.Reason()}");
+            return ExitCodes.Environment;
+        }
+
+        output.WriteLine($"group    {group.Key} — {group.Title}");
+        output.WriteLine($"slots    {string.Join(", ", resolved.Select(s => $"{s.Reviewer.Key}={s.Model.Config.ModelId}"))}");
+        output.WriteLine($"tree     {worktree}");
+
+        var report = await VettingPass.RunAsync(
+            agents,
+            bank,
+            settings.PromptRoot,
+            new VettingRequest(
+                group, settings.Target, settings.Commit, settings.Wall, worktree, settings.AllowSelfReview, settings.Limit),
+            resolved,
+            clock.GetUtcNow(),
+            cancellationToken);
+
+        return Report(report, group, output);
+    }
+
+    private static int Report(VettingReport report, QuestionGroup group, TextWriter output)
+    {
+        output.WriteLine($"vetted   {report.Describe}");
+
+        if (report.PromptHash.Length > 0)
+        {
+            output.WriteLine($"prompt   {report.PromptHash[..12]}  (prompts/review/{group.Key})");
+        }
+
+        if (report.Cost.Length > 0)
+        {
+            // Never silent. The escape hatch is the operator's to take, and what it costs travels with the run
+            // that took it rather than living in a chat log.
+            output.WriteLine($"cost     {report.Cost}");
+        }
+
+        foreach (var question in report.Questions)
+        {
+            output.WriteLine($"  {question.QuestionId}  {question.Decision.Kind} — {question.Decision.Reason}");
+
+            foreach (var line in question.Marks.Concat(question.Skipped.Select(s => $"skipped {s}")))
+            {
+                output.WriteLine($"    {line}");
+            }
+        }
+
+        foreach (var refusal in report.Refusals)
+        {
+            output.WriteLine($"  refuse {refusal}");
+        }
+
+        return report.Questions.Count > 0 ? ExitCodes.Pass : ExitCodes.NoReport;
+    }
+
+    /// <summary>Every slot with a model bound, resolved on this machine. A slot with none is skipped rather
+    /// than refused — a human reviewer is a legitimate row, it simply cannot be driven.</summary>
+    private static async Task<Outcome<IReadOnlyList<ReviewerSlot>>> SlotsAsync(
+        IQuestionBank bank, IModelRegistry registry, ISecretSource secrets, CancellationToken cancellationToken)
+    {
+        var listed = await bank.ReviewersAsync(cancellationToken);
+
+        if (listed is not Outcome<IReadOnlyList<Reviewer>>.Ok(var reviewers))
+        {
+            return Outcome<IReadOnlyList<ReviewerSlot>>.Failure(listed.Reason());
+        }
+
+        var slots = new List<ReviewerSlot>();
+
+        foreach (var reviewer in reviewers.Where(r => !r.IsHuman))
+        {
+            var resolved = await ResolveAuthorAsync(registry, secrets, reviewer.ModelKey, cancellationToken);
+
+            if (resolved is Outcome<ResolvedAuthor>.Fail bad)
+            {
+                return Outcome<IReadOnlyList<ReviewerSlot>>.Failure($"reviewer '{reviewer.Key}': {bad.Reason}");
+            }
+
+            var value = ((Outcome<ResolvedAuthor>.Ok)resolved).Value;
+            slots.Add(new ReviewerSlot(reviewer, value.Model, value.Executable));
+        }
+
+        return Outcome<IReadOnlyList<ReviewerSlot>>.Success(slots);
+    }
+
+    private sealed record VettingInputs(
+        string Group,
+        RepoUrl Target,
+        CommitSha Commit,
+        int Limit,
+        TimeSpan Wall,
+        bool AllowSelfReview,
+        string PromptRoot)
+    {
+        /// <summary>Five minutes. A reviewer reads one question and checks its anchors — a smaller job than
+        /// authoring five, and a ceiling that keeps a batch of thirty from becoming an afternoon.</summary>
+        private const int DefaultWallSeconds = 300;
+
+        public static Outcome<VettingInputs> Read(CommandLine command)
+        {
+            var group = command.Value("group");
+            var limit = command.Int("limit", 10);
+            var wall = command.Int("wall-seconds", DefaultWallSeconds);
+
+            if (group.Length == 0)
+            {
+                return Outcome<VettingInputs>.Failure("--group is required — vetting walks one group's proposed questions");
+            }
+
+            if (limit < 1 || wall < 1)
+            {
+                return Outcome<VettingInputs>.Failure("--limit and --wall-seconds must both be positive");
+            }
+
+            return RepoUrl.Parse(command.Value("repo")).Match(
+                repo => CommitSha.Parse(command.Value("commit")).Match(
+                    commit => Outcome<VettingInputs>.Success(new VettingInputs(
+                        group,
+                        repo,
+                        commit,
+                        limit,
+                        TimeSpan.FromSeconds(wall),
+                        command.Has("allow-self-review"),
+                        command.Value("prompts", "prompts"))),
+                    Outcome<VettingInputs>.Failure),
+                Outcome<VettingInputs>.Failure);
+        }
     }
 
     /// <summary>The selection vocabulary, shared by <c>list</c> and by <c>bench run --bank-group</c>: a

@@ -73,17 +73,30 @@ public sealed record QuestionGroup(Guid Id, GroupKey Key, string Title, int Ordi
 
 /// <summary>Who marks questions. Ordered, because the checkmark columns must appear in the same order on
 /// every page and "whatever the database returned" is not an order.</summary>
-public sealed record Reviewer(Guid Id, ReviewerKey Key, string DisplayName, int Ordinal)
+/// <param name="ModelKey">The registry row that ANSWERS for this slot, or empty for a person.
+/// <para>
+/// A slot without this is a slot nothing can automate: the self-review rule compares a reviewer's model with
+/// the question's author model, so "who is reviewer-2" has to be a stored fact rather than a flag typed on one
+/// command line. Found 2026-08-18, with three seeded slots that named nobody.
+/// </para></param>
+public sealed record Reviewer(Guid Id, ReviewerKey Key, string DisplayName, int Ordinal, string ModelKey = "")
 {
-    public static Outcome<Reviewer> Create(string? key, string? displayName, int ordinal) =>
+    /// <summary>Trimmed here so no call site has to. An empty binding means a person marks this slot, which is
+    /// the default a fresh row gets — binding a model is a deliberate act with a cost attached.</summary>
+    public string ModelKey { get; init; } = (ModelKey ?? string.Empty).Trim();
+
+    /// <summary>No model answers for this slot, so no pass can complete it.</summary>
+    public bool IsHuman => ModelKey.Length == 0;
+
+    public static Outcome<Reviewer> Create(string? key, string? displayName, int ordinal, string? modelKey = "") =>
         ReviewerKey.Parse(key).Match(
             parsed => Outcome<Reviewer>.Success(
-                new Reviewer(Guid.CreateVersion7(), parsed, Name(displayName, parsed), ordinal)),
+                new Reviewer(Guid.CreateVersion7(), parsed, Name(displayName, parsed), ordinal, modelKey ?? "")),
             Outcome<Reviewer>.Failure);
 
-    public static Outcome<Reviewer> Rehydrate(Guid id, string? key, string? displayName, int ordinal) =>
+    public static Outcome<Reviewer> Rehydrate(Guid id, string? key, string? displayName, int ordinal, string? modelKey = "") =>
         ReviewerKey.Parse(key).Match(
-            parsed => Outcome<Reviewer>.Success(new Reviewer(id, parsed, Name(displayName, parsed), ordinal)),
+            parsed => Outcome<Reviewer>.Success(new Reviewer(id, parsed, Name(displayName, parsed), ordinal, modelKey ?? "")),
             Outcome<Reviewer>.Failure);
 
     private static string Name(string? displayName, ReviewerKey key)

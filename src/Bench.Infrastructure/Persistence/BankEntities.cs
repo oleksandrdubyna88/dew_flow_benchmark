@@ -28,6 +28,10 @@ public sealed class ReviewerRow
     public string DisplayName { get; set; } = string.Empty;
 
     public int Ordinal { get; set; }
+
+    /// <summary>The registry key of the model that answers for this slot, or empty for a person. Stored
+    /// because the self-review rule needs "who is reviewer-2" to be a fact, not a command-line flag.</summary>
+    public string ModelKey { get; set; } = string.Empty;
 }
 
 /// <summary>One question of the bank.

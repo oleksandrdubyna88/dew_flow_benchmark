@@ -112,7 +112,7 @@ public static class BankImport
 
         foreach (var reviewer in file.Reviewers)
         {
-            var created = Reviewer.Create(reviewer.Key, reviewer.DisplayName, reviewer.Ordinal);
+            var created = Reviewer.Create(reviewer.Key, reviewer.DisplayName, reviewer.Ordinal, reviewer.Model);
 
             report = created is Outcome<Reviewer>.Ok(var value)
                 ? Counted(await bank.AddReviewerAsync(value, cancellationToken), report, r => r with { Reviewers = r.Reviewers + 1 })
@@ -262,6 +262,11 @@ public sealed record ReviewerFile
     public string DisplayName { get; init; } = string.Empty;
 
     public int Ordinal { get; init; }
+
+    /// <summary>The registry key that answers for this slot. Left empty in a seed file on purpose: binding a
+    /// model to a reviewer is a local decision with a stated cost (see <c>bench questions bind</c>), and a
+    /// committed default would make it look like the project's recommendation.</summary>
+    public string Model { get; init; } = string.Empty;
 }
 
 public sealed record SeedFile
