@@ -38,7 +38,12 @@ COMMIT=${BENCH_TARGET_COMMIT:-64865c6894c5eb4fc22aaefdb2c096dc4ed0f7bb}
 
 # Four of the six groups. `pr-diff` needs merge dates and git history is unreadable inside a worktree;
 # `code-writing` has three extra gates and belongs to PLAN_code_lane.
-GROUPS=(code-lookup semantic-intent bug-root-cause adversarial)
+#
+# NOT named GROUPS: bash owns that identifier — it is the array of the current user's group ids, and assigning
+# to it is silently ignored. The first run of this script authored into a group called "197609" for exactly
+# that reason, was refused by name four times, and still exited 0.
+# Overridable, so one group can be run alone — and so the guard below can be tested without a batch.
+read -ra BENCH_GROUPS <<<"${BENCH_GROUP_LIST:-code-lookup semantic-intent bug-root-cause adversarial}"
 
 # One row per model, used as both author and reviewer. The model ID is what the bank records as the author
 # and what the eligibility rule compares, so if a CLI turns out to report a different model, add a NEW row
@@ -70,6 +75,14 @@ PORT=$(docker port "$CONTAINER" 2>/dev/null | sed -n 's/.*:\([0-9]\+\)$/\1/p' | 
 export BENCH_DB="Host=127.0.0.1;Port=${PORT};Database=bench;Username=postgres;Password=${BENCH_PG_PASSWORD:-bench-local-dev}"
 say "database  127.0.0.1:${PORT}  (read from Docker — the published port changes on every restart)"
 
+# Every group name against the bank's own list, BEFORE anything is launched. The first run discovered its
+# group name was wrong only after three authoring calls had been refused — and then reported success.
+known=$($BENCH questions groups 2>/dev/null)
+for group in "${BENCH_GROUPS[@]}"; do
+  grep -q " ${group} " <<<"$known" || fail "the bank has no group '${group}' — it holds:"$'
+'"$known"
+done
+
 say "PROBE — does each CLI answer here? Nothing is written."
 for author in "${AUTHORS[@]}"; do
   $BENCH models probe --key "$author" --wall-seconds 120 || fail "$author did not answer — fix that before any batch"
@@ -77,8 +90,21 @@ done
 
 # ---------------------------------------------------------------- author
 
+# A step that fails for a CONFIGURATION or ENVIRONMENT reason stops the script: those are wrong for every
+# remaining step too, and a batch that logs four identical refusals and exits 0 is the failure this wrapper
+# exists to prevent. NoReport (5) is tolerable — an author that proposed nothing this call is a fact, not a
+# broken setup.
+step() {
+  "$@"
+  local code=$?
+  case $code in
+    0|5) return 0 ;;
+    *)   fail "step failed with exit ${code}: $* — every later step would fail the same way" ;;
+  esac
+}
+
 say "AUTHOR — 4 + 3 + 3 per group, each question marked with the model that wrote it"
-for group in "${GROUPS[@]}"; do
+for group in "${BENCH_GROUPS[@]}"; do
   ordinal=1
   for index in "${!AUTHORS[@]}"; do
     author=${AUTHORS[$index]}
@@ -94,7 +120,7 @@ done
 # ---------------------------------------------------------------- vet
 
 say "VET — every question judged by the two models that did not write it"
-for group in "${GROUPS[@]}"; do
+for group in "${BENCH_GROUPS[@]}"; do
   printf '\n---- %s\n' "$group"
   $BENCH questions vet --group "$group" --repo "$REPO" --commit "$COMMIT" \
     --limit 40 --wall-seconds 300
