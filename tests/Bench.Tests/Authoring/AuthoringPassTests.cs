@@ -107,7 +107,7 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
         var report = await RunAsync(group, $$"""
             [{ "id": "dateless-{{_tag}}", "prompt": "where is the retry delay computed?", "referenceAnswer": "in a helper",
                "seed": { "kind": "member", "reference": "RetryHelper.Backoff" },
-               "expectations": [ { "kind": "Member", "file": "src/A.cs", "member": "A.M", "start": 1, "end": 9 } ] }]
+               "expectations": [ { "kind": "Member", "file": "src/A.cs", "member": "A.M-{{_tag}}", "start": 1, "end": 9 } ] }]
             """);
 
         report.Proposed.Should().Be(1);
@@ -157,6 +157,48 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
 
         // The operator quotes ordinals — "group 1, questions 1–10" — so they are assigned, never generated.
         (await MineAsync(group)).Should().ContainSingle().Which.Question.Ordinal.Should().Be(41);
+    }
+
+    [Fact]
+    public async Task A_question_about_a_member_this_GROUP_already_holds_is_not_stored_twice()
+    {
+        var group = await GroupAsync();
+        await RunAsync(group, Answer(One("first-call", "src/Dup.cs", $"Dup.Member{_tag}", 10, 20)));
+
+        // A SECOND call, as a second author would be. The spans differ deliberately: 10-20 against 30-40 is what
+        // the old span-inclusive key could not see, and it is exactly what one author produced twice on
+        // 2026-08-18 (StoreNaming.KindOf at 33-49 and at 45-49, both in code-lookup).
+        var report = await RunAsync(group, Answer(One("second-call", "src/Dup.cs", $"Dup.Member{_tag}", 30, 40)));
+
+        report.Proposed.Should().Be(0);
+        report.Collisions.Should().ContainSingle().Which.Should().Contain("first-call").And.Contain("same member");
+        (await MineAsync(group)).Should().ContainSingle("the member is in this group once, not twice");
+    }
+
+    [Fact]
+    public async Task A_question_about_a_member_ANOTHER_group_holds_is_still_stored()
+    {
+        var group = await GroupAsync();
+        var elsewhere = await OtherGroupAsync();
+        await RunAsync(elsewhere, Answer(One("in-other-group", "src/Shared.cs", $"Shared.M{_tag}", 5, 9)));
+
+        var report = await RunAsync(group, Answer(One("in-this-group", "src/Shared.cs", $"Shared.M{_tag}", 5, 9)));
+
+        // A lookup question and a bug question about one member are two different questions. Dropping the second
+        // because of the first would delete real coverage, so the scope is the GROUP.
+        report.Proposed.Should().Be(1, string.Join(" | ", report.Rejected.Concat(report.Collisions)));
+    }
+
+    /// <summary>A second real group, for the cross-group case. <c>semantic-intent</c> because the prompt catalog
+    /// briefs it — a made-up key would fail at the render rather than at the thing under test.</summary>
+    private async Task<QuestionGroup> OtherGroupAsync()
+    {
+        var group = QuestionGroup.Create("semantic-intent", "Semantic intent", 2).Ok();
+        var added = await Bank().AddGroupAsync(group, Ct);
+
+        return added.Match(
+            row => row,
+            _ => Bank().GroupsAsync(Ct).GetAwaiter().GetResult().Ok().First(g => g.Key.Value == "semantic-intent"));
     }
 
     private Task<AuthoringReport> RunAsync(QuestionGroup group, string answer, int ordinal = 1) =>
@@ -217,10 +259,17 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
 
     private Task<IReadOnlyList<BankEntry>> MineAsync(QuestionGroup group) => MineAsync(group, _tag);
 
+    /// <summary>One question, with BOTH its id and its anchored member scoped by this test's tag.
+    /// <para>
+    /// The member has to be scoped too, and that was learned the hard way twice. The store is shared across the
+    /// suite, so two tests anchoring at <c>src/A.cs#A.M</c> are two questions about one member — invisible until
+    /// the authoring pass learned to deduplicate against the BANK, at which point the second test to run got its
+    /// candidate dropped as a duplicate of the first's.
+    /// </para></summary>
     private string One(string id, string file, string member, int start, int end) => $$"""
         { "id": "{{id}}-{{_tag}}", "prompt": "where is the delay computed?", "referenceAnswer": "in a helper",
-          "seed": { "kind": "member", "reference": "{{member}}", "at": "2026-05-14" },
-          "expectations": [ { "kind": "Member", "file": "{{file}}", "member": "{{member}}", "start": {{start}}, "end": {{end}} } ] }
+          "seed": { "kind": "member", "reference": "{{member}}{{_tag}}", "at": "2026-05-14" },
+          "expectations": [ { "kind": "Member", "file": "{{file}}", "member": "{{member}}{{_tag}}", "start": {{start}}, "end": {{end}} } ] }
         """;
 
     /// <summary>An agent that answers with a fixed string. What a real one WRITES is a question about quality;

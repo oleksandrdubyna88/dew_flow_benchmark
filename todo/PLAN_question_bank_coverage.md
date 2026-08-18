@@ -66,6 +66,37 @@ Options, cheapest first:
 
 Option 1 is the recommendation, and it makes the seed dates verifiable rather than merely present.
 
+### 3.2a The operator's one-third design — 10 per group, three authors, and the panel that follows from it
+
+Decided 2026-08-18: **ten questions per group now**, a third from each of the three CLI models, each question
+marked with the model that wrote it, and review by the others. Scaling to a hundred comes later.
+
+Two properties make this better than "all three review everything":
+
+- **The author is out of its own panel by construction.** With three authors at a third each, every question's
+  panel is the two models that did not write it. No self-review, no `--allow-self-review`, and each model reviews
+  exactly two thirds of the set. **Two launches per question instead of three** — a third cheaper.
+- **Authorship is already stored** (`bank_questions.AuthorModel`), so it also becomes measurable whether a
+  subject answers its own model's questions better than the others'. With one author that bias is invisible.
+
+**Both halves are built** (2026-08-18): `Promotion.Decide` now decides over the reviewers ELIGIBLE for a
+question rather than every configured row, and the pass computes eligibility from resolved model ids. Without it
+the strict rule waits forever on a mark the self-review refusal will never allow — proved by breaking it, where
+the red read *"reviewer-1 is claude-sonnet-4-6 and would be reviewing its own authorship"* and the question was
+never accepted. And `AuthoringPass` now deduplicates against **the bank**, on a member-level key, because the
+old key included the line span: one author over two calls had already left
+`StoreNaming.KindOf@33-49` beside `@45-49` and `RrfFusion.Fuse@17-28` beside `@27-28`, both pairs in one group,
+both invisible. Three authors on one group make that the normal case.
+
+**What is NOT built, and it is an installation rather than code:** neither `codex` nor `gemini` is on this
+machine (`which` finds only `claude`), and their argv shapes are marked UNVERIFIED in `CliArgv`. A wrong headless
+flag produces an interactive session waiting on a terminal nobody watches, so the first run of each must be one
+question with a short wall — the same failure mode that cost two groups a 900-second wall each.
+
+The two groups that already hold Claude-only questions do not need pruning: **the one-third rule is a property of
+the SELECTION, not of the bank.** `code-lookup` holds 9 accepted and `bug-root-cause` 8, all Claude; adding three
+from each of the other two authors makes a 4/3/3 selection of ten available, and the surplus stays in the bank.
+
 ### 3.3 A second real model on the panel
 
 The measured cost of three slots on one model: two rejections in 57 marks, both reproducible by substring

@@ -22,14 +22,20 @@ namespace Bench.Application.Bank;
 /// first live batch prefaced its answer with "git access to this worktree is blocked, so I cannot date the
 /// members" — a fact about the environment that the questions themselves could never carry, and the only place
 /// it exists.</param>
+/// <param name="Collisions">One line per candidate dropped as a duplicate, naming what it duplicated. Printed
+/// rather than counted away: with three authors writing a third of a group each, "which question did this repeat"
+/// is the operator's next question, and the stored id is the answer.</param>
 public sealed record AuthoringReport(
     string AuthorModel,
     string PromptHash,
     int Proposed,
     int Duplicates,
     IReadOnlyList<string> Rejected,
-    string Note = "")
+    string Note = "",
+    IReadOnlyList<string>? Collisions = null)
 {
+    public IReadOnlyList<string> Collisions { get; init; } = Collisions ?? [];
+
     public static AuthoringReport Nothing(string authorModel, string reason) =>
         new(authorModel, string.Empty, 0, 0, [reason]);
 
@@ -176,10 +182,24 @@ public static class AuthoringPass
         var admitted = Admit(files, request, author.Config.ModelId, now);
         var duplicates = Dedup.Find([.. admitted.Candidates]).SelectMany(c => c.CandidateIds.Skip(1)).ToHashSet(StringComparer.Ordinal);
         var rejected = admitted.Rejected.ToList();
+        var collisions = new List<string>();
         var stored = 0;
+
+        // Against the BANK, not only against this batch. Measured 2026-08-18: one author over two calls left two
+        // pairs of questions about one member in the same group, and nothing noticed — the in-batch check cannot
+        // see a call that already finished. Three authors writing a third of a group each turn that into the
+        // normal case, and a suite holding two questions about the same lines double-counts that member in every
+        // score it ever produces.
+        var alreadyThere = await StoredAsync(bank, request, cancellationToken);
 
         foreach (var candidate in admitted.Candidates.Where(c => !duplicates.Contains(c.Id)))
         {
+            if (alreadyThere.TryGetValue(Dedup.MemberKey(candidate), out var twin))
+            {
+                collisions.Add($"'{candidate.Id}' repeats {twin} — same member, already in this group");
+                continue;
+            }
+
             var added = await bank.AddAsync(
                 Row(candidate, request, author.Config.ModelId, now, request.Ordinal + stored), cancellationToken);
 
@@ -192,7 +212,28 @@ public static class AuthoringPass
             stored++;
         }
 
-        return new AuthoringReport(author.Config.ModelId, promptHash, stored, duplicates.Count, rejected);
+        return new AuthoringReport(author.Config.ModelId, promptHash, stored, duplicates.Count + collisions.Count, rejected)
+        {
+            Collisions = collisions,
+        };
+    }
+
+    /// <summary>What this GROUP already holds, by member-level key, so a new candidate can be compared against
+    /// the bank. Scoped to the group deliberately: a lookup question and a bug question about one member are two
+    /// different questions, and dropping the second because of the first would delete real coverage.</summary>
+    private static async Task<Dictionary<string, string>> StoredAsync(
+        IQuestionBank bank, AuthoringRequest request, CancellationToken cancellationToken)
+    {
+        var found = await bank.QuestionsAsync(new BankQuery(request.Group.Key.Value), cancellationToken);
+
+        return found.Match(
+            entries => entries
+                .GroupBy(e => Dedup.MemberKey(e.Question.Question), StringComparer.Ordinal)
+                .Where(g => g.Key.Length > 0)
+                .ToDictionary(g => g.Key, g => $"'{g.First().Question.Question.Id}'", StringComparer.Ordinal),
+            // A bank we cannot read is not a bank with nothing in it, but refusing the whole pass over it would
+            // throw away an author's work for a transient database. The pass continues and the report says so.
+            _ => []);
     }
 
     /// <summary>Each file through the EXISTING admission rules. A question with no retrieval expectation and a

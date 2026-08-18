@@ -105,6 +105,45 @@ public sealed class ReviewRulesTests
         decided.Reason.Should().Contain("no reviewer");
     }
 
+    [Fact]
+    public void A_rejection_from_an_INELIGIBLE_reviewer_still_rejects()
+    {
+        var all = Slots(3);
+        var eligible = all.Take(2).ToList();
+
+        var decided = Promotion.Decide(eligible, [Mark(all[0], ReviewVerdict.Approved), Mark(all[2], ReviewVerdict.Rejected)]);
+
+        // A named defect is a named defect. The third slot may not APPROVE this question — it is the model that
+        // wrote it — but a rejection it already recorded is a judgement, and discarding it would let a question
+        // through on the strength of who was allowed to speak.
+        decided.Kind.Should().Be(PromotionKind.Reject);
+    }
+
+    [Fact]
+    public void When_every_slot_is_the_authors_own_model_NOTHING_is_eligible_and_nothing_promotes()
+    {
+        var decided = Promotion.Decide([], [Mark(Slots(1)[0], ReviewVerdict.Approved)]);
+
+        // The state of this bank on 2026-08-18: three slots, one model, same model authored. Without the
+        // one-third design or the flag, there is nobody who may vouch for anything.
+        decided.Kind.Should().Be(PromotionKind.Wait);
+        decided.Reason.Should().Contain("every configured slot is the model that wrote it");
+    }
+
+    [Fact]
+    public void Two_of_three_approving_is_ENOUGH_when_the_third_is_the_author()
+    {
+        var all = Slots(3);
+        var eligible = all.Skip(1).ToList();
+
+        var decided = Promotion.Decide(eligible, [Mark(all[1], ReviewVerdict.Approved), Mark(all[2], ReviewVerdict.Approved)]);
+
+        // The one-third design's whole point: unanimity is still required, of the reviewers who MAY judge. Two
+        // launches per question instead of three, and no self-review anywhere.
+        decided.Kind.Should().Be(PromotionKind.Accept);
+        decided.Reason.Should().Contain("2 eligible");
+    }
+
     private static IReadOnlyList<Reviewer> Slots(int count) =>
         [.. Enumerable.Range(1, count).Select(n => Reviewer.Create($"reviewer-{n}", $"Reviewer {n}", n).Ok())];
 

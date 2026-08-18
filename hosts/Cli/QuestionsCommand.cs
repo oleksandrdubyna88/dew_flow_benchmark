@@ -149,6 +149,13 @@ public static class QuestionsCommand
                 output.WriteLine($"  note   {report.Note.Split('\n')[0]}");
             }
 
+            foreach (var collision in report.Collisions)
+            {
+                // With three authors writing a third of a group each, "which question did this repeat" is the
+                // operator's next question, and a bare count cannot answer it.
+                output.WriteLine($"  dupe   {collision}");
+            }
+
             foreach (var rejection in report.Rejected)
             {
                 // Printed, never counted and dropped: a rejection is the only record of what a source gets

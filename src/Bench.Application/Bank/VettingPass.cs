@@ -219,7 +219,7 @@ public static class VettingPass
                 });
         }
 
-        var decision = await DecideAsync(bank, reviewers, entry, cancellationToken);
+        var decision = await DecideAsync(bank, Eligible(reviewers, slots, request, entry), entry, cancellationToken);
 
         return new Vetted(
             new QuestionVerdicts(entry.Question.Question.Id, marks, decision, skipped, []), refusals, hash, cost);
@@ -267,6 +267,40 @@ public static class VettingPass
             answered.Match(answer => Read(answer.Text), Outcome<ReviewAnswer>.Failure),
             brief.Hash,
             ((Outcome<string>.Ok)allowed).Value);
+    }
+
+    /// <summary>The reviewer rows that MAY vouch for this question: every configured slot except one whose model
+    /// wrote it.
+    /// <para>
+    /// This is what makes the operator's one-third design work. Three authors each writing a third of a group
+    /// means every question's panel is the two models that did not write it — the author is excluded by
+    /// construction rather than by a flag, and each model reviews exactly two thirds of the set. Without it the
+    /// strict rule waits forever on a mark the self-review refusal will never allow.
+    /// </para>
+    /// <para>
+    /// Comparison is on the resolved MODEL ID, matching <see cref="SelfReview"/>: two registry keys resolving to
+    /// one model are one opinion. A slot with no resolved model (a human) stays eligible — a person is not the
+    /// author. Under <c>--allow-self-review</c> everyone is eligible again, which is the whole of what the flag
+    /// buys and why it prints what it costs.
+    /// </para></summary>
+    private static IReadOnlyList<Reviewer> Eligible(
+        IReadOnlyList<Reviewer> reviewers,
+        IReadOnlyList<ReviewerSlot> slots,
+        VettingRequest request,
+        BankEntry entry)
+    {
+        if (request.AllowSelfReview)
+        {
+            return reviewers;
+        }
+
+        var authored = slots
+            .Where(slot => string.Equals(
+                slot.Model.Config.ModelId.Trim(), entry.Question.AuthorModel.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(slot => slot.Reviewer.Id)
+            .ToHashSet();
+
+        return [.. reviewers.Where(reviewer => !authored.Contains(reviewer.Id))];
     }
 
     private static async Task<PromotionDecision> DecideAsync(

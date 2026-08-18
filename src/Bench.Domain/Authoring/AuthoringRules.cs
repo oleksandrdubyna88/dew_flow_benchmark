@@ -28,6 +28,31 @@ public static class Dedup
                 .Select(e => e.Anchor.Canonical)
                 .Order(StringComparer.Ordinal));
 
+    /// <summary>The same idea WITHOUT the line span — file and member only.
+    /// <para>
+    /// Measured 2026-08-18, and it is why this exists: one author over two calls produced
+    /// <c>StoreNaming.KindOf@33-49</c> and <c>StoreNaming.KindOf@45-49</c> in the same group, plus
+    /// <c>RrfFusion.Fuse@17-28</c> and <c>@27-28</c>. Both pairs are two questions about one member, and
+    /// <see cref="CollisionKey"/> cannot see either, because a span is part of it. Three authors writing a third
+    /// of a group each will produce this constantly — the most obvious member in a repository is obvious to all
+    /// three.
+    /// </para></summary>
+    public static string MemberKey(QuestionCandidate candidate) =>
+        string.Join(
+            "+",
+            candidate.Question.RetrievalExpectations
+                .Select(e => $"{e.Anchor.FilePath}#{e.Anchor.MemberKey}")
+                .Order(StringComparer.Ordinal));
+
+    /// <summary>The member-level key of a question already stored, so a new candidate can be compared against
+    /// the bank rather than only against its own batch.</summary>
+    public static string MemberKey(Suites.Question question) =>
+        string.Join(
+            "+",
+            question.RetrievalExpectations
+                .Select(e => $"{e.Anchor.FilePath}#{e.Anchor.MemberKey}")
+                .Order(StringComparer.Ordinal));
+
     public static IReadOnlyList<CandidateCollision> Find(IReadOnlyList<QuestionCandidate> candidates) =>
         [.. candidates
             .Where(c => c.State != CandidateState.Rejected)

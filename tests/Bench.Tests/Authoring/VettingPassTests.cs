@@ -184,6 +184,48 @@ public sealed class VettingPassTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_author_is_out_of_its_OWN_panel_and_the_other_two_are_enough()
+    {
+        // The operator's one-third design, end to end: three slots, one of them the model that wrote this
+        // question. Without eligibility the strict rule would wait forever on a mark the self-review refusal
+        // will never allow.
+        var bank = await BankAsync("thirds", slots: 3);
+        var agent = new EchoingAgent(Approved("checked it"));
+        var slots = Panel(bank, [AuthorModel, "gpt-5", "gemini-3-pro"]);
+
+        var report = await VettingPass.RunAsync(
+            agent, Bank(bank), Prompts, Request(Group(bank), allowSelf: false), slots, Noon, Ct);
+
+        agent.Launches.Should().Be(2, "the author's own slot must not be asked, and the other two must");
+        report.Accepted.Should().Be(1, string.Join(" | ", report.Questions.SelectMany(q => q.Skipped)));
+        report.Questions.Single().Decision.Reason.Should().Contain("2 eligible");
+        (await StateAsync(bank)).Should().Be(CandidateState.Accepted);
+    }
+
+    [Fact]
+    public async Task When_EVERY_slot_is_the_authors_model_nothing_is_eligible_and_nothing_is_accepted()
+    {
+        var bank = await BankAsync("all_author", slots: 3);
+        var agent = new EchoingAgent(Approved("mine, and excellent"));
+        var slots = Panel(bank, [AuthorModel, AuthorModel, AuthorModel]);
+
+        var report = await VettingPass.RunAsync(
+            agent, Bank(bank), Prompts, Request(Group(bank), allowSelf: false), slots, Noon, Ct);
+
+        // The bank's actual state on 2026-08-18, asserted so it cannot come back silently: three slots, one
+        // model, that model authored. Nobody may vouch, nothing is launched, nothing is promoted.
+        agent.Launches.Should().Be(0);
+        report.Questions.Single().Decision.Reason.Should().Contain("every configured slot is the model that wrote it");
+        (await StateAsync(bank)).Should().Be(CandidateState.Proposed);
+    }
+
+    /// <summary>The reviewer slots of this bank, each bound to the model at its ordinal position.</summary>
+    private IReadOnlyList<ReviewerSlot> Panel(string connection, IReadOnlyList<string> models) =>
+        [.. Bank(connection).ReviewersAsync(Ct).GetAwaiter().GetResult().Ok()
+            .Where(r => !r.IsHuman)
+            .Select((reviewer, index) => new ReviewerSlot(reviewer, Model(models[index]), "reviewer-exe"))];
+
+    [Fact]
     public async Task A_question_whose_ANCHOR_does_not_resolve_costs_ZERO_launches()
     {
         // The whole point of the pre-gate, and the only assertion that can prove it: the tree here is an empty

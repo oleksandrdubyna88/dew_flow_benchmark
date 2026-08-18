@@ -77,36 +77,51 @@ public sealed record PromotionDecision(PromotionKind Kind, string Reason);
 /// </para></summary>
 public static class Promotion
 {
+    /// <summary>The decision over the reviewers ELIGIBLE for this question — every configured slot except the
+    /// one whose model wrote it.
+    /// <para>
+    /// Eligibility is the caller's to compute, because it compares resolved model ids and only the pass holds
+    /// those. What lives here is what eligibility MEANS for the rule: with three authors each writing a third of
+    /// a group, every question's panel is the two models that did not write it — the author is out of its own
+    /// panel by construction rather than by a flag, nobody self-reviews, and each model reviews exactly two
+    /// thirds of the set. That shape costs two launches per question instead of three.
+    /// </para>
+    /// <para>
+    /// A REJECTION counts from anyone, eligible or not: a named defect is a named defect, and a mark already
+    /// stored is a recorded judgement. Only the approvals must come from the eligible set.
+    /// </para></summary>
     public static PromotionDecision Decide(
-        IReadOnlyList<Reviewer> configured, IReadOnlyList<QuestionReview> marks)
+        IReadOnlyList<Reviewer> eligible, IReadOnlyList<QuestionReview> marks)
     {
-        if (configured.Count == 0)
-        {
-            // Vacuous truth is the trap worth naming: "every configured reviewer approved" is technically true
-            // of no reviewers at all, and would promote a whole machine-written bank on an empty table.
-            return new PromotionDecision(
-                PromotionKind.Wait,
-                "no reviewer is configured, so nothing can be promoted — a reviewer is a row, and an empty "
-                + "table approves everything if you let it");
-        }
-
-        var refused = Named(configured, marks.Where(m => m.Verdict == ReviewVerdict.Rejected));
+        var refused = Named(eligible, marks.Where(m => m.Verdict == ReviewVerdict.Rejected));
 
         if (refused.Count > 0)
         {
             return new PromotionDecision(PromotionKind.Reject, $"rejected by {string.Join(", ", refused)}");
         }
 
+        if (eligible.Count == 0)
+        {
+            // Two ways to arrive here, and both must refuse rather than promote. An empty reviewers table makes
+            // "every configured reviewer approved" vacuously true; and a panel where every slot is the author's
+            // own model leaves nobody who may vouch for it — which is exactly the state of this bank while three
+            // slots share one model with the author.
+            return new PromotionDecision(
+                PromotionKind.Wait,
+                "no reviewer is eligible for this question — either the table is empty, or every configured slot "
+                + "is the model that wrote it, and a model may not vouch for its own work");
+        }
+
         var marked = marks.Select(m => m.ReviewerId).ToHashSet();
-        var missing = configured.Where(r => !marked.Contains(r.Id)).Select(r => r.Key.Value).Order(StringComparer.Ordinal).ToList();
+        var missing = eligible.Where(r => !marked.Contains(r.Id)).Select(r => r.Key.Value).Order(StringComparer.Ordinal).ToList();
 
         return missing.Count > 0
             ? new PromotionDecision(
                 PromotionKind.Wait,
                 $"no mark yet from {string.Join(", ", missing)} — the strict rule promotes only when every "
-                + "configured reviewer has approved")
+                + "eligible reviewer has approved")
             : new PromotionDecision(
-                PromotionKind.Accept, $"approved by all {configured.Count} configured reviewer(s)");
+                PromotionKind.Accept, $"approved by all {eligible.Count} eligible reviewer(s)");
     }
 
     private static List<string> Named(IReadOnlyList<Reviewer> configured, IEnumerable<QuestionReview> marks)
