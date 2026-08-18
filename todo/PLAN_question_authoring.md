@@ -37,8 +37,10 @@
 >
 > **The first real batch ran on 2026-08-18 and step 6 is NOT answered by it.** Four groups × 10 questions
 > against `dew_flow_rag_qln@64865c68`: `code-lookup` **10** (6 min), `bug-root-cause` **10** (11 min),
-> `semantic-intent` **0**, `adversarial` **0** — the last two burned their whole 900-second wall each. So the bank
-> holds 22 questions, of which 2 are `Accepted` (the pair the vetting pass marked) and 20 `Proposed`.
+> `semantic-intent` **0**, `adversarial` **0** — the last two burned their whole 900-second wall each. Vetting then
+> ran on what existed, and as of 2026-08-18 12:00 UTC the bank holds **22 questions: 9 `Accepted`, 2 `Rejected`,
+> 11 `Proposed`, 33 marks** — `code-lookup` 12 (2 accepted), `bug-root-cause` 10 (7 accepted, 2 rejected), and
+> **zero in the other four groups**. Observed rate: ~1.9 minutes per review mark.
 >
 > Two blockers, and only the first is ours:
 > - **An untrusted checkout waits for a dialog nothing can answer** — the cause of both empty groups, now FIXED:
@@ -49,8 +51,14 @@
 >   top-level keys and had one boolean flipped in one ten-field entry.
 > - **The org's monthly spend limit** — what the re-run hit instead, at 10 minutes in: *"You've hit your org's
 >   monthly spend limit · run /usage-credits to ask your admin for a higher limit"*, exit 1, carried into the
->   rejection as a value. **External, and it blocks every further authoring or vetting launch.** Step 6's number
->   cannot be produced until it is raised.
+>   rejection as a value. **It cleared on its own within the hour** and 33 marks were taken afterwards, so it is a
+>   transient ceiling rather than a wall — the first reading of it here, that step 6 could not proceed until an
+>   admin raised it, was wrong.
+> - **Docker Desktop's `docker-desktop` WSL distro stopped twice in one hour**, taking the bank's Postgres with it
+>   and killing a vetting run 50 minutes in. Restarting Docker Desktop brings the engine back in ~15 s (the
+>   privileged service cannot be started from a non-elevated session), and the container's published port changes
+>   every restart, so a recorded connection string is stale after one. Nothing was lost either time: every mark is
+>   written as it is taken. This is the real obstacle to a long run, not the spend limit.
 >
 > **Step 6's second question is partly answered, and by reading rather than by launching.** The plan asks
 > whether a question's properties can be checked mechanically or need a person every time. Measured over the 20
