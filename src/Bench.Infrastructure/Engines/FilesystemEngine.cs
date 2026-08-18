@@ -129,9 +129,8 @@ public sealed class FilesystemEngine(string checkoutPath) : IEngine
     private ToolAnswer List(JsonElement args)
     {
         var relative = Text(args, "path");
-        var full = relative.Length == 0 ? _root : Path.GetFullPath(Path.Combine(_root, relative));
 
-        if (!Inside(full))
+        if (Bench.Domain.Suites.RootedPath.Under(_root, relative) is not Outcome<string>.Ok(var full))
         {
             return ToolAnswer.Refusal("that path is outside the repository");
         }
@@ -216,8 +215,9 @@ public sealed class FilesystemEngine(string checkoutPath) : IEngine
             return false;
         }
 
-        var candidate = Path.GetFullPath(Path.Combine(_root, relative));
-        if (!Inside(candidate))
+        // The arithmetic is RootedPath's, shared with the anchor check: both read files with a path that
+        // arrived as data, and one of them was going to get it subtly wrong on its own.
+        if (Bench.Domain.Suites.RootedPath.Under(_root, relative) is not Outcome<string>.Ok(var candidate))
         {
             refusal = ToolAnswer.Refusal("that path is outside the repository");
             return false;
@@ -227,12 +227,6 @@ public sealed class FilesystemEngine(string checkoutPath) : IEngine
         refusal = ToolAnswer.Success(string.Empty);
         return true;
     }
-
-    /// <summary>Resolve, then compare — checking the STRING for "<c>..</c>" does not work, because
-    /// <c>a/../../b</c> and a symlink both spell fine.</summary>
-    private bool Inside(string candidate) =>
-        candidate == _root
-        || candidate.StartsWith(_root + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 
     private string Relative(string full) =>
         Path.GetRelativePath(_root, full).Replace('\\', '/');

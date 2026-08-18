@@ -183,6 +183,68 @@ public sealed class VettingPassTests(PostgresFixture postgres)
         (await StateAsync(bank)).Should().Be(CandidateState.Accepted);
     }
 
+    [Fact]
+    public async Task A_question_whose_ANCHOR_does_not_resolve_costs_ZERO_launches()
+    {
+        // The whole point of the pre-gate, and the only assertion that can prove it: the tree here is an empty
+        // temporary directory, so the question's anchor points at nothing.
+        var bank = await BankAsync("broken_anchor", slots: 3);
+        var agent = new EchoingAgent(Approved("never asked"));
+
+        var report = await VettingPass.RunAsync(
+            agent, Bank(bank), Prompts, Request(Group(bank), allowSelf: true) with { Worktree = Empty() }, Slots(bank, "gpt-5"), Noon, Ct);
+
+        agent.Launches.Should().Be(0, "three agents were being paid to discover arithmetic");
+        report.Broken.Should().Be(1);
+        report.LaunchesSaved.Should().Be(3);
+        report.Questions.Single().BrokenAnchors.Should().ContainSingle().Which.Should().Contain("no such file");
+        (await StateAsync(bank)).Should().Be(CandidateState.Proposed, "a broken anchor is a defect to fix, not a verdict");
+    }
+
+    [Fact]
+    public async Task A_question_whose_anchor_RESOLVES_is_still_asked_of_every_slot()
+    {
+        // The other half: the gate must not become a reason nothing is ever reviewed. Same pass, same question,
+        // a tree that actually contains the anchored member.
+        var bank = await BankAsync("good_anchor", slots: 1);
+        var agent = new EchoingAgent(Approved("checked the span"));
+
+        var report = await VettingPass.RunAsync(
+            agent, Bank(bank), Prompts, Request(Group(bank), allowSelf: true) with { Worktree = Anchored() }, Slots(bank, "gpt-5"), Noon, Ct);
+
+        agent.Launches.Should().Be(1, string.Join(" | ", report.Questions.SelectMany(q => q.BrokenAnchors)));
+        report.Broken.Should().Be(0);
+        report.Accepted.Should().Be(1);
+    }
+
+    /// <summary>A tree with nothing in it — every anchor points at nothing.</summary>
+    private string Empty() => Directory.CreateTempSubdirectory("bench-empty-tree").FullName;
+
+    private string _anchored = string.Empty;
+
+    /// <summary>A tree holding the one file this class's question is anchored at, with the member's name on the
+    /// claimed line. Built once per test.</summary>
+    private string Anchored()
+    {
+        if (_anchored.Length > 0)
+        {
+            return _anchored;
+        }
+
+        var tree = Directory.CreateTempSubdirectory("bench-anchored-tree").FullName;
+        var file = Path.Combine(tree, "src", "A.cs");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllLines(file, [.. Enumerable.Range(1, 44).Select(n => $"// line {n}"), "    public static StoreKind KindOf() => default;", .. Enumerable.Range(46, 10).Select(n => $"// line {n}")]);
+        _anchored = tree;
+
+        return tree;
+    }
+
+    private IReadOnlyList<ReviewerSlot> Slots(string connection, string reviewerModel) =>
+        [.. Bank(connection).ReviewersAsync(Ct).GetAwaiter().GetResult().Ok()
+            .Where(r => !r.IsHuman)
+            .Select(r => new ReviewerSlot(r, Model(reviewerModel), "reviewer-exe"))];
+
     private const string QuestionId = "vetting-subject";
 
     private static string Approved(string note) => $$"""{ "verdict": "approved", "note": "{{note}}" }""";
@@ -207,8 +269,15 @@ public sealed class VettingPassTests(PostgresFixture postgres)
             Ct);
     }
 
-    private static VettingRequest Request(QuestionGroup group, bool allowSelf) =>
-        new(group, Target, Commit, TimeSpan.FromMinutes(2), Path.GetTempPath(), allowSelf, Limit: 10);
+    /// <summary>The worktree every test but the broken-anchor one uses: a tree that actually contains the file and
+    /// the member this class's question is anchored at.
+    /// <para>
+    /// It used to be <c>Path.GetTempPath()</c>, which stopped being good enough the moment the pass grew a
+    /// mechanical anchor gate — nine tests about MARKS went red because their fixture's ground truth pointed at
+    /// nothing. Correct of the gate, and a fixture that was always lying about the tree.
+    /// </para></summary>
+    private VettingRequest Request(QuestionGroup group, bool allowSelf) =>
+        new(group, Target, Commit, TimeSpan.FromMinutes(2), Anchored(), allowSelf, Limit: 10);
 
     /// <summary>A database of this test's own, holding the real <c>code-lookup</c> group, <paramref name="slots"/>
     /// reviewer rows of which <paramref name="bind"/> name a model, and one proposed question to mark.</summary>
@@ -274,8 +343,13 @@ public sealed class VettingPassTests(PostgresFixture postgres)
 
     private sealed class EchoingAgent(string answer) : ICliAgentRuntime
     {
-        public Task<Outcome<AgentAnswer>> AskAsync(AgentAsk ask, CancellationToken cancellationToken) =>
-            Task.FromResult(Outcome<AgentAnswer>.Success(new AgentAnswer(answer, TimeSpan.FromSeconds(3), answer.Length)));
+        public int Launches { get; private set; }
+
+        public Task<Outcome<AgentAnswer>> AskAsync(AgentAsk ask, CancellationToken cancellationToken)
+        {
+            Launches++;
+            return Task.FromResult(Outcome<AgentAnswer>.Success(new AgentAnswer(answer, TimeSpan.FromSeconds(3), answer.Length)));
+        }
     }
 
     private sealed class RefusingAgent(string reason) : ICliAgentRuntime

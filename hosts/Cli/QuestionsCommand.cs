@@ -617,7 +617,11 @@ public static class QuestionsCommand
         {
             output.WriteLine($"  {question.QuestionId}  {question.Decision.Kind} — {question.Decision.Reason}");
 
-            foreach (var line in question.Marks.Concat(question.Skipped.Select(s => $"skipped {s}")))
+            // The broken anchors first: they are why nothing was launched for this question, and they are the
+            // one thing here an operator can fix in a minute.
+            foreach (var line in question.BrokenAnchors.Select(a => $"anchor  {a}")
+                .Concat(question.Marks)
+                .Concat(question.Skipped.Select(s => $"skipped {s}")))
             {
                 output.WriteLine($"    {line}");
             }

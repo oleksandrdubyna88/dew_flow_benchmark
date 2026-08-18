@@ -58,7 +58,13 @@
 > - **Anchor resolution is fully mechanical, and it is what the reviewers spent most of their notes on.**
 >   Checking that each expectation's file exists at the pinned commit and that the member's name falls inside the
 >   claimed line span: **20 of 20 correct**. All three live reviewer notes led with exactly this check, so a
->   mechanical pre-gate would take the most-cited half of a review off the launch budget entirely.
+>   mechanical pre-gate takes the most-cited half of a review off the launch budget entirely — **now built**
+>   (`AnchorCheck`, run inside `VettingPass` before any launch; a failing question reports where the name
+>   actually is and stays `Proposed`, because a broken anchor is a defect to fix rather than a verdict). Its own
+>   proof is the launch counter: a question with an unresolvable anchor costs **0** launches against 3, and the
+>   report says how many it did not spend. Building it turned nine of the existing vetting tests red at once —
+>   their fixture pointed the pass at `Path.GetTempPath()`, so their ground truth had always been unresolvable
+>   and nothing had ever noticed.
 > - **"The prompt must not name the identifier" is mechanical only where a brief forbids it.** Seven
 >   `code-lookup` prompts name their member outright — and that is the brief working as written, not a defect:
 >   `code-lookup` is *"findable by NAME or by an obvious identifier"*, the deliberate control group. The rule

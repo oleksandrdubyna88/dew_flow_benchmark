@@ -277,6 +277,18 @@ storing each mark through the same path `bench questions review` uses — so a m
 typed by a person are indistinguishable afterwards. That is correct rather than sloppy: a review is a
 judgement, and its provenance is the slot, which is recorded either way.
 
+- **The mechanical half runs FIRST, and a broken anchor costs no launches.** `AnchorCheck` verifies every
+  retrieval expectation against the checked-out tree — the file is present, the line span does not run past the
+  end of the file, the member's name occurs inside the span — before a single reviewer is asked. Measured
+  2026-08-18: all three live reviewer notes on the first vetted pair *led* with exactly this check, and the
+  review contract's first rejection reason is an expectation pointing at nothing, so three agent launches per
+  question were buying arithmetic. A question that fails is reported with where the name actually is (the
+  difference between a wrong question and a stale line range is what the operator does next) and stays
+  `Proposed`: a broken anchor is a defect to fix, not a verdict. What the check does NOT prove is that the
+  member is *defined* there — a name in a comment satisfies it — and it says nothing about whether the question
+  is any good. Anchor paths are data an agent wrote, so they resolve through `RootedPath` (shared with
+  `FilesystemEngine`, which had the only copy of that arithmetic): a path that escapes the tree reads as
+  nothing to find.
 - **A reviewer slot names its model, as data.** `reviewers.ModelKey` is a registry key, empty for a person. It
   is a column and not a command-line flag because the self-review rule compares a reviewer's model against the
   question's author model, and "who is reviewer-2" has to be answerable from the bank years later. Three slots

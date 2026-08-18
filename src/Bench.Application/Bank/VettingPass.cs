@@ -3,6 +3,7 @@ using Bench.Domain;
 using Bench.Domain.Authoring;
 using Bench.Domain.Bank;
 using Bench.Domain.Registry;
+using Bench.Domain.Suites;
 using Bench.Domain.Targets;
 
 namespace Bench.Application.Bank;
@@ -33,11 +34,18 @@ public sealed record VettingRequest(
 /// <param name="Skipped">Slots that did NOT mark this question, and why — a refused self-review, an agent that
 /// could not be reached, an unreadable answer. Reported rather than silently absent: a question that looks
 /// unreviewed for a reason nobody recorded is one somebody re-runs the whole pass over.</param>
+/// <param name="BrokenAnchors">Ground truth that does not resolve against the tree. Non-empty means NO reviewer
+/// was launched for this question: there is nothing to judge until the anchor is fixed, and asking three agents
+/// to discover arithmetic is what this field exists to stop.</param>
 public sealed record QuestionVerdicts(
     string QuestionId,
     IReadOnlyList<string> Marks,
     PromotionDecision Decision,
-    IReadOnlyList<string> Skipped);
+    IReadOnlyList<string> Skipped,
+    IReadOnlyList<string> BrokenAnchors)
+{
+    public bool Broken => BrokenAnchors.Count > 0;
+}
 
 public sealed record VettingReport(
     string PromptHash,
@@ -53,8 +61,16 @@ public sealed record VettingReport(
 
     public int Waiting => Questions.Count(q => q.Decision.Kind == PromotionKind.Wait);
 
+    /// <summary>Questions no reviewer was launched for, because their ground truth does not resolve.</summary>
+    public int Broken => Questions.Count(q => q.Broken);
+
+    /// <summary>Launches this pass did NOT spend, because a mechanical check answered first. The number the
+    /// pre-gate exists for.</summary>
+    public int LaunchesSaved { get; init; }
+
     public string Describe =>
         $"{Questions.Count} question(s): {Accepted} accepted, {Rejected} rejected, {Waiting} waiting"
+        + (Broken > 0 ? $", {Broken} with broken anchors ({LaunchesSaved} launch(es) not spent)" : string.Empty)
         + (Refusals.Count > 0 ? $", {Refusals.Count} refused" : string.Empty);
 }
 
@@ -115,7 +131,10 @@ public static class VettingPass
             cost = vetted.Cost.Length > 0 ? vetted.Cost : cost;
         }
 
-        return new VettingReport(hash, verdicts, refusals, cost);
+        return new VettingReport(hash, verdicts, refusals, cost)
+        {
+            LaunchesSaved = verdicts.Count(v => v.Broken) * slots.Count,
+        };
     }
 
     private sealed record Vetted(QuestionVerdicts Verdicts, IReadOnlyList<string> Refusals, string PromptHash, string Cost);
@@ -142,6 +161,32 @@ public static class VettingPass
         var refusals = new List<string>();
         var hash = string.Empty;
         var cost = string.Empty;
+
+        // The mechanical half FIRST, and nothing is launched when it fails. Measured 2026-08-18: all three live
+        // reviewer notes led with exactly this check, and the review contract's first rejection reason is an
+        // expectation that points at nothing — so three agent launches were buying arithmetic.
+        var broken = AnchorCheck
+            .Verify(entry.Question.Question, Reader(request.Worktree))
+            .Where(proof => !proof.Resolved)
+            .Select(proof => proof.Describe)
+            .ToList();
+
+        if (broken.Count > 0)
+        {
+            return new Vetted(
+                new QuestionVerdicts(
+                    entry.Question.Question.Id,
+                    marks,
+                    new PromotionDecision(
+                        PromotionKind.Wait,
+                        "the ground truth does not resolve against the tree, so no reviewer was asked — a question "
+                        + "whose anchor is wrong has nothing to judge until it is fixed"),
+                    skipped,
+                    broken),
+                refusals,
+                hash,
+                cost);
+        }
 
         foreach (var slot in slots)
         {
@@ -175,7 +220,7 @@ public static class VettingPass
         var decision = await DecideAsync(bank, reviewers, entry, cancellationToken);
 
         return new Vetted(
-            new QuestionVerdicts(entry.Question.Question.Id, marks, decision, skipped), refusals, hash, cost);
+            new QuestionVerdicts(entry.Question.Question.Id, marks, decision, skipped, []), refusals, hash, cost);
     }
 
     private sealed record Asked(Outcome<ReviewAnswer> Verdict, string PromptHash, string Cost);
@@ -268,6 +313,23 @@ public static class VettingPass
                 [.. entries.Where(e => e.Question.State == CandidateState.Proposed).Take(request.Limit)]),
             Outcome<IReadOnlyList<BankEntry>>.Failure);
     }
+
+    /// <summary>Reads a file of the checked-out tree for the anchor check, through the shared path guard.
+    /// <para>
+    /// An anchor's path arrives as DATA — an agent wrote it — so it can spell its way out of the tree, and a
+    /// path that escapes reads as <see cref="TreeFile.Absent"/>: from the question's point of view an anchor
+    /// pointing outside the repository points at nothing, which is exactly the verdict wanted.
+    /// </para></summary>
+    private static Func<string, TreeFile> Reader(string worktree) =>
+        relative =>
+        {
+            if (RootedPath.Under(worktree, relative) is not Outcome<string>.Ok(var full) || !File.Exists(full))
+            {
+                return TreeFile.Absent;
+            }
+
+            return TreeFile.Of(File.ReadAllLines(full));
+        };
 
     /// <param name="Note">Mandatory on a rejection: it is the only record of what an author gets wrong, and
     /// the next edit to an authoring prompt is made from exactly this text.</param>
