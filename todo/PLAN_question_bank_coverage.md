@@ -139,6 +139,44 @@ Then edit `AUTHORS` in `scripts/bank-thirds.sh` to the new key. Questions alread
 they were written by, which is the point: the bank becomes a record of two tiers, comparable by
 `AuthorModel`.
 
+### 3.4b DECIDED 2026-08-18: twenty questions rejected, and the contract fixed instead
+
+The gate, run over the whole bank, flagged **22 of 56 questions**. They are not 22 mistakes — they are three,
+and two of them were the CONTRACT's rather than any author's:
+
+| Pattern | Count | What it is |
+|---|---|---|
+| An `AnswerExcludes` term appears in the question's own reference answer | 8 | The author writes the trap as `AnswerExcludes: "AsyncLocal"` and then helpfully explains that this repository *"uses scoped DI, not AsyncLocal"* — so the gold answer contains the forbidden word and fails its own check |
+| A required `AnswerContains` term is absent from the reference | 8 | `"source line"` required while the reference says `"one-line window"` |
+| A required term already appears in the prompt | 3 | Any on-topic answer contains it, including a wrong one |
+| The seed date is shifted | 3 | See below — the author's, and now impossible |
+
+**Policy applied, uniformly: a question whose own reference answer fails its own required expectations cannot
+be measured, so it is rejected — regardless of who approved it.** Twenty rejected, including
+`gpu-waiter-never-advances-in-queue`, which three reviewers had ACCEPTED. That overturns a recorded judgement
+and is stated here rather than done quietly: its required term `never refreshed` is absent from its own
+reference, so a subject answering as well as the gold answer would fail it. A question that cannot be passed
+measures nothing, and no number of approvals changes that.
+
+Not edited, because there is no editor: the bank has `import|accept|reject|move` and no way to change a stored
+question's terms, and its state has no column for a reason. Rejecting is also the cheaper choice — a rejected
+candidate is kept as evidence about the source that produced it, which is the stated purpose, and re-authoring
+under a fixed contract costs minutes.
+
+**The two durable fixes, which is where the leverage was:**
+
+1. **The shared contract now states the rule the authors were failing** — every required `AnswerContains` term
+   must appear verbatim in the reference, no `AnswerExcludes` term may, and no required term may sit in the
+   prompt unless the group brief says the identifier belongs there. It also says these are checked mechanically
+   before any reviewer sees the question. The rule was never written down; twelve questions died of its absence.
+2. **The seed date is no longer the author's to get wrong.** It named a change and dated it a day early, three
+   times, after being told verbatim to copy. Now the author names the CHANGE and the pass dates it from the
+   repository (`AuthoringPass.Dated`), the same principle as the harness performing retrieval rather than
+   trusting a model's account of it. A disagreement is reported as a `fixed` line, because *"this author shifts
+   dates"* stays worth knowing once it can no longer damage a question.
+
+Bank after the decision: **16 accepted, 7 proposed, 33 rejected.**
+
 ### 3.4 Fix or retire the three gate-blocked questions
 
 `weighted-sum-minmax-equal-scores` (term `weight` occurs inside `WeightedSumFusion` in the prompt),

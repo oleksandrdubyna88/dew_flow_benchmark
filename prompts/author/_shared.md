@@ -64,6 +64,25 @@ with an empty array `[]` — that is a legible outcome; a paragraph is not.
 
 - An expectation pointing at a file or member that does not exist at that commit.
 - An `AnswerContains` term so generic that a wrong answer would contain it (`"the"`, `"method"`, `"class"`).
+
+## Your reference answer is the FIRST thing your own expectations are tested against
+
+Before you write a question down, check it against its own `referenceAnswer`, because that is what a correct
+answer looks like:
+
+- **Every `AnswerContains` term must appear in your `referenceAnswer`, verbatim.** If it does not, then an answer
+  as good as your own reference FAILS your check, and the question measures nothing. Twelve questions were thrown
+  away for this on 2026-08-18 — a term like `"source line"` required by the check while the reference said
+  `"one-line window"`.
+- **No `AnswerExcludes` term may appear in your `referenceAnswer`.** This one is easy to trip while being
+  helpful: you write the trap as `AnswerExcludes: "AsyncLocal"` and then explain in the reference that this
+  repository *"uses scoped DI, not AsyncLocal"* — so the gold answer contains the forbidden word and fails.
+  Describe what the code DOES do, and let the excluded term appear nowhere.
+- **No `AnswerContains` term may appear in your `prompt`**, unless the group brief says the identifier belongs
+  there. A term the question already contains is a term any on-topic answer contains, including a wrong one.
+
+These three are checked mechanically before any reviewer sees your question, and a question that fails them is
+never read by anybody. They cost you nothing to check and everything to get wrong.
 - A prompt that quotes its own answer.
 - Anything outside the JSON array.
 

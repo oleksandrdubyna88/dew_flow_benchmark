@@ -32,9 +32,14 @@ public sealed record AuthoringReport(
     int Duplicates,
     IReadOnlyList<string> Rejected,
     string Note = "",
-    IReadOnlyList<string>? Collisions = null)
+    IReadOnlyList<string>? Collisions = null,
+    IReadOnlyList<string>? Corrections = null)
 {
     public IReadOnlyList<string> Collisions { get; init; } = Collisions ?? [];
+
+    /// <summary>Facts the pass fixed rather than took the author's word for. Reported, never silent: a correction
+    /// nobody sees is a defect nobody knows the author keeps making.</summary>
+    public IReadOnlyList<string> Corrections { get; init; } = Corrections ?? [];
 
     public static AuthoringReport Nothing(string authorModel, string reason) =>
         new(authorModel, string.Empty, 0, 0, [reason]);
@@ -62,7 +67,8 @@ public sealed record AuthoringRequest(
     int Ordinal,
     TimeSpan Wall,
     string Worktree,
-    string History = "");
+    string History = "",
+    Func<string, CommitFact>? Commits = null);
 
 /// <summary>Driving a CLI agent to write questions, and admitting what it wrote through the rules the bank
 /// already has.
@@ -224,6 +230,7 @@ public static class AuthoringPass
         return new AuthoringReport(author.Config.ModelId, promptHash, stored, duplicates.Count + collisions.Count, rejected)
         {
             Collisions = collisions,
+            Corrections = admitted.Corrections,
         };
     }
 
@@ -247,16 +254,24 @@ public static class AuthoringPass
 
     /// <summary>Each file through the EXISTING admission rules. A question with no retrieval expectation and a
     /// candidate that does not name its author are already refused there, by name.</summary>
-    private static (IReadOnlyList<QuestionCandidate> Candidates, IReadOnlyList<string> Rejected) Admit(
+    private static (IReadOnlyList<QuestionCandidate> Candidates, IReadOnlyList<string> Rejected, IReadOnlyList<string> Corrections) Admit(
         IReadOnlyList<BankQuestionFile> files, AuthoringRequest request, string authorModel, DateTimeOffset now)
     {
         var candidates = new List<QuestionCandidate>();
         var rejected = new List<string>();
+        var corrections = new List<string>();
 
         foreach (var file in files)
         {
             var question = QuestionJson.ToQuestion(file.ToQuestionFile(), request.Commit);
-            var proposed = QuestionCandidate.Propose(AuthoringSource.Synthetic, authorModel, Seed(file), question);
+            var dated = Dated(Seed(file), request.Commits);
+
+            if (dated.Correction.Length > 0)
+            {
+                corrections.Add(dated.Correction);
+            }
+
+            var proposed = QuestionCandidate.Propose(AuthoringSource.Synthetic, authorModel, dated.Seed, question);
 
             proposed.Match(
                 candidate =>
@@ -271,7 +286,7 @@ public static class AuthoringPass
                 });
         }
 
-        return (candidates, rejected);
+        return (candidates, rejected, corrections);
     }
 
     /// <summary>The seed as the author declared it — and <c>unstated</c> at the beginning of time when it did
@@ -282,6 +297,43 @@ public static class AuthoringPass
         file.Seed is { Kind.Length: > 0 } seed && seed.At != default
             ? new QuestionSeed(seed.Kind.Trim(), seed.Reference.Trim(), seed.At)
             : new QuestionSeed("unstated", file.Seed?.Reference.Trim() ?? string.Empty, default);
+
+    /// <summary>A commit seed's date taken from the REPOSITORY, not from the author.
+    /// <para>
+    /// <b>Because the author will not copy it.</b> Handed 345 lines of real history and told in as many words to
+    /// take the date verbatim, one author cited three commits that all exist, whose subjects match its questions,
+    /// and dated every one of them a day early — systematically. Telling it again would be hoping.
+    /// </para>
+    /// <para>
+    /// So the author names the CHANGE and we date it, which removes the possibility rather than warning about it:
+    /// the same principle as the harness performing retrieval instead of trusting a model's account of it. A
+    /// disagreement is reported as a correction, because "this author shifts dates" is worth knowing about the
+    /// source even once it can no longer damage a question.
+    /// </para></summary>
+    private static (QuestionSeed Seed, string Correction) Dated(
+        QuestionSeed seed, Func<string, CommitFact>? commits)
+    {
+        if (commits is null || !string.Equals(seed.Kind, SeedCheck.CommitKind, StringComparison.OrdinalIgnoreCase)
+            || seed.Reference.Length == 0)
+        {
+            return (seed, string.Empty);
+        }
+
+        var fact = commits(seed.Reference);
+
+        if (!fact.Exists)
+        {
+            return (seed, string.Empty);
+        }
+
+        var landed = new DateTimeOffset(fact.Date.ToDateTime(default), TimeSpan.Zero);
+        var claimed = seed.At == default ? "nothing" : $"{seed.At:yyyy-MM-dd}";
+
+        return landed == seed.At
+            ? (seed, string.Empty)
+            : (seed with { At = landed },
+               $"seed {seed.Reference}: the author dated it {claimed}, the repository says {fact.Date:yyyy-MM-dd} — taken from the repository");
+    }
 
     private static BankQuestion Row(
         QuestionCandidate candidate,

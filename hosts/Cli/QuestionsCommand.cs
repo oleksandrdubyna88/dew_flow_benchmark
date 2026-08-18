@@ -115,7 +115,17 @@ public static class QuestionsCommand
         var history = await HistoryAsync(group, settings, worktree, output, cancellationToken);
 
         var request = new AuthoringRequest(
-            group, settings.Target, settings.Commit, settings.Count, settings.Ordinal, settings.Wall, worktree, history);
+            group,
+            settings.Target,
+            settings.Commit,
+            settings.Count,
+            settings.Ordinal,
+            settings.Wall,
+            worktree,
+            history,
+            // The author names a change; the repository dates it. Measured: told verbatim to copy the dates it
+            // had been handed, an author shifted all three back a day.
+            reference => Commit(worktree, reference, cancellationToken));
 
         var written = 0;
 
@@ -151,6 +161,13 @@ public static class QuestionsCommand
                 // What the author said outside its JSON. The first live batch reported a blocked git in the
                 // worktree this way, and nothing else in the system could have carried that fact.
                 output.WriteLine($"  note   {report.Note.Split('\n')[0]}");
+            }
+
+            foreach (var correction in report.Corrections)
+            {
+                // A fact the pass fixed rather than trusted. Printed because "this author shifts dates" stays
+                // worth knowing after it can no longer damage a question.
+                output.WriteLine($"  fixed  {correction}");
             }
 
             foreach (var collision in report.Collisions)
