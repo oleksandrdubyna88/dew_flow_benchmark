@@ -5,7 +5,9 @@ using Bench.Domain;
 using Bench.Domain.Authoring;
 using Bench.Domain.Bank;
 using Bench.Domain.Registry;
+using Bench.Domain.Suites;
 using Bench.Domain.Targets;
+using Bench.Infrastructure.Git;
 using Bench.Infrastructure.Models;
 
 namespace Bench.Cli;
@@ -110,8 +112,10 @@ public static class QuestionsCommand
         output.WriteLine($"tree     {worktree}");
         output.WriteLine($"trust    {Trusted(trust, worktree, command)}");
 
+        var history = await HistoryAsync(group, settings, worktree, output, cancellationToken);
+
         var request = new AuthoringRequest(
-            group, settings.Target, settings.Commit, settings.Count, settings.Ordinal, settings.Wall, worktree);
+            group, settings.Target, settings.Commit, settings.Count, settings.Ordinal, settings.Wall, worktree, history);
 
         var written = 0;
 
@@ -172,6 +176,48 @@ public static class QuestionsCommand
         return written > 0 ? ExitCodes.Pass : ExitCodes.NoReport;
     }
 
+    /// <summary>The target's merge history, for EVERY group.
+    /// <para>
+    /// Gathered here rather than by the agent, because the agent cannot: inside a <c>git worktree</c> the
+    /// <c>.git</c> is a redirect file its CLI declines to follow. Our own git has no such objection.
+    /// </para>
+    /// <para>
+    /// <b>Every group, and that reverses a decision made an hour earlier.</b> It was scoped to `pr-diff` on the
+    /// theory that only merge-seeded questions need dates, and two measurements say otherwise: Claude's first
+    /// batch reported it could not date the members it anchored, so `code-lookup` seeds came back `unstated`
+    /// too; and Gemini exited 1 mid-batch narrating <i>"I will run a git log command to find the modification
+    /// history/date"</i> — an author losing a whole call to a fact we could simply have handed it. The seed date
+    /// is the memorisation check's input for ALL groups, not one. The cost objection was also wrong: the prompt
+    /// hash covers the TEMPLATE, not the rendering, so history in a brief changes no identity.
+    /// </para></summary>
+    private static async Task<string> HistoryAsync(
+        QuestionGroup group,
+        AuthoringInputs settings,
+        string worktree,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var gathered = await GitHistory.ChangesAsync(
+            worktree, settings.Commit, settings.Merges, TimeSpan.FromMinutes(2), cancellationToken);
+
+        return gathered.Match(
+            text =>
+            {
+                // Printed as a count, not as the text: the operator needs to know the author was given real
+                // dates, and a screenful of log in the middle of a batch report hides everything else.
+                var records = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length;
+                output.WriteLine($"history  {records} line(s) of change history in the brief");
+                return text;
+            },
+            reason =>
+            {
+                // Not fatal. The brief says "no history was gathered — do not invent dates", the author writes
+                // what it honestly can, and the seed comes back `unstated` rather than wrong.
+                output.WriteLine($"history  none — {reason}");
+                return string.Empty;
+            });
+    }
+
     private sealed record ResolvedAuthor(RegisteredModel Model, string Executable);
 
     private static async Task<Outcome<ResolvedAuthor>> ResolveAuthorAsync(
@@ -211,7 +257,8 @@ public static class QuestionsCommand
         int Count,
         int Ordinal,
         TimeSpan Wall,
-        string PromptRoot)
+        string PromptRoot,
+        int Merges)
     {
         /// <summary>Ten minutes. An agent asked for ten questions about an unfamiliar repository reads files
         /// before it writes any, and a ceiling tight enough to feel brisk is one that reports working authors
@@ -247,7 +294,8 @@ public static class QuestionsCommand
                         count,
                         command.Int("ordinal", 1),
                         TimeSpan.FromSeconds(wall),
-                        command.Value("prompts", "prompts"))),
+                        command.Value("prompts", "prompts"),
+                        command.Int("merges", 40))),
                     Outcome<AuthoringInputs>.Failure),
                 Outcome<AuthoringInputs>.Failure);
         }
@@ -374,8 +422,10 @@ public static class QuestionsCommand
             return Fail(error, $"unknown verdict '{verdict}' — try 'approved' or 'rejected'");
         }
 
+        // No model id: a mark typed at this command line is a PERSON's. `bench questions vet` is the path that
+        // records a model, because it is the path where one actually answered.
         var marked = await bank.ReviewAsync(
-            question, reviewer, parsed, command.Value("note"), clock.GetUtcNow(), cancellationToken);
+            question, reviewer, parsed, command.Value("note"), clock.GetUtcNow(), string.Empty, cancellationToken);
 
         return marked.Match(
             _ =>
@@ -599,7 +649,12 @@ public static class QuestionsCommand
                 group, settings.Target, settings.Commit, settings.Wall, worktree, settings.AllowSelfReview, settings.Limit),
             resolved,
             clock.GetUtcNow(),
-            cancellationToken);
+            cancellationToken,
+            // What the repository says about a commit an author cited. Measured 2026-08-18: handed 345 lines of
+            // real history and told to copy the date verbatim, an author stored all three of its seeds one day
+            // early. A sha and a date are comparable for free; codex found the same class of defect by reading
+            // git during review, at three launches a question.
+            reference => Commit(worktree, reference, cancellationToken));
 
         return Report(report, group, output);
     }
@@ -670,6 +725,19 @@ public static class QuestionsCommand
         }
 
         return Outcome<IReadOnlyList<ReviewerSlot>>.Success(slots);
+    }
+
+    /// <summary>One commit's date, as this repository has it. Synchronous because it feeds a pure check that takes
+    /// a function; the call is a few milliseconds of local git.</summary>
+    private static CommitFact Commit(string worktree, string reference, CancellationToken cancellationToken)
+    {
+        var shown = GitCommand
+            .RunAsync(worktree, TimeSpan.FromSeconds(20), cancellationToken, "show", "-s", "--date=short", "--pretty=format:%ad", reference)
+            .GetAwaiter().GetResult();
+
+        return shown.Match(
+            text => DateOnly.TryParse(text.Trim(), out var date) ? CommitFact.On(date) : CommitFact.Unknown,
+            _ => CommitFact.Unknown);
     }
 
     private sealed record VettingInputs(

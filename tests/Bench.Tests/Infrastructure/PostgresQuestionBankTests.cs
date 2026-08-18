@@ -89,7 +89,7 @@ public sealed class PostgresQuestionBankTests(PostgresFixture postgres)
         var suffix = Unique();
         await ImportAsync(bank, File(suffix));
 
-        await bank.ReviewAsync($"q1-{suffix}", $"claude-{suffix}", ReviewVerdict.Rejected, "on reflection, ambiguous", Noon, Ct);
+        await bank.ReviewAsync($"q1-{suffix}", $"claude-{suffix}", ReviewVerdict.Rejected, "on reflection, ambiguous", Noon, "claude-sonnet-4-6", Ct);
 
         var question = (await bank.QuestionsAsync(new BankQuery($"lookup-{suffix}"), Ct)).Ok()
             .Single(e => e.Question.Question.Id == $"q1-{suffix}");
@@ -107,7 +107,7 @@ public sealed class PostgresQuestionBankTests(PostgresFixture postgres)
         var suffix = Unique();
         await ImportAsync(bank, File(suffix));
 
-        var refused = await bank.ReviewAsync($"q1-{suffix}", "nobody", ReviewVerdict.Approved, "", Noon, Ct);
+        var refused = await bank.ReviewAsync($"q1-{suffix}", "nobody", ReviewVerdict.Approved, "", Noon, "any-model", Ct);
 
         refused.Failed().Should().BeTrue();
         refused.Reason().Should().Contain("no reviewer").And.Contain("a reviewer is a row");

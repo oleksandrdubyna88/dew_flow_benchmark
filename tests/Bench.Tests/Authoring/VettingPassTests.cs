@@ -184,6 +184,30 @@ public sealed class VettingPassTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_mark_records_the_MODEL_that_made_it_not_only_the_slot()
+    {
+        var bank = await BankAsync("provenance", slots: 1);
+
+        await VettingPass.RunAsync(
+            new EchoingAgent(Approved("checked it")),
+            Bank(bank),
+            Prompts,
+            Request(Group(bank), allowSelf: true),
+            Panel(bank, ["gpt-5.6-terra"]),
+            Noon,
+            Ct);
+
+        // The slot is not provenance, and this cost a real ambiguity: `reviewer-2` held claude-sonnet-4-6 for
+        // thirty-three marks and gpt-5.6-terra for the next seven, so "reviewer-2 rejected 7" needed a timestamp
+        // filter to be honest. A slot says which COLUMN a mark is in; only this says who made it.
+        var stored = (await Bank(bank).QuestionsAsync(new BankQuery("code-lookup"), Ct)).Ok().Single();
+        var marks = (await Bank(bank).ReviewsAsync([stored.Question.Id], Ct)).Ok();
+
+        marks.Should().ContainSingle().Which.ModelId.Should().Be("gpt-5.6-terra");
+        marks.Single().Unattributed.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task The_author_is_out_of_its_OWN_panel_and_the_other_two_are_enough()
     {
         // The operator's one-third design, end to end: three slots, one of them the model that wrote this

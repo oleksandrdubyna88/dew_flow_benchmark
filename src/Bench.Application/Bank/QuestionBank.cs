@@ -59,12 +59,15 @@ public interface IQuestionBank
 
     /// <summary>One reviewer's mark on one question, replacing that reviewer's previous mark. Another
     /// reviewer's mark is never touched — "two of three approved" has to stay representable.</summary>
+    /// <param name="modelId">The model that made this mark, or empty when a person did. Stored because the
+    /// reviewer slot is NOT provenance — it can be rebound to another model, and was.</param>
     Task<Outcome<QuestionReview>> ReviewAsync(
         string questionId,
         string reviewerKey,
         ReviewVerdict verdict,
         string note,
         DateTimeOffset at,
+        string modelId,
         CancellationToken cancellationToken);
 
     Task<Outcome<IReadOnlyList<QuestionReview>>> ReviewsAsync(

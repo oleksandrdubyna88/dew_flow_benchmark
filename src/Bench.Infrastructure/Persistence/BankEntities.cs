@@ -102,6 +102,10 @@ public sealed class QuestionReviewRow
     public string Note { get; set; } = string.Empty;
 
     public DateTimeOffset At { get; set; }
+
+    /// <summary>The model that made this mark, or empty for a person — or for a mark older than the column.
+    /// The reviewer SLOT is not provenance: it can be rebound to another model, and was.</summary>
+    public string ModelId { get; set; } = string.Empty;
 }
 
 /// <summary>A question's move between groups, kept so a finished report can EXPLAIN why its snapshot

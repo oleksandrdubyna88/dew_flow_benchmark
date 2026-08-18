@@ -19,8 +19,11 @@ public sealed record RenderedPrompt(string Text, string Hash, string Source);
 /// <param name="Count">How many questions this call asks for. Part of the brief rather than a loop around it,
 /// because an author writing five questions at once avoids repeating itself in a way five separate calls
 /// cannot — and repetition is what deduplication then has to throw away.</param>
+/// <param name="History">The target's merge history, or empty. Filled for every group and USED by the brief that
+/// needs it: `pr-diff` questions are seeded from merged pull requests and their dates, and an agent launched
+/// inside a worktree cannot read that history for itself — the first batch returned every seed `unstated`.</param>
 public sealed record AuthoringBrief(
-    string Group, string GroupTitle, RepoUrl Target, CommitSha Commit, int Count);
+    string Group, string GroupTitle, RepoUrl Target, CommitSha Commit, int Count, string History = "");
 
 /// <summary>What a reviewer is briefed with: the same target, and the one question it is judging.</summary>
 public sealed record ReviewBrief(
@@ -61,6 +64,9 @@ public static class PromptCatalog
                 ["group"] = brief.Group,
                 ["groupTitle"] = brief.GroupTitle,
                 ["count"] = brief.Count.ToString(),
+                ["history"] = brief.History.Length > 0
+                    ? brief.History
+                    : "(no history was gathered for this call — do not invent dates)",
             });
 
     public static Outcome<RenderedPrompt> Review(string root, ReviewBrief brief) =>

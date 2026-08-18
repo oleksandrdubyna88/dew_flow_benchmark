@@ -117,4 +117,22 @@ public enum ReviewVerdict
 
 /// <summary>One reviewer's mark on one question. At most one per pair, enforced by a unique index rather
 /// than by a read-then-write two sessions can both pass.</summary>
-public sealed record QuestionReview(Guid QuestionId, Guid ReviewerId, ReviewVerdict Verdict, string Note, DateTimeOffset At);
+/// <param name="ModelId">The model that actually made this mark, or empty when a person did — or when the mark
+/// predates this column.
+/// <para>
+/// Added 2026-08-18 because the slot turned out not to be provenance. <c>reviewer-2</c> held
+/// <c>claude-sonnet-4-6</c> for thirty-three marks and <c>gpt-5.6-terra</c> for the next seven, so "reviewer-2
+/// rejected 7" needed a timestamp filter to be honest — a footnote nobody would remember. A slot says WHICH
+/// COLUMN a mark appears in; only this says who made it.
+/// </para>
+/// <para>
+/// Marks written before this column stay EMPTY rather than being backfilled. Which model held a slot in the
+/// past is knowable from a session's memory, not from the database, and writing a recollection into a column
+/// would make an unverifiable claim look like a record.
+/// </para></param>
+public sealed record QuestionReview(
+    Guid QuestionId, Guid ReviewerId, ReviewVerdict Verdict, string Note, DateTimeOffset At, string ModelId = "")
+{
+    /// <summary>Nothing recorded which model made this mark — a person, or a mark older than the column.</summary>
+    public bool Unattributed => ModelId.Length == 0;
+}

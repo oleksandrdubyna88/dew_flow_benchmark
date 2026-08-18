@@ -204,19 +204,11 @@ public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<Gi
         return Outcome<string>.Success(worktree);
     }
 
-    private async Task<Outcome<string>> GitAsync(
-        string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
-    {
-        var attempt = await ProcessRunner.RunAsync(
-            "git", arguments, workingDirectory, options.Timeout, cancellationToken);
-
-        return attempt switch
-        {
-            ProcessAttempt.Completed c when c.Result.Ok => Outcome<string>.Success(c.Result.Output),
-            ProcessAttempt.Completed c => Outcome<string>.Failure($"git {arguments[0]} exited {c.Result.ExitCode}: {c.Result.Output}"),
-            _ => Outcome<string>.Failure($"git {arguments[0]} {attempt.Describe}"),
-        };
-    }
+    // The runner is GitCommand's, shared with the history reader: one launcher and one refusal shape for every
+    // git call this repository makes.
+    private Task<Outcome<string>> GitAsync(
+        string workingDirectory, CancellationToken cancellationToken, params string[] arguments) =>
+        GitCommand.RunAsync(workingDirectory, options.Timeout, cancellationToken, arguments);
 
     private bool IsInsideRoot(string candidate)
     {

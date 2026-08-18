@@ -127,6 +127,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
         ReviewVerdict verdict,
         string note,
         DateTimeOffset at,
+        string modelId,
         CancellationToken cancellationToken)
     {
         var question = await db.BankQuestions.AsNoTracking()
@@ -141,7 +142,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
                 : $"no reviewer '{reviewerKey}' in the bank — a reviewer is a row, so add it before marking with it");
         }
 
-        return await MarkAsync(question.Id, reviewer.Id, verdict, note, at, cancellationToken);
+        return await MarkAsync(question.Id, reviewer.Id, verdict, note, at, modelId, cancellationToken);
     }
 
     public async Task<Outcome<IReadOnlyList<QuestionReview>>> ReviewsAsync(
@@ -153,7 +154,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             .ToListAsync(cancellationToken);
 
         return Outcome<IReadOnlyList<QuestionReview>>.Success(
-            [.. rows.Select(r => new QuestionReview(r.QuestionId, r.ReviewerId, r.Verdict, r.Note, r.At))]);
+            [.. rows.Select(r => new QuestionReview(r.QuestionId, r.ReviewerId, r.Verdict, r.Note, r.At, r.ModelId))]);
     }
 
     public async Task<Outcome<BankQuestion>> SetStateAsync(
@@ -239,6 +240,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
         ReviewVerdict verdict,
         string note,
         DateTimeOffset at,
+        string modelId,
         CancellationToken cancellationToken)
     {
         var existing = await db.QuestionReviews
@@ -256,6 +258,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
                 Verdict = verdict,
                 Note = note,
                 At = at,
+                ModelId = modelId,
             });
         }
         else
@@ -263,11 +266,13 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             existing.Verdict = verdict;
             existing.Note = note;
             existing.At = at;
+            existing.ModelId = modelId;
         }
 
         await db.SaveChangesAsync(cancellationToken);
 
-        return Outcome<QuestionReview>.Success(new QuestionReview(questionId, reviewerId, verdict, note, at));
+        return Outcome<QuestionReview>.Success(
+            new QuestionReview(questionId, reviewerId, verdict, note, at, modelId));
     }
 
     private async Task<Outcome<BankQuestion>> FindAsync(string questionId, CancellationToken cancellationToken)

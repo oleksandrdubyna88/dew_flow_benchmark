@@ -52,6 +52,8 @@ public sealed record AuthoringReport(
 /// <param name="Worktree">The target's tree on disk, at the pinned commit. The agent is launched THERE, because
 /// an author that cannot read the repository cannot anchor a question in it — found live on the first batch,
 /// where the agent refused to invent line numbers for a commit it had no access to.</param>
+/// <param name="History">The target's merge history, gathered by the caller because the agent cannot read it
+/// from inside a worktree. Empty for the groups that do not need it.</param>
 public sealed record AuthoringRequest(
     QuestionGroup Group,
     RepoUrl Target,
@@ -59,7 +61,8 @@ public sealed record AuthoringRequest(
     int Count,
     int Ordinal,
     TimeSpan Wall,
-    string Worktree);
+    string Worktree,
+    string History = "");
 
 /// <summary>Driving a CLI agent to write questions, and admitting what it wrote through the rules the bank
 /// already has.
@@ -97,7 +100,13 @@ public static class AuthoringPass
     {
         var prompt = PromptCatalog.Author(
             promptRoot,
-            new AuthoringBrief(request.Group.Key.Value, request.Group.Title, request.Target, request.Commit, request.Count));
+            new AuthoringBrief(
+                request.Group.Key.Value,
+                request.Group.Title,
+                request.Target,
+                request.Commit,
+                request.Count,
+                request.History));
 
         if (prompt is not Outcome<RenderedPrompt>.Ok(var brief))
         {

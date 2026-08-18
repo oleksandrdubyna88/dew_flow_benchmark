@@ -88,6 +88,10 @@ public sealed record VettingReport(
 /// </para></summary>
 public static class VettingPass
 {
+    /// <param name="commits">What the repository says about a commit an author cited. A function rather than a
+    /// port: it is one lookup, the caller owns the git process, and a port for it would be a port with one
+    /// method and one implementation. Default resolves nothing, which makes every commit seed read as
+    /// unverifiable rather than as verified.</param>
     public static async Task<VettingReport> RunAsync(
         ICliAgentRuntime agent,
         IQuestionBank bank,
@@ -95,7 +99,8 @@ public static class VettingPass
         VettingRequest request,
         IReadOnlyList<ReviewerSlot> slots,
         DateTimeOffset now,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<string, CommitFact>? commits = null)
     {
         if (slots.Count == 0)
         {
@@ -124,7 +129,8 @@ public static class VettingPass
 
         foreach (var entry in questions)
         {
-            var vetted = await VetAsync(agent, bank, promptRoot, request, slots, reviewers, entry, now, cancellationToken);
+            var vetted = await VetAsync(
+                agent, bank, promptRoot, request, slots, reviewers, entry, now, Resolver(commits), cancellationToken);
 
             verdicts.Add(vetted.Verdicts);
             refusals.AddRange(vetted.Refusals);
@@ -155,6 +161,7 @@ public static class VettingPass
         IReadOnlyList<Reviewer> reviewers,
         BankEntry entry,
         DateTimeOffset now,
+        IReadOnlyList<Func<string, CommitFact>> commits,
         CancellationToken cancellationToken)
     {
         var marks = new List<string>();
@@ -171,6 +178,8 @@ public static class VettingPass
             .Where(proof => !proof.Resolved)
             .Select(proof => proof.Describe)
             .Concat(QuestionSanity.Check(entry.Question.Question).Select(defect => defect.Describe))
+            .Concat(commits.Select(lookup => SeedCheck.Verify(entry.Question.Seed, lookup)).SelectMany(d => d)
+                .Select(defect => defect.Describe))
             .ToList();
 
         if (broken.Count > 0)
@@ -203,8 +212,16 @@ public static class VettingPass
                 continue;
             }
 
+            // The slot AND the model. "reviewer-2 rejected seven" was ambiguous the moment reviewer-2 stopped
+            // being the model it had been for thirty-three marks.
             var stored = await bank.ReviewAsync(
-                entry.Question.Question.Id, slot.Reviewer.Key.Value, answer.Verdict, answer.Note, now, cancellationToken);
+                entry.Question.Question.Id,
+                slot.Reviewer.Key.Value,
+                answer.Verdict,
+                answer.Note,
+                now,
+                slot.Model.Config.ModelId,
+                cancellationToken);
 
             stored.Match(
                 _ =>
@@ -349,6 +366,16 @@ public static class VettingPass
                 [.. entries.Where(e => e.Question.State == CandidateState.Proposed).Take(request.Limit)]),
             Outcome<IReadOnlyList<BankEntry>>.Failure);
     }
+
+    /// <summary>The resolver as NONE or ONE, never as a stub that answers.
+    /// <para>
+    /// A default of <c>_ => CommitFact.Unknown</c> was the first shape here and it was wrong in the dangerous
+    /// direction: "nobody looked it up" would have read as "the commit does not exist", blocking every
+    /// commit-seeded question in a pass that simply had no git. Absent means UNCHECKED — the check is skipped and
+    /// nothing is claimed about the date.
+    /// </para></summary>
+    private static IReadOnlyList<Func<string, CommitFact>> Resolver(Func<string, CommitFact>? commits) =>
+        commits is null ? [] : [commits];
 
     /// <summary>Reads a file of the checked-out tree for the anchor check, through the shared path guard.
     /// <para>

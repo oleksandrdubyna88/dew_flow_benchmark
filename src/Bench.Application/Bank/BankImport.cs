@@ -163,6 +163,7 @@ public static class BankImport
                 Verdict(review.Verdict),
                 review.Note,
                 clock.GetUtcNow(),
+                review.Model,
                 cancellationToken);
 
             report = marked is Outcome<QuestionReview>.Fail failed
@@ -285,6 +286,10 @@ public sealed record ReviewFile
     public string Verdict { get; init; } = "Approved";
 
     public string Note { get; init; } = string.Empty;
+
+    /// <summary>Which model made this mark, when one did. Empty means a person — the honest default for a file
+    /// somebody wrote by hand, and the reason this field is not required.</summary>
+    public string Model { get; init; } = string.Empty;
 }
 
 public sealed record BankQuestionFile

@@ -66,3 +66,19 @@ with an empty array `[]` — that is a legible outcome; a paragraph is not.
 - An `AnswerContains` term so generic that a wrong answer would contain it (`"the"`, `"method"`, `"class"`).
 - A prompt that quotes its own answer.
 - Anything outside the JSON array.
+
+## The target's change history, gathered for you
+
+You cannot read this repository's history yourself: the tree you are in is a `git worktree`, whose `.git` is a
+redirect file your CLI declines to follow. Do not spend a turn trying — it fails, and one author's whole batch
+was lost to exactly that attempt.
+
+It is below instead, first-parent and newest first: each change as `<short sha> <date> <subject>`, followed by the
+files it touched.
+
+**Take `seed.at` from these dates verbatim, or omit it.** A date you did not read here is a date you invented,
+and a guessed seed date reads as *safe* to the memorisation check — the one lie that check cannot survive.
+
+```
+{{history}}
+```
