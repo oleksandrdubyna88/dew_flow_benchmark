@@ -105,7 +105,7 @@ public static class AuthoringPass
         }
 
         var answered = await agent.AskAsync(
-            new AgentAsk(author.Runtime, executable, brief.Text, request.Worktree, request.Wall),
+            new AgentAsk(author.Runtime, executable, brief.Text, request.Worktree, request.Wall, author.Config.ModelId),
             cancellationToken);
 
         if (answered is not Outcome<AgentAnswer>.Ok(var answer))

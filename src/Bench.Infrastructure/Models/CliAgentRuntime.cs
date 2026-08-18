@@ -15,24 +15,40 @@ namespace Bench.Infrastructure.Models;
 /// symptom is a timeout rather than a message.
 /// </para>
 /// <para>
-/// <b>Only <c>claude</c> has been exercised</b> (operator decision 2026-08-17: three authors are the design,
-/// one is the first measurement). The other two argv shapes are written from their documented headless flags
-/// and are <b>unverified</b> — stated here rather than discovered by somebody trusting them, and the live
-/// test that would verify each one is the same test, pointed at a different reference.
+/// <b>All three are now measured</b> (2026-08-18), each by piping a one-word prompt to the real CLI and reading
+/// what came back on stdout. The three headless forms are NOT the same shape, and the one that was guessed from
+/// documentation was wrong: <c>gemini -p</c> exits 1 and prints its help, because <c>-p</c> demands a value —
+/// the prompt must arrive on stdin with no flag at all. That is exactly the failure this switch exists to make
+/// impossible to guess at twice.
 /// </para></summary>
 public static class CliArgv
 {
-    /// <summary>The argv for a kind, or a refusal for a kind that is not a CLI at all.</summary>
-    public static Outcome<IReadOnlyList<string>> For(ModelRuntimeKind runtime) =>
+    /// <summary>The argv for a kind, PINNED to a model, or a refusal for a kind that is not a CLI at all.
+    /// <para>
+    /// <b>The model is pinned, never left to the CLI's default.</b> Measured 2026-08-18 and it is not a
+    /// preference: Gemini's default is <c>Auto</c>, which routes per call — a one-word prompt went to
+    /// <c>gemini-3.1-flash-lite</c> — so a batch left on Auto would be written by whichever model the router
+    /// picked, question by question, while the bank recorded one fixed string. And Codex's real default here is
+    /// <c>gpt-5.6-terra</c>, not the id this registry row first guessed. <c>AuthorModel</c> is the fact the whole
+    /// authoring design rests on — a set's ceiling becomes its author's ceiling, and the eligibility rule
+    /// compares that id — so it must name what actually answered.
+    /// </para></summary>
+    public static Outcome<IReadOnlyList<string>> For(ModelRuntimeKind runtime, string modelId) =>
         runtime switch
         {
             // `-p` is Claude Code's print mode: it answers once and exits, reading the prompt from stdin when
             // none is given as an argument. Verified against 2.1.216.
-            ModelRuntimeKind.CliClaude => Outcome<IReadOnlyList<string>>.Success(["-p"]),
+            ModelRuntimeKind.CliClaude => Outcome<IReadOnlyList<string>>.Success(["-p", "--model", modelId]),
 
-            // UNVERIFIED — from documented headless usage, never run here.
-            ModelRuntimeKind.CliCodex => Outcome<IReadOnlyList<string>>.Success(["exec", "-"]),
-            ModelRuntimeKind.CliGemini => Outcome<IReadOnlyList<string>>.Success(["-p"]),
+            // `exec` is Codex's non-interactive subcommand and `-` means "read the prompt from stdin". Verified
+            // 2026-08-18: exit 0, `ready` on stdout, wrapped in a preamble the JSON extractor already handles.
+            ModelRuntimeKind.CliCodex => Outcome<IReadOnlyList<string>>.Success(["exec", "-m", modelId, "-"]),
+
+            // NO argv at all. Gemini reads a piped prompt from stdin and answers once; its `-p` flag takes the
+            // prompt as a VALUE, so passing it bare — which is what this line said until it was measured —
+            // exits 1 with the help text. Verified 2026-08-18: empty argv, exit 0, stdout is exactly the answer
+            // and the two "true color"/"ripgrep" warnings go to stderr, which this runtime already ignores.
+            ModelRuntimeKind.CliGemini => Outcome<IReadOnlyList<string>>.Success(["-m", modelId]),
 
             _ => Outcome<IReadOnlyList<string>>.Failure(
                 $"{runtime} is not a CLI agent — it is answered over HTTP, and asking it to author a question "
@@ -57,7 +73,7 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
                 "an agent was asked an empty prompt — a launch that cannot produce an answer must not cost one");
         }
 
-        var argv = CliArgv.For(ask.Runtime);
+        var argv = CliArgv.For(ask.Runtime, ask.ModelId);
 
         if (argv is Outcome<IReadOnlyList<string>>.Fail wrongKind)
         {

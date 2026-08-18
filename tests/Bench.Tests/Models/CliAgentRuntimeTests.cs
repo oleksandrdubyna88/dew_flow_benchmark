@@ -23,21 +23,27 @@ public sealed class CliAgentRuntimeTests
 
     [Fact]
     public void Claudes_headless_flag_is_the_one_that_answers_once_and_exits() =>
-        CliArgv.For(ModelRuntimeKind.CliClaude).Ok().Should().Equal(["-p"]);
+        CliArgv.For(ModelRuntimeKind.CliClaude, "claude-sonnet-4-6").Ok().Should().Equal(["-p", "--model", "claude-sonnet-4-6"]);
 
-    [Theory]
-    [InlineData(ModelRuntimeKind.CliCodex)]
-    [InlineData(ModelRuntimeKind.CliGemini)]
-    public void Every_CLI_kind_has_an_argv(ModelRuntimeKind runtime) =>
-        CliArgv.For(runtime).Ok().Should().NotBeEmpty(
-            "a kind with no argv would launch an interactive session that waits on a terminal nobody watches, "
-            + "and the symptom would be a timeout rather than a message");
+    [Fact]
+    public void Codex_reads_the_prompt_from_stdin_through_its_exec_subcommand() =>
+        CliArgv.For(ModelRuntimeKind.CliCodex, "gpt-5.6-terra").Ok().Should().Equal(["exec", "-m", "gpt-5.6-terra", "-"]);
+
+    [Fact]
+    public void Gemini_takes_NO_prompt_flag_because_its_p_demands_a_value()
+    {
+        // Measured 2026-08-18 against the real CLI, and it corrected a guess that had been sitting in this file
+        // for a day: `echo prompt | gemini -p` exits 1 and prints the help, because -p takes the prompt as a
+        // VALUE. With no prompt flag at all the same pipe answers on stdout and exits 0 — so the only argv here
+        // is the model pin.
+        CliArgv.For(ModelRuntimeKind.CliGemini, "gemini-3.1-flash").Ok().Should().Equal(["-m", "gemini-3.1-flash"]);
+    }
 
     [Theory]
     [InlineData(ModelRuntimeKind.OpenAiEndpoint)]
     [InlineData(ModelRuntimeKind.BridgeLocal)]
     public void A_runtime_that_is_not_a_CLI_is_refused_rather_than_launched(ModelRuntimeKind runtime) =>
-        CliArgv.For(runtime).Reason().Should().Contain("not a CLI agent");
+        CliArgv.For(runtime, "any-model").Reason().Should().Contain("not a CLI agent");
 
     [Fact]
     public async Task An_empty_prompt_never_costs_a_launch()

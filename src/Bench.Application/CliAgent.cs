@@ -13,12 +13,17 @@ namespace Bench.Application;
 /// platform maximum, so argv would fail on the machine with the biggest target repository.</param>
 /// <param name="Wall">Every wait has a ceiling. An agent that hangs must cost one recorded refusal rather
 /// than an authoring run of six groups.</param>
+/// <param name="ModelId">Which model to pin the CLI to. Never left to the CLI's default: Gemini's default is
+/// <c>Auto</c>, which routes per call, so a batch left on it would be written by whichever model the router
+/// picked question by question while the bank recorded one fixed string — and <c>AuthorModel</c> is the fact the
+/// whole authoring design rests on.</param>
 public sealed record AgentAsk(
     ModelRuntimeKind Runtime,
     string Executable,
     string Prompt,
     string WorkingDirectory,
-    TimeSpan Wall);
+    TimeSpan Wall,
+    string ModelId = "");
 
 /// <param name="ResponseBytes">What the agent actually printed. Recorded for the same reason a leg records
 /// its response size: it is the only honest per-call measure of what a batch cost to produce.</param>

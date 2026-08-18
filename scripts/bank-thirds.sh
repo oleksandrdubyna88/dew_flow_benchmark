@@ -17,8 +17,9 @@
 # WHY IT IS SHAPED THIS WAY
 #   - It PROBES each CLI first (one trivial question, nothing written). Measured: a wrong headless flag does
 #     not fail, it opens an interactive session that waits on a terminal nobody watches, so the symptom is a
-#     timeout at the far end of a batch. `codex` and `gemini` argv are marked UNVERIFIED in CliArgv; this is
-#     where that gets settled, in ~5 seconds each, instead of costing a 900-second wall per group.
+#     timeout at the far end of a batch. That is not hypothetical: `gemini -p` with the prompt on stdin exits 1
+#     and prints its help, because -p takes the prompt as a VALUE — found by probing, in seconds, and fixed in
+#     CliArgv before any batch paid for it.
 #   - It is RESUMABLE, and that is not optional here: the bank's Postgres is a Docker container, Docker's
 #     engine is a WSL distro, and any `wsl --shutdown` takes the database with it. Authoring skips a group
 #     that already holds enough from an author; vetting walks only Proposed questions and writes every mark
@@ -42,7 +43,9 @@ GROUPS=(code-lookup semantic-intent bug-root-cause adversarial)
 # One row per model, used as both author and reviewer. The model ID is what the bank records as the author
 # and what the eligibility rule compares, so if a CLI turns out to report a different model, add a NEW row
 # (there is no edit: a run names the key it measured under) and disable the old one.
-AUTHORS=(claude-author codex-author gemini-author)
+# Each row PINS its model (CliArgv passes --model / -m), because Gemini's default is Auto and routes per call:
+# a batch left on it would record one author id while several models actually wrote the questions.
+AUTHORS=(claude-author codex-terra gemini-flash)
 
 # 4 + 3 + 3 = 10 per group. The first author writes four because ten does not divide by three.
 COUNTS=(4 3 3)

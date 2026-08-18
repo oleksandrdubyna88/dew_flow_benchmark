@@ -260,7 +260,7 @@ public static class VettingPass
         }
 
         var answered = await agent.AskAsync(
-            new AgentAsk(slot.Model.Runtime, slot.Executable, brief.Text, request.Worktree, request.Wall),
+            new AgentAsk(slot.Model.Runtime, slot.Executable, brief.Text, request.Worktree, request.Wall, slot.Model.Config.ModelId),
             cancellationToken);
 
         return new Asked(

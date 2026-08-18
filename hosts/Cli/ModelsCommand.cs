@@ -93,7 +93,8 @@ public static class ModelsCommand
                 path,
                 "Reply with exactly one word and nothing else: ready",
                 Directory.GetCurrentDirectory(),
-                TimeSpan.FromSeconds(command.Int("wall-seconds", 90))),
+                TimeSpan.FromSeconds(command.Int("wall-seconds", 90)),
+                model.Config.ModelId),
             cancellationToken);
 
         return answered.Match(
