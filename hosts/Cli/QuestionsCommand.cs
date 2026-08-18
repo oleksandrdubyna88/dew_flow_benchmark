@@ -6,6 +6,7 @@ using Bench.Domain.Authoring;
 using Bench.Domain.Bank;
 using Bench.Domain.Registry;
 using Bench.Domain.Targets;
+using Bench.Infrastructure.Models;
 
 namespace Bench.Cli;
 
@@ -25,6 +26,7 @@ public static class QuestionsCommand
         IModelRegistry registry,
         ISecretSource secrets,
         ICheckoutProvider checkouts,
+        WorkspaceTrust trust,
         TimeProvider clock,
         TextWriter output,
         TextWriter error,
@@ -32,12 +34,12 @@ public static class QuestionsCommand
         command.Operand(0) switch
         {
             "import" => await ImportAsync(command, bank, clock, output, error, cancellationToken),
-            "author" => await AuthorAsync(command, bank, agents, registry, secrets, checkouts, clock, output, error, cancellationToken),
+            "author" => await AuthorAsync(command, bank, agents, registry, secrets, checkouts, trust, clock, output, error, cancellationToken),
             "list" => await ListAsync(command, bank, output, error, cancellationToken),
             "groups" => await GroupsAsync(bank, output, error, cancellationToken),
             "reviewers" => await ReviewersAsync(bank, output, error, cancellationToken),
             "bind" => await BindAsync(command, bank, registry, output, error, cancellationToken),
-            "vet" => await VetAsync(command, bank, agents, registry, secrets, checkouts, clock, output, error, cancellationToken),
+            "vet" => await VetAsync(command, bank, agents, registry, secrets, checkouts, trust, clock, output, error, cancellationToken),
             "review" => await ReviewAsync(command, bank, clock, output, error, cancellationToken),
             "accept" or "reject" => await StateAsync(command, bank, output, error, cancellationToken),
             "move" => await MoveAsync(command, bank, clock, output, error, cancellationToken),
@@ -69,6 +71,7 @@ public static class QuestionsCommand
         IModelRegistry registry,
         ISecretSource secrets,
         ICheckoutProvider checkouts,
+        WorkspaceTrust trust,
         TimeProvider clock,
         TextWriter output,
         TextWriter error,
@@ -105,6 +108,7 @@ public static class QuestionsCommand
         output.WriteLine($"group    {group.Key} — {group.Title}");
         output.WriteLine($"target   {settings.Target.Value}@{settings.Commit.Value[..12]}");
         output.WriteLine($"tree     {worktree}");
+        output.WriteLine($"trust    {Trusted(trust, worktree, command)}");
 
         var request = new AuthoringRequest(
             group, settings.Target, settings.Commit, settings.Count, settings.Ordinal, settings.Wall, worktree);
@@ -537,6 +541,7 @@ public static class QuestionsCommand
         IModelRegistry registry,
         ISecretSource secrets,
         ICheckoutProvider checkouts,
+        WorkspaceTrust trust,
         TimeProvider clock,
         TextWriter output,
         TextWriter error,
@@ -577,6 +582,7 @@ public static class QuestionsCommand
         output.WriteLine($"group    {group.Key} — {group.Title}");
         output.WriteLine($"slots    {string.Join(", ", resolved.Select(s => $"{s.Reviewer.Key}={s.Model.Config.ModelId}"))}");
         output.WriteLine($"tree     {worktree}");
+        output.WriteLine($"trust    {Trusted(trust, worktree, command)}");
 
         var report = await VettingPass.RunAsync(
             agents,
@@ -698,6 +704,22 @@ public static class QuestionsCommand
                 Outcome<VettingInputs>.Failure);
         }
     }
+
+    /// <summary>Pre-trusts the checked-out tree in the agent CLI's own config, and says what happened.
+    /// <para>
+    /// Measured 2026-08-18: two of four authoring groups produced nothing and burned their whole 900-second wall
+    /// each, because the CLI would not act in an untrusted workspace and then waited for a dialog no headless run
+    /// can answer. Half an hour, and the wall was the only thing that ended it.
+    /// </para>
+    /// <para>
+    /// It never fails the verb. A tree that could not be pre-trusted still gets measured — it just risks the
+    /// gate, and the printed line is what tells the operator that is what happened. <c>--no-trust</c> skips it
+    /// for anyone who would rather answer the dialog themselves.
+    /// </para></summary>
+    private static string Trusted(WorkspaceTrust trust, string worktree, CommandLine command) =>
+        command.Has("no-trust")
+            ? "skipped (--no-trust) — an untrusted workspace makes the agent wait for a dialog nothing can answer"
+            : trust.Ensure(worktree).Match(result => result.Describe, reason => $"could not be set — {reason}");
 
     /// <summary>The selection vocabulary, shared by <c>list</c> and by <c>bench run --bank-group</c>: a
     /// group and an ordinal range, which is how the operator describes this material out loud.</summary>

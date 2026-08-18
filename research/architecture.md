@@ -248,6 +248,22 @@ environment facts came out of it and are not yet fixed: **git history is not rea
 came back `unstated` — which the `pr-diff` group depends on entirely; and a CLI that prints diagnostics beside
 its answer is why the runtime reads **stdout alone** rather than the merged output.
 
+**An untrusted checkout costs the whole wall, so the pass pre-trusts it.** Measured on the first real batch
+(2026-08-18): two of four groups produced nothing and burned their full 900-second wall each — half an hour —
+because the CLI printed *"Ignoring 5 permissions.allow entries: this workspace has not been trusted"* and then
+waited on a dialog no headless run can answer. The other two groups succeeded with the same warning printed, so
+the warning is not the failure: the blocked tool call behind it is. `WorkspaceTrust` now sets
+`hasTrustDialogAccepted` for the tree before any launch — for **both** keys, the worktree and the bare
+repository its `.git` pointer names, because the CLI's own message names the bare path while the agent is
+launched in the worktree and the lookup is by string. Three properties, because the file is the operator's and
+not ours: only paths **under the benchmark's checkout root** may be trusted (trusting an arbitrary path would
+hand any repository this benchmark is pointed at the permissions of a trusted workspace), exactly one boolean is
+written with every sibling field preserved and a non-object `projects` refused rather than replaced, and the
+write goes through a staged file with a backup. It never fails the verb — a tree that could not be pre-trusted
+still runs and the printed `trust` line says so; `--no-trust` skips it. Verified against the live config: 51
+top-level keys unchanged, one entry added, one boolean flipped in a ten-field entry, and the workspace warning
+gone from the next run's output.
+
 **There are SIX groups, and five of them can be authored.** `code-writing` is a real group of this benchmark —
 `data/bank-seed.json` seeds it as a row and `BankSeedTests` holds the count at six — and it is the one
 `bench questions author` refuses by name, because its three gates need a sandbox worktree and a build. The row

@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -179,6 +180,7 @@ public static class Program
                 scope.ServiceProvider.GetRequiredService<IModelRegistry>(),
                 scope.ServiceProvider.GetRequiredService<ISecretSource>(),
                 scope.ServiceProvider.GetRequiredService<ICheckoutProvider>(),
+                scope.ServiceProvider.GetRequiredService<WorkspaceTrust>(),
                 TimeProvider.System,
                 output,
                 error,
@@ -268,13 +270,18 @@ public static class Program
         output.WriteLine("  bench questions import --file <path> --db <connection>");
         output.WriteLine("  bench questions author --group <key> --authors <registry keys> --repo <url>");
         output.WriteLine("             --commit <40-hex> [--count 5] [--ordinal 1] [--wall-seconds 600]");
-        output.WriteLine("             [--prompts prompts] --db <connection>   a CLI agent writes candidates:");
+        output.WriteLine("             [--prompts prompts] [--no-trust] --db <connection>   a CLI agent writes");
+        output.WriteLine("             candidates:");
         output.WriteLine("             they land Proposed, through the same admission rules an import passes,");
         output.WriteLine("             and the prompt that wrote them is recorded by hash");
         output.WriteLine("  bench questions vet    --group <key> --repo <url> --commit <40-hex> [--limit 10]");
         output.WriteLine("             [--wall-seconds 300] [--allow-self-review] [--prompts prompts] --db <connection>");
-        output.WriteLine("             every BOUND reviewer slot marks the group's proposed questions; a question");
-        output.WriteLine("             becomes selectable only when every configured slot approved it");
+        output.WriteLine("             [--no-trust]   every BOUND reviewer slot marks the group's proposed questions;");
+        output.WriteLine("             a question");
+        output.WriteLine("             becomes selectable only when every configured slot approved it.");
+        output.WriteLine("             Both verbs pre-trust the checked-out tree in the agent CLI's own config —");
+        output.WriteLine("             an untrusted workspace makes the agent wait for a dialog nothing can");
+        output.WriteLine("             answer, which costs the whole wall. Only paths under --checkout-root.");
         output.WriteLine("  bench questions list   [--group <key>] [--from N] [--to N] [--accepted] --db <connection>");
         output.WriteLine("  bench questions groups --db <connection>");
         output.WriteLine("  bench questions reviewers --db <connection>   the slots, and which model answers each");

@@ -60,6 +60,11 @@ public static class CliContainer
             // a defect in how it was called.
             .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
             .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
+            // Pre-trusting that tree in the agent CLI's own config, scoped to this root and nothing else.
+            // Measured 2026-08-18: two of four authoring groups produced nothing and burned their whole
+            // 900-second wall, because the CLI refuses to act in an untrusted workspace and then waits for a
+            // dialog no headless run can answer.
+            .AddSingleton(new WorkspaceTrust(WorkspaceTrust.DefaultConfigPath, checkoutRoot))
             .BuildServiceProvider();
 
     private static IServiceCollection Store(string connectionString, Serilog.ILogger logger) =>

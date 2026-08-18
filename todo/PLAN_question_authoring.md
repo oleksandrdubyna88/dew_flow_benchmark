@@ -35,6 +35,23 @@
 >   the design has six. The seed file names no reviewer model on purpose: binding one is a local decision with a
 >   stated cost, and a committed default would read as this project's recommendation.
 >
+> **The first real batch ran on 2026-08-18 and step 6 is NOT answered by it.** Four groups × 10 questions
+> against `dew_flow_rag_qln@64865c68`: `code-lookup` **10** (6 min), `bug-root-cause` **10** (11 min),
+> `semantic-intent` **0**, `adversarial` **0** — the last two burned their whole 900-second wall each. So the bank
+> holds 22 questions, of which 2 are `Accepted` (the pair the vetting pass marked) and 20 `Proposed`.
+>
+> Two blockers, and only the first is ours:
+> - **An untrusted checkout waits for a dialog nothing can answer** — the cause of both empty groups, now FIXED:
+>   `WorkspaceTrust` pre-trusts the tree (both the worktree and the bare repository its `.git` names) before any
+>   launch, scoped to the benchmark's own checkout root, writing exactly one boolean with a staged file and a
+>   backup. **Verified**: the re-run of `semantic-intent` printed the two trusted keys and the workspace warning
+>   was **gone** from its output (`grep -c "not been trusted"` → 0), against a live config that kept all 51 of its
+>   top-level keys and had one boolean flipped in one ten-field entry.
+> - **The org's monthly spend limit** — what the re-run hit instead, at 10 minutes in: *"You've hit your org's
+>   monthly spend limit · run /usage-credits to ask your admin for a higher limit"*, exit 1, carried into the
+>   rejection as a value. **External, and it blocks every further authoring or vetting launch.** Step 6's number
+>   cannot be produced until it is raised.
+>
 > **Four defects the live batch found, in order — none of them visible from a stub:**
 > 1. **The agent was launched in the wrong directory.** It refused to write anything, saying it needed read
 >    access to the repository at that commit — the correct answer, and a defect in how it was called. Now the
