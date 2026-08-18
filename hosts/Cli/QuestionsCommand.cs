@@ -617,9 +617,9 @@ public static class QuestionsCommand
         {
             output.WriteLine($"  {question.QuestionId}  {question.Decision.Kind} — {question.Decision.Reason}");
 
-            // The broken anchors first: they are why nothing was launched for this question, and they are the
+            // The mechanical defects first: they are why nothing was launched for this question, and they are the
             // one thing here an operator can fix in a minute.
-            foreach (var line in question.BrokenAnchors.Select(a => $"anchor  {a}")
+            foreach (var line in question.Defects.Select(d => $"defect  {d}")
                 .Concat(question.Marks)
                 .Concat(question.Skipped.Select(s => $"skipped {s}")))
             {

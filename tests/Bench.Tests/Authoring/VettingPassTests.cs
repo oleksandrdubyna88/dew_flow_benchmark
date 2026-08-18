@@ -197,7 +197,7 @@ public sealed class VettingPassTests(PostgresFixture postgres)
         agent.Launches.Should().Be(0, "three agents were being paid to discover arithmetic");
         report.Broken.Should().Be(1);
         report.LaunchesSaved.Should().Be(3);
-        report.Questions.Single().BrokenAnchors.Should().ContainSingle().Which.Should().Contain("no such file");
+        report.Questions.Single().Defects.Should().ContainSingle().Which.Should().Contain("no such file");
         (await StateAsync(bank)).Should().Be(CandidateState.Proposed, "a broken anchor is a defect to fix, not a verdict");
     }
 
@@ -212,7 +212,7 @@ public sealed class VettingPassTests(PostgresFixture postgres)
         var report = await VettingPass.RunAsync(
             agent, Bank(bank), Prompts, Request(Group(bank), allowSelf: true) with { Worktree = Anchored() }, Slots(bank, "gpt-5"), Noon, Ct);
 
-        agent.Launches.Should().Be(1, string.Join(" | ", report.Questions.SelectMany(q => q.BrokenAnchors)));
+        agent.Launches.Should().Be(1, string.Join(" | ", report.Questions.SelectMany(q => q.Defects)));
         report.Broken.Should().Be(0);
         report.Accepted.Should().Be(1);
     }

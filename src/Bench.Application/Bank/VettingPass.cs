@@ -34,17 +34,18 @@ public sealed record VettingRequest(
 /// <param name="Skipped">Slots that did NOT mark this question, and why — a refused self-review, an agent that
 /// could not be reached, an unreadable answer. Reported rather than silently absent: a question that looks
 /// unreviewed for a reason nobody recorded is one somebody re-runs the whole pass over.</param>
-/// <param name="BrokenAnchors">Ground truth that does not resolve against the tree. Non-empty means NO reviewer
-/// was launched for this question: there is nothing to judge until the anchor is fixed, and asking three agents
-/// to discover arithmetic is what this field exists to stop.</param>
+/// <param name="Defects">What a mechanical check found before anything was launched: ground truth that does not
+/// resolve against the tree, or a scoring term that cannot discriminate. Non-empty means NO reviewer was asked —
+/// there is nothing to judge until it is fixed, and paying three agents to discover substring arithmetic is what
+/// this field exists to stop. Both kinds are here because both came from real reviewer rejections.</param>
 public sealed record QuestionVerdicts(
     string QuestionId,
     IReadOnlyList<string> Marks,
     PromotionDecision Decision,
     IReadOnlyList<string> Skipped,
-    IReadOnlyList<string> BrokenAnchors)
+    IReadOnlyList<string> Defects)
 {
-    public bool Broken => BrokenAnchors.Count > 0;
+    public bool Broken => Defects.Count > 0;
 }
 
 public sealed record VettingReport(
@@ -162,13 +163,14 @@ public static class VettingPass
         var hash = string.Empty;
         var cost = string.Empty;
 
-        // The mechanical half FIRST, and nothing is launched when it fails. Measured 2026-08-18: all three live
-        // reviewer notes led with exactly this check, and the review contract's first rejection reason is an
-        // expectation that points at nothing — so three agent launches were buying arithmetic.
+        // The mechanical half FIRST, and nothing is launched when it fails. Both halves were taken from what live
+        // reviewers actually wrote: every note led with the anchor check, and the two rejections the panel
+        // produced were both substring arithmetic about the scoring terms.
         var broken = AnchorCheck
             .Verify(entry.Question.Question, Reader(request.Worktree))
             .Where(proof => !proof.Resolved)
             .Select(proof => proof.Describe)
+            .Concat(QuestionSanity.Check(entry.Question.Question).Select(defect => defect.Describe))
             .ToList();
 
         if (broken.Count > 0)
@@ -179,8 +181,8 @@ public static class VettingPass
                     marks,
                     new PromotionDecision(
                         PromotionKind.Wait,
-                        "the ground truth does not resolve against the tree, so no reviewer was asked — a question "
-                        + "whose anchor is wrong has nothing to judge until it is fixed"),
+                        "a mechanical check found a defect, so no reviewer was asked — a question whose ground "
+                        + "truth or scoring term is wrong has nothing to judge until it is fixed"),
                     skipped,
                     broken),
                 refusals,

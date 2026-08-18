@@ -69,6 +69,25 @@
 >   `code-lookup` prompts name their member outright — and that is the brief working as written, not a defect:
 >   `code-lookup` is *"findable by NAME or by an obvious identifier"*, the deliberate control group. The rule
 >   belongs to `semantic-intent`, which produced nothing in this batch, so it is still unmeasured.
+> - **The panel's own rejections were both substring arithmetic, so they are mechanical too.** Its only two
+>   rejections read: *"the Required AnswerContains term 'single line' does not appear in the reference answer …
+>   a correct answer modeled on the gold reference would fail this literal substring check"* and *"the term
+>   'branch' appears verbatim and repeatedly in the prompt … so any on-topic answer — including a wrong one — is
+>   guaranteed to contain it, making it a non-discriminating term."* `QuestionSanity` now checks exactly that,
+>   with `OrdinalIgnoreCase` to match `AnswerScoring`, and it **reproduces both rejections for free** — six
+>   launches' worth. Run over the whole bank it flags 5 of 22 questions, and on the ten unvetted `code-lookup`
+>   candidates it stopped **9 of 30 launches**.
+> - **And it contradicts the panel on one question the panel APPROVED.**
+>   `gpu-waiter-never-advances-in-queue` is `Accepted` by all three slots, and its required term
+>   `'never refreshed'` is absent from its reference answer — the same defect class reviewer-1 used to reject
+>   another question minutes earlier. Three instances of one model are not merely correlated: they applied a rule
+>   one of them had articulated to one question and not to the next. Left `Accepted` deliberately — a machine
+>   check must not silently overturn a recorded judgement — and reported here because it is the sharpest evidence
+>   yet for what the one-model panel costs.
+> - **One flag is arguable, and the gate errs toward refusing.** `weighted-sum-minmax-equal-scores` is flagged
+>   because its required term `weight` occurs inside the type name `WeightedSumFusion` in the prompt. By the
+>   panel's own reasoning that IS non-discriminating; whether it should be is judgement. A flagged question stays
+>   `Proposed` rather than being rejected, so the cost of erring is bounded to an operator's glance.
 > - **The looser version of that check is unusable.** Decomposing a member name into words and looking for any of
 >   them fired on 17 of 22 questions: `gpu` in a GPU bug report, `min`/`max` in a question about min-max
 >   normalisation, `credential` in one about a credential pool. A gate with that false-positive rate would refuse
