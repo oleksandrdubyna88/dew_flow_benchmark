@@ -13,7 +13,7 @@ namespace Bench.Cli;
 /// <summary>The question bank, from the command line.
 /// <para>
 /// Questions arrive two ways now. By IMPORT — authored elsewhere, reviewed elsewhere — and by AUTHOR, which
-/// drives a CLI agent to write them (`todo/PLAN_question_authoring.md`). Both land as the same rows through
+/// drives a CLI agent to write them (`research/PLAN_question_authoring.md`). Both land as the same rows through
 /// the same admission rules, and the authored ones are <c>Proposed</c> until something vouches for them —
 /// which is what keeps "a machine wrote a thousand overnight" from meaning "a thousand are measurable".
 /// </para></summary>

@@ -207,7 +207,7 @@ days, `--hit-retention-days 0` keeps everything. It is an `ExecuteUpdate` filter
 ### Where questions come from
 
 Two doors, one set of rules. **Import** takes a hand-authored file; **author** drives a CLI coding agent to
-write candidates for one group (`bench questions author`, `todo/PLAN_question_authoring.md`). Both land as the
+write candidates for one group (`bench questions author`, `PLAN_question_authoring.md`). Both land as the
 same rows through the same admission rules, and authored ones are `Proposed` until something vouches for them
 — which is what keeps "a machine wrote a thousand overnight" from meaning "a thousand are measurable".
 

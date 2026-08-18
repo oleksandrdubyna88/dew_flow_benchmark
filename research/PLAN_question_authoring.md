@@ -1,7 +1,37 @@
 # PLAN — question authoring: three CLI agents write the bank, three review it
 
-> Status: **steps 1–5 of §4 IMPLEMENTED (1–4 on 2026-08-17, 5 on 2026-08-18); step 6 — the throughput number —
-> open.** `bench questions author` drives the Claude CLI inside the target's checkout and stored **two
+> Status: **IMPLEMENTED, 2026-08-18.** All six steps of §4 ran, including step 6's measurement. The open tail —
+> three groups with no questions and the environment fact that blocks one of them — is extracted into
+> [../todo/PLAN_question_bank_coverage.md](../todo/PLAN_question_bank_coverage.md).
+>
+> ## Step 6, measured — the number the founding plan said could only be learned by running
+>
+> One author (`claude-sonnet-4-6`), three reviewer slots all bound to the same model, target
+> `dew_flow_rag_qln@64865c68`, 2026-08-18:
+>
+> | | |
+> |---|---|
+> | Questions authored | **22** in two groups (10 + 10 per successful call, 6–11 min each) |
+> | Accepted | **17 of 22 — 77 %** |
+> | Rejected by the panel | **2** |
+> | Blocked by the mechanical gate | **3** (still `Proposed`, awaiting a fix) |
+> | Review marks | **57 — 55 approved, 2 rejected (3.5 % rejection rate)** |
+> | Cost of one review | **~1.5 min** (24 launches in 35 min 24 s) |
+> | Cost of one accepted question, end to end | **~7 min** of sequential wall clock |
+>
+> Extrapolated: ~68 accepted questions per eight-hour day of unattended sequential running, so the founding
+> plan's target of six groups × ~100 is **roughly two weeks of machine time** — for the two groups that
+> currently author at all.
+>
+> **The finding that matters more than the rate: the panel found nothing the arithmetic could not.** Both of
+> its rejections were substring facts about scoring terms, reproducible for free. The mechanical gate found
+> **three more defects the panel never saw**, and the panel had **approved** a fourth question carrying the
+> same defect class it had rejected another for. Fifty-seven marks from three instances of one model produced
+> two rejections, both mechanical, and one inconsistency. That is the measured cost of *one opinion sampled
+> three times*, and it is the argument for a second real model rather than a fourth slot.
+>
+> Earlier status, kept because the sequence is the record: **steps 1–5 of §4 IMPLEMENTED (1–4 on 2026-08-17,
+> 5 on 2026-08-18).** `bench questions author` drives the Claude CLI inside the target's checkout and stored **two
 > questions** for `code-lookup` against `dew_flow_rag_qln@64865c68`, both anchored at members the agent verified
 > in the tree (`StoreNaming.KindOf` 45–49, `RrfFusion.Fuse` 27–28). `bench questions vet` then asks every bound
 > reviewer slot for a verdict and moves a question's state only under the strict rule.
@@ -184,12 +214,12 @@
 > (a CLI agent adapter over the existing `ProcessRunner`), `hosts/Cli` (two verbs), and a new `prompts/`
 > catalog. No new tables: the bank's schema was built to this shape and phase 2 adds VERBS.
 >
-> Related docs: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.3 (which names this as *"phase 2, a
-> follow-up plan, not this one"* — this is that plan), [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md)
-> (the authoring rules this obeys), [PLAN_code_lane.md](PLAN_code_lane.md) (group 6, whose authoring has
+> Related docs: [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §3.3 (which names this as *"phase 2, a
+> follow-up plan, not this one"* — this is that plan), [PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md)
+> (the authoring rules this obeys), [PLAN_code_lane.md](../todo/PLAN_code_lane.md) (group 6, whose authoring has
 > three extra gates and is deliberately NOT in scope here),
-> [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) §5 step 11 (`CliAgentRuntime` — the boundary in §2a),
-> [../research/architecture.md](../research/architecture.md).
+> [PLAN_tool_benchmark.md](../todo/PLAN_tool_benchmark.md) §5 step 11 (`CliAgentRuntime` — the boundary in §2a),
+> [../research/architecture.md](architecture.md).
 
 ## 1. The goal, before any solution
 
