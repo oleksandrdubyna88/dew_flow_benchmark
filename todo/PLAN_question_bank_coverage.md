@@ -194,6 +194,57 @@ CLI tolerates those arguments. The timeout path is covered by a unit test, not e
 old one. There is no edit: a run names the key it measured under, and rewriting a model id would relabel
 questions already authored.
 
+## 3.7 MEASURED: cross-model review earns its cost, and gemini needs its own trust escape
+
+The first three-author batch ran 2026-08-18 17:16–18:05 UTC. Two findings, and the first answers a question
+this plan opened.
+
+**A second real model rejects an order of magnitude more.** On this batch's marks:
+
+| Slot | Model | Approved | Rejected |
+|---|---|---|---|
+| `reviewer-1` | `claude-sonnet-4-6` | 3 | **0** |
+| `reviewer-2` | `gpt-5.6-terra` | 2 | **7** |
+| `reviewer-3` | `gemini-3.1-flash` | — | — (blocked, see below) |
+
+For comparison, three slots all on Claude produced **2 rejections in 57 marks**. And codex's reasons are not
+substring arithmetic — they are checks no mechanical gate here can perform:
+
+> *"The seed timestamp 2026-08-13 predates the first commit containing QdrantVectorIndex.cs (2026-08-14), so it
+> could not match this reference."*
+
+It read the target's **git history** and compared it against the seed date — the one property the memorisation
+check rests on, and something Claude never raised in 57 marks. Two more rejections are the same check on
+`PassWatch.Beat` and `ChunkBatcher.Build`. So: the panel of one model was not merely correlated, it was
+**blind to a whole class of defect**, and the operator's three-model design is measured to be worth its cost.
+
+One codex rejection is a DISAGREEMENT WITH THE BRIEF rather than a defect: *"The prompt explicitly names
+ResolveInside, the identifier it is supposed to test retrieval for in the code-lookup group."* The
+`code-lookup` brief says questions there are *"findable by NAME or by an obvious identifier"* — the deliberate
+control group. Either the brief or the reviewer should change; that is an operator decision, not a bug.
+
+**Gemini authored nothing and reviewed nothing**, in all four groups: exit 55, *"Gemini CLI is not running in a
+trusted directory."* It has its OWN trust gate, and `WorkspaceTrust` writes `~/.claude.json` — a different
+CLI's file — so it cannot help. Fixed by adding `--skip-trust` to its argv (verified live: exit 0), which is
+the right answer for the same reason pre-trusting Claude is: the tree is one this harness created, at a commit
+it pinned, from a repository the operator named. **Re-authoring and re-vetting gemini's third is outstanding.**
+
+**And the mechanical gate paid for itself again**: 15 questions blocked across four groups, **45 launches not
+spent**. Two of those blocks are a class worth naming — anchors pointing at `Bench.Infrastructure/...` and
+`Bench.ServiceDefaults/...`, files of THIS repository rather than the target's. An author invented anchors from
+the wrong repository, and nothing but the gate would have caught it before three reviewers were paid to.
+
+### 3.8 A defect this batch exposed: rebinding a slot relabels history
+
+`question_reviews` stores the reviewer **slot**, not the model that answered. That was defensible while a slot
+meant one thing forever, and this batch broke it: `reviewer-2` was `claude-sonnet-4-6` for 33 marks and is
+`gpt-5.6-terra` now, so "reviewer-2 rejected 7" needed a timestamp filter to attribute honestly. The claim in
+`research/architecture.md` that a mark's provenance is its slot is therefore **insufficient**.
+
+Fix: store the resolved model id on the mark. One column, written by the vetting pass, which already holds it.
+Until then, any per-reviewer statistic over this bank must be cut by time, and that is a footnote nobody will
+remember.
+
 ## 4. Build order
 
 1. §3.1 — retry `semantic-intent` and `adversarial` (a run, not a change).

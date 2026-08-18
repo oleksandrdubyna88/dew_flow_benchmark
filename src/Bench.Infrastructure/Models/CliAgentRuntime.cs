@@ -44,11 +44,17 @@ public static class CliArgv
             // 2026-08-18: exit 0, `ready` on stdout, wrapped in a preamble the JSON extractor already handles.
             ModelRuntimeKind.CliCodex => Outcome<IReadOnlyList<string>>.Success(["exec", "-m", modelId, "-"]),
 
-            // NO argv at all. Gemini reads a piped prompt from stdin and answers once; its `-p` flag takes the
-            // prompt as a VALUE, so passing it bare — which is what this line said until it was measured —
-            // exits 1 with the help text. Verified 2026-08-18: empty argv, exit 0, stdout is exactly the answer
-            // and the two "true color"/"ripgrep" warnings go to stderr, which this runtime already ignores.
-            ModelRuntimeKind.CliGemini => Outcome<IReadOnlyList<string>>.Success(["-m", modelId]),
+            // No prompt FLAG: Gemini reads a piped prompt from stdin and answers once, while its `-p` takes the
+            // prompt as a VALUE — passing it bare exits 1 with the help text. Verified 2026-08-18; stdout is
+            // exactly the answer and its "true color"/"ripgrep" warnings go to stderr, which this runtime ignores.
+            //
+            // `--skip-trust` is the second thing this CLI needs and the second one measured rather than guessed:
+            // without it every launch in a checked-out worktree exits 55 with "Gemini CLI is not running in a
+            // trusted directory", and it wrote 0 questions in all four groups of the first three-author batch.
+            // Gemini has its OWN trust gate, so the `~/.claude.json` pre-trust that fixed the Claude CLI does
+            // nothing for it. Skipping is the right answer here for the same reason pre-trusting is: the tree is
+            // one THIS harness created, at a commit it pinned, from a repository the operator named.
+            ModelRuntimeKind.CliGemini => Outcome<IReadOnlyList<string>>.Success(["-m", modelId, "--skip-trust"]),
 
             _ => Outcome<IReadOnlyList<string>>.Failure(
                 $"{runtime} is not a CLI agent — it is answered over HTTP, and asking it to author a question "

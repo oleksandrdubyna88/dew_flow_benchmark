@@ -30,13 +30,23 @@ public sealed class CliAgentRuntimeTests
         CliArgv.For(ModelRuntimeKind.CliCodex, "gpt-5.6-terra").Ok().Should().Equal(["exec", "-m", "gpt-5.6-terra", "-"]);
 
     [Fact]
+    public void Gemini_needs_its_OWN_trust_escape_which_the_claude_pre_trust_does_not_provide()
+    {
+        // Measured by a batch: without --skip-trust every launch inside a checked-out worktree exits 55 with
+        // "Gemini CLI is not running in a trusted directory", and gemini wrote 0 questions in all four groups.
+        // WorkspaceTrust writes ~/.claude.json — a different CLI's file — so it cannot help here.
+        CliArgv.For(ModelRuntimeKind.CliGemini, "any").Ok().Should().Contain("--skip-trust");
+    }
+
+    [Fact]
     public void Gemini_takes_NO_prompt_flag_because_its_p_demands_a_value()
     {
         // Measured 2026-08-18 against the real CLI, and it corrected a guess that had been sitting in this file
         // for a day: `echo prompt | gemini -p` exits 1 and prints the help, because -p takes the prompt as a
         // VALUE. With no prompt flag at all the same pipe answers on stdout and exits 0 — so the only argv here
         // is the model pin.
-        CliArgv.For(ModelRuntimeKind.CliGemini, "gemini-3.1-flash").Ok().Should().Equal(["-m", "gemini-3.1-flash"]);
+        CliArgv.For(ModelRuntimeKind.CliGemini, "gemini-3.1-flash").Ok()
+            .Should().Equal(["-m", "gemini-3.1-flash", "--skip-trust"]);
     }
 
     [Theory]
