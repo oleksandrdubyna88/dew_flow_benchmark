@@ -121,6 +121,47 @@ and the operator decides whether the term is weak or the gate is over-eager.
 overturn a recorded judgement. The operator's call is whether to fix the reference, drop the term, or re-open
 the question.
 
+## 3.6 The one-button path — what is prepared, and what only you can do
+
+Everything that does not need the two CLIs is done (2026-08-18). What remains for the operator:
+
+```bash
+# 1. install and log in to both CLIs, then name their executables
+export BENCH_CODEX_EXE="C:/path/to/codex.exe"
+export BENCH_GEMINI_EXE="C:/path/to/gemini.exe"
+export BENCH_CLAUDE_EXE="C:/Users/strug/.local/bin/claude.exe"
+
+# 2. press the button
+bash scripts/bank-thirds.sh
+```
+
+The script probes each CLI, authors 4 + 3 + 3 per group across four groups, then vets with the two
+non-authoring models per question, and prints the bank. It is **resumable**: authoring skips what a group
+already holds from an author, vetting walks only `Proposed`, every mark is written as it is taken — which
+matters because the bank's Postgres is a Docker container, Docker's engine is a WSL distro, and any
+`wsl --shutdown` takes the database with it.
+
+Prepared and verified:
+
+| Item | State |
+|---|---|
+| `bench models probe --key <k>` | **new** — asks one CLI a trivial question through the same path authoring uses and writes nothing. Verified live against `claude-author`: 5 s, answered `ready` |
+| `codex-author` → `gpt-5-codex`, `gemini-author` → `gemini-3-pro` | registered, references `BENCH_CODEX_EXE` / `BENCH_GEMINI_EXE` |
+| Reviewer panel | `reviewer-1` → claude, `reviewer-2` → codex, `reviewer-3` → gemini — **three different models** |
+| `scripts/bank-thirds.sh` | committed; its two preflight refusals are verified (an unset variable, and a path with no file there) |
+| Eligibility + bank-wide dedup | shipped (§3.2a) |
+
+**One honest gap in the verification.** The probe's purpose is to catch a wrong headless flag, whose symptom
+is a hang rather than an error. Trying to simulate that by pointing the codex row at `claude.exe` did **not**
+demonstrate it: `claude.exe exec -` answered `ready` in 4.1 s, so the substitution proved only that Claude's
+CLI tolerates those arguments. The timeout path is covered by a unit test, not end to end. So the first real
+`codex` probe is still the first true test of that argv — which is exactly why it is one question with a
+120-second wall and not a batch.
+
+**If a CLI reports a different model id** than the row claims, add a NEW row with the right id and disable the
+old one. There is no edit: a run names the key it measured under, and rewriting a model id would relabel
+questions already authored.
+
 ## 4. Build order
 
 1. §3.1 — retry `semantic-intent` and `adversarial` (a run, not a change).

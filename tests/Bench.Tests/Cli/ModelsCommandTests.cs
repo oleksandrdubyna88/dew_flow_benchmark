@@ -173,6 +173,46 @@ public sealed class ModelsCommandTests(PostgresFixture postgres) : IDisposable
     /// <summary>Sets a real environment variable for the duration of the test, and takes it back down —
     /// the registry resolves references from the environment, so this is the only honest way to exercise
     /// resolution through the CLI.</summary>
+    [Fact]
+    public void Probe_without_a_key_says_what_it_needs()
+    {
+        var (code, _, error) = Run("models", "probe", "--db", postgres.ConnectionString);
+
+        code.Should().Be(ExitCodes.Configuration);
+        error.Should().Contain("--key is required");
+    }
+
+    [Fact]
+    public void Probing_a_model_that_is_answered_over_HTTP_refuses_before_launching_anything()
+    {
+        var key = Unique("http");
+        Run("models", "add", "--key", key, "--model-id", "qwen3-coder:latest",
+            "--base-url-ref", Reference("BENCH_TEST_URL", DeadEndpoint), "--db", postgres.ConnectionString);
+
+        var (code, _, error) = Run("models", "probe", "--key", key, "--db", postgres.ConnectionString);
+
+        // Probe launches a process. An OpenAI-endpoint row has no executable, and "launching it would launch
+        // nothing" is the refusal the registry already writes — reused here rather than restated.
+        code.Should().Be(ExitCodes.Configuration);
+        error.Should().Contain("answered over").And.Contain("HTTP");
+    }
+
+    [Fact]
+    public void Probing_a_CLI_whose_reference_is_unset_HERE_is_a_configuration_fact()
+    {
+        var key = Unique("cli");
+        Run("models", "add", "--key", key, "--model-id", "some-cli-model", "--runtime", "clicodex",
+            "--base-url-ref", "BENCH_PROBE_MISSING", "--executable-ref", "BENCH_PROBE_MISSING",
+            "--db", postgres.ConnectionString);
+
+        var (code, _, error) = Run("models", "probe", "--key", key, "--db", postgres.ConnectionString);
+
+        // The whole point of storing references: the row is valid and this MACHINE cannot serve it. Said before
+        // a batch rather than discovered at question forty.
+        code.Should().Be(ExitCodes.Configuration);
+        error.Should().Contain("BENCH_PROBE_MISSING");
+    }
+
     private string Reference(string name, string value)
     {
         Environment.SetEnvironmentVariable(name, value);

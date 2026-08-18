@@ -217,6 +217,7 @@ public static class Program
                 command,
                 scope.ServiceProvider.GetRequiredService<IModelRegistry>(),
                 scope.ServiceProvider.GetRequiredService<ISecretSource>(),
+                scope.ServiceProvider.GetRequiredService<ICliAgentRuntime>(),
                 TimeProvider.System,
                 output,
                 error,
@@ -265,6 +266,10 @@ public static class Program
         output.WriteLine("             REFERENCES, never values: this database is published unedited, so an");
         output.WriteLine("             endpoint or a key stored here would leave with the results");
         output.WriteLine("  bench models list    [--all] --db <connection>   says which references resolve HERE");
+        output.WriteLine("  bench models probe   --key <slug> [--wall-seconds 90] --db <connection>");
+        output.WriteLine("             asks ONE CLI agent a trivial question through the same path authoring uses,");
+        output.WriteLine("             and writes nothing. A timeout means the headless flag is wrong for that CLI");
+        output.WriteLine("             (it opened an interactive session); a non-zero exit usually means no login");
         output.WriteLine("  bench models disable|enable --key <slug> --db <connection>");
         output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");

@@ -1,3 +1,4 @@
+using Bench.Application;
 using Bench.Application.Registry;
 using Bench.Domain;
 using Bench.Domain.Registry;
@@ -23,6 +24,7 @@ public static class ModelsCommand
         CommandLine command,
         IModelRegistry registry,
         ISecretSource secrets,
+        ICliAgentRuntime agents,
         TimeProvider clock,
         TextWriter output,
         TextWriter error,
@@ -31,13 +33,96 @@ public static class ModelsCommand
         {
             "add" => await AddAsync(command, registry, clock, output, error, cancellationToken),
             "list" => await ListAsync(command, registry, secrets, output, error, cancellationToken),
+            "probe" => await ProbeAsync(command, registry, secrets, agents, output, error, cancellationToken),
             "disable" or "enable" => await EnabledAsync(command, registry, output, error, cancellationToken),
             var other => Fail(
                 error,
                 other.Length == 0
-                    ? "bench models needs an action — 'add', 'list', 'disable' or 'enable'"
-                    : $"unknown models action '{other}' — try 'add', 'list', 'disable' or 'enable'"),
+                    ? "bench models needs an action — 'add', 'list', 'probe', 'disable' or 'enable'"
+                    : $"unknown models action '{other}' — try 'add', 'list', 'probe', 'disable' or 'enable'"),
         };
+
+    /// <summary>`bench models probe` — asks a CLI agent one trivial question and reports what came back.
+    /// <para>
+    /// It exists because of a measured failure mode: <c>CliArgv</c> maps a headless flag per runtime kind, and
+    /// only <c>claude -p</c> has ever been run. A wrong flag does not fail — it opens an interactive session that
+    /// waits on a terminal nobody is watching, so the symptom is a timeout at the far end of a batch rather than a
+    /// message. Two authoring groups cost a 900-second wall each to a related failure.
+    /// </para>
+    /// <para>
+    /// It goes through the SAME path authoring and vetting use — registry reference, <see cref="ISecretSource"/>,
+    /// <c>CliArgv</c>, <c>ProcessRunner</c> — so a pass here means those three agree. And it writes NOTHING: a
+    /// verification that leaves candidates behind cannot be run twice with a clear conscience.
+    /// </para></summary>
+    private static async Task<int> ProbeAsync(
+        CommandLine command,
+        IModelRegistry registry,
+        ISecretSource secrets,
+        ICliAgentRuntime agents,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        var key = command.Value("key");
+
+        if (key.Length == 0)
+        {
+            return Fail(error, "--key is required — probe asks ONE registry model whether it answers here");
+        }
+
+        var found = await registry.FindAsync(key, cancellationToken);
+
+        if (found is not Outcome<RegisteredModel>.Ok(var model))
+        {
+            return Fail(error, found.Match(_ => string.Empty, reason => reason));
+        }
+
+        var executable = ModelResolution.Executable(model, secrets);
+
+        if (executable is not Outcome<string>.Ok(var path))
+        {
+            return Fail(error, executable.Match(_ => string.Empty, reason => reason));
+        }
+
+        output.WriteLine($"probe    {model.Key} · {model.Runtime.ToString().ToLowerInvariant()} · {model.Config.ModelId}");
+        output.WriteLine($"exe      {path}");
+
+        var answered = await agents.AskAsync(
+            new AgentAsk(
+                model.Runtime,
+                path,
+                "Reply with exactly one word and nothing else: ready",
+                Directory.GetCurrentDirectory(),
+                TimeSpan.FromSeconds(command.Int("wall-seconds", 90))),
+            cancellationToken);
+
+        return answered.Match(
+            answer =>
+            {
+                output.WriteLine($"answer   {answer.Elapsed.TotalSeconds:0.#}s · {answer.ResponseBytes} byte(s)");
+                output.WriteLine($"said     {First(answer.Text)}");
+                output.WriteLine();
+                output.WriteLine($"{model.Key} answers on this machine — its argv, its login and this launcher agree");
+                return ExitCodes.Pass;
+            },
+            reason =>
+            {
+                error.WriteLine($"bench: {model.Key} did not answer — {reason}");
+                error.WriteLine();
+                error.WriteLine("A TIMEOUT here usually means the headless flag is wrong for this CLI: the process");
+                error.WriteLine("opened an interactive session and waited. A non-zero exit usually means it is not");
+                error.WriteLine("logged in. Both are fixed before a batch, never during one.");
+                return ExitCodes.Environment;
+            });
+    }
+
+    private static string First(string text)
+    {
+        var line = text
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(string.Empty);
+        return line.Length <= 120 ? line : line[..120] + "…";
+    }
 
     private static async Task<int> AddAsync(
         CommandLine command,
