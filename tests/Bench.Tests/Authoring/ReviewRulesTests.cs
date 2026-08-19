@@ -127,7 +127,16 @@ public sealed class ReviewRulesTests
         // The state of this bank on 2026-08-18: three slots, one model, same model authored. Without the
         // one-third design or the flag, there is nobody who may vouch for anything.
         decided.Kind.Should().Be(PromotionKind.Wait);
-        decided.Reason.Should().Contain("every configured slot is the model that wrote it");
+
+        // Three phrases rather than one long substring. An empty eligible list has three arrivals — an empty
+        // table, a panel retired to nothing, and a panel that is all the author's own model — so the refusal
+        // is necessarily general, and this asserts that it still names THIS one among them. Pinning the whole
+        // sentence is what broke here: the message was widened to mention retirement and the test went red
+        // against a change that altered no behaviour.
+        decided.Reason.Should()
+            .Contain("no reviewer is eligible")
+            .And.Contain("the model that wrote it")
+            .And.Contain("may not vouch for its own work");
     }
 
     [Fact]
