@@ -5,6 +5,7 @@ using Bench.Domain.Models;
 using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Trace;
+using Bench.Domain.Variants;
 using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
@@ -112,13 +113,39 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         return new RunScoreboard(scored, passed);
     }
 
-    public Task<IReadOnlyList<MetricByDimension>> AverageByEngineAsync(
-        Guid runId, string metricName, CancellationToken cancellationToken) =>
-        AverageAsync(runId, metricName, r => r.Cell!.Run!.EngineKind.ToString(), cancellationToken);
+    public async Task<IReadOnlyList<MetricByDimension>> AverageByAsync(
+        Guid runId,
+        ReportDimension dimension,
+        string metricName,
+        QuestionScope scope,
+        CancellationToken cancellationToken)
+    {
+        var samples = await SampleAsync(runId, metricName, scope, cancellationToken);
 
-    public Task<IReadOnlyList<MetricByDimension>> AverageByLaneAsync(
-        Guid runId, string metricName, CancellationToken cancellationToken) =>
-        AverageAsync(runId, metricName, r => r.Cell!.LaneName, cancellationToken);
+        var grouped = Numbers(samples, s => Key(s, dimension))
+            .GroupBy(x => x.Key, StringComparer.Ordinal)
+            .Select(g => new MetricByDimension(g.Key, g.Average(x => x.Number), g.Count()))
+            .OrderBy(x => x.Dimension, StringComparer.Ordinal);
+
+        return [.. grouped];
+    }
+
+    public async Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
+        Guid runId, string metricName, CancellationToken cancellationToken)
+    {
+        var samples = await SampleAsync(runId, metricName, QuestionScope.All, cancellationToken);
+
+        // Grouped on a TUPLE, never on a composed string. A question id is data an author wrote, so a
+        // separator inside one would silently split a pair — which is the string parsing this schema keeps
+        // these axes in their own columns to avoid.
+        var grouped = Numbers(samples, s => (s.QuestionId, s.Subject))
+            .GroupBy(x => x.Key)
+            .Select(g => new QuestionPassRate(g.Key.QuestionId, g.Key.Subject, g.Average(x => x.Number)))
+            .OrderBy(x => x.QuestionId, StringComparer.Ordinal)
+            .ThenBy(x => x.SubjectModelId, StringComparer.Ordinal);
+
+        return [.. grouped];
+    }
 
     /// <summary>Legs of this run that no arbiter of this name has read yet.
     /// <para>
@@ -154,35 +181,101 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         return Outcome<int>.Success(metrics.Count);
     }
 
-    /// <summary>One metric across a run, grouped by a dimension of the key.
+    /// <summary>Every axis key of one metric across a run — and NOTHING else.
     /// <para>
-    /// Booleans are read as 1 and 0 so a pass rate and a numeric score aggregate the same way; a metric
-    /// with no numeric reading at all is excluded rather than counted as zero, because "not a number" and
-    /// "zero" are different facts and folding them together invents data.
+    /// <b>A projection, not a hydration, and the difference is the whole reason this method exists.</b> It
+    /// used to <c>Include</c> the result, its cell and its run and then <c>ToListAsync</c>, which materialises
+    /// full <c>ResultRow</c> entities: every <c>Prompt</c>, every <c>Answer</c>, every <c>ThinkingText</c> and
+    /// every <c>ResponseMetaJson</c> of the run crossed the wire so that one number could be averaged. That is
+    /// verbatim the diagnosis already written twice in this file's own port — on <c>ScoreboardAsync</c> and on
+    /// <c>TotalsAsync</c> — and the aggregate standing between them repeated it. Harmless while nothing called
+    /// it; a report that dies on the first ten-thousand-cell campaign the moment something did.
+    /// </para>
+    /// <para>
+    /// <b>Why the fold is still here rather than an <c>AVG</c> in SQL.</b> A metric's numeric reading is a
+    /// domain decision, not a cast: a boolean reads as 1 or 0, and a value that does not parse is EXCLUDED
+    /// rather than counted as zero — because "not a number" and "zero" are different facts and merging them
+    /// invents data. A `CAST(... AS double precision)` would throw on the row the rule exists to skip. So the
+    /// grouping happens here, over five short columns per leg instead of whole rows, and
+    /// <c>StoredMetric.AsNumber</c> stays the one place that decides what a reading is.
+    /// </para>
+    /// <para>
+    /// All four dimension keys travel together rather than one selected in the query. An enum rendered to text
+    /// server-side is at the mercy of the provider's translation, and a silent fall back to client evaluation
+    /// is the defect <c>ScoreboardAsync</c>'s comment refuses; four short strings cost nothing beside the
+    /// prompts this no longer carries.
     /// </para></summary>
-    private async Task<IReadOnlyList<MetricByDimension>> AverageAsync(
-        Guid runId,
-        string metricName,
-        Func<ResultRow, string> dimension,
-        CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<MetricSample>> SampleAsync(
+        Guid runId, string metricName, QuestionScope scope, CancellationToken cancellationToken)
     {
-        var rows = await db.Results.AsNoTracking()
-            .Include(r => r.Metrics.Where(m => m.Name == metricName))
-            .Include(r => r.Cell!).ThenInclude(c => c.Run!)
-            .Where(r => r.Cell!.RunId == runId && r.Metrics.Any(m => m.Name == metricName))
+        var query = db.Results.AsNoTracking()
+            .Where(r => r.Cell!.RunId == runId && r.Metrics.Any(m => m.Name == metricName));
+
+        // The half arrives as the question ids it holds, because SeedSplit assigns it by a hash Postgres
+        // cannot compute. A suite has tens of questions where a run has thousands of legs, so this stays a
+        // WHERE over a short list rather than a fold over every leg.
+        if (scope is QuestionScope.Some some)
+        {
+            query = query.Where(r => some.Ids.Contains(r.Cell!.QuestionId));
+        }
+
+        return await query
+            .SelectMany(r => r.Metrics.Where(m => m.Name == metricName).Select(m => new MetricSample(
+                r.Cell!.Run!.EngineKind,
+                r.Cell!.LaneName,
+                r.Cell!.SubjectModelId,
+                r.Cell!.VariantId,
+                r.Cell!.VariantName,
+                r.Cell!.QuestionId,
+                m.Kind,
+                m.Value,
+                m.Name)))
             .ToListAsync(cancellationToken);
+    }
 
-        var grouped = rows
-            .Select(row => (Dimension: dimension(row), Number: ToDomain(row.Metrics[0]).AsNumber()))
+    /// <summary>The readings that ARE numbers, keyed by whatever the caller groups on. A sample whose value
+    /// has no numeric reading is dropped here — the one place that rule lives, so both aggregates inherit
+    /// it.</summary>
+    private static IEnumerable<(TKey Key, double Number)> Numbers<TKey>(
+        IReadOnlyList<MetricSample> samples, Func<MetricSample, TKey> key) =>
+        samples
+            .Select(sample => (Key: key(sample), Number: sample.AsMetric().AsNumber()))
             .Where(x => x.Number is Outcome<double>.Ok)
-            .GroupBy(x => x.Dimension, StringComparer.Ordinal)
-            .Select(g => new MetricByDimension(
-                g.Key,
-                g.Average(x => ((Outcome<double>.Ok)x.Number).Value),
-                g.Count()))
-            .OrderBy(x => x.Dimension, StringComparer.Ordinal);
+            .Select(x => (x.Key, ((Outcome<double>.Ok)x.Number).Value));
 
-        return [.. grouped];
+    /// <summary>The dimension's value for one sample. A switch over a closed enum, so a member added without
+    /// a key here is a compiler error rather than a silently empty column in a published report.</summary>
+    private static string Key(MetricSample sample, ReportDimension dimension) =>
+        dimension switch
+        {
+            ReportDimension.Engine => sample.Engine.ToString(),
+            ReportDimension.Lane => sample.Lane,
+            ReportDimension.Subject => sample.Subject,
+            ReportDimension.Variant => VariantSelectionCodec.Decode(sample.VariantId, sample.VariantName).Canonical,
+            _ => throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "no key for this dimension"),
+        };
+
+    /// <summary>One leg's axis keys plus one metric's raw reading — the shape the aggregate projects to.
+    /// <para>
+    /// A row of this is short by construction, which is the point: it is what stands between averaging a
+    /// number and reading a campaign's every prompt to do it.
+    /// </para></summary>
+    private sealed record MetricSample(
+        EngineKind Engine,
+        string Lane,
+        string Subject,
+        Guid? VariantId,
+        string VariantName,
+        string QuestionId,
+        MetricKind Kind,
+        string Value,
+        string Name)
+    {
+        /// <summary>Enough of a <see cref="StoredMetric"/> to ask it for its number. The fields a reading does
+        /// not depend on are left empty rather than fetched — this exists to reuse
+        /// <see cref="StoredMetric.AsNumber"/> instead of copying its rules into a second place.</summary>
+        public StoredMetric AsMetric() =>
+            new(Name, Kind, Value, string.Empty, false, string.Empty, new Dictionary<string, string>());
     }
 
     private static ResultRow ToRow(LegResult result) => new()

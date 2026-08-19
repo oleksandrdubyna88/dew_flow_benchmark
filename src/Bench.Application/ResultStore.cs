@@ -9,6 +9,77 @@ namespace Bench.Application;
 /// two hundred are different claims, and the report must be able to refuse to rank the first.</param>
 public readonly record struct MetricByDimension(string Dimension, double Average, int Legs);
 
+/// <summary>Which axis of the measurement tuple an aggregate groups by.
+/// <para>
+/// A parameter rather than four near-identical methods on the port. There were two —
+/// <c>AverageByEngineAsync</c> and <c>AverageByLaneAsync</c> — and the report needs subject and variant as
+/// well; a fifth copy is where the family drifts, and the adapter's own group-by was already general
+/// (a dimension selector) behind those two public faces.
+/// </para>
+/// <para>
+/// Every member names a column the cell already carries, which is why this costs no join and no schema
+/// change: <c>CellRow</c>'s own comment says these two axes are columns precisely so that "average by
+/// subject" is a group-by rather than string parsing.
+/// </para></summary>
+public enum ReportDimension
+{
+    /// <summary>The run's engine kind. One value per run today; an axis once the backend echo lands.</summary>
+    Engine,
+
+    Lane,
+
+    Subject,
+
+    /// <summary>The variant's <c>Canonical</c> — its name, or <c>"-"</c> for a cell that named none.
+    /// <para>
+    /// Read through <c>VariantSelectionCodec.Decode(...).Canonical</c> rather than off the name column, so the
+    /// control arm carries the same mark here as it does in a leg identity. A blank would put the control arm
+    /// and a variant whose name failed to store into one row of the report.
+    /// </para></summary>
+    Variant,
+}
+
+/// <summary>Which questions an aggregate may read.
+/// <para>
+/// A closed pair rather than a nullable collection, and it exists for the SPLIT: comparing a configuration's
+/// showing on the half that selected it against the half that did not is the whole guard against a false
+/// winner, and <see cref="Bench.Domain.Splitting.SeedSplit"/> assigns that half by a hash no database can
+/// compute. So the half arrives here as the question ids it contains — a suite has tens of questions where a
+/// run has thousands of legs, which keeps the aggregate a group-by instead of a fold over hydrated rows.
+/// </para>
+/// <para>
+/// <see cref="Only"/> with an empty list is legal and means what it says: this half has no questions, so
+/// there is nothing to average. That is the <c>Unmeasured</c> state a report must be able to render, and it
+/// is a different fact from <see cref="All"/>.
+/// </para></summary>
+public abstract record QuestionScope
+{
+    private QuestionScope() { }
+
+    public sealed record Every : QuestionScope
+    {
+        internal Every() { }
+    }
+
+    public sealed record Some : QuestionScope
+    {
+        internal Some(IReadOnlyList<string> ids) => Ids = ids;
+
+        public IReadOnlyList<string> Ids { get; }
+    }
+
+    public static QuestionScope All { get; } = new Every();
+
+    public static QuestionScope Only(IReadOnlyList<string> ids) => new Some(ids);
+}
+
+/// <param name="QuestionId">The suite-facing id, which is what a report and a result row both quote.</param>
+/// <param name="SubjectModelId">The model id, never the endpoint — folding an address into the identity
+/// would make the same model at a different port a different subject.</param>
+/// <param name="PassRate">The metric's mean for this pair. A boolean reads as 1 or 0, so a pass rate and a
+/// score aggregate the same way.</param>
+public readonly record struct QuestionPassRate(string QuestionId, string SubjectModelId, double PassRate);
+
 /// <param name="Scored">How many legs of the run carry a result.</param>
 /// <param name="Passed">How many of those failed no expectation. Same rule as
 /// <see cref="LegResult.Passed"/> — a leg with no metrics at all has not passed anything.</param>
@@ -82,16 +153,41 @@ public interface IResultStore
     /// </para></summary>
     Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken);
 
-    /// <summary>The aggregate the schema exists for: one metric, averaged per engine across a run.
+    /// <summary>The aggregate the schema exists for: one metric, averaged along one axis of a run.
     /// <para>
     /// This is the query the adopted library's disk store cannot answer without reading every result and
     /// parsing dimensions back out of a directory name. Keeping it a group-by is the entire justification
     /// for owning the storage rather than inheriting theirs.
+    /// </para>
+    /// <para>
+    /// <paramref name="scope"/> is what makes the SPLIT readable: the same metric along the same axis, asked
+    /// twice — once over the half that selected a configuration and once over the half that did not — is the
+    /// pair <c>SeedSplit.Proof</c> turns into a verdict. Asked with <see cref="QuestionScope.All"/> it is the
+    /// whole suite.
+    /// </para>
+    /// <para>
+    /// An absent metric is an EMPTY result, never a zero: a dimension nobody measured on this metric and a
+    /// dimension that measured zero are different facts, and a report that merges them invents data.
     /// </para></summary>
-    Task<IReadOnlyList<MetricByDimension>> AverageByEngineAsync(
-        Guid runId, string metricName, CancellationToken cancellationToken);
+    Task<IReadOnlyList<MetricByDimension>> AverageByAsync(
+        Guid runId,
+        ReportDimension dimension,
+        string metricName,
+        QuestionScope scope,
+        CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<MetricByDimension>> AverageByLaneAsync(
+    /// <summary>One metric per (question, subject) pair — the input <c>Discrimination</c> reads.
+    /// <para>
+    /// Separate from <see cref="AverageByAsync"/> rather than a fifth dimension, because it groups by TWO
+    /// keys and what it feeds is not a ranking: <c>QuestionSpread</c> asks whether a question can separate
+    /// these subjects at all, which is a statement about the question and never a verdict on it.
+    /// </para>
+    /// <para>
+    /// A pair with no legs is ABSENT from this list rather than present with a zero. That is what lets
+    /// <c>QuestionSpread.Unmeasured</c> name the models that never attempted a question instead of counting
+    /// them as failures.
+    /// </para></summary>
+    Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken);
 
     /// <summary>Stored legs of a run that do NOT yet carry <paramref name="metricName"/>.

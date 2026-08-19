@@ -175,11 +175,18 @@ The fix is a projection: select the dimension key, the question id and the metri
 `AsNumber()` exclusion rule — *not a number* stays excluded rather than becoming zero — which means the raw
 metric value travels and the parse still happens here.
 
-**Honesty about the test:** that a query does not hydrate a column is not directly assertable through EF
-without reading generated SQL. So this ships as a shape fix guarded by the five moved arithmetic assertions
-plus one new test that a run whose results carry large prompts produces the same averages — which proves
-correctness, not the saving. The saving is argued, not measured, and this plan says so rather than implying
-a benchmark it did not run.
+**Corrected 2026-08-19, before the build: it IS directly assertable, and this plan was wrong to say
+otherwise.** The claim here was that a query's hydration cannot be checked through EF without reading
+generated SQL. It can, and the technique was already in the file the fix lands beside:
+`PostgresResultStoreTests.Recording(sql)` builds a context that keeps every statement it issues, and
+`The_run_summary_does_not_hydrate_the_run_to_count_it` uses it to assert that no statement contains
+`"Prompt"` — with a comment explaining that timing would prove nothing, because the defect is invisible at
+three rows and fatal at fifty thousand. Reaching for a caveat before searching for the neighbour that
+already solved it is the failure `reuse-first` is about.
+
+So the fix ships with a real RED test,
+`The_average_does_not_hydrate_every_prompt_of_the_run_to_compute_one_mean`, asserting the same thing about
+`"Prompt"`, `"Answer"` and `"ResponseMetaJson"`.
 
 ### 3.8 The host, and what it must not become
 
@@ -223,9 +230,20 @@ to preserve.
 
 Each step ships alone with tests green before the next starts.
 
-1. **The store, generalised and projected.** `ReportDimension`, `AverageByAsync`, `PassRateByQuestionAndSubjectAsync`,
-   the §3.7 projection, the two removed methods and their five moved assertions. No new surface yet — this
-   step is provable entirely against `PostgresFixture`.
+1. ~~**The store, generalised and projected.**~~ **IMPLEMENTED 2026-08-19.** `ReportDimension`,
+   `QuestionScope`, `QuestionPassRate`, `AverageByAsync`, `PassRateByQuestionAndSubjectAsync`, the §3.7
+   projection, the two removed methods and their five moved assertions. `PostgresResultStoreTests` 16/16,
+   whole suite 777 of 778 (the one failure is another session's in-flight `ReviewRules` message, not this
+   work). Deviations, all recorded above where they belong:
+   - The half arrives as `QuestionScope`, a closed pair, rather than the `SplitHalf?` §3.2 proposed — the
+     store stays a query and the split stays a decision in the application, and the ids make it a `WHERE`
+     over a short list instead of a fold over every leg (§3.3).
+   - All four dimension keys travel in the projection rather than one selected server-side: rendering an
+     enum to text in SQL is at the mercy of the provider's translation, and a silent fall back to client
+     evaluation is the defect `ScoreboardAsync`'s own comment refuses.
+   - The variant key is `VariantSelectionCodec.Decode(...).Canonical`, reused rather than reimplemented, so
+     the control arm reads `-` in a report exactly as it does in a leg identity.
+   - §3.7's "not assertable" caveat was wrong and is corrected in place.
 2. **`RunReport` + `RunReportView`.** The use case: dimensions, halves, `ProofState`, the min-legs refusal,
    the discrimination block, the control-arm rule and its "no baseline stated" case. Pure over the store's
    answers, so tested with a fake store and no container.
