@@ -267,7 +267,25 @@ Each step ships alone with tests green before the next starts.
      split is the report's own reading of the run's questions, so a run whose questions all land on one side
      produces an empty half — and with no half that did not choose, *nothing can ever be confirmed*. A
      report that stayed silent there would read as a clean result.
-3. **`bench report`.** Renderer only, following `PlanCommand`. `--json` emits the DTO verbatim.
+3. ~~**`bench report`.**~~ **IMPLEMENTED 2026-08-19.** Renderer only, following `PlanCommand`; `--json`
+   emits the view verbatim with enums as NAMES. `ReportCommandTests` 10/10, whole suite 805 of 806 (the
+   one failure is still another session's in-flight `ReviewRules`). Deviations:
+   - **The exit-code contract had a hole, and a test found it.** A missing `--metric` exited `3`
+     (environment) because every `RunReport` refusal was mapped there — collapsing the one distinction the
+     contract rests on: *you asked wrongly* against *what you asked about is not here*. The surface now
+     validates its own invocation (`4`) and treats anything the use case refuses as `3`. The phrase is not
+     duplicated: `RunReport.NoMetricNamed` is a public constant consumed by both, the shape
+     `ClaimRefusal.NoPendingCell` already set for exactly this reason.
+   - **`CommandLine.Double` is new**, parsed with `InvariantCulture` — `--min-spread 0.25` must mean a
+     quarter on a machine whose decimal separator is a comma, or one command produces two comparisons
+     depending on where it ran.
+   - **This verb does not migrate**, alone among the database verbs. Migrating from a report would create
+     an empty schema and then answer "no run", which reads as *your id is wrong* when the truth is *this is
+     the wrong database*.
+   - **The scripted stores were extracted** to `tests/Bench.Tests/Application/ScriptedStores.cs` and are
+     shared by the use-case and CLI tests. A second pair would let the two surfaces be tested against two
+     different ideas of what the store answers, when the whole point of `RunReport` is that both render one
+     object.
 4. **Contracts + routes.** The DTOs and the three `GET`s, tested through `MapBenchApi` without a host.
 5. **`hosts/Api` + AppHost registration.** The first process that serves them.
 

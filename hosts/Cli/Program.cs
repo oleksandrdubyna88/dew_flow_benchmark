@@ -62,6 +62,7 @@ public static class Program
             "plan" => PlanCommand.Run(command, output, error),
             "run" => RunCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "judge" => JudgeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "report" => Report(command, output, error, stopping),
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
@@ -72,6 +73,37 @@ public static class Program
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
         };
+    }
+
+    /// <summary>The one READ verb over the store, and the only one here that does not migrate on the way
+    /// in.
+    /// <para>
+    /// Deliberate: migrating from a report would create an empty schema for a run that cannot exist in it,
+    /// and then answer "no run" — which reads as "your id is wrong" when the truth is "this is the wrong
+    /// database". An unreachable or unmigrated store surfaces as an environment failure naming what
+    /// happened, which is what an operator can act on.
+    /// </para></summary>
+    private static int Report(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var db = new BenchDbContext(
+            new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).Options);
+
+        return ReportCommand
+            .RunAsync(
+                command,
+                new PostgresRunStore(db, TimeProvider.System),
+                new PostgresResultStore(db, TimeProvider.System),
+                output,
+                error,
+                stopping)
+            .GetAwaiter().GetResult();
     }
 
     /// <summary>Telemetry is the one verb that needs a database, so it is the one that resolves a
@@ -330,6 +362,12 @@ public static class Program
         output.WriteLine("  bench judge --run <id> --suite-file <path> --db <connection>");
         output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
         output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg");
+        output.WriteLine("  bench report --run <id> --metric <name> --db <connection>");
+        output.WriteLine("             [--min-legs 2] [--min-spread 0.25] [--baseline <arm>] [--json]");
+        output.WriteLine("             the comparison, along every axis and on BOTH halves of the split. A");
+        output.WriteLine("             configuration that won only where it was chosen renders UNPROVEN — not as a");
+        output.WriteLine("             smaller win. --metric has no default: the one that answers a retrieval");
+        output.WriteLine("             question means nothing for the control arm. A low score still exits 0");
         output.WriteLine("  bench version");
         output.WriteLine();
         output.WriteLine("exit codes: 0 pass · 1 regression · 3 environment · 4 configuration · 5 no report");

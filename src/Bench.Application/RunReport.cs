@@ -92,6 +92,17 @@ public sealed record RunReportView(
 /// </para></summary>
 public static class RunReport
 {
+    /// <summary>Why a report with no metric is refused — written ONCE and consumed by both sides.
+    /// <para>
+    /// The same shape as <see cref="ClaimRefusal.NoPendingCell"/>, and for the same reason: a surface has to
+    /// act on this refusal — the CLI exits <c>4</c> for it and <c>3</c> for a run that is not there, since
+    /// "you asked wrongly" and "what you asked about is not here" are the distinction its whole exit-code
+    /// contract rests on. A phrase hand-typed here and hand-matched there is a contract that drifts silently.
+    /// </para></summary>
+    public const string NoMetricNamed =
+        "name the metric to report on — there is no default, because the one that answers a retrieval "
+        + "question means nothing for the control arm and a hidden default would decide the comparison";
+
     public static async Task<Outcome<RunReportView>> BuildAsync(
         IRunStore runs,
         IResultStore results,
@@ -100,9 +111,7 @@ public static class RunReport
     {
         if (request.MetricName.Length == 0)
         {
-            return Outcome<RunReportView>.Failure(
-                "name the metric to report on — there is no default, because the one that answers a retrieval "
-                + "question means nothing for the control arm and a hidden default would decide the comparison");
+            return Outcome<RunReportView>.Failure(NoMetricNamed);
         }
 
         var run = await runs.LoadAsync(request.RunId, cancellationToken);

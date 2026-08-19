@@ -30,6 +30,15 @@ public sealed class CommandLine
     public int Int(string name, int fallback) =>
         _values.TryGetValue(name, out var value) && int.TryParse(value, out var parsed) ? parsed : fallback;
 
+    /// <summary>Parsed INVARIANT, never with the machine's culture: a threshold typed as <c>0.25</c> must
+    /// mean a quarter on a machine whose decimal separator is a comma, or the same command produces two
+    /// different comparisons depending on where it was run.</summary>
+    public double Double(string name, double fallback) =>
+        _values.TryGetValue(name, out var value)
+        && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
     public IReadOnlyList<string> List(string name) =>
         Value(name).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
