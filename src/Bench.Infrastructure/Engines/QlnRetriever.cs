@@ -123,7 +123,13 @@ public sealed class QlnRetriever(
                 wire.WorkingTreeDirty,
                 // No pass row at all is NOT a success: it means nothing this engine remembers wrote that
                 // collection, so whatever is in it has no provenance.
-                wire.PassStatus == SucceededStatus));
+                wire.PassStatus == SucceededStatus)
+            {
+                // Read, never inferred from the endpoint. A url says where a request went and nothing about
+                // the host, provider or card that answered it — which is precisely the confound this axis
+                // exists to remove, so guessing here would reintroduce it wearing a stored field's authority.
+                Backend = BackendDeclaration.Read(wire.Backend),
+            });
     }
 
     /// <summary>The engine's <c>IndexPassStatus.Succeeded</c>, as its JSON renders it — an ordinal, which is
@@ -585,6 +591,11 @@ internal sealed record IndexStateWire
 
     /// <summary>Absent when no pass this engine remembers wrote the collection.</summary>
     [JsonPropertyName("passStatus")] public int? PassStatus { get; init; }
+
+    /// <summary>What the engine computed on, as <c>host/provider/device</c>. Absent from every version of
+    /// qln shipped so far, which reads as <c>not declared</c> — the honest state rather than a gap, since an
+    /// engine that says nothing has not agreed with anything.</summary>
+    [JsonPropertyName("backend")] public string Backend { get; init; } = string.Empty;
 }
 
 internal sealed record FunnelWire

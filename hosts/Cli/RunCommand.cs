@@ -246,7 +246,8 @@ public static class RunCommand
             return Refuse(error, chosen.Match(_ => string.Empty, reason => reason));
         }
 
-        var run = BenchRun.Planned(settings.Label, settings.Target, Engine(settings), frozen.Stamp, DateTimeOffset.UtcNow);
+        var run = BenchRun.Planned(
+            settings.Label, settings.Target, Engine(settings, variants.Served), frozen.Stamp, DateTimeOffset.UtcNow);
         var cells = Matrix.Plan(
             frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants));
 
@@ -397,7 +398,7 @@ public static class RunCommand
             return Outcome<VariantChoice>.Failure($"variant '{name}': {inspected.Match(_ => string.Empty, r => r)}");
         }
 
-        var approved = IndexReadiness.Of(state, recipe.Corpus, settings.Target.Commit, settings.AllowUnstampedIndex);
+        var approved = IndexReadiness.Of(state, recipe, settings.Target.Commit, settings.Allowances);
 
         if (approved is not Outcome<IndexApproval>.Ok(var approval))
         {
@@ -411,7 +412,10 @@ public static class RunCommand
             output.WriteLine($"warn     {approval.Warning}");
         }
 
-        return Outcome<VariantChoice>.Success(new VariantChoice(variant.Select(), variant.Definition));
+        // The ECHO travels with the choice, so this run's engine identity is built from what the engine
+        // actually said it computed on rather than from what the operator configured.
+        return Outcome<VariantChoice>.Success(
+            new VariantChoice(variant.Select(), variant.Definition) { Served = state.Backend });
     }
 
     /// <summary>The variant axis as the matrix takes it. A run with no variants passes the not-applicable
@@ -421,9 +425,9 @@ public static class RunCommand
 
     /// <summary>What this run measured through. The engine is recorded on the RUN, so a report years later
     /// reads it from the run itself rather than from whatever the settings say by then.</summary>
-    private static EngineRef Engine(RunInputs settings) =>
+    private static EngineRef Engine(RunInputs settings, BackendDeclaration served) =>
         settings.Engine.IsConfigured
-            ? new EngineRef(EngineKind.Qln, settings.Engine.BaseUrl, string.Empty, string.Empty)
+            ? new EngineRef(EngineKind.Qln, settings.Engine.BaseUrl, string.Empty, string.Empty) { Backend = served }
             : EngineRef.Filesystem();
 
     /// <summary>Who this run measures, resolved before a single cell exists.
@@ -760,7 +764,8 @@ public static class RunCommand
                         retrieval,
                         command.List("variants"),
                         retentionDays,
-                        command.Has("allow-unstamped-index"))),
+                        command.Has("allow-unstamped-index"),
+                        command.Has("allow-undeclared-backend"))),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
@@ -861,5 +866,11 @@ public static class RunCommand
         QlnEngineOptions Engine,
         IReadOnlyList<string> VariantNames,
         int HitRetentionDays,
-        bool AllowUnstampedIndex);
+        bool AllowUnstampedIndex,
+        bool AllowUndeclaredBackend)
+    {
+        /// <summary>What this run agreed to measure without proof — both refusals by default, both passable,
+        /// and both still printed on every approval that used them.</summary>
+        public ReadinessAllowances Allowances => new(AllowUnstampedIndex, AllowUndeclaredBackend);
+    }
 }

@@ -1,4 +1,5 @@
 using Bench.Domain.Retrieval;
+using Bench.Domain.Runs;
 using Bench.Domain.Targets;
 using Bench.Domain.Variants;
 using FluentAssertions;
@@ -22,7 +23,7 @@ public sealed class IndexReadinessTests
     [Fact]
     public void A_corpus_built_at_another_chunk_size_is_refused_naming_both()
     {
-        var refused = IndexReadiness.Of(State(chunkTokens: 256), Recipe(chunkTokens: 512), Target, allowUnstamped: false);
+        var refused = IndexReadiness.Of(State(chunkTokens: 256), Recipe(chunkTokens: 512), Target, ReadinessAllowances.Strict);
 
         // The defect this whole file exists for, and the message has to carry both numbers: an operator
         // reading "the corpora differ" cannot tell which side to change.
@@ -36,8 +37,7 @@ public sealed class IndexReadinessTests
         var approved = IndexReadiness.Of(
             State(embedModel: "BAAI/bge-m3 (dense, FP32)", commit: IndexCommit.Of(Target)),
             Recipe(embedModel: "bge-m3"),
-            Target,
-            allowUnstamped: false);
+            Target, ReadinessAllowances.Strict);
 
         // An operator types `bge-m3` into a catalog row and the engine reports its own full identity. Verbatim
         // equality here would refuse every correct recipe in the catalog.
@@ -53,8 +53,7 @@ public sealed class IndexReadinessTests
         var refused = IndexReadiness.Of(
             State(embedModel: "BAAI/bge-m3-large", commit: IndexCommit.Of(Target)),
             Recipe(embedModel: "bge-m3"),
-            Target,
-            allowUnstamped: false);
+            Target, ReadinessAllowances.Strict);
 
         // The direction that must never be lenient. A containment rule would accept this — and a false ACCEPT
         // is indistinguishable from a correct measurement once the run is over, while a false refusal is a
@@ -66,21 +65,21 @@ public sealed class IndexReadinessTests
     [Fact]
     public void A_differently_shaped_corpus_is_refused()
     {
-        IndexReadiness.Of(State(textShape: "SourceOnly"), Recipe(textShape: "GraphHeader"), Target, allowUnstamped: false)
+        IndexReadiness.Of(State(textShape: "SourceOnly"), Recipe(textShape: "GraphHeader"), Target, ReadinessAllowances.Strict)
             .Reason().Should().Contain("SourceOnly").And.Contain("GraphHeader");
     }
 
     [Fact]
     public void An_empty_collection_is_refused_because_zero_hits_reads_as_a_hard_question()
     {
-        IndexReadiness.Of(State(exists: false, points: 0), Recipe(), Target, allowUnstamped: false)
+        IndexReadiness.Of(State(exists: false, points: 0), Recipe(), Target, ReadinessAllowances.Strict)
             .Reason().Should().Contain("never indexed");
     }
 
     [Fact]
     public void A_collection_whose_newest_pass_did_not_succeed_is_refused()
     {
-        IndexReadiness.Of(State(passSucceeded: false), Recipe(), Target, allowUnstamped: false)
+        IndexReadiness.Of(State(passSucceeded: false), Recipe(), Target, ReadinessAllowances.Strict)
             .Reason().Should().Contain("did not succeed");
     }
 
@@ -89,14 +88,14 @@ public sealed class IndexReadinessTests
     {
         // The stamp then names a commit the index does not actually contain, which is worse than no stamp
         // because it reads as evidence.
-        IndexReadiness.Of(State(commit: IndexCommit.Of(Target), dirty: true), Recipe(), Target, allowUnstamped: false)
+        IndexReadiness.Of(State(commit: IndexCommit.Of(Target), dirty: true), Recipe(), Target, ReadinessAllowances.Strict)
             .Reason().Should().Contain("uncommitted changes");
     }
 
     [Fact]
     public void An_index_from_another_commit_is_refused_because_an_anchor_is_true_at_one_tree()
     {
-        var refused = IndexReadiness.Of(State(commit: IndexCommit.Of(Other)), Recipe(), Target, allowUnstamped: false);
+        var refused = IndexReadiness.Of(State(commit: IndexCommit.Of(Other)), Recipe(), Target, ReadinessAllowances.Strict);
 
         refused.Reason().Should().Contain(Other.Value[..12]).And.Contain(Target.Value[..12]);
         refused.Reason().Should().Contain("exactly one tree");
@@ -105,7 +104,7 @@ public sealed class IndexReadinessTests
     [Fact]
     public void The_matching_commit_is_approved_with_nothing_left_unverified()
     {
-        var approved = IndexReadiness.Of(State(commit: IndexCommit.Of(Target)), Recipe(), Target, allowUnstamped: false).Ok();
+        var approved = IndexReadiness.Of(State(commit: IndexCommit.Of(Target)), Recipe(), Target, ReadinessAllowances.Strict).Ok();
 
         approved.Warning.Should().BeEmpty();
         approved.Describe.Should().Contain(Target.Value[..12]).And.Contain("point(s)");
@@ -114,7 +113,7 @@ public sealed class IndexReadinessTests
     [Fact]
     public void An_UNSTAMPED_index_is_refused_by_default_and_says_which_flag_allows_it()
     {
-        var refused = IndexReadiness.Of(State(), Recipe(), Target, allowUnstamped: false);
+        var refused = IndexReadiness.Of(State(), Recipe(), Target, ReadinessAllowances.Strict);
 
         // Not "a different commit" — nothing is known. Every index built before the engine began stamping is
         // in this state, so a strict equality check would have blocked every cell against every index in
@@ -125,7 +124,7 @@ public sealed class IndexReadinessTests
     [Fact]
     public void An_UNSTAMPED_index_may_be_measured_deliberately_and_the_run_keeps_saying_so()
     {
-        var approved = IndexReadiness.Of(State(), Recipe(), Target, allowUnstamped: true).Ok();
+        var approved = IndexReadiness.Of(State(), Recipe(), Target, new ReadinessAllowances(UnstampedIndex: true, UndeclaredBackend: false)).Ok();
 
         // The same shape as --no-checkout: the escape hatch exists, and it keeps its warning, because an
         // unverified measurement that reads as a verified one is the whole failure being prevented.
@@ -137,8 +136,83 @@ public sealed class IndexReadinessTests
     {
         // Both wrong: the corpus is the disagreement an operator can act on without re-indexing, and naming
         // the commit first would send them to fix the wrong thing.
-        IndexReadiness.Of(State(chunkTokens: 256, commit: IndexCommit.Of(Other)), Recipe(chunkTokens: 512), Target, false)
+        IndexReadiness.Of(State(chunkTokens: 256, commit: IndexCommit.Of(Other)), Recipe(chunkTokens: 512), Target, ReadinessAllowances.Strict)
             .Reason().Should().Contain("embed tokens").And.NotContain("exactly one tree");
+    }
+
+    [Fact]
+    public void An_engine_serving_on_a_DIFFERENT_arm_than_the_variant_measures_is_refused_naming_both()
+    {
+        var served = State(commit: IndexCommit.Of(Target)) with { Backend = BackendDeclaration.Read("windows/dml/R9700") };
+
+        var refused = IndexReadiness.Of(served, Recipe(backend: "wsl/migraphx/R9700"), Target, ReadinessAllowances.Strict);
+
+        // §2b's point, caught at the only moment it is still cheap: one GET per variant, before any cell
+        // exists. The numbers would be real and the row naming them would describe other hardware.
+        refused.Reason().Should()
+            .Contain("wsl/migraphx/R9700")
+            .And.Contain("windows/dml/R9700")
+            .And.Contain("different hardware");
+    }
+
+    [Fact]
+    public void An_engine_serving_on_the_arm_the_variant_measures_is_approved()
+    {
+        var served = State(commit: IndexCommit.Of(Target)) with { Backend = BackendDeclaration.Read("wsl/migraphx/R9700") };
+
+        IndexReadiness.Of(served, Recipe(backend: "wsl/migraphx/R9700"), Target, ReadinessAllowances.Strict)
+            .Failed().Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_variant_that_names_no_arm_runs_against_an_engine_that_declares_none()
+    {
+        // Every engine on earth is in this state today, and so is every variant in the catalog. Nothing may
+        // have changed for them on the day this axis shipped.
+        IndexReadiness.Of(State(commit: IndexCommit.Of(Target)), Recipe(), Target, ReadinessAllowances.Strict)
+            .Failed().Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_silent_engine_under_a_variant_that_names_an_arm_is_refused_and_passable_with_a_standing_warning()
+    {
+        var silent = State(commit: IndexCommit.Of(Target));
+        var recipe = Recipe(backend: "wsl/migraphx/R9700");
+
+        IndexReadiness.Of(silent, recipe, Target, ReadinessAllowances.Strict)
+            .Reason().Should().Contain("--allow-undeclared-backend");
+
+        var allowed = IndexReadiness.Of(
+            silent, recipe, Target, new ReadinessAllowances(UnstampedIndex: false, UndeclaredBackend: true)).Ok();
+
+        // The --allow-unstamped-index precedent: passable, and the run KEEPS SAYING what it could not verify.
+        allowed.Warning.Should().Contain("wsl/migraphx/R9700").And.Contain("UNVERIFIED");
+    }
+
+    [Fact]
+    public void Two_allowances_are_owed_two_sentences()
+    {
+        var allowed = IndexReadiness.Of(
+            State(),
+            Recipe(backend: "wsl/migraphx/R9700"),
+            Target,
+            new ReadinessAllowances(UnstampedIndex: true, UndeclaredBackend: true)).Ok();
+
+        allowed.Warning.Should().Contain("no commit stamp").And.Contain("which arm these numbers describe");
+    }
+
+    [Fact]
+    public void A_wrong_corpus_outranks_a_wrong_arm_because_it_is_the_more_specific_disagreement()
+    {
+        var served = State(chunkTokens: 256, commit: IndexCommit.Of(Target))
+            with { Backend = BackendDeclaration.Read("windows/dml/R9700") };
+
+        var refused = IndexReadiness.Of(
+            served, Recipe(chunkTokens: 512, backend: "wsl/migraphx/R9700"), Target, ReadinessAllowances.Strict);
+
+        // An operator acts on the first line they read. Both are wrong here, and the corpus is the one they
+        // can fix in the catalog row they are already looking at.
+        refused.Reason().Should().Contain("embed tokens").And.NotContain("different hardware");
     }
 
     private static IndexState State(
@@ -160,7 +234,22 @@ public sealed class IndexReadinessTests
             dirty,
             passSucceeded);
 
-    private static CorpusSpec Recipe(
-        string textShape = "GraphHeader", int chunkTokens = 512, string embedModel = "bge-m3") =>
-        CorpusSpec.Parse(textShape, chunkTokens, embedModel).Ok();
+    /// <summary>A full recipe, because that is what readiness now decides about: the corpus is one of the
+    /// three things it compares, and the arm a variant measures is not a corpus property at all.</summary>
+    private static VariantDefinition.RetrievalRecipe Recipe(
+        string textShape = "GraphHeader",
+        int chunkTokens = 512,
+        string embedModel = "bge-m3",
+        string backend = "")
+    {
+        var recipe = (VariantDefinition.RetrievalRecipe)VariantDefinition.Retrieval(
+            EngineKind.Qln,
+            RetrievalChannels.Hybrid,
+            FusionSpec.Rrf(60).Ok(),
+            CorpusSpec.Parse(textShape, chunkTokens, embedModel).Ok(),
+            RerankSpec.Pooled(50).Ok(),
+            20).Ok();
+
+        return backend.Length == 0 ? recipe : recipe.On(ComputeBackend.Parse(backend).Ok());
+    }
 }

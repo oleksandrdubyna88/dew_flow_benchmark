@@ -120,6 +120,11 @@ public sealed record IndexState(
     bool WorkingTreeDirty,
     bool PassSucceeded)
 {
+    /// <summary>What the engine says it computed on, ECHOED. An <c>init</c> member so every engine that has
+    /// not been taught to report one keeps describing itself exactly as it did — which is
+    /// <see cref="BackendDeclaration.None"/>, and is the truth about all of them today.</summary>
+    public BackendDeclaration Backend { get; init; } = BackendDeclaration.None;
+
     public string Describe =>
         $"{Collection} · {Points} point(s) · {Corpus.TextShape}/{Corpus.ChunkTokens}/{Corpus.EmbedModel} · commit {Commit.Describe}";
 }
@@ -130,6 +135,18 @@ public sealed record IndexState(
 /// verified one is the whole failure this file exists to prevent.</param>
 public sealed record IndexApproval(string Describe, string Warning);
 
+/// <summary>What the operator has agreed to measure without proof.
+/// <para>
+/// A record rather than loose booleans, because each one is a promise the run then has to keep REPEATING:
+/// both are refusals by default, both are passable, and both keep printing that what they allowed is
+/// UNVERIFIED. A parameter list of bare <c>true</c>s at a call site is where that intent goes missing.
+/// </para></summary>
+public readonly record struct ReadinessAllowances(bool UnstampedIndex, bool UndeclaredBackend)
+{
+    /// <summary>Nothing unproven. The default, and what a run gets when it passes no flag.</summary>
+    public static ReadinessAllowances Strict { get; }
+}
+
 /// <summary>Deciding whether an index may serve a recipe at a pinned commit.
 /// <para>
 /// Pure, and separate from the adapter that fetched the state, because every rule here is a judgement about
@@ -138,17 +155,25 @@ public sealed record IndexApproval(string Describe, string Warning);
 /// </para></summary>
 public static class IndexReadiness
 {
+    /// <summary>Whether this index may serve this recipe at this commit.
+    /// <para>
+    /// It takes the whole RECIPE rather than only its corpus, because two of the three things it now checks
+    /// are not corpus properties: the arm the variant measures is a property of the engine serving it, and
+    /// the commit is a property of the run. Passing the corpus alone was a partial view that happened to be
+    /// enough while there was one check.
+    /// </para></summary>
     public static Outcome<IndexApproval> Of(
-        IndexState state, CorpusSpec recipe, CommitSha target, bool allowUnstamped)
+        IndexState state, VariantDefinition.RetrievalRecipe recipe, CommitSha target, ReadinessAllowances allowed)
     {
-        var refusal = Refuse(state, recipe, target, allowUnstamped);
+        var refusal = Refuse(state, recipe, target, allowed);
 
         return refusal.Length > 0
             ? Outcome<IndexApproval>.Failure(refusal)
-            : Outcome<IndexApproval>.Success(new IndexApproval(state.Describe, Warning(state, allowUnstamped)));
+            : Outcome<IndexApproval>.Success(new IndexApproval(state.Describe, Warning(state, recipe, allowed)));
     }
 
-    private static string Refuse(IndexState state, CorpusSpec recipe, CommitSha target, bool allowUnstamped) =>
+    private static string Refuse(
+        IndexState state, VariantDefinition.RetrievalRecipe recipe, CommitSha target, ReadinessAllowances allowed) =>
         (state.Exists && state.Points > 0, state.PassSucceeded, state.WorkingTreeDirty) switch
         {
             (false, _, _) =>
@@ -160,10 +185,17 @@ public static class IndexReadiness
             (_, _, true) =>
                 $"the pass that built '{state.Collection}' scanned a tree with uncommitted changes, so its "
                 + "commit stamp names a tree the index does not contain",
-            _ => Corpus(state, recipe) is { Length: > 0 } wrong ? wrong : Commit(state, target, allowUnstamped),
+            _ => Mismatch(state, recipe, target, allowed),
         };
 
-    private static string Corpus(IndexState state, CorpusSpec recipe) => state.Corpus.Refuse(recipe);
+    /// <summary>Corpus, then arm, then commit — an order, because an operator acts on the FIRST line they
+    /// read and the three are not equally specific. A wrong corpus is a wrong measurement; a wrong arm is a
+    /// measurement of other hardware; an unstamped commit is a thing nobody knows.</summary>
+    private static string Mismatch(
+        IndexState state, VariantDefinition.RetrievalRecipe recipe, CommitSha target, ReadinessAllowances allowed) =>
+        state.Corpus.Refuse(recipe.Corpus) is { Length: > 0 } corpus ? corpus
+        : state.Backend.Refuse(recipe.Backend, allowed.UndeclaredBackend) is { Length: > 0 } arm ? arm
+        : Commit(state, target, allowed.UnstampedIndex);
 
     private static string Commit(IndexState state, CommitSha target, bool allowUnstamped) =>
         state.Commit switch
@@ -178,9 +210,29 @@ public static class IndexReadiness
                 + "Pass --allow-unstamped-index to measure it anyway, and the run will say so",
         };
 
-    private static string Warning(IndexState state, bool allowUnstamped) =>
-        allowUnstamped && state.Commit is IndexCommit.Unstamped
-            ? $"'{state.Collection}' carries no commit stamp — the corpus matches the recipe, but which tree it "
-              + "describes is UNVERIFIED, and every anchor is true at exactly one tree"
-            : string.Empty;
+    /// <summary>What the run must keep saying about what it could not verify. Both allowances speak, and
+    /// both together speak twice — an operator who passed two flags is owed two sentences.</summary>
+    private static string Warning(
+        IndexState state, VariantDefinition.RetrievalRecipe recipe, ReadinessAllowances allowed) =>
+        string.Join(
+            " · ",
+            (string[])
+            [
+                .. allowed.UnstampedIndex && state.Commit is IndexCommit.Unstamped
+                    ? new[]
+                    {
+                        $"'{state.Collection}' carries no commit stamp — the corpus matches the recipe, but which tree it "
+                        + "describes is UNVERIFIED, and every anchor is true at exactly one tree",
+                    }
+                    : [],
+                .. allowed.UndeclaredBackend
+                   && recipe.Backend is BackendDeclaration.Declared arm
+                   && state.Backend is BackendDeclaration.NotDeclared
+                    ? new[]
+                    {
+                        $"this variant measures '{arm.Canonical}' and the engine declares no backend — which arm "
+                        + "these numbers describe is UNVERIFIED",
+                    }
+                    : [],
+            ]);
 }
