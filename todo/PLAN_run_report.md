@@ -1,6 +1,11 @@
 # PLAN — the comparison comes out of the store, and the split finally decides who won
 
-> Status: **plan only, 2026-08-19 — nothing implemented.** Scope: `Bench.Application` (one use case),
+> Status: **all five build steps IMPLEMENTED 2026-08-19; the plan stays here for its documentation tail.**
+> Steps 1–5 shipped the same day: the store's generalised aggregate and its de-hydration, `RunReport`, the
+> `bench report` verb, the wire contract with its three routes, and `hosts/Api` in the AppHost. What is
+> left is not code — `research/architecture.md` and CLAUDE.md's project table must record the report and
+> `hosts/Api`, and both files are held uncommitted by a concurrent session. Promote this plan the moment
+> they are free. Original scope: `Bench.Application` (one use case),
 > `Bench.Infrastructure/Persistence` (one generalised query, one hydration fix), `Bench.Contracts` (the report
 > DTOs), `Bench.Api` (the read routes), `hosts/Api` (new — the first process that hosts them), `hosts/Cli`
 > (`bench report`). **No migration**: every dimension this report groups by is already a column, and the split
@@ -341,11 +346,21 @@ Every defect found during the build gets its RED test first, watched failing for
 - [ ] `AverageByEngineAsync` / `AverageByLaneAsync` are gone, and no group-by in the port is a near-copy of
       another.
 - [ ] No aggregate query materialises `Prompt`, `Answer` or `ResponseMetaJson`.
-- [ ] `SeedSplit.Proof`, `Discrimination.Over` and `Discrimination.Usable` have callers in `src/`.
+- [x] `SeedSplit.Proof` and `Discrimination.Over` have callers in `src/`.
+- [ ] ~~`Discrimination.Usable` has a caller.~~ **Corrected 2026-08-19: this line was over-reach and is
+      withdrawn rather than ticked.** `Usable` returns the questions a report *may rank on* — and calling it
+      would change what a ranking IS, from "the mean over this run's questions" to "the mean over the ones
+      that separate these subjects". That is a real decision about the measurement, not a wiring gap, and
+      §3.6 never proposed it: the design prints `DiscriminationReport.Describe` beside the ranking so the
+      reader can see how many questions voted for nobody, and leaves the ranking over everything measured.
+      Restricting it is worth doing deliberately, with its own argument, or not at all — so it stays
+      uncalled and is named here instead of being wired in to satisfy a checklist.
 - [ ] `hosts/Api` is registered in the AppHost, serves the three routes, applies no migrations, and starts
       no run.
 - [ ] `research/architecture.md` records the report as existing, and its *What does NOT exist yet* list no
-      longer omits it.
+      longer omits it. **BLOCKED 2026-08-19: another session holds that file uncommitted**, and the same
+      applies to CLAUDE.md's project table, which has no `hosts/Api` row. This is the one thing standing
+      between this plan and `research/` — every build step is done. Do it, then promote.
 - [ ] No migration was added by this plan.
 
 ## 7. Open questions
