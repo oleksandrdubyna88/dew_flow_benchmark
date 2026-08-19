@@ -507,7 +507,7 @@ So this plan states the budget rather than inheriting it:
   the projected figure, exactly as an oversized expansion is refused in §3.2. A matrix that silently ran
   fewer variants than it says it ran is the failure mode this whole plan is built against.
 
-### 3.4b One accelerator, one lease — and it blocks the worker
+### 3.4b One accelerator, one lease — ~~and it blocks the worker~~ and only the client half is ours now
 
 The founding plan already answered this and the answer was then deferred: *"With N models and one card,
 concurrent runs make every hardware number meaningless and every latency number a queue measurement. A
@@ -541,8 +541,23 @@ The minimum viable shape, specified so it can be built before it is needed rathe
   ([PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.3). This is the whole point of the third bucket:
   a busy card must read as a busy card, not as a slow model.
 
-**This blocks §3.6 and build-order step 9.** `BenchRunWorker` is the change that makes two drains real, so
-it may not land before the lease exists; the sibling plan carries the same boundary from its side.
+~~**This blocks §3.6 and build-order step 9.**~~ **The server half exists — corrected 2026-08-19, by reading
+qln's code rather than its plan.** It shipped there on 2026-08-17 as
+`dew_flow_rag_qln · research/PLAN_gpu_arbitration.md`, and it is built and promoted, not merely planned: one
+guarded UPDATE on a singleton row, every in-process consumer holding it (that repo's `IndexPassWorker`,
+`SearchService`, and `SidecarClient` as the funnel nothing gets past), and `GpuEndpoints` serving
+claim · heartbeat · release to an outside caller — which **long-polls** rather than refusing, so a queued cell
+waits instead of trampling.
+
+One design decision was refuted on the way and is worth carrying, because the paragraph above still asserts
+it: the advisory lock is **not** what shipped. It is right only while every holder is a database session, and
+the claimant that prompted that plan — a Claude Code session reaching for the card through MCP — holds none
+and does not expose a pid. Liveness there is pid-where-knowable plus TTL, swept on a timer and at startup.
+
+**So what is left here is the client half, and it is this repository's own work**: take the lease over HTTP
+before a cell touches the card, and record the wait in `TimeBuckets.InfrastructureWait`
+(`src/Bench.Domain/Trace/LegTrace.cs:33` — the bucket exists and has no GPU caller). That is a small client,
+not a cross-repository dependency, and it no longer sequences step 9 behind another repository's roadmap.
 
 ### 3.5 What gets persisted, structured (the public-artefact discipline)
 
@@ -725,10 +740,16 @@ tool surface a customer's agent would actually see. The lane axis therefore grow
   harness. The `bridge-local` row rides the same lane with an in-process runtime instead of a CLI.
 - Telemetry correlation closes its loop here: the agent's MCP calls land in the spool with the leg/phase
   the harness supplies, so `tool_telemetry` finally attributes real tool traffic to cells.
-- Hard dependency, named in the sibling plan (its §3.6): the qln daemon currently serves **one** MCP tool
+- ~~Hard dependency, named in the sibling plan (its §3.6): the qln daemon currently serves **one** MCP tool
   (`rt_read_local_file`) — the retrieval tool (`rag_search`) does not exist and the `IToolProvider` seam
-  is unimplemented. The agent lane is honest only after that tool ships (and the mcp submodule bump —
-  `PLAN_boundary_repairs.md` item 3 — lands).
+  is unimplemented. The agent lane is honest only after that tool ships.~~ **Discharged 2026-08-19.** The
+  daemon serves **four**: mcp's own `rt_read_local_file` plus `rag_search_project_context`,
+  `graf_search_types` and `graf_get_type_relations`
+  (`dew_flow_rag_qln · research/PLAN_retrieval_tools.md`, verified over the protocol against a running
+  daemon). The submodule bump was never the obstacle it was written as — the pinned contract already carried
+  what a provider needs. **The agent lane's retrieval dependency is met**; what the tools still cannot take is
+  a corpus variant, so an agent-lane cell reads the default text shape whatever its variant column says —
+  which is a `PLAN_corpus_axis_integrity` concern, not a missing tool.
 - Ordered last: the single-shot lane must be proven end to end first. **Everything in this section is now
   designed and built by [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md)** — a lane becomes a catalog row
   there, with a doctrine preamble as the primary axis and an L0/L1/L2 ladder; what survives here is the
@@ -772,23 +793,39 @@ matrix, where a test crosses retrieval variants with tool lanes, and nowhere els
 ## 4. Cross-repository contract (the sibling plan's half)
 
 What this repo needs qln to provide — named identically in
-`dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`:
+`dew_flow_rag_qln · todo/PLAN_search_variant_axes.md`.
 
-1. `/search` accepts the fusion axes (`fusion.mode`, weights, `norm`) and `textShape` selects chunk
-   variants — additive to the existing input, `trace/v0` untouched.
-2. An **index-state read**: per (project, branch, corpus variant) — collection name, recipe, indexed
-   commit sha, point count, finished-at. This is what `index_preparations` polls.
-3. Passes **record the commit** they scanned; a pass can be started over HTTP naming the corpus variant.
+> **Delivery marks added 2026-08-19**, each checked against qln's code rather than against its plan — which is
+> how three of them turned out to have shipped on 2026-08-17 while this list still read as a wish. A contract
+> list that never records delivery is a list that stops being read.
+
+1. ~~`/search` accepts the fusion axes (`fusion.mode`, weights, `norm`) and `textShape` selects chunk
+   variants — additive to the existing input, `trace/v0` untouched.~~ **DELIVERED 2026-08-17**
+   (`Platform.Contracts/SearchModels.cs` — `Fusion`, `WsumNorm`, per-channel weights;
+   `SearchInput.TextShape` + `WindowTokens` select the corpus).
+2. ~~An **index-state read**: per (project, branch, corpus variant) — collection name, recipe, indexed
+   commit sha, point count, finished-at. This is what `index_preparations` polls.~~ **DELIVERED 2026-08-17**
+   — `GET /api/rag/projects/{projectId}/index-state`, every field derived rather than stored, and a shape
+   nobody indexed answers `exists: false` with its own collection name.
+3. **Half delivered.** Passes **record the commit** they scanned — **DELIVERED 2026-08-17**. A pass **started
+   over HTTP naming the corpus variant** is still open: `IndexPassInput` carries `Branch`, `SkipGraph`,
+   `ExpectedCommit` and `WindowTokens`, and `TextShape` appears only on the index-state *read*, so an
+   operator or a cell can build **only the default text shape**.
 4. A second dense embedder (`qwen`/`jina`, dense-only) registered behind the same recipe machinery, so
    `embedModel` is a legal variant axis.
-5. **`/search` refuses an unknown axis field rather than ignoring it** (`JsonUnmappedMemberHandling.Disallow`
-   on the axes contract, absent today at
-   `dew_flow_rag_qln · src/Platform.Contracts/SearchModels.cs:15-101`). Without it, an un-upgraded engine
-   silently serves RRF for a `wsum` request and echoes a record that merely lacks the field — §3.4 step 3.
-6. **A pass re-reads HEAD at pass END** and fails rather than stamps when the tree moved mid-scan, and
-   **the indexing checkout is leased** for the duration of a pass — §3.4 step 2.
-7. **An accelerator lease, served by qln**, taken by its own pass in-process and by this repository over
-   HTTP for any cell that drives the card on its own account — §3.4b.
+5. ~~**`/search` refuses an unknown axis field rather than ignoring it**~~ **DELIVERED 2026-08-17** —
+   `JsonUnmappedMemberHandling.Disallow` sits on `SearchAxes` (`SearchModels.cs:65`), and a misspelled
+   `denseWeigth` is refused rather than dropped. Without it, an un-upgraded engine would silently serve RRF
+   for a `wsum` request and echo a record that merely lacks the field — §3.4 step 3.
+6. **Half delivered.** **A pass re-reads HEAD at pass END** and fails rather than stamps when the tree moved
+   mid-scan — **DELIVERED 2026-08-17** (`CommitStamp.Moved`). **The indexing checkout lease** for the duration
+   of a pass is still open, and qln's plan says the same from its side: the re-read catches the race, it does
+   not prevent it — §3.4 step 2.
+7. ~~**An accelerator lease, served by qln**~~ — **SERVER DELIVERED 2026-08-17**
+   (`dew_flow_rag_qln · research/PLAN_gpu_arbitration.md`): qln's pass, search and sidecar funnel all hold it
+   in-process, and `GpuEndpoints` serves claim · heartbeat · release over HTTP, long-polling rather than
+   refusing. **Taking it from this repository for any cell that drives the card on its own account is ours and
+   is open** — §3.4b.
 8. **The collection prefix is selectable per pass and per search**, so benchmark-created corpora are
    `bench_…` and "sweep everything this tool made" is decidable from a name
    ([PLAN_corpus_litter.md](PLAN_corpus_litter.md)). The application layer already carries it
@@ -830,9 +867,10 @@ precedes the API + CLI it renders.**
 6. **Expansion** — `ExpandAsync` over variants AND subjects + derived progress + CLI `bench expand`,
    chunked inserts and the size cap of §3.2. Explicit tests: settle everything, add a variant → reopen;
    add a subject → reopen; % = settled ÷ current total.
-6a. **The corpus budget and the accelerator lease** (§3.4a, §3.4b). Both are cheap while nothing is
+6a. **The corpus budget and the accelerator lease CLIENT** (§3.4a, §3.4b). Both are cheap while nothing is
    resident and expensive to retrofit once 96 corpora and two drains exist. **Step 9 may not land before
-   this one.**
+   this one.** The lease half shrank on 2026-08-19: qln built and shipped the server, so what remains here is
+   an HTTP client and one bucket assignment rather than a design owed by another repository.
 7. **API read surface + reports** — run/matrix/variant/question/model endpoints in `Bench.Api`, plus a
    `bench report` verb surfacing the comparison queries that today have no caller
    (`AverageByEngineAsync`/`AverageByLaneAsync`).
@@ -840,12 +878,14 @@ precedes the API + CLI it renders.**
    settings, questions, matrix and variant pages over the step-7 endpoints.
 9. **Console, write paths** — new-test flow, `BenchRunWorker` hosting `LegDrain` (§3.6), start/expand
    buttons, polling, sweep on startup. **Gated on three things, all of them cheaper before than after:**
-   step 6a's accelerator lease (two drains against one card), ~~`PLAN_reliability_tail.md` **item 2**~~
+   step 6a's accelerator-lease **client** (two drains against one card; the server it calls has existed since
+   2026-08-17 — §3.4b), ~~`PLAN_reliability_tail.md` **item 2**~~
    (the two unbounded dictionaries this worker makes live — **cleared 2026-08-16**, see
    `research/PLAN_reliability_tail.md`), and
    ~~`dew_flow_rag_qln · PLAN_reliability_tail.md` **item 6** (the poll shape §3.6 page 3 copies)~~ —
    **cleared 2026-08-16**: it shipped as `LivePoller`, so page 3 reuses a type instead of copying a shape.
-   Only step 6a's lease still gates this step.
+   Only step 6a still gates this step — and of its two halves the lease is now a client against a live
+   endpoint, so the gate is work this repository can schedule rather than wait for.
 10. **Judges** — ordered per-test arbiters from the registry, per-group rollups + the analysis block.
 11. ~~**Agent lane**~~ — **superseded by [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md)**, which owns
     `CliAgentRuntime`, the `agent-mcp` lane and telemetry correlation as its own step 11 (boundary table,
