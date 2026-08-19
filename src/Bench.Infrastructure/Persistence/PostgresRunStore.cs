@@ -1,5 +1,6 @@
 using Bench.Application;
 using Bench.Domain;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Targets;
 using Bench.Domain.Variants;
@@ -287,6 +288,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
         EngineEndpoint = run.Engine.Endpoint,
         EngineVersion = run.Engine.Version,
         IndexFingerprint = run.Engine.IndexFingerprint,
+        EngineBackend = run.Engine.Backend.Canonical,
         SuiteStamp = run.SuiteStamp,
         Status = run.Status,
         CreatedAt = run.CreatedAt,
@@ -334,7 +336,10 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
                     row.Id,
                     row.Label,
                     new MeasurementTarget(repo, commit, row.Exclusions),
-                    new EngineRef(row.EngineKind, row.EngineEndpoint, row.EngineVersion, row.IndexFingerprint),
+                    new EngineRef(row.EngineKind, row.EngineEndpoint, row.EngineVersion, row.IndexFingerprint)
+                    {
+                        Backend = BackendDeclaration.Read(row.EngineBackend),
+                    },
                     row.SuiteStamp,
                     row.Status,
                     row.CreatedAt)),

@@ -26,6 +26,15 @@ public sealed class RunRow
 
     public string IndexFingerprint { get; set; } = string.Empty;
 
+    /// <summary>The arm the engine ECHOED, as <c>host/provider/device</c>, or empty when it declared none.
+    /// <para>
+    /// Empty is the value of every run stored before this column existed and of every run against an engine
+    /// that does not report one — which is all of them today. It reads back as <em>not declared</em> rather
+    /// than parsing into an arm, because silence is not agreement: two sidecars must stay two rows, and an
+    /// unattributed run must not join either one's aggregate.
+    /// </para></summary>
+    public string EngineBackend { get; set; } = string.Empty;
+
     public string SuiteStamp { get; set; } = string.Empty;
 
     public RunStatus Status { get; set; }

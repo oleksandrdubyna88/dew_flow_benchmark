@@ -1,3 +1,4 @@
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -53,6 +54,43 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         loaded.Engine.Canonical.Should().Be(run.Engine.Canonical);
         loaded.SuiteStamp.Should().Be(run.SuiteStamp);
         loaded.Scope.Should().Be(run.Scope);
+    }
+
+    [Fact]
+    public async Task The_arm_an_engine_served_on_survives_the_store()
+    {
+        var (planned, cells) = Plan(1, 1, 1);
+        var run = planned with
+        {
+            Engine = new EngineRef(EngineKind.Qln, "http://localhost:5080", "1.0", "fp")
+            {
+                Backend = BackendDeclaration.Read("wsl/migraphx/R9700"),
+            },
+        };
+
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        var loaded = (await store.LoadAsync(run.Id, Ct)).Ok();
+
+        // Without this column the echo is compared at plan time and then lost, so a report months later
+        // cannot group by the arm at all — the two sidecars measured on 2026-08-18 would be one row again,
+        // which is the whole defect this axis exists to end.
+        loaded.Engine.Backend.Describe.Should().Be("wsl/migraphx/R9700");
+        loaded.Engine.Canonical.Should().Be(run.Engine.Canonical);
+    }
+
+    [Fact]
+    public async Task A_run_against_an_engine_that_declared_nothing_loads_as_NOT_DECLARED_rather_than_as_an_arm()
+    {
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        // Every run ever stored is in this state, and the empty column they carry must read as "nothing is
+        // known" rather than parse into some arm — silence is not agreement.
+        (await store.LoadAsync(run.Id, Ct)).Ok().Engine.Backend
+            .Should().BeOfType<BackendDeclaration.NotDeclared>();
     }
 
     [Fact]
