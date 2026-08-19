@@ -1,6 +1,6 @@
 # PLAN — the comparison comes out of the store, and the split finally decides who won
 
-> Status: **all five build steps IMPLEMENTED 2026-08-19; the plan stays here for its documentation tail.**
+> Status: **OPEN — steps 1 to 5 shipped 2026-08-19, and the documentation tail is not written.**
 > Steps 1–5 shipped the same day: the store's generalised aggregate and its de-hydration, `RunReport`, the
 > `bench report` verb, the wire contract with its three routes, and `hosts/Api` in the AppHost. What is
 > left is not code — `research/architecture.md` and CLAUDE.md's project table must record the report and
@@ -360,7 +360,7 @@ Every defect found during the build gets its RED test first, watched failing for
 - [ ] `research/architecture.md` records the report as existing, and its *What does NOT exist yet* list no
       longer omits it. **BLOCKED 2026-08-19: another session holds that file uncommitted**, and the same
       applies to CLAUDE.md's project table, which has no `hosts/Api` row. This is the one thing standing
-      between this plan and `research/` — every build step is done. Do it, then promote.
+      between this plan and `research/`. Do it, then promote.
 - [ ] No migration was added by this plan.
 
 ## 7. Open questions
