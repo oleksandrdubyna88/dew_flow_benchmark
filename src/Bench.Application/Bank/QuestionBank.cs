@@ -53,6 +53,15 @@ public interface IQuestionBank
     /// would change who reviewed what without saying so.</summary>
     Task<Outcome<Reviewer>> BindReviewerAsync(string reviewerKey, string modelKey, CancellationToken cancellationToken);
 
+    /// <summary>Retires a reviewer slot, or brings it back. The only way out of a panel.
+    /// <para>
+    /// Not a delete, and the difference is the whole point: the strict promotion rule waits for every eligible
+    /// slot, so one slot that never answers freezes the entire bank — and until this existed there was nothing to
+    /// do about it, because a slot's marks must stay attributable and unbinding its model only turns it into a
+    /// person who also never answers. Disabled, never deleted, exactly as a model is.
+    /// </para></summary>
+    Task<Outcome<Reviewer>> SetReviewerEnabledAsync(string reviewerKey, bool enabled, CancellationToken cancellationToken);
+
     /// <summary>The questions a query names, each with the group it lives in NOW. A test freezes what this
     /// returns; the snapshot is what reports read afterwards.</summary>
     Task<Outcome<IReadOnlyList<BankEntry>>> QuestionsAsync(BankQuery query, CancellationToken cancellationToken);

@@ -8,6 +8,18 @@ Pinned commit: `{{commit}}`
 Group: `{{group}}` — {{groupTitle}}
 Write exactly {{count}} question(s).
 
+## The repository you are describing is the one you are STANDING IN
+
+Every question, every path, every member name refers to the working tree around you — `{{target}}` at
+`{{commit}}`. Nothing else. Not the benchmark that launched you, not a repository you remember, not one
+you have seen before with a similar layout.
+
+**List the tree before you anchor anything, and take every path from that listing.** A path you typed from
+memory is a path that does not exist here, and an expectation pointing at a file this tree does not contain
+is thrown away by a mechanical check before a reviewer ever sees the question — the work you did to write
+it is lost with it. This has happened: two questions in one batch anchored at `Bench.Infrastructure/...`,
+which is the harness's own code and has never been in a target repository.
+
 ## What you must produce
 
 A single JSON array and **nothing else**. No prose before it, no explanation after it, no markdown fence.
@@ -18,7 +30,7 @@ A single JSON array and **nothing else**. No prose before it, no explanation aft
     "id": "short-kebab-id",
     "prompt": "The question, as a person would ask it.",
     "referenceAnswer": "What a correct answer says. One or two sentences.",
-    "seed": { "kind": "member", "reference": "Type.Member or a PR/issue reference", "at": "2026-05-14" },
+    "seed": { "kind": "commit", "reference": "ad9d2cf", "at": "2026-05-14" },
     "expectations": [
       { "kind": "Member", "file": "src/Path/File.cs", "member": "Type.Member", "start": 75, "end": 111 },
       { "kind": "AnswerContains", "text": "a term a correct answer must use" },
@@ -40,15 +52,21 @@ with an empty array `[]` — that is a legible outcome; a paragraph is not.
 
 ## Rules that decide whether a question is accepted
 
-1. **At least one `Member` or `File` expectation, pointing at real code in that repository at that commit.**
+1. **At least one `Member` or `File` expectation, pointing at real code in this tree at this commit.**
    A question with nothing to find measures nothing. Line numbers must be the real ones — if you are not
    certain of them, give the file and the member and set `start` and `end` to 0.
 
-2. **The seed must be a real thing, with its real date.** `seed.kind` is `member`, `pr`, `issue` or `human`;
-   `seed.reference` names it; `seed.at` is when that thing dates from. This is how the benchmark decides
-   whether a subject could have memorised the answer instead of working it out. **Never invent a date.** If
-   you do not know it, omit `at` entirely — unknown reads as *may recall*, which is honest, while a guessed
-   date reads as *safe*, which is a lie the whole measurement rests on.
+2. **The seed must be a real thing, with its real date.** `seed.kind` is `commit`, `member`, `pr`, `issue`
+   or `human`; `seed.reference` names it; `seed.at` is when that thing dates from. This is how the benchmark
+   decides whether a subject could have memorised the answer instead of working it out.
+
+   **Prefer `commit`.** A `seed.reference` that is a short sha from the history below is the one kind the
+   harness can date for itself — so if you name the change, you do not have to be right about the day. Write
+   `at` as a plain calendar date (`"2026-05-14"`), never a timestamp.
+
+   **Never invent a date.** If you do not know it, omit `at` entirely — unknown reads as *may recall*, which
+   is honest, while a guessed date reads as *safe*, which is a lie the whole measurement rests on. With a
+   `commit` seed, omitting it costs nothing: the repository supplies the day.
 
 3. **A memorisation trap where the group calls for one.** A question whose obvious answer is the widely
    repeated one and whose correct answer, in THIS repository, is not. Express it as an `AnswerExcludes`
@@ -59,11 +77,6 @@ with an empty array `[]` — that is a legible outcome; a paragraph is not.
 
 5. **One question, one thing.** A question with two parts scores as one number and cannot say which half
    failed.
-
-## What gets a question rejected
-
-- An expectation pointing at a file or member that does not exist at that commit.
-- An `AnswerContains` term so generic that a wrong answer would contain it (`"the"`, `"method"`, `"class"`).
 
 ## Your reference answer is the FIRST thing your own expectations are tested against
 
@@ -83,6 +96,12 @@ answer looks like:
 
 These three are checked mechanically before any reviewer sees your question, and a question that fails them is
 never read by anybody. They cost you nothing to check and everything to get wrong.
+
+## What gets a question rejected
+
+- An expectation pointing at a file or member that does not exist in this tree at this commit.
+- An expectation pointing outside this repository — a path from the harness, or from any other codebase.
+- An `AnswerContains` term so generic that a wrong answer would contain it (`"the"`, `"method"`, `"class"`).
 - A prompt that quotes its own answer.
 - Anything outside the JSON array.
 

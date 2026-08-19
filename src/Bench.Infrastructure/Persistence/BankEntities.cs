@@ -32,6 +32,10 @@ public sealed class ReviewerRow
     /// <summary>The registry key of the model that answers for this slot, or empty for a person. Stored
     /// because the self-review rule needs "who is reviewer-2" to be a fact, not a command-line flag.</summary>
     public string ModelKey { get; set; } = string.Empty;
+
+    /// <summary>Whether this slot still takes part. Retired rather than deleted, so the marks it already made
+    /// stay attributable — the same rule the model registry follows, and for the same reason.</summary>
+    public bool Enabled { get; set; } = true;
 }
 
 /// <summary>One question of the bank.

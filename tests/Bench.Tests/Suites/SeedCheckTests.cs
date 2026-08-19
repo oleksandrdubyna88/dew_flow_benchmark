@@ -66,6 +66,31 @@ public sealed class SeedCheckTests
             .Should().BeEmpty();
     }
 
+    [Fact]
+    public void A_date_read_from_JSON_in_a_NON_UTC_offset_is_the_DAY_it_was_written()
+    {
+        // How a seed actually arrives. `"at": "2026-08-17"` deserialises to midnight in the READING machine's
+        // offset, and every other test in this class builds its date already in UTC — which is exactly why none
+        // of them could see the shift that made two authors look like they dated a day early for a whole batch.
+        var written = new DateTimeOffset(2026, 8, 17, 0, 0, 0, TimeSpan.FromHours(2));
+
+        SeedCheck.Verify(QuestionSeed.Written("commit", "5d6aec9", written), Repository()).Should().BeEmpty(
+            "the author wrote the day the repository says, whatever offset this machine reads it in");
+    }
+
+    [Fact]
+    public void A_day_early_written_in_a_non_UTC_offset_is_STILL_caught()
+    {
+        // The other half: fixing the false positive must not cost the true one.
+        var written = new DateTimeOffset(2026, 8, 16, 0, 0, 0, TimeSpan.FromHours(2));
+
+        var defect = SeedCheck.Verify(QuestionSeed.Written("commit", "5d6aec9", written), Repository())
+            .Should().ContainSingle().Subject;
+
+        defect.Fault.Should().Be(SeedFault.WrongDate);
+        defect.Describe.Should().Contain("2026-08-16").And.Contain("2026-08-17");
+    }
+
     private static QuestionSeed Seed(string reference, DateOnly at) =>
         new("commit", reference, at.ToDateTime(default, DateTimeKind.Utc));
 

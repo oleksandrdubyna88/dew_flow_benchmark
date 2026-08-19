@@ -289,6 +289,33 @@ judgement, and its provenance is the slot, which is recorded either way.
   is any good. Anchor paths are data an agent wrote, so they resolve through `RootedPath` (shared with
   `FilesystemEngine`, which had the only copy of that arithmetic): a path that escapes the tree reads as
   nothing to find.
+- **The gate grew two more checks, both taken from what reviewers actually wrote.** `QuestionSanity` reads a
+  question against its own reference answer: every required `AnswerContains` term must appear in it, no
+  `AnswerExcludes` term may, and no required term may sit in the prompt where any on-topic answer would contain
+  it. Comparison is `OrdinalIgnoreCase`, matching `AnswerScoring` — a gate stricter than the scorer would refuse
+  questions that score fine. `SeedCheck` compares a `commit` seed's date against what the repository says. Both
+  exist because a live panel found exactly these defects and charged three launches each to do it; run over the
+  whole bank they flagged **22 of 56 questions**, and the two dominant classes were the contract's fault rather
+  than any author's — the rule was never written down. It is now, in `prompts/author/_shared.md`, and the class
+  vanished from the next batch's twenty questions.
+- **The author is handed the history it cannot read.** A question's seed date is the memorisation check's only
+  input, and an agent inside a `git worktree` cannot get one: the `.git` is a redirect file its CLI declines to
+  follow. So `GitHistory` gathers first-parent changes — our own git has no objection — and the brief carries
+  them. Commits rather than merges, corrected on measurement: the target is trunk-based and has no merge commits
+  at all, so the group specified around pull requests would have stayed unauthorable.
+- **And the date is DERIVED, not authored** — kept, but for a different reason than the one first written here.
+  The justification was *"handed the correct dates and told verbatim to copy them, both Claude and Codex wrote
+  the same wrong one"*. **Retracted 2026-08-19: that was our own arithmetic.** A bare `"at": "2026-08-17"`
+  deserialises to midnight in the reading machine's offset, and `QuestionSeed.At` normalised the instant to UTC —
+  on this UTC+2 machine, one day back. Replayed through the real types, a report reading *"the author dated it
+  2026-08-16"* is what an author that wrote **2026-08-17** produces. Both models had copied faithfully; the
+  reviewer that rejected three questions for this rejected them over a defect of ours. Fixed at the boundary in
+  `QuestionSeed.Written`, which keeps the calendar day rather than converting it to an instant, and the one
+  comparison lives in `SeedCheck.Stated` so there is no second spelling to be wrong in.
+  The derivation stays on the argument that survives: the author names the CHANGE and the repository dates it,
+  the same principle as the harness performing retrieval instead of trusting a model's account of it — and it
+  serves the case the contract asks for, where an author honestly omits a date it cannot establish. A
+  disagreement still prints as a `fixed` line, and now that line means something.
 - **A reviewer slot names its model, as data.** `reviewers.ModelKey` is a registry key, empty for a person. It
   is a column and not a command-line flag because the self-review rule compares a reviewer's model against the
   question's author model, and "who is reviewer-2" has to be answerable from the bank years later. Three slots
@@ -305,15 +332,41 @@ judgement, and its provenance is the slot, which is recorded either way.
   `ReviewFile`, whose verdict defaults to `Approved` — right for a file a person wrote, and the failure that
   looks like success for an agent whose answer lost a field. A rejection with no note is refused outright: it is
   the only record of what an author gets wrong.
-- **Promotion is the strict rule and there is no threshold knob.** `Promotion.Decide` accepts only when EVERY
-  configured reviewer row has approved, rejects on any single rejection (a defect somebody named outranks any
-  count of approvals), and otherwise waits. An empty `reviewers` table promotes nothing — "every configured
-  reviewer approved" is vacuously true of none, and would accept a whole machine-written bank on an empty table.
-  A majority rule would be a quality claim nobody here has measured.
+- **Promotion is the strict rule over the ELIGIBLE reviewers.** `Promotion.Decide` accepts only when every
+  reviewer eligible for that question has approved — every slot that still serves, except one whose model wrote
+  it. It rejects on any single rejection (a defect somebody named outranks any count of approvals), and
+  otherwise waits. An empty `reviewers` table promotes nothing — "every configured reviewer approved" is
+  vacuously true of none, and would accept a whole machine-written bank on an empty table. A majority rule would
+  be a quality claim nobody here has measured.
+  Eligibility is what makes the one-third design work: with three authors writing a third of a group each, every
+  question's panel is the two models that did not write it, the author is out of its own panel by construction
+  rather than by a flag, and a question costs two launches instead of three. Without it the strict rule waits
+  forever on a mark the self-review refusal will never allow.
+- **A reviewer slot can be RETIRED, and until 2026-08-19 it could not.** `reviewers.Enabled`, with
+  `bench questions disable --reviewer <key>`; a retired slot is not launched and not waited for, and the marks it
+  already made are kept. It exists because the strict rule turned one broken slot into a frozen bank: three slots
+  configured, the third bound to a model that failed on every launch, so every question waited forever on a mark
+  that could never arrive — and there was no way out. Unbinding the model does not help, because a slot with no
+  model is a *person*: eligible, and equally silent. The model registry had already solved exactly this — disabled,
+  never deleted, so history stays readable — and this is that same move, arrived at one design generation late.
 - **A decided question is not re-vetted.** Only `Proposed` rows are walked, so a machine cannot overwrite a
   person's mark.
 
-**Today all three slots are bound to one model** (`claude-reviewer` → `claude-sonnet-4-6`, the operator's
+**A mark records the model that made it**, not only the slot (`question_reviews.ModelId`). The slot looked like
+provenance until it stopped being one: `reviewer-2` held `claude-sonnet-4-6` for thirty-three marks and
+`gpt-5.6-terra` for the next seven, so a per-reviewer statistic needed a timestamp filter to be honest. Marks
+older than the column stay empty rather than backfilled — which model held a slot in the past is knowable from a
+session's memory, not from the database.
+
+**The panel is three different models** (2026-08-18): `claude-sonnet-4-6`, `gpt-5.6-terra`, `gemini-3.1-flash`,
+each verified by `bench models probe` — one trivial question through the same path authoring uses, writing
+nothing, because a wrong headless flag does not fail but opens an interactive session that waits on a terminal
+nobody watches. **And a second model earned its cost immediately**: on one batch Claude approved 3 and rejected
+0 while Codex approved 2 and rejected **7**, against 2 rejections in 57 marks from three slots of one model. Its
+reasons were not substring arithmetic — it read the target's git history and checked seed dates against it, a
+class of defect the single-model panel never once raised.
+
+**Historically all three slots were bound to one model** (`claude-reviewer` → `claude-sonnet-4-6`, the operator's
 decision of 2026-08-18 while one CLI author is verified). That is *one opinion sampled three times, not three
 reviewers*, `bench questions reviewers` says so when it sees identical bindings, and every number derived from
 such a batch has to be reported that way.

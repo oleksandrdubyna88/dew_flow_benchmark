@@ -200,7 +200,10 @@ public static class BankImport
     private static QuestionSeed Seed(SeedFile? seed) =>
         seed is null
             ? new QuestionSeed("unstated", string.Empty, default)
-            : new QuestionSeed(
+            // Written, not constructed: an imported file carries a bare "at" exactly as an authored one does, and
+            // converting that calendar day into an instant in this machine's offset is what shifted a whole batch by
+            // a day. The import had the same hazard on the same line, unexercised until something imported one.
+            : QuestionSeed.Written(
                 seed.Kind.Length > 0 ? seed.Kind : "unstated", seed.Reference, seed.At);
 
     private static BankImportReport Counted<T>(

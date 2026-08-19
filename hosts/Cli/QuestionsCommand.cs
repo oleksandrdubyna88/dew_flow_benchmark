@@ -41,6 +41,7 @@ public static class QuestionsCommand
             "groups" => await GroupsAsync(bank, output, error, cancellationToken),
             "reviewers" => await ReviewersAsync(bank, output, error, cancellationToken),
             "bind" => await BindAsync(command, bank, registry, output, error, cancellationToken),
+            "disable" or "enable" => await EnabledAsync(command, bank, output, error, cancellationToken),
             "vet" => await VetAsync(command, bank, agents, registry, secrets, checkouts, trust, clock, output, error, cancellationToken),
             "review" => await ReviewAsync(command, bank, clock, output, error, cancellationToken),
             "accept" or "reject" => await StateAsync(command, bank, output, error, cancellationToken),
@@ -53,7 +54,8 @@ public static class QuestionsCommand
         };
 
     private const string Actions =
-        "'import', 'author', 'vet', 'list', 'groups', 'reviewers', 'bind', 'review', 'accept', 'reject' or 'move'";
+        "'import', 'author', 'vet', 'list', 'groups', 'reviewers', 'bind', 'disable', 'enable', 'review', "
+        + "'accept', 'reject' or 'move'";
 
     /// <summary>`bench questions author` — a CLI agent writes candidates for one group.
     /// <para>
@@ -534,7 +536,10 @@ public static class QuestionsCommand
 
                 foreach (var reviewer in reviewers)
                 {
-                    output.WriteLine($"  {reviewer.Ordinal,3}  {reviewer.Key.Value,-14}  "
+                    // Whether the slot still takes part comes FIRST, because it is the fact that decides whether a
+                    // question can ever be promoted — a retired slot is not waited for, a serving silent one is.
+                    output.WriteLine($"  {(reviewer.Enabled ? "serving " : "retired ")} {reviewer.Ordinal,3}  "
+                        + $"{reviewer.Key.Value,-14}  "
                         + $"{(reviewer.IsHuman ? "— a person marks this slot" : reviewer.ModelKey)}");
                 }
 
@@ -547,7 +552,7 @@ public static class QuestionsCommand
     /// operator cannot see from a list of three identical model keys is that it is one opinion.</summary>
     private static int Bound(IReadOnlyList<Reviewer> reviewers, TextWriter output)
     {
-        var models = reviewers.Where(r => !r.IsHuman).Select(r => r.ModelKey).ToList();
+        var models = reviewers.Where(r => r.Enabled && !r.IsHuman).Select(r => r.ModelKey).ToList();
 
         if (models.Count > 1 && models.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
         {
@@ -594,6 +599,45 @@ public static class QuestionsCommand
                 output.WriteLine(slot.IsHuman
                     ? $"{slot.Key} is now a human slot — no pass will mark it"
                     : $"{slot.Key} is answered by {slot.ModelKey}");
+                return ExitCodes.Pass;
+            },
+            reason => Fail(error, reason));
+    }
+
+    /// <summary>`bench questions disable` / `enable` — takes a reviewer slot out of the panel, or puts it back.
+    /// <para>
+    /// The way out of a panel, and there was none until 2026-08-19. Three slots were configured, one bound to a
+    /// model that failed on every launch, and the strict rule waits for every eligible reviewer — so every
+    /// question in the bank waited on a mark that could never arrive. Unbinding the model does not help: an
+    /// unbound slot is a PERSON, still eligible and still silent.
+    /// </para>
+    /// <para>
+    /// Retired, never deleted, mirroring `bench models disable`: the marks a slot already made stay attributable,
+    /// and a slot can come back when whatever broke its model is fixed.
+    /// </para></summary>
+    private static async Task<int> EnabledAsync(
+        CommandLine command,
+        IQuestionBank bank,
+        TextWriter output,
+        TextWriter error,
+        CancellationToken cancellationToken)
+    {
+        var key = command.Value("reviewer");
+
+        if (key.Length == 0)
+        {
+            return Fail(error, "--reviewer is required — it names the slot being retired or brought back");
+        }
+
+        var enable = command.Operand(0) == "enable";
+
+        return (await bank.SetReviewerEnabledAsync(key, enable, cancellationToken)).Match(
+            slot =>
+            {
+                output.WriteLine(slot.Enabled
+                    ? $"{slot.Key} is serving again — questions now wait for its mark"
+                    : $"{slot.Key} is retired — no pass will ask it, and no question waits for it. "
+                      + "The marks it already made are kept");
                 return ExitCodes.Pass;
             },
             reason => Fail(error, reason));
@@ -728,7 +772,9 @@ public static class QuestionsCommand
 
         var slots = new List<ReviewerSlot>();
 
-        foreach (var reviewer in reviewers.Where(r => !r.IsHuman))
+        // Retired slots are not resolved and not launched. Resolving one would also refuse the whole pass over a
+        // binding nobody is going to use — which is how a retired reviewer would still hold the bank hostage.
+        foreach (var reviewer in reviewers.Where(r => r.Enabled && !r.IsHuman))
         {
             var resolved = await ResolveAuthorAsync(registry, secrets, reviewer.ModelKey, cancellationToken);
 

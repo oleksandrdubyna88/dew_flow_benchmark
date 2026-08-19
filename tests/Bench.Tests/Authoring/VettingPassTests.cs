@@ -239,8 +239,47 @@ public sealed class VettingPassTests(PostgresFixture postgres)
         // The bank's actual state on 2026-08-18, asserted so it cannot come back silently: three slots, one
         // model, that model authored. Nobody may vouch, nothing is launched, nothing is promoted.
         agent.Launches.Should().Be(0);
-        report.Questions.Single().Decision.Reason.Should().Contain("every configured slot is the model that wrote it");
+        report.Questions.Single().Decision.Reason.Should().Contain("the model that wrote it");
         (await StateAsync(bank)).Should().Be(CandidateState.Proposed);
+    }
+
+    [Fact]
+    public async Task A_slot_nothing_can_complete_freezes_the_question_until_it_is_RETIRED()
+    {
+        // The structural blocker of 2026-08-18, reproduced whole. Three slots, one of which nothing will ever
+        // mark; the strict rule waits for every eligible reviewer, so the question waits forever — and until this
+        // test there was no way out of it: unbinding the model leaves a PERSON, who is eligible and also silent,
+        // and a reviewer row could not be removed without orphaning the marks it had already made.
+        var bank = await BankAsync("retire", slots: 3, bind: 2);
+
+        var frozen = await VetAsync(bank, Approved("checked both anchors"), reviewerModel: "gpt-5");
+
+        frozen.Accepted.Should().Be(0);
+        frozen.Questions.Single().Decision.Reason.Should().Contain("reviewer-3");
+        (await StateAsync(bank)).Should().Be(CandidateState.Proposed);
+
+        (await Bank(bank).SetReviewerEnabledAsync("reviewer-3", false, Ct)).Ok()
+            .Enabled.Should().BeFalse("a retired slot is disabled, never deleted — its marks stay attributable");
+
+        var freed = await VetAsync(bank, Approved("checked both anchors"), reviewerModel: "gpt-5");
+
+        freed.Accepted.Should().Be(1, string.Join(" | ", freed.Questions.SelectMany(q => q.Skipped)));
+        (await StateAsync(bank)).Should().Be(CandidateState.Accepted);
+    }
+
+    [Fact]
+    public async Task A_retired_slot_is_not_LAUNCHED_either()
+    {
+        var bank = await BankAsync("retire_launch", slots: 3);
+        var agent = new EchoingAgent(Approved("checked it"));
+
+        await Bank(bank).SetReviewerEnabledAsync("reviewer-2", false, Ct);
+
+        await VetAsync(bank, agent, reviewerModel: "gpt-5", allowSelf: false);
+
+        // Not merely uncounted: a retired slot costs nothing. A pass that still launched it would spend the wall
+        // clock of a reviewer whose answer it has already decided to ignore.
+        agent.Launches.Should().Be(2);
     }
 
     /// <summary>The reviewer slots of this bank, each bound to the model at its ordinal position.</summary>
@@ -323,7 +362,7 @@ public sealed class VettingPassTests(PostgresFixture postgres)
     private async Task<VettingReport> VetAsync(
         string connection, ICliAgentRuntime agent, string reviewerModel, bool allowSelf)
     {
-        var reviewers = (await Bank(connection).ReviewersAsync(Ct)).Ok().Where(r => !r.IsHuman).ToList();
+        var reviewers = (await Bank(connection).ReviewersAsync(Ct)).Ok().Where(r => r.Enabled && !r.IsHuman).ToList();
 
         return await VettingPass.RunAsync(
             agent,

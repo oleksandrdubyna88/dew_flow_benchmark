@@ -50,6 +50,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             DisplayName = reviewer.DisplayName,
             Ordinal = reviewer.Ordinal,
             ModelKey = reviewer.ModelKey,
+            Enabled = reviewer.Enabled,
         });
 
         return await SaveAsync(reviewer, $"the reviewer '{reviewer.Key}' is already in the bank", cancellationToken);
@@ -82,7 +83,7 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
             .OrderBy(r => r.Ordinal).ThenBy(r => r.Key)
             .ToListAsync(cancellationToken);
 
-        return All(rows, row => Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey));
+        return All(rows, row => Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey, row.Enabled));
     }
 
     /// <summary>Binds a model to an existing slot, or clears the binding back to a person.
@@ -105,11 +106,37 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
         row.ModelKey = modelKey.Trim();
 
         return await SaveAsync(
-            Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey).Match(r => r, _ => throw new InvalidOperationException(
-                "a reviewer row that rehydrated on the way in cannot fail to rehydrate on the way out")),
+            Rehydrated(row),
             $"the reviewer '{reviewerKey}' could not be bound",
             cancellationToken);
     }
+
+    /// <summary>Retires a slot, or brings it back. <c>ExecuteUpdate</c> rather than a read-then-write, mirroring
+    /// <c>PostgresModelRegistry.SetEnabledAsync</c> — the same operation on the same kind of row.</summary>
+    public async Task<Outcome<Reviewer>> SetReviewerEnabledAsync(
+        string reviewerKey, bool enabled, CancellationToken cancellationToken)
+    {
+        var changed = await db.Reviewers
+            .Where(r => r.Key == reviewerKey)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Enabled, enabled), cancellationToken);
+
+        if (changed == 0)
+        {
+            return Outcome<Reviewer>.Failure(
+                $"no reviewer '{reviewerKey}' in the bank — a reviewer is a row, so add it before retiring it");
+        }
+
+        var row = await db.Reviewers.AsNoTracking().FirstAsync(r => r.Key == reviewerKey, cancellationToken);
+
+        return Outcome<Reviewer>.Success(Rehydrated(row));
+    }
+
+    /// <summary>A row on its way back out. It parsed on the way in, so a failure here is impossible rather than
+    /// unlikely — and saying so is better than an <c>Outcome</c> every caller would have to pretend to handle.</summary>
+    private static Reviewer Rehydrated(ReviewerRow row) =>
+        Reviewer.Rehydrate(row.Id, row.Key, row.DisplayName, row.Ordinal, row.ModelKey, row.Enabled)
+            .Match(r => r, _ => throw new InvalidOperationException(
+                "a reviewer row that rehydrated on the way in cannot fail to rehydrate on the way out"));
 
     public async Task<Outcome<IReadOnlyList<BankEntry>>> QuestionsAsync(
         BankQuery query, CancellationToken cancellationToken)

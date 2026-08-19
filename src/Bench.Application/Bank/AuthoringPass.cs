@@ -292,23 +292,45 @@ public static class AuthoringPass
     /// <summary>The seed as the author declared it — and <c>unstated</c> at the beginning of time when it did
     /// not, which reads as <i>may recall</i> rather than as safe. The same rule the bank import follows, and
     /// the prompt says so in as many words: a guessed date is the one lie the whole memorisation check rests
-    /// on.</summary>
+    /// on.
+    /// <para>
+    /// Built through <see cref="QuestionSeed.Written"/>, which keeps the calendar day the author typed instead of
+    /// converting it to an instant in our timezone — the arithmetic that made two faithful authors look like they
+    /// dated a day early.
+    /// </para>
+    /// <para>
+    /// <b>A <c>commit</c> seed keeps its kind even with no date.</b> The first shape flattened every dateless
+    /// seed to <c>unstated</c>, and <see cref="Dated"/> acts only on <c>commit</c> — so an author doing exactly
+    /// what the contract asks, naming the change and omitting a date it could not establish, disarmed the
+    /// derivation written for that very case, and the question reached the bank reading <i>may recall</i> while
+    /// its date sat in our own git the whole time. The KIND says what the seed is; the DATE says whether it
+    /// claims a when. Conflating them cost the pr-diff group its dates.
+    /// </para></summary>
     private static QuestionSeed Seed(BankQuestionFile file) =>
-        file.Seed is { Kind.Length: > 0 } seed && seed.At != default
-            ? new QuestionSeed(seed.Kind.Trim(), seed.Reference.Trim(), seed.At)
+        file.Seed is { Kind.Length: > 0 } seed && (seed.At != default || Datable(seed))
+            ? QuestionSeed.Written(seed.Kind.Trim(), seed.Reference.Trim(), seed.At)
             : new QuestionSeed("unstated", file.Seed?.Reference.Trim() ?? string.Empty, default);
+
+    /// <summary>A seed <see cref="Dated"/> can date from the repository for itself: a commit, named.</summary>
+    private static bool Datable(SeedFile seed) =>
+        string.Equals(seed.Kind.Trim(), SeedCheck.CommitKind, StringComparison.OrdinalIgnoreCase)
+        && seed.Reference.Trim().Length > 0;
 
     /// <summary>A commit seed's date taken from the REPOSITORY, not from the author.
     /// <para>
-    /// <b>Because the author will not copy it.</b> Handed 345 lines of real history and told in as many words to
-    /// take the date verbatim, one author cited three commits that all exist, whose subjects match its questions,
-    /// and dated every one of them a day early — systematically. Telling it again would be hoping.
+    /// <b>The reason first written here was wrong, and the record says so rather than quietly improving.</b> This
+    /// was justified by "handed 345 lines of history and told to copy the dates verbatim, an author dated three
+    /// commits a day early — systematically". Replayed through the real types on 2026-08-19, that finding is the
+    /// bank's own timezone arithmetic: a bare date became midnight in the reading machine's offset and was
+    /// normalised to UTC, one day back. The authors had copied correctly. The boundary is fixed in
+    /// <see cref="QuestionSeed.Written"/>.
     /// </para>
     /// <para>
-    /// So the author names the CHANGE and we date it, which removes the possibility rather than warning about it:
-    /// the same principle as the harness performing retrieval instead of trusting a model's account of it. A
-    /// disagreement is reported as a correction, because "this author shifts dates" is worth knowing about the
-    /// source even once it can no longer damage a question.
+    /// The derivation stays, on the argument that survives: the author names the CHANGE and the repository dates
+    /// it, which is the same principle as the harness performing retrieval instead of trusting a model's account
+    /// of it. It also serves the honest case the contract asks for — an author that cannot establish a date omits
+    /// it, and a named commit is datable without it. A disagreement is still reported as a correction, and NOW
+    /// that line means something: with the shift removed, one that appears is the author's.
     /// </para></summary>
     private static (QuestionSeed Seed, string Correction) Dated(
         QuestionSeed seed, Func<string, CommitFact>? commits)
@@ -327,9 +349,10 @@ public static class AuthoringPass
         }
 
         var landed = new DateTimeOffset(fact.Date.ToDateTime(default), TimeSpan.Zero);
-        var claimed = seed.At == default ? "nothing" : $"{seed.At:yyyy-MM-dd}";
+        var claimed = seed.At == default ? "nothing" : $"{SeedCheck.Stated(seed.At):yyyy-MM-dd}";
 
-        return landed == seed.At
+        // The DAY, through the one place that reads a seed's day — never a second spelling of this comparison.
+        return seed.At != default && SeedCheck.Stated(seed.At) == fact.Date
             ? (seed, string.Empty)
             : (seed with { At = landed },
                $"seed {seed.Reference}: the author dated it {claimed}, the repository says {fact.Date:yyyy-MM-dd} — taken from the repository");

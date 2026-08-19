@@ -79,7 +79,19 @@ public sealed record QuestionGroup(Guid Id, GroupKey Key, string Title, int Ordi
 /// the question's author model, so "who is reviewer-2" has to be a stored fact rather than a flag typed on one
 /// command line. Found 2026-08-18, with three seeded slots that named nobody.
 /// </para></param>
-public sealed record Reviewer(Guid Id, ReviewerKey Key, string DisplayName, int Ordinal, string ModelKey = "")
+/// <param name="Enabled">Whether this slot still takes part. A retired one is skipped by the vetting pass and
+/// is not counted among the reviewers a question waits for.
+/// <para>
+/// <b>Added 2026-08-19, because a slot turned out to be irreversible.</b> Three slots were configured, one of
+/// them bound to a model that failed on every launch, and the strict promotion rule requires every eligible
+/// reviewer to approve — so every question in the bank waited forever on a mark that could never arrive, and
+/// nothing could undo it. Unbinding the model does not help: a slot with no model is a PERSON, still eligible
+/// and still silent. The registry had already solved exactly this for models — disabled, never deleted, so the
+/// history stays readable — and this is that same move. Marks a retired slot already made are kept: a judgement
+/// was made, and deleting it would rewrite what the bank was told.
+/// </para></param>
+public sealed record Reviewer(
+    Guid Id, ReviewerKey Key, string DisplayName, int Ordinal, string ModelKey = "", bool Enabled = true)
 {
     /// <summary>Trimmed here so no call site has to. An empty binding means a person marks this slot, which is
     /// the default a fresh row gets — binding a model is a deliberate act with a cost attached.</summary>
@@ -88,16 +100,21 @@ public sealed record Reviewer(Guid Id, ReviewerKey Key, string DisplayName, int 
     /// <summary>No model answers for this slot, so no pass can complete it.</summary>
     public bool IsHuman => ModelKey.Length == 0;
 
+    /// <summary>A fresh slot is enabled: retiring one is a deliberate act, exactly as disabling a model is.</summary>
     public static Outcome<Reviewer> Create(string? key, string? displayName, int ordinal, string? modelKey = "") =>
         ReviewerKey.Parse(key).Match(
             parsed => Outcome<Reviewer>.Success(
                 new Reviewer(Guid.CreateVersion7(), parsed, Name(displayName, parsed), ordinal, modelKey ?? "")),
             Outcome<Reviewer>.Failure);
 
-    public static Outcome<Reviewer> Rehydrate(Guid id, string? key, string? displayName, int ordinal, string? modelKey = "") =>
+    public static Outcome<Reviewer> Rehydrate(
+        Guid id, string? key, string? displayName, int ordinal, string? modelKey = "", bool enabled = true) =>
         ReviewerKey.Parse(key).Match(
-            parsed => Outcome<Reviewer>.Success(new Reviewer(id, parsed, Name(displayName, parsed), ordinal, modelKey ?? "")),
+            parsed => Outcome<Reviewer>.Success(
+                new Reviewer(id, parsed, Name(displayName, parsed), ordinal, modelKey ?? "", enabled)),
             Outcome<Reviewer>.Failure);
+
+    public Reviewer Enable(bool enabled) => this with { Enabled = enabled };
 
     private static string Name(string? displayName, ReviewerKey key)
     {

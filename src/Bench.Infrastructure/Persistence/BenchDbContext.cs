@@ -300,6 +300,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             reviewer.ToTable("reviewers");
             reviewer.HasKey(r => r.Id);
             reviewer.HasIndex(r => r.Key).IsUnique();
+
+            // Every vetting pass asks "which slots still take part" before it launches anything, exactly as the
+            // model registry's list does.
+            reviewer.HasIndex(r => r.Enabled);
         });
 
         builder.Entity<BankQuestionRow>(question =>

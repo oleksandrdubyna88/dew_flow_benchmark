@@ -105,8 +105,10 @@ public static class VettingPass
         if (slots.Count == 0)
         {
             return VettingReport.Nothing(
-                "no reviewer slot has a model bound — bind one with 'bench questions bind --reviewer <key> "
-                + "--model <registry key>', because a slot that names nobody cannot be marked by anything");
+                "no reviewer slot is both serving and bound to a model — bind one with 'bench questions bind "
+                + "--reviewer <key> --model <registry key>', or bring a retired one back with 'bench questions "
+                + "enable --reviewer <key>'. A slot that names nobody cannot be marked by anything, and a retired "
+                + "one is not asked");
         }
 
         var configured = await bank.ReviewersAsync(cancellationToken);
@@ -300,15 +302,20 @@ public static class VettingPass
     /// author. Under <c>--allow-self-review</c> everyone is eligible again, which is the whole of what the flag
     /// buys and why it prints what it costs.
     /// </para></summary>
+    /// <summary>Who may vouch for THIS question: the slots that still take part, minus the one whose model wrote
+    /// it. Retired slots are dropped first and unconditionally — <c>--allow-self-review</c> relaxes the
+    /// self-review rule, and a retired slot is not a rule being relaxed but a seat nobody sits in.</summary>
     private static IReadOnlyList<Reviewer> Eligible(
         IReadOnlyList<Reviewer> reviewers,
         IReadOnlyList<ReviewerSlot> slots,
         VettingRequest request,
         BankEntry entry)
     {
+        var serving = reviewers.Where(reviewer => reviewer.Enabled).ToList();
+
         if (request.AllowSelfReview)
         {
-            return reviewers;
+            return serving;
         }
 
         var authored = slots
@@ -317,7 +324,7 @@ public static class VettingPass
             .Select(slot => slot.Reviewer.Id)
             .ToHashSet();
 
-        return [.. reviewers.Where(reviewer => !authored.Contains(reviewer.Id))];
+        return [.. serving.Where(reviewer => !authored.Contains(reviewer.Id))];
     }
 
     private static async Task<PromotionDecision> DecideAsync(

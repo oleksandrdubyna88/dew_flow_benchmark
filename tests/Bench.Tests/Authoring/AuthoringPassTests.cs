@@ -120,6 +120,70 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_date_copied_CORRECTLY_from_the_history_is_NOT_reported_as_a_correction()
+    {
+        // The regression that manufactured a finding about models. A bare "at" deserialises to midnight in THIS
+        // machine's offset, and normalising that instant to UTC moved it a day back — so an author that copied
+        // 2026-08-17 verbatim, exactly as the contract demands, was reported as having "dated it 2026-08-16",
+        // twice, by two different model families. Nothing about the models; arithmetic of ours.
+        var group = await GroupAsync();
+
+        var report = await RunAsync(group, CommitSeeded("copied-right", "2026-08-17"), Landed);
+
+        report.Corrections.Should().BeEmpty(
+            "the author wrote the date the repository says, so there is nothing to correct");
+
+        var stored = (await MineAsync(group)).Should().ContainSingle().Subject;
+        stored.Question.Seed.At.Should().Be(new DateTimeOffset(2026, 8, 17, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task A_date_the_author_really_got_wrong_is_corrected_and_BOTH_dates_are_named()
+    {
+        var group = await GroupAsync();
+
+        var report = await RunAsync(group, CommitSeeded("shifted", "2026-08-16"), Landed);
+
+        // A correction still has to be possible, or the fix above would have removed the check instead of the
+        // false positive. Both dates, so the line can be read without opening the repository.
+        var correction = report.Corrections.Should().ContainSingle().Subject;
+        correction.Should().Contain("2026-08-16").And.Contain("2026-08-17");
+
+        var stored = (await MineAsync(group)).Should().ContainSingle().Subject;
+        stored.Question.Seed.At.Should().Be(new DateTimeOffset(2026, 8, 17, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task A_commit_the_author_could_NOT_date_is_dated_from_the_repository()
+    {
+        // The contract tells an author to omit a date it cannot establish, and an author that obeys used to lose
+        // the derivation built for exactly that case: the seed was flattened to `unstated`, which reads as
+        // "may recall", while the date sat in our own git the whole time.
+        var group = await GroupAsync();
+
+        var report = await RunAsync(group, CommitSeeded("undated", at: string.Empty), Landed);
+
+        report.Proposed.Should().Be(1, string.Join(" | ", report.Rejected));
+
+        var stored = (await MineAsync(group)).Should().ContainSingle().Subject;
+        stored.Question.Seed.Kind.Should().Be("commit");
+        stored.Question.Seed.At.Should().Be(new DateTimeOffset(2026, 8, 17, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    /// <summary>A repository that holds one commit, landed on the 17th — what `git show -s --date=short` gives.</summary>
+    private static Func<string, Bench.Domain.Suites.CommitFact> Landed =>
+        reference => reference == "ad9d2cf"
+            ? Bench.Domain.Suites.CommitFact.On(new DateOnly(2026, 8, 17))
+            : Bench.Domain.Suites.CommitFact.Unknown;
+
+    /// <summary>One question seeded by a commit, dated the way the contract asks for — a bare day, or nothing.</summary>
+    private string CommitSeeded(string id, string at) => $$"""
+        [{ "id": "{{id}}-{{_tag}}", "prompt": "where is the delay computed?", "referenceAnswer": "in a helper",
+           "seed": { "kind": "commit", "reference": "ad9d2cf"{{(at.Length > 0 ? $", \"at\": \"{at}\"" : string.Empty)}} },
+           "expectations": [ { "kind": "Member", "file": "src/A.cs", "member": "A.{{id}}{{_tag}}", "start": 1, "end": 9 } ] }]
+        """;
+
+    [Fact]
     public async Task The_same_question_twice_in_one_batch_is_stored_ONCE()
     {
         var group = await GroupAsync();
@@ -203,6 +267,22 @@ public sealed class AuthoringPassTests(PostgresFixture postgres)
 
     private Task<AuthoringReport> RunAsync(QuestionGroup group, string answer, int ordinal = 1) =>
         RunAsync(group, new EchoingAgent(answer), ordinal);
+
+    /// <summary>The same pass, handed a repository that can date a commit — which is what turns
+    /// <c>AuthoringPass.Dated</c> on.</summary>
+    private Task<AuthoringReport> RunAsync(
+        QuestionGroup group, string answer, Func<string, Bench.Domain.Suites.CommitFact> commits) =>
+        AuthoringPass.RunAsync(
+            new EchoingAgent(answer),
+            Bank(),
+            Prompts,
+            new AuthoringRequest(
+                group, Target, Commit, Count: 3, Ordinal: 1, TimeSpan.FromMinutes(2), Path.GetTempPath(),
+                History: string.Empty, Commits: commits),
+            Author(),
+            "claude",
+            Noon,
+            Ct);
 
     private async Task<AuthoringReport> RunAsync(QuestionGroup group, ICliAgentRuntime agent, int ordinal = 1) =>
         await AuthoringPass.RunAsync(

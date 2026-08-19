@@ -1,6 +1,9 @@
 # PLAN — the bank's coverage: four groups of six have no questions
 
-> Status: **plan only, 2026-08-18.** Extracted from
+> Status: **PARTLY IMPLEMENTED, 2026-08-19 — open work remains, so it stays here.** Done: the author's brief
+> carries the target's history (§3.2), the panel is three different models (§3.3, §3.7), the mechanical gate and
+> the seed-date derivation ship (§3.4b/§3.4c), and a reviewer slot can be retired (§3.9). Open: the first
+> measurement, `gemini` has still authored nothing, and the questions of §3.4/§3.5. Extracted from
 > [../research/PLAN_question_authoring.md](../research/PLAN_question_authoring.md) when that plan was
 > implemented: its pipeline works and its throughput is measured, and what remains is not pipeline work but
 > **coverage** — three reading groups nothing has authored, one that cannot be authored this way at all, and a
@@ -139,6 +142,20 @@ Then edit `AUTHORS` in `scripts/bank-thirds.sh` to the new key. Questions alread
 they were written by, which is the point: the bank becomes a record of two tiers, comparable by
 `AuthorModel`.
 
+### 3.4 Fix or retire the three gate-blocked questions
+
+`weighted-sum-minmax-equal-scores` (term `weight` occurs inside `WeightedSumFusion` in the prompt),
+`token-window-split-overlong-lines` (`source line` absent from its reference), `credential-pool-selection-order`
+(`least recently leased` absent from its reference). Each is one edit to a stored row; the first is arguable
+and the operator decides whether the term is weak or the gate is over-eager.
+
+### 3.5 Decide about `gpu-waiter-never-advances-in-queue`
+
+`Accepted` by all three slots, and its required term `never refreshed` is absent from its own reference answer
+— the defect reviewer-1 rejected another question for. Left accepted deliberately: a machine check must not
+overturn a recorded judgement. The operator's call is whether to fix the reference, drop the term, or re-open
+the question.
+
 ### 3.4b DECIDED 2026-08-18: twenty questions rejected, and the contract fixed instead
 
 The gate, run over the whole bank, flagged **22 of 56 questions**. They are not 22 mistakes — they are three,
@@ -177,21 +194,71 @@ under a fixed contract costs minutes.
 
 Bank after the decision: **16 accepted, 7 proposed, 33 rejected.**
 
-### 3.4 Fix or retire the three gate-blocked questions
+### 3.4c The contract fix worked — and the "both models shift dates" finding was OURS, retracted
 
-`weighted-sum-minmax-equal-scores` (term `weight` occurs inside `WeightedSumFusion` in the prompt),
-`token-window-split-overlong-lines` (`source line` absent from its reference), `credential-pool-selection-order`
-(`least recently leased` absent from its reference). Each is one edit to a stored row; the first is arguable
-and the operator decides whether the term is weak or the gate is over-eager.
+Re-authored the three emptied groups under the fixed contract, 2026-08-18 ~20:00 UTC. Claude and Codex wrote
+**17 questions** between them, and the vetting pass's first group reported:
 
-### 3.5 Decide about `gpu-waiter-never-advances-in-queue`
+```
+---- pr-diff
+vetted   6 question(s): 0 accepted, 3 rejected, 3 waiting
+```
 
-`Accepted` by all three slots, and its required term `never refreshed` is absent from its own reference answer
-— the defect reviewer-1 rejected another question for. Left accepted deliberately: a machine check must not
-overturn a recorded judgement. The operator's call is whether to fix the reference, drop the term, or re-open
-the question.
+**No `with broken anchors` line at all** — where the same gate had blocked 3 of 3 pr-diff questions an hour
+earlier. Writing the rule down removed the class. That half stands.
 
-## 3.6 The one-button path — what is prepared, and what only you can do
+#### RETRACTED 2026-08-19: the date shift was the bank's arithmetic, not the models'
+
+The seed-date derivation printed this, identically, for two different model families:
+
+```
+claude: fixed seed ad9d2cf: the author dated it 2026-08-16, the repository says 2026-08-17
+codex:  fixed seed ad9d2cf: the author dated it 2026-08-16, the repository says 2026-08-17
+```
+
+which was written up here as *"two families, handed the correct date and told verbatim to copy it, both write
+the same wrong one — an instruction was never going to fix this"*. **It was not a finding about models.**
+
+`SeedFile.At` is a `DateTimeOffset`, and a bare `"at": "2026-08-17"` deserialises to midnight in the READING
+machine's offset — `2026-08-17T00:00+02:00` here. `QuestionSeed.At` then normalises the instant to UTC:
+`2026-08-16T22:00Z`. Replayed through the real types on 2026-08-19:
+
+| the author wrote | stored as | the report said |
+|---|---|---|
+| `2026-08-17` *(correct)* | `2026-08-16T22:00Z` | "the author dated it **2026-08-16**" |
+| `2026-08-16` *(wrong)* | `2026-08-15T22:00Z` | "the author dated it **2026-08-15**" |
+
+The observed line says `2026-08-16`, so **both authors wrote `2026-08-17` — the date the repository says.** They
+copied it correctly, and the harness moved it. The same artifact explains the earlier finding recorded on
+2026-08-18: the three questions Codex rejected for "dating a day early" were dated correctly by their author and
+shifted afterwards by us, so a reviewer launch was spent on our defect and three questions were thrown away for it.
+
+What this costs: two conclusions in this document and in `research/architecture.md` were wrong and are now marked
+so, and nothing measured about author quality on this axis survives. What it does not cost: the derivation itself,
+which is kept on the argument that never depended on the finding — the author names the CHANGE and the repository
+dates it, the same principle as the harness performing retrieval rather than trusting a model's account of it.
+
+Fixed at the boundary, in `QuestionSeed.Written`: the calendar day an author wrote is stamped UTC instead of
+converted into it, on both paths that build a seed from a file (`AuthoringPass` and `BankImport`, which carried
+the identical hazard on the identical line, unexercised). The one comparison lives in `SeedCheck.Stated`, because
+the two spellings of it were how one could be wrong while the other looked right.
+
+**Rows already in the bank are still shifted by a day** — nothing was back-filled, and that is an operator
+decision. `bench questions vet` will now report a genuine correction for each, which is the honest way to find them.
+
+Two defects of my own, found in the same output and fixed:
+
+- The correction compared INSTANTS, so it printed a "fix" whose two dates were identical when an author had
+  written a time of day. Compares days now — through one shared helper.
+- A non-zero exit quoted the START of the output, which for these CLIs is banners — so a Gemini failure reported
+  nothing but *"True color (24-bit) support not detected"* three times in a row while its real reason sat at the
+  end. Reads the tail now, and so does the timeout branch, which had kept the head reading.
+
+**Gemini has still authored nothing**, across three distinct failures now: its own trust gate (fixed), a git
+attempt (fixed by handing it the history), and this exit 1 whose reason the head-reading hid. The next run is the
+first that will be able to say why.
+
+### 3.6 The one-button path — what is prepared, and what only you can do
 
 Everything that does not need the two CLIs is done (2026-08-18). What remains for the operator:
 
@@ -232,7 +299,7 @@ CLI tolerates those arguments. The timeout path is covered by a unit test, not e
 old one. There is no edit: a run names the key it measured under, and rewriting a model id would relabel
 questions already authored.
 
-## 3.7 MEASURED: cross-model review earns its cost, and gemini needs its own trust escape
+### 3.7 MEASURED: cross-model review earns its cost, and gemini needs its own trust escape
 
 The first three-author batch ran 2026-08-18 17:16–18:05 UTC. Two findings, and the first answers a question
 this plan opened.
@@ -280,8 +347,32 @@ meant one thing forever, and this batch broke it: `reviewer-2` was `claude-sonne
 `research/architecture.md` that a mark's provenance is its slot is therefore **insufficient**.
 
 Fix: store the resolved model id on the mark. One column, written by the vetting pass, which already holds it.
-Until then, any per-reviewer statistic over this bank must be cut by time, and that is a footnote nobody will
-remember.
+**Done 2026-08-18** — `question_reviews.ModelId`, migration `ReviewMarkRecordsItsModel`. Marks made before the
+column stay empty rather than back-filled: which model held a slot in the past is knowable from a session's
+memory, not from the database, and writing a recollection into a column would make it look like a record. Any
+per-reviewer statistic over the first forty marks must still be cut by time.
+
+### 3.9 A reviewer slot can be retired — the panel had no way out
+
+Found 2026-08-18, fixed 2026-08-19. Three slots were configured, `reviewer-3` bound to `gemini-3.1-flash`, which
+failed on every launch. The strict rule promotes only when every eligible reviewer has approved, so **every
+question in the bank waited forever on a mark that could never arrive** — 0 accepted across 20 questions, and the
+panel could not finish in principle.
+
+There was no way out, and that is the part worth recording. Unbinding the model does not help: a slot with no
+model is a *person*, still eligible and still silent. A reviewer row cannot be deleted either, because the marks
+it already made hang off it. So one broken slot froze the whole bank, and the design that made a fourth reviewer
+"one insert" had made an insert irreversible.
+
+The registry had already solved exactly this for models — disabled, never deleted, so history stays readable. The
+same move: `reviewers.Enabled`, `bench questions disable --reviewer <key>` / `enable`, migration
+`ReviewerRetirement`. A retired slot is not launched, not waited for, and keeps its marks. `Eligible` drops
+retired slots before the self-review rule runs, because a retired slot is not a rule being relaxed — it is a seat
+nobody sits in.
+
+> Note on the migration: the scaffolder wrote `defaultValue: false` for the new column, which would have retired
+> every existing slot on deploy — the column meant to unfreeze the panel would have emptied it instead. Backfills
+> `true`.
 
 ## 4. Build order
 
@@ -297,6 +388,10 @@ remember.
 - §3.3: the live-trait test that exists for `claude`, pointed at the second runtime's reference. It is the
   same test.
 - §3.1, §3.4, §3.5 need no new tests — they are runs and data edits — and the summary reports what they did.
+- §3.4c: the seed date read the way JSON delivers it — midnight in a non-UTC offset — is the day it was written,
+  and a date that really is a day early is still caught (`SeedCheckTests`, `AuthoringPassTests`).
+- §3.9: a slot nothing can complete freezes the question until it is retired, and a retired slot is not launched
+  (`VettingPassTests`).
 
 ## 6. Definition of Done
 
@@ -306,3 +401,6 @@ remember.
 - [ ] The five flagged questions are fixed, retired, or explicitly kept with a stated reason.
 - [ ] `research/architecture.md` and `research/PLAN_question_authoring.md` are updated with whatever the retried
       groups measure.
+- [x] A reviewer slot that cannot answer can be taken out of the panel without deleting its marks (§3.9).
+- [x] A seed date survives the trip from an author's JSON to the bank as the DAY it was written (§3.4c).
+- [ ] The seed dates already stored a day early are corrected, or the operator decides to leave them.

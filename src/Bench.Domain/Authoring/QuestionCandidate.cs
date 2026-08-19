@@ -44,6 +44,25 @@ public sealed record QuestionSeed(string Kind, string Reference, DateTimeOffset 
     /// </para></summary>
     public DateTimeOffset At { get; init; } = At.ToUniversalTime();
 
+    /// <summary>A seed exactly as an author WROTE it — the calendar date kept as a calendar date.
+    /// <para>
+    /// <b>The one-day shift was ours, and this is where it happened.</b> The contract asks for a bare
+    /// <c>"at": "2026-05-14"</c>; <c>System.Text.Json</c> reads a bare date as midnight in the READING machine's
+    /// offset, and <see cref="At"/> then normalises that instant to UTC — so on a UTC+2 machine a correctly
+    /// copied <c>2026-08-17</c> is stored as <c>2026-08-16T22:00Z</c> and reads back as the day before. Two
+    /// authors were recorded on 2026-08-18 as "systematically dating a day early", and a reviewer rejected three
+    /// questions for it; the arithmetic that produced that finding is this line. Measured 2026-08-19: a report
+    /// saying <i>"the author dated it 2026-08-16"</i> is what a seed written <c>2026-08-17</c> produces.
+    /// </para>
+    /// <para>
+    /// So the WALL date is stamped UTC rather than converted to it. A seed date is a day, never an instant: what
+    /// a memorisation check compares against a training cutoff is which day the material entered the world, and
+    /// no timezone of ours has an opinion about that. An author that wrote a time or an explicit <c>Z</c> keeps
+    /// what it wrote, since for those the two readings agree.
+    /// </para></summary>
+    public static QuestionSeed Written(string kind, string reference, DateTimeOffset at) =>
+        new(kind, reference, at == default ? default : new DateTimeOffset(at.DateTime, TimeSpan.Zero));
+
     public static QuestionSeed PullRequest(string reference, DateTimeOffset mergedAt) =>
         new("pull-request", reference, mergedAt);
 

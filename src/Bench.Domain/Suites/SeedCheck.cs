@@ -26,17 +26,22 @@ public sealed record SeedDefect(string Reference, SeedFault Fault, string Detail
 
 /// <summary>Whether a question's seed date is what the repository says, rather than what an author wrote down.
 /// <para>
-/// <b>Measured 2026-08-18, and it is the reason this file exists.</b> The first `pr-diff` batch was handed 345
-/// lines of real history and told, in the shared contract, to take `seed.at` from it VERBATIM. It cited three
-/// commits that all exist, whose subjects match its questions — and stored every one of them dated
-/// <c>2026-08-16</c> when the history it had been given says <c>2026-08-17</c>. Off by one day, three times,
-/// systematically. An author will not copy a date; it will reason about one.
+/// <b>RETRACTED 2026-08-19 — the finding this file was built on was our own arithmetic.</b> The first `pr-diff`
+/// batch was recorded as citing three commits and dating every one of them <c>2026-08-16</c> when the history it
+/// had been handed says <c>2026-08-17</c>: "off by one day, three times, systematically". It was not. A bare
+/// <c>"at": "2026-08-17"</c> deserialises to midnight in the READING machine's offset and was then normalised to
+/// UTC, which on this UTC+2 machine stores it as <c>2026-08-16T22:00Z</c> and reads back as the day before.
+/// Replayed through the real types, a report reading <i>"the author dated it 2026-08-16"</i> is what an author
+/// that wrote <c>2026-08-17</c> — the CORRECT date — produces. Both models copied the dates faithfully, and the
+/// three questions a reviewer rejected for this were rejected over a defect of ours. Fixed at the boundary, in
+/// <see cref="QuestionSeed.Written"/>.
 /// </para>
 /// <para>
-/// That matters more than a day, because the seed date is the ONLY input to the memorisation check: a question
-/// dated before a subject's training cutoff may be answered from memory, and a date shifted the wrong way turns
-/// <i>may recall</i> into <i>clear</i>. Codex found this class of defect by reading git history during review
-/// and rejected three questions for it, which is expensive; a sha and a date are comparable for free.
+/// The check still earns its place, for the reason it can now be stated honestly: the seed date is the ONLY
+/// input to the memorisation check — a question dated before a subject's training cutoff may be answered from
+/// memory, and a date shifted the wrong way turns <i>may recall</i> into <i>clear</i>. A sha and a date are
+/// comparable for free, whoever got them wrong, and this class of defect cost three reviewer launches to find
+/// by hand.
 /// </para>
 /// <para>
 /// Only a <c>commit</c> seed is checkable this way. A `pr` reference lives on a forge, an `issue` likewise, and
@@ -45,6 +50,20 @@ public sealed record SeedDefect(string Reference, SeedFault Fault, string Detail
 public static class SeedCheck
 {
     public const string CommitKind = "commit";
+
+    /// <summary>The calendar day a seed claims, which is the only thing a seed date ever means.
+    /// <para>
+    /// Reading <c>UtcDateTime</c> is safe here and nowhere else: <see cref="QuestionSeed.At"/> is normalised to
+    /// UTC by the domain type, and <see cref="QuestionSeed.Written"/> keeps the WALL date an author wrote when
+    /// it builds one. Both halves are needed — without the second, a bare <c>"at": "2026-05-14"</c> read on a
+    /// UTC+2 machine becomes the previous day at 22:00Z, which is the arithmetic that manufactured the
+    /// "authors date a day early" finding of 2026-08-18.
+    /// </para>
+    /// <para>
+    /// One copy, used by the gate here and by the authoring pass's derivation, because two spellings of this
+    /// comparison is how one of them came to be wrong while the other looked right.
+    /// </para></summary>
+    public static DateOnly Stated(DateTimeOffset at) => DateOnly.FromDateTime(at.UtcDateTime);
 
     public static IReadOnlyList<SeedDefect> Verify(QuestionSeed seed, Func<string, CommitFact> lookup)
     {
@@ -71,7 +90,7 @@ public static class SeedCheck
             return [];
         }
 
-        var claimed = DateOnly.FromDateTime(seed.At.UtcDateTime);
+        var claimed = Stated(seed.At);
 
         return claimed == fact.Date
             ? []

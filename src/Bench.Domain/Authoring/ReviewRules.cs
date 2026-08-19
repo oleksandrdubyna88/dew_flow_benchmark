@@ -77,8 +77,8 @@ public sealed record PromotionDecision(PromotionKind Kind, string Reason);
 /// </para></summary>
 public static class Promotion
 {
-    /// <summary>The decision over the reviewers ELIGIBLE for this question — every configured slot except the
-    /// one whose model wrote it.
+    /// <summary>The decision over the reviewers ELIGIBLE for this question — every slot that still takes part,
+    /// except the one whose model wrote it.
     /// <para>
     /// Eligibility is the caller's to compute, because it compares resolved model ids and only the pass holds
     /// those. What lives here is what eligibility MEANS for the rule: with three authors each writing a third of
@@ -102,14 +102,14 @@ public static class Promotion
 
         if (eligible.Count == 0)
         {
-            // Two ways to arrive here, and both must refuse rather than promote. An empty reviewers table makes
-            // "every configured reviewer approved" vacuously true; and a panel where every slot is the author's
-            // own model leaves nobody who may vouch for it — which is exactly the state of this bank while three
-            // slots share one model with the author.
+            // Three ways to arrive here, and all of them must refuse rather than promote. An empty reviewers table
+            // makes "every configured reviewer approved" vacuously true; a panel where every slot is the author's
+            // own model leaves nobody who may vouch for it; and a panel retired down to nothing is a panel. Waiting
+            // is the only honest answer — an accept here would promote a whole machine-written bank nobody read.
             return new PromotionDecision(
                 PromotionKind.Wait,
-                "no reviewer is eligible for this question — either the table is empty, or every configured slot "
-                + "is the model that wrote it, and a model may not vouch for its own work");
+                "no reviewer is eligible for this question — the table is empty, every slot is retired, or every "
+                + "remaining slot is the model that wrote it, and a model may not vouch for its own work");
         }
 
         var marked = marks.Select(m => m.ReviewerId).ToHashSet();

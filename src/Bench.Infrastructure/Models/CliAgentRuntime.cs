@@ -125,16 +125,19 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
 
             ProcessAttempt.TimedOut cap => Outcome<AgentAnswer>.Failure(
                 $"the {ask.Runtime} agent did not answer within {cap.Budget.TotalSeconds:0.#}s"
-                + (cap.Output.Length > 0 ? $" — it had printed: {Short(cap.Output)}" : " and printed nothing")),
+                + (cap.Output.Length > 0 ? $" — it had printed: {Last(cap.Output)}" : " and printed nothing")),
 
+            // The TAIL, not the head. A CLI's output opens with banners — "True color (24-bit) support not
+            // detected", a workspace notice, a version line — and the reason it failed is the last thing it said.
+            // Read from the front, a gemini failure reported nothing but a colour warning three times.
             ProcessAttempt.Completed { Result.Ok: false } failed => Outcome<AgentAnswer>.Failure(
-                $"the {ask.Runtime} agent exited {failed.Result.ExitCode}: {Short(failed.Result.Output)}"),
+                $"the {ask.Runtime} agent exited {failed.Result.ExitCode}: {Last(failed.Result.Output)}"),
 
             ProcessAttempt.Completed done when done.Result.StandardOutput.Length == 0 =>
                 Outcome<AgentAnswer>.Failure(
                     $"the {ask.Runtime} agent exited 0 and printed nothing on stdout — an empty answer stored as "
                     + "a candidate would be a question nobody wrote"
-                    + (done.Result.Output.Length > 0 ? $". It did say: {Short(done.Result.Output)}" : string.Empty)),
+                    + (done.Result.Output.Length > 0 ? $". It did say: {Last(done.Result.Output)}" : string.Empty)),
 
             // STDOUT alone, never the merged text. Found live: the Claude CLI prints a workspace-trust warning
             // beside its answer, and a merged reading therefore begins with prose — which the JSON parser then
@@ -147,6 +150,16 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             _ => Outcome<AgentAnswer>.Failure($"the {ask.Runtime} agent produced an attempt this build cannot read"),
         };
 
-    private static string Short(string text) =>
-        text.Length <= 300 ? text.Trim() : text[..300].Trim() + "…";
+    /// <summary>The END of what a process said, which is where the reason lives — the beginning is banners.
+    /// <para>
+    /// ONE helper, for all three "what did it say" sites. There used to be a second that quoted the FIRST 300
+    /// characters, and a gemini failure reported nothing but "True color (24-bit) support not detected" three
+    /// runs in a row while its real reason sat at the end. A timeout has the same shape and had kept the head
+    /// reading: what a hung agent printed last is what says where it hung.
+    /// </para></summary>
+    private static string Last(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length <= 400 ? trimmed : "…" + trimmed[^400..];
+    }
 }

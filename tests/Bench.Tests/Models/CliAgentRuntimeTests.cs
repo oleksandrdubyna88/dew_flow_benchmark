@@ -97,6 +97,21 @@ public sealed class CliAgentRuntimeTests
     }
 
     [Fact]
+    public void A_failure_quotes_the_END_of_the_output_where_the_reason_actually_is()
+    {
+        var banners = new string('b', 500);
+        var read = CliAgentRuntime.Read(
+            new ProcessAttempt.Completed(new ProcessResult(1, banners + "ModelNotFoundError: no such model")),
+            Ask,
+            TimeSpan.FromSeconds(2));
+
+        // Measured three times over: a gemini failure reported nothing but "True color (24-bit) support not
+        // detected" because the banners come first and the reason comes last. Reading from the front hid the
+        // actual error behind a cosmetic warning.
+        read.Reason().Should().Contain("ModelNotFoundError");
+    }
+
+    [Fact]
     public void A_timeout_says_the_ceiling_AND_whatever_had_been_printed_before_it()
     {
         var read = CliAgentRuntime.Read(
