@@ -86,7 +86,7 @@ Not yet built, and each has an owner in `todo/`:
 |---|---|
 | the tool-calling loop — the lane where the SUBJECT decides what to search | [todo/PLAN_tool_benchmark.md](todo/PLAN_tool_benchmark.md) |
 | the corpus axes (chunk size, embed model), and triggering an index pass | [todo/PLAN_variant_matrix.md](todo/PLAN_variant_matrix.md) steps 5–6 |
-| the compute-backend echo, without which two sidecars are one result row | [todo/PLAN_compute_backend_axis.md](todo/PLAN_compute_backend_axis.md) |
+| an engine that actually REPORTS which compute backend it served on — this side reads, compares and stores one, and no engine sends it yet | [todo/PLAN_compute_backend_axis.md](todo/PLAN_compute_backend_axis.md) |
 | the hardware sampler, a cloud model runtime, and the UI | [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md) |
 
 And the bottleneck is not code: the bank holds questions in **two of its six groups**, so a comparison over it

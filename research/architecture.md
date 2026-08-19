@@ -70,7 +70,7 @@ One result row is identified by, and comparable only within, this tuple:
 
 ```
 target   = (repoUrl, commitSha, exclusions[])     -- pinned, never ambient
-engine   = (kind, endpoint, version, indexFingerprint)
+engine   = (kind, endpoint, version, indexFingerprint, backend)  -- backend ECHOED, never assumed
 suite    = (suiteId, suiteVersion)                -- frozen and hashed, from a file or a bank selection
 subject  = (modelId, samplingAsSent)              -- 1..N, each with its OWN endpoint (SubjectRoster)
 lane     = (toolSurface, preamble)                -- 1..N
@@ -619,6 +619,41 @@ so changing the arbiter — or adding a second one that disagrees — costs its 
 
 The judge sits BESIDE the mechanical score, never instead of it. Two arbiters need a third thing to be
 checked against, and the deterministic metrics in the same result are it.
+
+### The compute backend, and why two sidecars were one row
+
+An engine's identity carries the arm it computed on — `host/provider/device`, as
+`wsl/migraphx/R9700` or `windows/dml/R9700`. Without it two qln engines differing only in which
+sidecar they call have the same kind, the same version and, the corpus being unchanged, the same index
+fingerprint; they differ in `endpoint`, which is a machine-local address rather than a description of
+anything. The operator's own question — on one R9700, is the sidecar faster under WSL/MIGraphX or on
+Windows/DirectML — was measured on 2026-08-18 and had nowhere in this schema to live.
+
+- **The three parts are one value, because the hardware does not separate them.** MIGraphX exists only under
+  Linux/WSL and DirectML only on Windows, so *"WSL against Windows"* and *"MIGraphX against DirectML"* are
+  one comparison with two names. The CPU pair is the only one that holds the provider constant, and is
+  therefore the only evidence about the operating system itself — an ordinary value here, not a special case.
+- **Echoed, never inferred.** The engine reports it on its index-state read; a url is not a description of
+  the host, provider or card that answered, and inferring one would reintroduce the confound wearing a
+  stored field's authority.
+- **Three states, the `IndexCommit` shape**: matched · mismatched · **not declared**. Silence is not
+  agreement, and an implementation that let it compare equal would fold an unattributed row into an arm's
+  aggregate.
+- **A variant may name the arm it measures**, optionally. A recipe that names none hashes exactly as it did
+  before this axis existed and stores no field at all — a definition is never edited, so an added axis may
+  relabel no number already measured.
+- **A disagreement ends the run before a cell exists**, naming both values, beside the corpus and commit
+  checks and in that order: corpus, arm, commit, most specific first.
+  `--allow-undeclared-backend` measures against an engine that declares nothing and keeps printing that
+  which arm the numbers describe is UNVERIFIED — the `--allow-unstamped-index` precedent.
+- **Parsing is structural, not an allow-list.** An engine reporting `macos/coreml/M3` has declared something
+  real; refusing to represent it would record it as *nothing known*, which is a claim about the engine rather
+  than about this build's vocabulary.
+
+**No engine sends the field yet**, so every run reads *not declared* and nothing changed for any of them.
+The producer half is `dew_flow_rag_qln`, which already holds the value — `RuntimeInspector` reads
+`active_provider` and `compiled_providers` off the sidecar's `/health` — so it is a field on an existing
+response rather than a new capability.
 
 ## The comparison, and the word a false winner is printed with
 

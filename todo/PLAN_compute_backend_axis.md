@@ -1,9 +1,16 @@
 # PLAN — the compute backend becomes an axis, and its first question is WSL against Windows on one card
 
-> Status: **plan only in this repository, 2026-08-19 — no code here yet. But two of its three premises have
-> changed and the document is corrected below rather than left standing.** Scope: a MEASUREMENT first (phase 1
-> needs no code in this repository), then the engine's backend echo in `Bench.Domain`/`Bench.Contracts`, then
-> the run matrix.
+> Status: **PHASE 2 IMPLEMENTED 2026-08-19 on this side; phase 1 is two arms of five and phase 3 is open.**
+> The backend is a value (`ComputeBackend`), a three-state declaration (`BackendDeclaration`), part of the
+> engine identity (`EngineRef.Canonical` — the §2b fix), an optional axis on a recipe, a rule that blocks a
+> mismatched cell before any cell exists (`IndexReadiness`), a flag that allows what it cannot verify and
+> keeps saying so (`--allow-undeclared-backend`), and a stored column (`runs.EngineBackend`). What remains
+> is **not this repository's**: qln must SEND the field — it already holds the value, since
+> `RuntimeInspector` reads `active_provider` off the sidecar's `/health` — so until then every engine
+> declares nothing, which is the truth about all of them and why no existing run changed.
+>
+> Scope: a MEASUREMENT first (phase 1 needs no code in this repository), then the engine's backend echo in
+> `Bench.Domain`/`Bench.Contracts`, then the run matrix.
 >
 > **The toolchain prerequisite of §6 is SATISFIED** (verified 2026-08-19): ONNX Runtime 1.24.4 built
 > `--use_migraphx` has been installed at `/opt/onnxruntime-migraphx/lib/` since 2026-07-27, and
@@ -461,11 +468,29 @@ the order the plan first put it.
 3. **The three remaining arms — I · C₁ · C₂.** No code here; a script and a discipline. C₁/C₂ are what keep
    the answer from being mislabelled as a statement about the operating system, so phase 1 publishes only
    after them.
-4. **Phase 2, the echo** (§5a) — small, independent of the matrix, and **the step that decides whether the
-   numbers of step 2 can ever live in this benchmark at all.** Do not schedule it behind another session's
-   migration.
+4. ~~**Phase 2, the echo** (§5a).~~ **IMPLEMENTED 2026-08-19**, in three slices, each with its RED test
+   watched failing first. Deviations, all argued in the code:
+   - **`Parse` is structural, not an allow-list.** Refusing `macos/coreml/M3` would record a real
+     declaration as *nothing known* — a claim about the engine rather than about this build's vocabulary,
+     in a benchmark whose premise is any engine. A typo in a recipe is caught better by the mismatch, which
+     names both values.
+   - **`EngineRef.Backend` and `IndexState.Backend` are `init` members, not positional parameters.** A
+     positional default must be a compile-time constant, so the alternative was a nullable — a null in the
+     domain, which this project refuses. A test caught that on the first attempt.
+   - **`IndexReadiness.Of` takes the whole RECIPE**, not just its corpus. Two of the three things it checks
+     are not corpus properties. Its refusals are ORDERED — corpus, arm, commit — because an operator acts
+     on the first line they read.
+   - **`ReadinessAllowances` replaced the loose `bool`.** Each allowance is a promise the run then keeps
+     repeating, and two allowances are owed two sentences.
+   - **The catalog carries the axis** (`RetrievalRecipe.On`, `DefinitionWire.Backend`), pinned literally so
+     a recipe naming no arm hashes exactly as before and stores no field at all — an added axis must
+     relabel no number already measured.
+   - **A stored arm this build cannot read is REFUSED**, the opposite of how an engine's echo is read: one
+     is a configuration somebody wrote down, the other is a fact about the engine.
+   - The migration waited one slice for another session's `LaneCatalog` to land, exactly as §5a item 5 says.
 5. **Phase 2's producer half** in `dew_flow_rag_qln` — one field on an existing response (§5a). Everything
-   here reads *not declared* until it lands, which is correct rather than blocked.
+   here reads *not declared* until it lands, which is correct rather than blocked. **This is now the only
+   thing between the arms measured on 2026-08-18 and a result row that can hold them.**
 6. **Phase 3, the axis** — gated on step 4 only; `PLAN_variant_matrix.md` step 4 landed 2026-08-17.
 
 ## 8. Test plan
