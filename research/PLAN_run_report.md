@@ -1,21 +1,44 @@
 # PLAN — the comparison comes out of the store, and the split finally decides who won
 
-> Status: **OPEN — steps 1 to 5 shipped 2026-08-19, and the documentation tail is not written.**
-> Steps 1–5 shipped the same day: the store's generalised aggregate and its de-hydration, `RunReport`, the
-> `bench report` verb, the wire contract with its three routes, and `hosts/Api` in the AppHost. What is
-> left is not code — `research/architecture.md` and CLAUDE.md's project table must record the report and
-> `hosts/Api`, and both files are held uncommitted by a concurrent session. Promote this plan the moment
-> they are free. Original scope: `Bench.Application` (one use case),
-> `Bench.Infrastructure/Persistence` (one generalised query, one hydration fix), `Bench.Contracts` (the report
-> DTOs), `Bench.Api` (the read routes), `hosts/Api` (new — the first process that hosts them), `hosts/Cli`
-> (`bench report`). **No migration**: every dimension this report groups by is already a column, and the split
-> half is derived by a pure function.
+> Status: **IMPLEMENTED, 2026-08-19.** All five steps shipped the same day the plan was written: the store's
+> generalised aggregate and its de-hydration, `RunReport`, the `bench report` verb, the wire contract with its
+> three routes, and `hosts/Api` in the AppHost. The guard this repository was built around — the
+> selection/held-out split — is consulted for the first time, and `Unproven` is now a word a report prints.
 >
-> This is step 7 of [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §5, brought forward out of its order
+> Scope as built: `Bench.Application` (`RunReport`, `RunReportContract`, two port additions),
+> `Bench.Infrastructure/Persistence` (one generalised query, one hydration fix, two reads),
+> `Bench.Contracts` (the report DTOs), `Bench.Api` (three `GET`s), `hosts/Api` (new), `hosts/Cli`
+> (`bench report`, `CommandLine.Double`), `Bench.Domain` (`Suite.IdOf`). **No migration**, as planned: every
+> dimension groups by a column that already existed, and the split half is derived by a pure function.
+>
+> **Deviations, and the three defects the build found that the plan had not predicted.** Each is argued where
+> it belongs in the text below; in summary:
+>
+> - **The aggregate was hydrating the whole campaign.** `AverageAsync` materialised full result rows — every
+>   prompt, answer and `ResponseMetaJson` of a run — to average one number, which is verbatim the diagnosis
+>   already written twice in the same port. Fixed to a projection, RED test first.
+> - **The exit-code contract had a hole.** A missing `--metric` exited `3` (environment) rather than `4`
+>   (configuration), collapsing the distinction the contract rests on. The surface validates its own
+>   invocation now; the phrase is `RunReport.NoMetricNamed`, one constant for both sides.
+> - **`Suite.IdOf` had to exist and the plan had not noticed why.** A run stores the suite STAMP while
+>   `SeedSplit` assigns from the suite ID — splitting on the stamp would have reshuffled every half at every
+>   freeze, the exact defect `StableHash` is there to prevent.
+> - **§3.2's `SplitHalf?` became `QuestionScope`**, a closed pair carrying question ids: Postgres cannot
+>   compute the hash, so the half travels as its members and the aggregate stays a group-by.
+> - **§3.7's "not assertable through EF" caveat was wrong** and was withdrawn before the build — the
+>   technique was already in the neighbouring test file.
+> - **A one-sided-split warning** was added, which the plan did not list; a test found that the split is the
+>   report's own reading of the run's questions.
+> - **`--json` emits the contract, not the view**, which is stronger than the equivalence test the plan
+>   proposed.
+> - **One DoD line was withdrawn rather than ticked**: `Discrimination.Usable` stays uncalled, because
+>   calling it would change what a ranking IS. Recorded in the DoD below and in `architecture.md`'s gap list.
+>
+> This is step 7 of [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §5, brought forward out of its order
 > because §1 below is a defect rather than a missing feature.
 >
-> Related docs: [../research/architecture.md](../research/architecture.md) (*The measurement contract*, *The
-> arbiter*), [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) (§the sweep that manufactured
+> Related docs: [architecture.md](architecture.md) (*The measurement contract*, *The
+> arbiter*), [MEASURED_LESSONS.md](MEASURED_LESSONS.md) (§the sweep that manufactured
 > winners — the reason `ProofState` exists at all).
 
 ---

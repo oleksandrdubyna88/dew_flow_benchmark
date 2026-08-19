@@ -1,6 +1,6 @@
 # Architecture — the system as it is
 
-> Status: **current as of 2026-08-17.** Describes what exists and runs, not what is planned; the plan is
+> Status: **current as of 2026-08-19.** Describes what exists and runs, not what is planned; the plan is
 > [todo/PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) and the evidence behind the design is
 > [MEASURED_LESSONS.md](MEASURED_LESSONS.md). Where the two disagree, this file is wrong and should be
 > corrected — a description that has drifted from the code is the failure this convention exists to catch.
@@ -19,12 +19,17 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — plan · run · judge · sweep · prune<br/>telemetry · variants · questions · models · version/help"]
-        apphost["AppHost — Aspire, own Postgres"]
+        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · version/help"]
+        apihost["Api — bench-api, READ only, starts nothing"]
+        apphost["AppHost — Aspire, own Postgres + bench-api"]
+    end
+    subgraph api["Bench.Api — the route group"]
+        routes["GET /runs · /runs/id/report · /runs/id/scoreboard<br/>POST /plan"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
         runner["LegRunner · LegDrain · LegRecorder"]
         plan["PlanRun / PlanRequestHandler"]
+        report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
         ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler"]
     end
@@ -44,10 +49,15 @@ flowchart TB
     contracts["Bench.Contracts — wire shapes, depends on nothing"]
 
     cli --> app
+    apihost --> api
+    apihost --> infra
+    api --> app
     apphost --> pg
+    apphost --> apihost
     app --> dom
     infra --> app
     app --> contracts
+    api --> contracts
 ```
 
 Two projects depend on **nothing**: `Bench.Domain` and `Bench.Contracts`. That is not tidiness — a wire
@@ -610,6 +620,60 @@ so changing the arbiter — or adding a second one that disagrees — costs its 
 The judge sits BESIDE the mechanical score, never instead of it. Two arbiters need a third thing to be
 checked against, and the deterministic metrics in the same result are it.
 
+## The comparison, and the word a false winner is printed with
+
+`bench report` and `GET /api/runs/{id}/report` read a finished run's stored metrics and assemble the thing
+this project exists to produce. `RunReport` decides; both surfaces render — and the CLI's `--json` emits the
+same `RunReportDto` the endpoint returns, so an agent reading one and a browser reading the other cannot be
+told two different truths about a run.
+
+**It exists because the guard against false winners had never been consulted.** `SeedSplit.Proof`,
+`Discrimination.Over` and `MetricByDimension.Legs` were written, tested, and called by nothing: the suite was
+split into a selection half and a held-out half, `bench plan` printed the assignment, `bench run` measured
+both, and no code ever compared them. That is the third time this shape has appeared here — `SweepAsync` and
+`ICheckoutProvider` were both fully built with no caller, and both were found by an audit rather than by use —
+and it is the most consequential of the three, because what it left unbuilt was not a guard but the product.
+
+- **Four axes, from columns that already existed.** `AverageByAsync(runId, dimension, metric, scope)` groups by
+  engine, lane, subject or variant; `cells` carries each as its own column precisely so this is a group-by
+  rather than string parsing. One method rather than six near-copies — the two that existed
+  (`AverageByEngineAsync`/`AverageByLaneAsync`) were removed rather than kept as delegations.
+- **The verdict is `ProofState`, and `Unproven` is a WORD.** Every arm is read on both halves against the
+  baseline: won on both is *Confirmed*, won only where it was chosen is **Unproven**, won only on the held-out
+  half is *Suspicious* and is printed rather than hidden. Unproven renders as *"won only where it was chosen"*
+  and never as a smaller number, because a false winner reads as a modest success until it is named.
+- **A half nobody ran is `unmeasured`, never a loss.** An absent measurement and a defeat are different facts;
+  there is no margin over a half that was never run.
+- **The baseline is the control arm or an operator's choice — never a nomination.** With neither, the arms are
+  reported side by side and none is called a winner, with a warning saying so: picking one by score would
+  define the result into existence.
+- **The margin is reported and is not a threshold.** A floor nobody has measured would be a quality claim.
+- **A thin mean prints and does not rank.** Below `--min-legs` the averages still appear and the ranking is
+  withheld naming the counts — `MetricByDimension.Legs` exists for exactly this, and whether to spend more
+  repeats is the operator's call rather than a suppressed table.
+- **The split is derived, never stored.** `SeedSplit.Assign(Suite.IdOf(stamp), questionId)` — from the suite
+  **id** inside the stamp, so freezing a new version cannot reshuffle the halves under a comparison that spans
+  versions. A run whose questions all land on one side gets a warning that nothing there can be confirmed.
+- **Nothing in a report proposes retiring a question**, and a test asserts it. Discrimination is a property of
+  a comparison rather than of a question: pruning what saturates the strongest models deletes the range in
+  which cheaper models still differ.
+- **`4` against `3`, and `400` against `404`, are the same distinction.** A request that named no metric asked
+  wrongly; a run this database does not hold is different news. `--metric` has no default at all — the metric
+  that answers a retrieval question means nothing for the control arm.
+- **A low score still exits `0`.** The report reports; it does not judge, exactly as `bench run` does not.
+
+**The aggregate stopped reading the campaign to average one number.** It used to `Include` the result, its cell
+and its run and materialise full rows — every prompt, answer and `ResponseMetaJson` of a run crossed the wire
+to produce one mean. It is a projection now: five short columns per leg. The fold stays in C# rather than
+becoming an `AVG` in SQL because *not a number* must be EXCLUDED rather than cast to zero, and a cast would
+throw on the row the rule exists to skip.
+
+**`bench-api` serves it and starts nothing.** Read-only routes, no migrations — the CLI owns the schema, and
+two processes racing `Migrate()` against one database is a defect rather than a race worth winning. `bench run`
+remains the one verb that reaches a model, so nothing an orchestrator restarts can begin spending money; a
+start button waits for the console's own worker and the accelerator lease that makes two drains against one
+card safe.
+
 ## Guards that shape the API
 
 Each is here because something went wrong that it now prevents; the catalogue is
@@ -642,14 +706,27 @@ Stated because a description that quietly implies more than is built is the same
   deliberately in place first: retrofitting it after the first long agentic campaign means discovering it
   from a multi-day gap in a log.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
-- **No hardware sampler**, no UI, and the API route group is not hosted.
+- **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
+  AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a
+  boundary rather than a gap (*The comparison*, above).
+- **`Discrimination.Usable` still has no caller**, alone among the pieces the report wired in. It returns the
+  questions a report may RANK on, and calling it would change what a ranking is — from the mean over a run's
+  questions to the mean over the ones that separate these subjects. That is a decision about the measurement
+  and not a wiring gap, so it is named here rather than made silently.
+- **`Mindex` and `Http` are `EngineKind` members with no adapter.** A run naming one gets `NoRetriever`, which
+  refuses by name before any cell exists — honest, but the axis reads as available in the enum and is not.
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
-- **The authoring pipeline exists but has no THROUGHPUT number.** `author` and `vet` both run against the real
-  Claude CLI, and what nobody knows yet is the only figure the founding plan says can be learned by running:
-  how many accepted questions a week of this produces. Two facts bound it and neither is fixed —
-  **`pr-diff` cannot be authored at all** while git history is unreadable inside the worktree, and **all three
-  reviewer slots are one model**, so today's approvals are one opinion sampled three times. A number produced
-  before those are addressed would be a number about this compromise rather than about the pipeline.
+- **The bank COVERS two of its six groups**, which is the one gap no amount of running compensates for: every
+  axis multiplies over the question set, so a comparison drawn from this bank today is a comparison about two
+  groups. Open work is `todo/PLAN_question_bank_coverage.md`, and `gemini` has still authored nothing across
+  several distinct failures.
+
+  > This bullet used to say the pipeline had *no throughput number*, that **`pr-diff` cannot be authored at
+  > all**, and that **all three reviewer slots are one model**. All three had stopped being true — the
+  > throughput is measured in `PLAN_question_authoring.md` (17 accepted of 22, ~7 min per accepted question),
+  > `GitHistory` hands the author the history it could not read and `pr-diff` questions have since been vetted,
+  > and *Vetting*, above, records a panel of three different models. The gap list had drifted from the body of
+  > its own file, which is exactly the defect this file's status line warns about; corrected 2026-08-19.
 - **Two variant axes cannot be honoured yet, and they are the corpus ones.** `bench run --variants` plans one
   leg per variant and the engine serves everything a recipe names except **chunk size** and **embed model**,
   which it derives from its own configured recipe rather than from a request. So two variants differing only

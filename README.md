@@ -59,6 +59,7 @@ measurement programme, and each one cost a wrong number to learn. The catalogue 
 | `src/Bench.Infrastructure` | adapters |
 | `src/Bench.Api` | minimal-API group over the same use cases |
 | `hosts/Cli` | `bench` — the first surface, and the one an agent drives |
+| `hosts/Api` | `bench-api` — the read surface. It serves reports and starts nothing |
 | `tests/Bench.Tests` | xUnit v3 on Microsoft Testing Platform, incl. the architecture guard |
 
 The CLI's exit codes are a contract, because its first consumer is an agent: `0` pass · `1` a real
@@ -74,15 +75,19 @@ retention on the one table that grows. Beside it: an immutable variant catalog, 
 groups and reviewers are rows, a model registry that stores the NAME of an environment variable rather than a
 key, a re-scoring arbiter that never re-runs a leg, telemetry ingest from a spool, and the layering guard.
 
+**And the run can be read back as a comparison.** `bench report` and `bench-api` answer with the same object:
+the metric along four axes, each arm on BOTH halves of the split, and a verdict — a configuration that won
+only where it was chosen renders **UNPROVEN**, in that word, rather than as a smaller win
+([research/PLAN_run_report.md](research/PLAN_run_report.md)).
+
 Not yet built, and each has an owner in `todo/`:
 
 | | |
 |---|---|
 | the tool-calling loop — the lane where the SUBJECT decides what to search | [todo/PLAN_tool_benchmark.md](todo/PLAN_tool_benchmark.md) |
-| a report — nothing assembles the comparison this project exists to produce | [todo/PLAN_run_report.md](todo/PLAN_run_report.md) |
 | the corpus axes (chunk size, embed model), and triggering an index pass | [todo/PLAN_variant_matrix.md](todo/PLAN_variant_matrix.md) steps 5–6 |
 | the compute-backend echo, without which two sidecars are one result row | [todo/PLAN_compute_backend_axis.md](todo/PLAN_compute_backend_axis.md) |
-| the hardware sampler, a cloud model runtime, the API host, and the UI | [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md) |
+| the hardware sampler, a cloud model runtime, and the UI | [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md) |
 
 And the bottleneck is not code: the bank holds questions in **two of its six groups**, so a comparison over it
 today is a comparison about two groups ([todo/PLAN_question_bank_coverage.md](todo/PLAN_question_bank_coverage.md)).
