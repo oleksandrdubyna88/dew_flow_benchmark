@@ -67,6 +67,7 @@ public static class Program
             "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
+            "lanes" => Lanes(command, output, error, stopping),
             "questions" => Questions(command, output, error, stopping),
             "models" => Models(command, output, error, stopping),
             "version" => Version(output),
@@ -177,6 +178,36 @@ public static class Program
 
         return VariantsCommand
             .RunAsync(command, new PostgresVariantCatalog(db), TimeProvider.System, output, error, stopping)
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>The lane catalog, same shape and same refusal as the variant one above: a default
+    /// connection would write a tool surface into whatever database happened to be listening, and a lane is
+    /// an identity every future result quotes.</summary>
+    private static int Lanes(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var db = new BenchDbContext(
+            new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).Options);
+
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return LanesCommand
+            .RunAsync(command, new PostgresLaneCatalog(db), TimeProvider.System, output, error, stopping)
             .GetAwaiter().GetResult();
     }
 
@@ -291,6 +322,16 @@ public static class Program
         output.WriteLine("  bench variants retire --name <slug> --db <connection>");
         output.WriteLine("             a variant is added and retired, never edited: results name what they ran under");
         output.WriteLine();
+        output.WriteLine("  bench lanes add       --name <slug> [--display <text>] --db <connection>");
+        output.WriteLine("             --presentation none|bridge|mcpstdio|clinative|clinativewithmcp");
+        output.WriteLine("             [--tools a,b,c] [--descriptions <set>] [--max-turns 1]");
+        output.WriteLine("             [--doctrine <text> | --doctrine-file <path>]");
+        output.WriteLine("             (or --definition-file <path> | --definition <json>)");
+        output.WriteLine("  bench lanes list      [--all] --db <connection>");
+        output.WriteLine("  bench lanes retire    --name <slug> --db <connection>");
+        output.WriteLine("             a lane is the TOOL SURFACE a leg ran under — which tools, in which words,");
+        output.WriteLine("             under which ordering doctrine, through which shape, for how many turns");
+        output.WriteLine();
         output.WriteLine("  bench models add     --key <slug> --model-id <id> [--display <text>]");
         output.WriteLine("             [--runtime openaiendpoint|cliclaude|clicodex|cligemini|bridgelocal]");
         output.WriteLine("             [--hosting local|cloud] --base-url-ref <ENV_VAR_NAME> [--api-key-ref <NAME>]");
@@ -343,6 +384,11 @@ public static class Program
         output.WriteLine("             the corpus that will ANSWER is read before any cell exists and a recipe it");
         output.WriteLine("             disagrees with ends the run; [--allow-unstamped-index] measures an index whose");
         output.WriteLine("             commit the engine never recorded, and says so");
+        output.WriteLine("             a variant may also name the COMPUTE BACKEND it measures (host/provider/device,");
+        output.WriteLine("             e.g. wsl/migraphx/R9700). The engine echoes what it served on and a disagreement");
+        output.WriteLine("             ends the run naming both — two sidecars are two arms, never one result row;");
+        output.WriteLine("             [--allow-undeclared-backend] measures against an engine that declares none, and");
+        output.WriteLine("             keeps printing that which arm the numbers describe is UNVERIFIED");
         output.WriteLine("             [--hit-retention-days 7]  how long a hit keeps its source TEXT; ranks, scores");
         output.WriteLine("             and spans are kept forever, so every retrieval metric stays recomputable");
         output.WriteLine("             [--lane no-tools] [--repeats N] [--seed N] [--label X] [--json]");

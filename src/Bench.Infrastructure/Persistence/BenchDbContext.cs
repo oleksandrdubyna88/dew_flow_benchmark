@@ -107,6 +107,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<VariantRow> Variants => Set<VariantRow>();
 
+    public DbSet<LaneRow> Lanes => Set<LaneRow>();
+
     public DbSet<QuestionGroupRow> QuestionGroups => Set<QuestionGroupRow>();
 
     public DbSet<ReviewerRow> Reviewers => Set<ReviewerRow>();
@@ -220,6 +222,25 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
             // "Is this the same recipe under another name" — a lookup, never a scan that re-parses rows.
             variant.HasIndex(v => v.Hash);
+        });
+
+        builder.Entity<LaneRow>(lane =>
+        {
+            lane.ToTable("lanes");
+            lane.HasKey(l => l.Id);
+            lane.Property(l => l.DefinitionJson).HasColumnType("jsonb");
+
+            // The name is the identity every cell already carries in RunCell.LaneName, so uniqueness is
+            // enforced where concurrency actually happens rather than by a read-then-write two sessions
+            // can both pass.
+            lane.HasIndex(l => l.Name).IsUnique();
+
+            // "Is this the same surface under another name" — the variant catalog's lookup, one axis over.
+            lane.HasIndex(l => l.Hash);
+
+            // The comparison scope: a leaderboard over wordings is only meaningful inside one tool set and
+            // one presentation, so that pair is the index the reports group by.
+            lane.HasIndex(l => new { l.ToolsHash, l.Presentation });
         });
     }
 

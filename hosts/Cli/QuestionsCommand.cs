@@ -876,6 +876,4 @@ public static class QuestionsCommand
         error.WriteLine($"bench: {reason}");
         return ExitCodes.Configuration;
     }
-
-    private static string Reason<T>(this Outcome<T> outcome) => outcome.Match(_ => string.Empty, reason => reason);
 }

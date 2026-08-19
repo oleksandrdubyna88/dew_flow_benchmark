@@ -1,6 +1,7 @@
 # PLAN — the tool benchmark: a lane is a catalog row, the doctrine is an axis, and the loop finally turns
 
-> Status: **plan only, nothing implemented yet.** Scope: `Bench.Domain` (new `Lanes/`, extensions to
+> Status: **step 1 implemented 2026-08-19; steps 2–4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
+> 2026-08-16). The lane catalog exists: a lane is a hashed row rather than a bare name. Scope: `Bench.Domain` (new `Lanes/`, extensions to
 > `Runs/` and `Suites/`), `Bench.Application` (the tool loop and its ports), `Bench.Infrastructure`
 > (a new engine, a new runtime, two migrations), `Bench.Api`, `hosts/Cli`, and later `src/Bench.Ui`.
 > One new cross-repository edge: this repository vendors `dew_flow_mcp` as a submodule.
@@ -430,9 +431,24 @@ What this plan needs from `dew_flow_mcp · research/PLAN_tool_surface_config.md`
 Each step ships alone, tests green, before the next. **CLI and API first, UI strictly after the endpoints
 it renders** — the API-first gate the family already applies.
 
-1. **Lane catalog** — `Bench.Domain/Lanes/*` (definition, catalog entry, selection, slug), the `lanes`
-   table and migration, `ILaneCatalog` + `PostgresLaneCatalog`, `bench lanes add|list|retire`.
-   Independent of the parallel session; touches no file under `Variants/`.
+1. ~~**Lane catalog**~~ **DONE 2026-08-19.** `Bench.Domain/Lanes/*`, `LaneJson`, `ILaneCatalog` +
+   `PostgresLaneCatalog`, the `lanes` table and its migration, and `bench lanes add|list|retire`. 37 tests,
+   eight of them against a real Postgres. It touched no file under `Variants/`, as promised.
+
+   **One deviation: there is no `LaneSelection` type.** The step asked for "definition, catalog entry,
+   selection, slug", and the selection turned out to exist already — `ToolLane.Select()` returns the
+   EXISTING `Lane(Name, Preamble)` axis record with its dead field finally set to the doctrine. A parallel
+   selection type would have been a second way to say what a leg's lane is, beside the one every cell
+   already stores.
+
+   **A defect this step's own tests produced, worth keeping.** The listing fails TOTALLY on one unreadable
+   row — deliberately, since skipping it renders a catalog quietly missing a surface somebody is measuring
+   against. The test that asserts this left its broken row behind, and every other listing test sharing the
+   Postgres fixture failed. The guarantee and the pollution are the same property; the test now removes the
+   row it broke, and says why in place.
+
+   **And a fourth copy of one helper was not written.** `Reason<T>()` on `Outcome` was already private in
+   three CLI commands; it is now `OutcomeText` and the three copies are gone.
 2. **Multi-turn model plumbing** — `ModelTurn`, `ModelAnswer.ToolCalls`, `ModelRequest.Tools/Transcript/OfTurn`,
    `OpenAiCompatibleRuntime` body and parse. The existing runtime tests must pass **unchanged** — that is
    the proof the addition is backward compatible.
