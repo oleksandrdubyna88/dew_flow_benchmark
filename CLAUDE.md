@@ -40,6 +40,11 @@ dotnet build dew_flow_benchmark.slnx -c Release
 ./hosts/Cli/bin/Release/net10.0/bench plan \
   --repo https://github.com/org/repo.git --commit <40-hex> --suite-file samples/demo-suite.json \
   --subjects qwen@local,opus@cloud --lanes native,retrieval --repeats 3 [--json]
+
+# The MCP telemetry spool's scheduled consumer (2026-08-19): the producers never prune — this
+# repository owns the files' lifecycle, and a Task Scheduler job (dew_flow-telemetry-ingest, daily
+# 03:30) runs ingest-then-prune. scripts/telemetry-ingest.ps1 is the action;
+# scripts/register-telemetry-ingest.ps1 (re)registers it.
 ```
 
 ## Project Structure
