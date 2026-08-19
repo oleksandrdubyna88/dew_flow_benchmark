@@ -26,18 +26,20 @@ dotnet build dew_flow_benchmark.slnx -c Release
 
 # Run tests — ALWAYS via the test project's executable, NEVER `dotnet test`
 # (xUnit v3 / Microsoft Testing Platform: there is no VSTest testhost, so `dotnet test` aborts)
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-method "*SomeTestName*"
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*MatrixOrderTests"
+# `.exe` because this machine is Windows and pwsh does not resolve an extensionless relative path;
+# ubuntu CI runs the same binary without the extension — that is the Linux name, not a different runner.
+./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe
+./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-method "*SomeTestName*"
+./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-class "*MatrixOrderTests"
 
-# The CLI
+# The CLI (same `.exe` note as above)
 # The variant catalog — retrieval configurations as rows, added and retired, never edited
-./hosts/Cli/bin/Release/net10.0/bench variants add --name hybrid-rrf-256 --db "$BENCH_DB" \
+./hosts/Cli/bin/Release/net10.0/bench.exe variants add --name hybrid-rrf-256 --db "$BENCH_DB" \
   --engine qln --channels hybrid --fusion rrf --k 60 \
   --text-shape src --chunk-tokens 256 --embed-model bge-m3 --rerank-pool 50 --limit 20
-./hosts/Cli/bin/Release/net10.0/bench variants list --all --db "$BENCH_DB"
+./hosts/Cli/bin/Release/net10.0/bench.exe variants list --all --db "$BENCH_DB"
 
-./hosts/Cli/bin/Release/net10.0/bench plan \
+./hosts/Cli/bin/Release/net10.0/bench.exe plan \
   --repo https://github.com/org/repo.git --commit <40-hex> --suite-file samples/demo-suite.json \
   --subjects qwen@local,opus@cloud --lanes native,retrieval --repeats 3 [--json]
 
