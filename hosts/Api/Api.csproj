@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The READ surface. It serves reports and the plan computation, and it starts nothing: `bench run` is
+       the one verb that reaches a model, and it stays a command an agent runs rather than a service an
+       orchestrator supervises. A start button belongs to the console's own worker, with the accelerator
+       lease that makes two drains against one card safe. -->
+
+  <PropertyGroup>
+    <AssemblyName>bench-api</AssemblyName>
+    <RootNamespace>Bench.ApiHost</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bench.Api\Bench.Api.csproj" />
+    <!-- The adapters this host binds the read ports to. The route group itself may not reference
+         Infrastructure — ArchitectureTests asserts that — so the composition happens here, which is what a
+         host is for. -->
+    <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

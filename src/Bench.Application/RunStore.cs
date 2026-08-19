@@ -66,6 +66,16 @@ public interface IRunStore
     /// run has cells.
     /// </para></summary>
     Task<IReadOnlyList<string>> QuestionIdsAsync(Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>The most recently created runs, newest first, capped by <paramref name="limit"/>.
+    /// <para>
+    /// A listing, and emphatically not a "current run": every other method on this port names the run it
+    /// operates on, because the system this replaces resolved an absent run id to the project's most recent
+    /// row whatever its status, and ~14 evaluations overwrote one another in a session before anybody
+    /// noticed. Reading a list and CHOOSING from it is the opposite of that — the caller still names what it
+    /// wants afterwards, and an operator who cannot find an id cannot report on it at all.
+    /// </para></summary>
+    Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>The one phrase that means "there is nothing left to claim".

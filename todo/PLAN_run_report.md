@@ -286,8 +286,27 @@ Each step ships alone with tests green before the next starts.
      shared by the use-case and CLI tests. A second pair would let the two surfaces be tested against two
      different ideas of what the store answers, when the whole point of `RunReport` is that both render one
      object.
-4. **Contracts + routes.** The DTOs and the three `GET`s, tested through `MapBenchApi` without a host.
-5. **`hosts/Api` + AppHost registration.** The first process that serves them.
+4. ~~**Contracts + routes.**~~ **IMPLEMENTED 2026-08-19.** `RunReportDto` and its parts in
+   `Bench.Contracts`, `RunReportContract` mapping in `Bench.Application`, and the three `GET`s.
+   `BenchApiTests` 4/4, no host: the report route is a NAMED method rather than a lambda, so the rule in
+   it is assertable while the route stays one line of wiring. Deviations:
+   - **`--json` now emits the CONTRACT, not the view.** The plan expected a test that the two agree;
+     making them one object is stronger, and it is what `RunPlanDto`'s own comment already demanded — *an
+     agent reading the CLI and a browser reading the API never see different truths*. The typed view stays
+     for the human rendering, where a `switch` over `ProofState` is a compiler error when a member is added
+     and a `switch` over a string is not.
+   - **`IRunStore.RecentAsync` is new**, for `/api/runs`. A listing, emphatically not a "current run": an
+     operator who cannot find an id cannot report on it, and the port's own comment records what resolving
+     an absent id to the newest row once cost.
+   - `400` against `404` is the HTTP spelling of the CLI's `4` against `3`, asserted.
+5. ~~**`hosts/Api` + AppHost registration.**~~ **IMPLEMENTED 2026-08-19.** `bench-api`, registered in the
+   AppHost with the database referenced and waited for. Read-only, applies no migrations, refuses without
+   a connection string. Smoked live: `/api/health` → `{"status":"ok"}`; a report with no `metric` → **400**
+   carrying the shared phrase; `/api/runs` against an unreachable database → **500** in 3.3 s with the
+   error logged; no connection string → exit **4**, the fatal reaching both the coloured console and
+   `logs/2026-08-19/bench-api-…log`. Deviation: the no-database refusal moved INSIDE the `try`, because an
+   early return past the `finally` skips `CloseAndFlush` — it survived only because this file sink happens
+   to be synchronous.
 
 Steps 1–3 are the value; 4–5 are what keeps step 8 from starting with a UI over nothing.
 

@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/hosts/">
     <Project Path="hosts/Cli/Cli.csproj" />
+    <Project Path="hosts/Api/Api.csproj" />
     <Project Path="hosts/AppHost/AppHost.csproj" />
   </Folder>
   <Folder Name="/tests/">

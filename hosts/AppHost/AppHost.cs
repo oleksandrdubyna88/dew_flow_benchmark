@@ -57,8 +57,20 @@ var postgres = builder.AddPostgres("postgres", password: password)
 
 var database = postgres.AddDatabase("bench");
 
-// No project resources yet, and that is honest rather than unfinished: the CLI is not a service an
-// orchestrator supervises — it is a command an agent runs, and it takes its connection string from
-// --connection or ConnectionStrings__bench. What this AppHost provides is the database that string points
-// at. The API host joins here when it exists.
+// The read surface, and the only project resource here. The CLI is still NOT one, and that is honest
+// rather than unfinished: it is a command an agent runs, not a service an orchestrator supervises, and it
+// takes its connection string from --connection or ConnectionStrings__bench.
+//
+// This host serves reports and starts nothing. `bench run` remains the one verb that reaches a model, so
+// nothing an orchestrator restarts can begin spending money — and a start button waits for the console's
+// own worker and the accelerator lease that makes two drains against one card safe
+// (todo/PLAN_variant_matrix.md step 6a).
+//
+// It applies no migrations: the CLI owns the schema, and two processes racing Migrate() against one
+// database is a defect rather than a race worth winning. Against an empty database this host answers
+// "no run" until a `bench run` has created it.
+builder.AddProject<Projects.Api>("bench-api")
+    .WithReference(database)
+    .WaitFor(database);
+
 builder.Build().Run();

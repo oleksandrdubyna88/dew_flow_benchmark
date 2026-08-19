@@ -45,6 +45,9 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
     public Task<IReadOnlyList<string>> QuestionIdsAsync(Guid runId, CancellationToken cancellationToken) =>
         Task.FromResult(questions);
 
+    public Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BenchRun>>([Run]);
+
     // The queue half of the port. A report never claims, settles or sweeps, and a double that quietly
     // answered these would hide a report that had started doing so.
     public Task<Outcome<BenchRun>> CreateAsync(BenchRun run, IReadOnlyList<RunCell> cells, CancellationToken cancellationToken) =>

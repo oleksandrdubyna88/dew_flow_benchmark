@@ -153,6 +153,23 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             counts.GetValueOrDefault(CellState.Abandoned));
     }
 
+    /// <summary>The newest runs, capped in the database rather than in memory.
+    /// <para>
+    /// A row this cannot parse back — an unreadable url or commit, which is only possible if something
+    /// wrote around this store — is SKIPPED rather than failing the listing: an operator hunting an id
+    /// should not be blocked from seeing every other run by one bad row, and the row is still there for a
+    /// direct <c>LoadAsync</c> to refuse by name.
+    /// </para></summary>
+    public async Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken)
+    {
+        var rows = await db.Runs.AsNoTracking()
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(Math.Max(1, limit))
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(ToDomain).OfType<Outcome<BenchRun>.Ok>().Select(ok => ok.Value)];
+    }
+
     /// <summary>The run's planned questions, distinct and ordered, computed in the database.
     /// <para>
     /// A <c>DISTINCT</c> over one indexed column rather than a read of the cells: a run has one row per

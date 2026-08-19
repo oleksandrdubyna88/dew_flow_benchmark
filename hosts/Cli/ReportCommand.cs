@@ -86,7 +86,10 @@ public static class ReportCommand
     {
         if (command.Has("json"))
         {
-            output.WriteLine(JsonSerializer.Serialize(view, Json));
+            // The CONTRACT, not the view: the same object the endpoint returns, so an agent reading this
+            // and a browser reading the API never see different truths. The typed view is what the human
+            // rendering below switches over, where a missing ProofState member is a compiler error.
+            output.WriteLine(JsonSerializer.Serialize(RunReportContract.From(view), Json));
             return Exit(view);
         }
 
