@@ -1,4 +1,5 @@
 using Bench.Domain;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Variants;
 using FluentAssertions;
@@ -100,6 +101,33 @@ public sealed class VariantDefinitionTests
     public void A_limit_of_zero_would_return_nothing_and_is_refused()
     {
         Retrieval(limit: 0).Reason().Should().Contain("limit");
+    }
+
+    [Fact]
+    public void A_recipe_that_names_no_backend_hashes_EXACTLY_as_it_did_before_that_axis_existed()
+    {
+        // Pinned literally, not against a sibling call: a definition is never edited because results name
+        // the variant they ran under, so adding an optional axis must not relabel a single number already
+        // measured. Emitting an empty `backend=` segment unconditionally would change every catalog row's
+        // hash on the day this shipped, and nothing would have said so.
+        Retrieval().Ok().Canonical.Should().Be(
+            "engine=Qln|channels=Hybrid|fusion=rrf,k=60,wd=1,ws=1,norm=none|corpus=src/256/bge-m3|rerank=50|limit=20");
+        Retrieval().Ok().Canonical.Should().NotContain("backend=");
+    }
+
+    [Fact]
+    public void A_recipe_that_names_an_arm_is_a_DIFFERENT_configuration()
+    {
+        var plain = (VariantDefinition.RetrievalRecipe)Retrieval().Ok();
+        var onWsl = plain.On(ComputeBackend.Parse("wsl/migraphx/R9700").Ok());
+
+        onWsl.Canonical.Should().Contain("backend=wsl/migraphx/R9700");
+        onWsl.Hash.Should().NotBe(plain.Hash,
+            "measuring the same recipe on two sidecars is two configurations, which is the entire point of "
+            + "the axis — a catalog that hashed them alike could not tell the arms apart");
+
+        var onWindows = plain.On(ComputeBackend.Parse("windows/dml/R9700").Ok());
+        onWindows.Hash.Should().NotBe(onWsl.Hash);
     }
 
     internal static Outcome<VariantDefinition> Retrieval(

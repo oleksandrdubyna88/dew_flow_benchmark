@@ -1,3 +1,5 @@
+using Bench.Domain.Retrieval;
+
 namespace Bench.Domain.Runs;
 
 public enum ModelHosting
@@ -103,9 +105,32 @@ public enum EngineKind
 /// An empty fingerprint means unknown — never "current", and never a default.</summary>
 public sealed record EngineRef(EngineKind Kind, string Endpoint, string Version, string IndexFingerprint)
 {
+    /// <summary>What the engine says it computed on, ECHOED and never assumed.
+    /// <para>
+    /// An <c>init</c> member defaulting to <see cref="BackendDeclaration.None"/> rather than a fifth
+    /// positional: a positional default must be a compile-time constant, so the alternative was a nullable
+    /// — a null in the domain, which this project refuses, and which would make *nothing known* a state two
+    /// values can express. Every run planned before this axis existed keeps the identity it already had, and
+    /// an engine that has not been taught to echo declares nothing, which is the truth about it.
+    /// </para></summary>
+    public BackendDeclaration Backend { get; init; } = BackendDeclaration.None;
+
     public static EngineRef Filesystem() => new(EngineKind.NoRetrieval, string.Empty, string.Empty, string.Empty);
 
     public bool MayBeWhiteBox => Kind == EngineKind.Qln;
 
-    public string Canonical => $"{Kind}|{Endpoint}|{Version}|{IndexFingerprint}";
+    /// <summary>The engine half of the measurement key.
+    /// <para>
+    /// <b>The backend is part of it, and that one segment is the whole of phase 2's structural fix.</b>
+    /// Without it, two qln engines differing only in which sidecar they call have the same kind, the same
+    /// version and — the corpus being unchanged — the same index fingerprint; they differ in
+    /// <see cref="Endpoint"/>, which is a machine-local address rather than a description of anything. The
+    /// WSL-against-Windows arms measured on 2026-08-18 are exactly that pair, and a sweep that merged them
+    /// would publish a mean over two operating systems as one number.
+    /// </para>
+    /// <para>
+    /// An engine that declared nothing contributes an empty segment rather than being omitted, so *nothing
+    /// known* stays distinguishable from any arm instead of quietly matching one.
+    /// </para></summary>
+    public string Canonical => $"{Kind}|{Endpoint}|{Version}|{IndexFingerprint}|{Backend.Canonical}";
 }

@@ -1,4 +1,5 @@
 using Bench.Application.Variants;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Variants;
 using FluentAssertions;
@@ -93,5 +94,47 @@ public sealed class VariantJsonTests
     public void Malformed_json_is_a_refusal_not_an_exception()
     {
         VariantJson.Read("{not json").Reason().Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void A_variant_that_names_no_arm_stores_no_backend_field_at_all()
+    {
+        var written = VariantJson.Write(VariantDefinitionTests.Retrieval().Ok());
+
+        // Absent, not empty. This row is published with the results, and a row written before the axis
+        // existed must stay byte-identical — an added `"backend":""` would rewrite the whole catalog's
+        // stored shape on the day this shipped.
+        written.Should().NotContain("backend");
+    }
+
+    [Fact]
+    public void The_arm_a_variant_measures_survives_the_catalog()
+    {
+        var recipe = (VariantDefinition.RetrievalRecipe)VariantDefinitionTests.Retrieval().Ok();
+        var onWsl = recipe.On(ComputeBackend.Parse("wsl/migraphx/R9700").Ok());
+
+        var written = VariantJson.Write(onWsl);
+        var read = (VariantDefinition.RetrievalRecipe)VariantJson.Read(written).Ok();
+
+        written.Should().Contain("\"backend\":\"wsl/migraphx/R9700\"");
+        read.Backend.Describe.Should().Be("wsl/migraphx/R9700",
+            "an axis that cannot be stored is not an axis — the catalog is where a variant lives");
+        read.Hash.Should().Be(onWsl.Hash, "and the recipe it comes back as must be the one that was hashed");
+    }
+
+    [Fact]
+    public void A_stored_arm_this_build_cannot_read_is_REFUSED_rather_than_dropped()
+    {
+        var json = """
+            {"engine":"qln","channels":"hybrid",
+             "fusion":{"mode":"rrf","k":60,"denseWeight":1,"sparseWeight":1,"norm":"none"},
+             "corpus":{"textShape":"src","chunkTokens":256,"embedModel":"bge-m3"},
+             "rerank":{"enabled":true,"pool":50},"limit":20,"backend":"wsl-migraphx"}
+            """;
+
+        // The opposite of how an ENGINE'S echo is read. This string is a configuration somebody wrote down,
+        // and the catalog's standing rule is that an axis this build cannot honour fails by name rather than
+        // running as something else; an unreadable echo is a fact about the engine and reads as not declared.
+        VariantJson.Read(json).Reason().Should().Contain("host/provider/device");
     }
 }

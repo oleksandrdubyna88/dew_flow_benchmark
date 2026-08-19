@@ -1,4 +1,5 @@
 using System.Globalization;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 
 namespace Bench.Domain.Variants;
@@ -197,6 +198,27 @@ public abstract record VariantDefinition
 
         public int Limit { get; }
 
+        /// <summary>The compute backend this variant measures, when it measures one.
+        /// <para>
+        /// Optional, and that is load-bearing: every variant in the catalog today declares none, and a
+        /// definition is never edited because results name the variant they ran under. So an undeclared
+        /// backend must leave the recipe hashing exactly as it did before this axis existed.
+        /// </para></summary>
+        public BackendDeclaration Backend { get; init; } = BackendDeclaration.None;
+
+        /// <summary>The same recipe, measured on a named arm. A new value rather than a mutation, like
+        /// every other change to a frozen shape here.</summary>
+        public RetrievalRecipe On(ComputeBackend backend) =>
+            this with { Backend = BackendDeclaration.Of(backend) };
+
+        /// <summary>The hashed recipe.
+        /// <para>
+        /// The backend segment is APPENDED only when one is declared, mirroring <c>Leg.Canonical</c>, which
+        /// appends its variant only when there is one so that identities stored before that axis existed
+        /// still mean what they said. Emitting an empty segment unconditionally would change the hash of
+        /// every catalog row on the day this shipped — relabelling numbers already measured, which is the
+        /// one thing an immutable catalog exists to prevent.
+        /// </para></summary>
         public override string Canonical => string.Join(
             '|',
             [
@@ -206,6 +228,7 @@ public abstract record VariantDefinition
                 Corpus.Canonical,
                 Rerank.Canonical,
                 $"limit={Limit}",
+                .. Backend is BackendDeclaration.Declared declared ? new[] { $"backend={declared.Canonical}" } : [],
             ]);
     }
 

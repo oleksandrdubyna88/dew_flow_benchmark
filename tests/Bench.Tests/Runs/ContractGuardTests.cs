@@ -1,3 +1,4 @@
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
@@ -92,6 +93,38 @@ public sealed class ContractGuardTests
         EngineRef.Filesystem().IndexFingerprint.Should().BeEmpty();
         EngineRef.Filesystem().MayBeWhiteBox.Should().BeFalse();
         new EngineRef(EngineKind.Qln, "http://localhost", "1.0", "abc").MayBeWhiteBox.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Two_engines_differing_only_in_the_backend_they_served_on_are_two_identities()
+    {
+        // The operator's question — on one R9700, is the sidecar faster under WSL/MIGraphX or on
+        // Windows/DirectML — was MEASURED on 2026-08-18 and cannot be stored here: both arms are the same
+        // qln, at the same version, over the same corpus, so they differ only in `endpoint`, which is a
+        // machine-local address and not a description of anything. A sweep that merged them would report a
+        // mean over two operating systems as one number.
+        var wsl = new EngineRef(EngineKind.Qln, "http://localhost:5080", "1.0", "fp")
+        {
+            Backend = BackendDeclaration.Of(ComputeBackend.Parse("wsl/migraphx/R9700").Ok()),
+        };
+
+        var windows = wsl with { Backend = BackendDeclaration.Of(ComputeBackend.Parse("windows/dml/R9700").Ok()) };
+
+        windows.Canonical.Should().NotBe(wsl.Canonical,
+            "two sidecars are two arms, and a result row that cannot tell them apart is a comparison of nothing");
+    }
+
+    [Fact]
+    public void An_engine_that_declared_no_backend_is_not_the_same_identity_as_one_that_did()
+    {
+        var silent = new EngineRef(EngineKind.Qln, "http://localhost:5080", "1.0", "fp");
+        var declared = silent with { Backend = BackendDeclaration.Of(ComputeBackend.Parse("windows/dml/R9700").Ok()) };
+
+        // Three states, never two. A third-party engine that says nothing must not compare equal to one that
+        // named a backend — "nothing is known" is not "the same as yours", and folding them is how an
+        // unattributed row joins an arm's aggregate.
+        silent.Canonical.Should().NotBe(declared.Canonical);
+        silent.Backend.Should().BeOfType<BackendDeclaration.NotDeclared>();
     }
 
     private static MeasurementTuple Tuple(string sha) => new(

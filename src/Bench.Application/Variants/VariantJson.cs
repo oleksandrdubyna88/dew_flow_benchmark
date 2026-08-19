@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Bench.Domain;
+using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Variants;
 
@@ -86,13 +87,28 @@ public static class VariantJson
             channels => FusionSpec.Parse(fusion.Mode, fusion.K, fusion.DenseWeight, fusion.SparseWeight, fusion.Norm).Match(
                 fused => CorpusSpec.Parse(corpus.TextShape, corpus.ChunkTokens, corpus.EmbedModel).Match(
                     corpora => Rerank(rerank).Match(
-                        reranked => VariantDefinition.Retrieval(
-                            engine, channels, fused, corpora, reranked, wire.Limit ?? 0),
+                        reranked => Backed(
+                            VariantDefinition.Retrieval(engine, channels, fused, corpora, reranked, wire.Limit ?? 0),
+                            wire.Backend),
                         Outcome<VariantDefinition>.Failure),
                     Outcome<VariantDefinition>.Failure),
                 Outcome<VariantDefinition>.Failure),
             Outcome<VariantDefinition>.Failure);
     }
+
+    /// <summary>Applies a stored backend to a parsed recipe.
+    /// <para>
+    /// An unreadable one is REFUSED rather than dropped, unlike an engine's echo: this string is a
+    /// configuration somebody wrote down, and the catalog's rule is that an axis this build cannot honour
+    /// fails by name instead of running as something else. The echo is the opposite case and reads as
+    /// <c>not declared</c>, because there the unreadable value is a fact about the engine.
+    /// </para></summary>
+    private static Outcome<VariantDefinition> Backed(Outcome<VariantDefinition> parsed, string? backend) =>
+        backend is null or "" ? parsed : parsed.Match(
+            definition => ComputeBackend.Parse(backend).Match(
+                arm => Outcome<VariantDefinition>.Success(((VariantDefinition.RetrievalRecipe)definition).On(arm)),
+                Outcome<VariantDefinition>.Failure),
+            Outcome<VariantDefinition>.Failure);
 
     private static Outcome<RetrievalChannels> Channels(string? value) =>
         Enum.TryParse<RetrievalChannels>((value ?? string.Empty).Trim(), ignoreCase: true, out var parsed)
@@ -114,6 +130,7 @@ public static class VariantJson
                 Corpus = new CorpusWire(recipe.Corpus.TextShape, recipe.Corpus.ChunkTokens, recipe.Corpus.EmbedModel),
                 Rerank = new RerankWire(recipe.Rerank.Enabled, recipe.Rerank.Pool),
                 Limit = recipe.Limit,
+                Backend = recipe.Backend is BackendDeclaration.Declared declared ? declared.Canonical : null,
             },
             _ => new DefinitionWire { Engine = NoRetrievalEngine },
         };
@@ -131,6 +148,14 @@ public static class VariantJson
         public RerankWire? Rerank { get; init; }
 
         public int? Limit { get; init; }
+
+        /// <summary>The compute backend this variant measures, as <c>host/provider/device</c>, or absent.
+        /// <para>
+        /// Absent rather than empty when undeclared: this row is published with the results, and a variant
+        /// that names no arm is a different fact from one whose arm failed to store. Omitting it also keeps
+        /// every catalog row written before this axis existed byte-identical.
+        /// </para></summary>
+        public string? Backend { get; init; }
     }
 
     private sealed record FusionWire(string Mode, int K, double DenseWeight, double SparseWeight, string Norm);
