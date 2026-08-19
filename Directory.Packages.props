@@ -12,7 +12,7 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
     <!-- Aspire SDK and Hosting packages must move as a matched pair — a straddled version spawns a
          second stray dashboard on a random port. The SDK version lives in hosts/AppHost/AppHost.csproj. -->
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.0" />
     <!-- Serilog: the one logging stack, per .claude/rules/common/logging-serilog.md. AspNetCore brings
          Serilog itself plus the console and file sinks. Apache-2.0. -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -29,7 +29,7 @@
          and the execution stay ours. .NLP is preview-only and stays out under the no-previews rule. -->
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.9.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation.Reporting" Version="10.9.0" />
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
     <!-- Real Postgres for the durability tests. Claim/settle/sweep are about what happens under genuine

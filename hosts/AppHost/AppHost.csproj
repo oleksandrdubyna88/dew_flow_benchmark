@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
 
   <!-- DEV orchestration only: `dotnet run` here brings up this benchmark's OWN database, isolated from
        every product store on the machine. It never ships. Keep the SDK and every Aspire.Hosting.*
