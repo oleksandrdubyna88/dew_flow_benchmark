@@ -71,6 +71,27 @@ public sealed class SuiteFreezeTests
         Draft("s", "q1").Freeze().Ok().Stamp.Should().StartWith("s@v1#");
     }
 
+    [Fact]
+    public void The_id_read_back_out_of_a_stamp_is_the_same_across_every_version_of_one_suite()
+    {
+        var v1 = Draft("polly-smoke", "q1").Freeze().Ok();
+        var v2 = v1.Amend().Ok().With(Question.Ask("q2", "another")).Ok().Freeze().Ok();
+
+        v1.Stamp.Should().NotBe(v2.Stamp, "two versions are two stamps, hash included");
+        Suite.IdOf(v1.Stamp).Should().Be("polly-smoke");
+        Suite.IdOf(v2.Stamp).Should().Be(Suite.IdOf(v1.Stamp),
+            "the SPLIT is derived from this — if freezing a version changed it, every question would be "
+            + "reassigned to the other half and a comparison spanning versions would silently compare two splits");
+        Suite.IdOf(Suite.Draft("polly-smoke").Stamp).Should().Be("polly-smoke", "a draft's stamp still names its suite");
+    }
+
+    [Fact]
+    public void A_value_carrying_no_version_is_already_an_id_rather_than_a_refusal()
+    {
+        Suite.IdOf("polly-smoke").Should().Be("polly-smoke");
+        Suite.IdOf(string.Empty).Should().BeEmpty("an empty stamp belongs to no suite anyone can look up");
+    }
+
     private static Suite Draft(string id, params string[] questionIds) =>
         questionIds.Aggregate(
             Suite.Draft(id),

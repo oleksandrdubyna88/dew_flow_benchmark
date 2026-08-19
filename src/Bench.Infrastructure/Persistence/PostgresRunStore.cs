@@ -153,6 +153,24 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             counts.GetValueOrDefault(CellState.Abandoned));
     }
 
+    /// <summary>The run's planned questions, distinct and ordered, computed in the database.
+    /// <para>
+    /// A <c>DISTINCT</c> over one indexed column rather than a read of the cells: a run has one row per
+    /// question × repeat × subject × lane × variant, so hydrating cells to collect tens of ids would scale
+    /// with the matrix instead of with the suite.
+    /// </para></summary>
+    public async Task<IReadOnlyList<string>> QuestionIdsAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var ids = await db.Cells.AsNoTracking()
+            .Where(c => c.RunId == runId)
+            .Select(c => c.QuestionId)
+            .Distinct()
+            .OrderBy(id => id)
+            .ToListAsync(cancellationToken);
+
+        return ids;
+    }
+
     /// <summary>The stale claims whose owner is provably gone. Everything else a stale row can be — a
     /// colleague on this host still working, or any row belonging to ANOTHER machine — is left alone.</summary>
     private async Task<List<CellRow>> StrandedAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)

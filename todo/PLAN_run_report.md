@@ -244,9 +244,29 @@ Each step ships alone with tests green before the next starts.
    - The variant key is `VariantSelectionCodec.Decode(...).Canonical`, reused rather than reimplemented, so
      the control arm reads `-` in a report exactly as it does in a leg identity.
    - §3.7's "not assertable" caveat was wrong and is corrected in place.
-2. **`RunReport` + `RunReportView`.** The use case: dimensions, halves, `ProofState`, the min-legs refusal,
-   the discrimination block, the control-arm rule and its "no baseline stated" case. Pure over the store's
-   answers, so tested with a fake store and no container.
+2. ~~**`RunReport` + `RunReportView`.**~~ **IMPLEMENTED 2026-08-19.** Dimensions, halves, `ProofState`, the
+   min-legs refusal, the discrimination block, the control-arm rule and its "no baseline stated" case.
+   `RunReportTests` 11/11 in 0.55 s against scripted stores, no container — the house `ScriptedLegs`
+   pattern. Whole suite 795 of 796 (the one failure remains another session's in-flight `ReviewRules`
+   message). Deviations:
+   - **`Suite.IdOf` had to exist, and the plan had not noticed why.** A run stores the suite STAMP
+     (`s@v3#abcdef012345`), while `SeedSplit` assigns a half from the suite **id** — deliberately, so a new
+     frozen version cannot reshuffle the halves under a comparison spanning versions. Splitting on the
+     stamp would therefore re-assign every question at every freeze, which is the exact defect
+     `SeedSplit`'s use of `StableHash` exists to prevent. The decomposition lives beside `Suite.Stamp`, the
+     one place that already knows the format, and `SuiteFreezeTests` pins that two versions of one suite
+     yield one id.
+   - **`IRunStore.QuestionIdsAsync` is new** — a `DISTINCT` over `cells.QuestionId`. Planned rather than
+     measured questions, so a half whose legs all crashed reads as *measured nothing* instead of as a half
+     that never existed; from the cells rather than the bank snapshot, because a file-frozen run writes no
+     `run_questions` rows at all. Still no migration.
+   - **`HalfReading` is a new type**, not `Captured`/`CapturedCount` reused: neither carries a mean with the
+     leg count behind it. It repeats their discipline — a half nobody ran and a half scored zero are
+     different states — rather than the type.
+   - **A one-sided-split warning was added**, which this plan did not list. Found by writing the test: the
+     split is the report's own reading of the run's questions, so a run whose questions all land on one side
+     produces an empty half — and with no half that did not choose, *nothing can ever be confirmed*. A
+     report that stayed silent there would read as a clean result.
 3. **`bench report`.** Renderer only, following `PlanCommand`. `--json` emits the DTO verbatim.
 4. **Contracts + routes.** The DTOs and the three `GET`s, tested through `MapBenchApi` without a host.
 5. **`hosts/Api` + AppHost registration.** The first process that serves them.

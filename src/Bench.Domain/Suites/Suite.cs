@@ -67,6 +67,31 @@ public sealed record Suite
     /// against the suite it claims rather than trusted.</summary>
     public string Stamp => IsFrozen ? $"{Id}@v{Version}#{Hash[..12]}" : $"{Id}@draft";
 
+    /// <summary>The suite ID out of a stamp — the only sanctioned way to read one apart.
+    /// <para>
+    /// It lives here, beside <see cref="Stamp"/>, because composition and decomposition of one format
+    /// belong in one file: a second place that knows a stamp begins with an id before an <c>@</c> is a
+    /// second place to update when the format moves, and the one that is forgotten fails silently.
+    /// </para>
+    /// <para>
+    /// The caller that needs it is the SPLIT. <see cref="Splitting.SeedSplit"/> assigns a question's half
+    /// from the suite <b>id</b> and deliberately not its version, so that freezing a new version cannot
+    /// reshuffle the halves underneath a comparison spanning versions — and a run stores the stamp rather
+    /// than the id. Splitting on the stamp would therefore re-assign every question at every freeze, which
+    /// is precisely the defect <c>SeedSplit</c>'s use of <c>StableHash</c> exists to prevent.
+    /// </para>
+    /// <para>
+    /// A stamp with no <c>@</c> is returned WHOLE rather than refused: an id is what this is asked for, and
+    /// a value that carries no version is already one. An empty stamp yields an empty id, which splits
+    /// consistently and belongs to no suite anyone can look up.
+    /// </para></summary>
+    public static string IdOf(string stamp)
+    {
+        var at = stamp.IndexOf('@', StringComparison.Ordinal);
+
+        return at < 0 ? stamp : stamp[..at];
+    }
+
     private static string HashOf(string id, int version, IReadOnlyList<Question> questions)
     {
         var canonical = string.Join(

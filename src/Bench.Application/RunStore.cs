@@ -51,6 +51,21 @@ public interface IRunStore
     Task<SweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken);
 
     Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>The distinct questions this run PLANNED, whether or not any of them was ever answered.
+    /// <para>
+    /// Planned rather than measured, and the difference is the point: a report splits these into the half
+    /// that selects and the half that confirms, and a half whose legs all crashed must read as
+    /// <em>measured nothing</em> rather than as a half that never existed. Reading the set off the results
+    /// would make those two indistinguishable — and would quietly shrink the denominator of every claim
+    /// about coverage.
+    /// </para>
+    /// <para>
+    /// From the cells rather than from the bank snapshot, because both doors have to answer: a run frozen
+    /// from a suite FILE writes no <c>run_questions</c> rows at all — a file has no groups — while every
+    /// run has cells.
+    /// </para></summary>
+    Task<IReadOnlyList<string>> QuestionIdsAsync(Guid runId, CancellationToken cancellationToken);
 }
 
 /// <summary>The one phrase that means "there is nothing left to claim".
