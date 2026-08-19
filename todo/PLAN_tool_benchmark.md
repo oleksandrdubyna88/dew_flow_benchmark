@@ -54,6 +54,12 @@ model passed 6 of 6 answers** an independent arbiter failed 0 of 6.
 
 ## 2. What exists today, verified
 
+> **Re-verified 2026-08-19 against the code rather than against this plan's own claims.** Four rows had moved,
+> and all four in the direction that makes this plan cheaper: the telemetry correlation now has both ends, the
+> MCP surface it measures went from one tool to four with the subset and description-set axes turnable and
+> echoed, the by-lane average was generalised into a report dimension, and the §3.7 loader defect moved file.
+> The rows below are corrected in place; the build order after them is unchanged.
+
 | capability | state | where |
 |---|---|---|
 | `Lane(Name, Preamble)` as a matrix axis | **`Preamble` is dead** — nothing reads it; `LegRunner` sends `SystemPrompt = string.Empty` unconditionally. Only `Lane.Name` is persisted and grouped on | `src/Bench.Domain/Runs/Axes.cs:79-84`, `src/Bench.Application/LegRunner.cs:76` |
@@ -61,12 +67,12 @@ model passed 6 of 6 answers** an independent arbiter failed 0 of 6.
 | `IEngine` as *the surface a model works through* (not a search API), `EngineTool(Name, Description, ArgumentsSchema)` | built, tested, **driven by nothing** | `src/Bench.Application/Ports.cs:38-60`, `src/Bench.Domain/Engines/EngineTool.cs:10` |
 | `BudgetKind.Turns` | declared, and `OpenAiCompatibleRuntime` already **refuses** it: *"one completion has no turns — a turn ceiling belongs to an agentic loop, not to this runtime"* | `src/Bench.Domain/Runs/Budgets.cs:7`, `src/Bench.Infrastructure/Models/OpenAiCompatibleRuntime.cs:45-46` |
 | `ToolCall(Name, ArgumentsJson, Refused, Error, Duration)`, `TimeBuckets`, `Captured`/`CapturedCount` | built; `LegTrace` is never captured by `bench run` | `src/Bench.Domain/Trace/LegTrace.cs:33-49, 99-130` |
-| `TelemetryCorrelation(Leg, Phase)` + `IsAttributed`, and the ingest codec that **already reads** an absent `correlation` as unattributed | built here; **nothing writes it** — the emitter has no such field | `src/Bench.Domain/Telemetry/ToolTelemetry.cs:52-64`, `src/Bench.Application/TelemetryCodec.cs:123-128, 191`; emitter gap: `dew_flow_mcp · src/Mcp.Telemetry/TelemetryRecord.cs:14-29` |
+| `TelemetryCorrelation(Leg, Phase)` + `IsAttributed`, and the ingest codec that reads an absent `correlation` as unattributed | **both ends now built** — the emitter gained the field 2026-08-16 with `--correlation`, so §3.5's reconstructed lane has a join key | `src/Bench.Domain/Telemetry/ToolTelemetry.cs:52-64`, `src/Bench.Application/TelemetryCodec.cs:123-128, 191`; emitter: `dew_flow_mcp · src/Mcp.Telemetry/TelemetryRecord.cs:19` |
 | The catalog pattern to mirror — immutable row, typed slug, `StableHash`, `Create`/`Rehydrate`/`Retire`, `Stamp`, never `Update` | **implemented 2026-08-16** as step 1 of the variant matrix; steps 2–11 of that plan remain open | `src/Bench.Domain/Variants/RetrievalVariant.cs:41-123`, `Variants/VariantSelection.cs:9-59`, `src/Bench.Domain/StableHash.cs:18-19` |
-| `ExpectationKind` (4 values), `Expectation(Kind, Anchor, Text, Required)`, `Question.RetrievalExpectations` | built; no notion of a tool | `src/Bench.Domain/Suites/SuiteItems.cs:36-72` |
+| `ExpectationKind` (4 values), `Expectation(Kind, Anchor, Text, Required)`, `Question.RetrievalExpectations` | built; no notion of a tool. **The unknown-kind fallback §3.7 fixes has MOVED**: it is `QuestionJson.ToExpectation`, not `SuiteJsonLoader`, and BOTH suite loading and stored bank rows reach it — so the typo trap is one step wider than §3.7 describes | `src/Bench.Domain/Suites/SuiteItems.cs:36-72`, `src/Bench.Application/QuestionJson.cs:63-75` |
 | `RetrievalObservation(Available, …)` and the *not applicable* honesty rule for a lane that surfaces nothing | built and load-bearing — the exact shape §3.7 mirrors | `src/Bench.Domain/Runs/AnswerScoring.cs:9-15, 87-104` |
-| `AverageByLaneAsync` / `AverageByEngineAsync` | built on both sides of the port, **surfaced by nothing** | `src/Bench.Application/ResultStore.cs:43-48`, `src/Bench.Infrastructure/Persistence/PostgresResultStore.cs:47-53` |
-| The MCP surface it will measure | one real tool; descriptions are **C# string literals compiled into the binary**; the catalog is built once per process from all registered providers, and there is no way to serve a subset | `dew_flow_mcp · src/Workspace.Application/WorkspaceToolProvider.cs:14-37`, `src/Mcp.Application/ToolCatalog.cs:61-72` |
+| Averaging by lane | **generalised since this was written** — the two methods became one `AverageByAsync(ReportDimension)` with `Lane` as a member, over columns the cell already carries. Cheaper than this plan assumed: the report axis exists and needs no join | `src/Bench.Application/ResultStore.cs:12-30` |
+| The MCP surface it will measure | **four tools, and every axis this plan needs is now turnable** (2026-08-19): `dew_flow_rag_qln`'s daemon serves `rag_search_project_context`, `graf_search_types` and `graf_get_type_relations` beside `rt_read_local_file`; descriptions are read from `prompts/tools/<set>/*.md` with the compiled literal as the floor; a tool SUBSET and a description SET are chosen at process start and echoed by `GET /api/mcp/surface`. The surface a lane names can therefore be both served and verified | `dew_flow_rag_qln · research/module_tools.md`; `dew_flow_mcp · src/Mcp.Application/ToolSurfaceOptions.cs` |
 | The submodule precedent | `dew_flow_rag_qln` vendors this exact repository and project-references five of its projects | `dew_flow_rag_qln · .gitmodules`, `hosts/Daemon/Daemon.csproj:26-30` |
 
 **Two facts are worth reading twice.** The measurement tuple has carried `lane = (toolSurface,
@@ -332,8 +338,9 @@ Every one of these reads existing tables plus the two above; none needs a new st
 | (b) is T better than native, and where | paired deltas per `ToolAffinity` group between two lanes at the same question and repeat, using only `Completed` legs — the existing `CountsInPairedDelta` rule. Reported per group, with totals shown last, because the totals are what hid the inversion last time |
 | (c) which description / doctrine wins | a leaderboard inside one comparison scope (§3.8), with the repeat spread printed beside every mean and any gap inside it labelled unproven |
 
-`AverageByLaneAsync` — which today has no caller outside its own Postgres tests — is what the lane
-rollup is built on.
+`AverageByAsync(ReportDimension.Lane)` is what the lane rollup is built on. *(Corrected 2026-08-19: this
+read `AverageByLaneAsync`, which has since been generalised into one dimension-taking method — the axis
+the rollup needs is a member of an enum now, not a fifth near-identical port method.)*
 
 ### 3.11 How the harness reaches the surface: a submodule
 
