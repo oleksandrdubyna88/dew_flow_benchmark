@@ -1,0 +1,286 @@
+# PLAN — the comparison comes out of the store, and the split finally decides who won
+
+> Status: **plan only, 2026-08-19 — nothing implemented.** Scope: `Bench.Application` (one use case),
+> `Bench.Infrastructure/Persistence` (one generalised query, one hydration fix), `Bench.Contracts` (the report
+> DTOs), `Bench.Api` (the read routes), `hosts/Api` (new — the first process that hosts them), `hosts/Cli`
+> (`bench report`). **No migration**: every dimension this report groups by is already a column, and the split
+> half is derived by a pure function.
+>
+> This is step 7 of [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §5, brought forward out of its order
+> because §1 below is a defect rather than a missing feature.
+>
+> Related docs: [../research/architecture.md](../research/architecture.md) (*The measurement contract*, *The
+> arbiter*), [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md) (§the sweep that manufactured
+> winners — the reason `ProofState` exists at all).
+
+---
+
+## 1. The goal, before any solution
+
+**This harness can produce evidence and cannot read a comparison out of it.** `bench run` fills `results`,
+`metrics`, `funnels` and `retrieved_hits`; the only thing any surface prints afterwards is two integers from
+`ScoreboardAsync` — "N of M passed". Everything needed to turn those rows into the answer the project exists
+to give is written, tested, and **called by nothing**:
+
+| Written, tested, no caller in `src/` or `hosts/` | Where |
+|---|---|
+| `MetricByDimension` (a mean per dimension, WITH its leg count) | `src/Bench.Application/ResultStore.cs:10` |
+| `AverageByEngineAsync` / `AverageByLaneAsync` | `src/Bench.Application/ResultStore.cs:91,94` |
+| `SeedSplit.Proof` → `ProofState` (Confirmed · Unproven · Suspicious) | `src/Bench.Domain/Splitting/SeedSplit.cs:60,70` |
+| `QuestionSpread`, `SaturatedAt`, `SpreadAcross` | `src/Bench.Domain/Runs/Discrimination.cs:13` |
+| `Discrimination.Over` / `Discrimination.Usable`, `DiscriminationReport` | `src/Bench.Domain/Runs/Discrimination.cs:126,141,109` |
+
+Verified 2026-08-19 by grepping each name across `src/` and `hosts/`: every hit is either the declaration
+itself or a test.
+
+**This is the third instance of one defect class, and the repository has already named the other two.** The
+crash-recovery sweep was fully implemented and called by nothing until `LegDrain` wired it
+(*What the drain survives* — "the audit finding this whole section exists to prevent repeating");
+`ICheckoutProvider` was tested from the first commits with no caller while every run printed that its commit
+was "recorded but unverified" and measured anyway. Both were found by an audit rather than by use. The
+report is the same shape, and it is the most consequential of the three, because what it leaves unbuilt is
+not a guard — it is **the product**: `research/architecture.md` opens by saying the output is *"a comparison,
+not a pass or a fail"*, and no code assembles one.
+
+The concrete consequence today: `SeedSplit` splits every suite into a selection half and a held-out half,
+`bench plan` prints the assignment, `bench run` measures both — and **nothing ever compares them.** The guard
+against the failure mode that cost this programme three reversed conclusions is fully built and has never
+once been consulted.
+
+## 2. What exists today, verified
+
+| Fact | Where |
+|---|---|
+| A private group-by already generalises over a dimension selector | `src/Bench.Infrastructure/Persistence/PostgresResultStore.cs:163` — `AverageAsync(runId, metricName, Func<ResultRow,string>, ct)` |
+| Booleans aggregate as 1/0; a metric with no numeric reading is excluded, never counted zero | same method, `:157-161` and `:178` |
+| The two public averages are two `Func` arguments to it | `:115-121` — `Run.EngineKind` and `Cell.LaneName` |
+| `cells` already carries every dimension this report needs | `CellRow` in `src/Bench.Infrastructure/Persistence/BenchDbContext.cs:44` (`QuestionId`), `:53` (`SubjectModelId`), `:55` (`LaneName`), `:60` (`VariantId`, nullable — the control arm) — no schema change to group by any of them |
+| The split half needs no column | `SeedSplit.Assign(suiteId, questionId)` is a `StableHash` bucket, deliberately derived from the suite **id** rather than its version |
+| A run records which questions it froze, per group, as a snapshot | `run_questions` (`IRunQuestionStore.ForRunAsync`) |
+| The renderer shape is settled | `hosts/Cli/PlanCommand.cs:55-79` — aligned `label   value`, `--json` short-circuit, `Fail(error, reason, code)` |
+| The exit-code contract | `hosts/Cli/ExitCodes.cs` — `0` pass · `1` regression · `3` environment · `4` configuration · `5` no report |
+
+## 3. The shape — decisions
+
+### 3.1 The report is a use case; the CLI and the API render it
+
+`RunReport` in `Bench.Application` returns a `RunReportView`, and both surfaces print it. This is the rule
+`PlanCommand`/`PlanRequestHandler` already follow, and it is what makes the API a door onto the same answer
+rather than a second implementation that agrees until somebody edits one.
+
+The use case is the only place that decides anything: which dimensions are worth showing, what may be
+ranked, what renders as *unproven*. A renderer that decides is a renderer whose decisions cannot be tested
+without a process.
+
+### 3.2 The dimensions become ONE method, not six
+
+`IResultStore` gains
+
+```csharp
+Task<IReadOnlyList<MetricByDimension>> AverageByAsync(
+    Guid runId, ReportDimension dimension, string metricName, SplitHalf? half, CancellationToken ct);
+```
+
+with `ReportDimension` = `Engine | Lane | Subject | Variant`, and `AverageByEngineAsync` /
+`AverageByLaneAsync` are **removed** rather than kept as delegations. Six near-identical group-bys in one
+port is the shape CLAUDE.md §5 refuses for `Outcome<T>`, for the same reason: the fifth one drifts.
+
+The adapter already has the general form privately (`:163`), so this is exposing an existing seam, not a new
+query. `PostgresResultStoreTests` has five call sites against the two removed methods; they move to the new
+one and are the guard that the refactor changed no arithmetic. Deleting a tested public method is the part
+that needs saying out loud, so: the behaviour is pinned by those five assertions before the signature moves,
+and the same numbers are asserted after.
+
+`half` is nullable because *"across the whole suite"* and *"on the selection half"* are both real questions,
+and a magic third enum member meaning "don't filter" would put that distinction inside the dimension.
+
+### 3.3 The split half is DERIVED, so this plan adds no migration
+
+`AverageAsync` already materialises its rows before grouping, so the half is a predicate over
+`Cell.QuestionId` evaluated where `SeedSplit.Assign` can be called. Storing the half would be a denormalised
+copy of a pure function of two values already in the row — and the one thing that must never happen to it is
+drifting from the function, because a split that re-assigns invisibly defeats itself (the reason
+`SeedSplit` uses `StableHash` and not `GetHashCode`).
+
+The suite id comes from the run, not from the caller: a half computed against the wrong suite id is a
+silently different split.
+
+### 3.4 A mean over two legs is not a ranking, and the report says which it has
+
+`MetricByDimension.Legs` exists for exactly this, and its own doc comment states the requirement: *"a mean
+over two legs and a mean over two hundred are different claims, and the report must be able to refuse to
+rank the first."* Nothing currently reads it.
+
+So the view carries, per dimension, either a ranking or a **refusal naming the count**. The floor is
+`--min-legs` (default 2, matching *"n ≥ 2 to rank anything"* in the measurement tuple), and a dimension
+below it renders its averages with the ranking withheld — never no output, because the numbers are real and
+the operator is the one who decides whether to spend more repeats.
+
+### 3.5 `ProofState` is the headline; the average is the supporting detail
+
+For each dimension value other than the control arm, the report computes the metric on **both halves** and
+asks `SeedSplit.Proof(wonOnSelection, wonOnHeldOut)`. What renders first is the verdict:
+
+- `Confirmed` — won on the half that selected it and on the half that did not. A result.
+- `Unproven` — won only where it was chosen. **Rendered as its own word, never as a smaller win**, because
+  every false winner this programme produced landed here and read as a discovery.
+- `Suspicious` — won only on the held-out half. Printed as odd, per the enum's own instruction: more likely
+  a split artefact than a finding, and worth seeing rather than hiding.
+- `NotAWinner` — omitted from the ranking, present in the table.
+
+"Won" is decided against the run's control arm — the dimension value whose variant is `NotApplicable`, or,
+when every cell names a variant, the baseline recipe. A run with no control arm gets a **comparison between
+arms with no baseline stated**, and the report says so rather than nominating one silently.
+
+A half with no legs at all is not a loss: it is `Unmeasured`, the same three-state discipline
+`QuestionSpread.Unmeasured` already applies to a model that never attempted a question.
+
+### 3.6 Discrimination is part of the report, not a separate verb
+
+`Discrimination.Over(questions, models, minSpread)` needs a pass rate per question per subject, which is one
+group-by the store does not have yet:
+
+```csharp
+Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(Guid runId, CancellationToken ct);
+```
+
+The report then prints `DiscriminationReport.Describe` and, when asked, the saturation label per tier.
+Tiers arrive as data (`--tier <modelId>=<rank>`), never as an ordering in code — the constraint
+`SaturatedAt` was written under.
+
+**Nothing here retires a question.** `Discrimination`'s own doc comment is unusually emphatic that
+discrimination is a property of a comparison rather than of a question, and that pruning what saturates the
+strongest models deletes the range where cheaper models still differ. The report reports; it proposes no
+deletions and offers no flag that would.
+
+### 3.7 The aggregate stops hydrating the whole campaign — found while planning this
+
+`AverageAsync` (`:170-175`) issues `.Include(r => r.Metrics…).Include(r => r.Cell!).ThenInclude(c => c.Run!)`
+and then `.ToListAsync()`, materialising full `ResultRow` entities — **every `Prompt`, every `Answer`, every
+`ThinkingText` and every `ResponseMetaJson` of the run**, in order to average one number.
+
+This is the defect whose diagnosis is already written down twelve lines above the method that has it, on
+`ScoreboardAsync` (`src/Bench.Application/ResultStore.cs:75-82`): *"every prompt, every answer and every
+metric with its metadata crossed the wire and was deserialized so a finished campaign could print 'N of M
+passed'. At the tens of thousands of cells this schema targets, that is the whole run pulled into memory to
+render one line."* `TotalsAsync` carries the same diagnosis a third time. The lesson has been recorded twice
+and the query that repeats it was never re-read.
+
+It has not hurt yet because nothing calls it. Fixing it while wiring the first caller is the cheap moment;
+after the first ten-thousand-cell campaign it is a report that OOMs, and the operator will read that as the
+store being too small.
+
+The fix is a projection: select the dimension key, the question id and the metric's raw value before
+`ToListAsync`, so the rows that cross the wire are three small columns. The projection must keep the
+`AsNumber()` exclusion rule — *not a number* stays excluded rather than becoming zero — which means the raw
+metric value travels and the parse still happens here.
+
+**Honesty about the test:** that a query does not hydrate a column is not directly assertable through EF
+without reading generated SQL. So this ships as a shape fix guarded by the five moved arithmetic assertions
+plus one new test that a run whose results carry large prompts produces the same averages — which proves
+correctness, not the saving. The saving is argued, not measured, and this plan says so rather than implying
+a benchmark it did not run.
+
+### 3.8 The host, and what it must not become
+
+`hosts/Api` — a minimal `WebApplication` that calls `AddBenchLogging`, maps `MapBenchApi`, and is registered
+in the AppHost with the existing `bench` database reference. Three properties:
+
+- **It is read-only.** `bench run` stays the only verb that reaches a model or spends money, and it stays a
+  command an agent runs rather than a service an orchestrator supervises — the AppHost's own comment says
+  why. The API host serves reports and the `plan` computation; it starts no run. When a start button exists
+  it is step 9's `BenchRunWorker`, gated on the accelerator lease, and it is not this plan.
+- **Its logging is the shared one.** `BenchLogging` per the family's Serilog rule — coloured console, one
+  file per run under `logs/{yyyy-MM-dd}/`, retention owned at startup. No second copy of a logging decision.
+- **It applies no migrations.** Two processes racing `Migrate()` against one database is a defect the CLI
+  already owns; the API assumes a schema and fails by name if it is behind.
+
+Routes, all `GET`, all under the existing `/api` group:
+
+| Route | Answers |
+|---|---|
+| `/api/runs` | the runs this store holds, newest first — an operator cannot report on an id they cannot find |
+| `/api/runs/{id}/report?metric=&minLegs=&minSpread=` | the `RunReportView`, the same object the CLI renders |
+| `/api/runs/{id}/scoreboard` | the two integers, for a poll that must stay cheap |
+
+`Bench.Contracts` gains the DTOs. It holds two files today and covers only `plan`; that is not an oversight
+to preserve.
+
+### 3.9 What this plan deliberately does not do
+
+- **No UI.** Step 8 of the sibling plan, and it renders these endpoints — which is why they come first.
+- **No cross-RUN comparison.** Every query here is scoped to one run id. Comparing two runs is only legal
+  inside one `ComparisonScope` (target + suite), and enforcing that is its own piece of work with its own
+  refusals; a report that quietly compared across scopes would be the exact failure the scope type exists
+  to prevent.
+- **No new metric.** The report reads what `AnswerScoring`, `RetrievalScoring` and the arbiters already
+  wrote. A report that computes its own number is a second scorer.
+- **No bar.** `bench report` exits `0` for a bad score, like `bench run`. There is still no agreed
+  threshold, and an agent that reads "the subject answered badly" as "the harness is broken" keeps
+  reporting the wrong news.
+
+## 4. Build order
+
+Each step ships alone with tests green before the next starts.
+
+1. **The store, generalised and projected.** `ReportDimension`, `AverageByAsync`, `PassRateByQuestionAndSubjectAsync`,
+   the §3.7 projection, the two removed methods and their five moved assertions. No new surface yet — this
+   step is provable entirely against `PostgresFixture`.
+2. **`RunReport` + `RunReportView`.** The use case: dimensions, halves, `ProofState`, the min-legs refusal,
+   the discrimination block, the control-arm rule and its "no baseline stated" case. Pure over the store's
+   answers, so tested with a fake store and no container.
+3. **`bench report`.** Renderer only, following `PlanCommand`. `--json` emits the DTO verbatim.
+4. **Contracts + routes.** The DTOs and the three `GET`s, tested through `MapBenchApi` without a host.
+5. **`hosts/Api` + AppHost registration.** The first process that serves them.
+
+Steps 1–3 are the value; 4–5 are what keeps step 8 from starting with a UI over nothing.
+
+## 5. Test plan
+
+xUnit v3 executable, never `dotnet test`. `PostgresFixture` for step 1; steps 2–4 need no container.
+
+| What | How |
+|---|---|
+| The refactor changed no arithmetic | The five existing `PostgresResultStoreTests` assertions, moved to `AverageByAsync`, asserting the same numbers |
+| A half is filtered by the SUITE's split | `An_average_on_the_selection_half_excludes_every_held_out_question` — seeded so the two halves have deliberately different means, and the wrong-suite-id variant produces a different set |
+| **Unproven never renders as a win** | `A_variant_that_won_only_where_it_was_chosen_is_unproven_and_not_ranked` — the direct regression of the lesson `SeedSplit` exists for |
+| Suspicious is visible | `A_variant_that_won_only_on_the_held_out_half_is_reported_as_suspicious_rather_than_hidden` |
+| An unmeasured half is not a loss | `A_dimension_with_no_legs_on_one_half_is_unmeasured_rather_than_beaten` |
+| A thin mean is not a ranking | `A_dimension_with_fewer_legs_than_the_floor_prints_its_average_and_withholds_the_ranking` |
+| No baseline is stated, not invented | `A_run_with_no_control_arm_reports_arms_without_nominating_a_baseline` |
+| *Not a number* stays excluded after the projection | `A_metric_with_no_numeric_reading_is_excluded_from_the_mean_rather_than_counted_as_zero` — carried through the §3.7 rewrite, since the projection is where it would be lost |
+| Discrimination counts what it says | `A_question_every_subject_passes_is_trivial_here_and_never_unmeasured` |
+| The report never proposes a deletion | `No_report_output_recommends_retiring_a_question` — a shape assertion, because the pressure to add that flag is exactly what `Discrimination`'s comment argues against |
+| The API and the CLI agree | `The_json_the_CLI_prints_is_the_object_the_endpoint_returns` — one use case, asserted rather than assumed |
+| Exit codes | `A_run_with_no_legs_exits_NoReport` · `A_low_score_exits_Pass` · `An_unknown_run_id_exits_Environment` |
+| The layering guard | `ArchitectureTests` unchanged — `hosts/Api` may reference `Bench.Infrastructure`; `Bench.Api` may not |
+
+Every defect found during the build gets its RED test first, watched failing for the real symptom.
+
+## 6. Definition of Done
+
+- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` — 0 warnings.
+- [ ] The test executable is green; every table above has a named test.
+- [ ] `bench report --db … --run <id>` prints a comparison whose winners carry a `ProofState`, and
+      `--json` emits the same object the endpoint returns.
+- [ ] `AverageByEngineAsync` / `AverageByLaneAsync` are gone, and no group-by in the port is a near-copy of
+      another.
+- [ ] No aggregate query materialises `Prompt`, `Answer` or `ResponseMetaJson`.
+- [ ] `SeedSplit.Proof`, `Discrimination.Over` and `Discrimination.Usable` have callers in `src/`.
+- [ ] `hosts/Api` is registered in the AppHost, serves the three routes, applies no migrations, and starts
+      no run.
+- [ ] `research/architecture.md` records the report as existing, and its *What does NOT exist yet* list no
+      longer omits it.
+- [ ] No migration was added by this plan.
+
+## 7. Open questions
+
+1. **Which metric is the default?** `--metric` has no obvious default: `Anchor recall` is the retrieval
+   answer and means nothing for the control arm, and a per-lane default would be a decision hidden in a
+   flag. Proposal: **no default — `--metric` is required**, and the error lists the metric names this run
+   actually holds. An operator who cannot name the metric does not yet have a question.
+2. **Does a `Confirmed` winner need a minimum margin?** `Discrimination.DefaultMinSpread` is 0.25 for a
+   question's spread; nothing analogous exists for a dimension's win. Winning by 0.001 on both halves is
+   `Confirmed` under §3.5 and is noise. Proposal: report the margin beside the verdict and add no threshold
+   in this plan — a floor nobody has measured is a quality claim, and this repository's rule is that those
+   are refused rather than guessed.

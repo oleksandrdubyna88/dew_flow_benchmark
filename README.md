@@ -67,9 +67,29 @@ like "the harness could not start".
 
 ## Status
 
-Early. The walking skeleton is in: the measurement contract, the order plan, the split, the CLI, and the
-guards. Not yet built: the read-only checkout cache, the Postgres adapter, the engine clients, the
-hardware sampler, the judge, the API host and the UI. The plan and its build order are
-[todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md).
+**A single-shot retrieval comparison runs end to end.** A cell claims, checks the target out read-only, asks
+the engine for hits, assembles the prompt it will store, asks the model, scores the answer and the retrieval
+against the question's anchors, and settles — with one wall budget per leg, a crash-recovery sweep, and
+retention on the one table that grows. Beside it: an immutable variant catalog, a Postgres question bank whose
+groups and reviewers are rows, a model registry that stores the NAME of an environment variable rather than a
+key, a re-scoring arbiter that never re-runs a leg, telemetry ingest from a spool, and the layering guard.
+
+Not yet built, and each has an owner in `todo/`:
+
+| | |
+|---|---|
+| the tool-calling loop — the lane where the SUBJECT decides what to search | [todo/PLAN_tool_benchmark.md](todo/PLAN_tool_benchmark.md) |
+| a report — nothing assembles the comparison this project exists to produce | [todo/PLAN_run_report.md](todo/PLAN_run_report.md) |
+| the corpus axes (chunk size, embed model), and triggering an index pass | [todo/PLAN_variant_matrix.md](todo/PLAN_variant_matrix.md) steps 5–6 |
+| the compute-backend echo, without which two sidecars are one result row | [todo/PLAN_compute_backend_axis.md](todo/PLAN_compute_backend_axis.md) |
+| the hardware sampler, a cloud model runtime, the API host, and the UI | [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md) |
+
+And the bottleneck is not code: the bank holds questions in **two of its six groups**, so a comparison over it
+today is a comparison about two groups ([todo/PLAN_question_bank_coverage.md](todo/PLAN_question_bank_coverage.md)).
+Authoring is the one axis nothing else compensates for — running is cheap.
+
+The founding plan and its build order are [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md); what
+exists in detail, including its own list of what does not, is
+[research/architecture.md](research/architecture.md).
 
 Conventions for contributors — including *never `dotnet test`* — are in [CLAUDE.md](CLAUDE.md).

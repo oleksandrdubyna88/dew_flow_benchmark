@@ -1,10 +1,27 @@
 # PLAN — the compute backend becomes an axis, and its first question is WSL against Windows on one card
 
-> Status: **plan only, 2026-08-16 — nothing implemented.** Scope: a MEASUREMENT first (phase 1 needs no code
-> in this repository), then the engine's backend echo in `Bench.Domain`/`Bench.Contracts`, then the run
-> matrix. **Three of phase 1's five arms run today; the two WSL ones do not** — they are blocked on the
-> prerequisite named in §6, which is the same blocker as
-> `dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1.
+> Status: **plan only in this repository, 2026-08-19 — no code here yet. But two of its three premises have
+> changed and the document is corrected below rather than left standing.** Scope: a MEASUREMENT first (phase 1
+> needs no code in this repository), then the engine's backend echo in `Bench.Domain`/`Bench.Contracts`, then
+> the run matrix.
+>
+> **The toolchain prerequisite of §6 is SATISFIED** (verified 2026-08-19): ONNX Runtime 1.24.4 built
+> `--use_migraphx` has been installed at `/opt/onnxruntime-migraphx/lib/` since 2026-07-27, and
+> `dew_flow_sidecar_rust · target-wsl/release/bge-sidecar` was built with the `migraphx` feature on
+> 2026-08-18. The claim that the WSL arms cannot be launched is this document reading its own history as its
+> present.
+>
+> **And phase 1 is half-run — outside this harness.** Arms **D** and **W** were measured on 2026-08-18 and
+> written up in `dew_flow_rag_qln · research/GPU_BACKEND_WSL_VS_WINDOWS.md`, using the instrument §4
+> prescribes (`PassTimings` off the `/embed` response, never a client stopwatch) and this plan's own arm
+> naming. Its answer: **per token MIGraphX is ~1.5× faster, per pass the two tie, and what reconciles them is
+> our own `ChunkBatcher`** — the sort is worth ~33 % to DirectML and nothing to MIGraphX, which pins its input
+> shape. Arms **I**, **C₁** and **C₂** were not run, and C₁/C₂ are the only evidence about the operating
+> system itself (§3), so **phase 1 is not published as an answer** — per §6's own rule, a table with the
+> control column empty reads as a result.
+>
+> **Phase 3's blocker is also gone:** `PLAN_variant_matrix.md` step 4 landed 2026-08-17, so an engine is wired
+> into a leg. What still blocks phase 3 is phase 2.
 >
 > **Read §1b before the rest.** The host and the execution provider cannot be separated on this hardware —
 > MIGraphX exists only under Linux/WSL and DirectML only on Windows — so "WSL against Windows" is
@@ -329,55 +346,127 @@ not need a hand-run probe of its own.
 
 ## 5. Phase 2 — the backend echo · Phase 3 — the axis
 
-**Phase 2 (this repository, small).** `EngineDescriptor` gains a `ComputeBackend` echo — host (`windows` |
-`wsl` | `linux`), provider (`migraphx` | `dml` | `cuda` | `cpu`), device, adapter name, and the serving
-binary's hash — populated from what the engine REPORTS, never from what the run requested. Three states, not
-two, copying [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md): **matched · mismatched · not
-declared**. An arm that names a backend and gets a different one back is **blocked with both named**; an
-engine that declares nothing is *not declared*, which is honest for a third-party engine and must not read as
-agreement.
+**Phase 2 (this repository, small).** The type is `EngineRef` (`src/Bench.Domain/Runs/Axes.cs:104` — the plan
+said `EngineDescriptor`, which does not exist; corrected 2026-08-19). It gains a `ComputeBackend` echo — host
+(`windows` | `wsl` | `linux`), provider (`migraphx` | `dml` | `cuda` | `cpu`), device, adapter name, and the
+serving binary's hash — populated from what the engine REPORTS, never from what the run requested. Three
+states, not two, copying [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md): **matched ·
+mismatched · not declared**. An arm that names a backend and gets a different one back is **blocked with both
+named**; an engine that declares nothing is *not declared*, which is honest for a third-party engine and must
+not read as agreement.
 
-**Phase 3 (blocked on `PLAN_variant_matrix` step 4).** The backend becomes a planned axis: one leg per
-`(subject × backend × repeat)`, so the comparison is a run rather than an afternoon. Nothing here may land
-before an engine is wired into a leg — planning legs against an axis no leg reads would produce cells that
-cannot be executed.
+### 5a. Phase 2, made buildable (2026-08-19)
+
+There is no need to invent the shape: this repository already solved the same problem one field over, and
+phase 2 is that solution applied to a second axis.
+
+**The template is `CorpusIdentity` + `IndexCommit`** (`src/Bench.Domain/Retrieval/IndexState.cs`). `CorpusIdentity.Refuse(recipe)`
+is a comparison returning *why this is not the recipe's, or empty when it is*, with a normalisation rule whose
+comment states which direction of error is unacceptable (a false accept, because it is indistinguishable from
+a correct measurement afterwards). `IndexCommit` is the three-state closed hierarchy — `At(sha)` |
+`Unstamped` — written precisely because *"not 'a different commit': nothing is known"*, refused by default and
+passable with `--allow-unstamped-index` that keeps printing the warning. Phase 2 needs both of those shapes and
+neither of them is new work to design.
+
+**What lands:**
+
+1. `src/Bench.Domain/Retrieval/ComputeBackend.cs` — `ComputeBackend(Host, Provider, Device, Adapter, BinaryHash)`
+   with `Parse` returning `Outcome<T>` (never a throwing constructor, CLAUDE.md §3) and a canonical
+   `host/provider/device` per §1b, so an arm's name in a report is the arm's name in this plan. Plus
+   `BackendDeclaration` = `NotDeclared` | `Declared(ComputeBackend)`, the `IndexCommit` shape.
+2. `EngineRef` carries the declaration, and **`Canonical` includes it** — that single line is the §2b
+   structural fix: today `Kind|Endpoint|Version|IndexFingerprint` makes two arms one row.
+3. `VariantDefinition.RetrievalRecipe` gains an optional declared backend. Optional is load-bearing: every
+   variant that exists today declares none, and they must keep running unchanged.
+4. The rule, four rows, and the third is the whole point:
+
+   | recipe declares | engine declares | verdict |
+   |---|---|---|
+   | nothing | anything | runs, and the engine's value is **recorded** — so a report can group by an axis nobody planned |
+   | a backend | the same one | runs |
+   | a backend | a different one | **cell blocked, both values named** (`LegRunner.BlockAsync`, the path `EngineAxes.AssertAppliedIn` already takes) |
+   | a backend | nothing | refused by default; `--allow-undeclared-backend` proceeds and keeps printing that the arm is UNVERIFIED — the `--allow-unstamped-index` / `--no-checkout` precedent |
+
+5. One migration for the echoed value on the funnel row. **Not in the same task as another session's
+   migration** — two migrations against one `BenchDbContextModelSnapshot` conflict by construction.
+
+**The producer half is cheaper than it looks, and it is not in this repository.** `IndexStateWire`
+(`src/Bench.Infrastructure/Engines/QlnRetriever.cs:560-588`) has no such field, so qln must send one — but qln
+already holds the value: `dew_flow_rag_qln · src/Rag.Infrastructure/Runtime/RuntimeInspector.cs:142-144` reads
+`active_provider` and `compiled_providers` off the sidecar's `/health`, and the host and device are properties
+of the sidecar URL it was configured with. The addition there is a field on an existing response, not a new
+capability.
+
+**Until that half lands, everything here reads *not declared*.** That is the design working, not the design
+waiting: a run against an engine that says nothing about its backend must record *nothing known* rather than
+agreement, and every engine on earth is in that state today.
+
+**Phase 3 (unblocked as of 2026-08-17 — `PLAN_variant_matrix` step 4 landed; now gated on phase 2 only).** The
+backend becomes a planned axis: one leg per `(subject × backend × repeat)`, so the comparison is a run rather
+than an afternoon. It may not land before phase 2, for the reason §2b gives: planning legs along an axis no
+result row can distinguish produces a comparison of nothing.
 
 ---
 
-## 6. The prerequisite that blocks phase 1's WSL half — stated, not worked around
+## 6. The prerequisite that blocked phase 1's WSL half — SATISFIED, and what it cost to find out
 
-**The WSL arm cannot be launched on this machine as it stands.** The `migraphx` flavour loads a machine-local
-`libonnxruntime.so` at runtime, and `ort` rc.12 requires ONNX Runtime ≥ 1.24; the build present under `/opt`
-is 1.23.2, whose mismatch path *deadlocks* inside `ort`'s own version check rather than erroring — which is
-why the sidecar preflights the dylib through the stable C ABI and exits with the required version instead
-(`dew_flow_sidecar_rust · src/preflight.rs:11-21` and the verdict at `:184-198`).
+> **Resolved.** This section is kept as history because its reasoning is still the reason the preflight exists,
+> and because the plan carried it as a live blocker for three days after it had stopped being one. Rewritten
+> 2026-08-19 with the evidence that closes it.
 
-So phase 1 needs, first: **ONNX Runtime v1.24.x built from source with `--use_migraphx`**, then
-`cargo build --release --no-default-features --features migraphx --target-dir target-wsl` inside the distro.
-Until that exists, three of the five arms of §4 are runnable — **D**, **I** and **C₂**, all Windows-hosted —
-and neither of the two the operator's question is actually about. **W** is the question, and **C₁** is what
-keeps its answer from being mislabelled as a statement about the operating system. Running the Windows three
-early is still worth doing: they are the arms whose absolute numbers the WSL pair will be read against, and
-measuring them now costs nothing and removes a variable later. What must not happen is publishing them as a
-partial answer — a table with the WSL column empty reads as a result, and it is a prerequisite.
+**What it was.** The `migraphx` flavour loads a machine-local `libonnxruntime.so` at runtime, and `ort` rc.12
+requires ONNX Runtime ≥ 1.24; the build then present under `/opt` was 1.23.2, whose mismatch path *deadlocks*
+inside `ort`'s own version check rather than erroring — which is why the sidecar preflights the dylib through
+the stable C ABI and exits with the required version instead (`dew_flow_sidecar_rust · src/preflight.rs:11-21`
+and the verdict at `:184-198`). That preflight stays: it is the reason the failure is now a message rather than
+a hang.
 
-This is the same prerequisite that blocks `dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1 (the
-MIGraphX cache-path race), so the two unblock together — and item 1 should be verified on the wire during the
-same session the toolchain first works, because it is the only opportunity that costs nothing extra.
+**Why it is closed.** Verified 2026-08-19:
+
+- `/opt/onnxruntime-migraphx/lib/` holds `libonnxruntime.so.1.24.4` and
+  `libonnxruntime_providers_migraphx.so`, built from source with `--use_migraphx` on **2026-07-27**, with the
+  old 1.23.2 kept beside them as `.bak`. ROCm is at `/opt/rocm`; the compiled-model cache survives at
+  `~/.cache/bge-sidecar-migraphx/device-0`.
+- `dew_flow_sidecar_rust · target-wsl/release/bge-sidecar` exists, built **2026-08-18**, and it is genuinely
+  the migraphx flavour: `libloading` is in its dependency graph, and that crate enters the build through the
+  `migraphx` feature and no other.
+- Arms **D** and **W** were then actually measured — `dew_flow_rag_qln · research/GPU_BACKEND_WSL_VS_WINDOWS.md`,
+  2026-08-18. A blocker that has been run past is not a blocker.
+
+**The lesson, which is the reason this section was not simply deleted.** The toolchain was fixed on 2026-07-27
+and this plan was written on 2026-08-16 declaring it the thing that blocks the operator's own question. Nothing
+was wrong with the reasoning; the premise had expired. Its cost was measurable in the shape of the document —
+the arms this plan calls impossible had already been run by the time anyone re-read it, and the numbers went
+into a *different repository's* measurement log because this one said they could not be taken.
+
+`dew_flow_sidecar_rust · research/PLAN_reliability_tail.md` item 1 (the MIGraphX cache-path race) shipped
+independently — that repository's plan is `IMPLEMENTED, 2026-08-16` with all eight items closed.
+
+**What is genuinely outstanding in phase 1** is therefore not a toolchain but three arms: **I** (the integrated
+card) and **C₁ · C₂** (the CPU control pair, the only evidence about the operating system itself, §3). Until
+they are run, §4's table has an empty control column and must not be published as an answer — the rule this
+section always carried, now applied to a different empty column than the one it was written about.
 
 ---
 
 ## 7. Build order
 
-1. **The Windows-hosted arms (D · I · C₂)** — runnable today, and the baseline the rest is read against.
-   Recorded, not published as an answer (§6).
-2. **(prerequisite)** ONNX Runtime 1.24.x `--use_migraphx`, and the WSL sidecar built against it. Not this
-   repository's work; named here because arms W and C₁ — the operator's actual question and its control —
-   do not exist without it.
-3. **Phase 1 completed (W · C₁)** — the operator's answer, published whole. No code here; a script and a
-   discipline.
-4. **Phase 2, the echo** — small, independent of the matrix, and useful the moment two arms exist.
-5. **Phase 3, the axis** — after [PLAN_variant_matrix.md](PLAN_variant_matrix.md) step 4.
+Revised 2026-08-19: steps 2 and 3 of the original order are done or partly done, and what is left is not in
+the order the plan first put it.
+
+1. ~~**The prerequisite** — ONNX Runtime 1.24.x `--use_migraphx` and the WSL sidecar built against it.~~
+   **DONE** 2026-07-27 / 2026-08-18 (§6).
+2. ~~**Arms D and W**~~ — **MEASURED** 2026-08-18, `dew_flow_rag_qln · research/GPU_BACKEND_WSL_VS_WINDOWS.md`.
+   Recorded, not published as an answer, because of step 3.
+3. **The three remaining arms — I · C₁ · C₂.** No code here; a script and a discipline. C₁/C₂ are what keep
+   the answer from being mislabelled as a statement about the operating system, so phase 1 publishes only
+   after them.
+4. **Phase 2, the echo** (§5a) — small, independent of the matrix, and **the step that decides whether the
+   numbers of step 2 can ever live in this benchmark at all.** Do not schedule it behind another session's
+   migration.
+5. **Phase 2's producer half** in `dew_flow_rag_qln` — one field on an existing response (§5a). Everything
+   here reads *not declared* until it lands, which is correct rather than blocked.
+6. **Phase 3, the axis** — gated on step 4 only; `PLAN_variant_matrix.md` step 4 landed 2026-08-17.
 
 ## 8. Test plan
 
