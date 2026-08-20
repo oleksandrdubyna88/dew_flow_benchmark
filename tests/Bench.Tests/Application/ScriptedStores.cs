@@ -48,6 +48,14 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
     public Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<BenchRun>>([Run]);
 
+    // A report reads the machine; it never records one. Answering NotRecorded is the honest double: these
+    // runs were never probed.
+    public Task RecordMachineAsync(Guid runId, Bench.Domain.Trace.MachineFacts facts, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report does not record machines");
+
+    public Task<Bench.Domain.Trace.MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken) =>
+        Task.FromResult(Bench.Domain.Trace.MachineFacts.NotRecorded);
+
     // The queue half of the port. A report never claims, settles or sweeps, and a double that quietly
     // answered these would hide a report that had started doing so.
     public Task<Outcome<BenchRun>> CreateAsync(BenchRun run, IReadOnlyList<RunCell> cells, CancellationToken cancellationToken) =>

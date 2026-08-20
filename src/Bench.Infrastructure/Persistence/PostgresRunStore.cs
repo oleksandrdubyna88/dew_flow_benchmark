@@ -3,6 +3,7 @@ using Bench.Domain;
 using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Targets;
+using Bench.Domain.Trace;
 using Bench.Domain.Variants;
 using Bench.Infrastructure.Process;
 using Microsoft.EntityFrameworkCore;
@@ -152,6 +153,36 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             counts.GetValueOrDefault(CellState.Claimed),
             counts.GetValueOrDefault(CellState.Settled),
             counts.GetValueOrDefault(CellState.Abandoned));
+    }
+
+    /// <summary>Records the machine, once. A second call for the same run REPLACES nothing and refuses
+    /// nothing — it is simply a no-op, because the first read is the one that describes the machine the run
+    /// started on and a later one would quietly re-label a measurement already under way.</summary>
+    public async Task RecordMachineAsync(Guid runId, MachineFacts facts, CancellationToken cancellationToken)
+    {
+        if (await db.RunMachines.AnyAsync(m => m.RunId == runId, cancellationToken))
+        {
+            return;
+        }
+
+        db.RunMachines.Add(new RunMachineRow
+        {
+            RunId = runId,
+            Fingerprint = facts.Fingerprint,
+            FactsJson = MachineFactsJson.Write(facts),
+            RecordedAt = clock.GetUtcNow(),
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var row = await db.RunMachines.AsNoTracking().FirstOrDefaultAsync(m => m.RunId == runId, cancellationToken);
+
+        // No row is NOT RECORDED, which is what every run stored before this table existed is — and a
+        // different fact from a machine that was read and answered nothing.
+        return row is null ? MachineFacts.NotRecorded : MachineFactsJson.Read(row.FactsJson);
     }
 
     /// <summary>The newest runs, capped in the database rather than in memory.

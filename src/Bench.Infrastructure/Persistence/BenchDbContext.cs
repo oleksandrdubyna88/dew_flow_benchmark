@@ -44,6 +44,26 @@ public sealed class RunRow
     public List<CellRow> Cells { get; set; } = [];
 }
 
+/// <summary>The machine one run measured on, read once at its start.
+/// <para>
+/// A row per run rather than columns on <c>runs</c>, because the facts nest — a machine has several adapters
+/// and one volume — and because they are read and rendered whole. <see cref="Fingerprint"/> is lifted out as
+/// its own column: it is the value a report GROUPS and COMPARES by, and a comparison that had to parse JSON
+/// to make it would be the string parsing this schema keeps its axes in columns to avoid.
+/// </para></summary>
+public sealed class RunMachineRow
+{
+    public Guid RunId { get; set; }
+
+    /// <summary>Empty when nothing was read. A report says <em>not recorded</em> from this rather than
+    /// inferring it from a missing row, so the three states stay three.</summary>
+    public string Fingerprint { get; set; } = string.Empty;
+
+    public string FactsJson { get; set; } = "{}";
+
+    public DateTimeOffset RecordedAt { get; set; }
+}
+
 public sealed class CellRow
 {
     public Guid Id { get; set; }
@@ -110,6 +130,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
     public DbSet<ResultRow> Results => Set<ResultRow>();
 
     public DbSet<MetricRow> Metrics => Set<MetricRow>();
+
+    public DbSet<RunMachineRow> RunMachines => Set<RunMachineRow>();
 
     public DbSet<FunnelRow> Funnels => Set<FunnelRow>();
 
@@ -199,6 +221,20 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             run.Property(r => r.Status).HasConversion<string>();
             run.Property(r => r.EngineKind).HasConversion<string>();
             run.HasMany(r => r.Cells).WithOne(c => c.Run!).HasForeignKey(c => c.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RunMachineRow>(machine =>
+        {
+            machine.ToTable("run_machines");
+
+            // Keyed BY the run, so one run cannot acquire two machines. The facts describe the host as it was
+            // when the run began; a second row would be a second answer to a question with one.
+            machine.HasKey(m => m.RunId);
+            machine.HasOne<RunRow>().WithOne().HasForeignKey<RunMachineRow>(m => m.RunId).OnDelete(DeleteBehavior.Cascade);
+
+            // Indexed because it is the value a report compares by — "were these two runs the same machine"
+            // is the question this table exists to answer, and it must not be a scan.
+            machine.HasIndex(m => m.Fingerprint);
         });
 
         builder.Entity<CellRow>(cell =>

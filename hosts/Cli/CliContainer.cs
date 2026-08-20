@@ -5,6 +5,7 @@ using Bench.Application.Lanes;
 using Bench.Application.Variants;
 using Bench.Infrastructure.Engines;
 using Bench.Infrastructure.Git;
+using Bench.Infrastructure.Machine;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,9 @@ public static class CliContainer
         Retrieval(Model(Store(connectionString, logger)), engine)
             .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
             .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
+            // The machine is read once per run, so a scoped probe is one object per verb rather than one
+            // per leg — and it holds nothing between calls.
+            .AddScoped<IMachineProbe, MachineProbe>()
             .AddScoped<IVariantCatalog, PostgresVariantCatalog>()
             .AddScoped<ILaneCatalog, PostgresLaneCatalog>()
             // Scoped beside the runner that takes it: it holds no state between legs, and a singleton would

@@ -2,6 +2,7 @@ using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Suites;
 using Bench.Domain.Targets;
+using Bench.Domain.Trace;
 using FluentAssertions;
 using Xunit;
 
@@ -117,6 +118,59 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
         // group investigate-only legs against full ones — the split measurement the axis exists for.
         claimed.Arm.Should().Be(FixArm.InvestigateOnly);
         claimed.Leg.Should().EndWith("!investigate-only");
+    }
+
+    [Fact]
+    public async Task The_machine_a_run_measured_on_survives_the_store()
+    {
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        var facts = new MachineFacts
+        {
+            Hostname = "bench-01",
+            Os = new OsFacts("windows", "Professional", "25H2", "10.0.26200.8653"),
+            Wsl = new WslFacts("2.7.10.0", "1.611.1-81528511", "10.0.26100.1"),
+            Cpu = new CpuFacts("AMD Ryzen AI 9 HX 370", 12, 24, "Balanced"),
+            TotalRamBytes = 98_374_103_040,
+            Adapters = [new AdapterFacts("AMD Radeon AI PRO R9700", 34_208_743_424, "32.0.31035.1003", "2026-07-24", 0)],
+            Volume = new VolumeFacts("D:\\", "NTFS", 4096, 900, 2000),
+        };
+
+        await store.RecordMachineAsync(run.Id, facts, Ct);
+        var read = await store.MachineAsync(run.Id, Ct);
+
+        read.Fingerprint.Should().Be(facts.Fingerprint, "the fingerprint is what a report compares by");
+        read.Os.Build.Should().Be("10.0.26200.8653", "the patch is the half a version without it cannot carry");
+        read.Wsl.Direct3D.Should().Be("1.611.1-81528511");
+        read.Adapters.Single().VramBytes.Should().Be(34_208_743_424, "the registry size, not WMI's saturated 4 GiB");
+    }
+
+    [Fact]
+    public async Task A_run_whose_machine_was_never_read_answers_NOT_RECORDED_rather_than_an_empty_machine()
+    {
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        // Every run stored before this table existed is in this state, and it is a different fact from a
+        // machine that was read and answered nothing.
+        (await store.MachineAsync(run.Id, Ct)).Recorded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task The_machine_is_written_ONCE_and_a_later_read_cannot_relabel_a_run_already_under_way()
+    {
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        await store.RecordMachineAsync(run.Id, new MachineFacts { Hostname = "bench-01" }, Ct);
+        await store.RecordMachineAsync(run.Id, new MachineFacts { Hostname = "somebody-elses-box" }, Ct);
+
+        (await store.MachineAsync(run.Id, Ct)).Hostname.Should().Be("bench-01",
+            "the first read describes the machine the run started on; a second would re-label a measurement already in flight");
     }
 
     [Fact]

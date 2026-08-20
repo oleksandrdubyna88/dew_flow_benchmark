@@ -272,6 +272,8 @@ public static class RunCommand
             return Refuse(error, badRun.Reason);
         }
 
+        await RecordMachineAsync(scope, run.Id, settings, output, stopping);
+
         var snapshot = await SnapshotAsync(scope, run.Id, selection, stopping);
 
         if (snapshot is Outcome<int>.Fail unsnapshotted)
@@ -416,6 +418,36 @@ public static class RunCommand
         // actually said it computed on rather than from what the operator configured.
         return Outcome<VariantChoice>.Success(
             new VariantChoice(variant.Select(), variant.Definition) { Served = state.Backend });
+    }
+
+    /// <summary>Reads the machine and stores it beside the run, once, before a single cell is claimed.
+    /// <para>
+    /// After the run exists rather than before, so a machine that takes twenty seconds to describe cannot
+    /// delay the row a crash would otherwise leave nothing behind for — and it is deliberately not part of
+    /// the create transaction: a benchmark must not fail to start because a registry key moved.
+    /// </para>
+    /// <para>
+    /// It prints an UNHEALTHY line when an adapter is not working properly, because that is the one machine
+    /// fact an operator has to see before the numbers rather than after them: a card at
+    /// <c>ConfigManagerErrorCode 31</c> is still enumerated while everything silently runs on the CPU.
+    /// </para></summary>
+    private static async Task RecordMachineAsync(
+        AsyncServiceScope scope, Guid runId, RunInputs settings, TextWriter output, CancellationToken stopping)
+    {
+        var facts = await scope.ServiceProvider.GetRequiredService<IMachineProbe>()
+            .ReadAsync(settings.CheckoutRoot, stopping);
+
+        await scope.ServiceProvider.GetRequiredService<PostgresRunStore>()
+            .RecordMachineAsync(runId, facts, stopping);
+
+        output.WriteLine(facts.Recorded
+            ? $"machine  {facts.Os.Describe} · {facts.Cpu.Describe} · {facts.Fingerprint[..12]}"
+            : "machine  not recorded — this run cannot say which machine produced its numbers");
+
+        foreach (var faulted in facts.UnhealthyAdapters)
+        {
+            output.WriteLine($"warn     {faulted.Describe} — everything may be running on the CPU");
+        }
     }
 
     /// <summary>The variant axis as the matrix takes it. A run with no variants passes the not-applicable

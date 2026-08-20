@@ -1,5 +1,6 @@
 using Bench.Domain;
 using Bench.Domain.Runs;
+using Bench.Domain.Trace;
 
 namespace Bench.Application;
 
@@ -76,6 +77,23 @@ public interface IRunStore
     /// wants afterwards, and an operator who cannot find an id cannot report on it at all.
     /// </para></summary>
     Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken);
+
+    /// <summary>Records the machine this run measured on, once, at its start.
+    /// <para>
+    /// Write-once and never updated: the facts describe the machine as it was when the run began, and a run
+    /// that spans a driver update is not two machines — it is one measurement whose machine changed under it,
+    /// which is a different and worse problem than a stale row.
+    /// </para>
+    /// <para>
+    /// It never refuses. A machine nobody could read is <c>MachineFacts.NotRecorded</c>, stored as such, so a
+    /// report can say <em>not recorded</em> rather than infer it from an absent row — the same three-state
+    /// discipline the index commit uses.
+    /// </para></summary>
+    Task RecordMachineAsync(Guid runId, MachineFacts facts, CancellationToken cancellationToken);
+
+    /// <summary>What machine a run measured on. <c>NotRecorded</c> for every run stored before this
+    /// existed, which is the honest answer rather than an absence a caller has to interpret.</summary>
+    Task<MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken);
 }
 
 /// <summary>The one phrase that means "there is nothing left to claim".
