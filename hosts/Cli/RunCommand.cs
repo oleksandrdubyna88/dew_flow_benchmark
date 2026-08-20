@@ -12,6 +12,7 @@ using Bench.Domain.Suites;
 using Bench.Domain.Targets;
 using Bench.Domain.Variants;
 using Bench.Infrastructure.Engines;
+using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,7 +57,7 @@ public static class RunCommand
     /// write into a tree somebody works in. The equivalent component upstream ran <c>git checkout</c> in
     /// place on a configured path, which for a benchmark means rewriting whatever a developer had open.
     /// </para></summary>
-    private static string DefaultCheckoutRoot =>
+    internal static string DefaultCheckoutRoot =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "bench", "checkouts");
 
@@ -481,12 +482,11 @@ public static class RunCommand
         }
 
         var registry = scope.ServiceProvider.GetRequiredService<IModelRegistry>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretSource>();
         var entries = new List<RosterEntry>(settings.SubjectKeys.Count);
 
         foreach (var key in settings.SubjectKeys)
         {
-            var resolved = await ResolveAsync(registry, secrets, key, stopping);
+            var resolved = await ResolveAsync(scope, settings, registry, key, stopping);
 
             if (resolved is not Outcome<RosterEntry>.Ok(var entry))
             {
@@ -500,15 +500,69 @@ public static class RunCommand
     }
 
     private static async Task<Outcome<RosterEntry>> ResolveAsync(
-        IModelRegistry registry, ISecretSource secrets, string key, CancellationToken stopping)
+        AsyncServiceScope scope, RunInputs settings, IModelRegistry registry, string key, CancellationToken stopping)
     {
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretSource>();
         var found = await registry.FindAsync(key, stopping);
 
-        return found.Match(
-            model => ModelResolution.Endpoint(model, secrets).Match(
+        if (found is not Outcome<RegisteredModel>.Ok(var model))
+        {
+            return Outcome<RosterEntry>.Failure(found.Match(_ => string.Empty, reason => reason));
+        }
+
+        return model.Runtime == ModelRuntimeKind.CliClaude
+            ? await CliEntryAsync(scope, settings, model, secrets, stopping)
+            : ModelResolution.Endpoint(model, secrets).Match(
                 endpoint => Outcome<RosterEntry>.Success(new RosterEntry(endpoint, model.Config.Sampling)),
-                Outcome<RosterEntry>.Failure),
-            Outcome<RosterEntry>.Failure);
+                Outcome<RosterEntry>.Failure);
+    }
+
+    /// <summary>A Claude row wired as a MEASURED subject — the seam `PLAN_tool_benchmark.md` step 11
+    /// reserved, filled here per `PLAN_investigate_vs_implement.md` §3.6. The route is registered on the
+    /// <see cref="SubjectRouter"/> before any cell exists, exactly when every other resolution happens;
+    /// each of its legs stages a DISPOSABLE worktree at the run's pinned commit (deny-writes planted,
+    /// tree pre-trusted, audited after), so the CLI's native tools read the target honestly and the
+    /// shared per-commit tree is never handed to an agent.</summary>
+    private static async Task<Outcome<RosterEntry>> CliEntryAsync(
+        AsyncServiceScope scope,
+        RunInputs settings,
+        RegisteredModel model,
+        ISecretSource secrets,
+        CancellationToken stopping)
+    {
+        if (settings.SkipCheckout)
+        {
+            return Outcome<RosterEntry>.Failure(
+                $"subject '{model.Key}' is a CLI agent and reads the target's TREE — a run with --no-checkout has none to give it");
+        }
+
+        var resolved = ModelResolution.CliSubject(model, secrets);
+
+        if (resolved is not Outcome<(ModelEndpoint Endpoint, string Executable)>.Ok(var subject))
+        {
+            return Outcome<RosterEntry>.Failure(resolved.Match(_ => string.Empty, reason => reason));
+        }
+
+        var tree = await scope.ServiceProvider.GetRequiredService<ICheckoutProvider>()
+            .EnsureAsync(settings.Target, stopping);
+
+        if (tree is not Outcome<string>.Ok(var repositoryDir))
+        {
+            return Outcome<RosterEntry>.Failure(tree.Match(_ => string.Empty, reason => reason));
+        }
+
+        scope.ServiceProvider.GetRequiredService<SubjectRouter>().Add(
+            subject.Endpoint.Model.Id,
+            new CliSubjectRuntime(
+                new CliSubjectOptions(
+                    subject.Executable,
+                    repositoryDir,
+                    settings.Target.Commit,
+                    Path.Combine(settings.CheckoutRoot, "subject-legs"),
+                    scope.ServiceProvider.GetRequiredService<WorkspaceTrust>()),
+                scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<CliSubjectRuntime>>()));
+
+        return Outcome<RosterEntry>.Success(new RosterEntry(subject.Endpoint, model.Config.Sampling));
     }
 
     /// <summary>Records what the test chose, so a registry edit next month cannot change what a finished

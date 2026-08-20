@@ -52,7 +52,9 @@ public sealed class CliSubjectRuntimeTests
     public async Task A_turn_ceiling_is_refused_because_nobody_can_enforce_it()
     {
         var runtime = new CliSubjectRuntime(
-            new CliSubjectOptions("claude", "."),
+            new CliSubjectOptions(
+                "claude", ".", Bench.Domain.Targets.CommitSha.Parse(new string('a', 40)).Ok(), ".",
+                new Bench.Infrastructure.Models.WorkspaceTrust("nowhere.json", ".")),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<CliSubjectRuntime>.Instance);
 
         (await runtime.AcceptBudgetAsync(Budget.Of(BudgetKind.Turns, BudgetScope.Question, 25), CancellationToken.None))

@@ -3,34 +3,44 @@ using Bench.Application;
 using Bench.Domain;
 using Bench.Domain.Models;
 using Bench.Domain.Runs;
+using Bench.Domain.Targets;
 using Bench.Domain.Trace;
+using Bench.Infrastructure.Git;
 using Bench.Infrastructure.Process;
 using Microsoft.Extensions.Logging;
 
 namespace Bench.Infrastructure.Models;
 
-/// <summary>Where a CLI subject runs, and as what.
-/// <para>
-/// The working directory is the leg's OWN disposable worktree, never the shared per-commit one: an
-/// agent that writes into the shared tree poisons every sibling leg at that commit. Plant
-/// <see cref="WorktreeAudit.DenyWritesAsync"/> before the leg and read
-/// <see cref="WorktreeAudit.ChangesAsync"/> after — the settings are advisory hardening, the AUDIT is
-/// the evidence.
-/// </para></summary>
-public sealed record CliSubjectOptions(string Executable, string WorkingDirectory);
+/// <summary>How a CLI subject's legs are staged.</summary>
+/// <param name="RepositoryDir">A directory where git resolves the target's commits — the run's own
+/// checked-out tree.</param>
+/// <param name="Commit">The commit every leg's worktree is created at — the run's target, the tree the
+/// solver investigates.</param>
+/// <param name="WorktreeRoot">Where the per-leg worktrees live. Under the CHECKOUT root, not temp,
+/// because <see cref="WorkspaceTrust"/> may only trust paths under it.</param>
+public sealed record CliSubjectOptions(
+    string Executable,
+    string RepositoryDir,
+    CommitSha Commit,
+    string WorktreeRoot,
+    WorkspaceTrust Trust);
 
 /// <summary>A cloud CLI measured AS a subject (todo/PLAN_investigate_vs_implement.md §3.6) — the other
-/// side of the worker/subject boundary `ICliAgentRuntime` guards: that port launches processes that
-/// work FOR the harness; this one answers `IModelRuntime` so a leg can be measured THROUGH the CLI.
-/// It meets `PLAN_tool_benchmark.md` step 11 at exactly this seam; the roster wiring that lets
-/// `bench run --subjects` name a CLI row belongs there and is deliberately not smuggled in here.
+/// side of the worker/subject boundary `ICliAgentRuntime` guards, meeting `PLAN_tool_benchmark.md`
+/// step 11 at exactly this seam through <see cref="SubjectRouter"/>.
 /// <para>
-/// What is honest today: the answer, the tokens (cache included) and the CLI's own cost come from the
-/// JSON envelope; sampling is NOT CAPTURED — a CLI exposes no temperature or seed, and claiming the
-/// requested values were applied is the unpinned-sampler lie the family already paid for. The wall is
-/// the one enforceable ceiling: the process is killed at it. A turn ceiling is refused by name — the
-/// CLI's inner loop cannot be counted from outside, and a budget nobody can enforce must not be
-/// recorded as accepted.
+/// Every ask stages its OWN disposable worktree at the pinned commit — never the shared per-commit
+/// tree, which an agent that writes would poison for every sibling leg — plants the deny-writes
+/// settings, pre-trusts the tree (measured: an untrusted workspace costs the whole wall waiting on a
+/// dialog nobody can answer), runs the CLI in it, AUDITS it afterwards, and removes it on every path
+/// out. A leg that wrote is marked in its stored record — the settings are advisory hardening, the
+/// audit is the evidence.
+/// </para>
+/// <para>
+/// The answer, the tokens (cache included) and the CLI's own cost come from the JSON envelope;
+/// sampling is NOT CAPTURED — a CLI exposes no temperature or seed, and claiming the requested values
+/// were applied is the unpinned-sampler lie. The wall is the one enforceable ceiling: the process is
+/// killed at it. Turn and cost ceilings are refused by name.
 /// </para></summary>
 public sealed class CliSubjectRuntime(CliSubjectOptions options, ILogger<CliSubjectRuntime> logger) : IModelRuntime
 {
@@ -56,25 +66,87 @@ public sealed class CliSubjectRuntime(CliSubjectOptions options, ILogger<CliSubj
 
     public async Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
     {
+        var wall = Wall(request);
+        var staged = await ScratchWorktree.AddAsync(
+            options.RepositoryDir, options.Commit, wall, cancellationToken, options.WorktreeRoot);
+
+        if (staged is Outcome<string>.Fail unstaged)
+        {
+            return Outcome<ModelAnswer>.Failure(unstaged.Reason);
+        }
+
+        var worktree = ((Outcome<string>.Ok)staged).Value;
+
+        try
+        {
+            return await AskInAsync(worktree, request, wall, cancellationToken);
+        }
+        finally
+        {
+            await ScratchWorktree.RemoveAsync(options.RepositoryDir, worktree, wall);
+        }
+    }
+
+    private async Task<Outcome<ModelAnswer>> AskInAsync(
+        string worktree, ModelRequest request, TimeSpan wall, CancellationToken cancellationToken)
+    {
+        await WorktreeAudit.DenyWritesAsync(worktree, cancellationToken);
+
+        var trusted = options.Trust.Ensure(worktree);
+
+        trusted.Match(
+            result => 0,
+            reason =>
+            {
+                logger.LogWarning("The subject worktree could not be pre-trusted: {Reason}", reason);
+                return 0;
+            });
+
         var clock = Stopwatch.StartNew();
 
         var attempt = await ProcessRunner.RunAsync(
             options.Executable,
             ["-p", "--model", request.Endpoint.Model.Id, "--output-format", "json"],
-            options.WorkingDirectory,
-            Wall(request),
+            worktree,
+            wall,
             Prompt(request),
             cancellationToken);
 
         var read = Read(attempt, clock.Elapsed);
 
-        read.Match(
-            ok => 0,
-            reason =>
+        return await AuditedAsync(worktree, read, wall, cancellationToken);
+    }
+
+    /// <summary>The audit, appended to the record rather than kept in a log: a leg that wrote into its
+    /// tree must be readable as one FROM THE STORED RESULT, months later, without this session's
+    /// scrollback.</summary>
+    private async Task<Outcome<ModelAnswer>> AuditedAsync(
+        string worktree, Outcome<ModelAnswer> read, TimeSpan wall, CancellationToken cancellationToken)
+    {
+        if (read is not Outcome<ModelAnswer>.Ok(var answer))
+        {
+            read.Match(
+                ok => 0,
+                reason =>
+                {
+                    logger.LogWarning("The CLI subject did not answer: {Reason}", reason);
+                    return 0;
+                });
+
+            return read;
+        }
+
+        var audit = await WorktreeAudit.ChangesAsync(worktree, wall, cancellationToken);
+
+        if (audit is Outcome<string>.Ok(var changes) && changes.Length > 0)
+        {
+            logger.LogWarning("The CLI subject WROTE into its worktree: {Changes}", changes);
+
+            return Outcome<ModelAnswer>.Success(answer with
             {
-                logger.LogWarning("The CLI subject {Model} did not answer: {Reason}", request.Endpoint.Model.Id, reason);
-                return 0;
+                StopDetail = answer.StopDetail + $"; WROTE to its worktree: {changes.Replace('\n', ' ')}",
             });
+        }
 
         return read;
     }

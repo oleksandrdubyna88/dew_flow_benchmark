@@ -32,6 +32,20 @@ public static class CliContainer
         Retrieval(Model(Store(connectionString, logger)), engine)
             .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
             .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
+            // The subject ROUTER: one IModelRuntime for a run whose subjects are driven differently.
+            // A singleton, because its routes are registered while the run is prepared and read by
+            // every leg scope after; the last IModelRuntime registration wins resolution, so a run
+            // with no CLI subjects behaves exactly as it did — the router forwards everything.
+            .AddSingleton(sp => new SubjectRouter(new OpenAiCompatibleRuntime(
+                sp.GetRequiredService<IHttpClientFactory>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OpenAiCompatibleRuntime>>())))
+            .AddScoped<IModelRuntime>(sp => sp.GetRequiredService<SubjectRouter>())
+            // Trust, because a CLI subject's worktree must be pre-trusted before launch — the untrusted
+            // dialog cost a whole wall per group once, measured.
+            .AddSingleton(new WorkspaceTrust(WorkspaceTrust.DefaultConfigPath, checkoutRoot))
+            // The bank, for `bench solve`: an implement leg reads its task — statement, payload,
+            // anchors — from the same rows the harvest landed.
+            .AddScoped<IQuestionBank, PostgresQuestionBank>()
             // The machine is read once per run, so a scoped probe is one object per verb rather than one
             // per leg — and it holds nothing between calls.
             .AddScoped<IMachineProbe, MachineProbe>()
@@ -107,7 +121,8 @@ public static class CliContainer
     private static IServiceCollection Model(IServiceCollection services) =>
         services
             .AddHttpClient()
-            .AddScoped<IModelRuntime, OpenAiCompatibleRuntime>();
+            .AddScoped<OpenAiCompatibleRuntime>()
+            .AddScoped<IModelRuntime>(sp => sp.GetRequiredService<OpenAiCompatibleRuntime>());
 
     /// <summary>The retrieval half. A run that named no engine gets <see cref="NoRetriever"/>, which refuses
     /// by name rather than answering with an empty context — an empty context stored as evidence would read

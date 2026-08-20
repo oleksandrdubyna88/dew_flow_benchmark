@@ -367,6 +367,17 @@ Each step ships alone, tests green, before the next.
    benchmark plan"), so `bench run --subjects` cannot name one until that roster branch lands with
    `PLAN_tool_benchmark.md` step 11 — and the pilot (live Claude legs, real money) is the OPERATOR's
    run, not this session's.
+
+   **The roster wiring landed later the same day, with the operator's explicit go.**
+   `ModelResolution.CliSubject` fills the reserved seam (only `cli-claude` — the one envelope this
+   build reads; a Codex row would run and report nothing, which is worse than a refusal);
+   `ModelEndpoint.Cli` mints the endpoint-shaped identity (base url is the literal `cli`, because an
+   address would be a lie); `SubjectRouter` is ONE `IModelRuntime` routing by the model id every
+   aggregate already keys on, and a budget any route cannot honour refuses the run WHOLE — a turn
+   ceiling that silently bound only the HTTP half is the measured context-compaction lie. A CLI
+   subject's route stages a disposable worktree per leg under the CHECKOUT root (the trust scope),
+   plants deny-writes, pre-trusts, audits after — a leg that wrote carries the audit in its stored
+   record. `--no-checkout` refuses a CLI subject by name: an agent with no tree has nothing to read.
 7. **The diagnosis judge prompt + the first series** — 8 tasks × 7 arms × 2 repeats; report with the
    `Arm` dimension.
 
@@ -398,6 +409,14 @@ Each step ships alone, tests green, before the next.
    (which is what surfaced it). `GitCommand.ReadAsync` (stdout alone) now feeds every payload capture,
    and a patch is written with its final newline, without which git refuses it whole as corrupt —
    measured, and exactly what a model-produced diff will trip on too.
+
+   **And the attended front door exists: `bench solve`** — ONE implement-given-diagnosis leg, exactly
+   the shape the isolation gate allows: one task, one subject, operator watching, nothing queued,
+   NOTHING persisted. The subject gets the statement plus the reference diagnosis (anchors, and the
+   mechanism where authored — never the reference diff, never a hidden test), answers with a fenced
+   unified diff (`DiffFence` — extraction, never repair), and is scored by the real signals. The
+   ceiling case is pinned by test: the reference fix itself, handed back as the answer, passes every
+   signal — an instrument the ceiling fails would be broken, not strict.
 
 ## 6. Test plan
 

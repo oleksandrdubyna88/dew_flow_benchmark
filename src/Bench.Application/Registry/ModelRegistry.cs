@@ -117,6 +117,33 @@ public static class ModelResolution
                 reason => Outcome<string>.Failure($"model '{model.Key}': {reason}"));
     }
 
+    /// <summary>A CLI row as a measured SUBJECT — the seam `PLAN_tool_benchmark.md` step 11 reserved,
+    /// filled by `PLAN_investigate_vs_implement.md` §3.6: the endpoint-shaped identity every roster and
+    /// aggregate keys by, plus the executable the router drives it as.
+    /// <para>
+    /// Only <see cref="ModelRuntimeKind.CliClaude"/> is drivable today, because only the Claude CLI's
+    /// envelope is read — a Codex or Gemini row would run and report no tokens, no cost and no error,
+    /// which is worse than a refusal by name.
+    /// </para></summary>
+    public static Outcome<(ModelEndpoint Endpoint, string Executable)> CliSubject(
+        RegisteredModel model, ISecretSource secrets)
+    {
+        if (model.Runtime is not ModelRuntimeKind.CliClaude)
+        {
+            return Outcome<(ModelEndpoint, string)>.Failure(
+                $"model '{model.Key}' runs as {model.Runtime.ToString().ToLowerInvariant()} — only cli-claude can be "
+                + "measured as a CLI subject today, because only its envelope (tokens, cost) is read");
+        }
+
+        return Executable(model, secrets).Match(
+            executable => model.AsRef().Match(
+                reference => Outcome<(ModelEndpoint, string)>.Success((
+                    ModelEndpoint.Cli(reference, model.Config.InputCostPerMTok, model.Config.OutputCostPerMTok),
+                    executable)),
+                Outcome<(ModelEndpoint, string)>.Failure),
+            Outcome<(ModelEndpoint, string)>.Failure);
+    }
+
     private static Outcome<ModelEndpoint> Resolve(RegisteredModel model, ISecretSource secrets)
     {
         if (model.Config.BaseUrlRef.Length == 0)

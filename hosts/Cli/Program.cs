@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Infrastructure.Engines;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +63,7 @@ public static class Program
             "plan" => PlanCommand.Run(command, output, error),
             "run" => RunCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "judge" => JudgeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "solve" => Solve(command, output, error, stopping),
             "report" => Report(command, output, error, stopping),
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
@@ -214,6 +216,51 @@ public static class Program
     /// <summary>The bank lives in the database, so this verb needs one — and refuses rather than guessing,
     /// for the same reason the other two do: a default connection would import somebody's question set into
     /// whatever database happened to be listening.</summary>
+    /// <summary>`bench solve` — the attended implement leg. Built on the RUN container because it needs
+    /// the same trio (checkout, model runtime, bank) a run does; what it deliberately does NOT get is a
+    /// queue — one task, one subject, an operator watching, per the code lane's isolation gate.</summary>
+    private static int Solve(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        var engine = QlnEngineOptions.Parse(
+            command.Value("engine-url"), command.Value("engine-project"), command.Value("engine-branch"));
+        if (engine is not Bench.Domain.Outcome<QlnEngineOptions>.Ok(var retrieval))
+        {
+            error.WriteLine($"bench: {engine.Match(_ => string.Empty, reason => reason)}");
+            return ExitCodes.Configuration;
+        }
+
+        using var provider = CliContainer.ForRun(
+            connection, command.Value("checkout-root", RunCommand.DefaultCheckoutRoot), retrieval, CliLogging.Start());
+        using var scope = provider.CreateScope();
+
+        try
+        {
+            scope.ServiceProvider.GetRequiredService<BenchDbContext>().Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return SolveCommand.RunAsync(
+                command,
+                scope.ServiceProvider.GetRequiredService<IQuestionBank>(),
+                scope.ServiceProvider.GetRequiredService<ICheckoutProvider>(),
+                scope.ServiceProvider.GetRequiredService<IModelRuntime>(),
+                output,
+                error,
+                stopping)
+            .GetAwaiter().GetResult();
+    }
+
     private static int Questions(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
         var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
@@ -415,9 +462,17 @@ public static class Program
         output.WriteLine("  bench prune --db <connection> [--hit-retention-days 7] [--json]");
         output.WriteLine("             releases the source TEXT of old retrieved hits, keeping every row: the corpus");
         output.WriteLine("             at the pinned commit reproduces it. `bench run` does this at startup too");
-        output.WriteLine("  bench judge --run <id> --suite-file <path> --db <connection>");
+        output.WriteLine("  bench judge --run <id> [--suite-file <path>] --db <connection>");
         output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
-        output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg");
+        output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg. Without");
+        output.WriteLine("             --suite-file a bank-frozen run's selection is REBUILT from the bank and its");
+        output.WriteLine("             stamp verified byte for byte; a fix run is framed around the reference FIX");
+        output.WriteLine("  bench solve --question <bank id> --db <connection> --model <id> --model-url <base>");
+        output.WriteLine("             --gate-build <exe;arg;..> --gate-test <exe;arg;..> [--wall-seconds 600]");
+        output.WriteLine("             ONE implement-given-diagnosis leg, ATTENDED: the statement and the reference");
+        output.WriteLine("             diagnosis in, a unified diff out, scored by the mechanical signals (applies ·");
+        output.WriteLine("             builds · right file · hidden tests). Nothing queued, nothing persisted — the");
+        output.WriteLine("             code lane's isolation gate stays closed until its assertions pass");
         output.WriteLine("  bench report --run <id> --metric <name> --db <connection>");
         output.WriteLine("             [--min-legs 2] [--min-spread 0.25] [--baseline <arm>] [--json]");
         output.WriteLine("             the comparison, along every axis and on BOTH halves of the split. A");

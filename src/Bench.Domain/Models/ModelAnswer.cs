@@ -33,6 +33,14 @@ public sealed record ModelEndpoint
 
     public decimal OutputCostPerMTok { get; }
 
+    /// <summary>An endpoint-shaped identity for a subject that is DRIVEN as a process rather than
+    /// answered over HTTP (todo/PLAN_investigate_vs_implement.md §3.6). The base url is the literal
+    /// <c>cli</c> — an address would be a lie, and every printout that shows it says what this subject
+    /// is. Prices ride as usual: the CLI's own reported cost is the authoritative figure, and these are
+    /// the fallback arithmetic.</summary>
+    public static ModelEndpoint Cli(ModelRef model, decimal inputPerMTok = 0, decimal outputPerMTok = 0) =>
+        new(model, "cli", inputPerMTok, outputPerMTok);
+
     public static Outcome<ModelEndpoint> Parse(
         ModelRef model, string? baseUrl, decimal inputPerMTok = 0, decimal outputPerMTok = 0)
     {

@@ -10,10 +10,18 @@ namespace Bench.Infrastructure.Git;
 /// its own tree and gives it back, registry entry included.</summary>
 public static class ScratchWorktree
 {
+    public static Task<Outcome<string>> AddAsync(
+        string repositoryDir, CommitSha at, TimeSpan timeout, CancellationToken cancellationToken) =>
+        AddAsync(repositoryDir, at, timeout, cancellationToken,
+            Path.Combine(Path.GetTempPath(), "bench-scratch"));
+
+    /// <summary>Under an explicit root — the CLI-subject worktrees live under the CHECKOUT root, because
+    /// <see cref="Models.WorkspaceTrust"/> may only trust paths under it, and a worktree it cannot trust
+    /// is a fifteen-minute hang wearing a permissions dialog.</summary>
     public static async Task<Outcome<string>> AddAsync(
-        string repositoryDir, CommitSha at, TimeSpan timeout, CancellationToken cancellationToken)
+        string repositoryDir, CommitSha at, TimeSpan timeout, CancellationToken cancellationToken, string underRoot)
     {
-        var scratch = Path.Combine(Path.GetTempPath(), "bench-scratch", Guid.CreateVersion7().ToString("N"));
+        var scratch = Path.Combine(underRoot, Guid.CreateVersion7().ToString("N"));
 
         var added = await GitCommand.RunAsync(
             repositoryDir, timeout, cancellationToken,
