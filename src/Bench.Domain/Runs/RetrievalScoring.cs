@@ -144,7 +144,7 @@ public static class RetrievalScoring
     /// rather than about retrieval.
     /// </para></summary>
     private static bool Satisfies(Expectation expectation, RetrievedHit hit) =>
-        SamePath(expectation.Anchor.FilePath, hit.RelativePath)
+        AnchorMatching.SamePath(expectation.Anchor.FilePath, hit.RelativePath)
         && (expectation.Kind == ExpectationKind.File || ReachesMember(expectation.Anchor, hit));
 
     /// <summary>Whether a hit in the right file reaches the right MEMBER — by identity or by covering its
@@ -161,18 +161,6 @@ public static class RetrievalScoring
     /// literally returned that code.
     /// </para></summary>
     private static bool ReachesMember(SourceAnchor anchor, RetrievedHit hit) =>
-        SameMember(anchor.MemberKey, hit.Member)
+        AnchorMatching.SameMember(anchor.MemberKey, hit.Member)
         || (!anchor.Lines.IsWhole && hit.Covers(anchor.Lines.Start, anchor.Lines.End));
-
-    /// <summary>Identity, when both sides spell a member the same way. Ordinal and whole-string: a suffix
-    /// rule would let <c>Retry</c> reach <c>NoRetry</c>, and this number is a claim.</summary>
-    private static bool SameMember(string anchorKey, string hitMember) =>
-        anchorKey.Length > 0 && string.Equals(anchorKey, hitMember, StringComparison.Ordinal);
-
-    private static bool SamePath(string anchorPath, string hitPath) =>
-        anchorPath.Length > 0
-        && string.Equals(
-            anchorPath.Replace('\\', '/').TrimStart('/'),
-            hitPath.Replace('\\', '/').TrimStart('/'),
-            StringComparison.OrdinalIgnoreCase);
 }

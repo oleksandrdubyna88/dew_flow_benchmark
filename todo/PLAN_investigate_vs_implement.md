@@ -1,6 +1,7 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **step 1 (the arm axis) implemented 2026-08-20; steps 2–8 open.** Scope: `Bench.Domain` (the
+> Status: **steps 1–2 (the arm axis; the diagnosis contract and its scoring) implemented 2026-08-20;
+> steps 3–8 open.** Scope: `Bench.Domain` (the
 > arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
 > pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
 > worktrees), `hosts/Cli`; one additive migration on `cells`.
@@ -249,9 +250,22 @@ Each step ships alone, tests green, before the next.
    **And one honesty note, recorded in `research/architecture.md`:** nothing RUNS a non-Full arm yet —
    no CLI flag plans one, deliberately, because `LegRunner` starts no phases and a cell whose arm the
    runner cannot honour must not be creatable. The flag arrives with step 4/5.
-2. **The diagnosis contract + scoring** — extraction (parsed/absent/malformed), `DiagnosisScoring`
-   (parses, recall, precision, symptom trap) over fixture diagnoses and a fixture reference diff. Pure
-   domain, no infrastructure.
+2. ~~**The diagnosis contract + scoring**~~ **DONE 2026-08-20.** `Diagnosis`/`DiagnosisAnchor` and the
+   three-state `DiagnosisReading` (parsed · absent · malformed-with-the-error) in the domain;
+   `DiagnosisScoring` emitting parses / anchor recall / anchor precision / the symptom-only trap, with
+   a malformed reading scoring NO anchor numbers; `DiagnosisJson` in the Application layer over the
+   authoring pass's own `AgentJson` extractor. 20 tests, RED first; the full suite 921/0/9.
+
+   **Three decisions the plan had not fixed, decided in place:**
+   - **The matching rule is shared, not copied.** `AnchorMatching` (SamePath, whole-string-ordinal
+     SameMember) was EXTRACTED from `RetrievalScoring`'s privates and both scorers now call it — one
+     definition of "found" in the system, per the reuse-first rule's widen-don't-duplicate step.
+   - **Line claims match by OVERLAP, not coverage** — a hit returns code, a diagnosis only points —
+     and a bare file claim (no member, no lines) reaches only a whole-file truth, so "somewhere in
+     this file" cannot inflate recall on member-level ground truth.
+   - **Unknown JSON members are tolerated.** The `Disallow` discipline guards configurations, where a
+     stray field silently becomes a different arm; an agent's answer is a payload, and the measured
+     half of the contract is what must be present (the mechanism), not what must be absent.
 3. **The harvest pass** — `bench questions harvest --fix-commit <sha>`: derived `baseCommit`, seed,
    reference-diff ref and hidden-test extraction; the three gates run attended; candidates land
    `Proposed` and are vetted by the existing panel. Meets `PLAN_code_lane.md` §3 at `CodeTaskJson` —
