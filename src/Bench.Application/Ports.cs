@@ -185,6 +185,26 @@ public interface IRunTrace
 
 /// <summary>Hardware, sampled out of band. A failure in here may never fail or delay a run: measuring
 /// the instrument instead of the subject is the classic way to make a whole series worthless.</summary>
+/// <summary>Reads the machine a run is about to measure on, ONCE, before any cell exists.
+/// <para>
+/// Separate from <see cref="IHardwareSampler"/> because the two have different lifetimes and mixing them
+/// would make both useless: this answers what the machine IS — an operating system, a driver, a disk — and
+/// that does not change between legs, while the sampler answers what it was DOING and that changes every
+/// second. Writing a driver version ten thousand times is a column nobody can index; taking a machine-wide
+/// VRAM range across a ten-thousand-cell campaign answers nothing.
+/// </para>
+/// <para>
+/// It never fails a run. A machine nobody could read is <c>MachineFacts.NotRecorded</c>, which is a state the
+/// shape carries and a report can print — and which every run stored before this port existed already is.
+/// </para></summary>
+public interface IMachineProbe
+{
+    /// <param name="volumePath">The path whose volume matters — the checkout root, because that is the disk
+    /// a run's corpus and worktrees actually live on and the one whose cluster size and free space bear on
+    /// the numbers.</param>
+    Task<MachineFacts> ReadAsync(string volumePath, CancellationToken cancellationToken);
+}
+
 public interface IHardwareSampler
 {
     Task<IReadOnlyList<HardwareSample>> DrainAsync(CancellationToken cancellationToken);
