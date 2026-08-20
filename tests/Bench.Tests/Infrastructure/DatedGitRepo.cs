@@ -20,6 +20,9 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
     public string Root { get; } = Path.Combine(
         Path.GetTempPath(), "bench-dated-git", Guid.CreateVersion7().ToString("N"));
 
+    /// <summary>The repository as a clonable url — what a checkout provider takes.</summary>
+    public string Url => new Uri(Root).AbsoluteUri;
+
     /// <summary>Initialises the repository with one commit and returns its sha.</summary>
     public async Task<string> InitAsync((string Path, string Content) file, (string Subject, string Date) commit)
     {
@@ -29,11 +32,20 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
     }
 
     /// <summary>Writes one file, commits it with a pinned author date, returns the new sha.</summary>
-    public async Task<string> CommitAsync((string Path, string Content) file, (string Subject, string Date) commit)
+    public Task<string> CommitAsync((string Path, string Content) file, (string Subject, string Date) commit) =>
+        CommitManyAsync([file], commit);
+
+    /// <summary>Several files in ONE commit — the shape a real fix has: the change and its test land
+    /// together, and a gate test needs exactly that.</summary>
+    public async Task<string> CommitManyAsync(
+        IReadOnlyList<(string Path, string Content)> files, (string Subject, string Date) commit)
     {
-        var full = Path.Combine(Root, file.Path.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        await File.WriteAllTextAsync(full, file.Content, cancellationToken);
+        foreach (var file in files)
+        {
+            var full = Path.Combine(Root, file.Path.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            await File.WriteAllTextAsync(full, file.Content, cancellationToken);
+        }
 
         await GitAsync("add", "-A");
         await GitAsync(

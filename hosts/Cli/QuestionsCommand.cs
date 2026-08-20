@@ -43,7 +43,7 @@ public static class QuestionsCommand
             "bind" => await BindAsync(command, bank, registry, output, error, cancellationToken),
             "disable" or "enable" => await EnabledAsync(command, bank, output, error, cancellationToken),
             "vet" => await VetAsync(command, bank, agents, registry, secrets, checkouts, trust, clock, output, error, cancellationToken),
-            "harvest" => await HarvestCommand.RunAsync(command, checkouts, output, error, cancellationToken),
+            "harvest" => await HarvestCommand.RunAsync(command, checkouts, bank, clock, output, error, cancellationToken),
             "review" => await ReviewAsync(command, bank, clock, output, error, cancellationToken),
             "accept" or "reject" => await StateAsync(command, bank, output, error, cancellationToken),
             "move" => await MoveAsync(command, bank, clock, output, error, cancellationToken),

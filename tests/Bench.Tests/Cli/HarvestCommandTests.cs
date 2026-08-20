@@ -107,12 +107,45 @@ public sealed class HarvestCommandTests : IDisposable
         }
 
         var code = await HarvestCommand.RunAsync(
-            CommandLine.Parse([.. args]), checkouts, output, error, Ct);
+            CommandLine.Parse([.. args]), checkouts, new UntouchedBank(), TimeProvider.System, output, error, Ct);
 
         return (code, output.ToString(), error.ToString());
     }
 
     public void Dispose() => _repo.Dispose();
+
+    /// <summary>Report-only harvests never reach the bank, and a double that quietly answered would hide
+    /// a print-only path that had started landing things.</summary>
+    private sealed class UntouchedBank : Bench.Application.Bank.IQuestionBank
+    {
+        private static NotSupportedException Nope => new("a report-only harvest does not touch the bank");
+
+        public Task<Outcome<Bench.Domain.Bank.QuestionGroup>> AddGroupAsync(Bench.Domain.Bank.QuestionGroup group, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.Reviewer>> AddReviewerAsync(Bench.Domain.Bank.Reviewer reviewer, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.BankQuestion>> AddAsync(Bench.Domain.Bank.BankQuestion question, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<IReadOnlyList<Bench.Domain.Bank.QuestionGroup>>> GroupsAsync(CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<IReadOnlyList<Bench.Domain.Bank.Reviewer>>> ReviewersAsync(CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.Reviewer>> BindReviewerAsync(string reviewerKey, string modelKey, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.Reviewer>> SetReviewerEnabledAsync(string reviewerKey, bool enabled, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<IReadOnlyList<Bench.Domain.Bank.BankEntry>>> QuestionsAsync(Bench.Application.Bank.BankQuery query, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.QuestionReview>> ReviewAsync(string questionId, string reviewerKey, Bench.Domain.Bank.ReviewVerdict verdict, string note, DateTimeOffset at, string modelId, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<IReadOnlyList<Bench.Domain.Bank.QuestionReview>>> ReviewsAsync(IReadOnlyList<Guid> questionIds, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.BankQuestion>> SetStateAsync(string questionId, Bench.Domain.Authoring.CandidateState state, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<Bench.Domain.Bank.GroupMove>> MoveAsync(string questionId, string toGroupKey, string reason, DateTimeOffset at, CancellationToken ct) => throw Nope;
+
+        public Task<Outcome<IReadOnlyList<Bench.Domain.Bank.GroupMove>>> MovesAsync(string questionId, CancellationToken ct) => throw Nope;
+    }
 
     /// <summary>A checkout that hands back the temp repository itself — the verb needs a directory where
     /// git resolves the sha, and the temp repo IS one.</summary>

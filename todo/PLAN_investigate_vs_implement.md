@@ -298,9 +298,25 @@ Each step ships alone, tests green, before the next.
    looked like it had banked a task would be worse than no verb. A fix whose every change is in test
    files exits `NoReport`: an investigate arm would have nothing to score. Five command-level tests
    over a real temp repository (`DatedGitRepo`, beside the checkout cache's fixed-shape `TempGitRepo`
-   with the read-only-delete lesson shared, not copied). Still open in this step: the statement, the
-   gates (build red at base / green with fix — attended), and the bank landing (`CodeTaskJson`, meets
-   `PLAN_code_lane.md` §3.1).
+   with the read-only-delete lesson shared, not copied).
+
+   **The tail is DONE 2026-08-20 — the step is complete.** `CodeTask` + `CodeTaskCodec` (a stored
+   CONFIGURATION, so unknown members refuse the read — the `VariantJson` discipline, where
+   `DiagnosisJson` tolerates extras because an agent's ANSWER is a payload; each codec says which trust
+   shape it reads). The reference diff is stored once and whole — anchors and hidden-test files derive
+   from it at use, never beside it. `HarvestGates` runs the two gates ATTENDED in a disposable scratch
+   worktree (the shared per-commit tree is never built in): RED materialises the fix's own tests at
+   base with `git checkout fix -- tests` and must fail — red-by-compilation is recorded as the weak
+   kind and says so; GREEN moves the worktree to the fix and must pass; the worktree is removed on
+   every path out, registry entry included. `bench questions harvest --statement-file … --statement-author …`
+   lands the candidate `Proposed` in `code-writing` (the statement is the OPERATOR's — harvest derives
+   the mechanical half and refuses to invent prose; `--statement-author` is required because a set's
+   ceiling becomes its author's ceiling); gates run by default, `--no-gates` skips them out loud and
+   the stored payload carries the warning label; **a failed gate refuses the landing with the gate's
+   own verdict** — a bank row carrying a failed gate would read as a task somebody vouched for. The
+   bank's `Kind`/`CodeTaskJson` columns had existed since the QuestionBank migration, waiting for an
+   owner. 18 new tests (codec 5 · gates-over-real-git 4 · landing-over-real-Postgres 4 · verb 5);
+   suite 1095/0/11.
 4. **Phases actually start** — `LegRunner` materialises and drives `PhasePlan` for `TaskKind.Fix`
    arms. Shared prerequisite with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
 5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the
