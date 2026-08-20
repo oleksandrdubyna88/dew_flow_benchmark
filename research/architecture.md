@@ -752,11 +752,15 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
-- **The arm axis is plannable and stored, but nothing RUNS a non-Full arm yet.** `FixArm`
+- **The arm axis runs — investigate-only — but no CLI plans it yet.** `FixArm`
   (full · investigate-only · implement-only, `todo/PLAN_investigate_vs_implement.md`) is a matrix axis,
-  a `cells` column defaulting `Full`, a leg-identity suffix (`!investigate-only`) and a report dimension —
-  but `LegRunner` still starts no phases, and no CLI flag plans a non-Full arm, deliberately: a cell whose
-  arm the runner cannot honour must not be creatable. The runner learns phases in that plan's step 4.
+  a `cells` column defaulting `Full`, a leg-identity suffix (`!investigate-only`) and a report dimension;
+  since that plan's step 4 a fix-kind leg records PHASES (`leg_phases`: Investigate Done around the
+  ordinary ask, Judge left Pending for the judge pass, later phases Stopped on a cap or crash), and the
+  arms that produce a diff are refused by name before any phase row exists — the sandbox does not exist
+  and the code lane is attended-only. What is still missing is the front door: `bench run` plans no
+  fix-kind run and no `--arm`, deliberately, until the Investigate phase carries the diagnosis contract
+  rather than the reading prompt (step 5).
 - **No tool-calling loop.** `IEngine` exposes tools and both engines implement them, but `LegRunner` asks the
   model exactly once. Retrieval now happens for a cell that names a variant — the harness performs it and
   puts the hits in the prompt (*The retrieval lane*, above) — so anchor recall is a real number there; what

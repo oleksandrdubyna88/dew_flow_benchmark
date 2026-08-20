@@ -76,6 +76,18 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
 
     public Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a report reads results, not progress");
+
+    public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report does not read cells");
+
+    public Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report does not run phases");
+
+    public Task<Outcome<int>> SavePhasesAsync(IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report does not run phases");
+
+    public Task<IReadOnlyList<LegPhase>> PhasesAsync(Guid cellId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report does not read phases");
 }
 
 /// <summary>Scored legs held as values, aggregated the way the port promises: grouped, averaged, and with

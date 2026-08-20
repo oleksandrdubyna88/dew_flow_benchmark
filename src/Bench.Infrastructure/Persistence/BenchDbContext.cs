@@ -121,6 +121,34 @@ public sealed class CellRow
     public RunRow? Run { get; set; }
 }
 
+/// <summary>One phase of one fix leg (todo/PLAN_investigate_vs_implement.md step 4). Reading legs
+/// write no rows here — their single phase IS the leg, and rows nobody transitions would be noise
+/// claiming to be record. Enums as NAMES, like every enum in this schema.</summary>
+public sealed class LegPhaseRow
+{
+    public Guid Id { get; set; }
+
+    public Guid CellId { get; set; }
+
+    public PhaseKind Kind { get; set; }
+
+    public int Ordinal { get; set; }
+
+    public PhaseState State { get; set; }
+
+    public TimeSpan Tools { get; set; }
+
+    public TimeSpan Thinking { get; set; }
+
+    public TimeSpan InfrastructureWait { get; set; }
+
+    public decimal CostUsd { get; set; }
+
+    public LegOutcomeKind OutcomeKind { get; set; }
+
+    public string Detail { get; set; } = string.Empty;
+}
+
 public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : DbContext(options)
 {
     public DbSet<RunRow> Runs => Set<RunRow>();
@@ -144,6 +172,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
     public DbSet<VariantRow> Variants => Set<VariantRow>();
 
     public DbSet<LaneRow> Lanes => Set<LaneRow>();
+
+    public DbSet<LegPhaseRow> LegPhases => Set<LegPhaseRow>();
 
     public DbSet<QuestionGroupRow> QuestionGroups => Set<QuestionGroupRow>();
 
@@ -259,6 +289,20 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             // measurements. A variant leaves the catalog by being RETIRED, which keeps every row resolvable.
             cell.HasOne<VariantRow>().WithMany()
                 .HasForeignKey(c => c.VariantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<LegPhaseRow>(phase =>
+        {
+            phase.ToTable("leg_phases");
+            phase.HasKey(p => p.Id);
+            phase.Property(p => p.Kind).HasConversion<string>();
+            phase.Property(p => p.State).HasConversion<string>();
+            phase.Property(p => p.OutcomeKind).HasConversion<string>();
+            phase.HasOne<CellRow>().WithMany().HasForeignKey(p => p.CellId).OnDelete(DeleteBehavior.Cascade);
+
+            // One record per (cell, ordinal): the guard for the theoretical race two workers would run
+            // materialising the same claimed cell — the loser's insert fails and it reads the winner's.
+            phase.HasIndex(p => new { p.CellId, p.Ordinal }).IsUnique();
         });
 
         builder.Entity<VariantRow>(variant =>

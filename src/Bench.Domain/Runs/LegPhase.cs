@@ -139,9 +139,24 @@ public static class PhasePlan
         LegPhase phase, IReadOnlyList<LegPhase> all, LegOutcome outcome)
     {
         var (kind, detail) = LegOutcomeCodec.Encode(outcome);
+
+        return End(phase, all, kind, detail);
+    }
+
+    /// <summary>Ending a phase from a STORED outcome — the kind and detail exactly as a settled cell
+    /// carries them.
+    /// <para>
+    /// The runner closes a fix leg's phase record AFTER the cell settled, and a stored outcome
+    /// deliberately has no decoder (<see cref="LegOutcomeCodec"/>: parsing the display sentence back
+    /// into structure is a lie that works until somebody edits the wording). The transition needs only
+    /// whether the leg COMPLETED; everything else rides as the text it already is.
+    /// </para></summary>
+    public static (LegPhase Ended, IReadOnlyList<LegPhase> Others) End(
+        LegPhase phase, IReadOnlyList<LegPhase> all, LegOutcomeKind kind, string detail)
+    {
         var ended = phase with { State = PhaseState.Done, Outcome = kind, Detail = detail };
 
-        var stopsTheLeg = outcome is not LegOutcome.Completed;
+        var stopsTheLeg = kind is not LegOutcomeKind.Completed;
 
         var others = all
             .Where(p => p.Id != phase.Id)

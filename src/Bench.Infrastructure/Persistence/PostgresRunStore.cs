@@ -285,6 +285,91 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
                       .SetProperty(c => c.Attempts, c => c.Attempts + 1),
                 cancellationToken) == 1;
 
+    public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
+        ReadAsync(cellId, cancellationToken);
+
+    public async Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(
+        Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken)
+    {
+        var existing = await PhasesAsync(cellId, cancellationToken);
+
+        if (existing.Count > 0)
+        {
+            return existing;
+        }
+
+        db.LegPhases.AddRange(phases.Select(ToRow));
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return phases;
+        }
+        catch (DbUpdateException)
+        {
+            // The unique (CellId, Ordinal) index fired: another worker materialised this cell's record
+            // between our read and our write. The claim makes that theoretical; losing it politely is
+            // reading what the winner wrote.
+            db.ChangeTracker.Clear();
+            return await PhasesAsync(cellId, cancellationToken);
+        }
+    }
+
+    public async Task<Outcome<int>> SavePhasesAsync(
+        IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken)
+    {
+        var written = 0;
+
+        foreach (var phase in phases)
+        {
+            written += await db.LegPhases
+                .Where(p => p.Id == phase.Id)
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(p => p.State, phase.State)
+                          .SetProperty(p => p.Tools, phase.Tools)
+                          .SetProperty(p => p.Thinking, phase.Thinking)
+                          .SetProperty(p => p.InfrastructureWait, phase.InfrastructureWait)
+                          .SetProperty(p => p.CostUsd, phase.CostUsd)
+                          .SetProperty(p => p.OutcomeKind, phase.Outcome)
+                          .SetProperty(p => p.Detail, phase.Detail),
+                    cancellationToken);
+        }
+
+        return written == phases.Count
+            ? Outcome<int>.Success(written)
+            : Outcome<int>.Failure(
+                $"updated {written} of {phases.Count} phase row(s) — a transition on a phase that was never materialised is a defect, not an upsert");
+    }
+
+    public async Task<IReadOnlyList<LegPhase>> PhasesAsync(Guid cellId, CancellationToken cancellationToken)
+    {
+        var rows = await db.LegPhases.AsNoTracking()
+            .Where(p => p.CellId == cellId)
+            .OrderBy(p => p.Ordinal)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(ToDomain)];
+    }
+
+    private static LegPhaseRow ToRow(LegPhase phase) => new()
+    {
+        Id = phase.Id,
+        CellId = phase.CellId,
+        Kind = phase.Kind,
+        Ordinal = phase.Ordinal,
+        State = phase.State,
+        Tools = phase.Tools,
+        Thinking = phase.Thinking,
+        InfrastructureWait = phase.InfrastructureWait,
+        CostUsd = phase.CostUsd,
+        OutcomeKind = phase.Outcome,
+        Detail = phase.Detail,
+    };
+
+    private static LegPhase ToDomain(LegPhaseRow row) => new(
+        row.Id, row.CellId, row.Kind, row.Ordinal, row.State,
+        row.Tools, row.Thinking, row.InfrastructureWait, row.CostUsd, row.OutcomeKind, row.Detail);
+
     private async Task<Outcome<RunCell>> ReadAsync(Guid cellId, CancellationToken cancellationToken)
     {
         var row = await db.Cells.AsNoTracking().FirstOrDefaultAsync(c => c.Id == cellId, cancellationToken);

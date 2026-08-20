@@ -143,9 +143,49 @@ public sealed class LegRunner(
                 cell, owner, plan.Variants.For(cell.Variant).Match(_ => string.Empty, reason => reason), cancellationToken);
         }
 
+        // A fix leg runs PHASES (todo/PLAN_investigate_vs_implement.md step 4). Only the
+        // investigate-only arm is runnable today — it builds nothing, so the code lane's isolation
+        // gate does not bind it; the arms that produce a diff are refused BY NAME before any phase
+        // row exists, because a cell whose arm the runner cannot honour must not look started.
+        if (plan.Kind == TaskKind.Fix && cell.Arm != FixArm.InvestigateOnly)
+        {
+            return await BlockAsync(
+                cell, owner,
+                $"the {cell.Arm.Canonical()} arm needs the sandbox executor — the code lane is attended-only "
+                + "until the isolation assertions of PLAN_code_lane.md §4.2 pass, and only investigate-only runs today",
+                cancellationToken);
+        }
+
         var deadline = LegDeadline.For(plan.Budgets, clock.GetUtcNow());
+
+        if (plan.Kind == TaskKind.Fix)
+        {
+            await OpenInvestigateAsync(cell, cancellationToken);
+        }
+
         var retrieved = await RetrieveAsync(question, variant, deadline, cancellationToken);
 
+        var outcome = await MeasureAsync(
+            cell, owner, plan, question, subject, deadline, retrieved, cancellationToken);
+
+        if (plan.Kind == TaskKind.Fix)
+        {
+            await ClosePhasesAsync(cell.Id, deadline, cancellationToken);
+        }
+
+        return outcome;
+    }
+
+    private async Task<Outcome<LegResult>> MeasureAsync(
+        RunCell cell,
+        WorkerIdentity owner,
+        LegPlan plan,
+        Question question,
+        RosterEntry subject,
+        LegDeadline deadline,
+        Outcome<RetrievedContext> retrieved,
+        CancellationToken cancellationToken)
+    {
         // UnansweredAsync, not AbandonAsync: retrieval is INSIDE the leg's wall, so an engine that ran the
         // clock out is a recorded CAP and an engine that failed inside the budget is a crash. Settling both
         // as crashes would report the harness as broken over a merely slow index.
@@ -163,6 +203,54 @@ public sealed class LegRunner(
             ? await BlockAsync(cell, owner, ignored.Reason, cancellationToken)
             : await AnswerAsync(
                 new LegWork(cell, owner, plan, question, subject, deadline, context), cancellationToken);
+    }
+
+    /// <summary>Materialises the investigate-only phase record and starts its working phase. Rows that
+    /// already exist come back as stored — a swept-back leg resumes the record its crash left.</summary>
+    private async Task OpenInvestigateAsync(RunCell cell, CancellationToken cancellationToken)
+    {
+        var materialised = PhasePlan.Materialise(cell.Id, TaskKind.Fix, cell.Arm);
+
+        if (materialised is not Outcome<IReadOnlyList<LegPhase>>.Ok(var fresh))
+        {
+            return; // unreachable for the arm the guard above admitted; the leg still runs and settles honestly
+        }
+
+        var phases = await runs.EnsurePhasesAsync(cell.Id, fresh, cancellationToken);
+        var first = phases.FirstOrDefault(p => p.Ordinal == 0);
+
+        if (first is { State: PhaseState.Pending } && PhasePlan.Start(first, phases) is Outcome<LegPhase>.Ok(var started))
+        {
+            await runs.SavePhasesAsync([started], cancellationToken);
+        }
+    }
+
+    /// <summary>Closes a fix leg's phase record from the outcome the cell SETTLED with — after the
+    /// fact, deliberately: every path out of a leg already settles the cell, and reading that one
+    /// stored answer beats threading a phase handle through five of them. A cap or a crash stops the
+    /// LEG, so the later phases go <see cref="PhaseState.Stopped"/>; a completed leg leaves the Judge
+    /// phase Pending for the judge pass to close.</summary>
+    private async Task ClosePhasesAsync(Guid cellId, LegDeadline deadline, CancellationToken cancellationToken)
+    {
+        if (await runs.CellAsync(cellId, cancellationToken) is not Outcome<RunCell>.Ok(var cell) || !cell.IsTerminal)
+        {
+            return;
+        }
+
+        var phases = await runs.PhasesAsync(cellId, cancellationToken);
+        var working = phases.FirstOrDefault(p => p.Kind != PhaseKind.Judge && p.State is PhaseState.Running or PhaseState.Pending);
+
+        if (working is null)
+        {
+            return;
+        }
+
+        var elapsed = clock.GetUtcNow() - deadline.StartedAt;
+        var (ended, others) = PhasePlan.End(
+            working with { Thinking = elapsed > TimeSpan.Zero ? elapsed : TimeSpan.Zero },
+            phases, cell.OutcomeKind, cell.OutcomeDetail);
+
+        await runs.SavePhasesAsync([ended, .. others], cancellationToken);
     }
 
     /// <summary>A leg whose ARM could not be trusted, settled without being run.

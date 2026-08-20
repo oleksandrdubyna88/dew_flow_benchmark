@@ -366,6 +366,18 @@ internal sealed class ArmWorld : IRunStore, IResultStore
     public Task<SweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a comparison does not sweep");
 
+    public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison reads legs, never one cell");
+
+    public Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison runs no phases");
+
+    public Task<Outcome<int>> SavePhasesAsync(IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison runs no phases");
+
+    public Task<IReadOnlyList<LegPhase>> PhasesAsync(Guid cellId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison reads no phases");
+
     public Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a comparison reads results, not progress");
 

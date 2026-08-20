@@ -94,6 +94,25 @@ public interface IRunStore
     /// <summary>What machine a run measured on. <c>NotRecorded</c> for every run stored before this
     /// existed, which is the honest answer rather than an absence a caller has to interpret.</summary>
     Task<MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>One cell by id — what a phase close reads to learn how the leg SETTLED. A miss is a
+    /// refusal naming the id, never an empty cell.</summary>
+    Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken);
+
+    /// <summary>A fix leg's phase record, materialised ONCE: rows that already exist come back as
+    /// stored — a swept-back leg resumes the record its crash left — and only a cell with no record
+    /// gets <paramref name="phases"/> inserted. Two workers racing this (the claim makes it
+    /// theoretical) are settled by the unique index, and the loser reads what the winner wrote.</summary>
+    Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(
+        Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken);
+
+    /// <summary>Writes phase transitions — start, end, stop — by id. Refuses when a phase named here
+    /// was never materialised: a transition on a row that does not exist is a defect, not an upsert.</summary>
+    Task<Outcome<int>> SavePhasesAsync(IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken);
+
+    /// <summary>One cell's phases, in ordinal order. Empty for a reading leg — reading has phases only
+    /// conceptually, and rows nobody transitions would be noise claiming to be record.</summary>
+    Task<IReadOnlyList<LegPhase>> PhasesAsync(Guid cellId, CancellationToken cancellationToken);
 }
 
 /// <summary>The one phrase that means "there is nothing left to claim".

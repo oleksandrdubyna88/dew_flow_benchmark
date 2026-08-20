@@ -1,7 +1,8 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **steps 1–2 (the arm axis; the diagnosis contract and its scoring) implemented 2026-08-20;
-> steps 3–8 open.** Scope: `Bench.Domain` (the
+> Status: **steps 1–4 (the arm axis; the diagnosis contract and its scoring; the harvest — FixDiff,
+> FixHarvest, gates, bank landing; phases in the runner) implemented 2026-08-20; steps 5–8 open.**
+> Scope: `Bench.Domain` (the
 > arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
 > pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
 > worktrees), `hosts/Cli`; one additive migration on `cells`.
@@ -317,8 +318,23 @@ Each step ships alone, tests green, before the next.
    bank's `Kind`/`CodeTaskJson` columns had existed since the QuestionBank migration, waiting for an
    owner. 18 new tests (codec 5 · gates-over-real-git 4 · landing-over-real-Postgres 4 · verb 5);
    suite 1095/0/11.
-4. **Phases actually start** — `LegRunner` materialises and drives `PhasePlan` for `TaskKind.Fix`
-   arms. Shared prerequisite with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
+4. ~~**Phases actually start**~~ **DONE 2026-08-20.** `LegRunner` materialises and drives the phase
+   record for `TaskKind.Fix` legs: `leg_phases` (one row per phase, unique per cell+ordinal, enums as
+   names), `IRunStore.EnsurePhasesAsync/SavePhasesAsync/PhasesAsync/CellAsync`. The investigate-only
+   arm runs the ordinary ask INSIDE its Investigate phase — Done/Completed on success, the Judge row
+   left Pending for the judge pass; a cap or crash stops the leg and the later phases go Stopped. The
+   arms that produce a diff are refused BY NAME before any phase row exists (`blocked: … needs the
+   sandbox executor … only investigate-only runs today`) and cost no completion. Shared prerequisite
+   with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
+
+   **Two decisions decided in place:** phases are CLOSED after the cell settles, from the stored
+   outcome — every path out of a leg already settles the cell, so `PhasePlan.End` gained an overload
+   taking the stored `(kind, detail)` pair rather than threading a phase handle through five exit
+   paths (and rather than decoding a stored outcome, which `LegOutcomeCodec` deliberately refuses).
+   And reading legs write NO phase rows — their single phase is the leg, and rows nobody transitions
+   would be noise claiming to be record. The Investigate phase still carries the question's ORDINARY
+   prompt: the diagnosis contract instruction and `DiagnosisScoring` wiring are step 5, which is also
+   where `bench run` learns to plan a fix-kind run with `--arm`.
 5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the
    prompt, the phase result stored, scored, judged. **First measurable milestone**, unattended-safe.
 6. **`CliSubjectRuntime`** — per-leg worktree, deny-writes settings, envelope cost readback,
