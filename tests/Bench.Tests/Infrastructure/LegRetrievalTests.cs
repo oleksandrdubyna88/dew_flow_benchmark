@@ -432,6 +432,7 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
                     new RetrievalFunnel(TraceContract.V0, [new FunnelStage("rerank", 50, 20, 900)], 1200, []),
                     string.Empty,
                     Asked(request),
+                    Asked(request),
                     Applied(request),
                     2048,
                     1300)));
@@ -472,6 +473,7 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
                 hits,
                 new RetrievalFunnel(TraceContract.V0, [new FunnelStage("rerank", 50, 20, 900)], 1200, []),
                 string.Empty,
+                EngineAxes.None,
                 EngineAxes.None,
                 EngineAxes.None,
                 2048,

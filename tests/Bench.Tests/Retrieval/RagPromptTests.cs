@@ -120,5 +120,5 @@ public sealed class RagPromptTests
             HitSnippet.Text(text));
 
     private static RetrievedContext Context(params RetrievedHit[] hits) =>
-        RetrievedContext.Of("code_x", hits, RetrievalFunnel.None, string.Empty, EngineAxes.None, EngineAxes.None, 0, 0);
+        RetrievedContext.Of("code_x", hits, RetrievalFunnel.None, string.Empty, EngineAxes.None, EngineAxes.None, EngineAxes.None, 0, 0);
 }

@@ -246,6 +246,7 @@ public sealed class QlnRetriever(
             funnel.Match(ok => ok, _ => RetrievalFunnel.None),
             funnel.Match(_ => string.Empty, reason => reason),
             sent.Asked,
+            sent.QueryAxes,
             Echoed(response.Wire.Axes),
             response.PayloadBytes,
             response.ElapsedMs);
@@ -379,6 +380,16 @@ internal sealed record QlnRequest(AxesWire Axes, string? TextShape)
     /// axes of the MEASUREMENT even though they ride at different levels of the request.</summary>
     public EngineAxes Asked =>
         new([.. Axes.Axes.Values, .. TextShape is { } shape ? new[] { new Axis("textShape", shape) } : []]);
+
+    /// <summary>Only what rides under <c>axes</c> — the set this engine's search echo may be held to.
+    /// <para>
+    /// <c>textShape</c> is excluded because it is an INDEX-TIME selector: it picks a collection, it travels at
+    /// the top level of the request, and this engine keeps it out of its applied-axes echo on purpose — an axis
+    /// that cannot be swept without re-indexing is not a query axis. It is verified against <c>/index-state</c>,
+    /// which does report it, through <c>CorpusSpec.Refuse</c>. Asserting it against the SEARCH echo demanded a
+    /// field that never arrives, and blocked every retrieval leg from 2026-08-17 until this was split out.
+    /// </para></summary>
+    public EngineAxes QueryAxes => new([.. Axes.Axes.Values]);
 
     private static string Refuse(VariantDefinition.RetrievalRecipe recipe) =>
         (recipe.Engine == EngineKind.Qln, Shape(recipe.Corpus.TextShape)) switch

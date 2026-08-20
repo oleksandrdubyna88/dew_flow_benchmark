@@ -155,7 +155,9 @@ public sealed class LegRunner(
         }
 
         var context = ((Outcome<RetrievedContext>.Ok)retrieved).Value;
-        var echoed = context.Requested.AssertAppliedIn(context.Applied);
+        // The QUERY-TIME subset, not the whole recipe: index-time selectors are verified against
+        // /index-state, where the engine actually reports them. See RetrievedContext.QueryTimeRequested.
+        var echoed = context.QueryTimeRequested.AssertAppliedIn(context.Applied);
 
         return echoed is Outcome<EngineAxes>.Fail ignored
             ? await BlockAsync(cell, owner, ignored.Reason, cancellationToken)

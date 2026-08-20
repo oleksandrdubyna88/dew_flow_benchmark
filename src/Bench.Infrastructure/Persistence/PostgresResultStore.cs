@@ -429,6 +429,11 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
                     JsonSerializer.Deserialize<List<string>>(funnel.AbsentJson, Meta) ?? []),
                 funnel.DegradationReason,
                 new EngineAxes(JsonSerializer.Deserialize<List<Axis>>(funnel.RequestedAxesJson, Meta) ?? []),
+                // The query-time SUBSET is not recoverable from storage: which axes are query-time is the
+                // adapter's knowledge, not the row's. Empty rather than a copy of the requested set — empty
+                // asserts vacuously (no false block) where a copy would re-create the confusion this split
+                // exists to end. Nothing asserts a hydrated leg; the assertion happens live.
+                EngineAxes.None,
                 new EngineAxes(JsonSerializer.Deserialize<List<Axis>>(funnel.AppliedAxesJson, Meta) ?? []),
                 funnel.PayloadBytes,
                 funnel.ElapsedMs);

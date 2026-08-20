@@ -334,13 +334,14 @@ internal static class RetrievalFixtures
             new RetrievalFunnel(TraceContract.V0, [new FunnelStage("rerank", 50, 20, 2500)], 3104, ["graph-enrich"]),
             string.Empty,
             new EngineAxes([new Axis("limit", "20")]),
+            new EngineAxes([new Axis("limit", "20")]),
             new EngineAxes([new Axis("limit", "20"), new Axis("rerank", "true")]),
             payloadBytes: 8192,
             elapsedMs: 3200);
 
     public static RetrievedContext Degraded(string reason) =>
         RetrievedContext.Of(
-            "code_ab12", [], RetrievalFunnel.None, reason, EngineAxes.None, EngineAxes.None, 512, 40);
+            "code_ab12", [], RetrievalFunnel.None, reason, EngineAxes.None, EngineAxes.None, EngineAxes.None, 512, 40);
 
     public static RetrievedHit Hit(int rank) => new(
         rank,

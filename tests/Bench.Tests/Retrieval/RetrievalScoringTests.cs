@@ -213,7 +213,7 @@ public sealed class RetrievalScoringTests
         HitSnippet.Text("the source"));
 
     private static RetrievedContext Context(params RetrievedHit[] hits) =>
-        RetrievedContext.Of("code_x", hits, RetrievalFunnel.None, string.Empty, EngineAxes.None, EngineAxes.None, 0, 0);
+        RetrievedContext.Of("code_x", hits, RetrievalFunnel.None, string.Empty, EngineAxes.None, EngineAxes.None, EngineAxes.None, 0, 0);
 
     private static Bench.Domain.Models.ModelAnswer Answered(string text) => new(
         Captured.Text(text),

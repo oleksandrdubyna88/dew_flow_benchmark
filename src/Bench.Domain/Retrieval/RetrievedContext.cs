@@ -124,6 +124,7 @@ public sealed record RetrievedContext
         RetrievalFunnel funnel,
         string funnelNote,
         EngineAxes requested,
+        EngineAxes queryTimeRequested,
         EngineAxes applied,
         long payloadBytes,
         long elapsedMs)
@@ -134,6 +135,7 @@ public sealed record RetrievedContext
         Funnel = funnel;
         FunnelNote = funnelNote;
         Requested = requested;
+        QueryTimeRequested = queryTimeRequested;
         Applied = applied;
         PayloadBytes = payloadBytes;
         ElapsedMs = elapsedMs;
@@ -158,6 +160,22 @@ public sealed record RetrievedContext
     /// <summary>The axes this run asked for.</summary>
     public EngineAxes Requested { get; }
 
+    /// <summary>The subset an engine's SEARCH echo may be held to — the query-time knobs, and nothing else.
+    /// <para>
+    /// The two are not one set, and conflating them blocked EVERY retrieval leg for three days (the assertion
+    /// was wired 2026-08-17 16:07; the first run to exercise it was 2026-08-20, because every run in between
+    /// was a no-retrieval control). <c>textShape</c> selects a COLLECTION: index-time, travelling outside
+    /// <c>axes</c>, and the engine keeps it out of the applied-axes echo deliberately — an axis that cannot be
+    /// swept without re-indexing is not a query axis. Asserting it there demanded a field that will never
+    /// arrive, and the refusal said the engine had ignored the recipe when the engine had honoured it.
+    /// </para>
+    /// <para>
+    /// Index-time selectors are verified where they ARE reported — <c>/index-state</c>, through
+    /// <c>CorpusSpec.Refuse</c> — which was already happening. So the axis was checked twice and the second
+    /// check was impossible.
+    /// </para></summary>
+    public EngineAxes QueryTimeRequested { get; }
+
     /// <summary>The axes the engine said it applied — after its own clamping, never as requested.</summary>
     public EngineAxes Applied { get; }
 
@@ -170,7 +188,7 @@ public sealed record RetrievedContext
     /// <summary>The state of a leg whose arm surfaces nothing.</summary>
     public static RetrievedContext NotPerformed { get; } = new(
         performed: false, string.Empty, [], RetrievalFunnel.None, string.Empty,
-        EngineAxes.None, EngineAxes.None, 0, 0);
+        EngineAxes.None, EngineAxes.None, EngineAxes.None, 0, 0);
 
     public static RetrievedContext Of(
         string collection,
@@ -178,10 +196,11 @@ public sealed record RetrievedContext
         RetrievalFunnel funnel,
         string funnelNote,
         EngineAxes requested,
+        EngineAxes queryTimeRequested,
         EngineAxes applied,
         long payloadBytes,
         long elapsedMs) =>
-        new(true, collection, hits, funnel, funnelNote, requested, applied, payloadBytes, elapsedMs);
+        new(true, collection, hits, funnel, funnelNote, requested, queryTimeRequested, applied, payloadBytes, elapsedMs);
 
     /// <summary>Whether the funnel arrived and this build could read it. A degraded funnel is still stored,
     /// with its reason: both vantage points are data.</summary>
