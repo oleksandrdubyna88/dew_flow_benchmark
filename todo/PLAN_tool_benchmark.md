@@ -12,6 +12,8 @@
 >
 > Related: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) (this plan is the design of its §3.8 agent
 > lane), [PLAN_code_lane.md](PLAN_code_lane.md) (meets this plan at `PhaseKind`, nowhere else),
+> [PLAN_investigate_vs_implement.md](PLAN_investigate_vs_implement.md) (consumes step 11's measured-CLI
+> subject and §3.5's reconstructed tool calls; builds neither),
 > [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) (founding plan; its §3 tuple already reserves the
 > axis this plan fills), [../research/architecture.md](../research/architecture.md),
 > [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md).

@@ -11,6 +11,12 @@
 >
 > Builds on [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §4b (the fix lane, already specified) and
 > [../research/MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md).
+>
+> [PLAN_investigate_vs_implement.md](PLAN_investigate_vs_implement.md) sits ON TOP of this plan
+> (2026-08-19): the phases here become three runnable ARMS (investigate-only ·
+> implement-given-diagnosis · full), the `Investigate` phase gains a scored diagnosis artefact, and §3
+> gains a second authoring door — harvesting a merged fix. Its step 4 (phases actually start) is this
+> plan's §7 step 1, built once and named in both. Changes that cross are named in both plans.
 
 ## 1. The goal, before any solution
 
