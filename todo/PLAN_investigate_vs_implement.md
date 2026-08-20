@@ -228,6 +228,23 @@ aspnetcore will cost more and nobody has measured how much, so the pilot comes f
 - **Pilot**: 1 harvested task × 7 arms (3 Claude CLI · 2 local × {no-tools, rag-variant}) × 2 repeats
   = 14 legs. Deliverable: per-leg cost and wall per subject, and the diagnosis contract exercised
   end-to-end. Nothing else is scheduled until these numbers exist.
+
+  **First numbers, measured 2026-08-20** (task `fix-cc7c4d7c0513` — the embed-batch 2× defect,
+  harvested from `dew_flow_rag_qln`; runs `investigate-pilot-{14b,7b,claude}`, judged by an
+  independent local arbiter under the diagnosis framing):
+  - **local qwen-14b/7b, no tools, $0, ~1 min/leg**: contract followed (`parses = true`), recall 0,
+    precision 0 — the model INVENTED a plausible path; the honest memorisation floor, and the judge's
+    reasons named symptom-restating unprompted.
+  - **Haiku 4.5 as a CLI subject over the real tree: ~$0.25/leg, ~2.7 min/leg** ($0.29 + $0.22 from
+    the CLI's own envelopes): recall 2/7 at **precision 1.0** — every anchor it named is causal, a
+    qualitatively different reading from the floor — but the judged MECHANISM was still wrong (a
+    near-miss about batching, not the ruler-row spill), so the verdict is NO. The instrument grades:
+    found-the-place ≠ understood-the-cause.
+  - **Sonnet 4.6: both legs spent the 600 s wall** and settled `CapExceeded` — excluded from every
+    paired delta, exactly as designed. Its real spend is UNRECORDED (the process was killed before an
+    envelope existed) — the Captured discipline's honest gap, and the pilot's actionable finding:
+    **the series wants a 900–1200 s wall for Sonnet-class subjects.**
+  - The audit flagged no worktree writes on any CLI leg.
 - **First series**: 8 harvested tasks × the same 7 arms × 2 repeats = 112 investigate-only legs,
   unattended-safe. Budget projected from the pilot, confirmed before any cell exists
   (`BudgetConfirmation`).
