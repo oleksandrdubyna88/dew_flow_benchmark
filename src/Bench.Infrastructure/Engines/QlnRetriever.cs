@@ -117,7 +117,12 @@ public sealed class QlnRetriever(
                 wire.Exists,
                 wire.Points,
                 new CorpusIdentity(
-                    wire.TextShape, wire.WindowTokens, wire.OverlapTokens, wire.EmbedModel, wire.Tokenizer),
+                    wire.TextShape,
+                    wire.WindowTokens,
+                    wire.OverlapTokens,
+                    wire.EmbedModel,
+                    wire.Tokenizer,
+                    EmbedDimensions.Of(wire.Dimensions)),
                 wire.Fingerprint,
                 IndexCommit.Read(wire.IndexedCommit),
                 wire.WorkingTreeDirty,
@@ -591,6 +596,10 @@ internal sealed record IndexStateWire
     [JsonPropertyName("overlapTokens")] public int OverlapTokens { get; init; }
 
     [JsonPropertyName("tokenizer")] public string Tokenizer { get; init; } = string.Empty;
+
+    /// <summary>The stored vectors' width, when this engine reports it. Absent from every build that has not
+    /// been taught to — which reads as NOT DECLARED rather than as a disagreement.</summary>
+    [JsonPropertyName("dimensions")] public int Dimensions { get; init; }
 
     [JsonPropertyName("fingerprint")] public string Fingerprint { get; init; } = string.Empty;
 

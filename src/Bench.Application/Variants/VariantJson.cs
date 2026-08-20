@@ -85,7 +85,7 @@ public static class VariantJson
 
         return Channels(wire.Channels).Match(
             channels => FusionSpec.Parse(fusion.Mode, fusion.K, fusion.DenseWeight, fusion.SparseWeight, fusion.Norm).Match(
-                fused => CorpusSpec.Parse(corpus.TextShape, corpus.ChunkTokens, corpus.EmbedModel).Match(
+                fused => CorpusSpec.Parse(corpus.TextShape, corpus.ChunkTokens, corpus.EmbedModel, corpus.Dimensions).Match(
                     corpora => Rerank(rerank).Match(
                         reranked => Backed(
                             VariantDefinition.Retrieval(engine, channels, fused, corpora, reranked, wire.Limit ?? 0),
@@ -127,7 +127,11 @@ public static class VariantJson
                 Engine = recipe.Engine.ToString().ToLowerInvariant(),
                 Channels = recipe.Channels.ToString().ToLowerInvariant(),
                 Fusion = new FusionWire(recipe.Fusion.Mode, recipe.Fusion.K, recipe.Fusion.DenseWeight, recipe.Fusion.SparseWeight, recipe.Fusion.Normalization),
-                Corpus = new CorpusWire(recipe.Corpus.TextShape, recipe.Corpus.ChunkTokens, recipe.Corpus.EmbedModel),
+                Corpus = new CorpusWire(
+                    recipe.Corpus.TextShape,
+                    recipe.Corpus.ChunkTokens,
+                    recipe.Corpus.EmbedModel,
+                    recipe.Corpus.Dimensions.Value),
                 Rerank = new RerankWire(recipe.Rerank.Enabled, recipe.Rerank.Pool),
                 Limit = recipe.Limit,
                 Backend = recipe.Backend is BackendDeclaration.Declared declared ? declared.Canonical : null,
@@ -160,7 +164,9 @@ public static class VariantJson
 
     private sealed record FusionWire(string Mode, int K, double DenseWeight, double SparseWeight, string Norm);
 
-    private sealed record CorpusWire(string TextShape, int ChunkTokens, string EmbedModel);
+/// <param name="Dimensions">The vector width, when the author declared one. Absent (0) on every row written
+    /// before this existed, and those rows must keep hashing as they did — see <c>EmbedDimensions</c>.</param>
+    private sealed record CorpusWire(string TextShape, int ChunkTokens, string EmbedModel, int Dimensions = 0);
 
     private sealed record RerankWire(bool Enabled, int Pool);
 }

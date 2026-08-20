@@ -14,12 +14,15 @@ namespace Bench.Domain.Retrieval;
 /// <param name="OverlapTokens">Recorded, never compared — a variant has no field for it. Two corpora that
 /// differ only in overlap are two corpora, and this benchmark cannot yet say so; storing the number is what
 /// makes that statable later without re-running anything.</param>
+/// <param name="Dimensions">How wide the stored vectors are, when the engine reports it. Compared only when
+/// BOTH sides declare one — an engine that has not been taught to answer has not disagreed.</param>
 public sealed record CorpusIdentity(
     string TextShape,
     int ChunkTokens,
     int OverlapTokens,
     string EmbedModel,
-    string Tokenizer)
+    string Tokenizer,
+    EmbedDimensions Dimensions = default)
 {
     /// <summary>Why this corpus is not the recipe's, or empty when it is.
     /// <para>
@@ -41,9 +44,15 @@ public sealed record CorpusIdentity(
                 + "a different corpus";
         }
 
-        return SameModel(EmbedModel, recipe.EmbedModel)
-            ? string.Empty
-            : $"the corpus that answers was embedded by '{EmbedModel}' and the recipe names '{recipe.EmbedModel}'";
+        if (!SameModel(EmbedModel, recipe.EmbedModel))
+        {
+            return $"the corpus that answers was embedded by '{EmbedModel}' and the recipe names '{recipe.EmbedModel}'";
+        }
+
+        // Last, and deliberately: a model NAME normalises across two legitimate spellings, so a width that
+        // disagrees under matching names is the case the name check cannot see. Silent when either side
+        // declares nothing — that absence is a warning, not a refusal.
+        return Dimensions.Refuse(recipe.Dimensions);
     }
 
     /// <summary>Whether two model names are the same model.
@@ -232,6 +241,17 @@ public static class IndexReadiness
                     {
                         $"this variant measures '{arm.Canonical}' and the engine declares no backend — which arm "
                         + "these numbers describe is UNVERIFIED",
+                    }
+                    : [],
+                // The width went unverified. No allowance gates it: unlike the commit stamp and the backend,
+                // an undeclared width blocks nothing, so there is no flag to forget — the run measures and
+                // the reader is told which axis nobody checked.
+                .. recipe.Corpus.Dimensions.Declared && !state.Corpus.Dimensions.Declared
+                    ? new[]
+                    {
+                        $"this variant names {recipe.Corpus.Dimensions.Value}-dimensional vectors and the engine "
+                        + "reports no width — that the corpus was built by the same embedder is UNVERIFIED, and a "
+                        + "model NAME does not settle it",
                     }
                     : [],
             ]);

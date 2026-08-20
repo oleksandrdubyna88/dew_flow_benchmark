@@ -98,11 +98,12 @@ public sealed record FusionSpec
 /// variants coexist as separate collections rather than replacing one another.</summary>
 public sealed record CorpusSpec
 {
-    private CorpusSpec(string textShape, int chunkTokens, string embedModel)
+    private CorpusSpec(string textShape, int chunkTokens, string embedModel, EmbedDimensions dimensions)
     {
         TextShape = textShape;
         ChunkTokens = chunkTokens;
         EmbedModel = embedModel;
+        Dimensions = dimensions;
     }
 
     public string TextShape { get; }
@@ -111,9 +112,15 @@ public sealed record CorpusSpec
 
     public string EmbedModel { get; }
 
+    /// <summary>How wide the vectors are, when anybody said. Optional by construction: every variant in a
+    /// catalog written before this existed declares nothing, and those rows must keep hashing as they did.
+    /// See <see cref="EmbedDimensions"/> for why a NAME does not identify an embedder and a width does.</summary>
+    public EmbedDimensions Dimensions { get; } = EmbedDimensions.NotDeclared;
+
     /// <summary>An unset embed model is a refusal, never a default — the same rule
     /// <see cref="ModelRef"/> enforces, and for the same near-miss.</summary>
-    public static Outcome<CorpusSpec> Parse(string? textShape, int chunkTokens, string? embedModel)
+    public static Outcome<CorpusSpec> Parse(
+        string? textShape, int chunkTokens, string? embedModel, int dimensions = 0)
     {
         var shape = (textShape ?? string.Empty).Trim();
         var model = (embedModel ?? string.Empty).Trim();
@@ -128,10 +135,17 @@ public sealed record CorpusSpec
 
         return refusal.Length > 0
             ? Outcome<CorpusSpec>.Failure(refusal)
-            : Outcome<CorpusSpec>.Success(new CorpusSpec(shape, chunkTokens, model));
+            : Outcome<CorpusSpec>.Success(
+                new CorpusSpec(shape, chunkTokens, model, EmbedDimensions.Of(dimensions)));
     }
 
-    public string Canonical => $"corpus={TextShape}/{ChunkTokens}/{EmbedModel}";
+    /// <summary>The identity a variant hashes on.
+    /// <para>
+    /// The width appends ONLY when declared, which keeps every stored variant hashing exactly as it did. A
+    /// catalog row is immutable — added and retired, never edited — so a hash that moved would silently
+    /// re-identify work already published against it.
+    /// </para></summary>
+    public string Canonical => $"corpus={TextShape}/{ChunkTokens}/{EmbedModel}{Dimensions.Canonical}";
 }
 
 /// <summary>Whether a cross-encoder re-scores the fused pool, and how deep.</summary>
