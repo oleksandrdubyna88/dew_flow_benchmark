@@ -352,6 +352,9 @@ public static class Program
         output.WriteLine("             candidates:");
         output.WriteLine("             they land Proposed, through the same admission rules an import passes,");
         output.WriteLine("             and the prompt that wrote them is recorded by hash");
+        output.WriteLine("  bench questions harvest --repo <url> --commit <40-hex fix sha>");
+        output.WriteLine("                         derive a code-task candidate from a merged fix: base, seed,");
+        output.WriteLine("                         causal anchors, hidden-test candidates — printed only, no gates yet");
         output.WriteLine("  bench questions vet    --group <key> --repo <url> --commit <40-hex> [--limit 10]");
         output.WriteLine("             [--wall-seconds 300] [--allow-self-review] [--prompts prompts] --db <connection>");
         output.WriteLine("             [--no-trust]   every BOUND reviewer slot marks the group's proposed questions;");

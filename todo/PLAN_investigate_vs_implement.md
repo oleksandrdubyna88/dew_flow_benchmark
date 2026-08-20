@@ -289,9 +289,18 @@ Each step ships alone, tests green, before the next.
    subject/body, and the `base..fix` diff `FixDiff` parses. A ROOT commit and a MERGE commit are
    refused by name before anything is read — no buggy tree exists before the first commit, and a
    merge's diff lands a whole branch, which would ask a solver to rediscover a feature rather than one
-   defect. Five integration tests over a temp repo and the real git. Still open in this step: the
-   statement, the gates (build red at base / green with fix — attended), the bank landing
-   (`CodeTaskJson`, meets `PLAN_code_lane.md` §3.1) and the CLI verb.
+   defect. Five integration tests over a temp repo and the real git.
+
+   **And the verb exists in its report-only first form (2026-08-20)**: `bench questions harvest
+   --repo <url> --commit <40-hex fix sha>` checks the fix out through the ordinary provider, reads it,
+   and PRINTS the derived candidate — base, seed, causal anchors, hidden-test candidates — with its
+   last line saying `printed only: no gate has run … nothing landed in the bank`, because a verb that
+   looked like it had banked a task would be worse than no verb. A fix whose every change is in test
+   files exits `NoReport`: an investigate arm would have nothing to score. Five command-level tests
+   over a real temp repository (`DatedGitRepo`, beside the checkout cache's fixed-shape `TempGitRepo`
+   with the read-only-delete lesson shared, not copied). Still open in this step: the statement, the
+   gates (build red at base / green with fix — attended), and the bank landing (`CodeTaskJson`, meets
+   `PLAN_code_lane.md` §3.1).
 4. **Phases actually start** — `LegRunner` materialises and drives `PhasePlan` for `TaskKind.Fix`
    arms. Shared prerequisite with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
 5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the
