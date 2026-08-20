@@ -384,6 +384,9 @@ public static class Program
         output.WriteLine("             --db <connection>");
         output.WriteLine("             (or --bank-group <key> [--bank-from N] [--bank-to N] [--suite-id <name>]");
         output.WriteLine("              to freeze a selection from the bank instead of reading a file)");
+        output.WriteLine("             [--task-kind reading|fix] [--arm investigate-only]  a fix run carries the");
+        output.WriteLine("             diagnosis contract and scores the diagnosis; the arms that produce a diff");
+        output.WriteLine("             cannot be planned until the sandbox lands, and are refused by name");
         output.WriteLine("             [--engine-url <qln base> --engine-project <guid> [--engine-branch main]");
         output.WriteLine("              --variants <catalog names>]  single-shot RAG: the harness retrieves per cell,");
         output.WriteLine("             assembles the prompt from the hits, and stores the funnel, the hits and the");

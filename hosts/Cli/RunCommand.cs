@@ -249,7 +249,8 @@ public static class RunCommand
         var run = BenchRun.Planned(
             settings.Label, settings.Target, Engine(settings, variants.Served), frozen.Stamp, DateTimeOffset.UtcNow);
         var cells = Matrix.Plan(
-            frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants));
+            frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants),
+            [settings.Arm]);
 
         if (cells is Outcome<IReadOnlyList<MatrixCell>>.Fail badMatrix)
         {
@@ -291,7 +292,7 @@ public static class RunCommand
         var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
         Announce(output, settings, run, selection, roster, variants, planned.Count, confirmed);
 
-        return (run, LegPlan.Reading(frozen, roster) with { Budgets = confirmed, Variants = variants });
+        return (run, new LegPlan(frozen, roster, confirmed, settings.Kind) with { Variants = variants });
     }
 
     /// <summary>Which retrieval recipes this run measures, resolved from the catalog before a single cell
@@ -753,6 +754,13 @@ public static class RunCommand
                 "--hit-retention-days cannot be negative — pass 0 to keep every hit's text forever");
         }
 
+        var task = KindAndArm(command);
+
+        if (task is not Outcome<(TaskKind Kind, FixArm Arm)>.Ok(var kindAndArm))
+        {
+            return Outcome<RunInputs>.Failure(task.Match(_ => string.Empty, reason => reason));
+        }
+
         var engine = QlnEngineOptions.Parse(
             command.Value("engine-url"), command.Value("engine-project"), command.Value("engine-branch"));
 
@@ -797,10 +805,50 @@ public static class RunCommand
                         command.List("variants"),
                         retentionDays,
                         command.Has("allow-unstamped-index"),
-                        command.Has("allow-undeclared-backend"))),
+                        command.Has("allow-undeclared-backend"),
+                        kindAndArm.Kind,
+                        kindAndArm.Arm)),
                     Outcome<RunInputs>.Failure),
                 Outcome<RunInputs>.Failure),
             Outcome<RunInputs>.Failure);
+    }
+
+    /// <summary>`--task-kind` and `--arm` (todo/PLAN_investigate_vs_implement.md step 5).
+    /// <para>
+    /// Only the investigate-only arm may be PLANNED: the arms that produce a diff need the sandbox
+    /// executor, and a cell the runner can only block must not be creatable — refusing it here is the
+    /// same move the subject roster makes for an unreachable model, before any cell exists.
+    /// </para></summary>
+    private static Outcome<(TaskKind Kind, FixArm Arm)> KindAndArm(CommandLine command)
+    {
+        var kindToken = command.Value("task-kind", "reading");
+
+        if (!Enum.TryParse<TaskKind>(kindToken, ignoreCase: true, out var kind))
+        {
+            return Outcome<(TaskKind, FixArm)>.Failure(
+                $"'{kindToken}' is not a task kind this build knows — it knows 'reading' and 'fix'");
+        }
+
+        var armToken = command.Value("arm");
+
+        if (kind == TaskKind.Reading)
+        {
+            return armToken.Length == 0
+                ? Outcome<(TaskKind, FixArm)>.Success((TaskKind.Reading, FixArm.Full))
+                : Outcome<(TaskKind, FixArm)>.Failure(
+                    "--arm slices a FIX task — pass --task-kind fix, or drop the flag");
+        }
+
+        return armToken switch
+        {
+            "" or "investigate-only" => Outcome<(TaskKind, FixArm)>.Success((TaskKind.Fix, FixArm.InvestigateOnly)),
+            "full" or "implement-only" => Outcome<(TaskKind, FixArm)>.Failure(
+                $"the {armToken} arm needs the sandbox executor — the code lane is attended-only until the "
+                + "isolation assertions of PLAN_code_lane.md §4.2 pass, and only investigate-only can be planned today"),
+            _ => Outcome<(TaskKind, FixArm)>.Failure(
+                $"'{armToken}' is not an arm this build knows — it knows 'investigate-only' (and, once the "
+                + "sandbox lands, 'full' and 'implement-only')"),
+        };
     }
 
     /// <summary>Registry keys, parsed here so a typo is refused before anything is created.</summary>
@@ -899,7 +947,9 @@ public static class RunCommand
         IReadOnlyList<string> VariantNames,
         int HitRetentionDays,
         bool AllowUnstampedIndex,
-        bool AllowUndeclaredBackend)
+        bool AllowUndeclaredBackend,
+        TaskKind Kind,
+        FixArm Arm)
     {
         /// <summary>What this run agreed to measure without proof — both refusals by default, both passable,
         /// and both still printed on every approval that used them.</summary>

@@ -63,6 +63,48 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task An_investigate_leg_carries_the_contract_and_a_valid_diagnosis_scores()
+    {
+        var runtime = new CountingRuntime(
+            """
+            I read the retry loop first.
+
+            ```json
+            { "anchors": [{ "path": "src/Policy.cs", "member": "Policy.NextDelay" }],
+              "mechanism": "the delay is recomputed from scratch on every attempt" }
+            ```
+            """);
+        var (runId, plan, runner, _) = await ArrangeAsync(FixArm.InvestigateOnly, runtime);
+
+        (await runner.RunNextAsync(runId, WorkerIdentity.Here("phase-test"), plan, Ct))
+            .Failed().Should().BeFalse();
+
+        runtime.SeenPrompt.Should().StartWith("Retries stop honouring the cap.")
+            .And.Contain("```json").And.Contain("CAUSED",
+                "the fix leg's prompt is the statement plus the diagnosis contract");
+
+        var stored = (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().ContainSingle().Subject;
+        Metric(stored, DiagnosisScoring.Parses).Should().Be("true");
+        Metric(stored, DiagnosisScoring.AnchorRecall).Should().Be(
+            "1", "the diagnosis named the question's own causal anchor");
+        Metric(stored, DiagnosisScoring.Precision).Should().Be("1");
+    }
+
+    [Fact]
+    public async Task A_prose_answer_scores_no_anchor_numbers_only_the_broken_contract()
+    {
+        var runtime = new CountingRuntime("It is somewhere in the retry logic, probably.");
+        var (runId, plan, runner, _) = await ArrangeAsync(FixArm.InvestigateOnly, runtime);
+
+        await runner.RunNextAsync(runId, WorkerIdentity.Here("phase-test"), plan, Ct);
+
+        var stored = (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().ContainSingle().Subject;
+        Metric(stored, DiagnosisScoring.Parses).Should().Be("false");
+        stored.Metrics.Should().NotContain(m => m.Name == DiagnosisScoring.AnchorRecall,
+            "malformed and wrong are different facts, and zeros would merge them");
+    }
+
+    [Fact]
     public async Task Phases_materialise_once_and_a_second_ensure_returns_the_stored_record()
     {
         var (runId, _, _, runs) = await ArrangeAsync(FixArm.InvestigateOnly);
@@ -123,17 +165,24 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
         return (run.Id, new LegPlan(suite, roster, [], TaskKind.Fix), runner, runs);
     }
 
+    private static string Metric(LegResult stored, string name) =>
+        stored.Metrics.Single(m => m.Name == name).Value;
+
     private async Task<Guid> ClaimedCellAsync(PostgresRunStore runs, Guid runId)
     {
         await using var db = postgres.NewContext();
         return db.Cells.Where(c => c.RunId == runId).Select(c => c.Id).Single();
     }
 
-    /// <summary>Answers once and counts how often it was reached — the blocked-arm assertion is about
-    /// the ask that must never happen.</summary>
-    private sealed class CountingRuntime : IModelRuntime
+    /// <summary>Answers with whatever the test scripted, counts how often it was reached — the
+    /// blocked-arm assertion is about the ask that must never happen — and keeps the prompt it saw,
+    /// because the diagnosis contract can only be observed on the request itself.</summary>
+    private sealed class CountingRuntime(string answer = "the delay is recomputed without carrying state")
+        : IModelRuntime
     {
         public int Asked { get; private set; }
+
+        public string SeenPrompt { get; private set; } = string.Empty;
 
         public ModelHosting Hosting => ModelHosting.Local;
 
@@ -143,9 +192,10 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
         public Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
         {
             Asked++;
+            SeenPrompt = request.UserPrompt;
 
             return Task.FromResult(Outcome<ModelAnswer>.Success(new ModelAnswer(
-                Captured.Text("the delay is recomputed without carrying state"),
+                Captured.Text(answer),
                 CapturedCount.Number(100),
                 CapturedCount.Number(20),
                 TimeSpan.FromMilliseconds(250),

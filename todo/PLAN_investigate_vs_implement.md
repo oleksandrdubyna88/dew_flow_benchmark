@@ -1,7 +1,8 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **steps 1–4 (the arm axis; the diagnosis contract and its scoring; the harvest — FixDiff,
-> FixHarvest, gates, bank landing; phases in the runner) implemented 2026-08-20; steps 5–8 open.**
+> Status: **steps 1–5 implemented 2026-08-20 (the arm axis; the diagnosis contract and its scoring;
+> the harvest — FixDiff, FixHarvest, gates, bank landing; phases in the runner; investigate-only
+> end-to-end with the contract in the prompt and `bench run --task-kind fix`); steps 6–8 open.**
 > Scope: `Bench.Domain` (the
 > arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
 > pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
@@ -335,8 +336,21 @@ Each step ships alone, tests green, before the next.
    would be noise claiming to be record. The Investigate phase still carries the question's ORDINARY
    prompt: the diagnosis contract instruction and `DiagnosisScoring` wiring are step 5, which is also
    where `bench run` learns to plan a fix-kind run with `--arm`.
-5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the
-   prompt, the phase result stored, scored, judged. **First measurable milestone**, unattended-safe.
+5. ~~**Investigate-only for local subjects, end-to-end**~~ **DONE 2026-08-20 — the first measurable
+   milestone stands.** `DiagnosisPrompt` appends the contract to the ordinary leg prompt (the reading
+   baseline is byte-identical — an arm that quietly reshaped it would no longer be comparable), and a
+   test proves the contract's own example parses through the real `DiagnosisJson` — a contract whose
+   example the reader refuses would teach every subject a broken shape. `LegRunner` scores fix legs
+   with `DiagnosisScoring` beside the ordinary metrics: the causal truth is the question's own
+   retrieval anchors (the harvest lands the reference fix's spans as exactly those — ONE set of
+   anchors for the rag lane and the diagnosis), symptoms are not landed yet so the trap stays
+   un-emitted, and an uncaptured answer reads *not answered*, never a failed parse. The front door:
+   `bench run --task-kind fix [--arm investigate-only]` — the diff-producing arms are refused at PLAN
+   time by name (a cell the runner can only block must not be creatable), an `--arm` on a reading run
+   is a named refusal, and the full-CLI test shows a leg that died on transport still recording its
+   phase attempt. What "judged" means today is unchanged honesty: code questions land with an empty
+   reference answer, so `bench judge` reports them *not judgeable* — the diagnosis judge prompt is
+   step 7's first half.
 6. **`CliSubjectRuntime`** — per-leg worktree, deny-writes settings, envelope cost readback,
    write-detection, wall budget; then the **pilot** (§4).
 7. **The diagnosis judge prompt + the first series** — 8 tasks × 7 arms × 2 repeats; report with the

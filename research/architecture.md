@@ -752,15 +752,20 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
-- **The arm axis runs — investigate-only — but no CLI plans it yet.** `FixArm`
+- **The investigate arm runs END TO END; the diff-producing arms wait for the sandbox.** `FixArm`
   (full · investigate-only · implement-only, `todo/PLAN_investigate_vs_implement.md`) is a matrix axis,
-  a `cells` column defaulting `Full`, a leg-identity suffix (`!investigate-only`) and a report dimension;
-  since that plan's step 4 a fix-kind leg records PHASES (`leg_phases`: Investigate Done around the
-  ordinary ask, Judge left Pending for the judge pass, later phases Stopped on a cap or crash), and the
-  arms that produce a diff are refused by name before any phase row exists — the sandbox does not exist
-  and the code lane is attended-only. What is still missing is the front door: `bench run` plans no
-  fix-kind run and no `--arm`, deliberately, until the Investigate phase carries the diagnosis contract
-  rather than the reading prompt (step 5).
+  a `cells` column defaulting `Full`, a leg-identity suffix (`!investigate-only`) and a report
+  dimension. `bench run --task-kind fix [--arm investigate-only]` plans it; the leg's prompt is the
+  statement plus the diagnosis CONTRACT (`DiagnosisPrompt` — one fenced JSON block: anchors, mechanism,
+  fixIntent), the answer is scored by `DiagnosisScoring` (parses · anchor recall against the question's
+  own causal anchors · precision · the symptom trap where authored) beside the ordinary metrics, and
+  the leg records PHASES (`leg_phases`: Investigate closed from the settled outcome, Judge left Pending
+  for the judge pass, later phases Stopped on a cap or crash). The `full` and `implement-only` arms are
+  refused at PLAN time by name — the sandbox executor does not exist and the code lane is
+  attended-only (`PLAN_code_lane.md` §4.2), so a cell the runner could only block cannot be created.
+  Code tasks land through `bench questions harvest` (a merged fix: derived base/seed/anchors, the two
+  gates, `CodeTaskJson`); their reference answers are empty until authored, so `bench judge` reports
+  them *not judgeable* — the diagnosis judge prompt is that plan's step 7.
 - **No tool-calling loop.** `IEngine` exposes tools and both engines implement them, but `LegRunner` asks the
   model exactly once. Retrieval now happens for a cell that names a variant — the harness performs it and
   puts the hits in the prompt (*The retrieval lane*, above) — so anchor recall is a real number there; what

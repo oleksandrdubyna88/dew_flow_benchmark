@@ -327,7 +327,11 @@ public sealed class LegRunner(
                 work.Cell, work.Owner, work.Deadline, "retrieval used the whole leg", cancellationToken);
         }
 
-        var prompt = RagPrompt.Assemble(work.Question, work.Retrieved, work.Plan.Prompt);
+        // A fix leg's prompt carries the diagnosis contract; a reading leg's is exactly what it always
+        // was — the arm must not change the baseline it is compared against.
+        var prompt = work.Plan.Kind == TaskKind.Fix
+            ? DiagnosisPrompt.Assemble(work.Question, work.Retrieved, work.Plan.Prompt)
+            : RagPrompt.Assemble(work.Question, work.Retrieved, work.Plan.Prompt);
 
         var lane = work.Plan.Lanes.For(work.Cell.LaneName);
         if (lane is Outcome<LaneChoice>.Fail unresolved)
@@ -509,7 +513,36 @@ public sealed class LegRunner(
     [
         .. AnswerScoring.Score(work.Question, answer, RetrievalScoring.Observe(work.Question, work.Retrieved)),
         .. RetrievalScoring.Score(work.Question, work.Retrieved),
+        .. DiagnosisMetrics(work, answer),
     ];
+
+    /// <summary>The diagnosis instrument, for fix legs only (todo/PLAN_investigate_vs_implement.md §3.3).
+    /// <para>
+    /// The causal ground truth is the question's own retrieval anchors — the harvest lands the
+    /// reference fix's touched spans as exactly those, so the rag lane and the diagnosis read ONE set
+    /// of anchors. Symptom anchors are not landed yet, so the trap metric stays un-emitted rather than
+    /// always-passing. An uncaptured answer reads <i>not answered</i>, never a failed parse — the model
+    /// may have been cut off, and AnswerScoring already keeps those two facts apart.
+    /// </para></summary>
+    private static IEnumerable<StoredMetric> DiagnosisMetrics(LegWork work, ModelAnswer answer)
+    {
+        if (work.Plan.Kind != TaskKind.Fix)
+        {
+            return [];
+        }
+
+        if (!answer.Text.WasCaptured)
+        {
+            return [StoredMetric.Text(
+                DiagnosisScoring.Parses, "not answered",
+                $"no text was captured: {answer.Text.Reason}", failed: false, "Unknown")];
+        }
+
+        return DiagnosisScoring.Score(
+            DiagnosisJson.Read(answer.Text.Value),
+            [.. work.Question.RetrievalExpectations.Select(e => e.Anchor)],
+            symptoms: []);
+    }
 
     /// <summary>An answer cut off at a ceiling ends the leg as a CAP, not as a completion. Scored as a
     /// wrong answer it would measure the ceiling, and a capped leg is excluded from paired deltas — which
