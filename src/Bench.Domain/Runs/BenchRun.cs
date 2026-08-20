@@ -29,6 +29,12 @@ public sealed record BenchRun(
     RunStatus Status,
     DateTimeOffset CreatedAt)
 {
+    /// <summary>What KIND of work this run's legs did — the fact a later pass reads to pick its own
+    /// behaviour: the judge frames a fix run's verdict around the reference FIX, not a reference
+    /// answer. An <c>init</c> member defaulting to <see cref="TaskKind.Reading"/>, because every run
+    /// stored before this column existed was one — the <see cref="EngineRef.Backend"/> pattern.</summary>
+    public TaskKind Kind { get; init; } = TaskKind.Reading;
+
     public static BenchRun Planned(string label, MeasurementTarget target, EngineRef engine, string suiteStamp, DateTimeOffset now) =>
         new(Guid.CreateVersion7(), label, target, engine, suiteStamp, RunStatus.Planned, now);
 

@@ -56,6 +56,8 @@ public sealed class HarvestLandingTests(PostgresFixture postgres) : IDisposable
         task.FixCommit.Value.Should().Be(fixSha);
         task.GatesRan.Should().BeTrue();
         task.Mechanism.Should().BeEmpty("the mechanism is authored later, never invented at harvest");
+        entry.Question.Question.ReferenceAnswer.Should().Contain("--- a/src/Policy.cs",
+            "the reference is the reference FIX itself — what the diagnosis judge reads");
     }
 
     [Fact]

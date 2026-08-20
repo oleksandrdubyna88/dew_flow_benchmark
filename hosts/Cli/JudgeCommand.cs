@@ -82,8 +82,25 @@ public static class JudgeCommand
             return Fail(error, arbiters.Match(_ => string.Empty, reason => reason), ExitCodes.Configuration);
         }
 
+        // The run's stored kind decides the FRAMING: a fix run's verdicts are about the diagnosis
+        // against the reference FIX, and a re-judge months later must frame it the way its legs were
+        // asked — which is why the kind is a column and not a flag the operator has to remember.
+        var measured = await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == inputs.RunId, stopping);
+
+        if (measured is null)
+        {
+            return Fail(error, $"this store holds no run {inputs.RunId}", ExitCodes.Environment);
+        }
+
+        var framing = measured.Kind == TaskKind.Fix ? JudgeFraming.Diagnosis : JudgeFraming.Answer;
+
+        if (framing == JudgeFraming.Diagnosis)
+        {
+            output.WriteLine("framing  diagnosis — a fix run: the reference is the reference FIX, and the verdict is about the cause");
+        }
+
         return await JudgeEachAsync(
-            scope, inputs, endpoints, ((Outcome<Suite>.Ok)suite).Value, command, output, error, stopping);
+            scope, inputs, endpoints, ((Outcome<Suite>.Ok)suite).Value, framing, command, output, error, stopping);
     }
 
     /// <summary>Every arbiter of this run, in order.
@@ -139,6 +156,7 @@ public static class JudgeCommand
         JudgeInputs inputs,
         IReadOnlyList<ModelEndpoint> arbiters,
         Suite suite,
+        JudgeFraming framing,
         CommandLine command,
         TextWriter output,
         TextWriter error,
@@ -152,7 +170,7 @@ public static class JudgeCommand
 
         foreach (var endpoint in arbiters)
         {
-            var judge = new ModelJudge(runtime, endpoint, inputs.Seed);
+            var judge = new ModelJudge(runtime, endpoint, inputs.Seed, framing);
 
             output.WriteLine($"arbiter  {judge.Model.Id} @ {endpoint.BaseUrl}");
             output.WriteLine($"metric   {JudgeScoring.MetricName(judge.Model.Id)}");

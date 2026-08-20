@@ -247,7 +247,9 @@ public static class RunCommand
         }
 
         var run = BenchRun.Planned(
-            settings.Label, settings.Target, Engine(settings, variants.Served), frozen.Stamp, DateTimeOffset.UtcNow);
+            settings.Label, settings.Target, Engine(settings, variants.Served), frozen.Stamp, DateTimeOffset.UtcNow)
+            with
+        { Kind = settings.Kind };
         var cells = Matrix.Plan(
             frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants),
             [settings.Arm]);

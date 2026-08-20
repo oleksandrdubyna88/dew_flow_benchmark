@@ -19,11 +19,28 @@ namespace Bench.Infrastructure.Models;
 /// here, and an arbiter whose sampling drifted silently would re-score an old run differently for no
 /// visible reason.
 /// </para></summary>
-public sealed class ModelJudge(IModelRuntime runtime, ModelEndpoint endpoint, int seed) : IJudge
+/// <summary>What a verdict is ABOUT — the judge's construction detail, never the port's: `IJudge` still
+/// asks one binary over (question, answer, reference), and the framing decides what those three ARE.
+/// Chosen from the run's stored <see cref="TaskKind"/>, so re-judging an old run months later frames it
+/// the way its legs were asked.</summary>
+public enum JudgeFraming
+{
+    /// <summary>A reading leg: does the candidate answer state what the reference answer states.</summary>
+    Answer,
+
+    /// <summary>A fix leg (todo/PLAN_investigate_vs_implement.md step 7): the reference is the
+    /// reference FIX's unified diff — ground truth that can be run, unlike any prose — and the question
+    /// is whether the candidate's diagnosis identifies the cause that fix addresses, or patched a
+    /// symptom. The part no mechanical signal covers, exactly as PLAN_code_lane.md §5.4 scoped it.</summary>
+    Diagnosis,
+}
+
+public sealed class ModelJudge(
+    IModelRuntime runtime, ModelEndpoint endpoint, int seed, JudgeFraming framing = JudgeFraming.Answer) : IJudge
 {
     /// <summary>Deliberately not a rubric. Every extra instruction is an extra thing that can change
     /// meaning when the arbiter is swapped, and the port exists precisely so it can be swapped.</summary>
-    private const string System = """
+    private const string AnswerSystem = """
         You judge whether a candidate answer states the same thing as a reference answer about a
         specific code repository. You are not grading style, completeness, or wording.
 
@@ -33,12 +50,25 @@ public sealed class ModelJudge(IModelRuntime runtime, ModelEndpoint endpoint, in
         Then one short line saying why.
         """;
 
+    private const string DiagnosisSystem = """
+        You judge whether a candidate DIAGNOSIS of a software defect identifies the cause that the
+        reference fix addresses. The reference is the actual fix, as a unified diff. You are not
+        grading style, completeness, or whether the candidate proposed the same code.
+
+        Answer with exactly one word on the first line: YES or NO.
+        YES  — the diagnosis names the mechanism the fix corrects, in the place the fix corrects it.
+        NO   — it names a different cause, only describes the symptom, or is too vague to tell.
+        Then one short line saying why.
+        """;
+
     public ModelRef Model => endpoint.Model;
 
     public async Task<Outcome<JudgeVerdict>> JudgeAsync(
         string question, string answer, string reference, CancellationToken cancellationToken)
     {
-        var request = new ModelRequest(endpoint, Sampling.Deterministic(seed), System, Prompt(question, answer, reference), []);
+        var system = framing == JudgeFraming.Diagnosis ? DiagnosisSystem : AnswerSystem;
+        var request = new ModelRequest(
+            endpoint, Sampling.Deterministic(seed), system, Prompt(question, answer, reference), []);
         var asked = await runtime.AskAsync(request, cancellationToken);
 
         if (asked is Outcome<ModelAnswer>.Fail unreachable)
@@ -79,14 +109,26 @@ public sealed class ModelJudge(IModelRuntime runtime, ModelEndpoint endpoint, in
 
     private static string Head(string line) => line.Length <= 40 ? line : line[..40] + "…";
 
-    private static string Prompt(string question, string answer, string reference) => $"""
-        QUESTION
-        {question}
+    private string Prompt(string question, string answer, string reference) =>
+        framing == JudgeFraming.Diagnosis
+            ? $"""
+              THE DEFECT, AS THE SOLVER WAS TOLD IT
+              {question}
 
-        REFERENCE ANSWER
-        {reference}
+              THE REFERENCE FIX (unified diff)
+              {reference}
 
-        CANDIDATE ANSWER
-        {answer}
-        """;
+              THE CANDIDATE'S DIAGNOSIS
+              {answer}
+              """
+            : $"""
+              QUESTION
+              {question}
+
+              REFERENCE ANSWER
+              {reference}
+
+              CANDIDATE ANSWER
+              {answer}
+              """;
 }

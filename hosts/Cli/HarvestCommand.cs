@@ -291,7 +291,7 @@ public static class HarvestCommand
                     command.Value("id", $"fix-{fix.Fix.Value[..12]}"),
                     statement,
                     [.. causal.Select(Expected)],
-                    ReferenceAnswer: string.Empty),
+                    Reference(fix.DiffText)),
                 CodeTaskCodec.Write(task),
                 AuthoringSource.BugsAndTests,
                 command.Value("statement-author"),
@@ -317,6 +317,16 @@ public static class HarvestCommand
             },
             reason => Fail(error, reason, ExitCodes.Regression));
     }
+
+    /// <summary>The landed question's reference is the reference FIX itself — the one ground truth
+    /// that can be RUN, and what the diagnosis judge reads (`JudgeFraming.Diagnosis`). Bounded and
+    /// SAYING so when it is: the judge meets this text inside a prompt, and the untruncated diff stays
+    /// in the code-task payload either way.</summary>
+    private static string Reference(string diff) =>
+        diff.Length <= 16 * 1024
+            ? diff
+            : diff[..(16 * 1024)]
+              + "\n\n[reference fix truncated at 16 KB for the judge's prompt — the full diff is in the code-task payload]";
 
     /// <summary>A causal anchor as the landed question's retrieval expectation: the anchors double as
     /// the rag lane's ground truth, and there is exactly one definition of "found" either way.</summary>

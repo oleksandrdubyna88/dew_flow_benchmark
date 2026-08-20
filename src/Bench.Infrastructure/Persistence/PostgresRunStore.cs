@@ -407,6 +407,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
         EngineBackend = run.Engine.Backend.Canonical,
         SuiteStamp = run.SuiteStamp,
         Status = run.Status,
+        Kind = run.Kind,
         CreatedAt = run.CreatedAt,
     };
 
@@ -462,7 +463,10 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
                     },
                     row.SuiteStamp,
                     row.Status,
-                    row.CreatedAt)),
+                    row.CreatedAt)
+                {
+                    Kind = row.Kind,
+                }),
                 Outcome<BenchRun>.Failure),
             Outcome<BenchRun>.Failure);
 }

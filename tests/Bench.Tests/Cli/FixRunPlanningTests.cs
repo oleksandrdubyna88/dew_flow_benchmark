@@ -71,6 +71,8 @@ public sealed class FixRunPlanningTests(PostgresFixture postgres)
         var cell = db.Cells.Single(c => c.QuestionId == $"fixq-{suffix}");
         cell.Arm.Should().Be(FixArm.InvestigateOnly, "a fix run defaults to the one arm that can be honoured");
         cell.Leg.Should().EndWith("!investigate-only");
+        db.Runs.Single(r => r.Id == cell.RunId).Kind.Should().Be(
+            TaskKind.Fix, "the run's kind is what a later judge pass reads to frame its verdicts");
 
         db.LegPhases.Count(p => p.CellId == cell.Id).Should().Be(
             2, "even a leg that died on transport records its phase attempt — Investigate closed, Judge stopped");

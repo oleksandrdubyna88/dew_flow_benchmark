@@ -39,6 +39,10 @@ public sealed class RunRow
 
     public RunStatus Status { get; set; }
 
+    /// <summary>The run's task kind, as its NAME. Defaults to <c>Reading</c> in the database, so every
+    /// run stored before the column existed reads as what it was.</summary>
+    public TaskKind Kind { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public List<CellRow> Cells { get; set; } = [];
@@ -250,6 +254,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             run.HasKey(r => r.Id);
             run.Property(r => r.Status).HasConversion<string>();
             run.Property(r => r.EngineKind).HasConversion<string>();
+            run.Property(r => r.Kind).HasConversion<string>().HasDefaultValue(TaskKind.Reading);
             run.HasMany(r => r.Cells).WithOne(c => c.Run!).HasForeignKey(c => c.RunId).OnDelete(DeleteBehavior.Cascade);
         });
 

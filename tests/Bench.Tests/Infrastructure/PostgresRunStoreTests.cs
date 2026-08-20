@@ -95,6 +95,20 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_task_kind_a_run_measured_under_survives_the_store()
+    {
+        var (planned, cells) = Plan(1, 1, 1);
+        var run = planned with { Kind = TaskKind.Fix };
+
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        // A re-judge months later reads this to FRAME its verdicts — a fix run judged as a reading
+        // run would grade prose restatement where the question is the cause.
+        (await store.LoadAsync(run.Id, Ct)).Ok().Kind.Should().Be(TaskKind.Fix);
+    }
+
+    [Fact]
     public async Task The_arm_a_cell_runs_survives_the_store()
     {
         var (run, _) = Plan(1, 1, 1);
