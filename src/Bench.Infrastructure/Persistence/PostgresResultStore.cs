@@ -120,7 +120,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         QuestionScope scope,
         CancellationToken cancellationToken)
     {
-        var samples = await SampleAsync(runId, metricName, scope, cancellationToken);
+        var samples = await SampleAsync([runId], metricName, scope, cancellationToken);
 
         var grouped = Numbers(samples, s => Key(s, dimension))
             .GroupBy(x => x.Key, StringComparer.Ordinal)
@@ -128,6 +128,29 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             .OrderBy(x => x.Dimension, StringComparer.Ordinal);
 
         return [.. grouped];
+    }
+
+    /// <summary>Every scored leg of several runs, as bare numbers — the shape an ARM comparison needs.
+    /// <para>
+    /// Run id and question id and nothing else, because that is all the caller can use: the arm lives on the
+    /// RUN and the half is derived from the question by a hash Postgres cannot compute, so the join and the
+    /// split both happen above this. A reading with no numeric value is already dropped by the shared rule.
+    /// </para></summary>
+    public async Task<IReadOnlyList<MetricLeg>> LegsAsync(
+        IReadOnlyList<Guid> runIds, string metricName, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return [];
+        }
+
+        var samples = await SampleAsync(runIds, metricName, QuestionScope.All, cancellationToken);
+
+        return
+        [
+            .. Numbers(samples, sample => (sample.RunId, sample.QuestionId))
+                .Select(x => new MetricLeg(x.Key.RunId, x.Key.QuestionId, x.Number)),
+        ];
     }
 
     /// <summary>One column, nothing else. The prompts and answers of a campaign are megabytes and none of
@@ -145,7 +168,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     public async Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken)
     {
-        var samples = await SampleAsync(runId, metricName, QuestionScope.All, cancellationToken);
+        var samples = await SampleAsync([runId], metricName, QuestionScope.All, cancellationToken);
 
         // Grouped on a TUPLE, never on a composed string. A question id is data an author wrote, so a
         // separator inside one would silently split a pair — which is the string parsing this schema keeps
@@ -218,10 +241,14 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     /// prompts this no longer carries.
     /// </para></summary>
     private async Task<IReadOnlyList<MetricSample>> SampleAsync(
-        Guid runId, string metricName, QuestionScope scope, CancellationToken cancellationToken)
+        IReadOnlyList<Guid> runIds, string metricName, QuestionScope scope, CancellationToken cancellationToken)
     {
+        // A LIST of runs rather than one, because the arm comparison spans them: the compute backend is
+        // recorded on the run, so putting two arms beside each other is by construction a query over two
+        // runs. WIDENED rather than copied — a second projection would be a second place for the "drop a
+        // reading that is not a number" rule to drift away from.
         var query = db.Results.AsNoTracking()
-            .Where(r => r.Cell!.RunId == runId && r.Metrics.Any(m => m.Name == metricName));
+            .Where(r => runIds.Contains(r.Cell!.RunId) && r.Metrics.Any(m => m.Name == metricName));
 
         // The half arrives as the question ids it holds, because SeedSplit assigns it by a hash Postgres
         // cannot compute. A suite has tens of questions where a run has thousands of legs, so this stays a
@@ -233,6 +260,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
 
         return await query
             .SelectMany(r => r.Metrics.Where(m => m.Name == metricName).Select(m => new MetricSample(
+                r.Cell!.RunId,
                 r.Cell!.Run!.EngineKind,
                 r.Cell!.LaneName,
                 r.Cell!.SubjectModelId,
@@ -275,6 +303,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     /// number and reading a campaign's every prompt to do it.
     /// </para></summary>
     private sealed record MetricSample(
+        Guid RunId,
         EngineKind Engine,
         string Lane,
         string Subject,

@@ -1,0 +1,325 @@
+using Bench.Application;
+using Bench.Domain;
+using Bench.Domain.Retrieval;
+using Bench.Domain.Runs;
+using Bench.Domain.Splitting;
+using Bench.Domain.Targets;
+using FluentAssertions;
+using Xunit;
+
+namespace Bench.Tests.Application;
+
+/// <summary>Putting two compute backends beside each other — the question this benchmark exists for.
+/// <para>
+/// The numbers are the easy half. What these tests mostly pin is the GUARD: the scope that must hold before
+/// two averages mean anything, the runs that are excluded and counted rather than folded in, and the three
+/// different refusals that must never collapse into one.
+/// </para></summary>
+public sealed class ArmComparisonTests
+{
+    private const string Metric = "Anchor recall";
+    private const string Wsl = "wsl-to-wsl/migraphx/R9700";
+    private const string Windows = "windows-to-windows/directml/R9700";
+
+    private CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Two_arms_measured_on_one_target_and_suite_are_compared()
+    {
+        var world = World();
+        var wsl = world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        var windows = world.Run(Windows, "polly@v1#aaaa", 0.4);
+
+        var view = (await Build(world)).Ok();
+
+        var scope = view.Scopes.Should().ContainSingle().Subject;
+        scope.Arms.Select(arm => arm.Arm).Should().BeEquivalentTo([Wsl, Windows]);
+        scope.Arms.Single(arm => arm.Arm == Wsl).Average.Should().BeApproximately(0.8, 0.001);
+        view.Refusal.Should().BeEmpty("there are two arms in one scope, so there IS a comparison to read");
+
+        _ = (wsl, windows);
+    }
+
+    [Fact]
+    public async Task Runs_on_different_suites_become_different_comparisons_rather_than_one_refusal()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        world.Run(Windows, "polly@v1#aaaa", 0.4);
+        world.Run(Wsl, "aspnet@v1#bbbb", 0.6);
+
+        var view = (await Build(world)).Ok();
+
+        // Partitioned, not refused. Refusing whenever the runs span scopes is correct and useless — the real
+        // database spans three suites, so the honest answer would have been a permanent blank.
+        view.Scopes.Should().HaveCount(2);
+        view.Scopes.First().Arms.Should().HaveCount(2, "the richest scope is listed first");
+        view.Scopes.Last().RankingRefusal.Should().Contain("one arm in this scope");
+    }
+
+    [Fact]
+    public async Task Nothing_crosses_a_scope_boundary()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 1.0);
+        world.Run(Wsl, "aspnet@v1#bbbb", 0.0);
+
+        var view = (await Build(world)).Ok();
+
+        // The same arm in two scopes is two readings, never one average of 0.5. Mixing the scope is this
+        // project's most expensive recorded mistake, and an average across it would be exactly that mistake
+        // with a tidier presentation.
+        view.Scopes.Should().HaveCount(2);
+        view.Scopes.SelectMany(scope => scope.Arms).Select(arm => arm.Average)
+            .Should().BeEquivalentTo([1.0, 0.0]);
+    }
+
+    [Fact]
+    public async Task A_run_that_declared_no_backend_is_excluded_and_COUNTED()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        world.Run(BackendDeclaration.None, "polly@v1#aaaa", 0.9);
+
+        var view = (await Build(world)).Ok();
+
+        // Folding it in would attach a measurement to hardware nobody showed did the work. Dropping it
+        // silently would make the population unknowable — so it is named.
+        view.Scopes.Single().Arms.Should().ContainSingle().Which.Arm.Should().Be(Wsl);
+        view.Excluded.Should().ContainSingle().Which.Should().Contain("1 run(s) declared no compute backend");
+    }
+
+    [Fact]
+    public async Task No_backend_anywhere_says_the_engine_must_ECHO_rather_than_that_nothing_ran()
+    {
+        var world = World();
+        world.Run(BackendDeclaration.None, "polly@v1#aaaa", 0.9);
+
+        var view = (await Build(world)).Ok();
+
+        // The actionable sentence. Every run in the real database is in this state, and "no arm to compare"
+        // alone would send the reader looking for missing runs instead of a sidecar that says nothing.
+        view.Refusal.Should().Contain("has to ECHO");
+        view.Scopes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task One_arm_everywhere_is_a_different_refusal_from_none_declared()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        world.Run(Wsl, "polly@v1#aaaa", 0.7);
+
+        var view = (await Build(world)).Ok();
+
+        // "Nothing echoed" and "everything echoed the same thing" are opposite pieces of news: one is a
+        // wiring problem, the other means go and measure the other backend.
+        view.Refusal.Should().Contain("declared the SAME one");
+        view.Refusal.Should().NotContain("has to ECHO");
+    }
+
+    [Fact]
+    public async Task An_arm_is_told_how_many_RUNS_it_rests_on_and_not_only_how_many_legs()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        world.Run(Wsl, "polly@v1#aaaa", 0.6);
+        world.Run(Windows, "polly@v1#aaaa", 0.4);
+
+        var view = (await Build(world)).Ok();
+
+        // An average over one run and an average over five are different evidence about a backend, and a
+        // reader holding only the mean cannot tell them apart.
+        view.Scopes.Single().Arms.Single(arm => arm.Arm == Wsl).Runs.Should().Be(2);
+        view.Scopes.Single().Arms.Single(arm => arm.Arm == Windows).Runs.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_stated_baseline_gives_the_others_a_verdict()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.9);
+        world.Run(Windows, "polly@v1#aaaa", 0.3);
+
+        var view = (await Build(world, baseline: Windows)).Ok();
+
+        var wsl = view.Scopes.Single().Arms.Single(arm => arm.Arm == Wsl);
+        wsl.Proof.Should().Be(ProofState.Confirmed, "it won on both halves against the stated baseline");
+        wsl.Margin.Should().BeApproximately(0.6, 0.001);
+    }
+
+    [Fact]
+    public async Task Without_a_baseline_nothing_is_a_winner_rather_than_the_top_score_becoming_one()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.9);
+        world.Run(Windows, "polly@v1#aaaa", 0.3);
+
+        var view = (await Build(world)).Ok();
+
+        // A comparison never nominates a baseline by score: an arm that is the baseline BECAUSE it won
+        // cannot then be beaten, and the verdict would be circular.
+        view.Scopes.Single().Arms.Should().OnlyContain(arm => arm.Proof == ProofState.NotAWinner);
+        view.Scopes.Single().Baseline.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_baseline_this_scope_never_measured_is_not_a_baseline()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.9);
+        world.Run(Windows, "polly@v1#aaaa", 0.3);
+
+        var view = (await Build(world, baseline: "wsl-to-windows/directml/890M")).Ok();
+
+        // Otherwise every arm silently goes unjudged, which reads as "nothing won" rather than as "the
+        // baseline you named is not in this comparison".
+        view.Scopes.Single().Baseline.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_arm_with_too_few_legs_shows_its_average_and_withholds_the_RANKING()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, questions: 4);
+        world.Run(Windows, "polly@v1#aaaa", 0.4, questions: 1);
+
+        var view = (await Build(world, baseline: Wsl)).Ok();
+
+        var scope = view.Scopes.Single();
+        scope.RankingRefusal.Should().Contain("1 leg(s)").And.Contain("below the 2");
+        scope.Arms.Should().HaveCount(2, "the averages are present either way — only the ranking is withheld");
+    }
+
+    [Fact]
+    public async Task A_report_without_a_metric_is_refused_rather_than_given_a_default()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+
+        var refused = await ArmComparison.BuildAsync(
+            world, world, new ArmComparisonRequest(string.Empty), Ct);
+
+        refused.Should().BeOfType<Outcome<ArmComparisonView>.Fail>()
+            .Which.Reason.Should().Contain("name the metric");
+    }
+
+    [Fact]
+    public async Task Both_halves_are_derived_per_leg_so_an_unmeasured_half_is_not_a_zero()
+    {
+        var world = World();
+
+        // One question only. Whichever half the hash puts it in, the OTHER half has no leg at all.
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, questions: 1);
+        world.Run(Windows, "polly@v1#aaaa", 0.8, questions: 1);
+
+        var arm = (await Build(world)).Ok().Scopes.Single().Arms.First();
+
+        (arm.Selection.Measured ^ arm.HeldOut.Measured).Should().BeTrue(
+            "exactly one half holds the single question; the other must say UNMEASURED rather than 0");
+    }
+
+    // ---- scaffolding -------------------------------------------------------------------------------
+
+    private Task<Outcome<ArmComparisonView>> Build(ArmWorld world, string baseline = "") =>
+        ArmComparison.BuildAsync(world, world, new ArmComparisonRequest(Metric, Baseline: baseline), Ct);
+
+    private static ArmWorld World() => new();
+}
+
+/// <summary>Runs and their legs, held as values. Both ports on one object because a comparison reads runs and
+/// results together and a test that scripted them apart could describe a world where they disagree.</summary>
+internal sealed class ArmWorld : IRunStore, IResultStore
+{
+    private readonly List<BenchRun> _runs = [];
+    private readonly List<MetricLeg> _legs = [];
+
+    public BenchRun Run(string arm, string suiteStamp, double value, int questions = 4) =>
+        Run(BackendDeclaration.Read(arm), suiteStamp, value, questions);
+
+    public BenchRun Run(BackendDeclaration backend, string suiteStamp, double value, int questions = 4)
+    {
+        var run = BenchRun.Planned(
+            "arms",
+            MeasurementTarget.At(
+                RepoUrl.Parse("https://example.invalid/x.git").Ok(),
+                CommitSha.Parse(new string('c', 40)).Ok()),
+            new EngineRef(EngineKind.Qln, "http://localhost:5080", "1.0", "fp") { Backend = backend },
+            suiteStamp,
+            new DateTimeOffset(2026, 8, 20, 12, 0, 0, TimeSpan.Zero));
+
+        _runs.Add(run);
+        _legs.AddRange(Enumerable.Range(1, questions).Select(i => new MetricLeg(run.Id, $"q{i}", value)));
+
+        return run;
+    }
+
+    public Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BenchRun>>([.. _runs.Take(limit)]);
+
+    public Task<IReadOnlyList<MetricLeg>> LegsAsync(
+        IReadOnlyList<Guid> runIds, string metric, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<MetricLeg>>(
+            metric == "Anchor recall" ? [.. _legs.Where(leg => runIds.Contains(leg.RunId))] : []);
+
+    // Everything else. A comparison reads recent runs and their scored legs; a double that quietly answered
+    // more would hide one that had started doing more.
+    public Task<Outcome<BenchRun>> LoadAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("an arm comparison reads the recent list, never one run by id");
+
+    public Task<IReadOnlyList<string>> QuestionIdsAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("the halves come from the LEGS, because an arm spans runs");
+
+    public Task RecordMachineAsync(Guid runId, Bench.Domain.Trace.MachineFacts facts, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison records nothing");
+
+    public Task<Bench.Domain.Trace.MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison does not read machines yet — see the plan's open tail");
+
+    public Task<Outcome<BenchRun>> CreateAsync(BenchRun run, IReadOnlyList<RunCell> cells, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison creates no runs");
+
+    public Task<Outcome<RunCell>> ClaimNextAsync(Guid runId, WorkerIdentity owner, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison claims no cells");
+
+    public Task<Outcome<RunCell>> SettleAsync(Guid cellId, WorkerIdentity owner, LegOutcome outcome, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison settles no cells");
+
+    public Task<SweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison does not sweep");
+
+    public Task<RunProgress> ProgressAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison reads results, not progress");
+
+    public Task<IReadOnlyList<MetricByDimension>> AverageByAsync(
+        Guid runId, ReportDimension dimension, string metric, QuestionScope scope, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("that is the single-run report's aggregate");
+
+    public Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
+        Guid runId, string metric, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("that is the single-run report's discrimination");
+
+    public Task<IReadOnlyList<Bench.Domain.Trace.LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison does not read the sampler yet");
+
+    public Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison counts legs per arm, not per run");
+
+    public Task<Outcome<LegResult>> SaveAsync(LegResult result, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison writes no results");
+
+    public Task<SnippetPruning> PruneHitSnippetsAsync(DateTimeOffset olderThan, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison prunes nothing");
+
+    public Task<bool> HasResultAsync(Guid cellId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison does not re-enter a leg");
+
+    public Task<IReadOnlyList<LegResult>> ForRunAsync(Guid runId, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison aggregates rather than hydrating — that is the point");
+
+    public Task<IReadOnlyList<JudgeableLeg>> WithoutMetricAsync(Guid runId, string metric, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison is not the judge lane");
+
+    public Task<Outcome<int>> AppendMetricsAsync(Guid resultId, IReadOnlyList<StoredMetric> metrics, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison appends no metrics");
+}

@@ -81,4 +81,30 @@ public static class RunReportContract
         report.TooClose,
         report.Unusable,
         report.Describe);
+
+    /// <summary>The arm comparison, flattened. Verdicts travel as NAMES for the same reason the run report's
+    /// do: an ordinal changes meaning the day somebody inserts an enum member, and this object is published
+    /// beside the results.</summary>
+    public static ArmComparisonDto From(ArmComparisonView view) => new(
+        view.MetricName,
+        [.. view.Scopes.Select(From)],
+        view.Excluded,
+        view.Refusal);
+
+    private static ScopedArmsDto From(ScopedArms scope) => new(
+        scope.TargetCanonical,
+        scope.SuiteStamp,
+        [.. scope.Arms.Select(From)],
+        scope.Baseline,
+        scope.RankingRefusal);
+
+    private static ArmAverageDto From(ArmAverage arm) => new(
+        arm.Arm,
+        arm.Average,
+        arm.Legs,
+        arm.Runs,
+        From(arm.Selection),
+        From(arm.HeldOut),
+        arm.Proof.ToString(),
+        arm.Margin);
 }

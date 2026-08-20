@@ -1,0 +1,25 @@
+@* A kind of test that is declared but not built. It says WHAT will live here and which plan owns it, because
+   "coming soon" tells a reader nothing they can act on — and because a tab that rendered empty would read as
+   a page that failed to load rather than as work not done. *@
+
+<div class="alert alert-secondary">
+    <strong>@Kind — not built yet.</strong>
+    @Will
+    @if (Plan.Length > 0)
+    {
+        <div class="mt-2"><small class="text-body-secondary">Owned by <code>@Plan</code>.</small></div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>What this tab will hold once it exists. A sentence, not a promise about timing.</summary>
+    [Parameter, EditorRequired]
+    public string Will { get; set; } = string.Empty;
+
+    /// <summary>The plan document that owns it, so a reader can go and read the design rather than guess.</summary>
+    [Parameter]
+    public string Plan { get; set; } = string.Empty;
+}

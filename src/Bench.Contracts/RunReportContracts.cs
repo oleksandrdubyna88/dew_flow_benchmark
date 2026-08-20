@@ -155,3 +155,41 @@ public static class WellKnownMetrics
         DiagnosisSymptomOnly,
     ];
 }
+
+/// <summary>The compute-backend comparison, as the wire sees it — <c>bench arms</c> and the API answer this
+/// same shape, for the reason <see cref="RunReportDto"/> already states.
+/// <para>
+/// <b>A LIST of scoped comparisons rather than one table.</b> Two runs are only comparable inside one
+/// target-and-suite scope, and real databases span several; refusing whenever they do is correct and useless,
+/// so each scope is its own comparison and nothing crosses a boundary.
+/// </para></summary>
+/// <param name="Excluded">Runs left out, with the reason. A comparison that silently dropped rows would be a
+/// comparison of an unknown population.</param>
+/// <param name="Refusal">Empty when some scope holds two arms. Otherwise why there is nothing to compare —
+/// which is a different piece of news from "these cannot be compared".</param>
+public sealed record ArmComparisonDto(
+    string MetricName,
+    IReadOnlyList<ScopedArmsDto> Scopes,
+    IReadOnlyList<string> Excluded,
+    string Refusal);
+
+/// <param name="RankingRefusal">Empty when these arms may be ranked; otherwise what decided it. The averages
+/// are present either way.</param>
+public sealed record ScopedArmsDto(
+    string TargetCanonical,
+    string SuiteStamp,
+    IReadOnlyList<ArmAverageDto> Arms,
+    string Baseline,
+    string RankingRefusal);
+
+/// <param name="Runs">How many runs this average rests on. Beside the leg count because an average over one
+/// run and one over five are different evidence about a backend.</param>
+public sealed record ArmAverageDto(
+    string Arm,
+    double Average,
+    int Legs,
+    int Runs,
+    HalfReadingDto Selection,
+    HalfReadingDto HeldOut,
+    string Proof,
+    double Margin);

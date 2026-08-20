@@ -174,27 +174,12 @@ public static class RunReport
         });
     }
 
-    /// <summary>The suite's two halves, as the question ids each holds.
-    /// <para>
-    /// Split on the suite ID rather than its stamp (<see cref="Suite.IdOf"/>): the assignment must survive a
-    /// new frozen version, or a comparison spanning versions would silently be a comparison of two different
-    /// splits. A question the hash refuses lands in neither half and is reported by the counts not adding up
-    /// to the run's question count, which is honest — inventing a half for it would put an unassignable
-    /// question on the side that happened to be checked first.
-    /// </para></summary>
-    private static SplitHalves Halves(string suiteStamp, IReadOnlyList<string> questions)
-    {
-        var suiteId = Suite.IdOf(suiteStamp);
-        var assigned = questions
-            .Select(q => (Question: q, Half: SeedSplit.Assign(suiteId, q)))
-            .Where(x => x.Half is Outcome<SplitHalf>.Ok)
-            .Select(x => (x.Question, Half: ((Outcome<SplitHalf>.Ok)x.Half).Value))
-            .ToList();
+    /// <summary>The suite's halves. The rule is <see cref="ArmVerdict.Halves"/>, shared with the arm
+    /// comparison: one implementation of a split, or two reports disagree about which half a question is in.
+    /// </summary>
+    private static SplitHalves Halves(string suiteStamp, IReadOnlyList<string> questions) =>
+        ArmVerdict.Halves(suiteStamp, questions);
 
-        return new SplitHalves(
-            [.. assigned.Where(x => x.Half == SplitHalf.Selection).Select(x => x.Question)],
-            [.. assigned.Where(x => x.Half == SplitHalf.HeldOut).Select(x => x.Question)]);
-    }
 
     private static async Task<DimensionReport> DimensionAsync(
         IResultStore results,
@@ -247,37 +232,19 @@ public static class RunReport
         return new ArmReading(arm.Dimension, arm.Average, arm.Legs, selection, heldOut, verdict.State, verdict.Margin);
     }
 
-    /// <summary>Whether an arm may be announced, and by how much it beat the baseline where it did.
-    /// <para>
-    /// The baseline is not compared with itself, and an arm with no baseline to beat is
-    /// <see cref="ProofState.NotAWinner"/> rather than a winner by default. A half neither side measured
-    /// yields no win on that half — <b>never a loss</b>: an absent measurement and a defeat are different
-    /// facts, and folding one into the other is how an unrun arm acquires a verdict.
-    /// </para></summary>
+    /// <summary>The verdict. Lives in <see cref="ArmVerdict"/> because the arm comparison asks the same
+    /// question of a different population -- one run's variants against several runs' compute backends -- and a
+    /// second copy of a rule about FALSE WINNERS is the one this repository can least afford to let drift.
+    /// </summary>
     private static (ProofState State, double Margin) Proof(
         string arm,
         string baseline,
         HalfReading selection,
         HalfReading heldOut,
         HalfReading baselineSelection,
-        HalfReading baselineHeldOut)
-    {
-        if (baseline.Length == 0 || arm == baseline)
-        {
-            return (ProofState.NotAWinner, 0);
-        }
+        HalfReading baselineHeldOut) =>
+        ArmVerdict.Of(arm, baseline, selection, heldOut, baselineSelection, baselineHeldOut);
 
-        var wonOnSelection = Beat(selection, baselineSelection);
-        var wonOnHeldOut = Beat(heldOut, baselineHeldOut);
-
-        return (SeedSplit.Proof(wonOnSelection, wonOnHeldOut), Margin(heldOut, baselineHeldOut));
-    }
-
-    private static bool Beat(HalfReading arm, HalfReading baseline) =>
-        arm.Measured && baseline.Measured && arm.Average > baseline.Average;
-
-    private static double Margin(HalfReading arm, HalfReading baseline) =>
-        arm.Measured && baseline.Measured ? arm.Average - baseline.Average : 0;
 
     private static HalfReading Reading(IReadOnlyList<MetricByDimension> half, string arm) =>
         half.Where(x => x.Dimension == arm)
@@ -364,5 +331,4 @@ public static class RunReport
     /// into naming the control arm two different things.</summary>
     private const string ControlArm = "-";
 
-    private readonly record struct SplitHalves(IReadOnlyList<string> Selection, IReadOnlyList<string> HeldOut);
 }

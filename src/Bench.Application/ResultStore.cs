@@ -10,6 +10,13 @@ namespace Bench.Application;
 /// two hundred are different claims, and the report must be able to refuse to rank the first.</param>
 public readonly record struct MetricByDimension(string Dimension, double Average, int Legs);
 
+/// <summary>One scored leg, reduced to what an arm comparison can use.</summary>
+/// <param name="RunId">Which run it came from. The arm is a property of the RUN, so this is the join key —
+/// and it is why a per-run aggregate cannot answer the arm question at all.</param>
+/// <param name="QuestionId">Which question. Carried because the selection/held-out half is derived from it by
+/// a hash, above the database, so the split needs the id rather than the number alone.</param>
+public readonly record struct MetricLeg(Guid RunId, string QuestionId, double Value);
+
 /// <summary>Which axis of the measurement tuple an aggregate groups by.
 /// <para>
 /// A parameter rather than four near-identical methods on the port. There were two —
@@ -202,6 +209,16 @@ public interface IResultStore
     /// the aggregate itself.
     /// </para></summary>
     Task<IReadOnlyList<LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken);
+
+    /// <summary>Every scored leg of SEVERAL runs, as bare numbers — what an arm comparison folds.
+    /// <para>
+    /// Cross-run by necessity rather than by ambition: the compute backend is recorded on the run, so two
+    /// arms are two runs and no per-run aggregate can put them beside each other. It returns legs rather
+    /// than averages because the half a leg belongs to is derived from its question id by a hash, so the
+    /// split cannot happen in the database.
+    /// </para></summary>
+    Task<IReadOnlyList<MetricLeg>> LegsAsync(
+        IReadOnlyList<Guid> runIds, string metricName, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken);

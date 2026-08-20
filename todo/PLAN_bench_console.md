@@ -1,6 +1,8 @@
 # PLAN — the benchmark console, mounted as DewFlow's *Benchmarking* section
 
-> Status: **steps 1-5 implemented 2026-08-20; two items of step 5 open.** The console exists, is tested
+> Status: **steps 1-6 implemented 2026-08-20; two items open.** Step 6 (added the same day, at the
+> operator's correction) restructured the section into the three KINDS of test -- RAG, MCP, Sidecar -- with
+> Runs and Arms as views INSIDE a kind, and built the cross-run arm comparison the sidecar question needs. The console exists, is tested
 > (29 new tests: 7 pure grouping, 6 client, 10 rendered pages, 2 route mounting, 2 summary contract, 2
 > metric names -- the suite went 1010 to 1039) and is wired into the DewFlow daemon as its **Benchmarking** section. Open: the
 > sibling-path `ProjectReference` is not yet the submodule this should end at (pinning a commit needs the
@@ -124,3 +126,49 @@ reader for it and nothing more: nothing in `Bench.Api` starts a run, and that bo
 - [ ] DewFlow's left menu shows **Benchmarking**, and both pages render live against a real run.
 - [ ] The console shows the arms side by side and **refuses to rank them**, naming the reason on screen.
 - [ ] The whole suite passes, run as the executable, never `dotnet test`.
+
+---
+
+## Step 6 — the three kinds, and the comparison itself (added 2026-08-20)
+
+The tabs are **kinds of test**, not views of one: `RAG`, `MCP`, `Sidecar`. Runs and Arms live INSIDE a kind,
+because they mean different things in each — an arm is a compute backend for the sidecar question and a tool
+lane for the MCP one, and one flat list across all three is a list nobody can read a comparison out of. RAG
+and MCP are declared before they are built: the structure is the claim about what this section is for, and a
+tab that appears later reads as a feature nobody planned. Each says what will live there and which plan owns
+it, because "coming soon" is not actionable and an empty tab reads as a page that failed to load.
+
+### What the comparison had to become
+
+The §3.9 exclusion was right about the RULE and wrong about the shape. Refusing whenever the runs span more
+than one `ComparisonScope` is correct and useless: the nine real runs here span three suites and two targets,
+so the honest answer would have been a permanent blank. So the scope is applied by **partitioning** — each
+target-and-suite pair becomes its own comparison, nothing crosses a boundary, and a scope holding one arm
+says so. The scope renders as the card HEADER over the table it licenses, asserted structurally.
+
+Three refusals that must never collapse into one, because they send a reader to three different places:
+
+| what happened | what it means |
+|---|---|
+| no run declared a backend | a WIRING problem — the engine has to echo host/provider/device |
+| every run declared the same one | go and measure the other backend |
+| a scope holds one arm | nothing to rank it against *here* |
+
+An undeclared run is **excluded and counted**, never folded in: attributing a measurement to hardware nobody
+showed did the work is the error indistinguishable from a correct result afterwards. And no baseline is
+nominated by score — an arm that became the baseline BECAUSE it won cannot then be beaten.
+
+### Reuse rather than a second copy
+
+`ComparisonScope` and `MeasurementTuple.ScopeOf` already existed. `SeedSplit.Proof` already existed. What did
+NOT exist was one home for the verdict, so `RunReport`'s private `Proof`/`Beat`/`Margin`/`Halves` were
+**extracted** into `ArmVerdict` and both callers now share them — a second copy of a rule about false winners
+is the last thing this repository can afford to let drift. `RunReportTests` 13/13 unchanged across the
+extraction, which is what makes it a refactor rather than a rewrite. `SampleAsync` was **widened** from one
+run id to a list rather than copied, so the "drop a reading that is not a number" rule stays in one place.
+
+### Verified live
+
+All five routes answer 200 through the daemon, and `GET /api/bench/arms?metric=Anchor recall` returns the
+actionable answer rather than an empty table: nine runs excluded with the reason, and a refusal naming exactly
+what has to happen next. Suite 1066 passed / 11 skipped / 0 failed.

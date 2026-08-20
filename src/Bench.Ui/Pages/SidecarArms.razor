@@ -1,0 +1,124 @@
+@page "/benchmarking/sidecar/arms"
+
+<PageTitle>Benchmarking · Sidecar · Arms</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+<SidecarViews />
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <label class="form-label" for="metric">Metric</label>
+        <select class="form-select" id="metric" value="@Metric" @onchange="ChooseMetricAsync" disabled="@Loading">
+            @* No option pre-selected: a default would make every number below it about a choice nobody made. *@
+            <option value="">— choose a metric —</option>
+            @foreach (var name in WellKnownMetrics.All)
+            {
+                <option value="@name">@name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label" for="baseline">Baseline</label>
+        <select class="form-select" id="baseline" value="@Baseline" @onchange="ChooseBaselineAsync"
+                disabled="@(Loading || Arms.Count == 0)">
+            @* A control, because nominating one is a DECISION. An arm that became the baseline because it
+               scored highest could not then be beaten, and every verdict would be circular. *@
+            <option value="">— none, so no arm is a winner —</option>
+            @foreach (var arm in Arms)
+            {
+                <option value="@arm">@arm</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (Metric.Length == 0)
+{
+    <div class="alert alert-secondary">Name the metric to compare on — there is no default.</div>
+}
+else if (!Comparison.Available)
+{
+    <div class="alert alert-warning">@(Comparison.Detail.Length > 0 ? Comparison.Detail : "Reading…")</div>
+}
+else
+{
+    var comparison = Comparison.Value!;
+
+    @if (comparison.Refusal.Length > 0)
+    {
+        @* Above everything, and never merged with the per-scope refusal: "no run echoed a backend" is a
+           wiring problem, "every run echoed the same one" means go and measure the other backend. *@
+        <div class="alert alert-info"><strong>Nothing to compare.</strong> @comparison.Refusal</div>
+    }
+
+    @if (comparison.Excluded.Count > 0)
+    {
+        <div class="alert alert-secondary">
+            <strong>Left out.</strong>
+            <ul class="mb-0 mt-2">
+                @foreach (var excluded in comparison.Excluded)
+                {
+                    <li>@excluded</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @foreach (var scope in comparison.Scopes)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                @* The scope is a header rather than a footnote: it is the pair that must be identical before
+                   any two numbers below may be read against each other. *@
+                <div><code>@scope.SuiteStamp</code></div>
+                <small class="text-body-secondary text-break">@scope.TargetCanonical</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Arm</th>
+                            <th scope="col">Average</th>
+                            <th scope="col">Legs</th>
+                            <th scope="col">Runs</th>
+                            <th scope="col">Selection half</th>
+                            <th scope="col">Held-out half</th>
+                            <th scope="col">Verdict</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var arm in scope.Arms)
+                        {
+                            <tr>
+                                <td><code>@arm.Arm</code>@if (arm.Arm == scope.Baseline)
+                                    {
+                                        <span class="badge text-bg-light ms-1">baseline</span>
+                                    }</td>
+                                <td>@arm.Average.ToString("0.###")</td>
+                                <td>@arm.Legs</td>
+                                <td>@arm.Runs</td>
+                                <td><small>@Half(arm.Selection)</small></td>
+                                <td><small>@Half(arm.HeldOut)</small></td>
+                                <td>
+                                    @if (arm.Proof != "NotAWinner")
+                                    {
+                                        <span class="badge @Badge(arm.Proof)">@arm.Proof</span>
+                                    }
+                                    @if (arm.Proof == "Confirmed")
+                                    {
+                                        <small class="ms-1">@arm.Margin.ToString("+0.###;-0.###;0")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (scope.RankingRefusal.Length > 0)
+            {
+                <div class="card-footer text-body-secondary"><small>@scope.RankingRefusal</small></div>
+            }
+        </div>
+    }
+}

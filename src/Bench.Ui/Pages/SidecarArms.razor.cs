@@ -1,0 +1,75 @@
+using Bench.Contracts;
+using Bench.Ui.Services;
+using Microsoft.AspNetCore.Components;
+
+namespace Bench.Ui.Pages;
+
+/// <summary>The compute backends, side by side — the question this benchmark was pointed at.
+///
+/// <para><b>Scoped, and the scope is on screen.</b> Two runs are only comparable inside one target-and-suite
+/// pair, so this renders one table PER scope rather than one table of everything. A single table would be the
+/// project's most expensive recorded mistake with a tidier presentation: a series measured over weeks turned
+/// out to have been scored against a corpus rebuilt underneath it, and every conclusion went back to being a
+/// hypothesis.</para>
+///
+/// <para><b>No baseline is chosen for the reader.</b> Without one every arm is <c>NotAWinner</c>, which is
+/// correct rather than unhelpful: an arm that becomes the baseline BECAUSE it scored highest cannot then be
+/// beaten, and the verdict would be circular. Picking one is a decision, so it is a control.</para>
+/// </summary>
+public partial class SidecarArms(BenchConsoleApi api) : ComponentBase
+{
+    private Read<ArmComparisonDto> Comparison { get; set; } = Read<ArmComparisonDto>.Unasked;
+
+    /// <summary>Empty until the reader picks — the same no-default rule the run report holds to.</summary>
+    private string Metric { get; set; } = string.Empty;
+
+    private string Baseline { get; set; } = string.Empty;
+
+    private bool Loading { get; set; }
+
+    private async Task ChooseMetricAsync(ChangeEventArgs changed)
+    {
+        Metric = changed.Value?.ToString() ?? string.Empty;
+        await ReadAsync();
+    }
+
+    private async Task ChooseBaselineAsync(ChangeEventArgs changed)
+    {
+        Baseline = changed.Value?.ToString() ?? string.Empty;
+        await ReadAsync();
+    }
+
+    private async Task ReadAsync()
+    {
+        if (Metric.Length == 0)
+        {
+            return;
+        }
+
+        Loading = true;
+        Comparison = await api.GetArmsAsync(Metric, Baseline);
+        Loading = false;
+    }
+
+    /// <summary>Every arm the comparison found, for the baseline control. Drawn from the ANSWER rather than
+    /// from a fixed list: the arms that exist are whatever the runs echoed, and offering one nothing was
+    /// measured on would leave the reader wondering why it changed nothing.</summary>
+    private IReadOnlyList<string> Arms =>
+        Comparison.Value is null
+            ? []
+            : [.. Comparison.Value.Scopes.SelectMany(scope => scope.Arms).Select(arm => arm.Arm).Distinct().Order()];
+
+    /// <summary>The verdict's colour. <c>Unproven</c> is a WARNING and never a paler success: an arm that won
+    /// only on the half that chose it is the shape of every false winner.</summary>
+    private static string Badge(string proof) =>
+        proof switch
+        {
+            "Confirmed" => "text-bg-success",
+            "Unproven" => "text-bg-warning",
+            "Suspicious" => "text-bg-danger",
+            _ => "text-bg-secondary",
+        };
+
+    private static string Half(HalfReadingDto half) =>
+        half.Measured ? $"{half.Average:0.###} ({half.Legs} leg(s))" : "not measured";
+}

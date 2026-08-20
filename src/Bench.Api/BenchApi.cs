@@ -40,6 +40,11 @@ public static class BenchApi
 
         group.MapGet("/runs/{id:guid}/report", ReportAsync);
 
+        // The compute-backend comparison. Its own route rather than a mode of the report, because it is a
+        // different SHAPE: the report answers about one run and this answers across runs, and folding them
+        // would give one endpoint two meanings of "the metric".
+        group.MapGet("/arms", ArmsAsync);
+
         return app;
     }
 
@@ -76,5 +81,40 @@ public static class BenchApi
         return built.Match(
             view => Results.Ok(RunReportContract.From(view)),
             reason => Results.NotFound(new ProblemDto(reason)));
+    }
+
+    /// <summary>The compute-backend comparison, across runs.
+    /// <para>
+    /// <b>400 and never 404.</b> There is no id here to be missing: the request names a metric and a window,
+    /// so the only failure is a malformed request. A comparison that found nothing to compare is a SUCCESS
+    /// carrying a refusal — the caller asked a well-formed question and the honest answer is "no run echoed a
+    /// backend", which a 404 would turn into "your URL is wrong".
+    /// </para>
+    /// <para>
+    /// A named method rather than a lambda, so the decision above can be asserted without standing up a host.
+    /// </para></summary>
+    public static async Task<IResult> ArmsAsync(
+        IRunStore runs,
+        IResultStore results,
+        CancellationToken cancellationToken,
+        string? metric = null,
+        int runWindow = 50,
+        int minLegs = 2,
+        string? baseline = null)
+    {
+        if (string.IsNullOrEmpty(metric))
+        {
+            return Results.BadRequest(new ProblemDto(ArmComparison.NoMetricNamed));
+        }
+
+        var built = await ArmComparison.BuildAsync(
+            runs,
+            results,
+            new ArmComparisonRequest(metric, runWindow, minLegs, baseline ?? string.Empty),
+            cancellationToken);
+
+        return built.Match(
+            view => Results.Ok(RunReportContract.From(view)),
+            reason => Results.BadRequest(new ProblemDto(reason)));
     }
 }
