@@ -133,7 +133,15 @@ public static class DiagnosisScoring
         AnchorMatching.SamePath(named.Path, truth.FilePath)
         && (AnchorMatching.SameMember(named.Member, truth.MemberKey)
             || (!named.Lines.IsWhole && !truth.Lines.IsWhole && Overlaps(named.Lines, truth.Lines))
-            || truth.IsWholeFile);
+            || IsWholeFileClaim(truth));
+
+    /// <summary>A truth that claims the whole file is one with NEITHER a member NOR a line span — a
+    /// deleted file, or a genuinely file-level expectation. <see cref="SourceAnchor.IsWholeFile"/> asks
+    /// only about the member, which is right for retrieval (a hit returns a region of a file) and wrong
+    /// here: FixDiff-derived truth carries a span and no member name, and reading it as whole-file
+    /// would let "somewhere in this file" answer for a specific touched region.</summary>
+    private static bool IsWholeFileClaim(SourceAnchor truth) =>
+        truth.MemberKey.Length == 0 && truth.Lines.IsWhole;
 
     /// <summary>Overlap, not coverage: a diagnosis pointing into any part of the touched span has found
     /// the place. Coverage is the hit-matching rule because a HIT returns code; a diagnosis only points.</summary>

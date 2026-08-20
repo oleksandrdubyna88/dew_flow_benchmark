@@ -270,6 +270,18 @@ Each step ships alone, tests green, before the next.
    reference-diff ref and hidden-test extraction; the three gates run attended; candidates land
    `Proposed` and are vetted by the existing panel. Meets `PLAN_code_lane.md` §3 at `CodeTaskJson` —
    named there when this lands.
+
+   **The pure half is DONE 2026-08-20**: `FixDiff` (`Bench.Domain/Authoring/FixDiff.cs`) parses a
+   unified diff into per-file OLD-side change spans — the a-side, because the solver investigates the
+   tree at `baseCommit` and a diagnosis names lines in THAT numbering — and derives the two things the
+   arm needs: `CausalAnchors` (non-test files; a created file is no anchor at all, a deleted one is a
+   whole-file claim, a rename anchors under its old name, far-apart hunks stay separate spans) and
+   `TestFiles` (the hidden-test candidates, path-heuristic classification stated in place). 9 tests.
+   Building it caught a real scoring defect before it shipped: `SourceAnchor.IsWholeFile` asks only
+   about the member, so FixDiff-shaped truth (span, no member name) read as a whole-file claim and a
+   bare file name reached it — watched RED (`recall 1` where the test demanded `0`), fixed with
+   `IsWholeFileClaim` (member AND lines both absent), suite 942/0/9. What remains of this step is the
+   verb itself: git extraction at `F`/`F~1`, the statement scrub, the gates, and the bank landing.
 4. **Phases actually start** — `LegRunner` materialises and drives `PhasePlan` for `TaskKind.Fix`
    arms. Shared prerequisite with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
 5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the

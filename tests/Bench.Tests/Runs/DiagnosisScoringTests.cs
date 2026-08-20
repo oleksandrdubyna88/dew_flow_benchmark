@@ -104,6 +104,22 @@ public sealed class DiagnosisScoringTests
     }
 
     [Fact]
+    public void A_span_only_truth_is_reached_by_lines_and_never_by_a_bare_file_claim()
+    {
+        // The FixDiff shape: derived ground truth carries a path and a span, no member name.
+        var truth = SourceAnchor.Member("src/F.cs", string.Empty, new LineSpan(50, 60), Commit);
+
+        var byFileAlone = DiagnosisScoring.Score(
+            Parsed(new DiagnosisAnchor("src/F.cs", string.Empty, LineSpan.Whole)), [truth], []);
+        var byLines = DiagnosisScoring.Score(
+            Parsed(new DiagnosisAnchor("src/F.cs", string.Empty, new LineSpan(55, 58))), [truth], []);
+
+        Value(byFileAlone, DiagnosisScoring.AnchorRecall).Should().Be(
+            "0", "a truth with a line claim is not a whole-file truth, and naming the file alone must not reach it");
+        Value(byLines, DiagnosisScoring.AnchorRecall).Should().Be("1");
+    }
+
+    [Fact]
     public void A_member_is_matched_whole_never_by_suffix()
     {
         var truth = SourceAnchor.Member("src/R.cs", "Retry", LineSpan.Whole, Commit);
