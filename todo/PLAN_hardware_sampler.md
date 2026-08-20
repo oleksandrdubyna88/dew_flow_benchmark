@@ -1,6 +1,10 @@
 # PLAN — the machine a number came off, recorded so the number stays readable
 
-> Status: **plan only, 2026-08-19 — nothing implemented.** Scope: `Bench.Domain/Trace` (the sample shapes and
+> Status: **OPEN — steps 1 to 3 shipped 2026-08-19/20; the sampler itself and the report are the work.**
+> A run now records the machine it measured on: the shapes and their fingerprint, a probe that reads this
+> host, and `run_machines` written by `bench run` at start. What is missing is the DYNAMIC half — nothing
+> samples VRAM, RAM or utilisation per leg yet — and the report does not name a fingerprint difference.
+> Originally: Scope: `Bench.Domain/Trace` (the sample shapes and
 > the machine fingerprint), `Bench.Application` (the sampler port, already declared, and a run-start probe),
 > `Bench.Infrastructure` (the adapters — WMI, `nvidia-smi`/`rocm-smi`, `/proc`, the qln runtime read),
 > `hosts/Cli`, one migration. Founding-plan step 7 (`PLAN_rag_bench_repo.md` §5.1), raised by the operator
@@ -153,12 +157,22 @@ failure never fails a leg — it makes the reading *not captured*, which is a st
 
 ## 4. Build order
 
-1. **The shapes** — `MachineFacts` (static, hashed), `SampleSummary` (min/max/mean/count, captured-aware),
-   `Attribution` on the VRAM reading. Domain only, no IO, fully testable.
-2. **The static probe** — one read per run, per platform. Windows: WMI + registry + `powercfg`; Linux/WSL:
-   `/proc/cpuinfo`, `/proc/meminfo`, `/proc/sys/kernel/osrelease`, `findmnt`, the governor. Reuses
-   `GpuProbe`'s script rather than writing a second one — that decision is §5's open question.
-3. **The migration** — `run_machine` (one row per run) and the leg summary columns.
+1. ~~**The shapes.**~~ **IMPLEMENTED 2026-08-19.** `MachineFacts` with its fingerprint, `SampleSummary`,
+   `VramReading` + `VramAttribution`. Domain only. The fingerprint excludes free space — the trap it was
+   most likely to fall into, since a fingerprint that moved by the minute would give every run its own
+   machine and destroy the comparison it exists to enable.
+2. ~~**The static probe.**~~ **IMPLEMENTED 2026-08-19.** `IMachineProbe` + `MachineProbe`, with the pure
+   parsers in `MachineText` tested against output captured from this machine. Two traps the real output
+   taught it, both now tested: `wsl.exe --version` emits UTF-16LE, and `/proc/meminfo` under WSL reports the
+   VM's allocation rather than the machine's. The Windows GPU read is ported from `GpuProbe`
+   (§7 question 1, answered in favour of porting) and demonstrated live: the registry returns
+   34 208 743 424 bytes for the R9700 where WMI's `AdapterRAM` would say 4 GiB for it and the integrated
+   890M alike. Left unread rather than guessed: the physical core count and cluster size on Linux.
+3. ~~**The migration.**~~ **IMPLEMENTED 2026-08-20.** `run_machines`, keyed by the run, facts as JSON with
+   the fingerprint lifted out and indexed, written ONCE — a second read cannot re-label a run in flight.
+   Wired into `bench run` in the same slice, because a table nothing writes is the "built and never called"
+   pattern this repository has met three times. **Deviation:** the leg summary columns are NOT here; they
+   have no writer until step 4, and shipping columns nothing fills is that same defect.
 4. **The background sampler** — cadence, drain-into-leg, failure-is-not-captured.
 5. **The report** — the fingerprint comparison of §3.5, and the dynamic summaries beside the metric.
 
