@@ -1,15 +1,19 @@
 # PLAN — the benchmark console, mounted as DewFlow's *Benchmarking* section
 
-> Status: **steps 1-6 implemented 2026-08-20; two items open.** Step 6 (added the same day, at the
-> operator's correction) restructured the section into the three KINDS of test -- RAG, MCP, Sidecar -- with
-> Runs and Arms as views INSIDE a kind, and built the cross-run arm comparison the sidecar question needs. The console exists, is tested
-> (29 new tests: 7 pure grouping, 6 client, 10 rendered pages, 2 route mounting, 2 summary contract, 2
-> metric names -- the suite went 1010 to 1039) and is wired into the DewFlow daemon as its **Benchmarking** section. Open: the
-> sibling-path `ProjectReference` is not yet the submodule this should end at (pinning a commit needs the
-> benchmark pushed to its remote, which this session may not do), and nothing has yet rendered it LIVE --
-> that needs `ConnectionStrings:bench` on the daemon and a restart, both of which are the operator's
-> environment rather than code. Scope: `src/Bench.Ui`, a route-prefix change in `src/Bench.Api`, and the
-> mount in `dew_flow_rag_qln`.
+> Status: **steps 1-7 implemented 2026-08-20; one item open.** The console exists, is wired into the DewFlow
+> daemon as its **Benchmarking** section, and has been RENDERED LIVE against the real database — three compute
+> arms in one comparison scope, with their retrieval cost, wall time, hits/files and peak VRAM. Step 6 (added
+> at the operator's correction) made the tabs the three KINDS of test — RAG, MCP, Sidecar — with Runs and Arms
+> as views INSIDE a kind, and built the cross-run comparison the sidecar question needs; step 7 added the cost
+> columns, a metric list asked of the data, and the engine identity that `EngineKind.ToString()` was hiding.
+>
+> **Open, and only this:** the `ProjectReference` from `dew_flow_rag_qln` is a SIBLING PATH, not the submodule
+> it should end at — pinning a commit needs this repository pushed to its remote, which the session that built
+> it may not do. Until then the console builds where the two repositories sit side by side and fails loudly
+> anywhere else.
+>
+> Scope: `src/Bench.Ui`, a route-prefix change in `src/Bench.Api`, the cross-run use case in
+> `src/Bench.Application`, and the mount in `dew_flow_rag_qln`.
 >
 > Related docs: [PLAN_run_report.md](../research/PLAN_run_report.md),
 > [PLAN_variant_matrix.md](PLAN_variant_matrix.md).
@@ -172,3 +176,41 @@ run id to a list rather than copied, so the "drop a reading that is not a number
 All five routes answer 200 through the daemon, and `GET /api/bench/arms?metric=Anchor recall` returns the
 actionable answer rather than an empty table: nine runs excluded with the reason, and a refusal naming exactly
 what has to happen next. Suite 1066 passed / 11 skipped / 0 failed.
+
+---
+
+## Step 7 — the numbers a comparison is actually read for (added 2026-08-20)
+
+The first real look at the finished Arms table produced three complaints, all correct, and all of them
+about the page showing figures without saying what they are.
+
+**Quality alone made three different measurements look identical.** The arms scored zero anchor recall
+apiece over the same 13 files — and cost 2 607 ms, 8 671 ms and 16 403 ms per retrieval. A comparison that
+reports only the score says the backends are alike. So retrieval time, wall time, hits/files and peak VRAM
+sit beside the average now, and each column names its own aggregate: a mean, a sum and a max standing side
+by side unlabelled invite the reader to compare two of them as though they were the same kind of number.
+
+Retrieval is a **mean** and wall a **sum** deliberately — arms differ in leg count, so a mean answers "what
+does one retrieval cost here" while a sum ranks whichever arm ran more. VRAM is a **peak** carrying its
+sample count, because an accelerator read costs about a second on Windows and is unavailable off it: a short
+leg may catch none, and **zero samples is not zero bytes**.
+
+**The metric control offered a catalog rather than the data.** `WellKnownMetrics` is a copy of domain
+constants and cannot know what a population measured, so it offered `Tool use` and four `Diagnosis *` names
+beside retrieval runs — each a click to an empty table that reads as a broken run. It is asked of the data
+now, scoped to the runs the comparison folds. The catalog was also too NARROW: `Retrieval recall@5`,
+`recall@10` and the per-question `Answer contains '…'` metrics are recorded and none were listed.
+
+**`Qln` was `EngineKind.ToString()`.** Every engine this project can tell apart — endpoint, version, index
+fingerprint, compute backend — collapsed into one row named after the enum, which is the backend-axis defect
+reproduced one level down inside the report. Its own test caught the change.
+
+Known limit, stated rather than hidden: carrying a metric NAME is not the same as having a numeric average.
+`Retrieval first-hit rank` is offered and its table is empty, because every reading is "not surfaced" and a
+non-numeric reading is dropped by the shared rule.
+
+### The corpus width went with it, and belongs to another plan
+
+`todo/PLAN_corpus_axis_integrity.md` owns it, and it is implemented: `EmbedDimensions` as a third state, the
+engine echo (`dew_flow_rag_qln` 2b9aab4) reading the width off the COLLECTION rather than configuration, and
+a canonical form that appends it only when declared so no stored variant's hash moves.
