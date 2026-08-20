@@ -282,6 +282,16 @@ Each step ships alone, tests green, before the next.
    bare file name reached it — watched RED (`recall 1` where the test demanded `0`), fixed with
    `IsWholeFileClaim` (member AND lines both absent), suite 942/0/9. What remains of this step is the
    verb itself: git extraction at `F`/`F~1`, the statement scrub, the gates, and the bank landing.
+
+   **The git half is DONE 2026-08-20 too**: `FixHarvest.ReadAsync` (`Bench.Infrastructure/Git`) over
+   `GitCommand`, the family's one launcher — resolves any ref to the full sha, derives `base = F~1`,
+   reads the seed as the AUTHOR date kept as a calendar day (the `QuestionSeed.Written` lesson),
+   subject/body, and the `base..fix` diff `FixDiff` parses. A ROOT commit and a MERGE commit are
+   refused by name before anything is read — no buggy tree exists before the first commit, and a
+   merge's diff lands a whole branch, which would ask a solver to rediscover a feature rather than one
+   defect. Five integration tests over a temp repo and the real git. Still open in this step: the
+   statement, the gates (build red at base / green with fix — attended), the bank landing
+   (`CodeTaskJson`, meets `PLAN_code_lane.md` §3.1) and the CLI verb.
 4. **Phases actually start** — `LegRunner` materialises and drives `PhasePlan` for `TaskKind.Fix`
    arms. Shared prerequisite with `PLAN_code_lane.md` §7 step 1: built once, named in both plans.
 5. **Investigate-only for local subjects, end-to-end** — the diagnosis instruction assembled into the
