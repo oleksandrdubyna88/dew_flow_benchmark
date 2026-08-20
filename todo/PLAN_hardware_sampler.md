@@ -213,5 +213,20 @@ Steps 1–3 are useful alone: a run that records its machine and samples nothing
    `wsl.exe --version` reports. What is still unknown is the **ROCm** version: `/opt/rocm/.info/version` does
    not exist on this install, so either another path carries it or it needs `rocminfo`, which is a process
    launch on the WSL side of the boundary. Do not promise the field until one probe settles it.
-3. **Cadence default.** 2 s is a guess. It should be measured against its own cost on this machine before it
-   becomes a number in a config file nobody revisits.
+3. ~~**Cadence default.**~~ **MEASURED 2026-08-20, and the guess was refuted.** A vendor-neutral machine-wide
+   VRAM read on Windows — `\GPU Adapter Memory(*)\Dedicated Usage` through PDH, the only path that covers
+   AMD, NVIDIA and Intel alike — costs **1 639 ms cold and 1 004 ms warm** on this machine. At the 2-second
+   cadence this plan proposed, the sampler would spend half the wall clock sampling: §3.6's "must not become
+   the thing it measures", failed by its own default.
+
+   So the readings SPLIT by cost rather than sharing one cadence:
+
+   | stream | source | cost | cadence |
+   |---|---|---|---|
+   | CPU + RAM | `Process` times and `GC.GetGCMemoryInfo` — no IO, no process launch | microseconds | the base tick |
+   | VRAM | PDH on Windows | **~1 s** | its own, far slower, and its `Count` says how thin it was |
+
+   That is why `SampleSummary` carries a count: a ten-second leg honestly reporting **one** VRAM sample is
+   legible, while the same leg reporting a smooth min/max would be fiction. The cheap alternative — asking
+   the engine's own `/health` — is milliseconds but answers a DIFFERENT question: what our processes hold,
+   not what the card holds, and the two differ by exactly the amount somebody else is using.

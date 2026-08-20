@@ -129,10 +129,23 @@ public sealed record LegTrace(
     public bool IsWhiteBox => Funnel.IsPresent;
 }
 
-/// <summary>One sample of the machine, taken out of band and joined to a run by its timestamp.</summary>
-public readonly record struct HardwareSample(
+/// <summary>One cheap reading of the machine — processor and memory, taken out of band and joined to a leg
+/// by its timestamp.
+/// <para>
+/// Separate from <see cref="VramSample"/> because the two cost three orders of magnitude apart, and pretending
+/// otherwise is how a sampler becomes the thing it measures. These come from process times and
+/// <c>GC.GetGCMemoryInfo</c>: no file, no process launch, microseconds. A VRAM read on Windows costs about a
+/// second (measured: <c>todo/PLAN_hardware_sampler.md</c> §7.3), so it ticks on its own far slower clock and
+/// its summary says how few readings it managed.
+/// </para></summary>
+public readonly record struct LoadSample(
     DateTimeOffset TakenAt,
-    double GpuUtilisationPercent,
-    long VramBytesUsed,
     double CpuUtilisationPercent,
-    long DiskBytesPerSecond);
+    long RamBytesUsed,
+    long RamBytesTotal);
+
+/// <summary>One reading of the accelerator's memory. Expensive, and therefore rare.</summary>
+/// <param name="UsedBytes">What is on the card — ALL of it, not this process's share. Whose it is cannot be
+/// read from here, which is why a summary built from these is <c>Observed</c> unless a lease proves the leg
+/// held the accelerator alone.</param>
+public readonly record struct VramSample(DateTimeOffset TakenAt, long UsedBytes, long TotalBytes);

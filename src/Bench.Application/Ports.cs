@@ -205,9 +205,26 @@ public interface IMachineProbe
     Task<MachineFacts> ReadAsync(string volumePath, CancellationToken cancellationToken);
 }
 
+/// <summary>Readings of the machine, taken out of band and asked for by WINDOW.
+/// <para>
+/// A window rather than a drain, and the difference is not stylistic: a drain empties, so two legs running in
+/// one process would each get half the readings and neither would know it. Asking for an interval leaves the
+/// samples where they are, lets a leg that overlapped another still describe itself, and makes the buffer's
+/// bound this adapter's business rather than every caller's.
+/// </para>
+/// <para>
+/// The two streams are separate because they cost three orders of magnitude apart — processor and memory are
+/// microseconds, a vendor-neutral VRAM read on Windows is about a second (measured,
+/// <c>todo/PLAN_hardware_sampler.md</c> §7.3) — and one cadence for both would make the sampler the thing it
+/// measures.
+/// </para></summary>
 public interface IHardwareSampler
 {
-    Task<IReadOnlyList<HardwareSample>> DrainAsync(CancellationToken cancellationToken);
+    /// <summary>Readings taken in <c>[from, to)</c>. Empty is an ordinary answer: on a host with nothing to
+    /// sample, or for a leg shorter than the slow stream's cadence, nobody read anything — which the
+    /// summaries express as <em>not sampled</em> rather than as zero.</summary>
+    Task<(IReadOnlyList<LoadSample> Load, IReadOnlyList<VramSample> Vram)> ReadAsync(
+        DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
 }
 
 /// <summary>The arbiter. Selectable per suite, and re-runnable over STORED answers — re-judging must
