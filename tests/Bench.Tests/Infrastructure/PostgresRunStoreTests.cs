@@ -94,6 +94,32 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_arm_a_cell_runs_survives_the_store()
+    {
+        var (run, _) = Plan(1, 1, 1);
+        var commit = CommitSha.Parse(new string('a', 40)).Ok();
+        var question = new Question(
+            "q1", "prompt", [Expectation.File(SourceAnchor.File("src/F.cs", commit))], string.Empty);
+        var subjects = new[] { new Subject(ModelRef.Parse("m", ModelHosting.Local).Ok(), Sampling.Deterministic(1)) };
+
+        var cells = Matrix.Plan(
+                [question], repeats: 1, subjects, [Lane.Named("lane1")],
+                [Bench.Domain.Variants.VariantSelection.None], [FixArm.InvestigateOnly]).Ok()
+            .Select(c => RunCell.Pending(run.Id, c))
+            .ToList();
+
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        var claimed = (await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("worker-arm"), Ct)).Ok();
+
+        // Without this column the arm is compared at plan time and then lost, so a report could never
+        // group investigate-only legs against full ones — the split measurement the axis exists for.
+        claimed.Arm.Should().Be(FixArm.InvestigateOnly);
+        claimed.Leg.Should().EndWith("!investigate-only");
+    }
+
+    [Fact]
     public async Task A_run_with_no_cells_is_refused()
     {
         var (run, _) = Plan(1, 1, 1);

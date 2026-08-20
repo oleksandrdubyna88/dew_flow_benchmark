@@ -309,6 +309,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
             LaneName = cell.LaneName,
             VariantId = variantId,
             VariantName = variantName,
+            Arm = cell.Arm,
             Position = cell.Position,
             State = cell.State,
             Attempts = cell.Attempts,
@@ -324,7 +325,10 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     private static RunCell ToDomain(CellRow row) => new(
         row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.SubjectModelId, row.LaneName,
         VariantSelectionCodec.Decode(row.VariantId, row.VariantName),
-        row.Position, row.State, row.Attempts, Owner(row), row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail);
+        row.Position, row.State, row.Attempts, Owner(row), row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail)
+    {
+        Arm = row.Arm,
+    };
 
     private static WorkerIdentity Owner(CellRow row) =>
         WorkerIdentity.Stored(row.Owner, row.OwnerHost, row.OwnerPid);

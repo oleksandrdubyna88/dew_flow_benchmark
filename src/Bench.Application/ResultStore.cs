@@ -37,6 +37,12 @@ public enum ReportDimension
     /// and a variant whose name failed to store into one row of the report.
     /// </para></summary>
     Variant,
+
+    /// <summary>Which slice of a fix task the leg ran — <see cref="Bench.Domain.Runs.FixArm"/>'s canonical
+    /// token. Investigate-only against implement-only against full is the comparison
+    /// <c>todo/PLAN_investigate_vs_implement.md</c> exists to produce, and it is a column on the cell for
+    /// the same reason subject and lane are: a report groups, it does not parse.</summary>
+    FixArm,
 }
 
 /// <summary>Which questions an aggregate may read.

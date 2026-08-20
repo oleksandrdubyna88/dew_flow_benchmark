@@ -75,6 +75,7 @@ suite    = (suiteId, suiteVersion)                -- frozen and hashed, from a f
 subject  = (modelId, samplingAsSent)              -- 1..N, each with its OWN endpoint (SubjectRoster)
 lane     = (toolSurface, preamble)                -- 1..N
 variant  = (name, definitionHash)                 -- 1..N, from the catalog; absent on a run planned without it
+arm      = full | investigate-only | implement-only  -- which slice of a fix task the leg runs; Full by default
 repeat   = ordinal                                -- n >= 2 to rank anything
 ```
 
@@ -732,6 +733,11 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
+- **The arm axis is plannable and stored, but nothing RUNS a non-Full arm yet.** `FixArm`
+  (full · investigate-only · implement-only, `todo/PLAN_investigate_vs_implement.md`) is a matrix axis,
+  a `cells` column defaulting `Full`, a leg-identity suffix (`!investigate-only`) and a report dimension —
+  but `LegRunner` still starts no phases, and no CLI flag plans a non-Full arm, deliberately: a cell whose
+  arm the runner cannot honour must not be creatable. The runner learns phases in that plan's step 4.
 - **No tool-calling loop.** `IEngine` exposes tools and both engines implement them, but `LegRunner` asks the
   model exactly once. Retrieval now happens for a cell that names a variant — the harness performs it and
   puts the hits in the prompt (*The retrieval lane*, above) — so anchor recall is a real number there; what

@@ -1,9 +1,9 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **plan only, nothing implemented yet, 2026-08-19.** Scope: `Bench.Domain` (the arm axis, the
-> diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest pass, the
-> diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg worktrees),
-> `hosts/Cli`; one additive migration on `cells`.
+> Status: **step 1 (the arm axis) implemented 2026-08-20; steps 2–8 open.** Scope: `Bench.Domain` (the
+> arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
+> pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
+> worktrees), `hosts/Cli`; one additive migration on `cells`.
 >
 > Sits ON TOP of [PLAN_code_lane.md](PLAN_code_lane.md): that plan owns the sandbox, the mechanical
 > signals and the delivered-work score; this one decides that its phases are also **arms** — so the
@@ -235,9 +235,20 @@ aspnetcore will cost more and nobody has measured how much, so the pilot comes f
 
 Each step ships alone, tests green, before the next.
 
-1. **The arm axis** — `FixArm`, `PhasePlan.For(kind, arm)` with the `Reading` refusal, the `cells`
-   column (additive migration), `Leg.Canonical` additivity, `ReportDimension.Arm`. RED tests first;
-   existing matrix and canonical tests must pass unchanged.
+1. ~~**The arm axis**~~ **DONE 2026-08-20.** `FixArm` + canonical tokens, `PhasePlan.For(kind, arm)` and
+   `Materialise(cell, kind, arm)` with the `Reading` refusal, `Leg.Arm`/`RunCell.Arm` as additive `init`
+   members (the `EngineRef.Backend` pattern), the sixth matrix axis with its empty-list refusal, the
+   `cells.Arm` column (migration `20260820073037_FixArmColumn`, default `Full`), and the report
+   dimension. RED was recorded (CS0246 on `FixArm`), then 36 domain tests green and the full suite
+   901/0/9 with every pre-existing matrix/phase/canonical test unchanged.
+
+   **One deviation:** the report dimension is named `ReportDimension.FixArm`, not `Arm` — the report's
+   own vocabulary already uses *arm* for "one compared configuration" (`ArmReading`, `ArmOf`), and a
+   dimension named `Arm` beside it would make every reading ambiguous.
+
+   **And one honesty note, recorded in `research/architecture.md`:** nothing RUNS a non-Full arm yet —
+   no CLI flag plans one, deliberately, because `LegRunner` starts no phases and a cell whose arm the
+   runner cannot honour must not be creatable. The flag arrives with step 4/5.
 2. **The diagnosis contract + scoring** — extraction (parsed/absent/malformed), `DiagnosisScoring`
    (parses, recall, precision, symptom trap) over fixture diagnoses and a fixture reference diff. Pure
    domain, no infrastructure.

@@ -10,10 +10,19 @@ public sealed record Leg(Subject Subject, Lane Lane, VariantSelection Variant)
     /// <summary>A leg with no variant — a run planned without the catalog.</summary>
     public static Leg Of(Subject subject, Lane lane) => new(subject, lane, VariantSelection.None);
 
-    /// <summary>The variant is appended only when there is one, so a run planned without the catalog
-    /// stores the identity it always stored. The axis is additive: it must not silently rewrite what
-    /// earlier results are keyed by.</summary>
-    public string Canonical => Variant switch
+    /// <summary>Which slice of a fix task this leg runs. An <c>init</c> member defaulting to
+    /// <see cref="FixArm.Full"/> rather than a fourth positional, for the same reason the variant is a
+    /// distinct not-applicable state: the axis is additive, every caller planning without it keeps
+    /// compiling, and every leg it plans keeps meaning what it meant.</summary>
+    public FixArm Arm { get; init; } = FixArm.Full;
+
+    /// <summary>The variant is appended only when there is one, and the ARM only when it is not the
+    /// whole task, so a run planned before either axis existed stores the identity it always stored.
+    /// The axes are additive: they must not silently rewrite what earlier results are keyed by.</summary>
+    public string Canonical =>
+        Identity + (Arm == FixArm.Full ? string.Empty : $"!{Arm.Canonical()}");
+
+    private string Identity => Variant switch
     {
         VariantSelection.Selected selected => $"{Subject.Canonical}@{Lane.Canonical}#{selected.Name}",
         _ => $"{Subject.Canonical}@{Lane.Canonical}",
@@ -44,23 +53,34 @@ public static class Matrix
         IReadOnlyList<Lane> lanes) =>
         Plan(questions, repeats, subjects, lanes, [VariantSelection.None]);
 
-    /// <summary>The full matrix: question × repeat × subject × lane × <b>variant</b>. The variant is an
-    /// axis rather than one value fixed for a whole run, which is what lets a finished test grow when the
-    /// catalog does.</summary>
+    /// <summary>A matrix over whole tasks only — every leg runs <see cref="FixArm.Full"/>. Kept so a run
+    /// planned before the arm axis existed plans identically today.</summary>
     public static Outcome<IReadOnlyList<MatrixCell>> Plan(
         IReadOnlyList<Question> questions,
         int repeats,
         IReadOnlyList<Subject> subjects,
         IReadOnlyList<Lane> lanes,
-        IReadOnlyList<VariantSelection> variants)
+        IReadOnlyList<VariantSelection> variants) =>
+        Plan(questions, repeats, subjects, lanes, variants, [FixArm.Full]);
+
+    /// <summary>The full matrix: question × repeat × subject × lane × variant × <b>arm</b>. Each is an
+    /// axis rather than one value fixed for a whole run, which is what lets a finished test grow when a
+    /// catalog does — and what lets one fix task be measured whole and as its two slices in one run.</summary>
+    public static Outcome<IReadOnlyList<MatrixCell>> Plan(
+        IReadOnlyList<Question> questions,
+        int repeats,
+        IReadOnlyList<Subject> subjects,
+        IReadOnlyList<Lane> lanes,
+        IReadOnlyList<VariantSelection> variants,
+        IReadOnlyList<FixArm> arms)
     {
-        var refusal = Validate(questions, repeats, subjects, lanes, variants);
+        var refusal = Validate(questions, repeats, subjects, lanes, variants, arms);
         if (refusal.Length > 0)
         {
             return Outcome<IReadOnlyList<MatrixCell>>.Failure(refusal);
         }
 
-        var legs = Legs(subjects, lanes, variants);
+        var legs = Legs(subjects, lanes, variants, arms);
         var cells = Slots(questions, repeats)
             .SelectMany((slot, slotIndex) => Rotated(legs, slotIndex)
                 .Select((leg, position) => new MatrixCell(slot.QuestionId, slot.Repeat, leg, position)));
@@ -76,8 +96,12 @@ public static class Matrix
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
 
     private static IReadOnlyList<Leg> Legs(
-        IReadOnlyList<Subject> subjects, IReadOnlyList<Lane> lanes, IReadOnlyList<VariantSelection> variants) =>
-        [.. subjects.SelectMany(s => lanes.SelectMany(l => variants.Select(v => new Leg(s, l, v))))];
+        IReadOnlyList<Subject> subjects,
+        IReadOnlyList<Lane> lanes,
+        IReadOnlyList<VariantSelection> variants,
+        IReadOnlyList<FixArm> arms) =>
+        [.. subjects.SelectMany(s => lanes.SelectMany(l => variants.SelectMany(v =>
+            arms.Select(a => new Leg(s, l, v) { Arm = a }))))];
 
     private static IEnumerable<(string QuestionId, int Repeat)> Slots(IReadOnlyList<Question> questions, int repeats) =>
         questions.SelectMany(q => Enumerable.Range(0, repeats).Select(r => (q.Id, r)));
@@ -93,15 +117,18 @@ public static class Matrix
         int repeats,
         IReadOnlyList<Subject> subjects,
         IReadOnlyList<Lane> lanes,
-        IReadOnlyList<VariantSelection> variants) =>
-        (questions.Count, repeats, subjects.Count, lanes.Count, variants.Count) switch
+        IReadOnlyList<VariantSelection> variants,
+        IReadOnlyList<FixArm> arms) =>
+        (questions.Count, repeats, subjects.Count, lanes.Count, variants.Count, arms.Count) switch
         {
-            (0, _, _, _, _) => "a matrix needs at least one question",
-            (_, < 1, _, _, _) => $"repeats must be at least 1, got {repeats}",
-            (_, _, 0, _, _) => "a matrix needs at least one subject — and an unset model id is a refusal, not a default",
-            (_, _, _, 0, _) => "a matrix needs at least one lane",
-            (_, _, _, _, 0) => "a matrix needs at least one variant — pass the not-applicable selection for a run "
+            (0, _, _, _, _, _) => "a matrix needs at least one question",
+            (_, < 1, _, _, _, _) => $"repeats must be at least 1, got {repeats}",
+            (_, _, 0, _, _, _) => "a matrix needs at least one subject — and an unset model id is a refusal, not a default",
+            (_, _, _, 0, _, _) => "a matrix needs at least one lane",
+            (_, _, _, _, 0, _) => "a matrix needs at least one variant — pass the not-applicable selection for a run "
                 + "planned without the catalog, so that 'no variant' is stated rather than assumed",
+            (_, _, _, _, _, 0) => "a matrix needs at least one arm — pass Full for a run planned before the arm "
+                + "axis existed, so that 'the whole task' is stated rather than assumed",
             _ => string.Empty,
         };
 }

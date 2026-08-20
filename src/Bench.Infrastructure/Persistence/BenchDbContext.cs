@@ -70,6 +70,11 @@ public sealed class CellRow
 
     public string VariantName { get; set; } = string.Empty;
 
+    /// <summary>Which arm of the task this cell runs — the leg's third axis as its own column, stored as
+    /// its NAME like every enum here. The database default is <c>Full</c>, so every cell written before
+    /// the axis existed reads as the whole task, which is what it was.</summary>
+    public FixArm Arm { get; set; }
+
     public int Position { get; set; }
 
     public CellState State { get; set; }
@@ -202,6 +207,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             cell.HasKey(c => c.Id);
             cell.Property(c => c.State).HasConversion<string>();
             cell.Property(c => c.OutcomeKind).HasConversion<string>();
+            cell.Property(c => c.Arm).HasConversion<string>().HasDefaultValue(FixArm.Full);
 
             // The claim query orders by (Position, QuestionId, Repeat) within one run's pending cells, and
             // the sweep scans claimed ones by age. Both are the hot paths of a run with tens of thousands

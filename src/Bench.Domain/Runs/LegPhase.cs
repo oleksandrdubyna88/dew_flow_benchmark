@@ -87,8 +87,34 @@ public static class PhasePlan
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown task kind"),
         };
 
+    /// <summary>The phases of one ARM of a task (todo/PLAN_investigate_vs_implement.md §3.1).
+    /// <para>
+    /// <see cref="FixArm.Full"/> is the plan the kind always had. The two slices exist for the split
+    /// measurement: investigate-only ends at the judged diagnosis, implement-only starts from a handed
+    /// one. A reading task REFUSES a fix arm by name — an arm the kind cannot honour must fail the
+    /// plan, never load as something else.
+    /// </para></summary>
+    public static Outcome<IReadOnlyList<PhaseKind>> For(TaskKind kind, FixArm arm) =>
+        (kind, arm) switch
+        {
+            (_, FixArm.Full) => Outcome<IReadOnlyList<PhaseKind>>.Success(For(kind)),
+            (TaskKind.Fix, FixArm.InvestigateOnly) =>
+                Outcome<IReadOnlyList<PhaseKind>>.Success([PhaseKind.Investigate, PhaseKind.Judge]),
+            (TaskKind.Fix, FixArm.ImplementOnly) =>
+                Outcome<IReadOnlyList<PhaseKind>>.Success([PhaseKind.Fix, PhaseKind.Verify, PhaseKind.Judge]),
+            _ => Outcome<IReadOnlyList<PhaseKind>>.Failure(
+                $"a {kind} task has no {arm.Canonical()} arm — the arms slice a fix task, and running one "
+                + "here would measure nothing"),
+        };
+
     public static IReadOnlyList<LegPhase> Materialise(Guid cellId, TaskKind kind) =>
         [.. For(kind).Select((phase, ordinal) => LegPhase.Pending(cellId, phase, ordinal))];
+
+    public static Outcome<IReadOnlyList<LegPhase>> Materialise(Guid cellId, TaskKind kind, FixArm arm) =>
+        For(kind, arm).Match(
+            phases => Outcome<IReadOnlyList<LegPhase>>.Success(
+                [.. phases.Select((phase, ordinal) => LegPhase.Pending(cellId, phase, ordinal))]),
+            Outcome<IReadOnlyList<LegPhase>>.Failure);
 
     /// <summary>Starting a phase. Refused unless every earlier phase has ended — a fix produced before
     /// the investigation ran is not a fix, it is a guess that happened to compile.</summary>

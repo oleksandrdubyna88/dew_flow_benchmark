@@ -106,6 +106,7 @@ internal sealed class ScriptedResults(IReadOnlyList<ScriptedLeg> legs, string me
             ReportDimension.Variant => leg.Variant,
             ReportDimension.Subject => leg.Subject,
             ReportDimension.Lane => "native",
+            ReportDimension.FixArm => "full",
             _ => "Qln",
         };
 

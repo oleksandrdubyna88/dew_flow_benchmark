@@ -63,6 +63,12 @@ public sealed record RunCell(
     LegOutcomeKind OutcomeKind,
     string OutcomeDetail)
 {
+    /// <summary>Which arm of the task this cell runs, beside the canonical leg for the same reason the
+    /// other axes are: a report grouping by arm must group, not parse a composite string back apart.
+    /// An <c>init</c> member defaulting to <see cref="FixArm.Full"/>, so every cell stored before the
+    /// axis existed reads as the whole task — which is what it was.</summary>
+    public FixArm Arm { get; init; } = FixArm.Full;
+
     public static RunCell Pending(Guid runId, MatrixCell cell) => new(
         Guid.CreateVersion7(),
         runId,
@@ -78,7 +84,10 @@ public sealed record RunCell(
         Owner: WorkerIdentity.Nobody,
         ClaimedAt: default,
         LegOutcomeKind.None,
-        OutcomeDetail: string.Empty);
+        OutcomeDetail: string.Empty)
+    {
+        Arm = cell.Leg.Arm,
+    };
 
     public bool IsTerminal => State is CellState.Settled or CellState.Abandoned;
 }

@@ -226,6 +226,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
                 r.Cell!.SubjectModelId,
                 r.Cell!.VariantId,
                 r.Cell!.VariantName,
+                r.Cell!.Arm,
                 r.Cell!.QuestionId,
                 m.Kind,
                 m.Value,
@@ -252,6 +253,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             ReportDimension.Lane => sample.Lane,
             ReportDimension.Subject => sample.Subject,
             ReportDimension.Variant => VariantSelectionCodec.Decode(sample.VariantId, sample.VariantName).Canonical,
+            ReportDimension.FixArm => sample.Arm.Canonical(),
             _ => throw new ArgumentOutOfRangeException(nameof(dimension), dimension, "no key for this dimension"),
         };
 
@@ -266,6 +268,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         string Subject,
         Guid? VariantId,
         string VariantName,
+        FixArm Arm,
         string QuestionId,
         MetricKind Kind,
         string Value,
