@@ -55,6 +55,7 @@ public static class RunReportContract
             ? declared.Backend.Canonical
             : ComputeArmLabel.NotDeclared,
         run.Status.ToString(),
+        run.Kind.ToString(),
         run.CreatedAt);
 
     private static DimensionReportDto From(DimensionReport dimension) => new(

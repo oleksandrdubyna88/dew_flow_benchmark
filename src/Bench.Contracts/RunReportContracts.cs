@@ -89,6 +89,9 @@ public sealed record DiscriminationDto(
 /// <paramref name="EngineCanonical"/>, which joins five facts with pipes for EQUALITY: a console grouping by
 /// the arm would otherwise parse a format nobody promised it. The undeclared state travels as its own words
 /// because a blank label groups every un-echoed run under whatever the page renders for empty.</param>
+/// <param name="Kind">What the run's legs DID — <c>Reading</c> or <c>Fix</c>. On the summary because a
+/// list mixing reading regressions with fix measurements must be tellable apart without opening each
+/// report.</param>
 public sealed record RunSummaryDto(
     Guid RunId,
     string Label,
@@ -97,6 +100,7 @@ public sealed record RunSummaryDto(
     string EngineCanonical,
     string ComputeArm,
     string Status,
+    string Kind,
     DateTimeOffset CreatedAt);
 
 /// <summary>The one label the console must recognise rather than merely print.

@@ -159,7 +159,7 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
         var model = runtime ?? new CountingRuntime();
         var runner = new LegRunner(
             runs, postgres.NewResults(), model, new NoRetriever(), new NoHardwareSampler(),
-            new ToolLoopRunner(model, NullLogger<ToolLoopRunner>.Instance), clock,
+            new ToolLoopRunner(model, clock, NullLogger<ToolLoopRunner>.Instance), clock,
             NullLogger<LegRunner>.Instance);
 
         return (run.Id, new LegPlan(suite, roster, [], TaskKind.Fix), runner, runs);

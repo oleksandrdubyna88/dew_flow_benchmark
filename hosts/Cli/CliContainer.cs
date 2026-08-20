@@ -55,6 +55,9 @@ public static class CliContainer
     public static ServiceProvider ForJudge(string connectionString, Serilog.ILogger logger) =>
         Model(Store(connectionString, logger))
             .AddScoped<JudgeRunner>()
+            // The bank, because a run frozen FROM the bank is judged from it too: the selection is
+            // rebuilt and its stamp verified, so bank-frozen runs stopped being unjudgeable.
+            .AddScoped<IQuestionBank, PostgresQuestionBank>()
             .BuildServiceProvider();
 
     /// <summary>`bench sweep` — the run store and nothing else. Recovery must not need a model endpoint.</summary>

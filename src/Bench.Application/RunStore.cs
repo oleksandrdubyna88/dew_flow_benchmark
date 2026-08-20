@@ -99,6 +99,17 @@ public interface IRunStore
     /// refusal naming the id, never an empty cell.</summary>
     Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken);
 
+    /// <summary>Advances the run's status FORWARD — <c>Running</c> when a drain begins, <c>Completed</c>
+    /// when every cell is terminal — and never backwards: a completed run that starts "running" again
+    /// would be a second campaign wearing the first's identity. Idempotent for the state it targets,
+    /// because a second worker draining the same run is the architecture's normal case, not a race to
+    /// referee. Returns the status the run HOLDS afterwards.
+    /// <para>
+    /// This existed as a column and a word for six days while nothing wrote it: sixteen finished runs
+    /// read <c>Planned</c> in every listing, which tells an operator the opposite of the truth.
+    /// </para></summary>
+    Task<Outcome<RunStatus>> AdvanceStatusAsync(Guid runId, RunStatus to, CancellationToken cancellationToken);
+
     /// <summary>A fix leg's phase record, materialised ONCE: rows that already exist come back as
     /// stored — a swept-back leg resumes the record its crash left — and only a cell with no record
     /// gets <paramref name="phases"/> inserted. Two workers racing this (the claim makes it

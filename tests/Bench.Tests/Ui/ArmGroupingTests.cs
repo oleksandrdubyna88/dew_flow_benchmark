@@ -96,5 +96,5 @@ public sealed class ArmGroupingTests
         string suite = "s@v3#abcdef012345",
         string label = "run",
         DateTimeOffset at = default) =>
-        new(Guid.CreateVersion7(), label, "repo@commit", suite, $"Qln|e|1.0|fp|{arm}", arm, "Planned", at);
+        new(Guid.CreateVersion7(), label, "repo@commit", suite, $"Qln|e|1.0|fp|{arm}", arm, "Planned", "Reading", at);
 }

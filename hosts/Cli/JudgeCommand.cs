@@ -24,14 +24,12 @@ public static class JudgeCommand
     public static async Task<int> RunAsync(
         CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
     {
+        // Without --suite-file the reference answers come from the BANK: the run's frozen selection is
+        // rebuilt and its stamp verified. A file is still the door for suite-file runs — a run frozen
+        // from a file has no bank rows to rebuild from.
         var suiteFile = command.Value("suite-file");
 
-        if (suiteFile.Length == 0)
-        {
-            return Fail(error, "--suite-file is required — a verdict needs the reference answers", ExitCodes.Configuration);
-        }
-
-        if (!File.Exists(suiteFile))
+        if (suiteFile.Length > 0 && !File.Exists(suiteFile))
         {
             return Fail(error, $"suite file not found: {suiteFile}", ExitCodes.Environment);
         }
@@ -68,7 +66,17 @@ public static class JudgeCommand
             return Fail(error, $"the store is not reachable — {ex.Message.Split('\n')[0]}", ExitCodes.Environment);
         }
 
-        var suite = SuiteJsonLoader.Load(File.ReadAllText(suiteFile), AnyCommit);
+        // The run row is read FIRST: the bank path needs its stamp, and the framing needs its kind.
+        var measured = await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == inputs.RunId, stopping);
+
+        if (measured is null)
+        {
+            return Fail(error, $"this store holds no run {inputs.RunId}", ExitCodes.Environment);
+        }
+
+        var suite = suiteFile.Length > 0
+            ? SuiteJsonLoader.Load(File.ReadAllText(suiteFile), AnyCommit)
+            : await BankSuiteAsync(scope, db, measured, output, stopping);
 
         if (suite is Outcome<Suite>.Fail badSuite)
         {
@@ -85,13 +93,6 @@ public static class JudgeCommand
         // The run's stored kind decides the FRAMING: a fix run's verdicts are about the diagnosis
         // against the reference FIX, and a re-judge months later must frame it the way its legs were
         // asked — which is why the kind is a column and not a flag the operator has to remember.
-        var measured = await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == inputs.RunId, stopping);
-
-        if (measured is null)
-        {
-            return Fail(error, $"this store holds no run {inputs.RunId}", ExitCodes.Environment);
-        }
-
         var framing = measured.Kind == TaskKind.Fix ? JudgeFraming.Diagnosis : JudgeFraming.Answer;
 
         if (framing == JudgeFraming.Diagnosis)
@@ -215,6 +216,60 @@ public static class JudgeCommand
         // Judged nothing is not a pass. A verdict of NO on every leg IS a completed measurement, and still
         // exits 0 — the arbiter's opinion of the subject is the report's content, never the harness's health.
         return report.Judged == 0 ? ExitCodes.NoReport : ExitCodes.Pass;
+    }
+
+    /// <summary>The run's frozen selection, rebuilt from the bank and PROVED by its stamp.
+    /// <para>
+    /// The same door the run froze through — the same entries, promoted and frozen by the same
+    /// machinery — so the stamp either reproduces byte for byte or the rebuild is refused whole. That
+    /// hash is what makes this safe: a bank whose questions drifted since the test froze cannot hand
+    /// the judge different reference answers under the old stamp, because the stamp will not mint.
+    /// </para></summary>
+    private static async Task<Outcome<Suite>> BankSuiteAsync(
+        AsyncServiceScope scope, BenchDbContext db, RunRow measured, TextWriter output, CancellationToken stopping)
+    {
+        var ids = await db.Cells.AsNoTracking()
+            .Where(c => c.RunId == measured.Id)
+            .Select(c => c.QuestionId)
+            .Distinct()
+            .ToListAsync(stopping);
+
+        var bank = await scope.ServiceProvider.GetRequiredService<Bench.Application.Bank.IQuestionBank>()
+            .QuestionsAsync(new Bench.Application.Bank.BankQuery(), stopping);
+
+        if (bank is not Outcome<IReadOnlyList<Bench.Domain.Bank.BankEntry>>.Ok(var entries))
+        {
+            return Outcome<Suite>.Failure(bank.Match(_ => string.Empty, reason => reason));
+        }
+
+        var chosen = entries
+            .Where(e => ids.Contains(e.Question.Question.Id))
+            .OrderBy(e => e.Group.Key.Value, StringComparer.Ordinal)
+            .ThenBy(e => e.Question.Ordinal)
+            .ToList();
+
+        if (chosen.Count != ids.Count)
+        {
+            return Outcome<Suite>.Failure(
+                $"the bank holds {chosen.Count} of this run's {ids.Count} question(s) — the selection cannot be "
+                + "rebuilt; judge from the suite file the test was created from, with --suite-file");
+        }
+
+        return Bench.Domain.Bank.BankFreeze.Freeze(Suite.IdOf(measured.SuiteStamp), chosen).Match(
+            selection =>
+            {
+                if (!string.Equals(selection.Stamp, measured.SuiteStamp, StringComparison.Ordinal))
+                {
+                    return Outcome<Suite>.Failure(
+                        $"the rebuilt selection stamps '{selection.Stamp}' where the run froze '{measured.SuiteStamp}' — "
+                        + "the bank has drifted since the test was created, and a verdict against different reference "
+                        + "answers would look exactly like a normal one. Judge with --suite-file");
+                }
+
+                output.WriteLine($"suite    rebuilt from the bank — stamp verified: {selection.Stamp}");
+                return Outcome<Suite>.Success(selection.Suite);
+            },
+            Outcome<Suite>.Failure);
     }
 
     /// <summary>The suite is re-read only for its reference answers, so its anchors are never resolved

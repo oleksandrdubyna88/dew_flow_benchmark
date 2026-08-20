@@ -213,5 +213,5 @@ public sealed class BenchmarkingPageTests : BunitContext
 
     private static RunSummaryDto Summary(string arm) =>
         new(Guid.CreateVersion7(), "run", "repo@commit", "s@v3#abcdef012345", $"Qln|e|1.0|fp|{arm}", arm,
-            "Planned", DateTimeOffset.UnixEpoch);
+            "Planned", "Reading", DateTimeOffset.UnixEpoch);
 }

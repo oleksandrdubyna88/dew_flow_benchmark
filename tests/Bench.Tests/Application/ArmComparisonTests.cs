@@ -369,6 +369,9 @@ internal sealed class ArmWorld : IRunStore, IResultStore
     public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a comparison reads legs, never one cell");
 
+    public Task<Outcome<RunStatus>> AdvanceStatusAsync(Guid runId, RunStatus to, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a comparison advances nothing");
+
     public Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a comparison runs no phases");
 

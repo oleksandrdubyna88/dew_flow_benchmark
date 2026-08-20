@@ -95,6 +95,25 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_status_walks_forward_and_never_back()
+    {
+        var (run, cells) = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(run, cells, Ct);
+
+        (await store.AdvanceStatusAsync(run.Id, RunStatus.Running, Ct)).Ok().Should().Be(RunStatus.Running);
+        (await store.AdvanceStatusAsync(run.Id, RunStatus.Running, Ct)).Ok().Should().Be(
+            RunStatus.Running, "a second worker draining the same run is the normal case, not a race to referee");
+        (await store.AdvanceStatusAsync(run.Id, RunStatus.Completed, Ct)).Ok().Should().Be(RunStatus.Completed);
+        (await store.AdvanceStatusAsync(run.Id, RunStatus.Completed, Ct)).Ok().Should().Be(RunStatus.Completed);
+
+        (await store.AdvanceStatusAsync(run.Id, RunStatus.Running, Ct)).Reason().Should().Contain(
+            "Completed", "a finished run does not start running again — a new campaign is a new run");
+
+        (await store.LoadAsync(run.Id, Ct)).Ok().Status.Should().Be(RunStatus.Completed);
+    }
+
+    [Fact]
     public async Task The_task_kind_a_run_measured_under_survives_the_store()
     {
         var (planned, cells) = Plan(1, 1, 1);

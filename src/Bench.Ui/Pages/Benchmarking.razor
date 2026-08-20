@@ -59,6 +59,7 @@
                 <thead>
                     <tr>
                         <th scope="col">Run</th>
+                        <th scope="col">Kind</th>
                         <th scope="col">Suite</th>
                         <th scope="col">Target</th>
                         <th scope="col">Status</th>
@@ -70,6 +71,7 @@
                     {
                         <tr>
                             <td><NavLink href="@($"/benchmarking/runs/{run.RunId}")">@run.Label</NavLink></td>
+                            <td>@run.Kind</td>
                             <td><code>@run.SuiteStamp</code></td>
                             <td class="text-break"><small>@run.TargetCanonical</small></td>
                             <td>@run.Status</td>

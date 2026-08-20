@@ -288,6 +288,38 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
         ReadAsync(cellId, cancellationToken);
 
+    public async Task<Outcome<RunStatus>> AdvanceStatusAsync(
+        Guid runId, RunStatus to, CancellationToken cancellationToken)
+    {
+        // Forward-only, guarded in the WHERE: two workers advancing the same run must both succeed
+        // without one dragging a Completed run back to Running.
+        var advanced = to switch
+        {
+            RunStatus.Running => await db.Runs
+                .Where(r => r.Id == runId && r.Status == RunStatus.Planned)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RunStatus.Running), cancellationToken),
+            RunStatus.Completed => await db.Runs
+                .Where(r => r.Id == runId && r.Status != RunStatus.Completed)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, RunStatus.Completed), cancellationToken),
+            _ => 0,
+        };
+
+        _ = advanced; // zero rows is the idempotent case, decided by the read below
+
+        var current = await db.Runs.AsNoTracking()
+            .Where(r => r.Id == runId)
+            .Select(r => (RunStatus?)r.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return current switch
+        {
+            null => Outcome<RunStatus>.Failure($"no run {runId}"),
+            RunStatus.Completed when to == RunStatus.Running => Outcome<RunStatus>.Failure(
+                $"run {runId} is Completed — a finished run does not start running again; a new campaign is a new run"),
+            var held => Outcome<RunStatus>.Success(held.Value),
+        };
+    }
+
     public async Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(
         Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken)
     {

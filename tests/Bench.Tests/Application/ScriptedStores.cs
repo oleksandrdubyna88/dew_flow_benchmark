@@ -80,6 +80,9 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
     public Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a report does not read cells");
 
+    public Task<Outcome<RunStatus>> AdvanceStatusAsync(Guid runId, RunStatus to, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a report advances nothing");
+
     public Task<IReadOnlyList<LegPhase>> EnsurePhasesAsync(Guid cellId, IReadOnlyList<LegPhase> phases, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a report does not run phases");
 

@@ -641,6 +641,15 @@ public static class RunCommand
 
         output.WriteLine();
 
+        // The drain is about to spend money, and the listing must say so: Planned → Running here,
+        // Running → Completed in the summary when every cell is terminal. Sixteen finished runs once
+        // read Planned forever, because the column existed and nothing wrote it.
+        await using (var statusScope = provider.CreateAsyncScope())
+        {
+            await statusScope.ServiceProvider.GetRequiredService<PostgresRunStore>()
+                .AdvanceStatusAsync(run.Id, RunStatus.Running, stopping);
+        }
+
         var drained = await provider.GetRequiredService<LegDrain>().DrainAsync(
             token => LegAsync(provider, run.Id, owner, plan, token),
             console.Write,
@@ -683,6 +692,11 @@ public static class RunCommand
         var runs = scope.ServiceProvider.GetRequiredService<PostgresRunStore>();
 
         var progress = await runs.ProgressAsync(runId, budget.Token);
+
+        if (progress.IsFinished)
+        {
+            await runs.AdvanceStatusAsync(runId, RunStatus.Completed, budget.Token);
+        }
 
         // Counted in the database. This line used to read every result of the run — prompt, answer and
         // every metric with its metadata — to render the two integers below.
