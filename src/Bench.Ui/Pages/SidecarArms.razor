@@ -12,7 +12,7 @@
         <select class="form-select" id="metric" value="@Metric" @onchange="ChooseMetricAsync" disabled="@Loading">
             @* No option pre-selected: a default would make every number below it about a choice nobody made. *@
             <option value="">— choose a metric —</option>
-            @foreach (var name in WellKnownMetrics.All)
+            @foreach (var name in Metrics.Value ?? [])
             {
                 <option value="@name">@name</option>
             }
@@ -33,7 +33,20 @@
     </div>
 </div>
 
-@if (Metric.Length == 0)
+@if (!Metrics.Available && Metrics.Detail.Length > 0)
+{
+    <div class="alert alert-warning">@Metrics.Detail</div>
+}
+else if (Metrics.Available && Metrics.Value!.Count == 0)
+{
+    @* Not the same as "choose one": there is nothing to choose. An empty control with a prompt beside it
+       would leave the reader clicking at a list that will never open. *@
+    <div class="alert alert-info">
+        <strong>No arm has carried a metric yet.</strong> These runs declared a backend but recorded no
+        scored metric, so there is nothing to compare them on.
+    </div>
+}
+else if (Metric.Length == 0)
 {
     <div class="alert alert-secondary">Name the metric to compare on — there is no default.</div>
 }
@@ -79,9 +92,16 @@ else
                     <thead>
                         <tr>
                             <th scope="col">Arm</th>
-                            <th scope="col">Average</th>
+                            @* Every column says which AGGREGATE it is. They are not the same kind of number --
+                               a mean, a sum and a max sit side by side here -- and a table of bare figures
+                               invites the reader to compare two of them as though they were. *@
+                            <th scope="col">Average <small class="fw-normal text-body-secondary">mean / leg</small></th>
                             <th scope="col">Legs</th>
                             <th scope="col">Runs</th>
+                            <th scope="col">Retrieval <small class="fw-normal text-body-secondary">mean / leg</small></th>
+                            <th scope="col">Wall <small class="fw-normal text-body-secondary">total</small></th>
+                            <th scope="col">Hits / files <small class="fw-normal text-body-secondary">mean / leg</small></th>
+                            <th scope="col">Peak VRAM <small class="fw-normal text-body-secondary">max</small></th>
                             <th scope="col">Selection half</th>
                             <th scope="col">Held-out half</th>
                             <th scope="col">Verdict</th>
@@ -98,6 +118,10 @@ else
                                 <td>@arm.Average.ToString("0.###")</td>
                                 <td>@arm.Legs</td>
                                 <td>@arm.Runs</td>
+                                <td>@arm.Cost.RetrievalMs.ToString("0") ms</td>
+                                <td><small>@arm.Cost.WallSeconds.ToString("0.#") s</small></td>
+                                <td><small>@arm.Cost.Hits.ToString("0.#") / @arm.Cost.Files.ToString("0.#")</small></td>
+                                <td><small>@Vram(arm.Cost)</small></td>
                                 <td><small>@Half(arm.Selection)</small></td>
                                 <td><small>@Half(arm.HeldOut)</small></td>
                                 <td>

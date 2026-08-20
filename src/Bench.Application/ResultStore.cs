@@ -17,6 +17,30 @@ public readonly record struct MetricByDimension(string Dimension, double Average
 /// a hash, above the database, so the split needs the id rather than the number alone.</param>
 public readonly record struct MetricLeg(Guid RunId, string QuestionId, double Value);
 
+/// <summary>What one leg COST, beside what it scored — the half a metric average cannot show.
+/// <para>
+/// An arm comparison that reports only quality answers half the operator's question. Two backends that
+/// retrieve the same files in 2.6 s and 16.4 s are not the same measurement, and the score is identical in
+/// both. These are the numbers that separate them.
+/// </para></summary>
+/// <param name="RetrievalMs">The ENGINE's own figure for the retrieval, from the funnel it echoed — never a
+/// client stopwatch, which would fold the network and this process's scheduling into the engine's cost.</param>
+/// <param name="WindowSeconds">How long the whole leg was open. Mostly the model answering rather than the
+/// engine retrieving, so it is reported BESIDE <paramref name="RetrievalMs"/> and never instead of it.</param>
+/// <param name="Hits">How many chunks came back.</param>
+/// <param name="Files">How many DISTINCT files those chunks came from — five hits in one file and five across
+/// five are different retrievals with the same count.</param>
+/// <param name="PeakVramBytes">The highest accelerator reading inside this leg, or 0 when nothing sampled it.
+/// <paramref name="VramSamples"/> is what tells those apart, which is why it travels beside.</param>
+public readonly record struct LegVitals(
+    Guid RunId,
+    double RetrievalMs,
+    double WindowSeconds,
+    int Hits,
+    int Files,
+    long PeakVramBytes,
+    int VramSamples);
+
 /// <summary>Which axis of the measurement tuple an aggregate groups by.
 /// <para>
 /// A parameter rather than four near-identical methods on the port. There were two —
@@ -219,6 +243,26 @@ public interface IResultStore
     /// </para></summary>
     Task<IReadOnlyList<MetricLeg>> LegsAsync(
         IReadOnlyList<Guid> runIds, string metricName, CancellationToken cancellationToken);
+
+    /// <summary>What those legs COST — retrieval time, hits, files touched, and the accelerator reading.
+    /// <para>
+    /// Its own read rather than fields on <see cref="MetricLeg"/>, because the two answer different questions
+    /// and a caller that wants a score should not pay for a join over hits. It also has no metric name: a
+    /// leg costs what it costs whichever metric is being read.
+    /// </para></summary>
+    Task<IReadOnlyList<LegVitals>> VitalsAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken);
+
+    /// <summary>The metric names these runs actually CARRY.
+    /// <para>
+    /// Asked of the data rather than taken from a list, because a published list cannot know what a given
+    /// population measured. A console offering <c>Tool use</c> beside a set of retrieval runs sends the reader
+    /// to an empty table and leaves them wondering whether the runs are broken; offering <c>Retrieval
+    /// first-hit rank</c> where every leg answered "not surfaced" does the same, because a non-numeric
+    /// reading is dropped and the average has nothing to stand on.
+    /// </para></summary>
+    Task<IReadOnlyList<string>> MetricNamesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken);

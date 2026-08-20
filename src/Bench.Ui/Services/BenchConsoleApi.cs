@@ -31,6 +31,12 @@ public sealed class BenchConsoleApi(HttpClient http)
         GetAsync<RunReportDto>(
             $"api/bench/runs/{runId}/report?metric={Uri.EscapeDataString(metric)}", cancellationToken);
 
+    /// <summary>Which metrics the arms actually carry. Read before anything is chosen, so the control offers
+    /// what was measured rather than a catalog — a metric no arm recorded renders an empty table and reads as
+    /// a broken run.</summary>
+    public Task<Read<IReadOnlyList<string>>> GetArmMetricsAsync(CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<string>>("api/bench/arms/metrics", cancellationToken);
+
     /// <summary>The compute-backend comparison, across runs. The baseline travels only when one was chosen,
     /// because an empty one is a legitimate answer — no arm is a winner — rather than a missing argument.</summary>
     public Task<Read<ArmComparisonDto>> GetArmsAsync(

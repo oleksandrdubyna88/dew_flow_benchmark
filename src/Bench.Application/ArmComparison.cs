@@ -30,7 +30,30 @@ public sealed record ArmAverage(
     HalfReading Selection,
     HalfReading HeldOut,
     ProofState Proof,
-    double Margin);
+    double Margin)
+{
+    /// <summary>What this arm COST. A quality average alone answers half the question: two backends that
+    /// return the same files in 2.6 s and 16.4 s score identically and are not the same measurement.</summary>
+    public ArmCost Cost { get; init; } = ArmCost.None;
+}
+
+/// <summary>The cost side of one arm, folded across its legs.</summary>
+/// <param name="RetrievalMs">MEAN of the engine's own per-leg figure, not a total: legs differ in number
+/// between arms, so a sum would rank the arm that ran more.</param>
+/// <param name="WallSeconds">Total time those legs were open. Mostly the model answering rather than the
+/// engine retrieving, which is why it never stands in for <paramref name="RetrievalMs"/>.</param>
+/// <param name="PeakVramBytes">The highest reading any of this arm's legs saw, with the sample count that
+/// says how thin the evidence is. Zero samples is NOT zero bytes.</param>
+public readonly record struct ArmCost(
+    double RetrievalMs,
+    double WallSeconds,
+    double Hits,
+    double Files,
+    long PeakVramBytes,
+    int VramSamples)
+{
+    public static ArmCost None { get; } = new(0, 0, 0, 0, 0, 0);
+}
 
 /// <summary>The arms inside ONE comparison scope — one target, one suite stamp.
 /// <para>
@@ -126,6 +149,22 @@ public static class ArmComparison
             Refuse(declared.Count, scopes)));
     }
 
+    /// <summary>The metrics the ARMS actually carry — what a console may offer.
+    /// <para>
+    /// Scoped to the same population the comparison folds: runs that declared a backend. A page offering a
+    /// metric no arm measured leads to an empty table and reads as a broken run rather than as a metric
+    /// nobody recorded, and the fix-lane and tool-lane names would do exactly that beside a set of retrieval
+    /// runs. Asked of the data rather than a published list, because a list cannot know what a population
+    /// measured.
+    /// </para></summary>
+    public static async Task<IReadOnlyList<string>> MetricsAsync(
+        IRunStore runs, IResultStore results, int window, CancellationToken cancellationToken)
+    {
+        var recent = await runs.RecentAsync(window, cancellationToken);
+
+        return await results.MetricNamesAsync([.. recent.Where(Declares).Select(run => run.Id)], cancellationToken);
+    }
+
     private static bool Declares(BenchRun run) => run.Engine.Backend is BackendDeclaration.Declared;
 
     private static string ArmOf(BenchRun run) => run.Engine.Backend.Canonical;
@@ -148,7 +187,9 @@ public static class ArmComparison
         ArmComparisonRequest request,
         CancellationToken cancellationToken)
     {
-        var legs = await results.LegsAsync([.. runs.Select(run => run.Id)], request.MetricName, cancellationToken);
+        var ids = runs.Select(run => run.Id).ToList();
+        var legs = await results.LegsAsync(ids, request.MetricName, cancellationToken);
+        var vitals = await results.VitalsAsync(ids, cancellationToken);
         var armOf = runs.ToDictionary(run => run.Id, ArmOf);
 
         var byArm = legs
@@ -163,12 +204,40 @@ public static class ArmComparison
 
         var baseline = Baseline(request.Baseline, halves.Keys);
 
+        var costOf = vitals
+            .Where(v => armOf.ContainsKey(v.RunId))
+            .GroupBy(v => armOf[v.RunId], StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => Cost([.. g]), StringComparer.Ordinal);
+
         var arms = byArm
-            .Select(group => Average(group.Key, [.. group], halves, baseline, armOf))
+            .Select(group => Average(group.Key, [.. group], halves, baseline, armOf) with
+            {
+                Cost = costOf.TryGetValue(group.Key, out var cost) ? cost : ArmCost.None,
+            })
             .OrderBy(arm => arm.Arm, StringComparer.Ordinal)
             .ToList();
 
         return new ScopedArms(scope.TargetCanonical, scope.SuiteStamp, arms, baseline, Refusal(arms, request.MinLegs));
+    }
+
+    /// <summary>One arm's cost, folded from its legs.
+    /// <para>
+    /// Retrieval time is a MEAN and wall time a SUM, deliberately: arms differ in leg count, so a mean answers
+    /// "what does one retrieval cost here" while a sum would simply rank whichever arm ran more. VRAM is a
+    /// PEAK and carries its sample count — a peak from one sample and a peak from thirty are different
+    /// claims, and zero samples is not zero bytes.
+    /// </para></summary>
+    private static ArmCost Cost(IReadOnlyList<LegVitals> legs)
+    {
+        var sampled = legs.Where(leg => leg.VramSamples > 0).ToList();
+
+        return new ArmCost(
+            legs.Average(leg => leg.RetrievalMs),
+            legs.Sum(leg => leg.WindowSeconds),
+            legs.Average(leg => (double)leg.Hits),
+            legs.Average(leg => (double)leg.Files),
+            sampled.Count == 0 ? 0 : sampled.Max(leg => leg.PeakVramBytes),
+            sampled.Sum(leg => leg.VramSamples));
     }
 
     /// <summary>A baseline only when it is actually present here. A named arm that this scope never measured

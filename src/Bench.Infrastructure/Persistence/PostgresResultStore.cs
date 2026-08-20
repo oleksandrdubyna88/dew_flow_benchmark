@@ -130,6 +130,79 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         return [.. grouped];
     }
 
+    /// <summary>Which metric names these runs carry, in name order.
+    /// <para>
+    /// A DISTINCT over one column — the cheapest question in this port, and the one that keeps a console from
+    /// offering a metric nothing measured. A leg whose reading is non-numeric still counts as carrying the
+    /// name: what it cannot do is contribute to an average, and that is the aggregate's business rather than
+    /// this list's.
+    /// </para></summary>
+    public async Task<IReadOnlyList<string>> MetricNamesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.Results.AsNoTracking()
+            .Where(r => runIds.Contains(r.Cell!.RunId))
+            .SelectMany(r => r.Metrics.Select(m => m.Name))
+            .Distinct()
+            .OrderBy(name => name)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>What each leg cost, from the columns that already carry it.
+    /// <para>
+    /// Projected, never hydrated: the funnel's own total, the hit count, the DISTINCT files those hits came
+    /// from, and the sampler's VRAM reading. A caller wanting these must not pull a campaign's prompts and
+    /// answers to fold four numbers — the defect this port has recorded on three other reads.
+    /// </para>
+    /// <para>
+    /// The VRAM figure comes from the stored <c>LoadJson</c> rather than a column, so it is folded here in
+    /// memory. Its SAMPLE COUNT travels with it: an accelerator read costs about a second on Windows and
+    /// nothing at all off it, so a short leg may catch none, and a peak drawn from one sample is not the same
+    /// claim as one drawn from thirty.
+    /// </para></summary>
+    public async Task<IReadOnlyList<LegVitals>> VitalsAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
+    {
+        if (runIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.Results.AsNoTracking()
+            .Where(r => runIds.Contains(r.Cell!.RunId))
+            .Select(r => new
+            {
+                r.Cell!.RunId,
+                RetrievalMs = r.Funnel == null ? 0d : r.Funnel.TotalMs,
+                Hits = r.Hits.Count,
+                Files = r.Hits.Select(h => h.RelativePath).Distinct().Count(),
+                r.LoadJson,
+            })
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(row => Vitals(row.RunId, row.RetrievalMs, row.Hits, row.Files, row.LoadJson))];
+    }
+
+    /// <summary>One row's vitals, with the load half read out of its stored JSON.</summary>
+    private static LegVitals Vitals(Guid runId, double retrievalMs, int hits, int files, string loadJson)
+    {
+        var load = LegLoadJson.Read(loadJson);
+
+        return new LegVitals(
+            runId,
+            retrievalMs,
+            load.Window.TotalSeconds,
+            hits,
+            files,
+            load.Vram.Bytes.Sampled ? (long)load.Vram.Bytes.Maximum : 0,
+            load.Vram.Bytes.Count);
+    }
+
     /// <summary>Every scored leg of several runs, as bare numbers — the shape an ARM comparison needs.
     /// <para>
     /// Run id and question id and nothing else, because that is all the caller can use: the arm lives on the
@@ -262,6 +335,10 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             .SelectMany(r => r.Metrics.Where(m => m.Name == metricName).Select(m => new MetricSample(
                 r.Cell!.RunId,
                 r.Cell!.Run!.EngineKind,
+                r.Cell!.Run!.EngineEndpoint,
+                r.Cell!.Run!.EngineVersion,
+                r.Cell!.Run!.IndexFingerprint,
+                r.Cell!.Run!.EngineBackend,
                 r.Cell!.LaneName,
                 r.Cell!.SubjectModelId,
                 r.Cell!.VariantId,
@@ -289,7 +366,17 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     private static string Key(MetricSample sample, ReportDimension dimension) =>
         dimension switch
         {
-            ReportDimension.Engine => sample.Engine.ToString(),
+            // The engine's whole IDENTITY, not its kind. `EngineKind.ToString()` collapses every engine
+            // this project can tell apart -- a different endpoint, version, index fingerprint or COMPUTE
+            // BACKEND -- into one row labelled "Qln", which is exactly the defect the backend axis exists to
+            // end, one level up. Two sidecars are two arms; they must not be one row here either.
+            ReportDimension.Engine => string.Join(
+                '|',
+                sample.Engine,
+                sample.EngineEndpoint,
+                sample.EngineVersion,
+                sample.EngineFingerprint,
+                sample.EngineBackend),
             ReportDimension.Lane => sample.Lane,
             ReportDimension.Subject => sample.Subject,
             ReportDimension.Variant => VariantSelectionCodec.Decode(sample.VariantId, sample.VariantName).Canonical,
@@ -305,6 +392,10 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     private sealed record MetricSample(
         Guid RunId,
         EngineKind Engine,
+        string EngineEndpoint,
+        string EngineVersion,
+        string EngineFingerprint,
+        string EngineBackend,
         string Lane,
         string Subject,
         Guid? VariantId,

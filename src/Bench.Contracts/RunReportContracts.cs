@@ -192,4 +192,25 @@ public sealed record ArmAverageDto(
     HalfReadingDto Selection,
     HalfReadingDto HeldOut,
     string Proof,
-    double Margin);
+    double Margin,
+    ArmCostDto Cost);
+
+/// <summary>What an arm cost, beside what it scored.
+/// <para>
+/// A quality average alone answers half the operator's question. Two backends that return the same files in
+/// 2.6 s and 16.4 s score identically and are plainly not the same measurement — and on the first real
+/// three-arm comparison run here, that is exactly what happened.
+/// </para></summary>
+/// <param name="RetrievalMs">MEAN of the ENGINE's own per-leg figure — its funnel total, never a client
+/// stopwatch, and a mean rather than a sum so an arm with more legs is not ranked for having more.</param>
+/// <param name="WallSeconds">Total time the legs were open. Mostly the model answering rather than the engine
+/// retrieving, so it is reported beside the retrieval figure and never instead of it.</param>
+/// <param name="VramSamples">How many accelerator readings the peak rests on. <b>Zero samples is not zero
+/// bytes</b> — a reading nobody took and an idle card are opposite facts.</param>
+public sealed record ArmCostDto(
+    double RetrievalMs,
+    double WallSeconds,
+    double Hits,
+    double Files,
+    long PeakVramBytes,
+    int VramSamples);

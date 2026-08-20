@@ -111,6 +111,15 @@ internal sealed class ScriptedResults(IReadOnlyList<ScriptedLeg> legs, string me
     public Task<IReadOnlyList<Bench.Domain.Trace.LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<Bench.Domain.Trace.LegLoad>>([]);
 
+    public Task<IReadOnlyList<string>> MetricNamesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a run report is given its metric — it does not discover them");
+
+    // A single-run report never reads leg COSTS either — that is the arm comparison's question.
+    public Task<IReadOnlyList<LegVitals>> VitalsAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a run report reads one run — vitals are folded per ARM");
+
     // A single-run report never compares arms — that is cross-run by construction. A double quietly
     // answering this would hide a report that had started reaching across runs.
     public Task<IReadOnlyList<MetricLeg>> LegsAsync(

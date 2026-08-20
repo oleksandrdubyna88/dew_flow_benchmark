@@ -106,5 +106,12 @@ public static class RunReportContract
         From(arm.Selection),
         From(arm.HeldOut),
         arm.Proof.ToString(),
-        arm.Margin);
+        arm.Margin,
+        new ArmCostDto(
+            arm.Cost.RetrievalMs,
+            arm.Cost.WallSeconds,
+            arm.Cost.Hits,
+            arm.Cost.Files,
+            arm.Cost.PeakVramBytes,
+            arm.Cost.VramSamples));
 }

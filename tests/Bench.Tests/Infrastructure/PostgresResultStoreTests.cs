@@ -83,7 +83,10 @@ public sealed class PostgresResultStoreTests(PostgresFixture postgres)
         var byEngine = await store.AverageByAsync(qlnRun, ReportDimension.Engine, "Anchor recall", QuestionScope.All, Ct);
 
         byEngine.Should().ContainSingle();
-        byEngine[0].Dimension.Should().Be("Qln");
+        // The engine's IDENTITY, not its kind. A row labelled "Qln" collapses every engine this project can
+        // tell apart — endpoint, version, index fingerprint, and the COMPUTE BACKEND — into one, which is the
+        // defect the backend axis exists to end. Two sidecars are two arms; they must not be one row here.
+        byEngine[0].Dimension.Should().Be("Qln|||fp|");
         byEngine[0].Average.Should().Be(0.5, "only the named metric may enter the aggregate");
         byEngine[0].Legs.Should().Be(2, "a mean over two legs and a mean over two hundred are different claims");
 

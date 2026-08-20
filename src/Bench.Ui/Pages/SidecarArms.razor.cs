@@ -27,6 +27,12 @@ public partial class SidecarArms(BenchConsoleApi api) : ComponentBase
 
     private bool Loading { get; set; }
 
+    /// <summary>What the arms measured. Empty until the first read answers, and empty ALSO when nothing was
+    /// measured — the page says which.</summary>
+    private Read<IReadOnlyList<string>> Metrics { get; set; } = Read<IReadOnlyList<string>>.Unasked;
+
+    protected override async Task OnInitializedAsync() => Metrics = await api.GetArmMetricsAsync();
+
     private async Task ChooseMetricAsync(ChangeEventArgs changed)
     {
         Metric = changed.Value?.ToString() ?? string.Empty;
@@ -69,6 +75,18 @@ public partial class SidecarArms(BenchConsoleApi api) : ComponentBase
             "Suspicious" => "text-bg-danger",
             _ => "text-bg-secondary",
         };
+
+    /// <summary>The accelerator peak, with the evidence behind it — or a statement that nobody looked.
+    /// <para>
+    /// <b>Zero samples is not zero bytes.</b> A card nobody read and an idle card are opposite facts, and a
+    /// bare <c>0 GiB</c> would read as the second. The sample count travels with the number because an
+    /// accelerator read costs about a second on Windows and is unavailable off it, so a short leg may catch
+    /// none and a peak from one sample is not the claim a peak from thirty is.
+    /// </para></summary>
+    private static string Vram(ArmCostDto cost) =>
+        cost.VramSamples == 0
+            ? "not sampled"
+            : $"{cost.PeakVramBytes / 1073741824.0:0.#} GiB ({cost.VramSamples} sample(s))";
 
     private static string Half(HalfReadingDto half) =>
         half.Measured ? $"{half.Average:0.###} ({half.Legs} leg(s))" : "not measured";

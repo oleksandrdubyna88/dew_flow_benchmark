@@ -219,6 +219,67 @@ public sealed class ArmComparisonTests
             "exactly one half holds the single question; the other must say UNMEASURED rather than 0");
     }
 
+    [Fact]
+    public async Task The_offered_metrics_are_the_ones_the_ARMS_carry_not_a_catalog()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+
+        var offered = await ArmComparison.MetricsAsync(world, world, 50, Ct);
+
+        // A published list cannot know what a population measured. Offering the fix-lane or tool-lane names
+        // beside a set of retrieval runs sends the reader to an empty table, which reads as a broken run
+        // rather than as a metric nobody recorded.
+        offered.Should().ContainSingle().Which.Should().Be("Anchor recall");
+    }
+
+    [Fact]
+    public async Task A_run_that_declared_no_backend_contributes_no_metric_to_the_offer()
+    {
+        var world = World();
+        world.Run(BackendDeclaration.None, "polly@v1#aaaa", 0.9);
+
+        var offered = await ArmComparison.MetricsAsync(world, world, 50, Ct);
+
+        // The offer is scoped to the same population the comparison folds. A metric only an unattributable
+        // run carries would open a table this page can never fill.
+        offered.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Retrieval_time_is_a_MEAN_and_wall_time_a_SUM()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, questions: 4);
+        world.Run(Windows, "polly@v1#aaaa", 0.4, questions: 2);
+
+        var arms = (await Build(world)).Ok().Scopes.Single().Arms;
+
+        // Every leg costs 100 ms and 2 s in the double. A MEAN of retrieval keeps the two arms comparable
+        // when one ran twice the legs; a SUM would rank whichever arm ran more, which is not a property of
+        // the backend. Wall time is the opposite question -- how long this arm occupied the machine -- so it
+        // sums.
+        arms.Should().OnlyContain(arm => arm.Cost.RetrievalMs == 100);
+        arms.Single(arm => arm.Arm == Wsl).Cost.WallSeconds.Should().Be(8);
+        arms.Single(arm => arm.Arm == Windows).Cost.WallSeconds.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task A_vram_peak_carries_the_sample_count_that_makes_it_readable()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, questions: 3);
+        world.Run(Windows, "polly@v1#aaaa", 0.4, questions: 3);
+
+        var wsl = (await Build(world)).Ok().Scopes.Single().Arms.Single(arm => arm.Arm == Wsl);
+
+        // The peak is the highest any leg saw, never a mean -- and the count is what separates a peak
+        // resting on one reading from one resting on thirty. Zero samples would be "not sampled", which a
+        // bare 0 could never say.
+        wsl.Cost.PeakVramBytes.Should().Be(1073741824);
+        wsl.Cost.VramSamples.Should().Be(3, "three legs each carried one reading");
+    }
+
     // ---- scaffolding -------------------------------------------------------------------------------
 
     private Task<Outcome<ArmComparisonView>> Build(ArmWorld world, string baseline = "") =>
@@ -261,6 +322,23 @@ internal sealed class ArmWorld : IRunStore, IResultStore
         IReadOnlyList<Guid> runIds, string metric, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<MetricLeg>>(
             metric == "Anchor recall" ? [.. _legs.Where(leg => runIds.Contains(leg.RunId))] : []);
+
+    /// <summary>Only what the scripted legs carry, so a console offering a catalog can be told apart from one
+    /// offering what was measured.</summary>
+    public Task<IReadOnlyList<string>> MetricNamesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>(
+            _legs.Any(leg => runIds.Contains(leg.RunId)) ? ["Anchor recall"] : []);
+
+    /// <summary>One vitals row per leg. Values chosen so a fold is checkable: every leg costs 100 ms and 2 s,
+    /// surfaces 5 hits across 3 files, and carries one 1 GiB accelerator reading.</summary>
+    public Task<IReadOnlyList<LegVitals>> VitalsAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<LegVitals>>(
+        [
+            .. _legs.Where(leg => runIds.Contains(leg.RunId))
+                .Select(leg => new LegVitals(leg.RunId, 100, 2, 5, 3, 1073741824, 1)),
+        ]);
 
     // Everything else. A comparison reads recent runs and their scored legs; a double that quietly answered
     // more would hide one that had started doing more.

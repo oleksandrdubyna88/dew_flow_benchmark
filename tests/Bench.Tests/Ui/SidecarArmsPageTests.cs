@@ -118,12 +118,16 @@ public sealed class SidecarArmsPageTests : BunitContext
     [Fact]
     public void Nothing_is_read_until_a_metric_is_chosen()
     {
-        var api = new ScriptedBenchApi();
+        var api = Offering(new ScriptedBenchApi());
 
         var page = Render<SidecarArms>(api);
 
         page.Markup.Should().Contain("there is no default");
-        api.Calls.Should().BeEmpty("a default metric would make every number below it about a choice nobody made");
+
+        // The guarantee is that no COMPARISON is read, not that the page is silent: it legitimately asks what
+        // the arms carry, because a control offering a catalog is what sent the reader to an empty table.
+        api.Calls.Should().ContainSingle().Which.Should().Be("/api/bench/arms/metrics");
+        api.Calls.Should().NotContain(call => call.StartsWith("/api/bench/arms?", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -148,6 +152,12 @@ public sealed class SidecarArmsPageTests : BunitContext
         return Render<T>();
     }
 
+    /// <summary>The metric control is filled from what the ARMS carry, so every page test has to script that
+    /// read — a page whose offer is empty renders "no arm has carried a metric yet" instead of a table, which
+    /// is correct behaviour and would silently pass every assertion below as a false negative.</summary>
+    private static ScriptedBenchApi Offering(ScriptedBenchApi api) =>
+        api.Answers("/api/bench/arms/metrics", new[] { WellKnownMetrics.AnchorRecall });
+
     private IRenderedComponent<SidecarArms> Arms(
         params ScopedArmsDto[] scopes) =>
         Arms(scopes, [], string.Empty);
@@ -159,7 +169,7 @@ public sealed class SidecarArmsPageTests : BunitContext
     private IRenderedComponent<SidecarArms> Arms(
         IReadOnlyList<ScopedArmsDto> scopes, IReadOnlyList<string> excluded, string refusal)
     {
-        var api = new ScriptedBenchApi().Answers(
+        var api = Offering(new ScriptedBenchApi()).Answers(
             "/api/bench/arms",
             new ArmComparisonDto(WellKnownMetrics.AnchorRecall, scopes, excluded, refusal));
 
@@ -178,5 +188,7 @@ public sealed class SidecarArmsPageTests : BunitContext
     private static ArmAverageDto Arm(
         string arm, double average, int legs = 4, int runs = 1, string proof = "NotAWinner") =>
         new(arm, average, legs, runs, new HalfReadingDto(true, average, legs / 2),
-            new HalfReadingDto(true, average, legs / 2), proof, 0);
+            new HalfReadingDto(true, average, legs / 2), proof, 0,
+            new ArmCostDto(RetrievalMs: 2607, WallSeconds: 50.2, Hits: 5, Files: 3,
+                PeakVramBytes: 25769803776, VramSamples: 2));
 }

@@ -45,6 +45,12 @@ public static class BenchApi
         // would give one endpoint two meanings of "the metric".
         group.MapGet("/arms", ArmsAsync);
 
+        // What the arms actually measured, so a console offers those and not a catalog. Its own route
+        // because the page needs it BEFORE a metric is chosen, and choosing is what triggers the comparison.
+        group.MapGet("/arms/metrics", async (
+            IRunStore runs, IResultStore results, CancellationToken cancellationToken, int runWindow = 50) =>
+            Results.Ok(await ArmComparison.MetricsAsync(runs, results, runWindow, cancellationToken)));
+
         return app;
     }
 
