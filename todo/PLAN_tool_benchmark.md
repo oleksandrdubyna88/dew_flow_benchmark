@@ -1,6 +1,6 @@
 # PLAN — the tool benchmark: a lane is a catalog row, the doctrine is an axis, and the loop finally turns
 
-> Status: **steps 1–2 implemented 2026-08-19; steps 3–4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
+> Status: **steps 1–3 implemented 2026-08-19; step 4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
 > 2026-08-16). The lane catalog exists: a lane is a hashed row rather than a bare name. Scope: `Bench.Domain` (new `Lanes/`, extensions to
 > `Runs/` and `Suites/`), `Bench.Application` (the tool loop and its ports), `Bench.Infrastructure`
 > (a new engine, a new runtime, two migrations), `Bench.Api`, `hosts/Cli`, and later `src/Bench.Ui`.
@@ -331,13 +331,34 @@ The doctrine text itself lives in `lanes.DefinitionJson`, so a published databas
 numbers without a second artefact. Nothing stores an absolute local path, a token or a machine name —
 the database must survive publication unedited, per the founding rule.
 
+### 3.9a What the operator asked for, and what it costs (2026-08-19)
+
+Stated during step 2, and it is a requirement rather than a preference: **the UI must list the tools, let a
+human pick ONE and test whether it works, and show the prompts that were actually sent.**
+
+Two of the three are already paid for and one is not:
+
+| the ask | where it comes from |
+|---|---|
+| a list of tools | `runs.SurfaceFingerprintJson` (§3.3) — what the server actually served, not what a lane asked for |
+| pick one and test it | the L1 rung (§3.6) narrowed to one tool: a lane whose `ToolNames` is that one tool, at `MaxTurns = 1`. No new mechanism — a lane already IS a tool subset |
+| **see the prompts sent** | **partly missing.** `LegResult.Prompt` already stores the assembled user prompt (the prompt · answer · thinking trio is called the artefact for exactly this reason), the doctrine is in `lanes.DefinitionJson`, and the advertised tools are in the fingerprint. What nothing holds is the middle of a loop: each turn's assistant prose and each tool's returned CONTENT |
+
+So the consequence for the build order is one sentence, and it lands in step 3 rather than waiting for the
+UI: **`ToolLoopRunner` keeps the transcript it built instead of discarding it after the last turn.** Storing
+it is step 7's migration; throwing it away in step 3 would make step 7 a re-run rather than a write.
+
+What this deliberately does **not** do is store a second copy of the system prompt or the tool list per leg.
+Both are already recoverable — from the lane the cell names and the fingerprint the run recorded — and a
+second copy is a second thing that can disagree with the first about what was sent.
+
 ### 3.10 The reports, and the three questions they answer
 
 Every one of these reads existing tables plus the two above; none needs a new store.
 
 | operator question | the report |
 |---|---|
-| (a) does tool T work at all | `bench lanes verify` (L0, no model) and the L1 rollup: per tool, how often it was *offered*, *called*, *refused*, *errored*, and how often its arguments were rejected. A tool with a healthy L0 and a zero call rate is the headline finding, not a footnote |
+| (a) does tool T work at all — **including one tool a human picked**, §3.9a | `bench lanes verify` (L0, no model) and the L1 rollup: per tool, how often it was *offered*, *called*, *refused*, *errored*, and how often its arguments were rejected. A tool with a healthy L0 and a zero call rate is the headline finding, not a footnote |
 | (b) is T better than native, and where | paired deltas per `ToolAffinity` group between two lanes at the same question and repeat, using only `Completed` legs — the existing `CountsInPairedDelta` rule. Reported per group, with totals shown last, because the totals are what hid the inversion last time |
 | (c) which description / doctrine wins | a leaderboard inside one comparison scope (§3.8), with the repeat spread printed beside every mean and any gap inside it labelled unproven |
 
@@ -470,10 +491,26 @@ it renders** — the API-first gate the family already applies.
    that asks for a tool while saying nothing reports *"this turn asked for a tool rather than answering"*
    instead of *"the response carried no message content"* — otherwise every multi-turn leg would carry a
    fault in its record for behaving normally.
-3. **`ToolSurface` + `ToolLoopRunner` + `LegRunner` wiring** — including the doctrine finally reaching
-   `SystemPrompt`, the `Turns` confirmation, and `CapExceeded(Turns)`. Land **before** the parallel
-   plan's engine-per-variant work reaches `LegRunner`; whoever is second reads the other's diff rather
-   than assuming.
+3. ~~**`ToolSurface` + `ToolLoopRunner` + `LegRunner` wiring**~~ **DONE 2026-08-19.** The doctrine reaches
+   `SystemPrompt`, the turn ceiling is confirmed by the loop and settles as `CapExceeded(Turns)`, and 11
+   tests cover it. `LegRunner` stayed the assembly it was: the loop scores nothing, persists nothing and
+   settles nothing.
+
+   **One deviation, and it is not small: `LegPlan` gained a `LaneRoster`, not a single `ToolSurface`.** The
+   step as written put one surface on the plan, which works only while a run measures one lane — and the
+   plan's own headline experiment is three doctrines, which is three lanes in ONE run. A single surface
+   would have sent every leg through the first lane and labelled the results with the cell's, the exact
+   defect the subject roster was introduced to end in another axis. The roster mirrors `VariantRoster` row
+   for row, resolves by the lane name a cell already carries, and refuses an unresolved lane rather than
+   falling back to the first.
+
+   **A defect its own tests found.** The request carried the growing transcript by REFERENCE, so the record
+   of what was sent changed after it was sent — every turn would have rendered as if it had carried the
+   whole conversation. It matters more now than it would have last week: §3.9a's "show me the prompts" reads
+   exactly that record. Fixed with a per-turn snapshot.
+
+   The parallel session was in `Runs/` throughout (the arm axis) but never in `LegRunner`; the two test
+   files that construct the runner directly gained the new collaborator, and no test BODY moved.
 4. **Tool expectations and scoring** — `ExpectationKind.ToolUsed/ToolNotUsed`, `ToolUsageObservation`,
    `AnswerScoring` extension, `Question.ToolAffinity`. Pure domain, no infrastructure. **Includes the
    §3.7 loader fix**: an unknown expectation kind refuses the suite instead of silently becoming a `File`
@@ -494,6 +531,13 @@ it renders** — the API-first gate the family already applies.
     a tool-health page answering (a), an affinity page answering (b), a wording leaderboard answering (c)
     with the unproven label rendered, and a leg detail showing every tool call with its outcome and its
     source. Mounted in the console shell `PLAN_variant_matrix.md` §3.6 builds.
+
+    **Three things §3.9a requires of it explicitly**, since they were asked for by name: the tool list comes
+    from the run's SURFACE FINGERPRINT rather than from the lane's request, so the page shows what was
+    served; picking one tool to test is a lane with that one name at `MaxTurns = 1`, offered from the page
+    rather than typed as JSON; and the leg detail renders **what was sent** — the doctrine from the lane, the
+    user prompt from the result, the advertised tools from the fingerprint, and each turn's own messages from
+    the transcript step 3 keeps and step 7 stores.
 11. **`CliAgentRuntime` + telemetry correlation** — the second subject: a cloud CLI headless over the
     worktree with its native tools, and the per-leg `Mcp.Host --stdio --correlation <cell>` attached; the
     reconstruction pass that turns ingested spool rows into `tool_calls` with `Source = reconstructed`.

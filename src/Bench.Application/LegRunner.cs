@@ -31,6 +31,15 @@ public sealed record LegPlan(
     /// it changes what the subject read and therefore belongs to the run's record.</summary>
     public RagPromptLimits Prompt { get; init; } = RagPromptLimits.Default;
 
+    /// <summary>Every tool lane this run measures, looked up per cell by the name the cell already carries.
+    /// <para>
+    /// <see cref="LaneRoster.Floor"/> by default and an <c>init</c> property, exactly like
+    /// <see cref="Variants"/> above and for the same reason: the tool lane is additive. A run planned
+    /// without the lane catalog resolves every cell to the floor — no tools, no doctrine — and behaves
+    /// exactly as it did before this axis existed.
+    /// </para></summary>
+    public LaneRoster Lanes { get; init; } = LaneRoster.Floor;
+
     /// <summary>A single-subject reading plan — the ad-hoc shape, and what a test with one subject
     /// collapses to.</summary>
     public static LegPlan Reading(Suite suite, ModelEndpoint endpoint, Sampling sampling) =>
@@ -68,6 +77,7 @@ public sealed class LegRunner(
     IResultStore results,
     IModelRuntime runtime,
     IRetriever retriever,
+    ToolLoopRunner loop,
     TimeProvider clock,
     ILogger<LegRunner> logger)
 {
@@ -227,11 +237,32 @@ public sealed class LegRunner(
 
         var prompt = RagPrompt.Assemble(work.Question, work.Retrieved, work.Plan.Prompt);
 
+        var lane = work.Plan.Lanes.For(work.Cell.LaneName);
+        if (lane is Outcome<LaneChoice>.Fail unresolved)
+        {
+            // A refusal, not a fallback to the first lane: a leg measured under an instruction it was not
+            // planned for is a number no report can catch.
+            return await AbandonAsync(work.Cell, work.Owner, unresolved.Reason, cancellationToken);
+        }
+
+        var chosen = ((Outcome<LaneChoice>.Ok)lane).Value;
+
+        return chosen.Surface is ToolSurface.Looping looping
+            ? await LoopAsync(work, prompt, chosen.Doctrine, looping, cancellationToken)
+            : await AskOnceAsync(work, prompt, chosen.Doctrine, cancellationToken);
+    }
+
+    /// <summary>The single completion this runner has always made — with one thing new: the doctrine now
+    /// reaches <c>SystemPrompt</c> instead of <c>string.Empty</c>. A floor lane's doctrine is empty, so a run
+    /// planned without the catalog sends exactly the request it sent before.</summary>
+    private async Task<Outcome<LegResult>> AskOnceAsync(
+        LegWork work, string prompt, string doctrine, CancellationToken cancellationToken)
+    {
         var asked = await runtime.AskAsync(
             new ModelRequest(
                 work.Subject.Endpoint,
                 work.Subject.Sampling,
-                string.Empty,
+                doctrine,
                 prompt,
                 work.Deadline.ForCall(clock.GetUtcNow())),
             cancellationToken);
@@ -239,6 +270,50 @@ public sealed class LegRunner(
         return asked is Outcome<ModelAnswer>.Fail failed
             ? await UnansweredAsync(work.Cell, work.Owner, work.Deadline, failed.Reason, cancellationToken)
             : await ScoreAsync(work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
+    }
+
+    /// <summary>
+    /// A leg that works a tool surface.
+    ///
+    /// <para>A leg that spends its turn ceiling settles as <see cref="LegOutcome.CapExceeded"/> with
+    /// <see cref="BudgetKind.Turns"/> — never as a crash, and never as a wrong answer. That keeps it out of
+    /// paired deltas through the existing <c>CountsInPairedDelta</c> rule, which is the whole reason the
+    /// distinction is worth making: a model that was still working when the ceiling arrived did not get
+    /// anything wrong, and averaging it in would report the instrument's limit as the subject's score.</para>
+    /// </summary>
+    private async Task<Outcome<LegResult>> LoopAsync(
+        LegWork work, string prompt, string doctrine, ToolSurface.Looping surface, CancellationToken cancellationToken)
+    {
+        var looped = await loop.RunAsync(
+            work.Subject.Endpoint,
+            work.Subject.Sampling,
+            doctrine,
+            prompt,
+            work.Deadline.ForCall(clock.GetUtcNow()),
+            surface,
+            cancellationToken);
+
+        if (looped is Outcome<ToolLoopResult>.Fail failed)
+        {
+            return await UnansweredAsync(work.Cell, work.Owner, work.Deadline, failed.Reason, cancellationToken);
+        }
+
+        var result = ((Outcome<ToolLoopResult>.Ok)looped).Value;
+
+        if (result.Exhausted)
+        {
+            await runs.SettleAsync(
+                work.Cell.Id,
+                work.Owner,
+                new LegOutcome.CapExceeded(
+                    BudgetKind.Turns, BudgetScope.Question, surface.MaxTurns, result.TurnsSpent),
+                cancellationToken);
+
+            return Outcome<LegResult>.Failure(
+                $"the leg spent its {surface.MaxTurns}-turn ceiling after {result.Calls.Count} tool call(s)");
+        }
+
+        return await ScoreAsync(work, prompt, result.Answer, cancellationToken);
     }
 
     /// <summary>A leg that produced no answer: a CEILING when its own wall ran out, a crash otherwise.

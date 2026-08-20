@@ -1,6 +1,7 @@
 using Bench.Application;
 using Bench.Application.Bank;
 using Bench.Application.Registry;
+using Bench.Application.Lanes;
 using Bench.Application.Variants;
 using Bench.Infrastructure.Engines;
 using Bench.Infrastructure.Git;
@@ -31,6 +32,10 @@ public static class CliContainer
             .AddSingleton(CheckoutCacheOptions.Under(checkoutRoot))
             .AddScoped<ICheckoutProvider, GitCheckoutProvider>()
             .AddScoped<IVariantCatalog, PostgresVariantCatalog>()
+            .AddScoped<ILaneCatalog, PostgresLaneCatalog>()
+            // Scoped beside the runner that takes it: it holds no state between legs, and a singleton would
+            // outlive the scope whose runtime it asks.
+            .AddScoped<ToolLoopRunner>()
             .AddScoped<LegRunner>()
             .AddSingleton<LegDrain>()
             .BuildServiceProvider();

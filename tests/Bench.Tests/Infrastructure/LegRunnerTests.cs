@@ -278,7 +278,7 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         return (
             run.Id,
             plan,
-            new LegRunner(runs, results, runtime, new NoRetriever(), clock, NullLogger<LegRunner>.Instance),
+            new LegRunner(runs, results, runtime, new NoRetriever(), Loop(runtime), clock, NullLogger<LegRunner>.Instance),
             runs,
             results);
     }
@@ -396,4 +396,11 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
                     stop,
                     stop.ToString())));
     }
+    /// <summary>The tool loop, which no test here reaches: every cell in this file is planned without a
+    /// lane, so it resolves to the floor and the runner takes the single-completion path it always took.
+    /// Constructed rather than faked for exactly that reason — a fake would assert something about a
+    /// collaborator these tests deliberately never use.</summary>
+    private static ToolLoopRunner Loop(IModelRuntime runtime) =>
+        new(runtime, NullLogger<ToolLoopRunner>.Instance);
+
 }

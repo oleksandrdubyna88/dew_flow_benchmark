@@ -330,7 +330,7 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
 
         var plan = LegPlan.Reading(suite, roster) with { Variants = variants };
         var runner = new LegRunner(
-            runs, postgres.NewResults(), runtime, retriever, clock, NullLogger<LegRunner>.Instance);
+            runs, postgres.NewResults(), runtime, retriever, Loop(runtime), clock, NullLogger<LegRunner>.Instance);
 
         return (run.Id, plan, runner, runs);
     }
@@ -551,4 +551,11 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
             }));
         }
     }
+    /// <summary>The tool loop, which no test here reaches: every cell in this file is planned without a
+    /// lane, so it resolves to the floor and the runner takes the single-completion path it always took.
+    /// Constructed rather than faked for exactly that reason — a fake would assert something about a
+    /// collaborator these tests deliberately never use.</summary>
+    private static ToolLoopRunner Loop(IModelRuntime runtime) =>
+        new(runtime, NullLogger<ToolLoopRunner>.Instance);
+
 }
