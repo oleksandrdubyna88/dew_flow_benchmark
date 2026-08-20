@@ -110,13 +110,32 @@ public sealed class SuiteJsonLoaderTests
         suite.Failed().Should().BeFalse();
     }
 
+    /// <summary>
+    /// <b>This test REVERSES a decision that was pinned here, and the reversal is the point.</b>
+    ///
+    /// <para>It used to read <c>An_unrecognised_expectation_kind_falls_back_to_File_rather_than_failing_the_batch</c>,
+    /// and the fallback was deliberate: one bad entry should not cost a whole suite. That trade was
+    /// defensible while the kinds were <c>File</c>, <c>Member</c>, <c>AnswerContains</c> and
+    /// <c>AnswerExcludes</c> — four words that look nothing like each other, so a typo was unlikely and its
+    /// cost was one loose expectation.</para>
+    ///
+    /// <para>Two things changed it. <c>ToolUsed</c> and <c>ToolNotUsed</c> differ from each other by three
+    /// characters and from a misspelling by one, so the typo stopped being unlikely. And the cost was never
+    /// really "one loose expectation": a <c>File</c> expectation against whatever path the entry carried —
+    /// often none — is a retrieval anchor that can never be surfaced, so the question scores as a MISS
+    /// forever and the author is told nothing. Every other unknown value in this system is refused by name;
+    /// this was the exception, and it is not one any more.</para>
+    /// </summary>
     [Fact]
-    public void An_unrecognised_expectation_kind_falls_back_to_File_rather_than_failing_the_batch()
+    public void An_unrecognised_expectation_kind_REFUSES_the_suite_and_names_the_kinds_it_knows()
     {
-        var suite = SuiteJsonLoader.Load(
+        var refusal = SuiteJsonLoader.Load(
             """{"id":"d","questions":[{"id":"q1","prompt":"p","expectations":[{"kind":"Nonsense","file":"src/A.cs"}]}]}""",
-            Commit).Ok();
+            Commit);
 
-        suite.Questions.Single().Expectations.Single().Kind.Should().Be(ExpectationKind.File);
+        refusal.Failed().Should().BeTrue();
+        refusal.Reason().Should().Contain("Nonsense")
+            .And.Contain("q1", "a refusal that does not name the question leaves an author searching a file")
+            .And.Contain("ToolUsed");
     }
 }

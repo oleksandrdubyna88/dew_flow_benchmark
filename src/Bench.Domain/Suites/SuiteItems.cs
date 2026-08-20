@@ -46,6 +46,17 @@ public enum ExpectationKind
 
     /// <summary>The produced answer must NOT contain this text.</summary>
     AnswerExcludes,
+
+    /// <summary>The subject must have CALLED this tool. The tool's name rides in
+    /// <see cref="Expectation.Text"/> — no new field, because a name is exactly what the anchor of a tool
+    /// expectation is.</summary>
+    ToolUsed,
+
+    /// <summary>The subject must NOT have called this tool.
+    /// <para>The trap half, and it matters as much as the other: a description that makes a model reach for
+    /// a tool where it should not have is a defect in the description, and it is invisible unless something
+    /// asserts the negative.</para></summary>
+    ToolNotUsed,
 }
 
 /// <summary>One thing that must be true of a leg's result. <see cref="Required"/> separates the
@@ -60,6 +71,10 @@ public sealed record Expectation(ExpectationKind Kind, SourceAnchor Anchor, stri
 
     public bool IsRetrieval => Kind is ExpectationKind.File or ExpectationKind.Member;
 
+    /// <summary>Whether this expectation is about a TOOL rather than about text or an anchor. The tool's
+    /// name is <see cref="Text"/>.</summary>
+    public bool IsTool => Kind is ExpectationKind.ToolUsed or ExpectationKind.ToolNotUsed;
+
     public string Canonical => $"{Kind}:{Anchor.Canonical}:{Text}:{(Required ? "req" : "opt")}";
 }
 
@@ -70,6 +85,17 @@ public sealed record Question(string Id, string Prompt, IReadOnlyList<Expectatio
         new(id, prompt, expectations, string.Empty);
 
     public IReadOnlyList<Expectation> RetrievalExpectations => [.. Expectations.Where(e => e.IsRetrieval)];
+
+    public IReadOnlyList<Expectation> ToolExpectations => [.. Expectations.Where(e => e.IsTool)];
+
+    /// <summary>What SHAPE of question this is — "a graph-shaped question", "a literal lookup". Empty by
+    /// default and never inferred.
+    /// <para>It is what turns "is the tool better on average" — where the measured answer is roughly a wash,
+    /// one point of sixty-three — into "on which KIND of question is it better", which is where the one
+    /// violent inversion in the record lived: 8/8 in 254 s against 0/8 in 1 058 s on a single task.</para>
+    /// <para>An <c>init</c> property, so every question ever written keeps its meaning: no affinity is a
+    /// question nobody has classified, not a question classified as nothing.</para></summary>
+    public string ToolAffinity { get; init; } = string.Empty;
 
     public string Canonical =>
         $"{Id}|{Prompt}|{ReferenceAnswer}|{string.Join(';', Expectations.Select(e => e.Canonical))}";

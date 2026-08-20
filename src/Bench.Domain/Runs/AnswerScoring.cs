@@ -14,6 +14,20 @@ public sealed record RetrievalObservation(bool Available, IReadOnlyList<string> 
     public static RetrievalObservation Of(params string[] anchors) => new(true, anchors);
 }
 
+/// <param name="Available">Whether this lane offered the subject any tool at all. A no-tools arm did not,
+/// and that is a property of the ARM rather than a failure of the subject — the same distinction
+/// <see cref="RetrievalObservation"/> makes, one axis over, and for the identical reason.</param>
+/// <param name="ToolsCalled">Every tool the subject actually invoked, in order, with repeats. Repeats are
+/// kept because "it called the search four times" and "it called it once" are different facts about how a
+/// model works a surface, and collapsing them here would throw that away before anything could count it.</param>
+public sealed record ToolUsageObservation(bool Available, IReadOnlyList<string> ToolsCalled)
+{
+    /// <summary>A lane that offered nothing. Not "it called nothing" — it could not.</summary>
+    public static ToolUsageObservation None => new(false, []);
+
+    public static ToolUsageObservation Of(params string[] names) => new(true, names);
+}
+
 /// <summary>Turning one leg's answer into metrics, mechanically.
 /// <para>
 /// Deterministic on purpose. The first measurement in this system must not depend on a second model: an
@@ -24,9 +38,72 @@ public static class AnswerScoring
 {
     public const string AnchorRecall = "Anchor recall";
 
+    public const string ToolUse = "Tool use";
+
     public static IReadOnlyList<StoredMetric> Score(
         Question question, ModelAnswer answer, RetrievalObservation retrieval) =>
-        [.. TextMetrics(question, answer), RecallMetric(question, retrieval)];
+        Score(question, answer, retrieval, ToolUsageObservation.None);
+
+    public static IReadOnlyList<StoredMetric> Score(
+        Question question,
+        ModelAnswer answer,
+        RetrievalObservation retrieval,
+        ToolUsageObservation tools) =>
+        [.. TextMetrics(question, answer), RecallMetric(question, retrieval), .. ToolMetrics(question, tools)];
+
+    /// <summary>
+    /// One metric per tool expectation — or an honest statement that it does not apply.
+    ///
+    /// <para><b>A <c>ToolUsed</c> expectation in a lane with no tools is NOT a miss.</b> The identical rule
+    /// anchor recall already applies, and for the identical reason: the no-tools floor exists to be compared
+    /// fairly, and scoring it zero for not calling a tool it never had would make the baseline look worse
+    /// than it is and flatter every tool lane by exactly that much. Emitted as TEXT so the numeric aggregate
+    /// skips it and reports a smaller denominator rather than a diluted mean.</para>
+    ///
+    /// <para><c>ToolNotUsed</c> follows the same rule for the same reason, and it is not symmetric with a
+    /// pass: a lane that offered the tool is the only place where NOT calling it means anything.</para>
+    /// </summary>
+    private static IEnumerable<StoredMetric> ToolMetrics(Question question, ToolUsageObservation tools) =>
+        question.ToolExpectations.Select(expectation => ToolMetric(expectation, tools));
+
+    private static StoredMetric ToolMetric(Expectation expectation, ToolUsageObservation tools)
+    {
+        var wanted = expectation.Kind == ExpectationKind.ToolUsed;
+        var label = $"{ToolUse}: {expectation.Text}";
+
+        if (!tools.Available)
+        {
+            return StoredMetric.Text(
+                label,
+                "not applicable",
+                $"this lane offers no tools, so '{expectation.Text}' could not be called — that is the arm, not the subject",
+                failed: false,
+                "Unknown");
+        }
+
+        var called = tools.ToolsCalled.Contains(expectation.Text, StringComparer.Ordinal);
+        var met = called == wanted;
+
+        return StoredMetric.Numeric(
+            label,
+            met ? 1 : 0,
+            Describe(expectation.Text, wanted, called),
+            failed: !met,
+            met ? "Exceptional" : "Unacceptable");
+    }
+
+    /// <summary>Why the expectation was met or not, in the words a reader needs.
+    /// <para>The unmet <c>ToolNotUsed</c> case is the one worth spelling out: a model that reached for a
+    /// tool it should not have is evidence about the DESCRIPTION, not about the model, and a metric that
+    /// only said "failed" would send a reader looking in the wrong place.</para></summary>
+    private static string Describe(string tool, bool wanted, bool called) =>
+        (wanted, called) switch
+        {
+            (true, true) => $"'{tool}' was called",
+            (true, false) => $"'{tool}' was offered and never called",
+            (false, false) => $"'{tool}' was correctly left alone",
+            _ => $"'{tool}' was called where it should not have been — read this as a defect in its description",
+        };
 
     /// <summary>One metric per answer expectation.
     /// <para>

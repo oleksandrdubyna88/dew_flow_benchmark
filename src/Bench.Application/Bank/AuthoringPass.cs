@@ -263,7 +263,17 @@ public static class AuthoringPass
 
         foreach (var file in files)
         {
-            var question = QuestionJson.ToQuestion(file.ToQuestionFile(), request.Commit);
+            var read = QuestionJson.ToQuestion(file.ToQuestionFile(), request.Commit);
+            if (read is Outcome<Question>.Fail unreadable)
+            {
+                // A rejection with its reason, not a throw: an author writing a kind this build does not
+                // know is an ordinary event in a pass driven by a model, and the pass must keep going and
+                // say which candidate it dropped.
+                rejected.Add(unreadable.Reason);
+                continue;
+            }
+
+            var question = ((Outcome<Question>.Ok)read).Value;
             var dated = Dated(Seed(file), request.Commits);
 
             if (dated.Correction.Length > 0)

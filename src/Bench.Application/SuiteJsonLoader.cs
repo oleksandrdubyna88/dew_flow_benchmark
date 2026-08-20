@@ -45,7 +45,13 @@ public static class SuiteJsonLoader
 
         var draft = file.Questions.Aggregate(
             Outcome<Suite>.Success(Suite.Draft(file.Id)),
-            (acc, q) => acc.Match(s => s.With(QuestionJson.ToQuestion(q, authoredAt)), Outcome<Suite>.Failure));
+            // Bound rather than mapped: a question whose expectations cannot be read refuses the SUITE.
+            // Loading the rest would freeze a suite quietly missing an expectation somebody wrote.
+            (acc, q) => acc.Match(
+                suite => QuestionJson.ToQuestion(q, authoredAt).Match(
+                    suite.With,
+                    Outcome<Suite>.Failure),
+                Outcome<Suite>.Failure));
 
         return draft.Match(s => s.Freeze(), Outcome<Suite>.Failure);
     }

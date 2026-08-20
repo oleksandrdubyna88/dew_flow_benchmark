@@ -178,18 +178,22 @@ public static class BankImport
         BankFile file, BankQuestionFile question, QuestionGroup group, TimeProvider clock) =>
         RepoUrl.Parse(file.TargetRepo).Match(
             repo => CommitSha.Parse(file.AuthoredAtCommit).Match(
-                commit => BankQuestion.Create(
-                    group.Id,
-                    question.Ordinal,
-                    Kind(question.Kind),
-                    QuestionJson.ToQuestion(question.ToQuestionFile(), commit),
-                    question.CodeTask,
-                    Source(question.Source),
-                    question.AuthorModel,
-                    Seed(question.Seed),
-                    repo,
-                    commit,
-                    clock.GetUtcNow()),
+                // Bound through the question too: an expectation kind this build does not know refuses the
+                // ROW rather than importing a question scored against something its author never wrote.
+                commit => QuestionJson.ToQuestion(question.ToQuestionFile(), commit).Match(
+                    asked => BankQuestion.Create(
+                        group.Id,
+                        question.Ordinal,
+                        Kind(question.Kind),
+                        asked,
+                        question.CodeTask,
+                        Source(question.Source),
+                        question.AuthorModel,
+                        Seed(question.Seed),
+                        repo,
+                        commit,
+                        clock.GetUtcNow()),
+                    Outcome<BankQuestion>.Failure),
                 Outcome<BankQuestion>.Failure),
             Outcome<BankQuestion>.Failure);
 

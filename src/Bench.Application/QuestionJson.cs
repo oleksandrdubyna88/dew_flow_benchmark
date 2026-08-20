@@ -28,11 +28,33 @@ public static class QuestionJson
 
     private static readonly JsonSerializerOptions Compact = new() { WriteIndented = false };
 
-    public static Question ToQuestion(QuestionFile question, CommitSha authoredAt) =>
-        new(question.Id,
-            question.Prompt,
-            [.. question.Expectations.Select(e => ToExpectation(e, authoredAt))],
-            question.ReferenceAnswer);
+    public static Outcome<Question> ToQuestion(QuestionFile question, CommitSha authoredAt) =>
+        Read(question.Expectations, authoredAt).Match(
+            expectations => Outcome<Question>.Success(
+                new Question(question.Id, question.Prompt, expectations, question.ReferenceAnswer)),
+            reason => Outcome<Question>.Failure($"question '{question.Id}': {reason}"));
+
+    /// <summary>Every expectation, or the first refusal.
+    /// <para>The whole list fails on one bad entry rather than loading the rest: a question missing the
+    /// expectation its author wrote is scored against the wrong thing, silently, forever.</para></summary>
+    private static Outcome<IReadOnlyList<Expectation>> Read(
+        IReadOnlyList<ExpectationFile> files, CommitSha authoredAt)
+    {
+        var read = new List<Expectation>(files.Count);
+
+        foreach (var file in files)
+        {
+            var one = ToExpectation(file, authoredAt);
+            if (one is Outcome<Expectation>.Fail failure)
+            {
+                return Outcome<IReadOnlyList<Expectation>>.Failure(failure.Reason);
+            }
+
+            read.Add(((Outcome<Expectation>.Ok)one).Value);
+        }
+
+        return Outcome<IReadOnlyList<Expectation>>.Success(read);
+    }
 
     /// <summary>The expectations of a stored question, as the JSON a bank row holds.</summary>
     public static string WriteExpectations(IReadOnlyList<Expectation> expectations) =>
@@ -49,8 +71,7 @@ public static class QuestionJson
         {
             var files = JsonSerializer.Deserialize<List<ExpectationFile>>(json, Options) ?? [];
 
-            return Outcome<IReadOnlyList<Expectation>>.Success(
-                [.. files.Select(e => ToExpectation(e, authoredAt))]);
+            return Read(files, authoredAt);
         }
         catch (JsonException ex)
         {
@@ -60,18 +81,35 @@ public static class QuestionJson
 
     public static JsonSerializerOptions ReaderOptions => Options;
 
-    private static Expectation ToExpectation(ExpectationFile expectation, CommitSha authoredAt)
+    /// <summary>
+    /// One expectation, or a refusal naming the kind.
+    ///
+    /// <para><b>It used to fall back to <see cref="ExpectationKind.File"/>.</b> A misspelt kind therefore
+    /// became a file expectation against whatever path the entry carried — often none — which then scored
+    /// as a retrieval miss the author never wrote, forever, silently. Every other unknown value in this
+    /// system is refused by name: an unknown axis field, an unknown funnel stage, an unknown telemetry
+    /// version. This one was the exception, and adding tool kinds is exactly what turns a latent typo trap
+    /// into a live one, since <c>ToolUsed</c> and <c>ToolUsedd</c> differ by a keystroke.</para>
+    ///
+    /// <para>Reached by TWO paths, which is why the guard is here rather than in a loader: a suite read from
+    /// JSON and a question rehydrated from a bank row both arrive at this method.</para>
+    /// </summary>
+    private static Outcome<Expectation> ToExpectation(ExpectationFile expectation, CommitSha authoredAt)
     {
-        var kind = Enum.TryParse<ExpectationKind>(expectation.Kind, ignoreCase: true, out var parsed)
-            ? parsed
-            : ExpectationKind.File;
+        if (!Enum.TryParse<ExpectationKind>(expectation.Kind, ignoreCase: true, out var kind))
+        {
+            var named = expectation.Kind.Length > 0 ? $"'{expectation.Kind}'" : "an empty kind";
+            return Outcome<Expectation>.Failure(
+                $"{named} is not an expectation kind this build knows — it knows "
+                + string.Join(", ", Enum.GetNames<ExpectationKind>()));
+        }
 
         var anchor = expectation.Member.Length == 0
             ? SourceAnchor.File(expectation.File, authoredAt)
             : SourceAnchor.Member(
                 expectation.File, expectation.Member, new LineSpan(expectation.Start, expectation.End), authoredAt);
 
-        return new Expectation(kind, anchor, expectation.Text, expectation.Required);
+        return Outcome<Expectation>.Success(new Expectation(kind, anchor, expectation.Text, expectation.Required));
     }
 
     /// <summary>One expectation as the JSON a file carries. Public because a stored question is also shown to

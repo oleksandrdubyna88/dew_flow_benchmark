@@ -1,7 +1,8 @@
 # PLAN — the tool benchmark: a lane is a catalog row, the doctrine is an axis, and the loop finally turns
 
-> Status: **steps 1–3 implemented 2026-08-19; step 4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
-> 2026-08-16). The lane catalog exists: a lane is a hashed row rather than a bare name. Scope: `Bench.Domain` (new `Lanes/`, extensions to
+> Status: **steps 1–4 implemented 2026-08-19; steps 6–11 open.** Step 5 shipped in `dew_flow_mcp`
+> 2026-08-16. A lane is a hashed catalog row, the loop turns, the doctrine reaches the model, and a tool
+> expectation scores — the harness can now measure a tool surface, but nothing yet reaches a real one. Scope: `Bench.Domain` (new `Lanes/`, extensions to
 > `Runs/` and `Suites/`), `Bench.Application` (the tool loop and its ports), `Bench.Infrastructure`
 > (a new engine, a new runtime, two migrations), `Bench.Api`, `hosts/Cli`, and later `src/Bench.Ui`.
 > One new cross-repository edge: this repository vendors `dew_flow_mcp` as a submodule.
@@ -511,10 +512,29 @@ it renders** — the API-first gate the family already applies.
 
    The parallel session was in `Runs/` throughout (the arm axis) but never in `LegRunner`; the two test
    files that construct the runner directly gained the new collaborator, and no test BODY moved.
-4. **Tool expectations and scoring** — `ExpectationKind.ToolUsed/ToolNotUsed`, `ToolUsageObservation`,
-   `AnswerScoring` extension, `Question.ToolAffinity`. Pure domain, no infrastructure. **Includes the
-   §3.7 loader fix**: an unknown expectation kind refuses the suite instead of silently becoming a `File`
-   expectation — its RED test is watched failing on the current fallback first.
+4. ~~**Tool expectations and scoring**~~ **DONE 2026-08-19.** `ExpectationKind.ToolUsed/ToolNotUsed`,
+   `ToolUsageObservation`, the `AnswerScoring` overload, `Question.ToolAffinity`. Pure domain, no
+   infrastructure, 19 tests.
+
+   **The §3.7 loader fix reversed a decision that was PINNED, which §3.7 did not know.** The fallback was not
+   an oversight: `An_unrecognised_expectation_kind_falls_back_to_File_rather_than_failing_the_batch` asserted
+   it deliberately, and the trade was defensible — one bad entry should not cost a whole suite, and with four
+   kind names that look nothing like each other a typo was unlikely. Two things changed it. `ToolUsed` and
+   `ToolNotUsed` differ from a misspelling by one character, so the typo stopped being unlikely; and the cost
+   was never "one loose expectation" but a `File` anchor against an empty path — a retrieval miss the author
+   never wrote, scored forever, silently. The old test was replaced by its opposite with the reversal
+   recorded in it, rather than deleted.
+
+   Watched RED first: four failures, all `Ok` where `Fail` was expected. And the guard went where the defect
+   actually lives — `QuestionJson.ToExpectation`, reached by BOTH a suite read from JSON and a question
+   rehydrated from a bank row, so the refusal had to be threaded through three call sites (`SuiteJsonLoader`,
+   `BankImport`, and `AuthoringPass`, where an unreadable candidate becomes a rejection with its reason
+   rather than a throw in a model-driven pass).
+
+   `ToolUsageObservation` mirrors `RetrievalObservation` member for member, including the fairness rule: a
+   tool expectation in a lane with no tools is **not applicable**, never a miss, emitted as TEXT so the
+   numeric aggregate reports a smaller denominator instead of a diluted mean. Repeat calls are kept — "it
+   called search four times" and "once" are different facts about how a model works a surface.
 5. ~~**Sibling repository, steps 1–2**~~ **DONE 2026-08-16, in `dew_flow_mcp`** — all five §4 items,
    not just 1–3 and 5: `--correlation` shipped in the same pass. Nothing is owed by that side.
 6. **Submodule + `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references, implement the
