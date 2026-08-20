@@ -623,17 +623,36 @@ checked against, and the deterministic metrics in the same result are it.
 
 ### The compute backend, and why two sidecars were one row
 
-An engine's identity carries the arm it computed on — `host/provider/device`, as
-`wsl/migraphx/R9700` or `windows/dml/R9700`. Without it two qln engines differing only in which
+An engine's identity carries the arm it computed on — `route/provider/device`, as `wsl/migraphx/R9700`,
+`windows/dml/R9700`, or `windows-to-wsl/migraphx/R9700`. Without it two qln engines differing only in which
 sidecar they call have the same kind, the same version and, the corpus being unchanged, the same index
 fingerprint; they differ in `endpoint`, which is a machine-local address rather than a description of
 anything. The operator's own question — on one R9700, is the sidecar faster under WSL/MIGraphX or on
 Windows/DirectML — was measured on 2026-08-18 and had nowhere in this schema to live.
 
+**The first segment is a ROUTE, not the sidecar's operating system, and that correction came from the
+operator on 2026-08-19.** Three topologies run on this machine, and the two that share a sidecar are the
+fastest and the slowest configurations ever measured on it (`dew_flow_rag_qln ·
+research/GPU_BACKEND_WSL_VS_WINDOWS.md` §10):
+
+| arm | counting | wall |
+|---|---|---|
+| `windows/dml/R9700` — Windows host → Windows sidecar | 84.5 s | 18:32 |
+| `windows-to-wsl/migraphx/R9700` — Windows host → WSL sidecar | **237.7 s** | 21:30 |
+| `wsl/migraphx/R9700` — WSL host → WSL sidecar | **82.7 s** | **17:18** |
+
+The last two are the same binary on the same card with the same provider; 155 s separates them, and all of
+it is the per-call crossing repeated 53 083 times. Naming the arm after the sidecar alone would have folded
+them into one row — this axis's own defect, one level up, and it survived the first implementation until it
+was pointed out.
+
 - **The three parts are one value, because the hardware does not separate them.** MIGraphX exists only under
   Linux/WSL and DirectML only on Windows, so *"WSL against Windows"* and *"MIGraphX against DirectML"* are
   one comparison with two names. The CPU pair is the only one that holds the provider constant, and is
   therefore the only evidence about the operating system itself — an ordinary value here, not a special case.
+- **A boundary crossed is part of the arm.** `windows-to-wsl` is a route, not a host, and it is where 155 s
+  of one index pass went. A daemon and a sidecar on opposite sides of the VM are a different configuration
+  from either of them native, however identical the sidecar.
 - **Echoed, never inferred.** The engine reports it on its index-state read; a url is not a description of
   the host, provider or card that answered, and inferring one would reintroduce the confound wearing a
   stored field's authority.
