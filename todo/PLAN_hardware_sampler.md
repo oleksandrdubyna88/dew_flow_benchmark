@@ -1,9 +1,21 @@
 # PLAN — the machine a number came off, recorded so the number stays readable
 
-> Status: **OPEN — steps 1 to 3 shipped 2026-08-19/20; the sampler itself and the report are the work.**
-> A run now records the machine it measured on: the shapes and their fingerprint, a probe that reads this
-> host, and `run_machines` written by `bench run` at start. What is missing is the DYNAMIC half — nothing
-> samples VRAM, RAM or utilisation per leg yet — and the report does not name a fingerprint difference.
+> Status: **OPEN — steps 1 to 5 shipped 2026-08-19/20 and proven on a live run; what is left is named below.**
+> A run records the machine it measured on, each leg records what that machine was doing while it ran, and
+> the report carries both — verified end to end against the real database on 2026-08-20. Three things remain,
+> and none is a gap in this plan's own steps:
+>
+> - **VRAM is unreachable on Linux/WSL** (PDH is Windows-only and the ROCm path is unverified), and on
+>   Windows a read costs about a second, so a leg shorter than the slow cadence catches none. Per-leg VRAM is
+>   therefore meaningful only for legs measured in MINUTES — index passes, code-lane tasks — and no tuning
+>   fixes that. A cheaper source is DXGI through P/Invoke, or asking the engine, which answers a different
+>   question.
+> - **`VramAttribution.Attributed` is unreachable** until the accelerator lease exists
+>   ([PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4b). Every figure is `Observed`, which is correct
+>   rather than pending: nothing can currently prove a leg held the card alone.
+> - **The fingerprint COMPARISON needs cross-run comparison**, which `bench report` deliberately does not do
+>   (`PLAN_run_report.md` §3.9). §5's DoD line promised it and was corrected rather than quietly dropped.
+>
 > Originally: Scope: `Bench.Domain/Trace` (the sample shapes and
 > the machine fingerprint), `Bench.Application` (the sampler port, already declared, and a run-start probe),
 > `Bench.Infrastructure` (the adapters — WMI, `nvidia-smi`/`rocm-smi`, `/proc`, the qln runtime read),
