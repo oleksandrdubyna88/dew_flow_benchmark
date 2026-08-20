@@ -2,8 +2,12 @@
 
 > Status: **PARTLY IMPLEMENTED, 2026-08-19 — open work remains, so it stays here.** Done: the author's brief
 > carries the target's history (§3.2), the panel is three different models (§3.3, §3.7), the mechanical gate and
-> the seed-date derivation ship (§3.4b/§3.4c), and a reviewer slot can be retired (§3.9). Open: the first
-> measurement, `gemini` has still authored nothing, and the questions of §3.4/§3.5. Extracted from
+> the seed-date derivation ship (§3.4b/§3.4c), a reviewer slot can be retired (§3.9), and the first run under the
+> fixed contract is measured (§3.10) — the bank now holds **25 accepted questions across all five reading
+> groups**, which answers this plan's §1 symptom; the 32 shifted seed dates are corrected and the three
+> gate-blocked questions are settled — one repaired, two retired (§3.10). Open: the first measurement RUN,
+> `gemini` has still authored nothing, codex is out of quota until 17 September, and the questions of §3.4/§3.5.
+> Extracted from
 > [../research/PLAN_question_authoring.md](../research/PLAN_question_authoring.md) when that plan was
 > implemented: its pipeline works and its throughput is measured, and what remains is not pipeline work but
 > **coverage** — three reading groups nothing has authored, one that cannot be authored this way at all, and a
@@ -244,7 +248,30 @@ the identical hazard on the identical line, unexercised). The one comparison liv
 the two spellings of it were how one could be wrong while the other looked right.
 
 **Rows already in the bank are still shifted by a day** — nothing was back-filled, and that is an operator
-decision. `bench questions vet` will now report a genuine correction for each, which is the honest way to find them.
+decision. Audited 2026-08-19, and the split is exact:
+
+| `SeedKind` | rows | time of day | reading |
+|---|---|---|---|
+| `commit` | 6 | `00:00` | correct — `Dated` overwrote them from the repository |
+| `commit` | **3** | `22:00` | **shifted** — `Dated` never fired for these (no lookup, or the sha did not resolve) |
+| `member` | **29** | `22:00` | **shifted, every one** |
+| `unstated` | 35 | `-infinity` | correct by design |
+
+**32 rows, not 29** — the first count looked only at `member` and missed three `commit` seeds the derivation never
+reached. Exactly `22:00` on all of them, which is local midnight at UTC+2: every one was written on this machine
+in summer, so a flat `+ interval '2 hours'` is right for all 32 and no per-row reasoning is needed.
+
+**Corrected 2026-08-19** on the operator's decision — `UPDATE ... + interval '2 hours'` over the 32 rows whose
+time of day was `22:00`. Every dated row in the bank now reads `00:00`: 9 `commit`, 29 `member`, and the 35
+`unstated` untouched at `-infinity`. The affected ids and their prior values were dumped before the statement ran,
+so the shift is reversible row by row rather than by re-running arithmetic over a column that no longer matches
+the predicate.
+
+Vetting will not surface most of them: `SeedCheck` checks only `commit` seeds, so the 29 `member` rows are never
+looked at, and the three `commit` ones are only re-checked while a question is still `Proposed`. The error runs in
+the SAFE direction — an earlier date reads as *may recall* rather than falsely certifying a question as *clear* —
+so nothing measured so far is wrong because of it, but 32 questions understate how recent their material is. It is
+a data edit, one statement, and it waits for the operator.
 
 Two defects of my own, found in the same output and fixed:
 
@@ -374,6 +401,83 @@ nobody sits in.
 > every existing slot on deploy — the column meant to unfreeze the panel would have emptied it instead. Backfills
 > `true`.
 
+### 3.10 MEASURED 2026-08-19: the first run under the fixed contract
+
+Predictions were recorded in §3.4c and §3.9 before anything was launched; this is what was observed.
+
+**The panel finishes.** Fifteen proposed questions in the three re-authored groups:
+
+| Group | Accepted | Rejected | Waiting | Gate blocked |
+|---|---|---|---|---|
+| pr-diff | 3 | 0 | 0 | 0 |
+| semantic-intent | 2 | 0 | 1 | 1 |
+| adversarial | 4 | 0 | 5 | 2 |
+| **total** | **9** | **0** | **6** | **3** |
+
+Against **0 accepted out of 20** before. The bank now holds **25 accepted across five groups** (code-lookup 9,
+bug-root-cause 7, adversarial 4, pr-diff 3, semantic-intent 2), where it held 16 in two — which is this plan's
+§1 symptom answered.
+
+**Zero date corrections across fifteen questions.** Not one `fixed seed` line. The strongest evidence is
+incidental: reviewer-1 checked a date by hand and approved —
+
+> *"Commit 46b5409 is real and dated 2026-08-17, the file and MinMax member exist at lines 51-64…"*
+
+That same question, under the pre-fix arithmetic, would have printed *"the author dated it 2026-08-16, the
+repository says 2026-08-17"* and been written up as another author shifting dates.
+
+**The retirement works and the migration backfilled correctly.** `bench questions reviewers` read all three slots
+as `serving` on the live bank — with the scaffolded `defaultValue: false` it would have read three `retired` and
+frozen the bank permanently. After `bench questions disable --reviewer reviewer-3`, gemini was neither launched
+nor waited for.
+
+**The remaining blockers are not the contract's.** The three gate-blocked questions are the same three as before
+the contract fix — they were authored under the OLD contract, which the fix cannot repair retroactively (§3.4).
+The six waiting split as three gate-blocked and three waiting on codex, whose **usage limit runs to 17 September**.
+By author: `gpt-5.6-terra` 8 accepted / 0 pending, `claude-sonnet-4-6` 1 accepted / 6 pending — every
+codex-authored question completed, because claude reviews them and claude answers. Retiring codex would not help:
+claude-authored questions would then have no eligible reviewer at all.
+
+**The tail-reading fix paid for itself the first time it was needed.** Codex's refusal read
+`ERROR: You've hit your usage limit … try again at Sep 17th` rather than a colour-support banner.
+
+Two things the plan did not anticipate:
+
+- **The bank's container would not start after a WSL restart** — the Aspire Docker network was gone and the
+  container held it by ID. Data was safe in the named volume `bench-postgres-data`; recreating the network under
+  the same name, force-dropping the stale endpoint and reconnecting with its aliases brought it back. Worth
+  knowing before the next restart, because the symptom reads like a lost database.
+- **A question accepted on a mark from an earlier pass.** `gpu-gate-re-entrant-hold` was accepted while both slots
+  were silent in this run: codex had approved it on 2026-08-18 at 20:03 UTC, and `Promotion.Decide` reads marks
+  from the BANK rather than from the run. Correct, documented, and startling the first time it is seen.
+
+#### The three gate-blocked questions, settled
+
+Two different defects wearing one symptom, and only one of them was an anchor typo.
+
+- **`chunk-completion-countdown` — repaired.** The question is sound: its reference answer matches `ChunkLedger`
+  in the target word for word, down to *"a piece that was never in the plan is silently ignored"*, which is what
+  the code's own comment says. Only the span was wrong — the anchor claimed `ChunkLedger.Landed@33-42`, and the
+  method lives at **54–63**; line 43 is a CALL of `Landed` inside `Wrote`, which is why the gate reported it
+  "on line(s) 43, 54". Repointed, and re-vetting the group proves it: the `defect` line and the
+  `with broken anchors` count are both gone, and the question now waits only on codex.
+- **`worker-liveness-win32-exception-return` and `process-runner-read-cancellation-token` — retired.** Not typos.
+  They anchor at `Bench.Infrastructure/Process/WorkerLiveness.cs` and `.../ProcessRunner.cs`, which exist in THIS
+  repository and not in the target; the author described the harness it was running inside. The target has a
+  `ProcessRunner` too, at `src/Rag.Infrastructure/Processes/`, but it is a different class and both reference
+  answers are claims about OUR code — repointing them would mean writing two new questions, not fixing two.
+  Rejected, as the class the contract's new *"the repository you are describing is the one you are standing in"*
+  section now prevents.
+
+There is **no CLI verb that edits a stored expectation** — `import` refuses a duplicate id, and only
+accept/reject/move/review exist — so the repair was one `jsonb_set` against the row, with the prior JSON dumped
+first. If anchor repairs turn out to be routine rather than rare, that verb is the thing to build.
+
+Test suite through the day: 773 → 863 → 886, 0 failed at each point (the growth is other work landing in the same
+tree). The two new seed tests were verified to have teeth by reverting `QuestionSeed.Written` and watching them go
+red with the real symptom — *"the question dates it 2026-08-15"* for a seed written `2026-08-16`.
+
+
 ## 4. Build order
 
 1. §3.1 — retry `semantic-intent` and `adversarial` (a run, not a change).
@@ -395,12 +499,15 @@ nobody sits in.
 
 ## 6. Definition of Done
 
-- [ ] Every reading group (1–5) holds questions, or names the reason it cannot in this document.
-- [ ] `pr-diff` questions carry real seed dates rather than `unstated`.
-- [ ] At least two DIFFERENT models sit on the reviewer panel, and the report says which.
+- [x] Every reading group (1–5) holds questions, or names the reason it cannot in this document — 25 accepted
+      across all five as of 2026-08-19 (§3.10).
+- [x] `pr-diff` questions carry real seed dates rather than `unstated` — all three accepted ones are `commit`
+      seeds dated from the repository.
+- [x] At least two DIFFERENT models sit on the reviewer panel, and the report says which — `claude-sonnet-4-6`
+      and `gpt-5.6-terra`; `gemini-3.1-flash` is retired, and codex is out of quota until 17 September.
 - [ ] The five flagged questions are fixed, retired, or explicitly kept with a stated reason.
 - [ ] `research/architecture.md` and `research/PLAN_question_authoring.md` are updated with whatever the retried
       groups measure.
 - [x] A reviewer slot that cannot answer can be taken out of the panel without deleting its marks (§3.9).
 - [x] A seed date survives the trip from an author's JSON to the bank as the DAY it was written (§3.4c).
-- [ ] The seed dates already stored a day early are corrected, or the operator decides to leave them.
+- [x] The seed dates already stored a day early are corrected — 32 rows, 2026-08-19 (§3.4c).
