@@ -292,6 +292,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         // distinguishable from "it reasoned about nothing" after a round trip.
         ThinkingReason = result.Thinking.Reason,
         ResponseMetaJson = ResponseMetaJson.Write(result.Meta),
+        LoadJson = LegLoadJson.Write(result.Load),
         CreatedAt = result.CreatedAt,
         Metrics = [.. result.Metrics.Select(m => ToRow(result.Id, m))],
         Hits = [.. Hits(result)],
@@ -368,6 +369,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             ? Captured.Unavailable(row.ThinkingReason)
             : Captured.Text(row.ThinkingText),
         Meta = Application.ResponseMetaJson.Read(row.ResponseMetaJson),
+        Load = LegLoadJson.Read(row.LoadJson),
         Retrieval = ToDomain(row.Funnel, row.Hits),
     };
 

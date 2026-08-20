@@ -35,6 +35,13 @@ public static class CliContainer
             // The machine is read once per run, so a scoped probe is one object per verb rather than one
             // per leg — and it holds nothing between calls.
             .AddScoped<IMachineProbe, MachineProbe>()
+            // A SINGLETON, and started with the container: it is one background loop for the whole verb,
+            // and one per leg would spend its first ticks warming a processor-time delta it then discards.
+            // Registered only here — the read-only verbs have no legs to sample beside.
+            .AddSingleton<IHardwareSampler>(services => new HardwareSampler(
+                services.GetRequiredService<ILogger<HardwareSampler>>(),
+                TimeProvider.System,
+                SamplingCadence.Default))
             .AddScoped<IVariantCatalog, PostgresVariantCatalog>()
             .AddScoped<ILaneCatalog, PostgresLaneCatalog>()
             // Scoped beside the runner that takes it: it holds no state between legs, and a singleton would

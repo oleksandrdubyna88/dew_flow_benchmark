@@ -32,6 +32,14 @@ public sealed class ResultRow
     /// unrecoverable after the fact, since a re-run is a different call.</summary>
     public string ResponseMetaJson { get; set; } = "{}";
 
+    /// <summary>What the machine was doing while this leg ran, as JSON.
+    /// <para>
+    /// <c>{}</c> is the default the migration gives every row written before a sampler existed, and it reads
+    /// back as <em>not sampled</em> rather than as a leg on an idle machine — the same three-state discipline
+    /// the response meta beside it already follows.
+    /// </para></summary>
+    public string LoadJson { get; set; } = "{}";
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public List<MetricRow> Metrics { get; set; } = [];

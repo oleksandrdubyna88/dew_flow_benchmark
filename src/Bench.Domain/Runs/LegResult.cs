@@ -88,5 +88,13 @@ public sealed record LegResult(
     /// rather than an empty result.</summary>
     public RetrievedContext Retrieval { get; init; } = RetrievedContext.NotPerformed;
 
+    /// <summary>What the machine was doing while this leg ran.
+    /// <para>
+    /// <c>NotSampled</c> by default, which is the truth for every leg measured before a sampler existed and
+    /// for every host with nothing to read. It is deliberately not zeroes: a leg on a machine nobody watched
+    /// and a leg on an idle one are opposite readings of the same digits.
+    /// </para></summary>
+    public LegLoad Load { get; init; } = LegLoad.NotSampled("no sampler was running for this leg");
+
     public bool Passed => Metrics.Count > 0 && Metrics.All(m => !m.Failed);
 }

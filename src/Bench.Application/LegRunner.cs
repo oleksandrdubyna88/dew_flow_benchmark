@@ -2,6 +2,7 @@ using Bench.Domain;
 using Bench.Domain.Models;
 using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
+using Bench.Domain.Trace;
 using Bench.Domain.Suites;
 using Bench.Domain.Variants;
 using Microsoft.Extensions.Logging;
@@ -77,6 +78,7 @@ public sealed class LegRunner(
     IResultStore results,
     IModelRuntime runtime,
     IRetriever retriever,
+    IHardwareSampler sampler,
     ToolLoopRunner loop,
     TimeProvider clock,
     ILogger<LegRunner> logger)
@@ -340,6 +342,40 @@ public sealed class LegRunner(
         return Outcome<LegResult>.Failure($"{reason} — the leg spent its {deadline.Describe} wall budget");
     }
 
+    /// <summary>What the machine was doing across this leg's window.
+    /// <para>
+    /// The window is the leg's own clock — <c>LegDeadline.StartedAt</c> to now — so the readings a leg claims
+    /// are the ones taken while it ran, and the half-open boundary in <c>LegSampling</c> keeps the next leg
+    /// from claiming the same ones.
+    /// </para>
+    /// <para>
+    /// <b>It cannot fail a leg.</b> A sampler that throws leaves the load unsampled and the result otherwise
+    /// intact: the leg's answer is the expensive artefact and losing it to a performance counter would be a
+    /// far worse trade than a row that says nobody watched.
+    /// </para>
+    /// <para>
+    /// <c>heldAcceleratorAlone</c> is FALSE, unconditionally and for now. Only the accelerator lease can
+    /// establish that a leg had the card to itself (<c>todo/PLAN_variant_matrix.md</c> §3.4b), and until it
+    /// exists nothing here may claim <c>Attributed</c> — a figure that says "this leg used 20 GB" when
+    /// something else held them is the one error indistinguishable from a correct measurement afterwards.
+    /// </para></summary>
+    private async Task<LegLoad> LoadAsync(LegWork work, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (load, vram) = await sampler.ReadAsync(
+                work.Deadline.StartedAt, clock.GetUtcNow(), cancellationToken);
+
+            return LegSampling.Over(
+                load, vram, work.Deadline.StartedAt, clock.GetUtcNow(), heldAcceleratorAlone: false, sharedWith: string.Empty);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(ex, "The machine could not be sampled for cell {Cell}", work.Cell.Id);
+            return LegLoad.NotSampled("the sampler failed for this leg");
+        }
+    }
+
     /// <summary>Scoring and persisting one leg: the answer's metrics, retrieval's metrics, and every piece
     /// of evidence the two were computed from — in ONE write, before the cell settles.</summary>
     private async Task<Outcome<LegResult>> ScoreAsync(
@@ -351,6 +387,7 @@ public sealed class LegRunner(
                 Thinking = answer.Thinking,
                 Meta = ResponseMeta.Of(answer),
                 Retrieval = work.Retrieved,
+                Load = await LoadAsync(work, cancellationToken),
             },
             cancellationToken);
 

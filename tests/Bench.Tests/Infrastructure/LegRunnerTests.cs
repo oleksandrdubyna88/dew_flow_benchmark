@@ -278,7 +278,9 @@ public sealed class LegRunnerTests(PostgresFixture postgres)
         return (
             run.Id,
             plan,
-            new LegRunner(runs, results, runtime, new NoRetriever(), Loop(runtime), clock, NullLogger<LegRunner>.Instance),
+            new LegRunner(
+                runs, results, runtime, new NoRetriever(), new NoHardwareSampler(), Loop(runtime), clock,
+                NullLogger<LegRunner>.Instance),
             runs,
             results);
     }

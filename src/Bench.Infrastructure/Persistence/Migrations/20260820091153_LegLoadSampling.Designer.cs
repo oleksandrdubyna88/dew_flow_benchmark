@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Bench.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bench.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(BenchDbContext))]
-    partial class BenchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260820091153_LegLoadSampling")]
+    partial class LegLoadSampling
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

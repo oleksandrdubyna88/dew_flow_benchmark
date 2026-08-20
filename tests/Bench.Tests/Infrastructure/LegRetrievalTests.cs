@@ -330,7 +330,8 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
 
         var plan = LegPlan.Reading(suite, roster) with { Variants = variants };
         var runner = new LegRunner(
-            runs, postgres.NewResults(), runtime, retriever, Loop(runtime), clock, NullLogger<LegRunner>.Instance);
+            runs, postgres.NewResults(), runtime, retriever, new NoHardwareSampler(), Loop(runtime), clock,
+            NullLogger<LegRunner>.Instance);
 
         return (run.Id, plan, runner, runs);
     }
