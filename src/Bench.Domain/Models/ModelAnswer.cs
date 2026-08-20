@@ -120,6 +120,18 @@ public sealed record ModelAnswer(
     /// <summary>Bytes of the runtime's response payload, as this process received it.</summary>
     public long ResponseBytes { get; init; }
 
+    /// <summary>What the model wants called before it will answer.
+    /// <para>An <c>init</c> property with an empty default, like <see cref="Thinking"/> and
+    /// <see cref="ResponseBytes"/> beside it, so every existing construction of an answer keeps compiling
+    /// and keeps meaning what it meant: no tool calls is what a single-shot completion has always
+    /// produced.</para></summary>
+    public IReadOnlyList<RequestedToolCall> ToolCalls { get; init; } = [];
+
+    /// <summary>Whether this answer ends the conversation.
+    /// <para>Derived rather than stored, because a flag beside the list is a second thing that can disagree
+    /// with it — and the loop's whole termination rule is this one question.</para></summary>
+    public bool IsFinal => ToolCalls.Count == 0;
+
     public bool WasCutOff => Stop == StopReason.LengthCapped;
 
     public string Describe =>

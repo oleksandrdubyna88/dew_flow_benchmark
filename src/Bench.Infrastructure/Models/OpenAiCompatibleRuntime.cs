@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Bench.Application;
 using Bench.Domain;
+using Bench.Domain.Engines;
 using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Trace;
@@ -49,6 +50,11 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
 
     public async Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
     {
+        if (RefuseUnusableTools(request) is { Length: > 0 } unusable)
+        {
+            return Outcome<ModelAnswer>.Failure(unusable);
+        }
+
         var body = Body(request);
         var clock = Stopwatch.StartNew();
 
@@ -97,7 +103,7 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
     /// looking configured.</summary>
     private static Dictionary<string, object> Body(ModelRequest request)
     {
-        var messages = new List<Dictionary<string, string>>();
+        var messages = new List<Dictionary<string, object>>();
 
         if (request.SystemPrompt.Length > 0)
         {
@@ -105,6 +111,7 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
         }
 
         messages.Add(new() { ["role"] = "user", ["content"] = request.UserPrompt });
+        messages.AddRange(request.Transcript.Select(Message));
 
         var body = new Dictionary<string, object>
         {
@@ -115,12 +122,98 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
             ["seed"] = request.Sampling.Seed,
         };
 
+        // Absent, not empty, when the lane offers nothing. An empty `tools: []` is a different request from
+        // one with no tools at all at several endpoints, and the no-tools arm is the floor every tool claim
+        // is measured against — it must send exactly the body it always sent.
+        if (request.Tools.Count > 0)
+        {
+            body["tools"] = request.Tools.Select(Tool).ToList();
+        }
+
         if (Context(request) is { } cap)
         {
             body["max_tokens"] = cap;
         }
 
         return body;
+    }
+
+    /// <summary>One transcript entry as the wire wants it.
+    /// <para>An assistant turn carries <c>content</c> even when it is empty, because an endpoint that
+    /// receives a message with neither content nor tool calls has been handed a turn that says nothing —
+    /// and the one that produced it said something, or asked for a call.</para></summary>
+    private static Dictionary<string, object> Message(ModelTurn turn) =>
+        turn switch
+        {
+            ModelTurn.Assistant assistant when assistant.ToolCalls.Count > 0 => new()
+            {
+                ["role"] = "assistant",
+                ["content"] = assistant.Text,
+                ["tool_calls"] = assistant.ToolCalls.Select(Call).ToList(),
+            },
+            ModelTurn.Assistant assistant => new()
+            {
+                ["role"] = "assistant",
+                ["content"] = assistant.Text,
+            },
+            ModelTurn.ToolResult result => new()
+            {
+                ["role"] = "tool",
+                ["tool_call_id"] = result.ToolCallId,
+                // The model sees the refusal REASON as ordinary content — it has to, in order to correct
+                // itself. That the tool refused rather than answered is recorded by the harness, not sent.
+                ["content"] = result.Content,
+            },
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+
+    private static Dictionary<string, object> Call(RequestedToolCall call) => new()
+    {
+        ["id"] = call.Id,
+        ["type"] = "function",
+        ["function"] = new Dictionary<string, object>
+        {
+            ["name"] = call.Name,
+            // Verbatim, as the model produced it. Re-serializing would repair broken JSON on the way back
+            // in, and a loop that quietly fixes the model's mistakes cannot measure that it makes them.
+            ["arguments"] = call.ArgumentsJson,
+        },
+    };
+
+    /// <summary>One tool as the request advertises it.
+    /// <para>The schema is parsed rather than passed through as a string: the wire wants a JSON OBJECT
+    /// there, and a string would advertise every tool as taking one text argument. A schema that will not
+    /// parse is refused before the call — see <see cref="RefuseUnusableTools"/>.</para></summary>
+    private static Dictionary<string, object> Tool(EngineTool tool) => new()
+    {
+        ["type"] = "function",
+        ["function"] = new Dictionary<string, object>
+        {
+            ["name"] = tool.Name,
+            ["description"] = tool.Description,
+            ["parameters"] = JsonDocument.Parse(tool.ArgumentsSchema).RootElement.Clone(),
+        },
+    };
+
+    /// <summary>Why this request cannot be sent, or empty when it can.
+    /// <para>Checked BEFORE the HTTP call so a broken schema is a named refusal rather than an exception out
+    /// of body-building — the leg then records a configuration fault, which is what it is, instead of an
+    /// unreachable model.</para></summary>
+    private static string RefuseUnusableTools(ModelRequest request)
+    {
+        foreach (var tool in request.Tools)
+        {
+            try
+            {
+                using var _ = JsonDocument.Parse(tool.ArgumentsSchema);
+            }
+            catch (JsonException ex)
+            {
+                return $"tool '{tool.Name}' advertises an argument schema that is not JSON: {Short(ex.Message)}";
+            }
+        }
+
+        return string.Empty;
     }
 
     private static ModelAnswer Read(JsonElement payload, ModelRequest request, TimeSpan latency)
@@ -133,8 +226,18 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
         var finish = Text(choice, "finish_reason");
         var usage = payload.TryGetProperty("usage", out var u) ? u : default;
 
+        var calls = ToolCalls(choice.TryGetProperty("message", out var asked) ? asked : default);
+
         return new ModelAnswer(
-            text.Length > 0 ? Captured.Text(text) : Captured.Unavailable("the response carried no message content"),
+            // A turn that asks for a tool and says nothing else is NOT a missing answer — it is the normal
+            // shape of a loop's middle. Reporting "no message content" for it would put a fault in every
+            // multi-turn leg's record.
+            text.Length > 0
+                ? Captured.Text(text)
+                : Captured.Unavailable(
+                    calls.Count > 0
+                        ? "this turn asked for a tool rather than answering"
+                        : "the response carried no message content"),
             Count(usage, "prompt_tokens"),
             Count(usage, "completion_tokens"),
             latency,
@@ -145,7 +248,33 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
             finish)
         {
             Thinking = Thinking(choice.TryGetProperty("message", out var thought) ? thought : default),
+            ToolCalls = calls,
         };
+    }
+
+    /// <summary>What the model asked to call, if anything.
+    /// <para>The arguments are taken as RAW TEXT, never re-serialized. A local model emits broken JSON
+    /// regularly, and a parse-then-write here would silently repair it — which would make the one
+    /// observation this whole benchmark exists to record, "can it form the arguments", unobservable.</para>
+    /// <para>A call with no name is dropped rather than carried: it names no tool, so nothing can invoke it
+    /// and nothing can score it. A call with no id keeps an empty one — the id is the endpoint's own
+    /// correlation token, and inventing one would put a value on the wire the endpoint never issued.</para></summary>
+    private static IReadOnlyList<RequestedToolCall> ToolCalls(JsonElement message)
+    {
+        if (!message.TryGetProperty("tool_calls", out var calls) || calls.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. calls.EnumerateArray()
+                .Select(call => new RequestedToolCall(
+                    Text(call, "id"),
+                    Text(call.TryGetProperty("function", out var fn) ? fn : default, "name"),
+                    Text(call.TryGetProperty("function", out var args) ? args : default, "arguments")))
+                .Where(call => call.Name.Length > 0),
+        ];
     }
 
     /// <summary>The model's reasoning, when the endpoint separates it from the answer.

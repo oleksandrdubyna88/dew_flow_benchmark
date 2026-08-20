@@ -137,8 +137,34 @@ public sealed record ModelRequest(
     string UserPrompt,
     IReadOnlyList<Budget> Budgets)
 {
+    /// <summary>What the model may call. Empty is a single-shot completion — exactly what every request
+    /// through this port has been until now, which is why it is an <c>init</c> property with an empty
+    /// default rather than a positional parameter.</summary>
+    public IReadOnlyList<EngineTool> Tools { get; init; } = [];
+
+    /// <summary>The conversation so far: what the model said, and what its calls answered. Empty means the
+    /// first turn.
+    /// <para>The user's question is NOT in here — it stays on <see cref="UserPrompt"/> and is sent once, so
+    /// there is one place that can say what was asked rather than two that can disagree.</para></summary>
+    public IReadOnlyList<ModelTurn> Transcript { get; init; } = [];
+
     public static ModelRequest Of(ModelEndpoint endpoint, Sampling sampling, string userPrompt) =>
         new(endpoint, sampling, string.Empty, userPrompt, []);
+
+    /// <summary>One turn of a tool-calling loop: the same question, the same tools, and everything that has
+    /// happened since.
+    /// <para>The doctrine rides in <paramref name="systemPrompt"/> — this is the factory through which
+    /// <c>Lane.Preamble</c> finally reaches a model, having been declared on day one and read by
+    /// nothing.</para></summary>
+    public static ModelRequest OfTurn(
+        ModelEndpoint endpoint,
+        Sampling sampling,
+        string systemPrompt,
+        string userPrompt,
+        IReadOnlyList<Budget> budgets,
+        IReadOnlyList<EngineTool> tools,
+        IReadOnlyList<ModelTurn> transcript) =>
+        new(endpoint, sampling, systemPrompt, userPrompt, budgets) { Tools = tools, Transcript = transcript };
 }
 
 public enum TraceMode

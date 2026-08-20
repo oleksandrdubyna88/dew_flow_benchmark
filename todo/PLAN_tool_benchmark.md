@@ -1,6 +1,6 @@
 # PLAN — the tool benchmark: a lane is a catalog row, the doctrine is an axis, and the loop finally turns
 
-> Status: **step 1 implemented 2026-08-19; steps 2–4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
+> Status: **steps 1–2 implemented 2026-08-19; steps 3–4 and 6–11 open** (step 5 shipped in `dew_flow_mcp`
 > 2026-08-16). The lane catalog exists: a lane is a hashed row rather than a bare name. Scope: `Bench.Domain` (new `Lanes/`, extensions to
 > `Runs/` and `Suites/`), `Bench.Application` (the tool loop and its ports), `Bench.Infrastructure`
 > (a new engine, a new runtime, two migrations), `Bench.Api`, `hosts/Cli`, and later `src/Bench.Ui`.
@@ -451,9 +451,25 @@ it renders** — the API-first gate the family already applies.
 
    **And a fourth copy of one helper was not written.** `Reason<T>()` on `Outcome` was already private in
    three CLI commands; it is now `OutcomeText` and the three copies are gone.
-2. **Multi-turn model plumbing** — `ModelTurn`, `ModelAnswer.ToolCalls`, `ModelRequest.Tools/Transcript/OfTurn`,
-   `OpenAiCompatibleRuntime` body and parse. The existing runtime tests must pass **unchanged** — that is
-   the proof the addition is backward compatible.
+2. ~~**Multi-turn model plumbing**~~ **DONE 2026-08-19.** `ModelTurn`, `RequestedToolCall`,
+   `ModelAnswer.ToolCalls`/`IsFinal`, `ModelRequest.Tools`/`Transcript`/`OfTurn`, and the runtime's body and
+   parse. **The proof held: all 16 existing runtime tests passed unchanged**, and 10 were added beside them.
+
+   Every addition is an `init` property with an empty default, following `ModelAnswer.Thinking`'s own
+   precedent, so no existing construction moved. `tools` is **absent** rather than empty when a lane offers
+   none — `tools: []` is a different request at several endpoints, and the no-tools arm is the floor
+   everything else is measured against.
+
+   **Argument JSON is never re-serialized, on either side.** A local model emits broken JSON regularly, and
+   "can it form the arguments" is one of the three questions this plan exists to answer; a parse-and-rewrite
+   would repair the mistake on its way in and make the observation impossible. Watched failing: adding a
+   four-line "repair" turned the test red immediately.
+
+   Two decisions the plan did not name. A tool whose advertised schema is not JSON is **refused before the
+   HTTP call**, so a broken lane records a configuration fault rather than an unreachable model. And a turn
+   that asks for a tool while saying nothing reports *"this turn asked for a tool rather than answering"*
+   instead of *"the response carried no message content"* — otherwise every multi-turn leg would carry a
+   fault in its record for behaving normally.
 3. **`ToolSurface` + `ToolLoopRunner` + `LegRunner` wiring** — including the doctrine finally reaching
    `SystemPrompt`, the `Turns` confirmation, and `CapExceeded(Turns)`. Land **before** the parallel
    plan's engine-per-variant work reaches `LegRunner`; whoever is second reads the other's diff rather

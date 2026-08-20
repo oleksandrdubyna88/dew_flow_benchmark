@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Bench.Application;
+using Bench.Domain.Engines;
 using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Trace;
@@ -170,6 +171,167 @@ public sealed class OpenAiCompatibleRuntimeTests
 
     private static ModelRef Model() => ModelRef.Parse("qwen3-coder:latest", ModelHosting.Local).Ok();
 
+    // ---- The tool-calling half (2026-08-19). Everything above ran unchanged when it was added, which is
+    // the whole proof that this is an addition rather than a new runtime.
+
+    [Fact]
+    public async Task A_request_with_no_tools_sends_the_body_it_always_sent()
+    {
+        // ABSENT, not empty. `tools: []` is a different request from no tools at all at several endpoints,
+        // and the no-tools arm is the floor every tool claim is measured against — it has to send exactly
+        // what it sent before this existed.
+        var handler = new FakeCompletions();
+
+        await Runtime(handler).AskAsync(Request(), Ct);
+
+        handler.LastBody.Should().NotContain("tools");
+        handler.LastBody.Should().NotContain("tool_calls");
+    }
+
+    [Fact]
+    public async Task Tools_are_advertised_as_functions_with_their_schema_as_an_OBJECT()
+    {
+        var handler = new FakeCompletions();
+
+        await Runtime(handler).AskAsync(WithTools(), Ct);
+
+        handler.LastBody.Should().Contain("\"tools\"").And.Contain("\"function\"");
+        handler.LastBody.Should().Contain("rt_read_local_file");
+        // Parsed, not passed through as a string: a schema sent as text advertises every tool as taking one
+        // text argument, which no model can form a call against.
+        handler.LastBody.Should().Contain("\"parameters\":{\"type\":\"object\"");
+        handler.LastBody.Should().NotContain("\"parameters\":\"{");
+    }
+
+    [Fact]
+    public async Task A_tool_whose_schema_is_not_JSON_is_refused_BEFORE_the_call()
+    {
+        var handler = new FakeCompletions();
+
+        var refused = await Runtime(handler).AskAsync(
+            Request() with { Tools = [new EngineTool("broken", "does things", "{not json")] }, Ct);
+
+        // A configuration fault, named — not an exception out of body-building, and not a leg that records
+        // an unreachable model for a mistake in its own lane.
+        refused.Reason().Should().Contain("broken").And.Contain("not JSON");
+        handler.LastBody.Should().BeEmpty("nothing may be sent when the request cannot be built");
+    }
+
+    [Fact]
+    public async Task A_transcript_is_replayed_as_assistant_and_tool_messages()
+    {
+        var handler = new FakeCompletions();
+
+        await Runtime(handler).AskAsync(
+            WithTools() with
+            {
+                Transcript =
+                [
+                    new ModelTurn.Assistant("", [new RequestedToolCall("call_1", "rt_read_local_file", """{"path":"a.cs"}""")]),
+                    new ModelTurn.ToolResult("call_1", "rt_read_local_file", "lines 1-2 of 2", Refused: false),
+                ],
+            },
+            Ct);
+
+        handler.LastBody.Should().Contain("\"role\":\"assistant\"").And.Contain("\"tool_calls\"");
+        handler.LastBody.Should().Contain("\"role\":\"tool\"").And.Contain("\"tool_call_id\":\"call_1\"");
+        handler.LastBody.Should().Contain("lines 1-2 of 2");
+    }
+
+    [Fact]
+    public async Task A_refusal_reaches_the_model_as_content_because_it_has_to_correct_itself()
+    {
+        var handler = new FakeCompletions();
+
+        await Runtime(handler).AskAsync(
+            WithTools() with
+            {
+                Transcript =
+                [
+                    new ModelTurn.ToolResult("call_1", "rt_read_local_file", "outside the workspace", Refused: true),
+                ],
+            },
+            Ct);
+
+        // The model sees the reason. That it was a REFUSAL rather than an answer is the harness's record,
+        // not a field on the wire — there is nowhere on the wire to put it.
+        handler.LastBody.Should().Contain("outside the workspace");
+        handler.LastBody.Should().NotContain("refused");
+    }
+
+    [Fact]
+    public async Task An_answer_that_asks_for_a_tool_is_not_final_and_carries_the_call()
+    {
+        var answer = (await Runtime(new FakeCompletions(
+                content: "",
+                toolCalls: """[{"id":"call_9","type":"function","function":{"name":"rag_search_project_context","arguments":"{\"query\":\"where is login\"}"}}]"""))
+            .AskAsync(WithTools(), Ct)).Ok();
+
+        answer.IsFinal.Should().BeFalse();
+        answer.ToolCalls.Should().ContainSingle();
+        answer.ToolCalls[0].Id.Should().Be("call_9");
+        answer.ToolCalls[0].Name.Should().Be("rag_search_project_context");
+        answer.ToolCalls[0].ArgumentsJson.Should().Contain("where is login");
+    }
+
+    [Fact]
+    public async Task Broken_argument_JSON_reaches_the_harness_VERBATIM()
+    {
+        // The load-bearing one. A local model emits broken JSON regularly, and "can it form the arguments"
+        // is one of the three questions this benchmark exists to answer. A parse-then-reserialize here would
+        // repair the mistake on its way in and make the observation impossible.
+        var answer = (await Runtime(new FakeCompletions(
+                content: "",
+                toolCalls: """[{"id":"c","type":"function","function":{"name":"t","arguments":"{path: 'a.cs'"}}]"""))
+            .AskAsync(WithTools(), Ct)).Ok();
+
+        answer.ToolCalls[0].ArgumentsJson.Should().Be("{path: 'a.cs'");
+    }
+
+    [Fact]
+    public async Task A_turn_that_only_asks_for_a_tool_does_not_record_missing_content_as_a_fault()
+    {
+        // The normal shape of a loop's middle. Reporting "the response carried no message content" for it
+        // would put a fault in the record of every multi-turn leg.
+        var answer = (await Runtime(new FakeCompletions(
+                content: "",
+                toolCalls: """[{"id":"c","type":"function","function":{"name":"t","arguments":"{}"}}]"""))
+            .AskAsync(WithTools(), Ct)).Ok();
+
+        answer.Text.WasCaptured.Should().BeFalse();
+        answer.Text.Reason.Should().Contain("asked for a tool");
+    }
+
+    [Fact]
+    public async Task A_call_naming_no_tool_is_dropped_because_nothing_can_invoke_or_score_it()
+    {
+        var answer = (await Runtime(new FakeCompletions(
+                content: "",
+                toolCalls: """[{"id":"c","type":"function","function":{"arguments":"{}"}}]"""))
+            .AskAsync(WithTools(), Ct)).Ok();
+
+        answer.ToolCalls.Should().BeEmpty();
+        answer.IsFinal.Should().BeTrue("a turn whose only call names nothing has asked for nothing");
+    }
+
+    [Fact]
+    public async Task An_answer_with_no_tool_calls_is_final()
+    {
+        (await Runtime(new FakeCompletions()).AskAsync(Request(), Ct)).Ok().IsFinal.Should().BeTrue();
+    }
+
+    private static ModelRequest WithTools() =>
+        Request() with
+        {
+            Tools =
+            [
+                new EngineTool(
+                    "rt_read_local_file",
+                    "Read a file from the workspace, whole or as a line window.",
+                    """{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"""),
+            ],
+        };
+
     private static ModelRequest Request() =>
         ModelRequest.Of(
             ModelEndpoint.Parse(Model(), "http://127.0.0.1:11434/v1").Ok(),
@@ -179,12 +341,17 @@ public sealed class OpenAiCompatibleRuntimeTests
     private static OpenAiCompatibleRuntime Runtime(HttpMessageHandler handler) =>
         new(new SingleHandlerFactory(handler), NullLogger<OpenAiCompatibleRuntime>.Instance);
 
+    /// <param name="toolCalls">The raw <c>tool_calls</c> array to answer with, or empty for a plain
+    /// completion. Added rather than copied into a second fake: the subject is the same runtime, and two
+    /// handlers producing two slightly different response shapes is how a parser comes to be tested against
+    /// a payload no endpoint sends.</param>
     private sealed class FakeCompletions(
         string content = "the total is summed in OrderService.Total",
         string finish = "stop",
         bool withUsage = true,
         HttpStatusCode status = HttpStatusCode.OK,
-        string body = "") : HttpMessageHandler
+        string body = "",
+        string toolCalls = "") : HttpMessageHandler
     {
         public string LastBody { get; private set; } = string.Empty;
 
@@ -199,8 +366,9 @@ public sealed class OpenAiCompatibleRuntimeTests
             }
 
             var usage = withUsage ? ""","usage":{"prompt_tokens":41,"completion_tokens":12,"total_tokens":53}""" : "";
+            var calls = toolCalls.Length > 0 ? $""","tool_calls":{toolCalls}""" : "";
             var payload = $$"""
-            {"choices":[{"message":{"role":"assistant","content":"{{content}}"},"finish_reason":"{{finish}}"}]{{usage}}}
+            {"choices":[{"message":{"role":"assistant","content":"{{content}}"{{calls}}},"finish_reason":"{{finish}}"}]{{usage}}}
             """;
 
             return new HttpResponseMessage(HttpStatusCode.OK)
