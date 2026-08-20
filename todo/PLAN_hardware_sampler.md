@@ -53,7 +53,7 @@ version does not change between legs, and writing it ten thousand times is a col
 
 | | On the RUN, once | On the LEG, sampled |
 |---|---|---|
-| operating system and its build (`Windows 11 26200`, `WSL2 Ubuntu-26.04 / 6.14.0-…-WSL2`) | ✓ | |
+| the operating system stack — **five independent versions under WSL**, see §3.1a | ✓ | |
 | GPU model, **driver version**, **health code**, total VRAM | ✓ | |
 | CPU model, physical cores, power plan / governor | ✓ | |
 | total RAM | ✓ | |
@@ -65,6 +65,44 @@ version does not change between legs, and writing it ten thousand times is a col
 | **what else held the card** at leg start (resident models, other sidecars) | | ✓ |
 | **throttling** — did the GPU hit a power or thermal limit during this leg | | ✓ |
 | **concurrency witness** — was another bench run or index pass live | | ✓ |
+
+### 3.1a "The OS version" is five versions, and two of the obvious reads are wrong
+
+Probed on this machine 2026-08-19, so the shape below is what is actually available rather than what a field
+list would guess. Under WSL the layers version **independently of each other**: Windows patches on its own
+cadence, the WSL runtime updates from the Store, the distro is upgraded by the operator, and the kernel moves
+with the WSL package. Recording one of them and calling it "the OS" would attribute a regression to whichever
+layer happened to be named.
+
+| Axis | Where it is read | Value here |
+|---|---|---|
+| Windows edition + release | `HKLM\…\CurrentVersion` → `DisplayVersion`, `EditionID` | `25H2`, `Professional` |
+| Windows build + **patch** | `CurrentBuild` + **`UBR`** | `26200` + **`8653`** → `10.0.26200.8653` |
+| WSL runtime, WSLg, MSRDC, **Direct3D**, **DXCore** | `wsl.exe --version`, one call | `2.7.10.0` · `1.0.73.2` · `1.2.6676` · **`1.611.1-81528511`** · **`10.0.26100.1`** |
+| distro | `/etc/os-release` → `VERSION_ID`, `VERSION_CODENAME` | `26.04`, `resolute` |
+| kernel | `/proc/sys/kernel/osrelease` | `6.18.33.2-microsoft-standard-WSL2` |
+
+**Two traps, both live on this machine:**
+
+- **`ProductName` lies.** The registry says `Windows 10 Pro` on a Windows 11 machine — Microsoft never
+  updated that value — so a run labelled from it would name the wrong operating system in every row. The
+  BUILD is the truth; `26200` is Windows 11. Read `DisplayVersion` and the build, never the product name.
+- **`Win32_OperatingSystem.Version` has no patch.** It stops at `10.0.26200`. The UBR — the number that moves
+  on Patch Tuesday, and therefore the only one that can answer *"we updated and it got slower"* — is
+  registry-only. A version without it cannot distinguish two runs a month apart.
+
+**Direct3D and DXCore are not decoration.** They are the GPU passthrough shims, delivered by the Windows
+driver package into `/usr/lib/wsl/lib`, and they are the layer the 155 s boundary finding lives in. A WSL arm
+whose D3D shim changed is not the same arm, and nothing else in this table would show it.
+
+**The driver is per adapter, and under WSL it is the WINDOWS one.** Read from `Win32_VideoController`:
+`DriverVersion`, `DriverDate` and `ConfigManagerErrorCode` together. Here both cards report
+`32.0.31035.1003`, dated 2026-07-24, code `0` — one driver serving the discrete R9700 and the integrated
+890M, which is why the field belongs to the adapter rather than to the machine even when the values agree.
+
+**ROCm's version is NOT at the conventional path.** `/opt/rocm/.info/version` does not exist on this
+install, so the ROCm version needs its own probe before it is promised — §7's second open question, now
+half-answered: the Windows driver version is available and the ROCm one is not, at least not there.
 
 ### 3.2 Four numbers, never one: min · max · mean · COUNT
 
@@ -155,8 +193,11 @@ Steps 1–3 are useful alone: a run that records its machine and samples nothing
    own machine facts would make it unable to measure anything else. **Proposal: the SHAPES and the rules live
    here; the Windows/Linux readers are ported — mechanism, not repository — with their provenance named in
    the comment, the way `PLAN_scoremeter_port.md` ports its cleaned-LOC family.**
-2. **Driver version on Linux/WSL.** Windows gives it from the same WMI class `GpuProbe` already queries. Under
-   WSL the GPU is passthrough and the driver is the WINDOWS one — `nvidia-smi` inside the distro reports the
-   host driver, but ROCm's story on this card is unverified. Needs one probe before the field is promised.
+2. ~~**Driver version on Linux/WSL.**~~ **Half-answered by the probe of §3.1a, 2026-08-19.** The Windows
+   driver reads cleanly from `Win32_VideoController` — `32.0.31035.1003`, dated 2026-07-24, one driver for
+   both adapters — and under WSL that IS the driver, materialised as the Direct3D and DXCore shims
+   `wsl.exe --version` reports. What is still unknown is the **ROCm** version: `/opt/rocm/.info/version` does
+   not exist on this install, so either another path carries it or it needs `rocminfo`, which is a process
+   launch on the WSL side of the boundary. Do not promise the field until one probe settles it.
 3. **Cadence default.** 2 s is a guess. It should be measured against its own cost on this machine before it
    becomes a number in a config file nobody revisits.
