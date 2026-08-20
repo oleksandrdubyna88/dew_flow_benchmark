@@ -205,6 +205,45 @@ public sealed class RunReportTests
         view.Dimensions.Should().OnlyContain(d => d.RankingRefusal.Contains("no leg of this run carries that metric"));
     }
 
+    [Fact]
+    public async Task A_card_that_fell_off_the_bus_warns_BEFORE_any_number_is_read()
+    {
+        var halves = Halves(2);
+        var run = new ScriptedRun(halves.All)
+        {
+            Machine = new Bench.Domain.Trace.MachineFacts
+            {
+                Hostname = "bench-01",
+                Adapters = [new Bench.Domain.Trace.AdapterFacts("AMD Radeon AI PRO R9700", 34_208_743_424, "32.0.31035.1003", "2026-07-24", 31)],
+            },
+        };
+
+        var view = (await RunReport.BuildAsync(
+            run, new ScriptedResults([], Metric), new RunReportRequest(run.Run.Id, Metric), Ct))
+            .Should().BeOfType<Outcome<RunReportView>.Ok>().Subject.Value;
+
+        // The one machine fact that changes how every number reads: the card is still enumerated and
+        // everything ran on the CPU, so the numbers are real and they describe other hardware.
+        view.Warnings.Should().Contain(w => w.Contains("UNHEALTHY") && w.Contains("may have been produced on the CPU"));
+        view.Machine.UnhealthyAdapters.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_run_measured_before_any_machine_was_read_SAYS_so_rather_than_printing_a_blank()
+    {
+        var halves = Halves(2);
+        var run = new ScriptedRun(halves.All);
+
+        var view = (await RunReport.BuildAsync(
+            run, new ScriptedResults([], Metric), new RunReportRequest(run.Run.Id, Metric), Ct))
+            .Should().BeOfType<Outcome<RunReportView>.Ok>().Subject.Value;
+
+        view.Machine.Recorded.Should().BeFalse();
+        view.Warnings.Should().Contain(w => w.Contains("machine that produced these numbers was not recorded"));
+        view.Load.LegsSampled.Should().Be(0);
+        view.Load.Describe.Should().Contain("not sampled");
+    }
+
     // ---- scaffolding -------------------------------------------------------------------------------
 
     /// <summary>Two arms over a two-question-per-half split, each scoring one value on each half — the

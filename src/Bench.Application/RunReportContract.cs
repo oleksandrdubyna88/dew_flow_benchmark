@@ -30,7 +30,20 @@ public static class RunReportContract
         view.HeldOutQuestions,
         [.. view.Dimensions.Select(From)],
         From(view.Discrimination),
-        view.Warnings);
+        view.Warnings,
+        From(view.Machine),
+        view.Load.Describe);
+
+    private static MachineDto From(Bench.Domain.Trace.MachineFacts machine) => new(
+        machine.Recorded,
+        machine.Hostname,
+        machine.Fingerprint,
+        machine.Os.Describe,
+        machine.Cpu.Describe,
+        machine.TotalRamBytes,
+        [.. machine.Adapters.Select(a => a.Describe)],
+        [.. machine.UnhealthyAdapters.Select(a => a.Describe)],
+        machine.Volume.Describe);
 
     public static RunSummaryDto From(BenchRun run) => new(
         run.Id,

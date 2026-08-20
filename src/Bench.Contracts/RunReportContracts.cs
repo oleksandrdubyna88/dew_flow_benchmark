@@ -22,7 +22,26 @@ public sealed record RunReportDto(
     int HeldOutQuestions,
     IReadOnlyList<DimensionReportDto> Dimensions,
     DiscriminationDto Discrimination,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    MachineDto Machine,
+    string Load);
+
+/// <param name="Recorded">False for every run measured before a machine was read. A consumer must render
+/// that as "not recorded" rather than as a host whose fields happened to be empty.</param>
+/// <param name="Fingerprint">What two runs are compared by. Empty when nothing was recorded.</param>
+/// <param name="UnhealthyAdapters">Adapters not working properly — a card at Windows' error code 31 is still
+/// enumerated while everything silently runs on the CPU, so this is the one field that changes how every
+/// number in the report reads.</param>
+public sealed record MachineDto(
+    bool Recorded,
+    string Hostname,
+    string Fingerprint,
+    string OperatingSystem,
+    string Cpu,
+    long TotalRamBytes,
+    IReadOnlyList<string> Adapters,
+    IReadOnlyList<string> UnhealthyAdapters,
+    string Volume);
 
 /// <param name="Baseline">The arm the others were read against; empty when none was stated, which is not
 /// the same as none existing — a report never nominates one by score.</param>

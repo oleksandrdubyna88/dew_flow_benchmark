@@ -99,6 +99,8 @@ public static class ReportCommand
         output.WriteLine($"engine   {view.EngineCanonical}");
         output.WriteLine($"metric   {view.MetricName}");
         output.WriteLine($"scored   {view.Scoreboard.Scored} leg(s), {view.Scoreboard.Passed} passed");
+        output.WriteLine($"machine  {Machine(view)}");
+        output.WriteLine($"load     {view.Load.Describe}");
 
         foreach (var dimension in view.Dimensions.Where(d => d.Arms.Count > 0))
         {
@@ -144,6 +146,16 @@ public static class ReportCommand
             ProofState.Suspicious => "SUSPICIOUS — won only on the held-out half",
             _ => string.Empty,
         };
+
+    /// <summary>The machine, in one line, because a number's meaning depends on it.
+    /// <para>
+    /// A run measured before the probe existed says NOT RECORDED rather than printing a blank: a reader who
+    /// cannot tell "no machine was read" from "the fields happened to be empty" has been told nothing twice.
+    /// </para></summary>
+    private static string Machine(RunReportView view) =>
+        view.Machine.Recorded
+            ? $"{view.Machine.Os.Describe} · {view.Machine.Cpu.Describe} · {view.Machine.Fingerprint[..12]}"
+            : "NOT RECORDED — nothing here can say which host produced these numbers";
 
     private static int Exit(RunReportView view) =>
         view.Scoreboard.Scored == 0 ? ExitCodes.NoReport : ExitCodes.Pass;

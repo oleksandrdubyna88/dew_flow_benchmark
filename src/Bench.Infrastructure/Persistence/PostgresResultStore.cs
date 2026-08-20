@@ -130,6 +130,18 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         return [.. grouped];
     }
 
+    /// <summary>One column, nothing else. The prompts and answers of a campaign are megabytes and none of
+    /// them bears on what the machine was doing.</summary>
+    public async Task<IReadOnlyList<LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var rows = await db.Results.AsNoTracking()
+            .Where(r => r.Cell!.RunId == runId)
+            .Select(r => r.LoadJson)
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(LegLoadJson.Read)];
+    }
+
     public async Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken)
     {

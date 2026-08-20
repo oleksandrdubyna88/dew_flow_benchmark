@@ -2,6 +2,7 @@ using Bench.Domain;
 using Bench.Domain.Runs;
 using Bench.Domain.Splitting;
 using Bench.Domain.Suites;
+using Bench.Domain.Trace;
 
 namespace Bench.Application;
 
@@ -77,7 +78,15 @@ public sealed record RunReportView(
     int HeldOutQuestions,
     IReadOnlyList<DimensionReport> Dimensions,
     DiscriminationReport Discrimination,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>The machine that produced these numbers. <c>NotRecorded</c> for every run measured before a
+    /// probe existed — which a reader must be told rather than left to infer from a blank line.</summary>
+    public MachineFacts Machine { get; init; } = MachineFacts.NotRecorded;
+
+    /// <summary>What that machine was doing across the run's legs. Peaks, never averages.</summary>
+    public RunLoad Load { get; init; } = RunLoad.None;
+}
 
 /// <summary>Assembling a run's stored evidence into a comparison.
 /// <para>
@@ -143,6 +152,8 @@ public static class RunReport
         }
 
         var spread = await SpreadAsync(results, run.Id, request.MetricName, cancellationToken);
+        var machine = await runs.MachineAsync(run.Id, cancellationToken);
+        var load = LegSampling.Across(await results.LoadsAsync(run.Id, cancellationToken));
 
         return Outcome<RunReportView>.Success(new RunReportView(
             run.Id,
@@ -156,7 +167,11 @@ public static class RunReport
             halves.HeldOut.Count,
             dimensions,
             Discrimination.Over(spread.Questions, spread.Models, request.MinSpread),
-            [.. Warnings(scoreboard, halves, dimensions)]));
+            [.. Warnings(scoreboard, halves, dimensions, machine)])
+        {
+            Machine = machine,
+            Load = load,
+        });
     }
 
     /// <summary>The suite's two halves, as the question ids each holds.
@@ -306,8 +321,24 @@ public static class RunReport
     }
 
     private static IEnumerable<string> Warnings(
-        RunScoreboard scoreboard, SplitHalves halves, IReadOnlyList<DimensionReport> dimensions)
+        RunScoreboard scoreboard, SplitHalves halves, IReadOnlyList<DimensionReport> dimensions, MachineFacts machine)
     {
+        // First, because it changes how every number below it reads. A card at ConfigManagerErrorCode 31 is
+        // still enumerated while everything silently runs on the CPU: the numbers are real and they are CPU
+        // numbers wearing a GPU's label.
+        foreach (var faulted in machine.UnhealthyAdapters)
+        {
+            yield return
+                $"{faulted.Describe} — this run's numbers may have been produced on the CPU, whatever the arm says";
+        }
+
+        if (!machine.Recorded)
+        {
+            yield return
+                "the machine that produced these numbers was not recorded, so nothing here can say which host, "
+                + "driver or operating system they belong to";
+        }
+
         if (scoreboard.Scored == 0)
         {
             yield return "no leg of this run has been scored — there is nothing here to compare";

@@ -53,8 +53,12 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
     public Task RecordMachineAsync(Guid runId, Bench.Domain.Trace.MachineFacts facts, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a report does not record machines");
 
+    /// <summary>What this run's machine was, when a test cares. NotRecorded by default, which is what every
+    /// run stored before the probe existed is.</summary>
+    public Bench.Domain.Trace.MachineFacts Machine { get; init; } = Bench.Domain.Trace.MachineFacts.NotRecorded;
+
     public Task<Bench.Domain.Trace.MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken) =>
-        Task.FromResult(Bench.Domain.Trace.MachineFacts.NotRecorded);
+        Task.FromResult(Machine);
 
     // The queue half of the port. A report never claims, settles or sweeps, and a double that quietly
     // answered these would hide a report that had started doing so.
@@ -101,6 +105,11 @@ internal sealed class ScriptedResults(IReadOnlyList<ScriptedLeg> legs, string me
 
         return Task.FromResult(rates);
     }
+
+    // These runs were never sampled, which is the honest double: the report must render a machine nobody
+    // watched, and that path is exactly what these tests exercise.
+    public Task<IReadOnlyList<Bench.Domain.Trace.LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Bench.Domain.Trace.LegLoad>>([]);
 
     public Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken) =>
         Task.FromResult(new RunScoreboard(legs.Count, legs.Count(l => l.Value > 0)));

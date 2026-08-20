@@ -27,6 +27,26 @@ public readonly record struct LegLoad(
             : $"nothing sampled — {CpuPercent.Reason}";
 }
 
+/// <summary>What a whole run's legs saw, folded from what each of them claimed.
+/// <para>
+/// <b>Peaks, never averages.</b> A mean across legs would answer nothing: legs differ in length, in what
+/// else was running, and in whether anybody sampled them at all, so their means are not commensurable. The
+/// highest reading any leg saw IS well defined, and it is the number a capacity question actually asks —
+/// <em>did this campaign ever come close to filling the card</em>.
+/// </para></summary>
+/// <param name="LegsSampled">How many legs carry any reading. Beside <paramref name="Legs"/> because a peak
+/// drawn from two legs of two hundred is a different claim from one drawn from all of them, and a reader
+/// holding only the peak cannot tell.</param>
+public readonly record struct RunLoad(int Legs, int LegsSampled, SampleSummary PeakRamBytes, VramReading PeakVram)
+{
+    public static RunLoad None { get; } = new(0, 0, SampleSummary.Nothing("no leg of this run was sampled"), VramReading.NotSampled("no leg of this run was sampled"));
+
+    public string Describe =>
+        LegsSampled == 0
+            ? $"not sampled — {PeakRamBytes.Reason}"
+            : $"{LegsSampled} of {Legs} leg(s) sampled · peak ram {PeakRamBytes.Describe} · peak vram {PeakVram.Describe}";
+}
+
 /// <summary>Turning a stream of out-of-band readings into what one leg may claim.
 /// <para>
 /// Pure, and separate from whatever took the readings, because the judgements are here: which samples belong
@@ -84,6 +104,57 @@ public static class LegSampling
         var summary = SampleSummary.Of([.. samples.Select(s => (double)s.UsedBytes)]);
 
         return alone ? VramReading.Attributed(summary) : VramReading.Observed(summary, sharedWith);
+    }
+
+    /// <summary>The run's peaks, from the legs that were sampled.
+    /// <para>
+    /// A VRAM peak inherits the WEAKEST attribution among the legs that contributed: if any of them merely
+    /// observed the card, the run's peak is observed too. Taking the strongest would let one leg that held
+    /// the accelerator alone lend its authority to a figure the rest of the run cannot support.
+    /// </para></summary>
+    public static RunLoad Across(IReadOnlyList<LegLoad> legs)
+    {
+        var sampled = legs.Where(l => l.Any).ToList();
+
+        if (sampled.Count == 0)
+        {
+            return RunLoad.None with { Legs = legs.Count };
+        }
+
+        var ram = sampled.Where(l => l.RamBytesUsed.Sampled).Select(l => l.RamBytesUsed).ToList();
+        var vram = sampled.Where(l => l.Vram.Bytes.Sampled).ToList();
+
+        return new RunLoad(
+            legs.Count,
+            sampled.Count,
+            Peak(ram, "no leg of this run carries a memory reading"),
+            PeakVram(vram));
+    }
+
+    private static SampleSummary Peak(IReadOnlyList<SampleSummary> summaries, string whenEmpty) =>
+        summaries.Count == 0
+            ? SampleSummary.Nothing(whenEmpty)
+            : new SampleSummary(
+                true,
+                summaries.Min(s => s.Minimum),
+                summaries.Max(s => s.Maximum),
+                summaries.Sum(s => s.Mean * s.Count) / Math.Max(1, summaries.Sum(s => s.Count)),
+                summaries.Sum(s => s.Count),
+                string.Empty);
+
+    private static VramReading PeakVram(IReadOnlyList<LegLoad> legs)
+    {
+        if (legs.Count == 0)
+        {
+            return VramReading.NotSampled("no leg of this run carries an accelerator reading");
+        }
+
+        var peak = Peak([.. legs.Select(l => l.Vram.Bytes)], string.Empty);
+        var shared = legs.Where(l => l.Vram.Attribution != VramAttribution.Attributed).ToList();
+
+        return shared.Count == 0
+            ? VramReading.Attributed(peak)
+            : VramReading.Observed(peak, shared.Select(l => l.Vram.SharedWith).FirstOrDefault(w => w.Length > 0) ?? string.Empty);
     }
 
     private static SampleSummary Summarise(IEnumerable<double> readings, string whenEmpty)

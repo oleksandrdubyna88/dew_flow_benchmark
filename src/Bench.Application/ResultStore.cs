@@ -1,5 +1,6 @@
 using Bench.Domain;
 using Bench.Domain.Runs;
+using Bench.Domain.Trace;
 
 namespace Bench.Application;
 
@@ -193,6 +194,15 @@ public interface IResultStore
     /// <c>QuestionSpread.Unmeasured</c> name the models that never attempted a question instead of counting
     /// them as failures.
     /// </para></summary>
+    /// <summary>What the machine was doing across each scored leg of a run.
+    /// <para>
+    /// Its own read rather than a field of <see cref="ForRunAsync"/>, and projected to ONE column: a report
+    /// wanting the peaks must not pull every prompt and answer of a campaign to fold four numbers — the
+    /// defect this port has now recorded three times, on <c>ScoreboardAsync</c>, on <c>TotalsAsync</c> and on
+    /// the aggregate itself.
+    /// </para></summary>
+    Task<IReadOnlyList<LegLoad>> LoadsAsync(Guid runId, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<QuestionPassRate>> PassRateByQuestionAndSubjectAsync(
         Guid runId, string metricName, CancellationToken cancellationToken);
 
