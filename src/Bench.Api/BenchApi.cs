@@ -20,7 +20,7 @@ public static class BenchApi
 {
     public static IEndpointRouteBuilder MapBenchApi(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api");
+        var group = app.MapGroup("/api/bench");
 
         group.MapGet("/health", () => Results.Ok(new HealthDto("ok")));
 
@@ -78,7 +78,3 @@ public static class BenchApi
             reason => Results.NotFound(new ProblemDto(reason)));
     }
 }
-
-public sealed record HealthDto(string Status);
-
-public sealed record ProblemDto(string Reason);

@@ -51,6 +51,9 @@ public static class RunReportContract
         run.Target.Canonical,
         run.SuiteStamp,
         run.Engine.Canonical,
+        run.Engine.Backend is Bench.Domain.Retrieval.BackendDeclaration.Declared declared
+            ? declared.Backend.Canonical
+            : ComputeArmLabel.NotDeclared,
         run.Status.ToString(),
         run.CreatedAt);
 

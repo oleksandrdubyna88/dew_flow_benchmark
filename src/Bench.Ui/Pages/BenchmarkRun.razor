@@ -1,0 +1,153 @@
+@page "/benchmarking/runs/{Id:guid}"
+
+<PageTitle>Benchmark run</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Run</h1>
+    <NavLink class="btn btn-sm btn-outline-secondary" href="/benchmarking">All runs</NavLink>
+</div>
+
+<div class="mb-3">
+    <label class="form-label" for="metric">Metric</label>
+    <select class="form-select" id="metric" value="@Metric" @onchange="ChooseAsync" disabled="@Loading">
+        @* No option is pre-selected. A default here would be a choice the reader did not make, and every
+           number below would be about it. *@
+        <option value="">— choose a metric —</option>
+        @foreach (var name in WellKnownMetrics.All)
+        {
+            <option value="@name">@name</option>
+        }
+    </select>
+</div>
+
+@if (Metric.Length == 0)
+{
+    <div class="alert alert-secondary">Name the metric to report on — there is no default.</div>
+}
+else if (!Report.Available)
+{
+    <div class="alert alert-warning">@(Report.Detail.Length > 0 ? Report.Detail : "Reading…")</div>
+}
+else
+{
+    var report = Report.Value!;
+
+    @if (report.Machine.UnhealthyAdapters.Count > 0)
+    {
+        @* First, because it changes how every number below it reads. A card at Windows' error code 31 stays
+           enumerated while everything silently runs on the CPU. *@
+        <div class="alert alert-danger">
+            <strong>An adapter is not working properly.</strong>
+            Whatever an arm claims, these numbers may have been produced on the CPU.
+            <ul class="mb-0 mt-2">
+                @foreach (var adapter in report.Machine.UnhealthyAdapters)
+                {
+                    <li>@adapter</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <dl class="row">
+        <dt class="col-sm-3">Run</dt>
+        <dd class="col-sm-9">@report.Label <code>@report.RunId</code></dd>
+
+        <dt class="col-sm-3">Target</dt>
+        <dd class="col-sm-9 text-break"><small>@report.TargetCanonical</small></dd>
+
+        <dt class="col-sm-3">Suite</dt>
+        <dd class="col-sm-9">
+            <code>@report.SuiteStamp</code>
+            <small class="text-body-secondary">
+                @report.SelectionQuestions selection, @report.HeldOutQuestions held out
+            </small>
+        </dd>
+
+        <dt class="col-sm-3">Engine</dt>
+        <dd class="col-sm-9 text-break"><small>@report.EngineCanonical</small></dd>
+
+        <dt class="col-sm-3">Scored</dt>
+        <dd class="col-sm-9">@report.LegsScored leg(s), @report.LegsPassed passed</dd>
+
+        <dt class="col-sm-3">Machine</dt>
+        <dd class="col-sm-9">
+            @if (report.Machine.Recorded)
+            {
+                <span>@report.Machine.OperatingSystem · @report.Machine.Cpu</span>
+                <br />
+                <small class="text-body-secondary">
+                    @report.Machine.Volume · fingerprint <code>@report.Machine.Fingerprint</code>
+                </small>
+            }
+            else
+            {
+                @* Not blank: a reader who cannot tell "no machine was read" from "the fields are empty" has
+                   been told nothing twice. *@
+                <span class="badge text-bg-secondary">not recorded</span>
+                <small class="text-body-secondary">nothing here can say which host produced these numbers</small>
+            }
+        </dd>
+
+        <dt class="col-sm-3">Load</dt>
+        <dd class="col-sm-9"><small>@report.Load</small></dd>
+    </dl>
+
+    @foreach (var dimension in report.Dimensions.Where(d => d.Arms.Count > 0))
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center gap-2">
+                <span class="text-capitalize">@dimension.Dimension</span>
+                <small class="ms-auto text-body-secondary">
+                    @(dimension.Baseline.Length > 0 ? "against " + dimension.Baseline : "no baseline stated")
+                </small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Arm</th>
+                            <th scope="col">Average</th>
+                            <th scope="col">Legs</th>
+                            <th scope="col">Selection half</th>
+                            <th scope="col">Held-out half</th>
+                            <th scope="col">Verdict</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var arm in dimension.Arms)
+                        {
+                            <tr>
+                                <td><code>@arm.Arm</code></td>
+                                <td>@arm.Average.ToString("0.###")</td>
+                                <td>@arm.Legs</td>
+                                <td><small>@Half(arm.Selection)</small></td>
+                                <td><small>@Half(arm.HeldOut)</small></td>
+                                <td>
+                                    @if (arm.Proof != "NotAWinner")
+                                    {
+                                        <span class="badge @Badge(arm.Proof)">@arm.Proof</span>
+                                    }
+                                    @if (arm.Proof == "Confirmed")
+                                    {
+                                        <small class="ms-1">@arm.Margin.ToString("+0.###;-0.###;0")</small>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (dimension.RankingRefusal.Length > 0)
+            {
+                <div class="card-footer text-body-secondary"><small>@dimension.RankingRefusal</small></div>
+            }
+        </div>
+    }
+
+    <div class="alert alert-secondary"><strong>Spread.</strong> @report.Discrimination.Describe</div>
+
+    @foreach (var warning in report.Warnings)
+    {
+        <div class="alert alert-warning"><small>@warning</small></div>
+    }
+}

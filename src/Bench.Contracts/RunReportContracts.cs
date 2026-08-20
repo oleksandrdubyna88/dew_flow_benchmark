@@ -83,12 +83,75 @@ public sealed record DiscriminationDto(
     int Unusable,
     string Describe);
 
-/// <param name="Scored">Legs of this run that carry a result.</param>
+/// <summary>One row of the console's run list.</summary>
+/// <param name="ComputeArm">The route, provider and device this run was measured on — <c>windows-to-wsl/migraphx/R9700</c>
+/// — or <c>not declared</c> when the engine echoed nothing. Its own field rather than a segment of
+/// <paramref name="EngineCanonical"/>, which joins five facts with pipes for EQUALITY: a console grouping by
+/// the arm would otherwise parse a format nobody promised it. The undeclared state travels as its own words
+/// because a blank label groups every un-echoed run under whatever the page renders for empty.</param>
 public sealed record RunSummaryDto(
     Guid RunId,
     string Label,
     string TargetCanonical,
     string SuiteStamp,
     string EngineCanonical,
+    string ComputeArm,
     string Status,
     DateTimeOffset CreatedAt);
+
+/// <summary>The one label the console must recognise rather than merely print.
+/// <para>
+/// Grouping by the compute arm means telling an arm from the absence of one, and the absence is a state
+/// (<c>BackendDeclaration.NotDeclared</c>) rather than a missing string. Naming it here, in the project both
+/// sides already reference, is what stops the console from matching a domain word it guessed — and stops the
+/// projection from drifting away from what the console looks for, since a test pins both to this constant.
+/// </para></summary>
+public static class ComputeArmLabel
+{
+    public const string NotDeclared = "not declared";
+}
+
+/// <summary>What a route answers when it refuses. Moved here from the endpoint project when the console was
+/// built: a page that cannot read the REASON behind a 400 has to render "could not be reached" over a server
+/// that answered perfectly well and explained itself.</summary>
+public sealed record ProblemDto(string Reason);
+
+public sealed record HealthDto(string Status);
+
+/// <summary>The metric names a report can be asked for, published so a console can OFFER them.
+/// <para>
+/// A report requires a metric and has no default, deliberately — one picked for the reader would report on
+/// an axis nobody chose. That is right for the CLI, where the operator knows the name, and unusable for a
+/// page, where nothing on screen would say what to type. So the names travel as a contract.
+/// </para>
+/// <para>
+/// <b>Copies of domain constants, pinned by a test.</b> The domain holds the authoritative strings and this
+/// project may not reference it (a contract able to see the domain is a contract that leaks it), so the two
+/// are asserted equal instead. A rename becomes a red test rather than a page offering a metric no result
+/// carries — which would render as an empty report and read as a broken run.
+/// </para></summary>
+public static class WellKnownMetrics
+{
+    public const string AnchorRecall = "Anchor recall";
+    public const string ToolUse = "Tool use";
+    public const string RetrievalMrr = "Retrieval MRR";
+    public const string RetrievalFirstHitRank = "Retrieval first-hit rank";
+    public const string DiagnosisParses = "Diagnosis parses";
+    public const string DiagnosisAnchorRecall = "Diagnosis anchor recall";
+    public const string DiagnosisAnchorPrecision = "Diagnosis anchor precision";
+    public const string DiagnosisSymptomOnly = "Diagnosis symptom-only";
+
+    /// <summary>Offered in the order a reader would try them: the retrieval answer first, then the funnel,
+    /// then the fix lane's own instruments.</summary>
+    public static IReadOnlyList<string> All { get; } =
+    [
+        AnchorRecall,
+        ToolUse,
+        RetrievalMrr,
+        RetrievalFirstHitRank,
+        DiagnosisParses,
+        DiagnosisAnchorRecall,
+        DiagnosisAnchorPrecision,
+        DiagnosisSymptomOnly,
+    ];
+}

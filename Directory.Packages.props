@@ -5,6 +5,8 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.11" />
     <!-- The CLI is a host and reads its Serilog levels from configuration rather than from a call site. -->
@@ -35,6 +37,11 @@
     <!-- Real Postgres for the durability tests. Claim/settle/sweep are about what happens under genuine
          concurrency, and a fake would only prove that the fake agrees with what we assumed. -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <!-- bUnit: renders a Razor component against a real Blazor renderer, so the console pages can be
+         asserted as MARKUP rather than by trusting that a table which compiles also displays. Version
+         matched to the sibling console (dew_flow_rag_qln), which pins the same 2.9.0 — one family, one
+         renderer. It carries no test-framework dependency of its own; xunit.v3 above stays the runner. -->
+    <PackageVersion Include="bunit" Version="2.9.0" />
   </ItemGroup>
 
 </Project>

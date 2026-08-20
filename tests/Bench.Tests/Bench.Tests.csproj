@@ -11,6 +11,7 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="bunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,7 @@
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Bench.Api\Bench.Api.csproj" />
+    <ProjectReference Include="../../src/Bench.Ui/Bench.Ui.csproj" />
     <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\hosts\Cli\Cli.csproj" />
   </ItemGroup>

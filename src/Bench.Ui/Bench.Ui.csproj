@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- The benchmark's console pages. A Razor class library, WASM-compatible: it is mounted by a Blazor
+       host running its interactivity in WebAssembly, which is why it may reference the contracts and
+       NOTHING else. Bench.Infrastructure means Npgsql and a PowerShell probe, and neither runs in a
+       browser; a reference to it would not fail here, it would fail at the host that mounts this. -->
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <!-- The one call a host makes is AddBenchUi(); the abstractions are what lets this library register
+         its own services without knowing which container it lands in. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Bench.Contracts\Bench.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

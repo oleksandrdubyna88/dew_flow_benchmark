@@ -5,6 +5,7 @@
     <Project Path="src/Bench.Infrastructure/Bench.Infrastructure.csproj" />
     <Project Path="src/Bench.Contracts/Bench.Contracts.csproj" />
     <Project Path="src/Bench.Api/Bench.Api.csproj" />
+    <Project Path="src/Bench.Ui/Bench.Ui.csproj" />
     <Project Path="src/Bench.ServiceDefaults/Bench.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/hosts/">
