@@ -1,9 +1,9 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **steps 1–5 implemented 2026-08-20 (the arm axis; the diagnosis contract and its scoring;
-> the harvest — FixDiff, FixHarvest, gates, bank landing; phases in the runner; investigate-only
-> end-to-end with the contract in the prompt and `bench run --task-kind fix`); steps 6–8 open.**
-> Scope: `Bench.Domain` (the
+> Status: **steps 1–5 implemented 2026-08-20; steps 6–8 partially implemented the same day — step 6's
+> subject components (envelope, CLI-subject runtime, worktree audit) with the roster wiring and the
+> pilot open; step 7's diagnosis judge whole, with the first series being the operator's run; step 8's
+> signal executor (signals 0–2, attended) with the leg wiring gated on PLAN_code_lane §4.2.** Scope: `Bench.Domain` (the
 > arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
 > pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
 > worktrees), `hosts/Cli`; one additive migration on `cells`.
@@ -353,11 +353,51 @@ Each step ships alone, tests green, before the next.
    step 7's first half.
 6. **`CliSubjectRuntime`** — per-leg worktree, deny-writes settings, envelope cost readback,
    write-detection, wall budget; then the **pilot** (§4).
+
+   **The components are DONE 2026-08-20; the roster wiring and the pilot remain.** `ClaudeEnvelope`
+   reads `--output-format json`: cache-read and cache-creation tokens are SUMMED into the input (they
+   are billed tokens), the CLI's own `total_cost_usd` is authoritative when present, and everything
+   unreported is NOT CAPTURED — never zero. `CliSubjectRuntime : IModelRuntime` answers as a subject:
+   stdout alone, sampling recorded as not captured (claiming the requested values were applied is the
+   unpinned-sampler lie), the wall enforced by killing the process, and a `Turns`/`CostUsd` ceiling
+   REFUSED by name — a budget nobody can enforce must not read as accepted. `WorktreeAudit` plants the
+   deny-writes settings before a leg and reads `git status` after, `.claude` excluded so our own
+   hardening never flags the leg. What remains is the seam this plan deliberately does not cross:
+   `ModelResolution.Endpoint` still refuses CLI rows as subjects ("the agent lane is owned by the tool
+   benchmark plan"), so `bench run --subjects` cannot name one until that roster branch lands with
+   `PLAN_tool_benchmark.md` step 11 — and the pilot (live Claude legs, real money) is the OPERATOR's
+   run, not this session's.
 7. **The diagnosis judge prompt + the first series** — 8 tasks × 7 arms × 2 repeats; report with the
    `Arm` dimension.
+
+   **The judge half is DONE 2026-08-20; the series is the operator's run.** `JudgeFraming` is the
+   judge's CONSTRUCTION detail, never the port's: `IJudge` still asks one binary over (question,
+   answer, reference), and `JudgeFraming.Diagnosis` decides what those three are — the statement, the
+   candidate's diagnosis, and the reference FIX's unified diff, the one ground truth that can be run.
+   The framing is chosen from the run's stored `TaskKind` (`runs.Kind`, additive column defaulting
+   Reading), so a re-judge months later frames verdicts the way the legs were asked. Harvest now lands
+   the reference diff as the question's `ReferenceAnswer` (bounded at 16 KB, saying so — the full diff
+   stays in the payload), which turns yesterday's honest *not judgeable* into a judgeable leg with no
+   authored mechanism needed.
 8. **`ImplementOnly`** — diagnosis-in-prompt, `DiagnosisSource`, running over the code-lane sandbox
    and signals once `PLAN_code_lane.md` steps 2–3 exist; attended until its isolation gate closes.
    Mixed pipelines (`DiagnosisSource.Leg`) as the follow-up query, not a new mechanism.
+
+   **The signal executor is DONE 2026-08-20; the leg wiring stays gated.** `SolutionSignals` runs
+   signals 0–2 over a solver's diff, ATTENDED: scratch worktree at base, the diff applied, the fix's
+   own tests materialised as the hidden tests, one build, one test run. A diff that does not apply or
+   build is a REPORT with the reason — `BuildFailed` distinct from wrong, per the plan — never an
+   instrument failure; signal 1 (touches a causal file) is computed purely from the two diffs and
+   reported even for a solution that never applied. The teeth-proof (signal 3) waits for
+   solver-authored tests and the neighbour suite (signal 4) for a per-task filter — both named open.
+   `ScratchWorktree` and `GateProcess` were EXTRACTED from `HarvestGates`, which now shares them.
+   Nothing is wired into `LegRunner`: its queue is the scheduled shape, and the §4.2 isolation
+   assertions are what would open that door. Building this caught a live harvest defect: `GitCommand`
+   returned the MERGED stream, so a captured diff carried git's stderr warnings as leading lines —
+   `FixDiff`'s parser shrugged them off (which is what hid it), `git apply` refused the same bytes
+   (which is what surfaced it). `GitCommand.ReadAsync` (stdout alone) now feeds every payload capture,
+   and a patch is written with its final newline, without which git refuses it whole as corrupt —
+   measured, and exactly what a model-produced diff will trip on too.
 
 ## 6. Test plan
 

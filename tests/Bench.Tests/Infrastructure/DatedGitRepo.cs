@@ -23,11 +23,14 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
     /// <summary>The repository as a clonable url — what a checkout provider takes.</summary>
     public string Url => new Uri(Root).AbsoluteUri;
 
-    /// <summary>Initialises the repository with one commit and returns its sha.</summary>
+    /// <summary>Initialises the repository with one commit and returns its sha. Line endings are pinned
+    /// to LF regardless of the machine's autocrlf, so a diff captured here applies to a worktree checked
+    /// out here — a fixture at the mercy of global git config is a test that fails per machine.</summary>
     public async Task<string> InitAsync((string Path, string Content) file, (string Subject, string Date) commit)
     {
         Directory.CreateDirectory(Root);
         await GitAsync("init", "-q");
+        await GitAsync("config", "core.autocrlf", "false");
         return await CommitAsync(file, commit);
     }
 
@@ -57,7 +60,8 @@ public sealed class DatedGitRepo(CancellationToken cancellationToken) : IDisposa
 
     public async Task<string> GitAsync(params string[] arguments)
     {
-        var run = await GitCommand.RunAsync(Root, Timeout, cancellationToken, arguments);
+        // ReadAsync: a test capturing a diff or a sha must get the PAYLOAD, not git's stderr beside it.
+        var run = await GitCommand.ReadAsync(Root, Timeout, cancellationToken, arguments);
 
         return run is Outcome<string>.Ok ok
             ? ok.Value

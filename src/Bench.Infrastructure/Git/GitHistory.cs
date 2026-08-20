@@ -23,6 +23,27 @@ public static class GitCommand
             _ => Outcome<string>.Failure($"git {arguments[0]} {attempt.Describe}"),
         };
     }
+
+    /// <summary>STDOUT alone — for output that IS a payload rather than a report.
+    /// <para>
+    /// Found by a red test, not by review: <see cref="RunAsync"/> returns the MERGED stream, and git
+    /// writes its warnings (`LF will be replaced by CRLF…`) to stderr — so a captured diff carried them
+    /// as leading lines. <c>FixDiff</c>'s parser shrugged them off, which is exactly what let the defect
+    /// hide; <c>git apply</c> refused the same bytes, which is what surfaced it. The same lesson
+    /// <c>CliAgentRuntime</c> already paid for on the Claude CLI, now paid once for git too.
+    /// </para></summary>
+    public static async Task<Outcome<string>> ReadAsync(
+        string workingDirectory, TimeSpan timeout, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var attempt = await ProcessRunner.RunAsync("git", arguments, workingDirectory, timeout, cancellationToken);
+
+        return attempt switch
+        {
+            ProcessAttempt.Completed c when c.Result.Ok => Outcome<string>.Success(c.Result.StandardOutput),
+            ProcessAttempt.Completed c => Outcome<string>.Failure($"git {arguments[0]} exited {c.Result.ExitCode}: {c.Result.Output}"),
+            _ => Outcome<string>.Failure($"git {arguments[0]} {attempt.Describe}"),
+        };
+    }
 }
 
 /// <summary>The target's change history, rendered for an author's brief.

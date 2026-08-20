@@ -63,28 +63,23 @@ public static class HarvestGates
                 "the fix carries no test file — there is no hidden test to be red at base, so the gates cannot prove the bug reproduces");
         }
 
-        var scratch = Path.Combine(Path.GetTempPath(), "bench-gate", Guid.CreateVersion7().ToString("N"));
+        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, timeout, cancellationToken);
 
-        var added = await GitCommand.RunAsync(
-            repositoryDir, timeout, cancellationToken,
-            "worktree", "add", "--detach", "--force", scratch, baseCommit.Value);
-
-        if (added is Outcome<string>.Fail cannotAdd)
+        if (scratch is Outcome<string>.Fail cannotAdd)
         {
-            return Outcome<GateReport>.Failure($"could not create the gate worktree: {cannotAdd.Reason}");
+            return Outcome<GateReport>.Failure(cannotAdd.Reason);
         }
+
+        var tree = ((Outcome<string>.Ok)scratch).Value;
 
         try
         {
             return await GatesAsync(
-                repositoryDir, scratch, fixCommit, testPaths, build, test, timeout, cancellationToken);
+                repositoryDir, tree, fixCommit, testPaths, build, test, timeout, cancellationToken);
         }
         finally
         {
-            // Best effort, on every path out: a leaked scratch worktree is disk litter AND a stale
-            // entry in the repository's worktree list, so both halves are cleaned.
-            await GitCommand.RunAsync(
-                repositoryDir, timeout, CancellationToken.None, "worktree", "remove", "--force", scratch);
+            await ScratchWorktree.RemoveAsync(repositoryDir, tree, timeout);
         }
     }
 
@@ -149,7 +144,7 @@ public static class HarvestGates
     private static async Task<Outcome<GatePhase>> PhaseAsync(
         string scratch, GateCommand build, GateCommand test, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var built = await RunAsync(scratch, build, timeout, cancellationToken);
+        var built = await GateProcess.RunAsync(scratch, build, timeout, cancellationToken);
 
         if (built is Outcome<ProcessResult>.Fail buildBroken)
         {
@@ -160,38 +155,13 @@ public static class HarvestGates
 
         if (!buildResult.Ok)
         {
-            return Outcome<GatePhase>.Success(new GatePhase(false, false, Tail(buildResult.Output)));
+            return Outcome<GatePhase>.Success(new GatePhase(false, false, GateProcess.Tail(buildResult.Output)));
         }
 
-        var tested = await RunAsync(scratch, test, timeout, cancellationToken);
+        var tested = await GateProcess.RunAsync(scratch, test, timeout, cancellationToken);
 
         return tested.Match(
-            result => Outcome<GatePhase>.Success(new GatePhase(true, result.Ok, Tail(result.Output))),
+            result => Outcome<GatePhase>.Success(new GatePhase(true, result.Ok, GateProcess.Tail(result.Output))),
             Outcome<GatePhase>.Failure);
-    }
-
-    /// <summary>A command that could not RUN is the environment's failure and fails the whole gate —
-    /// distinct from a command that ran and exited non-zero, which is a verdict.</summary>
-    private static async Task<Outcome<ProcessResult>> RunAsync(
-        string scratch, GateCommand command, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        var attempt = await ProcessRunner.RunAsync(
-            command.Executable, command.Arguments, scratch, timeout, cancellationToken);
-
-        return attempt switch
-        {
-            ProcessAttempt.Completed done => Outcome<ProcessResult>.Success(done.Result),
-            ProcessAttempt.NotFound missing => Outcome<ProcessResult>.Failure(
-                $"'{missing.Executable}' is not installed on this machine — the gate cannot run"),
-            ProcessAttempt.TimedOut cap => Outcome<ProcessResult>.Failure(
-                $"'{command.Describe}' did not finish within {cap.Budget.TotalSeconds:0.#}s"),
-            _ => Outcome<ProcessResult>.Failure($"'{command.Describe}' produced an attempt this gate cannot read"),
-        };
-    }
-
-    private static string Tail(string output)
-    {
-        var trimmed = output.Trim();
-        return trimmed.Length <= 300 ? trimmed : "…" + trimmed[^300..];
     }
 }

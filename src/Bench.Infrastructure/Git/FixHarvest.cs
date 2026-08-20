@@ -61,7 +61,9 @@ public static class FixHarvest
     private static async Task<Outcome<HarvestedFix>> AssembleAsync(
         string repositoryDir, string fixSha, string baseSha, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var meta = await Git(repositoryDir, timeout, cancellationToken,
+        // ReadAsync, not RunAsync: both outputs are PAYLOADS, and the merged stream once carried git's
+        // stderr warnings as leading lines of a diff that git apply then refused.
+        var meta = await GitCommand.ReadAsync(repositoryDir, timeout, cancellationToken,
             "show", "-s", "--format=%as%n%s%n%b", fixSha);
 
         if (meta is Outcome<string>.Fail unread)
@@ -69,7 +71,7 @@ public static class FixHarvest
             return Outcome<HarvestedFix>.Failure($"could not read {fixSha[..10]}: {unread.Reason}");
         }
 
-        var diff = await Git(repositoryDir, timeout, cancellationToken,
+        var diff = await GitCommand.ReadAsync(repositoryDir, timeout, cancellationToken,
             "diff", "--no-color", baseSha, fixSha);
 
         if (diff is Outcome<string>.Fail undiffed)
