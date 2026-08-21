@@ -1,9 +1,9 @@
 # PLAN — investigation quality and implementation quality, measured apart
 
-> Status: **steps 1–5 implemented 2026-08-20; steps 6–8 partially implemented the same day — step 6's
-> subject components (envelope, CLI-subject runtime, worktree audit) with the roster wiring and the
-> pilot open; step 7's diagnosis judge whole, with the first series being the operator's run; step 8's
-> signal executor (signals 0–2, attended) with the leg wiring gated on PLAN_code_lane §4.2.** Scope: `Bench.Domain` (the
+> Status: **steps 1–7 implemented 2026-08-21 (step 6's roster wiring landed and the §4 pilot RAN —
+> Claude legs at real cost, numbers below); step 8 partially — the signal executor (signals 0–2,
+> attended, `bench solve`) works, its scheduled leg wiring stays gated on PLAN_code_lane §4.2. Open:
+> the first series (§4), gated on bank coverage (1 harvested task of the 8 it wants).** Scope: `Bench.Domain` (the
 > arm axis, the diagnosis contract and its scoring), `Bench.Application` (phase execution, the harvest
 > pass, the diagnosis judge), `Bench.Infrastructure` (the measured-CLI subject runtime, per-leg
 > worktrees), `hosts/Cli`; one additive migration on `cells`.

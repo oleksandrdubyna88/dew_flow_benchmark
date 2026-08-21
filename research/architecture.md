@@ -553,8 +553,17 @@ believed. When the tool-calling loop arrives it turns inside `LegRunner.AskAsync
 
 A leg runs phases, and phases are ours: the adopted evaluation library's unit is a single evaluation with
 no notion of one. `TaskKind` picks the plan — `Reading` answers once and is judged; `Fix` runs
-**investigate → fix → verify → judge**. A phase cannot start while an earlier one is unfinished, and a
-ceiling or a crash stops the **leg**, not just the phase.
+**investigate → fix → verify → judge**, and `FixArm` slices it (investigate-only materialises
+`Investigate → Judge`). A phase cannot start while an earlier one is unfinished, and a ceiling or a crash
+stops the **leg**, not just the phase.
+
+**Who closes what (2026-08-21).** The runner closes the WORKING phase from the outcome the cell settled
+with — after the fact, on every path out, the re-entry branch included, so a crash's orphaned record does
+not read as forever mid-investigation. The Judge phase deliberately waits `Pending` for the judge pass, and
+`JudgeRunner` closes it when the verdict lands (a silent arbiter closes it too: its *not judged* metric
+means no later pass will ever revisit the leg). A cut-off leg settles as a cap and stores **no diagnosis
+metrics** — metric rows are what every aggregate groups over, and scoring truncated text would enrol the
+ceiling in the FixArm averages.
 
 ## Two vantage points on the same call
 
@@ -666,6 +675,46 @@ commits in chunks (`--chunk-size`, default 500) so memory and the store's parame
 size this process chose rather than by how productive the emitter has been, and the run summary counts its
 two integers in SQL instead of hydrating every prompt, answer and metric of the run to fold them here.
 
+## A CLI as a measured subject, and the attended executors (2026-08-21)
+
+`bench run --subjects claude-sonnet` routes a subject to a whole COMMAND-LINE AGENT rather than an
+OpenAI-compatible endpoint — `PLAN_tool_benchmark.md` step 11 met at exactly the worker/subject seam.
+`SubjectRouter` dispatches per model id (every route keeps a budget veto, so a ceiling ANY runtime refuses
+still ends the preparation), and `CliSubjectRuntime` stages each ask:
+
+- **A disposable worktree per leg** at the run's pinned commit, under the checkout root — never temp,
+  because `WorkspaceTrust` may only pre-trust paths under the root it was scoped to, and an untrusted
+  workspace is a wall spent waiting on a dialog nobody can answer. The trust edit itself is serialised
+  behind a named mutex: two parallel bench processes read-modify-write the operator's ONE `~/.claude.json`,
+  and the loser's write would silently drop the winner's grant.
+- **Deny-writes settings planted** (`.claude/settings.local.json`) and the tree AUDITED afterwards — the
+  settings are advisory hardening, the audit is the evidence, and a leg that wrote carries the fact in its
+  stored record. The planted file is excluded from the audit by exact path, so a write anywhere else under
+  `.claude/` still flags.
+- **The envelope is the meter**: tokens (cache included) and the CLI's own cost come from its JSON
+  envelope — stdout alone, never merged output; a trust warning beside the envelope defeated the parse
+  once. Sampling is NOT CAPTURED: a CLI exposes no temperature or seed, and claiming the requested values
+  were applied is the unpinned-sampler lie. The wall is the one enforceable ceiling (the process is killed
+  at it); `Turns` and `CostUsd` budgets are refused by name.
+
+Measured (`todo/PLAN_investigate_vs_implement.md` §4 pilot): Haiku ~$0.25/leg at ~2.7 min; Sonnet needs a
+1200 s wall (its longer leg thought for 915 s) at ~$1.42/leg — and produced the pilot's first judged YES on
+the mechanism. The audit flagged no writes on any leg.
+
+Beside the scheduled path stand two ATTENDED executors. They build model-influenced trees — arbitrary code
+execution by design — so they run while an operator watches, and nothing wires them into `LegRunner`'s
+queue (the code lane's isolation gate, `PLAN_code_lane.md` §4.2):
+
+- **`HarvestGates`** proves a harvested task is well-formed: a scratch worktree at base, the fix's own
+  tests checked out into it, red at base → green at the fix.
+- **`SolutionSignals`** (`bench solve`) scores ONE implement-given-diagnosis leg: the solver's diff at the
+  base tree — applies · builds · touches a causal file · hidden tests green.
+
+Both spend ONE `GateDeadline` across all their steps, never a budget per step — `--gate-timeout-seconds
+900` applied per step is a fifteen-minute flag whose real worst case was measured at ~8× that. Worktree
+cleanup has its own 60 s ceiling for the same reason in reverse: a hung remove must not hold a leg's whole
+wall.
+
 ## The arbiter, and why it never re-runs a leg
 
 `bench judge` reads a finished run's STORED answers and appends one metric row per leg. It re-scores; it
@@ -685,6 +734,8 @@ so changing the arbiter — or adding a second one that disagrees — costs its 
   ([MEASURED_LESSONS.md](MEASURED_LESSONS.md) §4d).
 - **The wrong suite is refused whole.** A verdict issued against a reference from a different suite is the
   one wrong result this system could not detect later, because it would look like a normal one.
+- **A verdict closes the leg's Judge phase** (2026-08-21). `JudgeableLeg` carries the cell id for exactly
+  this; before it did, every judged fix leg read as forever mid-judgement.
 
 The judge sits BESIDE the mechanical score, never instead of it. Two arbiters need a third thing to be
 checked against, and the deterministic metrics in the same result are it.
@@ -1025,6 +1076,7 @@ Stated because a description that quietly implies more than is built is the same
   heartbeat and stranding sweep — but nothing starts an index pass over HTTP, so a corpus the engine has not
   built is a refusal the operator satisfies by hand. That is the tail of step 5 in
   `todo/PLAN_variant_matrix.md`.
-- **The checked-out tree is verified but not yet READ.** `bench run` mirrors and checks out the target before
-  it measures, which is what makes a commit real rather than recorded — but no lane reads the worktree yet:
-  the retrieval lane reads the engine's index, and there is no tool loop to read files.
+- ~~**The checked-out tree is verified but not yet READ.**~~ Corrected 2026-08-21: two lanes read it now —
+  the fs-bridge agentic lane roots `FilesystemEngine` at the run's pinned checkout, and a CLI subject
+  investigates its own disposable worktree copy of that tree (*A CLI as a measured subject*, above). The
+  retrieval lane still reads the engine's index, which is its design rather than a gap.

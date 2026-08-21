@@ -47,7 +47,12 @@ const string DockerGroup = "dew-flow-bench";
 // rather than a missing value. Observed here before the file existed.
 var password = builder.AddParameter("bench-postgres-password", secret: true);
 
-var postgres = builder.AddPostgres("postgres", password: password)
+// The HOST port is PINNED — to the port the persistent container ALREADY holds, so pinning changes
+// the spec without forcing a recreation. A dynamic port drifts every time the container is
+// recreated, and the one consumer outside this orchestrator — the DewFlow console's read-only bench
+// slice — carries the connection string in its own user secrets: measured 2026-08-21, a recreation
+// moved the port from 61132 to 58215 and every /api/bench page answered 500 until someone chased it.
+var postgres = builder.AddPostgres("postgres", password: password, port: 58215)
     .WithImage("postgres", "17.10")
     .WithDataVolume("bench-postgres-data")
     // Persistent: the container belongs to the DATA, not to one AppHost session. A benchmark's whole value
