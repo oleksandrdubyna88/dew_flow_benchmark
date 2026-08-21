@@ -641,6 +641,38 @@ it renders** — the API-first gate the family already applies.
    doctrine, 417 with tools and the doctrine. The doctrine did change the model's behaviour measurably — it
    made it terser — it just did not change the ordering it was written to change.
 
+   **L1 — and the "inert" verdict above is now properly bounded (2026-08-22).** Six one-turn micro-tasks
+   whose expectation is WHICH tool was called (`samples/l1-tool-choice-suite.json`), three wordings, one run.
+   The third doctrine is adversarial on purpose — *read first, search later* — because three similar-good
+   wordings cannot tell an inert channel from a redundant instruction. Prediction written first: no-doctrine
+   high, locate-first equal or better, read-first breaks the behaviour-shaped question.
+
+   | question (wanted) | no doctrine | locate-first | read-first |
+   |---|---|---|---|
+   | behaviour, no path given (`search_literal`) | ✔ | ✔ | ✘ `list_directory` |
+   | project files by name (`find_files`) | ✔ | ✔ | ✔ |
+   | list the root (`list_directory`) | ✔ | ✔ | ✔ |
+   | an exact identifier (`search_literal`) | ✔ | ✔ | ✔ |
+   | file NAMES not content (`find_files`, not `search_literal`) | ✔ | ✔ | ✘ **no call at all** |
+   | a file whose path was GIVEN (`read_file`) | ✘ `list_directory` | ✔ | ✔ |
+   | **correct tool choice** | **5 / 6** | **6 / 6** | **4 / 6** |
+
+   **The doctrine channel is not inert — the L2 doctrine was REDUNDANT.** Wording moved the tool picked on
+   two questions in each direction, monotone and in the predicted order. The distinction matters: at L2 the
+   model already ordered its calls correctly on those nine questions, so an instruction telling it to do what
+   it already did could only cost turns. At L1 the same doctrine fixed the one question where the default was
+   wrong — the model listed a directory instead of reading a file whose exact path it had been handed.
+
+   **And the adversarial arm produced the failure this whole plan exists to catch, on demand**: on the
+   file-names question, *read first* produced **no tool call at all**. "A good tool nobody calls" is not a
+   hypothetical the harness has to wait for — a bad doctrine manufactures it.
+
+   **What is still NOT calibrated.** The plan's DoD asks for a spread larger than this harness's measured
+   REPEAT NOISE, and repeat noise has not been measured — n = 6, one model, one seed. A monotone 6/5/4 with a
+   legible mechanism is a reason to keep the axis, not a calibration. The plan's own control (three channel
+   doctrines over an 18-tool RAG surface) still needs the QLN engine wired to a lane, and a filesystem
+   surface is not a comparable setup for it.
+
 7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
    reconstructed source flag, result-store round-trip.
 8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the

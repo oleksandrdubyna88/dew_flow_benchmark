@@ -1,0 +1,55 @@
+{
+  "id": "l1-tool-choice",
+  "questions": [
+    {
+      "id": "l1-list-the-root",
+      "prompt": "I want to know what sits at the top level of this repository — the folders and files directly in its root, nothing deeper. Get me that.",
+      "referenceAnswer": "list_directory on the repository root.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "list_directory" }
+      ]
+    },
+    {
+      "id": "l1-find-project-files",
+      "prompt": "How many C# project files does this repository have, and where are they? Their names all end in .csproj.",
+      "referenceAnswer": "find_files with a **/*.csproj pattern. There are 12.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "find_files" }
+      ]
+    },
+    {
+      "id": "l1-locate-a-literal",
+      "prompt": "The exact identifier AddDewFlowLogging appears somewhere in this repository's source. Find where.",
+      "referenceAnswer": "search_literal for AddDewFlowLogging. It is declared in src/ServiceDefaults/RagLogging.cs.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "search_literal" }
+      ]
+    },
+    {
+      "id": "l1-read-a-known-file",
+      "prompt": "Open global.json and tell me which .NET SDK version it pins. The file is at the repository root and you already know its exact path.",
+      "referenceAnswer": "read_file on global.json — the path is given, so nothing needs locating.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "read_file" }
+      ]
+    },
+    {
+      "id": "l1-behaviour-not-a-path",
+      "prompt": "Somewhere in this repository a Docker container's kind is decided — whether it is Postgres, Qdrant or Neo4j. I have no idea which file. Start finding it.",
+      "referenceAnswer": "A behaviour with no path given: locate first with search_literal rather than guessing a file to read.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "search_literal" },
+        { "kind": "ToolNotUsed", "text": "read_file" }
+      ]
+    },
+    {
+      "id": "l1-name-shape-not-content",
+      "prompt": "Is there more than one file in this repository whose name is exactly Program.cs? I care about the file names, not what is inside them.",
+      "referenceAnswer": "A question about PATHS, not content: find_files, not search_literal.",
+      "expectations": [
+        { "kind": "ToolUsed", "text": "find_files" },
+        { "kind": "ToolNotUsed", "text": "search_literal" }
+      ]
+    }
+  ]
+}

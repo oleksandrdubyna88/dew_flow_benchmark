@@ -165,15 +165,53 @@ public sealed class LegToolUseTests(PostgresFixture postgres)
     private static StoredMetric ToolMetric(LegResult result) =>
         result.Metrics.Single(m => m.Name.StartsWith(AnswerScoring.ToolUse, StringComparison.Ordinal));
 
-    private static LaneRoster Looping(ToolAnswer? answer = null) =>
+    private static LaneRoster Looping(ToolAnswer? answer = null, int maxTurns = 5) =>
         LaneRoster.Of([new LaneChoice(
             "bridge",
             "Search before you read.",
-            new ToolSurface.Looping(new FakeEngine(Reads, answer), Reads, MaxTurns: 5))]);
+            new ToolSurface.Looping(new FakeEngine(Reads, answer), Reads, maxTurns))]);
+
+    private const string ArgsA = "{\"path\":\"a.txt\"}";
+
+    private const string ArgsB = "{\"path\":\"b.txt\"}";
+
+    [Fact]
+    public async Task A_leg_that_spent_its_TURN_ceiling_still_STORES_what_it_did()
+    {
+        // The most diagnostic leg there is — the one that thrashed through its whole ceiling — was the one
+        // whose evidence was destroyed entirely. Settling as a cap keeps it out of paired deltas, which is
+        // right; throwing away the record of what it called is not the same decision and was never argued
+        // for. Storing and scoring are different things.
+        var (outcome, runId) = await RunLegAsync(
+            Looping(maxTurns: 2),
+            [Asks("read", ArgsA), Asks("read", ArgsB)]);
+
+        outcome.Should().BeOfType<Outcome<LegResult>.Fail>("a spent ceiling is not a score");
+
+        var stored = (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().ContainSingle().Subject;
+        stored.Calls.Sequence.Should().Equal(["read", "read"]);
+    }
+
+    [Fact]
+    public async Task A_ONE_turn_lane_is_SCORED_on_the_tool_it_picked_because_that_is_the_whole_question()
+    {
+        // The L1 rung: "does a model pick it, and can it form the arguments". At MaxTurns = 1 the ceiling
+        // is not the instrument truncating ongoing work — it IS the question, and spending the single turn
+        // on a tool call is the success condition. Treating it as a cap made the rung unmeasurable: the leg
+        // the plan describes as catching "a good tool nobody calls" could never be scored at all.
+        var result = await LegAsync(Looping(maxTurns: 1), [Asks("read", ArgsA)]);
+
+        ToolMetric(result).Value.Should().Be("1");
+        result.Calls.Sequence.Should().Equal(["read"]);
+    }
 
     /// <summary>One leg, end to end, against the real stores — because the defect this pins lived precisely
     /// in the seam between two components that each passed their own tests.</summary>
-    private async Task<LegResult> LegAsync(LaneRoster lanes, IReadOnlyList<ModelAnswer> script)
+    private async Task<LegResult> LegAsync(LaneRoster lanes, IReadOnlyList<ModelAnswer> script) =>
+        (await RunLegAsync(lanes, script)).Outcome.Ok();
+
+    private async Task<(Outcome<LegResult> Outcome, Guid RunId)> RunLegAsync(
+        LaneRoster lanes, IReadOnlyList<ModelAnswer> script)
     {
         var runtime = new ScriptedRuntime(script);
         var clock = new TestClock(Noon);
@@ -196,8 +234,10 @@ public sealed class LegToolUseTests(PostgresFixture postgres)
             new ToolLoopRunner(runtime, clock, NullLogger<ToolLoopRunner>.Instance), clock,
             NullLogger<LegRunner>.Instance);
 
-        return (await runner.RunNextAsync(
-            run.Id, WorkerIdentity.Here("worker-1"), LegPlan.Reading(suite, roster) with { Lanes = lanes }, Ct)).Ok();
+        var outcome = await runner.RunNextAsync(
+            run.Id, WorkerIdentity.Here("worker-1"), LegPlan.Reading(suite, roster) with { Lanes = lanes }, Ct);
+
+        return (outcome, run.Id);
     }
 
     /// <summary>The matrix axis for these lanes — the same projection `bench run` makes, so a cell planned

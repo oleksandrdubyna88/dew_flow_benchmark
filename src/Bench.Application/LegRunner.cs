@@ -401,17 +401,15 @@ public sealed class LegRunner(
 
         var result = ((Outcome<ToolLoopResult>.Ok)looped).Value;
 
-        if (result.End == LoopEnd.TurnsSpent)
+        // A ONE-turn lane is the L1 rung, not a smaller L2. Its ceiling is not the instrument truncating
+        // ongoing work — it IS the question ("does a model pick the tool, and can it form the arguments"),
+        // and spending the single turn on a call is the SUCCESS condition. Read as a cap, that rung could
+        // never be scored at all: the leg this plan describes as catching "a good tool nobody calls" settled
+        // as a refusal every time, and its call was thrown away with it. Verified against a live model
+        // before it was changed — two legs, one tool call each, zero results and zero calls stored.
+        if (result.End == LoopEnd.TurnsSpent && surface.MaxTurns > 1)
         {
-            await runs.SettleAsync(
-                work.Cell.Id,
-                work.Owner,
-                new LegOutcome.CapExceeded(
-                    BudgetKind.Turns, BudgetScope.Question, surface.MaxTurns, result.TurnsSpent),
-                cancellationToken);
-
-            return Outcome<LegResult>.Failure(
-                $"the leg spent its {surface.MaxTurns}-turn ceiling after {result.Calls.Count} tool call(s)");
+            return await CappedAsync(work, prompt, result, surface.MaxTurns, cancellationToken);
         }
 
         return await ScoreAsync(work, prompt, result.Answer, Watched(work, result.Calls), cancellationToken);
@@ -521,18 +519,7 @@ public sealed class LegRunner(
         CancellationToken cancellationToken)
     {
         var stored = await results.SaveAsync(
-            LegResult.Of(
-                work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer, Observed(ledger)), clock.GetUtcNow()) with
-            {
-                Thinking = answer.Thinking,
-                Meta = ResponseMeta.Of(answer),
-                Retrieval = work.Retrieved,
-                Load = await LoadAsync(work, cancellationToken),
-                // The ledger is DURABLE, not just scored. A metric says a tool was called; only the ledger
-                // says in what order, with what arguments, and whether the engine took it — which is the
-                // difference between "the surface moved the score" and any account of HOW it was worked.
-                Calls = ledger,
-            },
+            await ArtefactAsync(work, prompt, answer, ledger, Metrics(work, answer, Observed(ledger)), cancellationToken),
             cancellationToken);
 
         if (stored is Outcome<LegResult>.Fail unsaved)
@@ -550,6 +537,59 @@ public sealed class LegRunner(
         }
 
         return stored;
+    }
+
+    /// <summary>What a leg leaves behind, whether or not it was scored.
+    /// <para>
+    /// One construction, because there are now two callers and the second exists precisely to preserve
+    /// evidence — a second copy would be the seam where the two drift, which is the defect this method's own
+    /// <see cref="ToolLedger"/> field was added to fix one level down.
+    /// </para></summary>
+    private async Task<LegResult> ArtefactAsync(
+        LegWork work,
+        string prompt,
+        ModelAnswer answer,
+        ToolLedger ledger,
+        IReadOnlyList<StoredMetric> metrics,
+        CancellationToken cancellationToken) =>
+        LegResult.Of(work.Cell.Id, prompt, answer.Text.Value, metrics, clock.GetUtcNow()) with
+        {
+            Thinking = answer.Thinking,
+            Meta = ResponseMeta.Of(answer),
+            Retrieval = work.Retrieved,
+            Load = await LoadAsync(work, cancellationToken),
+            // The ledger is DURABLE, not just scored. A metric says a tool was called; only the ledger says
+            // in what order, with what arguments, and whether the engine took it — the difference between
+            // "the surface moved the score" and any account of HOW it was worked.
+            Calls = ledger,
+        };
+
+    /// <summary>A leg the turn ceiling ended: settled as a cap, and its evidence KEPT.
+    ///
+    /// <para>It used to be discarded whole. The most diagnostic leg there is — the one that thrashed through
+    /// its entire ceiling — was the one whose record was destroyed, which is exactly backwards. Settling as a
+    /// cap keeps it out of paired deltas and that reasoning stands; throwing away what it called was never
+    /// the same decision and was never argued for.</para>
+    ///
+    /// <para><b>Stored with NO metrics</b>, deliberately. A capped leg was not scored, and metric rows are
+    /// what every aggregate in this system groups over — writing them would quietly enrol an unscored leg in
+    /// every average. The artefact is the prompt, the answer as far as it got, and the ledger.</para>
+    /// </summary>
+    private async Task<Outcome<LegResult>> CappedAsync(
+        LegWork work, string prompt, ToolLoopResult result, int maxTurns, CancellationToken cancellationToken)
+    {
+        await results.SaveAsync(
+            await ArtefactAsync(work, prompt, result.Answer, Watched(work, result.Calls), [], cancellationToken),
+            cancellationToken);
+
+        await runs.SettleAsync(
+            work.Cell.Id,
+            work.Owner,
+            new LegOutcome.CapExceeded(BudgetKind.Turns, BudgetScope.Question, maxTurns, result.TurnsSpent),
+            cancellationToken);
+
+        return Outcome<LegResult>.Failure(
+            $"the leg spent its {maxTurns}-turn ceiling after {result.Calls.Count} tool call(s)");
     }
 
     /// <summary>Both mechanical readings of one leg.

@@ -103,8 +103,11 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
     /// </para></summary>
     public async Task<RunScoreboard> ScoreboardAsync(Guid runId, CancellationToken cancellationToken)
     {
+        // Legs that were SCORED, not result rows. The two coincided until a capped leg began storing its
+        // evidence with no metrics — keeping the artefact of a leg the ceiling ended, without enrolling it
+        // in a denominator that says "this many were measured".
         var scored = await db.Results.AsNoTracking()
-            .CountAsync(r => r.Cell!.RunId == runId, cancellationToken);
+            .CountAsync(r => r.Cell!.RunId == runId && r.Metrics.Count > 0, cancellationToken);
 
         var passed = await db.Results.AsNoTracking()
             .CountAsync(

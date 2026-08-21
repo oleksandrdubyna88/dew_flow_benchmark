@@ -912,6 +912,24 @@ Stated because a description that quietly implies more than is built is the same
   model over a different tool set. It is a result only the ledger could produce — without a record of call
   order the claim was unfalsifiable and would have been carried forward as a design belief.
 
+  **L1, and the bound on that verdict.** Six one-turn micro-tasks whose expectation is WHICH tool was
+  called, three wordings, one run — the third adversarial on purpose (*read first, search later*), because
+  three similar-good wordings cannot tell an inert channel from a redundant instruction. Correct tool choice:
+  **6/6 locate-first, 5/6 no doctrine, 4/6 read-first**, monotone and in the predicted order. So the doctrine
+  channel is NOT inert; the L2 doctrine was **redundant** — the model already ordered its calls correctly on
+  those questions, while at L1 the same doctrine fixed the one case where the default was wrong (it listed a
+  directory instead of reading a file whose exact path it had been given). The adversarial arm produced the
+  failure this axis exists to catch, on demand: on the file-names question it made **no tool call at all**.
+  Not yet a calibration — repeat noise is unmeasured and n = 6.
+
+  **A defect the L1 rung exposed before it could be built.** A leg that spent its turn ceiling was discarded
+  WHOLE — no result, no ledger — so a one-turn lane, where spending the turn on a call is the success
+  condition, settled as a refusal every time and could never be scored. Verified against a live model: two
+  legs, one tool call each, **zero results and zero calls stored**. Storing and scoring are now separate. A
+  capped leg keeps its artefact and its ledger with NO metrics, so the most diagnostic leg there is — the one
+  that thrashed through its entire ceiling — stops being the one whose evidence is destroyed, and no unscored
+  leg is enrolled in an average. `MaxTurns = 1` is read as the L1 rung rather than a smaller L2.
+
   **The answer-length gradient sharpened**: 3 291 chars with no tools, 1 218 with tools and no doctrine, 417
   with tools and the doctrine. The doctrine did change behaviour measurably — it made the model terser — it
   just did not change the ordering it was written to change.
