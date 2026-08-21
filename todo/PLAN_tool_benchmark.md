@@ -586,6 +586,33 @@ it renders** — the API-first gate the family already applies.
 
    **First end-to-end milestone** is therefore reachable one step earlier than this plan assumed: a local
    model through the filesystem engine, temperature 0 and seed as-sent, tool calls recorded with outcomes.
+
+   **THE FIRST AGENTIC RUN HAPPENED, 2026-08-22, and the number is the one this whole repository was
+   built to produce.** `Gemma4-26B-A4B-Uncensored:latest` over Ollama's OpenAI-compatible route, nine
+   `code-lookup` questions against `dew_flow_rag_qln` at `0daa9254`, both lanes in ONE run so the pairing is
+   within-run rather than across two:
+
+   | lane | legs | passed every expectation | failed metric assertions |
+   |---|---|---|---|
+   | `fs-bridge` — four filesystem tools, locate-first doctrine, 12-turn ceiling | 9 | **6** | 3 |
+   | `floor` — no tools, no doctrine | 9 | **0** | 12 |
+
+   Same model, same questions, same seed, same wall. 18 legs in 6.5 minutes, 0 refused, 0 faulted. A
+   single-question probe run first isolates it further: the identical question passed on `fs-bridge` and
+   failed on `floor`, naming `src/Rag.Application/Runtime/StoreNaming.cs` and a PRIVATE method the model
+   could not have known — this repository is not in anyone's weights.
+
+   **The unplanned observation, and the more interesting half.** Floor answers average **3 291 characters**;
+   tool answers average **417**. Given nothing to read, the model writes long speculative prose; given a
+   tree, it answers short and specific. Nobody predicted that, and it means answer LENGTH is a candidate
+   signal for "answered from weights" that costs nothing to record.
+
+   **What this run cannot tell you, and it is the next thing to build.** The harness has no record of WHICH
+   tools were called or in what order — `ToolLoopResult.Calls` reaches the scorer for the metric and is then
+   dropped, because nothing persists it yet (step 7). So this measures that the surface moved the score, and
+   says nothing about how it was worked. The doctrine's whole claim — locate before you read — is currently
+   unfalsifiable for want of a ledger.
+
 7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
    reconstructed source flag, result-store round-trip.
 8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the

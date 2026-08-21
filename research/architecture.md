@@ -858,7 +858,8 @@ Stated because a description that quietly implies more than is built is the same
 
   3. **Then the MCP bridge.** `dew_flow_mcp` is not vendored here and `McpBridgeEngine` does not exist —
      which is what the 4/63-against-36/63 comparison needs, since that arm must be measured genuinely
-     in-process. It is NOT a prerequisite for the first agentic leg: `FilesystemEngine` already serves four
+     in-process. It is NOT a prerequisite for the first agentic leg — which has now RUN: `FilesystemEngine`
+     already serves four
      real tools and is the native-tools baseline that scored 36/63.
 
   The loop's per-leg wall budget was designed before any of this (`LegDeadline`), deliberately:
@@ -873,6 +874,28 @@ Stated because a description that quietly implies more than is built is the same
   is gone: as a failure, so the existing `UnansweredAsync` settles it as a wall `CapExceeded` rather than a
   crash. No campaign had run long enough to show it, which is the point — a budget nothing enforces reads
   identically to one that works until the day it costs a week.
+
+  **The first agentic run, 2026-08-22 — the number this repository exists to produce.**
+  `Gemma4-26B-A4B-Uncensored:latest` over Ollama, nine `code-lookup` questions against `dew_flow_rag_qln`
+  at `0daa9254`, both lanes in ONE run so the pairing is within-run:
+
+  | lane | legs | passed every expectation | failed metric assertions |
+  |---|---|---|---|
+  | `fs-bridge` — four filesystem tools, locate-first doctrine, 12 turns | 9 | **6** | 3 |
+  | `floor` — no tools, no doctrine | 9 | **0** | 12 |
+
+  Same model, same questions, same seed, same wall; 18 legs in 6.5 minutes, none refused or faulted. The
+  target is a repository no model has seen, so a passing answer naming a private method in a named file is
+  evidence of reading rather than of recall.
+
+  **The unpredicted observation.** Floor answers average **3 291 characters** and tool answers **417**.
+  Given nothing to read the model writes long speculative prose; given a tree it answers short and specific.
+  Answer length is therefore a candidate signal for "answered from weights" that costs nothing to record.
+
+  **And the honest limit.** Nothing persists WHICH tools were called or in what order — the ledger reaches
+  the scorer and is dropped. So this measures that the surface moved the score and says nothing about how it
+  was worked; the doctrine's own claim, locate before you read, is currently unfalsifiable.
+
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
   AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a
