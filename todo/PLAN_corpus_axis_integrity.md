@@ -43,7 +43,7 @@ because the next engine will have its own reasons to ignore an axis.
 
 This is the founding discipline applied one level down. An engine already *declares* its capabilities and
 *echoes* the axes that actually served a query rather than being trusted
-(`src/Bench.Infrastructure/Engines/QlnEngine.cs:222-238`). The corpus a query is served *from* has had no
+(`src/Bench.Infrastructure/Engines/QlnRetriever.cs:255,316` — the echo moved out of `QlnEngine` when the retriever was split out). The corpus a query is served *from* has had no
 such echo, and it is the more expensive half — a wrong query axis costs one query, a wrong corpus costs
 the whole collection and everything measured against it.
 
