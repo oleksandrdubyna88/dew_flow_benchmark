@@ -912,6 +912,22 @@ Stated because a description that quietly implies more than is built is the same
   model over a different tool set. It is a result only the ledger could produce — without a record of call
   order the claim was unfalsifiable and would have been carried forward as a design belief.
 
+  **THE FULL BANK, AND A REVERSAL WITHIN THE DAY.** 26 accepted questions, six groups, three lanes, 78 legs,
+  none refused or faulted: `fs-bridge` (tools + doctrine) **18/26**, `fs-mute` (same tools, no doctrine)
+  **14/26**, `floor` **2/26**. The "inert" verdict above came from `code-lookup` alone — and `code-lookup` is
+  the ONE group where the doctrine loses (6 against 7). The doctrine's whole margin is `bug-root-cause`, 6
+  against 2 on seven questions. Repeat noise is zero, so neither number is jitter; the slice was simply not
+  the population, which is the exact failure this family's rule about held-out splits was written against.
+
+  **The ledger also says the MECHANISM was misread.** Both lanes open with a locating tool essentially always
+  (0 of 32 legs opened with a blind `read_file`), so the doctrine's stated claim really is one this model
+  satisfies unprompted. What it changes is engagement: `fs-bridge` makes 4.3 tool calls a leg whether it
+  passes (4.4) or fails (4.1), while `fs-mute` averages 2.2 — 3.7 when it passes and **0.5 when it fails**.
+  Undirected, the model had four tools and answered from its weights anyway. So the doctrine removes the
+  *don't bother* failure mode rather than reordering anything, which is why it is worth four legs on "why does
+  Y happen" and nothing on "where is X". **"A good tool nobody calls" is no longer a hypothetical: it is the
+  measured failure mode of an undirected tool lane.**
+
   **L1, and the bound on that verdict.** Six one-turn micro-tasks whose expectation is WHICH tool was
   called, three wordings, one run — the third adversarial on purpose (*read first, search later*), because
   three similar-good wordings cannot tell an inert channel from a redundant instruction. Correct tool choice:

@@ -673,6 +673,49 @@ it renders** — the API-first gate the family already applies.
    doctrines over an 18-tool RAG surface) still needs the QLN engine wired to a lane, and a filesystem
    surface is not a comparable setup for it.
 
+   **THE FULL BANK REVERSED IT (2026-08-22).** 26 accepted questions, six groups, three lanes, 78 legs, none
+   refused or faulted:
+
+   | lane | legs | passed | |
+   |---|---|---|---|
+   | `fs-bridge` — tools + locate-first doctrine | 26 | **18** | 69.2 % |
+   | `fs-mute` — same tools, no doctrine | 26 | 14 | 53.8 % |
+   | `floor` — no tools | 26 | 2 | 7.7 % |
+
+   The "inert / redundant" verdict above was drawn from `code-lookup` alone, and `code-lookup` is the ONE
+   group where the doctrine loses:
+
+   | group | doctrine | no doctrine | floor |
+   |---|---|---|---|
+   | code-lookup (9) | 6 | **7** | 0 |
+   | bug-root-cause (7) | **6** | 2 | 1 |
+   | adversarial (4) | **2** | 1 | 0 |
+   | pr-diff (3) | 3 | 3 | 0 |
+   | semantic-intent (2) | 0 | 0 | 0 |
+   | code-writing (1) | 1 | 1 | 1 |
+
+   This is exactly the failure this family's own doctrine was written against — *three separate sweeps here
+   produced winners the full set then reversed* — and it has now happened to a finding recorded in this file
+   the same day. Repeat noise is zero, so neither number is model jitter; the slice was simply not the
+   population.
+
+   **And the ledger says the mechanism was misread too — it is not ORDERING, it is ENGAGEMENT.** Both lanes
+   open with a locating tool essentially always (0 legs of 32 opened with a blind `read_file`), so the
+   doctrine's *stated* claim really is one the model satisfies unprompted. What the doctrine actually changes
+   is how hard the model works the surface:
+
+   | lane | tool calls per leg | on legs that PASSED | on legs that FAILED |
+   |---|---|---|---|
+   | `fs-bridge` | 4.3 | 4.4 | 4.1 |
+   | `fs-mute` | 2.2 | 3.7 | **0.5** |
+
+   Without a doctrine the failures are legs that made **half a call on average** — the model had four tools
+   and answered from its weights anyway. With one, it digs uniformly whether or not it succeeds. So the
+   doctrine removes the *don't bother* failure mode rather than reordering anything, which is why it is worth
+   4 of 7 on `bug-root-cause` (why does Y happen — needs investigation) and nothing on `code-lookup` (where
+   is X — answerable in two calls). **"A good tool nobody calls" is no longer a hypothetical the plan
+   describes: it is the measured failure mode of an undirected tool lane.**
+
 7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
    reconstructed source flag, result-store round-trip.
 8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the
