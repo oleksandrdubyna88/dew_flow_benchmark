@@ -1,0 +1,61 @@
+@page "/benchmarking/code"
+
+<PageTitle>Benchmarking · Code</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+
+@if (!Runs.Available && Runs.Detail.Length > 0)
+{
+    @* The API could not be read — not the same panel as "no fix runs": one sends the reader to the
+       daemon, the other to the CLI. *@
+    <div class="alert alert-warning">@Runs.Detail</div>
+}
+else if (FixRuns.Count == 0)
+{
+    <div class="alert alert-secondary">
+        <strong>Nothing to show.</strong> no fix run has been measured yet — plan one with
+        <code>bench run --task-kind fix</code>.
+    </div>
+}
+else
+{
+    <div class="d-flex align-items-center justify-content-between">
+        <p class="text-body-secondary mb-2">
+            The code kind's population: every run whose task is a FIX — investigate-only today, the
+            diff-producing arms once the sandbox lands. Task detail (statement, phases, diff, signals)
+            grows here per <code>PLAN_code_lane.md</code> §7 step 8.
+        </p>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3" disabled="@Loading" @onclick="ReloadAsync">
+            @(Loading ? "Reading…" : "Refresh")
+        </button>
+    </div>
+
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Run</th>
+                        <th scope="col">Suite</th>
+                        <th scope="col">Target</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in FixRuns)
+                    {
+                        <tr>
+                            <td><NavLink href="@($"/benchmarking/runs/{run.RunId}")">@run.Label</NavLink></td>
+                            <td><code>@run.SuiteStamp</code></td>
+                            <td class="text-break"><small>@run.TargetCanonical</small></td>
+                            <td>@run.Status</td>
+                            <td><time datetime="@run.CreatedAt.ToString("o")">@run.CreatedAt.ToString("yyyy-MM-dd HH:mm")</time></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
