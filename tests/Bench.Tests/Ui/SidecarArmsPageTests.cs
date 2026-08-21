@@ -21,22 +21,28 @@ public sealed class SidecarArmsPageTests : BunitContext
     private const string Windows = "windows-to-windows/directml/R9700";
 
     [Fact]
-    public void The_tabs_are_the_KINDS_of_test_and_all_three_are_declared()
+    public void The_tabs_lead_with_the_population_and_the_pending_kinds_stay_declared()
     {
         var page = Render<Benchmarking>(new ScriptedBenchApi().Answers("/api/bench/runs", Array.Empty<RunSummaryDto>()));
 
-        // Declared before they are built, deliberately: the structure is the claim about what this section is
-        // for, and a tab appearing later reads as a feature nobody planned.
-        page.Markup.Should().Contain(">RAG<").And.Contain(">MCP<").And.Contain(">Sidecar<");
+        // The run list is the POPULATION — reading, fix and tool-lane runs alike — and a tab named after
+        // one hardware question mislabels every other kind that lands there. Measured on a real reader
+        // 2026-08-21: the operator asked why an investigate run showed under "Sidecar". The pending kinds
+        // stay declared before they are built — that part of the old structure was right.
+        page.Markup.Should().Contain(">Runs<").And.Contain(">Arms<").And.Contain(">RAG<").And.Contain(">MCP<");
+        page.Markup.Should().NotContain(">Sidecar<",
+            "the sidecar question is one DIMENSION of the arms comparison, not the name of the population");
         page.Markup.Should().Contain("/benchmarking/rag").And.Contain("/benchmarking/mcp");
     }
 
     [Fact]
-    public void Runs_and_arms_are_two_views_INSIDE_the_sidecar_kind()
+    public void Arms_is_a_top_level_tab_beside_the_runs_it_compares()
     {
         var page = Render<Benchmarking>(new ScriptedBenchApi().Answers("/api/bench/runs", Array.Empty<RunSummaryDto>()));
 
-        page.Markup.Should().Contain("/benchmarking/sidecar/arms");
+        page.Markup.Should().Contain("/benchmarking/arms");
+        page.Markup.Should().NotContain("/benchmarking/sidecar/arms",
+            "the old route survives as a bookmark alias on the page, never as navigation");
     }
 
     [Fact]
