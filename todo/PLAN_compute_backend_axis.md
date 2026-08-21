@@ -4,10 +4,20 @@
 > The backend is a value (`ComputeBackend`), a three-state declaration (`BackendDeclaration`), part of the
 > engine identity (`EngineRef.Canonical` — the §2b fix), an optional axis on a recipe, a rule that blocks a
 > mismatched cell before any cell exists (`IndexReadiness`), a flag that allows what it cannot verify and
-> keeps saying so (`--allow-undeclared-backend`), and a stored column (`runs.EngineBackend`). What remains
-> is **not this repository's**: qln must SEND the field — it already holds the value, since
-> `RuntimeInspector` reads `active_provider` off the sidecar's `/health` — so until then every engine
-> declares nothing, which is the truth about all of them and why no existing run changed.
+> keeps saying so (`--allow-undeclared-backend`), and a stored column (`runs.EngineBackend`).
+>
+> ~~What remains is **not this repository's**: qln must SEND the field.~~ **It does, since 2026-08-20** —
+> `dew_flow_rag_qln`'s `/index-state` composes the arm with `ComputeArm.Of(...)` and serialises it as
+> `backend`, which is exactly the property `QlnRetriever` already reads. The contract connects end to end;
+> the blocking dependency this plan was waiting on is closed, and what an engine declares is now a question
+> about the machine rather than about a missing field.
+>
+> **Read the arm's own rule before trusting a blank**, because an empty value is still common and still
+> means *not declared*: qln sends nothing unless all three parts are known and the whole sidecar fleet
+> agrees. Three corrections on that side (2026-08-20/21) were each a value that named hardware it could not
+> vouch for — the sidecar's `auto` REQUEST published as the active provider on the default configuration,
+> the console badging it green, and a CPU arm naming the idle card DXGI happens to resolve. So a run
+> recorded before 2026-08-21 that declares `windows/auto/…` is naming a provider nobody established.
 >
 > Scope: a MEASUREMENT first (phase 1 needs no code in this repository), then the engine's backend echo in
 > `Bench.Domain`/`Bench.Contracts`, then the run matrix.

@@ -612,9 +612,14 @@ internal sealed record IndexStateWire
     /// <summary>Absent when no pass this engine remembers wrote the collection.</summary>
     [JsonPropertyName("passStatus")] public int? PassStatus { get; init; }
 
-    /// <summary>What the engine computed on, as <c>host/provider/device</c>. Absent from every version of
-    /// qln shipped so far, which reads as <c>not declared</c> — the honest state rather than a gap, since an
-    /// engine that says nothing has not agreed with anything.</summary>
+    /// <summary>What the engine computed on, as <c>host/provider/device</c>.
+    ///
+    /// <para><b>Sent since 2026-08-20</b> — this comment said "absent from every version of qln shipped so
+    /// far" until 2026-08-21, and by then qln had been composing it for a day
+    /// (<c>dew_flow_rag_qln · IndexStateEndpoints</c> → <c>ComputeArm.Of</c>, documented in that repo's
+    /// <c>research/architecture.md</c>). Empty still reads as <c>not declared</c>, and still will: qln sends
+    /// an empty value whenever any of the three parts is unknown or two sidecars disagree, because a partial
+    /// or arbitrated arm would label a measurement with hardware that did not do the work.</para></summary>
     [JsonPropertyName("backend")] public string Backend { get; init; } = string.Empty;
 }
 
