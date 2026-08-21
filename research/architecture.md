@@ -621,6 +621,16 @@ campaign of ten thousand cells has to live through overnight:
   come back. `bench sweep --db … [--stale-after-minutes 30]` is the same recovery as an operator verb, for
   after a `kill -9`. The store had this from its first commit and *nothing called it*, which is the audit
   finding this whole section exists to prevent repeating.
+- **A stopped run is FINISHED with `bench resume --run <id>`.** The bullet above said a stopped run is
+  "resumable, not finished" — and until 2026-08-22 nothing could resume it from a cold start: the sweep only
+  hands back cells inside a drain still running, and `bench run` always plans a NEW run. So an interrupted
+  campaign left its cells `Pending` in a run stuck at `Running` for good, which is the stuck in-flight state
+  rule 8 forbids. `resume` rebuilds the questions from the bank and PROVES them against the stamp the run
+  froze, takes subjects, lanes and variants off the run's own cells, and drains through the same
+  `ExecuteAsync` the first half went through. Only the endpoint and the wall are named again, because a run
+  stores neither: an endpoint is where a model was reachable that day, not a property of the measurement. A
+  `--model` that disagrees with the cells is refused, a RETIRED lane resumes fine, and a run with no tool
+  lane needs no checkout at all.
 - **And retention runs beside it**, for the same reason: `bench run` releases hit snippets past the window
   before it drains, and `bench prune --db … [--hit-retention-days 7]` is the same pass as an operator verb.
   A policy that only runs when somebody remembers to run it is the pattern above, one table larger.

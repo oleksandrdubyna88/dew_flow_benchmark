@@ -24,6 +24,22 @@ Three separate configurations were chosen on convincing evidence and then revers
 | Filtering the semantic channel to opaque-named members — "the first configuration that improves both sides instead of trading one for the other" — **60/107** against 59 (all) and 51 (off) | The same flag on the full set two days later: **64/182 against 88/182**. It gutted the very slice it existed to protect (opaque 31 → 14, coverage 62 % → 28 %), and was reverted within the hour |
 | A 28-cell grid of signal combinations × query registers was expected to separate the registers | Predicted **flat before it ran**, and was. The prediction was recorded in advance precisely so flatness would read as a confirmation rather than a disappointment |
 
+**And a fourth, 2026-08-22 — the first this benchmark produced about ITSELF.** A tool lane with an ordering
+doctrine was measured against the same lane without one on the 9-question `code-lookup` group: 6 against 7,
+recorded the same day as *"the doctrine is inert — it was redundant"*. The full 26-question bank reversed it
+within hours: **18 against 14**, and `code-lookup` turned out to be the ONE group of six where the doctrine
+loses. Its entire margin lives in `bug-root-cause`, 6 against 2 on seven questions.
+
+Two things make this one worth more than the three above. First, **repeat noise had been measured at
+literally zero** — nine questions x five repeats, no verdict flipped and every question produced ONE distinct
+tool-call sequence — so neither number was jitter and the slice was simply not the population. A stable
+instrument does not protect you from a narrow one. Second, **the call ledger explained it and the scores
+could not**: both lanes locate before reading (0 of 32 legs opened with a blind read), so the doctrine's
+stated claim really was redundant — what it actually changes is engagement. Undirected, the FAILING legs
+averaged **0.5 tool calls**: four tools offered and the model answered from its weights anyway. Directed, 4.1
+even when failing. The doctrine removes a *don't bother* failure mode rather than reordering anything, which
+is why it is worth four legs on "why does Y happen" and nothing on "where is X".
+
 **What this buys the design.** Repeats defend against variance *within* one configuration; the
 selection/held-out split defends against choosing *among many*. They are different guards and this
 benchmark carries both. A configuration that won only on the half that selected it renders as

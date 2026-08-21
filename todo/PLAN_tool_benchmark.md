@@ -716,11 +716,46 @@ it renders** — the API-first gate the family already applies.
    is X — answerable in two calls). **"A good tool nobody calls" is no longer a hypothetical the plan
    describes: it is the measured failure mode of an undirected tool lane.**
 
-7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
-   reconstructed source flag, result-store round-trip.
-8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the
-   instrument's own calibration. If the doctrine spread does not appear, stop and fix the harness before
-   judging any tool with it.
+7. **`tool_calls` persistence** ~~+ the run's surface fingerprint~~ — **HALF DONE 2026-08-22.** The ledger
+   shipped: a `tool_calls` table (order, turn, phase, arguments as sent, refused, error, duration, source)
+   plus a `results.ToolsOffered` column, because an empty row set alone cannot tell "this lane had no tools"
+   from "the subject ignored four of them" and only the second is evidence about the descriptions. The
+   observed/reconstructed flag lives on the LEDGER rather than per row — it is an invariant of the leg, and a
+   per-row label would let a future writer blend the two kinds the rule forbids averaging. Round-tripped
+   through the real store. Its first use falsified a doctrine and then explained a reversal the scores could
+   not (§ the full bank, above).
+
+   **The surface fingerprint is NOT built, and the shape the plan specified is wrong now.**
+   `runs.SurfaceFingerprintJson` is a per-RUN column, and a lane became a per-CELL axis in step 3 — the runs
+   above measure three lanes at once, so one fingerprint per run cannot say what each of them served. It
+   belongs per lane-use, not per run. Nothing is blocked for a DOCTRINE campaign, where the tools are
+   identical across arms; it is the whole axis for a DESCRIPTION campaign, which therefore cannot be run yet.
+
+   **A defect this step exposed, and it was destroying more than it recorded.** A leg that spent its turn
+   ceiling was discarded WHOLE — no result row, no ledger — so the most diagnostic leg there is, the one that
+   thrashed through its entire ceiling, was the one whose evidence was destroyed. Storing and scoring are now
+   separate: a capped leg keeps its artefact and ledger with NO metrics, so nothing unscored is enrolled in an
+   average. It also made the L1 rung impossible (below).
+8. **L1 suite + the control** — **SUITE DONE 2026-08-22, the plan's own control still open.**
+   `samples/l1-tool-choice-suite.json`: six one-turn micro-tasks whose expectation is WHICH tool was called.
+   Three wordings, the third adversarial on purpose (*read first, search later*), because three
+   similar-good wordings cannot tell an inert channel from a redundant instruction. Correct tool choice
+   **6/6 locate-first, 5/6 no doctrine, 4/6 read-first** — monotone, in the predicted order, and the
+   adversarial arm produced *a good tool nobody calls* on demand.
+
+   **`MaxTurns = 1` had to become a rung rather than a smaller ceiling.** Read as a cap, an L1 leg settled
+   as a refusal every time and its call was thrown away with it — verified against a live model before the
+   change: two legs, one tool call each, zero results and zero calls stored. At one turn the ceiling is not
+   the instrument truncating work, it IS the question.
+
+   **Repeat noise: measured, and it is ZERO** (9 x 5, no verdict flipped, one distinct tool sequence per
+   question). So the DoD's "spread larger than repeat noise" is satisfied by any spread at all — and the
+   guard that actually bites here is the OTHER one, the question set: a 6-vs-7 spread on nine questions was
+   reversed to 18-vs-14 by twenty-six.
+
+   **Still open:** the plan's own control — three CHANNEL doctrines over an 18-tool RAG surface, the
+   arrangement that produced the 16.5-of-63 spread this axis was built on. A four-tool filesystem surface is
+   not a comparable setup for it, so it needs `QlnEngine` bound to a lane.
 9. **API + reports** — the lane, tool-usage, affinity-delta and doctrine-leaderboard endpoints in
    `Bench.Api`, plus `bench report` verbs over the same use cases. Comparison-scope refusal lands here.
 10. **UI** — `Bench.Ui` pages over the step-9 endpoints only: lanes catalog with the definition echoed,
@@ -767,23 +802,33 @@ it renders** — the API-first gate the family already applies.
 
 ## 7. Definition of Done
 
-- [ ] A lane is a catalog row; adding a wording, a doctrine or a tool subset needs no migration and no
+- [x] A lane is a catalog row; adding a wording, a doctrine or a tool subset needs no migration and no
       recompile of the runner.
-- [ ] The doctrine text reaches the model — proven by a test that asserts the outgoing system prompt,
+- [x] The doctrine text reaches the model — proven by a test that asserts the outgoing system prompt,
       not by reading the configuration.
-- [ ] `bench run` drives a real tool loop; every tool call is stored with its **outcome** (answered /
+- [x] `bench run` drives a real tool loop; every tool call is stored with its **outcome** (answered /
       refused / failed), its duration, its turn, and whether it was observed or reconstructed.
-- [ ] A leg that exhausts its turns settles `CapExceeded`, is excluded from paired deltas, and is never
+- [x] A leg that exhausts its turns settles `CapExceeded`, is excluded from paired deltas, and is never
       scored as a wrong answer.
-- [ ] A `ToolUsed` expectation in a no-tools lane reads *not applicable*, and the no-tools floor is
+- [x] A `ToolUsed` expectation in a no-tools lane reads *not applicable*, and the no-tools floor is
       therefore not penalised for lacking tools.
-- [ ] An unknown expectation kind refuses the suite by name instead of silently loading as a `File`
+- [x] An unknown expectation kind refuses the suite by name instead of silently loading as a `File`
       expectation.
 - [ ] Every result names the exact surface that produced it — tool names, description-set, description
       text hash, doctrine hash, presentation — and a mismatch between what was asked for and what was
       served blocks the cell instead of measuring it.
-- [ ] The three doctrine arms reproduce a spread larger than the measured repeat noise on this harness,
+      *(Still open, and the shape this plan specified for it is wrong: `runs.SurfaceFingerprintJson` is
+      per-RUN while a lane is a per-CELL axis, so one fingerprint cannot describe a run measuring three
+      lanes. It belongs per lane-use. Nothing blocks a DOCTRINE campaign, where the tools are identical
+      across arms; it is the whole axis for a DESCRIPTION campaign.)*
+- [x] The three doctrine arms reproduce a spread larger than the measured repeat noise on this harness,
       or the harness is fixed before any tool is judged by it.
+      *(2026-08-22. Repeat noise measured at ZERO — 9 questions x 5 repeats, no verdict flipped and one
+      distinct tool-call sequence per question — so any spread clears it. L1: 6/5/4 across three wordings,
+      monotone. The bar this item sets is therefore MET and turns out not to be the binding one: the guard
+      that actually bit was the question SET, where 6-vs-7 on nine questions reversed to 18-vs-14 on
+      twenty-six. The plan's own control — three CHANNEL doctrines over an 18-tool RAG surface — is still
+      unrun, and needs `QlnEngine` bound to a lane.)*
 - [ ] The three operator questions are answerable from the CLI, from the API, and from a UI page, in
       that order of arrival.
 - [ ] Rows are publication-safe: no local path, no secret, no machine name.
