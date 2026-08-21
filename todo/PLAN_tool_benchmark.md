@@ -548,10 +548,23 @@ it renders** — the API-first gate the family already applies.
       sent it a broken schema"*. **Everything measured before this is a measurement of our own defect**, which
       is why it goes first. The guard written in step 2 does not catch it either: it checked that the schema
       was valid JSON, and the bar is that it is a SCHEMA.
-   2. **Nothing resolves a lane name into a surface.** `bench lanes add|list|retire` fills the catalog and
-      `LegPlan.Lanes` reads a roster, but no command joins them — and `IEngine` is not registered in the CLI
-      container at all, only constructed in tests. The engine a tool lane needs is bound to the run's pinned
-      CHECKOUT, so the wiring is an engine factory rather than a lookup.
+   2. ~~**Nothing resolves a lane name into a surface.**~~ **DONE 2026-08-22.** `bench run --lanes <names>`
+      joins them: every named lane is an arm of the matrix, resolved before a cell exists.
+
+      **The engine factory this item predicted does not exist, and should not.** The reasoning that called
+      for one was right about the constraint — the engine must be rooted at the run's pinned checkout, a
+      path unknown when the container is composed — and wrong about the conclusion. The engine is
+      constructed in the plan path and rides inside `ToolSurface.Looping`, which is where `LegRunner`
+      already reads it from; nothing needs it from DI, so a factory would have been a port with one
+      implementation serving one caller.
+
+      **Two orderings were wrong on the first attempt, both caught by tests rather than by review.** The
+      tree was checked before the catalog, so a typo'd lane name under `--no-checkout` was answered with a
+      complaint about the checkout and the operator would fix the wrong thing — and a test written for the
+      unknown-name refusal could never reach the lookup at all. And the tree was demanded of EVERY lane,
+      including a floor lane, which is the one lane that provably needs no tree: "no tools, but read
+      carefully" is a legitimate arm, and refusing it for want of a checkout denies the floor every tool
+      claim is measured against.
    3. **Then the submodule and `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references,
       implement the engine, `bench lanes verify` against `--print-surface`. Still required for the arm that
       matters most (4/63 against 36/63 must be measured genuinely in-process) and still **not** a

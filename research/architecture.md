@@ -836,8 +836,15 @@ Stated because a description that quietly implies more than is built is the same
      would be handed nonsense and the symptom would read as *"the model cannot use tools"* rather than
      *"we sent it a broken schema"*. This is the one that must be fixed first, because everything measured
      before it would be measuring our own defect.
-  2. **Nothing resolves a lane name into a surface.** `bench lanes add|list|retire` fills the catalog and
-     `LegPlan.Lanes` reads it, but no command joins the two.
+  2. ~~**Nothing resolves a lane name into a surface.**~~ **DONE.** `bench run --lanes <names>` joins the
+     catalog to the plan: each named lane is an ARM of the matrix, resolved before a single cell exists, so
+     a retired lane, an unknown name, or a presentation this build cannot serve ends the run there rather
+     than three hours in as a wall of identical leg failures. The engine is built in the plan path and
+     TRAVELS inside `ToolSurface.Looping` — the prediction that it needed a container registration was
+     wrong, and wrong in a way worth keeping: it has to be rooted at the run's pinned checkout, a path
+     nobody knows until well after the container is composed, and `LegRunner` already reads its engine off
+     the surface. So there is no engine factory and no DI entry, only a constructor call where the tree is
+     finally known.
   3. **Then the MCP bridge.** `dew_flow_mcp` is not vendored here and `McpBridgeEngine` does not exist —
      which is what the 4/63-against-36/63 comparison needs, since that arm must be measured genuinely
      in-process. It is NOT a prerequisite for the first agentic leg: `FilesystemEngine` already serves four

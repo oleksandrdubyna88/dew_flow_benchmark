@@ -1,9 +1,11 @@
 using Bench.Application;
 using Bench.Application.Bank;
+using Bench.Application.Lanes;
 using Bench.Application.Registry;
 using Bench.Application.Variants;
 using Bench.Domain;
 using Bench.Domain.Bank;
+using Bench.Domain.Lanes;
 using Bench.Domain.Models;
 using Bench.Domain.Registry;
 using Bench.Domain.Retrieval;
@@ -147,7 +149,16 @@ public static class RunCommand
 
         return selection is Outcome<BankSelection>.Fail badSuite
             ? Refuse(error, badSuite.Reason)
-            : await CreateAsync(scope, settings, ((Outcome<BankSelection>.Ok)selection).Value, output, error, stopping);
+            : await CreateAsync(
+                scope,
+                settings,
+                ((Outcome<BankSelection>.Ok)selection).Value,
+                // The checkout PATH, not just the fact that it worked. A tool lane's engine is rooted at
+                // the run's pinned tree, and this is the only place that knows where it landed.
+                ((Outcome<string>.Ok)checkout).Value,
+                output,
+                error,
+                stopping);
     }
 
     /// <summary>Puts the target's tree on disk at the pinned commit, before anything is created.
@@ -228,6 +239,7 @@ public static class RunCommand
         AsyncServiceScope scope,
         RunInputs settings,
         BankSelection selection,
+        string checkout,
         TextWriter output,
         TextWriter error,
         CancellationToken stopping)
@@ -247,12 +259,19 @@ public static class RunCommand
             return Refuse(error, chosen.Match(_ => string.Empty, reason => reason));
         }
 
+        var offered = await LanesAsync(scope, settings, checkout, stopping);
+
+        if (offered is not Outcome<LaneRoster>.Ok(var lanes))
+        {
+            return Refuse(error, offered.Match(_ => string.Empty, reason => reason));
+        }
+
         var run = BenchRun.Planned(
             settings.Label, settings.Target, Engine(settings, variants.Served), frozen.Stamp, DateTimeOffset.UtcNow)
             with
         { Kind = settings.Kind };
         var cells = Matrix.Plan(
-            frozen.Questions, settings.Repeats, roster.Subjects, [settings.Lane], Planned(variants),
+            frozen.Questions, settings.Repeats, roster.Subjects, Axis(settings, lanes), Planned(variants),
             [settings.Arm]);
 
         if (cells is Outcome<IReadOnlyList<MatrixCell>>.Fail badMatrix)
@@ -293,9 +312,106 @@ public static class RunCommand
         }
 
         var confirmed = ((Outcome<IReadOnlyList<Budget>>.Ok)budgets).Value;
-        Announce(output, settings, run, selection, roster, variants, planned.Count, confirmed);
+        Announce(output, settings, run, selection, roster, variants, lanes, planned.Count, confirmed);
 
-        return (run, new LegPlan(frozen, roster, confirmed, settings.Kind) with { Variants = variants });
+        return (run, new LegPlan(frozen, roster, confirmed, settings.Kind) with { Variants = variants, Lanes = lanes });
+    }
+
+    /// <summary>Which tool lanes this run measures, resolved from the catalog before a single cell exists.
+    ///
+    /// <para>Resolved here rather than per leg for exactly the reason the variants are: a retired lane, a
+    /// name nobody added, or a presentation this build cannot serve must be a refusal at the START, not a
+    /// wall of identical leg failures three hours into a sweep. A run that names none measures the floor —
+    /// no tools, no doctrine — which is what every run planned before this axis existed already did.</para>
+    ///
+    /// <para><b>The engine is built HERE and travels inside the plan</b>, rather than being registered in the
+    /// container. It has to be bound to the run's pinned checkout, and that path is not known until the
+    /// checkout is ensured — well after the container is composed. Nothing needs it from DI either: the
+    /// engine rides in <c>ToolSurface.Looping</c>, which is where <c>LegRunner</c> already reads it from.</para>
+    ///
+    /// <para>A tool lane needs a TREE, so <c>--no-checkout</c> is refused by name rather than serving an
+    /// engine rooted at nothing — a subject whose every read fails would still produce answers, and they
+    /// would be scored.</para>
+    /// </summary>
+    private static async Task<Outcome<LaneRoster>> LanesAsync(
+        AsyncServiceScope scope, RunInputs settings, string checkout, CancellationToken stopping)
+    {
+        if (settings.LaneNames.Count == 0)
+        {
+            return Outcome<LaneRoster>.Success(LaneRoster.Floor);
+        }
+
+        // The CATALOG first, the tree second. Reversed — as the first version of this had it — a typo in a
+        // lane name under --no-checkout is answered by a complaint about the checkout, and the operator fixes
+        // the wrong thing. Written by a test that could then never reach the lookup at all.
+        var found = await FoundAsync(
+            scope.ServiceProvider.GetRequiredService<ILaneCatalog>(), settings.LaneNames, stopping);
+
+        if (found is Outcome<IReadOnlyList<ToolLane>>.Fail missing)
+        {
+            return Outcome<LaneRoster>.Failure(missing.Reason);
+        }
+
+        var lanes = ((Outcome<IReadOnlyList<ToolLane>>.Ok)found).Value;
+        var rootless = Rootless(lanes, checkout);
+
+        return rootless.Length > 0
+            ? Outcome<LaneRoster>.Failure(rootless)
+            : LaneResolution.Resolve(lanes, Serving(checkout));
+    }
+
+    /// <summary>Why these lanes cannot be served from this run's tree, or empty when they can.
+    /// <para>
+    /// Only a lane that OFFERS tools needs a tree. A floor lane named explicitly — "no tools, but read
+    /// carefully" is a legitimate arm — runs against nothing at all, and refusing it for want of a checkout
+    /// would deny the one lane that provably does not need one.
+    /// </para></summary>
+    private static string Rootless(IReadOnlyList<ToolLane> lanes, string checkout) =>
+        checkout.Length == 0 && lanes.Any(lane => lane.Definition.Presentation != ToolPresentation.None)
+            ? $"--lanes names {lanes.Count} tool lane(s) and --no-checkout left no tree to serve them from — "
+                + "a subject whose every read fails still answers, and those answers get scored"
+            : string.Empty;
+
+    /// <summary>The engine this process can offer a subject, or null when this run has no tree.
+    /// <para>
+    /// Null rather than an engine rooted at the empty string: <see cref="LaneResolution"/> already refuses a
+    /// lane that offers tools with no engine, and a filesystem engine pointed at nowhere would answer every
+    /// call with a refusal the subject would then write an answer around.
+    /// </para></summary>
+    private static IEngine? Serving(string checkout) =>
+        checkout.Length > 0 ? new FilesystemEngine(checkout) : null;
+
+    /// <summary>Every named lane, looked up by name and refused if retired.
+    /// <para>
+    /// A retired row stays LISTABLE — a report over an old test still has to name the surface it ran
+    /// against — but starting a NEW run on one is the mistake `bench lanes retire` exists to make
+    /// impossible, and it costs one property to say so here instead of in a post-mortem.
+    /// </para></summary>
+    private static async Task<Outcome<IReadOnlyList<ToolLane>>> FoundAsync(
+        ILaneCatalog catalog, IReadOnlyList<string> names, CancellationToken stopping)
+    {
+        var lanes = new List<ToolLane>(names.Count);
+
+        foreach (var name in names)
+        {
+            var found = await catalog.FindAsync(name, stopping);
+
+            if (found is not Outcome<ToolLane>.Ok(var lane))
+            {
+                return Outcome<IReadOnlyList<ToolLane>>.Failure(found.Match(_ => string.Empty, reason => reason));
+            }
+
+            if (!lane.IsActive)
+            {
+                return Outcome<IReadOnlyList<ToolLane>>.Failure(
+                    $"lane '{name}' was retired {lane.RetiredAt:u} — it stays listable so old reports can name "
+                    + "the surface they ran against, but a new run may not measure it");
+            }
+
+            lanes.Add(lane);
+        }
+
+        return Outcome<IReadOnlyList<ToolLane>>.Success(lanes);
     }
 
     /// <summary>Which retrieval recipes this run measures, resolved from the catalog before a single cell
@@ -461,6 +577,34 @@ public static class RunCommand
 
     /// <summary>What this run measured through. The engine is recorded on the RUN, so a report years later
     /// reads it from the run itself rather than from whatever the settings say by then.</summary>
+    /// <summary>The lanes this run measures, for the announcement.
+    /// <para>
+    /// Printed for the reason the recipes are: a run that measured the floor while its operator believed it
+    /// measured a tool surface is the failure this line exists to make impossible — and lane wording is the
+    /// axis that moved a score 16.5 points of 63, where swapping four tools for eighteen moved 1.
+    /// </para></summary>
+    private static string Lanes(RunInputs settings, LaneRoster lanes) =>
+        lanes.Entries.Count == 0
+            ? settings.Lane.Name
+            : string.Join(", ", lanes.Entries.Select(Describe));
+
+    private static string Describe(LaneChoice choice) =>
+        choice.Surface is ToolSurface.Looping looping
+            ? $"{choice.Name} ({looping.Tools.Count} tool(s), {looping.MaxTurns} turn(s))"
+            : $"{choice.Name} (no tools)";
+
+    /// <summary>The matrix's LANE axis.
+    /// <para>
+    /// <c>new Lane(name, doctrine)</c> reconstructs exactly what <c>ToolLane.Select()</c> produces — the
+    /// choice already carries both halves — so a cell planned from the catalog is indistinguishable from one
+    /// planned by hand, and the cell's <c>LaneName</c> stays the only join the roster needs. A run that
+    /// resolved no lane keeps the single <c>--lane</c> it always used.
+    /// </para></summary>
+    private static IReadOnlyList<Lane> Axis(RunInputs settings, LaneRoster lanes) =>
+        lanes.Entries.Count == 0
+            ? [settings.Lane]
+            : [.. lanes.Entries.Select(entry => new Lane(entry.Name, entry.Doctrine))];
+
     private static EngineRef Engine(RunInputs settings, BackendDeclaration served) =>
         settings.Engine.IsConfigured
             ? new EngineRef(EngineKind.Qln, settings.Engine.BaseUrl, string.Empty, string.Empty) { Backend = served }
@@ -610,6 +754,7 @@ public static class RunCommand
         BankSelection selection,
         SubjectRoster roster,
         VariantRoster variants,
+        LaneRoster lanes,
         int cells,
         IReadOnlyList<Budget> budgets)
     {
@@ -618,7 +763,7 @@ public static class RunCommand
         output.WriteLine($"run      {run.Id}");
         output.WriteLine($"target   {settings.Target.Canonical}");
         output.WriteLine($"suite    {frozen.Stamp}  ({frozen.Questions.Count} question(s))");
-        output.WriteLine($"matrix   {cells} cell(s) · lane {settings.Lane.Name}");
+        output.WriteLine($"matrix   {cells} cell(s) · lane {Lanes(settings, lanes)}");
 
         // The engine and the recipes, printed because they are what a retrieval number means. A run that
         // measured the baseline while its operator believed it measured a variant is the failure this line
@@ -863,6 +1008,7 @@ public static class RunCommand
                         subjects,
                         judges,
                         Lane.Named(command.Value("lane", NoToolsLane)),
+                        command.List("lanes"),
                         command.Int("repeats", 1),
                         command.Value("label", "run"),
                         connection,
@@ -1005,6 +1151,7 @@ public static class RunCommand
         IReadOnlyList<string> SubjectKeys,
         IReadOnlyList<string> JudgeKeys,
         Lane Lane,
+        IReadOnlyList<string> LaneNames,
         int Repeats,
         string Label,
         string ConnectionString,

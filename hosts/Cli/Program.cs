@@ -434,6 +434,11 @@ public static class Program
         output.WriteLine("             [--task-kind reading|fix] [--arm investigate-only]  a fix run carries the");
         output.WriteLine("             diagnosis contract and scores the diagnosis; the arms that produce a diff");
         output.WriteLine("             cannot be planned until the sandbox lands, and are refused by name");
+        output.WriteLine("             [--lanes <catalog names>]  tool lanes from `bench lanes`: each one is an ARM,");
+        output.WriteLine("             resolved before any cell exists — a retired lane, an unknown name, or a");
+        output.WriteLine("             presentation this build cannot serve ends the run here rather than three");
+        output.WriteLine("             hours in. Needs a checkout: the engine is rooted at the run's pinned tree.");
+        output.WriteLine("             Without them the run measures the floor — no tools, no doctrine");
         output.WriteLine("             [--engine-url <qln base> --engine-project <guid> [--engine-branch main]");
         output.WriteLine("              --variants <catalog names>]  single-shot RAG: the harness retrieves per cell,");
         output.WriteLine("             assembles the prompt from the hits, and stores the funnel, the hits and the");
