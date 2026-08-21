@@ -89,6 +89,79 @@ public sealed class LegToolUseTests(PostgresFixture postgres)
         ToolMetric(result).Value.Should().Be("1");
     }
 
+    [Fact]
+    public async Task The_LEDGER_survives_the_round_trip_with_its_order_arguments_and_outcomes()
+    {
+        // The whole point of step 7. A metric says a tool was called; only this says in what ORDER, with
+        // what arguments, and whether the engine took it — which is the difference between "the surface
+        // moved the score" and any account of how it was worked. Without it the doctrine under test
+        // ("locate before you read") is a claim nothing in the system can contradict.
+        var stored = await LegAsync(
+            Looping(),
+            [Asks("read", """{"path":"a.txt"}"""), Asks("read", """{"path":"b.txt"}"""), Final("both read")]);
+
+        var ledger = (await ReadBackAsync(stored)).Calls;
+
+        ledger.Offered.Should().BeTrue();
+        ledger.Source.Should().Be(ToolCallSource.Observed, "this harness drove every turn");
+        // Repeats kept: "search, read, read" and "read, search, read" are the difference between a doctrine
+        // followed and one ignored, and a deduplicated set cannot tell them apart.
+        ledger.Sequence.Should().Equal(["read", "read"]);
+        ledger.Entries.Select(e => e.Ordinal).Should().Equal(0, 1);
+        ledger.Entries.Select(e => e.Turn).Should().Equal(1, 2);
+        ledger.Entries[0].Call.ArgumentsJson.Should().Contain("a.txt");
+        ledger.Entries[1].Call.ArgumentsJson.Should().Contain("b.txt");
+        ledger.Entries.Should().OnlyContain(e => e.Phase == PhaseKind.Answer);
+    }
+
+    [Fact]
+    public async Task A_REFUSAL_is_stored_as_a_refusal_with_its_reason_rather_than_as_a_call_that_worked()
+    {
+        // The distinction whose absence upstream let a false read-only guarantee stand for months: all the
+        // ledger recorded was a result's length, so a refused call and an executed one looked identical.
+        var stored = await LegAsync(
+            Looping(ToolAnswer.Refusal("outside the workspace")),
+            [Asks("read", """{"path":"/etc/passwd"}"""), Final("that path is outside the tree")]);
+
+        var ledger = (await ReadBackAsync(stored)).Calls;
+
+        ledger.Refused.Should().Be(1);
+        ledger.Entries.Single().Call.Error.Should().Contain("outside the workspace");
+    }
+
+    [Fact]
+    public async Task A_FLOOR_leg_reads_back_as_NOT_OFFERED_rather_than_as_an_empty_list()
+    {
+        // An empty row set alone cannot tell "this lane had no tools" from "the subject ignored four of
+        // them", and only the second is evidence about the descriptions. That is the one fact a table of
+        // calls structurally cannot carry, which is why it is a column of its own.
+        var stored = await LegAsync(LaneRoster.Floor, [Final("it reads one.txt")]);
+
+        (await ReadBackAsync(stored)).Calls.Offered.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_lane_that_OFFERED_tools_to_a_subject_that_called_none_is_offered_with_no_entries()
+    {
+        var stored = await LegAsync(Looping(), [Final("I already know: it reads one.txt")]);
+
+        var ledger = (await ReadBackAsync(stored)).Calls;
+
+        ledger.Offered.Should().BeTrue("the tools were there — that the subject ignored them is the finding");
+        ledger.Entries.Should().BeEmpty();
+    }
+
+    /// <summary>Read the leg back through the store, because a round trip is the only thing that proves a
+    /// column was written rather than merely assigned.</summary>
+    private async Task<LegResult> ReadBackAsync(LegResult stored)
+    {
+        var results = postgres.NewResults();
+        await using var db = postgres.NewContext();
+        var runId = db.Cells.Single(c => c.Id == stored.CellId).RunId;
+
+        return (await results.ForRunAsync(runId, Ct)).Single(r => r.Id == stored.Id);
+    }
+
     private static StoredMetric ToolMetric(LegResult result) =>
         result.Metrics.Single(m => m.Name.StartsWith(AnswerScoring.ToolUse, StringComparison.Ordinal));
 

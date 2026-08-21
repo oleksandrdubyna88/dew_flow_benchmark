@@ -57,6 +57,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             .Include(r => r.Metrics)
             .Include(r => r.Funnel)
             .Include(r => r.Hits.OrderBy(h => h.Rank))
+            .Include(r => r.ToolCalls.OrderBy(t => t.Ordinal))
             .Where(r => r.Cell!.RunId == runId)
             .OrderBy(r => r.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -429,7 +430,49 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         Metrics = [.. result.Metrics.Select(m => ToRow(result.Id, m))],
         Hits = [.. Hits(result)],
         Funnel = Funnel(result),
+        ToolsOffered = result.Calls.Offered,
+        ToolCalls = [.. result.Calls.Entries.Select(e => ToRow(result.Id, result.Calls.Source, e))],
     };
+
+    /// <summary>One ledger entry as a row. The source travels from the LEDGER rather than per entry — it is
+    /// an invariant of the leg, not a label on a call, and a row-by-row flag would let a future writer blend
+    /// the two kinds that must never be averaged together.</summary>
+    private static ToolCallRow ToRow(Guid resultId, ToolCallSource source, LedgerEntry entry) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        ResultId = resultId,
+        Ordinal = entry.Ordinal,
+        Turn = entry.Turn,
+        Phase = entry.Phase,
+        ToolName = entry.Call.Name,
+        ArgumentsJson = entry.Call.ArgumentsJson,
+        Refused = entry.Call.Refused,
+        Error = entry.Call.Error,
+        DurationMs = (long)entry.Call.Duration.TotalMilliseconds,
+        Source = source,
+    };
+
+    /// <summary>The ledger a stored leg reads back as.
+    /// <para>
+    /// <c>NotOffered</c> when the lane offered nothing — which is the column's whole reason for existing,
+    /// since an empty row set alone cannot tell that apart from a subject that ignored every tool it had.
+    /// The source comes off the first row and defaults to observed for a leg with none, because a leg that
+    /// called nothing was still one the harness drove.
+    /// </para></summary>
+    private static ToolLedger Ledger(ResultRow row) =>
+        !row.ToolsOffered
+            ? ToolLedger.NotOffered
+            : new ToolLedger(
+                true,
+                row.ToolCalls.Count > 0 ? row.ToolCalls[0].Source : ToolCallSource.Observed,
+                [.. row.ToolCalls.OrderBy(c => c.Ordinal).Select(Entry)]);
+
+    private static LedgerEntry Entry(ToolCallRow row) => new(
+        row.Ordinal,
+        row.Turn,
+        row.Phase,
+        new Bench.Domain.Trace.ToolCall(
+            row.ToolName, row.ArgumentsJson, row.Refused, row.Error, TimeSpan.FromMilliseconds(row.DurationMs)));
 
     /// <summary>The funnel row, or none for a leg that performed no retrieval. A degraded funnel is still
     /// written, with its reason: the black-box reading is evidence too, and dropping it makes an engine that
@@ -503,6 +546,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
         Meta = Application.ResponseMetaJson.Read(row.ResponseMetaJson),
         Load = LegLoadJson.Read(row.LoadJson),
         Retrieval = ToDomain(row.Funnel, row.Hits),
+        Calls = Ledger(row),
     };
 
     /// <summary>The retrieval reading of one stored leg. No funnel row means no retrieval was performed —

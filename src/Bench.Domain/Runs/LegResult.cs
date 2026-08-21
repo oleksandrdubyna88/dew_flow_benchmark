@@ -96,5 +96,15 @@ public sealed record LegResult(
     /// </para></summary>
     public LegLoad Load { get; init; } = LegLoad.NotSampled("no sampler was running for this leg");
 
+    /// <summary>Every tool call this leg made, in order, with each one's outcome.
+    /// <para>
+    /// <see cref="ToolLedger.NotOffered"/> by default — the truth for every leg measured before tool lanes
+    /// existed and for every floor arm, and deliberately not an empty list: a lane that offered nothing and
+    /// a subject that reached for nothing are opposite readings of the same zero. Without this the harness
+    /// could say a tool surface moved a score and nothing about how it was worked, which leaves the ordering
+    /// doctrine under test unfalsifiable.
+    /// </para></summary>
+    public ToolLedger Calls { get; init; } = ToolLedger.NotOffered;
+
     public bool Passed => Metrics.Count > 0 && Metrics.All(m => !m.Failed);
 }

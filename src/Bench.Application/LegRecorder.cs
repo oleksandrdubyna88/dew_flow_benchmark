@@ -32,12 +32,7 @@ public sealed class LegRecorder : IFunnelSink
     /// nowhere else, so a call can never be counted twice or forgotten.</summary>
     public void Called(string tool, string argumentsJson, ToolAnswer answer, TimeSpan duration)
     {
-        _calls.Add(new ToolCall(
-            tool,
-            argumentsJson,
-            answer.WasRefused,
-            answer is ToolAnswer.Ok ? string.Empty : answer.Text,
-            duration));
+        _calls.Add(ToolCall.Of(tool, argumentsJson, answer, duration));
 
         _tools += duration;
     }

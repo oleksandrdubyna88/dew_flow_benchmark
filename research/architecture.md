@@ -892,9 +892,29 @@ Stated because a description that quietly implies more than is built is the same
   Given nothing to read the model writes long speculative prose; given a tree it answers short and specific.
   Answer length is therefore a candidate signal for "answered from weights" that costs nothing to record.
 
-  **And the honest limit.** Nothing persists WHICH tools were called or in what order — the ledger reaches
-  the scorer and is dropped. So this measures that the surface moved the score and says nothing about how it
-  was worked; the doctrine's own claim, locate before you read, is currently unfalsifiable.
+  **The ledger, built the same day, and the first thing it falsified.** Every tool call a leg makes is now
+  durable — order, turn, phase, arguments as sent, and each call's outcome (`tool_calls`, plus a
+  `results.ToolsOffered` column, because an empty row set alone cannot tell "this lane had no tools" from
+  "the subject ignored four"). With it, a third lane `fs-mute` ran the identical four tools with **no
+  doctrine at all**:
+
+  | lane | passed of 9 | legs opening with a blind `read_file` | tool calls | mean answer chars |
+  |---|---|---|---|---|
+  | `fs-bridge` — locate-first doctrine | 6 | **0 of 9** | 27 (3.0/leg) | 417 |
+  | `fs-mute` — same tools, no doctrine | **7** | **0 of 9** | 23 (2.6/leg) | 1 218 |
+  | `floor` — no tools | 0 | n/a | 0 | 3 291 |
+
+  **The doctrine is inert for this subject.** Every leg in BOTH lanes opened with `search_literal` or
+  `list_directory`; not one opened by reading a file it had guessed at. The doctrine's whole claim — locate
+  before you read — is one this model already satisfies unprompted, so the instruction had nothing to add,
+  cost ~15 % more calls, and scored one leg lower (noise at n=9, but not support). This does not refute
+  doctrine-wording effects in general: the 16.5-of-63 swing that motivated the axis came from a different
+  model over a different tool set. It is a result only the ledger could produce — without a record of call
+  order the claim was unfalsifiable and would have been carried forward as a design belief.
+
+  **The answer-length gradient sharpened**: 3 291 chars with no tools, 1 218 with tools and no doctrine, 417
+  with tools and the doctrine. The doctrine did change behaviour measurably — it made the model terser — it
+  just did not change the ordering it was written to change.
 
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the

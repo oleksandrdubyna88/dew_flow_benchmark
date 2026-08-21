@@ -1,3 +1,4 @@
+using Bench.Domain.Engines;
 namespace Bench.Domain.Trace;
 
 /// <summary>Text that may or may not have been obtainable.
@@ -46,7 +47,27 @@ public readonly record struct TokenSplit(long Fresh, long CacheRead, long CacheW
 /// tool call and an executed one look identical if the ledger records only the size of the result, and
 /// for months a guarantee was asserted on that basis and was false.
 /// </para></summary>
-public sealed record ToolCall(string Name, string ArgumentsJson, bool Refused, string Error, TimeSpan Duration);
+public sealed record ToolCall(string Name, string ArgumentsJson, bool Refused, string Error, TimeSpan Duration)
+{
+    /// <summary>
+    /// One engine answer as a record — the ONE place that decides what each outcome stores.
+    ///
+    /// <para>There were two, and they had drifted. <c>LegRecorder</c> put a refusal's sentence in
+    /// <see cref="Error"/>, which <c>TracePortTests</c> pins by name against the defect it was written for:
+    /// "a denied call and an executed one look identical if the ledger records only the size of the result."
+    /// <c>ToolLoopRunner</c>, written later and without checking, matched only <c>Failed</c> and left every
+    /// refusal's reason on the floor. Both produce the same record; only one of them can be right about what
+    /// it holds.</para>
+    ///
+    /// <para>So: <see cref="Refused"/> says WHICH kind of non-answer it was — the tool understood and said
+    /// no, against the tool broke — and <see cref="Error"/> says why, for either. A refusal with no sentence
+    /// is barely worth storing, because the whole value of an expected refusal is that a subject could read
+    /// it and correct itself: "the path was outside the checkout" and "the argument was the wrong kind" are
+    /// the evidence a tool DESCRIPTION is judged on, and an empty string collapses them into each other.</para>
+    /// </summary>
+    public static ToolCall Of(string name, string argumentsJson, ToolAnswer answer, TimeSpan duration) =>
+        new(name, argumentsJson, answer.WasRefused, answer.Match(_ => string.Empty, r => r, f => f), duration);
+}
 
 /// <summary>One stage of the retrieval funnel: how many candidates went in, how many came out, and what
 /// it cost.

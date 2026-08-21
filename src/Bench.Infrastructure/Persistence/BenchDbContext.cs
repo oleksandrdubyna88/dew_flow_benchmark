@@ -169,6 +169,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<RetrievedHitRow> RetrievedHits => Set<RetrievedHitRow>();
 
+    public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
+
     public DbSet<PreparationRow> Preparations => Set<PreparationRow>();
 
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
@@ -233,6 +235,25 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             result.HasOne(r => r.Cell!).WithMany().HasForeignKey(r => r.CellId).OnDelete(DeleteBehavior.Cascade);
             result.HasMany(r => r.Metrics).WithOne(m => m.Result!).HasForeignKey(m => m.ResultId).OnDelete(DeleteBehavior.Cascade);
             result.HasMany(r => r.Hits).WithOne(h => h.Result!).HasForeignKey(h => h.ResultId).OnDelete(DeleteBehavior.Cascade);
+            result.HasMany(r => r.ToolCalls).WithOne(t => t.Result!).HasForeignKey(t => t.ResultId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ToolCallRow>(call =>
+        {
+            call.ToTable("tool_calls");
+            call.HasKey(c => c.Id);
+
+            // Enum members as their NAMES, like every other enum here: an ordinal changes meaning the day
+            // somebody inserts a member, and old results staying readable is the point of this system.
+            call.Property(c => c.Phase).HasConversion<string>();
+            call.Property(c => c.Source).HasConversion<string>();
+
+            // One leg's calls in order — the read this table exists for, and the ordering the doctrine
+            // under test makes its claim about.
+            call.HasIndex(c => new { c.ResultId, c.Ordinal }).IsUnique();
+
+            // "Which tools did subjects reach for" across a whole run, without a scan.
+            call.HasIndex(c => c.ToolName);
         });
 
         builder.Entity<MetricRow>(metric =>

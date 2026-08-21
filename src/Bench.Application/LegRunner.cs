@@ -366,7 +366,7 @@ public sealed class LegRunner(
         return asked is Outcome<ModelAnswer>.Fail failed
             ? await UnansweredAsync(work.Cell, work.Owner, work.Deadline, failed.Reason, cancellationToken)
             : await ScoreAsync(
-                work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, ToolUsageObservation.None, cancellationToken);
+                work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, ToolLedger.NotOffered, cancellationToken);
     }
 
     /// <summary>
@@ -414,8 +414,24 @@ public sealed class LegRunner(
                 $"the leg spent its {surface.MaxTurns}-turn ceiling after {result.Calls.Count} tool call(s)");
         }
 
-        return await ScoreAsync(work, prompt, result.Answer, Observed(result.Calls), cancellationToken);
+        return await ScoreAsync(work, prompt, result.Answer, Watched(work, result.Calls), cancellationToken);
     }
+
+    /// <summary>The loop's calls as a durable ledger.
+    /// <para>
+    /// <c>Watched</c> rather than <c>Recovered</c>: this harness drove every turn, so the ordinals mean
+    /// what they say. A CLI-agent lane produces the other kind, later and from a server's spool, and the
+    /// two are never averaged together.
+    /// </para></summary>
+    private static ToolLedger Watched(LegWork work, IReadOnlyList<TurnCall> calls) =>
+        ToolLedger.Watched(
+            [.. calls.Select((record, ordinal) => new LedgerEntry(ordinal, record.Turn, Phase(work), record.Call))]);
+
+    /// <summary>Which phase a tool call happened in. A fix leg's loop runs while it INVESTIGATES — the arms
+    /// that produce a diff cannot be planned yet — so the phase is decided by the run's kind rather than
+    /// guessed from the call.</summary>
+    private static PhaseKind Phase(LegWork work) =>
+        work.Plan.Kind == TaskKind.Fix ? PhaseKind.Investigate : PhaseKind.Answer;
 
     /// <summary>What the subject reached for, for the tool-use metric.
     ///
@@ -427,11 +443,15 @@ public sealed class LegRunner(
     /// <para><b>A REFUSED call still counts as called</b>, and deliberately: the expectation asks whether the
     /// subject picked this tool, which is exactly what a description is being measured on. A model that
     /// selected the right tool and passed it a path outside the checkout demonstrated the selection the
-    /// metric is about. The outcome is not lost — it lives on each <c>ToolCall</c>, which is where a reader
-    /// asking the different question ("did the calls WORK") has to look.</para>
+    /// metric is about. The outcome is not lost — it is on the ledger's own <c>ToolCall</c>, which is where a
+    /// reader asking the different question ("did the calls WORK") has to look.</para>
+    ///
+    /// <para><b>Derived from the ledger rather than built beside it</b>, so the number a report prints and
+    /// the artefact it can be re-read against cannot disagree. They were assembled separately for one
+    /// commit, which is one commit longer than two representations of the same fact should ever live apart.</para>
     /// </summary>
-    private static ToolUsageObservation Observed(IReadOnlyList<TurnCall> calls) =>
-        new(true, [.. calls.Select(record => record.Call.Name)]);
+    private static ToolUsageObservation Observed(ToolLedger ledger) =>
+        new(ledger.Offered, ledger.Sequence);
 
     /// <summary>A leg that produced no answer: a CEILING when its own wall ran out, a crash otherwise.
     /// <para>
@@ -497,16 +517,21 @@ public sealed class LegRunner(
         LegWork work,
         string prompt,
         ModelAnswer answer,
-        ToolUsageObservation tools,
+        ToolLedger ledger,
         CancellationToken cancellationToken)
     {
         var stored = await results.SaveAsync(
-            LegResult.Of(work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer, tools), clock.GetUtcNow()) with
+            LegResult.Of(
+                work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer, Observed(ledger)), clock.GetUtcNow()) with
             {
                 Thinking = answer.Thinking,
                 Meta = ResponseMeta.Of(answer),
                 Retrieval = work.Retrieved,
                 Load = await LoadAsync(work, cancellationToken),
+                // The ledger is DURABLE, not just scored. A metric says a tool was called; only the ledger
+                // says in what order, with what arguments, and whether the engine took it — which is the
+                // difference between "the surface moved the score" and any account of HOW it was worked.
+                Calls = ledger,
             },
             cancellationToken);
 

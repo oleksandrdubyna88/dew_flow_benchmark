@@ -168,13 +168,10 @@ public sealed class ToolLoopRunner(IModelRuntime runtime, TimeProvider clock, IL
 
         var record = new TurnCall(
             turn,
-            new Bench.Domain.Trace.ToolCall(
-                requested.Name,
-                requested.ArgumentsJson,
-                answer.WasRefused,
-                answer is ToolAnswer.Failed failure ? failure.Message : string.Empty,
-                elapsed));
+            Bench.Domain.Trace.ToolCall.Of(requested.Name, requested.ArgumentsJson, answer, elapsed));
 
         return (record, new ModelTurn.ToolResult(requested.Id, requested.Name, answer.Text, answer.WasRefused));
     }
+
+
 }

@@ -47,6 +47,19 @@ public sealed class ResultRow
     /// <summary>The hits retrieval surfaced for this leg, empty for the control arm.</summary>
     public List<RetrievedHitRow> Hits { get; set; } = [];
 
+    /// <summary>Every tool call this leg made, in order. Empty for a floor leg and for a tool leg whose
+    /// subject reached for nothing — which is why <see cref="ToolsOffered"/> is a separate column rather
+    /// than a count of these rows.</summary>
+    public List<ToolCallRow> ToolCalls { get; set; } = [];
+
+    /// <summary>Whether this leg's lane offered tools AT ALL.
+    /// <para>
+    /// The one fact <c>tool_calls</c> cannot carry, because it is a statement about the rows that are not
+    /// there. Without it "the lane had no tools" and "the subject ignored four of them" are the same empty
+    /// set — and the second is the interesting result, the one that is evidence about the descriptions.
+    /// </para></summary>
+    public bool ToolsOffered { get; set; }
+
     /// <summary>The funnel of this leg's retrieval; absent for a leg that performed none. Nullable because
     /// EF models an optional one-to-one that way — the domain reads it as
     /// <c>RetrievedContext.NotPerformed</c>, which is a state rather than a null.</summary>
@@ -83,6 +96,50 @@ public sealed class MetricRow
     public string Rating { get; set; } = string.Empty;
 
     public string MetadataJson { get; set; } = "{}";
+
+    public ResultRow? Result { get; set; }
+}
+
+/// <summary>One tool call, as a ROW.
+/// <para>
+/// Rows rather than a JSON blob on the result, for the reason the metrics are rows: the question this
+/// ledger exists to answer — "did subjects that located before reading score better" — is a group-by over
+/// tool name and ordinal. As a blob it is a full scan that parses strings back into structure.
+/// </para></summary>
+public sealed class ToolCallRow
+{
+    public Guid Id { get; set; }
+
+    public Guid ResultId { get; set; }
+
+    /// <summary>Position in the whole leg, from 0 — the ordering the doctrine under test makes a claim
+    /// about, and the only thing that can falsify it.</summary>
+    public int Ordinal { get; set; }
+
+    /// <summary>Which model turn asked for it. Distinct from <see cref="Ordinal"/> because one turn may
+    /// request several tools at once.</summary>
+    public int Turn { get; set; }
+
+    public PhaseKind Phase { get; set; }
+
+    public string ToolName { get; set; } = string.Empty;
+
+    /// <summary>The arguments AS SENT. A description is measured on whether a subject can form a correct
+    /// call, so the malformed ones are the evidence rather than the noise.</summary>
+    public string ArgumentsJson { get; set; } = string.Empty;
+
+    /// <summary>An expected refusal — a path outside the checkout, an argument of the wrong kind. A VALUE
+    /// the subject could read and correct itself from, never an exception that ended the leg.</summary>
+    public bool Refused { get; set; }
+
+    /// <summary>Why it was refused or how it failed; empty when the call succeeded. Kept apart from
+    /// <see cref="Refused"/> so "the engine said no, here is why" stays distinguishable from "the engine
+    /// broke" — the distinction whose absence upstream let a false read-only guarantee stand for months.</summary>
+    public string Error { get; set; } = string.Empty;
+
+    public long DurationMs { get; set; }
+
+    public ToolCallSource Source { get; set; }
 
     public ResultRow? Result { get; set; }
 }

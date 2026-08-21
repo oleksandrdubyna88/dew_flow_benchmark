@@ -76,7 +76,14 @@ public sealed class ToolLoopRunnerTests
 
         result.Calls.Should().ContainSingle();
         result.Calls[0].Call.Refused.Should().BeTrue();
-        result.Calls[0].Call.Error.Should().BeEmpty("a refusal is not an error — the tool understood and said no");
+        // REVERSED, deliberately, and the reversal is the finding. This line asserted the reason was
+        // DROPPED — "a refusal is not an error" — while `LegRecorder`, the older producer of the same
+        // record, had always stored it, pinned by `TracePortTests` against the defect it exists for. Two
+        // producers of one record cannot both be right about what it holds. `Refused` says which kind of
+        // non-answer it was; `Error` says why, for either. A refusal with no sentence is barely worth
+        // storing: "the path was outside the checkout" and "the argument was the wrong kind" are the
+        // evidence a tool DESCRIPTION is judged on, and an empty string collapses them into each other.
+        result.Calls[0].Call.Error.Should().Be("outside the workspace");
         result.TurnsSpent.Should().Be(2);
         result.Transcript.OfType<ModelTurn.ToolResult>().Single().Content.Should().Contain("outside the workspace");
     }

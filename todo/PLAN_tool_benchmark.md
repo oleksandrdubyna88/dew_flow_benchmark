@@ -607,11 +607,39 @@ it renders** — the API-first gate the family already applies.
    tree, it answers short and specific. Nobody predicted that, and it means answer LENGTH is a candidate
    signal for "answered from weights" that costs nothing to record.
 
-   **What this run cannot tell you, and it is the next thing to build.** The harness has no record of WHICH
-   tools were called or in what order — `ToolLoopResult.Calls` reaches the scorer for the metric and is then
+   **What that first run could not tell you — now BUILT (step 7).** At the time the harness had no record of
+   WHICH tools were called or in what order — `ToolLoopResult.Calls` reaches the scorer for the metric and is then
    dropped, because nothing persists it yet (step 7). So this measures that the surface moved the score, and
    says nothing about how it was worked. The doctrine's whole claim — locate before you read — is currently
    unfalsifiable for want of a ledger.
+
+   **And with the ledger built, the doctrine was tested — and is INERT for this subject (2026-08-22).**
+   A third lane, `fs-mute`: the identical four tools, the identical 12-turn ceiling, and **no doctrine at
+   all**. The prediction was written down before the run, per this family's own rule — *a 26B tool-trained
+   model probably searches first by instinct, so expect the ordering largely unchanged (≤2 of 9 legs opening
+   with a blind read) and the doctrine's effect small.*
+
+   | lane | passed of 9 | legs opening with a blind `read_file` | tool calls | mean answer chars |
+   |---|---|---|---|---|
+   | `fs-bridge` — locate-first doctrine | 6 | **0 of 9** | 27 (3.0/leg) | 417 |
+   | `fs-mute` — same tools, no doctrine | **7** | **0 of 9** | 23 (2.6/leg) | 1 218 |
+   | `floor` — no tools | 0 | n/a | 0 | 3 291 |
+
+   Observed: **0 of 9 either way.** Every leg in both lanes opened with `search_literal` or
+   `list_directory`; not one opened by reading a file it had guessed at. The doctrine's entire stated claim —
+   *locate before you read* — is one this model already satisfies unprompted, so the instruction had nothing
+   to add. It cost ~15 % more tool calls and scored one leg lower, which on n=9 is noise and certainly not
+   support.
+
+   **What this does and does not say.** It does NOT refute doctrine-wording effects: the measured 16.5-of-63
+   swing that motivated this whole axis came from a different model over a different tool set. It says that
+   *this* doctrine, on *this* subject, bought nothing — and that is a result only the ledger could produce,
+   because without a record of call ORDER the claim was unfalsifiable and would have been carried forward as
+   a design belief. The obvious next arm is a doctrine whose claim the model does NOT already satisfy.
+
+   **The answer-length gradient held and sharpened**: 3 291 chars with no tools, 1 218 with tools and no
+   doctrine, 417 with tools and the doctrine. The doctrine did change the model's behaviour measurably — it
+   made it terser — it just did not change the ordering it was written to change.
 
 7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
    reconstructed source flag, result-store round-trip.
