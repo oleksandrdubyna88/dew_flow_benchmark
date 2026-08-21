@@ -59,7 +59,22 @@ public sealed class QlnEngine(QlnRetriever retrieval, IEngine files) : IEngine
             + "sentence, and get back the members that do it. Returns file, line span, signature and the "
             + "reason each hit matched. Use it when you do not know what a thing is called; use the file "
             + "tools when you do.",
-            """{"query":"string","limit":"int?"}"""),
+            """
+            {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "The question, in words. A behavioural sentence beats an identifier here."
+                },
+                "limit": {
+                  "type": "integer",
+                  "description": "Results returned. A RECALL setting, not a payload knob: measured on the previous generation, dropping it from 20 to 5 lost 29% of the ground truth while the top three stayed identical."
+                }
+              },
+              "required": ["query"]
+            }
+            """),
         .. files.Tools,
     ];
 

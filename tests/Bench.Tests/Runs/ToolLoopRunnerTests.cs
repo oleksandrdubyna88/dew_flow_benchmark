@@ -31,7 +31,7 @@ public sealed class ToolLoopRunnerTests
         var result = await Run(new ScriptedRuntime([Final("the total is in OrderService")]), engine);
 
         result.TurnsSpent.Should().Be(1);
-        result.Exhausted.Should().BeFalse();
+        result.End.Should().Be(LoopEnd.Answered);
         result.Calls.Should().BeEmpty();
         result.Transcript.Should().BeEmpty("nothing happened between the question and the answer");
         engine.Invocations.Should().BeEmpty();
@@ -46,7 +46,7 @@ public sealed class ToolLoopRunnerTests
             new ScriptedRuntime([Asks("read", """{"path":"a.cs"}"""), Final("it is on line 12")]), engine);
 
         result.TurnsSpent.Should().Be(2);
-        result.Exhausted.Should().BeFalse();
+        result.End.Should().Be(LoopEnd.Answered);
         engine.Invocations.Should().Equal(("read", """{"path":"a.cs"}"""));
 
         // The transcript is what the next turn replays and what the operator has to be able to read: the
@@ -118,7 +118,7 @@ public sealed class ToolLoopRunnerTests
             new RecordingEngine(),
             maxTurns: 3);
 
-        result.Exhausted.Should().BeTrue();
+        result.End.Should().Be(LoopEnd.TurnsSpent);
         result.TurnsSpent.Should().Be(3);
     }
 
@@ -130,16 +130,58 @@ public sealed class ToolLoopRunnerTests
         // leg look idle.
         var result = await Run(new ScriptedRuntime([Asks("a", "{}")]), new RecordingEngine(), maxTurns: 1);
 
-        result.Exhausted.Should().BeTrue();
+        result.End.Should().Be(LoopEnd.TurnsSpent);
         result.Calls.Should().ContainSingle();
         result.Calls[0].Turn.Should().Be(1);
     }
 
     [Fact]
+    public async Task A_leg_whose_WALL_went_stops_between_turns_and_says_so()
+    {
+        // The wall is not a third loop ending: it comes back as a failure, because the caller already knows
+        // how to settle one — it checks the deadline and caps the leg — and inventing an answer to carry
+        // back would put a turn in the ledger that never happened.
+        var spent = LegDeadline.For(
+            [Budget.Of(BudgetKind.Wall, BudgetScope.Question, 30)], DateTimeOffset.UnixEpoch);
+
+        var failed = await new ToolLoopRunner(
+                new ScriptedRuntime([Asks("a", "{}"), Final("done")]),
+                new FixedClock(DateTimeOffset.UnixEpoch.AddMinutes(5)),
+                NullLogger<ToolLoopRunner>.Instance)
+            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", spent, Surface(new RecordingEngine(), 5), Ct);
+
+        failed.Should().BeOfType<Outcome<ToolLoopResult>.Fail>()
+            .Which.Reason.Should().Contain("wall budget").And.Contain("0 turn(s)");
+    }
+
+    [Fact]
+    public async Task Every_turn_is_handed_the_wall_that_REMAINS_rather_than_the_one_it_started_with()
+    {
+        // The defect this parameter shape exists to prevent, and LegDeadline.ForCall's own comment names it:
+        // narrowing the wall to the remainder "is what makes twenty-five turns share one ceiling instead of
+        // each starting a fresh one". Computed once outside the loop, every turn is handed the remainder as
+        // it stood at turn one — and a leg outruns its wall by a factor of its turn ceiling.
+        var runtime = new ScriptedRuntime([Asks("a", "{}"), Final("done")]);
+        var clock = new SteppingClock(DateTimeOffset.UnixEpoch, TimeSpan.FromSeconds(10));
+
+        await new ToolLoopRunner(runtime, clock, NullLogger<ToolLoopRunner>.Instance).RunAsync(
+            Endpoint(), Sampling.Deterministic(7), "", "q",
+            LegDeadline.For([Budget.Of(BudgetKind.Wall, BudgetScope.Question, 100)], DateTimeOffset.UnixEpoch),
+            Surface(new RecordingEngine(), 5), Ct);
+
+        var walls = runtime.Seen
+            .Select(r => r.Budgets.Single(b => b.Kind == BudgetKind.Wall).Limit)
+            .ToList();
+
+        walls.Should().HaveCount(2);
+        walls[1].Should().BeLessThan(walls[0], "the second turn must be handed less wall than the first");
+    }
+
+    [Fact]
     public async Task A_runtime_failure_ends_the_loop_as_a_failure_rather_than_an_empty_answer()
     {
-        var failed = await new ToolLoopRunner(new FailingRuntime(), NullLogger<ToolLoopRunner>.Instance)
-            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", [], Surface(new RecordingEngine(), 3), Ct);
+        var failed = await new ToolLoopRunner(new FailingRuntime(), TimeProvider.System, NullLogger<ToolLoopRunner>.Instance)
+            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", Unbounded, Surface(new RecordingEngine(), 3), Ct);
 
         failed.Should().BeOfType<Outcome<ToolLoopResult>.Fail>()
             .Which.Reason.Should().Contain("unreachable");
@@ -152,8 +194,8 @@ public sealed class ToolLoopRunnerTests
         // assertion that it is finally read.
         var runtime = new ScriptedRuntime([Final("answered")]);
 
-        await new ToolLoopRunner(runtime, NullLogger<ToolLoopRunner>.Instance).RunAsync(
-            Endpoint(), Sampling.Deterministic(7), "retrieval first, then confirm", "q", [],
+        await new ToolLoopRunner(runtime, TimeProvider.System, NullLogger<ToolLoopRunner>.Instance).RunAsync(
+            Endpoint(), Sampling.Deterministic(7), "retrieval first, then confirm", "q", Unbounded,
             Surface(new RecordingEngine(), 3), Ct);
 
         runtime.Seen[0].SystemPrompt.Should().Be("retrieval first, then confirm");
@@ -173,9 +215,13 @@ public sealed class ToolLoopRunnerTests
 
     private async Task<ToolLoopResult> Run(
         IModelRuntime runtime, RecordingEngine engine, int maxTurns = 5) =>
-        (await new ToolLoopRunner(runtime, NullLogger<ToolLoopRunner>.Instance)
-            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "where is the total?", [], Surface(engine, maxTurns), Ct))
+        (await new ToolLoopRunner(runtime, TimeProvider.System, NullLogger<ToolLoopRunner>.Instance)
+            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "where is the total?", Unbounded, Surface(engine, maxTurns), Ct))
         .Should().BeOfType<Outcome<ToolLoopResult>.Ok>().Subject.Value;
+
+    /// <summary>A leg with no wall ceiling — what every test here wants, because their subject is the TURN
+    /// ceiling and a wall would be a second thing ending the loop.</summary>
+    private static readonly LegDeadline Unbounded = LegDeadline.For([], DateTimeOffset.UnixEpoch);
 
     private static ToolSurface.Looping Surface(IEngine engine, int maxTurns) =>
         new(engine, [new EngineTool("read", "reads a file", """{"type":"object"}""")], maxTurns);
@@ -220,6 +266,21 @@ public sealed class ToolLoopRunnerTests
             Seen.Add(request);
             return Task.FromResult(Outcome<ModelAnswer>.Success(answers[Seen.Count - 1]));
         }
+    }
+
+    /// <summary>A clock stopped at one instant — for the tests whose subject is a ceiling already spent.</summary>
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    /// <summary>A clock that advances a fixed step on every read, so "was this turn handed less than the
+    /// last" is a question the test can actually ask.</summary>
+    private sealed class SteppingClock(DateTimeOffset start, TimeSpan step) : TimeProvider
+    {
+        private int _reads;
+
+        public override DateTimeOffset GetUtcNow() => start + step * _reads++;
     }
 
     private sealed class FailingRuntime : IModelRuntime

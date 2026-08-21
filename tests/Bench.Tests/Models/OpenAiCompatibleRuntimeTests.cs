@@ -217,6 +217,58 @@ public sealed class OpenAiCompatibleRuntimeTests
         handler.LastBody.Should().BeEmpty("nothing may be sent when the request cannot be built");
     }
 
+    [Theory]
+    [InlineData("""{"path":"string","startLine":"int?"}""")]
+    [InlineData("""{"properties":{"path":{"type":"string"}}}""")]
+    public async Task Argument_JSON_that_is_not_a_SCHEMA_is_refused_even_though_it_parses(string schema)
+    {
+        // Valid JSON is not the bar, and the first version of this guard set it there. Both engines in this
+        // repository described their arguments in the first shape above — perfectly valid JSON, and not a
+        // schema at all. It would have reached the wire as `parameters`, no model could have formed a call
+        // against it, and the measurement would have read as "the model cannot use tools" when what happened
+        // is that we sent it nonsense.
+        var handler = new FakeCompletions();
+
+        var refused = await Runtime(handler).AskAsync(
+            Request() with { Tools = [new EngineTool("shorthand", "does things", schema)] }, Ct);
+
+        refused.Reason().Should().Contain("shorthand").And.Contain("not a schema");
+        handler.LastBody.Should().BeEmpty("nothing may be sent when the request cannot be built");
+    }
+
+    [Theory]
+    [InlineData("""["path"]""")]
+    [InlineData("\"a string\"")]
+    [InlineData("5")]
+    public async Task A_parameters_value_that_is_not_an_OBJECT_is_refused_by_its_KIND(string schema)
+    {
+        // A separate theory from the one above, and deliberately so: this refusal names what arrived
+        // ("advertises a Array where a JSON Schema object is required") rather than saying "not a schema",
+        // and a reader chasing a broken engine is better served by the kind than by the category. Running
+        // the first version of these tests is what separated them — one assertion had been written over
+        // two different refusals, and only the array case exposed it.
+        var handler = new FakeCompletions();
+
+        var refused = await Runtime(handler).AskAsync(
+            Request() with { Tools = [new EngineTool("shorthand", "does things", schema)] }, Ct);
+
+        refused.Reason().Should().Contain("shorthand").And.Contain("JSON Schema object is required");
+        handler.LastBody.Should().BeEmpty("nothing may be sent when the request cannot be built");
+    }
+
+    [Fact]
+    public async Task A_tool_that_takes_no_arguments_at_all_is_still_a_valid_schema()
+    {
+        // An object with no properties is a real shape — "this tool takes nothing" — so requiring
+        // `properties` would refuse a legitimate tool. The guard checks the one thing the wire needs.
+        var handler = new FakeCompletions();
+
+        await Runtime(handler).AskAsync(
+            Request() with { Tools = [new EngineTool("ping", "takes nothing", """{"type":"object"}""")] }, Ct);
+
+        handler.LastBody.Should().Contain("ping");
+    }
+
     [Fact]
     public async Task A_transcript_is_replayed_as_assistant_and_tool_messages()
     {

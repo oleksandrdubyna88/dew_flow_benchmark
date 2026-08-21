@@ -46,6 +46,16 @@ public sealed class FilesystemEngine(string checkoutPath) : IEngine
     /// A report renders its funnel columns as absent, never as zero.</summary>
     public string TraceContractVersion => string.Empty;
 
+    /// <summary>
+    /// The four tools, with REAL JSON Schema for their arguments.
+    ///
+    /// <para>They used to be described in a shorthand — <c>{"path":"string","startLine":"int?"}</c> — which
+    /// is valid JSON and is not a schema: no <c>type</c>, no <c>properties</c>, no <c>required</c>. It read
+    /// fine to a human and was unusable by a model, because the tool loop sends this string verbatim as the
+    /// wire's <c>parameters</c> object. A model handed that cannot form a call, and the symptom reads as
+    /// "the model cannot use tools" rather than "we sent it a broken schema" — which would have made the
+    /// first agentic measurement a measurement of our own defect.</para>
+    /// </summary>
     public IReadOnlyList<EngineTool> Tools { get; } =
     [
         new EngineTool(
@@ -53,22 +63,56 @@ public sealed class FilesystemEngine(string checkoutPath) : IEngine
             "Read a file from the repository, whole or as a line window. startLine is 1-based inclusive; "
             + "omit lineCount to read to the end. Every result reports startLine/endLine/totalLines, so "
             + "paging is a number rather than a guess.",
-            """{"path":"string","startLine":"int?","lineCount":"int?"}"""),
+            """
+            {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string", "description": "Repository-relative path to read." },
+                "startLine": { "type": "integer", "description": "1-based first line. Omit to start at the top." },
+                "lineCount": { "type": "integer", "description": "How many lines to return. Omit to read to the end." }
+              },
+              "required": ["path"]
+            }
+            """),
         new EngineTool(
             ListDirectory,
             "List the files and folders under a repository-relative path. Use it to orient before "
             + "reading; it does not return file contents.",
-            """{"path":"string?"}"""),
+            """
+            {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string", "description": "Repository-relative folder. Omit for the repository root." }
+              }
+            }
+            """),
         new EngineTool(
             SearchLiteral,
             "Find an exact substring across the repository. Not a regex and not a concept search: it "
             + "matches the characters given. Returns file, line number and the matching line.",
-            """{"text":"string","maxHits":"int?"}"""),
+            """
+            {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string", "description": "The exact characters to find. Not a regex." },
+                "maxHits": { "type": "integer", "description": "Cap on returned matches." }
+              },
+              "required": ["text"]
+            }
+            """),
         new EngineTool(
             FindFiles,
             "Find files by path pattern (for example **/*.cs or src/**/Order*). Matches paths, not "
             + "contents.",
-            """{"pattern":"string"}"""),
+            """
+            {
+              "type": "object",
+              "properties": {
+                "pattern": { "type": "string", "description": "Glob over repository-relative paths." }
+              },
+              "required": ["pattern"]
+            }
+            """),
     ];
 
     /// <summary>Nothing to warm: there is no index, which is the point of this engine. It confirms the

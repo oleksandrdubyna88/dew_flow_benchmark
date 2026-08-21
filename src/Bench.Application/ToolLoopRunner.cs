@@ -22,14 +22,28 @@ namespace Bench.Application;
 /// an executed one were indistinguishable" is the defect that let a false read-only guarantee stand for
 /// months upstream, because all the ledger recorded was a result's length.</param>
 /// <param name="TurnsSpent">How many times the model was asked.</param>
-/// <param name="Exhausted">The ceiling ended it, not the model. Settles as a CAP, never as a wrong
-/// answer.</param>
+/// <param name="End">Why the loop stopped. Two states rather than a bool, so a reader of the record does not
+/// have to know which way <c>true</c> pointed. The leg's WALL is not a third state here: it ends the loop as
+/// a FAILURE, because the caller already knows how to settle one — <c>UnansweredAsync</c> checks the
+/// deadline and caps it — and inventing an answer to carry back would put a turn in the ledger that never
+/// happened.</param>
 public sealed record ToolLoopResult(
     ModelAnswer Answer,
     IReadOnlyList<ModelTurn> Transcript,
     IReadOnlyList<TurnCall> Calls,
     int TurnsSpent,
-    bool Exhausted);
+    LoopEnd End);
+
+/// <summary>Why a tool loop stopped.</summary>
+public enum LoopEnd
+{
+    /// <summary>The model answered. The only ending that is scored.</summary>
+    Answered,
+
+    /// <summary>The turn ceiling ran out while the model was still working.</summary>
+    TurnsSpent,
+
+}
 
 /// <summary>One call and the turn it happened on.
 /// <para>The turn is carried here because <see cref="Bench.Domain.Trace.ToolCall"/> has no field for it and
@@ -51,14 +65,20 @@ public sealed record TurnCall(int Turn, Bench.Domain.Trace.ToolCall Call);
 /// <para>One collaborator, deliberately. It asks, invokes, appends and asks again; it scores nothing,
 /// persists nothing and settles nothing, so <c>LegRunner</c> stays the assembly it already is.</para>
 /// </summary>
-public sealed class ToolLoopRunner(IModelRuntime runtime, ILogger<ToolLoopRunner> logger)
+public sealed class ToolLoopRunner(IModelRuntime runtime, TimeProvider clock, ILogger<ToolLoopRunner> logger)
 {
+    /// <param name="deadline">The leg's wall, not a frozen budget list — and that distinction is the whole
+    /// reason this parameter is shaped this way. <c>LegDeadline.ForCall</c> narrows the wall to what REMAINS,
+    /// and its own comment says why: it "is what makes twenty-five turns share one ceiling instead of each
+    /// starting a fresh one". Computed once outside the loop, every turn would be handed the remainder as it
+    /// stood at turn one, and a leg could outrun its wall by a factor of its turn ceiling. It is recomputed
+    /// per turn here, and checked between turns.</param>
     public async Task<Outcome<ToolLoopResult>> RunAsync(
         ModelEndpoint endpoint,
         Sampling sampling,
         string doctrine,
         string prompt,
-        IReadOnlyList<Budget> budgets,
+        LegDeadline deadline,
         ToolSurface.Looping surface,
         CancellationToken cancellationToken)
     {
@@ -67,12 +87,27 @@ public sealed class ToolLoopRunner(IModelRuntime runtime, ILogger<ToolLoopRunner
 
         for (var turn = 1; turn <= surface.MaxTurns; turn++)
         {
+            // BETWEEN turns, before spending another completion. A leg whose wall went while a tool was
+            // working has nothing left to think with, and asking anyway buys an answer generated under no
+            // budget — measuring the ceiling and calling it a score. It is the same check the single-shot
+            // path already makes between retrieval and the ask, arriving where it matters most.
+            if (deadline.Exhausted(clock.GetUtcNow()))
+            {
+                return Outcome<ToolLoopResult>.Failure(
+                    $"the leg spent its {deadline.Describe} wall budget after {turn - 1} turn(s) "
+                    + $"and {calls.Count} tool call(s)");
+            }
+
             // A SNAPSHOT, not the list itself. The request is a value describing what was sent, and handing
             // over the growing list would let it change after the send — so anything that records a request
             // (the operator's "show me the prompts", first of all) would render the whole conversation as
             // if every turn had carried it. Found by its own test.
             var asked = await runtime.AskAsync(
-                ModelRequest.OfTurn(endpoint, sampling, doctrine, prompt, budgets, surface.Tools, [.. transcript]),
+                ModelRequest.OfTurn(
+                    endpoint, sampling, doctrine, prompt,
+                    deadline.ForCall(clock.GetUtcNow()),
+                    surface.Tools,
+                    [.. transcript]),
                 cancellationToken);
 
             if (asked is Outcome<ModelAnswer>.Fail failed)
@@ -85,7 +120,7 @@ public sealed class ToolLoopRunner(IModelRuntime runtime, ILogger<ToolLoopRunner
             if (answer.IsFinal)
             {
                 return Outcome<ToolLoopResult>.Success(
-                    new ToolLoopResult(answer, transcript, calls, turn, Exhausted: false));
+                    new ToolLoopResult(answer, transcript, calls, turn, LoopEnd.Answered));
             }
 
             transcript.Add(new ModelTurn.Assistant(answer.Text.WasCaptured ? answer.Text.Value : string.Empty, answer.ToolCalls));
@@ -106,7 +141,7 @@ public sealed class ToolLoopRunner(IModelRuntime runtime, ILogger<ToolLoopRunner
                     "A leg spent its {Turns}-turn ceiling with {Calls} tool call(s) made", surface.MaxTurns, calls.Count);
 
                 return Outcome<ToolLoopResult>.Success(
-                    new ToolLoopResult(answer, transcript, calls, turn, Exhausted: true));
+                    new ToolLoopResult(answer, transcript, calls, turn, LoopEnd.TurnsSpent));
             }
         }
 

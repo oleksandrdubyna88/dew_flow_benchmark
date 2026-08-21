@@ -380,12 +380,16 @@ public sealed class LegRunner(
     private async Task<Outcome<LegResult>> LoopAsync(
         LegWork work, string prompt, string doctrine, ToolSurface.Looping surface, CancellationToken cancellationToken)
     {
+        // The DEADLINE, not a frozen budget list. ForCall narrows the wall to what remains, and its own
+        // comment says why that matters here: it "is what makes twenty-five turns share one ceiling instead
+        // of each starting a fresh one". Computed once out here, every turn would receive the remainder as
+        // it stood before turn one, and a leg could outrun its wall by a factor of its turn ceiling.
         var looped = await loop.RunAsync(
             work.Subject.Endpoint,
             work.Subject.Sampling,
             doctrine,
             prompt,
-            work.Deadline.ForCall(clock.GetUtcNow()),
+            work.Deadline,
             surface,
             cancellationToken);
 
@@ -396,7 +400,7 @@ public sealed class LegRunner(
 
         var result = ((Outcome<ToolLoopResult>.Ok)looped).Value;
 
-        if (result.Exhausted)
+        if (result.End == LoopEnd.TurnsSpent)
         {
             await runs.SettleAsync(
                 work.Cell.Id,

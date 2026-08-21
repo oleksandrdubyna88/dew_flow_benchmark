@@ -559,6 +559,6 @@ public sealed class LegRetrievalTests(PostgresFixture postgres)
     /// Constructed rather than faked for exactly that reason — a fake would assert something about a
     /// collaborator these tests deliberately never use.</summary>
     private static ToolLoopRunner Loop(IModelRuntime runtime) =>
-        new(runtime, NullLogger<ToolLoopRunner>.Instance);
+        new(runtime, TimeProvider.System, NullLogger<ToolLoopRunner>.Instance);
 
 }

@@ -537,9 +537,42 @@ it renders** — the API-first gate the family already applies.
    called search four times" and "once" are different facts about how a model works a surface.
 5. ~~**Sibling repository, steps 1–2**~~ **DONE 2026-08-16, in `dew_flow_mcp`** — all five §4 items,
    not just 1–3 and 5: `--correlation` shipped in the same pass. Nothing is owed by that side.
-6. **Submodule + `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references, implement the
-   engine, `bench lanes verify` against `--print-surface`. **First end-to-end milestone**: a local model
-   through the real bridge, temperature 0 and seed as-sent, tool calls recorded with outcomes.
+6. **What steps 1–4 revealed the engine is NOT: the blocker.** Checked against the code on 2026-08-19
+   after the four steps landed, and the plan's order was wrong in a way worth writing down. Three things
+   stand between a built loop and a first agentic leg, and vendoring is the last of them:
+
+   1. **No engine advertises a real JSON Schema.** Both `FilesystemEngine` and `QlnEngine` described their
+      arguments in a shorthand — `{"path":"string","startLine":"int?"}` — which is valid JSON and is not a
+      schema: no `type`, no `properties`. Step 2's runtime parses it and sends it as `parameters`, so a model
+      would be handed nonsense and the symptom would read as *"the model cannot use tools"* rather than *"we
+      sent it a broken schema"*. **Everything measured before this is a measurement of our own defect**, which
+      is why it goes first. The guard written in step 2 does not catch it either: it checked that the schema
+      was valid JSON, and the bar is that it is a SCHEMA.
+   2. **Nothing resolves a lane name into a surface.** `bench lanes add|list|retire` fills the catalog and
+      `LegPlan.Lanes` reads a roster, but no command joins them — and `IEngine` is not registered in the CLI
+      container at all, only constructed in tests. The engine a tool lane needs is bound to the run's pinned
+      CHECKOUT, so the wiring is an engine factory rather than a lookup.
+   3. **Then the submodule and `McpBridgeEngine`** — vendor `dew_flow_mcp`, add the project references,
+      implement the engine, `bench lanes verify` against `--print-surface`. Still required for the arm that
+      matters most (4/63 against 36/63 must be measured genuinely in-process) and still **not** a
+      prerequisite for the first agentic leg: `FilesystemEngine` already serves four real tools and IS the
+      native-tools baseline that scored 36/63.
+
+   **And one defect fixed on the way, found by reading rather than by running.** `LegRunner` computed
+   `LegDeadline.ForCall` ONCE, outside the turn loop, so every turn was handed the wall as it stood before
+   turn one — defeating the mechanism the type's own doc comment describes, that narrowing the wall to the
+   remainder "is what makes twenty-five turns share one ceiling instead of each starting a fresh one". A
+   25-turn lane against one hanging endpoint would have spent 25 walls: 4 h 10 m where 10 minutes was
+   declared, the same arithmetic `LegDeadline` uses to argue for its own existence. The loop now takes the
+   deadline plus a clock, recomputes the remainder per turn, and stops BETWEEN turns when the wall is gone —
+   as a FAILURE, so the existing `UnansweredAsync` settles it as a wall `CapExceeded` rather than a crash and
+   the campaign continues past it. `bool Exhausted` on the result became `enum LoopEnd { Answered,
+   TurnsSpent }` in the same change, so a reader does not have to know which way `true` pointed. No campaign
+   had run long enough to expose it, which is the whole point: an unenforced budget is indistinguishable from
+   a working one until the day it costs a week.
+
+   **First end-to-end milestone** is therefore reachable one step earlier than this plan assumed: a local
+   model through the filesystem engine, temperature 0 and seed as-sent, tool calls recorded with outcomes.
 7. **`tool_calls` persistence + the run's surface fingerprint** — the two migrations, the observed/
    reconstructed source flag, result-store round-trip.
 8. **L1 suite + the control** — the micro-task suite, and the three doctrine lanes run as the

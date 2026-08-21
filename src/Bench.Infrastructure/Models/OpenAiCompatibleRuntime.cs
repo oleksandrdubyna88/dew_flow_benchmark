@@ -195,26 +195,71 @@ public sealed class OpenAiCompatibleRuntime(IHttpClientFactory factory, ILogger<
         },
     };
 
-    /// <summary>Why this request cannot be sent, or empty when it can.
+    /// <summary>
+    /// Why this request cannot be sent, or empty when it can.
+    ///
     /// <para>Checked BEFORE the HTTP call so a broken schema is a named refusal rather than an exception out
     /// of body-building — the leg then records a configuration fault, which is what it is, instead of an
-    /// unreachable model.</para></summary>
+    /// unreachable model.</para>
+    ///
+    /// <para><b>Valid JSON is not the bar, and the first version of this guard set it there.</b> Both engines
+    /// in this repository described their arguments as <c>{"path":"string","startLine":"int?"}</c> — perfectly
+    /// valid JSON, and not a schema at all. It would have passed, reached the wire as <c>parameters</c>, and
+    /// no model could have formed a call against it; the measurement would then have read as "the model
+    /// cannot use tools" when what happened is that we sent it nonsense. So the check is for the two things
+    /// the wire actually requires of a function's parameters: an object, declaring itself an object.</para>
+    /// </summary>
     private static string RefuseUnusableTools(ModelRequest request)
     {
         foreach (var tool in request.Tools)
         {
-            try
+            var refusal = RefuseSchema(tool);
+            if (refusal.Length > 0)
             {
-                using var _ = JsonDocument.Parse(tool.ArgumentsSchema);
-            }
-            catch (JsonException ex)
-            {
-                return $"tool '{tool.Name}' advertises an argument schema that is not JSON: {Short(ex.Message)}";
+                return refusal;
             }
         }
 
         return string.Empty;
     }
+
+    private static string RefuseSchema(EngineTool tool)
+    {
+        JsonElement schema;
+
+        try
+        {
+            using var parsed = JsonDocument.Parse(tool.ArgumentsSchema);
+            schema = parsed.RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            return $"tool '{tool.Name}' advertises an argument schema that is not JSON: {Short(ex.Message)}";
+        }
+
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return $"tool '{tool.Name}' advertises a {schema.ValueKind} where a JSON Schema object is required";
+        }
+
+        return DeclaresAnObject(schema)
+            ? string.Empty
+            : $"tool '{tool.Name}' advertises argument JSON that is not a schema — "
+                + "a function's parameters must be an object with \"type\": \"object\"";
+    }
+
+    /// <summary>
+    /// Whether a parameters value says what it is.
+    ///
+    /// <para><c>"type": "object"</c> is the whole check, and it is enough. A tool that legitimately takes NO
+    /// arguments declares an object with no properties, so demanding <c>properties</c> would refuse a real
+    /// shape — while a value that does not declare its type is not a schema in any reading, and is exactly
+    /// what the shorthand this guard was written for looked like.</para>
+    /// </summary>
+    private static bool DeclaresAnObject(JsonElement schema) =>
+        schema.TryGetProperty("type", out var type)
+        && type.ValueKind == JsonValueKind.String
+        && string.Equals(type.GetString(), "object", StringComparison.Ordinal);
 
     private static ModelAnswer Read(JsonElement payload, ModelRequest request, TimeSpan latency)
     {

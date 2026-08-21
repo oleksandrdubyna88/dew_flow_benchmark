@@ -106,6 +106,64 @@ existed still mean what they said.
 prices. Every aggregate, every discrimination reading and every saturation label is keyed by the id, so
 folding an address into it would make the same model at a different port a different subject.
 
+### The lane catalog, and the loop (2026-08-19)
+
+A **lane** is one named TOOL SURFACE — which tools are offered, in which words, under which ordering
+instruction, through which shape, for how many turns. It has been an axis of the measurement tuple since
+the founding plan, as a bare NAME resolving to nothing; `ToolLane` is what a name finally resolves to, and
+it mirrors the variant catalog row for row: never edited, hashed, unknown fields refused.
+
+Two things about it are not copies of the variant catalog, and both are measured:
+
+- **`Presentation` is part of the identity**, because the shape moved a score nine times: the same four
+  tools over the MCP wire scored **4 of 63** against **36 of 63** in-process, replicated at sixteen tools as
+  4/47 against 11/47. A leaderboard that could not tell those apart would attribute to wording what belongs
+  to the shape.
+- **The `Doctrine` — the ordering instruction — enters the identity as a hash and is stored beside it as
+  TEXT.** Rewriting that one paragraph moved a score **16.5 points of 63** with everything else held, while
+  swapping the toolbox from 4 tools to 18 moved **1**. It is the largest single effect measured in this
+  system, which is why it is an axis and not a preamble; the text travels in the row so a published
+  database explains its own numbers without a second artefact.
+
+`ToolLane.Select()` returns the EXISTING `Lane(Name, Preamble)` axis record with its preamble finally set.
+That field was declared on day one, documented, and read by nothing. There is no `cells.LaneId`:
+`RunCell.LaneName` already carries the identity, and a catalog changes what a name resolves TO rather than
+how a cell stores it — so the axis cost no schema change to `cells`.
+
+**The loop.** `ToolLoopRunner` asks, invokes what the model requested, appends the answers and asks again.
+`LegRunner` stays the assembly it was — the loop scores nothing, persists nothing and settles nothing.
+Four decisions carry it:
+
+- **The turn budget is confirmed HERE**, which is the component `OpenAiCompatibleRuntime`'s refusal has
+  named since the day it was written: *"one completion has no turns — a turn ceiling belongs to an agentic
+  loop, not to this runtime"*. A budget nobody confirmed is a budget that does not exist.
+- **A leg that spends its ceiling settles as `CapExceeded(Turns)`** — never a crash and never a wrong
+  answer, so it stays out of paired deltas. A model still working when the ceiling arrived did not get
+  anything wrong, and averaging it in reports the instrument's limit as the subject's score. The ceiling is
+  checked AFTER the last permitted turn's calls, because being busy when time ran out is what the cap is
+  reporting.
+- **Argument JSON is never re-serialized**, on either side of the wire. A local model emits broken JSON
+  regularly and "can it form the arguments" is one of the three questions this benchmark exists to answer;
+  a parse-and-rewrite would repair the mistake on its way in and make the observation impossible.
+- **The transcript is kept**, not discarded after the last turn. The user prompt is on the result, the
+  doctrine is in the lane and the advertised tools are in the surface fingerprint — the middle of a loop
+  exists nowhere else, and "show me the prompts that were sent" reads exactly that record.
+
+**Scoring.** `ExpectationKind.ToolUsed` / `ToolNotUsed` carry the tool's name in `Expectation.Text`, and
+`ToolUsageObservation` mirrors `RetrievalObservation` including its fairness rule: a tool expectation in a
+lane with no tools is **not applicable**, never a miss, emitted as text so the numeric aggregate reports a
+smaller denominator rather than a diluted mean. Scoring the floor zero for not calling a tool it never had
+would make the baseline look worse than it is and flatter every tool lane by exactly that much.
+`ToolNotUsed` is the trap half: a description that makes a model reach for a tool where it should not have
+is a defect in the DESCRIPTION, and it is invisible unless something asserts the negative.
+
+**One reversal is recorded rather than tidied.** An unknown expectation kind used to fall back to `File`,
+deliberately and with its own test — one bad entry should not cost a whole suite, and with four kind names
+that look nothing like each other a typo was unlikely. `ToolUsed` and `ToolNotUsed` differ from a
+misspelling by one character, and the cost was never "one loose expectation" but a `File` anchor against an
+empty path: a retrieval miss the author never wrote, scored forever, silently. It now refuses by name, like
+every other unknown value in this system.
+
 ### The retrieval lane (single-shot RAG)
 
 A cell whose variant names a retrieval recipe gets retrieval performed **for** it by the harness, and its
@@ -766,14 +824,37 @@ Stated because a description that quietly implies more than is built is the same
   Code tasks land through `bench questions harvest` (a merged fix: derived base/seed/anchors, the two
   gates, `CodeTaskJson`); their reference answers are empty until authored, so `bench judge` reports
   them *not judgeable* — the diagnosis judge prompt is that plan's step 7.
-- **No tool-calling loop.** `IEngine` exposes tools and both engines implement them, but `LegRunner` asks the
-  model exactly once. Retrieval now happens for a cell that names a variant — the harness performs it and
-  puts the hits in the prompt (*The retrieval lane*, above) — so anchor recall is a real number there; what
-  does not exist is the lane where the **subject** decides what to search and when. That is the other
-  measurement, and the two are not interchangeable: the same four tools behind a different surface shape
-  scored 4/63 against 37/63. The loop's per-leg wall budget already exists (`LegDeadline`) and is
-  deliberately in place first: retrofitting it after the first long agentic campaign means discovering it
-  from a multi-day gap in a log.
+- **The tool loop EXISTS and nothing reaches it.** `ToolLoopRunner` turns, the doctrine reaches the system
+  prompt, a spent turn ceiling settles as a cap, and a tool expectation scores (*The lane catalog, and the
+  loop*, above) — but `LegPlan.Lanes` is populated by **nobody**, so every cell resolves to the floor and
+  the runner takes the single-completion path it always took. Three things stand between here and a first
+  agentic leg, in this order:
+
+  1. **No engine advertises a real JSON Schema.** Both `FilesystemEngine` and `QlnEngine` describe their
+     arguments in a shorthand — `{"path":"string","startLine":"int?"}` — which is valid JSON and is not a
+     schema: no `type`, no `properties`. The runtime parses it and sends it as `parameters`, so a model
+     would be handed nonsense and the symptom would read as *"the model cannot use tools"* rather than
+     *"we sent it a broken schema"*. This is the one that must be fixed first, because everything measured
+     before it would be measuring our own defect.
+  2. **Nothing resolves a lane name into a surface.** `bench lanes add|list|retire` fills the catalog and
+     `LegPlan.Lanes` reads it, but no command joins the two.
+  3. **Then the MCP bridge.** `dew_flow_mcp` is not vendored here and `McpBridgeEngine` does not exist —
+     which is what the 4/63-against-36/63 comparison needs, since that arm must be measured genuinely
+     in-process. It is NOT a prerequisite for the first agentic leg: `FilesystemEngine` already serves four
+     real tools and is the native-tools baseline that scored 36/63.
+
+  The loop's per-leg wall budget was designed before any of this (`LegDeadline`), deliberately:
+  retrofitting it after the first long agentic campaign means discovering it from a multi-day gap in a log.
+  **It was designed and not connected, and that was found by reading rather than by running** — the loop
+  computed `ForCall` ONCE, outside the turn loop, so every turn received the wall as it stood before turn
+  one. The type's own doc comment describes the mechanism the call site defeated: narrowing the wall to the
+  remainder "is what makes twenty-five turns share one ceiling instead of each starting a fresh one". A
+  25-turn lane against one hanging endpoint would therefore have spent 25 walls — 4 h 10 m where 10 minutes
+  was declared, which is the exact arithmetic `LegDeadline`'s summary uses to argue for itself. The loop now
+  takes the deadline and a clock, recomputes the remainder each turn, and stops BETWEEN turns when the wall
+  is gone: as a failure, so the existing `UnansweredAsync` settles it as a wall `CapExceeded` rather than a
+  crash. No campaign had run long enough to show it, which is the point — a budget nothing enforces reads
+  identically to one that works until the day it costs a week.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
   AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a
