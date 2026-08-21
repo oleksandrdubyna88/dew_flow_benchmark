@@ -3,6 +3,7 @@ using Bench.Domain;
 using Bench.Domain.Engines;
 using Bench.Domain.Lanes;
 using Bench.Domain.Runs;
+using Bench.Tests.Infrastructure;
 using FluentAssertions;
 using Xunit;
 
@@ -43,14 +44,14 @@ public sealed class LaneResolutionTests
     {
         // The distinction the refusal has to carry: not "unbuilt" but "cannot be driven this way". A CLI
         // agent runs its own loop and its calls arrive later through the telemetry spool.
-        Refusal(Lane(Presented(presentation)), new StubEngine())
+        Refusal(Lane(Presented(presentation)), new FakeEngine())
             .Should().Contain("its own loop").And.Contain("reconstructed from");
     }
 
     [Fact]
     public void An_empty_subset_offers_every_tool_the_engine_serves()
     {
-        var choice = Resolved(Lane(Bridge()), new StubEngine());
+        var choice = Resolved(Lane(Bridge()), new FakeEngine());
 
         Looping(choice).Tools.Select(t => t.Name).Should().Equal("read", "search", "list");
     }
@@ -60,7 +61,7 @@ public sealed class LaneResolutionTests
     {
         // The engine's order, not the subset's: a tools array's ordering is something a model can be
         // sensitive to, and it must not vary with how somebody typed a CLI flag.
-        var choice = Resolved(Lane(Bridge(["list", "read"])), new StubEngine());
+        var choice = Resolved(Lane(Bridge(["list", "read"])), new FakeEngine());
 
         Looping(choice).Tools.Select(t => t.Name).Should().Equal("read", "list");
     }
@@ -70,7 +71,7 @@ public sealed class LaneResolutionTests
     {
         // Never a shorter surface served quietly: a lane whose NAME says four tools and whose request
         // carried three is a row that will be compared against other four-tool rows.
-        var refusal = Refusal(Lane(Bridge(["read", "graf_search_types"])), new StubEngine());
+        var refusal = Refusal(Lane(Bridge(["read", "graf_search_types"])), new FakeEngine());
 
         refusal.Should().Contain("graf_search_types");
         refusal.Should().Contain("does not").And.Contain("read");
@@ -79,7 +80,7 @@ public sealed class LaneResolutionTests
     [Fact]
     public void The_turn_ceiling_travels_from_the_definition_to_the_surface()
     {
-        Looping(Resolved(Lane(Bridge(maxTurns: 1)), new StubEngine())).MaxTurns.Should().Be(1);
+        Looping(Resolved(Lane(Bridge(maxTurns: 1)), new FakeEngine())).MaxTurns.Should().Be(1);
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public sealed class LaneResolutionTests
     {
         // There is no LaneId on a cell; the name is the join. A choice keyed by anything else would need a
         // schema change nobody asked for.
-        Resolved(Lane(Bridge(), "bridge-4"), new StubEngine()).Name.Should().Be("bridge-4");
+        Resolved(Lane(Bridge(), "bridge-4"), new FakeEngine()).Name.Should().Be("bridge-4");
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class LaneResolutionTests
     {
         var roster = Roster(
             [Lane(LaneDefinition.NoTools("first"), "floor"), Lane(Bridge(), "bridge-3")],
-            new StubEngine());
+            new FakeEngine());
 
         roster.Entries.Select(e => e.Name).Should().Equal("floor", "bridge-3");
     }
@@ -127,7 +128,7 @@ public sealed class LaneResolutionTests
         // other half of the cells with a surface that never ran.
         RosterRefusal(
             [Lane(Bridge(), "same"), Lane(Bridge(["read"]), "same")],
-            new StubEngine())
+            new FakeEngine())
             .Should().Contain("'same'").And.Contain("more than once");
     }
 
@@ -157,25 +158,4 @@ public sealed class LaneResolutionTests
     private static ToolLane Lane(LaneDefinition definition, string name = "lane-under-test") =>
         ToolLane.Create(name, "", definition, DateTimeOffset.UnixEpoch)
             .Should().BeOfType<Outcome<ToolLane>.Ok>().Subject.Value;
-
-    /// <summary>Three tools in a deliberate order, so the ordering assertions mean something.</summary>
-    private sealed class StubEngine : IEngine
-    {
-        public EngineRef Describe => EngineRef.Filesystem();
-
-        public string TraceContractVersion => string.Empty;
-
-        public IReadOnlyList<EngineTool> Tools { get; } =
-        [
-            new EngineTool("read", "reads", """{"type":"object"}"""),
-            new EngineTool("search", "searches", """{"type":"object"}"""),
-            new EngineTool("list", "lists", """{"type":"object"}"""),
-        ];
-
-        public Task<Outcome<string>> WarmAsync(string checkoutPath, CancellationToken cancellationToken) =>
-            Task.FromResult(Outcome<string>.Success("warm"));
-
-        public Task<ToolAnswer> InvokeAsync(string tool, string argumentsJson, CancellationToken cancellationToken) =>
-            Task.FromResult(ToolAnswer.Success("ok"));
-    }
 }

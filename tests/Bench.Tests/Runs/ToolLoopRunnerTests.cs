@@ -4,6 +4,7 @@ using Bench.Domain.Engines;
 using Bench.Domain.Models;
 using Bench.Domain.Runs;
 using Bench.Domain.Trace;
+using Bench.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -21,12 +22,17 @@ namespace Bench.Tests.Runs;
 /// </summary>
 public sealed class ToolLoopRunnerTests
 {
+    /// <summary>The one-tool surface these tests were written against: what the loop does with a tool list
+    /// is not what they measure, so a second and third entry would only make every assertion longer.</summary>
+    private static readonly IReadOnlyList<EngineTool> ReadOnly =
+        [new EngineTool("read", "reads a file", """{"type":"object"}""")];
+
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
     public async Task A_final_answer_on_the_first_turn_ends_the_loop_and_invokes_nothing()
     {
-        var engine = new RecordingEngine();
+        var engine = new FakeEngine(ReadOnly);
 
         var result = await Run(new ScriptedRuntime([Final("the total is in OrderService")]), engine);
 
@@ -40,7 +46,7 @@ public sealed class ToolLoopRunnerTests
     [Fact]
     public async Task A_requested_call_is_invoked_and_the_conversation_continues()
     {
-        var engine = new RecordingEngine();
+        var engine = new FakeEngine(ReadOnly);
 
         var result = await Run(
             new ScriptedRuntime([Asks("read", """{"path":"a.cs"}"""), Final("it is on line 12")]), engine);
@@ -63,7 +69,7 @@ public sealed class ToolLoopRunnerTests
         // Both halves matter. Recording it as an ordinary answer is the defect that let a false read-only
         // guarantee stand for months upstream; ending the leg on it would score a model down for a guard
         // doing its job, when correcting itself is exactly what it should do next.
-        var engine = new RecordingEngine(ToolAnswer.Refusal("outside the workspace"));
+        var engine = new FakeEngine(ReadOnly, ToolAnswer.Refusal("outside the workspace"));
 
         var result = await Run(
             new ScriptedRuntime([Asks("read", """{"path":"/etc/passwd"}"""), Final("I will stay in the repo")]), engine);
@@ -78,7 +84,7 @@ public sealed class ToolLoopRunnerTests
     [Fact]
     public async Task A_failed_call_carries_its_message_and_is_not_a_refusal()
     {
-        var engine = new RecordingEngine(ToolAnswer.Failure("the file is locked"));
+        var engine = new FakeEngine(ReadOnly, ToolAnswer.Failure("the file is locked"));
 
         var result = await Run(new ScriptedRuntime([Asks("read", "{}"), Final("done")]), engine);
 
@@ -92,7 +98,7 @@ public sealed class ToolLoopRunnerTests
         // It cannot be re-derived later: two calls on turn 3 and one on turn 4 are indistinguishable, from
         // an ordered list alone, from three calls on one turn.
         var result = await Run(
-            new ScriptedRuntime([Asks("a", "{}"), Asks("b", "{}"), Final("done")]), new RecordingEngine());
+            new ScriptedRuntime([Asks("a", "{}"), Asks("b", "{}"), Final("done")]), new FakeEngine(ReadOnly));
 
         result.Calls.Select(c => c.Turn).Should().Equal(1, 2);
     }
@@ -100,7 +106,7 @@ public sealed class ToolLoopRunnerTests
     [Fact]
     public async Task A_turn_that_asks_for_two_tools_invokes_both_before_asking_again()
     {
-        var engine = new RecordingEngine();
+        var engine = new FakeEngine(ReadOnly);
 
         var result = await Run(
             new ScriptedRuntime([Asks([("a", "{}"), ("b", "{}")]), Final("done")]), engine);
@@ -115,7 +121,7 @@ public sealed class ToolLoopRunnerTests
     {
         var result = await Run(
             new ScriptedRuntime([Asks("a", "{}"), Asks("b", "{}"), Asks("c", "{}")]),
-            new RecordingEngine(),
+            new FakeEngine(ReadOnly),
             maxTurns: 3);
 
         result.End.Should().Be(LoopEnd.TurnsSpent);
@@ -128,7 +134,7 @@ public sealed class ToolLoopRunnerTests
         // The ceiling is checked after that turn's calls, not before them: "it was still working when the
         // ceiling arrived" is precisely what the cap reports, and a call dropped there would make a busy
         // leg look idle.
-        var result = await Run(new ScriptedRuntime([Asks("a", "{}")]), new RecordingEngine(), maxTurns: 1);
+        var result = await Run(new ScriptedRuntime([Asks("a", "{}")]), new FakeEngine(ReadOnly), maxTurns: 1);
 
         result.End.Should().Be(LoopEnd.TurnsSpent);
         result.Calls.Should().ContainSingle();
@@ -148,7 +154,7 @@ public sealed class ToolLoopRunnerTests
                 new ScriptedRuntime([Asks("a", "{}"), Final("done")]),
                 new FixedClock(DateTimeOffset.UnixEpoch.AddMinutes(5)),
                 NullLogger<ToolLoopRunner>.Instance)
-            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", spent, Surface(new RecordingEngine(), 5), Ct);
+            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", spent, Surface(new FakeEngine(ReadOnly), 5), Ct);
 
         failed.Should().BeOfType<Outcome<ToolLoopResult>.Fail>()
             .Which.Reason.Should().Contain("wall budget").And.Contain("0 turn(s)");
@@ -167,7 +173,7 @@ public sealed class ToolLoopRunnerTests
         await new ToolLoopRunner(runtime, clock, NullLogger<ToolLoopRunner>.Instance).RunAsync(
             Endpoint(), Sampling.Deterministic(7), "", "q",
             LegDeadline.For([Budget.Of(BudgetKind.Wall, BudgetScope.Question, 100)], DateTimeOffset.UnixEpoch),
-            Surface(new RecordingEngine(), 5), Ct);
+            Surface(new FakeEngine(ReadOnly), 5), Ct);
 
         var walls = runtime.Seen
             .Select(r => r.Budgets.Single(b => b.Kind == BudgetKind.Wall).Limit)
@@ -181,7 +187,7 @@ public sealed class ToolLoopRunnerTests
     public async Task A_runtime_failure_ends_the_loop_as_a_failure_rather_than_an_empty_answer()
     {
         var failed = await new ToolLoopRunner(new FailingRuntime(), TimeProvider.System, NullLogger<ToolLoopRunner>.Instance)
-            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", Unbounded, Surface(new RecordingEngine(), 3), Ct);
+            .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "q", Unbounded, Surface(new FakeEngine(ReadOnly), 3), Ct);
 
         failed.Should().BeOfType<Outcome<ToolLoopResult>.Fail>()
             .Which.Reason.Should().Contain("unreachable");
@@ -196,7 +202,7 @@ public sealed class ToolLoopRunnerTests
 
         await new ToolLoopRunner(runtime, TimeProvider.System, NullLogger<ToolLoopRunner>.Instance).RunAsync(
             Endpoint(), Sampling.Deterministic(7), "retrieval first, then confirm", "q", Unbounded,
-            Surface(new RecordingEngine(), 3), Ct);
+            Surface(new FakeEngine(ReadOnly), 3), Ct);
 
         runtime.Seen[0].SystemPrompt.Should().Be("retrieval first, then confirm");
     }
@@ -206,7 +212,7 @@ public sealed class ToolLoopRunnerTests
     {
         var runtime = new ScriptedRuntime([Asks("a", "{}"), Final("done")]);
 
-        await Run(runtime, new RecordingEngine());
+        await Run(runtime, new FakeEngine(ReadOnly));
 
         runtime.Seen[0].Transcript.Should().BeEmpty();
         runtime.Seen[1].Transcript.Should().HaveCount(2, "the assistant's turn and the tool's answer");
@@ -214,7 +220,7 @@ public sealed class ToolLoopRunnerTests
     }
 
     private async Task<ToolLoopResult> Run(
-        IModelRuntime runtime, RecordingEngine engine, int maxTurns = 5) =>
+        IModelRuntime runtime, FakeEngine engine, int maxTurns = 5) =>
         (await new ToolLoopRunner(runtime, TimeProvider.System, NullLogger<ToolLoopRunner>.Instance)
             .RunAsync(Endpoint(), Sampling.Deterministic(7), "", "where is the total?", Unbounded, Surface(engine, maxTurns), Ct))
         .Should().BeOfType<Outcome<ToolLoopResult>.Ok>().Subject.Value;
@@ -292,25 +298,5 @@ public sealed class ToolLoopRunnerTests
 
         public Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken) =>
             Task.FromResult(Outcome<ModelAnswer>.Failure("the model is unreachable"));
-    }
-
-    private sealed class RecordingEngine(ToolAnswer? answer = null) : IEngine
-    {
-        public List<(string Tool, string Arguments)> Invocations { get; } = [];
-
-        public EngineRef Describe => EngineRef.Filesystem();
-
-        public string TraceContractVersion => string.Empty;
-
-        public IReadOnlyList<EngineTool> Tools => [new EngineTool("read", "reads a file", """{"type":"object"}""")];
-
-        public Task<Outcome<string>> WarmAsync(string checkoutPath, CancellationToken cancellationToken) =>
-            Task.FromResult(Outcome<string>.Success("warm"));
-
-        public Task<ToolAnswer> InvokeAsync(string tool, string argumentsJson, CancellationToken cancellationToken)
-        {
-            Invocations.Add((tool, argumentsJson));
-            return Task.FromResult(answer ?? ToolAnswer.Success("lines 1-3 of 3"));
-        }
     }
 }

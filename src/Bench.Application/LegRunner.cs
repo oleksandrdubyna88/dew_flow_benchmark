@@ -365,7 +365,8 @@ public sealed class LegRunner(
 
         return asked is Outcome<ModelAnswer>.Fail failed
             ? await UnansweredAsync(work.Cell, work.Owner, work.Deadline, failed.Reason, cancellationToken)
-            : await ScoreAsync(work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, cancellationToken);
+            : await ScoreAsync(
+                work, prompt, ((Outcome<ModelAnswer>.Ok)asked).Value, ToolUsageObservation.None, cancellationToken);
     }
 
     /// <summary>
@@ -413,8 +414,24 @@ public sealed class LegRunner(
                 $"the leg spent its {surface.MaxTurns}-turn ceiling after {result.Calls.Count} tool call(s)");
         }
 
-        return await ScoreAsync(work, prompt, result.Answer, cancellationToken);
+        return await ScoreAsync(work, prompt, result.Answer, Observed(result.Calls), cancellationToken);
     }
+
+    /// <summary>What the subject reached for, for the tool-use metric.
+    ///
+    /// <para><b><c>Available</c> is true for any looping lane, even when the list is empty.</b> "It called
+    /// nothing" and "it could not call anything" are the two readings this flag exists to keep apart, and
+    /// only the second is a not-applicable — a tool lane whose subject ignored every tool is a REAL zero and
+    /// one of the more interesting results the wording experiment can produce.</para>
+    ///
+    /// <para><b>A REFUSED call still counts as called</b>, and deliberately: the expectation asks whether the
+    /// subject picked this tool, which is exactly what a description is being measured on. A model that
+    /// selected the right tool and passed it a path outside the checkout demonstrated the selection the
+    /// metric is about. The outcome is not lost — it lives on each <c>ToolCall</c>, which is where a reader
+    /// asking the different question ("did the calls WORK") has to look.</para>
+    /// </summary>
+    private static ToolUsageObservation Observed(IReadOnlyList<TurnCall> calls) =>
+        new(true, [.. calls.Select(record => record.Call.Name)]);
 
     /// <summary>A leg that produced no answer: a CEILING when its own wall ran out, a crash otherwise.
     /// <para>
@@ -477,10 +494,14 @@ public sealed class LegRunner(
     /// <summary>Scoring and persisting one leg: the answer's metrics, retrieval's metrics, and every piece
     /// of evidence the two were computed from — in ONE write, before the cell settles.</summary>
     private async Task<Outcome<LegResult>> ScoreAsync(
-        LegWork work, string prompt, ModelAnswer answer, CancellationToken cancellationToken)
+        LegWork work,
+        string prompt,
+        ModelAnswer answer,
+        ToolUsageObservation tools,
+        CancellationToken cancellationToken)
     {
         var stored = await results.SaveAsync(
-            LegResult.Of(work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer), clock.GetUtcNow()) with
+            LegResult.Of(work.Cell.Id, prompt, answer.Text.Value, Metrics(work, answer, tools), clock.GetUtcNow()) with
             {
                 Thinking = answer.Thinking,
                 Meta = ResponseMeta.Of(answer),
@@ -513,9 +534,11 @@ public sealed class LegRunner(
     /// empty for the control arm, which keeps the no-retrieval baseline carrying precisely the metric set it
     /// carried before this lane existed.
     /// </para></summary>
-    private static IReadOnlyList<StoredMetric> Metrics(LegWork work, ModelAnswer answer) =>
+    private static IReadOnlyList<StoredMetric> Metrics(
+        LegWork work, ModelAnswer answer, ToolUsageObservation tools) =>
     [
-        .. AnswerScoring.Score(work.Question, answer, RetrievalScoring.Observe(work.Question, work.Retrieved)),
+        .. AnswerScoring.Score(
+            work.Question, answer, RetrievalScoring.Observe(work.Question, work.Retrieved), tools),
         .. RetrievalScoring.Score(work.Question, work.Retrieved),
         .. DiagnosisMetrics(work, answer),
     ];

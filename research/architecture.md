@@ -845,6 +845,17 @@ Stated because a description that quietly implies more than is built is the same
      nobody knows until well after the container is composed, and `LegRunner` already reads its engine off
      the surface. So there is no engine factory and no DI entry, only a constructor call where the tree is
      finally known.
+  2b. **And nothing carried the loop's call ledger to the scorer.** `ToolLoopResult.Calls` existed,
+     `AnswerScoring` had a rule for a `ToolUsed` expectation, and no code joined them — so every leg scored
+     as though no tools existed. **DONE**: `LegRunner` now observes what the subject called and the metric
+     reports three readings a passing suite could not previously tell apart. *Called* is a 1; *offered and
+     ignored* is a real 0 — one of the more interesting results the wording experiment can produce; and
+     *never offered* is the only not-applicable, because scoring the floor zero for a tool it never had
+     would flatter every tool lane by exactly that much. The gap was invisible precisely because the missing
+     wiring rendered as "not applicable", a sentence that reads like a considered verdict. A **refused** call
+     still counts as called: the expectation is about SELECTION, which is what a description is measured on,
+     and the outcome survives on the `ToolCall` record for the different question.
+
   3. **Then the MCP bridge.** `dew_flow_mcp` is not vendored here and `McpBridgeEngine` does not exist —
      which is what the 4/63-against-36/63 comparison needs, since that arm must be measured genuinely
      in-process. It is NOT a prerequisite for the first agentic leg: `FilesystemEngine` already serves four
