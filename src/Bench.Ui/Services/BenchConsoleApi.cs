@@ -31,6 +31,13 @@ public sealed class BenchConsoleApi(HttpClient http)
         GetAsync<RunReportDto>(
             $"api/bench/runs/{runId}/report?metric={Uri.EscapeDataString(metric)}", cancellationToken);
 
+    /// <summary>Which metrics THIS run actually carries. Read before anything is chosen, for the reason the
+    /// arms' equivalent is: a control offering a metric the run never recorded renders an empty table, and an
+    /// empty table reads as a broken run rather than as a bad question.</summary>
+    public Task<Read<IReadOnlyList<string>>> GetRunMetricsAsync(
+        Guid runId, CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<string>>($"api/bench/runs/{runId}/metrics", cancellationToken);
+
     /// <summary>Which metrics the arms actually carry. Read before anything is chosen, so the control offers
     /// what was measured rather than a catalog — a metric no arm recorded renders an empty table and reads as
     /// a broken run.</summary>

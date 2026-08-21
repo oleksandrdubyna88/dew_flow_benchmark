@@ -38,6 +38,14 @@ public static class BenchApi
             Guid id, IResultStore results, CancellationToken cancellationToken) =>
             Results.Ok(await results.ScoreboardAsync(id, cancellationToken)));
 
+        // What THIS run actually measured, so its metric control offers those and not a catalog — the same
+        // move `/arms/metrics` already makes, and the run page was the one place still missing it. A tool
+        // metric is named per tool ("Tool use: search_literal"), so a published list could never hold it:
+        // offering the bare "Tool use" sent the reader to an empty table reading as a broken run.
+        group.MapGet("/runs/{id:guid}/metrics", async (
+            Guid id, IResultStore results, CancellationToken cancellationToken) =>
+            Results.Ok(await results.MetricNamesAsync([id], cancellationToken)));
+
         group.MapGet("/runs/{id:guid}/report", ReportAsync);
 
         // The compute-backend comparison. Its own route rather than a mode of the report, because it is a

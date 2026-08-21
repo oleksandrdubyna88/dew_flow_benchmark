@@ -825,7 +825,10 @@ public static class RunCommand
         return null;
     }
 
-    private static async Task<int> ExecuteAsync(
+    /// <summary>The drain, the summary and the status transitions — shared with `bench resume`, because a
+    /// resumed campaign must be drained by the same code that drained its first half. A second copy is where
+    /// the two would come to disagree about when a run is finished.</summary>
+    internal static async Task<int> ExecuteAsync(
         ServiceProvider provider,
         BenchRun run,
         LegPlan plan,

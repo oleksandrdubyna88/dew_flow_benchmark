@@ -90,6 +90,24 @@ public sealed class BenchConsoleApiTests
         api.Calls.Should().ContainSingle().Which.Should().Contain("metric=Anchor%20recall");
     }
 
+    [Fact]
+    public async Task A_run_offers_the_metrics_it_MEASURED_including_the_per_tool_ones()
+    {
+        // The list a published catalog could never hold. A tool metric is named per tool, so the catalog's
+        // bare "Tool use" matched nothing and the one axis a tool run produces rendered as an empty table —
+        // which reads as a broken run rather than as a metric nobody recorded.
+        var runId = Guid.CreateVersion7();
+        var api = new ScriptedBenchApi().Answers(
+            $"/api/bench/runs/{runId}/metrics",
+            new[] { "Anchor recall", "Tool use: read_file", "Tool use: search_literal" });
+
+        var read = await new BenchConsoleApi(api.Client()).GetRunMetricsAsync(runId, Ct);
+
+        read.Available.Should().BeTrue();
+        read.Value.Should().Contain("Tool use: search_literal");
+        read.Value.Should().NotContain(WellKnownMetrics.ToolUse, "the bare name is the one that matches nothing");
+    }
+
     private static RunSummaryDto Summary(string arm) =>
         new(Guid.CreateVersion7(), "run", "repo@commit", "s@v3#abcdef012345", $"Qln|e|1.0|fp|{arm}", arm,
             "Planned", "Reading", DateTimeOffset.UnixEpoch);

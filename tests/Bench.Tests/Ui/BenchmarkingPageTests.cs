@@ -89,7 +89,15 @@ public sealed class BenchmarkingPageTests : BunitContext
         // The no-default rule, on screen. A page that picked one would report on an axis nobody chose, and
         // every number below it would be about that choice.
         page.Markup.Should().Contain("there is no default");
-        api.Calls.Should().BeEmpty("nothing may be fetched before the reader has named a metric");
+
+        // NARROWED, deliberately. This asserted that NOTHING was fetched, which was true only while the
+        // metric control offered a published catalog — and that catalog could never hold a tool metric,
+        // named per tool ("Tool use: search_literal"), so the one axis a tool run produces rendered as an
+        // empty table reading like a broken run. The page now asks the run what it measured, exactly as the
+        // arms page already did. The rule being protected is that no REPORT is read before a metric is
+        // chosen; reading the list of choices is not reading a report.
+        api.Calls.Should().ContainSingle().Which.Should().EndWith("/metrics");
+        api.Calls.Should().NotContain(call => call.Contains("/report", StringComparison.Ordinal));
     }
 
     [Fact]

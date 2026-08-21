@@ -62,6 +62,7 @@ public static class Program
         {
             "plan" => PlanCommand.Run(command, output, error),
             "run" => RunCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "resume" => ResumeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "judge" => JudgeCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "solve" => Solve(command, output, error, stopping),
             "report" => Report(command, output, error, stopping),
@@ -467,6 +468,14 @@ public static class Program
         output.WriteLine("  bench prune --db <connection> [--hit-retention-days 7] [--json]");
         output.WriteLine("             releases the source TEXT of old retrieved hits, keeping every row: the corpus");
         output.WriteLine("             at the pinned commit reproduces it. `bench run` does this at startup too");
+        output.WriteLine("  bench resume --run <id> --db <connection> --model-url <openai-compatible base>");
+        output.WriteLine("             [--model <id>] [--leg-wall-seconds 600] [--seed 1] [--checkout-root <dir>]");
+        output.WriteLine("             finishes a run something interrupted. The questions are rebuilt from the");
+        output.WriteLine("             bank and PROVED against the stamp the run froze; the subjects, lanes and");
+        output.WriteLine("             variants come off its own cells. Only the endpoint and the wall are named");
+        output.WriteLine("             again — a run stores neither, because an endpoint is where a model was");
+        output.WriteLine("             reachable that day rather than a property of the measurement. A --model");
+        output.WriteLine("             that disagrees with the cells is refused; a RETIRED lane resumes fine");
         output.WriteLine("  bench judge --run <id> [--suite-file <path>] --db <connection>");
         output.WriteLine("             --judge-model <id> --judge-url <openai-compatible base> [--seed N] [--json]");
         output.WriteLine("             re-scores STORED answers: a second arbiter never re-runs a leg. Without");

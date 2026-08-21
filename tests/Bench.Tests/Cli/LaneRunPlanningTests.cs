@@ -88,11 +88,11 @@ public sealed class LaneRunPlanningTests(PostgresFixture postgres)
     private (int Code, string Output, string Error) Planned(string lane)
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        using var bank = new TempReadingBank(suffix, "https://example.invalid/x.git", Sha);
+        using var bank = new TempBank(suffix, "https://example.invalid/x.git", Sha);
         Run("questions", "import", "--file", bank.Path, "--db", postgres.ConnectionString);
 
         return Run(
-            "run", "--db", postgres.ConnectionString, "--bank-group", $"reading-{suffix}",
+            "run", "--db", postgres.ConnectionString, "--bank-group", bank.Group,
             "--repo", "https://example.invalid/x.git", "--commit", Sha, "--no-checkout",
             "--model", "qwen@local", "--model-url", DeadEndpoint, "--lanes", lane);
     }
@@ -112,7 +112,7 @@ public sealed class LaneRunPlanningTests(PostgresFixture postgres)
         using var repo = await TempGitRepo.CreateAsync();
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var lane = $"bridge-{suffix}";
-        using var bank = new TempReadingBank(suffix, repo.Url, repo.FirstCommit);
+        using var bank = new TempBank(suffix, repo.Url, repo.FirstCommit);
 
         Run("questions", "import", "--file", bank.Path, "--db", postgres.ConnectionString);
         var (added, _, addError) = Run(
@@ -122,7 +122,7 @@ public sealed class LaneRunPlanningTests(PostgresFixture postgres)
 
         var (code, announcement, _) = Run(
             "run", "--repo", repo.Url, "--commit", repo.FirstCommit,
-            "--bank-group", $"reading-{suffix}", "--db", postgres.ConnectionString,
+            "--bank-group", bank.Group, "--db", postgres.ConnectionString,
             "--model", "qwen@local", "--model-url", DeadEndpoint,
             "--lanes", lane);
 
@@ -146,37 +146,5 @@ public sealed class LaneRunPlanningTests(PostgresFixture postgres)
         var error = new StringWriter();
         var code = Program.Run(args, output, error, TestContext.Current.CancellationToken);
         return (code, output.ToString(), error.ToString());
-    }
-
-    /// <summary>One accepted reading question against a real local tree — the minimum a lane run can freeze
-    /// a selection from.</summary>
-    private sealed class TempReadingBank : IDisposable
-    {
-        public TempReadingBank(string suffix, string repoUrl, string commit)
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"bench-lanebank-{suffix}.json");
-            File.WriteAllText(Path, $$"""
-            {
-              "targetRepo": "{{repoUrl.Replace("\\", "\\\\")}}",
-              "authoredAtCommit": "{{commit}}",
-              "groups": [ { "key": "reading-{{suffix}}", "title": "Reading tasks", "ordinal": 1 } ],
-              "reviewers": [],
-              "questions": [
-                {
-                  "group": "reading-{{suffix}}", "ordinal": 1, "kind": "Reading", "state": "Accepted",
-                  "source": "BugsAndTests", "authorModel": "harvest",
-                  "seed": { "kind": "commit", "reference": "abc", "at": "2026-08-11T00:00:00Z" },
-                  "id": "readq-{{suffix}}",
-                  "prompt": "What does this repository contain?",
-                  "expectations": [ { "kind": "File", "file": "one.txt" } ]
-                }
-              ]
-            }
-            """);
-        }
-
-        public string Path { get; }
-
-        public void Dispose() => File.Delete(Path);
     }
 }

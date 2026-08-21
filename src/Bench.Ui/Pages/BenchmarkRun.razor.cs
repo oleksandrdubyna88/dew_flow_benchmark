@@ -24,6 +24,17 @@ public partial class BenchmarkRun(BenchConsoleApi api) : ComponentBase
 
     private Read<RunReportDto> Report { get; set; } = Read<RunReportDto>.Unasked;
 
+    /// <summary>The metric names this run actually carries.
+    /// <para>
+    /// Asked of the run rather than taken from <see cref="WellKnownMetrics"/>, which could never hold them:
+    /// a tool metric is named per tool — <c>Tool use: search_literal</c> — so the published list offered a
+    /// bare <c>Tool use</c> that matched nothing, and the one axis a tool run produces rendered empty. An
+    /// empty table reads as a broken run rather than as a bad question, which is the failure this replaces.
+    /// </para></summary>
+    private Read<IReadOnlyList<string>> Metrics { get; set; } = Read<IReadOnlyList<string>>.Unasked;
+
+    protected override async Task OnInitializedAsync() => Metrics = await api.GetRunMetricsAsync(Id);
+
     private bool Loading { get; set; }
 
     private async Task ChooseAsync(ChangeEventArgs changed)

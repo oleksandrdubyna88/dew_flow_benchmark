@@ -922,6 +922,38 @@ Stated because a description that quietly implies more than is built is the same
   failure this axis exists to catch, on demand: on the file-names question it made **no tool call at all**.
   Not yet a calibration — repeat noise is unmeasured and n = 6.
 
+  **Repeat noise: ZERO, measured (2026-08-22).** Nine questions × five repeats, one lane, one seed. Not a
+  single verdict flipped, and at the finer grain every question produced exactly ONE distinct tool sequence
+  across all five. Temperature 0 with the seed as sent reproduces the behaviour, not merely the score. So a
+  spread of one leg is already above this stand's noise, and the remaining uncertainty is about the QUESTION
+  SET — nine is nine — rather than about the instrument. The prediction written before the run (about one leg
+  in nine would flicker) was wrong in the safe direction.
+
+  **`bench resume --run <id>`, and the claim it made honest.** `RunCommand`'s summary said the harness "is
+  built to be stopped and resumed", and that held for one thing only: the sweep hands back cells a dead host
+  CLAIMED, inside a drain still running. Nothing could pick a run up from a cold start — `bench run` always
+  plans a NEW one — so a campaign killed part-way left its cells `Pending` in a run stuck at `Running`
+  forever, which is also the stuck in-flight state rule 8 forbids. Found by losing 6 of 45 legs to a shell
+  timeout, then verified by finishing that exact run.
+
+  The boundary it draws is the interesting part: **a run's identity comes from storage, only its reachability
+  from the operator.** Questions are rebuilt from the bank and proved byte for byte against the stamp the run
+  froze (the same guard the judge applies, now one shared function rather than two copies); subjects, lanes
+  and variants come off the cells; a `--model` that disagrees with them is refused, because the second half of
+  a campaign measured on a different model under the first half's label is a substitution nothing downstream
+  could detect. The endpoint and the wall are named again, because a run stores neither — an endpoint is where
+  a model was reachable that day, not a property of the measurement. A **retired** lane resumes fine, which is
+  what retired rows stay listable for; two orderings were wrong first and both were caught by tests, not by
+  review: the checkout was demanded unconditionally (a `--no-checkout` run could not resume), and a lane name
+  the catalog never held was refused as "deleted" when it is the default `no-tools` floor.
+
+  **And the metric a console offered that could never match anything.** The run page's metric control listed a
+  published catalog containing `Tool use` — while every stored tool metric is named per tool,
+  `Tool use: search_literal`. Verified: `--metric "Tool use"` reports `0 of 0 discriminate`. So the one axis a
+  tool run produces rendered as an empty table, which reads as a broken run rather than as a metric nobody
+  recorded. The page now asks the run what it measured, exactly as the arms page already did — the comment
+  explaining why was already written there, on the route the run page had not copied.
+
   **A defect the L1 rung exposed before it could be built.** A leg that spent its turn ceiling was discarded
   WHOLE — no result, no ledger — so a one-turn lane, where spending the turn on a call is the success
   condition, settled as a refusal every time and could never be scored. Verified against a live model: two

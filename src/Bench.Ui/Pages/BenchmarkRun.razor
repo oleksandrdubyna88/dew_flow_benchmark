@@ -13,7 +13,10 @@
         @* No option is pre-selected. A default here would be a choice the reader did not make, and every
            number below would be about it. *@
         <option value="">— choose a metric —</option>
-        @foreach (var name in WellKnownMetrics.All)
+        @* What this RUN measured, not a published catalog. A tool metric is named per tool — "Tool use:
+           search_literal" — so the catalog's bare "Tool use" matched nothing and the one axis a tool run
+           produces rendered as an empty table, which reads as a broken run. *@
+        @foreach (var name in Metrics.Value ?? [])
         {
             <option value="@name">@name</option>
         }
