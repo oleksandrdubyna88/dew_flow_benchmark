@@ -41,7 +41,8 @@ public static class CodeTaskCodec
         if (string.IsNullOrWhiteSpace(json))
         {
             return Outcome<CodeTask>.Failure(
-                "the code-task payload is empty — a reading question has none, and asking for it is the caller's routing defect");
+                "the code-task payload is empty — either this row is a reading question (route by the row's Kind "
+                + "before asking this codec), or a fix row lost its payload and cannot be run");
         }
 
         try

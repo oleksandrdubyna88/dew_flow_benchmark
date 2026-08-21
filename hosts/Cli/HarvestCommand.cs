@@ -171,11 +171,11 @@ public static class HarvestCommand
         TextWriter error,
         CancellationToken cancellationToken)
     {
-        var gates = await GatesAsync(command, tree, fix, diff, output, error, cancellationToken);
+        var gates = await GatesAsync(command, tree, fix, diff, output, cancellationToken);
 
-        if (gates is Outcome<(bool Ran, string Detail)>.Fail gateFailed)
+        if (gates.Refused)
         {
-            return Fail(error, gateFailed.Reason, ExitCodes.Regression);
+            return Fail(error, gates.Refusal, gates.Code);
         }
 
         var statementPath = command.Value("statement-file");
@@ -192,28 +192,37 @@ public static class HarvestCommand
             return Fail(error, "the statement file is empty — a task nobody can read is a task nobody can solve", ExitCodes.Configuration);
         }
 
-        var (ran, detail) = ((Outcome<(bool Ran, string Detail)>.Ok)gates).Value;
-
         return await StoreAsync(
-            command, bank, clock, target, fix, statement, causal, ran, detail, output, error, cancellationToken);
+            command, bank, clock, target, fix, statement, causal, gates.Ran, gates.Detail, output, error, cancellationToken);
     }
 
-    /// <summary>The two gates, or the explicit refusal to run them. A FAILED gate comes back as this
-    /// method's failure carrying the gate's own verdict — the candidate never lands, per the code
-    /// lane's rule that a malformed task is refused with the reason rather than banked.</summary>
-    private static async Task<Outcome<(bool Ran, string Detail)>> GatesAsync(
+    /// <summary>How the landing's gate step ended: evidence to store, or a refusal that already knows
+    /// its exit code — a mistyped flag, a gate that could not RUN, and a verdict that failed are three
+    /// different facts, and folding them into one code made a typo read as a refuted task.</summary>
+    private sealed record GateStep(bool Ran, string Detail, int Code, string Refusal)
+    {
+        public bool Refused => Refusal.Length > 0;
+
+        public static GateStep Evidence(bool ran, string detail) => new(ran, detail, ExitCodes.Pass, string.Empty);
+
+        public static GateStep Refuse(int code, string refusal) => new(false, string.Empty, code, refusal);
+    }
+
+    /// <summary>The two gates, or the explicit refusal to run them. A FAILED gate refuses the landing
+    /// carrying the gate's own verdict — the candidate never lands, per the code lane's rule that a
+    /// malformed task is refused with the reason rather than banked.</summary>
+    private static async Task<GateStep> GatesAsync(
         CommandLine command,
         string tree,
         HarvestedFix fix,
         FixDiff diff,
         TextWriter output,
-        TextWriter error,
         CancellationToken cancellationToken)
     {
         if (command.Has("no-gates"))
         {
             output.WriteLine("gates    SKIPPED (--no-gates) — the candidate lands ungated, and this line is its record");
-            return Outcome<(bool, string)>.Success((false, "skipped by --no-gates at harvest"));
+            return GateStep.Evidence(false, "skipped by --no-gates at harvest");
         }
 
         var build = GateCommand.Parse(command.Value("gate-build"));
@@ -221,12 +230,12 @@ public static class HarvestCommand
 
         if (build is Outcome<GateCommand>.Fail badBuild)
         {
-            return Outcome<(bool, string)>.Failure($"--gate-build: {badBuild.Reason}");
+            return GateStep.Refuse(ExitCodes.Configuration, $"--gate-build: {badBuild.Reason}");
         }
 
         if (test is Outcome<GateCommand>.Fail badTest)
         {
-            return Outcome<(bool, string)>.Failure($"--gate-test: {badTest.Reason}");
+            return GateStep.Refuse(ExitCodes.Configuration, $"--gate-test: {badTest.Reason}");
         }
 
         var timeout = TimeSpan.FromSeconds(command.Int("gate-timeout-seconds", 900));
@@ -237,15 +246,18 @@ public static class HarvestCommand
 
         if (report is Outcome<GateReport>.Fail broken)
         {
-            return Outcome<(bool, string)>.Failure(broken.Reason);
+            // The INSTRUMENT could not run — a missing tool, a timeout, a worktree that would not
+            // stage. The task was never judged, and a regression code here would say it was.
+            return GateStep.Refuse(ExitCodes.Environment, $"the gates could not run: {broken.Reason}");
         }
 
         var verdict = ((Outcome<GateReport>.Ok)report).Value;
         output.WriteLine($"gates    {(verdict.Passed ? "passed" : "FAILED")} — {verdict.Describe}");
 
         return verdict.Passed
-            ? Outcome<(bool, string)>.Success((true, verdict.Describe))
-            : Outcome<(bool, string)>.Failure(
+            ? GateStep.Evidence(true, verdict.Describe)
+            : GateStep.Refuse(
+                ExitCodes.Regression,
                 $"the gates refused the task: {verdict.Describe}. Nothing landed — a bank row carrying a failed gate would read as a task somebody vouched for");
     }
 

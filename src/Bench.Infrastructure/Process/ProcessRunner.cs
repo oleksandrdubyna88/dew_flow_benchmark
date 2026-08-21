@@ -153,9 +153,21 @@ public static class ProcessRunner
         {
             await process.WaitForExitAsync(budget.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // The child dies with the wait, WHOEVER cancelled it. This guard used to fire only for the
+            // internal timeout, so every external cancellation — the drain's post-grace stop, a Ctrl+C —
+            // orphaned the exact child it was shutting down; on Windows the orphan keeps file handles
+            // open inside a scratch worktree, the cleanup then cannot remove the directory, and a stale
+            // worktree entry survives that nothing sweeps. Found by review, proven by a red test.
             Kill(process);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // The caller's own signal still surfaces as one — only the orphan is new.
+                throw;
+            }
+
             return new ProcessAttempt.TimedOut(timeout, await Merge(stdout, stderr));
         }
 

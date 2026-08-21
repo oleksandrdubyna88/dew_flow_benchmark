@@ -83,6 +83,38 @@ public sealed class HarvestLandingTests(PostgresFixture postgres) : IDisposable
     }
 
     [Fact]
+    public async Task A_mistyped_gate_command_is_a_configuration_refusal_not_a_refuted_task()
+    {
+        var bank = new PostgresQuestionBank(postgres.NewContext());
+        var (_, fixSha) = await FixtureAsync();
+        using var statement = new TempStatement("A symptom.");
+
+        var (code, _, error) = await RunAsync(bank,
+            "questions", "harvest", "--repo", "https://example.invalid/x.git", "--commit", fixSha,
+            "--statement-file", statement.Path, "--statement-author", "operator",
+            "--gate-build", "", "--gate-test", "git;--version");
+
+        code.Should().Be(ExitCodes.Configuration, "a flag typo says nothing about the task's validity");
+        error.Should().Contain("--gate-build");
+    }
+
+    [Fact]
+    public async Task A_gate_that_cannot_RUN_is_an_environment_failure_not_a_refuted_task()
+    {
+        var bank = new PostgresQuestionBank(postgres.NewContext());
+        var (_, fixSha) = await FixtureAsync();
+        using var statement = new TempStatement("A symptom.");
+
+        var (code, _, error) = await RunAsync(bank,
+            "questions", "harvest", "--repo", "https://example.invalid/x.git", "--commit", fixSha,
+            "--statement-file", statement.Path, "--statement-author", "operator",
+            "--gate-build", "bench-no-such-tool;--version", "--gate-test", "git;--version");
+
+        code.Should().Be(ExitCodes.Environment, "the instrument never ran, so nothing was judged");
+        error.Should().Contain("could not run");
+    }
+
+    [Fact]
     public async Task Landing_without_an_author_is_refused_before_anything_runs()
     {
         var bank = new PostgresQuestionBank(postgres.NewContext());

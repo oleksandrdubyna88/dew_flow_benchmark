@@ -46,6 +46,18 @@ public sealed class DiffFenceTests
     }
 
     [Fact]
+    public void A_diff_that_itself_adds_a_fence_line_is_not_truncated_at_it()
+    {
+        var diffWithFence =
+            "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,4 @@\n context\n+```csharp\n+var x = 1;\n context2";
+
+        var extracted = DiffFence.Extract($"```diff\n{diffWithFence}\n```").Ok();
+
+        extracted.Should().Contain("+```csharp", "the embedded fence line starts with '+', not a backtick — only a line-start fence closes the block");
+        extracted.Should().EndWith("context2");
+    }
+
+    [Fact]
     public void Prose_with_no_diff_is_a_refusal_carrying_what_was_said()
     {
         DiffFence.Extract("I would change the batching logic, probably.")

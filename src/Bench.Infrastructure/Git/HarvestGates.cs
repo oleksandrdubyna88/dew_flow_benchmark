@@ -63,7 +63,8 @@ public static class HarvestGates
                 "the fix carries no test file — there is no hidden test to be red at base, so the gates cannot prove the bug reproduces");
         }
 
-        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, timeout, cancellationToken);
+        var deadline = new GateDeadline(timeout);
+        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, deadline.Remaining(), cancellationToken);
 
         if (scratch is Outcome<string>.Fail cannotAdd)
         {
@@ -75,11 +76,11 @@ public static class HarvestGates
         try
         {
             return await GatesAsync(
-                repositoryDir, tree, fixCommit, testPaths, build, test, timeout, cancellationToken);
+                repositoryDir, tree, fixCommit, testPaths, build, test, deadline, cancellationToken);
         }
         finally
         {
-            await ScratchWorktree.RemoveAsync(repositoryDir, tree, timeout);
+            await ScratchWorktree.RemoveAsync(repositoryDir, tree);
         }
     }
 
@@ -90,11 +91,11 @@ public static class HarvestGates
         IReadOnlyList<string> testPaths,
         GateCommand build,
         GateCommand test,
-        TimeSpan timeout,
+        GateDeadline deadline,
         CancellationToken cancellationToken)
     {
         var testsIn = await GitCommand.RunAsync(
-            scratch, timeout, cancellationToken,
+            scratch, deadline.Remaining(), cancellationToken,
             ["checkout", fixCommit.Value, "--", .. testPaths]);
 
         if (testsIn is Outcome<string>.Fail noTests)
@@ -103,7 +104,7 @@ public static class HarvestGates
                 $"could not materialise the fix's test files at base: {noTests.Reason}");
         }
 
-        var red = await PhaseAsync(scratch, build, test, timeout, cancellationToken);
+        var red = await PhaseAsync(scratch, build, test, deadline, cancellationToken);
 
         if (red is Outcome<GatePhase>.Fail redBroken)
         {
@@ -111,14 +112,14 @@ public static class HarvestGates
         }
 
         var toFix = await GitCommand.RunAsync(
-            scratch, timeout, cancellationToken, "checkout", "--force", "--detach", fixCommit.Value);
+            scratch, deadline.Remaining(), cancellationToken, "checkout", "--force", "--detach", fixCommit.Value);
 
         if (toFix is Outcome<string>.Fail cannotMove)
         {
             return Outcome<GateReport>.Failure($"could not move the gate worktree to the fix: {cannotMove.Reason}");
         }
 
-        var green = await PhaseAsync(scratch, build, test, timeout, cancellationToken);
+        var green = await PhaseAsync(scratch, build, test, deadline, cancellationToken);
 
         return green.Match(
             greenPhase => Outcome<GateReport>.Success(Report(((Outcome<GatePhase>.Ok)red).Value, greenPhase)),
@@ -142,9 +143,9 @@ public static class HarvestGates
     private sealed record GatePhase(bool BuildPassed, bool TestsPassed, string Detail);
 
     private static async Task<Outcome<GatePhase>> PhaseAsync(
-        string scratch, GateCommand build, GateCommand test, TimeSpan timeout, CancellationToken cancellationToken)
+        string scratch, GateCommand build, GateCommand test, GateDeadline deadline, CancellationToken cancellationToken)
     {
-        var built = await GateProcess.RunAsync(scratch, build, timeout, cancellationToken);
+        var built = await GateProcess.RunAsync(scratch, build, deadline.Remaining(), cancellationToken);
 
         if (built is Outcome<ProcessResult>.Fail buildBroken)
         {
@@ -158,7 +159,7 @@ public static class HarvestGates
             return Outcome<GatePhase>.Success(new GatePhase(false, false, GateProcess.Tail(buildResult.Output)));
         }
 
-        var tested = await GateProcess.RunAsync(scratch, test, timeout, cancellationToken);
+        var tested = await GateProcess.RunAsync(scratch, test, deadline.Remaining(), cancellationToken);
 
         return tested.Match(
             result => Outcome<GatePhase>.Success(new GatePhase(true, result.Ok, GateProcess.Tail(result.Output))),

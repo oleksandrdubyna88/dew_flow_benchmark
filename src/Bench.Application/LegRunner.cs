@@ -104,8 +104,19 @@ public sealed class LegRunner(
         if (await results.HasResultAsync(cell.Id, cancellationToken))
         {
             // The interrupted case: scored, never settled. Finish that rather than measure it twice.
+            // Completed is the least-wrong terminal label this late — the crash lost the real outcome
+            // and the stored result keeps the evidence — but it IS a label, not a reading: a leg that
+            // was actually capped settles here as Completed, and only the result row can say otherwise.
             logger.LogInformation("Cell {Cell} was already scored — settling the leg a crash left open", cell.Id);
             await runs.SettleAsync(cell.Id, owner, new LegOutcome.Completed(), cancellationToken);
+
+            if (plan.Kind == TaskKind.Fix)
+            {
+                // The phase record the crash left open closes too — claiming no elapsed time, because
+                // this process never ran the leg.
+                await ClosePhasesAsync(cell.Id, TimeSpan.Zero, cancellationToken);
+            }
+
             return Outcome<LegResult>.Failure($"cell {cell.Id} was already scored; the open leg is now settled");
         }
 
@@ -170,7 +181,7 @@ public sealed class LegRunner(
 
         if (plan.Kind == TaskKind.Fix)
         {
-            await ClosePhasesAsync(cell.Id, deadline, cancellationToken);
+            await ClosePhasesAsync(cell.Id, clock.GetUtcNow() - deadline.StartedAt, cancellationToken);
         }
 
         return outcome;
@@ -230,7 +241,7 @@ public sealed class LegRunner(
     /// stored answer beats threading a phase handle through five of them. A cap or a crash stops the
     /// LEG, so the later phases go <see cref="PhaseState.Stopped"/>; a completed leg leaves the Judge
     /// phase Pending for the judge pass to close.</summary>
-    private async Task ClosePhasesAsync(Guid cellId, LegDeadline deadline, CancellationToken cancellationToken)
+    private async Task ClosePhasesAsync(Guid cellId, TimeSpan elapsed, CancellationToken cancellationToken)
     {
         if (await runs.CellAsync(cellId, cancellationToken) is not Outcome<RunCell>.Ok(var cell) || !cell.IsTerminal)
         {
@@ -245,7 +256,6 @@ public sealed class LegRunner(
             return;
         }
 
-        var elapsed = clock.GetUtcNow() - deadline.StartedAt;
         var (ended, others) = PhasePlan.End(
             working with { Thinking = elapsed > TimeSpan.Zero ? elapsed : TimeSpan.Zero },
             phases, cell.OutcomeKind, cell.OutcomeDetail);
@@ -619,6 +629,14 @@ public sealed class LegRunner(
     private static IEnumerable<StoredMetric> DiagnosisMetrics(LegWork work, ModelAnswer answer)
     {
         if (work.Plan.Kind != TaskKind.Fix)
+        {
+            return [];
+        }
+
+        // A cut-off leg settles as a cap and is excluded from paired deltas — but metric ROWS are what
+        // every aggregate groups over, so scoring the truncated text would quietly enrol the ceiling
+        // in every FixArm average anyway. No metrics; the artefact keeps the truncated answer itself.
+        if (answer.WasCutOff)
         {
             return [];
         }

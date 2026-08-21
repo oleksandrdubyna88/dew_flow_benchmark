@@ -68,7 +68,8 @@ public static class SolutionSignals
                 "the task carries no hidden-test files — signal 2 would assert nothing, and a green light nobody earned is worse than none");
         }
 
-        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, timeout, cancellationToken);
+        var deadline = new GateDeadline(timeout);
+        var scratch = await ScratchWorktree.AddAsync(repositoryDir, baseCommit, deadline.Remaining(), cancellationToken);
 
         if (scratch is Outcome<string>.Fail cannotAdd)
         {
@@ -80,11 +81,11 @@ public static class SolutionSignals
         try
         {
             return await SignalsAsync(
-                tree, fixCommit, solverDiff, causalPaths, testPaths, build, test, timeout, cancellationToken);
+                tree, fixCommit, solverDiff, causalPaths, testPaths, build, test, deadline, cancellationToken);
         }
         finally
         {
-            await ScratchWorktree.RemoveAsync(repositoryDir, tree, timeout);
+            await ScratchWorktree.RemoveAsync(repositoryDir, tree);
         }
     }
 
@@ -96,11 +97,11 @@ public static class SolutionSignals
         IReadOnlyList<string> testPaths,
         GateCommand build,
         GateCommand test,
-        TimeSpan timeout,
+        GateDeadline deadline,
         CancellationToken cancellationToken)
     {
         var (rightFiles, rightDetail) = TouchesCause(solverDiff, causalPaths);
-        var applied = await ApplyAsync(tree, solverDiff, timeout, cancellationToken);
+        var applied = await ApplyAsync(tree, solverDiff, deadline.Remaining(), cancellationToken);
 
         if (applied is not Outcome<string>.Ok)
         {
@@ -114,7 +115,7 @@ public static class SolutionSignals
         }
 
         var testsIn = await GitCommand.RunAsync(
-            tree, timeout, cancellationToken, ["checkout", fixCommit.Value, "--", .. testPaths]);
+            tree, deadline.Remaining(), cancellationToken, ["checkout", fixCommit.Value, "--", .. testPaths]);
 
         if (testsIn is Outcome<string>.Fail noTests)
         {
@@ -122,7 +123,7 @@ public static class SolutionSignals
                 $"could not materialise the hidden tests: {noTests.Reason}");
         }
 
-        var built = await GateProcess.RunAsync(tree, build, timeout, cancellationToken);
+        var built = await GateProcess.RunAsync(tree, build, deadline.Remaining(), cancellationToken);
 
         if (built is Outcome<Process.ProcessResult>.Fail buildBroken)
         {
@@ -140,7 +141,7 @@ public static class SolutionSignals
                 false, "not run: the tree does not build"));
         }
 
-        var tested = await GateProcess.RunAsync(tree, test, timeout, cancellationToken);
+        var tested = await GateProcess.RunAsync(tree, test, deadline.Remaining(), cancellationToken);
 
         return tested.Match(
             result => Outcome<SolutionReport>.Success(new SolutionReport(

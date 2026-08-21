@@ -33,7 +33,7 @@ public readonly record struct JudgeReport(int Judged, int NotJudgeable, int Sile
 /// Interruptible for the same reason the telemetry ingest is: work is selected by what carries no verdict
 /// yet, so a crash at leg 400 of 500 resumes at 400 and never re-judges the first 399.
 /// </para></summary>
-public sealed class JudgeRunner(IResultStore results, ILogger<JudgeRunner> logger)
+public sealed class JudgeRunner(IResultStore results, IRunStore runs, ILogger<JudgeRunner> logger)
 {
     public async Task<Outcome<JudgeReport>> JudgeRunAsync(
         Guid runId, Suite suite, IJudge judge, CancellationToken cancellationToken)
@@ -87,7 +87,32 @@ public sealed class JudgeRunner(IResultStore results, ILogger<JudgeRunner> logge
             return report;
         }
 
+        await CloseJudgePhaseAsync(leg.CellId, reading, cancellationToken);
+
         return Count(report, question, reading, leg, judge);
+    }
+
+    /// <summary>Closes the leg's Judge phase, when it has one. The leg runner deliberately leaves that
+    /// phase Pending for THIS pass — and until this closed it, every judged fix leg read as forever
+    /// mid-judgement. A reading leg has no phase record, and a leg whose earlier cap already stopped
+    /// the Judge phase keeps that record — both are the empty case here, not an error. A SILENT arbiter
+    /// closes it too: its "not judged" metric is stored, so no later pass will ever revisit the leg.</summary>
+    private async Task CloseJudgePhaseAsync(Guid cellId, JudgeReading reading, CancellationToken cancellationToken)
+    {
+        var phases = await runs.PhasesAsync(cellId, cancellationToken);
+        var judgePhase = phases.FirstOrDefault(
+            p => p.Kind == PhaseKind.Judge && p.State is PhaseState.Pending or PhaseState.Running);
+
+        if (judgePhase is null)
+        {
+            return;
+        }
+
+        var (ended, others) = PhasePlan.End(
+            judgePhase, phases, LegOutcomeKind.Completed,
+            reading.Reached ? "the arbiter gave its verdict" : "the arbiter was silent; the metric records it");
+
+        await runs.SavePhasesAsync([ended, .. others], cancellationToken);
     }
 
     private static async Task<JudgeReading> AskAsync(

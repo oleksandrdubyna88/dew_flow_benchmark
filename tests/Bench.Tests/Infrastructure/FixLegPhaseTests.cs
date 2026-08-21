@@ -105,6 +105,45 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task A_cut_off_leg_stores_no_diagnosis_metrics_to_pollute_the_arm_averages()
+    {
+        var runtime = new CountingRuntime(
+            """{ "anchors": [{ "path": "src/Wrong.cs" }], "mechanism": "truncated mid-""",
+            StopReason.LengthCapped);
+        var (runId, plan, runner, _) = await ArrangeAsync(FixArm.InvestigateOnly, runtime);
+
+        await runner.RunNextAsync(runId, WorkerIdentity.Here("phase-test"), plan, Ct);
+
+        var stored = (await postgres.NewResults().ForRunAsync(runId, Ct)).Should().ContainSingle().Subject;
+        stored.Metrics.Should().NotContain(
+            m => m.Name == DiagnosisScoring.Parses || m.Name == DiagnosisScoring.AnchorRecall || m.Name == DiagnosisScoring.Precision,
+            "the leg settled as a cap — scoring its truncated text would enrol the ceiling in every FixArm average");
+    }
+
+    [Fact]
+    public async Task Reentry_on_a_scored_but_unsettled_fix_leg_closes_the_phase_record_too()
+    {
+        var (runId, plan, runner, runs) = await ArrangeAsync(FixArm.InvestigateOnly);
+        var cellId = await ClaimedCellAsync(runs, runId);
+
+        // The crash shape: phases open, result stored, cell never settled.
+        var phases = await runs.EnsurePhasesAsync(
+            cellId, PhasePlan.Materialise(cellId, TaskKind.Fix, FixArm.InvestigateOnly).Ok(), Ct);
+        (await runs.SavePhasesAsync([PhasePlan.Start(phases[0], phases).Ok()], Ct)).Ok();
+        (await postgres.NewResults().SaveAsync(
+            LegResult.Of(cellId, "prompt", "an answer the crash orphaned", [], Noon), Ct)).Ok();
+
+        var result = await runner.RunNextAsync(runId, WorkerIdentity.Here("phase-test"), plan, Ct);
+
+        result.Reason().Should().Contain("already scored");
+        var after = await runs.PhasesAsync(cellId, Ct);
+        after.Single(p => p.Kind == PhaseKind.Investigate).State.Should().Be(
+            PhaseState.Done, "a leg the runner settles on re-entry must not read as forever mid-investigation");
+        after.Single(p => p.Kind == PhaseKind.Judge).State.Should().Be(
+            PhaseState.Pending, "the judge pass still owns closing its own phase");
+    }
+
+    [Fact]
     public async Task Phases_materialise_once_and_a_second_ensure_returns_the_stored_record()
     {
         var (runId, _, _, runs) = await ArrangeAsync(FixArm.InvestigateOnly);
@@ -177,7 +216,9 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
     /// <summary>Answers with whatever the test scripted, counts how often it was reached — the
     /// blocked-arm assertion is about the ask that must never happen — and keeps the prompt it saw,
     /// because the diagnosis contract can only be observed on the request itself.</summary>
-    private sealed class CountingRuntime(string answer = "the delay is recomputed without carrying state")
+    private sealed class CountingRuntime(
+        string answer = "the delay is recomputed without carrying state",
+        StopReason stop = StopReason.Completed)
         : IModelRuntime
     {
         public int Asked { get; private set; }
@@ -200,7 +241,7 @@ public sealed class FixLegPhaseTests(PostgresFixture postgres)
                 CapturedCount.Number(20),
                 TimeSpan.FromMilliseconds(250),
                 SamplingAsSent.From(request.Sampling, "request-body"),
-                StopReason.Completed,
+                stop,
                 "stop")));
         }
     }

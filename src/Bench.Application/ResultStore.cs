@@ -129,12 +129,14 @@ public readonly record struct RunScoreboard(int Scored, int Passed);
 /// about evidence. Results are immutable once written — a leg is scored, not edited — so nothing here
 /// updates anything.
 /// </para></summary>
+/// <param name="CellId">The cell whose phase record the judge pass CLOSES — the Judge phase waits
+/// Pending for exactly this pass, and without the id no verdict could ever end it.</param>
 /// <param name="QuestionId">Which suite question this leg answered — the judge needs the reference
 /// answer, and that lives in the suite rather than in the result.</param>
 /// <param name="SubjectModelId">Recorded on the verdict so self-judging is a filter after the fact,
 /// not something only the person watching the run could have noticed.</param>
 public readonly record struct JudgeableLeg(
-    Guid ResultId, string QuestionId, string SubjectModelId, string Prompt, string Answer);
+    Guid ResultId, Guid CellId, string QuestionId, string SubjectModelId, string Prompt, string Answer);
 
 /// <summary>What one retention pass dropped.</summary>
 /// <param name="Hits">Rows whose snippet text was released. The rows themselves survive — every retrieval

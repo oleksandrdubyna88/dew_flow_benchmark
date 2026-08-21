@@ -178,6 +178,66 @@ public sealed class FixDiffTests
     }
 
     [Fact]
+    public void A_pure_rename_with_no_hunks_still_carries_the_file_under_its_old_name()
+    {
+        // A 100%-similarity rename has NO ---/+++ headers at all — only the rename lines. Dropping
+        // the file entirely loses a renamed hidden-test candidate and makes a rename-only solver
+        // diff read as "no unified diff".
+        const string pureRename =
+            """
+            diff --git a/tests/Old/PolicyTests.cs b/tests/New/PolicyTests.cs
+            similarity index 100%
+            rename from tests/Old/PolicyTests.cs
+            rename to tests/New/PolicyTests.cs
+            """;
+
+        var diff = FixDiff.Parse(pureRename).Ok();
+
+        diff.Files.Should().ContainSingle().Which.OldPath.Should().Be("tests/Old/PolicyTests.cs");
+        diff.TestFiles.Should().ContainSingle().Which.Should().Be("tests/Old/PolicyTests.cs");
+        diff.CausalAnchors(Base).Should().BeEmpty("a pure rename changed no line anyone can point at");
+    }
+
+    [Fact]
+    public void A_quoted_header_path_is_unquoted_not_carried_with_its_quotes()
+    {
+        // git C-quotes any path with a space, quote or non-ASCII byte; taken verbatim, the quotes
+        // and escapes become part of the path and no anchor ever matches it.
+        const string quoted =
+            """
+            diff --git "a/src/Sp ace.cs" "b/src/Sp ace.cs"
+            --- "a/src/Sp ace.cs"
+            +++ "b/src/Sp ace.cs"
+            @@ -1,3 +1,3 @@
+                a();
+            -    b();
+            +    b2();
+                c();
+            """;
+
+        FixDiff.Parse(quoted).Ok().CausalAnchors(Base).Single().FilePath.Should().Be("src/Sp ace.cs");
+    }
+
+    [Fact]
+    public void A_quoted_path_with_octal_escapes_decodes_as_utf8()
+    {
+        // git writes non-ASCII as octal-escaped UTF-8 BYTES: 'é' is \303\251.
+        const string octal =
+            """
+            diff --git "a/src/Caf\303\251.cs" "b/src/Caf\303\251.cs"
+            --- "a/src/Caf\303\251.cs"
+            +++ "b/src/Caf\303\251.cs"
+            @@ -1,3 +1,3 @@
+                a();
+            -    b();
+            +    b2();
+                c();
+            """;
+
+        FixDiff.Parse(octal).Ok().CausalAnchors(Base).Single().FilePath.Should().Be("src/Café.cs");
+    }
+
+    [Fact]
     public void An_empty_or_diffless_text_is_refused_by_name()
     {
         FixDiff.Parse("   ").Reason().Should().Contain("diff");

@@ -106,8 +106,38 @@ public sealed class JudgeRunnerTests(PostgresFixture postgres)
             .Single(m => m.Name.Contains("Judge")).Metadata["selfJudged"].Should().Be("true");
     }
 
+    [Fact]
+    public async Task Judging_a_leg_closes_its_pending_Judge_phase()
+    {
+        var (runId, suite, results) = await ArrangeAsync("the mechanism, stated");
+        var runs = RunStore();
+        var cellId = await CellAsync(runId);
+
+        // A fix leg's shape: Investigate already Done, Judge waiting for exactly this pass.
+        var phases = await runs.EnsurePhasesAsync(
+            cellId, PhasePlan.Materialise(cellId, TaskKind.Fix, FixArm.InvestigateOnly).Ok(), Ct);
+        var started = PhasePlan.Start(phases[0], phases).Ok();
+        (await runs.SavePhasesAsync([started], Ct)).Ok();
+        var (ended, _) = PhasePlan.End(started, phases, LegOutcomeKind.Completed, "investigated");
+        (await runs.SavePhasesAsync([ended], Ct)).Ok();
+
+        var report = (await RunnerFor(results).JudgeRunAsync(runId, suite, Judge("opus", yes: true), Ct)).Ok();
+
+        report.Judged.Should().Be(1);
+        (await runs.PhasesAsync(cellId, Ct)).Single(p => p.Kind == PhaseKind.Judge).State.Should().Be(
+            PhaseState.Done, "the Judge phase waits for exactly this pass, and nothing else ever closes it");
+    }
+
     private JudgeRunner RunnerFor(PostgresResultStore results) =>
-        new(results, NullLogger<JudgeRunner>.Instance);
+        new(results, RunStore(), NullLogger<JudgeRunner>.Instance);
+
+    private PostgresRunStore RunStore() => new(postgres.NewContext(), new TestClock(Noon));
+
+    private async Task<Guid> CellAsync(Guid runId)
+    {
+        await using var db = postgres.NewContext();
+        return db.Cells.Where(c => c.RunId == runId).Select(c => c.Id).Single();
+    }
 
     private static IJudge Judge(string id, bool yes) => new FakeJudge(id, yes);
 

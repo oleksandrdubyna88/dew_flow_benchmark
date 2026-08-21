@@ -52,15 +52,19 @@ public static class DiffFence
                 yield break;
             }
 
-            var close = text.IndexOf("```", bodyStart, StringComparison.Ordinal);
+            // The closing fence must sit at the START of a line. A diff that touches markdown or a
+            // prompt file carries `+```…` lines INSIDE the body — those begin with '+', not with a
+            // backtick, so the line-start rule skips them where a bare IndexOf("```") truncated the
+            // diff mid-hunk and scored a valid solution "does not apply". Found by review.
+            var close = text.IndexOf("\n```", bodyStart, StringComparison.Ordinal);
 
             if (close < 0)
             {
                 yield break;
             }
 
-            yield return text[(bodyStart + 1)..close].Trim();
-            from = close + 3;
+            yield return text[(bodyStart + 1)..(close + 1)].Trim();
+            from = close + 4;
         }
     }
 

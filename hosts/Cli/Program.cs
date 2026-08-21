@@ -58,6 +58,21 @@ public static class Program
     {
         var command = CommandLine.Parse(args);
 
+        try
+        {
+            return Dispatch(command, output, error, stopping);
+        }
+        catch (CommandLineException refused)
+        {
+            // Flags are read lazily deep inside every verb, so an unreadable value surfaces here — once,
+            // as the configuration refusal it is, instead of a silent default under every verb.
+            error.WriteLine($"bench: {refused.Message}");
+            return ExitCodes.Configuration;
+        }
+    }
+
+    private static int Dispatch(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
         return command.Verb switch
         {
             "plan" => PlanCommand.Run(command, output, error),

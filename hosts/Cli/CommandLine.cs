@@ -1,5 +1,10 @@
 namespace Bench.Cli;
 
+/// <summary>A flag whose value cannot be read as what the verb needs. Its message names the flag and
+/// what was typed; <see cref="Program.Run"/> turns it into the configuration exit code — the one
+/// exception-shaped refusal here, because the flags are read lazily deep inside every verb.</summary>
+public sealed class CommandLineException(string message) : Exception(message);
+
 /// <summary>Flag parsing, kept deliberately dull. <c>--name value</c> and <c>--flag</c>; unknown flags
 /// are refused rather than ignored, because an agent that mistypes a budget ceiling must be told, not
 /// quietly given the default.</summary>
@@ -27,17 +32,35 @@ public sealed class CommandLine
     public string Value(string name, string fallback = "") =>
         _values.TryGetValue(name, out var value) ? value : fallback;
 
-    public int Int(string name, int fallback) =>
-        _values.TryGetValue(name, out var value) && int.TryParse(value, out var parsed) ? parsed : fallback;
+    /// <summary>The fallback is only for an ABSENT flag. A present value that does not parse is refused
+    /// by name — <c>--leg-wall-seconds 12O0</c> silently becoming the 600-second default is a mistyped
+    /// budget nobody was told about, and the measurement runs under a ceiling nobody chose.</summary>
+    public int Int(string name, int fallback)
+    {
+        if (!_values.TryGetValue(name, out var value))
+        {
+            return fallback;
+        }
+
+        return int.TryParse(value, out var parsed)
+            ? parsed
+            : throw new CommandLineException($"--{name} expects an integer, got '{value}'");
+    }
 
     /// <summary>Parsed INVARIANT, never with the machine's culture: a threshold typed as <c>0.25</c> must
     /// mean a quarter on a machine whose decimal separator is a comma, or the same command produces two
-    /// different comparisons depending on where it was run.</summary>
-    public double Double(string name, double fallback) =>
-        _values.TryGetValue(name, out var value)
-        && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+    /// different comparisons depending on where it was run. Same refusal rule as <see cref="Int"/>.</summary>
+    public double Double(string name, double fallback)
+    {
+        if (!_values.TryGetValue(name, out var value))
+        {
+            return fallback;
+        }
+
+        return double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
             ? parsed
-            : fallback;
+            : throw new CommandLineException($"--{name} expects a number with a '.' decimal separator, got '{value}'");
+    }
 
     public IReadOnlyList<string> List(string name) =>
         Value(name).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

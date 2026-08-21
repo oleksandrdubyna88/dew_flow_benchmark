@@ -121,7 +121,48 @@ public sealed class WorkspaceTrust(string configPath, string allowedRoot)
         return Apply(keys);
     }
 
+    /// <summary>Two subjects launching at once both read-modify-write the operator's ONE config, and
+    /// the loser's write silently drops the winner's grant — a cross-PROCESS race, because parallel
+    /// bench invocations are how a matrix is run. One machine-wide named mutex serialises the edit;
+    /// in-process locks cannot.</summary>
     private Outcome<TrustResult> Apply(IReadOnlyList<string> keys)
+    {
+        using var gate = new Mutex(initiallyOwned: false, "bench-workspace-trust");
+        var held = false;
+
+        try
+        {
+            held = Acquire(gate);
+
+            return held
+                ? ApplyLocked(keys)
+                : Outcome<TrustResult>.Failure(
+                    "another bench process has held the workspace-trust gate for over a minute — launching untrusted rather than waiting out the wall");
+        }
+        finally
+        {
+            if (held)
+            {
+                gate.ReleaseMutex();
+            }
+        }
+    }
+
+    /// <summary>An abandoned mutex means the previous holder DIED mid-edit — ownership still transfers,
+    /// and the backup-and-replace write below is what makes proceeding safe.</summary>
+    private static bool Acquire(Mutex gate)
+    {
+        try
+        {
+            return gate.WaitOne(TimeSpan.FromMinutes(1));
+        }
+        catch (AbandonedMutexException)
+        {
+            return true;
+        }
+    }
+
+    private Outcome<TrustResult> ApplyLocked(IReadOnlyList<string> keys)
     {
         try
         {

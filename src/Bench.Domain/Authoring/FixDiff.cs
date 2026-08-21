@@ -81,6 +81,21 @@ public sealed record FixDiff(IReadOnlyList<FixDiffFile> Files)
                 return;
             }
 
+            // A 100%-similarity rename has NO ---/+++ headers — only these lines name the file, and
+            // without them a renamed hidden test vanishes from the harvest entirely. Outside hunks
+            // only: a changed body line spelling 'rename from' starts with '+'/'-'/' ', never bare.
+            if (_inFile && !_inHunk && line.StartsWith("rename from ", StringComparison.Ordinal))
+            {
+                _oldPath = RenamePath(line["rename from ".Length..]);
+                return;
+            }
+
+            if (_inFile && !_inHunk && line.StartsWith("rename to ", StringComparison.Ordinal))
+            {
+                _newPath = RenamePath(line["rename to ".Length..]);
+                return;
+            }
+
             // Header order matters: '--- a/…' and '+++ b/…' must be read before the hunk branches
             // below would misread them as a deletion and an insertion.
             if (line.StartsWith("--- ", StringComparison.Ordinal))
@@ -157,11 +172,12 @@ public sealed record FixDiff(IReadOnlyList<FixDiffFile> Files)
             _inHunk = false;
         }
 
-        /// <summary>An a/b header's path: prefix stripped, timestamp dropped, slashes normalised —
-        /// empty for <c>/dev/null</c>, which is how "no such side" is spelt.</summary>
+        /// <summary>An a/b header's path: unquoted if git C-quoted it, prefix stripped, timestamp
+        /// dropped, slashes normalised — empty for <c>/dev/null</c>, which is how "no such side" is
+        /// spelt.</summary>
         private static string HeaderPath(string raw)
         {
-            var token = raw.Split('\t')[0].Trim();
+            var token = raw.StartsWith('"') ? Unquoted(raw) : raw.Split('\t')[0].Trim();
 
             if (token == "/dev/null")
             {
@@ -174,6 +190,52 @@ public sealed record FixDiff(IReadOnlyList<FixDiffFile> Files)
                 : token;
 
             return stripped.Replace('\\', '/').TrimStart('/');
+        }
+
+        /// <summary>A rename header's path — no a/ b/ prefix to strip (git writes these bare, and a
+        /// real directory named 'a' must survive), but the same quoting and normalisation.</summary>
+        private static string RenamePath(string raw)
+        {
+            var token = raw.StartsWith('"') ? Unquoted(raw) : raw.Trim();
+
+            return token.Replace('\\', '/').TrimStart('/');
+        }
+
+        /// <summary>git C-quotes any path with a space, quote or non-ASCII byte; taken verbatim, the
+        /// quotes and escapes become part of the path and no anchor ever matches it. Byte-wise, because
+        /// the octal escapes are UTF-8 BYTES ('é' is \303\251), not characters.</summary>
+        private static string Unquoted(string raw)
+        {
+            List<byte> bytes = [];
+            var i = 1;
+
+            while (i < raw.Length && raw[i] != '"')
+            {
+                i = raw[i] == '\\' ? Escaped(raw, i, bytes) : Plain(raw, i, bytes);
+            }
+
+            return System.Text.Encoding.UTF8.GetString([.. bytes]);
+        }
+
+        private static int Plain(string raw, int index, List<byte> bytes)
+        {
+            bytes.AddRange(System.Text.Encoding.UTF8.GetBytes(raw[index..(index + 1)]));
+            return index + 1;
+        }
+
+        private static int Escaped(string raw, int index, List<byte> bytes)
+        {
+            var next = index + 1 < raw.Length ? raw[index + 1] : '"';
+
+            if (next is >= '0' and <= '7')
+            {
+                var digits = new string([.. raw[(index + 1)..].TakeWhile(c => c is >= '0' and <= '7').Take(3)]);
+                bytes.Add((byte)Convert.ToInt32(digits, 8));
+                return index + 1 + digits.Length;
+            }
+
+            bytes.Add(next switch { 't' => (byte)'\t', 'n' => (byte)'\n', 'r' => (byte)'\r', _ => (byte)next });
+            return index + 2;
         }
 
         private static string OldStart(string hunkHeader)

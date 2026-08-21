@@ -273,7 +273,7 @@ public sealed class PostgresResultStore(BenchDbContext db, TimeProvider clock) :
             .Include(r => r.Cell!)
             .Where(r => r.Cell!.RunId == runId && !r.Metrics.Any(m => m.Name == metricName))
             .OrderBy(r => r.CreatedAt)
-            .Select(r => new JudgeableLeg(r.Id, r.Cell!.QuestionId, r.Cell!.SubjectModelId, r.Prompt, r.Answer))
+            .Select(r => new JudgeableLeg(r.Id, r.CellId, r.Cell!.QuestionId, r.Cell!.SubjectModelId, r.Prompt, r.Answer))
             .ToListAsync(cancellationToken);
 
         return rows;

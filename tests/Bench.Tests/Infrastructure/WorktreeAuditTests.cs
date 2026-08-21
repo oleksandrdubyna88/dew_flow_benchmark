@@ -36,10 +36,26 @@ public sealed class WorktreeAuditTests : IDisposable
 
         await WorktreeAudit.DenyWritesAsync(_repo.Root, Ct);
 
-        File.ReadAllText(Path.Combine(_repo.Root, ".claude", "settings.json"))
+        File.ReadAllText(Path.Combine(_repo.Root, ".claude", "settings.local.json"))
             .Should().Contain("\"deny\"").And.Contain("\"Write\"");
         (await WorktreeAudit.ChangesAsync(_repo.Root, Timeout, Ct)).Ok().Should().BeEmpty(
             "flagging our own settings file would make every audited leg read dirty");
+    }
+
+    [Fact]
+    public async Task A_write_elsewhere_under_dot_claude_IS_flagged()
+    {
+        // The target repositories COMMIT a .claude tree; a subject editing the rules that govern what a
+        // session may do is exactly the write this audit exists to catch, and a whole-folder exclusion
+        // was blind to it.
+        await _repo.InitAsync((".claude/rules/shared/testing.md", "# rule\n"), ("seed", "2026-05-01T12:00:00"));
+        await WorktreeAudit.DenyWritesAsync(_repo.Root, Ct);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_repo.Root, ".claude", "rules", "shared", "testing.md"), "# weakened\n", Ct);
+
+        (await WorktreeAudit.ChangesAsync(_repo.Root, Timeout, Ct)).Ok()
+            .Should().Contain("testing.md");
     }
 
     public void Dispose() => _repo.Dispose();

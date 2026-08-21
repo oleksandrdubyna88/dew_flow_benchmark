@@ -83,7 +83,7 @@ public sealed class CliSubjectRuntime(CliSubjectOptions options, ILogger<CliSubj
         }
         finally
         {
-            await ScratchWorktree.RemoveAsync(options.RepositoryDir, worktree, wall);
+            await ScratchWorktree.RemoveAsync(options.RepositoryDir, worktree);
         }
     }
 
