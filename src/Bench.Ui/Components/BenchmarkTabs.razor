@@ -1,27 +1,21 @@
-@* The section's tabs: the population first, then the comparison drawn from it, then the KINDS of test
-   that are declared but not built.
+@* The section's tabs: the KINDS of test this harness runs, not views of one of them.
 
-   Runs is every run this store holds — reading, fix and tool-lane alike — and Arms is the comparison
-   over whatever axis those runs varied: a compute backend, a tool lane, a retrieval variant, a fix arm.
-   The tab used to be named "Sidecar" after the first axis anyone compared, and the label outlived the
-   truth: measured on a real reader 2026-08-21, the operator asked why an investigate run showed under a
-   hardware tab. The old routes survive on the pages as bookmark aliases.
+   Runs and arms live INSIDE a kind, because they mean different things in each: an arm is a compute
+   backend for the sidecar question and a tool lane for the MCP one, and one flat list of runs across all
+   three would be a list nobody can read a comparison out of.
 
-   RAG and MCP stay declared before they are built, deliberately: the structure is the claim about what
-   this section is for, and a tab that appears later reads as a feature nobody planned. Each says what
-   will live there rather than rendering an empty page. *@
+   RAG and MCP are declared here before they are built, deliberately: the structure is the claim about what
+   this section is for, and a tab that appears later reads as a feature nobody planned. Each says what will
+   live there rather than rendering an empty page. *@
 
 <ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="/benchmarking" Match="NavLinkMatch.All">Runs</NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="/benchmarking/arms">Arms</NavLink>
-    </li>
     <li class="nav-item">
         <NavLink class="nav-link" href="/benchmarking/rag" Match="NavLinkMatch.All">RAG</NavLink>
     </li>
     <li class="nav-item">
         <NavLink class="nav-link" href="/benchmarking/mcp" Match="NavLinkMatch.All">MCP</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="/benchmarking/sidecar">Sidecar</NavLink>
     </li>
 </ul>

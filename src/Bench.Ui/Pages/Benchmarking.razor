@@ -1,14 +1,15 @@
 @page "/benchmarking"
 @page "/benchmarking/sidecar"
 
-<PageTitle>Benchmarking · Runs</PageTitle>
+<PageTitle>Benchmarking · Sidecar</PageTitle>
 
 <h1 class="h3 mb-3">Benchmarking</h1>
 <BenchmarkTabs />
 
-@* The population IS the landing: every run this store holds, whatever its kind — the tabs above route
-   to the comparison and to the declared-but-unbuilt kinds. *@
-<div class="d-flex align-items-center justify-content-end">
+@* The section lands HERE rather than on the first tab: RAG and MCP are declared and unbuilt, and a landing
+   page that says "not built yet" tells a first-time reader the console is empty when it is not. *@
+<div class="d-flex align-items-center justify-content-between">
+    <SidecarViews />
     <button type="button" class="btn btn-sm btn-outline-secondary mb-3" disabled="@Loading" @onclick="ReloadAsync">
         @(Loading ? "Reading…" : "Refresh")
     </button>
