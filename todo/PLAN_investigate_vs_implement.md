@@ -244,7 +244,19 @@ aspnetcore will cost more and nobody has measured how much, so the pilot comes f
     paired delta, exactly as designed. Its real spend is UNRECORDED (the process was killed before an
     envelope existed) — the Captured discipline's honest gap, and the pilot's actionable finding:
     **the series wants a 900–1200 s wall for Sonnet-class subjects.**
-  - The audit flagged no worktree writes on any CLI leg.
+  - **Sonnet 4.6 retried at a 1200 s wall, 2026-08-21** (run `investigate-sonnet-1200`,
+    `01a0250d-5647-79f7-83a1-ae6cf2b9397d`): both legs completed INSIDE the wall — 257 s and
+    **915 s** of thinking, so 900 s would still have capped one of two; 1200 is the right floor.
+    Cost by the CLI's own envelope: $0.73 and $2.11 (~$1.42/leg — roughly 6× Haiku). Recall 2/7
+    then **6/7**, precision 1.0 on both. The Gemma diagnosis judge: leg 1 **NO** (proposed a
+    push-model batch cap where the reference fix PULLS the sidecar's optimal size — found the
+    place, missed the mechanism's direction), leg 2 **YES** — the first yes of the whole pilot,
+    naming shape pinning and the ruler row spilling a second near-empty batch unprompted. Two
+    findings ride on that pair: the instrument separates its three rungs live (floor invents paths
+    → Haiku finds places → Sonnet, once, understands the cause), and **repeat-to-repeat spread at
+    this tier is large** (2/7 → 6/7 on an identical prompt) — the series' repeats are not a
+    formality.
+  - The audit flagged no worktree writes on any CLI leg, across both pilots.
 - **First series**: 8 harvested tasks × the same 7 arms × 2 repeats = 112 investigate-only legs,
   unattended-safe. Budget projected from the pilot, confirmed before any cell exists
   (`BudgetConfirmation`).
