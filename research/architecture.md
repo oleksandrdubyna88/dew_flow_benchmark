@@ -883,8 +883,14 @@ Stated because a description that quietly implies more than is built is the same
   refused at PLAN time by name — the sandbox executor does not exist and the code lane is
   attended-only (`PLAN_code_lane.md` §4.2), so a cell the runner could only block cannot be created.
   Code tasks land through `bench questions harvest` (a merged fix: derived base/seed/anchors, the two
-  gates, `CodeTaskJson`); their reference answers are empty until authored, so `bench judge` reports
-  them *not judgeable* — the diagnosis judge prompt is that plan's step 7.
+  gates, `CodeTaskJson`); the landed reference answer is the reference FIX itself, and that is what the
+  diagnosis judge frames its verdict around (`JudgeFraming.Diagnosis`, chosen by the run's stored kind —
+  this bullet used to say harvested tasks were *not judgeable*, and stopped being true when the harvest
+  began landing the fix as the reference). The console declares the CODE kind its own tab —
+  `/benchmarking/code`, the fix runs alone. The Sidecar tab remains the sidecar question's: its stopgap
+  flat list briefly rendered fix runs under a hardware comparison, caught by the operator 2026-08-21;
+  task detail on the code tab (statement, phases, diff, signals) is `PLAN_code_lane.md` §7 step 8's
+  open tail.
 - **The tool loop EXISTS and nothing reaches it.** `ToolLoopRunner` turns, the doctrine reaches the system
   prompt, a spent turn ceiling settles as a cap, and a tool expectation scores (*The lane catalog, and the
   loop*, above) — but `LegPlan.Lanes` is populated by **nobody**, so every cell resolves to the floor and

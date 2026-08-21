@@ -1,9 +1,15 @@
 # PLAN — the code lane: tasks a model must SOLVE, and how a solution is scored
 
-> Status: **plan only, nothing implemented yet, 2026-08-16.** Scope: `Bench.Domain` (task kinds,
-> scoring), `Bench.Application` (phases, the authoring pass, the delivered-work protocol),
-> `Bench.Infrastructure` (the sandbox executor, diff metrics), `Bench.Api` + `Bench.Ui` (the code
-> group's pages), `hosts/Cli`.
+> Status: **partially implemented, 2026-08-21, via
+> [PLAN_investigate_vs_implement.md](PLAN_investigate_vs_implement.md):** phases run for the
+> investigate arm; `bench questions harvest` lands code tasks (a second authoring door this plan did
+> not draft); mechanical signals 0–2 ship as the attended `bench solve`; and the console's **Code tab**
+> landed — §7 step 8's first page, the fix-run population, with task detail still open. **Still open
+> here: the sandbox executor and its three isolation assertions (§4.2), the diff-producing arms, the
+> authoring pass with its three gates, signals 3–4, and the delivered-work score.** Scope:
+> `Bench.Domain` (task kinds, scoring), `Bench.Application` (phases, the authoring pass, the
+> delivered-work protocol), `Bench.Infrastructure` (the sandbox executor, diff metrics), `Bench.Api` +
+> `Bench.Ui` (the code group's pages), `hosts/Cli`.
 >
 > Sits beside [PLAN_variant_matrix.md](PLAN_variant_matrix.md) — the matrix supplies the axes
 > (variant × subject × lane × repeat) and the console; this plan supplies **group 6** of the question
