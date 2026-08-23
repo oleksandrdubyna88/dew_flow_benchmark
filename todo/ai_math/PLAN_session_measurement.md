@@ -13,7 +13,7 @@
 > Scope as built: `Bench.Domain/Sessions` (the pure classifier and detectors), `Bench.Application/Sessions`
 > (ports, codec, ingest), `Bench.Infrastructure/Persistence` (two tables, one migration),
 > `Bench.Api/SessionApi.cs`, `Bench.Ui` (the Math tab), `hosts/Collector`, `hosts/Hook`,
-> `hosts/Cli/Sessions*.cs`, `tools/vscode-bench-sessions`.
+> `hosts/Cli/Sessions*.cs`. The editor half is NOT in this repository — see §10.6.
 
 ## 0. What the step-0 spikes measured
 
@@ -281,7 +281,7 @@ Built 2026-08-23. The Claude Code path runs end to end: hooks → collector → 
 | The collector | `hosts/Collector` — `bench-collector`, loopback-only on 5177, an AppHost resource |
 | The hook client | `hosts/Hook` — `bench-hook` |
 | The terminal verbs | `bench sessions install \| list \| show \| ingest` |
-| The editor | `tools/vscode-bench-sessions` |
+| The editor | `dew_flow_rag_qln · tools/vscode-extension` — the family's existing extension, v0.18.0 |
 
 ### Deviations worth recording
 
@@ -301,6 +301,14 @@ Built 2026-08-23. The Claude Code path runs end to end: hooks → collector → 
 5. **The plan's `src/Bench.Sessions` leaf module was not created.** The work divides cleanly along the
    layering that already exists, and a module cutting across it would have had to reference three layers
    to say anything.
+6. **The editor half is not in this repository, and a second extension was written here first and then
+   deleted.** §6 below says "a VS Code extension" without asking whether one already existed. One did:
+   `dew_flow_rag_qln · tools/vscode-extension` owns the `dewflow` activity-bar container and the
+   `dewflow.*` command namespace, and already renders the cross-repo plan tree a session links itself to.
+   Two panels for one workflow is exactly the duplication `reuse-first` exists to prevent, and the miss
+   was mine: the rule says search before writing, and I searched the repository I was in rather than the
+   family. The sessions branch, the start commands and the task status bar now live there (v0.18.0), and
+   this repository keeps only what records and stores.
 
 ### The instrument found three defects in itself, on its first two real runs
 

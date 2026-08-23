@@ -79,7 +79,14 @@ dotnet build dew_flow_benchmark.slnx -c Release
 | `hosts/Api` | `bench-api` — the READ surface. It serves reports and starts nothing: `bench run` stays the one verb that reaches a model |
 | `hosts/Collector` | `bench-collector` — the WRITE door for agent-session traces, loopback-only on 5177. Separate from `bench-api` because that host is read-only by an explicit decision, and because this one must be up whenever the OPERATOR is working rather than whenever somebody reads a report |
 | `hosts/Hook` | `bench-hook` — runs once per agent tool call, inside the agent's own loop. Every decision in it is about start-up cost and about never being the reason a tool call fails; it exits **zero** whatever happened |
-| `tools/vscode-bench-sessions` | A VS Code extension that opens SCOPED task sessions and links each to a plan by hand. Plain JavaScript, no build step |
+
+> **The editor half is NOT here.** Starting a scoped task session and watching it live belong to the
+> family's existing extension — `dew_flow_rag_qln · tools/vscode-extension`, which already owns the
+> `dewflow` activity-bar container and renders the cross-repo plan tree a session links itself to. A second
+> extension was written here first and deleted: two panels for one workflow is the duplication
+> [reuse-first](.claude/rules/shared/common/reuse-first.md) exists to prevent, and the plan browser it
+> would have needed already existed there.
+
 | `tests/Bench.Tests` | xUnit v3 on Microsoft Testing Platform, including the architecture guard |
 
 The layering is guarded by `ArchitectureTests` from the first commit, deliberately: the system this
