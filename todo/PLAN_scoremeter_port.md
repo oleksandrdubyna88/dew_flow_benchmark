@@ -4,7 +4,7 @@
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
-> `CoverageDecision` and `Inherited`. 97 module tests, suite 1400 green. Everything left needs a model
+> `CoverageDecision`, `WeightingProtocol` and `Inherited`. 107 module tests, suite 1410 green. Everything left needs a model
 > runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
 > since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
 >
@@ -275,8 +275,16 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
 3. **Prompts + gate + stage** — **the GATE landed 2026-08-23** (`CoverageDecision`: the bands, the
    quantisation tolerance, the boundary epsilon, the two size floors, the six statuses and the cap-reason
    judgement, all pure, 24 tests). Still open and all needing a runtime: the zero-band weigher's prompt
-   texts, strict parsing (an unreadable reply is a refusal, never a guess), the one re-ask the gate asks
-   for, `stage_payloads` persistence, and the protocol string.
+   texts beyond the scale, strict parsing (an unreadable reply is a refusal, never a guess), the one
+   re-ask the gate asks for, and `stage_payloads` persistence.
+   **The SCALE and the protocol string landed with the gate** (`WeightingProtocol`): the zero band, the
+   rule that keeps zero from eating the bottom of the scale, the ten inherited anchor lines carried
+   character-for-character, and `delivered-work-v1 (anchors inherited: …)` as §4.3 specified.
+   **Deviation:** the nineteen few-shot examples are NOT carried. They quote another repository's code
+   and name its pull requests, so against a .NET target they would teach the shape of a Symfony diff
+   rather than the meaning of a band — and the source's own admission rule is that examples enter only
+   where history agrees, which this project has not accumulated. What was measured stable is the WORDING
+   of the ten lines (models quote the matching line back), not the examples beside them.
    **Deviation:** the gate's numerator is NOT inherited. The source divided Σ grain by cleaned LOC, and
    grain is explicitly not ported (*"Σ grain still cannot tell padding from work"*), so the port takes a
    neutral `accounted` figure and leaves how the stage computes it as an open decision belonging with the
