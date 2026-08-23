@@ -1,9 +1,30 @@
 # PLAN — the machine a number came off, recorded so the number stays readable
 
-> Status: **OPEN — steps 1 to 5 shipped 2026-08-19/20 and proven on a live run; what is left is named below.**
-> A run records the machine it measured on, each leg records what that machine was doing while it ran, and
-> the report carries both — verified end to end against the real database on 2026-08-20. Three things remain,
-> and none is a gap in this plan's own steps:
+> Status: **IMPLEMENTED, 2026-08-23.** All five steps shipped (1–3 on 2026-08-19/20, 4–5 with them, the
+> fingerprint comparison on 2026-08-23): a run records the machine it measured on, each leg records what that
+> machine was doing while it ran, the report carries both, and a comparison that folds runs from more than one
+> machine now says so. Verified end to end against the real database on 2026-08-20 and re-verified by suite on
+> 2026-08-23.
+>
+> **The fingerprint comparison — the item this plan called blocked, and was not.** The status line above used
+> to read *"needs cross-run comparison, which `bench report` deliberately does not do"*. That was true when it
+> was written and false within hours: `ArmComparison` — cross-run by construction — shipped the same day
+> ([PLAN_bench_console.md](PLAN_bench_console.md) step 6), and nobody re-read this plan against it. The
+> comparison folded runs into one average per arm while reading no machine at all, which is exactly the silent
+> merge §3.5 exists to prevent, one level up from where it was being guarded. The test double left behind said
+> so in as many words — *"a comparison does not read machines yet — see the plan's open tail"*. Closed
+> 2026-08-23: `MachineAgreement` (`src/Bench.Domain/Trace/MachineAgreement.cs`) folds a population of
+> `MachineFacts` into four states, `IRunStore.MachinesAsync` reads them for a whole comparison in one query,
+> and both the scope and each individual arm carry their own reading into the contract and onto the console.
+>
+> **Four states rather than §3.5's three, and the fourth is the one a real database produces.** *Same machine ·
+> different machine · not recorded* leaves nowhere to put a comparison where SOME runs were probed and some
+> predate the probe — the ordinary state here. Folding it into *same machine* would let one probed run vouch
+> for a population nobody read, so `PartlyRecorded` is its own state. `SeveralMachines` is reported and never
+> refused, exactly as §3.5 required: a benchmark unable to span a hardware change would be useless.
+>
+> Two things remain, and neither is a gap in this plan's own steps — both are owned elsewhere and named here
+> so they are not re-derived:
 >
 > - **VRAM is unreachable on Linux/WSL** (PDH is Windows-only and the ROCm path is unverified), and on
 >   Windows a read costs about a second, so a leg shorter than the slow cadence catches none. Per-leg VRAM is
@@ -11,10 +32,8 @@
 >   fixes that. A cheaper source is DXGI through P/Invoke, or asking the engine, which answers a different
 >   question.
 > - **`VramAttribution.Attributed` is unreachable** until the accelerator lease exists
->   ([PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4b). Every figure is `Observed`, which is correct
->   rather than pending: nothing can currently prove a leg held the card alone.
-> - **The fingerprint COMPARISON needs cross-run comparison**, which `bench report` deliberately does not do
->   (`PLAN_run_report.md` §3.9). §5's DoD line promised it and was corrected rather than quietly dropped.
+>   ([PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §3.4b). Every figure is `Observed`, which is
+>   correct rather than pending: nothing can currently prove a leg held the card alone.
 >
 > Originally: Scope: `Bench.Domain/Trace` (the sample shapes and
 > the machine fingerprint), `Bench.Application` (the sampler port, already declared, and a run-start probe),
@@ -22,8 +41,8 @@
 > `hosts/Cli`, one migration. Founding-plan step 7 (`PLAN_rag_bench_repo.md` §5.1), raised by the operator
 > 2026-08-19.
 >
-> Related: [PLAN_compute_backend_axis.md](PLAN_compute_backend_axis.md) (the arm this describes the inside
-> of), [../research/architecture.md](../research/architecture.md) (*Guards that shape the API* — the
+> Related: [PLAN_compute_backend_axis.md](../todo/PLAN_compute_backend_axis.md) (the arm this describes the inside
+> of), [architecture.md](architecture.md) (*Guards that shape the API* — the
 > captured-or-zero rule this plan is an application of).
 
 ---
@@ -45,7 +64,7 @@ That is not a cosmetic gap on this hardware, and three incidents already in this
   a 32 GB card. A leg's latency is a function of what else was resident, and a bare "VRAM used" cannot tell
   *we used 20 GB* from *somebody else held 20 GB and we got the rest*.
 - **A disk that filled.** 24.38 GB of Qdrant of which 22 GB was leaked corpora — reported as "no space"
-  during an unrelated run ([PLAN_corpus_litter.md](PLAN_corpus_litter.md)).
+  during an unrelated run ([PLAN_corpus_litter.md](../todo/PLAN_corpus_litter.md)).
 
 ## 2. What already exists, verified — most of the reading is written
 
@@ -53,7 +72,7 @@ That is not a cosmetic gap on this hardware, and three incidents already in this
 |---|---|---|
 | Adapter name, true VRAM size, **health code** | `dew_flow_rag_qln · src/Rag.Infrastructure/Gpu/GpuProbe.cs` | WMI `Win32_VideoController` plus the display-class registry key, because WMI's `AdapterRAM` is a uint32 and saturates at 4 GiB — a 32 GB card and a 4 GB integrated one both report "4 GB". Linux asks `nvidia-smi`. **No driver version yet.** |
 | Resident models and their VRAM, per sidecar and per Ollama | `RuntimeInspector` → `RuntimeStatusVm` | This is the "who else is holding the card" read, already built |
-| The arm — route/provider/device | `ComputeArm`, `/index-state` | [PLAN_compute_backend_axis.md](PLAN_compute_backend_axis.md); this plan describes what is INSIDE that arm |
+| The arm — route/provider/device | `ComputeArm`, `/index-state` | [PLAN_compute_backend_axis.md](../todo/PLAN_compute_backend_axis.md); this plan describes what is INSIDE that arm |
 | VRAM attribution as a DECISION | `dew_flow_sidecar_rust · src/vram.rs` | A figure is published only when the build was alone. Not a subtraction — the same rule this plan must follow |
 | Captured-or-zero | `Captured` / `CapturedCount`, `src/Bench.Domain/Trace/LegTrace.cs:9` | "Not sampled" and "sampled zero" are different states, and `HardwareSample`'s bare doubles do not carry that |
 
@@ -139,7 +158,7 @@ The sidecar already learned this and wrote it down: *"the obvious answer — sam
 the delta — rests on nothing"*, so it publishes a VRAM figure only when the build was alone. The benchmark
 inherits the rule. A leg's VRAM reading is **attributed** when this process was the only claimant of the
 accelerator for the whole leg — which is knowable, because the accelerator lease
-([PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4b) is what serialises them — and **observed only**
+([PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §3.4b) is what serialises them — and **observed only**
 otherwise. Two states, stored separately, never averaged together.
 
 ### 3.5 The static facts are a FINGERPRINT, and a report says when it differs
@@ -161,7 +180,7 @@ failure never fails a leg — it makes the reading *not captured*, which is a st
 
 ### 3.7 What this plan deliberately does not do
 
-- **No accelerator lease.** It is [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.4b's, and §3.4 above
+- **No accelerator lease.** It is [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §3.4b's, and §3.4 above
   depends on it rather than duplicating it.
 - **No per-leg power draw in watts.** Available from both vendors, and no question here needs it yet.
 - **No throttling remedy.** Recording that a leg throttled is the deliverable; deciding what to do about it
@@ -185,8 +204,15 @@ failure never fails a leg — it makes the reading *not captured*, which is a st
    Wired into `bench run` in the same slice, because a table nothing writes is the "built and never called"
    pattern this repository has met three times. **Deviation:** the leg summary columns are NOT here; they
    have no writer until step 4, and shipping columns nothing fills is that same defect.
-4. **The background sampler** — cadence, drain-into-leg, failure-is-not-captured.
-5. **The report** — the fingerprint comparison of §3.5, and the dynamic summaries beside the metric.
+4. ~~**The background sampler**~~ **IMPLEMENTED 2026-08-20.** `HardwareSampler` — two clocks in one loop,
+   drain-into-leg by window, and every tick wrapped so a reader that throws stops contributing rather than
+   failing the leg. **Deviation:** the cadence SPLIT rather than being one number, because §7.3's measurement
+   refuted the plan's own 2-second default — see that question.
+5. ~~**The report**~~ **IMPLEMENTED 2026-08-20 (dynamic summaries) and 2026-08-23 (the fingerprint
+   comparison).** The machine and the load reach `RunReportDto`; the comparison of §3.5 landed on the ARM
+   comparison rather than on `bench report`, which is the deviation the status line explains — a single-run
+   report has only one machine to name, so a *difference* between machines can only exist where runs are
+   folded, and that use case did not exist when this step was written.
 
 Steps 1–3 are useful alone: a run that records its machine and samples nothing is already better than today.
 
@@ -204,12 +230,13 @@ Steps 1–3 are useful alone: a run that records its machine and samples nothing
 
 ## 6. Definition of Done
 
-- [ ] Build 0 warnings; the suite green; every row of §5 has a named test.
-- [ ] A run records its machine once, and a leg records what the card looked like while it ran.
-- [ ] No dynamic field can express "unknown" as a zero.
-- [ ] A VRAM figure taken while something else held the card is stored as *observed*, never as *attributed*.
-- [ ] `bench report` names a fingerprint difference between the runs it compares.
-- [ ] Nothing here can fail a leg.
+- [x] Build 0 warnings; the suite green; every row of §5 has a named test.
+- [x] A run records its machine once, and a leg records what the card looked like while it ran.
+- [x] No dynamic field can express "unknown" as a zero.
+- [x] A VRAM figure taken while something else held the card is stored as *observed*, never as *attributed*.
+- [x] A fingerprint difference between the runs a comparison folds is NAMED — on the arm comparison rather
+      than on `bench report`, per the deviation in the status line, and per arm as well as per scope.
+- [x] Nothing here can fail a leg.
 
 ## 7. Open questions
 

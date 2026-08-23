@@ -1,22 +1,33 @@
 # PLAN — the benchmark console, mounted as DewFlow's *Benchmarking* section
 
-> Status: **steps 1-7 implemented 2026-08-20; one item open.** The console exists, is wired into the DewFlow
-> daemon as its **Benchmarking** section, and has been RENDERED LIVE against the real database — three compute
-> arms in one comparison scope, with their retrieval cost, wall time, hits/files and peak VRAM. Step 6 (added
-> at the operator's correction) made the tabs the three KINDS of test — RAG, MCP, Sidecar — with Runs and Arms
-> as views INSIDE a kind, and built the cross-run comparison the sidecar question needs; step 7 added the cost
-> columns, a metric list asked of the data, and the engine identity that `EngineKind.ToString()` was hiding.
+> Status: **IMPLEMENTED, 2026-08-20.** Every step and every line of this plan's Definition of Done shipped: the
+> console exists, is wired into the DewFlow daemon as its **Benchmarking** section, and has been RENDERED LIVE
+> against the real database — three compute arms in one comparison scope, with their retrieval cost, wall time,
+> hits/files and peak VRAM. Step 6 (added at the operator's correction) made the tabs the three KINDS of test —
+> RAG, MCP, Sidecar — with Runs and Arms as views INSIDE a kind, and built the cross-run comparison the sidecar
+> question needs; step 7 added the cost columns, a metric list asked of the data, and the engine identity that
+> `EngineKind.ToString()` was hiding.
 >
-> **Open, and only this:** the `ProjectReference` from `dew_flow_rag_qln` is a SIBLING PATH, not the submodule
-> it should end at — pinning a commit needs this repository pushed to its remote, which the session that built
-> it may not do. Until then the console builds where the two repositories sit side by side and fails loudly
-> anywhere else.
+> **Deviation, and it is the only one: §5's submodule shipped three days late.** For 2026-08-20 to 08-23
+> `dew_flow_rag_qln` reached this repository through `../../../dew_flow_benchmark/...` in four
+> `ProjectReference` lines rather than through `external/dew_flow_benchmark`, because pinning a commit
+> requires this repository's commits to exist on its remote and no session had been the one to push them.
+> It built where the two repositories sat side by side and failed loudly anywhere else, which was the
+> deliberate half of the trade. Closed 2026-08-23 — this repository pushed (`3f91817`), qln pinned it
+> (`4f1a253`) — and recorded as its own document rather than as a footnote here:
+> [PLAN_bench_submodule_pin.md](PLAN_bench_submodule_pin.md).
+>
+> **What this plan did NOT foresee, recorded because it cost a real defect.** Step 6's cross-run comparison
+> made a machine-fingerprint comparison possible for the first time — and
+> [PLAN_hardware_sampler.md](PLAN_hardware_sampler.md), written the day before, was still calling that item
+> blocked *on the absence of cross-run comparison*. So the arms table folded runs across machines in silence
+> for three days. Fixed 2026-08-23; the account is in that plan's status line.
 >
 > Scope: `src/Bench.Ui`, a route-prefix change in `src/Bench.Api`, the cross-run use case in
 > `src/Bench.Application`, and the mount in `dew_flow_rag_qln`.
 >
-> Related docs: [PLAN_run_report.md](../research/PLAN_run_report.md),
-> [PLAN_variant_matrix.md](PLAN_variant_matrix.md).
+> Related docs: [PLAN_run_report.md](PLAN_run_report.md),
+> [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md).
 
 ## The goal, and the thing it is NOT
 
@@ -30,7 +41,7 @@ beside Companies, Search, Settings, Runtime, Infrastructure, MCP.
 declare a winner between sidecars. The compute arm is recorded on the RUN
 (`EngineRef.Backend`, `src/Bench.Domain/Runs/Axes.cs:116`), so comparing two arms means comparing two
 RUNS — and cross-run comparison was deliberately excluded from the report
-([PLAN_run_report.md](../research/PLAN_run_report.md) §3.9), because two runs are only comparable inside a
+([PLAN_run_report.md](PLAN_run_report.md) §3.9), because two runs are only comparable inside a
 `ComparisonScope` that nothing yet establishes. Two runs on different machines, suites or index
 fingerprints produce a difference that says nothing about sidecars.
 
@@ -123,13 +134,13 @@ reader for it and nothing more: nothing in `Bench.Api` starts a run, and that bo
 
 ## Definition of Done
 
-- [ ] `/api/bench` is the prefix, and nothing referenced the old one.
-- [ ] `RunSummaryDto.ComputeArm` is populated, with an undeclared backend arriving as its own state.
-- [ ] `Bench.Ui` compiles against `Bench.Contracts` only, and references no infrastructure.
-- [ ] `ArmGrouping` is pure and covered, including the undeclared-backend group.
-- [ ] DewFlow's left menu shows **Benchmarking**, and both pages render live against a real run.
-- [ ] The console shows the arms side by side and **refuses to rank them**, naming the reason on screen.
-- [ ] The whole suite passes, run as the executable, never `dotnet test`.
+- [x] `/api/bench` is the prefix, and nothing referenced the old one.
+- [x] `RunSummaryDto.ComputeArm` is populated, with an undeclared backend arriving as its own state.
+- [x] `Bench.Ui` compiles against `Bench.Contracts` only, and references no infrastructure.
+- [x] `ArmGrouping` is pure and covered, including the undeclared-backend group.
+- [x] DewFlow's left menu shows **Benchmarking**, and both pages render live against a real run.
+- [x] The console shows the arms side by side and **refuses to rank them**, naming the reason on screen.
+- [x] The whole suite passes, run as the executable, never `dotnet test`.
 
 ---
 

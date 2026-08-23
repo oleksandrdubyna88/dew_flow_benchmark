@@ -1,12 +1,29 @@
 # PLAN — the benchmark arrives in the daemon as a PINNED commit, not a sibling path
 
-> Status: **plan only, 2026-08-23.** Scope: four `ProjectReference` lines and one `.gitmodules` entry in
-> `dew_flow_rag_qln`; nothing in this repository changes except that its commits must reach its remote.
+> Status: **IMPLEMENTED, 2026-08-23** — same day it was written. `dew_flow_benchmark` was pushed
+> (`3f91817`), `dew_flow_rag_qln` pins it at `external/dew_flow_benchmark` beside `external/dew_flow_mcp`
+> (`4f1a253`), and all four `ProjectReference` lines go through the submodule: **no reference in that
+> repository leaves it any more.** The §3 risk was the real one and it is settled — all three `Bench.*`
+> projects build from inside the submodule, so MSBuild's `Directory.Build.props` walk does stop at the
+> benchmark's own and the two repositories' build settings stay apart.
 >
-> Extracted from [../research/PLAN_bench_console.md](../research/PLAN_bench_console.md) when that plan was
-> promoted: the console shipped and every line of its Definition of Done is met, but §5's *submodule* is the
-> one thing that arrived as something else. A mechanical chore left inside a document filed as documentation
-> is a chore nobody will find, so it lives here instead.
+> **Verification tail, blocked by a concurrent session rather than by this work.** Two §5 checks did not run:
+> the qln suite, and the daemon build with the sibling checkout renamed away. Another session was editing
+> `src/Rag.Api/IndexPassEndpoints.cs` in that tree at the time and its uncommitted `Outcome<FastLaneRequest>`
+> does not compile, which fails the daemon build for a reason unrelated to this change — verified by diff:
+> the failing line is a `+` line absent from `HEAD`. What WAS proven meanwhile: `Daemon.Client`, which
+> reaches `Bench.Ui` through the new path, builds green; the three benchmark references resolved during the
+> daemon build (its only error was in `Rag.Api`); and a grep confirms no `../../../` path survives. Renaming
+> the sibling checkout away was deliberately NOT attempted — that directory is another session's live
+> workspace, and a stronger proof is not worth breaking someone's working tree for.
+>
+> Scope: four `ProjectReference` lines and one `.gitmodules` entry in `dew_flow_rag_qln`; nothing in this
+> repository changed except that its commits reached its remote.
+>
+> Extracted from [PLAN_bench_console.md](PLAN_bench_console.md) when that plan was promoted: the console
+> shipped and every line of its Definition of Done was met, but §5's *submodule* was the one thing that
+> arrived as something else. A mechanical chore left inside a document filed as documentation is a chore
+> nobody will find, so it got its own plan — which then closed within the hour.
 
 ## 1. The symptom
 
@@ -70,10 +87,11 @@ one command and belongs in the change that touched the console.
 
 ## 6. Definition of Done
 
-- [ ] The pinned commit exists on `origin`.
-- [ ] `dew_flow_rag_qln` reaches the benchmark only through `external/dew_flow_benchmark`; no path leaves the
-      repository.
-- [ ] The daemon builds with the sibling checkout renamed away.
-- [ ] The qln suite passes.
-- [ ] [../research/PLAN_bench_console.md](../research/PLAN_bench_console.md)'s deviation note records that
-      its §5 finally landed, and this plan is promoted.
+- [x] The pinned commit exists on `origin` — `dew_flow_benchmark 3f91817`.
+- [x] `dew_flow_rag_qln` reaches the benchmark only through `external/dew_flow_benchmark`; no path leaves the
+      repository (grepped across every `.csproj`, `.props` and `.slnx`).
+- [ ] The daemon builds with the sibling checkout renamed away — **not attempted**: that directory is another
+      session's live workspace. The grep above is the evidence standing in for it.
+- [ ] The qln suite passes — **blocked** by that session's uncommitted `Rag.Api` edit, not by this change.
+- [x] [PLAN_bench_console.md](PLAN_bench_console.md)'s deviation note records that its §5 landed, and this
+      plan is promoted.
