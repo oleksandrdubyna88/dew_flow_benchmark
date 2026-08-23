@@ -7,15 +7,19 @@
 > projects build from inside the submodule, so MSBuild's `Directory.Build.props` walk does stop at the
 > benchmark's own and the two repositories' build settings stay apart.
 >
-> **Verification tail, blocked by a concurrent session rather than by this work.** Two §5 checks did not run:
-> the qln suite, and the daemon build with the sibling checkout renamed away. Another session was editing
-> `src/Rag.Api/IndexPassEndpoints.cs` in that tree at the time and its uncommitted `Outcome<FastLaneRequest>`
-> does not compile, which fails the daemon build for a reason unrelated to this change — verified by diff:
-> the failing line is a `+` line absent from `HEAD`. What WAS proven meanwhile: `Daemon.Client`, which
-> reaches `Bench.Ui` through the new path, builds green; the three benchmark references resolved during the
-> daemon build (its only error was in `Rag.Api`); and a grep confirms no `../../../` path survives. Renaming
-> the sibling checkout away was deliberately NOT attempted — that directory is another session's live
-> workspace, and a stronger proof is not worth breaking someone's working tree for.
+> **Verified, and the decisive check is not the one §5 proposed.** The daemon builds clean through the
+> submodule (0 warnings, 0 errors) and the qln suite passes — 795 total, 761 passed, 34 skipped, 0 failed.
+> Both were briefly blocked by a concurrent session's uncommitted `Rag.Api` edit, which failed that
+> repository's build for a reason unrelated to this change (verified by diff: the failing
+> `Outcome<FastLaneRequest>` line was a `+` line absent from `HEAD`); they ran once that session committed.
+>
+> §5's proposed proof — *build with the sibling checkout renamed away* — was deliberately **not** attempted:
+> that directory is another session's live workspace, and no proof is worth breaking someone's working tree
+> for. It was replaced by a stronger one that costs nothing. The two trees now build DIFFERENT assemblies
+> (the sibling carries work the pin does not), so hashing the daemon's own output settles where it came
+> from: `hosts/Daemon/bin/Release/net10.0/Bench.Ui.dll` is `20CE523E…` / 71 168 bytes, byte-for-byte the
+> submodule's, against the sibling's `ADA021CF…` / 101 888 bytes. A rename proves the build does not FALL
+> BACK on the sibling; the hash proves it never reads it at all.
 >
 > Scope: four `ProjectReference` lines and one `.gitmodules` entry in `dew_flow_rag_qln`; nothing in this
 > repository changed except that its commits reached its remote.
@@ -80,8 +84,9 @@ one command and belongs in the change that touched the console.
 
 ## 5. Test plan
 
-- The daemon builds with the sibling directory **renamed away**, which is the only real proof the path
-  dependency is gone.
+- ~~The daemon builds with the sibling directory **renamed away**~~ — **replaced.** Hash the daemon's own
+  `Bench.Ui.dll` against both candidate trees. It is the stronger claim (never read, rather than not fallen
+  back on), it costs one command, and it does not touch a directory somebody else is working in.
 - The qln suite passes unchanged — the mount is a reference change, not a behaviour change.
 - `git submodule status` reports the benchmark beside `dew_flow_mcp` and `.claude/rules/shared`.
 
@@ -90,8 +95,9 @@ one command and belongs in the change that touched the console.
 - [x] The pinned commit exists on `origin` — `dew_flow_benchmark 3f91817`.
 - [x] `dew_flow_rag_qln` reaches the benchmark only through `external/dew_flow_benchmark`; no path leaves the
       repository (grepped across every `.csproj`, `.props` and `.slnx`).
-- [ ] The daemon builds with the sibling checkout renamed away — **not attempted**: that directory is another
-      session's live workspace. The grep above is the evidence standing in for it.
-- [ ] The qln suite passes — **blocked** by that session's uncommitted `Rag.Api` edit, not by this change.
+- [x] The daemon builds through the submodule, 0 warnings — and its own `Bench.Ui.dll` hashes identical to
+      the submodule's and different from the sibling's, which is the check that REPLACED renaming the
+      sibling away (see the status line for why that swap is an improvement rather than a concession).
+- [x] The qln suite passes — 795 total, 761 passed, 34 skipped, 0 failed.
 - [x] [PLAN_bench_console.md](PLAN_bench_console.md)'s deviation note records that its §5 landed, and this
       plan is promoted.
