@@ -51,6 +51,7 @@ flowchart TB
         tr["LiveTrace · FixtureTrace"]
     end
     contracts["Bench.Contracts — wire shapes, depends on nothing"]
+    delivered["Bench.Delivered — the delivered-work instrument<br/>cleaned LOC · path fates · the policy trail<br/>a SIBLING LEAF: sees nothing, seen only by app"]
 
     cli --> app
     apihost --> api
@@ -63,6 +64,7 @@ flowchart TB
     apphost --> apihost
     apphost --> collector
     app --> dom
+    app -. "step 3 — no consumer yet" .-> delivered
     infra --> app
     app --> contracts
     api --> contracts
@@ -72,6 +74,22 @@ flowchart TB
 Two projects depend on **nothing**: `Bench.Domain` and `Bench.Contracts`. That is not tidiness — a wire
 contract able to reference the domain is a contract that leaks it, and a domain able to reference a package
 is a domain whose rules cannot be tested without one.
+
+**A third depends on nothing and is not a layer at all: `Bench.Delivered`.** It is the delivered-work
+instrument, ported *mechanism rather than repository* from the operator's `scoreMeter` V2
+(`todo/PLAN_scoremeter_port.md`), and it is a SIBLING LEAF — it may not see `Bench.Domain` either. Two
+architecture assertions hold it there: it references nothing, and nothing outside the Application layer may
+reference it. The second is the load-bearing one, because the property the port exists to preserve is that
+policy and figures recompute over historical runs **without one model call**, and that holds only while
+there is exactly one orchestration. Strings in, values out: it never calls a model, touches a store or
+reads a file.
+
+What is inside it is the deterministic half of a score that volume cannot buy — the cleaned-LOC family
+(case-sensitive first-match-wins path fates, line normalization that folds continuations so a wrapped
+statement costs what the one-liner costs) and the two corrections that run after the model (a cap on units
+that DECLARE themselves repeats, and an allowance that stops rescued points from pricing a one-line diff at
+79). Every constant it inherited from that corpus lives in one file with the measurement that produced it,
+and that file is designed to SHRINK: a constant re-measured here moves out of it.
 
 ## The measurement contract
 
@@ -977,6 +995,15 @@ Each is here because something went wrong that it now prevents; the catalogue is
 ## What does NOT exist yet
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
+
+- **The delivered-work module has no consumer yet.** `Bench.Delivered` holds the whole deterministic half
+  of the score — cleaned LOC, path fates, the near-duplicate cap, the rescue allowance, the adjustment
+  trail — and nothing calls it: `DeliveredWorkStage`, the prompts, the coverage gate, `stage_payloads` and
+  `bench rescore` are steps 3–5 of `todo/PLAN_scoremeter_port.md` and need a model runtime. The edge in the
+  diagram above is dashed for that reason. Unlike the preparation machine below, this one is uncalled *by
+  design and for one commit's worth of time* — the plan drew the boundary at "pure domain work can start
+  before the sandbox exists" — but it is stated here because a leaf nobody calls looks identical either way
+  from the outside, and this repository has met that pattern five times.
 
 - **Nothing here BUILDS a corpus, and the machine for it is complete and uncalled.** A run reads whatever the
   operator already indexed — `ApproveCorpusAsync` inspects the collection a search will reach and refuses a
