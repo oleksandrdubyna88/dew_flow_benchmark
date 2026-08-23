@@ -1,6 +1,42 @@
 # PLAN — corpus axis integrity: what a chunk axis means, and proving the engine honoured it
 
-> Status: **plan only, nothing implemented yet.** Scope: `Bench.Domain/Variants` (two fields on
+> Status: **PARTLY IMPLEMENTED, 2026-08-23 — the GUARD and the UNIT ship; the STRATEGY half is blocked on
+> the engine, so this stays open.** The status line above read *"plan only, nothing implemented yet"* until
+> today, which had been false since 2026-08-17: §3.2's guard — the whole point of the plan — was built then.
+>
+> **Shipped.** §1.1 is closed: an engine echoes the corpus it will answer from and `IndexReadiness` ends the
+> run naming both recipes before a single cell exists, which is more than the plan asked for (it also checks
+> the commit, the arm, a dirty tree and a failed pass). §1.2 is closed today: `CorpusSpec.Tokenizer` gives
+> `ChunkTokens` its unit, and a corpus counted in another model's tokens is refused *even though both sides
+> say 512* — the one check here where the numbers already agree. Both new axes are turnable from the CLI
+> (`--tokenizer`, `--dimensions`) and visible in `bench variants list`.
+>
+> **Two defects of the "built and never called" class were found while doing it.** `EmbedDimensions` — its
+> three states, its refusal, its warning, its wire round-trip and its tests — had no surface that could
+> declare a width, so the recipe side was always `NotDeclared` and the guard could never fire; one CLI flag
+> closed it, and the red test observed exactly that. And the tokenizer the engine has reported since
+> 2026-08-16 was read into `CorpusIdentity` and then discarded, so the plan's §4 contract item 3 had been
+> satisfied by the other repository for a week with nothing on this side consuming it.
+>
+> **Deviation, §3.1: an unset tokenizer is NOT a refusal.** The plan asked for one. It cannot hold —
+> `CorpusSpec.Parse` is also how STORED rows are read back, so refusing would make every variant written
+> before this axis unreadable, and a catalog row is immutable by design. It takes the three-state shape
+> `EmbedDimensions` had already established for the identical problem: declared · not declared, mismatched
+> only when both sides speak, and out of the canonical form until declared so no stored hash moves.
+>
+> **Still open, and the first item is why this document stays in `todo/`:**
+>
+> - **`ChunkStrategy` (§1.3) is not expressible, deliberately.** The engine has no strategy concept at all
+>   (verified 2026-08-23: zero occurrences in `dew_flow_rag_qln/src`), so it can neither select one nor echo
+>   one. Adding it to `CorpusSpec` now would mint two hashes that resolve to ONE corpus with no echo able to
+>   catch it — §1.1's defect, reintroduced by the plan meant to fix it. It waits on
+>   `dew_flow_rag_qln · todo/PLAN_tokenizer_contract_and_chunk_coverage.md` §3.2, which is §4 contract item 2.
+> - **The echoed recipe is checked and PRINTED, never stored** (§3.2's last bullet, DoD 3). A published
+>   database cannot be re-checked by a reader who was not there. Deferred rather than dropped: it needs a
+>   migration, and a concurrent session was writing migrations in this tree at the time.
+> - `bench variants verify` (§3.4), the API grouping, the UI pages, and the first strategy × chunk-size grid.
+>
+> Scope: `Bench.Domain/Variants` (two fields on
 > `CorpusSpec`), `Bench.Application` (the honoured-recipe guard), `Bench.Infrastructure/Engines`
 > (`QlnEngine` axes echo), `Bench.Api`, `hosts/Cli`, and `src/Bench.Ui` for the pages.
 >
@@ -182,11 +218,16 @@ What this plan needs, named identically on the other side:
 
 ## 5. Build order
 
-1. **`CorpusSpec` fields + canonical + refusals**, wire codec, catalog CLI flags. Domain only; no engine
-   involvement. Old rows render as *not recorded*.
-2. **The corpus echo on `IEngine`**, `QlnEngine` filling it from index-state, the three-state result
-   (matched / mismatched / not declared) stored on the result.
-3. **The block**, with its reason, plus `bench variants verify`.
+1. ~~**`CorpusSpec` fields + canonical + refusals**, wire codec, catalog CLI flags.~~ **HALF, 2026-08-23:**
+   the TOKENIZER shipped with its canonical, its wire round-trip and `--tokenizer`; `--dimensions` shipped
+   with it, closing an axis that had been declarable by nothing. `Strategy` did not — see the status line.
+   **Deviation:** optional and three-state rather than refused when unset.
+2. ~~**The corpus echo on `IEngine`**, `QlnEngine` filling it from index-state~~ **IMPLEMENTED 2026-08-17**
+   (`IRetriever.InspectAsync` → `IndexState`), and it reads more than this plan asked: overlap, commit,
+   dirty tree, pass status, backend, width. **Not done:** the three-state result *stored on the result* —
+   it is checked before the run and printed, never persisted.
+3. ~~**The block**, with its reason~~ **IMPLEMENTED 2026-08-17** (`IndexReadiness`, refusing before a cell
+   exists and naming both values). `bench variants verify` is **not** built.
 4. **API reads + the comparison grouping.**
 5. **UI pages**, over the step-4 endpoints only.
 6. **The first grid** — strategy × chunk size × question group, with the prediction recorded before it runs.
@@ -209,16 +250,19 @@ xUnit v3 executable, never `dotnet test`; `PostgresFixture` for anything stored.
 
 ## 7. Definition of Done
 
-- [ ] A variant states how its corpus was cut and whose tokens sized it; neither can be left unset.
+- [~] A variant states **whose tokens** sized it (2026-08-23) — but not how it was CUT, and both are
+      optional rather than refused when unset. The deviation is argued in the status line.
 - [ ] Two variants differing only in chunk strategy are two hashes and two corpora, never one.
-- [ ] Every result carries the corpus recipe that actually served it beside the one it was planned for.
-- [ ] A recipe mismatch blocks the cell with both recipes named; a non-declaring engine is flagged, not
-      silently trusted.
+- [ ] Every result carries the corpus recipe that actually served it beside the one it was planned for —
+      the check runs and PRINTS; nothing persists it.
+- [x] A recipe mismatch blocks the cell with both recipes named; a non-declaring engine is flagged, not
+      silently trusted. (2026-08-17 for shape/size/model, 2026-08-23 for the tokenizer and the width.)
 - [ ] `bench variants verify` exits non-zero on any mismatch in a run.
 - [ ] Chunk strategy is visible as a column and as a comparison rollup per question group, in the CLI, the
       API and a UI page — in that order of arrival.
 - [ ] The first strategy × chunk-size grid has run with its prediction recorded beforehand, at repeats ≥ 2.
-- [ ] `todo/README.md` updated; `research/architecture.md` records the corpus echo.
+- [x] `todo/README.md` updated; `research/architecture.md` records the corpus echo — including the tokenizer
+      as the third non-verbatim comparison and the three-state rule the optional axes follow.
 
 ## 8. Open questions
 

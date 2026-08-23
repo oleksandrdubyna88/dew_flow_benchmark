@@ -83,7 +83,7 @@ public static class VariantsCommand
                     // The state is printed rather than implied by absence: a retired variant listed with
                     // --all must never read like an active one.
                     var state = variant.IsActive ? "active " : "retired";
-                    output.WriteLine($"  {state}  {variant.Stamp,-28}  {variant.DisplayName}");
+                    output.WriteLine($"  {state}  {variant.Stamp,-28}  {variant.DisplayName}{Corpus(variant)}");
                 }
 
                 return ExitCodes.Pass;
@@ -160,14 +160,31 @@ public static class VariantsCommand
             Weight(command, "dense-weight"),
             Weight(command, "sparse-weight"),
             command.Value("norm", FusionSpec.NoNormalization)).Match(
+            // --dimensions and --tokenizer are both OPTIONAL and both stay out of the hash until given: the
+            // catalog is immutable, so a flag that changed a stored row's identity would be a migration.
             fusion => CorpusSpec.Parse(
-                command.Value("text-shape"), command.Int("chunk-tokens", 0), command.Value("embed-model")).Match(
+                command.Value("text-shape"),
+                command.Int("chunk-tokens", 0),
+                command.Value("embed-model"),
+                command.Int("dimensions", 0),
+                command.Value("tokenizer")).Match(
                 corpus => Rerank(command).Match(
                     rerank => VariantDefinition.Retrieval(
                         engine, channels, fusion, corpus, rerank, command.Int("limit", 20)),
                     Outcome<VariantDefinition>.Failure),
                 Outcome<VariantDefinition>.Failure),
             Outcome<VariantDefinition>.Failure);
+
+    /// <summary>The corpus axes, beside the name rather than buried in the stored definition.
+    /// <para>
+    /// The width and the tokenizer are what an operator has to compare against the engine's echo when a cell
+    /// is blocked, and a listing that showed only a hash would send them to the database to read a JSON
+    /// column. Rendered from the canonical form so the listing and the identity can never drift.
+    /// </para></summary>
+    private static string Corpus(RetrievalVariant variant) =>
+        variant.Definition is VariantDefinition.RetrievalRecipe recipe
+            ? $"   [{recipe.Corpus.Canonical["corpus=".Length..]}]"
+            : string.Empty;
 
     /// <summary>A pool of zero means the reranker is off — stated as one flag rather than two, because a
     /// separate <c>--rerank true --rerank-pool 0</c> pair has a state that means nothing.</summary>

@@ -98,19 +98,46 @@ public sealed record FusionSpec
 /// variants coexist as separate collections rather than replacing one another.</summary>
 public sealed record CorpusSpec
 {
-    private CorpusSpec(string textShape, int chunkTokens, string embedModel, EmbedDimensions dimensions)
+    private CorpusSpec(
+        string textShape, int chunkTokens, string embedModel, EmbedDimensions dimensions, string tokenizer)
     {
         TextShape = textShape;
         ChunkTokens = chunkTokens;
         EmbedModel = embedModel;
         Dimensions = dimensions;
+        Tokenizer = tokenizer;
     }
 
     public string TextShape { get; }
 
+    /// <summary>How long a chunk is — in tokens as counted by <see cref="Tokenizer"/>.
+    /// <para>
+    /// The unit is not decoration. <c>256</c> under two models' tokenizers is two different amounts of text,
+    /// so a number without its counter is a quantity nobody can recover — and two such corpora hash as one
+    /// comparable configuration, which is a comparison of nothing wearing a comparison's shape.
+    /// </para></summary>
     public int ChunkTokens { get; }
 
     public string EmbedModel { get; }
+
+    /// <summary>Whose tokens <see cref="ChunkTokens"/> counts, or empty when nobody said.
+    ///
+    /// <para><b>Not the embedder's name.</b> A model may be served by one engine and counted by another —
+    /// the sidecar holds a tokenizer loaded purely for counting, with no model behind it — so "which
+    /// embedder" and "whose tokens" are two questions. The engine has answered the second since 2026-08-16
+    /// and this side discarded it until now.</para>
+    ///
+    /// <para><b>Optional, and NOT the refusal the plan proposed.</b> <c>PLAN_corpus_axis_integrity</c> §3.1
+    /// wanted an unset tokenizer refused. That cannot hold here: <see cref="Parse"/> is how STORED rows are
+    /// read back, so refusing would make every variant written before this axis unreadable, and a catalog
+    /// row is immutable by design. It takes the three-state shape <see cref="EmbedDimensions"/> already
+    /// established for exactly this problem — declared · not declared, and a mismatch only when both sides
+    /// speak.</para></summary>
+    public string Tokenizer { get; } = string.Empty;
+
+    /// <summary>Whether anybody named the counter. Read this rather than testing the string for emptiness:
+    /// an unnamed tokenizer is an absent fact, not a tokenizer called "".</summary>
+    public bool TokenizerDeclared => Tokenizer.Length > 0;
 
     /// <summary>How wide the vectors are, when anybody said. Optional by construction: every variant in a
     /// catalog written before this existed declares nothing, and those rows must keep hashing as they did.
@@ -120,7 +147,7 @@ public sealed record CorpusSpec
     /// <summary>An unset embed model is a refusal, never a default — the same rule
     /// <see cref="ModelRef"/> enforces, and for the same near-miss.</summary>
     public static Outcome<CorpusSpec> Parse(
-        string? textShape, int chunkTokens, string? embedModel, int dimensions = 0)
+        string? textShape, int chunkTokens, string? embedModel, int dimensions = 0, string? tokenizer = null)
     {
         var shape = (textShape ?? string.Empty).Trim();
         var model = (embedModel ?? string.Empty).Trim();
@@ -135,17 +162,22 @@ public sealed record CorpusSpec
 
         return refusal.Length > 0
             ? Outcome<CorpusSpec>.Failure(refusal)
-            : Outcome<CorpusSpec>.Success(
-                new CorpusSpec(shape, chunkTokens, model, EmbedDimensions.Of(dimensions)));
+            : Outcome<CorpusSpec>.Success(new CorpusSpec(
+                shape, chunkTokens, model, EmbedDimensions.Of(dimensions), (tokenizer ?? string.Empty).Trim()));
     }
 
     /// <summary>The identity a variant hashes on.
     /// <para>
-    /// The width appends ONLY when declared, which keeps every stored variant hashing exactly as it did. A
-    /// catalog row is immutable — added and retired, never edited — so a hash that moved would silently
-    /// re-identify work already published against it.
+    /// The width and the tokenizer append ONLY when declared, which keeps every stored variant hashing
+    /// exactly as it did. A catalog row is immutable — added and retired, never edited — so a hash that
+    /// moved would silently re-identify work already published against it. Both are appended at the END
+    /// rather than woven in beside the number they qualify, for the same reason: a segment inserted into
+    /// the middle would have to render as something when absent, and every "something" changes old rows.
     /// </para></summary>
-    public string Canonical => $"corpus={TextShape}/{ChunkTokens}/{EmbedModel}{Dimensions.Canonical}";
+    public string Canonical =>
+        $"corpus={TextShape}/{ChunkTokens}/{EmbedModel}{Dimensions.Canonical}{TokenizerCanonical}";
+
+    private string TokenizerCanonical => TokenizerDeclared ? $"/tok={Tokenizer}" : string.Empty;
 }
 
 /// <summary>Whether a cross-encoder re-scores the fused pool, and how deep.</summary>

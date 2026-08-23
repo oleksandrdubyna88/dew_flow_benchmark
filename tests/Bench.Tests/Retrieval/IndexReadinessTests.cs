@@ -1,3 +1,4 @@
+using Bench.Domain;
 using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Targets;
@@ -215,6 +216,61 @@ public sealed class IndexReadinessTests
         refused.Reason().Should().Contain("embed tokens").And.NotContain("different hardware");
     }
 
+    [Fact]
+    public void A_corpus_counted_in_ANOTHER_MODELS_TOKENS_is_refused_even_when_the_number_matches()
+    {
+        var served = State(commit: IndexCommit.Of(Target), tokenizer: "Qwen/Qwen3-Embedding-0.6B");
+
+        var refused = IndexReadiness.Of(
+            served, Recipe(tokenizer: "bge-m3"), Target, ReadinessAllowances.Strict);
+
+        // The unit defect, and the reason it is invisible without this check: both sides say 512 and the
+        // numbers agree exactly. 512 of one model's tokens is a different amount of text from 512 of
+        // another's, so two corpora hash as one comparable configuration and the report compares nothing.
+        refused.Reason().Should().Contain("counted").And.Contain("Qwen").And.Contain("bge-m3");
+    }
+
+    [Fact]
+    public void A_tokenizer_spelled_by_its_VENDOR_is_the_same_tokenizer()
+    {
+        var served = State(commit: IndexCommit.Of(Target), tokenizer: "BAAI/bge-m3 (dense, FP32)");
+
+        var allowed = IndexReadiness.Of(
+            served, Recipe(tokenizer: "bge-m3"), Target, ReadinessAllowances.Strict);
+
+        // The operator types a bare name into a catalog row and the engine answers with a vendor path.
+        // Verbatim equality here would refuse every correct recipe — the same normalisation the embed
+        // model already gets, reused rather than written twice.
+        allowed.Should().BeOfType<Outcome<IndexApproval>.Ok>();
+    }
+
+    [Fact]
+    public void An_engine_that_names_NO_tokenizer_is_measured_and_the_gap_is_printed()
+    {
+        var served = State(commit: IndexCommit.Of(Target), tokenizer: "");
+
+        var allowed = IndexReadiness.Of(
+            served, Recipe(tokenizer: "bge-m3"), Target, ReadinessAllowances.Strict).Ok();
+
+        // Three states, never two. An engine that has not been taught to report a tokenizer has not
+        // disagreed — refusing there would block every engine but ours — so the axis goes UNVERIFIED and
+        // says so, which is the same trade EmbedDimensions already makes.
+        allowed.Warning.Should().Contain("names no tokenizer").And.Contain("UNVERIFIED");
+    }
+
+    [Fact]
+    public void A_recipe_that_names_no_tokenizer_asks_nothing_of_the_engine()
+    {
+        var served = State(commit: IndexCommit.Of(Target), tokenizer: "Qwen/Qwen3-Embedding-0.6B");
+
+        var allowed = IndexReadiness.Of(served, Recipe(), Target, ReadinessAllowances.Strict);
+
+        // Every variant in the catalog predates this axis. They must keep measuring exactly as they did,
+        // against whatever the engine reports, or the field is a migration wearing an optional flag.
+        allowed.Should().BeOfType<Outcome<IndexApproval>.Ok>();
+        allowed.Ok().Warning.Should().NotContain("tokenizer");
+    }
+
     private static IndexState State(
         bool exists = true,
         long points = 76_137,
@@ -223,12 +279,13 @@ public sealed class IndexReadinessTests
         string embedModel = "bge-m3",
         IndexCommit? commit = null,
         bool dirty = false,
-        bool passSucceeded = true) =>
+        bool passSucceeded = true,
+        string tokenizer = "bge") =>
         new(
             "code_project_shape_fingerprint",
             exists,
             points,
-            new CorpusIdentity(textShape, chunkTokens, OverlapTokens: 64, embedModel, Tokenizer: "bge"),
+            new CorpusIdentity(textShape, chunkTokens, OverlapTokens: 64, embedModel, tokenizer),
             "FINGERPRINT",
             commit ?? IndexCommit.None,
             dirty,
@@ -240,13 +297,14 @@ public sealed class IndexReadinessTests
         string textShape = "GraphHeader",
         int chunkTokens = 512,
         string embedModel = "bge-m3",
-        string backend = "")
+        string backend = "",
+        string tokenizer = "")
     {
         var recipe = (VariantDefinition.RetrievalRecipe)VariantDefinition.Retrieval(
             EngineKind.Qln,
             RetrievalChannels.Hybrid,
             FusionSpec.Rrf(60).Ok(),
-            CorpusSpec.Parse(textShape, chunkTokens, embedModel).Ok(),
+            CorpusSpec.Parse(textShape, chunkTokens, embedModel, tokenizer: tokenizer).Ok(),
             RerankSpec.Pooled(50).Ok(),
             20).Ok();
 

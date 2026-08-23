@@ -49,6 +49,16 @@ public sealed record CorpusIdentity(
             return $"the corpus that answers was embedded by '{EmbedModel}' and the recipe names '{recipe.EmbedModel}'";
         }
 
+        // The UNIT of ChunkTokens, and the only check here where both numbers already agree. Silent unless
+        // both sides name a counter — an engine that reports none has not disagreed — and normalised through
+        // SameModel, because a tokenizer is named by a model id and the two sides spell those differently.
+        if (recipe.TokenizerDeclared && Tokenizer.Length > 0 && !SameModel(Tokenizer, recipe.Tokenizer))
+        {
+            return $"the corpus that answers was counted in '{Tokenizer}' tokens and the recipe names "
+                + $"'{recipe.Tokenizer}' — both say {ChunkTokens}, and {ChunkTokens} of one model's tokens is "
+                + "a different amount of text from the other's";
+        }
+
         // Last, and deliberately: a model NAME normalises across two legitimate spellings, so a width that
         // disagrees under matching names is the case the name check cannot see. Silent when either side
         // declares nothing — that absence is a warning, not a refusal.
@@ -252,6 +262,16 @@ public static class IndexReadiness
                         $"this variant names {recipe.Corpus.Dimensions.Value}-dimensional vectors and the engine "
                         + "reports no width — that the corpus was built by the same embedder is UNVERIFIED, and a "
                         + "model NAME does not settle it",
+                    }
+                    : [],
+                // The unit went unverified, and it is the one whose absence is easiest to miss: the chunk
+                // NUMBERS still match, so the row looks checked. Ungated for the same reason as the width.
+                .. recipe.Corpus.TokenizerDeclared && state.Corpus.Tokenizer.Length == 0
+                    ? new[]
+                    {
+                        $"this variant counts {recipe.Corpus.ChunkTokens} tokens in '{recipe.Corpus.Tokenizer}' "
+                        + "and the engine names no tokenizer — that both sides mean the same amount of TEXT is "
+                        + "UNVERIFIED, and the matching number does not settle it",
                     }
                     : [],
             ]);

@@ -217,19 +217,37 @@ run naming both values (`IRetriever.InspectAsync`, `IndexReadiness`). This was m
 measurement: on 2026-08-17 a variant declaring 512 embed tokens was recorded against a 256-token index, every
 number in it real and the row naming them describing a corpus that would have produced different ones.
 
-Two comparisons in that check are not verbatim, and both directions matter:
+Three comparisons in that check are not verbatim, and every direction matters:
 
 - **The embedder name.** An operator types `bge-m3` into a catalog row and the engine reports
   `BAAI/bge-m3 (dense, FP32)`. Vendor prefix and parenthetical detail are dropped before comparing, because
   verbatim equality would refuse every correct recipe — while a CONTAINMENT rule would accept `bge-m3`
   against a `bge-m3-large` index, and a false accept is indistinguishable from a correct measurement
   afterwards.
+- **The tokenizer — the UNIT of the chunk number, and the only check here where both sides already agree.**
+  `chunkTokens` is an `int`, and `256` counted by two models' tokenizers is two different amounts of text; a
+  corpus whose windows were counted by another model than the recipe names is refused even though the numbers
+  match exactly. Whose tokens is not the same question as which embedder — a model may be served by one
+  engine and counted by another — so it is its own field, normalised through the same rule the embedder name
+  uses, since a tokenizer is also named by a model id. Both sides must speak: an engine that reports no
+  tokenizer has not disagreed, so the cell is measured and the run prints that the unit went UNVERIFIED.
+  Declared on a variant with `bench variants add --tokenizer`, and optional — see the three-state note below.
 - **The commit, in three states.** Matched, differing, or **unstamped** — and the third is not the second.
   Every index built before the engine began recording its commit is unstamped, so strict equality would have
   blocked every cell against every index in existence on the day the stamp landed. Unstamped is refused by
   default and passable with `--allow-unstamped-index`, which keeps printing that the tree is UNVERIFIED — the
   same shape as `--no-checkout`. An index built from a DIRTY tree is refused outright: its stamp then names a
   commit the index does not contain, which is worse than no stamp because it reads as evidence.
+
+**The optional corpus axes are three-state, and stay out of the hash until declared.** The vector width
+(`EmbedDimensions`) and the tokenizer are both *declared · not declared*, never *empty*, and both append to a
+variant's canonical form only when given. That is not tidiness: a catalog row is immutable — added and
+retired, never edited — so a canonical that grew a segment unconditionally would silently re-identify every
+variant already measured against. `PLAN_corpus_axis_integrity` §3.1 asked for an unset tokenizer to be a
+REFUSAL; that could not hold, because the same parse reads stored rows back and every row written before the
+axis existed would have become unreadable. The width is the sharper of the two — a model NAME does not
+identify an embedder and a width cannot be spelled two ways — and until 2026-08-23 no surface could declare
+one, so its guard existed and could never fire.
 
 Two refusals remain, and both happen **before any cell exists**: a recipe naming another engine, and a
 corpus shape this one does not have. `IRetriever.CanServe` is the check — a mapping, not a round trip — asked

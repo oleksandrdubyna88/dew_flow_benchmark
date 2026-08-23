@@ -441,6 +441,9 @@ public static class Program
         output.WriteLine("             --engine qln|mindex|http|noretrieval --channels dense|sparse|hybrid");
         output.WriteLine("             --fusion rrf|wsum [--k 60] [--dense-weight 1] [--sparse-weight 1]");
         output.WriteLine("             [--norm none|minmax] --text-shape <name> --chunk-tokens N --embed-model <id>");
+        output.WriteLine("             [--tokenizer <id>]  whose tokens --chunk-tokens counts; 256 under two");
+        output.WriteLine("                                 tokenizers is two different amounts of text");
+        output.WriteLine("             [--dimensions N]    the vector width, which a model NAME does not settle");
         output.WriteLine("             [--rerank-pool N] [--limit 20]   (or --definition-file <path> | --definition <json>)");
         output.WriteLine("  bench variants list   [--all] --db <connection>");
         output.WriteLine("  bench variants retire --name <slug> --db <connection>");

@@ -74,6 +74,56 @@ public sealed class VariantsCommandTests
     }
 
     [Fact]
+    public void A_variant_can_declare_the_vector_WIDTH_its_corpus_was_built_at()
+    {
+        var catalog = new InMemoryCatalog();
+
+        var (code, _, _) = Run(catalog, "add", "--name", "wide", "--engine", "qln",
+            "--text-shape", "src", "--chunk-tokens", "256", "--embed-model", "bge-m3",
+            "--dimensions", "1024");
+
+        // EmbedDimensions, its three states, its refusal and its warning all existed with no way for an
+        // operator to declare one: the guard could never fire, because the recipe side was always
+        // NotDeclared. A width nobody can state is the "built and never called" pattern.
+        code.Should().Be(ExitCodes.Pass);
+        Corpus(catalog).Dimensions.Declared.Should().BeTrue();
+        Corpus(catalog).Dimensions.Value.Should().Be(1024);
+    }
+
+    [Fact]
+    public void A_variant_can_name_WHOSE_TOKENS_its_chunk_size_was_counted_in()
+    {
+        var catalog = new InMemoryCatalog();
+
+        var (code, _, _) = Run(catalog, "add", "--name", "counted", "--engine", "qln",
+            "--text-shape", "src", "--chunk-tokens", "256", "--embed-model", "bge-m3",
+            "--tokenizer", "bge-m3");
+
+        // chunkTokens is an int with no unit: 256 under two models' tokenizers is two different amounts of
+        // text hashed as one comparable configuration. The engine already reports whose tokens it counted
+        // in; until now nothing on this side could say what it EXPECTED.
+        code.Should().Be(ExitCodes.Pass);
+        Corpus(catalog).Tokenizer.Should().Be("bge-m3");
+    }
+
+    [Fact]
+    public void A_declared_tokenizer_and_width_are_VISIBLE_in_the_listing()
+    {
+        var catalog = new InMemoryCatalog();
+        Run(catalog, "add", "--name", "counted", "--engine", "qln",
+            "--text-shape", "src", "--chunk-tokens", "256", "--embed-model", "bge-m3",
+            "--tokenizer", "bge-m3", "--dimensions", "1024");
+
+        var (_, output, _) = Run(catalog, "list");
+
+        // An axis buried in a hash is an axis nobody can check against the engine's echo.
+        output.Should().Contain("bge-m3").And.Contain("1024");
+    }
+
+    private static CorpusSpec Corpus(InMemoryCatalog catalog) =>
+        ((VariantDefinition.RetrievalRecipe)catalog.Added.Single().Definition).Corpus;
+
+    [Fact]
     public void The_baseline_needs_no_retrieval_flags()
     {
         var catalog = new InMemoryCatalog();

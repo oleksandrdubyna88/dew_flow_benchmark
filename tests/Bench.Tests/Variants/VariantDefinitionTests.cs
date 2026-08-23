@@ -130,6 +130,28 @@ public sealed class VariantDefinitionTests
         onWindows.Hash.Should().NotBe(onWsl.Hash);
     }
 
+    [Fact]
+    public void Two_corpora_counted_by_DIFFERENT_TOKENIZERS_are_two_configurations()
+    {
+        var bge = CorpusSpec.Parse("src", 256, "bge-m3", tokenizer: "bge-m3").Ok();
+        var qwen = CorpusSpec.Parse("src", 256, "bge-m3", tokenizer: "Qwen/Qwen3-Embedding-0.6B").Ok();
+
+        // Both say 256 and the numbers are equal. Folding them into one canonical would make two different
+        // amounts of text hash as one comparable configuration, which is the whole defect.
+        bge.Canonical.Should().NotBe(qwen.Canonical);
+    }
+
+    [Fact]
+    public void A_variant_that_names_no_tokenizer_hashes_EXACTLY_as_it_did_before_the_axis_existed()
+    {
+        var before = CorpusSpec.Parse("src", 256, "bge-m3").Ok();
+
+        // The regression this axis is most likely to cause, and the one that cannot be undone: a catalog row
+        // is immutable — added and retired, never edited — so a canonical that grew a segment would silently
+        // re-identify every variant already measured against. The literal is pinned deliberately.
+        before.Canonical.Should().Be("corpus=src/256/bge-m3");
+    }
+
     internal static Outcome<VariantDefinition> Retrieval(
         EngineKind engine = EngineKind.Qln,
         RetrievalChannels channels = RetrievalChannels.Hybrid,
