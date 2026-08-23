@@ -4,7 +4,8 @@
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
-> `CoverageDecision`, `WeightingProtocol` and `Inherited`. 107 module tests, suite 1410 green. Everything left needs a model
+> `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`. 125 module tests,
+> suite 1431 green. Everything left needs a model
 > runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
 > since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
 >
@@ -275,8 +276,16 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
 3. **Prompts + gate + stage** — **the GATE landed 2026-08-23** (`CoverageDecision`: the bands, the
    quantisation tolerance, the boundary epsilon, the two size floors, the six statuses and the cap-reason
    judgement, all pure, 24 tests). Still open and all needing a runtime: the zero-band weigher's prompt
-   texts beyond the scale, strict parsing (an unreadable reply is a refusal, never a guess), the one
-   re-ask the gate asks for, and `stage_payloads` persistence.
+   texts beyond the scale, the one re-ask the gate asks for, and `stage_payloads` persistence.
+   **Strict parsing landed 2026-08-23** (`Reply<T>`, `ReplyReader`, `DeliveredWorkReplies`): the packaging
+   is forgiven — models wrap JSON in prose and fences however firmly they are told not to — and every
+   field rule refuses rather than repairs. A duplicate key, a score off the scale, a step nobody asked
+   about, a key silently dropped: each is the one re-ask, never a salvaged number.
+   **A real defect the tests caught:** `JsonElement.TryGetInt32` THROWS on a non-number token rather than
+   answering false, so `"score": "high"` crashed the stage instead of being refused by it — the single
+   outcome this module promises never to produce. The `ValueKind` check that fixes it is not redundant.
+   **Deviation:** `Reply<T>` is `Outcome<T>` re-declared, because the leaf may not reference the domain
+   where `Outcome<T>` lives. The same trade `Bench.Ui`'s `Read<T>` makes, for the same reason.
    **The SCALE and the protocol string landed with the gate** (`WeightingProtocol`): the zero band, the
    rule that keeps zero from eating the bottom of the scale, the ten inherited anchor lines carried
    character-for-character, and `delivered-work-v1 (anchors inherited: …)` as §4.3 specified.
