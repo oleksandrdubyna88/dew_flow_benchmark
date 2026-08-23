@@ -95,6 +95,22 @@ public interface IRunStore
     /// existed, which is the honest answer rather than an absence a caller has to interpret.</summary>
     Task<MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken);
 
+    /// <summary>The machines behind a SET of runs — what a cross-run comparison needs before it may fold
+    /// them into one average.
+    /// <para>
+    /// A batch rather than a loop, for the reason <c>LegsAsync</c> and <c>VitalsAsync</c> already take a
+    /// list: a comparison spans up to fifty runs and a query apiece would make the guard cost more than the
+    /// comparison it protects.
+    /// </para>
+    /// <para>
+    /// <b>Every requested run appears in the answer.</b> A run with no stored machine comes back as
+    /// <c>MachineFacts.NotRecorded</c> rather than being absent, because a caller that had to treat a missing
+    /// key as "not recorded" would be re-deriving the three-state rule at each call site — and the state most
+    /// easily lost that way is the one that matters.
+    /// </para></summary>
+    Task<IReadOnlyDictionary<Guid, MachineFacts>> MachinesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken);
+
     /// <summary>One cell by id — what a phase close reads to learn how the leg SETTLED. A miss is a
     /// refusal naming the id, never an empty cell.</summary>
     Task<Outcome<RunCell>> CellAsync(Guid cellId, CancellationToken cancellationToken);

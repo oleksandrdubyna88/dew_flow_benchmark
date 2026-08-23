@@ -185,6 +185,26 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
         return row is null ? MachineFacts.NotRecorded : MachineFactsJson.Read(row.FactsJson);
     }
 
+    /// <summary>The machines behind a set of runs, in one query.
+    /// <para>
+    /// Every requested id comes back. A run with no row is <c>NotRecorded</c> in the answer rather than
+    /// missing from it, so a caller cannot accidentally read "absent" as "agrees with the rest" — which is
+    /// exactly how a comparison across two machines would go quiet again.
+    /// </para></summary>
+    public async Task<IReadOnlyDictionary<Guid, MachineFacts>> MachinesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken)
+    {
+        var rows = await db.RunMachines.AsNoTracking()
+            .Where(m => runIds.Contains(m.RunId))
+            .ToListAsync(cancellationToken);
+
+        var recorded = rows.ToDictionary(row => row.RunId, row => MachineFactsJson.Read(row.FactsJson));
+
+        return runIds.Distinct().ToDictionary(
+            id => id,
+            id => recorded.GetValueOrDefault(id, MachineFacts.NotRecorded));
+    }
+
     /// <summary>The newest runs, capped in the database rather than in memory.
     /// <para>
     /// A row this cannot parse back — an unreadable url or commit, which is only possible if something

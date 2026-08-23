@@ -179,15 +179,35 @@ public sealed record ArmComparisonDto(
 
 /// <param name="RankingRefusal">Empty when these arms may be ranked; otherwise what decided it. The averages
 /// are present either way.</param>
+/// <param name="Machines">Whether everything in this scope came off ONE machine. The target and the suite were
+/// never the whole scope: two runs on two machines differ for a reason that has nothing to do with the
+/// backend, so a comparison that stayed silent about the hardware would read as one that had checked.</param>
 public sealed record ScopedArmsDto(
     string TargetCanonical,
     string SuiteStamp,
     IReadOnlyList<ArmAverageDto> Arms,
     string Baseline,
-    string RankingRefusal);
+    string RankingRefusal,
+    MachineAgreementDto Machines);
+
+/// <summary>Whether a set of runs shares a machine, as the wire sees it.
+/// <para>
+/// The state travels as a NAME for the reason every verdict here does: an ordinal changes meaning the day
+/// somebody inserts a member, and this object is published beside the results. <paramref name="Note"/> is
+/// never empty — a comparison always says what it knows about its hardware, because silence reads as
+/// agreement.
+/// </para></summary>
+/// <param name="State">One of <c>NotRecorded</c>, <c>PartlyRecorded</c>, <c>OneMachine</c>,
+/// <c>SeveralMachines</c>.</param>
+/// <param name="Machines">How many DISTINCT machines the recorded runs name; zero when none recorded one.</param>
+/// <param name="Unrecorded">How many runs recorded no machine. Beside the count rather than folded into it:
+/// a run nobody probed is not evidence of a second machine, nor of the first.</param>
+public sealed record MachineAgreementDto(string State, int Machines, int Unrecorded, string Note);
 
 /// <param name="Runs">How many runs this average rests on. Beside the leg count because an average over one
 /// run and one over five are different evidence about a backend.</param>
+/// <param name="Machines">Which machines THIS arm's runs came off. An arm folded across two machines is a mean
+/// over two populations, and the scope-level reading cannot say which arm is the mixed one.</param>
 public sealed record ArmAverageDto(
     string Arm,
     double Average,
@@ -197,7 +217,8 @@ public sealed record ArmAverageDto(
     HalfReadingDto HeldOut,
     string Proof,
     double Margin,
-    ArmCostDto Cost);
+    ArmCostDto Cost,
+    MachineAgreementDto Machines);
 
 /// <summary>What an arm cost, beside what it scored.
 /// <para>

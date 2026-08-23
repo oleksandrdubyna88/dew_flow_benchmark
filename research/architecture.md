@@ -866,6 +866,16 @@ Each is here because something went wrong that it now prevents; the catalogue is
   in.
 - **A retrieval expectation in a lane with no retrieval is *not applicable*, not a miss.** Scoring it zero
   would make the no-tools baseline look worse than it is, and that baseline exists to be compared fairly.
+- **A comparison names the MACHINE its numbers came off.** Target and suite were only half the scope: two
+  runs on two machines differ for a reason that has nothing to do with the arm being compared.
+  `MachineAgreement` (`src/Bench.Domain/Trace/MachineAgreement.cs`) folds a population of `MachineFacts`
+  into four states — `OneMachine` · `SeveralMachines` · `PartlyRecorded` · `NotRecorded` — carried by every
+  scope AND by every arm inside it, since the scope cannot say which arm is the mean over two populations.
+  It is reported and **never refused**: a benchmark unable to span a driver update would be useless, so a
+  fingerprint is a fingerprint and not a gate. The fourth state is the one a real database produces —
+  partly probed — and folding it into agreement would let one probed run vouch for a population nobody
+  read. This guard is younger than the defect it names: `ArmComparison` folded runs across machines in
+  silence from 2026-08-20 to 2026-08-23 (`PLAN_hardware_sampler.md`).
 
 ## What does NOT exist yet
 

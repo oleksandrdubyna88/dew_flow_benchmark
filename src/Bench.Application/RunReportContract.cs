@@ -97,7 +97,14 @@ public static class RunReportContract
         scope.SuiteStamp,
         [.. scope.Arms.Select(From)],
         scope.Baseline,
-        scope.RankingRefusal);
+        scope.RankingRefusal,
+        From(scope.Machines));
+
+    private static MachineAgreementDto From(Bench.Domain.Trace.MachineAgreement agreement) => new(
+        agreement.State.ToString(),
+        agreement.Machines,
+        agreement.Unrecorded,
+        agreement.Describe);
 
     private static ArmAverageDto From(ArmAverage arm) => new(
         arm.Arm,
@@ -114,5 +121,6 @@ public static class RunReportContract
             arm.Cost.Hits,
             arm.Cost.Files,
             arm.Cost.PeakVramBytes,
-            arm.Cost.VramSamples));
+            arm.Cost.VramSamples),
+        From(arm.Machines));
 }

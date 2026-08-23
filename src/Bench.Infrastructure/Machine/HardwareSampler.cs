@@ -10,7 +10,7 @@ namespace Bench.Infrastructure.Machine;
 
 /// <param name="Load">How often the cheap stream ticks — processor and memory, microseconds apiece.</param>
 /// <param name="Vram">How often the expensive one does. Measured at about a second per read on Windows
-/// (<c>todo/PLAN_hardware_sampler.md</c> §7.3), so this is deliberately an order of magnitude slower than
+/// (<c>research/PLAN_hardware_sampler.md</c> §7.3), so this is deliberately an order of magnitude slower than
 /// <paramref name="Load"/>: a sampler that spent half the wall clock sampling would be measuring itself.</param>
 /// <param name="Window">How much history to keep. The buffer is bounded on purpose — this process runs for
 /// days, and a list that only grows is the shape two <c>GetOrAdd</c>-forever maps already had here.</param>

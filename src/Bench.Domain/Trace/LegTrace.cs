@@ -156,7 +156,7 @@ public sealed record LegTrace(
 /// Separate from <see cref="VramSample"/> because the two cost three orders of magnitude apart, and pretending
 /// otherwise is how a sampler becomes the thing it measures. These come from process times and
 /// <c>GC.GetGCMemoryInfo</c>: no file, no process launch, microseconds. A VRAM read on Windows costs about a
-/// second (measured: <c>todo/PLAN_hardware_sampler.md</c> §7.3), so it ticks on its own far slower clock and
+/// second (measured: <c>research/PLAN_hardware_sampler.md</c> §7.3), so it ticks on its own far slower clock and
 /// its summary says how few readings it managed.
 /// </para></summary>
 public readonly record struct LoadSample(

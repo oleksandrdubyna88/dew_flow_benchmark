@@ -215,7 +215,7 @@ public interface IMachineProbe
 /// <para>
 /// The two streams are separate because they cost three orders of magnitude apart — processor and memory are
 /// microseconds, a vendor-neutral VRAM read on Windows is about a second (measured,
-/// <c>todo/PLAN_hardware_sampler.md</c> §7.3) — and one cadence for both would make the sampler the thing it
+/// <c>research/PLAN_hardware_sampler.md</c> §7.3) — and one cadence for both would make the sampler the thing it
 /// measures.
 /// </para></summary>
 public interface IHardwareSampler

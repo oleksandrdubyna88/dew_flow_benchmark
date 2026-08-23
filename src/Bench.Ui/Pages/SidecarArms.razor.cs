@@ -90,4 +90,34 @@ public partial class SidecarArms(BenchConsoleApi api) : ComponentBase
 
     private static string Half(HalfReadingDto half) =>
         half.Measured ? $"{half.Average:0.###} ({half.Legs} leg(s))" : "not measured";
+
+    /// <summary>How loudly the scope's hardware reading is stated.
+    /// <para>
+    /// <c>SeveralMachines</c> is a WARNING and not a neutral note: a gap between arms measured on two machines
+    /// is a gap about the machines, and it is indistinguishable from a real backend result once it has been
+    /// averaged. The two unknown states are neutral rather than green — nobody looked is not agreement — and
+    /// the clean case is stated too, because silence here would read as agreement either way.
+    /// </para></summary>
+    private static string MachineBanner(string state) =>
+        state switch
+        {
+            "SeveralMachines" => "bg-warning-subtle text-warning-emphasis",
+            "OneMachine" => "bg-body-tertiary text-body-secondary",
+            _ => "bg-body-tertiary text-body-secondary",
+        };
+
+    private static string MachineText(string state) =>
+        state == "SeveralMachines" ? "text-warning-emphasis fw-semibold" : "text-body-secondary";
+
+    /// <summary>One arm's machines, compactly. The unrecorded count travels with the number for the reason the
+    /// VRAM sample count does: a run nobody probed is not evidence of a machine, and a bare "1" would claim
+    /// one where only part of the population was read.</summary>
+    private static string Machines(MachineAgreementDto machines) =>
+        machines.State switch
+        {
+            "OneMachine" => "one",
+            "SeveralMachines" => $"{machines.Machines} machines",
+            "PartlyRecorded" => $"1 (+{machines.Unrecorded} unrecorded)",
+            _ => "not recorded",
+        };
 }

@@ -4,6 +4,7 @@ using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Splitting;
 using Bench.Domain.Targets;
+using Bench.Domain.Trace;
 using FluentAssertions;
 using Xunit;
 
@@ -280,7 +281,107 @@ public sealed class ArmComparisonTests
         wsl.Cost.VramSamples.Should().Be(3, "three legs each carried one reading");
     }
 
+    [Fact]
+    public async Task Arms_measured_on_two_DIFFERENT_machines_have_the_difference_named()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, machine: Machine("bench-01"));
+        world.Run(Windows, "polly@v1#aaaa", 0.4, machine: Machine("bench-02"));
+
+        var scope = (await Build(world)).Ok().Scopes.Single();
+
+        // The whole point. The target and the suite were never the whole comparison scope: two runs on two
+        // machines differ for a reason that has nothing to do with the backend, and folding them into one
+        // table without a word is the silent merge MachineFacts exists to end.
+        scope.Machines.State.Should().Be(MachineConsensus.SeveralMachines);
+        scope.Machines.Describe.Should().Contain("DIFFERENT machines");
+        scope.Machines.OnOneMachine.Should().BeFalse();
+
+        // Named, never REFUSED. A fingerprint is a fingerprint and not a gate: a harness that blocked a
+        // comparison spanning a hardware change could not span a driver update, which is the ordinary life
+        // of a benchmark that runs for months. Both arms and their averages stay exactly where they were.
+        scope.Arms.Should().HaveCount(2);
+        scope.Arms.Single(arm => arm.Arm == Wsl).Average.Should().BeApproximately(0.8, 0.001);
+    }
+
+    [Fact]
+    public async Task Arms_measured_on_ONE_machine_say_so_rather_than_staying_silent()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, machine: Machine("bench-01"));
+        world.Run(Windows, "polly@v1#aaaa", 0.4, machine: Machine("bench-01"));
+
+        var scope = (await Build(world)).Ok().Scopes.Single();
+
+        // Silence would read as agreement either way, so the clean case is stated too — and this is the one
+        // state under which a gap between the arms may be read as a property of the backend.
+        scope.Machines.State.Should().Be(MachineConsensus.OneMachine);
+        scope.Machines.OnOneMachine.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_comparison_over_runs_nobody_probed_says_NOT_RECORDED_rather_than_one_machine()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8);
+        world.Run(Windows, "polly@v1#aaaa", 0.4);
+
+        var scope = (await Build(world)).Ok().Scopes.Single();
+
+        // Every run measured before the machine probe existed is in this state, and it is the state most
+        // likely to be rendered as agreement: two unrecorded runs share an empty fingerprint.
+        scope.Machines.State.Should().Be(MachineConsensus.NotRecorded);
+        scope.Machines.Describe.Should().Contain("no run here recorded the machine");
+    }
+
+    [Fact]
+    public async Task An_ARM_folded_across_two_machines_carries_that_beside_its_average()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.9, machine: Machine("bench-01"));
+        world.Run(Wsl, "polly@v1#aaaa", 0.1, machine: Machine("bench-02"));
+        world.Run(Windows, "polly@v1#aaaa", 0.4, machine: Machine("bench-01"));
+
+        var arms = (await Build(world)).Ok().Scopes.Single().Arms;
+
+        // A mean of 0.5 over two machines and a mean of 0.5 over one are different evidence about a backend.
+        // The scope-level reading cannot say which arm is the mixed one, so the arm carries its own.
+        arms.Single(arm => arm.Arm == Wsl).Machines.State.Should().Be(MachineConsensus.SeveralMachines);
+        arms.Single(arm => arm.Arm == Windows).Machines.State.Should().Be(MachineConsensus.OneMachine);
+    }
+
+    [Fact]
+    public async Task A_machine_that_contributed_no_LEG_to_this_metric_does_not_raise_the_warning()
+    {
+        var world = World();
+        world.Run(Wsl, "polly@v1#aaaa", 0.8, machine: Machine("bench-01"));
+        world.Run(Windows, "polly@v1#aaaa", 0.4, machine: Machine("bench-01"));
+
+        // A third run on a second machine that measured a DIFFERENT metric. It is in the scope and it
+        // declared an arm, but no number on screen came off it.
+        world.Silent(Wsl, "polly@v1#aaaa", machine: Machine("bench-02"));
+
+        var scope = (await Build(world)).Ok().Scopes.Single();
+
+        // A guard that fires over a machine behind none of the numbers is a false alarm, and a false alarm
+        // is how a real warning stops being read. The population is the legs, which is what the averages,
+        // the leg count and the run count are all already derived from.
+        scope.Machines.State.Should().Be(MachineConsensus.OneMachine);
+        scope.Arms.Single(arm => arm.Arm == Wsl).Machines.State.Should().Be(MachineConsensus.OneMachine);
+    }
+
     // ---- scaffolding -------------------------------------------------------------------------------
+
+    /// <summary>Two machines that differ in nothing a listing would show but their identity — which is the
+    /// case a comparison is most likely to fold in silence.</summary>
+    private static MachineFacts Machine(string hostname) => new()
+    {
+        Hostname = hostname,
+        MachineId = $"{hostname}-id",
+        Os = new OsFacts("windows", "Professional", "25H2", "10.0.26200.8653"),
+        Cpu = new CpuFacts("AMD Ryzen 9", 12, 24, "High performance"),
+        TotalRamBytes = 96L * 1024 * 1024 * 1024,
+    };
 
     private Task<Outcome<ArmComparisonView>> Build(ArmWorld world, string baseline = "") =>
         ArmComparison.BuildAsync(world, world, new ArmComparisonRequest(Metric, Baseline: baseline), Ct);
@@ -294,11 +395,22 @@ internal sealed class ArmWorld : IRunStore, IResultStore
 {
     private readonly List<BenchRun> _runs = [];
     private readonly List<MetricLeg> _legs = [];
+    private readonly Dictionary<Guid, Bench.Domain.Trace.MachineFacts> _machines = [];
 
-    public BenchRun Run(string arm, string suiteStamp, double value, int questions = 4) =>
-        Run(BackendDeclaration.Read(arm), suiteStamp, value, questions);
+    public BenchRun Run(
+        string arm,
+        string suiteStamp,
+        double value,
+        int questions = 4,
+        Bench.Domain.Trace.MachineFacts? machine = null) =>
+        Run(BackendDeclaration.Read(arm), suiteStamp, value, questions, machine);
 
-    public BenchRun Run(BackendDeclaration backend, string suiteStamp, double value, int questions = 4)
+    public BenchRun Run(
+        BackendDeclaration backend,
+        string suiteStamp,
+        double value,
+        int questions = 4,
+        Bench.Domain.Trace.MachineFacts? machine = null)
     {
         var run = BenchRun.Planned(
             "arms",
@@ -312,8 +424,17 @@ internal sealed class ArmWorld : IRunStore, IResultStore
         _runs.Add(run);
         _legs.AddRange(Enumerable.Range(1, questions).Select(i => new MetricLeg(run.Id, $"q{i}", value)));
 
+        // Unprobed unless a test says otherwise — which is what every run stored before the machine probe
+        // existed is, and therefore the default a comparison must handle.
+        _machines[run.Id] = machine ?? Bench.Domain.Trace.MachineFacts.NotRecorded;
+
         return run;
     }
+
+    /// <summary>A run that is in the scope and declared an arm but scored NO leg on the metric being
+    /// compared — it measured something else. Real databases are full of them.</summary>
+    public BenchRun Silent(string arm, string suiteStamp, Bench.Domain.Trace.MachineFacts machine) =>
+        Run(arm, suiteStamp, value: 0, questions: 0, machine: machine);
 
     public Task<IReadOnlyList<BenchRun>> RecentAsync(int limit, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<BenchRun>>([.. _runs.Take(limit)]);
@@ -352,7 +473,16 @@ internal sealed class ArmWorld : IRunStore, IResultStore
         throw new NotSupportedException("a comparison records nothing");
 
     public Task<Bench.Domain.Trace.MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken) =>
-        throw new NotSupportedException("a comparison does not read machines yet — see the plan's open tail");
+        throw new NotSupportedException("a comparison reads machines in a BATCH — one query, not one per run");
+
+    /// <summary>Every requested run answers, unprobed ones included. A double that omitted them would let a
+    /// comparison pass by treating an absent key as agreement — the exact silence being fixed.</summary>
+    public Task<IReadOnlyDictionary<Guid, Bench.Domain.Trace.MachineFacts>> MachinesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, Bench.Domain.Trace.MachineFacts>>(
+            runIds.Distinct().ToDictionary(
+                id => id,
+                id => _machines.GetValueOrDefault(id, Bench.Domain.Trace.MachineFacts.NotRecorded)));
 
     public Task<Outcome<BenchRun>> CreateAsync(BenchRun run, IReadOnlyList<RunCell> cells, CancellationToken cancellationToken) =>
         throw new NotSupportedException("a comparison creates no runs");

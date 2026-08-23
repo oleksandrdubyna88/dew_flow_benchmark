@@ -158,6 +158,45 @@ public sealed class SidecarArmsPageTests : BunitContext
     private static ScriptedBenchApi Offering(ScriptedBenchApi api) =>
         api.Answers("/api/bench/arms/metrics", new[] { WellKnownMetrics.AnchorRecall });
 
+    [Fact]
+    public void A_scope_whose_runs_came_off_two_machines_says_so_ABOVE_the_numbers()
+    {
+        var scope = Scope("polly@v1#aaaa", Arm(Wsl, 0.8), Arm(Windows, 0.4)) with { Machines = TwoMachines };
+
+        var page = Arms(scope);
+
+        // The hardware belongs before the table, not in a footnote under it: a gap between arms measured on
+        // two machines is a gap about the machines, and by the time the reader reaches a footnote they have
+        // already read the numbers as a backend result.
+        page.Markup.Should().Contain("DIFFERENT machines");
+        page.Markup.Should().Contain("bg-warning-subtle", "a confounded comparison is a warning, not a note");
+    }
+
+    [Fact]
+    public void A_scope_nobody_probed_says_NOT_RECORDED_rather_than_rendering_nothing()
+    {
+        var page = Arms(Scope("polly@v1#aaaa", Arm(Wsl, 0.8), Arm(Windows, 0.4)));
+
+        // Silence would read as agreement. Every run in the real database is in this state.
+        page.Markup.Should().Contain("no run here recorded the machine");
+        page.Markup.Should().NotContain("bg-warning-subtle", "unknown is not the same news as confounded");
+    }
+
+    [Fact]
+    public void Each_ARM_carries_its_own_machines_so_the_mixed_one_is_identifiable()
+    {
+        var page = Arms(Scope(
+            "polly@v1#aaaa",
+            Arm(Wsl, 0.5, machines: TwoMachines),
+            Arm(Windows, 0.4, machines: new MachineAgreementDto("OneMachine", 1, 0, "one machine."))));
+
+        // The scope-level reading says whether these numbers may be compared; it cannot say which arm is the
+        // mean over two populations. A reader holding only the banner would open every run to find out.
+        var row = page.FindAll("tbody tr")[0];
+        row.TextContent.Should().Contain("2 machines");
+        page.FindAll("tbody tr")[1].TextContent.Should().Contain("one");
+    }
+
     private IRenderedComponent<SidecarArms> Arms(
         params ScopedArmsDto[] scopes) =>
         Arms(scopes, [], string.Empty);
@@ -180,15 +219,34 @@ public sealed class SidecarArmsPageTests : BunitContext
     }
 
     private static ScopedArmsDto Scope(string suite, params ArmAverageDto[] arms) =>
-        new("https://example.invalid/x.git@" + new string('c', 40), suite, arms, string.Empty, string.Empty);
+        new("https://example.invalid/x.git@" + new string('c', 40), suite, arms, string.Empty, string.Empty,
+            Unprobed);
 
     private static ScopedArmsDto Scope(string suite, ArmAverageDto first, ArmAverageDto second, string baseline) =>
-        new("https://example.invalid/x.git@" + new string('c', 40), suite, [first, second], baseline, string.Empty);
+        new("https://example.invalid/x.git@" + new string('c', 40), suite, [first, second], baseline, string.Empty,
+            Unprobed);
 
     private static ArmAverageDto Arm(
-        string arm, double average, int legs = 4, int runs = 1, string proof = "NotAWinner") =>
+        string arm,
+        double average,
+        int legs = 4,
+        int runs = 1,
+        string proof = "NotAWinner",
+        MachineAgreementDto? machines = null) =>
         new(arm, average, legs, runs, new HalfReadingDto(true, average, legs / 2),
             new HalfReadingDto(true, average, legs / 2), proof, 0,
             new ArmCostDto(RetrievalMs: 2607, WallSeconds: 50.2, Hits: 5, Files: 3,
-                PeakVramBytes: 25769803776, VramSamples: 2));
+                PeakVramBytes: 25769803776, VramSamples: 2),
+            machines ?? Unprobed);
+
+    /// <summary>The default every existing case gets, because it is what the real database holds: runs stored
+    /// before the machine probe existed. A double defaulting to agreement would let the page pass while
+    /// rendering a claim nothing measured.</summary>
+    private static MachineAgreementDto Unprobed { get; } =
+        new("NotRecorded", 0, 0, "no run here recorded the machine it measured on.");
+
+    private static MachineAgreementDto TwoMachines { get; } =
+        new("SeveralMachines", 2, 0,
+            "these runs were measured on 2 DIFFERENT machines — a gap between arms is not attributable to "
+            + "the backend alone, because the hardware under them also differs.");
 }

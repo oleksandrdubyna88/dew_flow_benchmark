@@ -207,6 +207,25 @@ public sealed class PostgresRunStoreTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_BATCH_read_answers_for_every_run_asked_including_the_ones_nobody_probed()
+    {
+        var probed = Plan(1, 1, 1);
+        var unprobed = Plan(1, 1, 1);
+        var store = postgres.NewStore(new TestClock(Noon));
+        await store.CreateAsync(probed.Run, probed.Cells, Ct);
+        await store.CreateAsync(unprobed.Run, unprobed.Cells, Ct);
+        await store.RecordMachineAsync(probed.Run.Id, new MachineFacts { Hostname = "bench-01" }, Ct);
+
+        var machines = await store.MachinesAsync([probed.Run.Id, unprobed.Run.Id], Ct);
+
+        // An absent key would let a cross-run comparison read "we have no row for it" as "it agrees with the
+        // rest", which is exactly the silent merge across two machines this batch exists to stop.
+        machines.Should().HaveCount(2);
+        machines[probed.Run.Id].Hostname.Should().Be("bench-01");
+        machines[unprobed.Run.Id].Recorded.Should().BeFalse("nobody probed it — that is a state, not an absence");
+    }
+
+    [Fact]
     public async Task A_run_with_no_cells_is_refused()
     {
         var (run, _) = Plan(1, 1, 1);

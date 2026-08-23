@@ -2,6 +2,7 @@ using Bench.Domain;
 using Bench.Domain.Retrieval;
 using Bench.Domain.Runs;
 using Bench.Domain.Splitting;
+using Bench.Domain.Trace;
 
 namespace Bench.Application;
 
@@ -35,6 +36,10 @@ public sealed record ArmAverage(
     /// <summary>What this arm COST. A quality average alone answers half the question: two backends that
     /// return the same files in 2.6 s and 16.4 s score identically and are not the same measurement.</summary>
     public ArmCost Cost { get; init; } = ArmCost.None;
+
+    /// <summary>Which machines this arm's runs came off. An arm folded across two machines is a mean over two
+    /// populations, and the reader holding only the average cannot tell.</summary>
+    public MachineAgreement Machines { get; init; } = MachineAgreement.Nothing;
 }
 
 /// <summary>The cost side of one arm, folded across its legs.</summary>
@@ -72,6 +77,15 @@ public sealed record ScopedArms(
     string RankingRefusal)
 {
     public string ScopeDescribe => $"{TargetCanonical} / {SuiteStamp}";
+
+    /// <summary>Whether everything in this scope came off ONE machine.
+    /// <para>
+    /// The target and the suite are not the whole scope, only the half that was cheap to check. Two runs on
+    /// two machines differ for a reason that has nothing to do with the backend, and until this was folded in
+    /// the comparison averaged across hardware in silence — the defect <c>MachineFacts</c> was built to end,
+    /// left in place one level up.
+    /// </para></summary>
+    public MachineAgreement Machines { get; init; } = MachineAgreement.Nothing;
 }
 
 /// <param name="Excluded">Runs left out, each with the reason. A comparison that silently dropped rows would
@@ -135,11 +149,16 @@ public static class ArmComparison
         var declared = recent.Where(Declares).ToList();
         var excluded = Excluded(recent);
 
+        // One query for every run in the comparison. The machine is half of what makes two runs comparable
+        // and it was the half nobody read: a scope of target-and-suite says the questions matched, never that
+        // the hardware did.
+        var machines = await runs.MachinesAsync([.. declared.Select(run => run.Id)], cancellationToken);
+
         var scopes = new List<ScopedArms>();
 
         foreach (var group in declared.GroupBy(run => run.Scope))
         {
-            scopes.Add(await ScopeAsync(results, group.Key, [.. group], request, cancellationToken));
+            scopes.Add(await ScopeAsync(results, group.Key, [.. group], machines, request, cancellationToken));
         }
 
         return Outcome<ArmComparisonView>.Success(new ArmComparisonView(
@@ -184,6 +203,7 @@ public static class ArmComparison
         IResultStore results,
         ComparisonScope scope,
         IReadOnlyList<BenchRun> runs,
+        IReadOnlyDictionary<Guid, MachineFacts> machines,
         ArmComparisonRequest request,
         CancellationToken cancellationToken)
     {
@@ -213,12 +233,30 @@ public static class ArmComparison
             .Select(group => Average(group.Key, [.. group], halves, baseline, armOf) with
             {
                 Cost = costOf.TryGetValue(group.Key, out var cost) ? cost : ArmCost.None,
+                Machines = MachinesBehind([.. group], machines),
             })
             .OrderBy(arm => arm.Arm, StringComparer.Ordinal)
             .ToList();
 
-        return new ScopedArms(scope.TargetCanonical, scope.SuiteStamp, arms, baseline, Refusal(arms, request.MinLegs));
+        return new ScopedArms(scope.TargetCanonical, scope.SuiteStamp, arms, baseline, Refusal(arms, request.MinLegs))
+        {
+            Machines = MachinesBehind([.. byArm.SelectMany(group => group)], machines),
+        };
     }
+
+    /// <summary>The machines behind a set of SCORED LEGS — never behind the runs in the scope.
+    /// <para>
+    /// The distinction is the difference between a guard and a false alarm. A run can sit in a scope, declare
+    /// an arm and contribute nothing to the metric being compared, because it measured something else; a
+    /// machine behind none of the numbers on screen must not raise a warning about them. The population is
+    /// the legs, which is already what the averages, the leg count and the run count are derived from.
+    /// </para></summary>
+    private static MachineAgreement MachinesBehind(
+        IReadOnlyList<MetricLeg> legs, IReadOnlyDictionary<Guid, MachineFacts> machines) =>
+        MachineAgreement.Of(legs
+            .Select(leg => leg.RunId)
+            .Distinct()
+            .Select(runId => machines.GetValueOrDefault(runId, MachineFacts.NotRecorded)));
 
     /// <summary>One arm's cost, folded from its legs.
     /// <para>

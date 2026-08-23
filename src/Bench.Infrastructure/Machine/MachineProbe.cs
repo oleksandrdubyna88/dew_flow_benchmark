@@ -19,7 +19,7 @@ namespace Bench.Infrastructure.Machine;
 /// display-class registry key and is matched back by driver description; and <c>ConfigManagerErrorCode</c> is
 /// the field that exposes a card which has fallen off the bus. It is copied rather than referenced because a
 /// benchmark that depended on one engine's repository for its own machine facts could not measure any other
-/// engine — the reuse question is argued in <c>todo/PLAN_hardware_sampler.md</c> §7.
+/// engine — the reuse question is argued in <c>research/PLAN_hardware_sampler.md</c> §7.
 /// </para></summary>
 public sealed class MachineProbe(ILogger<MachineProbe> logger) : IMachineProbe
 {

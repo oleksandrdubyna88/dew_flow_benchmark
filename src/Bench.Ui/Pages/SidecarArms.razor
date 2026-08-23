@@ -87,6 +87,12 @@ else
                 <div><code>@scope.SuiteStamp</code></div>
                 <small class="text-body-secondary text-break">@scope.TargetCanonical</small>
             </div>
+            @* The hardware, stated before the numbers rather than after them. The target and the suite were
+               never the whole comparison scope: two runs on two machines differ for a reason that has nothing
+               to do with the backend, and a table silent about that reads as one that had checked. *@
+            <div class="@MachineBanner(scope.Machines.State) px-3 py-2 border-bottom">
+                <small><strong>Machine.</strong> @scope.Machines.Note</small>
+            </div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0">
                     <thead>
@@ -102,6 +108,9 @@ else
                             <th scope="col">Wall <small class="fw-normal text-body-secondary">total</small></th>
                             <th scope="col">Hits / files <small class="fw-normal text-body-secondary">mean / leg</small></th>
                             <th scope="col">Peak VRAM <small class="fw-normal text-body-secondary">max</small></th>
+                            @* Per arm as well as per scope: the scope says whether these numbers may be
+                               compared at all, this says WHICH arm is the mixed one. *@
+                            <th scope="col">Machines</th>
                             <th scope="col">Selection half</th>
                             <th scope="col">Held-out half</th>
                             <th scope="col">Verdict</th>
@@ -122,6 +131,7 @@ else
                                 <td><small>@arm.Cost.WallSeconds.ToString("0.#") s</small></td>
                                 <td><small>@arm.Cost.Hits.ToString("0.#") / @arm.Cost.Files.ToString("0.#")</small></td>
                                 <td><small>@Vram(arm.Cost)</small></td>
+                                <td><small class="@MachineText(arm.Machines.State)">@Machines(arm.Machines)</small></td>
                                 <td><small>@Half(arm.Selection)</small></td>
                                 <td><small>@Half(arm.HeldOut)</small></td>
                                 <td>

@@ -60,6 +60,12 @@ internal sealed class ScriptedRun(IReadOnlyList<string> questions, string suiteS
     public Task<Bench.Domain.Trace.MachineFacts> MachineAsync(Guid runId, CancellationToken cancellationToken) =>
         Task.FromResult(Machine);
 
+    // The batch read belongs to the cross-run comparison. A single-run report asks for its own machine by
+    // id, and a double quietly answering both would hide a report that had started reaching across runs.
+    public Task<IReadOnlyDictionary<Guid, Bench.Domain.Trace.MachineFacts>> MachinesAsync(
+        IReadOnlyList<Guid> runIds, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("a single-run report reads ONE machine — the batch is the comparison's");
+
     // The queue half of the port. A report never claims, settles or sweeps, and a double that quietly
     // answered these would hide a report that had started doing so.
     public Task<Outcome<BenchRun>> CreateAsync(BenchRun run, IReadOnlyList<RunCell> cells, CancellationToken cancellationToken) =>
