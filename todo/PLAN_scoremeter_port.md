@@ -1,9 +1,25 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **STEP 1 IMPLEMENTED 2026-08-23 — the module exists and the line family is in it. Steps 2–5
-> open.** `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it
-> sees nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
-> `LineNormalizer`, `DiffParser`, `DiffCleaner` and `LocCalculator`. 58 tests, suite 1361 green.
+> Status: **STEPS 1 AND 2 IMPLEMENTED 2026-08-23 — the whole deterministic half is in. Steps 3–5 open.**
+> `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
+> nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
+> `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy` and `Inherited`.
+> 73 module tests, suite 1376 green. Everything left needs a model runtime, which is exactly the boundary
+> §6 drew.
+>
+> **Step 2's two rules ported with their measured cases as fixtures**, by shape rather than by data — the
+> source's runs are not reproducible here, but their SHAPES are. A one-line diff carrying 23 points of
+> which 22 were rescued now scores 8 rather than 79, and a unit whose own justification calls it a mirror
+> is capped at the anchor scale's "no new logic" rung. Both exemptions are pinned too, and they matter as
+> much as the rules: co-location alone never caps (five distinct gates in one fat manager class are five
+> real units) and a cross-file mirror never caps (following a pattern is not repeating work). Without
+> them the cap stops being a cap on repetition and becomes a penalty on large files — punishing precisely
+> the refactors this benchmark most wants to price. Proven load-bearing by reverting the declared-mirror
+> condition and watching the co-location test go red.
+>
+> **§4.4 shipped as a file rather than as scattered notes.** `Inherited.cs` holds every constant accepted
+> on the source corpus's evidence, each with the measurement that produced it, plus the badge. The
+> mechanism is that the FILE SHRINKS as evidence becomes ours: a constant re-measured here moves out.
 >
 > **The two §3 adaptations landed with differential evidence rather than assertion.** Each behaviour is
 > pinned twice in the same run — once under the C# profile and once under the inherited one — so what the
@@ -22,7 +38,13 @@
 >   fates. `Migrations/` gets its OWN row rather than relaxing case sensitivity — the trap that once priced a
 >   9.42-hour ticket at 0 lines is live here in EF's capitalised folder.
 >
-> **Two deviations from the plan's own text, both narrowing:**
+> **Three deviations from the plan's own text, all narrowing:**
+>
+> - **The SQL multiplier is not ported.** The source weighted SQL units by a configured factor before
+>   summing; that is a claim about which work is worth more, fitted on a stack whose output was largely
+>   schema migrations, and this project has measured nothing of the sort. `PolicyResult.Total` is a plain
+>   sum, and `WeightedSum(Weighted, Unweighted)` collapses to one honest number. Same reasoning as the
+>   layer weights, which §2 already excluded — the plan simply did not name this one.
 >
 > - **The layer-weighted members are not ported at all**, as §2 said — but the plan's §4.1 still lists
 >   `LocFigures` as carrying `Diff/Cleaned/Excluded`, and what shipped adds `Added` and `Physical` beside
@@ -231,8 +253,13 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
    tests (each pinned under BOTH language profiles, so the profile is proven to decide). **Deviation:** the
    file splitter the source had twice — once in `DiffParser`, once in `LocMetrics` — was extracted to one
    walk, because two copies of a `diff --git` parser are two chances to drift.
-2. **The policy** — `DeliveredWorkPolicy` with the trail; behaviour pins ported from the source's
-   measured cases (run #13862's 79 → 9 shape, the declared-mirror cap) as fixture tests.
+2. ~~**The policy**~~ **IMPLEMENTED 2026-08-23.** `DeliveredWorkPolicy` with the `Adjustment` trail;
+   both measured cases pinned by SHAPE (#13862's 79 → 8 here, since the port sums plainly where the
+   source applied its SQL multiplier; #15105's declared mirror capped at 2). The trail keeps the MODEL's
+   raw score even where the cap already lowered it — a reader asking "what did the model say" cannot get
+   that from an applied score — and a dropped rescue is recorded at 0 rather than vanishing. Determinism
+   is pinned directly, because the recompute property depends on it: the same input applied twice must
+   produce an identical result, or a rescore is a new measurement wearing an old run's id.
 3. **Prompts + gate + stage** — the zero-band weigher, strict parsing (an unreadable reply is a
    refusal, never a guess), one re-ask, `stage_payloads` persistence, the protocol string.
 4. **`bench rescore`** — policy recompute over stored payloads, zero model calls, proven by a test
