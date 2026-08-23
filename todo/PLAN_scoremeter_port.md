@@ -1,11 +1,23 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **STEPS 1 AND 2 IMPLEMENTED 2026-08-23 — the whole deterministic half is in. Steps 3–5 open.**
+> Status: **STEPS 1, 2 AND THE PURE HALF OF 3 IMPLEMENTED 2026-08-23. What is left needs a model.**
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
-> `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy` and `Inherited`.
-> 73 module tests, suite 1376 green. Everything left needs a model runtime, which is exactly the boundary
-> §6 drew.
+> `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
+> `CoverageDecision` and `Inherited`. 97 module tests, suite 1400 green. Everything left needs a model
+> runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
+> since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
+>
+> **The gate's six statuses came across as six**, which is the part worth defending: "accepted" covers a
+> reply that met its band, one that fell short with an admissible cause, one that fell short with an
+> unlisted cause, and one the arithmetic could not judge at all. Collapsing them into a boolean would
+> publish four different claims as one. A cap with an unlisted cause is accepted and FLAGGED rather than
+> refused, because sincerity is not machine-decidable and a real cause nobody listed must stay sayable.
+>
+> **The known limitation is carried, not fixed.** The source's own report says *"the coverage gate still
+> loosens with size"* — a large change is held to 45 % where a small one is held to 70 %, and nothing here
+> has established that it should be. Recorded in `Inherited.CoverageBands` beside the measurement that
+> produced the bands, so a recalibration knows what to question rather than rediscovering it.
 >
 > **Step 2's two rules ported with their measured cases as fixtures**, by shape rather than by data — the
 > source's runs are not reproducible here, but their SHAPES are. A one-line diff carrying 23 points of
@@ -260,8 +272,15 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
    that from an applied score — and a dropped rescue is recorded at 0 rather than vanishing. Determinism
    is pinned directly, because the recompute property depends on it: the same input applied twice must
    produce an identical result, or a rescore is a new measurement wearing an old run's id.
-3. **Prompts + gate + stage** — the zero-band weigher, strict parsing (an unreadable reply is a
-   refusal, never a guess), one re-ask, `stage_payloads` persistence, the protocol string.
+3. **Prompts + gate + stage** — **the GATE landed 2026-08-23** (`CoverageDecision`: the bands, the
+   quantisation tolerance, the boundary epsilon, the two size floors, the six statuses and the cap-reason
+   judgement, all pure, 24 tests). Still open and all needing a runtime: the zero-band weigher's prompt
+   texts, strict parsing (an unreadable reply is a refusal, never a guess), the one re-ask the gate asks
+   for, `stage_payloads` persistence, and the protocol string.
+   **Deviation:** the gate's numerator is NOT inherited. The source divided Σ grain by cleaned LOC, and
+   grain is explicitly not ported (*"Σ grain still cannot tell padding from work"*), so the port takes a
+   neutral `accounted` figure and leaves how the stage computes it as an open decision belonging with the
+   stage. Inheriting a numerator whose own report disowns it would have been the worst of both.
 4. **`bench rescore`** — policy recompute over stored payloads, zero model calls, proven by a test
    that counts runtime invocations.
 5. **Recalibration** — the inflation arm on our corpus; on a pass (exponent ≈ ≤ 0, padded steps
