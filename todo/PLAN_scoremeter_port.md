@@ -1,6 +1,43 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **plan only, nothing implemented yet, 2026-08-16.** Scope: new code in `Bench.Domain` +
+> Status: **STEP 1 IMPLEMENTED 2026-08-23 — the module exists and the line family is in it. Steps 2–5
+> open.** `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it
+> sees nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
+> `LineNormalizer`, `DiffParser`, `DiffCleaner` and `LocCalculator`. 58 tests, suite 1361 green.
+>
+> **The two §3 adaptations landed with differential evidence rather than assertion.** Each behaviour is
+> pinned twice in the same run — once under the C# profile and once under the inherited one — so what the
+> tests prove is that the PROFILE decides, not that a constant happens to hold:
+>
+> - **`#` is the preprocessor, not a comment** (§3.2). `#if`/`#else`/`#endif` survive normalization while
+>   `#region`/`#pragma`/`#nullable` drop; under `LanguageProfile.Curly` the same lines drop as PHP comments.
+>   Dropping a conditional does not remove a comment — it MERGES two mutually exclusive branches into one
+>   statement that never existed, and the joiner then folds the wreckage into a logical line.
+> - **The string masker learned C#** (§3.2). `@"C:\path\"` under the source's escape model reads its closing
+>   quote as escaped, leaves the mask open to end of line, and every `//` after it stops being seen; raw
+>   strings carry unescaped quotes by design. Both are pinned.
+> - **`ConfiguringAnnotations` is empty for C#**, and that is a decision rather than an omission: its
+>   attributes are real `[…]` statements the comment rule never touched, so nothing needs rescuing from it.
+> - **The C# table band is ADDITIONS ONLY**, proven by a test that re-asserts six inherited paths keep their
+>   fates. `Migrations/` gets its OWN row rather than relaxing case sensitivity — the trap that once priced a
+>   9.42-hour ticket at 0 lines is live here in EF's capitalised folder.
+>
+> **Two deviations from the plan's own text, both narrowing:**
+>
+> - **The layer-weighted members are not ported at all**, as §2 said — but the plan's §4.1 still lists
+>   `LocFigures` as carrying `Diff/Cleaned/Excluded`, and what shipped adds `Added` and `Physical` beside
+>   them. `Physical` is the unjoined twin of the headline figure, and it is there because the joiner is the
+>   one adaptation that could silently change every number: a figure with no unjoined twin cannot show that.
+> - **`GlobToPattern` stayed internal and a `MatchesGlob` predicate is public instead.** This repository has
+>   no `InternalsVisibleTo` anywhere — it tests public surfaces — and the glob dialect *is* public contract,
+>   because callers write their own exclusion globs. A caller guessing whether `*` crosses a directory writes
+>   an exclusion that matches nothing, which looks exactly like one that had nothing to exclude.
+>
+> **A dropped tree is absent from the RAW figure too**, which the source did not do: it summed
+> `weighable` (counted + evidence) for `TreeDiffEquivalent`, and so does this port — stated because the
+> phrase *"the diff as it arrived"* reads as "everything git carried" and means something narrower.
+>
+> Originally: **plan only, nothing implemented yet, 2026-08-16.** Scope: new code in `Bench.Domain` +
 > `Bench.Application`, fixtures and tests; one new table. The source repository is read-only:
 > `scoreMeter` at `\\wsl.localhost\Ubuntu\home\jinx\git\scoreMeter` — cited below as paths, per the
 > cross-repository citation rule.
@@ -186,10 +223,14 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
 
 ## 6. Build order
 
-1. **The module and the line family** — `src/Bench.Delivered` created as a leaf (zero references,
-   `ArchitectureTests` extended to assert it, same as `Bench.Domain`); then `DiffParser` +
-   `DiffCleaner` + `PathCategoryTable` + `LineNormalizer` + `LocFigures` inside it, with the
-   §3.1/§3.2 adaptations behind their own tests and the parity fixtures green.
+1. ~~**The module and the line family**~~ **IMPLEMENTED 2026-08-23.** `src/Bench.Delivered` is a leaf
+   with zero references, guarded by two `ArchitectureTests` assertions rather than one — it sees nothing,
+   and nothing outside the Application layer may see it, because the recompute property holds only while
+   there is exactly one orchestration. `DiffParser` + `DiffCleaner` + `PathCategoryTable` +
+   `LineNormalizer` + `LocCalculator` are inside it with the §3.1/§3.2 adaptations under differential
+   tests (each pinned under BOTH language profiles, so the profile is proven to decide). **Deviation:** the
+   file splitter the source had twice — once in `DiffParser`, once in `LocMetrics` — was extracted to one
+   walk, because two copies of a `diff --git` parser are two chances to drift.
 2. **The policy** — `DeliveredWorkPolicy` with the trail; behaviour pins ported from the source's
    measured cases (run #13862's 79 → 9 shape, the declared-mirror cap) as fixture tests.
 3. **Prompts + gate + stage** — the zero-band weigher, strict parsing (an unreadable reply is a

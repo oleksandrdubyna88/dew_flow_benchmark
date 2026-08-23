@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Bench.Domain\Bench.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Bench.Delivered\Bench.Delivered.csproj" />
     <ProjectReference Include="..\..\src\Bench.Application\Bench.Application.csproj" />
     <ProjectReference Include="..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Bench.Api\Bench.Api.csproj" />

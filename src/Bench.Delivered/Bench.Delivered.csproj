@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The delivered-work instrument, ported — mechanism, not repository — from the operator's scoreMeter
+       V2. A SIBLING LEAF, not a layer: it references nothing (not even Bench.Domain) and nothing but the
+       one orchestrating stage references it, which is what keeps it liftable whole and keeps another
+       product's vocabulary out of this one's domain. Strings in, values out: it never calls a model, never
+       touches a store and never reads a file. The architecture test enforces the leaf rule. -->
+
+</Project>

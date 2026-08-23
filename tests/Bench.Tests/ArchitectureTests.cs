@@ -26,6 +26,31 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
+    public void Delivered_references_nothing_beyond_the_runtime()
+    {
+        // A SIBLING LEAF, not a layer — it may not see Bench.Domain either. That is what keeps the port
+        // liftable whole into a package or another repository, and what keeps another product's vocabulary
+        // out of this one's domain. Strings in, values out.
+        Referenced("Bench.Delivered.dll").Should().OnlyContain(
+            r => IsRuntime(r),
+            "the delivered-work module is a leaf: it never calls a model, touches a store or reads a file");
+    }
+
+    [Fact]
+    public void Nothing_but_the_Application_layer_may_reference_the_Delivered_module()
+    {
+        // The module owns every RULE and the stage owns the IO. A surface reaching past the stage into the
+        // module would be a second orchestration, and the recompute property — policy replayed over stored
+        // payloads with zero model calls — only holds while there is exactly one.
+        foreach (var assembly in new[] { "Bench.Domain.dll", "Bench.Contracts.dll", "Bench.Api.dll", "Bench.Ui.dll" })
+        {
+            Referenced(assembly).Should().NotContain(
+                r => r.Name == "Bench.Delivered",
+                $"{assembly} must reach the delivered-work module through the Application layer or not at all");
+        }
+    }
+
+    [Fact]
     public void Application_does_not_reach_into_Infrastructure()
     {
         Referenced("Bench.Application.dll").Should().NotContain(

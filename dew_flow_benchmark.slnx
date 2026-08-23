@@ -4,6 +4,7 @@
     <Project Path="src/Bench.Application/Bench.Application.csproj" />
     <Project Path="src/Bench.Infrastructure/Bench.Infrastructure.csproj" />
     <Project Path="src/Bench.Contracts/Bench.Contracts.csproj" />
+    <Project Path="src/Bench.Delivered/Bench.Delivered.csproj" />
     <Project Path="src/Bench.Api/Bench.Api.csproj" />
     <Project Path="src/Bench.Ui/Bench.Ui.csproj" />
     <Project Path="src/Bench.ServiceDefaults/Bench.ServiceDefaults.csproj" />
