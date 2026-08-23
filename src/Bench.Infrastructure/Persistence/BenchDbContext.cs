@@ -173,6 +173,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<PreparationRow> Preparations => Set<PreparationRow>();
 
+    /// <summary>Append-only and PERMANENT — the one table here that is never pruned, because a payload
+    /// aged out is a score that can no longer be recomputed.</summary>
+    public DbSet<StagePayloadRow> StagePayloads => Set<StagePayloadRow>();
+
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
 
     public DbSet<SessionRunRow> SessionRuns => Set<SessionRunRow>();
@@ -259,6 +263,20 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
             // "Which tools did subjects reach for" across a whole run, without a scan.
             call.HasIndex(c => c.ToolName);
+        });
+
+        builder.Entity<StagePayloadRow>(payload =>
+        {
+            payload.ToTable("stage_payloads");
+            payload.HasKey(p => p.Id);
+
+            // The name, not the ordinal — the same rule every other enum here follows.
+            payload.Property(p => p.Stage).HasConversion<string>();
+
+            // ONE payload per attempt, enforced rather than assumed: two rows for one (result, stage,
+            // ordinal) would make "was this re-asked" unanswerable, and that is read straight off the
+            // ordinal.
+            payload.HasIndex(p => new { p.ResultId, p.Stage, p.Ordinal }).IsUnique();
         });
 
         builder.Entity<MetricRow>(metric =>

@@ -1,4 +1,5 @@
 using Bench.Domain.Runs;
+using Bench.Domain.Trace;
 
 namespace Bench.Infrastructure.Persistence;
 
@@ -140,6 +141,43 @@ public sealed class ToolCallRow
     public long DurationMs { get; set; }
 
     public ToolCallSource Source { get; set; }
+
+    public ResultRow? Result { get; set; }
+}
+
+/// <summary>One raw model exchange of the delivered-work pipeline, as a ROW.
+/// <para>
+/// A row rather than a JSON column on the result, because the read a rescore performs is "every payload of
+/// this result, in stage then ordinal order" — an ordered walk, not a blob to parse. It is also the table
+/// whose SIZE has to be answerable, and a column inside another row cannot be measured on its own.
+/// </para>
+/// <para>
+/// Append-only and permanent by design: see <c>Bench.Domain.Trace.StagePayload</c> for why aging it out
+/// would end the property the whole delivered-work port exists to preserve.
+/// </para></summary>
+public sealed class StagePayloadRow
+{
+    public Guid Id { get; set; }
+
+    public Guid ResultId { get; set; }
+
+    public DeliveredStage Stage { get; set; }
+
+    /// <summary>Which attempt, from 0. The gate allows exactly one re-ask, so an ordinal above zero IS the
+    /// record that one happened.</summary>
+    public int Ordinal { get; set; }
+
+    /// <summary>The reply as it ARRIVED, before any parsing. A stored parse is a stored interpretation and
+    /// could not be re-read under a fixed parser, which is half of what a rescore is for.</summary>
+    public string PayloadJson { get; set; } = string.Empty;
+
+    public string PromptHash { get; set; } = string.Empty;
+
+    /// <summary>The scale and rules in force. A score is comparable only with scores made under the same
+    /// string, so it travels with the payload rather than being looked up from whatever is current.</summary>
+    public string Protocol { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; set; }
 
     public ResultRow? Result { get; set; }
 }

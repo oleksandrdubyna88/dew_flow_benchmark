@@ -237,3 +237,38 @@ public interface IJudge
 }
 
 public sealed record JudgeVerdict(bool Passed, string Reason);
+
+/// <summary>The raw model exchanges of the delivered-work pipeline, kept so a score can be recomputed
+/// without paying for a single call.
+///
+/// <para><b>Append-only and permanent.</b> There is no update and no delete, and that is the interface
+/// saying what the table is: a payload that could be rewritten would make an old score unreproducible
+/// while still looking reproducible, and one that could be aged out would end the recompute property the
+/// port exists for. The size that buys is a budget line, not a leak — see <see cref="StagePayload"/>.</para>
+/// </summary>
+public interface IStagePayloadStore
+{
+    /// <summary>Records one exchange. Refuses a duplicate <c>(result, stage, ordinal)</c>: two payloads for
+    /// one attempt would make "was this re-asked" unanswerable, and that is read off the ordinal.</summary>
+    Task<Outcome<StagePayload>> AppendAsync(StagePayload payload, CancellationToken cancellationToken);
+
+    /// <summary>Everything stored for one result, in stage then ordinal order — the order a rescore replays
+    /// them in. Empty for a result measured before this existed, which is the honest answer rather than a
+    /// refusal: those runs are simply not rescorable, and a reader must be able to tell that apart from a
+    /// run whose model said nothing.</summary>
+    Task<IReadOnlyList<StagePayload>> ForResultAsync(Guid resultId, CancellationToken cancellationToken);
+
+    /// <summary>How much this table holds, so the number nobody prints is not the number nobody notices
+    /// growing. Rows and bytes together: a million small payloads and a thousand enormous ones are
+    /// different problems with the same row count.</summary>
+    Task<StagePayloadFootprint> FootprintAsync(CancellationToken cancellationToken);
+}
+
+/// <param name="Results">How many results have payloads at all — the rescorable population, which is what
+/// a reader actually wants when they ask how much is stored.</param>
+public sealed record StagePayloadFootprint(long Rows, long Results, long Bytes)
+{
+    public string Describe =>
+        $"{Rows} payload(s) over {Results} result(s), {Bytes / (1024d * 1024):0.#} MiB — kept permanently so "
+        + "every stored score can be recomputed without a model call";
+}

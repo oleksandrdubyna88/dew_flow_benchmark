@@ -4,8 +4,8 @@
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
-> `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`. 125 module tests,
-> suite 1431 green. Everything left needs a model
+> `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`, with `stage_payloads`
+> persisted beside them. 125 module tests, suite 1439 green. Everything left needs a model
 > runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
 > since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
 >
@@ -276,7 +276,16 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
 3. **Prompts + gate + stage** — **the GATE landed 2026-08-23** (`CoverageDecision`: the bands, the
    quantisation tolerance, the boundary epsilon, the two size floors, the six statuses and the cap-reason
    judgement, all pure, 24 tests). Still open and all needing a runtime: the zero-band weigher's prompt
-   texts beyond the scale, the one re-ask the gate asks for, and `stage_payloads` persistence.
+   texts beyond the scale, the stage itself, and the one re-ask the gate asks for.
+   **`stage_payloads` landed 2026-08-23**: the table, its row, the `IStagePayloadStore` port and its
+   Postgres adapter. Append-only with no update and no delete — their absence IS the design, because a
+   payload that could be rewritten would make an old score unreproducible while still looking
+   reproducible. A re-ask is readable straight off the ordinal rather than from a log, the protocol
+   travels WITH the payload instead of being looked up from whatever is current, and the footprint is
+   counted in SQL so the one permanently-kept table can print its own budget line.
+   **A real defect the tests caught:** the stage column stores the enum's NAME, so a database sort is
+   alphabetical — `Coverage` before `Decompose` — which would replay the gate before the decomposition it
+   gates. Ordered in pipeline order in memory instead, which for a handful of rows costs nothing.
    **Strict parsing landed 2026-08-23** (`Reply<T>`, `ReplyReader`, `DeliveredWorkReplies`): the packaging
    is forgiven — models wrap JSON in prose and fences however firmly they are told not to — and every
    field rule refuses rather than repairs. A duplicate key, a score off the scale, a step nobody asked
