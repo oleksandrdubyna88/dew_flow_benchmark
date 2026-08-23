@@ -17,7 +17,7 @@ namespace Bench.Domain.Variants;
 /// <para><b>It stays OUT of the canonical form until declared</b>, which is not a detail. A variant is added
 /// and retired, never edited, so its hash is its identity and a stored row must keep hashing as it did. A
 /// width appended unconditionally would silently re-identify every variant in the catalog — the regression
-/// <c>todo/PLAN_corpus_axis_integrity.md</c> names in its own test plan.</para>
+/// <c>research/PLAN_corpus_axis_integrity.md</c> names in its own test plan.</para>
 /// </summary>
 public readonly record struct EmbedDimensions
 {

@@ -19,7 +19,7 @@ namespace Bench.Tests.Retrieval;
 /// <para><b>Three states, and the hash is the reason.</b> A catalog row is immutable — added and retired,
 /// never edited — so its hash is its identity. A width folded into the canonical form unconditionally would
 /// silently re-identify every variant already published against one, which is the regression
-/// <c>todo/PLAN_corpus_axis_integrity.md</c> names in its own test plan.</para>
+/// <c>research/PLAN_corpus_axis_integrity.md</c> names in its own test plan.</para>
 /// </summary>
 public sealed class EmbedDimensionsTests
 {

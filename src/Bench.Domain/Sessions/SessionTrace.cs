@@ -123,7 +123,7 @@ public enum CallState
 /// <summary>What a human said this session is FOR — supplied by whoever opened the terminal, never guessed.
 /// <para>
 /// <see cref="PlanPath"/> is the manual link to the plan document a session is working through
-/// (<c>todo/PLAN_corpus_axis_integrity.md</c>). It is deliberately not inferred: a session's subject is a
+/// (<c>research/PLAN_corpus_axis_integrity.md</c>). It is deliberately not inferred: a session's subject is a
 /// claim only the operator can make, and a heuristic that guessed it from the first file read would attach
 /// confident wrong labels to a corpus whose whole purpose is to be trustworthy.
 /// </para></summary>

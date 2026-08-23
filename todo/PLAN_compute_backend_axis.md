@@ -47,7 +47,7 @@
 >
 > Related: [PLAN_variant_matrix.md](PLAN_variant_matrix.md) (step 4 wires an engine into a leg; phase 3 here
 > cannot land before it), [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §5.1 (the accelerator lease this
-> measurement is void without), [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md) (the
+> measurement is void without), [PLAN_corpus_axis_integrity.md](../research/PLAN_corpus_axis_integrity.md) (the
 > echo-and-block discipline this copies wholesale),
 > [../research/architecture.md](../research/architecture.md) (the measurement contract the axis extends).
 > The measured party: `dew_flow_rag_qln` owns the card and the sidecar; the sidecar is
@@ -367,7 +367,7 @@ not need a hand-run probe of its own.
 said `EngineDescriptor`, which does not exist; corrected 2026-08-19). It gains a `ComputeBackend` echo — host
 (`windows` | `wsl` | `linux`), provider (`migraphx` | `dml` | `cuda` | `cpu`), device, adapter name, and the
 serving binary's hash — populated from what the engine REPORTS, never from what the run requested. Three
-states, not two, copying [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md): **matched ·
+states, not two, copying [PLAN_corpus_axis_integrity.md](../research/PLAN_corpus_axis_integrity.md): **matched ·
 mismatched · not declared**. An arm that names a backend and gets a different one back is **blocked with both
 named**; an engine that declares nothing is *not declared*, which is honest for a third-party engine and must
 not read as agreement.

@@ -25,7 +25,7 @@ public sealed record CapturedCountDto(bool Captured, long Value, string Reason)
 /// <summary>What a human said this session is for. Supplied by whoever opened the terminal — never guessed
 /// from the work, because a session's subject is a claim only its operator can make.</summary>
 /// <param name="PlanPath">The plan document this session is working through, repository-relative
-/// (<c>todo/PLAN_corpus_axis_integrity.md</c>). Empty when none was linked, which is ordinary.</param>
+/// (<c>research/PLAN_corpus_axis_integrity.md</c>). Empty when none was linked, which is ordinary.</param>
 public sealed record SessionTaskDto(string Id, string Name, string PlanPath)
 {
     public static SessionTaskDto None { get; } = new(string.Empty, string.Empty, string.Empty);

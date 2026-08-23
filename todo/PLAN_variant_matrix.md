@@ -230,7 +230,7 @@
 > [../research/architecture.md](../research/architecture.md),
 > [PLAN_corpus_litter.md](PLAN_corpus_litter.md) (every cell this plan adds is a corpus this plan must not leak),
 > [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) (the design of this plan's §3.8 agent lane — boundary in §3.8a),
-> [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md) (two more corpus identity axes and the recipe echo),
+> [PLAN_corpus_axis_integrity.md](../research/PLAN_corpus_axis_integrity.md) (two more corpus identity axes and the recipe echo),
 > [../research/PLAN_reliability_tail.md](../research/PLAN_reliability_tail.md) (implemented 2026-08-16 —
 > its items 2 and 1's wall-budget tail were two of step 9's gates, and both are now clear).
 
@@ -451,7 +451,7 @@ variant:
    the variant's `DefinitionJson` names must appear in the response's axes with the requested value, and a
    missing or differing axis **blocks the cell with a named reason** carrying both values. Same move, same
    reason as the surface fingerprint in [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) §3.3 and the
-   corpus recipe in [PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md) §3.2; a blocked cell is
+   corpus recipe in [PLAN_corpus_axis_integrity.md](../research/PLAN_corpus_axis_integrity.md) §3.2; a blocked cell is
    visible and cheap, a mislabelled measurement is permanent. qln's half — refusing an unknown axis field
    at the boundary instead of dropping it — is named in the sibling plan §3.1 and §7, because an engine
    that refuses is one the benchmark never has to catch.
@@ -478,7 +478,7 @@ identity already fingerprints all of them — `model`, `shape`, `window`, `overl
 field at `dew_flow_rag_qln · src/Rag.Domain/Corpus/CorpusVariant.cs:92-93`, precisely so that adding a
 field cannot silently re-hash — so those are not three ways of describing 24 corpora. They are 24 × 2 × 2
 = **96 coexisting collections, per target repository**. And 96 is the floor, not the ceiling:
-[PLAN_corpus_axis_integrity.md](PLAN_corpus_axis_integrity.md) §3.1 proposes `ChunkStrategy` and
+[PLAN_corpus_axis_integrity.md](../research/PLAN_corpus_axis_integrity.md) §3.1 proposes `ChunkStrategy` and
 `Tokenizer` as two more identity fields, each of which multiplies again.
 
 What that costs is measured, not estimated. [PLAN_corpus_litter.md](PLAN_corpus_litter.md) records one

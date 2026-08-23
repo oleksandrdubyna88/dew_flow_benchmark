@@ -222,6 +222,6 @@ non-numeric reading is dropped by the shared rule.
 
 ### The corpus width went with it, and belongs to another plan
 
-`todo/PLAN_corpus_axis_integrity.md` owns it, and it is implemented: `EmbedDimensions` as a third state, the
+`research/PLAN_corpus_axis_integrity.md` owns it, and it is implemented: `EmbedDimensions` as a third state, the
 engine echo (`dew_flow_rag_qln` 2b9aab4) reading the width off the COLLECTION rather than configuration, and
 a canonical form that appends it only when declared so no stored variant's hash moves.
