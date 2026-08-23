@@ -49,6 +49,57 @@ public sealed class SessionAnalysisTests
         loops[0].Ordinals.Should().Equal([1, 3, 4]);
     }
 
+    /// <summary>Found by a traced session, 2026-08-23. The window used to reset on any EXECUTION-phase
+    /// call, and "execution phase" is not the same fact as "the tree changed": a shell command the
+    /// allowlist conservatively counts as a write — <c>gh pr list</c> — carries phase Execution while its
+    /// porcelain digest says Unchanged. A genuine loop straddling one of those was silently missed, which
+    /// is a lost measurement in the flagship detector.</summary>
+    [Fact]
+    public void A_write_that_positively_changed_nothing_does_not_reset_the_window()
+    {
+        var calls = Labelled(
+            Call(1, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(2, ToolClass.Write, MutationEvidence.Unchanged, "gh pr list", "Bash"),
+            Call(3, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(4, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"));
+
+        calls[1].Phase.Should().Be(SessionPhase.Execution, "the classification itself is not in question");
+
+        var loops = SessionAnalysis.Loops(calls);
+
+        loops.Should().ContainSingle();
+        loops[0].Ordinals.Should().Equal([1, 3, 4]);
+    }
+
+    /// <summary>The mirror, and the reason the fix is not simply "reset only on Changed". A write whose
+    /// tree reading never ran might have changed everything — git was unavailable, the workspace is not a
+    /// repository, the budget was exceeded. Treating that as a no-op would MANUFACTURE a loop out of a gap
+    /// in instrumentation, which is the same class of defect one direction over.</summary>
+    [Fact]
+    public void A_write_nobody_could_verify_still_resets_the_window()
+    {
+        var calls = Labelled(
+            Call(1, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(2, ToolClass.Write, MutationEvidence.NotChecked, "src/Foo.cs", "Edit"),
+            Call(3, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(4, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"));
+
+        SessionAnalysis.Loops(calls).Should().BeEmpty();
+    }
+
+    /// <summary>A build changes no source, so it is not progress and must not reset the window either.</summary>
+    [Fact]
+    public void A_build_between_reads_does_not_reset_the_window()
+    {
+        var calls = Labelled(
+            Call(1, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(2, ToolClass.Verify, MutationEvidence.Unchanged, "dotnet build", "Bash"),
+            Call(3, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"),
+            Call(4, ToolClass.Read, MutationEvidence.NotChecked, "src/Foo.cs"));
+
+        SessionAnalysis.Loops(calls).Should().ContainSingle();
+    }
+
     [Fact]
     public void Two_reads_are_not_a_loop()
     {

@@ -209,12 +209,7 @@ public sealed class PostgresSessionStore(BenchDbContext db, ToolTaxonomy taxonom
         };
     }
 
-    /// <summary>Closes the newest still-open call of the same tool.
-    /// <para>
-    /// Matched by tool name and recency rather than by an id, because a hook payload carries no call id.
-    /// Within one session the calls are strictly serial — an agent does not start a second tool before the
-    /// first returns — so the newest open call of that name is the one this event is about.
-    /// </para>
+    /// <summary>Closes the open call this event is actually about.
     /// <para>
     /// A close with no matching open is not dropped: it becomes a finished call of its own. That is the
     /// shape a configuration with only a post-hook produces, and refusing it would silently record nothing
@@ -231,12 +226,7 @@ public sealed class PostgresSessionStore(BenchDbContext db, ToolTaxonomy taxonom
             return new SessionIngestOutcome(session.Id, known.Ordinal, true, "already recorded");
         }
 
-        var open = await db.SessionToolCalls
-            .Where(c => c.SessionId == session.Id
-                && c.State == CallState.Started
-                && c.ToolName == record.ToolName)
-            .OrderByDescending(c => c.Ordinal)
-            .FirstOrDefaultAsync(cancellationToken);
+        var open = await OpenCallAsync(session.Id, record, cancellationToken);
 
         var call = open ?? Adopted(session, record, await LatestAsync(session.Id, cancellationToken));
 
@@ -261,6 +251,46 @@ public sealed class PostgresSessionStore(BenchDbContext db, ToolTaxonomy taxonom
     /// <c>Time</c> already refused to invent a zero for exactly this case; mutation had never been given
     /// the same care. <c>PostgresSessionStoreTests</c> pins both halves.
     /// </para></summary>
+    /// <summary>Which open call this close belongs to — by its ARGUMENTS first, and only then by recency.
+    /// <para>
+    /// A hook payload carries no call id, so the pairing has to be inferred. The first version inferred it
+    /// from arrival order alone — "the newest open call of this tool" — on the stated assumption that a
+    /// session's calls are strictly serial. <b>They are not:</b> an agent BATCHES tool calls, so two
+    /// <c>Read</c>s run at once and the hooks arrive <c>Pre(A) · Pre(B) · Post(A) · Post(B)</c>. Recency
+    /// then hands A's response, size, duration and digests to B's row and B's to A's.
+    /// </para>
+    /// <para>
+    /// Nothing errors and nothing looks wrong afterwards: both rows are finished, both carry plausible
+    /// numbers, and each still names the file it was OPENED with. It is precisely the failure this whole
+    /// system exists to catch — a measurement confidently about the wrong thing — and it would have
+    /// poisoned the window-waste signal, whose entire content is "this size, against that target".
+    /// </para>
+    /// <para>
+    /// The arguments are the discriminator, because both hooks are handed the same <c>tool_input</c>. Two
+    /// batched calls that are identical in every argument remain indistinguishable, and there the pairing
+    /// genuinely does not matter — the rows would be interchangeable. Recency survives as the fallback for
+    /// the case where an emitter did not repeat the arguments on the close.
+    /// </para></summary>
+    private async Task<SessionToolCallRow?> OpenCallAsync(
+        Guid sessionId, SessionEventRecord record, CancellationToken cancellationToken)
+    {
+        var candidates = db.SessionToolCalls
+            .Where(c => c.SessionId == sessionId
+                && c.State == CallState.Started
+                && c.ToolName == record.ToolName);
+
+        var arguments = Cap(record.ArgumentsJson);
+
+        var exact = await candidates
+            .Where(c => c.ArgumentsJson == arguments)
+            .OrderByDescending(c => c.Ordinal)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return exact ?? await candidates
+            .OrderByDescending(c => c.Ordinal)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     private SessionToolCallRow Adopted(
         SessionRunRow session, SessionEventRecord record, SessionToolCallRow? previous)
     {

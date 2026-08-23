@@ -83,6 +83,41 @@ public sealed class PostgresSessionStoreTests(PostgresFixture postgres)
         run.Calls[0].Phase.Should().Be(SessionPhase.Execution);
     }
 
+    /// <summary>Raised by a traced session, 2026-08-23, as a risk rather than an observation — and it was
+    /// right. An agent BATCHES tool calls, so two <c>Read</c>s run at once and the hooks arrive
+    /// <c>Pre(A) · Pre(B) · Post(B) · Post(A)</c>. Matching a close to "the newest open call of this tool"
+    /// then attaches each response, size, duration and digest to the OTHER file.
+    /// <para>
+    /// Nothing errors and nothing looks wrong: both rows are finished, both have plausible numbers, and the
+    /// target of each is the file it was opened with. It is exactly the shape this system exists to catch —
+    /// a measurement that is confidently about the wrong thing — and it would have silently poisoned the
+    /// window-waste signal, whose whole content is "this size, against that target".
+    /// </para></summary>
+    [Fact]
+    public async Task Two_calls_of_one_tool_in_flight_close_onto_their_own_rows()
+    {
+        await using var db = postgres.NewContext();
+        var store = new PostgresSessionStore(db, ToolTaxonomy.ClaudeCode);
+        var key = $"parallel-{Guid.CreateVersion7()}";
+
+        await store.RecordAsync(Read(key, SessionEventKind.PreToolUse, "src/A.cs", 0), TestContext.Current.CancellationToken);
+        await store.RecordAsync(Read(key, SessionEventKind.PreToolUse, "src/B.cs", 0), TestContext.Current.CancellationToken);
+
+        // A finishes FIRST — the order the reporting session named, and the one "newest open call of this
+        // tool" gets wrong. (B-then-A happens to come out right by accident, which is why the accident had
+        // to be excluded from this test rather than relied on.)
+        await store.RecordAsync(Read(key, SessionEventKind.PostToolUse, "src/A.cs", 111), TestContext.Current.CancellationToken);
+        var last = await store.RecordAsync(Read(key, SessionEventKind.PostToolUse, "src/B.cs", 222), TestContext.Current.CancellationToken);
+
+        var run = await Read(store, last.SessionId);
+        var a = run.Calls.Single(c => c.Target == "src/A.cs");
+        var b = run.Calls.Single(c => c.Target == "src/B.cs");
+
+        run.Calls.Should().HaveCount(2, "two opens and two closes are two calls, not four");
+        a.ResponseChars.Should().Be(111, "A's answer belongs to A");
+        b.ResponseChars.Should().Be(222, "B's answer belongs to B");
+    }
+
     [Fact]
     public async Task A_call_that_never_closed_stays_in_the_ledger_as_unfinished()
     {
@@ -169,6 +204,22 @@ public sealed class PostgresSessionStoreTests(PostgresFixture postgres)
         var found = await store.ByIdAsync(id, TestContext.Current.CancellationToken);
 
         return found.Match(run => run, reason => throw new Xunit.Sdk.XunitException(reason));
+    }
+
+    /// <summary>A <c>Read</c> event naming one file — the shape an agent's batched reads take.</summary>
+    private static SessionEventRecord Read(string key, SessionEventKind kind, string path, int chars)
+    {
+        var record = Record(key, kind, "irrelevant", "d", 0, chars > 0 ? CallOutcome.Answered : CallOutcome.NotCaptured);
+
+        return record with
+        {
+            ToolName = "Read",
+            ArgumentsJson = $$"""{"file_path":"{{path}}"}""",
+            ResponseChars = chars,
+            Worktree = WorktreeReading.NotChecked("Read cannot change tracked files"),
+            // Each event needs its own identity, or the second open is absorbed as a retry of the first.
+            Fingerprint = $"{key}-{kind}-{path}",
+        };
     }
 
     private static SessionEventRecord Open(string key, string command, string digest, int dirty) =>

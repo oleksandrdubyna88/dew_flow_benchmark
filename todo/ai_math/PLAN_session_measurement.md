@@ -302,17 +302,31 @@ Built 2026-08-23. The Claude Code path runs end to end: hooks → collector → 
    layering that already exists, and a module cutting across it would have had to reference three layers
    to say anything.
 
-### The instrument found a defect in itself, on its first real run
+### The instrument found three defects in itself, on its first two real runs
 
-The first session ever traced was pointed at this repository and asked to find a bug. It found one **in
-this system's own store**: a close event with no matching open was adopted as a finished call, and the
-adoption seeded its before-digest from the CLOSE event — so the comparison ran a reading against itself and
-answered `Unchanged` every time. One reading taken, and a confident claim that nothing changed. Its visible
-consequence was a false `AllowlistCandidate` announcing that a command "changed nothing".
+Pointed at this repository and asked to find a bug, the traced sessions found them **in this system's own
+code**. All three are the same class, and it is this plan's own subject: a *fabricated or lost measurement* —
+a number that was computed rather than observed.
 
-Fixed with the red test watched failing on exactly that symptom (`PostgresSessionStoreTests`). Recorded here
-because it is the plan's own thesis arriving early: the defect was a *fabricated measurement*, the kind a
-formula catches and a reading of the code did not.
+1. **A reading compared against itself.** A close event with no matching open is adopted as a finished call,
+   and the adoption seeded its before-digest from the CLOSE event — so the comparison ran one reading against
+   itself and answered `Unchanged` every time. Its visible consequence was a false `AllowlistCandidate`
+   announcing that a command "changed nothing".
+2. **The loop detector reset on the wrong signal.** It flushed its window on any EXECUTION-phase call, and
+   "execution phase" is not the same fact as "the tree changed": a shell command the allowlist conservatively
+   counts as a write (`gh pr list`) is phase Execution while its digest says `Unchanged`. A genuine loop
+   straddling one was silently missed. **The obvious repair was refused** — resetting only on `Changed` would
+   have manufactured loops out of writes nobody could verify — so the rule is the narrow one: only a
+   *positively observed* no-op fails to reset.
+3. **Parallel calls of one tool closed onto each other's rows.** The pairing assumed a session's calls are
+   serial; an agent batches them, so `Pre(A) · Pre(B) · Post(A) · Post(B)` handed each response, size and
+   duration to the wrong file. Nothing errored and both rows looked plausible — the exact shape of a
+   measurement confidently about the wrong thing. Now paired by ARGUMENTS, with recency as the fallback.
+
+Each has a red test watched failing on its real symptom (`SessionAnalysisTests`, `PostgresSessionStoreTests`).
+The third is worth one more note: the reporting session flagged it as a *risk it could not confirm*, and it
+was right — the first version of its test passed, because the arrival order it happened to use is the one
+recency gets right by accident. The order had to be excluded from the test rather than relied upon.
 
 ## 9. Definition of Done
 

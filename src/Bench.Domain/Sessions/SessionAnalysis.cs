@@ -100,9 +100,9 @@ public static class SessionAnalysis
 
         foreach (var call in calls)
         {
-            if (call.Phase == SessionPhase.Execution)
+            if (Progressed(call))
             {
-                // The tree moved: everything read before it may legitimately need reading again.
+                // Something may have moved: everything read before it can legitimately need reading again.
                 Flush(window, found);
                 continue;
             }
@@ -161,6 +161,25 @@ public static class SessionAnalysis
                 $"'{g.Key}' was counted as a write {g.Count()} time(s) and changed nothing"))];
 
     // ---- the machinery the detectors above are written in terms of -------------------------------------
+
+    /// <summary>Whether this call is PROGRESS — a reason the reads before it might honestly need repeating.
+    /// <para>
+    /// The window used to reset on any execution-phase call, and that was a defect a traced session found
+    /// on 2026-08-23: "execution phase" is not the same fact as "the tree changed". A shell command the
+    /// allowlist conservatively counts as a write — <c>gh pr list</c> — is phase Execution while its
+    /// porcelain digest says <see cref="MutationEvidence.Unchanged"/>, so a genuine loop straddling one was
+    /// silently missed. A lost measurement in the flagship detector.
+    /// </para>
+    /// <para>
+    /// <b>The obvious repair — reset only on <see cref="MutationEvidence.Changed"/> — was refused</b>, and
+    /// this is the more interesting half. A write whose reading never RAN might have changed everything:
+    /// git was unavailable, the workspace is not a repository, the budget was exceeded. Treating that as a
+    /// no-op would manufacture a loop out of a gap in instrumentation, which is the same class of defect
+    /// one direction over. So the rule is the narrow one: <b>only a positively observed no-op fails to
+    /// reset the window.</b>
+    /// </para></summary>
+    private static bool Progressed(SessionToolCall call) =>
+        call.Phase == SessionPhase.Execution && call.Mutation != MutationEvidence.Unchanged;
 
     private static void Remember(Dictionary<string, List<int>> window, SessionToolCall call)
     {
