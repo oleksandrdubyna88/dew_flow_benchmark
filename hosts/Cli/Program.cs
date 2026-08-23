@@ -84,6 +84,7 @@ public static class Program
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
+            "sessions" => Sessions(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
             "lanes" => Lanes(command, output, error, stopping),
             "questions" => Questions(command, output, error, stopping),
@@ -166,6 +167,53 @@ public static class Program
         }
 
         return TelemetryCommand.RunAsync(command, new PostgresTelemetryStore(db), output, error, stopping)
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>The agent-session traces (todo/ai_math/PLAN_session_measurement.md).
+    /// <para>
+    /// This is also the verb that CREATES the schema those traces live in, and that is load-bearing: the
+    /// collector refuses to start against a database that is behind, the CLI owns migrations here, and so
+    /// the first command an operator runs is the one that makes the rest of the system possible.
+    /// </para></summary>
+    private static int Sessions(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
+    {
+        // Installing hooks writes a settings file inside a target repository and touches no database.
+        // Requiring a connection for it would make it impossible to instrument a repository from a machine
+        // that has the agent but not the store — which is most machines this will ever run on.
+        if (command.Operand(0) == "install")
+        {
+            return SessionsCommand.RunAsync(command, new NoSessionStore(), output, error, stopping)
+                .GetAwaiter().GetResult();
+        }
+
+        var connection = command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
+        if (connection.Length == 0)
+        {
+            error.WriteLine("bench: no database — pass --db or set BENCH_DB");
+            return ExitCodes.Environment;
+        }
+
+        using var db = new BenchDbContext(
+            new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).Options);
+
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Npgsql.NpgsqlException ex)
+        {
+            error.WriteLine($"bench: database unreachable — {ex.Message}");
+            return ExitCodes.Environment;
+        }
+
+        return SessionsCommand
+            .RunAsync(
+                command,
+                new PostgresSessionStore(db, Bench.Domain.Sessions.ToolTaxonomy.ClaudeCode),
+                output,
+                error,
+                stopping)
             .GetAwaiter().GetResult();
     }
 
@@ -376,6 +424,19 @@ public static class Program
         output.WriteLine("  bench telemetry report [--days N] [--connection <npgsql>] [--json]");
         output.WriteLine("  bench telemetry prune  --spool <dir> --older-than <days> [--json]");
         output.WriteLine();
+        output.WriteLine("  bench sessions install --repo <path> [--hook <bench-hook.exe>] [--collector <url>]");
+        output.WriteLine("             instruments ONE repository: writes .claude/settings.local.json so every");
+        output.WriteLine("             tool call an agent makes there is recorded. Local, never committed — the");
+        output.WriteLine("             command line holds this machine's absolute path to the hook binary");
+        output.WriteLine("  bench sessions list    [--limit 25] --db <connection> [--json]");
+        output.WriteLine("             the recorded sessions, most recently active first. Also the verb that");
+        output.WriteLine("             CREATES the schema — the collector refuses to start without it");
+        output.WriteLine("  bench sessions show    --session <guid> --db <connection> [--json]");
+        output.WriteLine("             one session whole: phase economics, the detectors' findings, every call");
+        output.WriteLine("             with its class, its phase and what the working tree said across it");
+        output.WriteLine("  bench sessions ingest  [--spool <dir>] --db <connection> [--json]");
+        output.WriteLine("             drains what a hook client spooled when the collector was unreachable");
+        output.WriteLine();
         output.WriteLine("  bench variants add    --name <slug> [--display <text>] --db <connection>");
         output.WriteLine("             --engine qln|mindex|http|noretrieval --channels dense|sparse|hybrid");
         output.WriteLine("             --fusion rrf|wsum [--k 60] [--dense-weight 1] [--sparse-weight 1]");
@@ -523,6 +584,25 @@ public static class Program
     /// <summary>Stands in for the store on the one path that has no database. Every member throws
     /// rather than returning an empty result: a silent empty answer here would render as "no telemetry
     /// stored", which is a claim about the data instead of an admission that nothing was consulted.</summary>
+    /// <summary>Stands in for the session store on the one path that has no database — installing hooks.
+    /// Every member throws rather than answering empty, for the reason its telemetry twin does: a silent
+    /// empty answer would render as "no sessions recorded", which is a claim about the data instead of an
+    /// admission that nothing was consulted.</summary>
+    private sealed class NoSessionStore : Bench.Application.Sessions.ISessionStore
+    {
+        public Task<Bench.Application.Sessions.SessionIngestOutcome> RecordAsync(
+            Bench.Application.Sessions.SessionEventRecord record, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
+
+        public Task<IReadOnlyList<Bench.Application.Sessions.SessionSummary>> RecentAsync(
+            int limit, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
+
+        public Task<Bench.Domain.Outcome<Bench.Domain.Sessions.SessionRun>> ByIdAsync(
+            Guid id, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("this command does not use a store");
+    }
+
     private sealed class NoTelemetryStore : ITelemetryStore
     {
         public Task<IngestReport> AppendAsync(

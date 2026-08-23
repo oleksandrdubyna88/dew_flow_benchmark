@@ -52,6 +52,18 @@ public sealed class BenchConsoleApi(HttpClient http)
             $"api/bench/arms?metric={Uri.EscapeDataString(metric)}&baseline={Uri.EscapeDataString(baseline)}",
             cancellationToken);
 
+    /// <summary>The recorded agent sessions, most recently active first — the Math tab's population.</summary>
+    public Task<Read<IReadOnlyList<SessionSummaryDto>>> GetSessionsAsync(
+        int limit = 50, CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<SessionSummaryDto>>($"api/bench/sessions?limit={limit}", cancellationToken);
+
+    /// <summary>One session whole: its calls, its phase economics, and what the detectors found. A 404 here
+    /// is a session this database does not hold, and the refusal says so rather than rendering an empty
+    /// trace — which would read as a session that did nothing.</summary>
+    public Task<Read<SessionDetailDto>> GetSessionAsync(
+        Guid sessionId, CancellationToken cancellationToken = default) =>
+        GetAsync<SessionDetailDto>($"api/bench/sessions/{sessionId}", cancellationToken);
+
     private async Task<Read<T>> GetAsync<T>(string route, CancellationToken cancellationToken)
         where T : class
     {

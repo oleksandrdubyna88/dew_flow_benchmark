@@ -78,4 +78,16 @@ builder.AddProject<Projects.Api>("bench-api")
     .WithReference(database)
     .WaitFor(database);
 
+// The session-trace collector — the one process an agent's hook is allowed to reach
+// (todo/ai_math/PLAN_session_measurement.md). It WRITES, which bench-api deliberately does not, and it is
+// a separate resource rather than two routes on that host because their lifecycles differ: a report server
+// is wanted when somebody reads a report, and this one is wanted whenever the operator is working at all.
+//
+// Its port is PINNED inside the host rather than left to Aspire, and for the reason the Postgres port above
+// is: the address is written into a `.claude/settings.json` inside every repository being measured, so a
+// port that drifted on restart would silently point every one of them at nothing.
+builder.AddProject<Projects.Collector>("bench-collector")
+    .WithReference(database)
+    .WaitFor(database);
+
 builder.Build().Run();

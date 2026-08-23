@@ -1,6 +1,6 @@
 # Architecture — the system as it is
 
-> Status: **current as of 2026-08-19.** Describes what exists and runs, not what is planned; the plan is
+> Status: **current as of 2026-08-23.** Describes what exists and runs, not what is planned; the plan is
 > [todo/PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) and the evidence behind the design is
 > [MEASURED_LESSONS.md](MEASURED_LESSONS.md). Where the two disagree, this file is wrong and should be
 > corrected — a description that has drifted from the code is the failure this convention exists to catch.
@@ -19,28 +19,32 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · version/help"]
+        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · sessions · version/help"]
         apihost["Api — bench-api, READ only, starts nothing"]
-        apphost["AppHost — Aspire, own Postgres + bench-api"]
+        collector["Collector — bench-collector, the WRITE door for<br/>session traces, loopback 5177"]
+        hook["Hook — bench-hook, one run per agent tool call"]
+        apphost["AppHost — Aspire, own Postgres + bench-api + bench-collector"]
     end
     subgraph api["Bench.Api — the route group"]
         routes["GET /runs · /runs/id/report · /runs/id/scoreboard<br/>POST /plan"]
+        sessionroutes["GET /sessions · /sessions/id<br/>POST /sessions/events — collector only"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
         runner["LegRunner · LegDrain · LegRecorder"]
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
         scoring["AnswerScoring · RetrievalScoring<br/>Discrimination · PhasePlan"]
         obs["Trace · Telemetry · Models · Retrieval"]
         axes["Variants · Authoring · Engines · Bank · Registry"]
+        sessions["Sessions — ToolTaxonomy · CommandClassifier<br/>PhaseClassifier · SessionAnalysis (pure, no model)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
         rt["OpenAiCompatibleRuntime"]
@@ -51,13 +55,18 @@ flowchart TB
     cli --> app
     apihost --> api
     apihost --> infra
+    collector --> api
+    collector --> infra
+    hook -- "POST /sessions/events" --> collector
     api --> app
     apphost --> pg
     apphost --> apihost
+    apphost --> collector
     app --> dom
     infra --> app
     app --> contracts
     api --> contracts
+    hook --> contracts
 ```
 
 Two projects depend on **nothing**: `Bench.Domain` and `Bench.Contracts`. That is not tidiness — a wire
@@ -565,14 +574,44 @@ means no later pass will ever revisit the leg). A cut-off leg settles as a cap a
 metrics** — metric rows are what every aggregate groups over, and scoring truncated text would enrol the
 ceiling in the FixArm averages.
 
-## Two vantage points on the same call
+## Three vantage points on the same call
 
-| | bench-side trace (`IRunTrace`, `LegRecorder`) | server-side telemetry (`ITelemetryStore`) |
-|---|---|---|
-| covers | this harness's own legs | **all** traffic, benchmark and real sessions |
-| knows the prompt, the answer, the cost | yes | no |
-| knows server processing time, the payload returned, the project scope | by inference | exactly |
-| shipped by | this repository | `dew_flow_mcp` / `dew_flow_rag_qln`, ingested here from a spool |
+| | bench-side trace (`IRunTrace`, `LegRecorder`) | server-side telemetry (`ITelemetryStore`) | session trace (`ISessionStore`, 2026-08-23) |
+|---|---|---|---|
+| covers | this harness's own legs | **all** traffic, benchmark and real sessions | one agent session, whatever it does |
+| sees NATIVE tool calls (Read · Edit · Bash) | only its own loop's | never — an MCP server cannot see them | **yes, every one** |
+| knows the prompt, the answer, the cost | yes | no | no |
+| knows server processing time, the payload returned, the project scope | by inference | exactly | the payload and its true size; no server time |
+| shipped by | this repository | `dew_flow_mcp` / `dew_flow_rag_qln`, ingested here from a spool | this repository — `bench-hook` → `bench-collector` |
+
+**None of the three is averaged into another.** `SessionRun.Source` (`Hook` · `Proxy` · `Otel` · `InProcess`)
+is a first-class column for exactly that reason: the same session watched by a hook and by a proxy is two
+rows about one thing, which is the only shape in which two instruments can be compared rather than merged.
+
+### The session trace, and what it is for
+
+`todo/ai_math/PLAN_math_over_ai.md` asks which steps of an agent's work a formula could do instead. Answering
+it needs the one thing neither older vantage point has: the **native** tool calls of a real session — the
+reads, the searches, the edits, the builds. A hook fires before and after every one of them, so that is where
+the capture lives, and nothing in the path ever sees a credential (the `ANTHROPIC_BASE_URL` proxy was
+considered and rejected for five measured reasons, recorded in the plan).
+
+Three decisions shape the schema, each one a state that would otherwise have been silently rendered as a fact:
+
+- **Phases are three, not two.** `Research` · `Execution` · `Verification`. A build after an edit is not
+  research, and the compile-failure count has nowhere else to come from — and with only two phases the loop
+  detector is wrong by construction, because a read after an edit is healthy verification.
+- **The working tree outranks the tool's name.** `Bash` is `git status` and it is also `rm -rf`, so a
+  `git status --porcelain` digest is taken either side of every SHELL call — including ones the allowlist
+  calls read-only, since a wrong allowlist entry can only be caught by checking what it claims is safe. Where
+  the two instruments disagree, both readings are kept and the disagreement is a finding about **us**.
+- **`NotChecked` is never `Unchanged`, and a truncated size is never the size.** Both rules were broken in
+  the first build and both were caught by reading real traces rather than by reading the code.
+
+The detectors (`SessionAnalysis`) are pure and run on the way OUT, so a better one reaches every session
+already measured. An architecture rule follows from the plan's own thesis: **no model call is reachable from
+the analyzer** — an instrument that asked a model would inherit its variance into the denominator of every
+later measurement.
 
 The trace port has **two** implementations — live black-box and fixture-replay white-box — because an
 interface with one implementation proves nothing about its own shape. The white-box funnel

@@ -19,8 +19,9 @@
          ProjectReference as an app RESOURCE to orchestrate and stops referencing its assembly, so without
          this the shared logging type is simply not found at compile time. -->
     <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" IsAspireProjectResource="false" />
-    <!-- An app RESOURCE, so no IsAspireProjectResource here: this one is meant to be orchestrated. -->
+    <!-- App RESOURCES, so no IsAspireProjectResource here: these are meant to be orchestrated. -->
     <ProjectReference Include="..\Api\Api.csproj" />
+    <ProjectReference Include="..\Collector\Collector.csproj" />
   </ItemGroup>
 
 </Project>

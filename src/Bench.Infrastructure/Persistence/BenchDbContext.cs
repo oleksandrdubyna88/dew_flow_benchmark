@@ -175,6 +175,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<ToolTelemetryRow> ToolTelemetry => Set<ToolTelemetryRow>();
 
+    public DbSet<SessionRunRow> SessionRuns => Set<SessionRunRow>();
+
+    public DbSet<SessionToolCallRow> SessionToolCalls => Set<SessionToolCallRow>();
+
     public DbSet<VariantRow> Variants => Set<VariantRow>();
 
     public DbSet<LaneRow> Lanes => Set<LaneRow>();
@@ -204,6 +208,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
         Bank(builder);
         Registry(builder);
         Retrieval(builder);
+        Sessions(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {
@@ -362,6 +367,73 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
             // The comparison scope: a leaderboard over wordings is only meaningful inside one tool set and
             // one presentation, so that pair is the index the reports group by.
             lane.HasIndex(l => new { l.ToolsHash, l.Presentation });
+        });
+    }
+
+    /// <summary>Agent-session traces — the THIRD vantage point (todo/ai_math/PLAN_session_measurement.md).
+    /// <para>
+    /// No foreign key to a run anywhere in here, and that is the design rather than an omission: almost
+    /// none of these sessions are benchmark legs. Covering the operator's real work is the entire reason
+    /// this vantage point exists, and a run id would have made an ordinary afternoon unstorable.
+    /// </para></summary>
+    private static void Sessions(ModelBuilder builder)
+    {
+        builder.Entity<SessionRunRow>(session =>
+        {
+            session.ToTable("session_runs");
+            session.HasKey(s => s.Id);
+            session.Property(s => s.Source).HasConversion<string>();
+
+            // Identity is the source AND the key. The same session watched by a hook and by a proxy is two
+            // rows about one thing — which is the only shape in which two instruments can be compared
+            // rather than silently averaged. Unique, so a racing pair of events reaches one row.
+            session.HasIndex(s => new { s.Source, s.SessionKey }).IsUnique();
+
+            // The console's own query: the most recently active sessions, newest first. It polls, so this
+            // must never become a scan over every session ever recorded.
+            session.HasIndex(s => s.LastEventAt);
+
+            // "Show me every session that worked on this plan" — the question the manual plan link exists
+            // to answer, and the reason it is a column rather than a note.
+            session.HasIndex(s => s.PlanPath);
+
+            session.HasMany(s => s.Calls).WithOne(c => c.Session!)
+                .HasForeignKey(c => c.SessionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SessionToolCallRow>(call =>
+        {
+            call.ToTable("session_tool_calls");
+            call.HasKey(c => c.Id);
+
+            // Enum members as their NAMES, like every enum here: an ordinal changes meaning the day
+            // somebody inserts a member, and old traces staying readable is the point of this system.
+            call.Property(c => c.Class).HasConversion<string>();
+            call.Property(c => c.Phase).HasConversion<string>();
+            call.Property(c => c.State).HasConversion<string>();
+            call.Property(c => c.Outcome).HasConversion<string>();
+            call.Property(c => c.Mutation).HasConversion<string>();
+
+            // One session's calls in order — the read this table exists for, and the ordering every loop
+            // detector makes its claim about.
+            call.HasIndex(c => new { c.SessionId, c.Ordinal }).IsUnique();
+
+            // The idempotency guard, in the DATABASE rather than in a read-then-write: a hook client that
+            // timed out and retried would otherwise be two rows. Unique on the opening event; the closing
+            // one is guarded by the same rule on its own column.
+            call.HasIndex(c => c.OpenFingerprint).IsUnique();
+
+            // Not unique: every OPEN call carries an empty close fingerprint, and there are legitimately
+            // many of those at once across parallel sessions. Indexed because the close path looks the
+            // arriving event up by it before doing anything else.
+            call.HasIndex(c => c.CloseFingerprint);
+
+            // "Which tools did this operator's sessions actually reach for" — the first question the
+            // replacement map asks, and it must not be a scan.
+            call.HasIndex(c => c.ToolName);
+
+            // The close path's own query: the newest still-open call of one tool in one session.
+            call.HasIndex(c => new { c.SessionId, c.State, c.ToolName });
         });
     }
 

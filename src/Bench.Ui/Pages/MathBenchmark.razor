@@ -1,0 +1,120 @@
+@page "/benchmarking/math"
+
+<PageTitle>Benchmarking · Math</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+
+<div class="d-flex align-items-start justify-content-between">
+    <p class="text-body-secondary mb-2">
+        <strong>Investigate.</strong> Real agent sessions, traced call by call and labelled by arithmetic —
+        never by a model. Each row is one session; the counters split its calls into
+        <em>research</em>, <em>execution</em> and <em>verification</em>, and the findings column counts the
+        patterns a formula could have done instead. This is the raw material of the replacement map in
+        <code>todo/ai_math/PLAN_math_over_ai.md</code>.
+    </p>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-3 ms-3 flex-shrink-0"
+            disabled="@Loading" @onclick="ReloadAsync">
+        @(Loading ? "Reading…" : "Refresh")
+    </button>
+</div>
+
+@if (!Sessions.Available && Sessions.Detail.Length > 0)
+{
+    @* The API could not be read — deliberately not the same panel as "no sessions": one sends the reader
+       to the daemon, the other to the collector and the hooks. *@
+    <div class="alert alert-warning">@Sessions.Detail</div>
+}
+else if (Rows.Count == 0)
+{
+    <div class="alert alert-secondary">
+        <strong>Nothing to show.</strong> no agent session has been recorded yet. Instrument a repository
+        with <code>bench sessions install --repo &lt;path&gt;</code>, make sure
+        <code>bench-collector</code> is running, and open a task terminal — from the VS&nbsp;Code extension,
+        or by hand with <code>BENCH_TASK_ID</code> / <code>BENCH_TASK_NAME</code> /
+        <code>BENCH_PLAN_PATH</code> set.
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Task</th>
+                        <th scope="col">Plan</th>
+                        <th scope="col">Workspace</th>
+                        <th scope="col">Phase</th>
+                        <th scope="col" class="text-end">Calls</th>
+                        <th scope="col" class="text-end" title="research · execution · verification">R·E·V</th>
+                        <th scope="col" class="text-end" title="calls that opened and never closed">Open</th>
+                        <th scope="col" class="text-end" title="failed builds and test runs">Fails</th>
+                        <th scope="col" class="text-end" title="calls counted harmless that changed tracked files">Disagree</th>
+                        <th scope="col">Last event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Rows)
+                    {
+                        <tr>
+                            <td>
+                                <NavLink href="@($"/benchmarking/sessions/{row.SessionId}")">@Name(row)</NavLink>
+                                <div><small class="text-body-secondary"><code>@row.Source</code>/@row.Runtime</small></div>
+                            </td>
+                            <td class="text-break">
+                                @if (row.Task.PlanPath.Length > 0)
+                                {
+                                    <small><code>@row.Task.PlanPath</code></small>
+                                }
+                                else
+                                {
+                                    @* An unlinked session is ordinary, not an error: the link is a claim only
+                                       the operator can make, and nothing here guesses it. *@
+                                    <small class="text-body-secondary">— not linked</small>
+                                }
+                            </td>
+                            <td class="text-break">
+                                <small>@row.WorkspacePath</small>
+                                @if (row.Branch.Length > 0)
+                                {
+                                    <small class="text-body-secondary"> [@row.Branch]</small>
+                                }
+                            </td>
+                            <td><span class="badge @PhaseBadge(row.Phase)">@row.Phase</span></td>
+                            <td class="text-end">@row.Calls</td>
+                            <td class="text-end"><small>@row.Research·@row.Execution·@row.Verification</small></td>
+                            <td class="text-end">@Count(row.Unfinished)</td>
+                            <td class="text-end">@Count(row.CompileFailures)</td>
+                            <td class="text-end">
+                                @if (row.Disagreements > 0)
+                                {
+                                    <span class="badge text-bg-danger">@row.Disagreements</span>
+                                }
+                                else
+                                {
+                                    <span class="text-body-secondary">—</span>
+                                }
+                            </td>
+                            <td>
+                                <time datetime="@row.LastEventAt.ToString("o")">
+                                    @row.LastEventAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                                </time>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            <small class="text-body-secondary">
+                Times are UTC. Every counter here is one the database computes.
+                <strong>The detectors — re-research loops, search-variant chains, allowlist candidates —
+                run on a session's own page</strong>, because they read its calls in order and a list that
+                ran them on each poll would load every call of every session to draw a summary.
+                <em>Disagree</em> is the exception worth carrying: a call this system counted as harmless
+                that changed tracked files is a defect in <em>our</em> taxonomy, not in the agent's work.
+            </small>
+        </div>
+    </div>
+}

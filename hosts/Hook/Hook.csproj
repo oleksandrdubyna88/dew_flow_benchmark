@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The hook client. It runs ONCE PER TOOL CALL, synchronously, inside the agent's own loop — so every
+       decision in this project is about start-up cost and about never being the reason a tool call fails.
+
+       ReadyToRun because the JIT is most of a run this short. InvariantGlobalization because loading ICU is
+       the other half, and this process formats nothing a culture could change. No EF, no Serilog, no
+       hosting: it reads stdin, optionally asks git one question, posts, and exits — and it exits ZERO
+       whatever happened, because instrumentation that can fail an operator's tool call is instrumentation
+       that gets uninstalled. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>bench-hook</AssemblyName>
+    <RootNamespace>Bench.Hook</RootNamespace>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Bench.Contracts\Bench.Contracts.csproj" />
+    <!-- For the taxonomy alone: it decides whether this call can possibly have touched the tree, and
+         therefore whether the porcelain read is worth its milliseconds. -->
+    <ProjectReference Include="..\..\src\Bench.Domain\Bench.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

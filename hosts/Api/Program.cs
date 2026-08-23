@@ -35,6 +35,13 @@ try
     builder.Services.AddScoped<IResultStore>(services =>
         new PostgresResultStore(services.GetRequiredService<BenchDbContext>(), TimeProvider.System));
 
+    // The session-trace read port. Registered here and its WRITE half deliberately not: the ingest route
+    // lives on the collector, which is the one process an agent's hook may reach. A store that can write is
+    // harmless in a host that maps no route to it, and mapping one here would undo the boundary above.
+    builder.Services.AddScoped<Bench.Application.Sessions.ISessionStore>(services =>
+        new PostgresSessionStore(
+            services.GetRequiredService<BenchDbContext>(), Bench.Domain.Sessions.ToolTaxonomy.ClaudeCode));
+
     var app = builder.Build();
 
     // It applies NO migrations, alone among this repository's database hosts, and deliberately: two
@@ -42,6 +49,11 @@ try
     // read surface that quietly created an empty one would answer "no run" for a database that had simply
     // never been set up — which reads as "your id is wrong" when the truth is "this is the wrong database".
     app.MapBenchApi();
+
+    // The session traces, READ only — the Math tab's population. Its ingest half is mapped by the
+    // collector and by nothing else.
+    app.MapSessionReads();
+
     app.Run();
 
     return 0;

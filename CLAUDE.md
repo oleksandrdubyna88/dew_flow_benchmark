@@ -52,6 +52,14 @@ dotnet build dew_flow_benchmark.slnx -c Release
 # The same object over HTTP. bench-api is READ-only and applies no migrations; the AppHost starts it.
 # GET /api/runs · /api/runs/{id}/report?metric=... · /api/runs/{id}/scoreboard
 
+# Agent-session traces (todo/ai_math/) — what an agent ACTUALLY did, call by call, so the steps a
+# formula could do instead can be found. `sessions list` is also the verb that creates the schema:
+# bench-collector refuses to start against a database that is behind, and the CLI owns migrations.
+./hosts/Cli/bin/Release/net10.0/bench.exe sessions install --repo <path>   # hooks → .claude/settings.local.json
+./hosts/Cli/bin/Release/net10.0/bench.exe sessions list --db "$BENCH_DB"
+./hosts/Cli/bin/Release/net10.0/bench.exe sessions show --session <guid> --db "$BENCH_DB"
+./hosts/Cli/bin/Release/net10.0/bench.exe sessions ingest --db "$BENCH_DB"  # drains what a hook spooled
+
 # The MCP telemetry spool's scheduled consumer (2026-08-19): the producers never prune — this
 # repository owns the files' lifecycle, and a Task Scheduler job (dew_flow-telemetry-ingest, daily
 # 03:30) runs ingest-then-prune. scripts/telemetry-ingest.ps1 is the action;
@@ -68,7 +76,10 @@ dotnet build dew_flow_benchmark.slnx -c Release
 | `src/Bench.Infrastructure` | Adapters — store, git, engine clients, model runtimes, sampler |
 | `src/Bench.Api` | Minimal-API group over the same use cases the CLI drives |
 | `hosts/Cli` | `bench` — the first surface, and the one an agent drives |
-| `hosts/Api` | `bench-api` — the READ surface, and the AppHost's only project resource. It serves reports and starts nothing: `bench run` stays the one verb that reaches a model |
+| `hosts/Api` | `bench-api` — the READ surface. It serves reports and starts nothing: `bench run` stays the one verb that reaches a model |
+| `hosts/Collector` | `bench-collector` — the WRITE door for agent-session traces, loopback-only on 5177. Separate from `bench-api` because that host is read-only by an explicit decision, and because this one must be up whenever the OPERATOR is working rather than whenever somebody reads a report |
+| `hosts/Hook` | `bench-hook` — runs once per agent tool call, inside the agent's own loop. Every decision in it is about start-up cost and about never being the reason a tool call fails; it exits **zero** whatever happened |
+| `tools/vscode-bench-sessions` | A VS Code extension that opens SCOPED task sessions and links each to a plan by hand. Plain JavaScript, no build step |
 | `tests/Bench.Tests` | xUnit v3 on Microsoft Testing Platform, including the architecture guard |
 
 The layering is guarded by `ArchitectureTests` from the first commit, deliberately: the system this

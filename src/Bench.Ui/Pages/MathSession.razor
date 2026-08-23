@@ -1,0 +1,255 @@
+@page "/benchmarking/sessions/{SessionId:guid}"
+
+<PageTitle>Benchmarking · Session</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+
+<div class="d-flex align-items-start justify-content-between">
+    <p class="mb-2">
+        <NavLink href="/benchmarking/math">← every session</NavLink>
+    </p>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-3 ms-3 flex-shrink-0"
+            disabled="@Loading" @onclick="ReloadAsync">
+        @(Loading ? "Reading…" : "Refresh")
+    </button>
+</div>
+
+@if (!Session.Available && Session.Detail.Length > 0)
+{
+    @* The server explained itself — a 404 here means this database holds no such session, which is a
+       different piece of news from a session that did nothing. *@
+    <div class="alert alert-warning">@Session.Detail</div>
+}
+else if (Detail is not null)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+            <strong>@Title</strong>
+            <span class="badge @PhaseBadge(Detail.Summary.Phase)">@Detail.Summary.Phase</span>
+            <small class="text-body-secondary"><code>@Detail.Summary.Source</code>/@Detail.Summary.Runtime</small>
+            <span class="ms-auto text-body-secondary">
+                <time datetime="@Detail.Summary.StartedAt.ToString("o")">
+                    @Detail.Summary.StartedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss")
+                </time> →
+                <time datetime="@Detail.Summary.LastEventAt.ToString("o")">
+                    @Detail.Summary.LastEventAt.UtcDateTime.ToString("HH:mm:ss")
+                </time> UTC
+            </span>
+        </div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-2">Plan</dt>
+                <dd class="col-sm-10">
+                    @if (Detail.Summary.Task.PlanPath.Length > 0)
+                    {
+                        <code>@Detail.Summary.Task.PlanPath</code>
+                    }
+                    else
+                    {
+                        <span class="text-body-secondary">
+                            not linked — a session's subject is a claim only its operator makes, and nothing here guesses it
+                        </span>
+                    }
+                </dd>
+
+                <dt class="col-sm-2">Workspace</dt>
+                <dd class="col-sm-10 text-break">
+                    <code>@Detail.Summary.WorkspacePath</code>
+                    @if (Detail.Summary.Branch.Length > 0)
+                    {
+                        <span class="text-body-secondary"> [@Detail.Summary.Branch]</span>
+                    }
+                </dd>
+
+                <dt class="col-sm-2">Session key</dt>
+                <dd class="col-sm-10 text-break"><small><code>@Detail.Summary.SessionKey</code></small></dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Phase economics</div>
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Phase</th>
+                            <th scope="col" class="text-end">Calls</th>
+                            <th scope="col" class="text-end">Seconds</th>
+                            <th scope="col" class="text-end">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var phase in Detail.Phases)
+                        {
+                            <tr>
+                                <td><span class="badge @PhaseBadge(phase.Phase)">@phase.Phase</span></td>
+                                <td class="text-end">@phase.Calls</td>
+                                <td class="text-end">@phase.Seconds.ToString("F1")</td>
+                                <td class="text-end">@Share(phase.Seconds)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="card-footer">
+                    <small class="text-body-secondary">
+                        Seconds are wall time between calls — the gaps, where a model spends most of a
+                        session, belong to the phase they happen in.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">The instrument</div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Phase switches</span><strong>@Detail.Switches</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Compile / test failures</span><strong>@Detail.Summary.CompileFailures</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Calls that never closed</span><strong>@Detail.Summary.Unfinished</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Taxonomy disagreements</span><strong>@Detail.Summary.Disagreements</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Tools this build cannot classify</span><strong>@Detail.UnknownTools</strong>
+                    </li>
+                </ul>
+                <div class="card-footer">
+                    <small class="text-body-secondary">
+                        The last two rows are this system's own error bar, not the agent's: every phase
+                        number above is a number about the calls it could classify.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            Findings
+            <small class="text-body-secondary ms-2">deterministic — same trace in, same findings out</small>
+        </div>
+        @if (Detail.Findings.Count == 0)
+        {
+            <div class="card-body">
+                <span class="text-body-secondary">
+                    Nothing fired. The detectors look for a target read three times with no change in
+                    between, one question re-asked as three near-identical searches, a harmless-looking call
+                    that moved the tree, and a shell command counted as a write that changed nothing.
+                </span>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Kind</th>
+                            <th scope="col">Subject</th>
+                            <th scope="col" class="text-end">Times</th>
+                            <th scope="col">Calls</th>
+                            <th scope="col">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var finding in Detail.Findings)
+                        {
+                            <tr>
+                                <td><span class="badge @FindingBadge(finding.Kind)">@finding.Kind</span></td>
+                                <td class="text-break"><code>@finding.Subject</code></td>
+                                <td class="text-end">@finding.Occurrences</td>
+                                <td><small>@string.Join(", ", finding.Ordinals)</small></td>
+                                <td class="text-break"><small>@finding.Detail</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Every call, in order</div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col" class="text-end">#</th>
+                        <th scope="col">Tool</th>
+                        <th scope="col">Class</th>
+                        <th scope="col">Phase</th>
+                        <th scope="col">Tree</th>
+                        <th scope="col" class="text-end">ms</th>
+                        <th scope="col" class="text-end" title="characters the tool returned — exact even where the stored body was capped">Chars</th>
+                        <th scope="col">Target</th>
+                        <th scope="col">Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var call in Detail.Calls)
+                    {
+                        <tr class="@(call.Disagrees ? "table-danger" : string.Empty)">
+                            <td class="text-end">@call.Ordinal</td>
+                            <td><code>@call.ToolName</code></td>
+                            <td><small>@call.Class</small></td>
+                            <td><span class="badge @PhaseBadge(call.Phase)">@call.Phase</span></td>
+                            <td><small class="@MutationClass(call.Mutation)">@call.Mutation</small></td>
+                            <td class="text-end">
+                                @if (call.DurationMs.Captured)
+                                {
+                                    @call.DurationMs.Value
+                                }
+                                else
+                                {
+                                    @* Not captured, and never rendered as a zero: a gap in instrumentation
+                                       is not a call that took no time. *@
+                                    <span class="text-body-secondary" title="@call.DurationMs.Reason">—</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (call.State == "Started")
+                                {
+                                    @* Nothing has come back YET, which is not the same as nothing came back. *@
+                                    <span class="text-body-secondary">—</span>
+                                }
+                                else
+                                {
+                                    @call.ResponseChars
+                                }
+                            </td>
+                            <td class="text-break"><small title="@call.ArgumentsJson">@call.Target</small></td>
+                            <td>
+                                <small class="@OutcomeClass(call)">@Outcome(call)</small>
+                                @if (call.CompileFailure)
+                                {
+                                    <span class="badge text-bg-danger ms-1">build failed</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            <small class="text-body-secondary">
+                <strong>Tree</strong> is what <code>git status --porcelain</code> said across the call —
+                the ground truth that settles what a tool name cannot, since <code>Bash</code> is both
+                <code>git status</code> and <code>rm -rf</code>. <code>NotChecked</code> is never rendered
+                as <code>Unchanged</code>. A red row is a call classified harmless that moved tracked files.
+                <strong>Chars</strong> is what the tool actually returned — exact even where the stored body
+                was capped, and the input to the question this tab exists for: a call that returned forty
+                thousand characters so six lines could be edited is a step a line-window read would have
+                done for a fraction of the price. Hover a target to see the arguments it was reduced from.
+            </small>
+        </div>
+    </div>
+}
