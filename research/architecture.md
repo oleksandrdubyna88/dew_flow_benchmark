@@ -416,6 +416,18 @@ judgement, and its provenance is the slot, which is recorded either way.
   is a column and not a command-line flag because the self-review rule compares a reviewer's model against the
   question's author model, and "who is reviewer-2" has to be answerable from the bank years later. Three slots
   were seeded on 2026-08-17 naming nobody, and this pass could not be written until they did.
+- **A slot is RETIRED, never deleted, and retirement is reversible.** `reviewers.Enabled` plus
+  `bench questions disable|enable --reviewer <key>`. One slot bound to a model that failed every launch froze
+  the entire bank — the strict rule below waits forever on a mark that can never arrive, and unbinding does not
+  help because a slot with no model is a *person*, still eligible and still silent. A retired slot is not
+  launched, not waited for, and keeps its marks. Both directions have now been used on the same slot: gemini
+  was retired 2026-08-19 when it could not answer and restored 2026-08-23 when it could.
+- **Each real model on the panel rejects a class the others are blind to, measured twice.** Three slots on one
+  model produced 2 rejections in 57 marks, both reproducible by substring arithmetic. A second family
+  (`gpt-5.6-terra`) rejected 7 of 9 on its first batch, reading the target's git history against the seed date —
+  a check nothing here can perform mechanically. A third (`gemini-3.1-flash`, 2026-08-23) rejected on its first
+  mark for a COMPOUND question, where every anchor resolved and every required term was present. The panel's
+  cost is therefore paid for by evidence rather than by symmetry.
 - **A model never marks its own writing** — refused before any launch, comparing the resolved **model id**
   rather than the slot or registry key, because two rows bound to two keys that both resolve to
   `claude-sonnet-4-6` are one opinion. `--allow-self-review` takes the mark anyway and **prints what it costs**;
@@ -1166,7 +1178,7 @@ Stated because a description that quietly implies more than is built is the same
 - **`IBenchStore` / `InMemoryBenchStore` are dead** — nothing calls them.
 - **The bank COVERS two of its six groups**, which is the one gap no amount of running compensates for: every
   axis multiplies over the question set, so a comparison drawn from this bank today is a comparison about two
-  groups. Open work is `todo/PLAN_question_bank_coverage.md`, and `gemini` has still authored nothing across
+  groups. Open work is `research/PLAN_question_bank_coverage.md`, and `gemini` has still authored nothing across
   several distinct failures.
 
   > This bullet used to say the pipeline had *no throughput number*, that **`pr-diff` cannot be authored at

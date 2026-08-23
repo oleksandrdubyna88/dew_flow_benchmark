@@ -2,7 +2,7 @@
 
 > Status: **IMPLEMENTED, 2026-08-18.** All six steps of §4 ran, including step 6's measurement. The open tail —
 > three groups with no questions and the environment fact that blocks one of them — is extracted into
-> [../todo/PLAN_question_bank_coverage.md](../todo/PLAN_question_bank_coverage.md).
+> [PLAN_question_bank_coverage.md](PLAN_question_bank_coverage.md).
 >
 > ## Step 6, measured — the number the founding plan said could only be learned by running
 >
@@ -29,6 +29,21 @@
 > same defect class it had rejected another for. Fifty-seven marks from three instances of one model produced
 > two rejections, both mechanical, and one inconsistency. That is the measured cost of *one opinion sampled
 > three times*, and it is the argument for a second real model rather than a fourth slot.
+>
+> **The argument was then tested twice, and it held both times** (recorded here because this is where the
+> claim was made; the runs belong to [PLAN_question_bank_coverage.md](PLAN_question_bank_coverage.md)
+> §3.7 and §3.11). A second family, `gpt-5.6-terra`, rejected **7 of 9** on its first batch against
+> claude's 0 of 3 — and its reasons were checks nothing here can perform mechanically, chiefly reading the
+> target's git history against a question's seed date. A third, `gemini-3.1-flash`, took its first mark on
+> 2026-08-23 and rejected a COMPOUND question: two questions in one prompt, where every anchor resolved and
+> every required term was present, so neither the gate nor the author's own model could see it. Three
+> families, three disjoint defect classes. The rejection rate of one model sampled three times — 3.5 % — was
+> not a property of the questions.
+>
+> **One prediction from this measurement was wrong and is corrected here.** The extrapolation above assumes
+> sequential machine time is the constraint. It was not: the bank's throughput has since been governed by CLI
+> ENTITLEMENTS — a usage limit that put `gpt-5.6-terra` out until 17 September, and a flash-tier
+> entitlement standing in for a pro model. Machine time was never the scarce resource.
 >
 > Earlier status, kept because the sequence is the record: **steps 1–5 of §4 IMPLEMENTED (1–4 on 2026-08-17,
 > 5 on 2026-08-18).** `bench questions author` drives the Claude CLI inside the target's checkout and stored **two

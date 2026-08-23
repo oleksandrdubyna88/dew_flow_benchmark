@@ -90,7 +90,7 @@ Not yet built, and each has an owner in `todo/`:
 | the hardware sampler, a cloud model runtime, and the UI | [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md) |
 
 And the bottleneck is not code: the bank holds questions in **two of its six groups**, so a comparison over it
-today is a comparison about two groups ([todo/PLAN_question_bank_coverage.md](todo/PLAN_question_bank_coverage.md)).
+today is a comparison about two groups ([research/PLAN_question_bank_coverage.md](research/PLAN_question_bank_coverage.md)).
 Authoring is the one axis nothing else compensates for — running is cheap.
 
 The founding plan and its build order are [todo/PLAN_rag_bench_repo.md](todo/PLAN_rag_bench_repo.md); what

@@ -1,14 +1,32 @@
 # PLAN — the bank's coverage: four groups of six have no questions
 
-> Status: **PARTLY IMPLEMENTED, 2026-08-19 — open work remains, so it stays here.** Done: the author's brief
-> carries the target's history (§3.2), the panel is three different models (§3.3, §3.7), the mechanical gate and
-> the seed-date derivation ship (§3.4b/§3.4c), a reviewer slot can be retired (§3.9), and the first run under the
-> fixed contract is measured (§3.10) — the bank now holds **25 accepted questions across all five reading
-> groups**, which answers this plan's §1 symptom; the 32 shifted seed dates are corrected and the three
-> gate-blocked questions are settled — one repaired, two retired (§3.10). Open: the first measurement RUN,
-> `gemini` has still authored nothing, codex is out of quota until 17 September, and the questions of §3.4/§3.5.
+> Status: **IMPLEMENTED, 2026-08-23.** Every line of the Definition of Done is met. The bank holds **26
+> accepted questions across all SIX groups** where it held 22 in two, which is this plan's §1 symptom answered;
+> the author's brief carries the target's history (§3.2), the mechanical gate and the seed-date derivation ship
+> (§3.4b/§3.4c), the 32 shifted seed dates are corrected, and a reviewer slot can be retired **and restored**
+> (§3.9, §3.11).
+>
+> **The panel argument is settled by measurement, three times over.** This plan opened asking whether a second
+> real model was worth its cost. One model in three slots gave 2 rejections in 57 marks, both reproducible by
+> substring arithmetic. `gpt-5.6-terra` then rejected 7 of 9 on its first batch by reading the target's git
+> history against a seed date (§3.7), and `gemini-3.1-flash` — on its very first mark, 2026-08-23 — rejected a
+> COMPOUND question that every anchor check and every required term had passed (§3.11). Three families, three
+> disjoint defect classes, none of them mechanical. The answer is yes, and it is no longer an argument.
+>
+> **The retraction is the most valuable thing in here.** The finding *"two model families both shift seed dates
+> by a day"* was OURS: a bare `"at": "2026-08-17"` deserialised to local midnight and normalised to UTC, so
+> both authors had copied correctly and three questions were thrown away over a defect of the harness. Fixed at
+> the boundary in `QuestionSeed.Written`, on both paths that build a seed from a file.
+>
+> **What remains is not this plan's, and none of it is a DoD line.** The first measurement RUN over the bank
+> belongs to [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md); `gemini` has still AUTHORED nothing
+> (it now probes and reviews, but its third of each group was never re-authored after the trust gate was
+> fixed); and `gpt-5.6-terra` is out of quota until **17 September 2026**, verified again on 2026-08-23. The
+> bank is therefore frozen on codex — and §3.11 names the one move that would unfreeze it, which is an
+> operator's decision rather than an obvious one.
+>
 > Extracted from
-> [../research/PLAN_question_authoring.md](../research/PLAN_question_authoring.md) when that plan was
+> [PLAN_question_authoring.md](PLAN_question_authoring.md) when that plan was
 > implemented: its pipeline works and its throughput is measured, and what remains is not pipeline work but
 > **coverage** — three reading groups nothing has authored, one that cannot be authored this way at all, and a
 > reviewer panel that is one model wearing three names.
@@ -16,9 +34,9 @@
 > Scope: `prompts/author/*`, the authoring pass's checkout (`ICheckoutProvider` usage), the reviewer bindings
 > (`reviewers.ModelKey`, data only), and three questions the bank already holds that carry a defect.
 >
-> Related docs: [../research/PLAN_question_authoring.md](../research/PLAN_question_authoring.md),
-> [PLAN_code_lane.md](PLAN_code_lane.md) (owns group 6), [PLAN_variant_matrix.md](PLAN_variant_matrix.md) §3.3,
-> [../research/architecture.md](../research/architecture.md) (*Where questions come from*, *Vetting*).
+> Related docs: [PLAN_question_authoring.md](PLAN_question_authoring.md),
+> [PLAN_code_lane.md](../todo/PLAN_code_lane.md) (owns group 6), [PLAN_variant_matrix.md](../todo/PLAN_variant_matrix.md) §3.3,
+> [architecture.md](architecture.md) (*Where questions come from*, *Vetting*).
 
 ## 1. The symptom, measured
 
@@ -31,7 +49,7 @@ After the first real batch (2026-08-18) the bank holds **22 questions in two gro
 | 3 | `pr-diff` | **0** | 0 | **blocked**: it needs merge dates, and git history is unreadable inside a `git worktree` |
 | 4 | `bug-root-cause` | 10 | 8 | — |
 | 5 | `adversarial` | **0** | 0 | same as group 2 — the trust gate, now fixed and never retried |
-| 6 | `code-writing` | **0** | 0 | deliberately not authorable here; three gates need a sandbox and a build ([PLAN_code_lane.md](PLAN_code_lane.md)) |
+| 6 | `code-writing` | **0** | 0 | deliberately not authorable here; three gates need a sandbox and a build ([PLAN_code_lane.md](../todo/PLAN_code_lane.md)) |
 
 A measurement over two groups measures two groups. The variant matrix multiplies over the question set, so
 coverage is the one axis that cannot be compensated for by running more cells.
@@ -478,6 +496,46 @@ tree). The two new seed tests were verified to have teeth by reverting `Question
 red with the real symptom — *"the question dates it 2026-08-15"* for a seed written `2026-08-16`.
 
 
+### 3.11 MEASURED 2026-08-23: gemini's blocker expired, and its first mark is a class nobody else caught
+
+The three failures §3.7 and §3.4c recorded — gemini's own trust gate, the git-history attempt, and an exit 1
+whose reason the head-reading hid — are **all closed**, and the proof is end to end rather than inferred.
+Probed through the same launcher authoring uses:
+
+| Slot | Model | Probe | State |
+|---|---|---|---|
+| `reviewer-1` | `claude-sonnet-4-6` | **7.0 s · `ready`** | serving |
+| `reviewer-2` | `gpt-5.6-terra` | **refused** — *"You've hit your usage limit … try again at Sep 17th, 2026"* | serving, and dead until then |
+| `reviewer-3` | `gemini-3.1-flash` | **7.7 s · `ready`** | **un-retired 2026-08-23** |
+
+So the retirement of §3.9 was right when it was made and is now wrong: `bench questions enable --reviewer
+reviewer-3`. The panel is three slots again, two of which answer.
+
+**Gemini reviews, and its first mark is not a rubber stamp.** Vetting `semantic-intent` (one proposed
+question, `--limit 5`) took gemini's first mark in this project's history, and it REJECTED:
+
+> *"The prompt contains two separate questions, asking both how the system knows when all pieces are written
+> and what happens when an unplanned piece arrives."*
+
+A compound question — a defect class neither the author (`claude-sonnet-4-6`, excluded from its own panel) nor
+any mechanical gate here can see, since every anchor resolves and every required term is present. It is the
+§3.7 finding repeating with a third model: each real model added to the panel rejects a class the others are
+blind to. It also lands on the one question §3.10 had just REPAIRED and declared *"waiting only on codex"* —
+the anchor was indeed fixed, and the question was still not measurable.
+
+**The tail-reading fix paid for itself a second time**, in the same output: codex's skip line carries
+`You've hit your usage limit … Sep 17th` rather than a colour-support banner.
+
+Bank after this pass: **26 accepted across all six groups** (code-lookup 9, bug-root-cause 7, adversarial 4,
+pr-diff 3, semantic-intent 2, code-writing 1), 14 proposed, 41 rejected.
+
+**What is now possible and was not, stated for whoever picks this up.** §3.10 concluded *"retiring codex would
+not help: claude-authored questions would then have no eligible reviewer at all"* — true while gemini was
+broken. With gemini serving, retiring codex until 17 September leaves gemini eligible for every
+claude-authored question, which would unfreeze the bank. It is an operator decision rather than an obvious
+one: it accepts questions on a panel whose only non-author slot is flash-tier (§3.3's caveat), and
+`AuthorModel` plus `question_reviews.ModelId` make that asymmetry measurable afterwards rather than invisible.
+
 ## 4. Build order
 
 1. §3.1 — retry `semantic-intent` and `adversarial` (a run, not a change).
@@ -505,9 +563,17 @@ red with the real symptom — *"the question dates it 2026-08-15"* for a seed wr
       seeds dated from the repository.
 - [x] At least two DIFFERENT models sit on the reviewer panel, and the report says which — `claude-sonnet-4-6`
       and `gpt-5.6-terra`; `gemini-3.1-flash` is retired, and codex is out of quota until 17 September.
-- [ ] The five flagged questions are fixed, retired, or explicitly kept with a stated reason.
-- [ ] `research/architecture.md` and `research/PLAN_question_authoring.md` are updated with whatever the retried
-      groups measure.
+- [x] The five flagged questions are fixed, retired, or explicitly kept with a stated reason — audited against
+      the live bank 2026-08-23: `weighted-sum-minmax-equal-scores`, `token-window-split-overlong-lines`,
+      `credential-pool-selection-order` and `gpu-waiter-never-advances-in-queue` are all **Rejected** under
+      §3.4b's uniform policy (a question whose own reference fails its own required expectations cannot be
+      measured), and `gpu-gate-re-entrant-hold` is **Accepted** with §3.10's account of the earlier-pass mark
+      it was accepted on. They were settled as a class rather than one at a time, which is why this line went
+      unticked while its work was already done.
+- [x] `research/architecture.md` and `research/PLAN_question_authoring.md` are updated with whatever the retried
+      groups measure — the panel evidence (three families, three disjoint defect classes), slot retirement as a
+      reversible state now used in both directions, and the correction that throughput is governed by CLI
+      entitlements rather than by the machine time that plan extrapolated from.
 - [x] A reviewer slot that cannot answer can be taken out of the panel without deleting its marks (§3.9).
 - [x] A seed date survives the trip from an author's JSON to the bank as the DAY it was written (§3.4c).
 - [x] The seed dates already stored a day early are corrected — 32 rows, 2026-08-19 (§3.4c).
