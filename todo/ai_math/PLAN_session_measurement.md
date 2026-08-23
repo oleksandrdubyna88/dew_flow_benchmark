@@ -229,43 +229,65 @@ own session id where one exists (Claude hooks), the injected `BENCH_TASK_ID` eve
 tag or per-port lane for proxied runtimes. The collector keys everything by that pair; ports never
 appear in the schema.
 
-## 6. The VS Code extension — thin, phase 2
+## 6. The editor — SHIPPED, and not here
 
-- Starts a task terminal with `window.createTerminal({ name, cwd, env })` — the env carries
-  `BENCH_TASK_ID`/`BENCH_TASK_NAME` (and, for proxied runtimes, the base-url variables). No PTY
-  tricks; this is the API's happy path.
-- A panel polling `GET /sessions`: task name, runtime, model, current phase, counters (research /
-  edit / verification calls, re-research warnings, compile failures).
-- **Thin-client rule:** every rendered number comes from the collector; the extension computes
-  nothing and holds no state worth losing.
-- Explicitly phase 2: the first twenty measured sessions need only a terminal, the collector and
-  `bench sessions` verbs.
+> **Corrected 2026-08-23.** This section said "a VS Code extension" without asking whether one already
+> existed. One did, and the miss is recorded as deviation §10.6. What shipped is a **Sessions branch in
+> the family's existing extension** — `dew_flow_rag_qln · tools/vscode-extension`, v0.18.0 — which
+> already owns the `dewflow` activity-bar container and the cross-repo plan tree a session links itself
+> to.
+
+- Starts a task terminal with `window.createTerminal({ name, cwd, env })`; the env carries
+  `BENCH_TASK_ID` / `BENCH_TASK_NAME` / `BENCH_PLAN_PATH` / `BENCH_COLLECTOR_URL`. Set ON the terminal
+  rather than exported inside it, so the variables exist before the agent's first byte — a hook that
+  fired before an `export` records an unattributed call.
+- A **new window** gets its task through a handoff file the new window CLAIMS and deletes. The deletion
+  is the scoping: a record left behind would give every later window on that folder the same task id.
+- The plan is picked from a LIST, reusing the extension's own Todo reader — so the choices are the plans
+  across every family checkout, carrying the status each states about itself. A typed path goes stale the
+  moment a plan is promoted to `research/`, which this family does routinely.
+- **Thin-client rule, kept:** every rendered number comes from the collector.
+- An unreachable collector renders as a warning row and never as an empty list — the two send a reader to
+  opposite places.
 
 ## 7. Build order
 
-0. The step-0 spikes: 4.1 (a)–(d), 4.3 (e), 4.5, and the custom-header format for 4.2 — findings
-   recorded in this file; a spike without a written finding did not happen.
-1. Schema + collector + the Claude Code hook client, end-to-end on a real session against a real
-   repo. This is the walking skeleton and the reference adapter.
-2. The classifier with the porcelain ground truth, as pure code with fixtures.
-3. `bench sessions` CLI verbs (`list · show · export`) — the read surface.
-4. The in-process adapter (ToolLoopRunner ledger → `session_*`), and the first calibration
-   comparison.
-5. The universal OpenAI-compatible proxy — Ollama-driven local models and Kimi first.
-6. The Gemini OTLP mapping; Codex per its spike's finding.
-7. The VS Code extension.
+| | | |
+|---|---|---|
+| 0 | The step-0 spikes | **done** — §0, and two of them changed the design |
+| 1 | Schema + collector + hook client, end to end on a real session | **done** |
+| 2 | The classifier with the porcelain ground truth, pure, with fixtures | **done** |
+| 3 | `bench sessions` verbs — the read surface | **done** (`install · list · show · ingest`) |
+| 4 | The in-process adapter (`ToolLoopRunner` → `session_*`) and the first calibration | **open** |
+| 5 | The universal OpenAI-compatible proxy — local models and Kimi first | **open** |
+| 6 | Gemini's OTLP mapping; Codex per its spike | **open** |
+| 7 | The editor | **done**, in the sibling repository — see §6 |
+
+Step 4 is the one worth doing next: it is the only lane that is complete BY CONSTRUCTION, so it is what
+every other vantage point's completeness is measured against.
 
 ## 8. Test plan
 
-- **Classifier**: per-runtime taxonomy fixtures; the healthy-verify fixture (edit → read → build)
-  must NOT flag; an allowlist-vs-porcelain disagreement is stored, not swallowed; build-failure
-  shapes match across `dotnet`/`cargo`/`npm` fixture outputs.
-- **Collector**: ingest idempotency (the same event twice is one row); DB-down → spool → re-ingest
-  preserves order and loses nothing; the bounded channel never blocks the endpoint (property test).
-- **Proxy**: SSE reassembly against recorded fixtures, including `delta.tool_calls` fragments split
-  across chunk boundaries.
-- **Hook client**: an end-to-end smoke with a real `claude -p` session against a scratch repo; the
-  ~200 ms budget asserted; collector-down still exits 0.
+- **Classifier**: per-runtime taxonomy fixtures; the healthy-verify fixture (edit → read → build) must
+  NOT flag; an allowlist-vs-porcelain disagreement is stored rather than swallowed; build-failure shapes
+  across `dotnet`/`cargo`/`npm`. ✔ `ToolTaxonomyTests`, `PhaseClassifierTests`, `SessionAnalysisTests`.
+- **The analyzer reaches no model** — structural, not remembered: every detector lives in `Bench.Domain`,
+  which depends on nothing, and `ArchitectureTests` names them so that moving one into the layer where
+  the model ports are declared is a red build. ✔
+- **Store**: an open and a close are one call; a close with no open is adopted WITHOUT inventing a tree
+  reading; a call that never closed stays unfinished; a re-sent event is counted once; two calls of one
+  tool in flight close onto their own rows; a response longer than the cap still reports its true size.
+  ✔ `PostgresSessionStoreTests`, against a real Postgres.
+- **Codec**: an unknown schema version is refused BY NAME and is retryable; a malformed line costs that
+  line; an unrecognised outcome becomes an error rather than an answer. ✔ `SessionCodecTests`.
+- **The console**: an unread store and an empty one render as different panels. ✔ `MathBenchmarkPageTests`.
+- **The editor**: the task id, the terminal environment, the handoff's claim-and-delete, its TTL, and a
+  corrupted handoff file. ✔ `sessions.test.ts`, `tree.test.ts` in the sibling repository.
+- **Proxy**: SSE reassembly against recorded fixtures, including `delta.tool_calls` split across chunk
+  boundaries. **Open** — waits for step 5.
+- **Not asserted, and it should be**: the hook's own latency has no test. §0(c) measures it by hand at
+  ~175 ms, and a regression to a second per call would be invisible to this suite. Its collector-down
+  path is likewise only exercised by hand.
 
 ## 10. What shipped, and where it differs from this plan
 
@@ -336,14 +358,20 @@ The third is worth one more note: the reporting session flagged it as a *risk it
 was right — the first version of its test passed, because the arrival order it happened to use is the one
 recency gets right by accident. The order had to be excluded from the test rather than relied upon.
 
-## 9. Definition of Done
+## 11. Definition of Done
 
-- [ ] A real Claude Code session produces a complete `session_*` trace with phases labeled — and
-      nothing in any credential path was touched to get it.
-- [ ] The porcelain ground truth runs inside its measured budget; disagreements with the allowlist
-      are stored as rows.
-- [ ] In-process ToolLoopRunner sessions land in the same tables with `source = inprocess`, and the
-      first hook-vs-inprocess calibration comparison is recorded.
-- [ ] At least one non-Claude runtime is traced end-to-end.
-- [ ] Every step-0 spike has its finding written into this file.
-- [ ] Build 0-warnings, tests green, the `todo/README.md` table row current.
+- [x] A real Claude Code session produces a complete `session_*` trace with phases labelled — and nothing
+      in any credential path was touched to get it. *(Several, 2026-08-23; the first one found a defect in
+      the recorder.)*
+- [x] The porcelain ground truth runs inside its measured budget (~130 ms, §0(b)); disagreements with the
+      allowlist are stored as rows and surfaced as findings.
+- [x] Every step-0 spike has its finding written into this file, including the two that changed the design.
+- [x] The analyzer cannot reach a model, and it is an architecture test rather than a promise.
+- [x] The editor half ships — in the family's existing extension, with the duplicate deleted (§10.6).
+- [x] Build 0-warnings, 1301 tests green, the `todo/README.md` row current.
+- [ ] In-process `ToolLoopRunner` sessions land in the same tables with `source = inprocess`, and the first
+      hook-vs-inprocess calibration comparison is recorded. **This is the next step**: the in-process lane
+      is complete by construction, so it is what every other vantage point's completeness is measured
+      against — until it runs, "what does a hook MISS" is unanswered.
+- [ ] At least one non-Claude runtime is traced end to end.
+- [ ] The hook's latency is asserted by a test rather than measured by hand.

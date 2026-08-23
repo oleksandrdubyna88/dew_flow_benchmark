@@ -614,6 +614,13 @@ reads, the searches, the edits, the builds. A hook fires before and after every 
 the capture lives, and nothing in the path ever sees a credential (the `ANTHROPIC_BASE_URL` proxy was
 considered and rejected for five measured reasons, recorded in the plan).
 
+A **call** is a row opened by the pre-event and closed by the post one, rather than written once when it is
+over. That is the durable-status shape this repository already uses for anything that can outlive its writer,
+and here it buys a specific fact: a call that opened and never closed — a tool the operator DENIED, an agent
+interrupted, a session killed — survives as a record instead of as an absence. A tool that FAILS fires
+`PostToolUseFailure` **instead of** `PostToolUse`, so that event closes a call too; without it every failed
+call sat open forever, and failed calls are precisely the work a replacement map is hunting.
+
 Three decisions shape the schema, each one a state that would otherwise have been silently rendered as a fact:
 
 - **Phases are three, not two.** `Research` · `Execution` · `Verification`. A build after an edit is not
@@ -626,10 +633,31 @@ Three decisions shape the schema, each one a state that would otherwise have bee
 - **`NotChecked` is never `Unchanged`, and a truncated size is never the size.** Both rules were broken in
   the first build and both were caught by reading real traces rather than by reading the code.
 
+Two more decisions are about *pairing and time*, and both replaced an assumption that turned out to be false:
+
+- **A close is matched to its open by ARGUMENTS, not by recency.** The first version matched "the newest open
+  call of this tool", on the stated assumption that a session's calls are serial. An agent BATCHES them, so
+  `Pre(A) · Pre(B) · Post(A) · Post(B)` handed each response, size and duration to the other file — with
+  nothing erroring and both rows looking plausible.
+- **Each hook stamps the instant closest to the tool boundary it observes** — a pre-event as late as it can,
+  a post-event the instant it was entered. Before that rule, reading one file recorded ~220 ms of which the
+  read was a handful: the duration column was measuring the instrument.
+
 The detectors (`SessionAnalysis`) are pure and run on the way OUT, so a better one reaches every session
-already measured. An architecture rule follows from the plan's own thesis: **no model call is reachable from
-the analyzer** — an instrument that asked a model would inherit its variance into the denominator of every
-later measurement.
+already measured. **No model call is reachable from the analyzer**, and that is structural rather than
+remembered: every detector lives in `Bench.Domain`, which depends on nothing, and `ArchitectureTests` names
+them so that moving one into the layer where `IModelRuntime` is declared is a red build. An instrument that
+asked a model would inherit its variance into the denominator of every later measurement.
+
+**The instrument spends no tokens**, and two channels were checked rather than assumed: the hook writes zero
+bytes to stdout on all five of its events (an agent injects some hooks' stdout into its own context), and it
+modifies no tool call. What it spends is wall-clock — about 350 ms per call, and ~130 ms more on shell calls
+for the porcelain read. Proving a replacement WORKS is a different matter: that goes through `bench run`,
+which is the one verb that reaches a model.
+
+The editor half is deliberately **not in this repository**: starting a scoped session and watching it live
+belong to `dew_flow_rag_qln · tools/vscode-extension`, which already owns the `dewflow` activity-bar
+container and the cross-repo plan tree a session links itself to.
 
 The trace port has **two** implementations — live black-box and fixture-replay white-box — because an
 interface with one implementation proves nothing about its own shape. The white-box funnel
@@ -937,6 +965,15 @@ Each is here because something went wrong that it now prevents; the catalogue is
 ## What does NOT exist yet
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
+
+- **Session tracing covers ONE runtime, and its completeness is unmeasured.** The Claude Code path runs
+  end to end — hooks, collector, schema, classifier, detectors, the Math tab and the editor branch — but
+  the other three vantage points in `todo/ai_math/PLAN_session_measurement.md` are open: the universal
+  OpenAI-compatible proxy (Codex · Kimi · local models), Gemini's own OTLP, and the in-process adapter.
+  The last of those is the one that matters most and is easiest to underrate: `ToolLoopRunner` sees every
+  turn **by construction**, so it is the only lane that can say what a hook MISSES. Until the same task is
+  traced both ways, every completeness claim about the hook path is an assumption. The hook's own latency
+  is likewise measured by hand (~175 ms) and asserted by nothing.
 
 - **The investigate arm runs END TO END; the diff-producing arms wait for the sandbox.** `FixArm`
   (full · investigate-only · implement-only, `todo/PLAN_investigate_vs_implement.md`) is a matrix axis,
