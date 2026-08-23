@@ -1,7 +1,32 @@
 # PLAN — a benchmark run must not leave a corpus behind
 
-> Status: **plan only, nothing implemented yet.** Scope: whatever in this repository creates or names a RAG
+> Status: **plan only — and the blocker it names has EXPIRED, while a larger precondition it did not know
+> about has taken its place (audited 2026-08-23).** Scope: whatever in this repository creates or names a RAG
 > corpus for an arm. Raised 2026-08-15 from a measurement taken in `dew_flow_rag_qln`.
+>
+> **The documented blocker is gone.** §"Build order" step 1 says the prefix *"is a per-request field on both
+> sides … but no HTTP surface carries it, so a caller cannot choose one today"*. It does now:
+> `dew_flow_rag_qln` carries `CollectionPrefix` on the index-pass, index-state and search endpoints, with
+> `CollectionNamespace.RefusePrefix` validating it, and it even ships a listing that says whose each
+> collection is (`03cc363`). Nothing on the engine side stops this plan any more.
+>
+> **What replaced it is bigger and changes the build order.** *Nothing in this repository creates a corpus.*
+> `IndexPreparation` — the four-state machine, its owner, its heartbeat, its stranding rule, the
+> `index_preparations` table and `PostgresPreparationStore` — appears **only in its own definition and its
+> tests**: no host, no use case and no DI registration references `IPreparationStore`. Verified 2026-08-23 by
+> grep across `src/`, `hosts/` and the container registrations. A run reads whatever the operator already
+> indexed (`ApproveCorpusAsync` → `InspectAsync`) and builds nothing.
+>
+> So **this harness cannot leak a corpus today**, and step 1 has nothing to name: a `bench_` prefix is a claim
+> about corpora this repository creates, and it creates none. The plan is PREVENTIVE, which is a fine thing to
+> be — the 22 GB of rubbish it was raised from is real and the exposure at matrix scale is real — but its
+> first step cannot land before the thing that would litter exists. That wiring is
+> [PLAN_variant_matrix.md](PLAN_variant_matrix.md) step 5, which owns index preparation and shipped its
+> SHAPES without a caller.
+>
+> **Revised order, therefore:** the prefix and delete-on-finish land *with* the preparation wiring, in the
+> same change, so the namespace exists from the first corpus this benchmark ever builds rather than being
+> retrofitted over a population that already leaked. Retrofitting is what the source incident had to do.
 >
 > Related: that repository's `todo/PLAN_runtime_panel.md` (the panel that lists unclaimed collections) and
 > `research/module_indexing.md` (why a collection's name is its claim).

@@ -978,6 +978,17 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
+- **Nothing here BUILDS a corpus, and the machine for it is complete and uncalled.** A run reads whatever the
+  operator already indexed — `ApproveCorpusAsync` inspects the collection a search will reach and refuses a
+  recipe that disagrees — and it never starts an index pass. `IndexPreparation` (four states, an owner, a
+  heartbeat, a stranding rule that needs both a stale beat and a provably dead owner), the
+  `index_preparations` table and `PostgresPreparationStore` all exist and are tested; audited 2026-08-23,
+  `IPreparationStore` has **no caller and no DI registration** anywhere in `src/` or `hosts/`. Two
+  consequences worth stating together: cells are never gated on a corpus being `Ready`, and this harness
+  cannot leak a corpus — so `todo/PLAN_corpus_litter.md` is preventive rather than curative, and its `bench_`
+  namespace has nothing to name until the wiring (`todo/PLAN_variant_matrix.md` step 5) lands. This is the
+  largest instance of the "built and never called" class this repository keeps meeting.
+
 - **Session tracing covers ONE runtime, and its completeness is unmeasured.** The Claude Code path runs
   end to end — hooks, collector, schema, classifier, detectors, the Math tab and the editor branch — but
   the other three vantage points in `todo/ai_math/PLAN_session_measurement.md` are open: the universal

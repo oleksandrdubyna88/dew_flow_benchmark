@@ -37,8 +37,11 @@
 > system itself (§3), so **phase 1 is not published as an answer** — per §6's own rule, a table with the
 > control column empty reads as a result.
 >
-> **Phase 3's blocker is also gone:** `PLAN_variant_matrix.md` step 4 landed 2026-08-17, so an engine is wired
-> into a leg. What still blocks phase 3 is phase 2.
+> **Phase 3 has no blocker left, and this sentence used to say otherwise.** `PLAN_variant_matrix.md` step 4
+> landed 2026-08-17, so an engine is wired into a leg; phase 2 shipped on 2026-08-19, as this document's own
+> headline and its build-order item 4 both say. The line here still read *"what still blocks phase 3 is
+> phase 2"* until 2026-08-23 — a document contradicting itself two paragraphs apart. **What phase 3 waits on
+> now is a decision and a card, not code.**
 >
 > **Read §1b before the rest.** The host and the execution provider cannot be separated on this hardware —
 > MIGraphX exists only under Linux/WSL and DirectML only on Windows — so "WSL against Windows" is
