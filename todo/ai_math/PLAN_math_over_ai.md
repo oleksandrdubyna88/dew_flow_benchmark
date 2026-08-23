@@ -114,6 +114,28 @@ exactly how the doctrine was priced, so the method needs no new instrument.
   cannot see tool results reports *not captured*, and the map never converts that into "this
   pattern does not occur there".
 
+## 5a. What the instrument costs
+
+**No tokens at all.** The capture path is a hook process, an HTTP post, a Postgres insert and pure C#;
+nothing in it reaches a model, and the guarantee is structural rather than remembered — every detector
+lives in `Bench.Domain`, which references nothing beyond the runtime, and `ArchitectureTests` names them so
+that moving one into a layer where the model ports are declared is a red build.
+
+Two channels were checked rather than assumed, because both could have cost tokens invisibly:
+
+- **The hook writes nothing to stdout**, on any of its five events, and always exits zero. That matters
+  because an agent injects some hooks' stdout into its own context — a chatty hook would have made every
+  tool call more expensive, silently and forever. Measured: 0 bytes, all five events.
+- **The hook never modifies a tool call.** No decision JSON, no blocking exit code, so the model sees
+  exactly the conversation it would have seen uninstrumented.
+
+What it costs instead is **time**: ~350 ms per tool call (§0(c)), and about 130 ms more on shell calls for
+the porcelain read. That is the honest price, and it is paid in wall-clock rather than in money.
+
+What *does* spend money is step 4 of the build order — **verifying** a replacement. `bench run` is the one
+verb that reaches a model, and pricing a candidate against its baseline is a real measurement with a real
+bill. The distinction is worth keeping sharp: tracing is free, and proving a replacement works is not.
+
 ## 6a. What the first traced sessions already showed (2026-08-23)
 
 The capture landed the same day, so this section is short and will grow. It is here because the plan says a
