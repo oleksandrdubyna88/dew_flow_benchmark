@@ -64,7 +64,7 @@ flowchart TB
     apphost --> apihost
     apphost --> collector
     app --> dom
-    app -. "step 3 — no consumer yet" .-> delivered
+    app --> delivered
     infra --> app
     app --> contracts
     api --> contracts
@@ -266,6 +266,57 @@ REFUSAL; that could not hold, because the same parse reads stored rows back and 
 axis existed would have become unreadable. The width is the sharper of the two — a model NAME does not
 identify an embedder and a width cannot be spelled two ways — and until 2026-08-23 no surface could declare
 one, so its guard existed and could never fire.
+
+## The delivered-work score
+
+A code-lane arm produces a diff, and the question *"how much work is that"* has an obvious wrong answer:
+count the lines. The instrument here is ported — mechanism rather than repository — from the operator's
+`scoreMeter` V2, whose inflation test measured the failure precisely: ten times the cleaned lines, added as
+reachable code that cannot change what the change DOES, bought **×1.7 the score**.
+
+**The zero band is why it does not.** The weigher in that test was not fooled — it priced the padding at 1
+and 2 and said so in its own words — and it had no number to record that judgement with, because the scale
+floor was 1 and **a floor is a payment**: 158 padded steps supplied 46 % of the inflated score. With a zero
+band the same padding bought ×0.88, and 160 of 160 padded steps landed on zero.
+
+Four things run in order, and only the middle two cost a call:
+
+| step | what it does | model? |
+|---|---|---|
+| cleaned LOC | path fates, comment and blank removal, continuation joining, wrap at 100 | no |
+| decompose | what the change did, step by step, each anchored in the diff | yes |
+| the gate | is enough of the change accounted for — accept · retry once · fail | no |
+| weigh → policy | price each step on the scale, then apply the deterministic corrections | yes, then no |
+
+**The figures are computed before anything is asked**, so a leg whose model half refuses still reports what
+the diff itself says — evidence that cost no call to produce.
+
+**The gate has six statuses, not a boolean.** "Accepted" covers a decomposition that met its band, one that
+fell short with an admissible cause, one that fell short with an unlisted cause, and one the arithmetic
+could not judge at all; collapsing them would publish four different claims as one. A cap with an unlisted
+cause is accepted and FLAGGED rather than refused — sincerity is not machine-decidable, and a real cause
+nobody enumerated has to stay sayable. The gate allows exactly ONE re-ask, and an unreadable reply spends
+that attempt rather than retrying free, or a model that never produces JSON would be asked forever.
+
+**The corrections run after the model, in code.** A step whose own justification calls it a mirror of a
+same-file sibling is capped; rescued points are admitted only up to an allowance. Both exemptions matter as
+much as the rules — co-location alone never caps, and a cross-file mirror never caps — because without them
+a cap on repetition becomes a penalty on large files. The raw score and the applied score are both kept
+with the rule that changed each: a report able to show only the second could not say whether the model or
+the correction produced a number.
+
+**Every exchange is stored, permanently.** `stage_payloads` keeps each reply as it ARRIVED, unparsed, with
+the prompt hash and the protocol string beside it — so `bench rescore` can replay the policy over a
+published run with **zero model calls**, which is the property the whole port exists to preserve. A stored
+parse would be a stored interpretation; a payload aged out would be a score that can no longer be
+re-derived. That table's growth is a budget line the footprint read prints, not a cleanup target.
+
+**Everything it inherited is marked.** The scale's ten lines, the coverage bands, the two policy constants
+and the cap vocabulary were all fitted on a PHP/JS corpus and none has been re-measured here, so they live
+in one file with the measurement behind each, and every score carries
+`delivered-work-v1 (anchors inherited: …)`. The file is designed to SHRINK: a constant re-measured on this
+corpus moves out of it. Until that happens the badge stands, and what would retire it is the one thing
+still missing — see *What does NOT exist yet*.
 
 Two refusals remain, and both happen **before any cell exists**: a recipe naming another engine, and a
 corpus shape this one does not have. `IRetriever.CanServe` is the check — a mapping, not a round trip — asked
@@ -996,14 +1047,13 @@ Each is here because something went wrong that it now prevents; the catalogue is
 
 Stated because a description that quietly implies more than is built is the same defect as a stale diagram.
 
-- **The delivered-work module has no consumer yet.** `Bench.Delivered` holds the whole deterministic half
-  of the score — cleaned LOC, path fates, the near-duplicate cap, the rescue allowance, the adjustment
-  trail — and nothing calls it: `DeliveredWorkStage`, the prompts, the coverage gate, `stage_payloads` and
-  `bench rescore` are steps 3–5 of `todo/PLAN_scoremeter_port.md` and need a model runtime. The edge in the
-  diagram above is dashed for that reason. Unlike the preparation machine below, this one is uncalled *by
-  design and for one commit's worth of time* — the plan drew the boundary at "pure domain work can start
-  before the sandbox exists" — but it is stated here because a leaf nobody calls looks identical either way
-  from the outside, and this repository has met that pattern five times.
+- **The delivered-work score has never run against a real model.** The pipeline is complete —
+  `DeliveredWorkStage` decomposes, gates, weighs and corrects; `stage_payloads` keeps every exchange; and
+  `bench rescore` replays the policy over them with no call. What has not happened is a single leg scored
+  by a live model, so every number the instrument can produce is still a number from a scripted test. Its
+  constants are also all inherited (`Bench.Delivered/Inherited.cs`), and the arm that would retire the
+  *inherited calibration* badge — re-measuring the inflation property on this corpus — needs a solved code
+  task, which the code lane's sandbox does not yet provide (`todo/PLAN_scoremeter_port.md` step 5).
 
 - **Nothing here BUILDS a corpus, and the machine for it is complete and uncalled.** A run reads whatever the
   operator already indexed — `ApproveCorpusAsync` inspects the collection a search will reach and refuses a
