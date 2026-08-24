@@ -1,15 +1,19 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **STEPS 1, 2 AND THE PURE HALF OF 3 IMPLEMENTED 2026-08-23. What is left needs a model.**
+> Status: **STEPS 1–3 IMPLEMENTED 2026-08-23. Step 4 needs no model at all — that is its point — and
+> step 5 needs a solved task.**
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
 > `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`, with `stage_payloads`
 > persisted beside them, and `DeliveredWorkStage` as their one orchestration. 136 module tests, suite
-> 1450 green. What remains needs a REAL model rather than more code: `bench rescore` and the
-> recalibration. Everything left needs a model
-> runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
-> since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
+> 1450 green.
+>
+> **§6's boundary — "steps 1–2 are pure domain work, 3–5 need a runtime" — was drawn one step too early,
+> and in the case of step 4 it is backwards.** Most of step 3 landed without a model because the gate's
+> accept/retry/fail arithmetic is pure and only its numerator comes from a reply. And `bench rescore` does
+> not need a runtime either: recomputing with ZERO model calls is the property it exists to demonstrate.
+> The only thing here that genuinely needs a live model is step 5, and it needs a solved task besides.
 >
 > **The gate's six statuses came across as six**, which is the part worth defending: "accepted" covers a
 > reply that met its band, one that fell short with an admissible cause, one that fell short with an
