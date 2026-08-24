@@ -1,13 +1,14 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **STEPS 1–4 IMPLEMENTED 2026-08-23. Only step 5 is left, and it needs a solved task and a
-> live model.**
+> Status: **STEPS 1–4 IMPLEMENTED 2026-08-23, and step 5's MACHINERY with them. What is left is a
+> RUN, not a build.**
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
 > `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`, with `stage_payloads`
 > persisted beside them, `DeliveredWorkStage` as their one orchestration and `bench rescore` over the
-> stored payloads. 145 module tests, suite 1459 green.
+> stored payloads, and the inflation arm that would retire the inherited badge. 160 module tests, suite
+> 1474 green.
 >
 > **§6's boundary — "steps 1–2 are pure domain work, 3–5 need a runtime" — was drawn one step too early,
 > and in the case of step 4 it is backwards.** Most of step 3 landed without a model because the gate's
@@ -334,8 +335,18 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
    because a rescore that overwrote the stored score would destroy the evidence that the policy changed.
    And the LAST decomposition attempt is the one rescored: a re-ask replaces its predecessor, so reading
    the first would rescore a decomposition the run itself rejected.
-5. **Recalibration** — the inflation arm on our corpus; on a pass (exponent ≈ ≤ 0, padded steps
-   zeroed, honest score inside the sampling spread) the inherited badge drops; on a fail the anchors
+5. **Recalibration** — **its MACHINERY landed 2026-08-23; what is left is the run.** `InflationPadding`
+   generates the padding deterministically (no model writes it, so an arm is rebuildable by somebody who
+   was not there — the flaw in the source's hand-written precedent), and `InflationArm` computes the
+   exponent and the three-part verdict. Both are pure and tested, including the premise itself: ×10 the
+   graph is ×10 the CLEANED lines, asserted rather than assumed.
+   **The verdict needs all THREE conditions**, and that is the part worth defending: an exponent at zero
+   with the honest score collapsed would mean the scale had stopped paying for anything — a different
+   failure wearing a passing number. So the padded steps must land on zero (discriminating, not firing
+   everywhere) and the honest arm's own score must hold. With no earlier score the third leg reports
+   UNVERIFIED rather than passing, the same three-state honesty the rest of this codebase uses.
+   What remains is running it: two scored legs against a real model, which needs a solved code task the
+   code lane's sandbox does not yet provide. On a pass the inherited badge drops; on a fail the anchors
    get recalibrated HERE and the protocol version bumps.
 
 Steps 1–2 are pure domain work and can start before the code lane's sandbox exists; steps 3–5 need a
