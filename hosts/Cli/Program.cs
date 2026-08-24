@@ -83,6 +83,7 @@ public static class Program
             "report" => Report(command, output, error, stopping),
             "sweep" => SweepCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "prune" => PruneCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "rescore" => RescoreCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "telemetry" => Telemetry(command, output, error, stopping),
             "sessions" => Sessions(command, output, error, stopping),
             "variants" => Variants(command, output, error, stopping),
@@ -545,6 +546,9 @@ public static class Program
         output.WriteLine("  bench sweep --db <connection> [--stale-after-minutes 30] [--json]");
         output.WriteLine("             hands back the cells a dead host left claimed; run it after any kill -9");
         output.WriteLine("  bench prune --db <connection> [--hit-retention-days 7] [--json]");
+        output.WriteLine("  bench rescore --run <guid> --db <connection> [--json]");
+        output.WriteLine("             recompute the delivered-work policy over stored payloads —"
+                          + " no model is called, and none can be");
         output.WriteLine("             releases the source TEXT of old retrieved hits, keeping every row: the corpus");
         output.WriteLine("             at the pinned commit reproduces it. `bench run` does this at startup too");
         output.WriteLine("  bench resume --run <id> --db <connection> --model-url <openai-compatible base>");

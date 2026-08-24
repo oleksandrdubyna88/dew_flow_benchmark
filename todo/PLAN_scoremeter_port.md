@@ -1,13 +1,13 @@
 # PLAN — the scoreMeter port: cleaned LOC, the zero-band weighting protocol, and the harness method
 
-> Status: **STEPS 1–3 IMPLEMENTED 2026-08-23. Step 4 needs no model at all — that is its point — and
-> step 5 needs a solved task.**
+> Status: **STEPS 1–4 IMPLEMENTED 2026-08-23. Only step 5 is left, and it needs a solved task and a
+> live model.**
 > `src/Bench.Delivered` is a leaf with zero references (asserted twice by `ArchitectureTests`: it sees
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
 > `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`, with `stage_payloads`
-> persisted beside them, and `DeliveredWorkStage` as their one orchestration. 136 module tests, suite
-> 1450 green.
+> persisted beside them, `DeliveredWorkStage` as their one orchestration and `bench rescore` over the
+> stored payloads. 145 module tests, suite 1459 green.
 >
 > **§6's boundary — "steps 1–2 are pure domain work, 3–5 need a runtime" — was drawn one step too early,
 > and in the case of step 4 it is backwards.** Most of step 3 landed without a model because the gate's
@@ -324,8 +324,16 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
    grain is explicitly not ported (*"Σ grain still cannot tell padding from work"*), so the port takes a
    neutral `accounted` figure and leaves how the stage computes it as an open decision belonging with the
    stage. Inheriting a numerator whose own report disowns it would have been the worst of both.
-4. **`bench rescore`** — policy recompute over stored payloads, zero model calls, proven by a test
-   that counts runtime invocations.
+4. ~~**`bench rescore`**~~ **IMPLEMENTED 2026-08-23.** `DeliveredRescore` plus the verb, recomputing the
+   policy over stored payloads with zero model calls. The proof is STRUCTURAL rather than a counter: the
+   class takes no runtime, so it cannot reach one — and the test asserts that constructor shape anyway,
+   because "we did not call a model" is the kind of promise that decays silently. Proven load-bearing by
+   adding an `IModelRuntime` parameter and watching it go red naming the type.
+   **Deviations:** it recomputes the POLICY, not the gate — re-deriving a verdict would need the diff's
+   figures, which no payload carries, so the stored verdict is the record. It REPORTS rather than writes,
+   because a rescore that overwrote the stored score would destroy the evidence that the policy changed.
+   And the LAST decomposition attempt is the one rescored: a re-ask replaces its predecessor, so reading
+   the first would rescore a decomposition the run itself rejected.
 5. **Recalibration** — the inflation arm on our corpus; on a pass (exponent ≈ ≤ 0, padded steps
    zeroed, honest score inside the sampling spread) the inherited badge drops; on a fail the anchors
    get recalibrated HERE and the protocol version bumps.
