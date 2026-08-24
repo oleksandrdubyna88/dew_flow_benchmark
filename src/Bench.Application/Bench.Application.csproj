@@ -13,6 +13,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Bench.Domain\Bench.Domain.csproj" />
     <ProjectReference Include="..\Bench.Contracts\Bench.Contracts.csproj" />
+    <!-- The delivered-work module: a SIBLING LEAF this layer is the ONLY one allowed to reference,
+         which is what keeps its recompute property tied to one orchestration. ArchitectureTests
+         asserts both halves of that. -->
+    <ProjectReference Include="..\Bench.Delivered\Bench.Delivered.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,7 +5,9 @@
 > nothing, and nothing but the Application layer may see it), holding `PathCategoryTable`,
 > `LineNormalizer`, `DiffParser`, `DiffCleaner`, `LocCalculator`, `DeliveredWorkPolicy`,
 > `CoverageDecision`, `WeightingProtocol`, `Reply`/`ReplyReader` and `Inherited`, with `stage_payloads`
-> persisted beside them. 125 module tests, suite 1439 green. Everything left needs a model
+> persisted beside them, and `DeliveredWorkStage` as their one orchestration. 136 module tests, suite
+> 1450 green. What remains needs a REAL model rather than more code: `bench rescore` and the
+> recalibration. Everything left needs a model
 > runtime, which is exactly the boundary §6 drew — and the GATE turned out to sit on this side of it,
 > since its accept/retry/fail arithmetic is pure and only its numerator comes from a reply.
 >
@@ -276,7 +278,18 @@ Ported as **practice**, encoded in this repo's shape rather than as Python:
 3. **Prompts + gate + stage** — **the GATE landed 2026-08-23** (`CoverageDecision`: the bands, the
    quantisation tolerance, the boundary epsilon, the two size floors, the six statuses and the cap-reason
    judgement, all pure, 24 tests). Still open and all needing a runtime: the zero-band weigher's prompt
-   texts beyond the scale, the stage itself, and the one re-ask the gate asks for.
+   texts beyond the scale — everything else in this step has landed.
+   **The STAGE landed 2026-08-23** (`Bench.Application/Delivered/DeliveredWorkStage`), and it is the only
+   orchestration: every rule stays in the leaf, the stage owns the IO and owns no rules, which is what
+   keeps the recompute property tied to one place. The figures are computed BEFORE anything is asked, so a
+   run whose model half refuses still has what the diff itself says. The prompts live in the module rather
+   than in `prompts/` — the scale's wording IS the measured artefact, so a text an operator could edit
+   without bumping the protocol would silently make two runs incomparable.
+   **Three decisions the plan did not specify.** An unreadable reply spends an ATTEMPT rather than
+   retrying free, or a model that never produces JSON would be asked forever. The gate's own verdict is
+   stored as a payload, so a rescore sees what was decided without re-deriving it. And the gate's numerator
+   is anchored STEPS against cleaned churn — chosen here rather than inherited, because the source divided
+   by grain and grain is explicitly not ported; it is exactly the number the recalibration arm checks.
    **`stage_payloads` landed 2026-08-23**: the table, its row, the `IStagePayloadStore` port and its
    Postgres adapter. Append-only with no update and no delete — their absence IS the design, because a
    payload that could be rewritten would make an old score unreproducible while still looking
