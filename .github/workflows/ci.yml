@@ -30,6 +30,57 @@ jobs:
       - name: Test
         run: ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
 
+  # Both hosts over the wire, against a real Postgres: routing, the group prefixes, the refusals and
+  # the shape of an EMPTY answer — which is the shape a fresh install actually serves and the one
+  # nobody checks. It also asserts the boundary between the two hosts: the read API refuses the
+  # ingest verb and has no read route on that path.
+  contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: suite
+          POSTGRES_PASSWORD: suite
+          POSTGRES_DB: bench
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      BENCH_CONN: Host=127.0.0.1;Port=55432;Database=bench;Username=suite;Password=suite
+    steps:
+      - uses: actions/checkout@v4
+      - run: git submodule update --init --depth 1 .claude/rules/shared
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the pinned httpyac
+        run: npm ci --prefix http
+
+      # The API applies no migrations by design — the CLI owns the schema, and `prune` is the
+      # cheapest verb that creates it.
+      - name: Create the schema
+        run: dotnet run --project hosts/Cli -c Release -- prune --db "$BENCH_CONN" --hit-retention-days 30
+
+      - name: Start both hosts and run the suite
+        run: |
+          ConnectionStrings__bench="$BENCH_CONN" ASPNETCORE_URLS=http://127.0.0.1:5411 \
+            dotnet run --project hosts/Api -c Release &
+          ConnectionStrings__bench="$BENCH_CONN" dotnet run --project hosts/Collector -c Release &
+          for _ in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:5411/api/bench/health && break
+            sleep 2
+          done
+          node .claude/rules/shared/tools/http-run.mjs --env local --target http://127.0.0.1:5411
+
+      - name: Every route has a request
+        run: node .claude/rules/shared/tools/http-coverage.mjs --source src --source hosts
+
+      - name: The post-deploy checklist is still well formed
+        run: node .claude/rules/shared/tools/post-deploy-check.mjs
+
   # The plan lifecycle, enforced from the shared rules repository rather than four times over — the check
   # reads markdown, not code, so one implementation serves every consumer (see .claude/rules/shared/README.md).
   # Only that ONE submodule is fetched: `submodules: true` would drag every other one in for a markdown walk.

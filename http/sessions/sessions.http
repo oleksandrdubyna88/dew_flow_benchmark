@@ -1,0 +1,78 @@
+# Session traces — and the boundary this group exists to keep.
+#
+# The INGEST route lives on the collector, which is the one process an agent's hook may reach. The
+# READ routes live on the API. They share a path prefix and nothing else: the API registers no write
+# port, and the collector maps no read route. So this file addresses two origins, and the split is
+# the contract rather than a deployment detail.
+
+# @name the_collector_answers_its_own_health
+# @prod
+GET {{collectorUrl}}/api/bench/sessions/health
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the collector has a probe of its own — the API being up says nothing about it', () => {
+    assert.strictEqual(response.parsedBody.status, 'ok');
+  });
+}}
+
+###
+# @name ingesting_a_body_that_is_not_a_session_event_is_refused
+POST {{collectorUrl}}/api/bench/sessions/events
+Content-Type: application/json
+
+{}
+
+?? status == 400
+
+###
+# @name sessions_lists_what_has_been_ingested
+# @prod
+GET {{baseUrl}}/api/bench/sessions?limit=5
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('an empty store answers with [], never null', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# 404 here, unlike the scoreboard's empty 200 next door, and the difference is the question being
+# asked: "show me this session" names one thing, and it is either there or it is not.
+# @name a_session_that_does_not_exist_is_404
+GET {{baseUrl}}/api/bench/sessions/{{unknownRunId}}
+
+?? status == 404
+
+###
+# 405, not 404, and the distinction is worth writing down: the read API knows the path space and
+# refuses the VERB. A store that can write is harmless in a host that maps no route to it, and this
+# is the request that proves no route was mapped — measured, because 404 is what one would guess.
+# @name the_read_api_does_not_serve_the_ingest_route
+POST {{baseUrl}}/api/bench/sessions/events
+Content-Type: application/json
+
+{}
+
+?? status == 405
+
+###
+# The other half of the same guarantee: no READ route answers on the ingest path either. A segment
+# that is not a guid fails the constraint, so there is nothing there at all.
+# @name the_read_api_has_no_route_on_the_ingest_path
+GET {{baseUrl}}/api/bench/sessions/events
+
+?? status == 404
+
+###
+# @uncovered 202/200 on a REAL ingest — a well-formed session event is produced by an agent's hook
+#            mid-session, and staging one here would assert the shape of a fixture rather than the
+#            shape a hook actually sends. The ingest's own parsing is unit-tested where it lives.
+# @uncovered a populated session detail — needs an ingested trace, same reason.

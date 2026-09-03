@@ -1,0 +1,255 @@
+# The read API and the planner — everything under `/api/bench` except the session routes.
+#
+# This host maps NO write route: the claim path is not reachable by a GET, and a port it never
+# registers cannot be reached by a route that does not exist. So every request here is safe to repeat,
+# and the suite leaves nothing behind.
+
+# @name bench_health_answers_ok
+# @prod
+GET {{baseUrl}}/api/bench/health
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the probe names its verdict', () => {
+    assert.strictEqual(response.parsedBody.status, 'ok');
+  });
+}}
+
+###
+# Planning is a PURE computation — it writes nothing, which is what makes it safe to assert here. It
+# is also the one place the matrix's shape is decided, so its refusals are the interesting half.
+# The suite document is read from samples/, relative to the repository root the runner works from.
+# @name plan_expands_a_suite_into_a_matrix_of_cells
+{{
+  const fs = require('node:fs');
+  // Built here rather than written inline because `suiteJson` is a JSON document INSIDE a JSON
+  // field, and a hand-escaped copy of a file that lives in the repository is a second copy that
+  // drifts. The path is relative to the repository root, which is where the runner works from.
+  exports.planBody = JSON.stringify({
+    repo: 'https://github.com/example/repo.git',
+    commit: wellFormedSha,
+    suiteJson: fs.readFileSync('samples/demo-suite.json', 'utf8'),
+    repeats: 1,
+    seed: 1,
+    subjects: ['m1@local'],
+    lanes: ['arch'],
+  });
+}}
+POST {{baseUrl}}/api/bench/plan
+Content-Type: application/json
+
+{{planBody}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  const plan = response.parsedBody;
+  test('the target is canonical — a plan is identified by what it ran against, not by a label', () => {
+    assert.match(plan.targetCanonical, /^https:\/\/github\.com\/example\/repo\.git@[0-9a-f]{40}/);
+  });
+  test('the suite is stamped, so two runs of "the same" suite cannot be silently different', () => {
+    assert.match(plan.suiteStamp, /^demo@/);
+  });
+  test('every question becomes cells, and each cell says which leg and position it holds', () => {
+    assert.ok(plan.questionCount > 0);
+    assert.ok(Array.isArray(plan.cells) && plan.cells.length > 0);
+    for (const cell of plan.cells) {
+      assert.ok(cell.questionId.length > 0);
+      assert.ok(cell.leg.length > 0, 'a cell with no leg cannot be attributed to an arm');
+      assert.strictEqual(typeof cell.position, 'number');
+    }
+  });
+}}
+
+###
+# @name plan_without_a_repository_is_refused_with_a_reason
+POST {{baseUrl}}/api/bench/plan
+Content-Type: application/json
+
+{}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal says what is missing rather than "bad request"', () => {
+    assert.match(response.parsedBody.reason, /repository url/i);
+  });
+}}
+
+###
+# An abbreviated sha is ambiguous, and a benchmark whose target is ambiguous cannot be compared with
+# anything. The refusal names the length it got, which is what makes it actionable.
+# @name plan_with_an_abbreviated_commit_is_refused_and_says_why
+POST {{baseUrl}}/api/bench/plan
+Content-Type: application/json
+
+{
+  "repo": "https://github.com/example/repo.git",
+  "commit": "abc123",
+  "suiteJson": "{}"
+}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal names the length seen and the reason abbreviations are refused', () => {
+    assert.match(response.parsedBody.reason, /40 hexadecimal/);
+    assert.match(response.parsedBody.reason, /got 6/);
+  });
+}}
+
+###
+# @name plan_with_a_suite_that_has_no_id_is_refused
+POST {{baseUrl}}/api/bench/plan
+Content-Type: application/json
+
+{
+  "repo": "https://github.com/example/repo.git",
+  "commit": "{{wellFormedSha}}",
+  "suiteJson": "{\"questions\":[]}"
+}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('an unidentifiable suite is named as such', () => {
+    assert.match(response.parsedBody.reason, /no id/i);
+  });
+}}
+
+###
+# @name runs_lists_what_this_database_holds
+# @prod
+GET {{baseUrl}}/api/bench/runs?limit=5
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('an empty database answers with [], never null — a caller iterates it either way', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# @name runs_accepts_a_zero_limit_without_inventing_a_default
+# @prod
+GET {{baseUrl}}/api/bench/runs?limit=0
+
+?? status == 200
+
+###
+# A scoreboard for a run that does not exist is an EMPTY scoreboard, not a 404: nothing was scored,
+# which is a true answer about a run nobody has recorded.
+# @name a_scoreboard_for_an_unknown_run_is_empty_rather_than_missing
+GET {{baseUrl}}/api/bench/runs/{{unknownRunId}}/scoreboard
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('zero scored and zero passed — and both numbers are present', () => {
+    assert.strictEqual(response.parsedBody.scored, 0);
+    assert.strictEqual(response.parsedBody.passed, 0);
+  });
+}}
+
+###
+# @name metrics_for_an_unknown_run_answer_without_failing
+GET {{baseUrl}}/api/bench/runs/{{unknownRunId}}/metrics
+
+?? status == 200
+
+###
+# The report DOES refuse for an unknown run, and the difference from the scoreboard above is
+# deliberate: a scoreboard summarises what exists, a report is about a specific run — and naming a
+# run that is not there is a mistake worth telling the caller about.
+# @name a_report_for_an_unknown_run_is_404_and_names_the_id
+GET {{baseUrl}}/api/bench/runs/{{unknownRunId}}/report?metric=recall_at_10
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('the refusal quotes the id it could not find', () => {
+    assert.match(response.parsedBody.reason, /00000000-0000-0000-0000-000000000000/);
+  });
+}}
+
+###
+# @name a_report_without_a_metric_is_refused
+GET {{baseUrl}}/api/bench/runs/{{unknownRunId}}/report
+
+?? status == 400
+
+###
+# There is no default metric, and the refusal explains why rather than picking one — the metric that
+# answers a retrieval question is not the one that answers a generation question.
+# @name arms_without_a_metric_is_refused_with_the_reason_there_is_no_default
+GET {{baseUrl}}/api/bench/arms
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal argues for itself instead of naming a missing parameter', () => {
+    assert.match(response.parsedBody.reason, /name the metric/i);
+  });
+}}
+
+###
+# A named metric with nothing to compare is a 200 carrying a REFUSAL FIELD, not an error: the request
+# was answerable, and the answer is "no arm qualifies, and here is what would have to be true".
+# @name arms_with_a_metric_and_no_qualifying_run_explains_itself_in_a_200
+GET {{baseUrl}}/api/bench/arms?metric=recall_at_10
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  const body = response.parsedBody;
+  test('the metric asked for is echoed back', () => {
+    assert.strictEqual(body.metricName, 'recall_at_10');
+  });
+  test('scopes and exclusions are arrays even when empty', () => {
+    assert.ok(Array.isArray(body.scopes));
+    assert.ok(Array.isArray(body.excluded));
+  });
+  test('when there is nothing to compare, the reason says what is missing', () => {
+    if (body.scopes.length === 0) {
+      assert.ok(body.refusal.length > 0,
+        'an empty comparison with no refusal is a blank page the caller cannot act on');
+    }
+  });
+}}
+
+###
+# @name arms_metrics_lists_what_can_be_asked_for
+# @prod
+GET {{baseUrl}}/api/bench/arms/metrics
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the answer is a list, so a client can populate a chooser from it', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# @uncovered every 200 that needs REAL DATA — a scoreboard with scores, a report with a comparison, a
+#            populated arms table. Producing them means running a campaign (a GPU, an engine, hours),
+#            which is the benchmark's own subject rather than something a contract smoke can stage.
+#            What is asserted here is the shape those routes answer in, including when empty.
