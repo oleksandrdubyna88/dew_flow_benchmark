@@ -302,7 +302,7 @@ public sealed class QlnRetriever(
     private static string Member(HitWire hit) =>
         (hit.TypeName.Length, hit.MemberName.Length) switch
         {
-            (> 0, > 0) => $"{hit.TypeName}.{hit.MemberName}",
+            ( > 0, > 0) => $"{hit.TypeName}.{hit.MemberName}",
             (0, > 0) => hit.MemberName,
             _ => string.Empty,
         };

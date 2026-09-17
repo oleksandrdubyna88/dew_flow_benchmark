@@ -206,7 +206,8 @@ public sealed class IndexReadinessTests
     public void A_wrong_corpus_outranks_a_wrong_arm_because_it_is_the_more_specific_disagreement()
     {
         var served = State(chunkTokens: 256, commit: IndexCommit.Of(Target))
-            with { Backend = BackendDeclaration.Read("windows/dml/R9700") };
+            with
+        { Backend = BackendDeclaration.Read("windows/dml/R9700") };
 
         var refused = IndexReadiness.Of(
             served, Recipe(chunkTokens: 512, backend: "wsl/migraphx/R9700"), Target, ReadinessAllowances.Strict);

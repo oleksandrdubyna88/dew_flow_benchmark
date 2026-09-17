@@ -126,7 +126,8 @@ public static class AuthoringPass
         if (answered is not Outcome<AgentAnswer>.Ok(var answer))
         {
             return AuthoringReport.Nothing(author.Config.ModelId, answered.Match(_ => string.Empty, r => r))
-                with { PromptHash = brief.Hash };
+                with
+            { PromptHash = brief.Hash };
         }
 
         var payload = Payload(answer.Text);
@@ -191,7 +192,8 @@ public static class AuthoringPass
         if (parsed is not Outcome<IReadOnlyList<BankQuestionFile>>.Ok(var files))
         {
             return AuthoringReport.Nothing(author.Config.ModelId, parsed.Match(_ => string.Empty, r => r))
-                with { PromptHash = promptHash };
+                with
+            { PromptHash = promptHash };
         }
 
         var admitted = Admit(files, request, author.Config.ModelId, now);
