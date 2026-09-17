@@ -70,7 +70,8 @@ public sealed class CliAgentLiveTests
         // One second against a call that pays for process start alone: the ceiling fires, the child is killed,
         // and the run continues. An authoring batch over six groups cannot end because one agent stalled.
         var ask = Ask("Think carefully and then reply with a very long essay about retry policies.")
-            with { Wall = TimeSpan.FromSeconds(1) };
+            with
+        { Wall = TimeSpan.FromSeconds(1) };
 
         var refused = await Runtime().AskAsync(ask, TestContext.Current.CancellationToken);
 

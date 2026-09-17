@@ -215,10 +215,12 @@ internal sealed record TelemetryWire
 
 internal sealed record CorrelationWire
 {
-    [JsonPropertyName("leg")] public CapturedTextWire Leg { get; init; } =
+    [JsonPropertyName("leg")]
+    public CapturedTextWire Leg { get; init; } =
         new() { Captured = false, Value = "", Reason = "the caller declared no leg" };
 
-    [JsonPropertyName("phase")] public CapturedTextWire Phase { get; init; } =
+    [JsonPropertyName("phase")]
+    public CapturedTextWire Phase { get; init; } =
         new() { Captured = false, Value = "", Reason = "the caller declared no phase" };
 }
 

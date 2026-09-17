@@ -166,9 +166,9 @@ public static class VariantJson
 
     private sealed record FusionWire(string Mode, int K, double DenseWeight, double SparseWeight, string Norm);
 
-/// <param name="Dimensions">The vector width, when the author declared one. Absent (0) on every row written
+    /// <param name="Dimensions">The vector width, when the author declared one. Absent (0) on every row written
     /// before this existed, and those rows must keep hashing as they did — see <c>EmbedDimensions</c>.</param>
-/// <param name="Tokenizer">Whose tokens <c>ChunkTokens</c> counts, when the author named one. Absent on every
+    /// <param name="Tokenizer">Whose tokens <c>ChunkTokens</c> counts, when the author named one. Absent on every
     /// row written before this existed — and, like <c>Dimensions</c>, absent from the canonical form until
     /// declared, so those rows keep hashing as they did.</param>
     private sealed record CorpusWire(

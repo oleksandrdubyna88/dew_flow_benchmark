@@ -257,7 +257,11 @@ public sealed class PostgresQuestionBank(BenchDbContext db) : IQuestionBank
 
         return Move(new QuestionGroupMoveRow
         {
-            QuestionId = question.Id, FromGroup = from, ToGroup = target.Key, Reason = reason, At = at,
+            QuestionId = question.Id,
+            FromGroup = from,
+            ToGroup = target.Key,
+            Reason = reason,
+            At = at,
         });
     }
 
