@@ -4,6 +4,7 @@
        Implements the Application's ports; nothing here is referenced back by Application. -->
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <!-- Pooled sockets for the model runtime: a benchmark opens one connection per leg and a
          run has tens of thousands of them. Microsoft-published, so it clears the package policy. -->
