@@ -1,7 +1,7 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
-> Status: **E1 (the domain and the contracts) landed 2026-09-27 — `research/module_gate.md` describes it; E2–E7
-> open.** Scope: a new bounded context `Gate` across
+> Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27 —
+> `research/module_gate.md` describes them; E3–E7 open.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -567,26 +567,76 @@ for the rest.
 - [x] **S1.10** architecture tests: gate decisions in `Bench.Domain`; `Bench.Ui` references contracts only.
 - [x] DoD: 0 warnings; every RED observed with its real symptom; `architecture.md` names the new context.
 
-### E2 — the store and the privacy guard (Fable for S2.4; Opus otherwise)
+### E2 — the store and the privacy guard (Fable for S2.4; Opus otherwise) — DONE 2026-09-27
 
-- **S2.1** EF entities + one migration for `gate_runs`, `gate_cells`, `gate_findings`, `gate_verdicts`,
-  `gate_reviewers`, `gate_artifacts`.
-- **S2.2** `IGateStore` (plan / claim / settle / sweep / recent / facts) + `PostgresGateStore` — the guarded-UPDATE
+> Landed on `feat/gate-e2-store`; the store, the artefact layout and protocol, the guard and the growth table are in
+> [module_gate.md](../research/module_gate.md). Every story's RED was observed by REVERTING its guard in the
+> finished code and watching the named test fail for the real symptom (the implementation was drafted before the
+> tests; the revert is how each test proved it has teeth), then restoring it green.
+>
+> **From E2's plan round (2026-09-27), accepted** — folded in as written:
+>
+> | # | finding | where it landed |
+> |---|---|---|
+> | 1 | the hand-back is ONE guarded atomic UPDATE, the observed owner and state in its WHERE, the attempt count incremented once; a test of two concurrent sweepers | `PostgresGateStore.HandBackAsync` re-checks state, owner (label, host, pid), claim time, attempt count and a live run in one statement and picks requeue or abandon inside it; the count moves only at the claim (`Attempts + 1` in the claim's UPDATE), so across hand-back + re-claim it moves exactly once. RED by revert: the guard reduced to the id → 6 and 8 of 8 simultaneous sweepers each counted the same cell |
+> | 2 | the sweep is scoped to cells of runs that are NOT finished | every sweep query and the hand-back's WHERE require a run that is neither `Finished` nor `Failed`; a terminal run is not claimed from either. RED by revert: both statuses' stranded cells went back to `Pending` |
+> | 3 | canonical containment: `GetFullPath` on root and target, separator-aware starts-with, refuse `..` in any id segment, resolve symlinks and junctions so a link cannot escape the root or the cell's own root; RED tests for traversal and a link escape, skipping only if the OS forbids links | `ArtifactPath` refuses `..`, `.`, empty, rooted, drive and backslash segments at parse; `ArtifactContainment` resolves every existing component (dangling links too) and compares separator-aware; a writable root reached through a link is not a writable root. RED by revert: link resolution off → a write through a junction landed outside the root, and a `cells/<a>` → `cells/<b>` link let cell a write into b; prefix-only compare → `attempt-1-evil` accepted as under `attempt-1`. The link tests make a symlink, or a junction via `cmd /c mklink /J` when the symlink privilege is missing, and skip only when both fail (the rules repository's precedent) — on this machine they ran, zero skips |
+> | 4 | an atomic staging/commit protocol: staging name, fsync, SHA-256 + length, rename, persist the `ArtifactRef`, only then mark the cell complete; an interrupted attempt is kept and marked, a later attempt gets a NEW directory, a cell never gets stuck; termination tested at each step | `FileSystemGateArtifactStore.WriteAsync` + `GateCellCompletion` (artefacts with `run.json` LAST → refs in one transaction → settle). `GateCellCompletionTests` kills the process at seven points (staged, flushed, hashed, renamed, after the run record, before the refs, before the settle): the cell stays claimed, is swept, re-claimed as attempt 2, begun in `attempt-2` with `attempt-1` marked interrupted, and settles. RED by revert: settle before the refs → a cell SETTLED over refs never written; no staging → a half file under the real name at every pre-rename step |
+> | 5 | the public export is built ONLY from database rows and never includes artefact file contents; test that a private name planted in an artefact body cannot reach it | `GatePublication.Export` over `PostgresGatePublicationSource` (every `gate_*` row read through the EF model); the artefact root is not an input. Tested with a findings file carrying two private names and a user path; the export carries its ref (path, SHA-256, length) and none of the text. No revert exists for this one: no export step can open an artefact, which is the guarantee |
+> | 6 | the FileHash HMAC key is a random key file (≥ 32 bytes) in the artefact root, owner-only (0600 / restricted ACL), never derived from a path, never in the database, never printed; a missing key with existing hashes is refused | `file-hash.key`, 32 bytes from the OS generator, `CreateNew`, `UnixCreateMode` 0600 on POSIX and a PROTECTED single-rule ACL on Windows — set AT creation, feasible, not merely documented; `GateFileHashKeys` refuses a keyless root while `gate_findings` has rows. RED by revert: a plain `FileStream` left the Windows ACL inheriting; skipping the findings check regenerated the key |
+> | 7 | prune: `--tap-retention-days` defaults to 30 and `--dry-run` lists what would go; facts durably written before any body is deleted — a crash mid-prune leaves the facts plus some bodies, never neither | per call: facts file flushed, the release appended to `tap/pruned.jsonl` and flushed, THEN the bodies; a call with no facts keeps its bodies. RED by revert: log after deletes → the crash test found no record of the body it had deleted; dry run deleting → the dry-run tests found bodies gone |
+>
+> **Deviations from the stories as written:**
+> - **`gate_runs` is the CAMPAIGN, and a session's facts live on its cell.** §4 projected "288 rows each" for
+>   `gate_runs` and `gate_cells`, which reads as one run per session, but D4 stores the data-dir MODE "on the run",
+>   the paths are `runs/<runId>/cells/<cellId>/…`, and the accepted finding scopes the sweep to cells of runs that
+>   are not finished — a run is the campaign. Only one attempt of a cell ever settles, so the session's facts are
+>   columns of `gate_cells` and `GateRunRecord.RunId` is the cell id; six tables, no seventh for sessions. An
+>   import with several attempts per repeat (E5) is several cells, or E5's own migration.
+> - **One free-text column, and it is also the cell's outcome detail.** A `Failed` settle stores its cause in
+>   `FailureText` (so `OutcomeDetail` reads back from it) and `GateRunFacts.NotProduced(cause)` as its facts; the
+>   harness-authored *reasons* of not-captured counts are not stored (a flag is), so they read back as
+>   `not captured`.
+> - **`GateFinding.Stored`** was added — E1's record had no read path, and a store that cannot read back what it
+>   wrote cannot compute a report. It refuses any hash that is not 64 lower-case hex; `Of` stays the only way a NEW
+>   finding enters.
+> - **The reviewer endpoint is the one column checked by a stricter rule than `://`.** D6 makes a public vendor
+>   url a VALUE and D8 refuses `://` in every row; `gate_reviewers.EndpointUrl` therefore passes the url rule only
+>   when `ReviewerEndpoint.Parse` reads it as public (a loopback one is refused — tested); every other rule applies
+>   to it. The endpoint is split into `EndpointUrl` and `EndpointRef`.
+> - **A refusal never prints the private text**, and the ROW ID is redacted too — a reviewer id is a slug somebody
+>   chose, and it can be the private name. Violations name the private name by its index in the suite.
+> - **The export is JSON rows, not per-model tables.** The per-model table needs E6's report mapping; E2 exports the
+>   guarded rows of every `gate_*` table. A dirty row exits 5 (no report), not 4.
+> - **`bench gate prune` prints every run's footprint** (`ArtifactFootprint.Describe`, *unknown (why)* when the
+>   measurement failed); `bench gate run` does not exist yet, so "printed by every run" is E3's call site.
+> - **`GateFileHashKeys`, `GateCellCompletion`, `IGatePublicationSource`** are new Application pieces the stories
+>   implied but did not name; the CLI verb class is `CoaiGateCommand` (`GateCommand` is already a harvest type).
+> - `samples/gate-suite.sample.json` is new: no tasks, three made-up private names the guard test always loads.
+
+- [x] **S2.1** EF entities + one migration for `gate_runs`, `gate_cells`, `gate_findings`, `gate_verdicts`,
+  `gate_reviewers`, `gate_artifacts` — `GateTables`, whose up-operations touch only `gate_*` (asserted).
+- [x] **S2.2** `IGateStore` (plan / claim / settle / sweep / recent / facts) + `PostgresGateStore` — the guarded-UPDATE
   claim of `PostgresRunStore.cs:58`. RED (`PostgresFixture`): two workers, one cell, one winner; a stale claim by a
-  dead pid on this host is handed back; one on another host is left alone.
-- **S2.3** `IGateArtifactStore` + filesystem adapter under the artefact root; `CellPaths.DataDirFor(run, cell,
+  dead pid on this host is handed back; one on another host is left alone. RED by revert, observed: claim guard off
+  → 5 of 16 simultaneous claimers won; ownership check off → the other host's cell went `Pending`; settle owner
+  check off → a stranger's settle succeeded.
+- [x] **S2.3** `IGateArtifactStore` + filesystem adapter under the artefact root; `CellPaths.DataDirFor(run, cell,
   attempt)` as the one path function; `ArtifactRef` written with SHA-256 and length; a root inside any git
   checkout is refused. RED: a write outside the root is refused; a write outside the CELL's own root is refused
   (an isolated cell cannot reach `data-shared`, a shared run cannot reach a cell's private dir); a ref re-read
-  hashes to what was written; an attempt directory that already exists is refused rather than reused.
-- **S2.4** the guard, structural first: the reflection test over every `gate_*` entity and every `Gate*Dto`
+  hashes to what was written; an attempt directory that already exists is refused rather than reused. Observed by
+  revert: the mode tests first passed on the ref's own refusal while the file had ALREADY been written — they now
+  assert nothing reached the disk, and went red for exactly that.
+- [x] **S2.4** the guard, structural first: the reflection test over every `gate_*` entity and every `Gate*Dto`
   string property against the allow-list (the failure cause named as the one exception); then the publication
-  guard test + `bench gate export --public`. RED: a DTO gaining a `Title` string property is named by type and
-  property; a seeded row carrying `C:\Users\x`, `https://`, or a private name from the sample suite is named by
-  table, column and row id.
-- **S2.5** `bench gate prune` + `FootprintAsync` printed by every `run`. RED: bodies past the window are gone,
-  facts files stay, a run with no `run.json` is listed, not deleted.
-- DoD: migrations apply on an empty database; `research/module_gate.md` carries the growth table of §4.
+  guard test + `bench gate export --public`. RED: a planted `GateFindingRow.Title` column is named by type and
+  column; seeded rows carrying `C:\Users\x`, `https://`, `/home/`, a drive path in an artefact path, or a private
+  name from the sample suite are named by table, column and row id.
+- [x] **S2.5** `bench gate prune` + `FootprintAsync` printed. RED: bodies past the window are gone, facts files stay,
+  a run with no `run.json` is listed, not deleted (revert: ignoring `run.json` released an unfinished attempt).
+- [x] DoD: migrations apply on an empty database (`PostgresFixture` migrates a fresh container and a fresh database
+  per guard test); `research/module_gate.md` carries the growth table of §4.
 
 ### E3 — the driver (Fable for S3.1, S3.2, S3.7; Opus otherwise)
 
