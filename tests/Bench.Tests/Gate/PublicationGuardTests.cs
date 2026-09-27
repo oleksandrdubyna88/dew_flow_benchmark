@@ -53,7 +53,7 @@ public sealed class PublicationGuardTests
     [InlineData("10.0.0.1:8000")]
     public void A_schemeless_machine_address_in_the_endpoint_column_is_refused(string endpoint)
     {
-        Check("gate_reviewers", "EndpointUrl", endpoint).Select(v => v.Rule).Should().Equal([PublicationGuard.EndpointRule],
+        Check("gate_reviewers", "EndpointUrl", endpoint).Select(v => v.Rule).Should().Contain(PublicationGuard.EndpointRule,
             "the endpoint column holds a public vendor url or nothing — a bare host is not exempt just because it has no '://'");
         Check("gate_reviewers", "EndpointUrl", string.Empty).Should().BeEmpty("an endpoint held as a reference leaves the url column empty");
     }
@@ -75,6 +75,35 @@ public sealed class PublicationGuardTests
 
         redacted.Should().Be("call 1: HTTP 401 from <url> reading <path> and <path>");
         Check("gate_cells", "FailureText", redacted).Should().BeEmpty("whatever the redaction produces, the guard accepts");
+    }
+
+    [Theory]
+    [InlineData("the coai process died on build-box-7 at turn 2")]
+    [InlineData("BUILD-BOX-7")]
+    [InlineData("DESKTOP-4F2K9QZ")]
+    [InlineData("laptop-8h3jk2l")]
+    [InlineData("gw.corp.internal")]
+    [InlineData("nas.lan")]
+    public void A_host_name_is_refused(string text)
+    {
+        PublicationGuard.Check([new PublishedText("gate_cells", "FailureText", "row-1", text)], Names.WithHosts(["build-box-7"]), UrlColumns)
+            .Select(v => v.Rule).Should().Contain(PublicationGuard.HostRule, "a host name identifies a machine, which is what must not be published");
+    }
+
+    [Theory]
+    [InlineData("build-box-70")]
+    [InlineData("desktop-app")]
+    [InlineData("sample#0123456789ab")]
+    public void A_word_that_only_resembles_a_host_passes(string text)
+    {
+        PublicationGuard.Check([new PublishedText("gate_cells", "FailureText", "row-1", text)], Names.WithHosts(["build-box-7"]), UrlColumns)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Redaction_removes_a_host_name()
+    {
+        FailureRedaction.Redact("process died on build-box-7", Names.WithHosts(["build-box-7"])).Should().Be("process died on <host>");
     }
 
     [Fact]

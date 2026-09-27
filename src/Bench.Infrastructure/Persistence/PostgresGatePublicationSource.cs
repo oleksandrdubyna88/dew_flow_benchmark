@@ -34,7 +34,11 @@ public sealed class PostgresGatePublicationSource(BenchDbContext db) : IGatePubl
     private async Task<IReadOnlyList<PublishedRow>> RowsAsync(IEntityType entity, CancellationToken cancellationToken)
     {
         var rows = await ListAsync(entity, cancellationToken);
-        var columns = entity.GetProperties().Where(p => p.PropertyInfo is not null).ToList();
+        // The claim owner (label, host, pid) never becomes a field of a public row: it names a machine and a process,
+        // and it is sweep state, not a measurement. It stays in the database; the guard refuses it if it ever returns.
+        var columns = entity.GetProperties()
+            .Where(p => p.PropertyInfo is not null && !GatePublication.ClaimOwnerColumns.Contains(p.GetColumnName()))
+            .ToList();
         var key = entity.FindPrimaryKey()!.Properties[0].PropertyInfo!;
 
         return [.. rows.Select(row => new PublishedRow(

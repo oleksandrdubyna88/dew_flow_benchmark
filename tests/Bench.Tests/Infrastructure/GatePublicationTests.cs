@@ -162,6 +162,35 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_export_has_no_claim_owner_field_and_carries_no_host_name()
+    {
+        var connection = await CampaignAsync();
+
+        var document = System.Text.Json.Nodes.JsonNode.Parse((await ExportAsync(connection)).Ok())!;
+        var cells = document["tables"]!["gate_cells"]!.AsArray();
+
+        cells.Should().NotBeEmpty();
+        cells.Select(c => c!.AsObject()).Should().OnlyContain(c => !c.ContainsKey("Owner") && !c.ContainsKey("OwnerHost") && !c.ContainsKey("OwnerPid"),
+            "the claim owner stays in the private database for the sweep; the public row shape has no such field");
+        document.ToJsonString().Should().NotContain(Environment.MachineName, "a host name identifies the machine the campaign ran on");
+    }
+
+    [Fact]
+    public async Task A_value_carrying_this_machines_name_refuses_the_export()
+    {
+        var connection = await CampaignAsync();
+        await using (var db = PostgresFixture.Context(connection))
+        {
+            var planted = Reviewer("host-planted");
+            planted.RemoteVendor = Environment.MachineName;
+            db.GateReviewers.Add(planted);
+            await db.SaveChangesAsync(Ct);
+        }
+
+        (await ExportAsync(connection)).Reason().Should().Contain("gate_reviewers.RemoteVendor row host-planted: " + PublicationGuard.HostRule);
+    }
+
+    [Fact]
     public async Task The_file_hash_key_never_reaches_a_row()
     {
         var connection = await CampaignAsync();
@@ -265,9 +294,11 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
     {
         var operatorSuite = Environment.GetEnvironmentVariable("BENCH_GATE_SUITE") ?? string.Empty;
 
-        return operatorSuite.Length > 0 && File.Exists(operatorSuite)
+        var names = operatorSuite.Length > 0 && File.Exists(operatorSuite)
             ? SampleNames().With(GatePrivateNames.Read(File.ReadAllText(operatorSuite)).Ok())
             : SampleNames();
+
+        return names.WithHosts([Environment.MachineName]);
     }
 
     public static PrivateNames SampleNames() =>
