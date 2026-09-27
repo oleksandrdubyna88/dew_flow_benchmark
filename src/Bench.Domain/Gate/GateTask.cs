@@ -1,4 +1,3 @@
-using Bench.Domain.Registry;
 using Bench.Domain.Targets;
 
 namespace Bench.Domain.Gate;
@@ -93,11 +92,12 @@ public sealed record GateCase
     public static Outcome<GateCase> Of(CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons)
     {
         var plan = (planPath ?? string.Empty).Trim();
+        var outside = RepositoryRelative.Refusal(plan);
 
-        var refusal = (plan.Length, ModelConfig.LooksLikeAValue(plan), @base.Value == variantHead.Value) switch
+        var refusal = (plan.Length, outside.Length, @base.Value == variantHead.Value) switch
         {
             (0, _, _) => "a case names the plan the product reviews, as a repository-relative path",
-            (_, true, _) => $"'{plan}' is an absolute path or a url — the plan path is REPOSITORY-relative, so the suite says nothing about this machine",
+            (_, > 0, _) => $"{outside} — the plan path is REPOSITORY-relative and stays inside the checkout, so the suite says nothing about this machine",
             (_, _, true) => $"the variant head is the base ({@base.Short}) — there is no diff to review and nothing was planted",
             _ => string.Empty,
         };
@@ -107,8 +107,9 @@ public sealed record GateCase
             : Outcome<GateCase>.Success(new GateCase(@base, variantHead, plan, epics ?? string.Empty, lessons ?? string.Empty));
     }
 
-    public string Canonical =>
-        string.Join('\u001f', Base.Value, VariantHead.Value, PlanPath, Epics, Lessons);
+    /// <summary>Length-prefixed (<see cref="CanonicalFields"/>): the epics and lessons are free text, and a
+    /// separator between them would be forgeable from inside either.</summary>
+    public string Canonical => CanonicalFields.Of("case", Base.Value, VariantHead.Value, PlanPath, Epics, Lessons);
 }
 
 /// <summary>One frozen seeded task: what the database knows it as (id, language, hosted gates, calibration
@@ -168,22 +169,22 @@ public sealed record GateTask
 
         return refusal.Length > 0
             ? Outcome<GateTask>.Failure(refusal)
-            : Outcome<GateTask>.Success(new GateTask(id, lang, hosts, isCalibration, @case, seeds, clone));
+            : Outcome<GateTask>.Success(new GateTask(id, lang, hosts, isCalibration, @case, [.. seeds], clone));
     }
 
     /// <summary>What the database and a report hold of a task — no text, no path.</summary>
     public TaskSummary Summary => new(Id, Language, IsCalibration, Hosts, [.. Seeds.Select(s => s.Ref)]);
 
-    /// <summary>The task's contribution to the suite stamp. The clone location is not an input.</summary>
+    /// <summary>The task's contribution to the suite stamp. The clone location is not an input. Length-prefixed,
+    /// with the seed COUNT as a field of its own, so one seed whose free text spells a second can never read as
+    /// two.</summary>
     public string Canonical =>
-        string.Join(
-            '\u001e',
-            $"task:{Id}",
-            $"language:{Language}",
-            $"hosts:{Hosts.Canonical}",
-            $"calibration:{(IsCalibration ? "yes" : "no")}",
-            $"case:{Case.Canonical}",
-            $"seeds:{string.Join('\u001d', Seeds.OrderBy(s => s.Id.Value, StringComparer.Ordinal).Select(s => s.Canonical))}");
+        CanonicalFields.Of(
+        [
+            "task", Id.Value, Language, Hosts.Canonical, IsCalibration ? "calibration" : "measured", Case.Canonical,
+            Seeds.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            .. Seeds.OrderBy(s => s.Id.Value, StringComparer.Ordinal).Select(s => s.Canonical),
+        ]);
 }
 
 /// <summary>A task as the database and the report see it.</summary>

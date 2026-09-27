@@ -61,8 +61,11 @@ public sealed record SeedSpec
     /// <summary>What the database and a report hold of a seed.</summary>
     public SeedRef Ref => new(Id, CrossEpic);
 
+    /// <summary>Length-prefixed (<see cref="CanonicalFields"/>): every field but the id is free text, and text
+    /// moved from <see cref="What"/> into <see cref="Trigger"/> is a different seed for the rubric that judges
+    /// the trigger.</summary>
     public string Canonical =>
-        string.Join('\u001f', Id.Value, File, Old, New, What, Trigger, Mechanism, Consequence, CrossEpic ? "cross-epic" : "in-epic");
+        CanonicalFields.Of("seed", Id.Value, File, Old, New, What, Trigger, Mechanism, Consequence, CrossEpic ? "cross-epic" : "in-epic");
 
     private static Outcome<SeedSpec> Described(
         SeedId id, string file, string old, string @new, string what,

@@ -1,4 +1,3 @@
-using System.Reflection;
 using Bench.Domain;
 using Bench.Domain.Gate;
 using FluentAssertions;
@@ -14,37 +13,74 @@ public sealed class GateFindingTests
     private static readonly string StrictHash = StableHash.Of("prompts/gate-assess/strict.md");
     private static readonly string LenientHash = StableHash.Of("prompts/gate-assess/lenient-worth-v1.md");
 
-    [Fact]
-    public void A_finding_has_no_string_property_other_than_its_hashes()
-    {
-        var strings = typeof(GateFinding).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.PropertyType == typeof(string))
-            .Select(p => p.Name)
-            .Order(StringComparer.Ordinal)
-            .ToList();
+    private static readonly FileHashKey Key = FileHashKey.Of(Enumerable.Range(0, 32).Select(i => (byte)(i * 7 + 3)).ToArray()).Ok();
 
-        strings.Should().Equal(["FileHash", "TextHash"],
-            "the finding's title, reasoning, fix and path quote private code — they live in the artefact store, never on this record");
+    /// <summary>The same walk as the contracts guard — nested types, collections, opaque values, keyed by
+    /// <c>Type.Property</c> — rather than a scan of this record's own <c>string</c> properties, which a
+    /// <c>List&lt;string&gt;</c> or a nested note record would have walked straight past.</summary>
+    [Fact]
+    public void A_finding_can_carry_no_text_but_its_two_hashes()
+    {
+        TextSurface.Offenders([typeof(GateFinding)], new HashSet<string>(StringComparer.Ordinal) { "GateFinding.FileHash", "GateFinding.TextHash" })
+            .Should().BeEmpty("the finding's title, reasoning, fix and path quote private code — they live in the artefact store, never on this record");
+        TextSurface.Carriers([typeof(GateFinding)]).Select(c => c.Key).Should().BeEquivalentTo(
+            ["GateFinding.FileHash", "GateFinding.TextHash"], "the walk must still see the two hashes it allows, or it is looking at nothing");
     }
 
     [Fact]
-    public void A_finding_hashes_its_text_and_file_and_keeps_neither()
+    public void A_finding_hashes_its_text_and_keys_its_file_hash_and_keeps_neither()
     {
         var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, isGating: true, line: 42,
-            "Null order line dereferenced in TotalOf", "src/Orders/OrderService.cs").Ok();
+            "Null order line dereferenced in TotalOf", "src/Orders/OrderService.cs", Key).Ok();
 
         finding.TextHash.Should().Be(StableHash.Of("Null order line dereferenced in TotalOf"));
-        finding.FileHash.Should().Be(StableHash.Of("src/Orders/OrderService.cs"));
+        finding.FileHash.Should().Be(Key.Hash("src/Orders/OrderService.cs"));
         finding.Line.Should().Be(42);
         finding.IsGating.Should().BeTrue();
     }
 
     [Fact]
+    public void A_published_file_hash_cannot_be_confirmed_by_hashing_a_guessed_path()
+    {
+        var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, true, 1, "t", "src/Orders/OrderService.cs", Key).Ok();
+
+        finding.FileHash.Should().NotBe(StableHash.Of("src/Orders/OrderService.cs"),
+            "repository paths are few and guessable — a plain SHA-256 of one is confirmed by hashing candidates until one matches");
+        finding.FileHash.Should().MatchRegex("^[0-9a-f]{64}$");
+
+        var otherKey = FileHashKey.Of(new byte[32]).Ok();
+        GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, true, 1, "t", "src/Orders/OrderService.cs", otherKey).Ok()
+            .FileHash.Should().NotBe(finding.FileHash, "the hash is a function of the key the artefact root holds");
+    }
+
+    [Theory]
+    [InlineData(@"src\Orders\OrderService.cs")]
+    [InlineData("./src/Orders/OrderService.cs")]
+    [InlineData(@".\src\Orders\OrderService.cs")]
+    [InlineData("/src/Orders/OrderService.cs")]
+    [InlineData("src/Orders/OrderService.cs/")]
+    [InlineData(" src//Orders/./OrderService.cs ")]
+    public void One_file_spelled_several_ways_is_one_file_hash(string spelling)
+    {
+        var canonical = GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Correctness, false, 0, "t", "src/Orders/OrderService.cs", Key).Ok();
+
+        GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Correctness, false, 0, "t", spelling, Key).Ok().FileHash
+            .Should().Be(canonical.FileHash, "'same file' must not depend on the separator or the ./ a reviewer happened to write");
+    }
+
+    [Fact]
+    public void A_short_file_hash_key_is_refused_and_never_printed()
+    {
+        FileHashKey.Of(new byte[16]).Reason().Should().Contain("at least 32 bytes");
+        Key.ToString().Should().Be("FileHashKey(redacted)");
+    }
+
+    [Fact]
     public void A_finding_without_text_or_with_a_negative_ordinal_is_refused()
     {
-        GateFinding.Of(0, FindingSeverity.Nit, FindingCategory.Unknown, false, 0, "  ", "f").Reason().Should().Contain("no text");
-        GateFinding.Of(-1, FindingSeverity.Nit, FindingCategory.Unknown, false, 0, "t", "f").Reason().Should().Contain("ordinal");
-        GateFinding.Of(0, FindingSeverity.Nit, FindingCategory.Unknown, false, -5, "t", "f").Reason().Should().Contain("line");
+        GateFinding.Of(0, FindingSeverity.Nit, FindingCategory.Unknown, false, 0, "  ", "f", Key).Reason().Should().Contain("no text");
+        GateFinding.Of(-1, FindingSeverity.Nit, FindingCategory.Unknown, false, 0, "t", "f", Key).Reason().Should().Contain("ordinal");
+        GateFinding.Of(0, FindingSeverity.Nit, FindingCategory.Unknown, false, -5, "t", "f", Key).Reason().Should().Contain("line");
     }
 
     [Theory]
@@ -107,8 +143,9 @@ public sealed class GateFindingTests
         reading.SeedHit.Should().Be(new SeedHit.Of(SeedId.Parse("cs2-S1").Ok()));
         SeedHit.Parse("none").IsHit.Should().BeFalse();
         SeedHit.Parse("").IsHit.Should().BeFalse();
-        typeof(Verdict.Strict).GetProperties().Where(p => p.PropertyType == typeof(string)).Select(p => p.Name)
-            .Should().Equal(["ClusterHash"], "the note is text and lives in the artefact store");
+        TextSurface.Offenders([typeof(Verdict.Strict)], new HashSet<string>(StringComparer.Ordinal) { "Strict.ClusterHash" })
+            .Should().BeEmpty("the note is text and lives in the artefact store");
+        TextSurface.Carriers([typeof(Verdict.Strict)]).Select(c => c.Key).Should().Equal(["Strict.ClusterHash"]);
     }
 
     [Fact]

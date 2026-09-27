@@ -39,8 +39,10 @@ public sealed record GateCell(
     GateCellOutcomeKind OutcomeKind,
     string OutcomeDetail)
 {
-    public static GateCell Pending(Guid runId, GateMatrixCell cell) => new(
-        Guid.CreateVersion7(),
+    /// <summary>A cell before anyone claimed it. The id is the CALLER's: a domain factory that minted one
+    /// would read a clock, so the same plan could never produce the same cells twice.</summary>
+    public static GateCell Pending(Guid id, Guid runId, GateMatrixCell cell) => new(
+        id,
         runId,
         cell.Task,
         cell.Reviewer,

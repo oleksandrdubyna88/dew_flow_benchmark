@@ -3,15 +3,22 @@ namespace Bench.Domain.Gate;
 /// <summary>The part of a gate run's identity that must match before two runs may be put beside each other:
 /// the suite, the gate, the product's version text and the settings hash. Everything else — reviewer, task,
 /// repeat — is an axis compared ALONG. A page that puts two products or two settings hashes in one column has
-/// folded two populations: the compute-backend lesson, one level up.</summary>
-public sealed record GateScope(string SuiteStamp, GateKind Gate, string ProductVersion, string SettingsHash)
+/// folded two populations: the compute-backend lesson, one level up.
+/// <para>
+/// The product is identified by its BYTES as well as its words: <see cref="ProductVersion"/> is what
+/// <c>--version</c> printed and <see cref="ProductSha256"/> is the binary's hash. A dirty rebuild at one HEAD
+/// prints the same version text from different bytes, and a scope keyed by the text alone averaged the two.
+/// An imported pin has no binary to hash; its sha is empty and its version text says so.
+/// </para></summary>
+public sealed record GateScope(string SuiteStamp, GateKind Gate, string ProductVersion, string ProductSha256, string SettingsHash)
 {
     public static GateScope Of(string suiteStamp, GateKind gate, ProductPin pin, string settingsHash) =>
-        new(suiteStamp, gate, pin.VersionText, settingsHash);
+        new(suiteStamp, gate, pin.VersionText, pin.BinarySha256, settingsHash);
 
-    public string Describe => $"{SuiteStamp} · {Gate.ToString().ToLowerInvariant()} · {ProductVersion} · settings {Short(SettingsHash)}";
+    public string Describe =>
+        $"{SuiteStamp} · {Gate.ToString().ToLowerInvariant()} · {ProductVersion} ({Bytes}) · settings {HashText.Short(SettingsHash)}";
 
-    private static string Short(string hash) => hash.Length >= 12 ? hash[..12] : hash;
+    private string Bytes => ProductSha256.Length > 0 ? HashText.Short(ProductSha256) : "binary not hashed";
 }
 
 /// <summary>Where a run came from. An imported run never enters a native figure without this label on the

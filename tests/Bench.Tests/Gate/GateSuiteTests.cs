@@ -120,6 +120,84 @@ public sealed class GateSuiteTests
         GateCase.Of(Base, Variant, " ", string.Empty, string.Empty).Reason().Should().Contain("names the plan");
     }
 
+    [Theory]
+    [InlineData("../x")]
+    [InlineData(@"..\x")]
+    [InlineData("todo/../../x")]
+    [InlineData(@"C:\x")]
+    [InlineData("C:x")]
+    [InlineData("/x")]
+    [InlineData(@"\x")]
+    [InlineData("https://example.test/PLAN.md")]
+    public void A_plan_path_that_is_rooted_or_climbs_out_of_the_repository_is_refused(string planPath)
+    {
+        GateCase.Of(Base, Variant, planPath, string.Empty, string.Empty).Reason().Should().Contain("REPOSITORY-relative",
+            "a plan path is read inside the checkout — a rooted path names this machine and a '..' segment reads outside the repository");
+    }
+
+    [Theory]
+    [InlineData("todo/PLAN_x.md")]
+    [InlineData("PLAN.md")]
+    [InlineData("docs/..plan/PLAN.md")]
+    [InlineData("a..b/PLAN.md")]
+    public void A_plain_repository_relative_plan_path_is_accepted(string planPath)
+    {
+        GateCase.Of(Base, Variant, planPath, string.Empty, string.Empty).Ok().PlanPath.Should().Be(planPath,
+            "only a WHOLE '..' segment climbs; two dots inside a name are a name");
+    }
+
+    [Fact]
+    public void Moving_a_separator_between_two_case_fields_changes_the_stamp()
+    {
+        var a = Suite(Task("cs2", epics: "E1\u001fL1", lessons: "X"));
+        var b = Suite(Task("cs2", epics: "E1", lessons: "L1\u001fX"));
+
+        b.Stamp.Should().NotBe(a.Stamp,
+            "epics 'E1␟L1' + lessons 'X' and epics 'E1' + lessons 'L1␟X' are two cases — a delimiter-joined form cannot tell them apart");
+    }
+
+    [Fact]
+    public void Moving_a_separator_between_two_seed_fields_changes_the_stamp()
+    {
+        var a = SeedSpec.Of("cs2-S1", "src/A.cs", "o", "n", "what\u001fbody", "trigger", "m", "c", crossEpic: false).Ok();
+        var b = SeedSpec.Of("cs2-S1", "src/A.cs", "o", "n", "what", "body\u001ftrigger", "m", "c", crossEpic: false).Ok();
+
+        b.Canonical.Should().NotBe(a.Canonical, "the assessor judges the TRIGGER — text moved into it from 'what' is a different seed");
+        Suite(Task("cs2", seedList: [a])).Stamp.Should().NotBe(Suite(Task("cs2", seedList: [b])).Stamp);
+    }
+
+    [Fact]
+    public void One_seed_whose_consequence_spells_a_second_seed_is_not_two_seeds()
+    {
+        var s1 = SeedSpec.Of("cs2-S1", "f", "o", "n", "w", "t", "m", "c", crossEpic: false).Ok();
+        var s2 = SeedSpec.Of("cs2-S2", "f", "o", "n", "w", "t", "m", "c", crossEpic: false).Ok();
+        var forged = SeedSpec.Of("cs2-S1", "f", "o", "n", "w", "t", "m",
+            "c\u001fin-epic\u001dcs2-S2\u001ff\u001fo\u001fn\u001fw\u001ft\u001fm\u001fc", crossEpic: false).Ok();
+
+        Suite(Task("cs2", seedList: [forged])).Stamp.Should().NotBe(Suite(Task("cs2", seedList: [s1, s2])).Stamp,
+            "a task with one seed and a task with two are different ground truth, whatever the free text says");
+    }
+
+    [Fact]
+    public void A_frozen_suite_does_not_follow_the_callers_lists()
+    {
+        var seeds = new List<SeedSpec>
+        {
+            SeedSpec.Of("cs2-S1", "src/A.cs", "o", "n", "w", "t", "m", "c", crossEpic: false).Ok(),
+        };
+        var tasks = new List<GateTask> { Task("cs2", seedList: seeds) };
+        var suite = GateSuite.Freeze("gate-seeded", tasks, []).Ok();
+        var stamp = suite.Stamp;
+
+        tasks.Add(Task("rs3"));
+        seeds.Clear();
+
+        suite.Tasks.Should().ContainSingle("Freeze takes a snapshot — the caller's list is the caller's");
+        suite.Tasks[0].Seeds.Should().ContainSingle("the task's seeds are its own copy, not a view of a list somebody else can clear");
+        suite.SeedsOf(GateTaskId.Parse("cs2").Ok()).Ok().Should().ContainSingle();
+        suite.Stamp.Should().Be(stamp);
+    }
+
     [Fact]
     public void A_task_names_a_language_and_a_clone_and_carries_no_seed_twice()
     {
@@ -152,18 +230,21 @@ public sealed class GateSuiteTests
         IReadOnlyList<GateKind>? hosts = null,
         int seeds = 2,
         string seedTrigger = "a null order line",
-        CommitSha? variant = null)
+        CommitSha? variant = null,
+        string epics = "[{\"title\":\"E1\"}]",
+        string lessons = "{\"pitfalls\":[]}",
+        IReadOnlyList<SeedSpec>? seedList = null)
     {
-        var specs = Enumerable.Range(1, seeds).Select(n => SeedSpec.Of(
+        var specs = seedList ?? [.. Enumerable.Range(1, seeds).Select(n => SeedSpec.Of(
             $"{id}-S{n}", $"src/{id}/File{n}.cs", $"old {n}", $"new {n}", $"what {n}", seedTrigger, $"mechanism {n}",
-            $"consequence {n}", crossEpic: n % 2 == 0).Ok()).ToList();
+            $"consequence {n}", crossEpic: n % 2 == 0).Ok())];
 
         return GateTask.Of(
             GateTaskId.Parse(id).Ok(),
             "C#",
             HostedGates.Of(hosts ?? [GateKind.Plan, GateKind.Code, GateKind.Feature]).Ok(),
             isCalibration: false,
-            GateCase.Of(Base, variant ?? Variant, "todo/PLAN_feature.md", "[{\"title\":\"E1\"}]", "{\"pitfalls\":[]}").Ok(),
+            GateCase.Of(Base, variant ?? Variant, "todo/PLAN_feature.md", epics, lessons).Ok(),
             specs,
             CloneLocation.Parse(clone).Ok()).Ok();
     }

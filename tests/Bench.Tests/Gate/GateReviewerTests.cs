@@ -28,6 +28,38 @@ public sealed class GateReviewerTests
                 "a loopback address is this machine's identity, and a reviewer row is published with the results");
     }
 
+    [Theory]
+    [InlineData("http://[::ffff:127.0.0.1]:11434/v1")]
+    [InlineData("http://[::ffff:7f00:1]:11434/v1")]
+    [InlineData("http://[::ffff:10.0.0.7]/v1")]
+    [InlineData("http://[::ffff:192.168.1.5]:8000/v1")]
+    [InlineData("http://[::ffff:172.20.3.9]/v1")]
+    [InlineData("http://[::ffff:169.254.1.1]/v1")]
+    public void An_ipv4_mapped_ipv6_address_is_judged_as_the_ipv4_address_it_carries(string endpoint)
+    {
+        ReviewerEndpoint.Parse(endpoint).Reason().Should().Contain("machine-local",
+            "::ffff:127.0.0.1 IS 127.0.0.1 — a range check that only reads the IPv4 bytes of an IPv4 address publishes this machine");
+    }
+
+    [Fact]
+    public void A_mapped_public_address_is_still_a_value()
+    {
+        ReviewerEndpoint.Parse("http://[::ffff:8.8.8.8]/v1").Ok().Should().BeOfType<ReviewerEndpoint.Value>(
+            "the normalisation is for the range check, not a refusal of the notation — this one names no machine of ours");
+    }
+
+    [Fact]
+    public void A_short_or_empty_hash_still_describes_rather_than_throwing()
+    {
+        var ids = new[] { Id("grok-a"), Id("grok-b") };
+
+        new SharedConfiguration("abc", ids).Describe.Should().Contain("(abc)",
+            "a stamp is a label; producing one must never be the thing that fails");
+        new SharedConfiguration(string.Empty, ids).Describe.Should().Contain("under 2 names");
+        HashText.Short("0123456789abcdef").Should().Be("0123456789ab");
+        HashText.Short("abc").Should().Be("abc");
+    }
+
     [Fact]
     public void A_public_vendor_url_is_a_value_and_a_name_is_a_reference()
     {

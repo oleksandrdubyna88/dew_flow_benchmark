@@ -116,6 +116,11 @@ public sealed class ArchitectureTests
             typeof(Domain.Gate.ReviewerDefinition),
             typeof(Domain.Gate.ReviewerEndpoint),
             typeof(Domain.Gate.CoaiVendorRow),
+            typeof(Domain.Gate.CoaiVendorsSetting),
+            typeof(Domain.Gate.GatePopulation),
+            typeof(Domain.Gate.RepositoryRelative),
+            typeof(Domain.Gate.FileHashKey),
+            typeof(Domain.Gate.PythonRound),
             typeof(Domain.Gate.GateRunFacts),
             typeof(Domain.Gate.FailureCauses),
             typeof(Domain.Gate.GateVerdict),
@@ -161,19 +166,131 @@ public sealed class ArchitectureTests
     public void The_vendors_scan_still_finds_the_sanctioned_producer()
     {
         ProductionFilesSpelling("COAI_VENDORS").Should().Contain(
-            Path.Combine("src", "Bench.Domain", "Gate", "CoaiVendorRow.cs"),
+            Path.Combine("src", "Bench.Domain", "Gate", "CoaiVendorsSetting.cs"),
             "the scan is only a guard while it can see the one file that is allowed to spell the literal");
     }
+
+    /// <summary>The literal scan's planted negative: a host file that writes the variable by hand is found by
+    /// path. A fixed directory per scenario, removed afterwards, so runs reuse one artefact.</summary>
+    [Fact]
+    public void A_planted_host_file_spelling_the_variable_is_found()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bench-arch-planted-vendors-literal");
+        Directory.CreateDirectory(Path.Combine(root, "hosts", "Planted"));
+        File.WriteAllText(Path.Combine(root, "hosts", "Planted", "Launch.cs"), "env[\"COAI_VENDORS\"] = otherJson;");
+
+        try
+        {
+            FilesSpelling(root, "COAI_VENDORS").Should().Equal([Path.Combine("hosts", "Planted", "Launch.cs")]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The one-producer rule as a TYPE fact, over every production assembly that can see the domain: the
+    /// setting has no constructor but a private one, and nothing anywhere RETURNS a setting except its one factory.
+    /// A forwarding helper, an <c>internal</c> "sealer", a second public factory — each is a second producer, and
+    /// each is named here by type and member.</summary>
+    [Fact]
+    public void Nothing_but_the_one_factory_can_produce_a_vendors_setting()
+    {
+        string.Join(", ", SettingProducers(ProductionAssemblies())).Should().BeEmpty(
+            $"the only way to a CoaiVendorsSetting is {SanctionedProducer}; everything else takes the value");
+    }
+
+    [Fact]
+    public void The_producer_scan_still_sees_the_sanctioned_factory()
+    {
+        SettingMembers(ProductionAssemblies()).Should().Contain(SanctionedProducer,
+            "a reflection scan that sees nothing passes forever — it must find the one factory it allows");
+    }
+
+    [Fact]
+    public void A_planted_forwarding_factory_is_found_by_the_producer_scan()
+    {
+        SettingProducers([typeof(ArchitectureTests).Assembly]).Should().Equal(["PlantedVendorsForwarder.Forward"],
+            "a helper that hands back a setting it did not build is still a door a second producer walks through");
+    }
+
+    /// <summary>The variable's NAME is the setting's own: exposed, it let a host write <c>env[name] = anything</c>
+    /// beside the value the one producer made. No non-private string constant or static field in production
+    /// code may hold it.</summary>
+    [Fact]
+    public void No_production_assembly_exposes_the_variable_name()
+    {
+        ExposedLiteral(ProductionAssemblies(), "COAI_VENDORS").Should().BeEmpty(
+            "the setting applies itself to an environment — nobody else needs, or may have, the name");
+        ExposedLiteral([typeof(ArchitectureTests).Assembly], "COAI_VENDORS").Should().Equal(["PlantedVendorsForwarder.Name"],
+            "the planted constant proves the literal scan can see a public const at all");
+    }
+
+    private const string SanctionedProducer = "CoaiVendorsSetting.From";
+
+    private const BindingFlags Every = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
+    /// <summary>Every assembly of this solution that can reference the domain, and so could hold a producer.</summary>
+    private static IReadOnlyList<Assembly> ProductionAssemblies() =>
+        [.. new[] { "Bench.Domain", "Bench.Application", "Bench.Infrastructure", "Bench.Api", "bench" }
+            .Select(name => Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, $"{name}.dll")))];
+
+    private static IReadOnlyList<string> SettingProducers(IReadOnlyList<Assembly> assemblies) =>
+        [.. SettingMembers(assemblies).Where(member => member != SanctionedProducer)];
+
+    /// <summary>Every member that makes or hands back a setting: a non-private constructor of the type, or a
+    /// method whose return type is the setting or an outcome of one. The compiler's own <c>&lt;Clone&gt;$</c> (a
+    /// copy of a value somebody already produced) and the lambdas inside the sanctioned factory's body are
+    /// excluded — both are the one producer, not another.</summary>
+    private static IReadOnlyList<string> SettingMembers(IReadOnlyList<Assembly> assemblies)
+    {
+        var setting = typeof(Domain.Gate.CoaiVendorsSetting);
+
+        return [.. assemblies.SelectMany(a => a.GetTypes())
+            .SelectMany(type => type.GetMethods(Every).Cast<MethodBase>().Concat(type.GetConstructors(Every)))
+            .Where(member => Produces(member, setting) && !IsTheFactorysOwnMachinery(member, setting))
+            .Select(member => $"{member.DeclaringType!.Name}.{member.Name}")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
+    }
+
+    private static bool Produces(MethodBase member, Type setting) => member switch
+    {
+        ConstructorInfo ctor => ctor.DeclaringType == setting && !ctor.IsPrivate,
+        MethodInfo method => method.ReturnType == setting || method.ReturnType == typeof(Domain.Outcome<>).MakeGenericType(setting),
+        _ => false,
+    };
+
+    private static bool IsTheFactorysOwnMachinery(MethodBase member, Type setting) =>
+        member.Name == "<Clone>$"
+        || member.Name.StartsWith('<') && IsWithin(member.DeclaringType!, setting);
+
+    private static bool IsWithin(Type type, Type outer) =>
+        type == outer || type.DeclaringType is { } parent && IsWithin(parent, outer);
+
+    /// <summary><c>Type.Field</c> of every non-private string CONSTANT holding <paramref name="literal"/>. Constants
+    /// only: reading a static field's value would run type initialisers across every assembly, and a scan must
+    /// not be the thing that has side effects.</summary>
+    private static IReadOnlyList<string> ExposedLiteral(IReadOnlyList<Assembly> assemblies, string literal) =>
+        [.. assemblies.SelectMany(a => a.GetTypes())
+            .SelectMany(type => type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            .Where(field => field.IsLiteral && !field.IsPrivate && Equals(field.GetRawConstantValue(), literal))
+            .Select(field => $"{field.DeclaringType!.Name}.{field.Name}")
+            .Order(StringComparer.Ordinal)];
 
     /// <summary>Repository-relative paths of the production files whose text contains <paramref name="literal"/>.
     /// Reads <c>src/</c> and <c>hosts/</c> from the source tree; build output is skipped, because a scan over
     /// generated files would find the literal in every assembly's copied resources.</summary>
-    private static IReadOnlyList<string> ProductionFilesSpelling(string literal) =>
+    private static IReadOnlyList<string> ProductionFilesSpelling(string literal) => FilesSpelling(Cli.Repository.Root, literal);
+
+    private static IReadOnlyList<string> FilesSpelling(string root, string literal) =>
         [.. new[] { "src", "hosts" }
-            .SelectMany(folder => Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, folder), "*.cs", SearchOption.AllDirectories))
+            .Select(folder => Path.Combine(root, folder))
+            .Where(Directory.Exists)
+            .SelectMany(folder => Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories))
             .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
             .Where(path => File.ReadAllText(path).Contains(literal, StringComparison.Ordinal))
-            .Select(path => Path.GetRelativePath(Cli.Repository.Root, path))
+            .Select(path => Path.GetRelativePath(root, path))
             .Order(StringComparer.Ordinal)];
 
     private static IEnumerable<AssemblyName> Referenced(string fileName) =>
@@ -183,4 +300,14 @@ public sealed class ArchitectureTests
         name.Name!.StartsWith("System", StringComparison.Ordinal)
         || name.Name == "netstandard"
         || name.Name == "mscorlib";
+}
+
+/// <summary>PLANTED — the two shapes of a second producer the review found open: a helper that hands back a
+/// setting, and a public constant naming the variable. Lives in the test assembly so the scans above can prove
+/// they see both; nothing calls it.</summary>
+internal static class PlantedVendorsForwarder
+{
+    public const string Name = "COAI_VENDORS";
+
+    public static Domain.Gate.CoaiVendorsSetting Forward(Domain.Gate.CoaiVendorsSetting setting) => setting;
 }

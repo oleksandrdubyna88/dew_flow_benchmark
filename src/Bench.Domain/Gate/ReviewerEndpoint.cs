@@ -3,20 +3,48 @@ using Bench.Domain.Registry;
 
 namespace Bench.Domain.Gate;
 
-/// <summary>How the product reaches a reviewer — the product's own runtime words.</summary>
+/// <summary>How the product reaches a reviewer — the product's own runtime WORDS, one member per word.
+/// <para>
+/// There is no <c>cli</c> member, on purpose. The product has no runtime called <c>cli</c>: it knows which
+/// command-line agent to launch by the runtime word itself (<c>codex</c>, <c>gemini</c>, <c>claude</c>,
+/// <c>antigravity</c>), and a word it does not know is run on Codex. A row that said <c>cli</c> therefore ran a
+/// Claude or Gemini reviewer on the Codex CLI without a word of complaint — the measurement of one model
+/// filed under another's name. The set is pinned against the product's own list by a test
+/// (<c>coai · src_mcp/runners/Reviewers/ReviewerRuntime.cs</c>, <c>RuntimeNames</c>).
+/// </para></summary>
 public enum ReviewerRuntime
 {
     /// <summary>An OpenAI-compatible HTTP endpoint the product calls itself, in a dialect.</summary>
     Api,
 
-    /// <summary>A vendor's own command-line agent, launched by the product.</summary>
-    Cli,
+    /// <summary>The Codex CLI, launched by the product.</summary>
+    Codex,
+
+    /// <summary>The Gemini CLI, launched by the product.</summary>
+    Gemini,
+
+    /// <summary>The Claude Code CLI, launched by the product.</summary>
+    Claude,
+
+    /// <summary>The Antigravity CLI, launched by the product.</summary>
+    Antigravity,
 
     /// <summary>A model served on this machine.</summary>
     Local,
 
     /// <summary>A Team server answers; the row names the vendor that server knows.</summary>
     Remote,
+}
+
+public static class ReviewerRuntimes
+{
+    /// <summary>A vendor's own command-line agent, launched by the product — no HTTP for the tap to sit in
+    /// front of, and no metered cost.</summary>
+    public static bool IsCli(this ReviewerRuntime runtime) =>
+        runtime is ReviewerRuntime.Codex or ReviewerRuntime.Gemini or ReviewerRuntime.Claude or ReviewerRuntime.Antigravity;
+
+    /// <summary>The word the product's vendor row carries — the member's name, lower-cased.</summary>
+    public static string Word(this ReviewerRuntime runtime) => runtime.ToString().ToLowerInvariant();
 }
 
 /// <summary>Where an <c>api</c> reviewer is — as a VALUE when it is a public vendor url, and as a REFERENCE
@@ -92,16 +120,17 @@ public abstract record ReviewerEndpoint
             || IPAddress.TryParse(lower, out var address) && IsPrivate(address);
     }
 
-    private static bool IsPrivate(IPAddress address)
-    {
-        if (IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6UniqueLocal)
-        {
-            return true;
-        }
+    /// <summary>An IPv4-mapped IPv6 address (<c>::ffff:127.0.0.1</c>) IS the IPv4 address it carries, so it is
+    /// normalised before any range check: read as IPv6 it is neither loopback nor link-local nor unique-local,
+    /// and its sixteen bytes never meet the four-byte private ranges — it passed as a public vendor url.</summary>
+    private static bool IsPrivate(IPAddress parsed) =>
+        IsPrivateAddress(parsed.IsIPv4MappedToIPv6 ? parsed.MapToIPv4() : parsed);
 
-        var bytes = address.GetAddressBytes();
-        return bytes.Length == 4 && IsPrivateV4(bytes);
-    }
+    private static bool IsPrivateAddress(IPAddress address) =>
+        IPAddress.IsLoopback(address) || address.IsIPv6LinkLocal || address.IsIPv6UniqueLocal || IsPrivateV4(address);
+
+    private static bool IsPrivateV4(IPAddress address) =>
+        address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPrivateV4(address.GetAddressBytes());
 
     private static bool IsPrivateV4(byte[] b) =>
         b[0] == 10
