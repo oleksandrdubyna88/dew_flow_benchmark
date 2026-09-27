@@ -118,11 +118,18 @@ public sealed partial record ModelConfig(
             : $"'{Short(value)}' is not a usable reference for {flag} — an environment variable name or a configuration "
               + "section path (letters, digits, '_', ':' and '.')";
 
-    private static bool LooksLikeAValue(string value) =>
+    /// <summary>Whether a string is a url or a path — the shapes people paste where a NAME belongs. Public
+    /// because the gate reviewer catalog applies the same rule to its key names and plan paths; one spelling
+    /// of "this looks like a machine's identity" rather than two that agree until one is edited.</summary>
+    public static bool LooksLikeAValue(string value) =>
         value.Contains("://", StringComparison.Ordinal)
         || value.StartsWith('/')
         || value.StartsWith("\\\\", StringComparison.Ordinal)
         || (value.Length > 2 && value[1] == ':' && (value[2] == '\\' || value[2] == '/'));
+
+    /// <summary>Whether a string is a usable REFERENCE — an environment variable's name or a configuration
+    /// section path. The same pattern <see cref="Parse"/> holds every stored reference to.</summary>
+    public static bool IsReference(string value) => Reference.IsMatch(value);
 
     private static Outcome<ModelConfig> Priced(
         string id,
