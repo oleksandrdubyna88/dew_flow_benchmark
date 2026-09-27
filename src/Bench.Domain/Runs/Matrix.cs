@@ -82,7 +82,7 @@ public static class Matrix
 
         var legs = Legs(subjects, lanes, variants, arms);
         var cells = Slots(questions, repeats)
-            .SelectMany((slot, slotIndex) => Rotated(legs, slotIndex)
+            .SelectMany((slot, slotIndex) => SlotRotation.Rotated(legs, slotIndex)
                 .Select((leg, position) => new MatrixCell(slot.QuestionId, slot.Repeat, leg, position)));
 
         return Outcome<IReadOnlyList<MatrixCell>>.Success([.. cells]);
@@ -105,12 +105,6 @@ public static class Matrix
 
     private static IEnumerable<(string QuestionId, int Repeat)> Slots(IReadOnlyList<Question> questions, int repeats) =>
         questions.SelectMany(q => Enumerable.Range(0, repeats).Select(r => (q.Id, r)));
-
-    private static IReadOnlyList<Leg> Rotated(IReadOnlyList<Leg> legs, int slotIndex)
-    {
-        var offset = slotIndex % legs.Count;
-        return [.. legs.Skip(offset), .. legs.Take(offset)];
-    }
 
     private static string Validate(
         IReadOnlyList<Question> questions,

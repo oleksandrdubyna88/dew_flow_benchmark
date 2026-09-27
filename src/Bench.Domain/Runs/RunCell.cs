@@ -11,7 +11,7 @@ public enum CellState
     /// <summary>Finished, with an outcome — which includes "hit a ceiling" and "crashed".</summary>
     Settled,
 
-    /// <summary>Handed back too many times. Deliberately terminal: see <see cref="CellLifecycle.MaxAttempts"/>.</summary>
+    /// <summary>Handed back too many times. Deliberately terminal: see <see cref="Claimable.MaxAttempts"/>.</summary>
     Abandoned,
 }
 
@@ -54,12 +54,10 @@ public sealed record RunCell(
     /// the other two axes are: a report grouping by configuration must group, not parse.</summary>
     Variants.VariantSelection Variant,
     int Position,
-    CellState State,
-    int Attempts,
-    /// <summary>Who holds it — label, host and pid together. A label alone cannot be swept correctly:
-    /// see <see cref="WorkerIdentity"/>.</summary>
-    WorkerIdentity Owner,
-    DateTimeOffset ClaimedAt,
+    /// <summary>The claim — state, attempts, owner, when — as ONE value shared with the gate benchmark's
+    /// cell, so the claim/settle/sweep rules exist once. The four are still readable as properties below;
+    /// what changed is that the transitions are <see cref="Claimable"/>'s and not this record's.</summary>
+    Claimable Claim,
     LegOutcomeKind OutcomeKind,
     string OutcomeDetail)
 {
@@ -79,82 +77,65 @@ public sealed record RunCell(
         cell.Leg.Lane.Name,
         cell.Leg.Variant,
         cell.Position,
-        CellState.Pending,
-        Attempts: 0,
-        Owner: WorkerIdentity.Nobody,
-        ClaimedAt: default,
+        Claimable.Fresh,
         LegOutcomeKind.None,
         OutcomeDetail: string.Empty)
     {
         Arm = cell.Leg.Arm,
     };
 
-    public bool IsTerminal => State is CellState.Settled or CellState.Abandoned;
+    public CellState State => Claim.State;
+
+    public int Attempts => Claim.Attempts;
+
+    /// <summary>Who holds it — label, host and pid together. A label alone cannot be swept correctly:
+    /// see <see cref="WorkerIdentity"/>.</summary>
+    public WorkerIdentity Owner => Claim.Owner;
+
+    public DateTimeOffset ClaimedAt => Claim.ClaimedAt;
+
+    public bool IsTerminal => Claim.IsTerminal;
 }
 
-/// <summary>The claim/settle/sweep transitions, as pure functions.
+/// <summary>The claim/settle/sweep transitions over a <see cref="RunCell"/>, as pure functions.
 /// <para>
-/// They are pure so the rules can be tested without a database, and so the database's only job is the one
-/// thing only it can do: make a claim atomic. Mixing the two is how a state machine ends up asserted in
-/// prose and enforced nowhere.
+/// The rules themselves live on <see cref="Claimable"/>, which this cell composes; what is decided here is
+/// only what an abandonment means for the leg's outcome columns. They are pure so the rules can be tested
+/// without a database, and so the database's only job is the one thing only it can do: make a claim atomic.
 /// </para></summary>
 public static class CellLifecycle
 {
-    /// <summary>How many times a cell may be handed back before it is abandoned.
-    /// <para>
-    /// A sweep that re-queues forever is worse than one that gives up: a cell that kills its host is a
-    /// cell that will kill the next host too, and an unbounded sweep turns that into a loop that survives
-    /// reboots. Upstream this was learned by parking an item on its second attempt.
-    /// </para></summary>
-    public const int MaxAttempts = 3;
+    /// <summary>How many times a cell may be handed back before it is abandoned — <see cref="Claimable.MaxAttempts"/>.</summary>
+    public const int MaxAttempts = Claimable.MaxAttempts;
 
-    public static Outcome<RunCell> Claim(RunCell cell, WorkerIdentity owner, DateTimeOffset now)
-    {
-        if (!owner.CanClaim)
-        {
-            return Outcome<RunCell>.Failure(
-                "a claim needs an owner with a host and a pid — an unowned claim can never be swept correctly");
-        }
-
-        return cell.State == CellState.Pending
-            ? Outcome<RunCell>.Success(cell with
-            {
-                State = CellState.Claimed,
-                Owner = owner,
-                ClaimedAt = now,
-                Attempts = cell.Attempts + 1,
-            })
-            : Outcome<RunCell>.Failure($"cell {cell.Id} is {cell.State}, not Pending");
-    }
+    public static Outcome<RunCell> Claim(RunCell cell, WorkerIdentity owner, DateTimeOffset now) =>
+        Claimable.Claim(cell.Claim, owner, now, Subject(cell)).Match(
+            claim => Outcome<RunCell>.Success(cell with { Claim = claim }),
+            Outcome<RunCell>.Failure);
 
     public static Outcome<RunCell> Settle(RunCell cell, LegOutcome outcome)
     {
         var (kind, detail) = LegOutcomeCodec.Encode(outcome);
 
-        return cell.State == CellState.Claimed
-            ? Outcome<RunCell>.Success(cell with
-            {
-                State = CellState.Settled,
-                OutcomeKind = kind,
-                OutcomeDetail = detail,
-            })
-            : Outcome<RunCell>.Failure($"cell {cell.Id} is {cell.State}, not Claimed — only a claimed cell can settle");
+        return Claimable.Settle(cell.Claim, Subject(cell)).Match(
+            claim => Outcome<RunCell>.Success(cell with { Claim = claim, OutcomeKind = kind, OutcomeDetail = detail }),
+            Outcome<RunCell>.Failure);
     }
 
     /// <summary>The sweep decision for one cell. Not an <c>Outcome</c>: a sweep over a thousand cells asks
     /// this of every one of them, and "nothing to do here" is the normal answer rather than a failure.</summary>
     public static RunCell Reclaim(RunCell cell) =>
-        cell.State != CellState.Claimed
-            ? cell
-            : cell.Attempts >= MaxAttempts
-                ? cell with
-                {
-                    State = CellState.Abandoned,
-                    Owner = WorkerIdentity.Nobody,
-                    OutcomeKind = LegOutcomeKind.Crashed,
-                    OutcomeDetail = $"abandoned after {cell.Attempts} attempts — a cell that kills its host will kill the next one",
-                }
-                : cell with { State = CellState.Pending, Owner = WorkerIdentity.Nobody, ClaimedAt = default };
+        Claimable.Reclaim(cell.Claim) switch
+        {
+            ReclaimDecision.Requeued requeued => cell with { Claim = requeued.Claim },
+            ReclaimDecision.Abandoned abandoned => cell with
+            {
+                Claim = abandoned.Claim,
+                OutcomeKind = LegOutcomeKind.Crashed,
+                OutcomeDetail = abandoned.Detail,
+            },
+            _ => cell,
+        };
 
     /// <summary>Whether a claim has gone quiet long enough to be a sweep CANDIDATE.
     /// <para>
@@ -163,7 +144,9 @@ public static class CellLifecycle
     /// 2026-08-16, which meant a worker legitimately past the window was requeued under it.
     /// </para></summary>
     public static bool IsStale(RunCell cell, DateTimeOffset now, TimeSpan staleAfter) =>
-        cell.State == CellState.Claimed && now - cell.ClaimedAt >= staleAfter;
+        Claimable.IsStale(cell.Claim, now, staleAfter);
+
+    private static string Subject(RunCell cell) => $"cell {cell.Id}";
 }
 
 /// <summary>Flattening <see cref="LegOutcome"/> for storage. One named function, so that adding a case to
