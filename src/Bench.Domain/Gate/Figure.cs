@@ -30,11 +30,13 @@ public sealed record Figure(bool Known, double Value, FigureState State)
     /// <summary>A percentage of <paramref name="part"/> in <paramref name="whole"/>, or <see cref="Unassessed"/>
     /// when the whole is empty — the Python report's <c>pct</c>, which answers <c>None</c> for a zero denominator.</summary>
     public static Figure Percent(long part, long whole) =>
-        whole > 0 ? Of(Math.Round(100.0 * part / whole, 1)) : Unassessed;
+        whole > 0 ? Of(PythonRound.Of(100.0 * part / whole, 1)) : Unassessed;
 
-    /// <summary>The mean of some readings, or <see cref="Unknown"/> when there are none.</summary>
+    /// <summary>The mean of some readings, or <see cref="Unknown"/> when there are none — rounded by
+    /// <see cref="PythonRound"/>, as the Python report's <c>round(statistics.mean(xs), n)</c> is, so an imported
+    /// and a native mean agree in the last digit (<see cref="Percent"/> likewise).</summary>
     public static Figure Mean(IReadOnlyList<double> readings, int decimals = 2) =>
-        readings.Count > 0 ? Of(Math.Round(readings.Average(), decimals)) : Unknown;
+        readings.Count > 0 ? Of(PythonRound.Of(readings.Sum() / readings.Count, decimals)) : Unknown;
 }
 
 /// <summary>The linear-interpolated quantile the Python report uses (<c>report.py: q</c>), so imported and

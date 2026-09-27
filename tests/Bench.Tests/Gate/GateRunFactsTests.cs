@@ -112,6 +112,19 @@ public sealed class GateRunFactsTests
         GateVerdictWords.Parse(word).Should().Be(expected);
     }
 
+    [Fact]
+    public void Seconds_round_as_the_other_harnesss_summarise_does()
+    {
+        // python (run.py summarise): [round(s, 1) for s in [0.35, 0.15]] → [0.3, 0.1]; round(0.35 + 0.15, 1) → 0.5;
+        // round(0.35, 1) → 0.3 — Math.Round would say 0.4 and 0.2
+        var two = GateRunFacts.From(Answered(GateVerdictWord.Proceed, 1), [Turn(seconds: 0.35), Turn(seconds: 0.15)], [Call(), Call()], 1, 0, 0);
+        var one = GateRunFacts.From(Answered(GateVerdictWord.Proceed, 1), [Turn(seconds: 0.35)], [Call()], 1, 0, 0);
+
+        two.SecondsPerTurn.Should().Equal([0.3, 0.1]);
+        two.ReviewSeconds.Should().Be(0.5);
+        one.ReviewSeconds.Should().Be(0.3);
+    }
+
     private static GateReply Answered(GateVerdictWord verdict, int findings) =>
         new GateReply.Answered(verdict, CapturedCount.Number(findings));
 
