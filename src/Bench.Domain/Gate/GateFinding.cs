@@ -84,7 +84,7 @@ public sealed record GateFinding
     {
         var refusal = (ordinal, line, (text ?? string.Empty).Trim().Length) switch
         {
-            (< 0, _, _) => $"a finding's ordinal is its position in the reply, got {ordinal}",
+            ( < 0, _, _) => $"a finding's ordinal is its position in the reply, got {ordinal}",
             (_, < 0, _) => $"a line is zero (none named) or positive, got {line}",
             (_, _, 0) => $"finding {ordinal} has no text — a finding that says nothing cannot be assessed",
             _ => string.Empty,
