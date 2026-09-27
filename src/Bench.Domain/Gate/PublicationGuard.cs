@@ -20,16 +20,29 @@ public sealed record GuardViolation(string Table, string Column, string RowId, s
 /// <c>contoso</c> are one leak.</summary>
 public sealed record PrivateNames
 {
-    private PrivateNames(IReadOnlyList<string> names) => Names = names;
+    private PrivateNames(IReadOnlyList<string> names, IReadOnlyList<string> hosts)
+    {
+        Names = names;
+        Hosts = hosts;
+    }
 
     public IReadOnlyList<string> Names { get; }
 
-    public static PrivateNames None { get; } = new([]);
+    /// <summary>The machine names the guard refuses as whole words — at least the machine the export runs on, which
+    /// is the one a campaign's rows could have picked up. Kept apart from <see cref="Names"/> because a host is a
+    /// whole-word match, not a substring: <c>box-7</c> must not refuse <c>box-70</c>.</summary>
+    public IReadOnlyList<string> Hosts { get; }
 
-    public static PrivateNames Of(IEnumerable<string> names) =>
-        new([.. names.Select(n => (n ?? string.Empty).Trim()).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)]);
+    public static PrivateNames None { get; } = new([], []);
 
-    public PrivateNames With(PrivateNames other) => Of([.. Names, .. other.Names]);
+    public static PrivateNames Of(IEnumerable<string> names) => new(Clean(names), []);
+
+    public PrivateNames With(PrivateNames other) => new(Clean([.. Names, .. other.Names]), Clean([.. Hosts, .. other.Hosts]));
+
+    public PrivateNames WithHosts(IEnumerable<string> hosts) => new(Names, Clean([.. Hosts, .. hosts]));
+
+    private static IReadOnlyList<string> Clean(IEnumerable<string> names) =>
+        [.. names.Select(n => (n ?? string.Empty).Trim()).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>The 1-based position of the first private name inside <paramref name="text"/>, or zero.</summary>
     public int FirstIn(string text) =>
@@ -63,6 +76,7 @@ public static partial class PublicationGuard
     public const string HomeRule = "carries a /home/ path";
     public const string UsersRule = "carries a \\Users\\ path";
     public const string EndpointRule = "is not a public vendor url";
+    public const string HostRule = "carries a host name";
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])[A-Za-z]:[\\/]")]
     private static partial Regex DrivePath { get; }
@@ -87,6 +101,11 @@ public static partial class PublicationGuard
         if (privateNames.FirstIn(text.Text) is var index and > 0)
         {
             yield return $"carries private name #{index} of the suite";
+        }
+
+        if (HostNames.Carries(text.Text, privateNames.Hosts))
+        {
+            yield return HostRule;
         }
     }
 
@@ -138,17 +157,39 @@ public static partial class FailureRedaction
     public const string UrlPlaceholder = "<url>";
     public const string PathPlaceholder = "<path>";
     public const string NamePlaceholder = "<private>";
+    public const string HostPlaceholder = "<host>";
 
     public static string Redact(string? text, PrivateNames privateNames)
     {
         var withoutUrls = Url.Replace(text ?? string.Empty, UrlPlaceholder);
         var withoutPaths = MachinePath.Replace(withoutUrls, PathPlaceholder);
 
-        return privateNames.Names
+        var withoutNames = privateNames.Names
             .OrderByDescending(n => n.Length)
             .Aggregate(withoutPaths, (current, name) => current.Replace(name, NamePlaceholder, StringComparison.OrdinalIgnoreCase));
+
+        return HostNames.Replace(withoutNames, privateNames.Hosts, HostPlaceholder);
     }
 
     public static FailureCause Redact(FailureCause cause, PrivateNames privateNames) =>
         cause with { Text = Redact(cause.Text, privateNames) };
+}
+
+/// <summary>What a machine name looks like: a KNOWN host as a whole word (case-insensitive), or the two shapes a
+/// host name takes without anyone listing it — an operating system's generated name (<c>DESKTOP-4F2K9QZ</c>,
+/// <c>LAPTOP-…</c>, <c>WIN-…</c>) and a private-network domain (<c>*.local</c>, <c>*.lan</c>, <c>*.internal</c>,
+/// <c>*.corp</c>, <c>*.home</c>, <c>*.localdomain</c>).</summary>
+public static partial class HostNames
+{
+    [GeneratedRegex(@"(?i)(?<![A-Za-z0-9-])(?:desktop|laptop|win)-[a-z0-9]{6,}(?![A-Za-z0-9-])|(?<![A-Za-z0-9.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|corp|home|localdomain)(?![A-Za-z0-9-])")]
+    private static partial Regex Shaped { get; }
+
+    public static bool Carries(string text, IReadOnlyList<string> known) =>
+        Shaped.IsMatch(text) || known.Any(host => Known(host).IsMatch(text));
+
+    public static string Replace(string text, IReadOnlyList<string> known, string placeholder) =>
+        known.Aggregate(Shaped.Replace(text, placeholder), (current, host) => Known(host).Replace(current, placeholder));
+
+    private static Regex Known(string host) =>
+        new($"(?<![A-Za-z0-9-]){Regex.Escape(host)}(?![A-Za-z0-9-])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 }

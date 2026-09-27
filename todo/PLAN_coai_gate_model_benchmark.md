@@ -600,7 +600,8 @@ for the rest.
 > - **`GateFinding.Stored`** was added — E1's record had no read path, and a store that cannot read back what it
 >   wrote cannot compute a report. It refuses any hash that is not 64 lower-case hex; `Of` stays the only way a NEW
 >   finding enters.
-> - **The reviewer endpoint is the one column checked by a stricter rule than `://`.** D6 makes a public vendor
+> - **The reviewer endpoint is the one column checked by a stricter rule than `://`** — ACCEPTED by the coordinator
+>   as a deviation (2026-09-27). D6 makes a public vendor
 >   url a VALUE and D8 refuses `://` in every row; `gate_reviewers.EndpointUrl` therefore passes the url rule only
 >   when `ReviewerEndpoint.Parse` reads it as public (a loopback one is refused — tested); every other rule applies
 >   to it. The endpoint is split into `EndpointUrl` and `EndpointRef`.
@@ -613,6 +614,16 @@ for the rest.
 > - **`GateFileHashKeys`, `GateCellCompletion`, `IGatePublicationSource`** are new Application pieces the stories
 >   implied but did not name; the CLI verb class is `CoaiGateCommand` (`GateCommand` is already a harvest type).
 > - `samples/gate-suite.sample.json` is new: no tasks, three made-up private names the guard test always loads.
+> - **The claim owner is never published** (coordinator, 2026-09-27). `gate_cells.Owner`, `OwnerHost` and
+>   `OwnerPid` stay in the database for the sweep; the public export's rows have no such field (the publication
+>   source leaves them out), `GatePublication.Check` refuses any row that still carries one whatever its value, and
+>   the string guard gained a host rule — this machine's name as a whole word, OS-generated names
+>   (`DESKTOP-…`, `LAPTOP-…`, `WIN-…`) and private-network domains (`*.local`, `*.lan`, `*.internal`, `*.corp`,
+>   `*.home`); the failure redaction replaces them with `<host>`. RED first: the export of a claimed campaign carried
+>   `Owner`/`OwnerHost`/`OwnerPid` and this machine's name, a planted host name passed. **The retrieval benchmark has
+>   the same leak and is NOT changed here:** `cells` and `preparations` carry `Owner`/`OwnerHost`/`OwnerPid`,
+>   `run_machines.FactsJson` carries `Hostname`, and `MachineDto.Hostname` travels on the report DTO
+>   (`bench report --json`, `GET /api/runs/{id}/report`) of a database the docs call "published unedited".
 >
 > **The code round (coai, 2026-09-27, `good_enough`, 12 of 12 reviewers, 37 findings) — 13 accepted, 24 rejected
 > with reasons recorded on the round.** Taken, each RED first: a schemeless machine address in

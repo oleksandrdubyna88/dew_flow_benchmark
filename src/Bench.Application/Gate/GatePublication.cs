@@ -73,13 +73,25 @@ public static class GatePublication
 {
     public const string ExportKind = "bench-gate-public-export";
 
+    public const string ClaimOwnerRule = "is a claim-owner column — never published";
+
+    /// <summary>The claim owner — label, host, pid — is private SWEEP state: it names a machine and a process. It stays
+    /// in the database for the sweep and is not a field of any public row; the source leaves these columns out, and
+    /// <see cref="Check"/> refuses any row that still carries one, whatever its value.</summary>
+    public static IReadOnlySet<string> ClaimOwnerColumns { get; } = new HashSet<string>(StringComparer.Ordinal) { "Owner", "OwnerHost", "OwnerPid" };
+
     public static IEnumerable<PublishedText> Texts(IReadOnlyList<PublishedTable> tables) =>
         tables.SelectMany(table => table.Rows.SelectMany(row => row.Fields.SelectMany(field =>
             field.Value.Words.Select(word => new PublishedText(table.Name, field.Column, row.Id, word)))));
 
     public static IReadOnlyList<GuardViolation> Check(
         IReadOnlyList<PublishedTable> tables, PrivateNames privateNames, IReadOnlySet<string> publicUrlColumns) =>
-        PublicationGuard.Check(Texts(tables), privateNames, publicUrlColumns);
+        [.. OwnerFields(tables), .. PublicationGuard.Check(Texts(tables), privateNames, publicUrlColumns)];
+
+    private static IEnumerable<GuardViolation> OwnerFields(IReadOnlyList<PublishedTable> tables) =>
+        tables.SelectMany(table => table.Rows.SelectMany(row => row.Fields
+            .Where(field => ClaimOwnerColumns.Contains(field.Column))
+            .Select(field => new GuardViolation(table.Name, field.Column, row.Id, ClaimOwnerRule))));
 
     /// <summary>The export document as JSON, or the refusal naming every violation by table, column and row.</summary>
     public static Outcome<string> Export(

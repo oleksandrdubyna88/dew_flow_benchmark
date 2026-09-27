@@ -65,7 +65,8 @@ public static class CoaiGateCommand
             return ExitCodes.Environment;
         }
 
-        var exported = GatePublication.Export(tables, names, source.PublicUrlColumns, DateTimeOffset.UtcNow);
+        // This machine's name is always refused: it is the one host a campaign's rows could have picked up.
+        var exported = GatePublication.Export(tables, names.WithHosts([Environment.MachineName]), source.PublicUrlColumns, DateTimeOffset.UtcNow);
 
         return exported switch
         {

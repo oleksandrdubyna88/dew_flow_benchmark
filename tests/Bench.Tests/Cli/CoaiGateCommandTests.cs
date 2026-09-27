@@ -53,6 +53,20 @@ public sealed class CoaiGateCommandTests(PostgresFixture postgres)
 
         await using (var db = PostgresFixture.Context(connection))
         {
+            db.GateReviewers.Add(new GateReviewerRow { Id = "host-planted", Hash = new string('4', 64), Model = "m", RemoteVendor = Environment.MachineName, AddedAt = Noon });
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var hosted = Run("gate", "export", "--public", "--db", connection, "--suite-file", suite, "--out", Path.Combine(temp.Path, "hosted.json"));
+        hosted.Code.Should().Be(ExitCodes.NoReport, "the CLI hands the guard this machine's name");
+        hosted.Error.Should().Contain(PublicationGuard.HostRule);
+        await using (var db = PostgresFixture.Context(connection))
+        {
+            await db.GateReviewers.Where(r => r.Id == "host-planted").ExecuteDeleteAsync(Ct);
+        }
+
+        await using (var db = PostgresFixture.Context(connection))
+        {
             await db.GateRuns.Where(r => r.Id == run.Id).ExecuteUpdateAsync(s => s.SetProperty(r => r.SuiteStamp, "contoso-orders#abc"), Ct);
         }
 
