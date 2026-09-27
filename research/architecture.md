@@ -1031,20 +1031,26 @@ E2) and its own report — and the parts that ARE the same were made shared rath
 The tuple, the guard and every entity are in [module_gate.md](module_gate.md). Three things are worth stating
 here because they cut across modules:
 
-- **The scope is `(suiteStamp, gate, product.versionText, settingsHash)`**, and the product pin is stored
-  per CELL at claim time — a campaign allowed to change product mid-way partitions rather than averages, the
-  compute-backend lesson one level up. The suite stamp hashes the tasks' canonical forms and NOT where the
+- **The scope is `(suiteStamp, gate, product.versionText, product.binarySha256, settingsHash)`**, and the
+  product pin is stored per CELL at claim time — a campaign allowed to change product mid-way partitions rather
+  than averages, the compute-backend lesson one level up; the binary's sha is in the scope because a dirty
+  rebuild at one HEAD prints the same version text from different bytes. The suite stamp hashes the tasks'
+  length-prefixed canonical forms (a separator inside free text cannot forge a boundary) and NOT where the
   clones are, so the operator's suite file may name absolute paths and stamp identically on another machine.
 - **The publication guard is structural first.** The repository is public and seven of the fourteen task
   repositories behind the feature trial are corporate, so a finding's text never enters the domain record
-  (`GateFinding` has hashes only, asserted by reflection) and no `Gate*Dto` has a free-text finding or prompt
-  field (an allow-list over every string property, with the redacted failure cause as the one named
-  exception). Two rubric kinds never share a row or a mean: `RubricKind` is a required dimension of every
-  report call, exactly as `--metric` has no default.
-- **The vendors string the product reads is produced in exactly one place.** `CoaiVendorRow.From` is the only
-  factory of `CoaiVendorsSetting` (no public constructor; a reflection test counts the factories), it ticks
-  only the gate under measurement, and `ArchitectureTests` scans `src/` and `hosts/` for the literal and
-  refuses a second file — with the companion that proves the scan still finds the first.
+  (`GateFinding` has hashes only; its file hash is an HMAC under a key that lives only in the artefact root, so
+  a published hash cannot be confirmed by guessing paths) and nothing a gate DTO can reach carries free text: a
+  test walks every `Gate*Dto` into its nested types and collections and holds every text-bearing property to
+  an allow-list keyed by `Type.Property`, with the redacted failure cause as the one named exception. One
+  rubric per table — id, kind and hash — and one verdict per finding: two rubrics never share a row or a mean,
+  exactly as `--metric` has no default.
+- **The vendors string the product reads is produced in exactly one place.** `CoaiVendorsSetting.From` is the
+  only factory — it lives inside the type, whose constructor and variable name are private, and
+  `ArchitectureTests` proves by reflection over every production assembly that nothing else returns a setting
+  and no constant exposes the name, plus a literal scan of `src/` and `hosts/`, each with a planted negative
+  and a companion that proves the scan still sees the sanctioned member. It ticks only the gate under
+  measurement and writes the product's own runtime WORDS (pinned against the product's `RuntimeNames`).
 
 Nothing in it runs yet: the store, the driver over MCP stdio, the blinded assessment, the import of the
 existing Python and `coai-bench` records, the CLI verbs, the API routes and the Gate tab are E2–E7 of
