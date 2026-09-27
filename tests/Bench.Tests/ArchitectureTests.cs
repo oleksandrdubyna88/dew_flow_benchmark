@@ -97,6 +97,74 @@ public sealed class ArchitectureTests
             + "a model, and that is cheaper to guarantee than to remember");
     }
 
+    /// <summary>Every gate type that DECIDES anything lives in <c>Bench.Domain</c> — the same argument as the
+    /// session detectors: a layer that depends on nothing cannot reach a model, a store or a file, so a suite
+    /// stamp, a matrix order, a claim, a pin comparison, a report figure and the one vendor-row producer are
+    /// pure by construction. Naming them is what keeps that enforced; moving one up into the Application
+    /// layer would quietly make the guarantee unprovable.</summary>
+    [Fact]
+    public void The_gate_decisions_live_where_no_model_can_be_reached()
+    {
+        Type[] deciders =
+        [
+            typeof(Domain.Runs.Claimable),
+            typeof(Domain.Runs.SlotRotation),
+            typeof(Domain.Gate.GateMatrix),
+            typeof(Domain.Gate.GateCellLifecycle),
+            typeof(Domain.Gate.ProductPin),
+        ];
+
+        deciders.Should().OnlyContain(
+            type => type.Assembly.GetName().Name == "Bench.Domain",
+            "a gate decision made where a model or a store is reachable is a decision nobody can replay");
+    }
+
+    /// <summary>The console is mounted by another repository's Blazor WebAssembly host, so a reference here is
+    /// a reference there: the domain would pull rules into a browser, and infrastructure would fail to load
+    /// at all. The gate pages (E6) must not be the ones to break this.</summary>
+    [Fact]
+    public void Ui_references_the_contracts_and_nothing_else_of_this_solution()
+    {
+        Referenced("Bench.Ui.dll").Where(r => r.Name!.StartsWith("Bench.", StringComparison.Ordinal))
+            .Select(r => r.Name)
+            .Should().BeEquivalentTo(["Bench.Contracts"],
+                "the console may reference the wire shapes and NOTHING else — it runs in a browser somebody else hosts");
+    }
+
+    /// <summary>The vendor list the product reads is produced in exactly ONE place, and this is what makes that
+    /// a fact rather than a convention: a second spelling of the literal is a second producer, and two producers
+    /// of one request drift until a run measures a vendor nobody configured.</summary>
+    [Fact]
+    public void The_vendors_setting_is_spelled_in_exactly_one_production_file()
+    {
+        var spelled = ProductionFilesSpelling("COAI_VENDORS");
+
+        spelled.Should().ContainSingle(
+            "a recipe becomes a request in exactly one place — every other file takes a CoaiVendorsSetting value, "
+            + $"and the offenders are: {string.Join(", ", spelled)}");
+    }
+
+    /// <summary>The companion the scan above needs: a tree scan that matches nothing passes forever, so this
+    /// asserts it still finds the sanctioned producer by path.</summary>
+    [Fact]
+    public void The_vendors_scan_still_finds_the_sanctioned_producer()
+    {
+        ProductionFilesSpelling("COAI_VENDORS").Should().Contain(
+            Path.Combine("src", "Bench.Domain", "Gate", "CoaiVendorRow.cs"),
+            "the scan is only a guard while it can see the one file that is allowed to spell the literal");
+    }
+
+    /// <summary>Repository-relative paths of the production files whose text contains <paramref name="literal"/>.
+    /// Reads <c>src/</c> and <c>hosts/</c> from the source tree; build output is skipped, because a scan over
+    /// generated files would find the literal in every assembly's copied resources.</summary>
+    private static IReadOnlyList<string> ProductionFilesSpelling(string literal) =>
+        [.. new[] { "src", "hosts" }
+            .SelectMany(folder => Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, folder), "*.cs", SearchOption.AllDirectories))
+            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => File.ReadAllText(path).Contains(literal, StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(Cli.Repository.Root, path))
+            .Order(StringComparer.Ordinal)];
+
     private static IEnumerable<AssemblyName> Referenced(string fileName) =>
         Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, fileName)).GetReferencedAssemblies();
 
