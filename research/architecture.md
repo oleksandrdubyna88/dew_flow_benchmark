@@ -1,6 +1,6 @@
 # Architecture — the system as it is
 
-> Status: **current as of 2026-08-23.** Describes what exists and runs, not what is planned; the plan is
+> Status: **current as of 2026-09-27.** Describes what exists and runs, not what is planned; the plan is
 > [todo/PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) and the evidence behind the design is
 > [MEASURED_LESSONS.md](MEASURED_LESSONS.md). Where the two disagree, this file is wrong and should be
 > corrected — a description that has drifted from the code is the failure this convention exists to catch.
@@ -42,6 +42,7 @@ flowchart TB
         obs["Trace · Telemetry · Models · Retrieval"]
         axes["Variants · Authoring · Engines · Bank · Registry"]
         sessions["Sessions — ToolTaxonomy · CommandClassifier<br/>PhaseClassifier · SessionAnalysis (pure, no model)"]
+        gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
         pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls"]
@@ -1014,6 +1015,41 @@ remains the one verb that reaches a model, so nothing an orchestrator restarts c
 start button waits for the console's own worker and the accelerator lease that makes two drains against one
 card safe.
 
+## The gate benchmark — a sibling context (2026-09-27)
+
+The retrieval benchmark's run is one target × one suite × subjects × lanes × variants × repeats, whose leg is a
+completion the harness prompts. The **gate** benchmark measures a REVIEWER MODEL on the product's three review
+gates — plan, code, feature — and its run is seven targets (one seeded repository per task, at its own variant
+commit) × reviewers × repeats, whose leg is a multi-turn product session the harness never prompts, and whose
+result is a reply of findings plus a ledger. Folding that into `cells` and `results` would have left half the
+columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own tables to come (`gate_*`,
+E2) and its own report — and the parts that ARE the same were made shared rather than duplicated:
+`Claimable` (the four claim fields and the claim/settle/reclaim/stale transitions, composed by `RunCell` and
+`GateCell`) and `SlotRotation` (the global slot rotation, called by both matrices). `CellLifecycleTests` and
+`MatrixOrderTests` are byte-for-byte unchanged, which is the proof the extraction changed nothing.
+
+The tuple, the guard and every entity are in [module_gate.md](module_gate.md). Three things are worth stating
+here because they cut across modules:
+
+- **The scope is `(suiteStamp, gate, product.versionText, settingsHash)`**, and the product pin is stored
+  per CELL at claim time — a campaign allowed to change product mid-way partitions rather than averages, the
+  compute-backend lesson one level up. The suite stamp hashes the tasks' canonical forms and NOT where the
+  clones are, so the operator's suite file may name absolute paths and stamp identically on another machine.
+- **The publication guard is structural first.** The repository is public and seven of the fourteen task
+  repositories behind the feature trial are corporate, so a finding's text never enters the domain record
+  (`GateFinding` has hashes only, asserted by reflection) and no `Gate*Dto` has a free-text finding or prompt
+  field (an allow-list over every string property, with the redacted failure cause as the one named
+  exception). Two rubric kinds never share a row or a mean: `RubricKind` is a required dimension of every
+  report call, exactly as `--metric` has no default.
+- **The vendors string the product reads is produced in exactly one place.** `CoaiVendorRow.From` is the only
+  factory of `CoaiVendorsSetting` (no public constructor; a reflection test counts the factories), it ticks
+  only the gate under measurement, and `ArchitectureTests` scans `src/` and `hosts/` for the literal and
+  refuses a second file — with the companion that proves the scan still finds the first.
+
+Nothing in it runs yet: the store, the driver over MCP stdio, the blinded assessment, the import of the
+existing Python and `coai-bench` records, the CLI verbs, the API routes and the Gate tab are E2–E7 of
+[todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+
 ## Guards that shape the API
 
 Each is here because something went wrong that it now prevents; the catalogue is
@@ -1253,6 +1289,11 @@ Stated because a description that quietly implies more than is built is the same
   with tools and the doctrine. The doctrine did change behaviour measurably — it made the model terser — it
   just did not change the ordering it was written to change.
 
+- **The gate benchmark has a domain and no driver.** `Bench.Domain.Gate` and the `Gate*Dto` contracts exist
+  and are guarded (*The gate benchmark*, above), and nothing reaches them: no `gate_*` table, no process over
+  MCP stdio, no assessor launch, no import, no `bench gate` verb, no route, no tab. The first number it can
+  produce waits on E2–E3 of `todo/PLAN_coai_gate_model_benchmark.md`, and the first number worth reading on
+  E7's A/A against a Python run at the same product sha.
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
   AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a

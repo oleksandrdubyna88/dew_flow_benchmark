@@ -1,6 +1,7 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
-> Status: **plan only, nothing implemented yet, 2026-09-27.** Scope: a new bounded context `Gate` across
+> Status: **E1 (the domain and the contracts) landed 2026-09-27 — `research/module_gate.md` describes it; E2–E7
+> open.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -492,42 +493,53 @@ Every story: RED tests first (named for the guarantee), then the code, then the 
 for the architecture of the new context, everything that touches a secret, and the publication guard; **Opus**
 for the rest.
 
-### E1 — the domain and the contracts (Fable)
+### E1 — the domain and the contracts (Fable) — DONE 2026-09-27
 
-- **S1.1** `GateKind`, `GateTask` (id, language, hosted gates, calibration flag, seeds), `SeedSpec`, `GateSuite`
+> Landed as four commits on `feat/gate-e1-domain`; every story's RED is quoted in its commit body and the
+> module is described in [module_gate.md](../research/module_gate.md). Deviations from the text below:
+> the finding's `category` is an enum of the product's words with `Unknown` as a counted state (a word this
+> build has not met is a state, not a refusal, because the value is the product's); `ReviewerHash` is
+> `ReviewerDefinition.Hash` plus `GateReviewerCatalog.SameConfiguration` rather than a type of its own;
+> `GateVerdict.Under` takes the rubric catalog so a verdict cannot exist under a hash nobody holds; the
+> report's per-model row gained `AssessedRuns` beside `Runs`, because "unassessed" is per run and the Python
+> report's zero-for-unassessed was the thing to stop; `GateRunRecord` names the campaign and the run apart,
+> since a run is one cell's product session. `SeedEvidence` landed in S1.8 as the pure classifier over the
+> turn-1 prompt (S4.5 keeps the reading of that prompt off disk).
+
+- [x] **S1.1** `GateKind`, `GateTask` (id, language, hosted gates, calibration flag, seeds), `SeedSpec`, `GateSuite`
   (parse → freeze → `Stamp` via `StableHash`; `privateNames[]`; refuses a task naming a gate it cannot host — a
   plan-only task on the code gate, a task with no seeds on a seeded-recall column). RED: two suites differing only
   in a repository path have the same stamp when the operator's canonical form excludes paths — **no**: paths are
   OUT of the canonical form by construction, and the test asserts a moved clone keeps its stamp.
-- **S1.2** `GateReviewer` row + `CoaiVendorRow.From` + `ReviewerHash`. RED: a row with a loopback endpoint as a
+- [x] **S1.2** `GateReviewer` row + `CoaiVendorRow.From` + `ReviewerHash`. RED: a row with a loopback endpoint as a
   value is refused by name; an unknown vendor field is refused; retiring keeps the row readable; two rows with one
   hash are reported as one configuration under two names. **And the one-producer guarantee is a type and a
   test (plan round, finding 4):** the environment builder takes a `CoaiVendorsSetting` value whose only
   constructor is private and whose only factory is `CoaiVendorRow.From`, so no other code can hand the server
   a vendors string; an architecture test scans `src/` and `hosts/` for the literal `COAI_VENDORS` and asserts it
   occurs in exactly one production file, naming any other by path and line.
-- **S1.3** `ProductPin` (sha256, version text, git sha, dirty count) + `ProductPin.Matches`. RED: a campaign's
+- [x] **S1.3** `ProductPin` (sha256, version text, git sha, dirty count) + `ProductPin.Matches`. RED: a campaign's
   second run against a different sha is refused naming both.
-- **S1.4** `Claimable` extracted; `CellLifecycle` over it; `GateCell` composed. RED: every existing
+- [x] **S1.4** `Claimable` extracted; `CellLifecycle` over it; `GateCell` composed. RED: every existing
   `CellLifecycleTests` unchanged and green; a `GateCell` follows the same three-attempt abandon rule.
-- **S1.5** `GateRunFacts` (valid, verdict, findings count, turns, HTTP calls, finish reasons, tokens in/out/cached/
+- [x] **S1.5** `GateRunFacts` (valid, verdict, findings count, turns, HTTP calls, finish reasons, tokens in/out/cached/
   reasoning as `CapturedCount`, seconds total and per turn, cost as `CapturedCount`, served/refused, failure cause)
   + the `valid` rule (verdict ∈ {proceed, revise}, every ledger turn `ok`, findings a list — `calib · run.py:195`).
   RED: a reply that parses with zero turns is not valid; a ledger with no cost gives cost *unknown*, never 0.
-- **S1.6** `SlotRotation` extracted; `GateMatrix.Plan(tasks, reviewers, repeats)` repeats-outermost. RED:
+- [x] **S1.6** `SlotRotation` extracted; `GateMatrix.Plan(tasks, reviewers, repeats)` repeats-outermost. RED:
   `MatrixOrderTests` unchanged; the three repeats of one task are never adjacent; first positions balanced.
-- **S1.7** `GateFinding` (hash-only fields), `Verdict` (carries its `RubricKind`; `AssessmentFailure` with its
+- [x] **S1.7** `GateFinding` (hash-only fields), `Verdict` (carries its `RubricKind`; `AssessmentFailure` with its
   cause is a verdict case, not a null), `Rubric` (id, kind, hash). RED: a verdict under a rubric hash the catalog
   does not hold is refused; a `GateFinding` has no property of type `string` other than enum names and hashes
   (asserted by reflection).
-- **S1.8** `GateReport.PerModel(gate, scope, rubric)`, `PerTask`, `SeedEvidence`, `Variance` — pure, `RubricKind`
+- [x] **S1.8** `GateReport.PerModel(gate, scope, rubric)`, `PerTask`, `SeedEvidence`, `Variance` — pure, `RubricKind`
   required. RED: `Withheld` below 3 repeats; `—` for unassessed; a mean across two rubric kinds is refused by
   name; `AssessmentFailure` rows are excluded from supported % and counted in their own column; a failed run
   stays in the denominator; `q` matches the Python quantile on a fixed vector; a scope with two product
   versions partitions; cells claimed under two pins in one run land in two partitions.
-- **S1.9** `Bench.Contracts`: `GateModelTableDto`, `GateRunSummaryDto`, `GateRunDetailDto`, `GateScopeDto`.
-- **S1.10** architecture tests: gate decisions in `Bench.Domain`; `Bench.Ui` references contracts only.
-- DoD: 0 warnings; every RED observed with its real symptom; `architecture.md` names the new context.
+- [x] **S1.9** `Bench.Contracts`: `GateModelTableDto`, `GateRunSummaryDto`, `GateRunDetailDto`, `GateScopeDto`.
+- [x] **S1.10** architecture tests: gate decisions in `Bench.Domain`; `Bench.Ui` references contracts only.
+- [x] DoD: 0 warnings; every RED observed with its real symptom; `architecture.md` names the new context.
 
 ### E2 — the store and the privacy guard (Fable for S2.4; Opus otherwise)
 
@@ -719,6 +731,16 @@ harness defect, not a model result. If it does not hold, this sentence is the re
       plan rather than holding this one.
 
 ## 9. Open questions for the operator
+
+> **Assumed 2026-09-27, pending the operator** — E1 was built on these answers so it could land; each is a
+> one-line change if the operator decides otherwise, and none is a promise the code makes on its own:
+>
+> 1. isolated data directory by default; 2. a checkout build is "the product", pinned by sha; 3. assessors —
+> codex primary, the Claude CLI for the agreement figure; 4. the lenient 09-05/09-06 verdicts are shown in
+> their own labelled column (`RubricKind.LenientWorth`, never in a strict figure); 5. the seeded 8-defect plan
+> and coai's own plans may go in `samples/`; 6. the suite file lives in the local artefact root, outside git;
+> 7. CLI reviewers show *cost unknown*, never zero (`CapturedUsd`, `ReviewerPrices.Unknown`, `Figure.Unknown`);
+> 8. the coordinator bumps the qln pin after E6.
 
 1. **Isolated or real data directory by default?** This plan says isolated (models are the subject, the store is
    not). `coai-bench` defaults to the real one so rounds show in the panel while a person watches.
