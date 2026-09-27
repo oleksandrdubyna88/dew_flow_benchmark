@@ -69,11 +69,38 @@ public sealed class FileHashKeyFileTests
     }
 
     [Fact]
+    public async Task A_key_file_whose_permissions_were_loosened_is_unusable()
+    {
+        using var temp = NewRoot();
+        var store = Store(temp);
+        await store.CreateFileHashKeyAsync(Ct);
+        var path = Path.Combine(store.Root, FileHashKeyFile.FileName);
+
+        if (OperatingSystem.IsWindows())
+        {
+            var info = new FileInfo(path);
+            var acl = info.GetAccessControl();
+            acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), FileSystemRights.Read, AccessControlType.Allow));
+            info.SetAccessControl(acl);
+        }
+        else
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.OtherRead);
+        }
+
+        (await store.ReadFileHashKeyAsync(Ct)).Should().BeOfType<FileHashKeyRead.Unusable>()
+            .Which.Reason.Should().Contain("readable by someone other than its owner",
+                "a key another user can read lets them confirm private paths from the published hashes");
+    }
+
+    [Fact]
     public async Task A_short_key_file_is_unusable_and_says_so()
     {
         using var temp = NewRoot();
         var store = Store(temp);
-        await File.WriteAllBytesAsync(Path.Combine(store.Root, FileHashKeyFile.FileName), new byte[16], Ct);
+        var path = Path.Combine(store.Root, FileHashKeyFile.FileName);
+        await File.WriteAllBytesAsync(path, new byte[16], Ct);
+        OwnerOnly(path);
 
         (await store.ReadFileHashKeyAsync(Ct)).Should().BeOfType<FileHashKeyRead.Unusable>().Which.Reason.Should().Contain("at least 32 bytes");
         (await GateFileHashKeys.ResolveAsync(store, new FindingsOnly(false), Ct)).Reason().Should().Contain("cannot be used");
@@ -99,6 +126,19 @@ public sealed class FileHashKeyFileTests
         (await GateFileHashKeys.ResolveAsync(store, new FindingsOnly(true), Ct)).Reason()
             .Should().Contain("already holds findings").And.Contain("restore");
         File.Exists(Path.Combine(store.Root, FileHashKeyFile.FileName)).Should().BeFalse("a silently regenerated key would make every stored file hash incomparable");
+    }
+
+    /// <summary>Restricts a hand-written file the way the store creates one, so the test reaches the check it is about.</summary>
+    private static void OwnerOnly(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            new FileInfo(path).SetAccessControl(FileHashKeyFile.OwnerOnly());
+        }
+        else
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 
     /// <summary>A store that answers one question — whether any finding exists — and refuses every other.</summary>

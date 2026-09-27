@@ -69,7 +69,7 @@ public static class CoaiGateCommand
 
         return exported switch
         {
-            Outcome<string>.Ok document => await WriteAsync(command.Value("out"), document.Value, tables, output, cancellationToken),
+            Outcome<string>.Ok document => await WriteAsync(command.Value("out"), document.Value, tables, output, error, cancellationToken),
             Outcome<string>.Fail fail => Refused(fail.Reason, error),
             _ => throw new InvalidOperationException("unreachable"),
         };
@@ -174,16 +174,38 @@ public static class CoaiGateCommand
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Outcome<PrivateNames>.Failure($"the suite file could not be read — {ex.GetType().Name}");
+            return Outcome<PrivateNames>.Failure($"the suite file could not be read — {ex.Message}");
         }
     }
 
+    /// <summary>Staged, flushed to disk, then renamed over the target — a crash leaves the previous export or the new
+    /// one, never half of either. A target that cannot be written is the environment's answer (3), with the partial
+    /// file removed, rather than an exception.</summary>
     private static async Task<int> WriteAsync(
-        string path, string document, IReadOnlyList<PublishedTable> tables, TextWriter output, CancellationToken cancellationToken)
+        string path, string document, IReadOnlyList<PublishedTable> tables, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var staging = path + ".partial";
-        await File.WriteAllTextAsync(staging, document, cancellationToken);
-        File.Move(staging, path, overwrite: true);
+
+        try
+        {
+            await using (var stream = new FileStream(staging, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes(document), cancellationToken);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(staging, path, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (File.Exists(staging))
+            {
+                File.Delete(staging);
+            }
+
+            error.WriteLine($"bench: the export could not be written — {ex.Message}");
+            return ExitCodes.Environment;
+        }
 
         output.WriteLine($"exported       {tables.Sum(t => t.Rows.Count)} row(s) from {tables.Count} gate table(s), through the publication guard");
         return ExitCodes.Pass;

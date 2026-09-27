@@ -83,6 +83,28 @@ public sealed class GateCellCompletionTests(PostgresFixture postgres)
             .Should().Contain("run record");
     }
 
+    [Fact]
+    public async Task A_scope_that_does_not_match_the_owners_claim_is_refused_before_anything_is_written()
+    {
+        using var temp = NewRoot();
+        var (run, cells) = Planned(count: 1);
+        var store = new PostgresGateStore(postgres.NewContext(), new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        var owner = Here();
+        var claimed = ArtifactScope.Of(run, (await store.ClaimNextAsync(run.Id, owner, Pin(), Ct)).Ok()).Ok();
+        var artifacts = Store(temp);
+        await artifacts.BeginAttemptAsync(claimed, Ct);
+        var stale = claimed with { Attempt = 2 };
+        var completion = new GateCellCompletion(artifacts, store);
+
+        (await completion.CompleteAsync(stale, owner, Files(stale), RunRecord(stale), Completed(), Ct)).Reason()
+            .Should().Contain("attempt 1", "a scope for an attempt the claim is not at would file its refs under the wrong attempt");
+        (await completion.CompleteAsync(claimed, WorkerIdentity.Here("somebody-else"), Files(claimed), RunRecord(claimed), Completed(), Ct)).Reason()
+            .Should().Contain("does not hold");
+        (await store.ArtifactsAsync(run.Id, Ct)).Should().BeEmpty("the refusal comes before any file or ref");
+        (await artifacts.AttemptsAsync(run.Id, claimed.CellId, Ct)).Should().ContainSingle().Which.State.Should().Be(AttemptState.Open);
+    }
+
     private static ArtifactProbe ProbeFor(string crashPoint) => crashPoint switch
     {
         "write:Staged" => new CrashAt(ArtifactStep.Staged),

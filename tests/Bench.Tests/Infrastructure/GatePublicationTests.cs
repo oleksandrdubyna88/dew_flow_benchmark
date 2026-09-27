@@ -112,7 +112,7 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
         }
 
         (await ViolationsAsync(connection)).Select(v => v.Describe).Should().Equal(
-            "gate_reviewers.EndpointUrl row local-endpoint: " + PublicationGuard.UrlRule);
+            "gate_reviewers.EndpointUrl row local-endpoint: " + PublicationGuard.EndpointRule);
     }
 
     [Fact]

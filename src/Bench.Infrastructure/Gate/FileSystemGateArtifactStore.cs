@@ -306,14 +306,13 @@ public sealed class FileSystemGateArtifactStore : IGateArtifactStore
 
         try
         {
-            var files = new DirectoryInfo(runDirectory)
+            // Aggregated while enumerating — a run is thousands of files, and holding every FileInfo to sum them
+            // afterwards is memory spent on nothing.
+            var (bytes, count, tap) = new DirectoryInfo(runDirectory)
                 .EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false })
-                .ToList();
+                .Aggregate((Bytes: 0L, Count: 0L, Tap: 0L), (sum, file) => (sum.Bytes + file.Length, sum.Count + 1, sum.Tap + (IsTapBody(file) ? file.Length : 0)));
 
-            return new ArtifactFootprint(
-                CapturedCount.Number(files.Sum(f => f.Length)),
-                CapturedCount.Number(files.Count),
-                CapturedCount.Number(files.Where(IsTapBody).Sum(f => f.Length)));
+            return new ArtifactFootprint(CapturedCount.Number(bytes), CapturedCount.Number(count), CapturedCount.Number(tap));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

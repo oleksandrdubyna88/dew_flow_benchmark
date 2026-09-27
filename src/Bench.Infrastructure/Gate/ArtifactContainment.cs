@@ -34,8 +34,11 @@ public static class ArtifactContainment
     {
         var trimmedRoot = Path.TrimEndingDirectorySeparator(root);
 
-        return string.Equals(candidate, trimmedRoot, PathComparison)
-            || candidate.StartsWith(trimmedRoot + Path.DirectorySeparatorChar, PathComparison);
+        // A drive or volume root keeps its separator when trimmed; appending another would make a prefix no path
+        // under it starts with.
+        var prefix = Path.EndsInDirectorySeparator(trimmedRoot) ? trimmedRoot : trimmedRoot + Path.DirectorySeparatorChar;
+
+        return string.Equals(candidate, trimmedRoot, PathComparison) || candidate.StartsWith(prefix, PathComparison);
     }
 
     /// <summary>Whether two canonical paths name one place, by the platform's own case rule.</summary>
