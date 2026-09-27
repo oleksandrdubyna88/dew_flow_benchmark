@@ -494,7 +494,7 @@ public sealed class PostgresRunStore(BenchDbContext db, TimeProvider clock) : IR
     private static RunCell ToDomain(CellRow row) => new(
         row.Id, row.RunId, row.QuestionId, row.Repeat, row.Leg, row.SubjectModelId, row.LaneName,
         VariantSelectionCodec.Decode(row.VariantId, row.VariantName),
-        row.Position, row.State, row.Attempts, Owner(row), row.ClaimedAt, row.OutcomeKind, row.OutcomeDetail)
+        row.Position, Claimable.Stored(row.State, row.Attempts, Owner(row), row.ClaimedAt), row.OutcomeKind, row.OutcomeDetail)
     {
         Arm = row.Arm,
     };
