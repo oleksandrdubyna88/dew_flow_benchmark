@@ -210,6 +210,26 @@ Exactly what both existing instruments do, taken as the contract:
   was asked (`coai · SettingsApplied.cs:34`): a setting accepted and ignored looks exactly like one that worked.
 - Consult off (`COAI_CONSULT_ENABLED=false`), min-epics 1, the caps and pools as the calibrated preset says.
 
+**Isolation, as paths (plan round, finding 1).** A cell's `COAI_DATA_DIR` is
+`<artifact-root>/runs/<runId>/cells/<cellId>/attempt-<n>/data` — created by the harness before the process
+starts and refused if it already exists. Under `--shared-data-dir` every cell of the run uses
+`<artifact-root>/runs/<runId>/data-shared`, and the MODE is stored on the run, so a resumed campaign cannot
+flip it. The path is derived from the cell's stored mode in one function (`CellPaths.DataDirFor`), and the
+artefact store refuses a write outside the cell's own root — an isolated cell cannot write under the shared
+path and a shared run cannot write under a cell's private one. RED (S3.2): two cells drained concurrently
+never resolve to one directory unless shared was asked; a run planned isolated and resumed with
+`--shared-data-dir` is refused naming the stored mode.
+
+**One process per CELL, and a cell is atomic (findings 6 and 7).** One `ProcessSession` — one `coai-mcp`
+process, one stdio pipe — per cell, opened when the cell is claimed and disposed when it settles; lanes never
+share a session, and the shared-data-dir mode shares the DIRECTORY, never the process. An interrupted cell
+(swept from a dead worker, or a lane that died mid-review) is restarted FRESH on its next claim: attempt `n+1`
+gets a new data dir (`attempt-<n+1>`), a new caller session id
+(`bench-gate-<campaign>-<reviewer>-<task>-r<repeat>-a<attempt>`) and a new process; the interrupted attempt's
+artefacts stay under `attempt-<n>/`, marked `Interrupted` on the run record, and are never continued — no
+`again: true`, no resumed session, nothing read back from the dead attempt's data dir. `Claimable.Attempts` is
+the counter and the three-attempt abandon rule applies unchanged.
+
 ### D5 — the product is pinned, and a campaign refuses a product that moved
 
 `ProductPin.Read(path)` = SHA-256 of the binary's bytes + the text of `--version` + (when the binary sits under a
@@ -220,6 +240,18 @@ different `binarySha256` is **refused** naming both, passable with `--allow-prod
 new scope, never extends the old one. The calibration itself crossed this line once (the branch was rebased
 mid-measurement; phase-1 and phase-2 runs record different shas, `calib · RESUME.md`), which is precisely the
 case a report must be able to see.
+
+**The dirty check, scoped (plan round, finding 10).** `git -C <checkout> status --porcelain
+--untracked-files=no -- <product source tree>`, where the source tree is the project directory the binary was
+built from (found by walking up from the binary to the nearest `*.csproj`), falling back to the whole checkout
+when no project is found and saying so on the pin. Untracked files are excluded on purpose: a scratch file
+beside the source is not a changed product, and counting it would have marked every calibration run dirty.
+
+**`--allow-product-change` and in-flight cells.** The pin is stored **per cell at claim time**, never read once
+per run: a claimed cell finishes under the pin it started with, pending cells claim under the new pin, and the
+run record lists every pin it saw. `ComparisonScope` carries the product version, so the report partitions the
+run's cells by pin rather than averaging two products — the partitioning the arms page already does across
+scopes.
 
 ### D6 — the reviewer catalog: immutable rows, hashed, the `COAI_VENDORS` row derived in exactly one place
 
@@ -268,11 +300,21 @@ panel's key (`coai · research/RESULTS_api_vendors_probe_and_first_trial.md` §1
 | finding TEXT (title, why, fix quote private code) and the file path it names | the artefact store (`findings.jsonl` per run) | per finding: ordinal, severity, category, `isGating`, line, SHA-256 of the text, a `fileHash` — enough for every count on the page, no code |
 | the blinded assessment key (`blindedId → run, finding ordinal`) | the artefact store | the verdict rows keyed by `blindedId`; the join to runs happens through the key at report time, in the process that holds the artefact root |
 
-**A publication guard test** re-reads every row of every `gate_*` table (the `ModelConfigTests` re-read
-precedent) and every `ArtifactRef` path and refuses: `://`, a drive letter or `/home/`, `\Users\`, any string
-from the suite's `privateNames[]` (the operator lists repository and company names there; the test loads the
-suite named by `BENCH_GATE_SUITE` when set, and always the sample). `bench gate export --public` writes the
-per-model tables and per-run rows to CSV/JSON through the same guard.
+**The guard is STRUCTURAL first (plan round, finding 8).** Finding text and any code quote never enter the
+database at all: the domain record `GateFinding` has no text field — ordinal, severity, category, `isGating`,
+line, `TextHash`, `FileHash` — so the EF entity cannot store text, and `FindingText` is a type of the artefact
+store alone. The public DTOs (`Bench.Contracts` `Gate*Dto`) carry no free-text field from a finding or a
+prompt. An architecture/type test enumerates every string property of every `gate_*` entity and every
+`Gate*Dto` and asserts each is on an allow-list (ids, hashes, enum names, language, reviewer id, product
+version text, suite stamp) — a new column or DTO field is red until it is named there. The one free-text
+column is the failure cause: stored as a `FailureKind` enum plus a text that has passed the redaction below,
+and the type test names it as the exception.
+
+**A publication guard test** is the second line: it re-reads every row of every `gate_*` table (the
+`ModelConfigTests` re-read precedent) and every `ArtifactRef` path and refuses: `://`, a drive letter or
+`/home/`, `\Users\`, any string from the suite's `privateNames[]` (the operator lists repository and company
+names there; the test loads the suite named by `BENCH_GATE_SUITE` when set, and always the sample).
+`bench gate export --public` writes the per-model tables and per-run rows to CSV/JSON through the same guard.
 
 The `coai-bench` corpus points at plans inside coai's own public repository, so its cases and findings are not
 private — the import (D12) still routes them through the artefact store, because one rule for all rows is the
@@ -294,8 +336,14 @@ hashed onto every verdict: `supported` only when trigger, mechanism AND conseque
   (`CliAgentRuntime.cs:36`) is widened with an `AgentAskOptions` (sandbox, output schema file, disallowed tools)
   rather than a second launcher.
 - **Batches of ≤ 24 per task**, verdict rows appended per batch with the assessor id, the batch id, the rubric
-  hash and the prompt hash; a task whose findings are all assessed is skipped; missing ids are re-asked once
-  and then recorded as `unassessed` — never counted either way (`coai-bench` prints `—`, `Tables.cs`).
+  hash and the prompt hash; a task whose findings are all assessed is skipped.
+- **An assessor's output failure is a verdict, never a gap (plan round, finding 9).** A batch whose output does
+  not parse, is truncated, or names ids the batch did not carry is retried once as a whole; if the retry fails
+  the same way, every finding of that batch receives an explicit `AssessmentFailure` verdict named by cause
+  (`Unparseable` · `Truncated` · `UnknownIds` · `NoAnswer`), under the same rubric hash. Those rows are
+  excluded from supported % and from every rate, and shown as their own count (*assessment failed: n*) — the
+  page never reads them as `—` (nobody looked) nor as `refuted`. A later `bench gate assess` re-asks exactly
+  them (the failure is a row, so the skip rule can see it), and the new verdict supersedes the failure.
 - **Prior cluster keys** for a task are handed to the next batch so one issue keeps one key.
 - **Family match is a flag, not a refusal**: an assessor of the same vendor family as the reviewer it judges is
   counted apart (`AssessorFamilyMatches`), the `SelfJudged` discipline (`JudgeRunner.cs:16`; `MEASURED_LESSONS.md`
@@ -309,8 +357,11 @@ hashed onto every verdict: `supported` only when trigger, mechanism AND conseque
 
 ### D10 — the report: the operator's columns, medians, refusals in words
 
-`GateReport.PerModel(gate, scope)` — pure, in `Bench.Domain.Gate`, over the facts and verdicts — produces per
-reviewer: runs, **valid %** (a failed run is IN the denominator and named by cause), findings/run, **seeds hit
+`GateReport.PerModel(gate, scope, rubric)` — pure, in `Bench.Domain.Gate`, over the facts and verdicts — takes
+the **`RubricKind` as a required dimension (plan round, finding 11)**, exactly as `--metric` has no default:
+`strict-v1` and `lenient-worth-v1` are two populations, every verdict row carries its `RubricKind`, and there
+is no aggregate across kinds anywhere — not in the domain function, not in the API, not on the page, whose
+rubric control is a filter beside the scope control. It produces per reviewer: runs, **valid %** (a failed run is IN the denominator and named by cause), findings/run, **seeds hit
 mean (min–max)**, distinct seeds (cross-epic), **supported % (strict)**, supported+partial %, **high-value
 findings/run**, **overstated %**, **seconds p50 / p90**, turns mean, runs with extra calls / extra calls
 (repairs — the count proves an extra call, not its cause), served / refused source requests, **tokens in / out /
@@ -335,7 +386,10 @@ A **Gate** tab in `BenchmarkTabs.razor` (after Code, before Math) and three rout
 
 Until the read side exists each renders `PendingKind` naming this plan. The console is mounted by
 `dew_flow_rag_qln` through the submodule pin (`research/PLAN_bench_submodule_pin.md`), so the cross-repository
-step is a pin bump there — no code on that side.
+step is a pin bump there — no code on that side. **Owner and order (plan round, finding 5):** the coordinator
+opens the qln pin-bump pull request right after E6 merges here; the order is this repository's E6 pull request
+→ the qln pin → the coai cross-reference pull request (§6). E6's Definition of Done requires the PINNED console
+— qln at the new pin — to show the Gate page, not only this repository's bUnit render of it.
 
 ### D12 — import: today's measurement on the page without re-spending
 
@@ -379,8 +433,17 @@ repeats of one task are hours apart (cache warmth, rate limits) and no reviewer 
 `--parallel` (default 4) with a per-endpoint cap (`--per-endpoint`, default 2) — a semaphore keyed by the
 reviewer row's endpoint; a lane claims through `IGateStore.ClaimNextAsync` the way `LegRunner` claims, and
 `LegDrain` runs each lane (one failed leg recorded and skipped; twenty consecutive failures end the campaign
-with exit 3; Ctrl+C leaves it resumable, exit 5). `bench gate resume --run <id>` rebuilds the plan from the
-stored suite stamp and cells.
+with exit 3; Ctrl+C leaves it resumable, exit 5). **Every lane holds exactly one `ProcessSession` at a time,
+for the cell it has claimed, and disposes it before claiming the next** — two lanes never share a coai process,
+and a process never outlives its cell (D4). **The limits are enforced by a test, not by a comment (plan round,
+finding 3):** a scripted fake server records the number of concurrently open sessions and, per endpoint, the
+number of concurrently in-flight reviews; the test asserts the observed maxima never exceed `--parallel` and
+`--per-endpoint`, and that they REACH the limits when there is enough work — a cap that is never reached is
+indistinguishable from serial execution. `bench gate resume --run <id>` rebuilds the plan from the stored suite
+stamp and cells, and **`bench gate status --run <id>` (finding 2)** prints, before anything is claimed, the
+cells by state — pending, claimed (with owner host/pid and age), abandoned (with the last cause), settled —
+plus the pins the run has seen and the data-dir mode; `resume --dry-run` is the same listing and exits 0
+without claiming.
 
 ### D15 — the tap is a diagnostic, on by default for `api` reviewers, and it is the biggest thing on disk
 
@@ -392,6 +455,26 @@ upstream socket at an absolute deadline (the cap plus the diagnostic wait), so a
 connection open (`calib · harness/tap.py:78`). Off for `cli`/`local` reviewers (no HTTP to sit in front of).
 `bench gate prune --tap-retention-days 30` releases request/response bodies past the window and keeps the
 facts file — the `retrieved_hits` snippet precedent.
+
+## 3b. From the plan round (2026-09-27), accepted
+
+The coai plan gate ran over this document on pull request #39: verdict `good_enough`, 17 findings — 11
+accepted and folded in below, 6 rejected with reasons because the plan already covered them (recorded on the
+round). Each accepted finding names where it landed:
+
+| # | finding | where it landed |
+|---|---|---|
+| 1 | isolation as exact paths per run and for `--shared-data-dir`; a RED test that concurrent cells never share a dir unless asked, and that the mode cannot write into the other's dir | D4 *Isolation, as paths*; S2.3, S3.2 |
+| 2 | a `bench gate status` (or `resume --dry-run`) listing pending, claimed, abandoned and done cells before resuming | D14; S3.8 |
+| 3 | a test that `--parallel` and `--per-endpoint` are enforced — a scripted fake server counting concurrent calls, never above the limits | D14; S3.8; §8 |
+| 4 | an architecture test that `CoaiVendorRow.From` is the only producer of the `COAI_VENDORS` string | S1.2 (a value type with one factory, plus the literal scan); §8 |
+| 5 | the qln console pin bump has an owner (the coordinator, right after E6 merges), an order (E6 → qln pin → coai cross-reference), and E6's DoD requires the pinned console to show the Gate page | D11; E6 DoD; §6; §9 Q8 |
+| 6 | resume semantics: a cell is atomic — an interrupted cell restarts fresh with a new data dir and caller session id (attempt suffix); the interrupted attempt's artefacts are kept, marked, never continued | D4 *One process per CELL, and a cell is atomic*; S3.2, S3.8 |
+| 7 | one `ProcessSession` (one coai process, one stdio pipe) per CELL; lanes never share a session | D4, D14; S3.1 |
+| 8 | the publication guard made STRUCTURAL: finding text and code quotes never enter the database (hashes only); the public DTOs have no free-text finding or prompt field, enforced by a type/architecture test; the string guard stays as the second line | D8; S1.7, S2.4; §8 |
+| 9 | an assessor batch that does not parse, is truncated or names unknown ids is retried once, then each of its findings gets an explicit `AssessmentFailure` verdict by cause, excluded from supported % and shown as a count | D9; S1.7, S1.8, S4.4 |
+| 10 | the product dirty check is `git status --porcelain --untracked-files=no` scoped to the product's source tree; with `--allow-product-change`, in-flight cells finish under their own pin and new cells start the new scope | D5; S3.6, S3.8 |
+| 11 | `RubricKind` is an explicit dimension of `GateReport` and a UI filter; no aggregate across rubric kinds | D10; S1.7, S1.8, S6.3; §8 |
 
 ## 4. Growth surfaces — projected size, who retires it, what a crash leaves
 
@@ -418,7 +501,11 @@ for the rest.
   OUT of the canonical form by construction, and the test asserts a moved clone keeps its stamp.
 - **S1.2** `GateReviewer` row + `CoaiVendorRow.From` + `ReviewerHash`. RED: a row with a loopback endpoint as a
   value is refused by name; an unknown vendor field is refused; retiring keeps the row readable; two rows with one
-  hash are reported as one configuration under two names.
+  hash are reported as one configuration under two names. **And the one-producer guarantee is a type and a
+  test (plan round, finding 4):** the environment builder takes a `CoaiVendorsSetting` value whose only
+  constructor is private and whose only factory is `CoaiVendorRow.From`, so no other code can hand the server
+  a vendors string; an architecture test scans `src/` and `hosts/` for the literal `COAI_VENDORS` and asserts it
+  occurs in exactly one production file, naming any other by path and line.
 - **S1.3** `ProductPin` (sha256, version text, git sha, dirty count) + `ProductPin.Matches`. RED: a campaign's
   second run against a different sha is refused naming both.
 - **S1.4** `Claimable` extracted; `CellLifecycle` over it; `GateCell` composed. RED: every existing
@@ -429,11 +516,15 @@ for the rest.
   RED: a reply that parses with zero turns is not valid; a ledger with no cost gives cost *unknown*, never 0.
 - **S1.6** `SlotRotation` extracted; `GateMatrix.Plan(tasks, reviewers, repeats)` repeats-outermost. RED:
   `MatrixOrderTests` unchanged; the three repeats of one task are never adjacent; first positions balanced.
-- **S1.7** `Finding` (hash-only fields), `Verdict`, `Rubric` (id, hash). RED: a verdict under a rubric hash the
-  catalog does not hold is refused.
-- **S1.8** `GateReport.PerModel`, `PerTask`, `SeedEvidence`, `Variance` — pure. RED: `Withheld` below 3 repeats;
-  `—` for unassessed; two rubrics refuse a mean; a failed run stays in the denominator; `q` matches the Python
-  quantile on a fixed vector; a scope with two product versions partitions.
+- **S1.7** `GateFinding` (hash-only fields), `Verdict` (carries its `RubricKind`; `AssessmentFailure` with its
+  cause is a verdict case, not a null), `Rubric` (id, kind, hash). RED: a verdict under a rubric hash the catalog
+  does not hold is refused; a `GateFinding` has no property of type `string` other than enum names and hashes
+  (asserted by reflection).
+- **S1.8** `GateReport.PerModel(gate, scope, rubric)`, `PerTask`, `SeedEvidence`, `Variance` — pure, `RubricKind`
+  required. RED: `Withheld` below 3 repeats; `—` for unassessed; a mean across two rubric kinds is refused by
+  name; `AssessmentFailure` rows are excluded from supported % and counted in their own column; a failed run
+  stays in the denominator; `q` matches the Python quantile on a fixed vector; a scope with two product
+  versions partitions; cells claimed under two pins in one run land in two partitions.
 - **S1.9** `Bench.Contracts`: `GateModelTableDto`, `GateRunSummaryDto`, `GateRunDetailDto`, `GateScopeDto`.
 - **S1.10** architecture tests: gate decisions in `Bench.Domain`; `Bench.Ui` references contracts only.
 - DoD: 0 warnings; every RED observed with its real symptom; `architecture.md` names the new context.
@@ -445,11 +536,16 @@ for the rest.
 - **S2.2** `IGateStore` (plan / claim / settle / sweep / recent / facts) + `PostgresGateStore` — the guarded-UPDATE
   claim of `PostgresRunStore.cs:58`. RED (`PostgresFixture`): two workers, one cell, one winner; a stale claim by a
   dead pid on this host is handed back; one on another host is left alone.
-- **S2.3** `IGateArtifactStore` + filesystem adapter under the artefact root; `ArtifactRef` written with SHA-256
-  and length; a root inside any git checkout is refused. RED: a write outside the root is refused; a ref re-read
-  hashes to what was written.
-- **S2.4** the publication guard test + `bench gate export --public`. RED: a seeded row carrying `C:\Users\x`,
-  `https://`, or a private name from the sample suite is named by table, column and row id.
+- **S2.3** `IGateArtifactStore` + filesystem adapter under the artefact root; `CellPaths.DataDirFor(run, cell,
+  attempt)` as the one path function; `ArtifactRef` written with SHA-256 and length; a root inside any git
+  checkout is refused. RED: a write outside the root is refused; a write outside the CELL's own root is refused
+  (an isolated cell cannot reach `data-shared`, a shared run cannot reach a cell's private dir); a ref re-read
+  hashes to what was written; an attempt directory that already exists is refused rather than reused.
+- **S2.4** the guard, structural first: the reflection test over every `gate_*` entity and every `Gate*Dto`
+  string property against the allow-list (the failure cause named as the one exception); then the publication
+  guard test + `bench gate export --public`. RED: a DTO gaining a `Title` string property is named by type and
+  property; a seeded row carrying `C:\Users\x`, `https://`, or a private name from the sample suite is named by
+  table, column and row id.
 - **S2.5** `bench gate prune` + `FootprintAsync` printed by every `run`. RED: bodies past the window are gone,
   facts files stay, a run with no `run.json` is listed, not deleted.
 - DoD: migrations apply on an empty database; `research/module_gate.md` carries the growth table of §4.
@@ -460,10 +556,16 @@ for the rest.
   dispose, `IsAlreadyGone` shared) + `McpStdioClient` (`initialize`, `notifications/initialized`, `tools/list`,
   `tools/call` with an absolute per-call timeout, notifications kept). RED against a fake MCP server in the test
   project (a tiny console that speaks newline JSON-RPC): handshake before any call; a hung call ends at its
-  timeout with the process gone; stderr survives a crash.
-- **S3.2** `CoaiEnvironment.For(run, reviewer, task, dataDir)`: parent `COAI_*` dropped, every knob set, the
-  vendor row, the caller session, the secret injected last; `Snapshot` = the same map minus secrets, hashed. RED:
-  the snapshot never contains the key's value; the hash is stable across two runs with different keys.
+  timeout with the process gone; stderr survives a crash; **one session per cell** — a lane that claims a second
+  cell while holding a session is a programming error the type refuses (`ProcessSession` is owned by the cell's
+  scope and disposed at settle).
+- **S3.2** `CoaiEnvironment.For(run, reviewer, task, attempt)`: parent `COAI_*` dropped, every knob set, the
+  vendor row, the caller session id with its attempt suffix, `COAI_DATA_DIR` from `CellPaths.DataDirFor`, the
+  secret injected last; `Snapshot` = the same map minus secrets, hashed. RED: the snapshot never contains the
+  key's value; the hash is stable across two runs with different keys; two cells resolved concurrently never
+  share a data dir unless the run is shared; a run stored isolated cannot be resumed shared, and vice versa;
+  attempt 2 of a cell gets a different data dir and caller session id from attempt 1, and attempt 1's directory
+  is untouched.
 - **S3.3** `PlanGateProtocol`, `CodeGateProtocol` (open → plan loop → resolve accept-all → code → resolve; a ref per
   run; `Passed`), `FeatureGateProtocol` (`review_feature` with the suite's inputs). RED against the fake server:
   the code gate is refused when no plan round passed (the product's rule, replayed by the fake); the resolve
@@ -473,17 +575,26 @@ for the rest.
   is not valid and says why.
 - **S3.5** `SettingsCheck` port: asked-for settings against the session config on disk, scoped to this run's
   session. RED: an accepted-and-ignored knob is reported as a mismatch.
-- **S3.6** `ProductPin.Read` over the binary and its checkout. RED: a binary outside any checkout has an empty git
-  sha and says so.
+- **S3.6** `ProductPin.Read` over the binary and its checkout: `git status --porcelain --untracked-files=no`
+  scoped to the product's source tree. RED: a binary outside any checkout has an empty git sha and says so; an
+  untracked scratch file beside the source does not dirty the pin; a modified tracked file under the product's
+  project does; a modified file elsewhere in the checkout does not, and the pin says which tree was checked.
 - **S3.7** `RecordingTap` (Kestrel on a loopback port per run; body written before forwarding; absolute deadline
   closing the upstream socket; `Authorization` in memory only; `read_calls`/`facts` equivalents). RED: the
   recorded request file never contains the header value; a dripping upstream is closed at the deadline with the
   call marked; every forwarded request is answered or marked before the run finishes.
 - **S3.8** `bench gate run` (`--gate`, `--suite-file`, `--reviewers`, `--repeats`, `--coai-exe`, `--artifact-root`,
-  `--parallel`, `--per-endpoint`, `--shared-data-dir`, `--no-tap`, `--prediction "<text>"`, `--db`), `resume`,
-  `sweep`, `probe`, `reviewers add|list|retire`, `suite verify`. Exit codes: 0 legs produced · 3 environment ·
-  4 configuration · 5 none. The prediction text is stored on the run (measurement rule 4). RED (`CliContractTests`
-  shape): no reviewer → 4; a suite file that is not there → 3; a product that moved → 4 naming both shas.
+  `--parallel`, `--per-endpoint`, `--shared-data-dir`, `--no-tap`, `--prediction "<text>"`, `--db`), `resume`
+  (`--dry-run`), `status`, `sweep`, `probe`, `reviewers add|list|retire`, `suite verify`. Exit codes: 0 legs
+  produced · 3 environment · 4 configuration · 5 none. The prediction text is stored on the run (measurement
+  rule 4); the pin is stored on each cell at claim. RED (`CliContractTests` shape): no reviewer → 4; a suite file
+  that is not there → 3; a product that moved → 4 naming both shas; with `--allow-product-change` a claimed cell
+  settles under its original pin while the next pending cell claims under the new one; `status` lists pending /
+  claimed (owner, age) / abandoned (cause) / settled and the pins seen, and claims nothing; a swept cell's next
+  attempt runs in a fresh process, a fresh data dir and a fresh caller session, and the first attempt's artefacts
+  are still on disk and marked `Interrupted`; **the concurrency test** — the fake server counts open sessions and
+  in-flight reviews per endpoint: never above `--parallel` / `--per-endpoint`, and equal to them under enough
+  work.
 - DoD: a live test class (skipped when `BENCH_GATE_COAI_EXE` is unset, the `QlnEngineLiveTests` shape) drives
   `providers` and one `review_plan` against the real binary with a fake vendor and stores a run.
 
@@ -497,8 +608,12 @@ for the rest.
 - **S4.3** `AgentAskOptions` on `CliArgv.For` (sandbox, output schema, disallowed tools, MCP servers off) +
   `FindingAssessor` over `ICliAgentRuntime`. RED: the argv for codex carries `-s read-only` and `--output-schema`;
   the claude argv carries `--disallowedTools Edit Write NotebookEdit --max-turns 1`.
-- **S4.4** batches of ≤ 24, verdict rows appended per batch, missing ids re-asked once then `unassessed`, prior
-  cluster keys carried. RED: a killed batch leaves earlier batches' rows in place; a re-run skips them.
+- **S4.4** batches of ≤ 24, verdict rows appended per batch, prior cluster keys carried; a batch whose output
+  does not parse, is truncated or names unknown ids is retried once, then every finding of it gets an
+  `AssessmentFailure` verdict named by cause. RED: a killed batch leaves earlier batches' rows in place; a re-run
+  skips them; a batch answering with an extra id is retried and, failing again, yields `UnknownIds` rows for every
+  finding it carried; a later pass re-asks exactly the failed rows and its verdicts supersede the failures; the
+  report counts failures in their own column and never in supported %.
 - **S4.5** seed matching and evidence: `seedHit` must name a seed of the row's task; `SeedEvidence` from the
   product's turn-1 prompt file (pack / on request / withheld). RED: a seed id from another task is refused.
 - **S4.6** `bench gate assess --run|--scope … --assessor <reviewer-catalog id> [--rubric strict-v1]`.
@@ -521,13 +636,18 @@ for the rest.
 - **S6.2** `GET /api/bench/gate/scopes`, `/gate/{gate}/models?scope=`, `/gate/{gate}/runs?scope=`, `/gate/runs/{id}`
   — 400 for a missing scope, 404 for an unknown run. `http/gate/*.http` per the contracts rule.
 - **S6.3** the Gate tab + `GateFeature.razor`, `GatePlan.razor`, `GateCode.razor` (+ `.razor.cs`, primary-constructor
-  DI) + shared `GateModelTable`, `GateRunList` components. bUnit RED: the scope control offers only scopes the runs
-  echoed; `Withheld` renders as words above the table; `—` is never `0`; an unknown cost renders *unknown*; a
-  calibration task is marked; two rubrics are two columns.
+  DI) + shared `GateModelTable`, `GateRunList` components; a **rubric filter** beside the scope control, no
+  aggregate across kinds. bUnit RED: the scope control offers only scopes the runs echoed; the rubric control
+  offers only kinds the verdicts carry and the table re-reads when it changes; `Withheld` renders as words
+  above the table; `—` is never `0`; *assessment failed: n* is its own cell; an unknown cost renders
+  *unknown*; a calibration task is marked; two rubric kinds never share a column.
 - **S6.4** `research/module_gate.md` (purpose, Mermaid, entities, entry points, growth table), `architecture.md`
   (the new context, the tuple, the guard), `research/README.md` row, and the qln pin bump named as the
-  cross-repository step.
-- DoD: `PendingKind` is gone from the three routes; `BenchUiRegistrationTests` cover the new service reads.
+  cross-repository step with its owner and order (D11).
+- DoD: `PendingKind` is gone from the three routes; `BenchUiRegistrationTests` cover the new service reads;
+  **the pinned console shows the Gate page** — the coordinator's qln pin-bump pull request, opened right after
+  this epic merges, renders `/benchmarking/gate/feature` from the new pin, and that observation is recorded in
+  the epic's pull-request description.
 
 ### E7 — the first re-run through the C# driver (Opus; the operator's campaign)
 
@@ -554,7 +674,7 @@ harness defect, not a model result. If it does not hold, this sentence is the re
 |---|---|---|
 | the product's own instrument | ports mechanism from `coai-bench`; does not replace it for coai's own release campaigns (five windows, store fixes) | `coai · research/module_bench.md` gains one row pointing here for MODEL measurement — to be added in a coai pull request when E3 lands |
 | the feature-gate calibration | imports its records and completes its phase 2 through the C# driver | `coai · todo/PLAN_feature_review.md` §9 / S1.2 names this plan as where the re-runnable measurement lives — same pull request |
-| the console host | the pages live here | `dew_flow_rag_qln` bumps the submodule pin; no code |
+| the console host | the pages live here | `dew_flow_rag_qln` bumps the submodule pin; no code. Owner: the coordinator, in a qln pull request right after E6 merges. Order: this repository's E6 pull request → the qln pin → the coai cross-reference pull request |
 | the code lane (`PLAN_code_lane.md`) | measures a REVIEWER reading a diff | measures a SUBJECT producing one; disjoint |
 | the tool benchmark (`PLAN_tool_benchmark.md`) | the catalog-row precedent is borrowed; nothing else | — |
 
@@ -588,7 +708,13 @@ harness defect, not a model result. If it does not hold, this sentence is the re
       carries no `://`, no user path, no private name.
 - [ ] Twenty strict verdicts hand-checked before any strict % appears for a scope.
 - [ ] `research/module_gate.md` written; `architecture.md` updated; the qln pin bump and the two coai
-      cross-references named in their pull requests.
+      cross-references named in their pull requests, in the order of D11.
+- [ ] The structural guard (reflection over every `gate_*` entity and `Gate*Dto` string property) and the
+      string guard both pass; `COAI_VENDORS` is spelled in exactly one production file.
+- [ ] The concurrency test reaches and never exceeds `--parallel` and `--per-endpoint`; two concurrent cells
+      never share a data dir unless the run is shared; an interrupted cell's next attempt is fresh and the old
+      attempt is kept and marked.
+- [ ] `RubricKind` is a required dimension of every report call; `AssessmentFailure` rows are counted apart.
 - [ ] This plan promoted with its deviations — and a partial landing extracts what is left into a fresh `todo/`
       plan rather than holding this one.
 
@@ -608,4 +734,6 @@ harness defect, not a model result. If it does not hold, this sentence is the re
    artefact root (`--suite-file` defaults to `<artifact-root>/suite.json`), so one path names everything private.
 7. **CLI reviewers** (codex / gemini / claude through their CLIs) cannot be tapped and codex reports no cost —
    accept *unknown* on those rows, or exclude them from the cost columns?
-8. **Who bumps the qln submodule pin** for the page, and in which order with the coai cross-reference pull request?
+8. ~~**Who bumps the qln submodule pin** for the page, and in which order with the coai cross-reference pull request?~~
+   **Settled by the plan round (finding 5):** the coordinator, in a qln pull request right after E6 merges;
+   E6 → the qln pin → the coai cross-reference pull request (D11, §6).
