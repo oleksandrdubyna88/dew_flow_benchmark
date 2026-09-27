@@ -10,18 +10,21 @@ public enum FindingSeverity
     Unknown,
 }
 
-/// <summary>The product's finding categories, as names. A word this build has not met is <see cref="Unknown"/>
-/// — counted, never dropped, and never quietly filed under a neighbour.</summary>
+/// <summary>The product's finding categories, as names — its own <c>Category</c> enum, word for word (pinned by the
+/// copied fixture <c>tests/Bench.Tests/Fixtures/coai-finding-words.json</c>). A word this build has not met is
+/// <see cref="Unknown"/> — counted, never dropped, and never quietly filed under a neighbour.</summary>
 public enum FindingCategory
 {
-    Correctness,
-    Reliability,
+    Architecture,
     Security,
+    Reliability,
     Performance,
-    Maintainability,
-    Testing,
-    Documentation,
-    Contract,
+    Ux,
+    Convention,
+    Clarity,
+    Completeness,
+    Consistency,
+    Feasibility,
     Unknown,
 }
 

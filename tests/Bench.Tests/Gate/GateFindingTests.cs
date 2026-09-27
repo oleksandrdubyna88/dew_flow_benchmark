@@ -30,7 +30,7 @@ public sealed class GateFindingTests
     [Fact]
     public void A_finding_hashes_its_text_and_keys_its_file_hash_and_keeps_neither()
     {
-        var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, isGating: true, line: 42,
+        var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Architecture, isGating: true, line: 42,
             "Null order line dereferenced in TotalOf", "src/Orders/OrderService.cs", Key).Ok();
 
         finding.TextHash.Should().Be(StableHash.Of("Null order line dereferenced in TotalOf"));
@@ -42,14 +42,14 @@ public sealed class GateFindingTests
     [Fact]
     public void A_published_file_hash_cannot_be_confirmed_by_hashing_a_guessed_path()
     {
-        var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, true, 1, "t", "src/Orders/OrderService.cs", Key).Ok();
+        var finding = GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Architecture, true, 1, "t", "src/Orders/OrderService.cs", Key).Ok();
 
         finding.FileHash.Should().NotBe(StableHash.Of("src/Orders/OrderService.cs"),
             "repository paths are few and guessable — a plain SHA-256 of one is confirmed by hashing candidates until one matches");
         finding.FileHash.Should().MatchRegex("^[0-9a-f]{64}$");
 
         var otherKey = FileHashKey.Of(new byte[32]).Ok();
-        GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Correctness, true, 1, "t", "src/Orders/OrderService.cs", otherKey).Ok()
+        GateFinding.Of(0, FindingSeverity.Major, FindingCategory.Architecture, true, 1, "t", "src/Orders/OrderService.cs", otherKey).Ok()
             .FileHash.Should().NotBe(finding.FileHash, "the hash is a function of the key the artefact root holds");
     }
 
@@ -62,9 +62,9 @@ public sealed class GateFindingTests
     [InlineData(" src//Orders/./OrderService.cs ")]
     public void One_file_spelled_several_ways_is_one_file_hash(string spelling)
     {
-        var canonical = GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Correctness, false, 0, "t", "src/Orders/OrderService.cs", Key).Ok();
+        var canonical = GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Architecture, false, 0, "t", "src/Orders/OrderService.cs", Key).Ok();
 
-        GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Correctness, false, 0, "t", spelling, Key).Ok().FileHash
+        GateFinding.Of(0, FindingSeverity.Minor, FindingCategory.Architecture, false, 0, "t", spelling, Key).Ok().FileHash
             .Should().Be(canonical.FileHash, "'same file' must not depend on the separator or the ./ a reviewer happened to write");
     }
 
@@ -94,6 +94,26 @@ public sealed class GateFindingTests
         FindingWords.Severity(word).Should().Be(expected);
         FindingWords.Category("reliability").Should().Be(FindingCategory.Reliability);
         FindingWords.Category("vibes").Should().Be(FindingCategory.Unknown);
+    }
+
+    /// <summary>Every severity and category word the PRODUCT writes parses to a member of its own — read off a copied
+    /// fixture of the product's enums, never a list retyped here. E1 named eight categories the product has never
+    /// written (Correctness, Maintainability, Testing, Documentation, Contract among them), so seven of its ten words —
+    /// Architecture, Ux, Convention, Clarity, Completeness, Consistency, Feasibility — would all have been counted as
+    /// Unknown, and a per-category column would have been a column of one bucket.</summary>
+    [Fact]
+    public void Every_finding_word_the_product_writes_is_a_word_this_build_knows()
+    {
+        using var fixture = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "coai-finding-words.json")));
+        var severities = fixture.RootElement.GetProperty("severities").EnumerateArray().Select(e => e.GetString()!).ToList();
+        var categories = fixture.RootElement.GetProperty("categories").EnumerateArray().Select(e => e.GetString()!).ToList();
+
+        severities.Where(w => FindingWords.Severity(w) == FindingSeverity.Unknown).Should().BeEmpty();
+        categories.Where(w => FindingWords.Category(w) == FindingCategory.Unknown).Should().BeEmpty(
+            "a word the product writes and this build does not know is counted as Unknown");
+        Enum.GetNames<FindingCategory>().Where(n => n != nameof(FindingCategory.Unknown)).Should().BeEquivalentTo(categories,
+            "the enum is the product's vocabulary — a member it never writes is a column that is always empty");
     }
 
     [Fact]

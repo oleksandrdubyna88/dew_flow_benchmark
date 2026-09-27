@@ -161,6 +161,10 @@ internal abstract class ForwardingGateStore(IGateStore inner) : IGateStore
     public Task<Outcome<GateCell>> ClaimNextAsync(Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken) =>
         inner.ClaimNextAsync(runId, owner, pin, cancellationToken);
 
+    public Task<Outcome<GateCell>> ClaimNextAmongAsync(
+        Guid runId, WorkerIdentity owner, ProductPin pin, IReadOnlyCollection<GateReviewerId> among, CancellationToken cancellationToken) =>
+        inner.ClaimNextAmongAsync(runId, owner, pin, among, cancellationToken);
+
     public virtual Task<Outcome<GateCell>> SettleAsync(Guid cellId, WorkerIdentity owner, GateSettlement settlement, CancellationToken cancellationToken) =>
         inner.SettleAsync(cellId, owner, settlement, cancellationToken);
 

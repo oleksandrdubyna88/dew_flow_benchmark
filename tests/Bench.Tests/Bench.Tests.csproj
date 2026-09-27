@@ -29,6 +29,9 @@
     <ProjectReference Include="../../src/Bench.Ui/Bench.Ui.csproj" />
     <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\hosts\Cli\Cli.csproj" />
+    <!-- The fake coai-mcp: built first, NOT referenced as an assembly — the tests launch it from its own output
+         folder, so its deployment set is its own and the product pin hashes a folder of the product's shape. -->
+    <ProjectReference Include="..\FakeCoai\FakeCoai.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
