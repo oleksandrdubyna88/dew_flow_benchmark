@@ -202,9 +202,20 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
         db.GateReviewers.Add(Reviewer("grok-medium"));
         db.GateVerdicts.Add(new GateVerdictRow
         {
-            CellId = first.CellId, FindingOrdinal = 0, RubricId = "strict-v1", RubricKind = RubricKind.Strict, RubricHash = new string('7', 64),
-            Kind = "Strict", Reading = StrictReading.Supported, Value = ValueLevel.High, ClusterHash = new string('8', 64), SeedHit = "cs2-S1",
-            AssessorId = "codex-astra", BatchId = "b-0001", PromptHash = new string('9', 64), RecordedAt = Noon,
+            CellId = first.CellId,
+            FindingOrdinal = 0,
+            RubricId = "strict-v1",
+            RubricKind = RubricKind.Strict,
+            RubricHash = new string('7', 64),
+            Kind = "Strict",
+            Reading = StrictReading.Supported,
+            Value = ValueLevel.High,
+            ClusterHash = new string('8', 64),
+            SeedHit = "cs2-S1",
+            AssessorId = "codex-astra",
+            BatchId = "b-0001",
+            PromptHash = new string('9', 64),
+            RecordedAt = Noon,
         });
         await db.SaveChangesAsync(Ct);
 
@@ -213,10 +224,24 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
 
     private static GateReviewerRow Reviewer(string id) => new()
     {
-        Id = id, Hash = new string('4', 64), Runtime = ReviewerRuntime.Api, Model = "grok-4.7", EndpointUrl = "https://api.x.ai/v1",
-        KeyName = "xai", CredsKeyRef = "COAI_CREDS_KEY_REF", Dialect = "xai", ReasoningEffort = "medium", MaxTokens = 32000,
-        TimeoutMinutes = 12, FollowUps = 2, ReviewMinutesCap = 20, PricesKnown = true, InPerMTok = 3m, OutPerMTok = 15m,
-        GateFeature = true, AddedAt = Noon,
+        Id = id,
+        Hash = new string('4', 64),
+        Runtime = ReviewerRuntime.Api,
+        Model = "grok-4.7",
+        EndpointUrl = "https://api.x.ai/v1",
+        KeyName = "xai",
+        CredsKeyRef = "COAI_CREDS_KEY_REF",
+        Dialect = "xai",
+        ReasoningEffort = "medium",
+        MaxTokens = 32000,
+        TimeoutMinutes = 12,
+        FollowUps = 2,
+        ReviewMinutesCap = 20,
+        PricesKnown = true,
+        InPerMTok = 3m,
+        OutPerMTok = 15m,
+        GateFeature = true,
+        AddedAt = Noon,
     };
 
     private static async Task<IReadOnlyList<GuardViolation>> ViolationsAsync(string connection)
