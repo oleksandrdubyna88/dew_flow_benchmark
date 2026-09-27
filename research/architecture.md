@@ -34,7 +34,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -45,7 +45,8 @@ flowchart TB
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (six tables, ids · hashes · numbers)"]
+        artroot["FileSystemGateArtifactStore<br/>the artefact root — OUTSIDE git"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
         rt["OpenAiCompatibleRuntime"]
@@ -1022,8 +1023,8 @@ completion the harness prompts. The **gate** benchmark measures a REVIEWER MODEL
 gates — plan, code, feature — and its run is seven targets (one seeded repository per task, at its own variant
 commit) × reviewers × repeats, whose leg is a multi-turn product session the harness never prompts, and whose
 result is a reply of findings plus a ledger. Folding that into `cells` and `results` would have left half the
-columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own tables to come (`gate_*`,
-E2) and its own report — and the parts that ARE the same were made shared rather than duplicated:
+columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own six `gate_*` tables (E2,
+one migration that touches no existing table) and its own report — and the parts that ARE the same were made shared rather than duplicated:
 `Claimable` (the four claim fields and the claim/settle/reclaim/stale transitions, composed by `RunCell` and
 `GateCell`) and `SlotRotation` (the global slot rotation, called by both matrices). `CellLifecycleTests` and
 `MatrixOrderTests` are byte-for-byte unchanged, which is the proof the extraction changed nothing.
@@ -1052,9 +1053,18 @@ here because they cut across modules:
   and a companion that proves the scan still sees the sanctioned member. It ticks only the gate under
   measurement and writes the product's own runtime WORDS (pinned against the product's `RuntimeNames`).
 
-Nothing in it runs yet: the store, the driver over MCP stdio, the blinded assessment, the import of the
-existing Python and `coai-bench` records, the CLI verbs, the API routes and the Gate tab are E2–E7 of
-[todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+- **Private text has two homes, and only one of them is published** (E2). The `gate_*` tables hold ids, hashes,
+  enum names, numbers, references and one redacted failure sentence; every request, reply, prompt, answer and
+  finding body lives in the ARTEFACT ROOT — a directory outside every git checkout (a root inside one is
+  refused), laid out by one path function (`CellPaths`), written through a staged-flushed-hashed-renamed commit,
+  and joined to the database only by `ArtifactRef` (relative path, SHA-256, length). `bench gate export --public`
+  is built from database rows ONLY and runs the same `PublicationGuard` the re-read test runs; nothing inside an
+  artefact can reach it, because no export step opens one.
+
+The store (E2) exists — `PostgresGateStore`, `FileSystemGateArtifactStore`, the publication guard,
+`bench gate export --public` and `bench gate prune`. The driver over MCP stdio, the blinded assessment, the
+import of the existing Python and `coai-bench` records, the remaining CLI verbs, the API routes and the Gate tab
+are E3–E7 of [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 
 ## Guards that shape the API
 
