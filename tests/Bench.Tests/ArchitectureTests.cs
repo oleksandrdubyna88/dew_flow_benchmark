@@ -109,9 +109,20 @@ public sealed class ArchitectureTests
         [
             typeof(Domain.Runs.Claimable),
             typeof(Domain.Runs.SlotRotation),
+            typeof(Domain.Gate.GateSuite),
             typeof(Domain.Gate.GateMatrix),
             typeof(Domain.Gate.GateCellLifecycle),
             typeof(Domain.Gate.ProductPin),
+            typeof(Domain.Gate.ReviewerDefinition),
+            typeof(Domain.Gate.ReviewerEndpoint),
+            typeof(Domain.Gate.CoaiVendorRow),
+            typeof(Domain.Gate.GateRunFacts),
+            typeof(Domain.Gate.FailureCauses),
+            typeof(Domain.Gate.GateVerdict),
+            typeof(Domain.Gate.RubricCatalog),
+            typeof(Domain.Gate.GateReport),
+            typeof(Domain.Gate.Quantile),
+            typeof(Domain.Gate.SeedEvidence),
         ];
 
         deciders.Should().OnlyContain(
