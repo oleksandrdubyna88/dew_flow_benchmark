@@ -505,6 +505,28 @@ for the rest.
 > report's zero-for-unassessed was the thing to stop; `GateRunRecord` names the campaign and the run apart,
 > since a run is one cell's product session. `SeedEvidence` landed in S1.8 as the pure classifier over the
 > turn-1 prompt (S4.5 keeps the reading of that prompt off disk).
+>
+> **The code round on pull request #40 (coai gate + our own review), folded in before merge — further
+> deviations:** `GateScope` carries the binary's sha beside the version text (D2's scope named the text only; a
+> dirty rebuild at one HEAD shares the text). `CoaiVendorsSetting.From` — not `CoaiVendorRow.From` (S1.2) — is
+> the one producer, because C# gives an enclosing type no access to a nested type's private constructor, so a
+> builder class needs an `internal` door (the first cut had one, `Sealed`); the factory lives inside the type,
+> the variable name is private and `ApplyTo(env)` is the only way into an environment; `CoaiVendorRow` keeps the
+> vocabulary and a reader that refuses a mistyped field by name. `ReviewerRuntime` has one member per product
+> runtime WORD (`codex`, `gemini`, `claude`, `antigravity` beside `api`, `local`, `remote`) instead of D6's
+> `cli`, which the product would have run on Codex; the words are pinned against a copied fixture of the
+> product's `RuntimeNames`, and an effort of `none` (the module default) is not written. Canonical forms are
+> length-prefixed; `GateSuite.Freeze` snapshots; the plan path refuses rooted paths and `..`; IPv4-mapped IPv6
+> is judged as the IPv4 it carries (the loopback case was already caught by `IPAddress.IsLoopback`; the private
+> ranges were the hole); `GateCell.Pending` takes a caller-minted id. `GateFinding.FileHash` is an HMAC under a
+> `FileHashKey` that lives only in the artefact root (resolving it is E2/E3) over a normalised path. The report
+> takes the `Rubric` (id + kind + hash) rather than the `RubricKind`, and `GatePopulation` decides its inputs
+> once: the latest attempt per (task, reviewer, repeat) with `Attempts` / `AttemptsFailed` columns (the Python
+> report's `final_attempts`), one verdict per finding (real over `AssessmentFailure`, independent over
+> family-matched, `AssessorFamilyMatched` counted), a valid zero-finding run assessed with zero hits, calibration
+> tasks in `ModelTable.Calibration`, and variance as two spreads — seeds need three assessed readings, findings
+> three repeats. `Quantile.Q` rounds through `PythonRound` (the exact binary value, half to even), pinned on
+> vectors printed by Python 3.14.6. The DTO guard walks the type graph with a `Type.Property` allow-list.
 
 - [x] **S1.1** `GateKind`, `GateTask` (id, language, hosted gates, calibration flag, seeds), `SeedSpec`, `GateSuite`
   (parse → freeze → `Stamp` via `StableHash`; `privateNames[]`; refuses a task naming a gate it cannot host — a
