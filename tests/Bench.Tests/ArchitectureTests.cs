@@ -128,11 +128,30 @@ public sealed class ArchitectureTests
             typeof(Domain.Gate.GateReport),
             typeof(Domain.Gate.Quantile),
             typeof(Domain.Gate.SeedEvidence),
+            typeof(Domain.Gate.CellPaths),
+            typeof(Domain.Gate.ArtifactPath),
+            typeof(Domain.Gate.ArtifactRef),
+            typeof(Domain.Gate.PublicationGuard),
+            typeof(Domain.Gate.FailureRedaction),
         ];
 
         deciders.Should().OnlyContain(
             type => type.Assembly.GetName().Name == "Bench.Domain",
             "a gate decision made where a model or a store is reachable is a decision nobody can replay");
+    }
+
+    /// <summary>The gate's two storage PORTS are declared in the Application layer and implemented in Infrastructure —
+    /// the rule every other port here follows — and nothing in the domain knows EF exists (the first test in this file
+    /// says the domain references nothing; this names the gate's own pair so moving one is a red build).</summary>
+    [Fact]
+    public void The_gate_storage_ports_live_in_the_application_layer_and_their_adapters_in_infrastructure()
+    {
+        typeof(global::Bench.Application.Gate.IGateStore).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Gate.IGateArtifactStore).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Persistence.PostgresGateStore).Should().Implement<global::Bench.Application.Gate.IGateStore>();
+        typeof(global::Bench.Infrastructure.Gate.FileSystemGateArtifactStore).Should().Implement<global::Bench.Application.Gate.IGateArtifactStore>();
+        typeof(Domain.Gate.GateRun).Assembly.GetReferencedAssemblies().Should().NotContain(
+            r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the gate domain stays free of EF");
     }
 
     /// <summary>The console is mounted by another repository's Blazor WebAssembly host, so a reference here is

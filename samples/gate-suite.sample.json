@@ -1,0 +1,6 @@
+{
+  "id": "gate-sample",
+  "comment": "A SHAPE example, not a suite. The real gate suite lives in the operator's artefact root, outside git; this file carries made-up private names so the publication guard always has something to refuse, on every machine and in CI.",
+  "privateNames": ["contoso-orders", "Fabrikam", "northwind-billing"],
+  "tasks": []
+}

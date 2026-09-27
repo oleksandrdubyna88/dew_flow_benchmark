@@ -173,6 +173,34 @@ public sealed record GateRunFacts(
         return facts with { Failure = FailureCauses.Of(facts, reply, ledger, calls) };
     }
 
+    /// <summary>The facts of a session that never reached an end — a process that died, a cell abandoned after its
+    /// attempts. Invalid, with nothing captured and the cause kept: a failed run stays in every denominator, so it
+    /// needs facts, and every one of them is <i>not captured</i> rather than a zero that reads as "none".</summary>
+    public static GateRunFacts NotProduced(FailureCause cause) => new(
+        Valid: false,
+        GateVerdictWord.Unknown,
+        ReplyParsed: false,
+        CapturedCount.Unavailable(NotProducedReason),
+        Turns: 0,
+        HttpCalls: 0,
+        [],
+        [],
+        CapturedCount.Unavailable(NotProducedReason),
+        CapturedCount.Unavailable(NotProducedReason),
+        CapturedCount.Unavailable(NotProducedReason),
+        CapturedCount.Unavailable(NotProducedReason),
+        SecondsTotal: 0,
+        ReviewSeconds: 0,
+        [],
+        [],
+        CapturedUsd.Unavailable(NotProducedReason),
+        Served: 0,
+        Refused: 0,
+        cause);
+
+    /// <summary>The one reason every field of a session that never ended carries.</summary>
+    public const string NotProducedReason = "the session never reached an end";
+
     /// <summary>The cost the ledger metered, or <i>unknown</i> when no turn carried one — never free.</summary>
     private static CapturedUsd Cost(IReadOnlyList<LedgerTurn> ledger)
     {

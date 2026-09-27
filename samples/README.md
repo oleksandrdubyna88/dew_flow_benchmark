@@ -6,6 +6,7 @@ Suites you can run. Two files, and they are not the same kind of thing.
 |---|---|
 | [polly-smoke-suite.json](polly-smoke-suite.json) | **A real suite against a real target.** Three questions, every anchor verified by reading the tree at a pinned commit |
 | [demo-suite.json](demo-suite.json) | **A shape example, not a suite.** Its anchors point at `src/Orders/OrderService.cs` and friends, which exist in no repository. It shows the file FORMAT and nothing else — running it measures nothing |
+| [gate-suite.sample.json](gate-suite.sample.json) | **A shape example for the coai gate benchmark.** No tasks; three made-up `privateNames` the publication guard test always loads, so a refusal is exercised on every machine. The real suite lives in the operator's artefact root, outside git (`research/module_gate.md`) |
 
 ## The smoke suite
 

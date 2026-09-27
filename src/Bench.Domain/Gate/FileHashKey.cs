@@ -13,7 +13,7 @@ namespace Bench.Domain.Gate;
 /// </para>
 /// <para>
 /// The domain takes the key as a VALUE. Creating it on first use, reading it back from the artefact root and
-/// refusing a root without one are the store's and the driver's jobs (E2/E3); a class rather than a record
+/// refusing a root that lost it while hashes exist is <c>GateFileHashKeys</c>' job (E2); a class rather than a record
 /// because it holds a secret — no value equality, no generated <c>ToString</c> that could print it.
 /// </para></summary>
 public sealed class FileHashKey

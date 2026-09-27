@@ -207,12 +207,25 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<RunJudgeRow> RunJudges => Set<RunJudgeRow>();
 
+    public DbSet<GateRunRow> GateRuns => Set<GateRunRow>();
+
+    public DbSet<GateCellRow> GateCells => Set<GateCellRow>();
+
+    public DbSet<GateFindingRow> GateFindings => Set<GateFindingRow>();
+
+    public DbSet<GateVerdictRow> GateVerdicts => Set<GateVerdictRow>();
+
+    public DbSet<GateReviewerRow> GateReviewers => Set<GateReviewerRow>();
+
+    public DbSet<GateArtifactRow> GateArtifacts => Set<GateArtifactRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         Bank(builder);
         Registry(builder);
         Retrieval(builder);
         Sessions(builder);
+        GateModel.Configure(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {
