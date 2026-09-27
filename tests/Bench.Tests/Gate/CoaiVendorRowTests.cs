@@ -1,6 +1,5 @@
-using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
-using Bench.Domain;
 using Bench.Domain.Gate;
 using FluentAssertions;
 using Xunit;
@@ -8,8 +7,8 @@ using Xunit;
 namespace Bench.Tests.Gate;
 
 /// <summary>A reviewer row becomes the vendor row the product reads in exactly one place, and that place pins
-/// everything the run is not varying. The literal's one-file rule is <c>ArchitectureTests</c>; this is what
-/// the one producer does.</summary>
+/// everything the run is not varying. The one-producer rule (the literal in one file, no other factory of the
+/// setting anywhere) is <c>ArchitectureTests</c>; this is what the one producer does.</summary>
 public sealed class CoaiVendorRowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 27, 12, 0, 0, TimeSpan.Zero);
@@ -19,7 +18,7 @@ public sealed class CoaiVendorRowTests
     {
         var reviewer = Reviewer("grok-medium");
 
-        var setting = CoaiVendorRow.From([reviewer], GateKind.Feature, ResolvedReferences.Empty).Ok();
+        var setting = CoaiVendorsSetting.From([reviewer], GateKind.Feature, ResolvedReferences.Empty).Ok();
         var row = Rows(setting.Json).Single();
 
         row["feature"]!.GetValue<bool>().Should().BeTrue();
@@ -32,7 +31,7 @@ public sealed class CoaiVendorRowTests
     [Fact]
     public void The_row_carries_the_model_the_transport_and_the_vault_entry_name_and_never_a_secret()
     {
-        var row = Rows(CoaiVendorRow.From([Reviewer("grok-medium")], GateKind.Plan, ResolvedReferences.Empty).Ok().Json).Single();
+        var row = Rows(CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Plan, ResolvedReferences.Empty).Ok().Json).Single();
 
         row["id"]!.GetValue<string>().Should().Be("grok-medium");
         row["runtime"]!.GetValue<string>().Should().Be("api");
@@ -50,10 +49,63 @@ public sealed class CoaiVendorRowTests
     [Fact]
     public void Every_field_the_row_writes_is_one_the_product_knows()
     {
-        var row = Rows(CoaiVendorRow.From([Reviewer("grok-medium")], GateKind.Code, ResolvedReferences.Empty).Ok().Json).Single();
+        var row = Rows(CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Code, ResolvedReferences.Empty).Ok().Json).Single();
 
         row.Select(p => p.Key).Should().BeSubsetOf(CoaiVendorRow.KnownFields,
             "the writer and the reader enumerate ONE list — a field the product does not know would be silently ignored by it");
+    }
+
+    /// <summary>The runtime words are checked against the PRODUCT's set — a fixture copied from its source with
+    /// the commit it was read at — never against a list typed in this file, which could only agree with itself.
+    /// Every member of the harness's enum is enumerated, so a runtime added here without the product knowing
+    /// it is red.</summary>
+    [Fact]
+    public void Every_runtime_word_the_row_can_write_is_one_the_product_knows()
+    {
+        var productWords = ProductRuntimeNames();
+
+        var written = Enum.GetValues<ReviewerRuntime>()
+            .Select(runtime => (Runtime: runtime, Word: Rows(CoaiVendorsSetting.From(
+                [Reviewer($"r-{runtime.Word()}", runtime: runtime)], GateKind.Plan, ResolvedReferences.Empty).Ok().Json).Single()["runtime"]!.GetValue<string>()))
+            .ToList();
+
+        written.Should().OnlyContain(w => productWords.Contains(w.Word),
+            "a word the product does not know is run on the Codex CLI — a Claude or Gemini reviewer measured on another vendor's agent");
+        written.Single(w => w.Runtime == ReviewerRuntime.Claude).Word.Should().Be("claude");
+        written.Single(w => w.Runtime == ReviewerRuntime.Gemini).Word.Should().Be("gemini");
+    }
+
+    [Fact]
+    public void The_product_runtime_fixture_is_read_and_is_the_products_own_set()
+    {
+        ProductRuntimeNames().Should().Contain(["codex", "api", "local"],
+            "a fixture that failed to load would make the runtime check vacuous");
+    }
+
+    [Fact]
+    public void An_effort_that_asks_for_the_module_default_is_not_written()
+    {
+        var byDefault = Rows(CoaiVendorsSetting.From([Reviewer("grok-default", effort: ReviewerTransport.ModuleDefault)], GateKind.Plan, ResolvedReferences.Empty).Ok().Json).Single();
+        var medium = Rows(CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Plan, ResolvedReferences.Empty).Ok().Json).Single();
+
+        byDefault.ContainsKey("effort").Should().BeFalse(
+            "'none' is the harness's word for the module's default; on an OpenAI-style dialect the same word turns reasoning OFF");
+        medium["effort"]!.GetValue<string>().Should().Be("medium");
+    }
+
+    [Fact]
+    public void The_setting_applies_itself_to_an_environment_and_is_the_only_writer_of_its_variable()
+    {
+        var setting = CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Plan, ResolvedReferences.Empty).Ok();
+        var inherited = new Dictionary<string, string>(StringComparer.Ordinal) { ["PATH"] = "/usr/bin", ["coai_vendors"] = "[]" };
+
+        var applied = setting.ApplyTo(inherited);
+
+        applied.Values.Should().Contain(setting.Json);
+        applied.Keys.Where(k => k.Equals("coai_vendors", StringComparison.OrdinalIgnoreCase)).Should().ContainSingle(
+            "whatever case the inherited environment spelled it in, the product reads ONE vendor list — this one");
+        applied["PATH"].Should().Be("/usr/bin");
+        inherited["coai_vendors"].Should().Be("[]", "the caller's environment is not mutated; a new one is returned");
     }
 
     [Fact]
@@ -61,11 +113,11 @@ public sealed class CoaiVendorRowTests
     {
         var local = Reviewer("qwen-local", endpoint: "LOCAL_LLM_URL");
 
-        CoaiVendorRow.From([local], GateKind.Plan, ResolvedReferences.Empty).Reason()
+        CoaiVendorsSetting.From([local], GateKind.Plan, ResolvedReferences.Empty).Reason()
             .Should().Contain("'qwen-local'").And.Contain("LOCAL_LLM_URL").And.Contain("nothing resolved it");
 
         var resolved = new ResolvedReferences(new Dictionary<string, string> { ["LOCAL_LLM_URL"] = "http://127.0.0.1:11434/v1" });
-        Rows(CoaiVendorRow.From([local], GateKind.Plan, resolved).Ok().Json).Single()["baseUrl"]!.GetValue<string>()
+        Rows(CoaiVendorsSetting.From([local], GateKind.Plan, resolved).Ok().Json).Single()["baseUrl"]!.GetValue<string>()
             .Should().Be("http://127.0.0.1:11434/v1", "the VALUE reaches the product; the row keeps the NAME");
     }
 
@@ -75,10 +127,10 @@ public sealed class CoaiVendorRowTests
         var retired = Reviewer("grok-medium").Retire(Now).Ok();
         var planOnly = Reviewer("plan-only", gates: [GateKind.Plan]);
 
-        CoaiVendorRow.From([retired], GateKind.Plan, ResolvedReferences.Empty).Reason().Should().Contain("retired");
-        CoaiVendorRow.From([planOnly], GateKind.Code, ResolvedReferences.Empty).Reason()
+        CoaiVendorsSetting.From([retired], GateKind.Plan, ResolvedReferences.Empty).Reason().Should().Contain("retired");
+        CoaiVendorsSetting.From([planOnly], GateKind.Code, ResolvedReferences.Empty).Reason()
             .Should().Contain("'plan-only'").And.Contain("not ticked for the code gate");
-        CoaiVendorRow.From([], GateKind.Code, ResolvedReferences.Empty).Reason().Should().Contain("at least one reviewer");
+        CoaiVendorsSetting.From([], GateKind.Code, ResolvedReferences.Empty).Reason().Should().Contain("at least one reviewer");
     }
 
     [Fact]
@@ -88,6 +140,29 @@ public sealed class CoaiVendorRowTests
 
         CoaiVendorRow.Read(json).Reason().Should().Contain("'temperature'").And.Contain("does not know",
             "a field dropped on import is a reviewer that is not the one the operator runs");
+    }
+
+    [Theory]
+    [InlineData("""{"id":"grok","plan":"false"}""", "'plan'", "boolean")]
+    [InlineData("""{"id":"grok","reviewMinutes":"20"}""", "'reviewMinutes'", "integer")]
+    [InlineData("""{"id":"grok","reviewMinutes":20.5}""", "'reviewMinutes'", "integer")]
+    [InlineData("""{"id":"grok","model":42}""", "'model'", "string")]
+    [InlineData("""{"id":"grok","thinking":1}""", "'thinking'", "boolean")]
+    [InlineData("""{"id":"grok","price":"cheap"}""", "'price'", "object")]
+    [InlineData("""{"id":7}""", "'id'", "string")]
+    public void A_field_of_the_wrong_type_is_refused_by_name_rather_than_read_as_its_default(string row, string field, string expected)
+    {
+        CoaiVendorRow.Read($"[{row}]").Reason().Should().Contain(field).And.Contain(expected,
+            "\"plan\":\"false\" read as absent would TICK the plan gate — the opposite of what the operator wrote");
+    }
+
+    [Fact]
+    public void An_absent_or_null_field_is_the_products_default_and_not_a_type_error()
+    {
+        var row = CoaiVendorRow.Read("""[{"id":"grok","plan":null,"reviewMinutes":null}]""").Ok().Single();
+
+        row.Plan.Should().BeTrue("null is how the product's own reader spells absence for a flag");
+        row.ReviewMinutes.Should().Be(0);
     }
 
     [Fact]
@@ -108,7 +183,7 @@ public sealed class CoaiVendorRowTests
     [Fact]
     public void A_row_written_here_round_trips_through_the_reader()
     {
-        var json = CoaiVendorRow.From([Reviewer("grok-medium")], GateKind.Feature, ResolvedReferences.Empty).Ok().Json;
+        var json = CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Feature, ResolvedReferences.Empty).Ok().Json;
 
         var read = CoaiVendorRow.Read(json).Ok().Single();
 
@@ -126,29 +201,23 @@ public sealed class CoaiVendorRowTests
         CoaiVendorRow.Read("""[{"runtime":"api"}]""").Reason().Should().Contain("without an id");
     }
 
-    /// <summary>The one-producer guarantee as a type: nothing but <c>CoaiVendorRow.From</c> can make the value
-    /// the environment builder takes. Checked by reflection over the whole domain assembly, so a second public
-    /// factory added anywhere is a red test rather than a review comment.</summary>
-    [Fact]
-    public void The_setting_has_no_public_constructor_and_exactly_one_public_factory()
+    private static IReadOnlySet<string> ProductRuntimeNames()
     {
-        typeof(CoaiVendorsSetting).GetConstructors(BindingFlags.Public | BindingFlags.Instance).Should().BeEmpty();
+        using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "coai-runtime-names.json")));
 
-        var factories = typeof(CoaiVendorsSetting).Assembly.GetTypes()
-            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            .Where(m => m.ReturnType == typeof(Outcome<CoaiVendorsSetting>) || m.ReturnType == typeof(CoaiVendorsSetting))
-            .Select(m => $"{m.DeclaringType!.Name}.{m.Name}")
-            .ToList();
-
-        factories.Should().Equal(["CoaiVendorRow.From"], "a recipe becomes a request in exactly one place");
+        return new HashSet<string>(
+            fixture.RootElement.GetProperty("runtimeNames").EnumerateArray().Select(e => e.GetString()!),
+            StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<JsonObject> Rows(string json) =>
         [.. (JsonNode.Parse(json) as JsonArray)!.OfType<JsonObject>()];
 
-    private static GateReviewer Reviewer(string id, string endpoint = "https://api.x.ai/v1", IReadOnlyList<GateKind>? gates = null) =>
+    private static GateReviewer Reviewer(
+        string id, string endpoint = "https://api.x.ai/v1", IReadOnlyList<GateKind>? gates = null,
+        ReviewerRuntime runtime = ReviewerRuntime.Api, string effort = "medium") =>
         GateReviewer.Create(
             GateReviewerId.Parse(id).Ok(),
-            GateReviewerTests.Definition(endpoint: endpoint, gates: gates).Ok(),
+            GateReviewerTests.Definition(endpoint: endpoint, gates: gates, runtime: runtime, effort: effort).Ok(),
             Now);
 }

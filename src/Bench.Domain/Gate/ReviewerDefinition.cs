@@ -48,6 +48,13 @@ public sealed record ReviewerTransport(
             : Outcome<ReviewerTransport>.Success(new ReviewerTransport(d, effort, maxTokens, timeoutMinutes, followUps, reviewMinutesCap, thinking));
     }
 
+    /// <summary>The harness's word for "send no effort; let the product's dialect module choose". It is a
+    /// HARNESS word and never reaches the product: on an OpenAI-style dialect <c>none</c> is a real value that
+    /// turns reasoning OFF, so passing it through would measure a different subject than the row names.</summary>
+    public const string ModuleDefault = "none";
+
+    public bool AsksModuleDefault => string.Equals(ReasoningEffort, ModuleDefault, StringComparison.Ordinal);
+
     public string Canonical =>
         $"dialect={Dialect},effort={ReasoningEffort},maxTokens={MaxTokens},timeoutMin={TimeoutMinutes},"
         + $"followUps={FollowUps},capMin={ReviewMinutesCap},thinking={(Thinking ? "on" : "off")}";

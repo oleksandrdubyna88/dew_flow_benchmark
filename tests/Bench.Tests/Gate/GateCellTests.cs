@@ -100,12 +100,26 @@ public sealed class GateCellTests
         GateCellLifecycle.IsStale(reclaimed, Noon.AddDays(7), TimeSpan.FromMinutes(1)).Should().BeFalse("nobody holds it");
     }
 
+    [Fact]
+    public void A_pending_cell_carries_the_id_its_caller_minted()
+    {
+        var id = new Guid("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b");
+        var runId = new Guid("0199a1b2-c3d4-7e5f-8a9b-000000000001");
+
+        var cell = GateCell.Pending(id, runId, Matrix());
+
+        cell.Id.Should().Be(id, "the domain factory mints nothing — the caller owns identity, so a plan can be replayed and a test can name its cell");
+        cell.RunId.Should().Be(runId);
+        GateCell.Pending(id, runId, Matrix()).Should().Be(cell, "the same inputs make the same cell — a factory that reads the clock does not");
+    }
+
     private static WorkerIdentity Worker(string label) => WorkerIdentity.Here(label);
 
     private static ProductPin Pin(string letter) => ProductPin.Hashed(
         new string(letter[0], 64), "0.0.0+abc1234", "abc1234", CapturedCount.Number(0), "src_mcp").Ok();
 
-    private static GateCell Cell() => GateCell.Pending(
-        Guid.CreateVersion7(),
-        new GateMatrixCell(GateTaskId.Parse("cs2").Ok(), GateReviewerId.Parse("grok-medium").Ok(), Repeat: 1, Slot: 0, Position: 0));
+    private static GateMatrixCell Matrix() =>
+        new(GateTaskId.Parse("cs2").Ok(), GateReviewerId.Parse("grok-medium").Ok(), Repeat: 1, Slot: 0, Position: 0);
+
+    private static GateCell Cell() => GateCell.Pending(Guid.CreateVersion7(), Guid.CreateVersion7(), Matrix());
 }

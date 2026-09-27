@@ -9,7 +9,7 @@ namespace Bench.Contracts;
 /// <see cref="GateRunSummaryDto.FailureText"/>, a failure cause that passed the publication redaction, and the
 /// test names it as the exception.
 /// </para></summary>
-public sealed record GateScopeDto(string SuiteStamp, string Gate, string ProductVersion, string SettingsHash, int Runs);
+public sealed record GateScopeDto(string SuiteStamp, string Gate, string ProductVersion, string BinarySha256, string SettingsHash, int Runs);
 
 /// <summary>A number that may not be one. <paramref name="State"/> says why when it is not: <c>known</c>,
 /// <c>unassessed</c> (nobody looked — rendered <c>—</c>, never <c>0</c>), <c>unknown</c> (could not be
@@ -39,6 +39,8 @@ public sealed record GateFigureDto(bool Known, double Value, string State)
 public sealed record GateModelRowDto(
     string ReviewerId,
     int Runs,
+    int Attempts,
+    int AttemptsFailed,
     int ValidRuns,
     int AssessedRuns,
     GateFigureDto ValidPct,
@@ -54,6 +56,7 @@ public sealed record GateModelRowDto(
     int Refuted,
     int Unresolved,
     int AssessmentFailed,
+    int AssessorFamilyMatched,
     GateFigureDto SupportedPct,
     GateFigureDto SupportedOrPartialPct,
     GateFigureDto HighValuePerRun,
@@ -80,14 +83,17 @@ public sealed record GateModelRowDto(
 public sealed record GateFailureCountDto(string FailureKind, int Runs);
 
 /// <summary>Run-to-run variance for one task × reviewer: the spread of seeds hit and of findings across the
-/// repeats, or <c>withheld</c> below three.</summary>
+/// repeats, each with its own state — the seeds spread needs three ASSESSED runs, the findings spread three
+/// repeats — and <c>withheld</c> below three.</summary>
 public sealed record GateVarianceDto(
     string TaskId,
     string ReviewerId,
     int Repeats,
-    string State,
+    int SeedReadings,
+    string SeedsState,
     int SeedsHitMin,
     int SeedsHitMax,
+    string FindingsState,
     int FindingsMin,
     int FindingsMax);
 
@@ -106,13 +112,15 @@ public sealed record GatePerTaskRowDto(
     IReadOnlyList<double> Seconds,
     IReadOnlyList<GateFigureDto> Cost);
 
-/// <summary>The per-model table for ONE scope under ONE rubric kind. There is no shape for a table across
-/// rubric kinds, and that absence is the rule.</summary>
+/// <summary>The per-model table for ONE scope under ONE rubric. There is no shape for a table across rubric
+/// kinds, and that absence is the rule. Calibration tasks are reported apart, in <paramref name="CalibrationRows"/>,
+/// never inside <paramref name="Rows"/>.</summary>
 public sealed record GateModelTableDto(
     GateScopeDto Scope,
     string RubricKind,
     string RubricId,
     IReadOnlyList<GateModelRowDto> Rows,
+    IReadOnlyList<GateModelRowDto> CalibrationRows,
     IReadOnlyList<GatePerTaskRowDto> PerTask,
     IReadOnlyList<GateVarianceDto> Variance);
 

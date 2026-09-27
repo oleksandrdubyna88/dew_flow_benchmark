@@ -2,107 +2,23 @@ using Bench.Domain.Trace;
 
 namespace Bench.Domain.Gate;
 
-/// <summary>One row of the per-model table — the operator's columns. Every refusal is a <see cref="Figure"/>
-/// state; every count is over ALL runs of the reviewer in the scope, failed ones included.</summary>
-public sealed record ModelRow(
-    GateReviewerId Reviewer,
-    int Runs,
-    int ValidRuns,
-    int AssessedRuns,
-    Figure ValidPct,
-    Figure FindingsPerRun,
-    Figure SeedsHitMean,
-    int SeedsHitMin,
-    int SeedsHitMax,
-    int DistinctSeeds,
-    int DistinctCrossEpicSeeds,
-    int Assessed,
-    int Supported,
-    int Partial,
-    int Refuted,
-    int Unresolved,
-    int AssessmentFailed,
-    Figure SupportedPct,
-    Figure SupportedOrPartialPct,
-    Figure HighValuePerRun,
-    Figure OverstatedPct,
-    Figure SecondsP50,
-    Figure SecondsP90,
-    Figure TurnsMean,
-    int RepairRuns,
-    int RepairCalls,
-    Figure ServedMean,
-    Figure RefusedMean,
-    Figure TokensInPerRun,
-    Figure TokensOutPerRun,
-    Figure TokensCachedPerRun,
-    Figure CachePct,
-    Figure TurnOneCachedMean,
-    int WarmRuns,
-    Figure ReasoningPerRun,
-    Figure CostPerRun,
-    Figure CostPerSeed,
-    Figure CostTotal,
-    IReadOnlyList<FailureCount> Failures);
-
-public sealed record FailureCount(FailureKind Kind, int Runs);
-
-public sealed record PerTaskRow(
-    GateTaskId Task,
-    string Language,
-    bool Calibration,
-    GateReviewerId Reviewer,
-    int Runs,
-    int ValidRuns,
-    IReadOnlyList<int> Findings,
-    IReadOnlyList<Figure> SeedsHit,
-    IReadOnlyList<int> Turns,
-    IReadOnlyList<double> Seconds,
-    IReadOnlyList<Figure> Cost);
-
-public enum VarianceState
-{
-    Stated,
-    Withheld,
-    Unassessed,
-}
-
-/// <summary>Run-to-run variance for one task × reviewer: the spread of seeds hit and of findings across the
-/// repeats. <see cref="VarianceState.Withheld"/> below <see cref="GateReport.MinRepeatsForVariance"/> — the
-/// numbers are then zero and MUST NOT be read.</summary>
-public sealed record VarianceReading(
-    GateTaskId Task,
-    GateReviewerId Reviewer,
-    int Repeats,
-    VarianceState State,
-    int SeedsHitMin,
-    int SeedsHitMax,
-    int FindingsMin,
-    int FindingsMax);
-
-public sealed record ModelTable(
-    GateScope Scope,
-    RubricKind Rubric,
-    IReadOnlyList<ModelRow> Rows,
-    IReadOnlyList<PerTaskRow> PerTask,
-    IReadOnlyList<VarianceReading> Variance);
-
-/// <summary>The gate report — pure, over the facts and the verdicts, with the <see cref="RubricKind"/> as a
-/// REQUIRED dimension exactly as <c>--metric</c> has no default: <c>strict-v1</c> and <c>lenient-worth-v1</c>
-/// are two populations, and there is no aggregate across kinds anywhere — not here, not in the API, not on
-/// the page. Refusals are words: <i>withheld</i>, <i>unassessed</i>, <i>unknown</i>. No reviewer is ever
-/// nominated best by score.</summary>
+/// <summary>The gate report — pure, over the facts and the verdicts, with the <see cref="Rubric"/> as a REQUIRED
+/// dimension exactly as <c>--metric</c> has no default: <c>strict-v1</c> and <c>lenient-worth-v1</c> are two
+/// populations, and there is no aggregate across rubrics anywhere — not here, not in the API, not on the page.
+/// Which runs and verdicts a figure is over is <see cref="GatePopulation"/>'s decision, taken once. Refusals are
+/// words: <i>withheld</i>, <i>unassessed</i>, <i>unknown</i>. No reviewer is ever nominated best by score.</summary>
 public static class GateReport
 {
-    /// <summary>Below this many repeats, variance is withheld — a spread of two is a difference, not a spread.</summary>
+    /// <summary>Below this many readings, a spread is withheld — a spread of two is a difference, not a spread.</summary>
     public const int MinRepeatsForVariance = 3;
 
-    /// <summary>The scopes the runs span. A scope with two product versions PARTITIONS — cells claimed under
-    /// two pins in one campaign land in two partitions, never averaged — the arms page's move.</summary>
+    /// <summary>The scopes the runs span. A scope with two products PARTITIONS — two pins in one campaign, or
+    /// two builds behind one version text, land in two partitions, never averaged — the arms page's move.</summary>
     public static IReadOnlyList<GateScope> Scopes(IReadOnlyList<GateRunRecord> runs) =>
         [.. runs.Select(r => r.Scope).Distinct()
             .OrderBy(s => s.SuiteStamp, StringComparer.Ordinal).ThenBy(s => s.Gate)
-            .ThenBy(s => s.ProductVersion, StringComparer.Ordinal).ThenBy(s => s.SettingsHash, StringComparer.Ordinal)];
+            .ThenBy(s => s.ProductVersion, StringComparer.Ordinal).ThenBy(s => s.ProductSha256, StringComparer.Ordinal)
+            .ThenBy(s => s.SettingsHash, StringComparer.Ordinal)];
 
     /// <summary>A supported rate over verdicts of ONE kind. Two kinds in one population are refused by name —
     /// this is the function every rate goes through, so the refusal cannot be bypassed by a caller who forgot.</summary>
@@ -121,82 +37,118 @@ public static class GateReport
         return Outcome<Figure>.Success(Figure.Percent(counted.Count(v => v.Reading.IsSupported), counted.Count));
     }
 
-    public static ModelTable PerModel(GateScope scope, RubricKind rubric, GateReportInput input)
+    /// <summary>The per-model table: measured tasks in <see cref="ModelTable.Rows"/>, calibration tasks apart in
+    /// <see cref="ModelTable.Calibration"/>.</summary>
+    public static ModelTable PerModel(GateScope scope, Rubric rubric, GateReportInput input)
     {
-        var runs = input.Runs.Where(r => r.Scope == scope).ToList();
-        var verdicts = input.Verdicts.Where(v => v.Rubric.Kind == rubric).ToList();
+        var population = GatePopulation.Of(scope, rubric, input);
+        var calibration = input.Tasks.Where(t => t.IsCalibration).Select(t => t.Id.Value).ToHashSet(StringComparer.Ordinal);
 
-        var rows = runs.GroupBy(r => r.Reviewer.Value, StringComparer.Ordinal)
-            .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => Row(ReviewerAggregate.Of(g.First().Reviewer, [.. g], verdicts, input.Tasks)))
-            .ToList();
-
-        return new ModelTable(scope, rubric, rows, PerTask(scope, rubric, input), Variance(scope, rubric, input));
+        return new ModelTable(
+            scope,
+            rubric,
+            Rows(population, run => !calibration.Contains(run.Task.Value), input.Tasks),
+            Rows(population, run => calibration.Contains(run.Task.Value), input.Tasks),
+            PerTask(scope, rubric, input),
+            Variance(scope, rubric, input));
     }
 
-    public static IReadOnlyList<PerTaskRow> PerTask(GateScope scope, RubricKind rubric, GateReportInput input)
+    public static IReadOnlyList<PerTaskRow> PerTask(GateScope scope, Rubric rubric, GateReportInput input)
     {
-        var verdicts = input.Verdicts.Where(v => v.Rubric.Kind == rubric).ToLookup(v => v.RunId);
+        var population = GatePopulation.Of(scope, rubric, input);
         var tasks = input.Tasks.ToDictionary(t => t.Id.Value, StringComparer.Ordinal);
 
-        return [.. input.Runs.Where(r => r.Scope == scope)
-            .GroupBy(r => (Task: r.Task.Value, Reviewer: r.Reviewer.Value))
-            .OrderBy(g => g.Key.Task, StringComparer.Ordinal).ThenBy(g => g.Key.Reviewer, StringComparer.Ordinal)
-            .Select(g => TaskRow([.. g.OrderBy(r => r.Repeat)], tasks.GetValueOrDefault(g.Key.Task), verdicts))];
+        return [.. ByTaskAndReviewer(population.Runs)
+            .Select(g => TaskRowOf(g.Key.Task, g.Key.Reviewer, [.. g.OrderBy(r => r.Repeat)], tasks.GetValueOrDefault(g.Key.Task.Value), population.Verdicts))];
     }
 
-    public static IReadOnlyList<VarianceReading> Variance(GateScope scope, RubricKind rubric, GateReportInput input)
+    public static IReadOnlyList<VarianceReading> Variance(GateScope scope, Rubric rubric, GateReportInput input)
     {
-        var verdicts = input.Verdicts.Where(v => v.Rubric.Kind == rubric).ToLookup(v => v.RunId);
+        var population = GatePopulation.Of(scope, rubric, input);
 
-        return [.. input.Runs.Where(r => r.Scope == scope)
-            .GroupBy(r => (Task: r.Task.Value, Reviewer: r.Reviewer.Value))
-            .OrderBy(g => g.Key.Task, StringComparer.Ordinal).ThenBy(g => g.Key.Reviewer, StringComparer.Ordinal)
-            .Select(g => VarianceOf([.. g], verdicts))];
+        return [.. ByTaskAndReviewer(population.Runs).Select(g => VarianceOf(g.Key.Task, g.Key.Reviewer, [.. g], population.Verdicts))];
     }
 
-    private static VarianceReading VarianceOf(IReadOnlyList<GateRunRecord> runs, ILookup<Guid, GateVerdict> verdicts)
+    /// <summary>One task × reviewer's variance. The ids come from the caller, not from <c>runs[0]</c>, so a group
+    /// of nothing is an explicit empty state (withheld findings, unassessed seeds) rather than an index error.</summary>
+    public static VarianceReading VarianceOf(GateTaskId task, GateReviewerId reviewer, IReadOnlyList<GateRunRecord> runs, IReadOnlyList<GateVerdict> verdicts)
     {
-        var first = runs[0];
+        var byRun = verdicts.ToLookup(v => v.RunId);
         var repeats = runs.Select(r => r.Repeat).Distinct().Count();
-        var assessed = runs.Where(r => verdicts[r.RunId].Any()).Select(r => SeedsHit(verdicts[r.RunId])).ToList();
-        var findings = runs.Select(r => r.FindingsCount).ToList();
+        var seeds = runs.Where(r => GatePopulation.IsAssessed(r, [.. byRun[r.RunId]])).Select(r => SeedsHit(byRun[r.RunId])).ToList();
+        var findings = repeats >= MinRepeatsForVariance ? runs.Select(r => r.FindingsCount).ToList() : [];
+        var seedsState = SpreadState(seeds.Count);
+        var stated = seedsState == VarianceState.Stated ? seeds : [];
 
-        return (repeats >= MinRepeatsForVariance, assessed.Count) switch
-        {
-            (false, _) => new VarianceReading(first.Task, first.Reviewer, repeats, VarianceState.Withheld, 0, 0, 0, 0),
-            (_, 0) => new VarianceReading(first.Task, first.Reviewer, repeats, VarianceState.Unassessed, 0, 0, findings.Min(), findings.Max()),
-            _ => new VarianceReading(first.Task, first.Reviewer, repeats, VarianceState.Stated, assessed.Min(), assessed.Max(), findings.Min(), findings.Max()),
-        };
+        return new VarianceReading(
+            task, reviewer, repeats, seeds.Count,
+            seedsState, MinOf(stated), MaxOf(stated),
+            findings.Count > 0 ? VarianceState.Stated : VarianceState.Withheld, MinOf(findings), MaxOf(findings));
     }
 
-    private static PerTaskRow TaskRow(IReadOnlyList<GateRunRecord> runs, TaskSummary? task, ILookup<Guid, GateVerdict> verdicts) =>
-        new(
-            runs[0].Task,
-            task?.Language ?? string.Empty,
-            task?.IsCalibration ?? false,
-            runs[0].Reviewer,
+    /// <summary>One task × reviewer cell of the per-task table, with the ids from the caller — an empty run list
+    /// is a row of nothing, not an index error.</summary>
+    public static PerTaskRow TaskRowOf(
+        GateTaskId task, GateReviewerId reviewer, IReadOnlyList<GateRunRecord> runs, TaskSummary? summary, IReadOnlyList<GateVerdict> verdicts)
+    {
+        var byRun = verdicts.ToLookup(v => v.RunId);
+
+        return new PerTaskRow(
+            task,
+            summary?.Language ?? string.Empty,
+            summary?.IsCalibration ?? false,
+            reviewer,
             runs.Count,
             runs.Count(r => r.Facts.Valid),
             [.. runs.Select(r => r.FindingsCount)],
-            [.. runs.Select(r => SeedsHitFigure(r, task, verdicts))],
+            [.. runs.Select(r => SeedsHitFigure(r, summary, [.. byRun[r.RunId]]))],
             [.. runs.Select(r => r.Facts.Turns)],
             [.. runs.Select(r => r.Facts.SecondsTotal)],
             [.. runs.Select(r => r.Facts.CostUsd.WasCaptured ? Figure.Of((double)r.Facts.CostUsd.Value) : Figure.Unknown)]);
+    }
 
-    private static Figure SeedsHitFigure(GateRunRecord run, TaskSummary? task, ILookup<Guid, GateVerdict> verdicts) =>
-        (task is { IsSeeded: false }, verdicts[run.RunId].Any()) switch
+    private static IEnumerable<IGrouping<(GateTaskId Task, GateReviewerId Reviewer), GateRunRecord>> ByTaskAndReviewer(IReadOnlyList<GateRunRecord> runs) =>
+        runs.GroupBy(r => (r.Task, r.Reviewer))
+            .OrderBy(g => g.Key.Task.Value, StringComparer.Ordinal).ThenBy(g => g.Key.Reviewer.Value, StringComparer.Ordinal);
+
+    private static IReadOnlyList<ModelRow> Rows(GatePopulation population, Func<GateRunRecord, bool> include, IReadOnlyList<TaskSummary> tasks)
+    {
+        var attempts = population.Attempts.Where(include).ToLookup(r => r.Reviewer.Value, StringComparer.Ordinal);
+
+        return [.. population.Runs.Where(include)
+            .GroupBy(r => r.Reviewer.Value, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => ReviewerRow.Of(ReviewerAggregate.Of(g.First().Reviewer, [.. g], [.. attempts[g.Key]], population.Verdicts, tasks)))];
+    }
+
+    private static VarianceState SpreadState(int readings) => readings switch
+    {
+        0 => VarianceState.Unassessed,
+        < MinRepeatsForVariance => VarianceState.Withheld,
+        _ => VarianceState.Stated,
+    };
+
+    private static int MinOf(IReadOnlyList<int> values) => values.Count > 0 ? values.Min() : 0;
+
+    private static int MaxOf(IReadOnlyList<int> values) => values.Count > 0 ? values.Max() : 0;
+
+    private static Figure SeedsHitFigure(GateRunRecord run, TaskSummary? task, IReadOnlyList<GateVerdict> verdicts) =>
+        (task is { IsSeeded: false }, GatePopulation.IsAssessed(run, verdicts)) switch
         {
             (true, _) => Figure.NotApplicable,
             (_, false) => Figure.Unassessed,
-            _ => Figure.Of(SeedsHit(verdicts[run.RunId])),
+            _ => Figure.Of(SeedsHit(verdicts)),
         };
 
-    private static int SeedsHit(IEnumerable<GateVerdict> verdicts) =>
+    internal static int SeedsHit(IEnumerable<GateVerdict> verdicts) =>
         verdicts.Select(v => v.Reading).OfType<Verdict.Strict>().Select(v => v.SeedHit).OfType<SeedHit.Of>()
             .Select(h => h.Seed.Value).Distinct(StringComparer.Ordinal).Count();
+}
 
-    private static ModelRow Row(ReviewerAggregate a)
+/// <summary>One per-model row, folded from a <see cref="ReviewerAggregate"/>.</summary>
+internal static class ReviewerRow
+{
+    public static ModelRow Of(ReviewerAggregate a)
     {
         var seeds = a.SeedsHitPerRun;
         var seconds = a.Captured(r => (true, r.Facts.SecondsTotal));
@@ -207,6 +159,8 @@ public static class GateReport
         return new ModelRow(
             a.Reviewer,
             a.RunCount,
+            a.Attempts.Count,
+            a.Attempts.Count(r => !r.Facts.Valid),
             a.ValidRuns,
             a.Assessed.Count,
             Figure.Percent(a.ValidRuns, a.RunCount),
@@ -222,6 +176,7 @@ public static class GateReport
             a.Refuted,
             a.Unresolved,
             a.AssessmentFailed,
+            a.AssessorFamilyMatched,
             Figure.Percent(a.Supported, a.Judged),
             Figure.Percent(a.Supported + a.Partial, a.Judged),
             a.HighValuePerRun.Count > 0 ? Figure.Mean([.. a.HighValuePerRun.Select(h => (double)h)]) : Figure.Unassessed,

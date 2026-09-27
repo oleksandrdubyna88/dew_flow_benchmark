@@ -48,7 +48,7 @@ public sealed partial record Rubric
 
     public string Hash { get; }
 
-    public string Stamp => $"{Id.Value}#{Hash[..12]}";
+    public string Stamp => $"{Id.Value}#{HashText.Short(Hash)}";
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex Sha256Hex { get; }
@@ -77,10 +77,8 @@ public sealed record RubricCatalog(IReadOnlyList<Rubric> Rubrics)
 
         return held is null
             ? Outcome<Rubric>.Failure(
-                $"no rubric in the catalog hashes to {Short(digest)} — it holds {string.Join(", ", Rubrics.Select(r => r.Stamp))}; "
+                $"no rubric in the catalog hashes to {HashText.Short(digest)} — it holds {string.Join(", ", Rubrics.Select(r => r.Stamp))}; "
                 + "a verdict under a wording nobody can read back is a verdict about nothing")
             : Outcome<Rubric>.Success(held);
     }
-
-    private static string Short(string digest) => digest.Length >= 12 ? digest[..12] : digest;
 }

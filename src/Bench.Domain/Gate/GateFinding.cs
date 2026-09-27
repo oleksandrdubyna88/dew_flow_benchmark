@@ -43,8 +43,8 @@ public static class FindingWords
 /// The guard is structural: this record has no field for the finding's title, its reasoning, its fix, or the
 /// path it names, so the entity that stores it cannot store them either. The text lives in the artefact store
 /// (<c>findings.jsonl</c> per run) outside git and outside the published database; what is here is enough
-/// for every count on the page and no code. A reflection test asserts that the only string properties are the
-/// two hashes.
+/// for every count on the page and no code. A test walks the type (nested types and collections included) and
+/// asserts that the only text it can carry is the two hashes.
 /// </para></summary>
 public sealed record GateFinding
 {
@@ -74,13 +74,15 @@ public sealed record GateFinding
     /// tell two findings apart, and nothing a reader could recover code from.</summary>
     public string TextHash { get; }
 
-    /// <summary>SHA-256 of the repository-relative path the finding names, so "same file" is computable
-    /// without the path being stored.</summary>
+    /// <summary>HMAC-SHA256, under the artefact root's <see cref="FileHashKey"/>, of the path the finding names in
+    /// its one normal form (<see cref="FindingPath.Normalise"/>) — so "same file" is computable without the path
+    /// being stored, and a published hash cannot be confirmed by hashing a guessed path.</summary>
     public string FileHash { get; }
 
     /// <summary>The one constructor: takes the TEXT and keeps the HASH. There is no way to build one from a
-    /// hash somebody else computed, so a stored row is always re-derivable from its artefact.</summary>
-    public static Outcome<GateFinding> Of(int ordinal, FindingSeverity severity, FindingCategory category, bool isGating, int line, string? text, string? file)
+    /// hash somebody else computed, so a stored row is always re-derivable from its artefact and the key.</summary>
+    public static Outcome<GateFinding> Of(
+        int ordinal, FindingSeverity severity, FindingCategory category, bool isGating, int line, string? text, string? file, FileHashKey fileKey)
     {
         var refusal = (ordinal, line, (text ?? string.Empty).Trim().Length) switch
         {
@@ -93,6 +95,6 @@ public sealed record GateFinding
         return refusal.Length > 0
             ? Outcome<GateFinding>.Failure(refusal)
             : Outcome<GateFinding>.Success(new GateFinding(
-                ordinal, severity, category, isGating, line, StableHash.Of(text!), StableHash.Of((file ?? string.Empty).Trim())));
+                ordinal, severity, category, isGating, line, StableHash.Of(text!), fileKey.Hash(FindingPath.Normalise(file))));
     }
 }

@@ -28,7 +28,7 @@ public sealed record GateSuite
     public string Hash { get; }
 
     /// <summary>What every run quotes: the id plus enough of the hash to prove which file it was.</summary>
-    public string Stamp => $"{Id}#{Hash[..12]}";
+    public string Stamp => $"{Id}#{HashText.Short(Hash)}";
 
     public static Outcome<GateSuite> Freeze(string? id, IReadOnlyList<GateTask> tasks, IReadOnlyList<string> privateNames)
     {
@@ -46,8 +46,14 @@ public sealed record GateSuite
 
         return refusal.Length > 0
             ? Outcome<GateSuite>.Failure(refusal)
-            : Outcome<GateSuite>.Success(new GateSuite(suiteId, tasks, [.. privateNames.Select(n => n.Trim())], HashOf(suiteId, tasks)));
+            : Outcome<GateSuite>.Success(Frozen(suiteId, [.. tasks], [.. privateNames.Select(n => n.Trim())]));
     }
+
+    /// <summary>The suite over SNAPSHOTS: the task list is copied here and every task already holds its own
+    /// copy of its seeds (<see cref="GateTask.Of"/>), so a caller that keeps and edits its lists after freezing
+    /// cannot change what a stamped suite contains.</summary>
+    private static GateSuite Frozen(string id, IReadOnlyList<GateTask> tasks, IReadOnlyList<string> privateNames) =>
+        new(id, tasks, privateNames, HashOf(id, tasks));
 
     /// <summary>The tasks a run of <paramref name="gate"/> may plan over. Refused when none hosts it, because a
     /// matrix over zero tasks is refused one step later with less to say.</summary>
@@ -93,7 +99,9 @@ public sealed record GateSuite
     private static string Name(GateKind gate) => gate.ToString().ToLowerInvariant();
 
     private static string HashOf(string id, IReadOnlyList<GateTask> tasks) =>
-        StableHash.Of(string.Join(
-            "\n",
-            [$"gate-suite:{id}", .. tasks.OrderBy(t => t.Id.Value, StringComparer.Ordinal).Select(t => t.Canonical)]));
+        StableHash.Of(CanonicalFields.Of(
+        [
+            "gate-suite", id, tasks.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            .. tasks.OrderBy(t => t.Id.Value, StringComparer.Ordinal).Select(t => t.Canonical),
+        ]));
 }

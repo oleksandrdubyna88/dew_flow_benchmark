@@ -39,8 +39,9 @@ public sealed record Figure(bool Known, double Value, FigureState State)
 
 /// <summary>The linear-interpolated quantile the Python report uses (<c>report.py: q</c>), so imported and
 /// native p50 / p90 are computed by ONE function and agree to the digit. Sorted, <c>k = (n - 1) · p</c>,
-/// interpolated between the two neighbours, rounded to one decimal — with the same banker's rounding Python's
-/// <c>round</c> applies, which is .NET's default.</summary>
+/// interpolated between the two neighbours, rounded to one decimal by <see cref="PythonRound"/> — Python's
+/// <c>round</c>, which rounds the EXACT binary value half to even. <c>Math.Round(x, 1)</c> does not: it scales
+/// by ten first, and <c>0.35 × 10</c> lands on the tie <c>3.5</c> that the true value (0.3499…) never was.</summary>
 public static class Quantile
 {
     public static Figure Q(IReadOnlyList<double> readings, double p)
@@ -54,6 +55,6 @@ public static class Quantile
         var k = (xs.Count - 1) * p;
         var lo = (int)k;
         var hi = Math.Min(lo + 1, xs.Count - 1);
-        return Figure.Of(Math.Round(xs[lo] + (xs[hi] - xs[lo]) * (k - lo), 1));
+        return Figure.Of(PythonRound.Of(xs[lo] + (xs[hi] - xs[lo]) * (k - lo), 1));
     }
 }

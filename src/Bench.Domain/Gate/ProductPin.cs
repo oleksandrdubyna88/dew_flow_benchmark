@@ -107,7 +107,7 @@ public sealed partial record ProductPin
                 + $"{current.Short} ({current.VersionText}) — pass --allow-product-change to measure it as a new scope; "
                 + "a changed product never extends the old one");
 
-    public string Short => BinaryHashed ? BinarySha256[..12] : "unhashed";
+    public string Short => BinaryHashed ? HashText.Short(BinarySha256) : "unhashed";
 
     public string Describe =>
         $"{Short} · {VersionText}"

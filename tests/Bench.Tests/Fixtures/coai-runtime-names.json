@@ -1,0 +1,7 @@
+{
+  "_source": "coai · src_mcp/runners/Reviewers/ReviewerRuntime.cs, ReviewerRuntimeSelector.RuntimeNames (line 514)",
+  "_commit": "9cb01a2bf17fa5ca72cc59050427bf989bdf96e3",
+  "_read": "2026-09-27, from dew_flow_connect_other_ais origin/main",
+  "_why": "The product's own set of vendor runtime words. A word outside it is run on the Codex CLI (PanelSettings.RuntimeOf). COPIED rather than retyped in a test, and REPLACED from the product's source when it grows — never edited by hand, because an edited fixture has stopped being evidence.",
+  "runtimeNames": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"]
+}

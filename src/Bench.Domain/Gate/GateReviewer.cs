@@ -32,7 +32,7 @@ public sealed record GateReviewer
     public string Hash => Definition.Hash;
 
     /// <summary>What a report quotes: the id plus enough of the hash to prove which definition it was.</summary>
-    public string Stamp => $"{Id.Value}#{Hash[..12]}";
+    public string Stamp => $"{Id.Value}#{HashText.Short(Hash)}";
 
     public static GateReviewer Create(GateReviewerId id, ReviewerDefinition definition, DateTimeOffset now) =>
         new(id, definition, now, retiredAt: default);
@@ -59,7 +59,7 @@ public sealed record GateReviewer
 public sealed record SharedConfiguration(string Hash, IReadOnlyList<GateReviewerId> Ids)
 {
     public string Describe =>
-        $"{string.Join(", ", Ids.Select(i => i.Value))} are one configuration ({Hash[..12]}) under {Ids.Count} names";
+        $"{string.Join(", ", Ids.Select(i => i.Value))} are one configuration ({HashText.Short(Hash)}) under {Ids.Count} names";
 }
 
 public static class GateReviewerCatalog
