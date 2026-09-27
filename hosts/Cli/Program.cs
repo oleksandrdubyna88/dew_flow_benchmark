@@ -90,6 +90,7 @@ public static class Program
             "lanes" => Lanes(command, output, error, stopping),
             "questions" => Questions(command, output, error, stopping),
             "models" => Models(command, output, error, stopping),
+            "gate" => CoaiGateCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -472,6 +473,13 @@ public static class Program
         output.WriteLine("             and writes nothing. A timeout means the headless flag is wrong for that CLI");
         output.WriteLine("             (it opened an interactive session); a non-zero exit usually means no login");
         output.WriteLine("  bench models disable|enable --key <slug> --db <connection>");
+        output.WriteLine();
+        output.WriteLine("  bench gate export --public --db <connection> --suite-file <suite.json> --out <file.json>");
+        output.WriteLine("             every gate_* row through the publication guard; built from database rows ONLY,");
+        output.WriteLine("             never from an artefact file. One url, machine path or private name refuses it whole");
+        output.WriteLine("  bench gate prune  --artifact-root <dir> [--tap-retention-days 30] [--dry-run] [--json]");
+        output.WriteLine("             releases tap request/response bodies past the window; every facts file is kept,");
+        output.WriteLine("             an unfinished attempt is listed and never touched; prints each run's footprint");
         output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");
         output.WriteLine("  bench questions author --group <key> --authors <registry keys> --repo <url>");

@@ -79,8 +79,25 @@ public sealed record GateFinding
     /// being stored, and a published hash cannot be confirmed by hashing a guessed path.</summary>
     public string FileHash { get; }
 
-    /// <summary>The one constructor: takes the TEXT and keeps the HASH. There is no way to build one from a
-    /// hash somebody else computed, so a stored row is always re-derivable from its artefact and the key.</summary>
+    /// <summary>A finding read back from the store — the hashes exactly as the row holds them, refused unless both
+    /// have the one shape <see cref="Of"/> produces. It is the READ path only: a new finding enters the system
+    /// through <see cref="Of"/>, from its text, and a stored row stays re-derivable from its artefact and the key.</summary>
+    public static Outcome<GateFinding> Stored(
+        int ordinal, FindingSeverity severity, FindingCategory category, bool isGating, int line, string? textHash, string? fileHash)
+    {
+        var text = (textHash ?? string.Empty).Trim();
+        var file = (fileHash ?? string.Empty).Trim();
+
+        return IsSha256Hex(text) && IsSha256Hex(file) && ordinal >= 0 && line >= 0
+            ? Outcome<GateFinding>.Success(new GateFinding(ordinal, severity, category, isGating, line, text, file))
+            : Outcome<GateFinding>.Failure(
+                $"finding {ordinal} does not read back as a finding — both hashes are 64 lower-case hex characters, the ordinal and the line are not negative");
+    }
+
+    private static bool IsSha256Hex(string value) => value.Length == 64 && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    /// <summary>The one constructor for a NEW finding: takes the TEXT and keeps the HASH. There is no way to create
+    /// one from a hash somebody else computed; <see cref="Stored"/> only reads back what this produced.</summary>
     public static Outcome<GateFinding> Of(
         int ordinal, FindingSeverity severity, FindingCategory category, bool isGating, int line, string? text, string? file, FileHashKey fileKey)
     {

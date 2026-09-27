@@ -1,0 +1,86 @@
+using System.Collections;
+using System.Globalization;
+using Bench.Application.Gate;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+
+namespace Bench.Infrastructure.Persistence;
+
+/// <summary>Every row of every <c>gate_*</c> table, read through the EF MODEL rather than through a list of
+/// columns — so a column added next month is read, guarded and exported without anyone remembering to add it
+/// here. That is the property that makes this the guard's input rather than a second opinion about it.</summary>
+public sealed class PostgresGatePublicationSource(BenchDbContext db) : IGatePublicationSource
+{
+    public IReadOnlySet<string> PublicUrlColumns => GateModel.PublicUrlColumns;
+
+    /// <summary>The gate entity types, as the model maps them — also what the structural guard test walks.</summary>
+    public static IReadOnlyList<IEntityType> GateEntities(BenchDbContext context) =>
+        [.. context.Model.GetEntityTypes()
+            .Where(e => (e.GetTableName() ?? string.Empty).StartsWith(GateModel.TablePrefix, StringComparison.Ordinal))
+            .OrderBy(e => e.GetTableName(), StringComparer.Ordinal)];
+
+    public async Task<IReadOnlyList<PublishedTable>> ReadAsync(CancellationToken cancellationToken)
+    {
+        var tables = new List<PublishedTable>();
+
+        foreach (var entity in GateEntities(db))
+        {
+            tables.Add(new PublishedTable(entity.GetTableName()!, await RowsAsync(entity, cancellationToken)));
+        }
+
+        return tables;
+    }
+
+    private async Task<IReadOnlyList<PublishedRow>> RowsAsync(IEntityType entity, CancellationToken cancellationToken)
+    {
+        var rows = await ListAsync(entity, cancellationToken);
+        var columns = entity.GetProperties().Where(p => p.PropertyInfo is not null).ToList();
+        var key = entity.FindPrimaryKey()!.Properties[0].PropertyInfo!;
+
+        return [.. rows.Select(row => new PublishedRow(
+            Text(key.GetValue(row)),
+            [.. columns.Select(p => new PublishedField(p.GetColumnName(), Value(p.PropertyInfo!.GetValue(row))))]))];
+    }
+
+    /// <summary>The rows of one entity type, untracked. Reflection picks the type; the query itself is an ordinary
+    /// typed <c>Set&lt;T&gt;()</c>, so EF translates exactly what it would for hand-written code.</summary>
+    private Task<List<object>> ListAsync(IEntityType entity, CancellationToken cancellationToken) =>
+        (Task<List<object>>)typeof(PostgresGatePublicationSource)
+            .GetMethod(nameof(TypedListAsync), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .MakeGenericMethod(entity.ClrType)
+            .Invoke(this, [cancellationToken])!;
+
+    private async Task<List<object>> TypedListAsync<T>(CancellationToken cancellationToken)
+        where T : class =>
+        [.. await db.Set<T>().AsNoTracking().ToListAsync(cancellationToken)];
+
+    /// <summary>A stored value as a published one. Text is what the guard reads; an enum is text too — its name is
+    /// what the column holds — so nothing that reaches the database as a word escapes the guard.</summary>
+    private static PublishedValue Value(object? value) => value switch
+    {
+        null => new PublishedValue.Text(string.Empty),
+        string s => new PublishedValue.Text(s),
+        Enum e => new PublishedValue.Text(e.ToString()),
+        bool b => new PublishedValue.Flag(b),
+        Guid g => new PublishedValue.Identity(g),
+        DateTimeOffset d => new PublishedValue.Moment(d),
+        double d => new PublishedValue.Real(d),
+        IEnumerable sequence => Sequence(sequence),
+        _ => new PublishedValue.Number(Convert.ToDecimal(value, CultureInfo.InvariantCulture)),
+    };
+
+    private static PublishedValue Sequence(IEnumerable sequence)
+    {
+        var items = sequence.Cast<object>().ToList();
+
+        return items switch
+        {
+            _ when items.All(i => i is bool) => new PublishedValue.Flags([.. items.Cast<bool>()]),
+            _ when items.All(i => i is double) => new PublishedValue.Reals([.. items.Cast<double>()]),
+            _ when items.All(i => i is int or long or decimal) => new PublishedValue.Numbers([.. items.Select(i => Convert.ToDecimal(i, CultureInfo.InvariantCulture))]),
+            _ => new PublishedValue.Texts([.. items.Select(Text)]),
+        };
+    }
+
+    private static string Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+}
