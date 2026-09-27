@@ -665,6 +665,148 @@ for the rest.
 
 ### E3 — the driver (Fable for S3.1, S3.2, S3.7; Opus otherwise)
 
+> **How E3 is built (decided 2026-09-27, before its plan round).** The stories below are the contract; these are
+> the decisions they left open, each checked against the code at `4c24116` and the product's source.
+>
+> - **Layers.** The ports are Application (`IMcpSessionFactory`/`IMcpSession`, `IProductPinReader`,
+>   `IRecordingTapFactory`, `ISessionConfigReader` for S3.5, `IGateReviewerCatalog`, `IGateCheckouts`); the
+>   pure decisions are Domain (`CoaiEnvironment`, the protocol step rules `GateProtocolRules.Passed` /
+>   `AcceptAll` / `RunRef`, `GateReplyParser`, `LedgerRows`, `SettingsCheck.Compare`, `StderrFacts`); the
+>   adapters are Infrastructure (`ProcessSession` beside `ProcessRunner`, `McpStdioClient`, `ProductPinReader`,
+>   `RecordingTap` on Kestrel — a `FrameworkReference` to `Microsoft.AspNetCore.App`, no package —,
+>   `SessionConfigReader`, `PostgresGateReviewerCatalog`, `CoaiSettingsSecrets`). The protocols and the cell
+>   runner (`GateCellRunner`, `GateCampaign`) are Application over the ports, so every protocol test runs against
+>   the fake server through the real `McpStdioClient`.
+> - **The fake product** is a console project, `tests/FakeCoai`, in the solution (not under
+>   `tests/Bench.Tests/Fixtures/`, whose `.cs` files the test project would compile): newline JSON-RPC, a script
+>   file named by `FAKE_COAI_SCRIPT` (replies per tool, `hang`, `crash`, `nonjson`, `refuse-code-without-plan` as
+>   the product does), a ledger it writes into `COAI_DATA_DIR`, a session file, and an event log (open/close,
+>   review start/end per endpoint with timestamps) the concurrency test folds into observed maxima.
+> - **The pin hashes the PRODUCT bytes — the whole deployment set** (plan round, finding 13). A
+>   framework-dependent .NET app's `coai-mcp.exe` is a small apphost whose bytes barely change between builds;
+>   the code is in `coai-mcp.dll` beside it AND in the project-reference assemblies (`core`, `runners`) beside
+>   that. So when a sibling `<name>.dll` exists, `ProductPin.Read` hashes a manifest of every `.dll`, `.exe` and
+>   `.json` file under the binary's directory (relative path + SHA-256 per file, sorted) — a rebuild that changed
+>   one dependency must move the pin, and a test changes a dependency only; a self-contained single file is
+>   hashed alone. `--version` is run with a 30-second timeout. The pin is read per CLAIM (S1.3's rule), not once
+>   per run.
+> - **What `settingsHash` covers.** The snapshot is every `COAI_*` SENT, minus secrets by name (`COAI_CREDS_KEY`,
+>   `*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`), stored per attempt as `settings.json` in the artefact root
+>   (it holds the data-dir path, so never in the database). The HASH — the `settingsHash` of `GateScope` — is
+>   over the snapshot minus the keys that are another axis already: the per-cell identity (`COAI_DATA_DIR`,
+>   `COAI_CALLER_SESSION`) and the reviewer-derived values (the vendors string, whose tap port also moves per
+>   run, and the transport knobs the reviewer row sets — they are in `ReviewerDefinition.Hash`). Otherwise
+>   every cell would be its own scope and no two reviewers could share a table. The excluded names are one
+>   list with a reason each, tested.
+> - **The plan gate measures ONE round; the code gate measures the code stage.** A plan cell is `open →
+>   review_plan → resolve accept-all` (the reply of that round is the measurement; the bench never revises the
+>   plan, so a second round re-reviews the same text). A code cell is `open → plan loop (≤ 4 rounds, accept-all,
+>   to Passed = proceed | good_enough | continue_anyway) → review_code → resolve accept-all`; its facts are the
+>   code reply and the ledger rows of the code stage; the plan rounds are kept as artefacts
+>   (`stage-plan-<n>.reply.json`, `…resolve.json`) and their spend is not the code reviewer's. A code cell whose
+>   plan loop never passed is a completed session, invalid, cause `VerdictNotPassing` naming the plan loop.
+> - **The run's ref carries the run and the attempt**: `bench/gate/<run8>/<reviewer>/<task>-r<n>-a<k>`, created
+>   with `git branch -f` at the variant head. With `--shared-data-dir` a retried attempt would otherwise find the
+>   dead attempt's session under the same repo+branch and continue it.
+> - **Checkouts: the product is handed a GATE-OWNED clone, never the shared read-only checkout** (plan round,
+>   finding 14). `ICheckoutProvider` keeps its bare mirror per url and read-only worktree per commit untouched; the
+>   gate makes one `git clone --shared --no-checkout` of that mirror per run and task under
+>   `<checkout-root>/gate/<runId>/<task>` (objects borrowed through alternates, so it costs a working tree, not a
+>   second object store), checks it out detached at the variant head, and creates the run's refs THERE. The
+>   product's own worktrees and sessions are made against that clone, so nothing any other benchmark reads is
+>   written. A task's `CloneLocation` that is a plain path is passed as `file://`.
+> - **A whole-cell deadline** (plan round, finding 2): every cell runs under one absolute budget,
+>   `--cell-timeout-minutes` (default 300, the calibration's five-hour tool call), on top of each call's own
+>   timeout; at the deadline the session is killed, the attempt is settled `Failed` with cause `Interrupted`
+>   naming the deadline, and the lane moves on.
+> - **Lanes and endpoints.** `--parallel` lanes, each a `LegDrain` over one delegate; a lane CLAIMS, then waits on
+>   the per-endpoint semaphore of the claimed cell's reviewer (keyed by the endpoint value or reference name, or
+>   the runtime word for a CLI row), then opens the cell's one `ProcessSession`. A `LaneSlot` holds at most one
+>   session; opening a second while one is held throws (a programming error, not an outcome).
+> - **The prediction** (`--prediction`) is free text, so it goes where free text goes: `runs/<runId>/prediction.txt`
+>   in the artefact root, its SHA-256 on `gate_runs.PredictionHash`. The structural guard keeps
+>   `FailureText` as the one free-text column.
+> - **One migration (`GateDriver`)** adds `gate_runs.PredictionHash`, `gate_runs.AllowProductChange`,
+>   `gate_cells.ServerVersion` (the handshake's `serverInfo.version`, beside the pin), `gate_cells.ReferencesHash`
+>   (the consultation's point (a), below) and
+>   `gate_cells.SettingsChecked` / `SettingsMismatches` (S3.5's verdict as counts; the sentences go to
+>   `settings-check.json`). Every new string column joins the guard's allow-list by name.
+> - **The product moved.** `run` finds earlier native runs of the same gate and suite stamp that measured any of
+>   the same reviewers; if their latest cell pin does not `Match` the binary now, it is refused (exit 4, both
+>   shas named) unless `--allow-product-change`, which is stored on the run. A lane that reads a moved pin at a
+>   later claim stops claiming (exit 4) in a run without the flag; with it, it claims under the new pin, and a
+>   cell already claimed settles under its own.
+> - **Findings.** The reply's `findings[]` → `GateFinding.Of(ordinal, severity, category, isGating, line, text =
+>   the finding's canonical JSON, file, key)`; the text goes to `findings.jsonl`. Served/refused come from the
+>   server's stderr line (`reviewer … answered in … over N turns`), the turn-1 prompt hash from the prompt file named
+>   on the server's stderr LOG of the api shim's argv (`--prompt-file <p> … --out <a>`) — absent, never a crash,
+>   when no such line exists (a CLI reviewer) — both ports of the other harness's functions.
+> - **Growth, per attempt** (plan round, finding 12): `settings.json`, `settings-check.json`, `request.json`,
+>   `reply.json` (and one per plan-loop stage), `stderr.txt`, `findings.jsonl`, `run.json`, the product's data dir
+>   (`usage.jsonl`, `sessions/`, `coai.db`, logs) and, for `api` reviewers, the tap — ≈ 2.3 MB per feature run as
+>   the calibration measured, most of it tap bodies. Interrupted attempts are kept whole (≤ 2 per cell by the
+>   abandon rule); the gate clones are one working tree per run × task. `module_gate.md`'s growth table carries
+>   each with its owner: `bench gate prune` for tap bodies; a gate clone is removed by `bench gate sweep` once its
+>   run is `Finished` or `Failed`.
+> - **From the plan round (2026-09-27, coai `good_enough`, 3 of 3 reviewers, 15 findings — 4 accepted, 11
+>   rejected with reasons on the round):** accepted — a whole-cell deadline (2), the growth accounting (12), the
+>   pin over the whole deployment set (13), the refs in a gate-owned clone (14); rejected — state before a kill,
+>   orphan processes, interrupted-while-running (all already decided by E2's owner-checked sweep and fresh attempt
+>   directories), the concurrency test's realism (it proves the harness's limits, not the product's capacity),
+>   pre-flight (run reads the pin, the references and the suite before planning; `probe` is the dry run),
+>   cleaning interrupted attempts (binding: kept as evidence), batch mode (lanes are parallel), the settings hash
+>   and the vendors string (the reviewer's configuration is its own hashed axis), the prompt-file source (misread:
+>   it is the stderr log of the shim's argv), migrating stored categories (no driver has written a finding yet),
+>   and `proceed`-only passing (the product's `AdvanceOnResolve` is set by good_enough and continue_anyway too).
+> - **From the cadence consultation over E1–E3 (codex, closed `solved` after each point was checked in the
+>   code):** (a) a reviewer row hashes its reference NAMES, so an endpoint reference re-pointed from one address
+>   to another keeps `ReviewerDefinition.Hash` and would have been one population — each cell now carries
+>   `ReferencesHash` (SHA-256 over the resolved values the row's references took on this machine, the tap's
+>   loopback address excluded), and a run whose reviewer resolves differently at a later claim or a resume is
+>   refused naming the reference; (b) **an E2 defect**: `PostgresGateStore` claimed pending cells by `Position`
+>   then `Slot`, reversing the matrix's nesting (one task, reviewers A/B, two repeats: planned A1 B1 B2 A2,
+>   claimed A1 B2 B1 A2) — fixed test-first to `Slot` then `Position`, over a real `GateMatrix.Plan`; (c)
+>   claim-then-wait blocks a lane at the head of the line (two lanes, cap one, queue A A B: B idles while a lane
+>   waits for A) — a lane now claims only among reviewers whose endpoint has a free slot
+>   (`ClaimNextAsync(…, among)`), waits for a release when every pending cell's endpoint is full, and a barrier
+>   test requires B to start while the second A waits; (d) a SHARED data dir has one `usage.jsonl` with no
+>   session, task or attempt on a row, so concurrent cells' turns cannot be told apart — `--shared-data-dir`
+>   therefore runs ONE lane (a `--parallel` above 1 is refused naming why) and a cell's ledger is the slice
+>   appended between its session's start and end offsets.
+> - **Product facts, verified against coai's source 2026-09-27** (`origin/main` `9cb01a2b` = mcp 0.39.0, and
+>   the calibration branch `feat/feature-review-e3-dialects` `9afda135`), and what each changes here:
+>   the runtime words are `codex gemini claude antigravity local remote api` (`ReviewerRuntime.cs`
+>   `RuntimeNames`; an unknown word runs on Codex — E1 already pins this). The vendor row parser ignores an
+>   unknown field SILENTLY (no `UnmappedMemberHandling`), and `effort` / `thinking` / `reviewMinutes` exist only
+>   on the calibration branch (announced for 0.40.0, unreleased) — so on 0.39.0 they are accepted and ignored,
+>   which is exactly S3.5's case: the settings check reports them `unchecked` rather than applied, and the run
+>   record names the product version they were sent to. `COAI_FEATURE_MIN_EPICS` defaults to **3** and a plan
+>   with fewer epics is NOT refused — the verdict is `skipped` — so the environment sets it to 1 and the verdict
+>   word `skipped` joins `GateVerdictWord` (a skipped review is invalid and says why). The api key: the product
+>   runs `creds config <COAI_CREDS_KEY>`, reads one JSON object of name → key, takes the row's `key` (default the
+>   row id) and hands it to the api shim as `COAI_API_KEY` in ITS child environment; unset `COAI_CREDS_KEY` makes
+>   the row `unavailable` (excluded from rounds). `review_code` refuses with *"no plan round has reached
+>   'proceed' in this session — the plan gate comes first (review_plan)"* until a plan round is RESOLVED at
+>   proceed / good_enough / continue_anyway. The ledger is `<COAI_DATA_DIR>/usage.jsonl`, one row per reviewer
+>   turn: `utc provider model role stage seconds tokensIn tokensOut costUsd(nullable) outcome email kind
+>   tokensCached costNote` — **`tokensReasoning` only on the calibration branch** (defaulting to 0), so the
+>   reader treats an ABSENT field as *not captured* and the ledger artefact (it carries an `email`) stays in the
+>   artefact root. The review reply is `verdict gatingCount threshold reviewers findings[] discounted[]
+>   instruction cost{tokensIn,tokensOut,usd} commands[]`; a refusal is a separate `{error}` object. A finding's
+>   `category` is one of `Architecture Security Reliability Performance Ux Convention Clarity Completeness
+>   Consistency Feasibility` — **E1's `FindingCategory` names eight other words**, so every product category but
+>   three would read `Unknown`; S3.4 replaces the enum with the product's words, pinned by a copied fixture of
+>   `core/Findings/Finding.cs` as the runtime words are. `--version` prints `connect-other-ais <version>` and
+>   exits without serving; `serverInfo.version` is `Major.Minor.Build`. Session files are
+>   `<data>/sessions/session-<hash16>.json` holding `state.repoPath`, `state.branch` and `state.config
+>   {roles{<Role>{maxRounds,threshold,enabled}}, onExhausted}` — S3.5 matches repo+branch the way `coai-bench`'s
+>   `Sessions.Owner` does (separators and a trailing slash normalised, case-insensitive path, ordinal branch).
+>   `COAI_FEATURE_API_REVIEW_MINUTES` exists only on the calibration branch; `COAI_FEATURE_SOURCE_FOLLOWUPS` on
+>   0.39.0. The installed binary the editor runs is a single self-contained file (~26 MB); a checkout build is
+>   an apphost beside `coai-mcp.dll`, which is why the pin hashes both.
+> - **Not in E3** (named so nobody reads their absence as done): `reviewers add --from-coai-settings` /
+>   `--from-calib-models` (D6, S7.1), `suite verify --prune` (§4) and `bench gate prune`'s scheduling.
+
 - **S3.1** `ProcessSession` (long-lived exe + argv, stdin/stdout pipes, stderr to a file, kill the tree on
   dispose, `IsAlreadyGone` shared) + `McpStdioClient` (`initialize`, `notifications/initialized`, `tools/list`,
   `tools/call` with an absolute per-call timeout, notifications kept). RED against a fake MCP server in the test

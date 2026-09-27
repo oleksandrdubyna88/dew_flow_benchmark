@@ -55,6 +55,33 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
         (await NewStore(new TestClock(Noon)).CellAsync(cells[0].Id, Ct)).Ok().Attempts.Should().Be(1, "the winner's claim counted once");
     }
 
+    /// <summary>The store hands cells out in the MATRIX's order — slot, then the reviewer's position inside the slot.
+    /// It used to order by position first, which reversed the nesting: one task, reviewers A and B, two repeats was
+    /// planned A1 B1 B2 A2 and claimed A1 B2 B1 A2, so B's second repeat ran before its first. The fixture that hid it
+    /// planned every cell in slot 0; this one plans through <see cref="GateMatrix.Plan"/>.</summary>
+    [Fact]
+    public async Task Cells_are_claimed_in_the_order_the_matrix_planned_them()
+    {
+        var run = Run();
+        var planned = GateMatrix.Plan(
+            [GateTaskId.Parse("cs2").Ok()],
+            [GateReviewerId.Parse("rev-a").Ok(), GateReviewerId.Parse("rev-b").Ok()],
+            repeats: 2).Ok();
+        var cells = planned.Select(c => GateCell.Pending(Guid.CreateVersion7(), run.Id, c)).ToList();
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+
+        var claimed = new List<string>();
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = (await store.ClaimNextAsync(run.Id, Here(), Pin(), Ct)).Ok();
+            claimed.Add($"{cell.Reviewer.Value}{cell.Repeat}");
+            (await store.SettleAsync(cell.Id, Here(), Completed(), Ct)).Ok();
+        }
+
+        claimed.Should().Equal(planned.Select(c => $"{c.Reviewer.Value}{c.Repeat}"), "a lane takes the next cell of the PLAN, repeats outermost");
+    }
+
     /// <summary>Runs one call per store at the same instant. Each store opens its connection FIRST, and every call
     /// waits on one gate — without that, the first call finishes before the last connection is open and a "race" is
     /// a queue, which is how a guard that is missing can pass a concurrency test.</summary>

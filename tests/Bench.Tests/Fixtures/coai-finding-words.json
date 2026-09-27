@@ -1,0 +1,8 @@
+{
+  "_source": "coai · src_mcp/core/Findings/Finding.cs, enum Severity (line 6) and enum Category (line 25); serialised by name (ServerJsonContext UseStringEnumConverter = true, line 252)",
+  "_commit": "9cb01a2bf17fa5ca72cc59050427bf989bdf96e3",
+  "_read": "2026-09-27, from dew_flow_connect_other_ais origin/main; identical on feat/feature-review-e3-dialects 9afda135",
+  "_why": "The words a finding's severity and category arrive as. COPIED rather than retyped in a test, and REPLACED from the product's source when it grows — never edited by hand, because an edited fixture has stopped being evidence.",
+  "severities": ["Blocking", "Major", "Minor", "Nit"],
+  "categories": ["Architecture", "Security", "Reliability", "Performance", "Ux", "Convention", "Clarity", "Completeness", "Consistency", "Feasibility"]
+}

@@ -27,6 +27,12 @@ public interface IGateStore
     /// is the directory its artefacts go to.</summary>
     Task<Outcome<GateCell>> ClaimNextAsync(Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken);
 
+    /// <summary><see cref="ClaimNextAsync"/> limited to cells of <paramref name="among"/> — the reviewers whose endpoint
+    /// has a free slot. A lane claims only work it can start, so it never holds a claimed cell at the head of the line
+    /// while another endpoint sits idle. An empty set claims nothing.</summary>
+    Task<Outcome<GateCell>> ClaimNextAmongAsync(
+        Guid runId, WorkerIdentity owner, ProductPin pin, IReadOnlyCollection<GateReviewerId> among, CancellationToken cancellationToken);
+
     /// <summary>Records how a claimed cell ended: the state change, the facts and the findings in one transaction.
     /// Refused for a cell this owner does not hold.</summary>
     Task<Outcome<GateCell>> SettleAsync(Guid cellId, WorkerIdentity owner, GateSettlement settlement, CancellationToken cancellationToken);

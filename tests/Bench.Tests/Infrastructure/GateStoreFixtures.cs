@@ -43,7 +43,7 @@ internal static class GateStoreFixtures
 
         return new GateSettlement.Completed(
             facts,
-            [.. Enumerable.Range(0, findings).Select(i => GateFinding.Of(i, FindingSeverity.Major, FindingCategory.Correctness, i == 0, 10 + i,
+            [.. Enumerable.Range(0, findings).Select(i => GateFinding.Of(i, FindingSeverity.Major, FindingCategory.Architecture, i == 0, 10 + i,
                 $"finding {i} text that quotes private code", $"src/File{i}.cs", Key).Ok())],
             SettingsHash: new string('5', 64),
             PromptHash: new string('6', 64));

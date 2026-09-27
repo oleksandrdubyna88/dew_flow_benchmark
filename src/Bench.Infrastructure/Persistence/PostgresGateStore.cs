@@ -76,7 +76,27 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
             _ => string.Empty,
         };
 
-        return refusal.Length > 0 ? Outcome<GateCell>.Failure(refusal) : await ClaimLoopAsync(runId, owner, pin, cancellationToken);
+        return refusal.Length > 0 ? Outcome<GateCell>.Failure(refusal) : await ClaimLoopAsync(runId, owner, pin, [], cancellationToken);
+    }
+
+    public async Task<Outcome<GateCell>> ClaimNextAmongAsync(
+        Guid runId, WorkerIdentity owner, ProductPin pin, IReadOnlyCollection<GateReviewerId> among, CancellationToken cancellationToken)
+    {
+        if (among.Count == 0)
+        {
+            return Outcome<GateCell>.Failure($"gate run {runId} has {NoPendingCell} among no reviewers — every endpoint is full");
+        }
+
+        var refusal = (owner.CanClaim, pin.IsPinned) switch
+        {
+            (false, _) => "a claim needs an owner with a host and a pid — an unowned claim can never be swept correctly",
+            (_, false) => "a gate cell is claimed under a product pin, and none was given — the pin is stored per cell at claim time",
+            _ => string.Empty,
+        };
+
+        return refusal.Length > 0
+            ? Outcome<GateCell>.Failure(refusal)
+            : await ClaimLoopAsync(runId, owner, pin, [.. among.Select(r => r.Value)], cancellationToken);
     }
 
     public async Task<Outcome<GateCell>> SettleAsync(
@@ -204,11 +224,12 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
 
     public Task<bool> HasFindingsAsync(CancellationToken cancellationToken) => db.GateFindings.AnyAsync(cancellationToken);
 
-    private async Task<Outcome<GateCell>> ClaimLoopAsync(Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken)
+    private async Task<Outcome<GateCell>> ClaimLoopAsync(
+        Guid runId, WorkerIdentity owner, ProductPin pin, IReadOnlyList<string> among, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < ClaimAttempts; attempt++)
         {
-            var candidate = await NextPendingIdAsync(runId, cancellationToken);
+            var candidate = await NextPendingIdAsync(runId, among, cancellationToken);
 
             if (candidate == Guid.Empty)
             {
@@ -224,12 +245,16 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
         return Outcome<GateCell>.Failure($"lost {ClaimAttempts} claim races in a row — the queue is contended, retry");
     }
 
-    /// <summary>The next pending cell of a run that has NOT ended — a terminal run is never claimed from.</summary>
-    private async Task<Guid> NextPendingIdAsync(Guid runId, CancellationToken cancellationToken) =>
+    /// <summary>The next pending cell of a run that has NOT ended — a terminal run is never claimed from — in the
+    /// MATRIX's order: slot, then the reviewer's position inside the slot. (It was position first, which reversed the
+    /// nesting and ran a reviewer's second repeat before its first.) <paramref name="among"/>, when not empty, limits
+    /// the candidates to those reviewers — the lanes' capacity-aware claim.</summary>
+    private async Task<Guid> NextPendingIdAsync(Guid runId, IReadOnlyList<string> among, CancellationToken cancellationToken) =>
         await db.GateCells.AsNoTracking()
             .Where(c => c.RunId == runId && c.State == CellState.Pending
                      && db.GateRuns.Any(r => r.Id == runId && r.Status != GateRunStatus.Finished && r.Status != GateRunStatus.Failed))
-            .OrderBy(c => c.Position).ThenBy(c => c.Slot)
+            .Where(c => among.Count == 0 || among.Contains(c.ReviewerId))
+            .OrderBy(c => c.Slot).ThenBy(c => c.Position)
             .Select(c => c.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
