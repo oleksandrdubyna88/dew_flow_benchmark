@@ -25,6 +25,16 @@ public sealed record CapturedCount(bool WasCaptured, long Value, string Reason)
     public static CapturedCount Unavailable(string reason) => new(false, 0, reason);
 }
 
+/// <summary>The same distinction for MONEY. A reviewer that reports no cost — every CLI reviewer, for one —
+/// is <i>cost unknown</i>, never free: a row priced at nothing would make the cheapest reviewer the one
+/// nobody metered. Decimal because a cost is summed and compared; a double would drift across a campaign.</summary>
+public sealed record CapturedUsd(bool WasCaptured, decimal Value, string Reason)
+{
+    public static CapturedUsd Amount(decimal value) => new(true, value, string.Empty);
+
+    public static CapturedUsd Unavailable(string reason) => new(false, 0m, reason);
+}
+
 /// <summary>Where a leg's wall-clock went. Three buckets, not two.
 /// <para>
 /// The third exists because a busy accelerator otherwise reads as a slow model: time spent waiting for
