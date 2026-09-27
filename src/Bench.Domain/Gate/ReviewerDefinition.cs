@@ -55,9 +55,15 @@ public sealed record ReviewerTransport(
 
     public bool AsksModuleDefault => string.Equals(ReasoningEffort, ModuleDefault, StringComparison.Ordinal);
 
+    /// <summary>Length-prefixed: the dialect and the effort are free text side by side, and a <c>,</c>-joined form
+    /// let dialect <c>"xai,effort=high"</c> with effort <c>medium</c> read like dialect <c>xai</c> with effort
+    /// <c>"high,effort=medium"</c>.</summary>
     public string Canonical =>
-        $"dialect={Dialect},effort={ReasoningEffort},maxTokens={MaxTokens},timeoutMin={TimeoutMinutes},"
-        + $"followUps={FollowUps},capMin={ReviewMinutesCap},thinking={(Thinking ? "on" : "off")}";
+        CanonicalFields.Of(
+            "transport", Dialect, ReasoningEffort, Invariant(MaxTokens), Invariant(TimeoutMinutes), Invariant(FollowUps),
+            Invariant(ReviewMinutesCap), Thinking ? "thinking-on" : "thinking-off");
+
+    private static string Invariant(int value) => value.ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>What a reviewer charges per million tokens, or the honest statement that nobody knows.
@@ -201,19 +207,22 @@ public sealed record ReviewerDefinition
                 runtime, id, endpoint, key, creds, exe, (remoteVendor ?? string.Empty).Trim(), transport, prices, gates));
     }
 
+    /// <summary>Length-prefixed (<see cref="CanonicalFields"/>), like the suite's forms: the model and the url are
+    /// free text side by side, and a <c>|</c>-joined form let a model <c>"m|endpoint=url:A"</c> at url <c>B</c> hash
+    /// like model <c>"m"</c> at url <c>"A|endpoint=url:B"</c> — two subjects under one hash.</summary>
     public string Canonical =>
-        string.Join(
-            '|',
-            $"runtime={Runtime.ToString().ToLowerInvariant()}",
-            $"model={Model}",
-            $"endpoint={Endpoint.Canonical}",
-            $"key={KeyName}",
-            $"credsRef={CredsKeyRef}",
-            $"exeRef={ExecutableRef}",
-            $"remoteVendor={RemoteVendor}",
+        CanonicalFields.Of(
+            "reviewer",
+            Runtime.Word(),
+            Model,
+            Endpoint.Canonical,
+            KeyName,
+            CredsKeyRef,
+            ExecutableRef,
+            RemoteVendor,
             Transport.Canonical,
-            $"prices={Prices.Canonical}",
-            $"gates={Gates.Canonical}");
+            Prices.Canonical,
+            Gates.Canonical);
 
     public string Hash => StableHash.Of(Canonical);
 

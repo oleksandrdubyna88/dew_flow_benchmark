@@ -90,14 +90,15 @@ public sealed class GateReportPopulationTests
     [Fact]
     public void An_interrupted_then_completed_cell_is_one_run_and_its_failed_attempt_is_counted_apart()
     {
-        var interrupted = Run("cs2", "grok", 1, valid: false, findings: 0, failure: FailureKind.Interrupted, attempt: 1);
-        var completed = Run("cs2", "grok", 1, findings: 4, attempt: 2);
-        var other = Run("cs2", "grok", 2, findings: 2, attempt: 1);
+        var campaign = Guid.CreateVersion7();
+        var interrupted = Run("cs2", "grok", 1, valid: false, findings: 0, failure: FailureKind.Interrupted, attempt: 1, campaign: campaign);
+        var completed = Run("cs2", "grok", 1, findings: 4, attempt: 2, campaign: campaign);
+        var other = Run("cs2", "grok", 2, findings: 2, attempt: 1, campaign: campaign);
 
         var input = Input([interrupted, completed, other]);
         var row = GateReport.PerModel(Scope(PinA), StrictRubric, input).Rows.Single();
 
-        row.Runs.Should().Be(2, "one run per (task, reviewer, repeat): the cell's LATEST attempt");
+        row.Runs.Should().Be(2, "one run per cell (campaign, task, reviewer, repeat): the cell's LATEST attempt");
         row.ValidPct.Should().Be(Figure.Of(100), "the interrupted attempt is not a run of the model — the completed one is");
         row.FindingsPerRun.Should().Be(Figure.Of(3), "(4 + 2) / 2 — the interrupted attempt's zero is not averaged in");
         row.Failures.Should().BeEmpty();
@@ -106,6 +107,27 @@ public sealed class GateReportPopulationTests
 
         GateReport.PerTask(Scope(PinA), StrictRubric, input).Single().Runs.Should().Be(2);
         GateReport.Variance(Scope(PinA), StrictRubric, input).Single().Repeats.Should().Be(2);
+    }
+
+    [Fact]
+    public void Two_campaigns_in_one_scope_are_separate_runs_and_never_collapse_into_one()
+    {
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+        var input = Input([
+            Run("cs2", "grok", 1, findings: 2, campaign: first),
+            Run("cs2", "grok", 2, findings: 6, campaign: first),
+            Run("cs2", "grok", 1, findings: 4, campaign: second),
+        ]);
+
+        var row = GateReport.PerModel(Scope(PinA), StrictRubric, input).Rows.Single();
+
+        row.Runs.Should().Be(3, "repeat 1 of one campaign and repeat 1 of another are two measurements, not two attempts at one");
+        row.FindingsPerRun.Should().Be(Figure.Of(4));
+        var variance = GateReport.Variance(Scope(PinA), StrictRubric, input).Single();
+        variance.Repeats.Should().Be(3, "three cells are three readings, whatever their repeat numbers");
+        variance.FindingsState.Should().Be(VarianceState.Stated);
+        variance.FindingsMax.Should().Be(6);
     }
 
     [Fact]

@@ -2,8 +2,11 @@ namespace Bench.Domain.Gate;
 
 /// <summary>WHICH runs and WHICH verdicts a report figure is computed over, decided once, before any arithmetic.
 /// <list type="bullet">
-/// <item><b>Runs</b> — one per cell (task, reviewer, repeat): its LATEST attempt. An interrupted attempt that was
-/// restarted is not a run of the model; it stays in <see cref="Attempts"/>, which the attempts columns count.</item>
+/// <item><b>Runs</b> — one per cell (campaign, task, reviewer, repeat): its LATEST attempt. An interrupted attempt
+/// that was restarted is not a run of the model; it stays in <see cref="Attempts"/>, which the attempts columns
+/// count. The campaign is part of the cell: repeat 1 of one campaign and repeat 1 of another are two
+/// measurements, and a key without it collapsed them into one. An imported run carries the campaign id its
+/// import assigns, so it never collapses into a native one either.</item>
 /// <item><b>Verdicts</b> — under ONE rubric (id, kind and hash: an edited prompt is another rubric), and ONE per
 /// finding (<c>RunId</c>, <c>FindingOrdinal</c>): a re-ask that superseded an <c>AssessmentFailure</c>, or a
 /// second assessor reading the same finding, is not a second finding. The choice is ordered — a real reading
@@ -28,7 +31,7 @@ public sealed record GatePopulation(
         verdicts.Count > 0 || run.Facts.Valid && run.FindingsCount == 0;
 
     private static IReadOnlyList<GateRunRecord> LatestAttempts(IReadOnlyList<GateRunRecord> attempts) =>
-        [.. attempts.GroupBy(r => (r.Task, r.Reviewer, r.Repeat)).Select(cell => cell.MaxBy(r => r.Attempt)!)];
+        [.. attempts.GroupBy(r => (r.CampaignId, r.Task, r.Reviewer, r.Repeat)).Select(cell => cell.MaxBy(r => r.Attempt)!)];
 
     private static IReadOnlyList<GateVerdict> OnePerFinding(IEnumerable<GateVerdict> verdicts) =>
         [.. verdicts.GroupBy(v => (v.RunId, v.FindingOrdinal))

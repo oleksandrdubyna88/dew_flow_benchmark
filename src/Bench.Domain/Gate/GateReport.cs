@@ -70,11 +70,13 @@ public static class GateReport
     }
 
     /// <summary>One task × reviewer's variance. The ids come from the caller, not from <c>runs[0]</c>, so a group
-    /// of nothing is an explicit empty state (withheld findings, unassessed seeds) rather than an index error.</summary>
+    /// of nothing is an explicit empty state (withheld findings, unassessed seeds) rather than an index error.
+    /// <paramref name="runs"/> are already one per cell, so the number of repeats is the number of runs — two
+    /// campaigns' repeat 1 are two readings, which counting distinct repeat NUMBERS would have folded into one.</summary>
     public static VarianceReading VarianceOf(GateTaskId task, GateReviewerId reviewer, IReadOnlyList<GateRunRecord> runs, IReadOnlyList<GateVerdict> verdicts)
     {
         var byRun = verdicts.ToLookup(v => v.RunId);
-        var repeats = runs.Select(r => r.Repeat).Distinct().Count();
+        var repeats = runs.Count;
         var seeds = runs.Where(r => GatePopulation.IsAssessed(r, [.. byRun[r.RunId]])).Select(r => SeedsHit(byRun[r.RunId])).ToList();
         var findings = repeats >= MinRepeatsForVariance ? runs.Select(r => r.FindingsCount).ToList() : [];
         var seedsState = SpreadState(seeds.Count);
@@ -195,9 +197,9 @@ internal static class ReviewerRow
             Figure.Mean(a.Captured(TurnOneCached), 0),
             a.Runs.Count(r => r.Facts.IsWarm),
             Figure.Mean(a.Captured(r => Count(r.Facts.TokensReasoning)), 0),
-            costs.Count > 0 ? Figure.Of(Math.Round(costs.Average(), 4)) : Figure.Unknown,
+            costs.Count > 0 ? Figure.Of(PythonRound.Of(costs.Sum() / costs.Count, 4)) : Figure.Unknown,
             CostPerSeed(costs, a.SeedsFoundTotal),
-            costs.Count > 0 ? Figure.Of(Math.Round(costs.Sum(), 4)) : Figure.Unknown,
+            costs.Count > 0 ? Figure.Of(PythonRound.Of(costs.Sum(), 4)) : Figure.Unknown,
             [.. a.Runs.Where(r => !r.Facts.Valid).GroupBy(r => r.Facts.Failure.Kind).OrderBy(g => g.Key)
                 .Select(g => new FailureCount(g.Key, g.Count()))]);
     }
@@ -207,7 +209,7 @@ internal static class ReviewerRow
         {
             (0, _) => Figure.Unknown,
             (_, 0) => Figure.NotApplicable,
-            _ => Figure.Of(Math.Round(costs.Sum() / seedsFound, 4)),
+            _ => Figure.Of(PythonRound.Of(costs.Sum() / seedsFound, 4)),
         };
 
     private static (bool Captured, double Value) Count(CapturedCount count) => (count.WasCaptured, count.Value);

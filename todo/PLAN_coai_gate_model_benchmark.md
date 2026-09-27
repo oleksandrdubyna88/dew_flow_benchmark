@@ -521,12 +521,16 @@ for the rest.
 > ranges were the hole); `GateCell.Pending` takes a caller-minted id. `GateFinding.FileHash` is an HMAC under a
 > `FileHashKey` that lives only in the artefact root (resolving it is E2/E3) over a normalised path. The report
 > takes the `Rubric` (id + kind + hash) rather than the `RubricKind`, and `GatePopulation` decides its inputs
-> once: the latest attempt per (task, reviewer, repeat) with `Attempts` / `AttemptsFailed` columns (the Python
-> report's `final_attempts`), one verdict per finding (real over `AssessmentFailure`, independent over
-> family-matched, `AssessorFamilyMatched` counted), a valid zero-finding run assessed with zero hits, calibration
-> tasks in `ModelTable.Calibration`, and variance as two spreads — seeds need three assessed readings, findings
-> three repeats. `Quantile.Q` rounds through `PythonRound` (the exact binary value, half to even), pinned on
-> vectors printed by Python 3.14.6. The DTO guard walks the type graph with a `Type.Property` allow-list.
+> once: the latest attempt per cell (campaign, task, reviewer, repeat) — the campaign in the key, so two
+> campaigns in one scope never collapse — with `Attempts` / `AttemptsFailed` columns (the Python report's
+> `final_attempts`), one verdict per finding (real over `AssessmentFailure`, independent over family-matched,
+> `AssessorFamilyMatched` counted), a valid zero-finding run assessed with zero hits, calibration tasks in
+> `ModelTable.Calibration`, and variance as two spreads over the cells — seeds need three assessed readings,
+> findings three repeats. Every rounding the Python harness does — `q`, `pct`, the means, the costs, the run's
+> seconds — goes through `PythonRound` (the exact binary value, half to even), pinned on vectors printed by
+> Python 3.14.6. `ReviewerDefinition.Canonical` and `ReviewerTransport.Canonical` are length-prefixed like the
+> suite's forms, which changed every reviewer hash (no reviewer row is stored yet). The DTO guard walks the type
+> graph with a `Type.Property` allow-list.
 
 - [x] **S1.1** `GateKind`, `GateTask` (id, language, hosted gates, calibration flag, seeds), `SeedSpec`, `GateSuite`
   (parse → freeze → `Stamp` via `StableHash`; `privateNames[]`; refuses a task naming a gate it cannot host — a

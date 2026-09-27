@@ -101,6 +101,25 @@ public sealed class GateReviewerTests
     }
 
     [Fact]
+    public void Moving_a_separator_between_the_model_and_the_url_changes_the_hash()
+    {
+        var a = Definition(model: "grok-4.7|endpoint=url:https://api.x.ai/v1", endpoint: "https://api.x.ai/v2").Ok();
+        var b = Definition(model: "grok-4.7", endpoint: "https://api.x.ai/v1|endpoint=url:https://api.x.ai/v2").Ok();
+
+        b.Hash.Should().NotBe(a.Hash,
+            "two different models at two different urls are two subjects — a '|'-joined form could not tell them apart");
+    }
+
+    [Fact]
+    public void Moving_a_separator_between_the_dialect_and_the_effort_changes_the_transport()
+    {
+        var a = ReviewerTransport.Parse("xai,effort=high", "medium", 8192, 20, 3, 20, true).Ok();
+        var b = ReviewerTransport.Parse("xai", "high,effort=medium", 8192, 20, 3, 20, true).Ok();
+
+        b.Canonical.Should().NotBe(a.Canonical, "the transport is part of the subject, and each of its knobs is its own field");
+    }
+
+    [Fact]
     public void The_hash_changes_when_the_transport_changes_because_the_transport_is_part_of_the_subject()
     {
         var medium = Definition(effort: "medium").Ok();
@@ -158,7 +177,7 @@ public sealed class GateReviewerTests
         ReviewerTransport.Parse("xai", "", 8192, 20, 3, 20, true).Reason().Should().Contain("reasoning effort").And.Contain("'none'");
         ReviewerTransport.Parse("xai", "medium", 0, 20, 3, 20, true).Reason().Should().Contain("maxTokens");
         ReviewerTransport.Parse("xai", "medium", 8192, 20, 3, 20, true).Ok().Canonical
-            .Should().Be("dialect=xai,effort=medium,maxTokens=8192,timeoutMin=20,followUps=3,capMin=20,thinking=on");
+            .Should().Be("9:transport3:xai6:medium4:81922:201:32:2011:thinking-on", "every knob is one length-prefixed field");
     }
 
     private static GateReviewerId Id(string value) => GateReviewerId.Parse(value).Ok();
