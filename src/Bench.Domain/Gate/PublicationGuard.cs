@@ -62,6 +62,7 @@ public static partial class PublicationGuard
     public const string DriveRule = "carries a drive path";
     public const string HomeRule = "carries a /home/ path";
     public const string UsersRule = "carries a \\Users\\ path";
+    public const string EndpointRule = "is not a public vendor url";
 
     [GeneratedRegex(@"(?<![A-Za-z0-9])[A-Za-z]:[\\/]")]
     private static partial Regex DrivePath { get; }
@@ -73,9 +74,9 @@ public static partial class PublicationGuard
 
     private static IEnumerable<string> Rules(PublishedText text, PrivateNames privateNames, IReadOnlySet<string> publicUrlColumns)
     {
-        if (HasUrl(text, publicUrlColumns))
+        if (UrlRuleFor(text, publicUrlColumns) is { Length: > 0 } urlRule)
         {
-            yield return UrlRule;
+            yield return urlRule;
         }
 
         foreach (var rule in PathRules(text.Text))
@@ -89,9 +90,16 @@ public static partial class PublicationGuard
         }
     }
 
-    private static bool HasUrl(PublishedText text, IReadOnlySet<string> publicUrlColumns) =>
-        text.Text.Contains("://", StringComparison.Ordinal)
-        && !(publicUrlColumns.Contains($"{text.Table}.{text.Column}") && IsPublicVendorUrl(text.Text));
+    /// <summary>The url rule for one value. An ordinary column refuses any <c>://</c>. The endpoint column holds a
+    /// public vendor url or NOTHING, so there any non-empty value that is not one is refused — with or without a
+    /// scheme: <c>llm.corp.internal:8000</c> spells no <c>://</c> and is exactly the machine address the rule is for.</summary>
+    private static string UrlRuleFor(PublishedText text, IReadOnlySet<string> publicUrlColumns) =>
+        (publicUrlColumns.Contains($"{text.Table}.{text.Column}"), text.Text.Length > 0, text.Text.Contains("://", StringComparison.Ordinal)) switch
+        {
+            (true, true, _) => IsPublicVendorUrl(text.Text) ? string.Empty : EndpointRule,
+            (false, _, true) => UrlRule,
+            _ => string.Empty,
+        };
 
     private static bool IsPublicVendorUrl(string text) =>
         ReviewerEndpoint.Parse(text).Match(endpoint => endpoint is ReviewerEndpoint.Value, _ => false);
@@ -108,7 +116,7 @@ public static partial class PublicationGuard
             yield return HomeRule;
         }
 
-        if (text.Contains("\\Users\\", StringComparison.OrdinalIgnoreCase) || text.Contains("/Users/", StringComparison.Ordinal))
+        if (text.Contains("\\Users\\", StringComparison.OrdinalIgnoreCase) || text.Contains("/Users/", StringComparison.OrdinalIgnoreCase))
         {
             yield return UsersRule;
         }

@@ -34,6 +34,13 @@ public sealed class GateCellCompletion(IGateArtifactStore artifacts, IGateStore 
                 $"the last artefact an attempt commits is its run record, got {runRecord.Class} — its presence is what says the attempt was written out whole");
         }
 
+        var claim = ClaimRefusal(scope, owner, await store.CellAsync(scope.CellId, cancellationToken));
+
+        if (claim.Length > 0)
+        {
+            return Outcome<GateCell>.Failure(claim);
+        }
+
         var written = await WriteAllAsync(scope, [.. files, runRecord], cancellationToken);
 
         return written switch
@@ -44,6 +51,19 @@ public sealed class GateCellCompletion(IGateArtifactStore artifacts, IGateStore 
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
+
+    /// <summary>Why this owner may not commit this scope, or empty. Checked BEFORE the first byte is written: a scope
+    /// for an attempt the claim is not at, or a cell this owner does not hold, would file refs under an attempt that
+    /// never settles — evidence recorded against the wrong session.</summary>
+    private static string ClaimRefusal(ArtifactScope scope, WorkerIdentity owner, Outcome<GateCell> read) => read switch
+    {
+        Outcome<GateCell>.Fail fail => fail.Reason,
+        Outcome<GateCell>.Ok { Value: var cell } when cell.State != CellState.Claimed || cell.Owner != owner =>
+            $"{cell.Subject} is {cell.State} under {cell.Owner.Canonical} — {owner.Canonical} does not hold it, so it commits nothing",
+        Outcome<GateCell>.Ok { Value: var cell } when cell.RunId != scope.Run.Id || cell.Attempts != scope.Attempt =>
+            $"{cell.Subject} is claimed at attempt {cell.Attempts} of run {cell.RunId}; a scope for attempt {scope.Attempt} of run {scope.Run.Id} would file its refs under the wrong attempt",
+        _ => string.Empty,
+    };
 
     private async Task<Outcome<GateCell>> RecordThenSettleAsync(
         ArtifactScope scope, WorkerIdentity owner, IReadOnlyList<ArtifactRef> refs, GateSettlement settlement, CancellationToken cancellationToken) =>

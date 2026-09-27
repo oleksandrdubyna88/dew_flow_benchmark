@@ -241,6 +241,15 @@ public sealed class FileSystemGateArtifactStoreTests
     }
 
     [Fact]
+    public void Containment_under_a_drive_or_volume_root_is_not_refused()
+    {
+        var volume = Path.GetPathRoot(Path.GetTempPath())!;
+
+        ArtifactContainment.IsWithin(Path.Combine(volume, "artifacts", "runs"), volume).Should().BeTrue(
+            "a root at the top of a drive keeps its separator when trimmed, and must not become a doubled one");
+    }
+
+    [Fact]
     public async Task A_link_that_swaps_one_cells_folder_for_anothers_is_refused()
     {
         using var temp = NewRoot();

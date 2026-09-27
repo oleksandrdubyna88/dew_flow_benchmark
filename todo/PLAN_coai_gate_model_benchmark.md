@@ -613,6 +613,20 @@ for the rest.
 > - **`GateFileHashKeys`, `GateCellCompletion`, `IGatePublicationSource`** are new Application pieces the stories
 >   implied but did not name; the CLI verb class is `CoaiGateCommand` (`GateCommand` is already a harvest type).
 > - `samples/gate-suite.sample.json` is new: no tasks, three made-up private names the guard test always loads.
+>
+> **The code round (coai, 2026-09-27, `good_enough`, 12 of 12 reviewers, 37 findings) — 13 accepted, 24 rejected
+> with reasons recorded on the round.** Taken, each RED first: a schemeless machine address in
+> `gate_reviewers.EndpointUrl` (`llm.corp.internal:8000`) passed the guard — the endpoint column now requires a
+> public vendor url for ANY non-empty value; `/users/` in lower case passed; `IsWithin` refused every path under a
+> drive or volume root (the trimmed root kept its separator and got a second one); `GateCellCompletion` wrote and
+> recorded refs for a scope whose attempt did not match the claim, or whose owner did not hold the cell — it now
+> checks the claim before the first byte; an existing key file whose permissions had been loosened was accepted —
+> every read re-checks owner-only; the export's staging file was not flushed, an unwritable `--out` threw instead
+> of exiting 3, and the suite-read refusal named only the exception type. The footprint now aggregates while it
+> enumerates. Declined (reasons on the round): progress output, streaming the export, a size cap on the operator's
+> own suite file, `--out` path policing, `Verb` vs `Operand` dispatch, the CLI's synchronous dispatch and its role as
+> composition root, an explicit export projection beside the model-driven one, and the scenario harness — this
+> repository has none yet and no `research/module_tests.md`, a gap older than E2 (open question).
 
 - [x] **S2.1** EF entities + one migration for `gate_runs`, `gate_cells`, `gate_findings`, `gate_verdicts`,
   `gate_reviewers`, `gate_artifacts` — `GateTables`, whose up-operations touch only `gate_*` (asserted).

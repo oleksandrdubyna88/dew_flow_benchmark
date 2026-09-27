@@ -18,6 +18,7 @@ public sealed class PublicationGuardTests
     [InlineData("d:/work/x", PublicationGuard.DriveRule)]
     [InlineData("/home/someone/x", PublicationGuard.HomeRule)]
     [InlineData("/Users/someone/x", PublicationGuard.UsersRule)]
+    [InlineData("/users/someone/x", PublicationGuard.UsersRule)]
     [InlineData("contoso-ORDERS", "carries private name #1 of the suite")]
     [InlineData("the fabrikam key", "carries private name #2 of the suite")]
     public void Each_rule_refuses_its_shape(string text, string rule)
@@ -41,9 +42,20 @@ public sealed class PublicationGuardTests
     {
         Check("gate_reviewers", "EndpointUrl", "https://api.x.ai/v1").Should().BeEmpty("a vendor's public url is a VALUE there by design");
         Check("gate_reviewers", "RemoteVendor", "https://api.x.ai/v1").Select(v => v.Rule).Should().Equal(PublicationGuard.UrlRule);
-        Check("gate_reviewers", "EndpointUrl", "http://127.0.0.1:11434/v1").Select(v => v.Rule).Should().Equal(PublicationGuard.UrlRule);
+        Check("gate_reviewers", "EndpointUrl", "http://127.0.0.1:11434/v1").Select(v => v.Rule).Should().Equal(PublicationGuard.EndpointRule);
         Check("gate_reviewers", "EndpointUrl", "https://contoso-orders.example/v1").Select(v => v.Rule)
             .Should().Equal("carries private name #1 of the suite");
+    }
+
+    [Theory]
+    [InlineData("llm.corp.internal:8000")]
+    [InlineData("localhost:11434")]
+    [InlineData("10.0.0.1:8000")]
+    public void A_schemeless_machine_address_in_the_endpoint_column_is_refused(string endpoint)
+    {
+        Check("gate_reviewers", "EndpointUrl", endpoint).Select(v => v.Rule).Should().Equal([PublicationGuard.EndpointRule],
+            "the endpoint column holds a public vendor url or nothing — a bare host is not exempt just because it has no '://'");
+        Check("gate_reviewers", "EndpointUrl", string.Empty).Should().BeEmpty("an endpoint held as a reference leaves the url column empty");
     }
 
     [Fact]

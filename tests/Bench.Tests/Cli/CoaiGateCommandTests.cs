@@ -65,6 +65,24 @@ public sealed class CoaiGateCommandTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task An_export_that_cannot_be_written_is_an_environment_failure_and_leaves_no_partial_file()
+    {
+        var connection = await postgres.NewDatabaseAsync($"gate_cli_{Guid.NewGuid():N}");
+        using var temp = NewRoot();
+        var suite = Path.Combine(temp.Path, "suite.json");
+        await File.WriteAllTextAsync(suite, "{\"privateNames\":[]}", Ct);
+        var target = Path.Combine(temp.Path, "no-such-directory", "export.json");
+
+        var (code, _, error) = Run("gate", "export", "--public", "--db", connection, "--suite-file", suite, "--out", target);
+
+        code.Should().Be(ExitCodes.Environment);
+        error.Should().Contain("could not be written");
+        Directory.Exists(Path.GetDirectoryName(target)).Should().BeFalse();
+        Run("gate", "export", "--public", "--db", connection, "--suite-file", Path.Combine(temp.Path, "missing.json"), "--out", target)
+            .Error.Should().Contain("Could not find", "the refusal says what went wrong, not only an exception's type name");
+    }
+
+    [Fact]
     public async Task Prune_defaults_to_thirty_days_and_a_dry_run_lists_and_deletes_nothing()
     {
         using var temp = NewRoot();

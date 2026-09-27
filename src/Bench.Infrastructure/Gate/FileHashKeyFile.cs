@@ -33,6 +33,13 @@ public static class FileHashKeyFile
             return new FileHashKeyRead.Missing();
         }
 
+        if (!IsOwnerOnly(path))
+        {
+            return new FileHashKeyRead.Unusable(
+                $"{FileName} is readable by someone other than its owner — a key another user can read lets them confirm private paths "
+                + "from the published hashes; restore owner-only access (0600, or an access list naming only you) and run again");
+        }
+
         try
         {
             return FileHashKey.Of(File.ReadAllBytes(path)).Match<FileHashKeyRead>(
@@ -68,6 +75,34 @@ public static class FileHashKeyFile
         {
             CryptographicOperations.ZeroMemory(bytes);
         }
+    }
+
+    /// <summary>Whether only this user can reach the key: no group or other bits on POSIX; on Windows a protected
+    /// list whose every allow rule names the current user. Checked on every READ, because a key whose permissions were
+    /// loosened after creation is as exposed as one that was never protected.</summary>
+    private static bool IsOwnerOnly(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode others = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+            return (File.GetUnixFileMode(path) & others) == 0;
+        }
+
+        return IsOwnerOnlyOnWindows(path);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static bool IsOwnerOnlyOnWindows(string path)
+    {
+        var acl = new FileInfo(path).GetAccessControl();
+        var user = WindowsIdentity.GetCurrent().User;
+
+        return acl.AreAccessRulesProtected
+            && acl.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier))
+                .Cast<FileSystemAccessRule>()
+                .Where(rule => rule.AccessControlType == AccessControlType.Allow)
+                .All(rule => rule.IdentityReference.Equals(user));
     }
 
     private static FileStream OpenNew(string path) =>
