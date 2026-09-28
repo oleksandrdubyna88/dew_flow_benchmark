@@ -2,7 +2,8 @@
 
 > Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27, E3 (the
 > driver), E4 (the blinded strict assessment), E5 (the import) and E6 (the report, the API and the page) 2026-09-28 —
-> `research/module_gate.md` describes them; E7 (the first campaign) open.** Scope: a new bounded context `Gate` across
+> `research/module_gate.md` describes them; E7 (the first campaign) open — S7.2a built and S7.2's A/A passed on cs2
+> 2026-09-28 (`research/RESULTS_gate_aa_cs2.md`), S7.3 (plan and code gates) and the hand-check outstanding.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -1477,6 +1478,19 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   finding 18 (serial reads, rejected on the 2.3 s measurement) and finding 18 carries none; the code does what finding 17
   asked. (f) The unsettled refusals (5) are checked before the reference is read, not after it: a person resumes a run
   before choosing its reference.
+- **S7.2 as run (2026-09-28), recorded in [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md).** It took four
+  campaigns:
+  1. `01a0e98d` found the rows' thinking field. The driver wrote `false`, which the product refuses for xai and glm.
+     The fix is in [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md); the campaign went on with
+     `--thinking` rows. The same campaign found Fable 5.1 at the account's limit (429) and the PATH `claude` too old
+     for Opus 5.5 (a row naming CLI 2.1.284 by `--executable-ref`).
+  2. `01a0e993` **failed the A/A**: 4 of 4 API cells at `9afba0db90c6`. The gate's clone had inherited the machine's
+     `autocrlf=true` and left the task's rules submodule empty.
+  3. PR #49 fixed the clone (LF as committed, submodules initialised).
+  4. `01a0e9a8` then gave **4 of 4 at `451c8c505317`** (exit 0), and `01a0e9b1` settled Opus and Astra 2 of 2 each.
+
+  Every cell hit both cs2 seeds, as every valid Python cs2 cell did. The assessment needed a row naming `codex.exe`
+  (D5 of the fidelity plan). Fable 5.1 is not measured: it is blocked on the account, not on the harness.
 - DoD (E7): `PromptShape`, `GateTurnOnePrompt` and `bench gate aa` merged with every RED watched; the self-check
   printed `same shape` for the five imported cs2 cells; the A/A ran, was compared and assessed; S7.3 ran and was
   assessed; `RESULTS_gate_aa_cs2.md` and `module_gate.md` written; the hand-check still open and said so.
