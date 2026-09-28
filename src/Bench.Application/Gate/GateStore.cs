@@ -37,6 +37,12 @@ public interface IGateStore
     /// Refused for a cell this owner does not hold.</summary>
     Task<Outcome<GateCell>> SettleAsync(Guid cellId, WorkerIdentity owner, GateSettlement settlement, CancellationToken cancellationToken);
 
+    /// <summary>Hands a claimed cell back AT ONCE because it was never measured — it could not be prepared, or its product
+    /// could not be started — in ONE guarded UPDATE (still claimed, by this owner, at this attempt, in a run that has not
+    /// ended). The claim's attempt is given back too: a refusal before launch is not an attempt, so it never walks a cell
+    /// toward Abandoned. The cause (redacted) is recorded on the cell.</summary>
+    Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken);
+
     /// <summary>Hands back the stale claims whose owner is provably gone — each with ONE guarded UPDATE that
     /// re-checks the state, the owner, the claim time and the attempt count it decided on — and never a cell of a
     /// run that is <see cref="GateRunStatus.Finished"/> or <see cref="GateRunStatus.Failed"/>.</summary>

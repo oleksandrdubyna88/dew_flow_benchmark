@@ -73,7 +73,7 @@ internal static class GateRowMapping
                     Claimable.Stored(row.State, row.Attempts, WorkerIdentity.Stored(row.Owner, row.OwnerHost, row.OwnerPid), row.ClaimedAt),
                     Pin(row),
                     row.OutcomeKind,
-                    row.OutcomeKind == GateCellOutcomeKind.Failed ? row.FailureText : string.Empty)),
+                    row.OutcomeKind == GateCellOutcomeKind.Failed || row.State == CellState.Pending ? row.FailureText : string.Empty)),
                 Outcome<GateCell>.Failure),
             Outcome<GateCell>.Failure);
 

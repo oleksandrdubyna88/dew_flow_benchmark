@@ -188,21 +188,45 @@ public sealed class GateProtocolTests(PostgresFixture postgres)
             Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("the code prompt"))));
     }
 
-    /// <summary>A product that never starts is the ENVIRONMENT, not a measurement: the cell is not settled terminal (a
-    /// resume can still run it) and nothing is counted as produced.</summary>
+    /// <summary>A cell refused BEFORE launch — here, a product binary that is not there — was never measured. It is handed
+    /// back AT ONCE, it does not count as an attempt toward Abandoned, and the refusal is recorded on the cell: three
+    /// resumes (a sweep, then a campaign, three times) never abandon it. A dead environment still ends each campaign
+    /// through the drain's breaker rather than running forever.</summary>
     [Fact]
-    public async Task A_product_that_never_starts_settles_no_cell_and_produces_nothing()
+    public async Task Three_resumes_of_a_pre_launch_refusal_never_abandon_the_cell_and_the_cause_is_on_it()
     {
         await using var rig = await GateDriverRig.StartAsync(postgres);
         rig.Product = Path.Combine(rig.Root.Path, "no-such-coai-mcp.exe");
         var reviewer = GateDriverRig.Reviewer("rev-a", "api.vendor-a.example.com");
-        var (run, cells) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 2);
+        var (run, cells) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 1);
 
-        var report = await rig.CampaignAsync(run, [reviewer], parallel: 1, perEndpoint: 1);
+        for (var resume = 0; resume < 3; resume++)
+        {
+            await rig.NewStore().SweepAsync(TimeSpan.Zero, Ct);
+            var report = await rig.CampaignAsync(run, [reviewer], parallel: 1, perEndpoint: 1);
+            report.Settled.Should().Be(0, "a harness that could not start the product measured nothing");
+            report.Stop.Should().Be(CampaignStop.TooManyFailures, "a dead environment ends the campaign");
+        }
 
-        report.Settled.Should().Be(0, "a harness that could not start the product measured nothing");
-        report.Refused.Should().Be(cells.Count);
-        (await rig.NewStore().CellsAsync(run.Id, Ct)).Should().OnlyContain(c => c.State != CellState.Settled, "left for a resume, never recorded as a failed measurement");
+        var cell = (await rig.NewStore().CellAsync(cells[0].Id, Ct)).Ok();
+        cell.State.Should().Be(CellState.Pending, "handed back at once, never left claimed and never abandoned");
+        cell.Attempts.Should().Be(0, "a refusal before launch is not an attempt");
+        cell.OutcomeDetail.Should().Contain("no-such-coai-mcp", "the refusal's cause is recorded on the cell");
+    }
+
+    /// <summary>A product that STARTED and then failed is a measured attempt: it settles failed and counts.</summary>
+    [Fact]
+    public async Task A_product_that_started_and_then_failed_counts_as_an_attempt()
+    {
+        await using var rig = await GateDriverRig.StartAsync(postgres, new JsonObject { ["crash"] = new JsonArray("open") });
+        var reviewer = GateDriverRig.Reviewer("rev-a", "api.vendor-a.example.com");
+        var (run, cells) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 1);
+
+        await rig.CampaignAsync(run, [reviewer], parallel: 1, perEndpoint: 1);
+
+        var cell = (await rig.NewStore().CellAsync(cells[0].Id, Ct)).Ok();
+        cell.Attempts.Should().Be(1);
+        cell.OutcomeKind.Should().Be(GateCellOutcomeKind.Failed);
     }
 
     [Fact]
