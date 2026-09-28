@@ -4,6 +4,7 @@ using Bench.Domain;
 using Bench.Domain.Gate;
 using Bench.Infrastructure.Gate;
 using Bench.Infrastructure.Persistence;
+using Bench.Tests.Gate;
 using Bench.Tests.Infrastructure;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -130,6 +131,21 @@ public sealed class CalibImportTests(PostgresFixture postgres)
 
         (await rig.ImportAsync(Ct, assessor: false)).Reason().Should().Contain("blinded assessment").And.Contain("--assessor");
         (await rig.CountsAsync(Ct)).Cells.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task An_assessor_row_the_verdict_lines_do_not_name_is_refused_before_a_single_cell_is_written()
+    {
+        using var rig = await ImportRig.NewAsync(postgres);
+        var claude = GateReviewer.Create(
+            GateReviewerId.Parse("claude-judge").Ok(),
+            GateReviewerTests.Definition(model: "claude-opus-5", runtime: ReviewerRuntime.Claude, endpoint: string.Empty, credsKeyRef: string.Empty, keyName: string.Empty).Ok(),
+            GateStoreFixtures.Noon);
+
+        var refused = await rig.Calib().RunAsync(rig.Request() with { Assessor = Outcome<GateReviewer>.Success(claude) }, _ => { }, Ct);
+
+        refused.Reason().Should().Contain("'codex'").And.Contain("claude-judge");
+        (await rig.CountsAsync(Ct)).Cells.Should().Be(0, "a refusal the files alone decide is a pre-flight refusal — before the first byte");
     }
 
     [Fact]

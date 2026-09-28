@@ -16,18 +16,45 @@ public sealed record VerdictImportCounts(int Verdicts, int New, int Batches, int
 /// The prompt hash is empty: the other harness archived no batch prompt, and a hash of nothing would be a guess.</summary>
 public sealed class CalibVerdictImport(IGateVerdictStore verdicts, IGateAssessmentFiles files)
 {
+    /// <summary>What the files alone decide about the verdicts, asked BEFORE the first cell is written (code round): every line
+    /// names the assessor row it is attributed to, and no imported id clashes with this root's key. The key is checked again
+    /// under the lock, where it is extended.</summary>
+    public async Task<string> CheckAsync(GateReviewer assessor, CalibSource source, GateSuite suite, CancellationToken cancellationToken)
+    {
+        var foreign = source.Verdicts.FirstOrDefault(v => !Names(assessor, v.Assessor));
+        if (foreign is not null)
+        {
+            return $"verdict {foreign.Row.Id} was written by assessor '{foreign.Assessor}', and --assessor {assessor.Id} is a {assessor.Definition.Runtime.Word()} row — attribute each assessor's verdicts to its own row";
+        }
+
+        var records = source.Cells.ToDictionary(c => c.Record.Id, c => c.Record, StringComparer.Ordinal);
+        var entries = source.Key.Select(k => (Id: k.Id.Value, RunId: CalibImport.CellId(suite, records[k.Run]), k.Index)).ToList();
+
+        return await files.ReadKeyAsync(cancellationToken) switch
+        {
+            Outcome<IReadOnlyList<BlindKeyEntry>>.Ok held => Clash(held.Value, entries),
+            Outcome<IReadOnlyList<BlindKeyEntry>>.Fail f => f.Reason,
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+    }
+
+    private static string Clash(IReadOnlyList<BlindKeyEntry> held, IReadOnlyList<(string Id, Guid RunId, int Index)> entries)
+    {
+        var byId = held.ToDictionary(e => e.Id.Value, StringComparer.Ordinal);
+        var byFinding = held.GroupBy(e => (e.RunId, e.Ordinal)).ToDictionary(g => g.Key, g => g.First().Id.Value);
+
+        return entries.Where(e =>
+                (byId.TryGetValue(e.Id, out var other) && (other.RunId, other.Ordinal) != (e.RunId, e.Index))
+                || (byFinding.TryGetValue((e.RunId, e.Index), out var id) && id != e.Id))
+            .Select(e => $"blinded id {e.Id} clashes with this root's key — it names another finding there, or its finding is already blinded under another id")
+            .FirstOrDefault(string.Empty);
+    }
+
     public async Task<Outcome<VerdictImportCounts>> RunAsync(
         CalibImportRequest request, CalibSource source, IReadOnlyDictionary<string, Guid> cellIds, IReadOnlyDictionary<string, GateReviewer> byHash,
         IReadOnlyDictionary<int, GateRun> campaigns, Action<string> progress, CancellationToken cancellationToken)
     {
         var assessor = ((Outcome<GateReviewer>.Ok)request.Assessor).Value;
-        var foreign = source.Verdicts.FirstOrDefault(v => !Names(assessor, v.Assessor));
-        if (foreign is not null)
-        {
-            return Outcome<VerdictImportCounts>.Failure(
-                $"verdict {foreign.Row.Id} was written by assessor '{foreign.Assessor}', and --assessor {assessor.Id} is a {assessor.Definition.Runtime.Word()} row — attribute each assessor's verdicts to its own row");
-        }
-
         var locked = await files.LockAssessorAsync(assessor.Id, cancellationToken);
         if (locked is not Outcome<IAsyncDisposable>.Ok { Value: var hold })
         {
@@ -76,15 +103,10 @@ public sealed class CalibVerdictImport(IGateVerdictStore verdicts, IGateAssessme
             return Outcome<int>.Failure(((Outcome<IReadOnlyList<BlindKeyEntry>>.Fail)held).Reason);
         }
 
-        var byId = entries.ToDictionary(e => e.Id.Value, StringComparer.Ordinal);
-        var byFinding = entries.GroupBy(e => (e.RunId, e.Ordinal)).ToDictionary(g => g.Key, g => g.First().Id.Value);
-        var clash = joined.Select(j => j.Entry).FirstOrDefault(e =>
-            (byId.TryGetValue(e.Id.Value, out var other) && (other.RunId, other.Ordinal) != (e.RunId, e.Ordinal))
-            || (byFinding.TryGetValue((e.RunId, e.Ordinal), out var id) && id != e.Id.Value));
-
-        if (clash is not null)
+        var clash = Clash(entries, [.. joined.Select(j => (j.Entry.Id.Value, j.Entry.RunId, j.Entry.Ordinal))]);
+        if (clash.Length > 0)
         {
-            return Outcome<int>.Failure($"blinded id {clash.Id} clashes with this root's key — it names another finding there, or its finding is already blinded under another id");
+            return Outcome<int>.Failure(clash);
         }
 
         var extended = await files.ExtendKeyAsync(

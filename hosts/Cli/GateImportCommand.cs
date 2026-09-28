@@ -53,7 +53,14 @@ public static class GateImportCommand
             return session.Code;
         }
 
-        return await RunCalibAsync(command, session, inputs.Request, output, error, cancellationToken);
+        try
+        {
+            return await RunCalibAsync(command, session, inputs.Request, output, error, cancellationToken);
+        }
+        catch (Exception ex) when (IsStoreFailure(ex))
+        {
+            return StoreFailed(error, ex);
+        }
     }
 
     private static async Task<int> RunCalibAsync(
@@ -169,7 +176,15 @@ public static class GateImportCommand
         }
 
         var import = new CoaiBenchImport(session.Imports!, session.Artifacts!, new PostgresGateVerdictStore(session.Db, TimeProvider.System), new GitCommitResolver(command.Value("repo")));
-        var report = await import.RunAsync(new CoaiBenchImportRequest(files, fileKey, lenient, GateRubrics.Catalog(session.Rubrics), PrivateNames.None.WithHosts([Environment.MachineName])), output.WriteLine, cancellationToken);
+        Outcome<CoaiBenchImportReport> report;
+        try
+        {
+            report = await import.RunAsync(new CoaiBenchImportRequest(files, fileKey, lenient, GateRubrics.Catalog(session.Rubrics), PrivateNames.None.WithHosts([Environment.MachineName])), output.WriteLine, cancellationToken);
+        }
+        catch (Exception ex) when (IsStoreFailure(ex))
+        {
+            return StoreFailed(error, ex);
+        }
 
         return report switch
         {
@@ -181,7 +196,7 @@ public static class GateImportCommand
 
     private static async Task<int> SummaryAsync(CommandLine command, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var gate = Enum.TryParse<GateKind>(command.Value("gate"), ignoreCase: true, out var g) ? g : (GateKind?)null;
+        var gate = Enum.TryParse<GateKind>(command.Value("gate"), ignoreCase: true, out var g) && Enum.IsDefined(g) && !int.TryParse(command.Value("gate"), out _) ? g : (GateKind?)null;
         var flags = (command.Value("document").Length, command.Value("section").Length, gate, GateCliInputs.Connection(command).Length) switch
         {
             (0, _, _, _) => "gate import summary needs --document <RESULTS_*.md>",
@@ -208,8 +223,12 @@ public static class GateImportCommand
         {
             await db.Database.MigrateAsync(cancellationToken);
             var citation = new SummaryCitation(command.Value("source", "coai-results"), Path.GetFileName(command.Value("document")), Convert.ToHexStringLower(SHA256.HashData(bytes)));
-            var stored = await new PostgresGateImportStore(db, TimeProvider.System).RecordSummaryAsync(citation, gate!.Value, parsed, cancellationToken);
-            return Printed(output, $"summary        {citation.Document} § {parsed.Section}: {parsed.Rows.Count} row(s), {((Outcome<int>.Ok)stored).Value} new number(s) — summary only, never averaged with runs");
+            return await new PostgresGateImportStore(db, TimeProvider.System).RecordSummaryAsync(citation, gate!.Value, parsed, cancellationToken) switch
+            {
+                Outcome<int>.Ok stored => Printed(output, $"summary        {citation.Document} § {parsed.Section}: {parsed.Rows.Count} row(s), {stored.Value} new number(s) — summary only, never averaged with runs"),
+                Outcome<int>.Fail refused => GateRunCommand.Refuse(error, ExitCodes.Configuration, refused.Reason),
+                _ => throw new InvalidOperationException("unreachable"),
+            };
         }
         catch (Exception ex) when (ex is Npgsql.NpgsqlException or InvalidOperationException or TimeoutException)
         {
@@ -219,15 +238,17 @@ public static class GateImportCommand
 
     private static async Task<int> PrintedAsync(TextWriter output, CoaiBenchImportReport report, string artifactRoot, string repo, CancellationToken cancellationToken)
     {
-        // The cases' suite, so a report can be asked for these runs by suite file like any other: it names the product's
+        // The cases' suites, so a report can be asked for these runs by suite file like any other: each names the product's
         // checkout, a path on this machine, so it lives in the artefact root with everything else private.
         var folder = Path.Combine(artifactRoot, "imports");
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"coai-bench-cases-{report.Suite.Hash[..12]}.suite.json");
-        await File.WriteAllTextAsync(path, GateSuiteFile.Json(report.Suite, _ => repo), cancellationToken);
+        foreach (var suite in report.Suites)
+        {
+            await File.WriteAllTextAsync(Path.Combine(folder, $"coai-bench-cases-{suite.Hash[..12]}.suite.json"), GateSuiteFile.Json(suite, _ => repo), cancellationToken);
+        }
 
         return Printed(output,
-            $"imported       {report.Cells.Imported} cell(s), {report.Cells.Unchanged} already there unchanged · suite {report.Suite.Stamp} (written to imports/{Path.GetFileName(path)})\n"
+            $"imported       {report.Cells.Imported} cell(s), {report.Cells.Unchanged} already there unchanged · suite(s) {string.Join(", ", report.Suites.Select(s => s.Stamp))} (written to imports/)\n"
             + $"verdicts       {report.Verdicts} judged ({report.VerdictsNew} new) under lenient-worth-v1 · {report.Unjudged} unjudged, left unassessed · {report.FamilyMatched} by the arm's own family");
     }
 
@@ -237,6 +258,14 @@ public static class GateImportCommand
         + $"reviewers      {(report.ReviewersAdded.Count > 0 ? string.Join(", ", report.ReviewersAdded) + " added" : "every one already in the catalog")}\n"
         + $"verdicts       {report.Verdicts.Verdicts} under strict-v1 ({report.Verdicts.New} new, {report.Verdicts.Batches} batch(es), {report.Verdicts.FamilyMatched} by the reviewer's own family) — "
         + "strict % stays 'not hand-checked' until a person records a hand-check";
+
+    /// <summary>The database going away mid-import is the environment (3), never a crash: each cell is its own transaction, so
+    /// what was committed stays and the next import resumes the rest.</summary>
+    private static bool IsStoreFailure(Exception ex) => ex is Npgsql.NpgsqlException or DbUpdateException or TimeoutException;
+
+    private static int StoreFailed(TextWriter error, Exception ex) =>
+        GateRunCommand.Refuse(error, ExitCodes.Environment,
+            $"the database failed during the import — {ex.Message.Split('\n')[0]}; what was committed stays, and the next import resumes the rest");
 
     private static int Printed(TextWriter output, string text)
     {

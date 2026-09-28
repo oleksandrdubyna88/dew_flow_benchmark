@@ -32,8 +32,8 @@ public sealed record ModelRow(
     Figure SecondsP50,
     Figure SecondsP90,
     Figure TurnsMean,
-    int RepairRuns,
-    int RepairCalls,
+    Figure RepairRuns,
+    Figure RepairCalls,
     Figure ServedMean,
     Figure RefusedMean,
     Figure TokensInPerRun,
@@ -59,7 +59,7 @@ public sealed record PerTaskRow(
     int ValidRuns,
     IReadOnlyList<int> Findings,
     IReadOnlyList<Figure> SeedsHit,
-    IReadOnlyList<int> Turns,
+    IReadOnlyList<Figure> Turns,
     IReadOnlyList<double> Seconds,
     IReadOnlyList<Figure> Cost);
 

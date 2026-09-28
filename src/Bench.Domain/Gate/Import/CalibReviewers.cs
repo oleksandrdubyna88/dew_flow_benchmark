@@ -73,8 +73,8 @@ public static class CalibReviewers
     public static Outcome<GateReviewerId> NewId(string model, ReviewerDefinition definition) =>
         GateReviewerId.Parse($"{ImportSlug.Of(model, 55)}-{definition.Hash[..8]}");
 
-    /// <summary>An existing row with this definition, under whatever name it was added — a row is never added twice for
-    /// one configuration by an import.</summary>
-    public static GateReviewer? Existing(IReadOnlyList<GateReviewer> catalog, ReviewerDefinition definition) =>
-        catalog.Where(r => string.Equals(r.Hash, definition.Hash, StringComparison.Ordinal)).OrderBy(r => r.Id.Value, StringComparer.Ordinal).FirstOrDefault();
+    /// <summary>The existing rows with this definition, under whatever names they were added, first by id — an import never
+    /// adds a row twice for one configuration, and none is an empty list, not a null.</summary>
+    public static IReadOnlyList<GateReviewer> Existing(IReadOnlyList<GateReviewer> catalog, ReviewerDefinition definition) =>
+        [.. catalog.Where(r => string.Equals(r.Hash, definition.Hash, StringComparison.Ordinal)).OrderBy(r => r.Id.Value, StringComparer.Ordinal)];
 }

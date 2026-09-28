@@ -66,12 +66,18 @@ public sealed class PostgresGateImportStore(BenchDbContext db, TimeProvider cloc
 
     public async Task<Outcome<int>> RecordSummaryAsync(SummaryCitation citation, GateKind gate, SummaryTable table, CancellationToken cancellationToken)
     {
-        var held = (await db.GateSummaries.AsNoTracking()
-                .Where(s => s.DocumentSha256 == citation.DocumentSha256 && s.Section == table.Section)
-                .Select(s => new { s.RowOrdinal, s.Metric })
-                .ToListAsync(cancellationToken))
-            .Select(s => (s.RowOrdinal, s.Metric))
-            .ToHashSet();
+        var stored = await db.GateSummaries.AsNoTracking()
+            .Where(s => s.DocumentSha256 == citation.DocumentSha256 && s.Section == table.Section)
+            .Select(s => new { s.RowOrdinal, s.Metric, s.Gate, s.Source })
+            .ToListAsync(cancellationToken);
+
+        if (stored.FirstOrDefault(s => s.Gate != gate || s.Source != citation.Source) is { } other)
+        {
+            return Outcome<int>.Failure(
+                $"{citation.Document} § {table.Section} is stored as a {other.Gate} table from {other.Source} — imported again as a {gate} table from {citation.Source}, it is refused rather than kept under the first");
+        }
+
+        var held = stored.Select(s => (s.RowOrdinal, s.Metric)).ToHashSet();
 
         var now = clock.GetUtcNow();
         var fresh = table.Rows
@@ -94,10 +100,19 @@ public sealed class PostgresGateImportStore(BenchDbContext db, TimeProvider cloc
             .ToList();
 
         db.GateSummaries.AddRange(fresh);
-        await db.SaveChangesAsync(cancellationToken);
-        db.ChangeTracker.Clear();
-
-        return Outcome<int>.Success(fresh.Count);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return Outcome<int>.Success(fresh.Count);
+        }
+        catch (DbUpdateException)
+        {
+            return Outcome<int>.Failure($"{citation.Document} § {table.Section} was stored concurrently — nothing of this import was written; run it again");
+        }
+        finally
+        {
+            db.ChangeTracker.Clear();
+        }
     }
 
     private async Task<string> RefusalAsync(ImportedCell cell, CancellationToken cancellationToken)

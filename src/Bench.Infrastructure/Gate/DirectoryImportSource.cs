@@ -16,7 +16,7 @@ public sealed class DirectoryImportSource : IImportSource
 
     public static Outcome<DirectoryImportSource> Open(string? root) =>
         !string.IsNullOrWhiteSpace(root) && Directory.Exists(root)
-            ? Outcome<DirectoryImportSource>.Success(new DirectoryImportSource(Path.GetFullPath(root)))
+            ? Outcome<DirectoryImportSource>.Success(new DirectoryImportSource(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root))))
             : Outcome<DirectoryImportSource>.Failure($"the import source {Path.GetFileName(root ?? string.Empty)} is not a directory that exists");
 
     public bool Exists(string relative) => Full(relative) is { } full && File.Exists(full);
@@ -35,7 +35,7 @@ public sealed class DirectoryImportSource : IImportSource
             await stream.ReadExactlyAsync(bytes, cancellationToken);
             return Outcome<byte[]>.Success(bytes);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return Outcome<byte[]>.Failure($"{relative} in {Label} could not be read — {ex.Message}");
         }

@@ -107,7 +107,7 @@ public static class GateReport
             runs.Count(r => r.Facts.Valid),
             [.. runs.Select(r => r.FindingsCount)],
             [.. runs.Select(r => SeedsHitFigure(r, summary, [.. byRun[r.RunId]]))],
-            [.. runs.Select(r => r.Facts.Turns)],
+            [.. runs.Select(r => r.Facts.TurnFactsCaptured ? Figure.Of(r.Facts.Turns) : Figure.Unknown)],
             [.. runs.Select(r => r.Facts.SecondsTotal)],
             [.. runs.Select(r => r.Facts.CostUsd.WasCaptured ? Figure.Of((double)r.Facts.CostUsd.Value) : Figure.Unknown)]);
     }
@@ -192,8 +192,8 @@ internal static class ReviewerRow
             Quantile.Q(seconds, 0.5),
             Quantile.Q(seconds, 0.9),
             Figure.Mean(a.TurnLevel(r => r.Facts.Turns)),
-            a.Runs.Count(r => r.Facts.TurnFactsCaptured && r.Facts.ExtraCalls > 0),
-            a.Runs.Where(r => r.Facts.TurnFactsCaptured).Sum(r => r.Facts.ExtraCalls),
+            a.TurnLevel(r => r.Facts.ExtraCalls) is { Count: > 0 } extra ? Figure.Of(extra.Count(e => e > 0)) : Figure.Unknown,
+            a.TurnLevel(r => r.Facts.ExtraCalls) is { Count: > 0 } calls ? Figure.Of(calls.Sum()) : Figure.Unknown,
             Figure.Mean(a.TurnLevel(r => r.Facts.Served), 1),
             Figure.Mean(a.TurnLevel(r => r.Facts.Refused), 1),
             Figure.Mean(tokensIn, 0),

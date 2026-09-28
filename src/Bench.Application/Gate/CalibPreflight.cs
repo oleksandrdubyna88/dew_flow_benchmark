@@ -6,7 +6,7 @@ namespace Bench.Application.Gate;
 
 /// <summary>One calibration record ready to import: the line, the reviewer definition it was measured with, and its
 /// reply as the one parser reads it (no reply file — a run that died before answering — is an empty answer).</summary>
-public sealed record CalibCell(CalibRecord Record, CalibModel Model, ReviewerDefinition Definition, ParsedReply Reply);
+public sealed record CalibCell(CalibRecord Record, CalibModel Model, ReviewerDefinition Definition, ParsedReply Reply, ProductPin Pin);
 
 /// <summary>Everything the calibration's files say, read and checked BEFORE the first byte is written.</summary>
 public sealed record CalibSource(IReadOnlyList<CalibCell> Cells, IReadOnlyList<CalibKeyEntry> Key, IReadOnlyList<CalibVerdictLine> Verdicts)
@@ -32,8 +32,13 @@ public static class CalibPreflight
             return Outcome<CalibSource>.Failure($"{source.Label} has no {RunsFile} — not a calibration workspace");
         }
 
-        var records = Lines(await source.ReadBytesAsync(RunsFile, cancellationToken))
-            .Select((line, i) => CalibRecords.Parse(line, i + 1, privateNames)).ToList();
+        var runs = await source.ReadBytesAsync(RunsFile, cancellationToken);
+        if (runs is Outcome<byte[]>.Fail unread)
+        {
+            return Outcome<CalibSource>.Failure(unread.Reason);
+        }
+
+        var records = Lines(((Outcome<byte[]>.Ok)runs).Value).Select((line, i) => CalibRecords.Parse(line, i + 1, privateNames)).ToList();
         var bad = records.OfType<Outcome<CalibRecord>.Fail>().FirstOrDefault();
         if (bad is not null)
         {
@@ -68,17 +73,19 @@ public static class CalibPreflight
         IImportSource source, GateSuite suite, IReadOnlyDictionary<string, CalibModel> models, CalibRecord record, CancellationToken cancellationToken)
     {
         var task = suite.Task(record.Task, GateKind.Feature);
-        var definition = models.TryGetValue(record.Model, out var model)
-            ? CalibReviewers.Definition(model, record.Preset)
-            : Outcome<ReviewerDefinition>.Failure($"model '{record.Model}' is not in the calibration models file");
+        var definition = models.TryGetValue(record.Model, out var row)
+            ? CalibReviewers.Definition(row, record.Preset).Match(d => Outcome<(CalibModel, ReviewerDefinition)>.Success((row, d)), Outcome<(CalibModel, ReviewerDefinition)>.Failure)
+            : Outcome<(CalibModel, ReviewerDefinition)>.Failure($"model '{record.Model}' is not in the calibration models file");
         var reply = await ReplyAsync(source, record, cancellationToken);
 
-        return (task, definition, reply) switch
+        return (task, definition, reply, record.Pin) switch
         {
-            (Outcome<GateTask>.Fail f, _, _) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
-            (_, Outcome<ReviewerDefinition>.Fail f, _) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
-            (_, _, Outcome<ParsedReply>.Fail f) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
-            (_, Outcome<ReviewerDefinition>.Ok d, Outcome<ParsedReply>.Ok r) => Outcome<CalibCell>.Success(new CalibCell(record, model!, d.Value, r.Value)),
+            (Outcome<GateTask>.Fail f, _, _, _) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
+            (_, Outcome<(CalibModel, ReviewerDefinition)>.Fail f, _, _) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
+            (_, _, Outcome<ParsedReply>.Fail f, _) => Outcome<CalibCell>.Failure($"record {record.Id}: {f.Reason}"),
+            (_, _, _, Outcome<ProductPin>.Fail f) => Outcome<CalibCell>.Failure($"record {record.Id}: its product pin — {f.Reason}"),
+            (_, Outcome<(CalibModel, ReviewerDefinition)>.Ok d, Outcome<ParsedReply>.Ok r, Outcome<ProductPin>.Ok p) =>
+                Outcome<CalibCell>.Success(new CalibCell(record, d.Value.Item1, d.Value.Item2, r.Value, p.Value)),
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
@@ -88,9 +95,13 @@ public static class CalibPreflight
     private static async Task<Outcome<ParsedReply>> ReplyAsync(IImportSource source, CalibRecord record, CancellationToken cancellationToken)
     {
         var path = $"{RunsFolder}/{record.Id}/reply.json";
-        var reply = source.Exists(path)
-            ? (await source.ReadBytesAsync(path, cancellationToken)).Match(b => GateReplyParser.Parse(Encoding.UTF8.GetString(b)), _ => GateReplyParser.Parse(string.Empty))
-            : GateReplyParser.Parse(string.Empty);
+        var bytes = source.Exists(path) ? await source.ReadBytesAsync(path, cancellationToken) : Outcome<byte[]>.Success([]);
+        if (bytes is Outcome<byte[]>.Fail unread)
+        {
+            return Outcome<ParsedReply>.Failure(unread.Reason);
+        }
+
+        var reply = GateReplyParser.Parse(Encoding.UTF8.GetString(((Outcome<byte[]>.Ok)bytes).Value));
         var recorded = record.Facts.Findings.WasCaptured ? (int)record.Facts.Findings.Value : 0;
 
         return reply.Findings.Count == recorded
@@ -109,7 +120,13 @@ public static class CalibPreflight
         var key = hasKey
             ? (await source.ReadBytesAsync(KeyFile, cancellationToken)).Match(b => CalibVerdicts.Key(Encoding.UTF8.GetString(b)), Outcome<IReadOnlyList<CalibKeyEntry>>.Failure)
             : Outcome<IReadOnlyList<CalibKeyEntry>>.Failure($"{AssessFile} is there and {KeyFile} is not — a verdict cannot be joined to its finding without the key");
-        var lines = hasLog ? Lines(await source.ReadBytesAsync(AssessFile, cancellationToken)).Select((l, i) => CalibVerdicts.Line(l, i + 1, suite)).ToList() : [];
+        var log = hasLog ? await source.ReadBytesAsync(AssessFile, cancellationToken) : Outcome<byte[]>.Success([]);
+        if (log is Outcome<byte[]>.Fail unread)
+        {
+            return Outcome<CalibSource>.Failure(unread.Reason);
+        }
+
+        var lines = Lines(((Outcome<byte[]>.Ok)log).Value).Select((l, i) => CalibVerdicts.Line(l, i + 1, suite)).ToList();
 
         return (key, lines.OfType<Outcome<CalibVerdictLine>.Fail>().FirstOrDefault()) switch
         {
@@ -137,6 +154,6 @@ public static class CalibPreflight
         };
     }
 
-    private static IReadOnlyList<string> Lines(Outcome<byte[]> bytes) =>
-        bytes.Match(b => Encoding.UTF8.GetString(b).Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).ToList(), _ => []);
+    private static IReadOnlyList<string> Lines(byte[] bytes) =>
+        [.. Encoding.UTF8.GetString(bytes).Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0)];
 }

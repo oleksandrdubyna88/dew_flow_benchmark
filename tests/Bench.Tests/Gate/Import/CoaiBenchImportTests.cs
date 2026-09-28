@@ -25,8 +25,8 @@ public sealed class CoaiBenchImportTests(PostgresFixture postgres)
             Task.FromResult(CommitSha.Parse(shortSha.PadRight(40, '0')));
     }
 
-    private static JsonObject Record(int repeat, string useful, string startedUtc) => (JsonObject)JsonNode.Parse($$"""
-        {"case": {"name": "made-up-case", "planFile": "docs/plan.md", "commit": "1234567", "baseRef": "abcdef0"},
+    private static JsonObject Record(int repeat, string useful, string startedUtc, string caseName = "made-up-case") => (JsonObject)JsonNode.Parse($$"""
+        {"case": {"name": "{{caseName}}", "planFile": "docs/plan.md", "commit": "1234567", "baseRef": "abcdef0"},
          "arm": "codex,local", "repeat": {{repeat}}, "lane": 1, "startedUtc": "{{startedUtc}}", "judgedBy": "claude-opus-5",
          "stages": [
           {"stage": "plan-1", "seconds": 50.8, "verdict": "proceed", "error": "", "tokensIn": 100, "tokensOut": 20, "costUsd": null,
@@ -89,6 +89,68 @@ public sealed class CoaiBenchImportTests(PostgresFixture postgres)
         grown.Cells.Unchanged.Should().Be(2);
         await using var db = PostgresFixture.Context(connection);
         (await db.GateRuns.CountAsync(Ct)).Should().Be(2, "one campaign per (location, gate); the copy created none");
+    }
+
+    [Fact]
+    public async Task A_file_that_also_carries_another_case_never_imports_the_records_already_there_again()
+    {
+        var (connection, root) = await NewAsync(postgres);
+        using var _ = root;
+        var first = Record(1, "yes", "2026-09-05T20:39:22Z");
+
+        await ImportAsync(connection, root, new CoaiBenchFile("epic1", new JsonArray(first).ToJsonString()));
+        var wider = await ImportAsync(connection, root, new CoaiBenchFile("matrix", new JsonArray((JsonObject)first.DeepClone(), Record(1, "no", "2026-09-06T10:00:00Z", "another-case")).ToJsonString()));
+
+        wider.Cells.Unchanged.Should().Be(2, "a record's cell is the record's, whichever other cases the file it came in carries");
+        wider.Cells.Imported.Should().Be(2);
+        await using var db = PostgresFixture.Context(connection);
+        (await db.GateCells.CountAsync(Ct)).Should().Be(4);
+    }
+
+    private static async Task<Outcome<CoaiBenchImportReport>> TryImportAsync(string connection, TempRoot root, params CoaiBenchFile[] files)
+    {
+        var rubrics = GateRubrics.Load(Path.Combine(Bench.Tests.Cli.Repository.Root, "prompts")).Ok();
+        var import = new CoaiBenchImport(
+            new PostgresGateImportStore(PostgresFixture.Context(connection), TimeProvider.System), Store(root),
+            new PostgresGateVerdictStore(PostgresFixture.Context(connection), TimeProvider.System), new PaddedShas());
+
+        return await import.RunAsync(new CoaiBenchImportRequest(files, Key, GateRubrics.Labelling(rubrics, GateRubrics.LenientId).Ok(), GateRubrics.Catalog(rubrics), PrivateNames.None), _ => { }, Ct);
+    }
+
+    [Fact]
+    public async Task Two_records_on_one_cell_of_a_campaign_are_refused_rather_than_one_hiding_the_other()
+    {
+        var (connection, root) = await NewAsync(postgres);
+        using var _ = root;
+
+        var twice = await TryImportAsync(connection, root, new CoaiBenchFile("f", new JsonArray(Record(1, "yes", "2026-09-05T20:39:22Z"), Record(1, "no", "2026-09-05T23:00:00Z")).ToJsonString()));
+
+        twice.Reason().Should().Contain("one cell").And.Contain("2026-09-05T23:00:00Z");
+    }
+
+    [Fact]
+    public async Task A_finding_re_judged_after_the_first_import_is_refused_never_silently_kept_as_it_was()
+    {
+        var (connection, root) = await NewAsync(postgres);
+        using var _ = root;
+
+        await ImportAsync(connection, root, new CoaiBenchFile("f", new JsonArray(Record(1, "yes", "2026-09-05T20:39:22Z")).ToJsonString()));
+        var rejudged = await TryImportAsync(connection, root, new CoaiBenchFile("f", new JsonArray(Record(1, "no", "2026-09-05T20:39:22Z")).ToJsonString()));
+
+        rejudged.Reason().Should().Contain("judged").And.Contain("differently");
+    }
+
+    [Fact]
+    public async Task A_summary_table_imported_again_under_another_gate_is_refused_not_kept_under_the_first()
+    {
+        var connection = await ImportRig.DatabaseAsync(postgres, "sg");
+        var table = SummaryTables.Parse("## T\n| model | run 1 |\n|---|---|\n| Model-A | 6 |\n", "T").Ok();
+        var citation = new SummaryCitation("coai-results", "RESULTS_made_up.md", new string('d', 64));
+
+        (await new PostgresGateImportStore(PostgresFixture.Context(connection), TimeProvider.System).RecordSummaryAsync(citation, GateKind.Plan, table, Ct)).Ok();
+        var again = await new PostgresGateImportStore(PostgresFixture.Context(connection), TimeProvider.System).RecordSummaryAsync(citation, GateKind.Code, table, Ct);
+
+        again.Reason().Should().Contain("Plan").And.Contain("Code");
     }
 
     [Fact]

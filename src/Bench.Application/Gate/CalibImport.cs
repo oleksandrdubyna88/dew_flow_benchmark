@@ -54,6 +54,14 @@ public sealed class CalibImport(
             return Outcome<CalibImportReport>.Failure($"the workspace has a blinded assessment and {noAssessor.Reason}");
         }
 
+        var verdictCheck = source.HasVerdicts
+            ? await verdicts.CheckAsync(((Outcome<GateReviewer>.Ok)request.Assessor).Value, source, request.Suite, cancellationToken)
+            : string.Empty;
+        if (verdictCheck.Length > 0)
+        {
+            return Outcome<CalibImportReport>.Failure(verdictCheck);
+        }
+
         progress($"read           {source.Cells.Count} record(s), {source.Key.Count} key entr(ies), {source.Verdicts.Count} verdict(s) — every one checked before anything is written");
 
         var reviewers = await ReviewersAsync(source.Cells, cancellationToken);
@@ -73,13 +81,15 @@ public sealed class CalibImport(
         foreach (var (cell, position) in source.Cells.Select((c, i) => (c, i)))
         {
             var planned = await PlanAsync(request, campaigns[cell.Record.Phase], cell, byHash[cell.Definition.Hash], position, cancellationToken);
-            var written = await writer.WriteAsync(planned.Plan, cancellationToken);
+            var written = planned is Outcome<(ImportPlan Plan, int Skipped)>.Ok ready
+                ? await writer.WriteAsync(ready.Value.Plan, cancellationToken)
+                : Outcome<ImportOutcome>.Failure($"record {cell.Record.Id}: {((Outcome<(ImportPlan Plan, int Skipped)>.Fail)planned).Reason}");
             if (written is Outcome<ImportOutcome>.Fail fail)
             {
                 return Outcome<CalibImportReport>.Failure(fail.Reason);
             }
 
-            counts = counts.Add(((Outcome<ImportOutcome>.Ok)written).Value, planned.Skipped);
+            counts = counts.Add(((Outcome<ImportOutcome>.Ok)written).Value, ((Outcome<(ImportPlan Plan, int Skipped)>.Ok)planned).Value.Skipped);
             progress($"{Word(((Outcome<ImportOutcome>.Ok)written).Value),-15}{cell.Record.Id}");
         }
 
@@ -109,11 +119,16 @@ public sealed class CalibImport(
                 new RunSource.Imported(CalibRecords.Harness),
                 g.Min(c => c.Record.Started)));
 
-    private async Task<(ImportPlan Plan, int Skipped)> PlanAsync(
+    private async Task<Outcome<(ImportPlan Plan, int Skipped)>> PlanAsync(
         CalibImportRequest request, GateRun campaign, CalibCell cell, GateReviewer reviewer, int position, CancellationToken cancellationToken)
     {
         var record = cell.Record;
-        var copied = await ImportedFiles.CopyAsync(request.Source, $"{CalibPreflight.RunsFolder}/{record.Id}", cancellationToken);
+        var read = await ImportedFiles.CopyAsync(request.Source, $"{CalibPreflight.RunsFolder}/{record.Id}", cancellationToken);
+        if (read is not Outcome<CopiedFiles>.Ok { Value: var copied })
+        {
+            return Outcome<(ImportPlan Plan, int Skipped)>.Failure(((Outcome<CopiedFiles>.Fail)read).Reason);
+        }
+
         var findings = cell.Reply.Findings
             .Select(f => GateFinding.Of(f.Ordinal, f.Severity, f.Category, f.IsGating, f.Line, f.Text, f.File, request.Key))
             .OfType<Outcome<GateFinding>.Ok>().Select(o => o.Value).ToList();
@@ -122,11 +137,11 @@ public sealed class CalibImport(
         var gateCell = new GateCell(
             CellId(request.Suite, record), campaign.Id, record.Task, reviewer.Id, record.Repeat, Slot: 0, position,
             Claimable.Stored(CellState.Settled, record.Attempt, WorkerIdentity.Nobody, record.Started),
-            record.Pin.Match(p => p, _ => ProductPin.None), GateCellOutcomeKind.Completed, string.Empty);
+            cell.Pin, GateCellOutcomeKind.Completed, string.Empty);
 
         ImportFile[] files = [new("findings.jsonl", ArtifactClass.Findings, Encoding.UTF8.GetBytes(string.Concat(cell.Reply.Findings.Select(f => f.Json + "\n")))), .. copied.Files];
 
-        return (new ImportPlan(campaign, gateCell, settlement, record.Id, record.SourceJson, files), copied.Skipped);
+        return Outcome<(ImportPlan Plan, int Skipped)>.Success((new ImportPlan(campaign, gateCell, settlement, record.Id, record.SourceJson, files), copied.Skipped));
     }
 
     /// <summary>A row per distinct definition: the catalog's own when one already hashes alike (under any name), else a new
@@ -140,7 +155,7 @@ public sealed class CalibImport(
 
         foreach (var cell in cells.DistinctBy(c => c.Definition.Hash))
         {
-            var row = CalibReviewers.Existing(rows, cell.Definition) is { } existing ? Outcome<GateReviewer>.Success(existing) : await AddAsync(cell, added, cancellationToken);
+            var row = CalibReviewers.Existing(rows, cell.Definition) is [var existing, ..] ? Outcome<GateReviewer>.Success(existing) : await AddAsync(cell, added, cancellationToken);
             if (row is Outcome<GateReviewer>.Fail fail)
             {
                 return Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>.Failure(fail.Reason);
