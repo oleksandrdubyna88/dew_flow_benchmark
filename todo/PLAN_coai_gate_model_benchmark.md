@@ -1,7 +1,7 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
-> Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27 —
-> `research/module_gate.md` describes them; E3–E7 open.** Scope: a new bounded context `Gate` across
+> Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27, E3 (the
+> driver) 2026-09-28 — `research/module_gate.md` describes them; E4–E7 open.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -663,7 +663,50 @@ for the rest.
 - [x] DoD: migrations apply on an empty database (`PostgresFixture` migrates a fresh container and a fresh database
   per guard test); `research/module_gate.md` carries the growth table of §4.
 
-### E3 — the driver (Fable for S3.1, S3.2, S3.7; Opus otherwise)
+### E3 — the driver (Fable for S3.1, S3.2, S3.7; Opus otherwise) — DONE 2026-09-28
+
+> Landed on `feat/gate-e3-driver`; the driver, the protocols, the tap and the CLI are in
+> [module_gate.md](../research/module_gate.md). Built on Opus throughout (the coordinator's assignment), with the two
+> secret-bearing stories (S3.2, S3.7) put to a risk consultation before they were written. Every story's RED is quoted
+> in its commit body: the pure pieces (S3.4–S3.6) failed to compile first and then went red by revert; every guard
+> was reverted in the finished code and its test watched failing for the real symptom, then restored. **Run once
+> against the real product** (`GateDriverLiveTests`, the installed coai-mcp 0.39.0, a `local` reviewer at a loopback
+> stand-in vendor): `providers` answered, one plan cell completed valid (proceed, one ledger turn, one vendor call) and
+> was stored with `serverInfo.version`.
+>
+> **Deviations from the stories as written:**
+> - **Two E1/E2 defects found and fixed test-first.** `PostgresGateStore` claimed by `Position` then `Slot`, reversing
+>   the matrix (RED: planned `a1 b1 b2 a2`, claimed `a1 b2 b1 a2`); `FindingCategory` named eight words the product
+>   never writes (RED against a copied fixture of the product's enums: `Architecture` read as `Unknown`).
+> - **The risk consultation (codex) changed three things.** A value endpoint could carry a credential — user-info, a
+>   query, a fragment, plain http to a public host — and a refusal quoted the url: now refused without quoting it. A
+>   vendor that echoes the header in a 401 would have put the key on disk: the tap scrubs the request's Authorization
+>   value (and its bearer token) from every body it WRITES, the product still receives the vendor's bytes. The child
+>   inherited the variable the reviewer names as holding the creds key: `CoaiEnvironment` drops it, and the product's
+>   stderr is scrubbed of the key as it is streamed.
+> - **The cadence consultation** added the per-cell `ReferencesHash` (a resume whose references now resolve elsewhere is
+>   refused naming the reviewer), capacity-aware claiming, and one lane for a shared data directory; its store-order
+>   finding is the first defect above.
+> - **The ledger's stage words are the product's `Stage` enum** — `PlanReview`, `CodeReview`, `FeatureReview` — not
+>   `plan`/`code`/`feature`; a code cell's facts are its `CodeReview` rows only. `tokensReasoning` is written only by the
+>   calibration branch, so an absent field reads *not captured*.
+> - **The product's words widened the domain**: `GateVerdictWord.Skipped` (a feature review of too few epics),
+>   `GateReply.Refused` + `FailureKind.ToolRefused` (the `{error}` object, e.g. `review_code` before a passed plan
+>   round).
+> - **`GateSettlement.Notes`** (server version, references hash, settings check counts) rides on the settlement as an
+>   init property; `IGateArtifactStore.AdoptAsync` and a `GateCellCompletion` overload commit files written LIVE
+>   (stderr, tap) where they lie instead of copying them.
+> - **`effort` / `thinking` / `reviewMinutes`** exist only on the calibration branch (announced for 0.40.0); on 0.39.0
+>   they are accepted and silently ignored, and `SettingsCheck` reports every knob the session file cannot show as
+>   *unchecked*, never as applied.
+> - **A shared data directory is refused above one lane**, and a cell's ledger is the slice appended during its own
+>   session — `usage.jsonl` carries no session, task or attempt on a row.
+> - **`Bench.Infrastructure` carries the ASP.NET Core framework reference** for the tap's Kestrel and drops three
+>   package references the framework now provides (NU1510).
+> - **The feature protocol does not resolve** its round (the calibration harness's shape), and **the plan gate measures
+>   one round**.
+> - **Not built** (named, not silently missing): `reviewers add --from-coai-settings` / `--from-calib-models` (E7),
+>   `suite verify --prune` (§4), synthetic (uncommitted) plans (E7's export writes them into the suite's checkout).
 
 > **How E3 is built (decided 2026-09-27, before its plan round).** The stories below are the contract; these are
 > the decisions they left open, each checked against the code at `4c24116` and the product's source.
@@ -807,38 +850,38 @@ for the rest.
 > - **Not in E3** (named so nobody reads their absence as done): `reviewers add --from-coai-settings` /
 >   `--from-calib-models` (D6, S7.1), `suite verify --prune` (§4) and `bench gate prune`'s scheduling.
 
-- **S3.1** `ProcessSession` (long-lived exe + argv, stdin/stdout pipes, stderr to a file, kill the tree on
+- [x] **S3.1** `ProcessSession` (long-lived exe + argv, stdin/stdout pipes, stderr to a file, kill the tree on
   dispose, `IsAlreadyGone` shared) + `McpStdioClient` (`initialize`, `notifications/initialized`, `tools/list`,
   `tools/call` with an absolute per-call timeout, notifications kept). RED against a fake MCP server in the test
   project (a tiny console that speaks newline JSON-RPC): handshake before any call; a hung call ends at its
   timeout with the process gone; stderr survives a crash; **one session per cell** — a lane that claims a second
   cell while holding a session is a programming error the type refuses (`ProcessSession` is owned by the cell's
   scope and disposed at settle).
-- **S3.2** `CoaiEnvironment.For(run, reviewer, task, attempt)`: parent `COAI_*` dropped, every knob set, the
+- [x] **S3.2** `CoaiEnvironment.For(run, reviewer, task, attempt)`: parent `COAI_*` dropped, every knob set, the
   vendor row, the caller session id with its attempt suffix, `COAI_DATA_DIR` from `CellPaths.DataDirFor`, the
   secret injected last; `Snapshot` = the same map minus secrets, hashed. RED: the snapshot never contains the
   key's value; the hash is stable across two runs with different keys; two cells resolved concurrently never
   share a data dir unless the run is shared; a run stored isolated cannot be resumed shared, and vice versa;
   attempt 2 of a cell gets a different data dir and caller session id from attempt 1, and attempt 1's directory
   is untouched.
-- **S3.3** `PlanGateProtocol`, `CodeGateProtocol` (open → plan loop → resolve accept-all → code → resolve; a ref per
+- [x] **S3.3** `PlanGateProtocol`, `CodeGateProtocol` (open → plan loop → resolve accept-all → code → resolve; a ref per
   run; `Passed`), `FeatureGateProtocol` (`review_feature` with the suite's inputs). RED against the fake server:
   the code gate is refused when no plan round passed (the product's rule, replayed by the fake); the resolve
   reply's refusal is kept on the stage; `again` is never sent on a first call.
-- **S3.4** the reply parser + the ledger reader (`usage.jsonl` rows → turns) + `GateRunFacts` + `FailureCause`.
+- [x] **S3.4** the reply parser + the ledger reader (`usage.jsonl` rows → turns) + `GateRunFacts` + `FailureCause`.
   RED: a length-cut call is named as such; a non-JSON reply is `tool answered non-JSON`; a `call_human` verdict
   is not valid and says why.
-- **S3.5** `SettingsCheck` port: asked-for settings against the session config on disk, scoped to this run's
+- [x] **S3.5** `SettingsCheck` port: asked-for settings against the session config on disk, scoped to this run's
   session. RED: an accepted-and-ignored knob is reported as a mismatch.
-- **S3.6** `ProductPin.Read` over the binary and its checkout: `git status --porcelain --untracked-files=no`
+- [x] **S3.6** `ProductPin.Read` over the binary and its checkout: `git status --porcelain --untracked-files=no`
   scoped to the product's source tree. RED: a binary outside any checkout has an empty git sha and says so; an
   untracked scratch file beside the source does not dirty the pin; a modified tracked file under the product's
   project does; a modified file elsewhere in the checkout does not, and the pin says which tree was checked.
-- **S3.7** `RecordingTap` (Kestrel on a loopback port per run; body written before forwarding; absolute deadline
+- [x] **S3.7** `RecordingTap` (Kestrel on a loopback port per run; body written before forwarding; absolute deadline
   closing the upstream socket; `Authorization` in memory only; `read_calls`/`facts` equivalents). RED: the
   recorded request file never contains the header value; a dripping upstream is closed at the deadline with the
   call marked; every forwarded request is answered or marked before the run finishes.
-- **S3.8** `bench gate run` (`--gate`, `--suite-file`, `--reviewers`, `--repeats`, `--coai-exe`, `--artifact-root`,
+- [x] **S3.8** `bench gate run` (`--gate`, `--suite-file`, `--reviewers`, `--repeats`, `--coai-exe`, `--artifact-root`,
   `--parallel`, `--per-endpoint`, `--shared-data-dir`, `--no-tap`, `--prediction "<text>"`, `--db`), `resume`
   (`--dry-run`), `status`, `sweep`, `probe`, `reviewers add|list|retire`, `suite verify`. Exit codes: 0 legs
   produced · 3 environment · 4 configuration · 5 none. The prediction text is stored on the run (measurement
@@ -850,7 +893,7 @@ for the rest.
   are still on disk and marked `Interrupted`; **the concurrency test** — the fake server counts open sessions and
   in-flight reviews per endpoint: never above `--parallel` / `--per-endpoint`, and equal to them under enough
   work.
-- DoD: a live test class (skipped when `BENCH_GATE_COAI_EXE` is unset, the `QlnEngineLiveTests` shape) drives
+- [x] DoD: a live test class (skipped when `BENCH_GATE_COAI_EXE` is unset, the `QlnEngineLiveTests` shape) drives
   `providers` and one `review_plan` against the real binary with a fake vendor and stores a run.
 
 ### E4 — the assessment (Opus)

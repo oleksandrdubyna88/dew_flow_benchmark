@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Cli;
 
-/// <summary><c>bench gate …</c> — the coai gate-model benchmark's verbs. E2 lands the two that own its storage:
-/// the PUBLIC export (database rows through the publication guard, never an artefact) and the tap PRUNE (bodies
-/// past the window released, facts kept). The driver's verbs — run, resume, status, sweep — arrive with E3.</summary>
+/// <summary><c>bench gate …</c> — the coai gate-model benchmark's verbs: the two that own its storage (the PUBLIC export —
+/// database rows through the publication guard, never an artefact — and the tap PRUNE), and the driver's (E3): run,
+/// resume, status, sweep, probe, reviewers and suite verify.</summary>
 public static class CoaiGateCommand
 {
     /// <summary>How long a tap request/response body is kept, in days. The facts file of every call is kept forever.</summary>
@@ -21,6 +21,13 @@ public static class CoaiGateCommand
         {
             "export" => await ExportAsync(command, output, error, cancellationToken),
             "prune" => await PruneAsync(command, output, error, cancellationToken),
+            "run" => await GateRunCommand.RunAsync(command, output, error, cancellationToken),
+            "resume" => await GateRunCommand.ResumeAsync(command, output, error, cancellationToken),
+            "status" => await GateRunCommand.StatusAsync(command, output, error, cancellationToken),
+            "sweep" => await GateRunCommand.SweepAsync(command, output, error, cancellationToken),
+            "probe" => await GateToolsCommand.ProbeAsync(command, output, error, cancellationToken),
+            "reviewers" => await GateToolsCommand.ReviewersAsync(command, output, error, cancellationToken),
+            "suite" when command.Operand(1) == "verify" => await GateToolsCommand.VerifySuiteAsync(command, output, error, cancellationToken),
             var other => Unknown(other, error),
         };
 
@@ -223,10 +230,12 @@ public static class CoaiGateCommand
     private static int Unknown(string operand, TextWriter error)
     {
         error.WriteLine(operand.Length == 0
-            ? "bench: gate needs a sub-verb — export or prune"
-            : $"bench: unknown gate sub-verb '{operand}' — export or prune (run, resume, status and sweep arrive with the driver)");
+            ? $"bench: gate needs a sub-verb — {SubVerbs}"
+            : $"bench: unknown gate sub-verb '{operand}' — {SubVerbs}");
         return ExitCodes.Configuration;
     }
+
+    private const string SubVerbs = "run, resume, status, sweep, probe, reviewers, suite verify, export or prune";
 
     private static string Connection(CommandLine command) =>
         command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);

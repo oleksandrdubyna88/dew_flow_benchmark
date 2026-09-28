@@ -1,8 +1,9 @@
 # Module — Gate: the coai gate-model benchmark
 
-> Status: **the domain and the contracts (E1) and the store and the privacy guard (E2) exist, 2026-09-27; no
-> product session is driven yet.** The driver (E3), the assessment (E4), the import (E5), the report surfaces and
-> the page (E6) and the first campaign (E7) are open in [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+> Status: **the domain and the contracts (E1), the store and the privacy guard (E2) and the driver (E3) exist,
+> 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by cell, and stores every session.** The
+> assessment (E4), the import (E5), the report surfaces and the page (E6) and the first campaign (E7) are open in
+> [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 > This file describes what is built; a sentence here about something that does not run is a bug in the file.
 
 ## Purpose
@@ -77,6 +78,15 @@ flowchart TB
         completion["GateCellCompletion<br/>artefacts, run.json last → refs → settle"]
         pub["PublicationGuard + FailureRedaction<br/>PostgresGatePublicationSource: every gate_* row, from the EF model<br/>bench gate export --public · bench gate prune"]
     end
+    subgraph driver["the driver (E3) — Application over ports, adapters in Infrastructure"]
+        campaign["GateCampaign<br/>--parallel lanes (LegDrain) · EndpointPool: claim only where the endpoint has room<br/>pin read per claim · a moved product stops the run unless allowed"]
+        runner["GateCellRunner — one cell attempt<br/>fresh attempt dir · gate-owned clone + run ref · CoaiEnvironment (secret last)<br/>ONE process in the lane's LaneSlot · protocol under the cell deadline"]
+        protocols["PlanGateProtocol · CodeGateProtocol · FeatureGateProtocol<br/>open → review → resolve accept-all · plan loop ≤ 4 · again never sent"]
+        mcp["McpStdioClient over ProcessSession<br/>handshake first · absolute per-call timeout kills the tree · stderr streamed, scrubbed"]
+        tap["RecordingTap (Kestrel, loopback)<br/>body before forwarding · Authorization in memory, scrubbed from disk · deadline aborts"]
+        readers["GateReplyParser · LedgerRows · StderrFacts · TapCallFacts · SettingsCheck<br/>ProductPinReader · SessionConfigReader · PostgresGateReviewerCatalog"]
+        cli["bench gate run · resume · status · sweep · probe · reviewers · suite verify"]
+    end
     contracts["Bench.Contracts — Gate*Dto<br/>no free text reachable (type-graph walk, Type.Property allow-list)"]
     guard["ArchitectureTests<br/>deciders in Bench.Domain · Ui → Contracts only · one setting producer · name private"]
 
@@ -97,6 +107,15 @@ flowchart TB
     pgstore --> pub
     guard -. asserts .-> dom
     guard -. asserts .-> contracts
+    cli --> campaign
+    campaign --> runner
+    runner --> protocols
+    protocols --> mcp
+    runner --> tap
+    runner --> readers
+    runner --> completion
+    campaign --> pgstore
+    runner -. "CoaiEnvironment · facts · findings" .-> dom
 ```
 
 ## Core entities, and the rule each one carries
@@ -125,6 +144,12 @@ flowchart TB
 | `ArtifactRef` · `ArtifactClass` · `ArtifactFootprint` | `ArtifactRef.cs` | what the database knows of a file: relative path, attempt, class, SHA-256, length — never the bytes. `Of` refuses a path outside the writing attempt; `Stored` re-parses a row's path, so a hand-edited `..` is refused on read. A footprint that could not be measured is `unknown`, never zero |
 | `PublicationGuard` · `PrivateNames` · `FailureRedaction` | `PublicationGuard.cs` | the string guard: refuses `://`, a drive path, `/home/`, `\Users\` (and `/Users/`) and any private name (case-insensitive), a HOST name (this machine's name as a whole word, `DESKTOP-…`/`LAPTOP-…`/`WIN-…`, `*.local`/`*.lan`/`*.internal`/`*.corp`/`*.home`), naming table, column, row id and the RULE — never the text, and the row id itself is redacted, because a reviewer id can be the private name. The one column checked by a stricter rule than `://` is `gate_reviewers.EndpointUrl`: any non-empty value there passes only when `ReviewerEndpoint.Parse` reads a public vendor url — a schemeless `llm.corp.internal:8000` is refused as well (it spells no `://`). `FailureRedaction` replaces urls, machine paths and private names in the failure sentence before it is stored |
 | `HashText` | `HashText.cs` | the one twelve-character short form of a hash every stamp uses — never a `[..12]` that throws on a shorter value |
+| `CoaiEnvironment` · `SecretValue` · `ChildEnvironment` · `GateRunSettings` | `CoaiEnvironment.cs` | one cell ATTEMPT's environment, a port of the calibration's `child_env`: the parent's `COAI_*` dropped (and the variable the reviewer names as holding the creds key), the run's pinned knobs (`COAI_FEATURE_MIN_EPICS=1` — the product's default 3 SKIPS a small plan —, consult off, `COAI_ON_EXHAUSTED=good_enough`, the product's concurrency caps, Debug logs) plus the operator's `--set` extras, the reviewer's transport, the vendors string through `ApplyTo`, `COAI_CALLER_SESSION=bench-gate-<run8>-<reviewer>-<task>-r<n>-a<k>`, `COAI_DATA_DIR` from `CellPaths.DataDirFor`. `Snapshot` = every `COAI_*` sent minus secrets by name; `SettingsHash` (the SCOPE's) = the snapshot minus `AxisVariables` (the cell's identity and the reviewer's own configuration, each with its reason). The secret joins only at `WithSecret`, LAST, into a `ChildEnvironment` that renders as names and `Scrub`s the key out of stderr; `SecretValue` prints `[redacted]`. An operator extra that is not `COAI_*`, is harness-owned or looks like a secret is refused |
+| `GateRunResume` · `RequestedDataDir` | `GateRun.cs` | a resume never flips the data-directory mode, and a finished run is a record — both refused by name |
+| `GateReplyParser` · `ParsedFinding` · `LedgerRows` · `StderrFacts` · `TapCallFacts` | `GateReplies.cs` | the reply (not JSON → `NotJson`; `{error}` → `Refused`; findings a LIST or *not captured*; the product's severity and category words), accept-all decisions, `Passed` = proceed · good_enough · continue_anyway; the ledger's REVIEW rows of the gate's own stage word (`PlanReview` · `CodeReview` · `FeatureReview`, the product's `Stage` enum — a code cell's plan loop and a consultation are not the code reviewer's spend), an absent field *not captured*; served/refused and the shim's prompt files off stderr; a tap call without a facts file is status 0 |
+| `SettingsCheck` · `SettingsApplied` | `SettingsCheck.cs` | what was ASKED against THIS run's session file: mismatches, checked, and unchecked (a knob the disk cannot show — never passing); `good_enough` and `GoodEnough` are one decision |
+| `EndpointRoutes` · `ResolvedReferences.Hash` | `CoaiVendorsSetting.cs` | the tap's loopback address routed into the vendors string by the one producer; the hash of what a row's references RESOLVED to, stored per cell (`ReferencesHash`) — the row hashes the names, so a re-pointed endpoint would otherwise be one population, and a resume where it changed is refused |
+| `GateSessionNotes` | `GateRun.cs` | on a settlement: the handshake's `serverInfo.version`, the references hash, the settings check as counts |
 
 ## Entry points
 
@@ -146,21 +171,102 @@ flowchart TB
   · advance · cells · facts · artefact refs) and `IGateArtifactStore` (begin an attempt · write · read-and-verify ·
   attempts on disk · footprint · the file-hash key · prune), plus `GateCellCompletion`, the commit protocol.
   `GateFileHashKeys.ResolveAsync` is the one place the key is read, created or refused.
-- `bench gate run | resume | status | sweep | probe | reviewers | suite verify` (E3), `bench gate assess` (E4),
-  `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
+- `bench gate run --gate plan|code|feature --suite-file <suite.json> --reviewers <id,…> --coai-exe <coai-mcp>
+  --artifact-root <dir> --db <conn> [--repeats 3] [--parallel 4] [--per-endpoint 2] [--shared-data-dir] [--no-tap]
+  [--prediction "<text>"] [--allow-product-change] [--set "COAI_X=1,…"] [--cell-timeout-minutes 300]
+  [--checkout-root <dir>] [--creds-key-from-coai-settings]` — loads and refuses in the order a person fixes things
+  (flags 4 · missing files 3 · suite 4 · database 3 · reviewers 4 · pin and file-hash key 3), refuses a product that
+  moved since an earlier native run of this gate and suite measured any of these reviewers (4, both shas named) unless
+  allowed, plans the matrix (repeats outermost), writes the prediction to `runs/<id>/prediction.txt` (its hash on the
+  run) and the run settings to `runs/<id>/run-settings.json`, drives the campaign, prints the pins seen and the
+  footprint. Exit 0 cells produced · 3 pin unreadable / too many failures · 4 product moved · 5 nothing produced
+  (resumable). A shared data directory runs one lane (`--parallel` above 1 is refused, saying why).
+- `bench gate resume --run <id> [--dry-run] [--shared-data-dir|--isolated-data-dir]` — the same inputs; refused when
+  the suite stamp differs, the product moved (unless the run allows it), the mode would flip, or a reviewer's
+  references now resolve to something else than its settled cells were measured under. `--dry-run` is `status`.
+- `bench gate status --run <id>` — pending, claimed (owner, age), abandoned (cause), settled (failed), the pins seen,
+  the data-dir mode. Claims nothing. `bench gate sweep` — hands back claims whose owner is provably gone and removes
+  the gate clones of runs that ended.
+- `bench gate probe --coai-exe … --reviewers <id>` — the product started with that reviewer's environment in a throwaway
+  data directory: `tools/list`, `providers` (an allow-list of fields), no model called.
+- `bench gate reviewers add --id … --runtime api|codex|gemini|claude|antigravity|local|remote --model … [--endpoint
+  <public https url | VARIABLE_NAME>] [--key-name …] [--creds-key-ref VARIABLE] [--executable-ref VARIABLE]
+  [--dialect …] [--effort …] [--max-tokens …] [--timeout-minutes …] [--follow-ups …] [--review-minutes …] [--thinking]
+  [--price-in/--price-cached/--price-out …] --gates plan,code,feature` · `list [--all]` · `retire --id …` — added and
+  retired, never edited; a row read back whose stored hash no longer matches its definition is refused.
+- `bench gate suite verify --suite-file … [--checkout-root …]` — every task's checkout at its variant head with its
+  plan committed there; 3 when any is not.
+- `bench gate assess` (E4), `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6)
+  are open in the plan.
 
-## The store — six tables, one migration, no existing table touched
+## The driver — one cell attempt, end to end
+
+The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Application):
+
+1. **A fresh attempt directory** (`BeginAttemptAsync`): earlier attempts of the cell are marked `interrupted.json`,
+   kept whole, never continued. The attempt number IS the claim's.
+2. **The checkout**: a GATE-OWNED clone per run and task, `<checkout-root>/gate/<runId>/<task>`, made with `git clone
+   --shared --no-checkout` from the read-only worktree `ICheckoutProvider` keeps and detached at the variant head; the
+   run's ref `bench/gate/<run8>/<reviewer>/<task>-r<n>-a<k>` is made THERE (plan and code). The shared read-only
+   checkout is never written.
+3. **References and the key**: the reviewer's references resolved through `ISecretSource` (`GateSecrets`), the vault's
+   access key for an `api` row from the variable its `credsKeyRef` names, or — opt-in — from the machine's coai
+   `settings.json` (`CoaiSettingsSecrets`), held as a `SecretValue`.
+4. **The tap** for an `api` row whose endpoint is known (`RecordingTap`, a loopback Kestrel per cell): the vendors
+   string routes the row's base url through it (`EndpointRoutes`). Deadline = the review cap + 5 minutes.
+5. **The environment** (`CoaiEnvironment`), the secret last.
+6. **ONE process** in the lane's `LaneSlot` (opening a second throws — one process per cell), over `McpStdioClient`:
+   `initialize` → `notifications/initialized` before any call; every call's timeout is what is left of the CELL's
+   absolute deadline (`--cell-timeout-minutes`), and a call that runs out kills the process tree.
+7. **The protocol**: plan — `open → review_plan → resolve` (ONE round is the measurement); code — `open → plan loop
+   (≤ 4, accept-all, until a passing verdict) → review_code → resolve`, a loop that never passes recorded as a
+   completed, INVALID run (`VerdictNotPassing`, review_code never called); feature — `review_feature` with the suite's
+   inputs, no open, no resolve (the calibration's shape). `again` is never sent. Each resolve's refusal is kept on its
+   stage.
+8. **The process gone, the tap closed** — calls still open are aborted and marked `closed_at_cell_end`.
+9. **Evidence read back** (`IGateAttemptFiles`): the reply, the ledger (the slice appended during THIS session — a
+   shared directory's `usage.jsonl` is one file), stderr (served/refused, the shim's prompt files → the turn-1 prompt
+   hash), the tap's calls, this session's config → the settings check.
+10. **Facts, findings, settlement**: `GateRunFacts.From`, findings hashed under the root's key (text to
+    `findings.jsonl`), the failure redacted with the suite's private names and this host; a session that BROKE (no
+    measurement: the product exited, the deadline ran out) settles `Failed` (`ProcessDied` / `Interrupted`).
+11. **Commit** (`GateCellCompletion`): live files ADOPTED where they lie (`stderr.txt`, `tap/call-NN.*` — flushed and
+    hashed, never copied), then `settings.json`, `request.json`, `stage-<name>.reply.json` / `.resolve.json`,
+    `reply.json`, `findings.jsonl`, `ledger.jsonl`, `settings-check.json`, `answers/NN-*`, and `run.json` LAST; refs in
+    one transaction; then the settle.
+
+**The campaign** (`GateCampaign`): `--parallel` lanes, each its own database context, store, runner and slot, each a
+`LegDrain`. A lane pins the product (`ProductPinReader`) before EVERY claim; a moved product stops every lane
+(`ProductMoved`, exit 4) unless the run allows a change, in which case the next claim is under the new pin and the pins
+seen are listed. The per-endpoint cap is enforced AT THE CLAIM (`EndpointPool`): under one lock, a lane claims only
+among reviewers whose endpoint has a free slot (`IGateStore.ClaimNextAmongAsync`), and waits for a release only when
+every pending cell's endpoint is full — so no lane holds a claimed cell at the head of the line while another endpoint
+idles. The endpoint key is the url value, the reference name, or a CLI row's runtime word.
+
+**Measured against the real product** (`GateDriverLiveTests`, 2026-09-28, the installed coai-mcp 0.39.0, a `local`
+reviewer at a loopback stand-in vendor): `providers` answered, one plan cell completed — verdict proceed, valid, one
+ledger turn, one vendor call — and its session was stored with `serverInfo.version`.
+
+**The pin** (`ProductPinReader`): SHA-256 of the deployment set — every `.dll`, `.exe`, `.json` under the binary's
+folder, when a sibling `<name>.dll` shows a framework-dependent build (an apphost barely changes between builds) — or
+the file alone; `--version`'s first line; and under a checkout the short sha and `git status --porcelain
+--untracked-files=no -- <the nearest *.csproj directory>`, naming the tree.
+
+## The store — six tables, two migrations (`GateTables`, E3's `GateDriver`), no existing table touched
 
 | table | one row per | what it holds |
 |---|---|---|
-| `gate_runs` | `bench gate run` invocation | gate, suite stamp, data-dir mode, status, source (`native` or the harness an import came from) |
-| `gate_cells` | task × reviewer × repeat | the claim (state, attempts, owner label/host/pid, claimed-at), the pin taken at claim, and once settled the session's facts — every count beside a *captured* flag, the vendor's finish WORDS, the verdict word, the failure KIND and the ONE free-text column, `FailureText` (redacted) |
+| `gate_runs` | `bench gate run` invocation | gate, suite stamp, data-dir mode, status, source (`native` or the harness an import came from); since E3 the prediction's HASH (its text is in the artefact root) and whether a product change is allowed |
+| `gate_cells` | task × reviewer × repeat | the claim (state, attempts, owner label/host/pid, claimed-at), the pin taken at claim, and once settled the session's facts — every count beside a *captured* flag, the vendor's finish WORDS, the verdict word, the failure KIND and the ONE free-text column, `FailureText` (redacted); since E3 the handshake's `ServerVersion`, the `ReferencesHash`, and the settings check as `SettingsChecked` / `SettingsMismatches` |
 | `gate_findings` | finding of a settled session | ordinal, severity, category, gating, line, `TextHash`, `FileHash`; `(cell, attempt, ordinal)` unique |
 | `gate_verdicts` | verdict on a finding under a rubric | rubric id/kind/hash, the verdict case, the strict fields as enum names, cluster hash, seed id, assessor id, batch id, prompt hash, family match (written by E4) |
 | `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport, prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
 | `gate_artifacts` | committed file | run, cell, attempt, class, RELATIVE path (unique), SHA-256, length |
 
-**The claim** is one UPDATE guarded on `State == Pending` that sets the owner, the claim time, the pin and
+**The claim** takes the next pending cell in the MATRIX's order — slot, then position (it was position first until
+E3's consultation found it reversing the nesting: planned A1 B1 B2 A2, claimed A1 B2 B1 A2) — optionally only among
+named reviewers (`ClaimNextAmongAsync`, the lanes' capacity-aware claim), with one UPDATE guarded on
+`State == Pending` that sets the owner, the claim time, the pin and
 `Attempts + 1` in the same statement — so the attempt number a cell is claimed at is its attempt directory — and a
 run that ended is never claimed from. **The hand-back is ONE statement per stranded cell**, guarded on every fact
 the sweep decided on — still claimed, the same owner (label, host, pid), the same claim time, the same attempt
@@ -177,10 +283,16 @@ plus the facts and the findings, in one transaction.
 <artifact-root>/                        refused if it is inside ANY git checkout (a .git folder or file above it)
   file-hash.key                         32 random bytes; created once (CreateNew), owner-only from creation
   runs/<runId>/
+    prediction.txt                      the prediction written before the run (E3); its SHA-256 is on gate_runs
+    run-settings.json                   the run's pinned knobs and --set extras, re-applied by a resume (E3)
     data-shared/                        COAI_DATA_DIR of a SHARED run
     cells/<cellId>/attempt-<n>/         one cell attempt — created once, never reused
       data/                             COAI_DATA_DIR of an ISOLATED run
-      reply.json, stderr.txt, ...       artefacts, each committed once
+      stderr.txt                        the product's stderr, streamed live with the key scrubbed, adopted at the end
+      settings.json, request.json       the COAI_* snapshot (no secret); every tool call's arguments
+      stage-<name>.reply/resolve.json   every review and resolve reply; reply.json is the measured one
+      findings.jsonl, ledger.jsonl      the findings' TEXT; this session's slice of the product's usage ledger
+      settings-check.json, answers/     the settings check; the api shim's prompt and answer files
       tap/call-NN.request.json          tap bodies (released by prune)
       tap/call-NN.response.json
       tap/call-NN.json                  tap facts (kept forever)
@@ -238,6 +350,15 @@ The store (E2) adds no package: `Bench.Infrastructure` already carries EF Core a
 access list uses `System.Security.AccessControl` and `System.Security.Principal` (runtime, Windows-only calls
 behind `OperatingSystem.IsWindows`).
 
+The driver (E3) adds no package either. `Bench.Infrastructure` gains a FRAMEWORK reference to
+`Microsoft.AspNetCore.App` for the tap's Kestrel listener — it ships with the runtime — and drops three package
+references that framework now carries (logging abstractions, `Microsoft.Extensions.Http`, `FileSystemGlobbing`;
+NU1510 refuses a reference the framework already has). The product's finding words are pinned by a second copied
+fixture, `tests/Bench.Tests/Fixtures/coai-finding-words.json` (`coai · src_mcp/core/Findings/Finding.cs`, commit
+`9cb01a2b`). The fake product is `tests/FakeCoai`, a console the test project builds and launches from its own output
+folder, never referencing it as an assembly; the real product is exercised by `GateDriverLiveTests` when
+`BENCH_GATE_COAI_EXE` names a binary.
+
 ## Growth surfaces
 
 The tables and the artefact root exist since E2; the sizes are still the plan's projection (§4) until E7's first
@@ -251,7 +372,9 @@ campaign measures them.
 | the artefact root, `runs/<id>/` | measured 2026-09-27: 160 MB for 71 feature runs ≈ 2.3 MB/run → ~650 MB per campaign, mostly tap bodies | `bench gate prune` releases tap bodies past 30 days (`--tap-retention-days`), each call's facts made durable and its release logged to `tap/pruned.jsonl` before a body goes; request / reply / stderr / ledger / answers are kept forever | an attempt without `run.json` never finished — prune lists it and touches nothing; an interrupted attempt is kept whole; a prune killed half-way leaves the facts and some bodies, never neither, and the next prune finishes |
 | staging files (`*.staging-<guid>`) | none in a healthy run; one per crash mid-write | nothing yet — counted in the footprint, read by nothing | a crash before the rename leaves one, never a half file under the real name |
 | `file-hash.key` | 32 bytes, once per root | never — losing it refuses the root while findings exist | — |
-| checkouts at the variant heads | 8 worktrees + bare mirrors, the size of the repositories | the checkout root's existing owner; `bench gate suite verify --prune` (E3) | — |
+| checkouts at the variant heads | 8 worktrees + bare mirrors, the size of the repositories | the checkout root's existing owner; `bench gate suite verify --prune` is not built (open) | — |
+| gate clones (E3) | one working tree per run × task under `<checkout-root>/gate/<runId>/`, objects borrowed from the mirror | `bench gate sweep` once the run is `Finished` or `Failed` | a clone of a run still open is reused by its resume |
+| per attempt (E3) | `settings.json`, `request.json`, the stage replies, `reply.json`, `stderr.txt`, `findings.jsonl`, `ledger.jsonl`, `settings-check.json`, `answers/`, `run.json`, the product's own data dir (`usage.jsonl`, `sessions/`, `coai.db`, logs) and for `api` rows the tap — ≈ 2.3 MB per feature run as the calibration measured, most of it tap bodies | `bench gate prune` for tap bodies; the rest kept with the run | an interrupted attempt is kept whole and marked; ≤ 2 per cell by the abandon rule |
 | `gate_reviewers` | tens of rows | never deleted, retired | — |
 
 ## Operator decisions assumed on 2026-09-27, pending the operator
@@ -266,9 +389,8 @@ coordinator bumps the qln pin after E6.
 
 ## What does NOT exist yet
 
-Everything that drives the PRODUCT: `ProcessSession` / `McpStdioClient` / `CoaiEnvironment` / the tap /
-`ProductPin.Read` and the `bench gate run | resume | status | sweep` verbs that call the store (E3); the reviewer
-catalog's store and verbs (E3 — `gate_reviewers` exists and is guarded, nothing writes it yet); the blinded export
+The reviewer catalog's imports (`reviewers add --from-coai-settings` / `--from-calib-models`, E7) and `suite verify
+--prune`; the blinded export
 and the assessor launch that write `gate_verdicts` (E4); the import of the 71 Python runs and the coai-bench
 records (E5); the report verb, the API routes, the Gate tab and the mapping from `ModelTable` to
 `GateModelTableDto` (E6). The per-model TABLES in the public export wait for E6's report; today the export is the

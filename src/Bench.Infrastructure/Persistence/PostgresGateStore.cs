@@ -224,6 +224,17 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
 
     public Task<bool> HasFindingsAsync(CancellationToken cancellationToken) => db.GateFindings.AnyAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<(GateReviewerId Reviewer, string ReferencesHash)>> ReferenceHashesAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var rows = await db.GateCells.AsNoTracking()
+            .Where(c => c.RunId == runId && c.FactsRecorded && c.ReferencesHash != string.Empty)
+            .Select(c => new { c.ReviewerId, c.ReferencesHash })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.SelectMany(r => GateReviewerId.Parse(r.ReviewerId) is Outcome<GateReviewerId>.Ok ok ? [(ok.Value, r.ReferencesHash)] : Array.Empty<(GateReviewerId, string)>())];
+    }
+
     private async Task<Outcome<GateCell>> ClaimLoopAsync(
         Guid runId, WorkerIdentity owner, ProductPin pin, IReadOnlyList<string> among, CancellationToken cancellationToken)
     {

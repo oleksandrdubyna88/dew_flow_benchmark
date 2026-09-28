@@ -57,6 +57,12 @@ internal sealed class GateDriverRig : IAsyncDisposable
 
     public ScriptedPins Pins { get; } = new(GateStoreFixtures.Pin('a'));
 
+    /// <summary>The product binary the runner launches — the fake unless a live test names the real one.</summary>
+    public string Product { get; set; } = FakeCoai.Executable;
+
+    /// <summary>What the rig's references resolve to — a live test points a loopback vendor reference here.</summary>
+    public IReadOnlyDictionary<string, string> References { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     public static async Task<GateDriverRig> StartAsync(PostgresFixture postgres, JsonObject? script = null)
     {
         var ct = Xunit.TestContext.Current.CancellationToken;
@@ -98,15 +104,15 @@ internal sealed class GateDriverRig : IAsyncDisposable
     }
 
     public GateCellRunner Runner(IGateStore store, bool tap = false) => new(
-        store, Artifacts, new McpStdioSessionFactory(), new RecordingTapFactory(), Checkouts, new RigSecrets(), new FileGateAttemptFiles(), TimeProvider.System,
-        new GateDriverSettings(FakeCoai.Executable, Artifacts.Root, tap, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2),
+        store, Artifacts, new McpStdioSessionFactory(), new RecordingTapFactory(), Checkouts, new RigSecrets(References), new FileGateAttemptFiles(), TimeProvider.System,
+        new GateDriverSettings(Product, Artifacts.Root, tap, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2),
             Fake.Environment(), PrivateNames.Of(["contoso-orders"])));
 
     public async Task<GateCampaignReport> CampaignAsync(GateRun run, IReadOnlyList<GateReviewer> reviewers, int parallel, int perEndpoint)
     {
         var inputs = new GateCampaignInputs(
             run, Pins.First, reviewers.ToDictionary(r => r.Id.Value), new Dictionary<string, GateTask> { [Task.Id.Value] = Task },
-            GateRunSettings.With(new Dictionary<string, string>()).Ok(), GateStoreFixtures.Key, FakeCoai.Executable);
+            GateRunSettings.With(new Dictionary<string, string>()).Ok(), GateStoreFixtures.Key, Product);
 
         var campaign = new GateCampaign(Pins, new LegDrain(NullLogger<LegDrain>.Instance), TimeProvider.System);
         var report = await campaign.RunAsync(
@@ -126,15 +132,33 @@ internal sealed class GateDriverRig : IAsyncDisposable
         Fake.Dispose();
         Repo.Dispose();
         Root.Dispose();
+
+        foreach (var sibling in new[] { "checkouts", "cli-checkouts", "suite" }.Select(Root.Sibling).Where(Directory.Exists))
+        {
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(sibling, "*", SearchOption.AllDirectories))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+
+                Directory.Delete(sibling, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A git process still closing a pack; the temp folder is the operating system's to clean.
+            }
+        }
+
         await System.Threading.Tasks.Task.CompletedTask;
     }
 
     /// <summary>The secret source for the rig: the vault key is a fixed sentinel, references resolve to nothing.</summary>
-    private sealed class RigSecrets : IGateSecrets
+    private sealed class RigSecrets(IReadOnlyDictionary<string, string> references) : IGateSecrets
     {
         public Outcome<SecretValue> CredsKey(GateReviewer reviewer) => SecretValue.Of(GateDriverRig.CredsKey, "rig");
 
-        public Outcome<ResolvedReferences> References(GateReviewer reviewer) => Outcome<ResolvedReferences>.Success(ResolvedReferences.Empty);
+        public Outcome<ResolvedReferences> References(GateReviewer reviewer) => Outcome<ResolvedReferences>.Success(new ResolvedReferences(references));
     }
 }
 
@@ -143,11 +167,18 @@ internal sealed class ScriptedPins(ProductPin first) : IProductPinReader
 {
     private ProductPin _current = first;
 
-    public ProductPin First { get; } = first;
+    public ProductPin First { get; private set; } = first;
 
     public int Reads { get; private set; }
 
     public void MoveTo(ProductPin pin) => _current = pin;
+
+    /// <summary>Pins the campaign itself to <paramref name="pin"/> — a live test measures the real binary's bytes.</summary>
+    public void StartAt(ProductPin pin)
+    {
+        First = pin;
+        _current = pin;
+    }
 
     public Task<Outcome<ProductPin>> ReadAsync(string executable, CancellationToken cancellationToken)
     {

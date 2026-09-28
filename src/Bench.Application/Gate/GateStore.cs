@@ -59,6 +59,10 @@ public interface IGateStore
 
     Task<IReadOnlyList<ArtifactRef>> ArtifactsAsync(Guid runId, CancellationToken cancellationToken);
 
+    /// <summary>The resolved-references hash each reviewer's SETTLED cells of a run were measured under — what a resume
+    /// compares the machine's references with, so a re-pointed endpoint is a refusal rather than a second population.</summary>
+    Task<IReadOnlyList<(GateReviewerId Reviewer, string ReferencesHash)>> ReferenceHashesAsync(Guid runId, CancellationToken cancellationToken);
+
     /// <summary>Whether any finding row exists — the question a missing file-hash key must be asked against.</summary>
     Task<bool> HasFindingsAsync(CancellationToken cancellationToken);
 }
