@@ -136,7 +136,7 @@ public sealed class CoaiGateCommandTests(PostgresFixture postgres)
     [Fact]
     public void An_unknown_gate_sub_verb_is_a_configuration_error()
     {
-        Run("gate", "frobnicate").Should().Match<(int Code, string Output, string Error)>(r => r.Code == ExitCodes.Configuration && r.Error.Contains("export or prune"));
+        Run("gate", "frobnicate").Should().Match<(int Code, string Output, string Error)>(r => r.Code == ExitCodes.Configuration && r.Error.Contains("export or prune") && r.Error.Contains("run, resume, status, sweep"));
     }
 
     private static (int Code, string Output, string Error) Run(params string[] args)

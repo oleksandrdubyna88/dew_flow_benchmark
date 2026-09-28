@@ -34,7 +34,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -1062,9 +1062,15 @@ here because they cut across modules:
   artefact can reach it, because no export step opens one.
 
 The store (E2) exists — `PostgresGateStore`, `FileSystemGateArtifactStore`, the publication guard,
-`bench gate export --public` and `bench gate prune`. The driver over MCP stdio, the blinded assessment, the
-import of the existing Python and `coai-bench` records, the remaining CLI verbs, the API routes and the Gate tab
-are E3–E7 of [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+`bench gate export --public` and `bench gate prune` — and so does the driver (E3, 2026-09-28): `bench gate run |
+resume | status | sweep | probe | reviewers | suite verify` drive the product over MCP stdio, ONE `coai-mcp` process
+per cell (`ProcessSession` beside the one-shot `ProcessRunner`, sharing its kill rule), each cell attempt in a fresh
+data directory with its own caller session, the vault key joined last into an environment that cannot print it, an
+`api` reviewer's calls through a loopback recording tap, the product pinned at every claim, and the per-endpoint cap
+enforced at the claim itself. It is the one place outside the API that hosts HTTP (the tap's Kestrel), which is why
+`Bench.Infrastructure` carries the ASP.NET Core framework reference. It was run against the real coai-mcp 0.39.0
+(`GateDriverLiveTests`). The blinded assessment, the import of the existing Python and `coai-bench` records, the API
+routes and the Gate tab are E4–E7 of [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 
 ## Guards that shape the API
 
@@ -1305,11 +1311,10 @@ Stated because a description that quietly implies more than is built is the same
   with tools and the doctrine. The doctrine did change behaviour measurably — it made the model terser — it
   just did not change the ordering it was written to change.
 
-- **The gate benchmark has a domain and no driver.** `Bench.Domain.Gate` and the `Gate*Dto` contracts exist
-  and are guarded (*The gate benchmark*, above), and nothing reaches them: no `gate_*` table, no process over
-  MCP stdio, no assessor launch, no import, no `bench gate` verb, no route, no tab. The first number it can
-  produce waits on E2–E3 of `todo/PLAN_coai_gate_model_benchmark.md`, and the first number worth reading on
-  E7's A/A against a Python run at the same product sha.
+- **The gate benchmark drives the product and assesses nothing yet.** Its store (E2) and its driver (E3) exist
+  (*The gate benchmark*, above): cells run and settle with facts and hash-only findings. There is no assessor
+  launch, no import, no route and no tab, so no supported-% exists; the first number worth reading waits on E4 and on
+  E7's A/A against a Python run at the same product sha (`todo/PLAN_coai_gate_model_benchmark.md`).
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
   AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a

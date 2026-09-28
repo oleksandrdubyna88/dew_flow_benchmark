@@ -184,4 +184,7 @@ internal abstract class ForwardingGateStore(IGateStore inner) : IGateStore
     public Task<IReadOnlyList<ArtifactRef>> ArtifactsAsync(Guid runId, CancellationToken cancellationToken) => inner.ArtifactsAsync(runId, cancellationToken);
 
     public virtual Task<bool> HasFindingsAsync(CancellationToken cancellationToken) => inner.HasFindingsAsync(cancellationToken);
+
+    public Task<IReadOnlyList<(GateReviewerId Reviewer, string ReferencesHash)>> ReferenceHashesAsync(Guid runId, CancellationToken cancellationToken) =>
+        inner.ReferenceHashesAsync(runId, cancellationToken);
 }
