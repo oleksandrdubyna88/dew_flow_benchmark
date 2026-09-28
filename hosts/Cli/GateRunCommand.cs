@@ -59,7 +59,12 @@ public static class GateRunCommand
             return await StatusAsync(command, output, error, cancellationToken);
         }
 
-        var reviewers = await GateCliInputs.ReviewersOfAsync(command, runId, cancellationToken);
+        var (known, unknown, reviewers) = await GateCliInputs.ReviewersOfAsync(command, runId, cancellationToken);
+        if (known != ExitCodes.Pass)
+        {
+            return Refuse(error, known, unknown);
+        }
+
         var (code, inputs) = await GateCliInputs.LoadAsync(command, reviewers, error, cancellationToken);
         if (inputs is null)
         {

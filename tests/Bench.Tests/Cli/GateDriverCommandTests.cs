@@ -127,6 +127,39 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
         }
     }
 
+    /// <summary>A dead environment is found BEFORE anything is planned: a reviewer whose creds-key reference is unset on
+    /// this machine is the environment (3), named, and no run exists — rather than every cell failing one by one.</summary>
+    [Fact]
+    public async Task A_reviewer_whose_creds_key_is_unset_is_refused_before_anything_is_planned()
+    {
+        await using var setup = await CliSetup.StartAsync(postgres);
+        var unset = "BENCH_GATE_TEST_UNSET_" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        Run("gate", "reviewers", "add", "--id", "rev-nokey", "--runtime", "api", "--model", "m", "--endpoint", "https://api.vendor-b.example.com/v1",
+            "--creds-key-ref", unset, "--gates", "plan", "--db", setup.Connection).Code.Should().Be(ExitCodes.Pass);
+
+        var (code, _, error) = Run(setup.RunArgs("plan").Select(a => a == "rev-a" ? "rev-nokey" : a).ToArray());
+
+        code.Should().Be(ExitCodes.Environment);
+        error.Should().Contain("rev-nokey").And.Contain(unset);
+        await using var db = PostgresFixture.Context(setup.Connection);
+        (await db.GateRuns.CountAsync(Ct)).Should().Be(0, "nothing is planned for an environment that cannot run it");
+    }
+
+    [Fact]
+    public async Task A_resume_of_an_unknown_run_is_configuration_and_an_unreachable_database_is_the_environment()
+    {
+        await using var setup = await CliSetup.StartAsync(postgres);
+        var unknown = Guid.NewGuid();
+
+        var missing = Run(["gate", "resume", "--run", unknown.ToString(), .. setup.RunArgs("plan").Skip(2)]);
+        missing.Code.Should().Be(ExitCodes.Configuration);
+        missing.Error.Should().Contain($"no gate run {unknown}");
+
+        var down = Run(["gate", "resume", "--run", unknown.ToString(), .. setup.RunArgs("plan").Skip(2).Select(a => a == setup.Connection ? "Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=2" : a)]);
+        down.Code.Should().Be(ExitCodes.Environment);
+        down.Error.Should().Contain("unreachable");
+    }
+
     [Fact]
     public async Task Probe_lists_the_products_tools_and_providers_and_calls_no_model()
     {

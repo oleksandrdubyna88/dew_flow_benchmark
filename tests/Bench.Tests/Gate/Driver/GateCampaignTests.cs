@@ -105,20 +105,45 @@ public sealed class GateCampaignTests(PostgresFixture postgres)
         (await File.ReadAllTextAsync(Path.Combine(firstData, "usage.jsonl"), Ct)).Should().Be("{\"outcome\":\"ok\"}\n");
     }
 
+    /// <summary>The product moves AFTER the first cell started: the cell in flight settles under its own pin, and no later
+    /// cell is measured under bytes the campaign was not pinned to.</summary>
     [Fact]
     public async Task A_product_that_moves_mid_run_stops_the_campaign_naming_both_shas()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateDriverRig.StartAsync(postgres, new JsonObject { ["reviewMs"] = 1500 });
         var reviewer = GateDriverRig.Reviewer("rev-a", "api.vendor-a.example.com");
-        var (run, _) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 2);
-        rig.Pins.MoveTo(Pin('b'));
+        var (run, cells) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 2);
 
-        var report = await rig.CampaignAsync(run, [reviewer], parallel: 1, perEndpoint: 1);
+        var campaign = rig.CampaignAsync(run, [reviewer], parallel: 1, perEndpoint: 1);
+        await Eventually(() => rig.Fake.Events().Any(e => e.Text.StartsWith("review-start", StringComparison.Ordinal)));
+        rig.Pins.MoveTo(Pin('b'));
+        var report = await campaign;
 
         report.Stop.Should().Be(CampaignStop.ProductMoved);
         report.Reason.Should().Contain(HashText.Short(new string('a', 64))).And.Contain(HashText.Short(new string('b', 64)));
-        report.Settled.Should().Be(0);
-        (await rig.NewStore().CellsAsync(run.Id, Ct)).Should().OnlyContain(c => c.State == CellState.Pending, "nothing is measured under bytes the campaign was not pinned to");
+        report.Settled.Should().Be(1, "the cell already in flight settles");
+        var after = await rig.NewStore().CellsAsync(run.Id, Ct);
+        after.Single(c => c.Id == cells[0].Id).State.Should().Be(CellState.Settled);
+        after.Single(c => c.Id == cells[1].Id).State.Should().Be(CellState.Pending, "nothing is measured under bytes the campaign was not pinned to");
+    }
+
+    /// <summary>A lane that WAITED for its endpoint pins the product when it claims, not when it started waiting: the
+    /// product rebuilt while it waited is seen, and — without a change allowed — nothing is claimed under stale bytes.</summary>
+    [Fact]
+    public async Task A_lane_that_waited_for_its_endpoint_pins_the_product_at_the_claim_not_before_the_wait()
+    {
+        await using var rig = await GateDriverRig.StartAsync(postgres, new JsonObject { ["reviewMs"] = 2000 });
+        var reviewer = GateDriverRig.Reviewer("rev-a", "api.vendor-a.example.com");
+        var (run, cells) = await rig.PlanAsync(GateKind.Plan, [reviewer], repeats: 2);
+
+        var campaign = rig.CampaignAsync(run, [reviewer], parallel: 2, perEndpoint: 1);
+        await Eventually(() => rig.Fake.Events().Any(e => e.Text.StartsWith("review-start", StringComparison.Ordinal)));
+        await Task.Delay(300, Ct);
+        rig.Pins.MoveTo(Pin('b'));
+        var report = await campaign;
+
+        report.Stop.Should().Be(CampaignStop.ProductMoved, "the waiting lane read the pin again when its turn came");
+        (await rig.NewStore().CellsAsync(run.Id, Ct)).Single(c => c.Id == cells[1].Id).State.Should().Be(CellState.Pending);
     }
 
     [Fact]

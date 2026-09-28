@@ -160,7 +160,7 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         await gate.WaitAsync(cancellationToken);
         try
         {
-            return Directory.Exists(Path.Combine(clone, ".git")) ? Outcome<string>.Success(clone) : await CloneAsync(clone, task, cancellationToken);
+            return Directory.Exists(Path.Combine(clone, ".git")) ? await VerifiedAsync(clone, task, cancellationToken) : await CloneAsync(clone, task, cancellationToken);
         }
         finally
         {
@@ -183,6 +183,29 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         }
 
         return Task.FromResult(removed);
+    }
+
+    /// <summary>An existing clone is reused only at the variant head. One interrupted between its clone and its checkout
+    /// (a failure, a timeout, a Ctrl+C) has no working tree or the wrong one; it is checked out again, and made anew when
+    /// even that fails — never handed on as it lies to fail every later cell of the task.</summary>
+    private async Task<Outcome<string>> VerifiedAsync(string clone, GateTask task, CancellationToken cancellationToken)
+    {
+        var head = await GitCommand.ReadAsync(clone, GitTimeout, cancellationToken, "rev-parse", "HEAD");
+
+        if (head is Outcome<string>.Ok ok && ok.Value.Trim() == task.Case.VariantHead.Value && File.Exists(Path.Combine(clone, task.Case.PlanPath)))
+        {
+            return Outcome<string>.Success(clone);
+        }
+
+        var repaired = await GitCommand.RunAsync(clone, GitTimeout, cancellationToken, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--force", "--detach", task.Case.VariantHead.Value);
+
+        if (repaired is Outcome<string>.Ok)
+        {
+            return Outcome<string>.Success(clone);
+        }
+
+        DeleteTree(clone);
+        return await CloneAsync(clone, task, cancellationToken);
     }
 
     private async Task<Outcome<string>> CloneAsync(string clone, GateTask task, CancellationToken cancellationToken)

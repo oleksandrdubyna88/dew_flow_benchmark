@@ -33,6 +33,10 @@ public sealed record ProtocolInputs(string RepoPath, string Branch, GateTask Tas
     public const int MaxPlanRounds = 4;
 
     public TimeSpan Remaining => Deadline - Clock.GetUtcNow();
+
+    /// <summary>Called right before the MEASURED call — the runner notes where the stderr and the tap stand, so the facts it
+    /// reads afterwards are that stage's alone.</summary>
+    public Action MarkMeasured { get; init; } = static () => { };
 }
 
 /// <summary>The steps the three protocols share: a call under what is left of the deadline, and a review followed by
@@ -72,9 +76,11 @@ public static class GateProtocolSteps
             new JsonObject { ["repoPath"] = inputs.RepoPath, ["branch"] = inputs.Branch, ["decisions"] = decisions },
             inputs, cancellationToken);
 
-        return resolve.Match(
-            r => Outcome<ProtocolStage>.Success(stage with { Resolve = r.Reply, ResolveRefusal = GateReplyParser.RefusalIn(r.Reply) }),
-            Outcome<ProtocolStage>.Failure);
+        // A resolve that FAILED (the product exited, the deadline ran out) does not take the review with it: the reply
+        // arrived and is the measurement. The failure is kept on the stage; the session's next call finds it over.
+        return Outcome<ProtocolStage>.Success(resolve.Match(
+            r => stage with { Resolve = r.Reply, ResolveRefusal = GateReplyParser.RefusalIn(r.Reply) },
+            reason => stage with { ResolveRefusal = $"the resolve failed — {reason}" }));
     }
 
     public static JsonObject Open(ProtocolInputs inputs) =>
@@ -100,6 +106,7 @@ public static class PlanGateProtocol
         }
 
         var opened = ((Outcome<ProtocolStage>.Ok)open).Value;
+        inputs.MarkMeasured();
         var plan = await GateProtocolSteps.ReviewAsync(session, "plan-1", "review_plan", GateProtocolSteps.Plan(inputs), inputs, cancellationToken);
 
         return plan.Match(
@@ -136,6 +143,7 @@ public static class CodeGateProtocol
             return new ProtocolRun(stages, stages[^1], string.Empty, PlanLoopPassed: false);
         }
 
+        inputs.MarkMeasured();
         var code = await GateProtocolSteps.ReviewAsync(session, "code", "review_code", Code(inputs), inputs, cancellationToken);
 
         return code.Match(
@@ -195,6 +203,7 @@ public static class FeatureGateProtocol
             ["callerModel"] = ProtocolInputs.CallerModel,
         };
 
+        inputs.MarkMeasured();
         var review = await GateProtocolSteps.CallAsync(session, "feature", "review_feature", arguments, inputs, cancellationToken);
 
         return review.Match(

@@ -208,13 +208,24 @@ The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Applic
 2. **The checkout**: a GATE-OWNED clone per run and task, `<checkout-root>/gate/<runId>/<task>`, made with `git clone
    --shared --no-checkout` from the read-only worktree `ICheckoutProvider` keeps and detached at the variant head; the
    run's ref `bench/gate/<run8>/<reviewer>/<task>-r<n>-a<k>` is made THERE (plan and code). The shared read-only
-   checkout is never written.
+   checkout is never written. A clone found NOT at the variant head (interrupted between its clone and its checkout) is
+   checked out again, or made anew — never reused as it lies.
 3. **References and the key**: the reviewer's references resolved through `ISecretSource` (`GateSecrets`), the vault's
    access key for an `api` row from the variable its `credsKeyRef` names, or — opt-in — from the machine's coai
-   `settings.json` (`CoaiSettingsSecrets`), held as a `SecretValue`.
+   `settings.json` (`CoaiSettingsSecrets`), held as a `SecretValue`. `run` and `resume` resolve both for EVERY reviewer
+   before anything is planned (a dead environment is exit 3 naming the reviewer).
 4. **The tap** for an `api` row whose endpoint is known (`RecordingTap`, a loopback Kestrel per cell): the vendors
-   string routes the row's base url through it (`EndpointRoutes`). Deadline = the review cap + 5 minutes.
-5. **The environment** (`CoaiEnvironment`), the secret last.
+   string routes the row's base url through it (`EndpointRoutes`). Deadline = the review cap + 5 minutes. It follows
+   no redirect, reads no body past its cap (a larger one is cut and marked `too_large`), and scrubs the value of EVERY
+   credential header (`Authorization`, `Proxy-Authorization`, `x-api-key`, `api-key`, `x-goog-api-key`, `Cookie`)
+   from every body and kept response header it writes.
+5. **The environment** (`CoaiEnvironment`), the secret last. Every text the product sends back — replies, resolves, an
+   RPC error the session broke on, the ledger slice — is scrubbed of the vault key AND of every secret-named value the
+   harness's own shell passed through (raw and JSON-escaped) before anything reads or writes it.
+
+A cell that could not be PREPARED (a reference, the key, the checkout or the plan) or whose product never STARTED was
+not measured: the leg is refused (the drain's breaker counts it), nothing is settled terminal, and the claim is handed
+back by the next sweep once this process has ended.
 6. **ONE process** in the lane's `LaneSlot` (opening a second throws — one process per cell), over `McpStdioClient`:
    `initialize` → `notifications/initialized` before any call; every call's timeout is what is left of the CELL's
    absolute deadline (`--cell-timeout-minutes`), and a call that runs out kills the process tree.
@@ -222,7 +233,9 @@ The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Applic
    (≤ 4, accept-all, until a passing verdict) → review_code → resolve`, a loop that never passes recorded as a
    completed, INVALID run (`VerdictNotPassing`, review_code never called); feature — `review_feature` with the suite's
    inputs, no open, no resolve (the calibration's shape). `again` is never sent. Each resolve's refusal is kept on its
-   stage.
+   stage — and a resolve that FAILED keeps the review it followed as the measurement. Right before the measured call
+   the protocol marks where the stderr and the tap stand (`MeasuredMark`), so served/refused, the turn-1 prompt and the
+   HTTP calls are the measured stage's, never a code cell's plan loop's.
 8. **The process gone, the tap closed** — calls still open are aborted and marked `closed_at_cell_end`.
 9. **Evidence read back** (`IGateAttemptFiles`): the reply, the ledger (the slice appended during THIS session — a
    shared directory's `usage.jsonl` is one file), stderr (served/refused, the shim's prompt files → the turn-1 prompt
@@ -236,7 +249,8 @@ The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Applic
     one transaction; then the settle.
 
 **The campaign** (`GateCampaign`): `--parallel` lanes, each its own database context, store, runner and slot, each a
-`LegDrain`. A lane pins the product (`ProductPinReader`) before EVERY claim; a moved product stops every lane
+`LegDrain`. A lane pins the product (`ProductPinReader`) at EVERY claim — under the pool's lock, right before the store
+takes the cell, so a lane that waited an hour for its endpoint sees the product as it is then; a moved product stops every lane
 (`ProductMoved`, exit 4) unless the run allows a change, in which case the next claim is under the new pin and the pins
 seen are listed. The per-endpoint cap is enforced AT THE CLAIM (`EndpointPool`): under one lock, a lane claims only
 among reviewers whose endpoint has a free slot (`IGateStore.ClaimNextAmongAsync`), and waits for a release only when

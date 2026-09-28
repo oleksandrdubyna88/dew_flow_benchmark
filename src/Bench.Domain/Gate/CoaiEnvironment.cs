@@ -157,13 +157,21 @@ public sealed record CoaiEnvironment
         ["COAI_FEATURE_SOURCE_FOLLOWUPS"] = "the reviewer's follow-up count — in ReviewerDefinition.Hash",
     };
 
-    private CoaiEnvironment(IReadOnlyDictionary<string, string> variables, IReadOnlyDictionary<string, string> snapshot, string dataDir, string callerSession)
+    private readonly IReadOnlyList<string> _inheritedSecrets;
+
+    private CoaiEnvironment(
+        IReadOnlyDictionary<string, string> variables, IReadOnlyDictionary<string, string> snapshot, string dataDir, string callerSession, IReadOnlyList<string> inheritedSecrets)
     {
         Variables = variables;
         Snapshot = snapshot;
         DataDir = dataDir;
         CallerSession = callerSession;
+        _inheritedSecrets = inheritedSecrets;
     }
+
+    /// <summary>A value shorter than this is not scrubbed as a secret: replacing a three-letter "key" everywhere would
+    /// mangle the record without protecting anything.</summary>
+    public const int ShortestScrubbed = 8;
 
     /// <summary>The whole child environment except the secret: the parent's non-<c>COAI_*</c> variables and every knob.</summary>
     public IReadOnlyDictionary<string, string> Variables { get; }
@@ -219,13 +227,18 @@ public sealed record CoaiEnvironment
             .Where(v => v.Key.StartsWith("COAI_", StringComparison.Ordinal) && !IsSecretName(v.Key))
             .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
 
-        return new CoaiEnvironment(variables, snapshot, dataDir, caller);
+        // The operator's other secrets (any *_KEY, *_TOKEN, … in the harness's shell) still reach the child — a CLI reviewer
+        // may authenticate by one, and the calibration passed the parent through — but their VALUES are scrubbed from
+        // everything the harness writes, beside the vault key.
+        var inherited = parent.Where(v => IsSecretName(v.Key) && v.Value.Trim().Length >= ShortestScrubbed).Select(v => v.Value.Trim()).Distinct(StringComparer.Ordinal).ToList();
+
+        return new CoaiEnvironment(variables, snapshot, dataDir, caller, inherited);
     }
 
     /// <summary>The launch environment: every variable, then the secret, LAST — nothing after this step can read or
     /// overwrite it, and nothing before it could see one. A reviewer that needs no vault gets no key.</summary>
     public ChildEnvironment WithSecret(SecretValue credsKey) =>
-        new(new Dictionary<string, string>(Variables, StringComparer.Ordinal), credsKey);
+        new(new Dictionary<string, string>(Variables, StringComparer.Ordinal), credsKey, _inheritedSecrets);
 
     /// <summary>Whether a variable name is a secret's — removed from every snapshot, by name, whatever its case.</summary>
     public static bool IsSecretName(string name)
@@ -259,10 +272,17 @@ public sealed record CoaiEnvironment
 public sealed class ChildEnvironment
 {
     private readonly SecretValue _secret;
+    private readonly IReadOnlyList<string> _scrubbed;
 
-    internal ChildEnvironment(Dictionary<string, string> variables, SecretValue secret)
+    internal ChildEnvironment(Dictionary<string, string> variables, SecretValue secret, IReadOnlyList<string> inheritedSecrets)
     {
         _secret = secret;
+        _scrubbed = [.. (secret.IsPresent ? [secret.Value, .. inheritedSecrets] : inheritedSecrets)
+            .SelectMany(v => new[] { v, JsonSerializer.Serialize(v)[1..^1] })
+            .Where(v => v.Length >= CoaiEnvironment.ShortestScrubbed)
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(v => v.Length)];
+
         if (secret.IsPresent)
         {
             variables[CoaiEnvironment.CredsKeyVariable] = secret.Value;
@@ -278,10 +298,11 @@ public sealed class ChildEnvironment
 
     public bool CarriesSecret => _secret.IsPresent;
 
-    /// <summary>Removes the secret's characters from text the harness is about to write — the product's stderr, a
-    /// failure sentence — so a child that echoes its environment leaves <c>[redacted]</c> on disk.</summary>
+    /// <summary>Removes every secret's characters — the vault key and the operator's inherited secrets, raw and as they
+    /// read inside a JSON string — from text the harness is about to write: the product's stderr, a reply, a failure
+    /// sentence. A child that echoes its environment leaves <c>[redacted]</c> on disk.</summary>
     public string Scrub(string text) =>
-        !_secret.IsPresent || text.Length == 0 ? text : text.Replace(_secret.Value, "[redacted]", StringComparison.Ordinal);
+        text.Length == 0 ? text : _scrubbed.Aggregate(text, (current, secret) => current.Replace(secret, "[redacted]", StringComparison.Ordinal));
 
     public override string ToString() => $"{Variables.Count} variable(s): {string.Join(", ", Names)}";
 }

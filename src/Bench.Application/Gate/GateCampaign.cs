@@ -88,14 +88,10 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
 
     private async Task<Outcome<LegResult>> LegAsync(GateLane lane, WorkerIdentity owner, GateCampaignInputs inputs, EndpointPool pool, CancellationToken cancellationToken)
     {
-        var pin = await PinAsync(inputs, cancellationToken);
-
-        if (pin is not Outcome<ProductPin>.Ok { Value: var current })
-        {
-            return Outcome<LegResult>.Failure(ClaimRefusal.NoPendingCell);
-        }
-
-        var claim = await pool.ClaimAsync(lane.Store, inputs.Run.Id, owner, current, cancellationToken);
+        // The pin is read INSIDE the claim, under the pool's lock, right before the store takes the cell: a lane that
+        // waited an hour for its endpoint must see the product as it is when its turn comes, not as it was when it began
+        // to wait.
+        var claim = await pool.ClaimAsync(lane.Store, inputs.Run.Id, owner, () => PinAsync(inputs, cancellationToken), cancellationToken);
 
         if (claim is Outcome<GateCell>.Fail fail)
         {
@@ -224,7 +220,8 @@ public sealed class EndpointPool
         _ => "runtime:" + reviewer.Definition.Runtime.Word(),
     };
 
-    public async Task<Outcome<GateCell>> ClaimAsync(IGateStore store, Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken)
+    public async Task<Outcome<GateCell>> ClaimAsync(
+        IGateStore store, Guid runId, WorkerIdentity owner, Func<Task<Outcome<ProductPin>>> pinNow, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -238,6 +235,11 @@ public sealed class EndpointPool
 
                 if (free.Count > 0)
                 {
+                    if (await pinNow() is not Outcome<ProductPin>.Ok { Value: var pin })
+                    {
+                        return Outcome<GateCell>.Failure(ClaimRefusal.NoPendingCell); // the campaign has stopped: the product moved or is gone
+                    }
+
                     var claim = await store.ClaimNextAmongAsync(runId, owner, pin, free, cancellationToken);
                     var nothingFree = claim is Outcome<GateCell>.Fail f && f.Reason.Contains("no pending gate cell", StringComparison.Ordinal);
 
