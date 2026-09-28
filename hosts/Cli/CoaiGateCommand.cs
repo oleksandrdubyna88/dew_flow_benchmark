@@ -34,6 +34,7 @@ public static class CoaiGateCommand
             "suite" when command.Operand(1) == "verify" => await GateToolsCommand.VerifySuiteAsync(command, output, error, cancellationToken),
             "suite" when command.Operand(1) == "record" => await GateReportCommand.RecordSuitesAsync(command, output, error, cancellationToken),
             "report" => await GateReportCommand.ReportAsync(command, output, error, cancellationToken),
+            "aa" => await GateAaCommand.RunAsync(command, output, error, cancellationToken),
             var other => Unknown(other, error),
         };
 
@@ -241,7 +242,7 @@ public static class CoaiGateCommand
         return ExitCodes.Configuration;
     }
 
-    private const string SubVerbs = "run, resume, status, sweep, probe, reviewers, suite verify, assess, hand-check, export or prune";
+    private const string SubVerbs = "run, resume, status, sweep, probe, reviewers, suite verify, suite record, assess, hand-check, import, report, aa, export or prune";
 
     private static string Connection(CommandLine command) =>
         command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);

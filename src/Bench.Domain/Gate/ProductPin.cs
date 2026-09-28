@@ -140,9 +140,10 @@ public sealed partial record ProductPin
 
     public string Describe =>
         $"{Short} · {VersionText}"
-        + (UnderCheckout ? $" · git {GitSha}, {Dirty} in {CheckedTreeOrWhole}" : " · no checkout above the binary");
+        + (UnderCheckout ? $" · git {GitSha}, {DirtyText} in {CheckedTreeOrWhole}" : " · no checkout above the binary");
 
-    private string Dirty =>
+    /// <summary>The dirty count in words — "1 dirty file(s)", or why it was not captured.</summary>
+    public string DirtyText =>
         DirtyFiles.WasCaptured ? $"{DirtyFiles.Value} dirty file(s)" : $"dirty count not captured ({DirtyFiles.Reason})";
 
     private string CheckedTreeOrWhole => CheckedTree.Length > 0 ? CheckedTree : "the whole checkout";

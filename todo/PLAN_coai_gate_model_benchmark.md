@@ -1434,7 +1434,9 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   (2) The product built from a clean worktree at `coai@5d73ead7`. (3) **Self-check before anything is spent:** `bench
   gate aa` over the imported phase-2 campaign against `p2-grok-4.7-cs2-r1`'s cell must print `same shape` for every
   cs2 cell at `5d73ead7` — the five that produced `837fed1ae93f14bf…` under a scratch normaliser (CR stripped; its
-  other rules are the ones above). If the C# shapes of those five disagree among themselves, the normaliser is wrong
+  other rules are the ones above); the built `PromptShape`, which keeps the CRLF those prompts carry and the separator
+  before `coai.db`, gives all five `451c8c505317…` — `bench gate aa` over the imported campaign, 2026-09-28: 4 compared (the
+  reference listed apart), exit 0. If the C# shapes of those five disagree among themselves, the normaliser is wrong
   and nothing is run. (4) `bench gate run --gate feature --suite-file aa-cs2.suite.json --repeats 2` over grok, glm,
   Fable 5.1, Opus 5.5 and gpt-6-astra, isolated data directories, the prediction below passed as `--prediction`.
   (5) `bench gate aa --run <it> --against <p2-grok-4.7-cs2-r1's cell>`; the cell id is `CalibImport.CellId` of that
@@ -1464,12 +1466,23 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   scenario-tests rule requires of every repository — a repository-wide gap older than this epic, recorded in §9.
 - **Code egress, confirmed by the operator:** the same seven repositories and vendors as the 09-27 calibration (xAI,
   Alibaba DashScope), plus Anthropic (Claude CLI) and OpenAI (Codex CLI) for the A/A.
+- **S7.2a as built (2026-09-28), deviations from the text above.** (a) A differing DIRTY count at one commit is COMPARED
+  and noted, not skipped as another pin — the calibration's own cs2 runs at `5d73ead7` carry 0 or 1 dirty files and one
+  shape. (b) The same pin is also the same hashed bytes (`ProductPin.Matches`), and a native pin's sha is `rev-parse
+  --short`, not the full sha. (c) The reference inside the run is listed as `the reference — not compared` (our own code
+  review: compared with itself it made a vacuous pass). (d) An ambiguous reference is refused (4), a stored hash with no
+  file is `HashMismatch`, an unreadable prompt is said without its path, a missing suite file or artefact root is 3 and the
+  root is never created. (e) The separator before `coai.db` is KEPT (the code round's finding 17); the round's record
+  mis-indexed that decision — 18 decisions were sent for 19 findings, so finding 17 carries the rejection written for
+  finding 18 (serial reads, rejected on the 2.3 s measurement) and finding 18 carries none; the code does what finding 17
+  asked. (f) The unsettled refusals (5) are checked before the reference is read, not after it: a person resumes a run
+  before choosing its reference.
 - DoD (E7): `PromptShape`, `GateTurnOnePrompt` and `bench gate aa` merged with every RED watched; the self-check
   printed `same shape` for the five imported cs2 cells; the A/A ran, was compared and assessed; S7.3 ran and was
   assessed; `RESULTS_gate_aa_cs2.md` and `module_gate.md` written; the hand-check still open and said so.
 
 **Prediction for the amended S7.2, written before it runs:** every grok-4.7 and glm-5.3 cell of the A/A campaign has
-shape `837fed1ae93f14bf…` (the Python runs' shape) — any other shape is a port defect, named by line; grok's seeds hit on
+shape `451c8c505317…` (the Python runs' shape under the built `PromptShape`; `837fed1a…` was a scratch normaliser's, CR stripped) — any other shape is a port defect, named by line; grok's seeds hit on
 cs2 falls in the Python range for that task (its three repeats), glm's likewise; each of the three CLI reviewers settles
 both repeats valid. If a line of this does not hold, it is the record of a wrong guess.
 
