@@ -34,7 +34,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -45,7 +45,7 @@ flowchart TB
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (seven tables, ids · hashes · numbers)"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (eight tables, ids · hashes · numbers)"]
         artroot["FileSystemGateArtifactStore<br/>the artefact root — OUTSIDE git"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
@@ -1024,7 +1024,7 @@ gates — plan, code, feature — and its run is seven targets (one seeded repos
 commit) × reviewers × repeats, whose leg is a multi-turn product session the harness never prompts, and whose
 result is a reply of findings plus a ledger. Folding that into `cells` and `results` would have left half the
 columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own `gate_*` tables (six in E2,
-one migration that touches no existing table; E4 adds a seventh) and its own report — and the parts that ARE the same were made shared rather than duplicated:
+one migration that touches no existing table; E4 adds a seventh, E5 an eighth) and its own report — and the parts that ARE the same were made shared rather than duplicated:
 `Claimable` (the four claim fields and the claim/settle/reclaim/stale transitions, composed by `RunCell` and
 `GateCell`) and `SlotRotation` (the global slot rotation, called by both matrices). `CellLifecycleTests` and
 `MatrixOrderTests` are byte-for-byte unchanged, which is the proof the extraction changed nothing.
@@ -1075,8 +1075,15 @@ the Claude CLI in plan mode with the write tools denied — the one repository-w
 `CliArgv.For`, which refuses a guarantee a CLI has no flag for) under a fresh blinded id whose key never leaves the
 artefact root, and writes verdicts per batch — the log with its text to the artefact root, the verdict (ids, enum
 names, a keyed cluster hash) to `gate_verdicts`. A strict percentage is withheld until a person's hand-check of twenty
-verdicts is recorded (`gate_hand_checks`, the seventh table). The import of the existing Python and `coai-bench`
-records, the API routes and the Gate tab are E5–E7 of
+verdicts is recorded (`gate_hand_checks`, the seventh table). The import (E5, 2026-09-28) brings the measurements
+that already exist in without re-spending anything: `bench gate import calib | coai-bench | summary` read the other
+harnesses' files READ-ONLY and write SETTLED cells of FINISHED campaigns directly (never a claim), with DERIVED ids so a
+second import changes nothing; verdicts enter through the same `IGateVerdictStore` a native assessment writes through.
+Two cross-cutting consequences: an imported pin's version text names the POPULATION the other harness compared within
+(`imported from calib-py phase 2`), not its commit — the commit stays on the pin per cell — so its table is held against
+the published one like with like; and a harness that kept no ledger marks its turn-level facts *not captured*
+(`GateRunFacts.TurnFactsCaptured`), never zeros. Published tables whose raw data is gone are `gate_summaries` rows
+(the eighth table) — numbers with a citation, read by no report. The API routes and the Gate tab are E6–E7 of
 [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 
 ## Guards that shape the API

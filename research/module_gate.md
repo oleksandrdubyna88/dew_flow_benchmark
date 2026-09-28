@@ -1,10 +1,11 @@
 # Module — Gate: the coai gate-model benchmark
 
-> Status: **the domain and the contracts (E1), the store and the privacy guard (E2), the driver (E3) and the blinded
-> strict assessment (E4) exist, 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by cell, and stores
-> every session; `bench gate assess` reads each finding blind and records a verdict per batch; `bench gate hand-check`
-> records the person's check that gates every strict %.** The import (E5), the report surfaces and the page (E6) and the
-> first campaign (E7) are open in
+> Status: **the domain and the contracts (E1), the store and the privacy guard (E2), the driver (E3), the blinded
+> strict assessment (E4) and the import (E5) exist, 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by
+> cell, and stores every session; `bench gate assess` reads each finding blind and records a verdict per batch; `bench
+> gate hand-check` records the person's check that gates every strict %; `bench gate import` brings the calibration's
+> Python runs, the coai-bench records and the published summary tables in, read-only and idempotent.** The report
+> surfaces and the page (E6) and the first campaign (E7) are open in
 > [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 > This file describes what is built; a sentence here about something that does not run is a bug in the file.
 
@@ -99,6 +100,15 @@ flowchart TB
         assessfiles["FileSystemGateAssessmentFiles : IGateAssessmentFiles<br/>assess/key.json (locked, atomic) · verdicts/per assessor · batches/ · hand-check/"]
         acli["bench gate assess · hand-check sample | record"]
     end
+    subgraph imp["the import (E5) — pure mappings in Domain, the passes in Application, adapters in Infrastructure"]
+        readers5["CalibRecords · CalibFacts · CalibReviewers · CalibVerdicts<br/>CoaiBenchRecords · CoaiBenchFacts · SummaryTables · ImportIds"]
+        preflight["CalibPreflight — every record, reply, key entry and verdict read and checked<br/>before the first byte is written"]
+        writer["GateImportWriter — files first (written, or adopted when a killed import left them)<br/>then ONE transaction · unchanged = no-op · changed = refused"]
+        passes["CalibImport · CalibVerdictImport · CoaiBenchImport"]
+        importstore["PostgresGateImportStore : IGateImportStore<br/>settled cells of FINISHED campaigns · gate_summaries"]
+        source["DirectoryImportSource : IImportSource (read-only)<br/>GitCommitResolver : ICommitResolver"]
+        icli["bench gate import calib · coai-bench · summary"]
+    end
     contracts["Bench.Contracts — Gate*Dto<br/>no free text reachable (type-graph walk, Type.Property allow-list)"]
     guard["ArchitectureTests<br/>deciders in Bench.Domain · Ui → Contracts only · one setting producer · name private"]
 
@@ -139,6 +149,16 @@ flowchart TB
     verdictstore --> pgstore
     verdict --> verdictstore
     pending -. "the hand-check gate" .-> report
+    icli --> passes
+    passes --> preflight
+    preflight --> source
+    preflight --> readers5
+    passes --> writer
+    writer --> artstore
+    writer --> importstore
+    passes -- "verdicts, the E4 contract" --> verdictstore
+    importstore --> pgstore
+    readers5 -. "facts · findings · pins" .-> dom
 ```
 
 ## Core entities, and the rule each one carries
@@ -150,16 +170,16 @@ flowchart TB
 | `GateReviewer` · `ReviewerDefinition` | `GateReviewer.cs`, `ReviewerDefinition.cs` | the variant-catalog row, mirrored: added and retired, never edited, hashed; two rows with one hash are reported as one configuration (`GateReviewerCatalog.SameConfiguration`). The **transport is part of the subject**, so `effort` changes the hash. The definition's and the transport's canonical forms are length-prefixed (`CanonicalFields`) — a `|`-joined form let a model and a url trade text and keep one hash. Key names and refs are NAMES (`ModelConfig.IsReference`) |
 | `ReviewerEndpoint` · `ReviewerRuntime` | `ReviewerEndpoint.cs` | a public vendor url is a VALUE; a loopback, private-range, link-local, `localhost`, `.local` or bare-name address is refused as a value and stored as a REFERENCE — `ModelConfig`'s rule, inverted for addresses. An IPv4-mapped IPv6 address (`[::ffff:10.0.0.7]`) is normalised to the IPv4 it carries before the range checks. The runtime is one member per product WORD — `Api`, `Codex`, `Gemini`, `Claude`, `Antigravity`, `Local`, `Remote`; there is no `cli`, because the product runs a word it does not know on Codex |
 | `CoaiVendorsSetting` · `CoaiVendorRow` | `CoaiVendorsSetting.cs`, `CoaiVendorRow.cs` | `CoaiVendorsSetting.From` is the one producer of the vendors string and lives INSIDE the type: private constructor, private variable name, `ApplyTo(env)` the only way into an environment (it removes any inherited spelling of the variable). An architecture test reflects over every production assembly for any other member that returns a setting and any constant holding the name, each with a planted negative. **Only the gate under measurement is ticked**; the runtime is the product's word; an effort of `none` (the module default) is not written. `CoaiVendorRow` is the vocabulary — `KnownFields`, each with the JSON type the product reads — and the reader: an unknown field, or a known one of the wrong type (`"plan":"false"`), is refused by name; absent or `null` is the product's default |
-| `ProductPin` | `ProductPin.cs` | `Continue(campaign, current)` refuses a moved product naming both shas; an imported pin (no binary hashed) never matches; a binary outside a checkout has an empty git sha and a dirty count that is *not captured*, never zero |
+| `ProductPin` | `ProductPin.cs` | `Continue(campaign, current)` refuses a moved product naming both shas; an imported pin (no binary hashed) never matches; a binary outside a checkout has an empty git sha and a dirty count that is *not captured*, never zero. **An imported pin's version text is the POPULATION the other harness compared within** — `imported from calib-py phase 2 — binary not hashed` — and its commit (when the harness recorded one) stays on `GitSha`, per cell (E5): a scope per commit would have split the calibration's phase 2 into ten scopes, none comparable with its published table. `ImportedStored` reads the population back out of the stored text |
 | `Claimable` (shared) | `src/Bench.Domain/Runs/Claimable.cs` | the four claim fields and the claim/settle/reclaim/stale transitions, composed by `RunCell` and `GateCell`; `MaxAttempts = 3` lives here once |
 | `GateCell` · `GateCellLifecycle` | `GateCell.cs` | `Pending(id, runId, cell)` — the CALLER mints the id, the factory reads no clock; claimed UNDER a pin, refused without one; abandonment is `Claimable`'s rule |
 | `SlotRotation` (shared) | `src/Bench.Domain/Runs/SlotRotation.cs` | the global slot rotation, called by `Matrix.Plan` and `GateMatrix.Plan` |
 | `GateMatrix` | `GateMatrix.cs` | task × reviewer × repeat, **repeats outermost** (the three repeats of one task are never adjacent), reviewers rotated, repeats numbered from one |
-| `GateRunFacts` · `FailureCauses` | `GateRunFacts.cs` | a port of the other harness's `summarise` / `failure_cause`: **valid** = verdict ∈ {proceed, revise} ∧ ≥ 1 ledger turn ∧ every turn `ok` ∧ a findings LIST. Tokens sum what was captured or are *not captured*; cost is `CapturedUsd` — unknown, never free; review and per-turn seconds round through `PythonRound`, as `summarise` does. The failure's first reason is its `FailureKind`; every reason is in the text |
+| `GateRunFacts` · `FailureCauses` | `GateRunFacts.cs` | a port of the other harness's `summarise` / `failure_cause`: **valid** = verdict ∈ {proceed, revise} ∧ ≥ 1 ledger turn ∧ every turn `ok` ∧ a findings LIST. Tokens sum what was captured or are *not captured*; cost is `CapturedUsd` — unknown, never free; review and per-turn seconds round through `PythonRound`, as `summarise` does. The failure's first reason is its `FailureKind`; every reason is in the text. `TurnFactsCaptured` (E5, default true) is false only for an import from a harness that kept no ledger: turns, HTTP calls, served and refused are then *not captured*, and the report reads those columns over the runs that recorded them (`ReviewerAggregate.TurnLevel`) |
 | `GateFinding` · `FileHashKey` · `FindingPath` | `GateFinding.cs`, `FileHashKey.cs` | ordinal, severity, category, gating, line, `TextHash`, `FileHash` — the only text the type graph can carry is the two hashes (a walk test); the one constructor for a NEW finding takes the text and keeps the hash (`Stored` only reads back a row, refusing any hash that is not 64 lower-case hex). `FileHash` is **HMAC-SHA256** under a `FileHashKey` (at least 32 bytes, never printed) of the path in its one normal form (`\` → `/`, empty and `.` segments dropped) — a plain SHA-256 of a guessable path is confirmed by hashing candidates. The key lives ONLY in the artefact root, never in git or the database; the domain takes it as a value; the artefact root creates, reads and refuses it (`GateFileHashKeys`, E2) |
 | `Rubric` · `RubricCatalog` · `Verdict` · `GateVerdict` | `Rubric.cs`, `Verdict.cs` | a verdict is issued under a rubric the catalog holds, of that rubric's kind; `AssessmentFailure(cause)` is a verdict case that never counts in a rate; the cluster key travels as a hash |
 | `GatePopulation` | `GatePopulation.cs` | which runs and verdicts a figure is over: the latest attempt per cell (campaign, task, reviewer, repeat), every attempt kept beside; one rubric (id + kind + hash); one verdict per (run, finding) — real reading over `AssessmentFailure`, independent assessor over family-matched, then assessor and batch id; `IsAssessed` = has verdicts, or valid with zero findings |
-| `GateReport` | `GateReport.cs`, `GateReportRows.cs`, `ReviewerAggregate.cs`, `Figure.cs`, `PythonRound.cs` | `PerModel(scope, rubric, input)` — the operator's columns, the `Rubric` required; **calibration tasks in `ModelTable.Calibration`, never in `Rows`**; `Runs` one per cell plus `Attempts` / `AttemptsFailed`; `AssessorFamilyMatched` counted apart; variance as two spreads over the cells, each with a state — seeds need 3 ASSESSED readings, findings 3 cells; `Unassessed` (`—`) where nobody looked; `Unknown` where nothing was metered; a failed run in every denominator; `AssessmentFailed` its own column; `TaskRowOf` / `VarianceOf` take their ids from the caller, so an empty group is an empty state; `Quantile.Q` = `report.py: q`; every rounding the Python report does (`q`, `pct`, the means, the costs) goes through `PythonRound` (the exact binary value, half to even), each pinned on vectors printed by the Python |
+| `GateReport` | `GateReport.cs`, `GateReportRows.cs`, `ReviewerAggregate.cs`, `Figure.cs`, `PythonRound.cs` | `PerModel(scope, rubric, input)` — the operator's columns, the `Rubric` required; **calibration tasks in `ModelTable.Calibration`, never in `Rows`**; `ModelTable.AllTasks` (E5) is every task, calibration included — the population the other harness's `per_model` reads, so an import is held against its published table like with like; it is never the default reading; `Runs` one per cell plus `Attempts` / `AttemptsFailed`; `AssessorFamilyMatched` counted apart; variance as two spreads over the cells, each with a state — seeds need 3 ASSESSED readings, findings 3 cells; `Unassessed` (`—`) where nobody looked; `Unknown` where nothing was metered; a failed run in every denominator; `AssessmentFailed` its own column; `TaskRowOf` / `VarianceOf` take their ids from the caller, so an empty group is an empty state; `Quantile.Q` = `report.py: q`; every rounding the Python report does (`q`, `pct`, the means, the costs) goes through `PythonRound` (the exact binary value, half to even), each pinned on vectors printed by the Python |
 | `SeedEvidence` | `SeedEvidence.cs` | where a seed's evidence sat — pack / pack by file / on request / withheld / unknown — off the product's turn-1 prompt; `GateSeedEvidence` (Application, E4) reads that prompt off disk: the first `Prompt`-class artefact of the task's earliest settled cell, hash-verified; none recorded reads `Unknown` |
 | `BlindedId` · `BlindKeyEntry` · `AssessmentRow` · `BlindExport` | `BlindExport.cs` | E4. A blinded id is eight lower-case hex, minted fresh and never one the key holds. The KEY (blinded id → campaign, cell, ordinal, task, reviewer) lives ONLY in the artefact root. `AssessmentRow` — what the assessor reads — has no model, run, cell, campaign, reviewer or ordinal field (reflection-tested), and its JSON uses the other harness's keys (`repo_path`, `base`, `head`, `seed_spec`) so the strict rubric is sent verbatim. `Plan` skips a finding already in the key and shuffles each task's new entries |
 | `AssessorOutput` · `AssessedRow` · `BatchReading` | `AssessorOutput.cs` | E4. An answer read against its batch: nothing → `NoAnswer`; a JSON document valid so far and cut → `Truncated`; prose, the wrong shape, a word outside the rubric, an id twice → `Unparseable`; an id the batch did not carry → `UnknownIds`; otherwise `Answered(rows, missing, refusals)`. A row naming another task, or a `seed_hit` that is not a seed of ITS task, is refused and counts as missing. `AssessedRow` keeps the note and the cluster TEXT (artefact store); `ToVerdict` gives the database a cluster hash HMAC'd under the artefact root's key |
@@ -179,6 +199,13 @@ flowchart TB
 | `SettingsCheck` · `SettingsApplied` | `SettingsCheck.cs` | what was ASKED against THIS run's session file: mismatches, checked, and unchecked (a knob the disk cannot show — never passing); `good_enough` and `GoodEnough` are one decision |
 | `EndpointRoutes` · `ResolvedReferences.Hash` | `CoaiVendorsSetting.cs` | the tap's loopback address routed into the vendors string by the one producer; the hash of what a row's references RESOLVED to, stored per cell (`ReferencesHash`) — the row hashes the names, so a re-pointed endpoint would otherwise be one population, and a resume where it changed is refused |
 | `GateSessionNotes` | `GateRun.cs` | on a settlement: the handshake's `serverInfo.version`, the references hash, the settings check as counts |
+| `ImportIds` · `ImportSlug` | `Import/ImportIds.cs` | E5. An imported campaign's or cell's id is DERIVED — a version-8 name-based UUID over (harness, source key) — so importing one source twice finds one set of ids; a slug of a name somebody else chose (a model id, a table's first column) is `[a-z0-9-]` only |
+| `CalibRecord` · `CalibRecords` · `CalibFacts` · `CalibPreset` | `Import/CalibRecord.cs`, `Import/CalibFacts.cs` | E5. One `runs.jsonl` line: its id (the source key — it carries the attempt, `…-a2`), phase, model, task, repeat (the ITERATION in phase 1), attempt, preset (`capMin` absent = the 20 the harness's `child_env` sent), product sha, dirty count, start, facts and the line as read. `Latest` is the other harness's `latest_by_id`. The facts field for field, every "nobody counted" a state: the ledger sums over NO ledger turn are *not captured* (Python's `sum([])` is 0), every `null` is *not captured*, served/refused follow the other REPORT (`served_count or note.count("served ")`), the failure is redacted and its kind read off its first reason. A line that does not parse is a refusal naming its number, never a skipped record |
+| `CalibModels` · `CalibReviewers` | `Import/CalibReviewers.cs` | E5. `models.py`'s `MODELS` as JSON — endpoint, vault key NAME, prices, what a line does not record — plus the line's preset make a `ReviewerDefinition` (api, feature ticked); a row is MATCHED by definition hash to one already in the catalog under any name, else added as `<model>-<hash8>` |
+| `CalibVerdicts` · `CalibKeyEntry` · `CalibVerdictLine` | `Import/CalibVerdicts.cs` | E5. The calibration's key (blinded id → run, index, task) and verdict lines, read against the suite: a word outside the strict rubric, or a `seed_hit` that is not a seed of the row's own task, refuses the line; `Latest` is `latest_by_id` |
+| `CoaiBenchRecords` · `CoaiBenchStage` · `CoaiBenchFacts` · `WorthWord` | `Import/CoaiBenchRecord.cs` | E5. A coai-bench `RunRecord` → a stage per `plan-N` (plan) and `code` (code), any other stage refused by name; the key is the RECORD's (arm, case, repeat, startedUtc, stage), so a byte copy of a file is the same cells. Findings go through the one reply parser with the judge's `useful` and `verdict` removed (the text is the reviewer's); `RunJson`, the stage without the judge's fields, is what a re-import compares, so a judge pass after the first import adds verdicts rather than reading as a changed run. Facts: no ledger → `TurnFactsCaptured` false, cached and reasoning *not captured*, a 0 token count *not captured*; valid is the gate's one rule (proceed or revise, and no error) — a `good_enough` round is not valid, as for a native cell. The reviewer is `coai-bench-<arm>`: a vendor SET with no model recorded gets no catalog row |
+| `SummaryTables` · `SummaryTable` · `SummaryFigure` | `Import/SummaryTable.cs` | E5. The first markdown table under a named heading → rows of (label slug, metric slug, number or *not captured*): `k`/`M`, `$`, `%`, emphasis and thousands separators understood, `a / b` split into `-part1` / `-part2`, a short sha is not a number; two columns that slug alike refuse the table |
+| `CalibImport` · `CalibPreflight` · `CalibVerdictImport` · `CoaiBenchImport` · `GateImportWriter` · `ImportedFiles` | `src/Bench.Application/Gate/` | E5, over the ports. `CalibPreflight` reads and checks everything first (a line, a reply whose findings disagree with its line, a key entry naming a record or a finding the workspace lacks, two records on one cell attempt). `GateImportWriter` commits a cell's files (the run directory copied under `source/`, `findings.jsonl`, `import-source.json`, `run.json` LAST) and then ONE transaction; on re-import an unchanged `import-source.json` is a no-op and a changed one a refusal; an attempt directory a killed import left is RESUMED — each file written or adopted, the same bytes reused, other bytes refused naming the path. `CalibVerdictImport` holds the assessor's lock, enters the ids into this root's key (a clash refuses), appends the log lines (with their text) that are not already there, then records each batch through `IGateVerdictStore`; the prompt hash is empty (the other harness archived no batch prompt). `ImportedSettings.Hash(harness)` is the settings hash of an imported cell — one value per harness, because none kept a `COAI_*` snapshot |
 
 ## Entry points
 
@@ -246,7 +273,23 @@ flowchart TB
   draw hashes everything a row shows but the person's `agree` and `comment`) or whose verdict changed since, and fewer
   than twenty answered rows; then stores the counts and the file's SHA-256. The check covers the campaigns that HAD
   verdicts to draw — never every campaign named, so a campaign assessed afterwards stays `not hand-checked`.
-- `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
+- `bench gate import calib --calib <workspace> --suite-file <suite.json> --calib-models <models.json> --artifact-root … --db …
+  [--assessor <catalog id>]` (E5) — the calibration's `runs.jsonl`, its run directories and its blinded assessment. One
+  campaign per PHASE (Finished, source `calib-py`), a cell per record (a second attempt is a second cell, so the report's
+  latest-attempt rule reads the re-run and counts the first in the attempts columns — the other harness's
+  `final_attempts`), the run directory copied under `source/`. `--assessor` is REQUIRED when the workspace has an
+  assessment and must be a catalog row whose runtime word (or id) is what each verdict line names. Prints every cell as
+  `imported` or `unchanged` and a summary; exit 0 when all were imported or already there; 4 for a source record that does
+  not read or changed since it was imported; 3 for a missing source, file-hash key or database.
+- `bench gate import coai-bench --runs <runs.json>[,…] --repo <the product's checkout> --artifact-root … --db …` (E5) — a
+  campaign per (the file's FOLDER, gate): a grown file adds its new records to it, a byte copy elsewhere adds nothing. The
+  cases' suite (full shas resolved in `--repo`) is written to `<artifact-root>/imports/coai-bench-cases-<hash12>.suite.json`.
+  Judged findings become `lenient-worth-v1` verdicts by the record's `judgedBy` (`coai-bench-unrecorded` when it named
+  none); `unjudged` has no row.
+- `bench gate import summary --document <RESULTS_*.md> --section "<heading>" --gate plan|code|feature --db … [--source
+  coai-results]` (E5) — one published table as summary-only numbers in `gate_summaries`, cited by the document's file
+  name, the section slug and the document's SHA-256; a re-import is a no-op, an edited document a new citation.
+- `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
 
 ## The driver — one cell attempt, end to end
 
@@ -327,17 +370,18 @@ folder, when a sibling `<name>.dll` shows a framework-dependent build (an apphos
 the file alone; `--version`'s first line; and under a checkout the short sha and `git status --porcelain
 --untracked-files=no -- <the nearest *.csproj directory>`, naming the tree.
 
-## The store — seven tables, three migrations (`GateTables`, E3's `GateDriver`, E4's `GateAssessment`), no existing table touched
+## The store — eight tables, four migrations (`GateTables`, E3's `GateDriver`, E4's `GateAssessment`, E5's `GateImport`), no existing table touched
 
 | table | one row per | what it holds |
 |---|---|---|
 | `gate_runs` | `bench gate run` invocation | gate, suite stamp, data-dir mode, status, source (`native` or the harness an import came from); since E3 the prediction's HASH (its text is in the artefact root) and whether a product change is allowed |
-| `gate_cells` | task × reviewer × repeat | the claim (state, attempts, owner label/host/pid, claimed-at), the pin taken at claim, and once settled the session's facts — every count beside a *captured* flag, the vendor's finish WORDS, the verdict word, the failure KIND and the ONE free-text column, `FailureText` (redacted); since E3 the handshake's `ServerVersion`, the `ReferencesHash`, and the settings check as `SettingsChecked` / `SettingsMismatches` |
+| `gate_cells` | task × reviewer × repeat | the claim (state, attempts, owner label/host/pid, claimed-at), the pin taken at claim, and once settled the session's facts — every count beside a *captured* flag, the vendor's finish WORDS, the verdict word, the failure KIND and the ONE free-text column, `FailureText` (redacted); since E3 the handshake's `ServerVersion`, the `ReferencesHash`, and the settings check as `SettingsChecked` / `SettingsMismatches`; since E5 `TurnFactsCaptured` (true for every earlier row). An IMPORTED cell is written settled with `Attempts` = the source's attempt number — a source cell with two attempts is two cells on one (campaign, task, reviewer, repeat) |
 | `gate_findings` | finding of a settled session | ordinal, severity, category, gating, line, `TextHash`, `FileHash`; `(cell, attempt, ordinal)` unique |
 | `gate_verdicts` | verdict on a finding under a rubric | rubric id/kind/hash, the verdict case, the strict fields as enum names, cluster hash (HMAC under the artefact root's key), seed id, assessor id, batch id, prompt hash, family match — written by E4 through `PostgresGateVerdictStore`: a batch naming a finding no settled attempt stored is refused whole, and `(cell, ordinal, rubric hash, assessor, batch)` is unique, so a replay changes nothing. Never a note, never a cluster's text, never a blinded id |
 | `gate_hand_checks` | recorded hand-check (E4) | the campaigns covered (uuid[]), rubric id/kind/hash, assessor id, verdicts read, agreed, the answered sample file's SHA-256, recorded at |
 | `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport, prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
 | `gate_artifacts` | committed file | run, cell, attempt, class, RELATIVE path (unique), SHA-256, length |
+| `gate_summaries` | number of a published table whose raw data is gone (E5) | gate, source label, document FILE NAME, section slug, document SHA-256, row ordinal, row label slug, metric slug, captured, value; unique per (document sha, section, row, metric). Read by no report — shown, never averaged with runs |
 
 **The claim** takes the next pending cell in the MATRIX's order — slot, then position (it was position first until
 E3's consultation found it reversing the nesting: planned A1 B1 B2 A2, claimed A1 B2 B1 A2) — optionally only among
@@ -384,7 +428,12 @@ plus the facts and the findings, in one transaction.
                                         answer.json — ARCHIVED here after the batch; the assessor never works here
     verdicts/<assessor>.jsonl           every reading WITH its text (cluster, note) and every failure, one writer per file
     hand-check/<sample>.jsonl           a sample for a person to answer; <sample>.drawn.json is what was drawn
+  imports/coai-bench-cases-<h>.suite.json   the suite E5 built from coai-bench's cases (it names the product's checkout)
 ```
+
+An IMPORTED attempt (E5) has the same root, `runs/<campaign>/cells/<cell>/attempt-<n>/`, and holds `source/…` (the other
+harness's run directory, file by file — its tap bodies under `source/tap/`, which `bench gate prune` does not release),
+`findings.jsonl`, `import-source.json` (the source record as read — what a re-import compares) and `run.json` LAST.
 
 **What the assessor is handed lives OUTSIDE the artefact root.** Its working folder, the schema, its answer file and the
 seed list it reads are in a workspace of their own under the system temp folder (`bench-assess-<random>`, removed when
@@ -482,6 +531,8 @@ campaign measures them.
 | `gate_reviewers` | tens of rows | never deleted, retired | — |
 | `gate_verdicts` (E4) | ≤ findings × assessors real readings (~1 500 × 2 per campaign), plus the failure rows a re-ask superseded (kept: the history of what failed) | kept forever | a batch lands in one transaction or not at all; a replay is a no-op |
 | `gate_hand_checks` (E4) | one row per recorded sample — a handful per campaign | kept forever | one insert |
+| imported attempts (E5) | **measured 2026-09-28: 111 calibration cells → 271 MB** (the source's 269 MB copied, plus findings, source record, run record); 160 coai-bench cells → a few KB each | kept forever — the evidence an imported number is re-checked against; imported tap bodies are NOT released by prune (they sit under `source/`) | a killed import leaves an attempt directory with no row; the next import resumes it (the same bytes adopted, other bytes refused) |
+| `gate_summaries` (E5) | ~10 numbers per table row → 220 rows for the three 2026-09-01/02 tables | kept forever; an edited document is a new citation beside the old | one insert per table, all or none |
 | `assess/key.json` (E4) | one entry per finding ever blinded, ~200 B → ~300 KB per 1 500-finding campaign | kept forever — a verdict without its key entry cannot be joined back | replaced atomically under a lock: the old key or the new one |
 | `assess/verdicts/<assessor>.jsonl` (E4) | ~1 KB per reading → ~1.5 MB per assessor per campaign | kept forever — the notes are the evidence a hand-check reads | a torn last line of a killed append is skipped on read; its batch never reached the database, so the finding is asked again |
 | `assess/batches/` (E4) | per batch ≈ the rubric (4 KB) + ≤ 24 rows (~1 KB each) + the answer — ≈ 50 KB; ~63 batches per assessor per 1 500 findings, up to twice with retries → ≈ 3–6 MB | kept forever — `prompt.txt` is what the prompt hash on a verdict names | a batch folder is created once and never reused; an interrupted one stays |
@@ -504,7 +555,25 @@ coordinator bumps the qln pin after E6.
 
 The reviewer catalog's imports (`reviewers add --from-coai-settings` / `--from-calib-models`, E7) and `suite verify
 --prune`; the paired-agreement figure between two assessors (E6 — `GatePopulation` keeps one verdict per finding, so
-agreement is computed before that choice); the import of the 71 Python runs and the coai-bench
-records (E5); the report verb, the API routes, the Gate tab and the mapping from `ModelTable` to
+agreement is computed before that choice); importing the 2026-09-01/02 RAW JSON as runs (the raw is still in the operator's WSL home; E5 stored those documents'
+tables as summary-only numbers); the report verb, the API routes, the Gate tab and the mapping from `ModelTable` to
 `GateModelTableDto` (E6). The per-model TABLES in the public export wait for E6's report; today the export is the
 guarded rows.
+
+## Measured: the import against the real data (E5, 2026-09-28)
+
+The calibration workspace imported into the local bench database: **111 cells** (19 phase-1 iterations, 92 phase-2
+attempts = 84 cells + 8 second attempts) in two campaigns, **340 strict verdicts**, 10 reviewer rows (one per model ×
+preset); a second import: 0 new cells, 0 new verdicts, no log line appended. The phase-2 scope's `ModelTable.AllTasks`
+against the other harness's `results.json` of 2026-09-27T19:19Z, all 36 columns per model: **every number equal** —
+runs, attempts (failed), valid %, findings/run, seeds hit mean and range, distinct seeds and cross-epic, every verdict
+count, high-value/run, overstated %, p50/p90, turns, repairs, served/refused, tokens in/out/cached, cache %, turn-1
+cached and warm runs, reasoning/run, cost per run, per seed and total — with two named exceptions: (1) the strict
+percentages are `not hand-checked` until a person records a hand-check (the counts they are computed from are equal, so
+the percentages are too: 67.3 / 22.3 / 43.2 / 45.2 supported, 87.8 / 42.9 / 62.2 / 82.8 supported-or-partial); (2)
+deepseek-v4-pro's seeds hit mean 0.60 against 0.57 and high-value/run 0.45 against 0.43 — its one invalid run found
+nothing, and the Python report counted it as an assessed reading of zero hits while `GatePopulation` counts only a VALID
+run with no findings as assessed (E1's deliberate choice; 12/20 against 12/21). coai-bench: 160 cells from seven files
+(a byte copy added nothing), 916 judged findings → 692 lenient verdicts (224 were the copy's), 549 unjudged left without a
+row. Three published tables → 220 summary-only numbers. `bench gate export --public` over the whole database: 7 325 rows,
+no violation.

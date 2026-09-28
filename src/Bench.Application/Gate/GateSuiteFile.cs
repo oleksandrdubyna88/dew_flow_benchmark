@@ -51,6 +51,36 @@ public static class GateSuiteFile
         }
     }
 
+    /// <summary>A frozen suite written back in the file's own shape — what an import that BUILDS a suite (the coai-bench
+    /// cases) leaves in the artefact root, so its runs can be reported by suite file like any other. Parsing the text
+    /// gives back the same stamp: the clone location is the only field not in the stamp, and the caller names it.</summary>
+    public static string Json(GateSuite suite, Func<GateTask, string> repository) =>
+        new System.Text.Json.Nodes.JsonObject
+        {
+            ["id"] = suite.Id,
+            ["privateNames"] = new System.Text.Json.Nodes.JsonArray([.. suite.PrivateNames.Select(n => (System.Text.Json.Nodes.JsonNode)n)]),
+            ["tasks"] = new System.Text.Json.Nodes.JsonArray([.. suite.Tasks.Select(t => (System.Text.Json.Nodes.JsonNode)TaskJson(t, repository(t)))]),
+        }.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+
+    private static System.Text.Json.Nodes.JsonObject TaskJson(GateTask task, string repository) => new()
+    {
+        ["id"] = task.Id.Value,
+        ["language"] = task.Language,
+        ["gates"] = new System.Text.Json.Nodes.JsonArray([.. task.Hosts.Kinds.Select(k => (System.Text.Json.Nodes.JsonNode)k.ToString().ToLowerInvariant())]),
+        ["calibration"] = task.IsCalibration,
+        ["repository"] = repository,
+        ["base"] = task.Case.Base.Value,
+        ["variantHead"] = task.Case.VariantHead.Value,
+        ["planPath"] = task.Case.PlanPath,
+        ["epics"] = task.Case.Epics,
+        ["lessons"] = task.Case.Lessons,
+        ["seeds"] = new System.Text.Json.Nodes.JsonArray([.. task.Seeds.Select(s => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+        {
+            ["id"] = s.Id.Value, ["file"] = s.File, ["old"] = s.Old, ["new"] = s.New, ["what"] = s.What,
+            ["trigger"] = s.Trigger, ["mechanism"] = s.Mechanism, ["consequence"] = s.Consequence, ["crossEpic"] = s.CrossEpic,
+        })]),
+    };
+
     private static Outcome<GateTask> Task(JsonElement task)
     {
         var id = Text(task, "id");

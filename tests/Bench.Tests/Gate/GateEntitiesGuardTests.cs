@@ -10,7 +10,7 @@ namespace Bench.Tests.Gate;
 /// and every property that can carry text must be named here as <c>Type.Property</c>. A new column is red until it is
 /// named, and the one free-text column — the redacted failure cause — is named on its own type as the exception.
 /// <para>
-/// The entities come from the MODEL, not from a list in this file: a seventh <c>gate_*</c> table is walked the moment
+/// The entities come from the MODEL, not from a list in this file: a new <c>gate_*</c> table is walked the moment
 /// it is mapped, which is the property a hand-kept list of types cannot have.
 /// </para></summary>
 public sealed class GateEntitiesGuardTests
@@ -51,6 +51,12 @@ public sealed class GateEntitiesGuardTests
         // gate_hand_checks (E4) — the rubric's id and hash, the assessor's catalog id, and the HASH of the answered sample
         // file; the file (finding text, notes, a person's comments) stays in the artefact root.
         "GateHandCheckRow.RubricId", "GateHandCheckRow.RubricHash", "GateHandCheckRow.AssessorId", "GateHandCheckRow.NoteHash",
+
+        // gate_summaries (E5) — the citation of a published table whose raw data is gone: the harness label, the
+        // document's FILE NAME (a public results document, never a path), the section and row labels and the metric as
+        // SLUGS (ImportSlug: [a-z0-9-] only), and the document's hash. Numbers beside them; no sentence can be stored.
+        "GateSummaryRow.Source", "GateSummaryRow.Document", "GateSummaryRow.Section", "GateSummaryRow.DocumentSha256",
+        "GateSummaryRow.Label", "GateSummaryRow.Metric",
     };
 
     /// <summary>The one column that is prose: the failure cause, redacted before it is written.</summary>
@@ -65,10 +71,10 @@ public sealed class GateEntitiesGuardTests
     }
 
     [Fact]
-    public void The_walk_covers_all_seven_gate_tables_from_the_model()
+    public void The_walk_covers_all_eight_gate_tables_from_the_model()
     {
         GateEntities().Select(t => t.Name).Should().BeEquivalentTo(
-            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow", "GateHandCheckRow"],
+            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow", "GateHandCheckRow", "GateSummaryRow"],
             "a scan that finds nothing passes forever — the tables come from the EF model, so a new one is walked when it is mapped");
     }
 

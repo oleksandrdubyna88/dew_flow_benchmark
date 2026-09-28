@@ -51,7 +51,10 @@ internal static class GateFactsMapping
         row.CostCaptured ? CapturedUsd.Amount(row.CostUsd) : CapturedUsd.Unavailable(GateRowMapping.StoredNotCaptured),
         row.Served,
         row.Refused,
-        new FailureCause(row.FailureKind, row.FailureText));
+        new FailureCause(row.FailureKind, row.FailureText))
+    {
+        TurnFactsCaptured = row.TurnFactsCaptured,
+    };
 
     private static void ApplyReply(GateCellRow row, GateRunFacts facts)
     {
@@ -62,6 +65,7 @@ internal static class GateFactsMapping
         row.Findings = facts.Findings.Value;
         row.Turns = facts.Turns;
         row.HttpCalls = facts.HttpCalls;
+        row.TurnFactsCaptured = facts.TurnFactsCaptured;
         row.FinishReasons = [.. facts.FinishReasons];
         row.Statuses = [.. facts.Statuses];
         row.Served = facts.Served;

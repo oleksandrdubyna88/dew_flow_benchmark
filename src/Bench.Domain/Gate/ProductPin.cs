@@ -53,7 +53,16 @@ public sealed partial record ProductPin
 
     public bool UnderCheckout => GitSha.Length > 0;
 
-    public bool IsPinned => BinaryHashed || UnderCheckout;
+    /// <summary>A pin carried over from another harness: no binary was hashed, and the version text names the population
+    /// that harness declared (<see cref="Imported"/>).</summary>
+    public bool IsImported => !BinaryHashed && VersionText.StartsWith(ImportedPrefix, StringComparison.Ordinal);
+
+    public bool IsPinned => BinaryHashed || UnderCheckout || IsImported;
+
+    /// <summary>How every imported pin's version text starts — the one spelling <see cref="IsImported"/> reads back.</summary>
+    public const string ImportedPrefix = "imported from ";
+
+    private const string ImportedSuffix = " — binary not hashed";
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex Sha256Hex { get; }
@@ -77,18 +86,38 @@ public sealed partial record ProductPin
             : Outcome<ProductPin>.Success(new ProductPin(sha, version, git, dirtyFiles, (checkedTree ?? string.Empty).Trim()));
     }
 
-    /// <summary>A pin carried over from another harness's record: the sha it wrote down, no binary to hash.
-    /// Such a pin never <see cref="Matches"/> a hashed one — nothing proves the bytes were the same — and it
-    /// says so in its version text.</summary>
-    public static Outcome<ProductPin> Imported(string? gitSha, CapturedCount dirtyFiles)
+    /// <summary>A pin carried over from another harness's record: the sha it wrote down (when it wrote one), no binary to
+    /// hash, and the POPULATION that harness compared its runs within — <c>calib-py phase 2</c>. The population, not the
+    /// sha, is the version text, because the version text is what a <see cref="GateScope"/> compares: the other harness
+    /// folded the product commits it moved across into one comparison, and a scope per commit would split its table into
+    /// pieces nobody can hold against it. The sha stays on <see cref="GitSha"/>, per cell. Such a pin never
+    /// <see cref="Matches"/> anything — nothing proves the bytes were the same.</summary>
+    public static Outcome<ProductPin> Imported(string? gitSha, CapturedCount dirtyFiles, string? population)
     {
         var git = (gitSha ?? string.Empty).Trim().ToLowerInvariant();
+        var label = (population ?? string.Empty).Trim();
 
-        return GitShaHex.IsMatch(git)
-            ? Outcome<ProductPin>.Success(new ProductPin(
-                string.Empty, $"git {git} (imported — binary not hashed)", git, dirtyFiles, string.Empty))
-            : Outcome<ProductPin>.Failure(
-                $"'{git}' is not a git sha — an imported pin needs the sha the other harness recorded, 7 to 40 hex characters");
+        var refusal = (label.Length, git.Length == 0 || GitShaHex.IsMatch(git)) switch
+        {
+            (0, _) => "an imported pin names the population the other harness compared its runs within — got none",
+            (_, false) => $"'{git}' is not a git sha — an imported pin carries the sha the other harness recorded, 7 to 40 hex characters, or none",
+            _ => string.Empty,
+        };
+
+        return refusal.Length > 0
+            ? Outcome<ProductPin>.Failure(refusal)
+            : Outcome<ProductPin>.Success(new ProductPin(string.Empty, ImportedPrefix + label + ImportedSuffix, git, dirtyFiles, string.Empty));
+    }
+
+    /// <summary>An imported pin read back from its stored columns: the population is taken out of the stored version
+    /// text, so a row reads back as exactly the pin that was written.</summary>
+    public static Outcome<ProductPin> ImportedStored(string? versionText, string? gitSha, CapturedCount dirtyFiles)
+    {
+        var text = (versionText ?? string.Empty).Trim();
+
+        return text.StartsWith(ImportedPrefix, StringComparison.Ordinal) && text.EndsWith(ImportedSuffix, StringComparison.Ordinal)
+            ? Imported(gitSha, dirtyFiles, text[ImportedPrefix.Length..^ImportedSuffix.Length])
+            : Outcome<ProductPin>.Failure($"'{text}' is not an imported pin's version text");
     }
 
     /// <summary>Whether two pins name the same bytes. Only a hashed binary can match: two pins that were

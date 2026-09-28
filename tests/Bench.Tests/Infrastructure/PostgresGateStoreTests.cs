@@ -302,7 +302,7 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
             ["gate_runs", "gate_cells", "gate_findings", "gate_verdicts", "gate_reviewers", "gate_artifacts"]);
         operations.OfType<ITableMigrationOperation>().Select(o => o.Table).Should().OnlyContain(t => t.StartsWith("gate_", StringComparison.Ordinal),
             "no existing table is touched — the gate is a sibling context in the same database");
-        PostgresGatePublicationSource.GateEntities(db).Select(e => e.GetTableName()).Should().HaveCount(7, "six from this migration, gate_hand_checks from E4's");
+        PostgresGatePublicationSource.GateEntities(db).Select(e => e.GetTableName()).Should().HaveCount(8, "six from this migration, gate_hand_checks from E4's, gate_summaries from E5's");
         (await db.GateRuns.CountAsync(Ct)).Should().BeGreaterThanOrEqualTo(0, "the tables exist on a migrated database");
     }
 

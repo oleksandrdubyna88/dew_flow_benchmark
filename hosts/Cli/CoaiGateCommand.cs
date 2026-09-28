@@ -10,7 +10,7 @@ namespace Bench.Cli;
 
 /// <summary><c>bench gate …</c> — the coai gate-model benchmark's verbs: the two that own its storage (the PUBLIC export —
 /// database rows through the publication guard, never an artefact — and the tap PRUNE), and the driver's (E3): run,
-/// resume, status, sweep, probe, reviewers and suite verify; and the assessment's (E4): assess and hand-check.</summary>
+/// resume, status, sweep, probe, reviewers and suite verify; the assessment's (E4): assess and hand-check; and the import (E5).</summary>
 public static class CoaiGateCommand
 {
     /// <summary>How long a tap request/response body is kept, in days. The facts file of every call is kept forever.</summary>
@@ -29,6 +29,7 @@ public static class CoaiGateCommand
             "reviewers" => await GateToolsCommand.ReviewersAsync(command, output, error, cancellationToken),
             "assess" => await GateAssessCommand.AssessAsync(command, output, error, cancellationToken),
             "hand-check" => await GateAssessCommand.HandCheckAsync(command, output, error, cancellationToken),
+            "import" => await GateImportCommand.RunAsync(command, output, error, cancellationToken),
             "suite" when command.Operand(1) == "verify" => await GateToolsCommand.VerifySuiteAsync(command, output, error, cancellationToken),
             var other => Unknown(other, error),
         };

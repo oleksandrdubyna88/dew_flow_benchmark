@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
 
-/// <summary>The mapping of the seven <c>gate_*</c> tables — a context of its own inside the one database, beside
+/// <summary>The mapping of the eight <c>gate_*</c> tables — a context of its own inside the one database, beside
 /// the retrieval benchmark's tables and touching none of them. Every enum is stored as its NAME, the rule every
 /// other table here follows: an ordinal changes meaning the day somebody inserts a member.</summary>
 internal static class GateModel
@@ -23,7 +23,20 @@ internal static class GateModel
         Reviewers(builder);
         Artifacts(builder);
         HandChecks(builder);
+        Summaries(builder);
     }
+
+    private static void Summaries(ModelBuilder builder) =>
+        builder.Entity<GateSummaryRow>(summary =>
+        {
+            summary.ToTable("gate_summaries");
+            summary.HasKey(s => s.Id);
+            summary.Property(s => s.Gate).HasConversion<string>();
+
+            // A number of a document is stored once per (document bytes, section, row, metric): a re-import is a no-op, and
+            // an edited document is a new citation beside the old one, never a silent overwrite.
+            summary.HasIndex(s => new { s.DocumentSha256, s.Section, s.RowOrdinal, s.Metric }).IsUnique();
+        });
 
     private static void Runs(ModelBuilder builder) =>
         builder.Entity<GateRunRow>(run =>

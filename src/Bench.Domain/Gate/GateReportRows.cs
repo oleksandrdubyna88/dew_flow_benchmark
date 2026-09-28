@@ -96,4 +96,11 @@ public sealed record ModelTable(
     IReadOnlyList<ModelRow> Rows,
     IReadOnlyList<ModelRow> Calibration,
     IReadOnlyList<PerTaskRow> PerTask,
-    IReadOnlyList<VarianceReading> Variance);
+    IReadOnlyList<VarianceReading> Variance)
+{
+    /// <summary>Every task, calibration tasks INCLUDED — the population the other harness's per-model table is computed
+    /// over (<c>report.py: per_model</c> reads every phase-2 task). It exists so an imported measurement can be held
+    /// against the table it was published as, like with like; it is never the default reading, which is
+    /// <see cref="Rows"/> with the calibration tasks apart.</summary>
+    public IReadOnlyList<ModelRow> AllTasks { get; init; } = [];
+}

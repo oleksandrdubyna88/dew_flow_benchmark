@@ -44,6 +44,13 @@ public static class GateRubrics
 
     public static RubricCatalog Catalog(IReadOnlyList<LoadedRubric> rubrics) => new([.. rubrics.Select(r => r.Rubric)]);
 
+    /// <summary>The rubric an IMPORT labels verdicts with — any rubric this build holds, the lenient one included: an import
+    /// asks nobody, it records what another harness's judge already said (E5).</summary>
+    public static Outcome<LoadedRubric> Labelling(IReadOnlyList<LoadedRubric> rubrics, string id) =>
+        rubrics.FirstOrDefault(r => string.Equals(r.Rubric.Id.Value, id, StringComparison.Ordinal)) is { } held
+            ? Outcome<LoadedRubric>.Success(held)
+            : Outcome<LoadedRubric>.Failure($"no rubric '{id}' — this build holds {string.Join(", ", rubrics.Select(r => r.Rubric.Id.Value))}");
+
     /// <summary>The rubric an assessment ASKS under. Only a strict rubric is asked: the lenient one names verdicts another
     /// harness produced, and sending its question here would be a third rubric wearing its name.</summary>
     public static Outcome<LoadedRubric> Asked(IReadOnlyList<LoadedRubric> rubrics, string id)

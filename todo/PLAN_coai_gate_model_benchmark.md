@@ -1,7 +1,8 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
 > Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27, E3 (the
-> driver) and E4 (the blinded strict assessment) 2026-09-28 — `research/module_gate.md` describes them; E5–E7 open.** Scope: a new bounded context `Gate` across
+> driver), E4 (the blinded strict assessment) and E5 (the import) 2026-09-28 — `research/module_gate.md` describes them;
+> E6–E7 open.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -1023,14 +1024,142 @@ for the rest.
   report refuses the number (`NotHandChecked`) until `bench gate hand-check record` has stored one; the person's reading
   itself is E7's campaign (S7.4).
 
-### E5 — the import (Opus)
+### E5 — the import (Opus) — DONE 2026-09-28
 
-- **S5.1** `runs.jsonl` + run directories → runs, findings, artefacts, reviewer rows by preset hash. RED: a fixture
+> Landed on `feat/gate-e5-import`; the import, its verbs, its tables and the real-data measurement are in
+> [module_gate.md](../research/module_gate.md). Every guard was reverted in the finished code and its test watched failing
+> for the real symptom, then restored (the observations are in the commit body). **Run against the real data**: the
+> calibration's 111 cells and 340 verdicts, coai-bench's 160 cells and 692 lenient verdicts, three published tables as
+> 220 summary-only numbers; every phase-2 per-model number equal to `results.json` of 2026-09-27 but the two named below.
+>
+> **Deviations from the stories as written:**
+> - **The imported pin's version text is the population, not the commit** (a domain change to E1's `ProductPin.Imported`,
+>   decided before the plan round and put to it). Phase 2 recorded ten product commits; keyed by commit it was ten
+>   scopes. The commit stays on each cell's pin.
+> - **`ModelTable.AllTasks`** (a report widening): the Python `per_model` reads every task, and E1's rows keep the
+>   calibration tasks apart. The DoD is checked against `AllTasks`; the default reading is unchanged.
+> - **`GateRunFacts.TurnFactsCaptured`** and a column for it: coai-bench kept no ledger, so its turns, calls, served and
+>   refused are *not captured* — the fourth `gate_cells` column family E5 adds; every earlier row reads true.
+> - **Two numbers differ from `results.json`, both by earlier decisions, not by the import:** the strict percentages are
+>   `not hand-checked` (E4's gate — their counts are equal, so the percentages are 67.3 / 22.3 / 43.2 / 45.2 and
+>   87.8 / 42.9 / 62.2 / 82.8 once a person checks), and deepseek-v4-pro's seeds hit mean and high-value/run (0.60 / 0.45
+>   against 0.57 / 0.43) because its one invalid run found nothing and E1 counts only a VALID empty run as an assessed
+>   zero. The calibration's own hand-check was made by the agent session, not a person, and is not imported.
+> - **The DoD's "page"** is E6's; E5 proves the numbers through `GateReport.PerModel` over the imported rows, the object
+>   the page will render. The fixture pins FOUR numbers PER MODEL (valid %, p50 seconds, cost per run, tokens in per run)
+>   plus runs / attempts / failed attempts, over the whole redacted phase-2 population (plan round, finding 8) — not four
+>   numbers in all.
+> - **"71 runs"** was the count on 2026-09-27 morning; the workspace now holds 113 lines = 111 cells (19 phase-1
+>   iterations, 84 phase-2 cells, 8 second attempts).
+> - **S5.4 ran although the raw JSON is NOT gone** — it is still in the operator's WSL home (`coai-models`,
+>   `coai-models-code`, `coai-select`). The summary-only rows were imported anyway (the numbers are the published ones and
+>   carry their citation); importing the raw JSON as runs is D12.4's first branch and no story builds it (open question).
+> - **The harness's sha is not on the campaign**: the harness evolved during the measurement, and a hash of today's
+>   files names none of the versions that ran; the source label is `calib-py`.
+> - **`--calib-models`** (the models file) is an input the stories did not name: `runs.jsonl` records no endpoint, key
+>   name or price, and a reviewer row needs all three. The operator's one-off `export_suite.py` (outside git, S7.1's) wrote
+>   the suite file and the models file for the real run.
+> - **The coai-bench arms get no catalog row** (D12 said "one reviewer row named for the set"): a vendor set is not one
+>   runtime and one model, and the record names neither model — a row would invent a definition. The cells name
+>   `coai-bench-<arm>`. The cases become a suite the import writes into the artefact root.
+> - **`good_enough` coai-bench rounds are not valid** — the gate's one valid rule (proceed or revise), the rule a native
+>   plan or code cell is judged by too.
+
+> **How E5 is built (decided 2026-09-28, before its plan round).** Checked against `cd4934e` and the real source data:
+> the calibration's `runs.jsonl` now holds **113 lines** (21 phase-1 lines = 19 ids, one re-run with `--force`; 92
+> phase-2 attempts = 84 cells, 8 grok cells re-run as `-a2` after vendor 500s), 111 run directories (269 MB),
+> `assess.jsonl` 340 verdicts by one assessor (`codex`), `assess-key/key.json` 340 entries; `results.json` was
+> regenerated 2026-09-27T19:19Z from exactly these files. The seven coai-bench `runs.json` files hold `plan-1` and
+> `code` stages only (`artifacts/bench/matrix-v0.18.0/runs.json` is a byte copy of `bench-2026-09-06/runs.json`). The
+> 2026-09-01/02 raw JSON is **still on the machine** (the WSL home: `coai-models`, `coai-models-code`, `coai-select`).
+>
+> - **One verb, four sources**: `bench gate import calib | coai-bench | summary`, each read-only over its source (a test
+>   hashes the source tree before and after). Ports in Application (`IGateImportStore`), the readers and every mapping
+>   decision pure in Domain (`CalibRecord`, `CoaiBenchRecord`, `SummaryTable`), adapters in Infrastructure.
+> - **Idempotent by construction**: every imported campaign and cell id is DERIVED — a name-based UUID over
+>   (harness, source key) — so a second import finds every cell already there. Each imported cell also commits its
+>   source record as an artefact (`import-source.json`, SHA-256 in `gate_artifacts`); a re-import of an unchanged record
+>   is a no-op, of a CHANGED one (a later `--force` line) a refusal naming the id — never a silent overwrite. A cell whose
+>   attempt directory exists with no row (an import killed between the files and the transaction) is refused naming it.
+> - **An import writes settled cells directly**, never through a claim: `IGateImportStore.ImportCellAsync` inserts the
+>   campaign (status `Finished` — a terminal run is never swept or claimed) if missing, then the cell row (`Settled`,
+>   `Attempts` = the source's attempt number, the pin, the facts), its findings and its artefact refs in ONE transaction,
+>   after the files are committed under `runs/<campaign>/cells/<cell>/attempt-<n>/` by `IGateArtifactStore.WriteAsync`.
+>   **A source cell with two attempts is two cells** (E2's deviation said so): the population's latest-attempt rule
+>   then reads `p2-grok-4.7-cs2-r3-a2` as the run and counts `…-r3` in the attempts columns — the Python report's
+>   `final_attempts`, reproduced.
+> - **calib**: `bench gate import calib --calib <dir> --suite-file <suite.json> --calib-models <models.json>
+>   --artifact-root … --db … [--assessor <catalog id>]`. The suite is the operator's (the same file E7 runs, so imported
+>   and native runs share a stamp); `--calib-models` is `models.py`'s `MODELS` as JSON (endpoint, vault key NAME, prices —
+>   what `runs.jsonl` does not record). One campaign per PHASE. A reviewer row per (model, transport preset) — created
+>   as `<model>-<hash8>` or MATCHED by definition hash to a row that already exists under any name. Facts field for field
+>   (`CalibRecord.Facts`): Python's `0` over no ledger turn is *not captured*, `None` is *not captured*, the failure
+>   sentence goes through `FailureRedaction` with its kind read off its first reason; served/refused by the Python
+>   REPORT's rule (`served_count or note.count("served ")`), because the report is what the numbers are compared with.
+>   Findings from `reply.json` through `GateReplyParser` (the one parser) → `GateFinding.Of` under the root's file-hash
+>   key → `findings.jsonl`, so a later native `bench gate assess` could read an imported run like any other. The run
+>   directory is copied file by file (committed, hashed, a ref each).
+> - **The imported pin (a domain change).** `ProductPin.Imported(gitSha, dirty)` put the sha INTO the version text,
+>   so the scope partitioned by commit: phase 2 recorded ten product commits and would have been ten scopes of a few
+>   runs each, none comparable with `results.json`. The sha stays on the pin (`GitSha`, per cell — a partition by
+>   commit is one query); the VERSION TEXT becomes the population the other harness declared: `imported from calib-py
+>   phase 2 — binary not hashed`. That is exactly the comparison unit the Python report used, and it keeps phase 1
+>   (a different population: the pre-rebase commits, other presets) out of phase 2's scope. The settings hash of an
+>   imported cell is the hash of `imported:<harness>:settings-not-recorded` (the harness kept no `COAI_*` snapshot).
+> - **The all-tasks table (a report widening).** Python's `per_model` is over EVERY task; `GateReport.PerModel` puts the
+>   calibration tasks (js3, ts2) apart. `ModelTable.AllTasks` is added — every task, calibration included, named as the
+>   other harness's population and never the default reading — so the DoD compares like with like. `Rows` and
+>   `Calibration` are unchanged.
+> - **calib verdicts (S5.2)**: through `IGateVerdictStore.RecordAsync`, the ingestion contract, one call per Python
+>   batch; the rubric is `strict-v1` (the file IS the calibration's instructions, byte for byte but the final newline,
+>   which the rubric hash normalises); Python ids enter OUR key (`ExtendKeyAsync`; an id the key already holds for another
+>   finding is refused) and the notes and cluster text go to the assessor's verdict log, so a person can later hand-check
+>   imported verdicts with `bench gate hand-check`; the cluster is HMAC'd; the prompt hash is empty (the other harness
+>   archived no batch prompt — said, not guessed). `--assessor` names the catalog row the verdicts are attributed to
+>   (the E4 rule: an assessor is a catalog row), whose family is compared with each reviewer's. The calibration's own
+>   hand-check was made by the agent session, not a person, and is NOT imported: strict % stays `not hand-checked`.
+> - **coai-bench (S5.3)**: `bench gate import coai-bench --runs <file,…> --repo <coai checkout> --artifact-root … --db …`.
+>   `plan-1` → a plan cell, `code` → a code cell; one campaign per (file content, gate); the cell key is the record's own
+>   (`arm|case|repeat|startedUtc`) so a copied file adds nothing. The cases become a suite the importer writes into the
+>   artefact root (short shas resolved by `git rev-parse` in `--repo`; no seeds; plan and code hosted). An arm is a vendor
+>   SET and the record names no model, so its reviewer id is `coai-bench-<arm>` and NO catalog row is invented. `Useful`
+>   yes/no → `Lenient(WorthHaving)` under `lenient-worth-v1`, assessor = the record's `judgedBy` (or
+>   `coai-bench-unrecorded` where the judge wrote no name), family by model prefix against the arm's CLI words;
+>   `unjudged` → no verdict row. What coai-bench never recorded (turns, HTTP calls, served/refused, the ledger) is *not
+>   captured* — `GateRunFacts.TurnFactsCaptured` (default true) and a column for it — never a zero.
+> - **summary (S5.4)**: `bench gate import summary --document <RESULTS_*.md> --section "<heading>" --gate plan|code
+>   --db …` reads one markdown table: the first column is the row label (a slug), each other column a metric (a slug of
+>   its header, `.1`/`.2` for `a / b` cells), each cell its NUMBER (`k`/`M`, `$`, `%` understood) or *not captured*
+>   (`—`, `electricity`). Stored in `gate_summaries` (the eighth table, its own migration `GateImport`) with the
+>   document's name, the section slug and the document's SHA-256 as the citation — no text; a table the report never
+>   reads, so it can never be averaged with runs. Unique per (document sha, section, row, metric): a re-import is a no-op.
+> - **Order**: S5.1 (the domain mappings, then the store, then the verb) → S5.2 → S5.3 → S5.4 → the DoD fixture. The DoD
+>   fixture is grok-4.7's 29 phase-2 lines and 98 verdicts, REDACTED (no note, no cluster text, no path, no commit sha, no
+>   repository name; placeholder findings carrying the recorded severities) over a made-up suite with the real task and
+>   seed ids; it pins four of `results.json`'s grok numbers through `GateReport.PerModel(...).AllTasks`.
+> - **Not in E5**: importing the 09-01/02 RAW JSON as runs (D12.4's first branch; no story builds it — the raw is still
+>   on the machine, an open question); the page (E6).
+>
+> **From E5's plan round (coai, 2026-09-28, `good_enough`, 3 of 3 reviewers, 15 findings — 10 accepted, 5 rejected with
+> reasons on the round), accepted and folded in:**
+>
+> | # | finding | where it landed |
+> |---|---|---|
+> | 0 | verify the source before any write | a PRE-FLIGHT reads and parses every source record (every line, its run directory's `reply.json`, the key, every verdict) and refuses — naming the file and line — before the first byte is written; a truncated line is a refusal, never a skipped record |
+> | 2, 6, 11 | files committed before the row: a crash leaves an attempt directory nobody can import again | the retry RESUMES instead of refusing: every file of an imported attempt is written, or — when it is already there from a killed import — ADOPTED and its SHA-256 compared with the source bytes; equal is reused, different is refused naming the path; only then the one transaction. An attempt directory with a row is the finished case, compared through `import-source.json` |
+> | 7 | the source key of a two-attempt cell | the calib key is the record's own id, which carries the attempt (`…-r3`, `…-r3-a2`); a MUTATION is the same id with other bytes (compared through `import-source.json`), a new attempt is a new id |
+> | 8 | four grok numbers do not prove the population | the DoD fixture is the WHOLE phase-2 population (92 lines, 340 verdicts, four models), redacted, and the test pins four numbers per model plus the runs / attempts / latest-attempt columns |
+> | 9 | a coai-bench file that grows gets a second campaign | the campaign is keyed by (gate, the source's LOCATION label — the folder the file sits in), not its content; a grown file adds its new records to the same campaign; a campaign row is created only when it gets at least one new cell, so a byte copy elsewhere adds nothing |
+> | 12 | two records on one population key | the Python report's `latest_by_id` (the last line of an id wins) is applied before mapping, and the importer refuses two records that map to one (campaign, task, reviewer, repeat, attempt) — phase-1 iterations take the iteration as their repeat |
+> | 13 | `--assessor` optional while verdicts need it | required whenever the source has an `assess.jsonl`, and it must be a catalog row; refused otherwise |
+> | 14 | header slugs can collide | a cell splits into `.1`/`.2` only on ` / `; two columns that slug alike refuse the table naming both |
+
+- [x] **S5.1** `runs.jsonl` + run directories → runs, findings, artefacts, reviewer rows by preset hash. RED: a fixture
   line (a real one, redacted to the sample suite's names) round-trips every fact; a second import changes nothing.
-- **S5.2** `assess.jsonl` + `key.json` → verdicts under `strict-v1`.
-- **S5.3** `coai-bench` `runs.json` → plan/code runs, `Useful` → `lenient-worth-v1`, unjudged stays unassessed.
-- **S5.4** `SummaryOnly` rows for the 2026-09-01/02 documents when the raw JSON is gone.
-- DoD: the page shows the 71 imported feature runs with the exact per-model numbers of the Python `results.json`
+- [x] **S5.2** `assess.jsonl` + `key.json` → verdicts under `strict-v1`.
+- [x] **S5.3** `coai-bench` `runs.json` → plan/code runs, `Useful` → `lenient-worth-v1`, unjudged stays unassessed.
+- [x] **S5.4** `SummaryOnly` rows for the 2026-09-01/02 documents when the raw JSON is gone.
+- [x] DoD: the page shows the 71 imported feature runs with the exact per-model numbers of the Python `results.json`
   of the same day (a fixture pins four of them).
 
 ### E6 — report, API, page, docs (Opus)

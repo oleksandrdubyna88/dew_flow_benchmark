@@ -137,6 +137,12 @@ public sealed record GateRunFacts(
     /// schema) or a retry. The count proves an extra call, not its cause.</summary>
     public int ExtraCalls => Math.Max(0, HttpCalls - Turns);
 
+    /// <summary>Whether the turn-level facts — <see cref="Turns"/>, <see cref="HttpCalls"/>, <see cref="Served"/>,
+    /// <see cref="Refused"/> — were recorded at all. True for every native session and every calibration line; FALSE for an
+    /// import from a harness that never recorded them (coai-bench kept no ledger), whose zeros are not counts: a report
+    /// reads these columns only over runs that captured them, and says <i>unknown</i> when none did.</summary>
+    public bool TurnFactsCaptured { get; init; } = true;
+
     /// <summary>A turn-1 cache read above this many tokens is a WARM run — the prompt was served from a
     /// vendor cache rather than read afresh — and warm runs are reported apart.</summary>
     public const long WarmTurnOneCachedTokens = 4096;

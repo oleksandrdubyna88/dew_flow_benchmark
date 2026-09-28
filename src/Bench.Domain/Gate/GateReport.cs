@@ -50,7 +50,10 @@ public static class GateReport
             Rows(population, run => !calibration.Contains(run.Task.Value), input, rubric),
             Rows(population, run => calibration.Contains(run.Task.Value), input, rubric),
             PerTask(scope, rubric, input),
-            Variance(scope, rubric, input));
+            Variance(scope, rubric, input))
+        {
+            AllTasks = Rows(population, _ => true, input, rubric),
+        };
     }
 
     public static IReadOnlyList<PerTaskRow> PerTask(GateScope scope, Rubric rubric, GateReportInput input)
@@ -188,11 +191,11 @@ internal static class ReviewerRow
             Figure.Percent(a.Overstated, a.Graded),
             Quantile.Q(seconds, 0.5),
             Quantile.Q(seconds, 0.9),
-            Figure.Mean([.. a.Runs.Select(r => (double)r.Facts.Turns)]),
-            a.Runs.Count(r => r.Facts.ExtraCalls > 0),
-            a.Runs.Sum(r => r.Facts.ExtraCalls),
-            Figure.Mean([.. a.Runs.Select(r => (double)r.Facts.Served)], 1),
-            Figure.Mean([.. a.Runs.Select(r => (double)r.Facts.Refused)], 1),
+            Figure.Mean(a.TurnLevel(r => r.Facts.Turns)),
+            a.Runs.Count(r => r.Facts.TurnFactsCaptured && r.Facts.ExtraCalls > 0),
+            a.Runs.Where(r => r.Facts.TurnFactsCaptured).Sum(r => r.Facts.ExtraCalls),
+            Figure.Mean(a.TurnLevel(r => r.Facts.Served), 1),
+            Figure.Mean(a.TurnLevel(r => r.Facts.Refused), 1),
             Figure.Mean(tokensIn, 0),
             Figure.Mean(a.Captured(r => Count(r.Facts.TokensOut)), 0),
             Figure.Mean(tokensCached, 0),
