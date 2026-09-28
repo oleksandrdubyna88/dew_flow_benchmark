@@ -35,6 +35,10 @@ try
     builder.Services.AddScoped<IResultStore>(services =>
         new PostgresResultStore(services.GetRequiredService<BenchDbContext>(), TimeProvider.System));
 
+    // The coai gate benchmark's read port (E6): records, recorded suite tasks, verdicts and hand-checks, read only.
+    builder.Services.AddScoped<Bench.Application.Gate.IGateReads>(services =>
+        new PostgresGateReads(services.GetRequiredService<BenchDbContext>(), TimeProvider.System));
+
     // The session-trace read port. Registered here and its WRITE half deliberately not: the ingest route
     // lives on the collector, which is the one process an agent's hook may reach. A store that can write is
     // harmless in a host that maps no route to it, and mapping one here would undo the boundary above.

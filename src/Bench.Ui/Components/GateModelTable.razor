@@ -1,0 +1,90 @@
+@* One per-model table: one scope, one rubric, one population (measured, calibration, or all tasks). *@
+
+<div class="card mb-3" data-test="@Test">
+    <div class="card-header">
+        <strong>@Title</strong>
+        @if (Note.Length > 0)
+        {
+            <span class="text-body-secondary small ms-2">@Note</span>
+        }
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 small">
+            <thead>
+                <tr>
+                    <th scope="col">reviewer</th>
+                    <th scope="col">runs</th>
+                    <th scope="col">attempts (failed)</th>
+                    <th scope="col">valid %</th>
+                    <th scope="col">findings/run</th>
+                    <th scope="col">seeds hit</th>
+                    <th scope="col">distinct seeds (cross-epic)</th>
+                    <th scope="col">@SupportedHeading</th>
+                    @if (IsStrict)
+                    {
+                        <th scope="col">@PartialHeading</th>
+                    }
+                    <th scope="col">@CountsHeading</th>
+                    <th scope="col">assessment failed</th>
+                    <th scope="col">read by own family</th>
+                    @if (IsStrict)
+                    {
+                        <th scope="col">high-value/run</th>
+                        <th scope="col">overstated %</th>
+                    }
+                    <th scope="col">s p50</th>
+                    <th scope="col">s p90</th>
+                    <th scope="col">turns</th>
+                    <th scope="col">runs with extra calls</th>
+                    <th scope="col">tokens in/run</th>
+                    <th scope="col">tokens out/run</th>
+                    <th scope="col">cache %</th>
+                    <th scope="col">reasoning/run</th>
+                    <th scope="col">cost/run</th>
+                    <th scope="col">cost/seed</th>
+                    <th scope="col">cost total</th>
+                    <th scope="col">failures</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Rows)
+                {
+                    <tr>
+                        <th scope="row"><code>@r.ReviewerId</code></th>
+                        <td>@r.Runs</td>
+                        <td>@r.Attempts (@r.AttemptsFailed)</td>
+                        <td>@W(r.ValidPct)</td>
+                        <td>@W(r.FindingsPerRun)</td>
+                        <td data-col="seeds-hit">@Seeds(r)</td>
+                        <td>@r.DistinctSeeds (@r.DistinctCrossEpicSeeds)</td>
+                        <td data-col="supported">@W(r.SupportedPct)</td>
+                        @if (IsStrict)
+                        {
+                            <td>@W(r.SupportedOrPartialPct)</td>
+                        }
+                        <td>@Counts(r)</td>
+                        <td data-col="assessment-failed">@r.AssessmentFailed</td>
+                        <td>@r.AssessorFamilyMatched</td>
+                        @if (IsStrict)
+                        {
+                            <td>@W(r.HighValuePerRun)</td>
+                            <td>@W(r.OverstatedPct)</td>
+                        }
+                        <td>@W(r.SecondsP50)</td>
+                        <td>@W(r.SecondsP90)</td>
+                        <td>@W(r.TurnsMean)</td>
+                        <td>@W(r.RepairRuns) (@W(r.RepairCalls) call(s))</td>
+                        <td>@W(r.TokensInPerRun, "0")</td>
+                        <td>@W(r.TokensOutPerRun, "0")</td>
+                        <td>@W(r.CachePct)</td>
+                        <td>@W(r.ReasoningPerRun, "0")</td>
+                        <td data-col="cost-per-run">@W(r.CostPerRun, "0.####")</td>
+                        <td>@W(r.CostPerSeed, "0.####")</td>
+                        <td>@W(r.CostTotal, "0.####")</td>
+                        <td>@Failures(r)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

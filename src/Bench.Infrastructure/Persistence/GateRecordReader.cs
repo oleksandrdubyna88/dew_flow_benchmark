@@ -23,13 +23,32 @@ internal sealed class GateRecordReader(BenchDbContext db)
             .OrderBy(c => c.Position).ThenBy(c => c.Slot)
             .ToListAsync(cancellationToken);
 
+        return await RecordsAsync([run], cells, cancellationToken);
+    }
+
+    /// <summary>Every settled cell of EVERY campaign — the report's population (E6). Three queries whatever the number of
+    /// campaigns: the runs, the settled cells, their findings.</summary>
+    public async Task<IReadOnlyList<GateRunRecord>> ReadAllAsync(CancellationToken cancellationToken)
+    {
+        var runs = await db.GateRuns.AsNoTracking().OrderBy(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var cells = await db.GateCells.AsNoTracking()
+            .Where(c => c.FactsRecorded)
+            .OrderBy(c => c.RunId).ThenBy(c => c.Position).ThenBy(c => c.Slot)
+            .ToListAsync(cancellationToken);
+
+        return await RecordsAsync(runs, cells, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<GateRunRecord>> RecordsAsync(
+        IReadOnlyList<GateRunRow> runs, IReadOnlyList<GateCellRow> cells, CancellationToken cancellationToken)
+    {
         var ids = cells.Select(c => c.Id).ToList();
         var findings = (await db.GateFindings.AsNoTracking().Where(f => ids.Contains(f.CellId)).ToListAsync(cancellationToken))
             .ToLookup(f => (f.CellId, f.Attempt));
+        var campaigns = runs.ToDictionary(r => r.Id, GateRowMapping.ToDomain);
 
-        var campaign = GateRowMapping.ToDomain(run);
-
-        return [.. cells.SelectMany(cell => Record(campaign, cell, findings[(cell.Id, cell.Attempts)]))];
+        return [.. cells.Where(cell => campaigns.ContainsKey(cell.RunId))
+            .SelectMany(cell => Record(campaigns[cell.RunId], cell, findings[(cell.Id, cell.Attempts)]))];
     }
 
     /// <summary>One record, or none when a stored id no longer parses — skipped rather than failing the whole read,

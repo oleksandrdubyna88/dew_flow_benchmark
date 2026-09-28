@@ -192,4 +192,14 @@ public sealed record TaskSummary(
     GateTaskId Id, string Language, bool IsCalibration, HostedGates Hosts, IReadOnlyList<SeedRef> Seeds)
 {
     public bool IsSeeded => Seeds.Count > 0;
+
+    /// <summary>What a RECORDED task set is compared by (<c>gate_suite_tasks</c>, E6): the seeds in id order, so the order a
+    /// suite file listed them in is not a difference, and every field length-prefixed.</summary>
+    public string Canonical =>
+        CanonicalFields.Of(
+        [
+            "summary", Id.Value, Language, IsCalibration ? "calibration" : "measured", Hosts.Canonical,
+            Seeds.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            .. Seeds.OrderBy(s => s.Id.Value, StringComparer.Ordinal).Select(s => CanonicalFields.Of(s.Id.Value, s.CrossEpic ? "cross-epic" : "in-epic")),
+        ]);
 }

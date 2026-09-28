@@ -18,6 +18,8 @@ public sealed class GateContractsGuardTests
     private static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
         "GateScopeDto.SuiteStamp", "GateScopeDto.Gate", "GateScopeDto.ProductVersion", "GateScopeDto.BinarySha256", "GateScopeDto.SettingsHash",
+        "GateScopeDto.Id", "GateScopeDto.Sources",
+        "GateRubricDto.Id", "GateRubricDto.Kind", "GateRubricDto.Hash", "GateRubricDto.Stamp",
         "GateFigureDto.State",
         "GateModelRowDto.ReviewerId",
         "GateFailureCountDto.FailureKind",

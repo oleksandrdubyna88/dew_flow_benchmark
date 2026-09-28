@@ -1,0 +1,131 @@
+# The coai gate benchmark's reads (E6) — `/api/bench/gate/*`, the object `bench gate report --json` prints.
+#
+# Every request here READS: the gate routes map no write, and the port behind them is a read port. Against the
+# fresh database the suite runs on there are no gate runs at all, so what is asserted is the shape of an EMPTY
+# answer and every refusal the handlers decide: 400 asked wrongly, 404 not here.
+
+# @name gate_scopes_answer_an_empty_list_on_a_fresh_install
+# @prod
+GET {{baseUrl}}/api/bench/gate/scopes
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('no runs is [], never null — the scope control then offers nothing rather than breaking', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# @name gate_scopes_of_one_gate_answer_a_list
+# @prod
+GET {{baseUrl}}/api/bench/gate/scopes?gate=feature
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('a gate filter answers a list too', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# A number is not a gate: Enum parsing alone would read "7" as one, which is how `--gate 7` was once accepted.
+# @name gate_scopes_of_a_word_that_is_no_gate_is_400
+# @prod
+GET {{baseUrl}}/api/bench/gate/scopes?gate=7
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal names the three gates', () => {
+    assert.match(response.parsedBody.reason, /plan, code or feature/);
+  });
+}}
+
+###
+# @name gate_models_without_a_scope_is_400
+# @prod
+GET {{baseUrl}}/api/bench/gate/feature/models?rubric=strict-v1
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal says to name a scope — a table over every scope would put two products in one column', () => {
+    assert.match(response.parsedBody.reason, /name a scope/);
+  });
+}}
+
+###
+# @name gate_models_without_a_rubric_is_400
+# @prod
+GET {{baseUrl}}/api/bench/gate/feature/models?scope=000000000000
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('there is no default rubric — strict and lenient verdicts are two populations', () => {
+    assert.match(response.parsedBody.reason, /name a rubric/);
+  });
+}}
+
+###
+# @name gate_models_of_a_word_that_is_no_gate_is_400
+# @prod
+GET {{baseUrl}}/api/bench/gate/plans/models?scope=000000000000&rubric=strict-v1
+
+?? status == 400
+
+###
+# @name gate_models_of_an_unknown_scope_is_404
+# @prod
+GET {{baseUrl}}/api/bench/gate/feature/models?scope=000000000000&rubric=strict-v1
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('the refusal names the gate and what it holds instead of a blank table', () => {
+    assert.match(response.parsedBody.reason, /no feature-gate scope/);
+  });
+}}
+
+###
+# @name gate_runs_without_a_scope_is_400
+# @prod
+GET {{baseUrl}}/api/bench/gate/code/runs
+
+?? status == 400
+
+###
+# @name gate_runs_of_an_unknown_scope_is_404
+# @prod
+GET {{baseUrl}}/api/bench/gate/code/runs?scope=000000000000
+
+?? status == 404
+
+###
+# @name gate_run_that_does_not_exist_is_404
+# @prod
+GET {{baseUrl}}/api/bench/gate/runs/{{unknownRunId}}
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('a run this database does not hold says so', () => {
+    assert.match(response.parsedBody.reason, /no gate run/);
+  });
+}}
+
+# @uncovered 200 with a populated scope, table, run list or run — needs imported or measured gate runs, which the
+#            fresh database this suite runs against does not hold (the query and the table are tested in-process).
+# @uncovered 409 — a scope whose suite's tasks were never recorded; it needs gate runs in the database, same reason.
+# @uncovered 503 — reached only on a host that never registered the gate's read port; the read API registers it.

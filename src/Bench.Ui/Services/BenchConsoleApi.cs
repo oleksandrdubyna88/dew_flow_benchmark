@@ -64,6 +64,28 @@ public sealed class BenchConsoleApi(HttpClient http)
         Guid sessionId, CancellationToken cancellationToken = default) =>
         GetAsync<SessionDetailDto>($"api/bench/sessions/{sessionId}", cancellationToken);
 
+    /// <summary>The scopes one gate's runs span (E6) — the ONLY scopes the Gate page's control may offer: a scope nobody
+    /// measured would render an empty table that reads as a broken run.</summary>
+    public Task<Read<IReadOnlyList<GateScopeDto>>> GetGateScopesAsync(string gate, CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<GateScopeDto>>($"api/bench/gate/scopes?gate={Uri.EscapeDataString(gate)}", cancellationToken);
+
+    /// <summary>One scope's per-model table under ONE rubric — both required, as the metric is on the run report. A scope
+    /// whose suite's tasks were never recorded is a 409 whose sentence names the verb that records them.</summary>
+    public Task<Read<GateModelTableDto>> GetGateModelsAsync(
+        string gate, string scope, string rubric, CancellationToken cancellationToken = default) =>
+        GetAsync<GateModelTableDto>(
+            $"api/bench/gate/{Uri.EscapeDataString(gate)}/models?scope={Uri.EscapeDataString(scope)}&rubric={Uri.EscapeDataString(rubric)}",
+            cancellationToken);
+
+    /// <summary>One scope's run list — every attempt, the superseded ones marked. Needs no rubric.</summary>
+    public Task<Read<IReadOnlyList<GateRunSummaryDto>>> GetGateRunsAsync(string gate, string scope, CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<GateRunSummaryDto>>(
+            $"api/bench/gate/{Uri.EscapeDataString(gate)}/runs?scope={Uri.EscapeDataString(scope)}", cancellationToken);
+
+    /// <summary>One gate run whole: its findings (hashes only) and its verdicts. A 404 is a run this database does not hold.</summary>
+    public Task<Read<GateRunDetailDto>> GetGateRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        GetAsync<GateRunDetailDto>($"api/bench/gate/runs/{runId}", cancellationToken);
+
     private async Task<Read<T>> GetAsync<T>(string route, CancellationToken cancellationToken)
         where T : class
     {

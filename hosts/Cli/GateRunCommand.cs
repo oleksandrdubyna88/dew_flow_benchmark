@@ -157,6 +157,13 @@ public static class GateRunCommand
             return Refuse(error, ExitCodes.Configuration, noMatrix.Reason);
         }
 
+        // The suite's tasks (E6), so the report can put this run's calibration tasks apart without the suite file.
+        var recorded = await GateReportCommand.RecordAsync(inputs.SuiteTasks, inputs.Suite, output, cancellationToken);
+        if (recorded.Length > 0)
+        {
+            return Refuse(error, ExitCodes.Configuration, recorded);
+        }
+
         var run = await PersistAsync(command, inputs, gate, mode, ((Outcome<GateRunSettings>.Ok)settings).Value, ((Outcome<IReadOnlyList<GateMatrixCell>>.Ok)matrix).Value, cancellationToken);
         output.WriteLine($"planned        gate run {run.Id} — {gate.ToString().ToLowerInvariant()} gate, {hosting.Count} task(s) × {inputs.Reviewers.Count} reviewer(s) × {command.Int("repeats", DefaultRepeats)} repeat(s), {mode.ToString().ToLowerInvariant()} data directories");
         output.WriteLine($"product        {inputs.Pin.Describe}");
@@ -195,6 +202,12 @@ public static class GateRunCommand
         if (drifted.Length > 0)
         {
             return Refuse(error, ExitCodes.Configuration, drifted);
+        }
+
+        var recorded = await GateReportCommand.RecordAsync(inputs.SuiteTasks, inputs.Suite, output, cancellationToken);
+        if (recorded.Length > 0)
+        {
+            return Refuse(error, ExitCodes.Configuration, recorded);
         }
 
         await inputs.Store.SweepAsync(TimeSpan.Zero, cancellationToken);

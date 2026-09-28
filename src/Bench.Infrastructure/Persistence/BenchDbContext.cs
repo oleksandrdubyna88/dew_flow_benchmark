@@ -223,6 +223,8 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<GateSummaryRow> GateSummaries => Set<GateSummaryRow>();
 
+    public DbSet<GateSuiteTaskRow> GateSuiteTasks => Set<GateSuiteTaskRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         Bank(builder);

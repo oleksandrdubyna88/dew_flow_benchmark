@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
 
-/// <summary>The mapping of the eight <c>gate_*</c> tables — a context of its own inside the one database, beside
+/// <summary>The mapping of the nine <c>gate_*</c> tables — a context of its own inside the one database, beside
 /// the retrieval benchmark's tables and touching none of them. Every enum is stored as its NAME, the rule every
 /// other table here follows: an ordinal changes meaning the day somebody inserts a member.</summary>
 internal static class GateModel
@@ -24,7 +24,19 @@ internal static class GateModel
         Artifacts(builder);
         HandChecks(builder);
         Summaries(builder);
+        SuiteTasks(builder);
     }
+
+    private static void SuiteTasks(ModelBuilder builder) =>
+        builder.Entity<GateSuiteTaskRow>(task =>
+        {
+            task.ToTable("gate_suite_tasks");
+            task.HasKey(t => t.Id);
+
+            // One row per (stamp, task): a stamp is the hash of its tasks, so a second reading of it is the same rows or a
+            // defect — never an update.
+            task.HasIndex(t => new { t.SuiteStamp, t.TaskId }).IsUnique();
+        });
 
     private static void Summaries(ModelBuilder builder) =>
         builder.Entity<GateSummaryRow>(summary =>

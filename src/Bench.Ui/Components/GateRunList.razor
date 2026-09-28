@@ -1,0 +1,68 @@
+@* Every attempt of the scope, the superseded ones marked rather than hidden — the report reads the latest attempt of each
+   cell, and the list shows what that rule set aside. *@
+
+<div class="card mb-3" data-test="gate-run-list">
+    <div class="card-header"><strong>Runs</strong> <span class="text-body-secondary small ms-2">@Runs.Count attempt(s)</span></div>
+    @if (Runs.Count == 0)
+    {
+        <div class="card-body small text-body-secondary">No settled run in this scope.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 small">
+                <thead>
+                    <tr>
+                        <th scope="col">task</th>
+                        <th scope="col">reviewer</th>
+                        <th scope="col">repeat</th>
+                        <th scope="col">attempt</th>
+                        <th scope="col">source</th>
+                        <th scope="col">valid</th>
+                        <th scope="col">verdict</th>
+                        <th scope="col">findings</th>
+                        <th scope="col">turns</th>
+                        <th scope="col">s</th>
+                        <th scope="col">cost</th>
+                        <th scope="col">failure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in Runs)
+                    {
+                        <tr class="@(run.Superseded ? "text-body-secondary" : string.Empty)">
+                            <th scope="row">
+                                <code>@run.TaskId</code>
+                                @if (!run.TaskRecorded)
+                                {
+                                    <span class="badge text-bg-light border ms-1">task not recorded</span>
+                                }
+                                else if (run.Calibration)
+                                {
+                                    <span class="badge text-bg-warning ms-1">calibration</span>
+                                }
+                            </th>
+                            <td><code>@run.ReviewerId</code></td>
+                            <td>@run.Repeat</td>
+                            <td>
+                                @run.Attempt
+                                @if (run.Superseded)
+                                {
+                                    <span class="badge text-bg-secondary ms-1" title="a later attempt of this cell is the run the figures read">superseded</span>
+                                }
+                            </td>
+                            <td>@run.Source</td>
+                            <td>@(run.Valid ? "valid" : "invalid")</td>
+                            <td>@run.Verdict</td>
+                            <td>@run.Findings</td>
+                            <td>@GateFigureWords.Of(run.Turns)</td>
+                            <td>@run.Seconds.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)</td>
+                            <td>@GateFigureWords.Of(run.CostUsd, "0.####")</td>
+                            <td>@Failure(run)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
