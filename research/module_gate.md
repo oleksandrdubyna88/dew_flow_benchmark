@@ -225,13 +225,25 @@ The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Applic
    RPC error the session broke on, the ledger slice — is scrubbed of the vault key AND of every secret-named value the
    harness's own shell passed through (raw and JSON-escaped) before anything reads or writes it.
 
-A cell that could not be PREPARED (a reference, the key, the checkout or the plan) or whose product never STARTED was
-not measured: the leg is refused (the drain's breaker counts it), nothing is settled terminal, and the claim is handed
-back by the next sweep once this process has ended.
+**Refused before launch is not an attempt** (the coordinator's decision, 2026-09-28). Everything that can refuse
+before the product starts — the product binary not there, a reference or the key unset, the checkout, the ref, the
+plan — is decided BEFORE the attempt directory is begun. Such a cell was never measured: it is handed back AT ONCE
+(`IGateStore.HandBackUnmeasuredAsync`, one guarded UPDATE — still claimed, by this owner, at this attempt, in a run that
+has not ended), its attempt given back (never a step toward Abandoned, whatever the number of resumes), the redacted
+cause recorded on the cell (`refused before launch: …`, shown by `status`), and the leg refused so the drain's breaker
+still ends a dead environment (exit 3). A product that STARTED and then failed is a measured attempt: it settles
+`Failed` and counts. `run` and `resume` also resolve every reviewer's references and key before anything is planned.
+
+**The child's environment is inherited, the artefacts are scrubbed** (the coordinator's decision, 2026-09-28): the
+product runs with the harness's environment minus `COAI_*` and the creds-ref variable, as the editor launches it — a
+CLI reviewer may sign in through a variable — and every text the harness WRITES is scrubbed of the vault key and of
+every secret-named value that environment carries.
 6. **ONE process** in the lane's `LaneSlot` (opening a second throws — one process per cell), over `McpStdioClient`:
    `initialize` → `notifications/initialized` before any call; every call's timeout is what is left of the CELL's
    absolute deadline (`--cell-timeout-minutes`), and a call that runs out kills the process tree.
-7. **The protocol**: plan — `open → review_plan → resolve` (ONE round is the measurement); code — `open → plan loop
+7. **The protocol** — and the DEFINITION of what each gate measures (confirmed by the coordinator, 2026-09-28): **a code
+   cell measures the code stage only; the plan stage is measured on its own**, by plan cells. Plan — `open → review_plan →
+   resolve` (ONE round is the measurement); code — `open → plan loop
    (≤ 4, accept-all, until a passing verdict) → review_code → resolve`, a loop that never passes recorded as a
    completed, INVALID run (`VerdictNotPassing`, review_code never called); feature — `review_feature` with the suite's
    inputs, no open, no resolve (the calibration's shape). `again` is never sent. Each resolve's refusal is kept on its

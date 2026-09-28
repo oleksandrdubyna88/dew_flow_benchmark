@@ -224,6 +224,25 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
 
     public Task<bool> HasFindingsAsync(CancellationToken cancellationToken) => db.GateFindings.AnyAsync(cancellationToken);
 
+    public async Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken)
+    {
+        var handed = await Live(db.GateCells)
+            .Where(c => c.Id == cellId && c.State == CellState.Claimed && c.Attempts == attempt
+                        && c.Owner == owner.Label && c.OwnerHost == owner.Host && c.OwnerPid == owner.Pid)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(c => c.State, CellState.Pending)
+                      .SetProperty(c => c.Attempts, c => c.Attempts - 1)
+                      .SetProperty(c => c.Owner, string.Empty)
+                      .SetProperty(c => c.OwnerHost, string.Empty)
+                      .SetProperty(c => c.OwnerPid, 0)
+                      .SetProperty(c => c.FailureText, cause),
+                cancellationToken);
+
+        return handed == 1
+            ? await CellAsync(cellId, cancellationToken)
+            : Outcome<GateCell>.Failure($"gate cell {cellId} is not claimed by {owner.Canonical} at attempt {attempt} — nothing was handed back");
+    }
+
     public async Task<IReadOnlyList<(GateReviewerId Reviewer, string ReferencesHash)>> ReferenceHashesAsync(Guid runId, CancellationToken cancellationToken)
     {
         var rows = await db.GateCells.AsNoTracking()

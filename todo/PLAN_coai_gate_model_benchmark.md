@@ -721,6 +721,20 @@ for the rest.
 >   kept as the measurement; a code cell's served/refused, prompt hash and tap calls included its plan loop's — sliced
 >   at a `MeasuredMark`; a clone interrupted between clone and checkout was reused — it is repaired or re-made; a resume
 >   against an unreachable database or an unknown run said "pass --reviewers" (4) — now 3 and "no gate run".
+> - **Decisions by the coordinator (2026-09-28), after the code round:**
+>   - **The child's environment is inherited; the written artefacts are scrubbed.** The product runs with the harness's
+>     environment minus `COAI_*` and the creds-ref variable, as the editor launches it (a CLI reviewer may sign in
+>     through a variable); every text the harness writes is scrubbed of the vault key and every inherited secret-named
+>     value. The child is not filtered.
+>   - **A cell refused BEFORE launch is handed back at once and is not an attempt.** Could not be prepared, or the
+>     product binary is not there: `HandBackUnmeasuredAsync` returns it to `Pending` in one guarded UPDATE, gives the
+>     attempt back, records the redacted cause on the cell; it never walks toward Abandoned. RED first: three resumes of
+>     a pre-launch refusal left the cell claimed and the campaign drained (`Expected … TooManyFailures … but found
+>     Drained`); GREEN: the cell is `Pending`, attempts 0, the cause on it, and each campaign ends on the breaker. A
+>     product that started and then failed still counts as an attempt (tested).
+>   - **A code cell measures the code stage only; the plan stage is measured on its own**, by plan cells — the definition,
+>     written into `module_gate.md`.
+>   - The product-moved check's per-run query stays for E6.
 > - **The code round (coai, 2026-09-28, `good_enough`, 12 of 12 reviewers, 27 findings — 7 accepted, 20 rejected with
 >   reasons on the round).** Taken, each RED first and checked by revert: a suite gate word nobody recognises was
 >   silently dropped (a mistyped `featre` ran a campaign without the feature gate); a `--set` name given twice threw

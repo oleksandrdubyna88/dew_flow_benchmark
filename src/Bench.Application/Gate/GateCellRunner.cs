@@ -55,39 +55,59 @@ public sealed class GateCellRunner(
         }
 
         var attempt = ((Outcome<ArtifactScope>.Ok)scope).Value;
-        var begun = await artifacts.BeginAttemptAsync(attempt, cancellationToken);
+        var deadline = clock.GetUtcNow() + settings.CellTimeout;
 
-        if (begun is Outcome<ArtifactPath>.Fail notBegun)
+        // Everything that can refuse BEFORE launch is decided before the attempt directory exists: a cell that could not
+        // be prepared — a reference or the key unset, the checkout, the plan, the product binary not there — was never
+        // measured. It is handed back AT ONCE, its attempt given back with it (never a step toward Abandoned), the cause
+        // recorded on the cell, and the leg refused so the drain's breaker still ends a dead environment.
+        var ready = await ReadyAsync(work, attempt, cancellationToken);
+        if (ready is Outcome<Ready>.Fail notReady)
         {
-            return NotMeasured(notBegun.Reason);
+            return await HandBackAsync(work, notReady.Reason, cancellationToken);
         }
 
-        var deadline = clock.GetUtcNow() + settings.CellTimeout;
-        var prepared = await PrepareAsync(work, attempt, cancellationToken);
+        var begun = await artifacts.BeginAttemptAsync(attempt, cancellationToken);
+        if (begun is Outcome<ArtifactPath>.Fail notBegun)
+        {
+            return Outcome<GateCell>.Failure($"the attempt directory could not be begun — {FailureRedaction.Redact(notBegun.Reason, settings.PrivateNames)}");
+        }
 
-        // A cell that could not be PREPARED — a reference unset, a checkout that could not be made, the plan missing — was
-        // never measured. It is the environment's answer, not the reviewer's: the leg is refused (the drain's breaker
-        // counts it), the claim is left for a sweep to hand back after this process ends, and nothing is settled terminal.
+        var prepared = await EnvironmentAsync(work, attempt, ((Outcome<Ready>.Ok)ready).Value, cancellationToken);
+
         return prepared switch
         {
             Outcome<Prepared>.Ok ok => await DriveAsync(work, attempt, ok.Value, slot, deadline, cancellationToken),
-            Outcome<Prepared>.Fail fail => NotMeasured(fail.Reason),
+            Outcome<Prepared>.Fail fail => await CompleteAsync(work, attempt, Evidence.Empty, Failed(FailureKind.Unexplained, fail.Reason, work), cancellationToken),
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
 
-    private Outcome<GateCell> NotMeasured(string reason) =>
-        Outcome<GateCell>.Failure($"the cell was not measured — {FailureRedaction.Redact(reason, settings.PrivateNames)}; its claim is handed back by the next sweep");
+    private async Task<Outcome<GateCell>> HandBackAsync(GateCellWork work, string reason, CancellationToken cancellationToken)
+    {
+        var cause = FailureRedaction.Redact($"refused before launch: {reason}", settings.PrivateNames);
+        await store.HandBackUnmeasuredAsync(work.Cell.Id, work.Owner, work.Cell.Attempts, cause, cancellationToken);
+
+        return Outcome<GateCell>.Failure($"the cell was not measured and was handed back — {cause}");
+    }
+
+    /// <summary>What was resolved before the attempt began.</summary>
+    private sealed record Ready(string Checkout, string Branch, string PlanText, ResolvedReferences References, SecretValue Key);
 
     /// <summary>Everything decided before the product starts.</summary>
     private sealed record Prepared(string Checkout, string Branch, string PlanText, CoaiEnvironment Environment, ChildEnvironment Child, IRecordingTap Tap, string ReferencesHash);
 
-    private async Task<Outcome<Prepared>> PrepareAsync(GateCellWork work, ArtifactScope scope, CancellationToken cancellationToken)
+    private async Task<Outcome<Ready>> ReadyAsync(GateCellWork work, ArtifactScope scope, CancellationToken cancellationToken)
     {
+        if (!files.Exists(settings.ProductExecutable))
+        {
+            return Outcome<Ready>.Failure($"the product binary {Path.GetFileName(settings.ProductExecutable)} is not there — it could not be started");
+        }
+
         var clone = await checkouts.EnsureAsync(work.Run.Id, work.Task, cancellationToken);
         if (clone is Outcome<string>.Fail noClone)
         {
-            return Outcome<Prepared>.Failure(noClone.Reason);
+            return Outcome<Ready>.Failure(noClone.Reason);
         }
 
         var path = ((Outcome<string>.Ok)clone).Value;
@@ -106,21 +126,21 @@ public sealed class GateCellRunner(
 
         if (refusal.Length > 0)
         {
-            return Outcome<Prepared>.Failure(refusal);
+            return Outcome<Ready>.Failure(refusal);
         }
 
         if (work.Run.Gate != GateKind.Feature && await checkouts.CreateRefAsync(path, branch, work.Task, cancellationToken) is Outcome<string>.Fail noRef)
         {
-            return Outcome<Prepared>.Failure(noRef.Reason);
+            return Outcome<Ready>.Failure(noRef.Reason);
         }
 
-        var resolved = ((Outcome<ResolvedReferences>.Ok)references).Value;
-        return await EnvironmentAsync(work, scope, path, branch, ((Outcome<string>.Ok)plan).Value, resolved, ((Outcome<SecretValue>.Ok)key).Value, cancellationToken);
+        return Outcome<Ready>.Success(new Ready(
+            path, branch, ((Outcome<string>.Ok)plan).Value, ((Outcome<ResolvedReferences>.Ok)references).Value, ((Outcome<SecretValue>.Ok)key).Value));
     }
 
-    private async Task<Outcome<Prepared>> EnvironmentAsync(
-        GateCellWork work, ArtifactScope scope, string clone, string branch, string planText, ResolvedReferences resolved, SecretValue key, CancellationToken cancellationToken)
+    private async Task<Outcome<Prepared>> EnvironmentAsync(GateCellWork work, ArtifactScope scope, Ready ready, CancellationToken cancellationToken)
     {
+        var (clone, branch, planText, resolved, key) = (ready.Checkout, ready.Branch, ready.PlanText, ready.References, ready.Key);
         var tap = await TapAsync(work, scope, resolved, cancellationToken);
         if (tap is Outcome<IRecordingTap>.Fail noTap)
         {
@@ -193,11 +213,6 @@ public sealed class GateCellRunner(
         }
 
         var run = Scrubbed(session.Run, prepared.Child.Scrub);
-
-        if (!session.Started)
-        {
-            return NotMeasured($"the product did not start — {run.Broken}");
-        }
 
         var evidence = Read(work, scope, prepared, run, ledgerPath, ledgerOffset, stderrPath, session.ServerVersion, marked, mark);
 
