@@ -705,6 +705,22 @@ for the rest.
 >   package references the framework now provides (NU1510).
 > - **The feature protocol does not resolve** its round (the calibration harness's shape), and **the plan gate measures
 >   one round**.
+> - **The per-story risk consultations (codex, after the code was written, before the code round)** found the key
+>   could still reach disk and the database: an RPC error echoing it reached `gate_cells.FailureText`, a reply or an
+>   inherited `*_TOKEN` echoed to stderr reached the artefact root, a credential in `x-api-key` or echoed into a kept
+>   response header reached the tap's files, a 307 was followed to another host, and a response was buffered whole.
+>   Each was reproduced RED and fixed: every product text is scrubbed of the vault key and the inherited secret-named
+>   values (raw and JSON-escaped) before it is read or written; the tap scrubs every credential header, follows no
+>   redirect and cuts a body past its cap. The parent environment itself still passes through to the child (a CLI
+>   reviewer may authenticate by it, and the calibration did the same).
+> - **Our own review (Opus) found**, each fixed test-first: a cell that could not be prepared or whose product never
+>   started was settled terminal and COUNTED as produced (a dead environment finished the run with exit 0) — it is now a
+>   refused leg with its claim left for the sweep, and `run`/`resume` resolve every reviewer's references and key before
+>   planning (exit 3); the pin was read before a lane's endpoint wait (a lane that waited could claim under stale bytes)
+>   — it is read under the pool's lock at the claim; a failed resolve discarded the review it followed — the review is
+>   kept as the measurement; a code cell's served/refused, prompt hash and tap calls included its plan loop's — sliced
+>   at a `MeasuredMark`; a clone interrupted between clone and checkout was reused — it is repaired or re-made; a resume
+>   against an unreachable database or an unknown run said "pass --reviewers" (4) — now 3 and "no gate run".
 > - **Not built** (named, not silently missing): `reviewers add --from-coai-settings` / `--from-calib-models` (E7),
 >   `suite verify --prune` (§4), synthetic (uncommitted) plans (E7's export writes them into the suite's checkout).
 

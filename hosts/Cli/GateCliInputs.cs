@@ -75,22 +75,27 @@ public sealed class GateCliInputs : IAsyncDisposable
             .Where(pair => pair.Length == 2)
             .ToDictionary(pair => pair[0].Trim(), pair => pair[1].Trim(), StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The reviewers a stored run's cells name — what a resume runs with.</summary>
-    public static async Task<IReadOnlyList<string>> ReviewersOfAsync(CommandLine command, Guid runId, CancellationToken cancellationToken)
+    /// <summary>The reviewers a stored run's cells name — what a resume runs with — or the exit code and the reason it
+    /// cannot: no database (4), an unreachable one (3), a run id nothing knows (4).</summary>
+    public static async Task<(int Code, string Refusal, IReadOnlyList<string> Reviewers)> ReviewersOfAsync(CommandLine command, Guid runId, CancellationToken cancellationToken)
     {
         if (Connection(command).Length == 0)
         {
-            return [];
+            return (ExitCodes.Configuration, "the gate driver needs the database — pass --db or set BENCH_DB", []);
         }
 
         await using var db = Context(Connection(command));
         try
         {
-            return [.. (await new PostgresGateStore(db, TimeProvider.System).CellsAsync(runId, cancellationToken)).Select(c => c.Reviewer.Value).Distinct(StringComparer.Ordinal)];
+            var store = new PostgresGateStore(db, TimeProvider.System);
+
+            return await store.LoadAsync(runId, cancellationToken) is Outcome<GateRun>.Ok
+                ? (ExitCodes.Pass, string.Empty, [.. (await store.CellsAsync(runId, cancellationToken)).Select(c => c.Reviewer.Value).Distinct(StringComparer.Ordinal)])
+                : (ExitCodes.Configuration, $"no gate run {runId} is in this database", []);
         }
-        catch (Npgsql.NpgsqlException)
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException or InvalidOperationException or TimeoutException)
         {
-            return [];
+            return (ExitCodes.Environment, $"the database is unreachable — {ex.Message.Split('\n')[0]}", []);
         }
     }
 
@@ -162,6 +167,15 @@ public sealed class GateCliInputs : IAsyncDisposable
             return (GateRunCommand.Refuse(error, ExitCodes.Configuration, noReviewers.Reason), null);
         }
 
+        var secrets = new GateSecrets(new EnvironmentSecrets(), command.Has("creds-key-from-coai-settings"), GateSecrets.DefaultCoaiSettingsFile);
+        var unready = Preflight(((Outcome<IReadOnlyList<GateReviewer>>.Ok)reviewers).Value, secrets);
+
+        if (unready.Length > 0)
+        {
+            await db.DisposeAsync();
+            return (GateRunCommand.Refuse(error, ExitCodes.Environment, unready), null);
+        }
+
         var pin = await new ProductPinReader().ReadAsync(command.Value("coai-exe"), cancellationToken);
         var key = await GateFileHashKeys.ResolveAsync(artifacts, new PostgresGateStore(db, TimeProvider.System), cancellationToken);
 
@@ -181,8 +195,6 @@ public sealed class GateCliInputs : IAsyncDisposable
         var checkoutRoot = command.Value("checkout-root", RunCommand.DefaultCheckoutRoot);
         var logs = LoggerFactory.Create(builder => builder.AddSerilog(CliLogging.Start(), dispose: false));
         var checkouts = new GateCloneCheckouts(new GitCheckoutProvider(CheckoutCacheOptions.Under(checkoutRoot), logs.CreateLogger<GitCheckoutProvider>()), checkoutRoot);
-        var secrets = new GateSecrets(new EnvironmentSecrets(), command.Has("creds-key-from-coai-settings"), GateSecrets.DefaultCoaiSettingsFile);
-
         return (ExitCodes.Pass, new GateCliInputs(
             Connection(command), db, suite, artifacts, ((Outcome<IReadOnlyList<GateReviewer>>.Ok)reviewers).Value,
             ((Outcome<ProductPin>.Ok)pin).Value, ((Outcome<FileHashKey>.Ok)key).Value, Path.GetFullPath(command.Value("coai-exe")), logs, checkouts, secrets));
@@ -217,6 +229,32 @@ public sealed class GateCliInputs : IAsyncDisposable
 
         await _db.DisposeAsync();
         Logs.Dispose();
+    }
+
+    /// <summary>Every reviewer's references and — for an api row — its vault key, resolved on THIS machine before anything
+    /// is planned: a dead environment is one refusal naming the reviewer, not a campaign of cells that each fail alone.
+    /// The values are dropped at once; the runner resolves them again per cell.</summary>
+    private static string Preflight(IReadOnlyList<GateReviewer> reviewers, IGateSecrets secrets)
+    {
+        foreach (var reviewer in reviewers)
+        {
+            var references = secrets.References(reviewer);
+            var key = reviewer.Definition.Runtime == ReviewerRuntime.Api ? secrets.CredsKey(reviewer) : Outcome<SecretValue>.Success(SecretValue.None);
+
+            var refusal = (references, key) switch
+            {
+                (Outcome<ResolvedReferences>.Fail f, _) => f.Reason,
+                (_, Outcome<SecretValue>.Fail f) => f.Reason,
+                _ => string.Empty,
+            };
+
+            if (refusal.Length > 0)
+            {
+                return $"reviewer '{reviewer.Id}' cannot run on this machine — {refusal}";
+            }
+        }
+
+        return string.Empty;
     }
 
     private static IReadOnlyDictionary<string, string> ParentEnvironment() =>

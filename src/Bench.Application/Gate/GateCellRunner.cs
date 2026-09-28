@@ -59,19 +59,25 @@ public sealed class GateCellRunner(
 
         if (begun is Outcome<ArtifactPath>.Fail notBegun)
         {
-            return await store.SettleAsync(work.Cell.Id, work.Owner, Failed(FailureKind.Unexplained, notBegun.Reason, work), cancellationToken);
+            return NotMeasured(notBegun.Reason);
         }
 
         var deadline = clock.GetUtcNow() + settings.CellTimeout;
         var prepared = await PrepareAsync(work, attempt, cancellationToken);
 
+        // A cell that could not be PREPARED — a reference unset, a checkout that could not be made, the plan missing — was
+        // never measured. It is the environment's answer, not the reviewer's: the leg is refused (the drain's breaker
+        // counts it), the claim is left for a sweep to hand back after this process ends, and nothing is settled terminal.
         return prepared switch
         {
             Outcome<Prepared>.Ok ok => await DriveAsync(work, attempt, ok.Value, slot, deadline, cancellationToken),
-            Outcome<Prepared>.Fail fail => await CompleteAsync(work, attempt, Evidence.Empty, Failed(FailureKind.Unexplained, fail.Reason, work), cancellationToken),
+            Outcome<Prepared>.Fail fail => NotMeasured(fail.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
+
+    private Outcome<GateCell> NotMeasured(string reason) =>
+        Outcome<GateCell>.Failure($"the cell was not measured — {FailureRedaction.Redact(reason, settings.PrivateNames)}; its claim is handed back by the next sweep");
 
     /// <summary>Everything decided before the product starts.</summary>
     private sealed record Prepared(string Checkout, string Branch, string PlanText, CoaiEnvironment Environment, ChildEnvironment Child, IRecordingTap Tap, string ReferencesHash);
@@ -171,30 +177,48 @@ public sealed class GateCellRunner(
             Scrub = prepared.Child.Scrub,
         };
 
-        var (run, serverVersion) = await SessionAsync(work, prepared, slot, launch, deadline, cancellationToken);
-        var marked = await prepared.Tap.CloseAsync(settings.TapWait, CancellationToken.None);
-        await prepared.Tap.DisposeAsync();
+        var tapDirectory = Absolute(GateArtifactPaths.Under(CellPaths.AttemptRoot(scope), CellPaths.TapFolder));
+        var mark = new MeasuredMark(() => files.SizeOf(stderrPath), () => prepared.Tap.Endpoint.Length == 0 ? 0 : files.TapCalls(tapDirectory).Count);
+        (ProtocolRun Run, string ServerVersion, bool Started) session;
+        int marked;
 
-        var evidence = Read(work, scope, prepared, run, ledgerPath, ledgerOffset, stderrPath, serverVersion, marked);
+        try
+        {
+            session = await SessionAsync(work, prepared, slot, launch, deadline, mark, cancellationToken);
+            marked = await prepared.Tap.CloseAsync(settings.TapWait, CancellationToken.None);
+        }
+        finally
+        {
+            await prepared.Tap.DisposeAsync(); // a tap is never left listening, whatever happened to the session
+        }
+
+        var run = Scrubbed(session.Run, prepared.Child.Scrub);
+
+        if (!session.Started)
+        {
+            return NotMeasured($"the product did not start — {run.Broken}");
+        }
+
+        var evidence = Read(work, scope, prepared, run, ledgerPath, ledgerOffset, stderrPath, session.ServerVersion, marked, mark);
 
         return await CompleteAsync(work, scope, evidence, Settlement(work, run, evidence), cancellationToken);
     }
 
-    private async Task<(ProtocolRun Run, string ServerVersion)> SessionAsync(
-        GateCellWork work, Prepared prepared, LaneSlot slot, McpLaunch launch, DateTimeOffset deadline, CancellationToken cancellationToken)
+    private async Task<(ProtocolRun Run, string ServerVersion, bool Started)> SessionAsync(
+        GateCellWork work, Prepared prepared, LaneSlot slot, McpLaunch launch, DateTimeOffset deadline, MeasuredMark mark, CancellationToken cancellationToken)
     {
         var opened = await slot.OpenAsync(work.Cell.Id, sessions, launch, cancellationToken);
 
         if (opened is Outcome<IMcpSession>.Fail fail)
         {
-            return (GateProtocolSteps.Broken([], fail.Reason), string.Empty);
+            return (GateProtocolSteps.Broken([], fail.Reason), string.Empty, false);
         }
 
         var session = ((Outcome<IMcpSession>.Ok)opened).Value;
 
         try
         {
-            var inputs = new ProtocolInputs(prepared.Checkout, prepared.Branch, work.Task, prepared.PlanText, deadline, clock);
+            var inputs = new ProtocolInputs(prepared.Checkout, prepared.Branch, work.Task, prepared.PlanText, deadline, clock) { MarkMeasured = mark.Set };
             var run = work.Run.Gate switch
             {
                 GateKind.Plan => await PlanGateProtocol.RunAsync(session, inputs, cancellationToken),
@@ -202,7 +226,7 @@ public sealed class GateCellRunner(
                 _ => await FeatureGateProtocol.RunAsync(session, inputs, cancellationToken),
             };
 
-            return (run, session.ServerVersion);
+            return (run, session.ServerVersion, true);
         }
         finally
         {
@@ -211,19 +235,24 @@ public sealed class GateCellRunner(
     }
 
     private Evidence Read(
-        GateCellWork work, ArtifactScope scope, Prepared prepared, ProtocolRun run, string ledgerPath, long ledgerOffset, string stderrPath, string serverVersion, int marked)
+        GateCellWork work, ArtifactScope scope, Prepared prepared, ProtocolRun run, string ledgerPath, long ledgerOffset, string stderrPath, string serverVersion, int marked,
+        MeasuredMark mark)
     {
         var parsed = GateReplyParser.Parse(run.Measured.Reply);
-        var ledgerText = files.ReadFrom(ledgerPath, ledgerOffset);
-        var stderr = files.ReadFrom(stderrPath, 0);
+        var ledgerText = prepared.Child.Scrub(files.ReadFrom(ledgerPath, ledgerOffset));
+
+        // Served/refused, the turn-1 prompt and the tap's calls are the MEASURED stage's: a code cell's plan loop ran in
+        // the same session, and its stderr lines and HTTP calls are not the code reviewer's work.
+        var stderr = files.ReadFrom(stderrPath, mark.StderrOffset);
         var calls = prepared.Tap.Endpoint.Length == 0 ? [] : files.TapCalls(Absolute(GateArtifactPaths.Under(CellPaths.AttemptRoot(scope), CellPaths.TapFolder)));
+        var measuredCalls = calls.Skip(mark.Calls).Select(c => c.Facts).ToList();
         var stderrFacts = StderrFacts.Of(stderr);
         var shim = files.ShimFiles(stderrFacts.PromptFiles);
         var config = files.SessionConfig(prepared.Environment.DataDir, prepared.Checkout, work.Run.Gate == GateKind.Feature ? string.Empty : prepared.Branch);
         var check = SettingsCheck.Compare(prepared.Environment.Snapshot, config);
 
         return new Evidence(
-            parsed, run, ledgerText, LedgerRows.Parse(ledgerText, work.Run.Gate), stderrFacts, calls, shim, check,
+            parsed, run, ledgerText, LedgerRows.Parse(ledgerText, work.Run.Gate), stderrFacts, calls, measuredCalls, shim, check,
             prepared.Environment.SnapshotJson, prepared.Environment.SettingsHash,
             new GateSessionNotes(serverVersion, prepared.ReferencesHash, check.Checked.Count, check.Mismatches.Count), marked);
     }
@@ -239,7 +268,7 @@ public sealed class GateCellRunner(
         }
 
         var facts = GateRunFacts.From(
-            evidence.Reply.Reply, evidence.Ledger.Turns, [.. evidence.Calls.Select(c => c.Facts)], run.Measured.Seconds,
+            evidence.Reply.Reply, evidence.Ledger.Turns, evidence.MeasuredCalls, run.Measured.Seconds,
             evidence.Stderr.Served, evidence.Stderr.Refused);
 
         if (work.Run.Gate == GateKind.Code && !run.PlanLoopPassed)
@@ -311,6 +340,15 @@ public sealed class GateCellRunner(
 
     public const string StderrFile = "stderr.txt";
 
+    /// <summary>Every text the product sent back, with the launch's secrets removed BEFORE anything reads or writes it —
+    /// a reply, a resolve, an RPC error the session broke on. The product can echo its environment anywhere.</summary>
+    private static ProtocolRun Scrubbed(ProtocolRun run, Func<string, string> scrub)
+    {
+        ProtocolStage Clean(ProtocolStage stage) => stage with { Reply = scrub(stage.Reply), Resolve = scrub(stage.Resolve), ResolveRefusal = scrub(stage.ResolveRefusal) };
+
+        return run with { Stages = [.. run.Stages.Select(Clean)], Measured = Clean(run.Measured), Broken = scrub(run.Broken) };
+    }
+
     /// <summary>The run's own ref: the run, the reviewer, the task, the repeat AND the attempt — with a shared data
     /// directory a retried attempt would otherwise find the dead attempt's session under the same repo and branch.</summary>
     public static string RunRef(GateCellWork work, int attempt) =>
@@ -329,6 +367,7 @@ public sealed record Evidence(
     LedgerRows Ledger,
     StderrFacts.Facts Stderr,
     IReadOnlyList<(HttpCallFacts Facts, IReadOnlyList<string> Files)> Calls,
+    IReadOnlyList<HttpCallFacts> MeasuredCalls,
     IReadOnlyList<(string Name, byte[] Bytes)> Shim,
     SettingsApplied Settings,
     string SnapshotJson,
@@ -338,7 +377,21 @@ public sealed record Evidence(
 {
     public static Evidence Empty { get; } = new(
         GateReplyParser.Parse(string.Empty), GateProtocolSteps.Broken([], string.Empty), string.Empty, new LedgerRows([], 0),
-        new StderrFacts.Facts(0, 0, []), [], [], new SettingsApplied([], [], []), string.Empty, string.Empty, GateSessionNotes.None, 0);
+        new StderrFacts.Facts(0, 0, []), [], [], [], new SettingsApplied([], [], []), string.Empty, string.Empty, GateSessionNotes.None, 0);
+}
+
+/// <summary>Where the stderr and the tap stood when the MEASURED stage began — set by the protocol, read after the session.</summary>
+public sealed class MeasuredMark(Func<long> stderrSize, Func<int> tapCalls)
+{
+    public long StderrOffset { get; private set; }
+
+    public int Calls { get; private set; }
+
+    public void Set()
+    {
+        StderrOffset = stderrSize();
+        Calls = tapCalls();
+    }
 }
 
 /// <summary>No recorder — a CLI reviewer, a referenced endpoint nothing resolved, or <c>--no-tap</c>. A state, not a null.</summary>

@@ -63,6 +63,9 @@ internal sealed class GateDriverRig : IAsyncDisposable
     /// <summary>What the rig's references resolve to — a live test points a loopback vendor reference here.</summary>
     public IReadOnlyDictionary<string, string> References { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>Extra variables in the harness's own environment — a test plants an unrelated secret here.</summary>
+    public IReadOnlyDictionary<string, string> ParentExtras { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     public static async Task<GateDriverRig> StartAsync(PostgresFixture postgres, JsonObject? script = null)
     {
         var ct = Xunit.TestContext.Current.CancellationToken;
@@ -106,7 +109,7 @@ internal sealed class GateDriverRig : IAsyncDisposable
     public GateCellRunner Runner(IGateStore store, bool tap = false) => new(
         store, Artifacts, new McpStdioSessionFactory(), new RecordingTapFactory(), Checkouts, new RigSecrets(References), new FileGateAttemptFiles(), TimeProvider.System,
         new GateDriverSettings(Product, Artifacts.Root, tap, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(2),
-            Fake.Environment(), PrivateNames.Of(["contoso-orders"])));
+            Fake.Environment(ParentExtras), PrivateNames.Of(["contoso-orders"])));
 
     public async Task<GateCampaignReport> CampaignAsync(GateRun run, IReadOnlyList<GateReviewer> reviewers, int parallel, int perEndpoint)
     {

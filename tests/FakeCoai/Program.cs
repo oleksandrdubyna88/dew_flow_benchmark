@@ -96,6 +96,11 @@ public sealed class Server(Script script)
             Console.Error.WriteLine($"debug: COAI_CREDS_KEY={Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}");
         }
 
+        if (script.Root["echoVariable"]?.GetValue<string>() is { Length: > 0 } echoed)
+        {
+            Console.Error.WriteLine($"debug: {echoed}={Environment.GetEnvironmentVariable(echoed)}");
+        }
+
         Console.Error.Flush();
 
         try
@@ -164,6 +169,12 @@ public sealed class Server(Script script)
             Thread.Sleep(Timeout.Infinite);
         }
 
+        if (script.Root["rpcErrorWithKey"] is JsonArray failing && failing.Any(t => t?.GetValue<string>() == tool))
+        {
+            Fail(message, $"the vault refused {Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}");
+            return;
+        }
+
         var text = script.AnswersNonJson(tool) ? "this is not json at all" : Reply(tool, call, arguments).ToJsonString();
         Answer(message, new JsonObject { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }) });
     }
@@ -196,6 +207,11 @@ public sealed class Server(Script script)
         _events.Write($"review-end {endpoint}");
 
         var reply = script.ReplyFor(tool, call) as JsonObject ?? DefaultReview(tool);
+        if (script.Root["replyEchoesKey"]?.GetValue<bool>() == true)
+        {
+            reply["instruction"] = $"resolve with key {Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}";
+        }
+
         _lastVerdict = reply["verdict"]?.GetValue<string>() ?? string.Empty;
         _lastFindings = (reply["findings"] as JsonArray)?.Count ?? 0;
 
@@ -337,6 +353,17 @@ public sealed class Server(Script script)
         var url = row?["baseUrl"]?.GetValue<string>() ?? string.Empty;
 
         return url.Length > 0 ? url : "runtime:" + (row?["runtime"]?.GetValue<string>() ?? "none");
+    }
+
+    private void Fail(JsonObject request, string text)
+    {
+        var reply = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = request["id"]?.DeepClone(), ["error"] = new JsonObject { ["code"] = -32000, ["message"] = text } };
+
+        lock (_stdout)
+        {
+            Console.Out.Write(reply.ToJsonString() + "\n");
+            Console.Out.Flush();
+        }
     }
 
     private void Answer(JsonObject request, JsonObject result)

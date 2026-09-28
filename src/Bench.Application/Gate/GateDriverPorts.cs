@@ -25,7 +25,12 @@ public interface IRecordingTap : IAsyncDisposable
 /// <param name="Upstream">The reviewer's real base url — a public vendor url, never a loopback one.</param>
 /// <param name="RecordDirectory">The attempt's <c>tap/</c> folder, absolute, inside the artefact root.</param>
 /// <param name="Deadline">The ABSOLUTE budget of one upstream call: at it the connection is closed and the call marked.</param>
-public sealed record TapLaunch(string Upstream, string RecordDirectory, TimeSpan Deadline);
+public sealed record TapLaunch(string Upstream, string RecordDirectory, TimeSpan Deadline)
+{
+    /// <summary>The largest body the tap buffers, each way. A response above it is cut, answered as a failure and marked —
+    /// a fast, large answer must not exhaust memory before the deadline does anything.</summary>
+    public long MaxBodyBytes { get; init; } = 64L * 1024 * 1024;
+}
 
 public interface IRecordingTapFactory
 {

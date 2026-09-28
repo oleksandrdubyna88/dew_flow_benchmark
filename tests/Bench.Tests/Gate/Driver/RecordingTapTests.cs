@@ -58,6 +58,73 @@ public sealed class RecordingTapTests
         (await File.ReadAllTextAsync(Path.Combine(temp.Path, "call-01.request.json"), Ct)).Should().Contain("\"max_tokens\":8192");
     }
 
+    /// <summary>The risk consultation's cases: a credential in ANOTHER header (<c>x-api-key</c>) echoed into the body, and
+    /// the bearer echoed into a response header the facts keep (<c>x-request-id</c>). Neither may reach the disk.</summary>
+    [Fact]
+    public async Task No_credential_header_value_reaches_the_disk_even_echoed_into_a_kept_response_header()
+    {
+        await using var upstream = await Upstream.StartAsync(async context =>
+        {
+            context.Response.Headers["x-request-id"] = context.Request.Headers.Authorization.ToString();
+            await context.Response.WriteAsync($"{{\"echo\":\"{context.Request.Headers["x-api-key"]}\"}}");
+        });
+        using var temp = GateStoreFixtures.NewRoot();
+        await using var tap = (await new RecordingTapFactory().StartAsync(new TapLaunch(upstream.Url, temp.Path, TimeSpan.FromSeconds(30)), Ct)).Ok();
+        using var client = new HttpClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, tap.Endpoint + "/chat/completions") { Content = new StringContent("{}") };
+        request.Headers.Authorization = AuthenticationHeaderValue.Parse(Bearer);
+        request.Headers.Add("x-api-key", "xk-sentinel-19d44b02");
+
+        using var response = await client.SendAsync(request, Ct);
+        await tap.CloseAsync(TimeSpan.FromSeconds(5), Ct);
+
+        (await response.Content.ReadAsStringAsync(Ct)).Should().Contain("xk-sentinel-19d44b02", "the product receives the vendor's bytes unmodified");
+        Directory.EnumerateFiles(temp.Path).Select(File.ReadAllText).Should().NotContain(
+            t => t.Contains("xk-sentinel-19d44b02", StringComparison.Ordinal) || t.Contains("sk-sentinel-5aa91c0e77", StringComparison.Ordinal));
+    }
+
+    /// <summary>The upstream is fixed at start — and a redirect is not a way around it: the tap follows none, so a
+    /// vendor (or anyone in its path) answering 307 to another host cannot make the tap carry the body and the
+    /// remaining headers there.</summary>
+    [Fact]
+    public async Task A_redirect_is_recorded_and_never_followed_to_another_host()
+    {
+        await using var elsewhere = await Upstream.StartAsync(async context => await context.Response.WriteAsync("{}"));
+        await using var upstream = await Upstream.StartAsync(context =>
+        {
+            context.Response.StatusCode = 307;
+            context.Response.Headers.Location = elsewhere.Url + "/v1/chat/completions";
+            return Task.CompletedTask;
+        });
+        using var temp = GateStoreFixtures.NewRoot();
+        await using var tap = (await new RecordingTapFactory().StartAsync(new TapLaunch(upstream.Url, temp.Path, TimeSpan.FromSeconds(30)), Ct)).Ok();
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+        using var request = new HttpRequestMessage(HttpMethod.Post, tap.Endpoint + "/chat/completions") { Content = new StringContent("{\"private\":true}") };
+        request.Headers.Add("x-api-key", "xk-sentinel-19d44b02");
+
+        using var response = await client.SendAsync(request, Ct);
+
+        ((int)response.StatusCode).Should().Be(307);
+        elsewhere.Authorizations.Should().BeEmpty("nothing reached the other host");
+        (await File.ReadAllTextAsync(Path.Combine(temp.Path, "call-01.json"), Ct)).Should().Contain("\"status\":307");
+    }
+
+    /// <summary>A response larger than the tap's cap is cut, answered as a failure and MARKED — never buffered whole.</summary>
+    [Fact]
+    public async Task A_response_above_the_cap_is_cut_and_marked_rather_than_buffered_whole()
+    {
+        await using var upstream = await Upstream.StartAsync(async context => await context.Response.WriteAsync(new string('x', 64 * 1024)));
+        using var temp = GateStoreFixtures.NewRoot();
+        await using var tap = (await new RecordingTapFactory().StartAsync(new TapLaunch(upstream.Url, temp.Path, TimeSpan.FromSeconds(30)) { MaxBodyBytes = 4096 }, Ct)).Ok();
+        using var client = new HttpClient();
+
+        using var response = await client.PostAsync(tap.Endpoint + "/chat/completions", new StringContent("{}"), Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        (await File.ReadAllTextAsync(Path.Combine(temp.Path, "call-01.json"), Ct)).Should().Contain("\"too_large\":true");
+        new FileInfo(Path.Combine(temp.Path, "call-01.response.json")).Length.Should().BeLessThan(4096);
+    }
+
     [Fact]
     public async Task The_request_body_is_on_disk_before_the_upstream_has_answered()
     {

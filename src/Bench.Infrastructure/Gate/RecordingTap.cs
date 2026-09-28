@@ -40,6 +40,10 @@ public sealed class RecordingTap : IRecordingTap
         "Host", "Content-Length", "Connection", "Accept-Encoding", "Transfer-Encoding", "Expect",
     };
 
+    /// <summary>Request headers whose VALUES are credentials: forwarded from memory, never written, and scrubbed from
+    /// every body and every kept response header before it reaches the disk.</summary>
+    private static readonly string[] CredentialHeaders = ["Authorization", "Proxy-Authorization", "x-api-key", "api-key", "x-goog-api-key", "Cookie"];
+
     private static readonly string[] KeptResponseHeaders =
     [
         "content-type", "x-request-id", "x-ratelimit-remaining-requests", "x-ratelimit-remaining-tokens", "retry-after", "date",
@@ -56,13 +60,24 @@ public sealed class RecordingTap : IRecordingTap
     private int _calls;
     private int _markedAtClose;
 
-    private RecordingTap(WebApplication app, Uri upstream, string directory, TimeSpan deadline)
+    private readonly long _maxBody;
+
+    private RecordingTap(WebApplication app, Uri upstream, string directory, TimeSpan deadline, long maxBody)
     {
         _app = app;
         _upstream = upstream;
         _directory = directory;
         _deadline = deadline;
-        _client = new HttpClient(new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All, PooledConnectionLifetime = TimeSpan.FromMinutes(1) })
+        _maxBody = maxBody;
+
+        // No redirect is followed: the upstream is fixed at start, and a 307 to another host would otherwise carry the
+        // body and every non-Authorization header there. The product sees the redirect and decides.
+        _client = new HttpClient(new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.All,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(1),
+            AllowAutoRedirect = false,
+        })
         {
             Timeout = Timeout.InfiniteTimeSpan,
         };
@@ -82,7 +97,7 @@ public sealed class RecordingTap : IRecordingTap
         builder.Logging.ClearProviders(); // a request line carries the key's header; nothing here logs one
         builder.WebHost.UseKestrel(k => k.Listen(IPAddress.Loopback, 0));
         var app = builder.Build();
-        var tap = new RecordingTap(app, upstream, launch.RecordDirectory, launch.Deadline);
+        var tap = new RecordingTap(app, upstream, launch.RecordDirectory, launch.Deadline, launch.MaxBodyBytes);
         app.Run(tap.ForwardAsync);
         await app.StartAsync(cancellationToken);
 
@@ -145,8 +160,7 @@ public sealed class RecordingTap : IRecordingTap
         using var buffer = new MemoryStream();
         await request.Body.CopyToAsync(buffer, _closing.Token).ConfigureAwait(false);
         var body = buffer.ToArray();
-        var authorization = request.Headers.Authorization.ToString();
-        var scrub = Scrubber(authorization);
+        var scrub = Scrubber(request.Headers);
 
         if (body.Length > 0)
         {
@@ -155,7 +169,8 @@ public sealed class RecordingTap : IRecordingTap
 
         var clock = Stopwatch.StartNew();
         var (status, data, headers, closed) = await UpstreamAsync(request, body, number);
-        var facts = Facts(number, request, body.Length, status, clock.Elapsed.TotalSeconds, headers, data.Length, closed);
+        var kept = headers.ToDictionary(h => h.Key, h => Encoding.UTF8.GetString(scrub(Encoding.UTF8.GetBytes(h.Value))), StringComparer.OrdinalIgnoreCase);
+        var facts = Facts(number, request, body.Length, status, clock.Elapsed.TotalSeconds, kept, data.Length, closed);
 
         await WriteAsync($"call-{number:00}.json", Encoding.UTF8.GetBytes(facts));
         await WriteAsync($"call-{number:00}.response.json", scrub(data));
@@ -171,9 +186,11 @@ public sealed class RecordingTap : IRecordingTap
         {
             using var message = Message(request, body);
             using var response = await _client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-            var data = await response.Content.ReadAsByteArrayAsync(deadline.Token);
+            var data = await BoundedAsync(response, deadline.Token);
 
-            return ((int)response.StatusCode, data, ResponseHeaders(response), string.Empty);
+            return data.Length > _maxBody
+                ? (502, Error($"call {number}: the response exceeded the recorder's cap of {_maxBody} bytes and was cut"), JsonHeaders(), "too_large")
+                : ((int)response.StatusCode, data, ResponseHeaders(response), string.Empty);
         }
         catch (OperationCanceledException) when (_closing.IsCancellationRequested)
         {
@@ -188,6 +205,22 @@ public sealed class RecordingTap : IRecordingTap
         {
             return (502, Error($"call {number}: {ex.GetType().Name}: {ex.HttpRequestError}"), JsonHeaders(), string.Empty);
         }
+    }
+
+    /// <summary>The response body, read no further than one byte past the cap — a body that long is refused, never held.</summary>
+    private async Task<byte[]> BoundedAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+
+        while (buffer.Length <= _maxBody && (read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 
     private HttpRequestMessage Message(HttpRequest request, byte[] body)
@@ -246,6 +279,7 @@ public sealed class RecordingTap : IRecordingTap
             ["response_bytes"] = responseBytes,
             ["closed_by_deadline"] = closed == "closed_by_deadline",
             ["closed_at_cell_end"] = closed == "closed_at_cell_end",
+            ["too_large"] = closed == "too_large",
         });
 
     private static async Task RespondAsync(HttpContext context, int status, Dictionary<string, string> headers, byte[] data)
@@ -271,11 +305,12 @@ public sealed class RecordingTap : IRecordingTap
         stream.Flush(flushToDisk: true);
     }
 
-    /// <summary>Removes the request's Authorization value — whole, and its bearer token alone — from bytes about to be
-    /// written. Applied to the DISK copy only; what the product receives is the vendor's own bytes.</summary>
-    private static Func<byte[], byte[]> Scrubber(string authorization)
+    /// <summary>Removes every credential header's value — whole, and a bearer token alone — from bytes about to be written.
+    /// Applied to the DISK copy only; what the product receives is the vendor's own bytes.</summary>
+    private static Func<byte[], byte[]> Scrubber(IHeaderDictionary headers)
     {
-        var secrets = new[] { authorization, authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authorization[7..] : string.Empty }
+        var values = CredentialHeaders.SelectMany(h => headers[h].Select(v => v ?? string.Empty));
+        var secrets = values.SelectMany(v => new[] { v, v.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? v[7..] : string.Empty })
             .Select(s => s.Trim())
             .Where(s => s.Length >= 8)
             .Distinct(StringComparer.Ordinal)
