@@ -168,6 +168,49 @@ public sealed class GateReportQueryTests
     }
 
     [Fact]
+    public async Task A_read_of_one_gate_asks_the_store_for_that_gate_only_and_one_run_for_its_own_gate()
+    {
+        var reads = Reads(out var a, out _);
+
+        await GateReportQuery.ScopesAsync(reads, "feature", Ct);
+        await GateReportQuery.ModelsAsync(reads, "feature", a.Scope.Id, "strict-v1", Ct);
+        await GateReportQuery.RunsAsync(reads, "feature", a.Scope.Id, Ct);
+        await GateReportQuery.RunAsync(reads, a.RunId, Ct);
+        await GateReportQuery.ScopesAsync(reads, string.Empty, Ct);
+
+        reads.RecordReads.Take(4).Should().AllSatisfy(gates => gates.Should().Equal([GateKind.Feature]),
+            "a feature-gate read never materialises the plan and code history");
+        reads.RecordReads[4].Should().BeEquivalentTo(Enum.GetValues<GateKind>(), "the scope list of every gate reads every gate");
+    }
+
+    [Fact]
+    public async Task The_cli_ask_resolves_its_scope_and_computes_its_table_from_one_read()
+    {
+        var reads = Reads(out var a, out _);
+
+        var table = Answer(await GateReportQuery.ReportAsync(reads, "feature", a.Scope.Id, "strict-v1", Ct));
+        var noRubric = Refusal(await GateReportQuery.ReportAsync(reads, "feature", a.Scope.Id, string.Empty, Ct));
+        var spanning = Refusal(await GateReportQuery.ReportAsync(reads, "feature", a.Scope.SuiteStamp, "strict-v1", Ct));
+
+        table.Scope.Id.Should().Be(a.Scope.Id);
+        reads.RecordReads.Should().HaveCount(3, "one read per ask — resolving the scope and computing its table share it");
+        noRubric.Should().Be((GateRefusalKind.BadRequest, $"{GateReportQuery.NoRubricNamed} — this scope's verdicts carry {StrictRubric.Stamp} (Strict, 1 verdict(s))"));
+        spanning.Reason.Should().Contain("spans 2 scopes");
+    }
+
+    [Fact]
+    public async Task A_scope_run_whose_task_the_recorded_suite_lacks_refuses_the_table_rather_than_reading_it_as_measured()
+    {
+        var reads = Reads(out var a, out _);
+        var withoutCs2 = new Dictionary<string, IReadOnlyList<TaskSummary>> { [a.Scope.SuiteStamp] = [.. Input([]).Tasks.Where(t => t.Id.Value != "cs2")] };
+
+        var refused = Refusal(await GateReportQuery.ModelsAsync(reads with { Tasks = withoutCs2 }, "feature", a.Scope.Id, "strict-v1", Ct));
+
+        refused.Kind.Should().Be(GateRefusalKind.Conflict);
+        refused.Reason.Should().Contain("cs2 missing");
+    }
+
+    [Fact]
     public async Task A_scope_id_resolves_and_a_suite_stamp_spanning_two_scopes_is_refused_listing_both()
     {
         var scopes = Answer(await GateReportQuery.ScopesAsync(Reads(out var a, out var b), "feature", Ct));

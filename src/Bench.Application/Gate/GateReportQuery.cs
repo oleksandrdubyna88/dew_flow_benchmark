@@ -83,15 +83,15 @@ public static class GateReportQuery
 
     private static async Task<IReadOnlyList<GateScopeDto>> ScopesOfAsync(IGateReads reads, IReadOnlyList<GateKind> gates, CancellationToken cancellationToken)
     {
-        var snapshot = await GateSnapshot.ReadAsync(reads, cancellationToken);
+        var snapshot = await GateSnapshot.ReadAsync(reads, gates, cancellationToken);
 
-        return [.. snapshot.Scopes().Where(s => gates.Contains(s.Gate)).Select(snapshot.ScopeDto)];
+        return [.. snapshot.Scopes().Select(snapshot.ScopeDto)];
     }
 
     private static async Task<GateAnswer<IReadOnlyList<GateRunSummaryDto>>> RunListAsync(
         IGateReads reads, GateKind gate, string scopeId, CancellationToken cancellationToken)
     {
-        var snapshot = await GateSnapshot.ReadAsync(reads, cancellationToken);
+        var snapshot = await GateSnapshot.ReadAsync(reads, [gate], cancellationToken);
 
         return snapshot.Find(gate, scopeId) switch
         {
@@ -101,20 +101,54 @@ public static class GateReportQuery
         };
     }
 
-    public static async Task<GateAnswer<GateRunDetailDto>> RunAsync(IGateReads reads, Guid runId, CancellationToken cancellationToken)
-    {
-        var snapshot = await GateSnapshot.ReadAsync(reads, cancellationToken);
-        var record = snapshot.Records.FirstOrDefault(r => r.RunId == runId);
+    /// <summary>One run — read through ITS gate's history only (its scope's runs and verdicts are what its detail shows).</summary>
+    public static async Task<GateAnswer<GateRunDetailDto>> RunAsync(IGateReads reads, Guid runId, CancellationToken cancellationToken) =>
+        await reads.GateOfRunAsync(runId, cancellationToken) switch
+        {
+            Outcome<GateKind>.Ok gate => await DetailAsync(await GateSnapshot.ReadAsync(reads, [gate.Value], cancellationToken), runId, cancellationToken),
+            Outcome<GateKind>.Fail missing => GateAnswer<GateRunDetailDto>.Refuse(GateRefusalKind.NotFound, missing.Reason),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
 
-        return record is null
-            ? GateAnswer<GateRunDetailDto>.Refuse(GateRefusalKind.NotFound, $"no gate run {runId} in this database")
-            : GateAnswer<GateRunDetailDto>.Of(await snapshot.DetailAsync(record, cancellationToken));
-    }
+    /// <summary>The CLI's ask — a scope id or a suite stamp, and a rubric — answered from ONE read of the gate: the scope is
+    /// resolved and the table computed over the same snapshot (code round: resolving first and then asking for the table read
+    /// the gate's whole history twice).</summary>
+    public static async Task<GateAnswer<GateModelTableDto>> ReportAsync(
+        IGateReads reads, string gateWord, string scopeAsked, string rubric, CancellationToken cancellationToken) =>
+        GateWord.Parse(gateWord) switch
+        {
+            Outcome<GateKind>.Ok gate => await ReportOfAsync(
+                await GateSnapshot.ReadAsync(reads, [gate.Value], cancellationToken), gate.Value, scopeAsked, rubric, cancellationToken),
+            Outcome<GateKind>.Fail bad => GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.BadRequest, bad.Reason),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+
+    private static async Task<GateAnswer<GateModelTableDto>> ReportOfAsync(
+        GateSnapshot snapshot, GateKind gate, string scopeAsked, string rubric, CancellationToken cancellationToken) =>
+        (ResolveScope([.. snapshot.Scopes().Select(snapshot.ScopeDto)], scopeAsked), rubric.Length) switch
+        {
+            (GateAnswer<GateScopeDto>.Refused refused, _) => GateAnswer<GateModelTableDto>.Refuse(refused.Kind, refused.Reason),
+            (GateAnswer<GateScopeDto>.Answered scope, 0) =>
+                GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.BadRequest, $"{NoRubricNamed} — {Carried(scope.Value)}"),
+            (GateAnswer<GateScopeDto>.Answered scope, _) => await snapshot.TableAsync(
+                snapshot.Find(gate, scope.Value.Id).Match(s => s, reason => throw new InvalidOperationException(reason)), rubric, cancellationToken),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+
+    private static async Task<GateAnswer<GateRunDetailDto>> DetailAsync(GateSnapshot snapshot, Guid runId, CancellationToken cancellationToken) =>
+        snapshot.Records.FirstOrDefault(r => r.RunId == runId) is { } record
+            ? GateAnswer<GateRunDetailDto>.Of(await snapshot.DetailAsync(record, cancellationToken))
+            : GateAnswer<GateRunDetailDto>.Refuse(GateRefusalKind.NotFound, $"no gate run {runId} in this database");
+
+    private static string Carried(GateScopeDto scope) =>
+        scope.Rubrics.Count == 0
+            ? "nothing in this scope was assessed yet (bench gate assess)"
+            : "this scope's verdicts carry " + string.Join(", ", scope.Rubrics.Select(r => $"{r.Stamp} ({r.Kind}, {r.Verdicts} verdict(s))"));
 
     private static async Task<GateAnswer<GateModelTableDto>> TableAsync(
         IGateReads reads, GateKind gate, string scopeId, string rubric, CancellationToken cancellationToken)
     {
-        var snapshot = await GateSnapshot.ReadAsync(reads, cancellationToken);
+        var snapshot = await GateSnapshot.ReadAsync(reads, [gate], cancellationToken);
 
         return snapshot.Find(gate, scopeId) switch
         {

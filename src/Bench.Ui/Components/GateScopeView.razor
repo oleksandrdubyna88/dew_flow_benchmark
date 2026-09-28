@@ -98,6 +98,13 @@ else
 
         <p class="alert alert-light border small" data-test="gate-variance">@VarianceSentence(table.Variance)</p>
 
+        @if (table.Rows.Count == 0)
+        {
+            <div class="alert alert-info" data-test="gate-no-measured">
+                <strong>No measured task in this scope.</strong> Every task of it is a calibration task — its rows are below, reported apart.
+            </div>
+        }
+
         <GateModelTable Table="table" Rows="table.Rows" Test="gate-model-table"
                         Title="Measured tasks" Note="Medians and means per reviewer; a failed run stays in every denominator. No reviewer is nominated best." />
 

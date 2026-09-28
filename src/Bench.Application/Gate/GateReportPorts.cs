@@ -12,8 +12,13 @@ namespace Bench.Application.Gate;
 /// </para></summary>
 public interface IGateReads
 {
-    /// <summary>Every settled cell of every campaign, as the report reads it — imported and native alike.</summary>
-    Task<IReadOnlyList<GateRunRecord>> RecordsAsync(CancellationToken cancellationToken);
+    /// <summary>Every settled cell of the campaigns of <paramref name="gates"/>, as the report reads it — imported and native
+    /// alike. Filtered in the database: a feature-gate read never materialises the plan and code history (code round).</summary>
+    Task<IReadOnlyList<GateRunRecord>> RecordsAsync(IReadOnlyCollection<GateKind> gates, CancellationToken cancellationToken);
+
+    /// <summary>The gate of one settled run, so a single run is read through its own gate's history only; a run this
+    /// database does not hold is a refusal naming it.</summary>
+    Task<Outcome<GateKind>> GateOfRunAsync(Guid runId, CancellationToken cancellationToken);
 
     /// <summary>The recorded tasks of one suite stamp, or none when that suite was never recorded. A suite has at least one
     /// task, so an empty answer means <i>not recorded</i> and never <i>a suite of nothing</i>.</summary>

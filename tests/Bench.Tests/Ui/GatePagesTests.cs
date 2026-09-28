@@ -197,6 +197,41 @@ public sealed class GatePagesTests : BunitContext
     }
 
     [Fact]
+    public void A_rubric_id_in_the_address_naming_two_wordings_is_not_chosen()
+    {
+        var reworded = Strict with { Hash = new string('d', 64), Stamp = "strict-v1#dddddddddddd" };
+        var two = Scope("aaaaaaaaaaa1", rubrics: [Strict, reworded]);
+        var api = new ScriptedBenchApi().Answers(Scopes, new[] { two }).Answers(Runs, Array.Empty<GateRunSummaryDto>());
+        Services.AddSingleton(new BenchConsoleApi(api.Client()));
+
+        var view = Render<Bench.Ui.Components.GateScopeView>(p => p.Add(v => v.Gate, "feature").Add(v => v.InitialScope, two.Id).Add(v => v.InitialRubric, "strict-v1"));
+
+        view.Markup.Should().Contain("Choose a rubric", "two wordings of one id are a choice the page does not make for the reader");
+        api.Calls.Should().NotContain(c => c.StartsWith(Models, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_rubric_id_in_the_address_is_matched_in_any_case_as_the_server_matches_it()
+    {
+        var one = Scope("aaaaaaaaaaa2", rubrics: [Strict, Lenient]);
+        var api = new ScriptedBenchApi().Answers(Scopes, new[] { one }).Answers(Runs, Array.Empty<GateRunSummaryDto>())
+            .Answers(Models, Table(one, Strict, [Row("grok")]));
+        Services.AddSingleton(new BenchConsoleApi(api.Client()));
+
+        Render<Bench.Ui.Components.GateScopeView>(p => p.Add(v => v.Gate, "feature").Add(v => v.InitialScope, one.Id).Add(v => v.InitialRubric, "STRICT-V1"));
+
+        api.Calls.Should().Contain($"{Models}?scope={one.Id}&rubric={Uri.EscapeDataString(Strict.Stamp)}");
+    }
+
+    [Fact]
+    public void A_scope_of_calibration_tasks_only_says_it_has_no_measured_task()
+    {
+        var page = RenderTable(Table(Scope("aaaaaaaaaaa1", rubrics: [Strict]), Strict, [], calibration: [Row("grok")]));
+
+        page.Find("[data-test=gate-no-measured]").TextContent.Should().Contain("No measured task in this scope");
+    }
+
+    [Fact]
     public void A_scope_in_the_address_that_the_runs_never_echoed_is_not_chosen()
     {
         var api = new ScriptedBenchApi().Answers(Scopes, new[] { Scope("aaaaaaaaaaa1", rubrics: [Strict]), Scope("aaaaaaaaaaa2", rubrics: [Strict]) });

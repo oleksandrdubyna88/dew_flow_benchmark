@@ -37,7 +37,7 @@ public static class GateReportCommand
             await db.Database.MigrateAsync(cancellationToken);
             return await AnswerAsync(command, new PostgresGateReads(db, TimeProvider.System), output, error, cancellationToken);
         }
-        catch (Exception ex) when (ex is Npgsql.NpgsqlException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (IsStoreFailure(ex))
         {
             return GateRunCommand.Refuse(error, ExitCodes.Environment, $"the database is unreachable — {ex.Message.Split('\n')[0]}");
         }
@@ -69,7 +69,7 @@ public static class GateReportCommand
             await db.Database.MigrateAsync(cancellationToken);
             return await RecordEachAsync(files, new PostgresGateSuiteTasks(db, TimeProvider.System), output, error, cancellationToken);
         }
-        catch (Exception ex) when (ex is Npgsql.NpgsqlException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (IsStoreFailure(ex))
         {
             return GateRunCommand.Refuse(error, ExitCodes.Environment, $"the database is unreachable — {ex.Message.Split('\n')[0]}");
         }
@@ -107,41 +107,21 @@ public static class GateReportCommand
         return ExitCodes.Pass;
     }
 
-    private static async Task<int> AnswerAsync(CommandLine command, IGateReads reads, TextWriter output, TextWriter error, CancellationToken cancellationToken)
-    {
-        var gate = command.Value("gate").ToLowerInvariant();
-        var scopes = ((GateAnswer<IReadOnlyList<GateScopeDto>>.Answered)await GateReportQuery.ScopesAsync(reads, gate, cancellationToken)).Value;
-
-        return GateReportQuery.ResolveScope(scopes, command.Value("scope")) switch
-        {
-            GateAnswer<GateScopeDto>.Answered scope => await TableAsync(command, reads, scope.Value, output, error, cancellationToken),
-            GateAnswer<GateScopeDto>.Refused refused => GateRunCommand.Refuse(error, ExitCodes.Configuration, refused.Reason),
-            _ => throw new InvalidOperationException("unreachable"),
-        };
-    }
-
-    private static async Task<int> TableAsync(
-        CommandLine command, IGateReads reads, GateScopeDto scope, TextWriter output, TextWriter error, CancellationToken cancellationToken)
-    {
-        var rubric = command.Value("rubric");
-        if (rubric.Length == 0)
-        {
-            return GateRunCommand.Refuse(error, ExitCodes.Configuration, $"{GateReportQuery.NoRubricNamed} — {Rubrics(scope)}");
-        }
-
-        return await GateReportQuery.ModelsAsync(reads, scope.Gate, scope.Id, rubric, cancellationToken) switch
+    /// <summary>The ask answered from ONE read of the gate (<see cref="GateReportQuery.ReportAsync"/>): a scope that is not one,
+    /// a stamp spanning several, a missing rubric — 4, each naming what there is to choose; the suite's tasks not recorded — 3.</summary>
+    private static async Task<int> AnswerAsync(CommandLine command, IGateReads reads, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
+        await GateReportQuery.ReportAsync(reads, command.Value("gate"), command.Value("scope"), command.Value("rubric"), cancellationToken) switch
         {
             GateAnswer<GateModelTableDto>.Answered table => Printed(output, command.Has("json") ? JsonSerializer.Serialize(table.Value, Web) : GateReportText.Of(table.Value)),
             GateAnswer<GateModelTableDto>.Refused { Kind: GateRefusalKind.Conflict } refused => GateRunCommand.Refuse(error, ExitCodes.Environment, refused.Reason),
             GateAnswer<GateModelTableDto>.Refused refused => GateRunCommand.Refuse(error, ExitCodes.Configuration, refused.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
-    }
 
-    private static string Rubrics(GateScopeDto scope) =>
-        scope.Rubrics.Count == 0
-            ? "nothing in this scope was assessed yet (bench gate assess)"
-            : "this scope's verdicts carry " + string.Join(", ", scope.Rubrics.Select(r => $"{r.Stamp} ({r.Kind}, {r.Verdicts} verdict(s))"));
+    /// <summary>A failure OF THE STORE — the only kind reported as "the database is unreachable" (exit 3). An
+    /// <see cref="InvalidOperationException"/> is not one: it is how this code says an invariant broke, and reporting it as an
+    /// outage sends the reader to the database when the defect is here (code round). The import verbs' rule, shared.</summary>
+    public static bool IsStoreFailure(Exception ex) => ex is Npgsql.NpgsqlException or DbUpdateException or TimeoutException;
 
     private static int Printed(TextWriter output, string text)
     {

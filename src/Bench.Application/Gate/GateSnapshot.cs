@@ -28,9 +28,10 @@ internal sealed class GateSnapshot
 
     public IReadOnlySet<string> Recorded { get; }
 
-    public static async Task<GateSnapshot> ReadAsync(IGateReads reads, CancellationToken cancellationToken)
+    /// <summary>The rows of <paramref name="gates"/> only — a read is never over another gate's history.</summary>
+    public static async Task<GateSnapshot> ReadAsync(IGateReads reads, IReadOnlyCollection<GateKind> gates, CancellationToken cancellationToken)
     {
-        var records = await reads.RecordsAsync(cancellationToken);
+        var records = await reads.RecordsAsync(gates, cancellationToken);
         var catalog = new RubricCatalog(await reads.RubricsAsync(cancellationToken));
         var verdicts = await reads.VerdictsAsync([.. records.Select(r => r.RunId)], catalog, cancellationToken);
 
@@ -66,9 +67,11 @@ internal sealed class GateSnapshot
         var tasks = await _reads.TasksAsync(scope.SuiteStamp, cancellationToken);
         var dto = ScopeDto(scope);
 
-        if (tasks.Count == 0)
+        var missing = MissingTasks(Of(scope), tasks);
+
+        if (tasks.Count == 0 || missing.Count > 0)
         {
-            return GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.Conflict, TasksNotRecorded(scope.SuiteStamp));
+            return GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.Conflict, TasksNotRecorded(scope.SuiteStamp, missing));
         }
 
         return GateRubricChoice.Of(dto.Rubrics, rubricAsked) switch
@@ -102,10 +105,18 @@ internal sealed class GateSnapshot
             [.. Verdicts.Where(v => v.RunId == record.RunId)]);
     }
 
-    public static string TasksNotRecorded(string suiteStamp) =>
-        $"the tasks of suite {suiteStamp} are not recorded in this database, so its calibration tasks cannot be put apart from the "
-        + "measured ones — record them once with `bench gate suite record --suite-file <that suite's file> --db …` "
-        + "(or import the suite again); the run list is still readable";
+    public static string TasksNotRecorded(string suiteStamp, IReadOnlyList<string> missing) =>
+        $"the tasks of suite {suiteStamp} are not {(missing.Count > 0 ? $"all recorded in this database ({string.Join(", ", missing)} missing)" : "recorded in this database")}, "
+        + "so its calibration tasks cannot be put apart from the measured ones — record them once with "
+        + "`bench gate suite record --suite-file <that suite's file> --db …` (or import the suite again); the run list is still readable";
+
+    /// <summary>The scope's task ids the recorded set does not hold. A task that is not in the set would be read as a MEASURED
+    /// task by the report — the calibration split folded silently — so one missing task refuses the table like none recorded.</summary>
+    private static IReadOnlyList<string> MissingTasks(IReadOnlyList<GateRunRecord> records, IReadOnlyList<TaskSummary> tasks) =>
+        tasks.Count == 0
+            ? []
+            : [.. records.Select(r => r.Task.Value).Distinct(StringComparer.Ordinal)
+                .Where(id => tasks.All(t => t.Id.Value != id)).Order(StringComparer.Ordinal)];
 
     private async Task<GateModelTableDto> ComputeAsync(
         GateScope scope, GateScopeDto dto, IReadOnlyList<TaskSummary> tasks, GateRubricDto chosen, CancellationToken cancellationToken)

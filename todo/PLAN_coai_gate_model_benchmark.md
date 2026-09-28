@@ -1221,6 +1221,21 @@ for the rest.
 > - **Not built:** the seed-evidence table (a read host carries no artefact root; `bench gate assess` prints it), the
 >   paired agreement between two assessors (one assessor in the data).
 >
+> **The code round (coai, 2026-09-28, `good_enough`, 12 of 12 reviewers, 22 findings — 6 accepted, 16 rejected with reasons
+> on the round) and our own review (Opus), each accepted finding RED first (by revert or against the unfixed code):** a
+> read materialised every gate's history (`Expected gates to be equal to {Feature}, but {Plan, Code, Feature}`) — now the
+> asked gate only, and one run through its own gate; the CLI read the gate twice per ask (`… to contain 3 item(s) … but found
+> 6`) — one snapshot; an `InvalidOperationException` was reported as "the database is unreachable" (`IsStoreFailure(new
+> InvalidOperationException()) … found True`) — the import verbs' store-failure rule, shared. From our own review: a late
+> table of a scope the reader left replaced the chosen scope's (the held answer released → `… to contain "reviewer-of-b"`
+> failed) — reads are generation-guarded; the lenient text report printed the strict-only columns; a scope run whose task
+> the recorded set lacked was read as MEASURED (`Expected …Refused … but found …Answered`) — 409 naming it; two first records
+> of one suite at once refused the loser (`Expected …Outcome`1+Ok`) — it re-reads and finds the same rows; an address rubric
+> id naming two wordings was chosen silently and ids were matched case-sensitively; a calibration-only scope said nothing;
+> the coai-bench import recorded its suites outside its store-failure boundary. Declined: primitive words at the HTTP
+> boundary, misreadings (an empty rubric IS a 400, the repair columns ARE figures, `TasksAsync` never returns null), file-size
+> / timeout / traversal guards on the operator's own suite file, a catch-all exception filter, pagination.
+>
 > **How E6 is built (decided 2026-09-28, before its plan round).** Checked against `765b4ee` and the local bench
 > database (18 campaigns, 243 cells, 340 `strict-v1` + 692 `lenient-worth-v1` verdicts, no hand-check).
 >

@@ -187,9 +187,15 @@ public static class GateImportCommand
 
         var import = new CoaiBenchImport(session.Imports!, session.Artifacts!, new PostgresGateVerdictStore(session.Db, TimeProvider.System), new GitCommitResolver(command.Value("repo")));
         Outcome<CoaiBenchImportReport> report;
+        var unrecorded = string.Empty;
         try
         {
             report = await import.RunAsync(new CoaiBenchImportRequest(files, fileKey, lenient, GateRubrics.Catalog(session.Rubrics), PrivateNames.None.WithHosts([Environment.MachineName])), output.WriteLine, cancellationToken);
+
+            // Each location's suite recorded (E6) inside the same store-failure boundary as the import (own review).
+            unrecorded = report is Outcome<CoaiBenchImportReport>.Ok imported
+                ? await RecordedAsync(new PostgresGateSuiteTasks(session.Db, TimeProvider.System), imported.Value, output, cancellationToken)
+                : string.Empty;
         }
         catch (Exception ex) when (IsStoreFailure(ex))
         {
@@ -198,8 +204,8 @@ public static class GateImportCommand
 
         return report switch
         {
-            Outcome<CoaiBenchImportReport>.Ok ok => await RecordedAsync(new PostgresGateSuiteTasks(session.Db, TimeProvider.System), ok.Value, output, cancellationToken) is { Length: > 0 } refused
-                ? GateRunCommand.Refuse(error, ExitCodes.Configuration, refused)
+            Outcome<CoaiBenchImportReport>.Ok ok => unrecorded.Length > 0
+                ? GateRunCommand.Refuse(error, ExitCodes.Configuration, unrecorded)
                 : await PrintedAsync(output, ok.Value, session.Artifacts!.Root, command.Value("repo"), cancellationToken),
             Outcome<CoaiBenchImportReport>.Fail fail => GateRunCommand.Refuse(error, ExitCodes.Configuration, fail.Reason),
             _ => throw new InvalidOperationException("unreachable"),
@@ -288,7 +294,7 @@ public static class GateImportCommand
 
     /// <summary>The database going away mid-import is the environment (3), never a crash: each cell is its own transaction, so
     /// what was committed stays and the next import resumes the rest.</summary>
-    private static bool IsStoreFailure(Exception ex) => ex is Npgsql.NpgsqlException or DbUpdateException or TimeoutException;
+    private static bool IsStoreFailure(Exception ex) => GateReportCommand.IsStoreFailure(ex);
 
     private static int StoreFailed(TextWriter error, Exception ex) =>
         GateRunCommand.Refuse(error, ExitCodes.Environment,

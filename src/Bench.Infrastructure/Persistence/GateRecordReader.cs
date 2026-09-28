@@ -26,13 +26,15 @@ internal sealed class GateRecordReader(BenchDbContext db)
         return await RecordsAsync([run], cells, cancellationToken);
     }
 
-    /// <summary>Every settled cell of EVERY campaign — the report's population (E6). Three queries whatever the number of
-    /// campaigns: the runs, the settled cells, their findings.</summary>
-    public async Task<IReadOnlyList<GateRunRecord>> ReadAllAsync(CancellationToken cancellationToken)
+    /// <summary>Every settled cell of every campaign of <paramref name="gates"/> — the report's population (E6). Three queries
+    /// whatever the number of campaigns: the runs, the settled cells, their findings; another gate's rows are never read.</summary>
+    public async Task<IReadOnlyList<GateRunRecord>> ReadAllAsync(IReadOnlyCollection<GateKind> gates, CancellationToken cancellationToken)
     {
-        var runs = await db.GateRuns.AsNoTracking().OrderBy(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var wanted = gates.ToList();
+        var runs = await db.GateRuns.AsNoTracking().Where(r => wanted.Contains(r.Gate)).OrderBy(r => r.CreatedAt).ToListAsync(cancellationToken);
+        var ids = runs.Select(r => r.Id).ToList();
         var cells = await db.GateCells.AsNoTracking()
-            .Where(c => c.FactsRecorded)
+            .Where(c => c.FactsRecorded && ids.Contains(c.RunId))
             .OrderBy(c => c.RunId).ThenBy(c => c.Position).ThenBy(c => c.Slot)
             .ToListAsync(cancellationToken);
 

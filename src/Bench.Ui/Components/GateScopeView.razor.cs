@@ -46,6 +46,13 @@ public partial class GateScopeView(BenchConsoleApi api) : ComponentBase
 
     private bool Loading { get; set; }
 
+    /// <summary>Which scope read, and which table read, is the latest. An answer to an earlier one is dropped: a reader who
+    /// switches scope while the first scope's table is on its way must never see that late table under the second scope's
+    /// header (own review of E6). Two counters, because a rubric change supersedes the table read and not the run list.</summary>
+    private int _scopeRead;
+
+    private int _tableRead;
+
     private GateScopeDto Chosen => (Scopes.Value ?? []).FirstOrDefault(s => s.Id == ScopeId) ?? NoScope;
 
     protected override async Task OnParametersSetAsync()
@@ -66,24 +73,42 @@ public partial class GateScopeView(BenchConsoleApi api) : ComponentBase
     private async Task ChooseRubricAsync(ChangeEventArgs changed)
     {
         Rubric = changed.Value?.ToString() ?? string.Empty;
-        await ReadTableAsync();
+        await ReadTableAsync(++_tableRead);
     }
 
     private async Task ReadScopeAsync(string askedRubric)
     {
+        var read = ++_scopeRead;
+        var table = ++_tableRead;
         Table = Read<GateModelTableDto>.Unasked;
-        Rubric = Pick([.. Chosen.Rubrics.Select(r => r.Stamp)], Chosen.Rubrics.Where(r => r.Id == askedRubric).Select(r => r.Stamp).DefaultIfEmpty(askedRubric).First());
-        Runs = ScopeId.Length > 0 ? await api.GetGateRunsAsync(Gate, ScopeId) : Read<IReadOnlyList<GateRunSummaryDto>>.Unasked;
-        await ReadTableAsync();
+        Runs = Read<IReadOnlyList<GateRunSummaryDto>>.Unasked;
+        Rubric = PickRubric(Chosen.Rubrics, askedRubric);
+
+        var runs = ScopeId.Length > 0 ? await api.GetGateRunsAsync(Gate, ScopeId) : Read<IReadOnlyList<GateRunSummaryDto>>.Unasked;
+        Runs = read == _scopeRead ? runs : Runs;
+        await ReadTableAsync(table);
     }
 
     /// <summary>The table is asked for only when it can be answered: a scope, a rubric, and the suite's tasks recorded — a
-    /// scope without them is refused by the server anyway, and the page says why before asking.</summary>
-    private async Task ReadTableAsync()
+    /// scope without them is refused by the server anyway, and the page says why before asking. Its answer is kept only when
+    /// no later read was started meanwhile.</summary>
+    private async Task ReadTableAsync(int read)
     {
-        Table = ScopeId.Length > 0 && Rubric.Length > 0 && Chosen.TasksRecorded
+        var table = ScopeId.Length > 0 && Rubric.Length > 0 && Chosen.TasksRecorded
             ? await api.GetGateModelsAsync(Gate, ScopeId, Rubric)
             : Read<GateModelTableDto>.Unasked;
+        Table = read == _tableRead ? table : Table;
+    }
+
+    /// <summary>The rubric the address named — its stamp, or its id when exactly ONE wording of that id is carried, in any
+    /// case (the server's rule) —; else the one rubric when there is exactly one; else none: two wordings of one id are a
+    /// choice, and the page does not make it for the reader.</summary>
+    private static string PickRubric(IReadOnlyList<GateRubricDto> carried, string asked)
+    {
+        var named = carried.Where(r => string.Equals(r.Stamp, asked, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(r.Id, asked, StringComparison.OrdinalIgnoreCase)).Select(r => r.Stamp).ToList();
+
+        return named.Count == 1 ? named[0] : Pick([.. carried.Select(r => r.Stamp)], string.Empty);
     }
 
     /// <summary>What the address asked for when it is on offer; else the one option when there is exactly one — nothing to
