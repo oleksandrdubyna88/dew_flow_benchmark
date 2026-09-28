@@ -19,6 +19,7 @@ public sealed class GateImportCommandTests(PostgresFixture postgres)
         Run("gate", "import", "calib", "--db", "Host=x").Error.Should().Contain("--calib");
         Run("gate", "import", "coai-bench", "--db", "Host=x").Error.Should().Contain("--runs");
         Run("gate", "import", "summary", "--db", "Host=x", "--document", "d.md", "--section", "T").Error.Should().Contain("--gate");
+        Run("gate", "import", "summary", "--db", "Host=x", "--document", "d.md", "--section", "T", "--gate", "7").Error.Should().Contain("--gate", "a number is not a gate");
     }
 
     [Fact]
@@ -52,6 +53,22 @@ public sealed class GateImportCommandTests(PostgresFixture postgres)
         first.Output.Should().Contain("imported       92 cell(s)").And.Contain("340 under strict-v1 (340 new");
         second.Code.Should().Be(ExitCodes.Pass, second.Error);
         second.Output.Should().Contain("0 cell(s), 92 already there unchanged").And.Contain("(0 new");
+    }
+
+    [Fact]
+    public async Task A_summary_table_refused_by_the_store_is_a_configuration_refusal_not_a_crash()
+    {
+        var connection = await ImportRig.DatabaseAsync(postgres, "sc");
+        using var files = NewRoot();
+        var document = Path.Combine(files.Path, "RESULTS_made_up.md");
+        await File.WriteAllTextAsync(document, "## T\n| model | run 1 |\n|---|---|\n| Model-A | 6 |\n", TestContext.Current.CancellationToken);
+
+        var first = Run("gate", "import", "summary", "--document", document, "--section", "T", "--gate", "plan", "--db", connection);
+        var other = Run("gate", "import", "summary", "--document", document, "--section", "T", "--gate", "code", "--db", connection);
+
+        first.Code.Should().Be(ExitCodes.Pass, first.Error);
+        other.Code.Should().Be(ExitCodes.Configuration);
+        other.Error.Should().Contain("Plan");
     }
 
     private static (int Code, string Output, string Error) Run(params string[] args)

@@ -34,7 +34,9 @@ public sealed class GateReportImportTests
         row.TurnsMean.Value.Should().Be(2, "an import that kept no ledger is not a run of zero turns");
         row.ServedMean.Value.Should().Be(6);
 
-        var none = GateReport.PerModel(Scope(PinA), StrictRubric, Input([unrecorded])).Rows.Single();
-        none.TurnsMean.State.Should().Be(FigureState.Unknown, "nobody recorded a turn — unknown, never zero");
+        var none = GateReport.PerModel(Scope(PinA), StrictRubric, Input([unrecorded]));
+        none.Rows.Single().TurnsMean.State.Should().Be(FigureState.Unknown, "nobody recorded a turn — unknown, never zero");
+        none.Rows.Single().RepairRuns.State.Should().Be(FigureState.Unknown, "no run recorded its calls, so nobody knows whether one was repaired");
+        none.PerTask.Single().Turns.Single().State.Should().Be(FigureState.Unknown, "the per-task table reads the same flag");
     }
 }

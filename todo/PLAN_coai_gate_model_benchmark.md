@@ -1064,6 +1064,35 @@ for the rest.
 >   `coai-bench-<arm>`. The cases become a suite the import writes into the artefact root.
 > - **`good_enough` coai-bench rounds are not valid** — the gate's one valid rule (proceed or revise), the rule a native
 >   plan or code cell is judged by too.
+>
+> **The code round (coai, 2026-09-28, `good_enough`, 12 of 12 reviewers, 35 findings — 9 accepted, 26 rejected with reasons
+> on the round) and our own review (Opus), each accepted finding RED first and checked by revert:**
+> - **coai-bench ids carried the suite stamp** — one suite over every file of an invocation, so a later import with another
+>   file or case re-keyed every record (RED: a file that also carried another case imported the known records again,
+>   `Expected value to be 2 … but found 0` unchanged). Campaigns are now keyed by (location, gate), cells by the record,
+>   and each location's cases are its own suite; the stages are grouped once instead of scanned per stage.
+> - **A summary table imported again under another gate** was silently kept under the first (RED: `expected a failure, got
+>   success`) — refused now, and the unique-index race is an Outcome, not an exception; the CLI's summary verb matched on it
+>   with a cast (RED: exit 0 where 4 was due).
+> - **A source path with a trailing separator** found no file at all (RED: `Expected boolean to be True … but found
+>   False`); **an unreadable runs.jsonl, assess.jsonl, reply.json or run file** read as empty or as a skipped name (RED:
+>   `expected a failure, got success`; `its reply carries 0 finding(s) and its run record says 4`) — each is a refusal
+>   naming the file; `UnauthorizedAccessException` is caught with `IOException`.
+> - **An empty short sha resolved to the checkout's HEAD** (RED: `git rev-parse exited 1` where "no sha" was due — git
+>   reads `^{commit}` alone as HEAD) — refused by name.
+> - From our own review: **a wrong `--assessor` was refused only after 111 cells were written** (RED: `expected a failure,
+>   got success` with the cells in place) — the assessor-name and key-clash checks run before the first byte now; **a
+>   product sha that is not one was pinned to nothing** (RED: `expected a failure, got success`) — refused by the
+>   pre-flight; **two coai-bench records on one cell** and **a re-judged finding** were accepted silently (RED:
+>   `expected a failure, got success` each) — both refused; **the per-task turns and the repair columns read zero** for a
+>   harness with no ledger (RED: `Expected … FigureState.Unknown … but found FigureState.Known`) — `Figure`s now, unknown when
+>   nothing recorded them; `--gate 7` was accepted as a gate (RED) — refused; a database that fails mid-import is exit 3.
+> - Declined (reasons on the round): record shapes, lock ordering, the designed resume and log orders, path traversal
+>   (`ArtifactPath` refuses it at parse), parallelism and streaming (measured: 25 s for 271 MB), progress (a line per cell),
+>   injected writers and the CLI as composition root, value types for the id derivation's inputs, `CommitSha` for 7-hex
+>   product shas, git-call caching (two cases). Our own review's point that a RE-EXPORTED calibration suite re-keys the
+>   calibration cells is declined too: a different suite file is a different measurement statement, and its cells are
+>   imported again under that suite's campaign rather than silently re-labelled.
 
 > **How E5 is built (decided 2026-09-28, before its plan round).** Checked against `cd4934e` and the real source data:
 > the calibration's `runs.jsonl` now holds **113 lines** (21 phase-1 lines = 19 ids, one re-run with `--force`; 92

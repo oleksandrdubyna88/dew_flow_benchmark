@@ -12,27 +12,32 @@ public static class ImportedFiles
 {
     public const string SourceFolder = "source";
 
-    public static async Task<CopiedFiles> CopyAsync(IImportSource source, string directory, CancellationToken cancellationToken)
+    /// <summary>Every file of <paramref name="directory"/>; only a NAME no artefact path can carry is skipped (and counted) —
+    /// a file that could not be READ refuses the cell naming it, because a cell committed without it would read
+    /// 'unchanged' on every later import and the file would never arrive.</summary>
+    public static async Task<Outcome<CopiedFiles>> CopyAsync(IImportSource source, string directory, CancellationToken cancellationToken)
     {
         var files = new List<ImportFile>();
         var skipped = 0;
 
         foreach (var relative in await source.FilesUnderAsync(directory, cancellationToken))
         {
-            var bytes = ArtifactPath.Parse($"{SourceFolder}/{relative}") is Outcome<ArtifactPath>.Ok
-                ? await source.ReadBytesAsync($"{directory}/{relative}", cancellationToken)
-                : Outcome<byte[]>.Failure("a name outside the artefact path alphabet");
-
-            if (bytes is Outcome<byte[]>.Ok ok)
+            if (ArtifactPath.Parse($"{SourceFolder}/{relative}") is not Outcome<ArtifactPath>.Ok)
             {
-                files.Add(new ImportFile($"{SourceFolder}/{relative}", ClassOf(relative), ok.Value));
+                skipped++;
                 continue;
             }
 
-            skipped++;
+            var bytes = await source.ReadBytesAsync($"{directory}/{relative}", cancellationToken);
+            if (bytes is Outcome<byte[]>.Fail unread)
+            {
+                return Outcome<CopiedFiles>.Failure(unread.Reason);
+            }
+
+            files.Add(new ImportFile($"{SourceFolder}/{relative}", ClassOf(relative), ((Outcome<byte[]>.Ok)bytes).Value));
         }
 
-        return new CopiedFiles(files, skipped);
+        return Outcome<CopiedFiles>.Success(new CopiedFiles(files, skipped));
     }
 
     /// <summary>The class of a copied file, by the other harness's own layout — its reply, its request, the server's stderr,
