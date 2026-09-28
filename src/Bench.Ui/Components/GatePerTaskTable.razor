@@ -1,0 +1,44 @@
+@* Task × reviewer, one reading per repeat — so a reader sees the spread rather than a mean over three. *@
+
+<div class="card mb-3" data-test="gate-per-task">
+    <div class="card-header"><strong>Per task × reviewer</strong> <span class="text-body-secondary small ms-2">one reading per repeat</span></div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 small">
+            <thead>
+                <tr>
+                    <th scope="col">task</th>
+                    <th scope="col">language</th>
+                    <th scope="col">reviewer</th>
+                    <th scope="col">runs (valid)</th>
+                    <th scope="col">findings</th>
+                    <th scope="col">seeds hit</th>
+                    <th scope="col">turns</th>
+                    <th scope="col">seconds</th>
+                    <th scope="col">cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr>
+                        <th scope="row">
+                            <code>@row.TaskId</code>
+                            @if (row.Calibration)
+                            {
+                                <span class="badge text-bg-warning ms-1" title="a calibration task — reported apart">calibration</span>
+                            }
+                        </th>
+                        <td>@row.Language</td>
+                        <td><code>@row.ReviewerId</code></td>
+                        <td>@row.Runs (@row.ValidRuns)</td>
+                        <td>@string.Join(" · ", row.Findings)</td>
+                        <td>@Each(row.SeedsHit)</td>
+                        <td>@Each(row.Turns)</td>
+                        <td>@string.Join(" · ", row.Seconds.Select(s => s.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)))</td>
+                        <td>@Each(row.Cost, "0.####")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

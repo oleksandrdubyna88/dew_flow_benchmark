@@ -9,6 +9,9 @@ namespace Bench.Tests;
 /// accumulated exactly where nothing was watching.</summary>
 public sealed class ArchitectureTests
 {
+    /// <summary>The verbs a write port's methods begin with — none of them may appear on the gate's READ port.</summary>
+    private static readonly string[] WriteVerbs = ["RecordAsync", "RecordHandCheck", "Settle", "Plan", "Claim", "Write", "Import", "Sweep", "Advance", "HandBack", "Extend", "Add", "Delete"];
+
     [Fact]
     public void Domain_references_nothing_beyond_the_runtime()
     {
@@ -160,6 +163,12 @@ public sealed class ArchitectureTests
         typeof(global::Bench.Application.Gate.IGateAssessmentFiles).Assembly.GetName().Name.Should().Be("Bench.Application");
         typeof(global::Bench.Infrastructure.Persistence.PostgresGateVerdictStore).Should().Implement<global::Bench.Application.Gate.IGateVerdictStore>();
         typeof(global::Bench.Infrastructure.Gate.FileSystemGateAssessmentFiles).Should().Implement<global::Bench.Application.Gate.IGateAssessmentFiles>();
+        typeof(global::Bench.Application.Gate.IGateReads).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Gate.IGateSuiteTasks).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Persistence.PostgresGateReads).Should().Implement<global::Bench.Application.Gate.IGateReads>();
+        typeof(global::Bench.Infrastructure.Persistence.PostgresGateSuiteTasks).Should().Implement<global::Bench.Application.Gate.IGateSuiteTasks>();
+        typeof(global::Bench.Application.Gate.IGateReads).GetMethods().Select(m => m.Name).Should().NotContain(n => WriteVerbs.Any(v => n.StartsWith(v, StringComparison.Ordinal)),
+            "the read port a read host registers carries no write — no route can reach one through it");
         typeof(Domain.Gate.GateRun).Assembly.GetReferencedAssemblies().Should().NotContain(
             r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the gate domain stays free of EF");
     }

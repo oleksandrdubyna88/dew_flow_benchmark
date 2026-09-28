@@ -59,6 +59,10 @@ public static class BenchApi
             IRunStore runs, IResultStore results, CancellationToken cancellationToken, int runWindow = 50) =>
             Results.Ok(await ArmComparison.MetricsAsync(runs, results, runWindow, cancellationToken)));
 
+        // The coai gate benchmark's reads (E6) — mapped here so every host that mounts the bench group serves them; the read
+        // port is resolved per request, so a host that never registered it still starts and answers 503 naming it.
+        app.MapGateReads();
+
         return app;
     }
 

@@ -1,0 +1,123 @@
+@* One gate, one scope, one rubric. Every figure below comes from the API's GateModelTableDto — the object
+   `bench gate report --json` prints — and every refusal is rendered in words by GateFigureWords, never as a zero. *@
+
+<div class="row g-3 mb-3">
+    <div class="col-md-7">
+        <label class="form-label" for="gate-scope">Scope</label>
+        <select class="form-select" id="gate-scope" value="@ScopeId" @onchange="ChooseScopeAsync" disabled="@Loading">
+            @* Only the scopes the runs echoed — a partition per product and settings hash, never a fixed list. *@
+            <option value="">— choose a scope —</option>
+            @foreach (var scope in Scopes.Value ?? [])
+            {
+                <option value="@scope.Id">@ScopeLabel(scope)</option>
+            }
+        </select>
+    </div>
+    @if (Chosen.Rubrics.Count > 0)
+    {
+        <div class="col-md-5">
+            <label class="form-label" for="gate-rubric">Rubric</label>
+            <select class="form-select" id="gate-rubric" value="@Rubric" @onchange="ChooseRubricAsync" disabled="@Loading">
+                @* Only the rubrics this scope's verdicts carry. Strict and lenient are two populations: no default, and
+                   no table across them. *@
+                <option value="">— choose a rubric —</option>
+                @foreach (var rubric in Chosen.Rubrics)
+                {
+                    <option value="@rubric.Stamp">@RubricLabel(rubric)</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+@if (!Scopes.Available && Scopes.Detail.Length > 0)
+{
+    @* The API could not be read — not the same panel as "nothing measured": one sends the reader to the host, the other
+       to the CLI. *@
+    <div class="alert alert-warning">@Scopes.Detail</div>
+}
+else if (Scopes.Available && Scopes.Value!.Count == 0)
+{
+    <div class="alert alert-secondary">
+        <strong>No gate run has been measured for the @Gate gate yet.</strong> Measure one with <code>bench gate run --gate @Gate</code>,
+        or bring an earlier measurement in with <code>bench gate import</code>.
+    </div>
+}
+else if (ScopeId.Length == 0)
+{
+    <div class="alert alert-secondary">Choose a scope — two products or two settings hashes are two populations, and are never averaged.</div>
+}
+else
+{
+    var scope = Chosen;
+
+    <dl class="row small mb-3" data-test="gate-scope-header">
+        <dt class="col-sm-2">Suite</dt>
+        <dd class="col-sm-10"><code>@scope.SuiteStamp</code></dd>
+        <dt class="col-sm-2">Product</dt>
+        <dd class="col-sm-10">
+            @scope.ProductVersion
+            @if (scope.BinarySha256.Length > 0)
+            {
+                <span class="text-body-secondary"> · binary <code>@Short(scope.BinarySha256)</code></span>
+            }
+        </dd>
+        <dt class="col-sm-2">Settings</dt>
+        <dd class="col-sm-10"><code>@Short(scope.SettingsHash)</code></dd>
+        <dt class="col-sm-2">Source</dt>
+        <dd class="col-sm-10">@string.Join(", ", scope.Sources.Select(Source))</dd>
+    </dl>
+
+    @if (!scope.TasksRecorded)
+    {
+        <div class="alert alert-warning">
+            <strong>The per-model table is refused for this scope.</strong> The tasks of suite <code>@scope.SuiteStamp</code> are not
+            recorded in this database, so its calibration tasks cannot be put apart from the measured ones. Record them once with
+            <code>bench gate suite record --suite-file &lt;that suite's file&gt; --db …</code> (or import the suite again). The run
+            list below is still readable.
+        </div>
+    }
+    else if (scope.Rubrics.Count == 0)
+    {
+        <div class="alert alert-info">
+            <strong>No assessment recorded in this scope.</strong> Nothing has read its findings yet, so every verdict column would be
+            <code>—</code>; <code>bench gate assess</code> reads them. The run list below is what was measured.
+        </div>
+    }
+    else if (Rubric.Length == 0)
+    {
+        <div class="alert alert-secondary">Choose a rubric — strict and lenient verdicts answer different questions; there is no default.</div>
+    }
+    else if (!Table.Available)
+    {
+        <div class="alert alert-warning">@(Table.Detail.Length > 0 ? Table.Detail : "Reading…")</div>
+    }
+    else
+    {
+        var table = Table.Value!;
+
+        <p class="alert alert-light border small" data-test="gate-variance">@VarianceSentence(table.Variance)</p>
+
+        <GateModelTable Table="table" Rows="table.Rows" Test="gate-model-table"
+                        Title="Measured tasks" Note="Medians and means per reviewer; a failed run stays in every denominator. No reviewer is nominated best." />
+
+        @if (table.CalibrationRows.Count > 0)
+        {
+            <GateModelTable Table="table" Rows="table.CalibrationRows" Test="gate-calibration-table"
+                            Title="Calibration tasks — reported apart" Note="These tasks settled a transport, so their numbers describe the tuning as much as the model." />
+            <GateModelTable Table="table" Rows="table.AllTaskRows" Test="gate-all-tasks-table"
+                            Title="All tasks, calibration included" Note="The population an imported harness published its table over — shown to hold it like with like, never the default reading." />
+        }
+
+        <GatePerTaskTable Rows="table.PerTask" />
+    }
+
+    @if (!Runs.Available && Runs.Detail.Length > 0)
+    {
+        <div class="alert alert-warning">@Runs.Detail</div>
+    }
+    else if (Runs.Available)
+    {
+        <GateRunList Runs="Runs.Value!" />
+    }
+}

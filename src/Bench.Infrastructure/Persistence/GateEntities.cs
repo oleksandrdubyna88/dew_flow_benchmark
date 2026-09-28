@@ -379,3 +379,29 @@ public sealed class GateSummaryRow
 
     public DateTimeOffset ImportedAt { get; set; }
 }
+
+/// <summary>One task of a recorded suite (E6) — what a report needs of it and nothing else: the task id, its language,
+/// whether it is a calibration task, the gates it hosts and its seeds as (id, cross-epic). No text, no path, no private
+/// name: the suite file itself stays outside git and outside the database.</summary>
+public sealed class GateSuiteTaskRow
+{
+    public long Id { get; set; }
+
+    public string SuiteStamp { get; set; } = string.Empty;
+
+    public string TaskId { get; set; } = string.Empty;
+
+    public string Language { get; set; } = string.Empty;
+
+    public bool IsCalibration { get; set; }
+
+    /// <summary>The hosted gates' canonical form (<c>plan,code,feature</c>).</summary>
+    public string Hosts { get; set; } = string.Empty;
+
+    /// <summary>The seed ids in id order; <see cref="SeedCrossEpic"/> is parallel to it.</summary>
+    public List<string> SeedIds { get; set; } = [];
+
+    public List<bool> SeedCrossEpic { get; set; } = [];
+
+    public DateTimeOffset RecordedAt { get; set; }
+}

@@ -15,6 +15,10 @@ public sealed record GateScope(string SuiteStamp, GateKind Gate, string ProductV
     public static GateScope Of(string suiteStamp, GateKind gate, ProductPin pin, string settingsHash) =>
         new(suiteStamp, gate, pin.VersionText, pin.BinarySha256, settingsHash);
 
+    /// <summary>The scope's KEY — what <c>bench gate report --scope</c>, <c>?scope=</c> and the page's control carry.</summary>
+    public string Id =>
+        HashText.Short(StableHash.Of(CanonicalFields.Of("scope", SuiteStamp, GateWord.Of(Gate), ProductVersion, ProductSha256, SettingsHash)));
+
     public string Describe =>
         $"{SuiteStamp} · {Gate.ToString().ToLowerInvariant()} · {ProductVersion} ({Bytes}) · settings {HashText.Short(SettingsHash)}";
 

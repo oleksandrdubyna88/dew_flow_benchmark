@@ -1,0 +1,13 @@
+@page "/benchmarking/gate/plan"
+
+<PageTitle>Benchmarking · Gate · Plan</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+<GateViews />
+
+<p class="text-body-secondary">
+    <strong>coai models — plan gate.</strong> @Purpose
+</p>
+
+<GateScopeView Gate="@Gate" InitialScope="@(Scope ?? string.Empty)" InitialRubric="@(Rubric ?? string.Empty)" />

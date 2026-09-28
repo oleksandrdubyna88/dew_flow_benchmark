@@ -57,6 +57,12 @@ public sealed class GateEntitiesGuardTests
         // SLUGS (ImportSlug: [a-z0-9-] only), and the document's hash. Numbers beside them; no sentence can be stored.
         "GateSummaryRow.Source", "GateSummaryRow.Document", "GateSummaryRow.Section", "GateSummaryRow.DocumentSha256",
         "GateSummaryRow.Label", "GateSummaryRow.Metric",
+
+        // gate_suite_tasks (E6) — what a report needs of a suite: its stamp, the task and seed IDS, the task's language word and
+        // its hosted gates' canonical form (plan,code,feature). The suite file (cases, plans, seed texts, clone paths) stays
+        // outside the database; the string guard reads these rows like any other.
+        "GateSuiteTaskRow.SuiteStamp", "GateSuiteTaskRow.TaskId", "GateSuiteTaskRow.Language", "GateSuiteTaskRow.Hosts",
+        "GateSuiteTaskRow.SeedIds",
     };
 
     /// <summary>The one column that is prose: the failure cause, redacted before it is written.</summary>
@@ -71,10 +77,10 @@ public sealed class GateEntitiesGuardTests
     }
 
     [Fact]
-    public void The_walk_covers_all_eight_gate_tables_from_the_model()
+    public void The_walk_covers_all_nine_gate_tables_from_the_model()
     {
         GateEntities().Select(t => t.Name).Should().BeEquivalentTo(
-            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow", "GateHandCheckRow", "GateSummaryRow"],
+            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow", "GateHandCheckRow", "GateSummaryRow", "GateSuiteTaskRow"],
             "a scan that finds nothing passes forever — the tables come from the EF model, so a new one is walked when it is mapped");
     }
 

@@ -38,6 +38,31 @@ public sealed class BenchUiRegistrationTests : BunitContext
     }
 
     [Fact]
+    public void AddBenchUi_is_what_makes_the_three_gate_pages_constructible_and_they_read_through_it()
+    {
+        // The Gate tab (E6) injects the same service through its shared view; a host mounting the console gets the gate
+        // pages from the one registration it already makes — and the first read each page makes is the gate's scopes.
+        var api = new ScriptedBenchApi().Answers("/api/bench/gate/scopes", Array.Empty<Bench.Contracts.GateScopeDto>());
+        Services.AddSingleton(api.Client());
+        Services.AddBenchUi();
+
+        Render<GateFeature>().Markup.Should().Contain("feature gate");
+        Render<GatePlan>().Markup.Should().Contain("plan gate");
+        Render<GateCode>().Markup.Should().Contain("code gate");
+        api.Calls.Should().Equal("/api/bench/gate/scopes?gate=feature", "/api/bench/gate/scopes?gate=plan", "/api/bench/gate/scopes?gate=code");
+    }
+
+    [Fact]
+    public void Without_it_a_gate_page_cannot_be_built_either()
+    {
+        Services.AddSingleton(new ScriptedBenchApi().Client());
+
+        var attempt = () => Render<GateFeature>();
+
+        attempt.Should().Throw<InvalidOperationException>().WithMessage("*BenchConsoleApi*");
+    }
+
+    [Fact]
     public void Without_it_the_page_cannot_be_built_at_all_rather_than_rendering_empty()
     {
         // The failure mode a host must be able to recognise. It is not a blank page and not a 404 — the

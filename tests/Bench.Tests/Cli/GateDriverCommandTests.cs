@@ -53,6 +53,8 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
         {
             (await new PostgresGateStore(db, TimeProvider.System).LoadAsync(runId, Ct)).Ok().Should().Match<GateRun>(r =>
                 r.Status == GateRunStatus.Finished && r.PredictionHash.Length == 64, "the prediction's hash is on the run, its text in the artefact root");
+            (await db.GateSuiteTasks.CountAsync(t => t.SuiteStamp == setup.SuiteStamp, Ct)).Should().BeGreaterThan(0,
+                "a run records its suite's tasks, so its report can put the calibration tasks apart without the suite file (E6)");
         }
 
         var status = Run("gate", "status", "--run", runId.ToString(), "--db", setup.Connection);

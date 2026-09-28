@@ -9,12 +9,35 @@ namespace Bench.Contracts;
 /// <see cref="GateRunSummaryDto.FailureText"/>, a failure cause that passed the publication redaction, and the
 /// test names it as the exception.
 /// </para></summary>
-public sealed record GateScopeDto(string SuiteStamp, string Gate, string ProductVersion, string BinarySha256, string SettingsHash, int Runs);
+/// <param name="Id">The scope's key (<c>GateScope.Id</c>) — what <c>?scope=</c> and <c>--scope</c> take.</param>
+/// <param name="Runs">Runs in the scope — one per cell, its latest attempt.</param>
+/// <param name="Sources">Where its runs came from: <c>native</c>, or an import's harness name — shown on screen, so an
+/// imported scope is never read as a native measurement.</param>
+/// <param name="Rubrics">The rubrics this scope's verdicts carry — the ONLY ones a rubric control may offer. Empty: nothing
+/// was assessed.</param>
+/// <param name="TasksRecorded">Whether the suite's tasks (language, calibration, seeds) are in the database. When they are
+/// not, the per-model table is refused — it cannot put the calibration tasks apart — and the run list still renders.</param>
+public sealed record GateScopeDto(
+    string Id,
+    string SuiteStamp,
+    string Gate,
+    string ProductVersion,
+    string BinarySha256,
+    string SettingsHash,
+    int Runs,
+    IReadOnlyList<string> Sources,
+    IReadOnlyList<GateRubricDto> Rubrics,
+    bool TasksRecorded);
+
+/// <summary>A rubric a scope's verdicts were read under: its id, its KIND (<c>Strict</c> or <c>LenientWorth</c> — two
+/// populations, never one column), the hash of its wording, the <c>id#hash12</c> stamp, and how many verdicts carry it.</summary>
+public sealed record GateRubricDto(string Id, string Kind, string Hash, string Stamp, int Verdicts);
 
 /// <summary>A number that may not be one. <paramref name="State"/> says why when it is not: <c>known</c>,
 /// <c>unassessed</c> (nobody looked — rendered <c>—</c>, never <c>0</c>), <c>unknown</c> (could not be
 /// captured — a CLI reviewer's cost, never free), <c>withheld</c> (too few repeats to state), or
-/// <c>not-applicable</c> (a task with no seeds has no recall).</summary>
+/// <c>not-applicable</c> (a task with no seeds has no recall), or <c>not-hand-checked</c> (a strict percentage no person
+/// has checked twenty verdicts of yet — the counts beside it stay visible).</summary>
 public sealed record GateFigureDto(bool Known, double Value, string State)
 {
     public const string KnownState = "known";
@@ -22,6 +45,7 @@ public sealed record GateFigureDto(bool Known, double Value, string State)
     public const string UnknownState = "unknown";
     public const string WithheldState = "withheld";
     public const string NotApplicableState = "not-applicable";
+    public const string NotHandCheckedState = "not-hand-checked";
 
     public static GateFigureDto Of(double value) => new(true, value, KnownState);
 
@@ -32,6 +56,8 @@ public sealed record GateFigureDto(bool Known, double Value, string State)
     public static GateFigureDto Withheld { get; } = new(false, 0, WithheldState);
 
     public static GateFigureDto NotApplicable { get; } = new(false, 0, NotApplicableState);
+
+    public static GateFigureDto NotHandChecked { get; } = new(false, 0, NotHandCheckedState);
 }
 
 /// <summary>One row of the per-model table — the operator's columns, with every refusal a state rather than a
@@ -64,8 +90,8 @@ public sealed record GateModelRowDto(
     GateFigureDto SecondsP50,
     GateFigureDto SecondsP90,
     GateFigureDto TurnsMean,
-    int RepairRuns,
-    int RepairCalls,
+    GateFigureDto RepairRuns,
+    GateFigureDto RepairCalls,
     GateFigureDto ServedMean,
     GateFigureDto RefusedMean,
     GateFigureDto TokensInPerRun,
@@ -108,13 +134,14 @@ public sealed record GatePerTaskRowDto(
     int ValidRuns,
     IReadOnlyList<int> Findings,
     IReadOnlyList<GateFigureDto> SeedsHit,
-    IReadOnlyList<int> Turns,
+    IReadOnlyList<GateFigureDto> Turns,
     IReadOnlyList<double> Seconds,
     IReadOnlyList<GateFigureDto> Cost);
 
 /// <summary>The per-model table for ONE scope under ONE rubric. There is no shape for a table across rubric
 /// kinds, and that absence is the rule. Calibration tasks are reported apart, in <paramref name="CalibrationRows"/>,
-/// never inside <paramref name="Rows"/>.</summary>
+/// never inside <paramref name="Rows"/>; <paramref name="AllTaskRows"/> is every task, calibration included — the
+/// population an imported harness published its table over, shown beside the default reading and never as it.</summary>
 public sealed record GateModelTableDto(
     GateScopeDto Scope,
     string RubricKind,
@@ -122,33 +149,38 @@ public sealed record GateModelTableDto(
     IReadOnlyList<GateModelRowDto> Rows,
     IReadOnlyList<GateModelRowDto> CalibrationRows,
     IReadOnlyList<GatePerTaskRowDto> PerTask,
-    IReadOnlyList<GateVarianceDto> Variance);
+    IReadOnlyList<GateVarianceDto> Variance,
+    IReadOnlyList<GateModelRowDto> AllTaskRows);
 
 /// <param name="Source">Where the run came from — <c>native</c>, or an import's harness name — so an imported
 /// run never enters a native figure unlabelled.</param>
 /// <param name="FailureText">The one free-text field in the gate contracts: the failure cause, after the
 /// publication redaction. Empty on a valid run.</param>
+/// <param name="TaskRecorded">Whether the task's language and calibration flag are in the database; when not, both read
+/// <i>not recorded</i> on screen rather than as an empty language and a measured task.</param>
+/// <param name="Superseded">An earlier attempt of a cell whose later attempt is the run the figures read.</param>
 public sealed record GateRunSummaryDto(
     Guid RunId,
     string Gate,
     string TaskId,
     string Language,
     bool Calibration,
+    bool TaskRecorded,
     string ReviewerId,
     int Repeat,
     int Attempt,
+    bool Superseded,
     string Source,
     bool Valid,
     string Verdict,
     int Findings,
-    int Turns,
+    GateFigureDto Turns,
     double Seconds,
     GateFigureDto CostUsd,
     string FailureKind,
     string FailureText,
     string ProductVersion,
-    string BinarySha256,
-    DateTimeOffset CreatedAt);
+    string BinarySha256);
 
 public sealed record GateFindingDto(
     int Ordinal,
@@ -191,3 +223,24 @@ public sealed record GateRunDetailDto(
     GateTokensDto Tokens,
     IReadOnlyList<GateFindingDto> Findings,
     IReadOnlyList<GateVerdictDto> Verdicts);
+
+/// <summary>A figure in WORDS — the one rendering the CLI's text report and the console's page both use, so a refusal reads
+/// the same on every surface and never as a number: <c>—</c> nobody looked, <i>unknown</i> nothing was captured,
+/// <i>withheld</i> too few repeats, <i>n/a</i> the column has no business in the row, <i>not hand-checked</i> a strict
+/// percentage no person has checked yet.</summary>
+public static class GateFigureWords
+{
+    public const string Dash = "—";
+
+    public static string Of(GateFigureDto figure, string format = "0.##") =>
+        figure.State switch
+        {
+            GateFigureDto.KnownState => figure.Value.ToString(format, System.Globalization.CultureInfo.InvariantCulture),
+            GateFigureDto.UnassessedState => Dash,
+            GateFigureDto.UnknownState => "unknown",
+            GateFigureDto.WithheldState => "withheld",
+            GateFigureDto.NotApplicableState => "n/a",
+            GateFigureDto.NotHandCheckedState => "not hand-checked",
+            var other => other,
+        };
+}

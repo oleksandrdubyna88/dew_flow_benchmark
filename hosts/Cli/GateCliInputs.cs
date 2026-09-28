@@ -33,6 +33,7 @@ public sealed class GateCliInputs : IAsyncDisposable
         _checkouts = checkouts;
         _secrets = secrets;
         Store = new PostgresGateStore(db, TimeProvider.System);
+        SuiteTasks = new PostgresGateSuiteTasks(db, TimeProvider.System);
     }
 
     private readonly string _connection;
@@ -58,6 +59,9 @@ public sealed class GateCliInputs : IAsyncDisposable
     public ILoggerFactory Logs { get; }
 
     public PostgresGateStore Store { get; }
+
+    /// <summary>Where the suite's task summaries are recorded (E6) — what a report puts the calibration tasks apart by.</summary>
+    public PostgresGateSuiteTasks SuiteTasks { get; }
 
     /// <summary>The references a reviewer resolves to on this machine NOW — a resume compares them with the run's cells.</summary>
     public Outcome<ResolvedReferences> ReferencesOf(GateReviewer reviewer) => _secrets.References(reviewer);

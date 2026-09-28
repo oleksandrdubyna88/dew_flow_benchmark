@@ -6,6 +6,7 @@ One folder per route group, per
 | Folder | Routes | Host |
 |---|---|---|
 | [`bench/`](bench) | `/api/bench/health`, `/plan`, `/runs`, `/runs/{id}/scoreboard`, `/runs/{id}/metrics`, `/runs/{id}/report`, `/arms`, `/arms/metrics` | the read API |
+| [`gate/`](gate) | `/api/bench/gate/scopes`, `/gate/{gate}/models`, `/gate/{gate}/runs`, `/gate/runs/{id}` — the coai gate benchmark's reads (E6) | the read API |
 | [`sessions/`](sessions) | `/api/bench/sessions` and `/{id}` on the API; `/events` and `/health` on the **collector** | both |
 
 Two origins, because the boundary is the contract: the collector is the one process an agent's hook

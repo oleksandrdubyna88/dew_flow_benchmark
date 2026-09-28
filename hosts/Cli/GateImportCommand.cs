@@ -90,7 +90,17 @@ public static class GateImportCommand
             var import = new CalibImport(
                 session.Imports!, session.Artifacts, new PostgresGateReviewerCatalog(session.Db!),
                 new CalibVerdictImport(new PostgresGateVerdictStore(session.Db!, TimeProvider.System), files), TimeProvider.System);
-            var report = await import.RunAsync(request(assessor, fileKey, session.Strict!, GateRubrics.Catalog(session.Rubrics)), output.WriteLine, cancellationToken);
+            var asked = request(assessor, fileKey, session.Strict!, GateRubrics.Catalog(session.Rubrics));
+
+            // The suite's tasks first (E6): a report cannot put the calibration tasks apart without them, and the suite file
+            // is the one input that has them.
+            var recorded = await GateReportCommand.RecordAsync(new PostgresGateSuiteTasks(session.Db!, TimeProvider.System), asked.Suite, output, cancellationToken);
+            if (recorded.Length > 0)
+            {
+                return GateRunCommand.Refuse(error, ExitCodes.Configuration, recorded);
+            }
+
+            var report = await import.RunAsync(asked, output.WriteLine, cancellationToken);
 
             return report switch
             {
@@ -188,7 +198,9 @@ public static class GateImportCommand
 
         return report switch
         {
-            Outcome<CoaiBenchImportReport>.Ok ok => await PrintedAsync(output, ok.Value, session.Artifacts!.Root, command.Value("repo"), cancellationToken),
+            Outcome<CoaiBenchImportReport>.Ok ok => await RecordedAsync(new PostgresGateSuiteTasks(session.Db, TimeProvider.System), ok.Value, output, cancellationToken) is { Length: > 0 } refused
+                ? GateRunCommand.Refuse(error, ExitCodes.Configuration, refused)
+                : await PrintedAsync(output, ok.Value, session.Artifacts!.Root, command.Value("repo"), cancellationToken),
             Outcome<CoaiBenchImportReport>.Fail fail => GateRunCommand.Refuse(error, ExitCodes.Configuration, fail.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
@@ -234,6 +246,21 @@ public static class GateImportCommand
         {
             return GateRunCommand.Refuse(error, ExitCodes.Environment, $"the database is unreachable — {ex.Message.Split('\n')[0]}");
         }
+    }
+
+    /// <summary>Each location's suite recorded (E6): empty when all were, else why the first could not be.</summary>
+    private static async Task<string> RecordedAsync(IGateSuiteTasks tasks, CoaiBenchImportReport report, TextWriter output, CancellationToken cancellationToken)
+    {
+        foreach (var suite in report.Suites)
+        {
+            var refused = await GateReportCommand.RecordAsync(tasks, suite, output, cancellationToken);
+            if (refused.Length > 0)
+            {
+                return refused;
+            }
+        }
+
+        return string.Empty;
     }
 
     private static async Task<int> PrintedAsync(TextWriter output, CoaiBenchImportReport report, string artifactRoot, string repo, CancellationToken cancellationToken)
