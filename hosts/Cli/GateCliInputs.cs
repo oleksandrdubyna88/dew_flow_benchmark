@@ -68,12 +68,21 @@ public sealed class GateCliInputs : IAsyncDisposable
     public static BenchDbContext Context(string connection) =>
         new(new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).Options);
 
-    /// <summary><c>--set "COAI_X=1,COAI_Y=2"</c> as a map.</summary>
-    public static IReadOnlyDictionary<string, string> Extras(CommandLine command) =>
-        command.List("set")
-            .Select(pair => pair.Split('=', 2))
-            .Where(pair => pair.Length == 2)
-            .ToDictionary(pair => pair[0].Trim(), pair => pair[1].Trim(), StringComparer.OrdinalIgnoreCase);
+    /// <summary><c>--set "COAI_X=1,COAI_Y=2"</c> as a map — a name given twice (in any case) is refused rather than
+    /// resolved by a guess, and a pair without <c>=</c> is refused rather than dropped.</summary>
+    public static Outcome<IReadOnlyDictionary<string, string>> Extras(CommandLine command)
+    {
+        var pairs = command.List("set").Select(pair => pair.Split('=', 2)).ToList();
+        var malformed = pairs.FirstOrDefault(p => p.Length != 2 || p[0].Trim().Length == 0);
+        var twice = pairs.Where(p => p.Length == 2).GroupBy(p => p[0].Trim(), StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+
+        return (malformed, twice) switch
+        {
+            ({ } bad, _) => Outcome<IReadOnlyDictionary<string, string>>.Failure($"--set '{string.Join('=', bad)}' is not NAME=VALUE"),
+            (_, { } group) => Outcome<IReadOnlyDictionary<string, string>>.Failure($"--set names {group.Key.ToUpperInvariant()} twice — say which value is meant"),
+            _ => Outcome<IReadOnlyDictionary<string, string>>.Success(pairs.ToDictionary(p => p[0].Trim(), p => p[1].Trim(), StringComparer.OrdinalIgnoreCase)),
+        };
+    }
 
     /// <summary>The reviewers a stored run's cells name — what a resume runs with — or the exit code and the reason it
     /// cannot: no database (4), an unreachable one (3), a run id nothing knows (4).</summary>

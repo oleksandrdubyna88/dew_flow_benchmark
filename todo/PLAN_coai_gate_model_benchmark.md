@@ -721,6 +721,17 @@ for the rest.
 >   kept as the measurement; a code cell's served/refused, prompt hash and tap calls included its plan loop's — sliced
 >   at a `MeasuredMark`; a clone interrupted between clone and checkout was reused — it is repaired or re-made; a resume
 >   against an unreachable database or an unknown run said "pass --reviewers" (4) — now 3 and "no gate run".
+> - **The code round (coai, 2026-09-28, `good_enough`, 12 of 12 reviewers, 27 findings — 7 accepted, 20 rejected with
+>   reasons on the round).** Taken, each RED first and checked by revert: a suite gate word nobody recognises was
+>   silently dropped (a mistyped `featre` ran a campaign without the feature gate); a `--set` name given twice threw
+>   out of `ToDictionary`; the probe left its throwaway data directory behind; a campaign printed nothing between
+>   "planned" and its end (three reviewers) — now one line per cell as it ends; and the transport variables were two
+>   lists (the environment and the scope-hash exclusions) — now one. Declined: a tuple null check that is really a
+>   deconstructed element, a context disposed while lanes still run (they have ended), a lock around the environment
+>   snapshot (there is none), unbounded waits (bounded, and a stopped campaign exits them), a tap leaked on the vendors
+>   refusal (disposed there), exit 4 for twenty failures (D14 says 3), naming nits, the repository's exhaustive
+>   `unreachable` arms, local clone paths in the operator's own suite (D8), and the product-moved check's per-run query
+>   (bounded at 200, once per campaign; a scoped pin query belongs to E6's report store).
 > - **Not built** (named, not silently missing): `reviewers add --from-coai-settings` / `--from-calib-models` (E7),
 >   `suite verify --prune` (§4), synthetic (uncommitted) plans (E7's export writes them into the suite's checkout).
 

@@ -62,6 +62,12 @@ public static class GateSuiteFile
 
     private static Outcome<GateTask> Fields(GateTaskId id, JsonElement task)
     {
+        var unknown = Strings(task, "gates").Where(w => !Gate(w).Any()).ToList();
+        if (unknown.Count > 0)
+        {
+            return Outcome<GateTask>.Failure($"gate '{unknown[0]}' is not a gate — plan, code or feature; a word nobody recognises is refused, never dropped");
+        }
+
         var hosts = HostedGates.Of([.. Strings(task, "gates").SelectMany(Gate)]);
         var @case = Case(task);
         var seeds = Seeds(task);

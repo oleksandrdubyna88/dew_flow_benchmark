@@ -178,9 +178,11 @@ flowchart TB
   (flags 4 · missing files 3 · suite 4 · database 3 · reviewers 4 · pin and file-hash key 3), refuses a product that
   moved since an earlier native run of this gate and suite measured any of these reviewers (4, both shas named) unless
   allowed, plans the matrix (repeats outermost), writes the prediction to `runs/<id>/prediction.txt` (its hash on the
-  run) and the run settings to `runs/<id>/run-settings.json`, drives the campaign, prints the pins seen and the
-  footprint. Exit 0 cells produced · 3 pin unreadable / too many failures · 4 product moved · 5 nothing produced
-  (resumable). A shared data directory runs one lane (`--parallel` above 1 is refused, saying why).
+  run) and the run settings to `runs/<id>/run-settings.json`, drives the campaign — one line per cell as it ends
+  (`settled … — Completed` / `refused … — <why>`) —, prints the pins seen and the footprint. Exit 0 cells produced ·
+  3 pin unreadable / too many failures · 4 product moved · 5 nothing produced (resumable). A shared data directory
+  runs one lane (`--parallel` above 1 is refused, saying why). A `--set` name given twice, a pair without `=`, and a
+  suite gate word that is not plan, code or feature are each refused by name.
 - `bench gate resume --run <id> [--dry-run] [--shared-data-dir|--isolated-data-dir]` — the same inputs; refused when
   the suite stamp differs, the product moved (unless the run allows it), the mode would flip, or a reviewer's
   references now resolve to something else than its settled cells were measured under. `--dry-run` is `status`.

@@ -142,6 +142,17 @@ public sealed record CoaiEnvironment
 
     public const string CallerSessionVariable = "COAI_CALLER_SESSION";
 
+    /// <summary>The reviewer's transport as the product's variables — ONE list, read both to SET them and to leave them out
+    /// of the scope's hash, so a transport knob added here can never become a scope difference by being forgotten there.</summary>
+    public static IReadOnlyList<(string Name, Func<ReviewerTransport, string> Value)> TransportVariables { get; } =
+    [
+        ("COAI_LOCAL_MAX_TOKENS", t => Invariant(t.MaxTokens)),
+        ("COAI_LOCAL_REASONING_EFFORT", t => t.ReasoningEffort),
+        ("COAI_REVIEWER_TIMEOUT_MINUTES", t => Invariant(t.TimeoutMinutes)),
+        ("COAI_FEATURE_API_REVIEW_MINUTES", t => Invariant(t.ReviewMinutesCap)),
+        ("COAI_FEATURE_SOURCE_FOLLOWUPS", t => Invariant(t.FollowUps)),
+    ];
+
     /// <summary>The variables that are another axis already, each with the reason it is out of the scope's hash. The vendors
     /// variable is out as well — the reviewer's row (and the tap's per-run port), hashed in <c>ReviewerDefinition.Hash</c> —
     /// and is asked through <see cref="CoaiVendorsSetting.IsVariable"/>, because its name is spelled in one file only.</summary>
@@ -150,12 +161,9 @@ public sealed record CoaiEnvironment
         [DataDirVariable] = "the cell attempt's own directory — the cell is its own axis",
         [CallerSessionVariable] = "the cell attempt's own identity — the cell is its own axis",
         ["COAI_PROVIDERS"] = "the reviewer's id — the reviewer is its own axis",
-        ["COAI_LOCAL_MAX_TOKENS"] = "the reviewer's transport ceiling — in ReviewerDefinition.Hash",
-        ["COAI_LOCAL_REASONING_EFFORT"] = "the reviewer's transport effort — in ReviewerDefinition.Hash",
-        ["COAI_REVIEWER_TIMEOUT_MINUTES"] = "the reviewer's per-turn deadline — in ReviewerDefinition.Hash",
-        ["COAI_FEATURE_API_REVIEW_MINUTES"] = "the reviewer's whole-review cap — in ReviewerDefinition.Hash",
-        ["COAI_FEATURE_SOURCE_FOLLOWUPS"] = "the reviewer's follow-up count — in ReviewerDefinition.Hash",
-    };
+    }.Concat(TransportVariables.Select(t => KeyValuePair.Create(t.Name, $"the reviewer's transport ({t.Name}) — in ReviewerDefinition.Hash")))
+     .ToDictionary(StringComparer.Ordinal);
+
 
     private readonly IReadOnlyList<string> _inheritedSecrets;
 
@@ -213,9 +221,9 @@ public sealed record CoaiEnvironment
             .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
 
         var knobs = new Dictionary<string, string>(inputs.RunSettings.Values, StringComparer.Ordinal);
-        foreach (var (name, value) in Transport(inputs.Reviewer))
+        foreach (var (name, value) in TransportVariables)
         {
-            knobs[name] = value;
+            knobs[name] = value(inputs.Reviewer.Definition.Transport);
         }
 
         knobs[DataDirVariable] = dataDir;
@@ -252,17 +260,6 @@ public sealed record CoaiEnvironment
     public static bool IsHarnessOwned(string name) => IsAxis(name.ToUpperInvariant());
 
     private static bool IsAxis(string name) => AxisVariables.ContainsKey(name) || CoaiVendorsSetting.IsVariable(name);
-
-    /// <summary>The reviewer's transport as the product's variables — the calibration's preset, field for field.</summary>
-    private static IEnumerable<(string Name, string Value)> Transport(GateReviewer reviewer)
-    {
-        var t = reviewer.Definition.Transport;
-        yield return ("COAI_LOCAL_MAX_TOKENS", Invariant(t.MaxTokens));
-        yield return ("COAI_LOCAL_REASONING_EFFORT", t.ReasoningEffort);
-        yield return ("COAI_REVIEWER_TIMEOUT_MINUTES", Invariant(t.TimeoutMinutes));
-        yield return ("COAI_FEATURE_API_REVIEW_MINUTES", Invariant(t.ReviewMinutesCap));
-        yield return ("COAI_FEATURE_SOURCE_FOLLOWUPS", Invariant(t.FollowUps));
-    }
 
     private static string Invariant(int value) => value.ToString(CultureInfo.InvariantCulture);
 }
