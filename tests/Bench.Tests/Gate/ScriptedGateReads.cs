@@ -40,5 +40,5 @@ internal sealed record ScriptedGateReads(
 
     Task<IReadOnlyList<HandCheck>> IGateReads.HandChecksAsync(RubricCatalog catalog, CancellationToken cancellationToken) => Task.FromResult(HandChecks);
 
-    Task<string> IGateReads.PromptHashAsync(Guid runId, CancellationToken cancellationToken) => Task.FromResult("p-" + runId.ToString("N")[..8]);
+    Task<string> IGatePromptHashes.PromptHashAsync(Guid runId, CancellationToken cancellationToken) => Task.FromResult("p-" + runId.ToString("N")[..8]);
 }

@@ -7,7 +7,7 @@ namespace Bench.Application.Gate;
 public sealed record SeedEvidenceRow(SeedId Seed, bool CrossEpic, EvidenceWhere Where);
 
 /// <summary>Where each of a task's seeds sat in the PRODUCT's turn-1 prompt — the calibration's <c>seed_evidence</c>, read
-/// off disk: the first prompt file (<c>answers/NN-…prompt…</c>, committed as a <see cref="ArtifactClass.Prompt"/>
+/// off disk: the first prompt file (<see cref="GateTurnOnePrompt"/> — <c>answers/NN-…prompt…</c>, committed as a <see cref="ArtifactClass.Prompt"/>
 /// artefact) of the task's earliest settled cell, re-read hash-verified, then <see cref="SeedEvidence.Classify"/>. A task
 /// no run left a prompt for (a CLI reviewer writes none) reads <see cref="EvidenceWhere.Unknown"/>, never "missed".
 /// Nothing is stored: it is derivable from the artefacts whenever it is asked.</summary>
@@ -26,17 +26,14 @@ public static class GateSeedEvidence
     {
         foreach (var campaign in campaigns)
         {
-            var prompts = (await store.ArtifactsAsync(campaign, cancellationToken)).Where(a => a.Class == ArtifactClass.Prompt).ToList();
+            var committed = await store.ArtifactsAsync(campaign, cancellationToken);
 
             foreach (var record in (await store.FactsAsync(campaign, cancellationToken)).Where(r => r.Task == task))
             {
-                var first = prompts.Where(p => p.CellId == record.RunId && p.Attempt == record.Attempt)
-                    .OrderBy(p => p.Path.Value, StringComparer.Ordinal)
-                    .FirstOrDefault();
-
-                if (first is not null && await artifacts.ReadAsync(first, cancellationToken) is Outcome<ReadOnlyMemory<byte>>.Ok { Value: var bytes })
+                // Absent or Unreadable: this cell is no evidence either way — try the next one.
+                if (await GateTurnOnePrompt.ReadAsync(artifacts, committed, record.RunId, record.Attempt, cancellationToken) is TurnOnePrompt.Present present)
                 {
-                    return System.Text.Encoding.UTF8.GetString(bytes.Span);
+                    return present.Text;
                 }
             }
         }

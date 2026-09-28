@@ -10,7 +10,9 @@ namespace Bench.Application.Gate;
 /// of the wording it was judged under, while the prompt files are what an INGEST is checked against — and a read host
 /// carries no prompt folder.
 /// </para></summary>
-public interface IGateReads
+/// <remarks>The prompt hash of a settled cell — the one fact the run detail shows that the record does not carry — comes
+/// from <see cref="IGatePromptHashes"/>, the narrow port the A/A check reads it through.</remarks>
+public interface IGateReads : IGatePromptHashes
 {
     /// <summary>Every settled cell of the campaigns of <paramref name="gates"/>, as the report reads it — imported and native
     /// alike. Filtered in the database: a feature-gate read never materialises the plan and code history (code round).</summary>
@@ -34,9 +36,6 @@ public interface IGateReads
 
     Task<IReadOnlyList<HandCheck>> HandChecksAsync(RubricCatalog catalog, CancellationToken cancellationToken);
 
-    /// <summary>The prompt hash of a settled cell — the one fact the run detail shows that the record does not carry.
-    /// Empty when the cell is not there or recorded none.</summary>
-    Task<string> PromptHashAsync(Guid runId, CancellationToken cancellationToken);
 }
 
 /// <summary>Records what a report needs of a SUITE — its tasks' summaries, no text and no path — so a read host can put the
