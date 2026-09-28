@@ -89,7 +89,13 @@ public sealed class Server(Script script)
     public int Serve()
     {
         _events.Write("open");
+        _events.Write($"env {Environment.GetEnvironmentVariable("COAI_CALLER_SESSION")} {Environment.GetEnvironmentVariable("COAI_DATA_DIR")}");
         Console.Error.WriteLine("fake coai-mcp starting");
+        if (script.Root["echoCredsKey"]?.GetValue<bool>() == true)
+        {
+            Console.Error.WriteLine($"debug: COAI_CREDS_KEY={Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}");
+        }
+
         Console.Error.Flush();
 
         try
@@ -361,6 +367,11 @@ public sealed class Events
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.AppendAllText(_path, $"{Stopwatch.GetTimestamp().ToString(CultureInfo.InvariantCulture)} {Environment.ProcessId} {text}\n");
+        var line = Encoding.UTF8.GetBytes($"{Stopwatch.GetTimestamp().ToString(CultureInfo.InvariantCulture)} {Environment.ProcessId} {text}\n");
+
+        // Shared for reading AND writing: a test polls this file while the fake runs, and an append refused because a
+        // reader holds it would crash the fake mid-review — the test would then be measuring its own poll.
+        using var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        stream.Write(line);
     }
 }

@@ -48,7 +48,7 @@ public sealed class McpStdioClient : IMcpSession
     {
         var client = new McpStdioClient();
         var start = ProcessSession.Start(
-            new SessionLaunch(launch.Executable, launch.Arguments, launch.WorkingDirectory, launch.Environment, launch.StderrPath),
+            new SessionLaunch(launch.Executable, launch.Arguments, launch.WorkingDirectory, launch.Environment, launch.StderrPath) { Scrub = launch.Scrub },
             client.Receive);
 
         if (start is SessionStart.NotFound missing)

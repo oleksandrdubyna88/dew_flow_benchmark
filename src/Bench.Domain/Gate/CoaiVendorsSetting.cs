@@ -45,7 +45,12 @@ public sealed record CoaiVendorsSetting
     /// measurement rule: pin everything you are not varying. A retired row, a row that does not host the gate,
     /// and a reference nothing resolved on this machine are each refused by name before any process starts.
     /// </para></summary>
-    public static Outcome<CoaiVendorsSetting> From(IReadOnlyList<GateReviewer> reviewers, GateKind gate, ResolvedReferences resolved)
+    public static Outcome<CoaiVendorsSetting> From(IReadOnlyList<GateReviewer> reviewers, GateKind gate, ResolvedReferences resolved) =>
+        From(reviewers, gate, resolved, EndpointRoutes.None);
+
+    /// <summary>The same, with some reviewers' base url ROUTED through a loopback recorder (the tap): the row then names
+    /// the recorder's address, and the recorder forwards to the reviewer's real endpoint. Still the one producer.</summary>
+    public static Outcome<CoaiVendorsSetting> From(IReadOnlyList<GateReviewer> reviewers, GateKind gate, ResolvedReferences resolved, EndpointRoutes routes)
     {
         if (reviewers.Count == 0)
         {
@@ -53,7 +58,7 @@ public sealed record CoaiVendorsSetting
         }
 
         var rows = new JsonArray();
-        foreach (var row in reviewers.Select(reviewer => Row(reviewer, gate, resolved)))
+        foreach (var row in reviewers.Select(reviewer => Row(reviewer, gate, resolved, routes)))
         {
             if (row is Outcome<JsonObject>.Fail fail)
             {
@@ -77,7 +82,7 @@ public sealed record CoaiVendorsSetting
             [VariableName] = Json,
         };
 
-    private static Outcome<JsonObject> Row(GateReviewer reviewer, GateKind gate, ResolvedReferences resolved)
+    private static Outcome<JsonObject> Row(GateReviewer reviewer, GateKind gate, ResolvedReferences resolved, EndpointRoutes routes)
     {
         var definition = reviewer.Definition;
 
@@ -94,7 +99,7 @@ public sealed record CoaiVendorsSetting
         }
 
         return Addresses(reviewer, resolved).Match(
-            addresses => Outcome<JsonObject>.Success(Build(reviewer, gate, addresses)),
+            addresses => Outcome<JsonObject>.Success(Build(reviewer, gate, routes.Route(reviewer.Id, addresses))),
             Outcome<JsonObject>.Failure);
     }
 
@@ -205,4 +210,26 @@ public sealed record ResolvedReferences(IReadOnlyDictionary<string, string> Valu
     public static ResolvedReferences Empty { get; } = new(new Dictionary<string, string>(StringComparer.Ordinal));
 
     public bool TryGet(string name, out string value) => Values.TryGetValue(name, out value!);
+
+    /// <summary>SHA-256 over the resolved VALUES, by name — what a cell stores so a reference re-pointed from one address
+    /// to another is a different configuration even though the row (which hashes the NAMES) is the same one.</summary>
+    public string Hash => StableHash.Of(CanonicalFields.Of(
+    [
+        "references", .. Values.OrderBy(v => v.Key, StringComparer.Ordinal).SelectMany(v => new[] { v.Key, v.Value }),
+    ]));
+
+    /// <summary>The printable form: names only.</summary>
+    public override string ToString() => $"references: {string.Join(", ", Values.Keys.Order(StringComparer.Ordinal))}";
+}
+
+/// <summary>Which reviewers' base url is routed through a loopback recorder for this cell, and to which address.</summary>
+public sealed record EndpointRoutes(IReadOnlyDictionary<string, string> ByReviewer)
+{
+    public static EndpointRoutes None { get; } = new(new Dictionary<string, string>(StringComparer.Ordinal));
+
+    public static EndpointRoutes Through(GateReviewerId reviewer, string loopback) =>
+        new(new Dictionary<string, string>(StringComparer.Ordinal) { [reviewer.Value] = loopback });
+
+    internal (string BaseUrl, string Executable) Route(GateReviewerId reviewer, (string BaseUrl, string Executable) addresses) =>
+        ByReviewer.TryGetValue(reviewer.Value, out var loopback) ? (loopback, addresses.Executable) : addresses;
 }

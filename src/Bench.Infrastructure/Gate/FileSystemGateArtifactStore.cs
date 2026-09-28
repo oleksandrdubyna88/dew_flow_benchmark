@@ -77,6 +77,33 @@ public sealed class FileSystemGateArtifactStore : IGateArtifactStore
             reason => Task.FromResult(Outcome<ArtifactRef>.Failure(reason)));
     }
 
+    public async Task<Outcome<ArtifactRef>> AdoptAsync(ArtifactScope scope, ArtifactClass kind, ArtifactPath path, CancellationToken cancellationToken)
+    {
+        if (!CellPaths.Allows(scope, path))
+        {
+            return Outcome<ArtifactRef>.Failure($"{path} is outside cell {scope.CellId}'s own root for attempt {scope.Attempt} — only a file inside it is adopted");
+        }
+
+        return await WithinScope(scope, path).Match(
+            full => AdoptFileAsync(scope, kind, path, full, cancellationToken),
+            reason => Task.FromResult(Outcome<ArtifactRef>.Failure(reason)));
+    }
+
+    private static async Task<Outcome<ArtifactRef>> AdoptFileAsync(
+        ArtifactScope scope, ArtifactClass kind, ArtifactPath path, string full, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(full))
+        {
+            return Outcome<ArtifactRef>.Failure($"{path} does not exist — nothing to adopt");
+        }
+
+        await using var stream = new FileStream(full, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        stream.Flush(flushToDisk: true);
+        var sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken));
+
+        return ArtifactRef.Of(scope, kind, path, sha256, stream.Length);
+    }
+
     public async Task<Outcome<ReadOnlyMemory<byte>>> ReadAsync(ArtifactRef artifact, CancellationToken cancellationToken) =>
         await Contained(artifact.Path).Match(
             async full => File.Exists(full)

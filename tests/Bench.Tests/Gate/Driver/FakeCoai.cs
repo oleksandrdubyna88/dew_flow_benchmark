@@ -72,9 +72,18 @@ internal sealed class FakeCoai : IDisposable
     /// <summary>Every event every fake process logged, in time order: (timestamp, pid, text).</summary>
     public IReadOnlyList<(long At, int Pid, string Text)> Events() =>
         [.. Directory.EnumerateFiles(EventsDir, "events-*.log")
-            .SelectMany(File.ReadAllLines)
+            .SelectMany(ReadShared)
             .Select(Parse)
             .OrderBy(e => e.At)];
+
+    /// <summary>Read while the fake may still be appending — shared, so neither side refuses the other. A poll that
+    /// locked the file used to crash the fake mid-review, and the test then measured its own poll.</summary>
+    private static IEnumerable<string> ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    }
 
     /// <summary>The largest number of intervals open at once, where an interval opens at an event named
     /// <paramref name="open"/> and closes at <paramref name="close"/>, per process — optionally keyed by the rest of

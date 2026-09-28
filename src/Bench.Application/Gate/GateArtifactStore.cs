@@ -25,6 +25,11 @@ public interface IGateArtifactStore
     Task<Outcome<ArtifactRef>> WriteAsync(
         ArtifactScope scope, ArtifactClass kind, ArtifactPath path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken);
 
+    /// <summary>A file that was written LIVE inside the attempt's writable roots — the product's data directory, the stderr
+    /// the harness streamed, a tap body written before forwarding — flushed to disk, hashed and returned as a ref. The
+    /// same containment as <see cref="WriteAsync"/>; nothing is copied, so a large tap body is on disk once.</summary>
+    Task<Outcome<ArtifactRef>> AdoptAsync(ArtifactScope scope, ArtifactClass kind, ArtifactPath path, CancellationToken cancellationToken);
+
     /// <summary>Re-reads a committed artefact and refuses it unless its bytes still hash to the ref.</summary>
     Task<Outcome<ReadOnlyMemory<byte>>> ReadAsync(ArtifactRef artifact, CancellationToken cancellationToken);
 

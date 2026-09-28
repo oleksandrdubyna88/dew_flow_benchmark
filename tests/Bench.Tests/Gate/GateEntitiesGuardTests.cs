@@ -19,14 +19,17 @@ public sealed class GateEntitiesGuardTests
     /// of it could hold a sentence somebody wrote about private code.</summary>
     private static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
-        // gate_runs — the suite's stamp, and native or the harness an import came from.
-        "GateRunRow.SuiteStamp", "GateRunRow.Source",
+        // gate_runs — the suite's stamp, native or the harness an import came from, and the prediction's HASH (its text
+        // is in the artefact root).
+        "GateRunRow.SuiteStamp", "GateRunRow.Source", "GateRunRow.PredictionHash",
 
         // gate_cells — slug ids, the claim's owner (a label, a host name), the pin (hashes, the --version text, the
         // product tree the dirty check covered), the vendor's finish WORDS, and hashes.
         "GateCellRow.TaskId", "GateCellRow.ReviewerId", "GateCellRow.Owner", "GateCellRow.OwnerHost",
         "GateCellRow.PinBinarySha256", "GateCellRow.PinVersionText", "GateCellRow.PinGitSha", "GateCellRow.PinCheckedTree",
         "GateCellRow.FinishReasons", "GateCellRow.SettingsHash", "GateCellRow.PromptHash",
+        // the handshake's Major.Minor.Build, and a hash of the resolved reference values (never the values).
+        "GateCellRow.ServerVersion", "GateCellRow.ReferencesHash",
         TheOneException,
 
         // gate_findings — two hashes and nothing else, by construction of GateFinding.

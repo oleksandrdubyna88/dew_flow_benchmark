@@ -23,10 +23,16 @@ internal static class GateRowMapping
         Status = run.Status,
         Source = run.Source.Label,
         CreatedAt = run.CreatedAt,
+        PredictionHash = run.PredictionHash,
+        AllowProductChange = run.AllowProductChange,
     };
 
     public static GateRun ToDomain(GateRunRow row) =>
-        new(row.Id, row.Gate, row.SuiteStamp, row.DataDirMode, row.Status, Source(row.Source), row.CreatedAt);
+        new(row.Id, row.Gate, row.SuiteStamp, row.DataDirMode, row.Status, Source(row.Source), row.CreatedAt)
+        {
+            PredictionHash = row.PredictionHash,
+            AllowProductChange = row.AllowProductChange,
+        };
 
     public static GateCellRow ToRow(GateCell cell) => new()
     {
