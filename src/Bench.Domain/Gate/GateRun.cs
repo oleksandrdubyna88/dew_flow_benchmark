@@ -67,6 +67,14 @@ public sealed record GateRun(
     /// <summary>A run that ended — whole or failed. Its cells are never swept and never claimed again.</summary>
     public bool IsTerminal => Status is GateRunStatus.Finished or GateRunStatus.Failed;
 
+    /// <summary>SHA-256 of the prediction written before the run (measurement rule 4). The TEXT is free text, so it lives
+    /// in the artefact root (<c>runs/&lt;id&gt;/prediction.txt</c>); the database holds its hash. Empty when none was given.</summary>
+    public string PredictionHash { get; init; } = string.Empty;
+
+    /// <summary>Whether this run was started with <c>--allow-product-change</c>: a product that moves during it is claimed
+    /// under the new pin (a new scope) instead of stopping the campaign.</summary>
+    public bool AllowProductChange { get; init; }
+
     public static GateRun Planned(Guid id, GateKind gate, string suiteStamp, DataDirMode mode, DateTimeOffset now) =>
         new(id, gate, suiteStamp, mode, GateRunStatus.Planned, new RunSource.Native(), now);
 }
@@ -92,4 +100,19 @@ public abstract record GateSettlement
     public sealed record Failed(FailureCause Cause) : GateSettlement;
 
     public GateCellOutcomeKind Kind => this is Completed ? GateCellOutcomeKind.Completed : GateCellOutcomeKind.Failed;
+
+    /// <summary>What the attempt learned about the product session beside its facts: the handshake's version, the hash of
+    /// the reviewer's resolved references, and the settings check as counts.</summary>
+    public GateSessionNotes Notes { get; init; } = GateSessionNotes.None;
+}
+
+/// <param name="ServerVersion"><c>serverInfo.version</c> from the MCP handshake — beside the pin, because a rebuild can
+/// print one version from different bytes and the other way round.</param>
+/// <param name="ReferencesHash">SHA-256 over the VALUES the reviewer's references resolved to on this machine (a referenced
+/// endpoint's url, a CLI's path). The row hashes the names; this is what makes a re-pointed reference visible.</param>
+/// <param name="SettingsChecked">How many asked-for settings the session file could show.</param>
+/// <param name="SettingsMismatches">How many of those it showed differently — a setting accepted and ignored.</param>
+public sealed record GateSessionNotes(string ServerVersion, string ReferencesHash, int SettingsChecked, int SettingsMismatches)
+{
+    public static GateSessionNotes None { get; } = new(string.Empty, string.Empty, 0, 0);
 }

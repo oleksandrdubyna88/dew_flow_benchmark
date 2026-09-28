@@ -27,6 +27,11 @@ public sealed class GateRunRow
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    /// <summary>SHA-256 of the prediction text; the text is in the artefact root.</summary>
+    public string PredictionHash { get; set; } = string.Empty;
+
+    public bool AllowProductChange { get; set; }
+
     public List<GateCellRow> Cells { get; set; } = [];
 }
 
@@ -141,6 +146,16 @@ public sealed class GateCellRow
     public string SettingsHash { get; set; } = string.Empty;
 
     public string PromptHash { get; set; } = string.Empty;
+
+    /// <summary>The handshake's <c>serverInfo.version</c> (<c>Major.Minor.Build</c>).</summary>
+    public string ServerVersion { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 over the resolved reference VALUES — a hash, never the values.</summary>
+    public string ReferencesHash { get; set; } = string.Empty;
+
+    public int SettingsChecked { get; set; }
+
+    public int SettingsMismatches { get; set; }
 }
 
 /// <summary>One finding — HASHES ONLY, by construction of <see cref="GateFinding"/>.</summary>

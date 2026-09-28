@@ -22,6 +22,10 @@ internal static class GateFactsMapping
         row.FactsRecorded = true;
         row.SettingsHash = settingsHash;
         row.PromptHash = promptHash;
+        row.ServerVersion = settlement.Notes.ServerVersion;
+        row.ReferencesHash = settlement.Notes.ReferencesHash;
+        row.SettingsChecked = settlement.Notes.SettingsChecked;
+        row.SettingsMismatches = settlement.Notes.SettingsMismatches;
         ApplyReply(row, facts);
         ApplyTokens(row, facts);
         ApplyTimes(row, facts);

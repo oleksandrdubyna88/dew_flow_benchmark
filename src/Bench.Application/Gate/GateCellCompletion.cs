@@ -20,9 +20,21 @@ public sealed record PendingArtifact(ArtifactClass Class, ArtifactPath Path, Rea
 /// </summary>
 public sealed class GateCellCompletion(IGateArtifactStore artifacts, IGateStore store)
 {
+    public Task<Outcome<GateCell>> CompleteAsync(
+        ArtifactScope scope,
+        WorkerIdentity owner,
+        IReadOnlyList<PendingArtifact> files,
+        PendingArtifact runRecord,
+        GateSettlement settlement,
+        CancellationToken cancellationToken) =>
+        CompleteAsync(scope, owner, [], files, runRecord, settlement, cancellationToken);
+
+    /// <summary>The same protocol with files that were written LIVE (the product's data directory, the streamed stderr,
+    /// the tap) adopted first — flushed and hashed where they lie — then the harness's own files, the run record last.</summary>
     public async Task<Outcome<GateCell>> CompleteAsync(
         ArtifactScope scope,
         WorkerIdentity owner,
+        IReadOnlyList<(ArtifactClass Class, ArtifactPath Path)> adopted,
         IReadOnlyList<PendingArtifact> files,
         PendingArtifact runRecord,
         GateSettlement settlement,
@@ -41,7 +53,10 @@ public sealed class GateCellCompletion(IGateArtifactStore artifacts, IGateStore 
             return Outcome<GateCell>.Failure(claim);
         }
 
-        var written = await WriteAllAsync(scope, [.. files, runRecord], cancellationToken);
+        var live = await AdoptAllAsync(scope, adopted, cancellationToken);
+        var written = live is Outcome<IReadOnlyList<ArtifactRef>>.Ok ok
+            ? Join(ok.Value, await WriteAllAsync(scope, [.. files, runRecord], cancellationToken))
+            : live;
 
         return written switch
         {
@@ -74,6 +89,29 @@ public sealed class GateCellCompletion(IGateArtifactStore artifacts, IGateStore 
                 $"cell {scope.CellId} attempt {scope.Attempt} was not settled — its artefact refs were not recorded: {fail.Reason}"),
             _ => throw new InvalidOperationException("unreachable"),
         };
+
+    private async Task<Outcome<IReadOnlyList<ArtifactRef>>> AdoptAllAsync(
+        ArtifactScope scope, IReadOnlyList<(ArtifactClass Class, ArtifactPath Path)> adopted, CancellationToken cancellationToken)
+    {
+        var refs = new List<ArtifactRef>(adopted.Count);
+
+        foreach (var (kind, path) in adopted)
+        {
+            var one = await artifacts.AdoptAsync(scope, kind, path, cancellationToken);
+
+            if (one is Outcome<ArtifactRef>.Fail fail)
+            {
+                return Outcome<IReadOnlyList<ArtifactRef>>.Failure($"{path} was not adopted: {fail.Reason}");
+            }
+
+            refs.Add(((Outcome<ArtifactRef>.Ok)one).Value);
+        }
+
+        return Outcome<IReadOnlyList<ArtifactRef>>.Success(refs);
+    }
+
+    private static Outcome<IReadOnlyList<ArtifactRef>> Join(IReadOnlyList<ArtifactRef> live, Outcome<IReadOnlyList<ArtifactRef>> written) =>
+        written is Outcome<IReadOnlyList<ArtifactRef>>.Ok ok ? Outcome<IReadOnlyList<ArtifactRef>>.Success([.. live, .. ok.Value]) : written;
 
     private async Task<Outcome<IReadOnlyList<ArtifactRef>>> WriteAllAsync(
         ArtifactScope scope, IReadOnlyList<PendingArtifact> files, CancellationToken cancellationToken)

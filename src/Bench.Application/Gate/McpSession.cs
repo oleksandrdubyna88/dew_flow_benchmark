@@ -12,7 +12,12 @@ public sealed record McpLaunch(
     string WorkingDirectory,
     IReadOnlyDictionary<string, string> Environment,
     string StderrPath,
-    TimeSpan HandshakeTimeout);
+    TimeSpan HandshakeTimeout)
+{
+    /// <summary>Applied to every stderr line before it is written — the launch's secret becomes <c>[redacted]</c>, so a
+    /// product that echoes its environment leaves no key in the artefact root.</summary>
+    public Func<string, string> Scrub { get; init; } = static line => line;
+}
 
 /// <summary>What a tool call answered: the text of its content (the product answers one text block carrying JSON),
 /// whether the RPC layer flagged it an error, and how long it took.</summary>

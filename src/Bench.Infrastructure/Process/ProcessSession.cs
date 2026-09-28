@@ -14,7 +14,11 @@ public sealed record SessionLaunch(
     IReadOnlyList<string> Arguments,
     string WorkingDirectory,
     IReadOnlyDictionary<string, string> Environment,
-    string StderrPath);
+    string StderrPath)
+{
+    /// <summary>Applied to every stderr line before it reaches the file.</summary>
+    public Func<string, string> Scrub { get; init; } = static line => line;
+}
 
 /// <summary>How a launch attempt ended before any conversation — the executable was not there, or it started.</summary>
 public abstract record SessionStart
@@ -49,10 +53,13 @@ public sealed class ProcessSession : IAsyncDisposable
     private readonly TaskCompletionSource _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _disposed;
 
-    private ProcessSession(System.Diagnostics.Process process, StreamWriter stderr, Action<string> onLine)
+    private readonly Func<string, string> _scrub;
+
+    private ProcessSession(System.Diagnostics.Process process, StreamWriter stderr, Action<string> onLine, Func<string, string> scrub)
     {
         _process = process;
         _stderr = stderr;
+        _scrub = scrub;
         _process.ErrorDataReceived += (_, e) => Remember(e.Data);
         _process.Exited += (_, _) => _exited.TrySetResult();
         _process.BeginErrorReadLine();
@@ -119,7 +126,7 @@ public sealed class ProcessSession : IAsyncDisposable
             return new SessionStart.NotFound(launch.Executable, ex.Message);
         }
 
-        return new SessionStart.Started(new ProcessSession(process, stderr, onLine) { ProcessId = process.Id, StderrPath = launch.StderrPath });
+        return new SessionStart.Started(new ProcessSession(process, stderr, onLine, launch.Scrub) { ProcessId = process.Id, StderrPath = launch.StderrPath });
     }
 
     /// <summary>Writes one line to the child's stdin. False when the pipe is gone — the child exited — which the
@@ -250,7 +257,7 @@ public sealed class ProcessSession : IAsyncDisposable
         {
             try
             {
-                _stderr.WriteLine(line);
+                _stderr.WriteLine(_scrub(line));
                 _stderr.Flush();
             }
             catch (ObjectDisposedException)

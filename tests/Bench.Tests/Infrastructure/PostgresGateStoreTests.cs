@@ -305,4 +305,30 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
         PostgresGatePublicationSource.GateEntities(db).Select(e => e.GetTableName()).Should().HaveCount(6);
         (await db.GateRuns.CountAsync(Ct)).Should().BeGreaterThanOrEqualTo(0, "the tables exist on a migrated database");
     }
+
+    /// <summary>The driver's migration adds columns to gate tables only, and what it adds reads back: the prediction's
+    /// hash and the product-change flag on the run, the session notes on the settled cell.</summary>
+    [Fact]
+    public async Task The_driver_migration_touches_only_gate_tables_and_its_columns_read_back()
+    {
+        await using (var db = postgres.NewContext())
+        {
+            var migrations = db.GetService<IMigrationsAssembly>();
+            var id = migrations.Migrations.Keys.Should().ContainSingle(k => k.EndsWith("_GateDriver", StringComparison.Ordinal)).Subject;
+            migrations.CreateMigration(migrations.Migrations[id], db.Database.ProviderName!).UpOperations
+                .OfType<ITableMigrationOperation>().Select(o => o.Table).Should().OnlyContain(t => t.StartsWith("gate_", StringComparison.Ordinal));
+        }
+
+        var (planned, cells) = Planned(count: 1);
+        var run = planned with { PredictionHash = new string('7', 64), AllowProductChange = true };
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        var claimed = (await store.ClaimNextAsync(run.Id, Here(), Pin(), Ct)).Ok();
+        (await store.SettleAsync(claimed.Id, Here(), Completed() with { Notes = new GateSessionNotes("0.39.0", new string('8', 64), 3, 1) }, Ct)).Ok();
+
+        (await store.LoadAsync(run.Id, Ct)).Ok().Should().Match<GateRun>(r => r.PredictionHash == run.PredictionHash && r.AllowProductChange);
+        await using var read = postgres.NewContext();
+        var row = await read.GateCells.SingleAsync(c => c.Id == claimed.Id, Ct);
+        (row.ServerVersion, row.ReferencesHash, row.SettingsChecked, row.SettingsMismatches).Should().Be(("0.39.0", new string('8', 64), 3, 1));
+    }
 }
