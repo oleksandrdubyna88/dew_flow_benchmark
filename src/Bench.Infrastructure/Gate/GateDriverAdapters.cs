@@ -160,7 +160,9 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         await gate.WaitAsync(cancellationToken);
         try
         {
-            return Directory.Exists(Path.Combine(clone, ".git")) ? await VerifiedAsync(clone, task, cancellationToken) : await CloneAsync(clone, task, cancellationToken);
+            var made = Directory.Exists(Path.Combine(clone, ".git")) ? await VerifiedAsync(clone, task, cancellationToken) : await CloneAsync(clone, task, cancellationToken);
+
+            return made is Outcome<string>.Ok && File.Exists(Path.Combine(clone, ".gitmodules")) ? await SubmodulesAsync(clone, task, cancellationToken) : made;
         }
         finally
         {
@@ -225,13 +227,28 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(clone)!);
-        var cloned = await GitCommand.RunAsync(checkoutRoot, GitTimeout, cancellationToken, "clone", "--shared", "--no-checkout", "--quiet", worktree, clone);
+        var cloned = await GitCommand.RunAsync(checkoutRoot, GitTimeout, cancellationToken, "clone", "--shared", "--no-checkout", "--quiet", "--config", AsCommitted, worktree, clone);
         var checkedOut = cloned is Outcome<string>.Ok
             ? await GitCommand.RunAsync(clone, GitTimeout, cancellationToken, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", task.Case.VariantHead.Value)
             : cloned;
 
         return checkedOut.Match(_ => Outcome<string>.Success(clone), reason => Outcome<string>.Failure($"task '{task.Id}': the gate's clone could not be made — {reason}"));
     }
+
+    /// <summary>The submodules the variant head pins, at the commits it pins — idempotent, so a reused clone and one
+    /// interrupted before this step both end whole. The product reads a repository's rules from the tree it is handed; a
+    /// submodule left empty tells the reviewer the rules are not there (E7's A/A, 2026-09-28: none of twelve against the
+    /// calibration's eight). The same line-ending setting rides into the submodules' own clones; a local path is a url a
+    /// suite may name, so the file transport is allowed here. Run only where the tree HAS a <c>.gitmodules</c>: the step is
+    /// a git process inside the clone's lock, and paying it on every cell of a repository without submodules serialised
+    /// the lanes (the campaign's concurrency tests went red on it).</summary>
+    private static async Task<Outcome<string>> SubmodulesAsync(string clone, GateTask task, CancellationToken cancellationToken) =>
+        (await GitCommand.RunAsync(clone, GitTimeout, cancellationToken, "-c", AsCommitted, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--quiet"))
+            .Match(_ => Outcome<string>.Success(clone), reason => Outcome<string>.Failure($"task '{task.Id}': the submodules its variant head pins could not be checked out — {reason}"));
+
+    /// <summary>The committed bytes, whatever the machine's global <c>core.autocrlf</c> says: a clone inheriting
+    /// <c>true</c> handed the product a CRLF plan the calibration's checkout had as LF (E7's A/A, 2026-09-28).</summary>
+    private const string AsCommitted = "core.autocrlf=false";
 
     /// <summary>The task's repository as a target the checkout provider takes: a url as it is, a local path as
     /// <c>file://</c>.</summary>
