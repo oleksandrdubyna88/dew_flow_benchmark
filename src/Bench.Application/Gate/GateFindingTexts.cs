@@ -47,12 +47,23 @@ public static class GateFindingTexts
             return Outcome<IReadOnlyList<FindingToAssess>>.Failure($"cell {record.RunId}: {((Outcome<ReadOnlyMemory<byte>>.Fail)bytes).Reason}");
         }
 
-        var lines = System.Text.Encoding.UTF8.GetString(content.Span).Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 0).ToList();
-        var ordinals = record.Findings.Select(f => f.Ordinal).ToHashSet();
+        // Line n IS ordinal n (the driver writes one line per reply finding, in reply order) — so the raw line position is
+        // the index, never a position after dropping blanks, and each line is CHECKED against the stored finding.
+        var lines = System.Text.Encoding.UTF8.GetString(content.Span).Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var stranger = record.Findings.FirstOrDefault(f => f.Ordinal >= lines.Count || StableHash.Of(TextOf(lines[f.Ordinal])) != f.TextHash);
 
-        return Outcome<IReadOnlyList<FindingToAssess>>.Success(
-            [.. lines.Select((json, ordinal) => (json, ordinal)).Where(l => ordinals.Contains(l.ordinal))
-                .Select(l => new FindingToAssess(record.CampaignId, record.RunId, l.ordinal, record.Task, record.Reviewer, l.json))]);
+        return stranger is not null
+            ? Outcome<IReadOnlyList<FindingToAssess>>.Failure(
+                $"cell {record.RunId}: line {stranger.Ordinal} of its findings.jsonl does not hash to the finding the database stored for that ordinal — "
+                + "refused rather than judging one finding under another's identity")
+            : Outcome<IReadOnlyList<FindingToAssess>>.Success(
+                [.. record.Findings.Select(f => new FindingToAssess(record.CampaignId, record.RunId, f.Ordinal, record.Task, record.Reviewer, lines[f.Ordinal]))]);
     }
 
+    /// <summary>A line's finding text exactly as the driver hashed it — read by the one reply parser, not by a second copy
+    /// of its rules.</summary>
+    private static string TextOf(string line) =>
+        GateReplyParser.Parse($"{{\"verdict\":\"revise\",\"findings\":[{(line.Trim().Length > 0 ? line : "{}")}]}}") is { Findings: [var finding] }
+            ? finding.Text
+            : string.Empty;
 }

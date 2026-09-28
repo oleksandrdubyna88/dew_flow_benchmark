@@ -985,6 +985,21 @@ for the rest.
 >   the file's hash. `Figure.NotHandChecked` is a new state (the DTO's `not-hand-checked` for E6).
 > - **The strict-% gate applies to `SupportedPct` and `SupportedOrPartialPct`**; the counts beside them stay visible.
 > - **Seed evidence is printed by `bench gate assess`, not stored** (it is derivable from the artefacts).
+>
+> **The code round (coai, 2026-09-28, `good_enough`, 12 of 12 reviewers, 36 findings — 11 accepted, 25 rejected with
+> reasons on the round) and our own review (Opus), each accepted finding RED first:** a findings file whose line does not
+> hash to the stored finding is refused (line position is the ordinal, checked against `TextHash`); a batch the database
+> refuses is reported unassessed, not read (`Expected value to be 0 ... but found 2`); prior cluster keys come only from
+> THIS assessor's committed lines (an orphan line and the other assessor's keys leaked in); a hand-check binds each answer
+> to a hash of everything its row showed (a note, a seed hit or a title edited after the draw was accepted) and covers
+> only the campaigns that had verdicts to draw (an empty campaign named on the command line was unlocked); a batch is
+> announced when it is sent; `--scope` reads every run of the stamp in SQL (it filtered the newest 10 000 in memory). From
+> our own review: the assessor's working folder, schema, answer file and seed list were INSIDE `assess/` — the key and
+> every run's findings one `ls ..` away under a read-only (not read-blind) sandbox — now a temp workspace archived
+> afterwards; an append after a torn line glued its first line onto the fragment; a log held by one pass's writer could
+> not be read by the other assessor's pass. Declined: the Claude `--max-turns 1` (the operator's specification — measured,
+> documented, asked), prompt injection through a finding (rows are JSON-escaped, ids and seeds are validated),
+> misreadings of the evidence loop, streaming small files, a key per rubric, naming nits.
 
 - [x] **S4.1** `prompts/gate-assess/strict.md` (the calibration's rubric verbatim) + `lenient-worth-v1.md` (the coai
   judge's question, for the import's label only), hashed through `PromptCatalog`.

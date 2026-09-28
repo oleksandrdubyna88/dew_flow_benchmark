@@ -22,6 +22,10 @@ public interface IGateStore
     /// <summary>The newest runs, capped in the database.</summary>
     Task<IReadOnlyList<GateRun>> RecentAsync(int limit, CancellationToken cancellationToken);
 
+    /// <summary>The ids of EVERY run planned against <paramref name="suiteStamp"/>, chosen in the database — never a filter
+    /// over a capped recent list, which would drop the oldest campaigns without saying so.</summary>
+    Task<IReadOnlyList<Guid>> RunsOfSuiteAsync(string suiteStamp, CancellationToken cancellationToken);
+
     /// <summary>Takes one pending cell of a run that has not ended, atomically, under <paramref name="pin"/>. The
     /// claim increments the attempt count — once, in the same UPDATE — so the attempt number a cell is claimed at
     /// is the directory its artefacts go to.</summary>

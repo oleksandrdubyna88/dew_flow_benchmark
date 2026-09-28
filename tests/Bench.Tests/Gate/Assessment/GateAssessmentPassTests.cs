@@ -35,6 +35,8 @@ public sealed class GateAssessmentPassTests(PostgresFixture postgres)
         var sent = string.Join('\n', assessor.Prompts.Concat(assessor.Asks.Select(a => a.WorkingDirectory)).Concat(assessor.Asks.SelectMany(a => new[] { a.Options.OutputSchemaFile, a.Options.LastMessageFile })));
         sent.Should().NotContain("grok").And.NotContain(rig.Campaign.ToString()).And.NotContain(rig.Reviewer.Definition.Model);
         rig.Cells.Should().OnlyContain(cell => !sent.Contains(cell.ToString()), "no cell id — the run a finding came from — reaches the assessor");
+        sent.Replace('\\', '/').Should().NotContain(rig.Root.Replace('\\', '/'),
+            "no path handed to the assessor — its folder, the schema, the answer file, the seed list — lies in the artefact root, where the key and every run's findings are one directory away");
         assessor.Prompts[0].Should().Contain(AssessRig.NeutralCheckout).And.Contain("PRIOR CLUSTER KEYS\n(none)").And.Contain("INPUT ROWS (4 findings, task cs2)");
     }
 
@@ -136,6 +138,70 @@ public sealed class GateAssessmentPassTests(PostgresFixture postgres)
 
         assessor.Prompts[0].Should().Contain("PRIOR CLUSTER KEYS\n(none)");
         assessor.Prompts[1].Should().Contain("PRIOR CLUSTER KEYS\n- cs2:null-export", "the first batch's key is offered to the second so one issue keeps one key");
+    }
+
+    /// <summary>Prior cluster keys come from THIS assessor's COMMITTED readings: an orphan log line (its batch never reached
+    /// the database) is not a reading, and another assessor's keys would steer the second opinion toward the first.</summary>
+    [Fact]
+    public async Task Prior_cluster_keys_are_this_assessors_committed_ones_only()
+    {
+        using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 2, ct: Ct);
+        var other = GateReviewer.Create(GateReviewerId.Parse("claude-opus").Ok(),
+            GateReviewerTests.Definition(model: "claude-opus-5", runtime: ReviewerRuntime.Claude, endpoint: string.Empty, credsKeyRef: string.Empty, keyName: string.Empty).Ok(), DateTimeOffset.UtcNow);
+        await rig.Pass(ScriptedAssessor.AllSupported()).RunAsync(rig.Request(assessor: other), _ => { }, Ct);
+        var key = (await rig.Files.ReadKeyAsync(Ct)).Ok();
+        await rig.Files.AppendVerdictLinesAsync(AssessRig.Assessor().Id,
+            [new VerdictLine(key[0].Id.Value, "cs2", "codex-astra", "orphan-batch", rig.Strict.Rubric.Hash, "supported", "high", "yes", "yes", "cs2:orphan-key", "none", "n", string.Empty, DateTimeOffset.UtcNow)], Ct);
+
+        var codex = ScriptedAssessor.AllSupported();
+        await rig.Pass(codex).RunAsync(rig.Request(), _ => { }, Ct);
+
+        codex.Prompts[0].Should().Contain("PRIOR CLUSTER KEYS\n(none)", "neither the other assessor's committed keys nor this one's orphan line are this assessor's readings");
+    }
+
+    /// <summary>A batch can take many minutes; the operator is told when it is SENT, not only when it comes back.</summary>
+    [Fact]
+    public async Task A_batch_is_announced_before_the_assessor_is_asked()
+    {
+        using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 2, ct: Ct);
+        var events = new List<string>();
+        var assessor = new ScriptedAssessor((ids, _) =>
+        {
+            events.Add("asked");
+            return Answer([.. ids.Select(id => AnswerRow(id))]);
+        });
+
+        await rig.Pass(assessor).RunAsync(rig.Request(), new AssessmentProgress(started => events.Add($"sent {started.Asked}"), done => events.Add("done")), Ct);
+
+        events.Should().Equal(["sent 2", "asked", "done"]);
+    }
+
+    /// <summary>The database is the commit point: a batch it refused was not assessed, whatever the assessor answered.</summary>
+    [Fact]
+    public async Task A_batch_the_verdict_store_refuses_is_left_unassessed_never_reported_as_read()
+    {
+        using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 2, reviewerModel: "gpt-5.6-terra", ct: Ct);
+
+        var report = (await rig.Pass(ScriptedAssessor.AllSupported(), verdicts: new RefusingVerdicts(rig.NewVerdicts())).RunAsync(rig.Request(), _ => { }, Ct)).Ok();
+
+        report.Assessed.Should().Be(0, "nothing reached the database");
+        report.Unassessed.Should().Be(2, "the next pass must ask them again, and the exit code must say so");
+        report.FamilyMatched.Should().Be(0);
+        report.Refusals.Should().Contain(r => r.Contains("the database refused the batch"));
+    }
+
+    /// <summary>Line n of findings.jsonl is taken as ordinal n — and checked: its text must hash to the finding the database
+    /// stored for that ordinal, or a reordered or edited file would have one finding judged under another's identity.</summary>
+    [Fact]
+    public async Task A_findings_file_whose_line_is_not_the_stored_finding_is_refused_rather_than_assessed_under_another_identity()
+    {
+        using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 2, ct: Ct, fileLine: i => FindingJson(1 - i));
+        var assessor = ScriptedAssessor.AllSupported();
+
+        var refused = await rig.Pass(assessor).RunAsync(rig.Request(), _ => { }, Ct);
+
+        refused.Reason().Should().Contain("does not hash to the finding the database stored");
+        assessor.Prompts.Should().BeEmpty("nothing is shown to an assessor under an identity that is not its own");
     }
 
     [Fact]

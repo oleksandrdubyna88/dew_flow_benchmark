@@ -306,6 +306,24 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
         (await db.GateRuns.CountAsync(Ct)).Should().BeGreaterThanOrEqualTo(0, "the tables exist on a migrated database");
     }
 
+    /// <summary>Every run of a suite stamp, chosen in the database — the assessment's <c>--scope</c> used to filter the
+    /// newest 10 000 runs in memory, which silently dropped every campaign older than that.</summary>
+    [Fact]
+    public async Task The_runs_of_a_suite_stamp_are_every_run_planned_against_it_and_no_other()
+    {
+        var store = NewStore(new TestClock(Noon));
+        var stamp = $"scope-{Guid.NewGuid():N}"[..20] + "#000000000000";
+        var (first, firstCells) = Planned(count: 1);
+        var (second, secondCells) = Planned(count: 1);
+        var (other, otherCells) = Planned(count: 1);
+        await store.PlanAsync(first with { SuiteStamp = stamp }, firstCells, Ct);
+        await store.PlanAsync(second with { SuiteStamp = stamp }, secondCells, Ct);
+        await store.PlanAsync(other, otherCells, Ct);
+
+        (await store.RunsOfSuiteAsync(stamp, Ct)).Should().BeEquivalentTo([first.Id, second.Id]);
+        (await store.RunsOfSuiteAsync("never-planned#000000000000", Ct)).Should().BeEmpty();
+    }
+
     /// <summary>The assessment's migration (E4) adds the hand-check table and the verdict replay index, on gate tables only.</summary>
     [Fact]
     public async Task The_assessment_migration_adds_the_hand_check_table_and_the_verdict_replay_index_and_touches_no_other()

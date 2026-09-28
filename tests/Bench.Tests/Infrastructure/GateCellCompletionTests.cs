@@ -158,6 +158,8 @@ internal abstract class ForwardingGateStore(IGateStore inner) : IGateStore
 
     public Task<IReadOnlyList<GateRun>> RecentAsync(int limit, CancellationToken cancellationToken) => inner.RecentAsync(limit, cancellationToken);
 
+    public Task<IReadOnlyList<Guid>> RunsOfSuiteAsync(string suiteStamp, CancellationToken cancellationToken) => inner.RunsOfSuiteAsync(suiteStamp, cancellationToken);
+
     public Task<Outcome<GateCell>> ClaimNextAsync(Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken) =>
         inner.ClaimNextAsync(runId, owner, pin, cancellationToken);
 

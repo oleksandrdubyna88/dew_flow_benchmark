@@ -66,6 +66,13 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
         return [.. rows.Select(GateRowMapping.ToDomain)];
     }
 
+    public async Task<IReadOnlyList<Guid>> RunsOfSuiteAsync(string suiteStamp, CancellationToken cancellationToken) =>
+        await db.GateRuns.AsNoTracking()
+            .Where(r => r.SuiteStamp == suiteStamp)
+            .OrderBy(r => r.CreatedAt)
+            .Select(r => r.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<Outcome<GateCell>> ClaimNextAsync(
         Guid runId, WorkerIdentity owner, ProductPin pin, CancellationToken cancellationToken)
     {

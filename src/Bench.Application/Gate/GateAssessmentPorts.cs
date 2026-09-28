@@ -51,6 +51,10 @@ public interface IGateAssessmentFiles
 
     Task WriteBatchFileAsync(string batchDirectory, string name, string text, CancellationToken cancellationToken);
 
+    /// <summary>Copies a batch folder's files into the artefact root (<c>assess/batches/&lt;batch&gt;/</c>) — the prompt as sent
+    /// is the evidence behind the prompt hash on every verdict it produced.</summary>
+    Task ArchiveBatchAsync(string batchDirectory, string batchId, CancellationToken cancellationToken);
+
     /// <summary>Appends a batch's lines to the ASSESSOR's verdict log (one file per assessor, one writer per file under
     /// <see cref="LockAssessorAsync"/>) and flushes them to disk before returning.</summary>
     Task AppendVerdictLinesAsync(GateReviewerId assessor, IReadOnlyList<VerdictLine> lines, CancellationToken cancellationToken);

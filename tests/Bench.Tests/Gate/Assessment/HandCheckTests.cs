@@ -66,13 +66,14 @@ public sealed class HandCheckTests
     [Fact]
     public void Answers_count_only_when_every_answered_row_was_drawn_and_still_shows_the_stored_verdict()
     {
-        var drawn = Enumerable.Range(0, 20).Select(i => new HandCheckTruth(Id($"{i:x8}"), Campaign, "b1", "supported")).ToList();
-        var answers = drawn.Select((t, i) => new HandCheckAnswer(t.Id, t.BatchId, t.Reading, true, i % 4 != 0)).ToList();
+        var drawn = Enumerable.Range(0, 20).Select(i => new HandCheckTruth(Id($"{i:x8}"), Campaign, "b1", "supported", $"e{i}")).ToList();
+        var answers = drawn.Select((t, i) => new HandCheckAnswer(t.Id, t.BatchId, t.Reading, t.Evidence, true, i % 4 != 0)).ToList();
 
         HandCheckAnswers.Verify(answers, drawn).Ok().Should().Be((20, 15));
 
         HandCheckAnswers.Verify([.. answers.Skip(1)], drawn).Reason().Should().Contain("19 row(s) answered");
-        HandCheckAnswers.Verify([.. answers.Skip(1), answers[0] with { Reading = "refuted" }], drawn).Reason().Should().Contain("no longer shows the verdict as stored");
+        HandCheckAnswers.Verify([.. answers.Skip(1), answers[0] with { Reading = "refuted" }], drawn).Reason().Should().Contain("no longer shows what was drawn");
+        HandCheckAnswers.Verify([.. answers.Skip(1), answers[0] with { Evidence = "edited" }], drawn).Reason().Should().Contain("no longer shows what was drawn");
         HandCheckAnswers.Verify([.. answers.Skip(1), answers[0] with { Id = Id("ffffffff") }], drawn).Reason().Should().Contain("was not drawn");
         HandCheckAnswers.Verify([.. answers, answers[0]], drawn).Reason().Should().Contain("answered 2 times");
     }
