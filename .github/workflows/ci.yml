@@ -79,11 +79,19 @@ jobs:
       - name: Create the schema
         run: dotnet run --project hosts/Cli -c Release -- prune --db "$BENCH_CONN" --hit-retention-days 30
 
+      # Built ONCE, before either host starts: two `dotnet run`s side by side both build the shared projects into one
+      # bin/, and on 2026-09-28 one lost the race on Bench.Api.deps.json ("being used by another process") and the
+      # collector never started — an environment failure that said nothing about the contract.
+      - name: Build both hosts
+        run: |
+          dotnet build hosts/Api -c Release
+          dotnet build hosts/Collector -c Release
+
       - name: Start both hosts and run the suite
         run: |
           ConnectionStrings__bench="$BENCH_CONN" ASPNETCORE_URLS=http://127.0.0.1:5411 \
-            dotnet run --project hosts/Api -c Release &
-          ConnectionStrings__bench="$BENCH_CONN" dotnet run --project hosts/Collector -c Release &
+            dotnet run --no-build --project hosts/Api -c Release &
+          ConnectionStrings__bench="$BENCH_CONN" dotnet run --no-build --project hosts/Collector -c Release &
           for _ in $(seq 1 30); do
             curl -fsS -o /dev/null http://127.0.0.1:5411/api/bench/health && break
             sleep 2
