@@ -1,11 +1,12 @@
 # Module — Gate: the coai gate-model benchmark
 
 > Status: **the domain and the contracts (E1), the store and the privacy guard (E2), the driver (E3), the blinded
-> strict assessment (E4) and the import (E5) exist, 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by
-> cell, and stores every session; `bench gate assess` reads each finding blind and records a verdict per batch; `bench
-> gate hand-check` records the person's check that gates every strict %; `bench gate import` brings the calibration's
-> Python runs, the coai-bench records and the published summary tables in, read-only and idempotent.** The report
-> surfaces and the page (E6) and the first campaign (E7) are open in
+> strict assessment (E4), the import (E5) and the report, the API and the page (E6) exist, 2026-09-28: `bench gate run`
+> drives the product over MCP stdio, cell by cell, and stores every session; `bench gate assess` reads each finding blind
+> and records a verdict per batch; `bench gate hand-check` records the person's check that gates every strict %; `bench
+> gate import` brings the calibration's Python runs, the coai-bench records and the published summary tables in,
+> read-only and idempotent; `bench gate report`, `/api/bench/gate/*` and the console's Gate tab answer ONE object per
+> scope and rubric.** The first campaign (E7) is open in
 > [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 > This file describes what is built; a sentence here about something that does not run is a bug in the file.
 
@@ -109,6 +110,15 @@ flowchart TB
         source["DirectoryImportSource : IImportSource (read-only)<br/>GitCommitResolver : ICommitResolver"]
         icli["bench gate import calib · coai-bench · summary"]
     end
+    subgraph read["the report (E6) — the query in Application, the read adapter in Infrastructure, the page in Bench.Ui"]
+        query["GateReportQuery over IGateReads<br/>scopes · one scope under ONE rubric · run list · one run<br/>400 asked wrongly · 404 not here · 409 tasks not recorded"]
+        mapping["GateReportContract — ModelTable → GateModelTableDto<br/>every Figure a state, never a zero"]
+        reads["PostgresGateReads : IGateReads (read only)<br/>GateRecordReader.ReadAllAsync · rubrics from the rows · gate_suite_tasks"]
+        tasks["PostgresGateSuiteTasks : IGateSuiteTasks<br/>a suite's tasks in ONE transaction · same set = no-op · other = refused"]
+        rcli["bench gate report --json · bench gate suite record"]
+        api["GateApi — /api/bench/gate/*<br/>port resolved per request · 503 when a host never registered it"]
+        page["Gate tab — GateFeature · GatePlan · GateCode<br/>GateScopeView → GateModelTable · GatePerTaskTable · GateRunList<br/>GateFigureWords: — · unknown · withheld · n/a · not hand-checked"]
+    end
     contracts["Bench.Contracts — Gate*Dto<br/>no free text reachable (type-graph walk, Type.Property allow-list)"]
     guard["ArchitectureTests<br/>deciders in Bench.Domain · Ui → Contracts only · one setting producer · name private"]
 
@@ -121,7 +131,18 @@ flowchart TB
     finding --> verdict
     verdict --> population
     population --> report
-    report -. "mapped by the Application layer (E6)" .-> contracts
+    report --> query
+    query --> mapping
+    mapping --> contracts
+    query --> reads
+    reads --> pgstore
+    tasks --> pgstore
+    rcli --> query
+    rcli --> tasks
+    cli -- "records the suite's tasks" --> tasks
+    icli -- "records the suite's tasks" --> tasks
+    api --> query
+    page -- "HTTP, Contracts only" --> api
     cell --> pgstore
     finding --> pgstore
     completion --> artstore
@@ -187,6 +208,11 @@ flowchart TB
 | `VendorFamily` | `VendorFamily.cs` | E4. A row's family from its model id (lower-cased, a `vendor/` route prefix dropped), then its CLI word, then the model id itself; `AssessorFamilyMatches` on every verdict |
 | `HandCheck` · `HandCheckGate` · `HandCheckAnswers` | `HandCheck.cs` | E4, the DoD. A hand-check is (campaigns, rubric, assessor, read ≥ 20, agreed, the answered file's hash). Under a strict rubric a row's `SupportedPct` / `SupportedOrPartialPct` are `Figure.NotHandChecked` unless every (campaign, assessor) its counted verdicts come from is covered; a lenient rubric is not gated; nothing judged stays `Unassessed`. Answers count only when every answered row was DRAWN, still shows the stored verdict (same batch, same reading) and is answered once |
 | `FindingAssessor` · `GateAssessmentPass` · `GateRubrics` · `GateFindingTexts` · `GateHandChecks` | `src/Bench.Application/Gate/` | E4, over the ports. The rubrics are `prompts/gate-assess/strict.md` (the calibration's instructions verbatim) and `lenient-worth-v1.md` (the coai-bench judge's question, a label only), hashed through `PromptCatalog.GateRubric` with line endings normalised; only `strict-v1` is asked. The prompt is the rubric, `PRIOR CLUSTER KEYS`, `INPUT ROWS` — the other harness's framing. A claude answer is taken out of its prose by `AgentJson`; a claude run that stopped at its turn ceiling is `NoAnswer` |
+| `GateScope.Id` · `GateWord` · `GateRunList` · `TaskSummary.Canonical` | `GateScope.cs`, `GateKind.cs`, `GateRunList.cs`, `GateTask.cs` | E6. A scope's KEY is twelve hex of `StableHash` over its five fields, length-prefixed (a documented formula, pinned on a vector; each field moves it) — what `--scope`, `?scope=` and the page control carry. `GateWord.Parse` is the one reading of a gate word: `plan`, `code`, `feature` in any case and nothing else (`Enum.TryParse` alone took `"7"`). `GateRunList.Superseded` marks an earlier attempt of a cell (campaign, task, reviewer, repeat) whose later attempt is the run — the population's rule, shown rather than hidden. `TaskSummary.Canonical` (seeds in id order) is what a recorded task set is compared by |
+| `IGateReads` · `IGateSuiteTasks` · `GateReportQuery` · `GateSnapshot` · `GateRubricChoice` · `GateReportContract` · `TaskOrNot` | `src/Bench.Application/Gate/GateReport*.cs`, `GateSnapshot.cs` | E6. The READ port carries no write (an architecture test). One snapshot per request — every record, the rubric catalog built from the ROWS, every verdict, the recorded stamps. Refusals are `GateAnswer<T>.Refused(kind, reason)`: `BadRequest` (a word that is no gate, no scope, no rubric, a rubric id naming two wordings), `NotFound` (a scope the gate does not hold — the refusal lists the ones it does —, a rubric the scope's verdicts do not carry, nothing assessed, an unknown run), `Conflict` (the suite's tasks not recorded). `ResolveScope` takes a scope id or a suite stamp that spans exactly one scope; a stamp spanning several is refused listing each. `GateReportContract` is the one flattening both surfaces answer with; `TaskOrNot` reads a task the database does not hold as NOT RECORDED, never as a measured task with no language |
+| `PostgresGateReads` · `PostgresGateSuiteTasks` · `GateSuiteTaskRow` | `src/Bench.Infrastructure/Persistence/PostgresGateReads.cs`, `GateEntities.cs` | E6. Reads compose the verdict store's own mapping and `GateRecordReader.ReadAllAsync` (three queries whatever the number of campaigns). A suite's tasks are written in ONE `SaveChanges`; a held row that reads differently from the suite — or a held task the suite lacks — refuses the whole record naming the task; a unique-index race is an Outcome, never an exception |
+| `GateApi` | `src/Bench.Api/GateApi.cs` | E6. `/api/bench/gate/scopes[?gate=]`, `/{gate}/models?scope=&rubric=`, `/{gate}/runs?scope=`, `/runs/{id}` — mapped from `MapBenchApi`, the port resolved from the REQUEST's services: in a host that never registered it the route answers 503 naming the registration, where a handler parameter would have been inferred as a body and failed every route of that host at startup (measured by revert) |
+| Gate pages · `GateScopeView` · `GateModelTable` · `GatePerTaskTable` · `GateRunList` · `GateViews` · `GateFigureWords` | `src/Bench.Ui/Pages/Gate*.razor(.cs)`, `src/Bench.Ui/Components/Gate*.razor(.cs)`, `src/Bench.Contracts/GateContracts.cs` | E6. The scope control offers only the scopes `/gate/scopes` echoed; the rubric control only the rubrics the chosen scope's verdicts carry, and the table re-reads when either changes; one option is chosen for the reader, two wait (no default), and `?scope=` / `?rubric=` in the address choose when on offer. The verdict columns are headed in the rubric's own words WITH its id (*supported % (strict-v1)* against *worth having % (lenient-worth-v1)*), and the strict-only columns are not drawn under a lenient rubric. A scope whose tasks are not recorded asks for no table and names the verb; a scope with no verdicts hides the rubric control. `GateFigureWords` is the ONE rendering of a figure the CLI's text and the page share |
 | `Gate*Dto` | `src/Bench.Contracts/GateContracts.cs` | figures travel as `GateFigureDto(known, value, state)`; `GateContractsGuardTests` walks every `Gate*Dto` into the nested types and collection elements it reaches and holds every text-bearing property — `string`, collections and dictionaries of strings, `object`, `JsonElement`, `JsonNode` — to an allow-list keyed by `Type.Property`, with `GateRunSummaryDto.FailureText` the one named exception; planted negatives (a `FailureText` elsewhere, a nested `FindingNote(string Title)`, `List<string>`) prove it bites |
 | `GateRun` · `GateRunStatus` · `DataDirMode` · `GateSettlement` | `GateRun.cs` | a `bench gate run` invocation — the CAMPAIGN its cells belong to and the id every artefact path starts with. Forward-only status (Planned → Running → Finished or Failed); a terminal run's cells are never swept and never claimed; the data-directory mode is stored on the run so a resume cannot flip it. A product SESSION is one cell's settled attempt (only one attempt of a cell ever settles), so `GateRunRecord.RunId` is the cell's id. `GateSettlement` is `Completed(facts, findings, settingsHash, promptHash)` or `Failed(cause)`; `GateRunFacts.NotProduced(cause)` gives a failed session invalid facts with nothing captured — it stays in every denominator |
 | `CellPaths` · `ArtifactPath` · `ArtifactScope` | `CellPaths.cs` | the ONE path function. `ArtifactPath` is relative to the artefact root: `/`-separated segments of `[A-Za-z0-9._-]`, never empty, `.` or `..`; rooted, drive, url and backslash forms are refused at parse time. `DataDirFor(run, cell, attempt)` is `runs/<run>/cells/<cell>/attempt-<n>/data` (isolated) or `runs/<run>/data-shared` (shared). `Allows(scope, path)` decides by SEGMENT (so `attempt-10` is not under `attempt-1`): an isolated cell cannot reach `data-shared`, a shared run cannot reach a cell's private `data`, no cell reaches another cell or another attempt |
@@ -295,7 +321,21 @@ flowchart TB
   name, the section slug and the document's SHA-256; a re-import is a no-op, an edited document a new citation, and the same
   table imported again under another `--gate` or `--source` is refused (4) rather than kept under the first. A database that
   fails mid-import is 3 for every import verb — each cell is its own transaction, so the next import resumes.
-- `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
+- `bench gate report --gate plan|code|feature --scope <scope id | suite stamp> --rubric <id or stamp> --db … [--json]` (E6)
+  — `--json` prints the object `/api/bench/gate/{gate}/models` answers, byte for byte; text otherwise: the scope, its
+  product and source, the rubric, the measured tasks, the calibration tasks apart, all tasks beside them (only when there
+  are calibration tasks), the variance sentence — every figure through `GateFigureWords`. No `--scope` → 4 listing the
+  gate's scopes; a stamp spanning several → 4 listing each; no `--rubric` → 4 listing the rubrics the scope carries; a
+  word that is no gate → 4; the suite's tasks not recorded → 3 naming the verb; an unreachable database → 3. Migrates, as
+  every CLI verb does.
+- `bench gate suite record --suite-file <file>[,<file>…] --db …` (E6) — records each suite's task summaries (the backfill
+  for anything imported before `gate_suite_tasks`); prints `suite <stamp> — n task(s) recorded`, or `0 … (already
+  there)`; a conflicting row → 4. `bench gate run` / `resume` and `bench gate import calib | coai-bench` record the suite
+  they load the same way.
+- `GET /api/bench/gate/scopes[?gate=]` · `/gate/{gate}/models?scope=&rubric=` · `/gate/{gate}/runs?scope=` ·
+  `/gate/runs/{id}` (E6) — 400 · 404 · 409 · 503 as the entity row says; `http/gate/gate.http` is the contract suite.
+- The console's **Gate** tab (E6) — `/benchmarking/gate` (= `/feature`), `/benchmarking/gate/plan`,
+  `/benchmarking/gate/code`, each taking `?scope=<id>&rubric=<id or stamp>`.
 
 ## The driver — one cell attempt, end to end
 
@@ -376,7 +416,7 @@ folder, when a sibling `<name>.dll` shows a framework-dependent build (an apphos
 the file alone; `--version`'s first line; and under a checkout the short sha and `git status --porcelain
 --untracked-files=no -- <the nearest *.csproj directory>`, naming the tree.
 
-## The store — eight tables, four migrations (`GateTables`, E3's `GateDriver`, E4's `GateAssessment`, E5's `GateImport`), no existing table touched
+## The store — nine tables, five migrations (`GateTables`, E3's `GateDriver`, E4's `GateAssessment`, E5's `GateImport`, E6's `GateReportReads`), no existing table touched
 
 | table | one row per | what it holds |
 |---|---|---|
@@ -387,6 +427,7 @@ the file alone; `--version`'s first line; and under a checkout the short sha and
 | `gate_hand_checks` | recorded hand-check (E4) | the campaigns covered (uuid[]), rubric id/kind/hash, assessor id, verdicts read, agreed, the answered sample file's SHA-256, recorded at |
 | `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport, prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
 | `gate_artifacts` | committed file | run, cell, attempt, class, RELATIVE path (unique), SHA-256, length |
+| `gate_suite_tasks` | task of a recorded suite (E6) | suite stamp, task id, language, calibration flag, hosted gates (`plan,code,feature`), seed ids and their cross-epic flags (parallel lists, id order), recorded at; unique per (stamp, task). What a report puts the calibration tasks apart by; the suite file itself stays outside |
 | `gate_summaries` | number of a published table whose raw data is gone (E5) | gate, source label, document FILE NAME, section slug, document SHA-256, row ordinal, row label slug, metric slug, captured, value; unique per (document sha, section, row, metric). Read by no report — shown, never averaged with runs |
 
 **The claim** takes the next pending cell in the MATRIX's order — slot, then position (it was position first until
@@ -539,6 +580,8 @@ campaign measures them.
 | `gate_hand_checks` (E4) | one row per recorded sample — a handful per campaign | kept forever | one insert |
 | imported attempts (E5) | **measured 2026-09-28: 111 calibration cells → 271 MB** (the source's 269 MB copied, plus findings, source record, run record); 160 coai-bench cells → a few KB each | kept forever — the evidence an imported number is re-checked against; imported tap bodies are NOT released by prune (they sit under `source/`) | a killed import leaves an attempt directory with no row; the next import resumes it (the same bytes adopted, other bytes refused) |
 | `gate_summaries` (E5) | ~10 numbers per table row → 220 rows for the three 2026-09-01/02 tables | kept forever; an edited document is a new citation beside the old | one insert per table, all or none |
+| `gate_suite_tasks` (E6) | bounded by tasks per suite version: 7 for the seeded suite, one or two per coai-bench location → tens of rows | kept forever — a verdict's report needs its suite's tasks for as long as the verdict exists; a new suite version is new rows beside the old | one transaction per suite: all of a stamp or none |
+| a report read (E6) | every settled record, verdict and recorded stamp per request (three record queries, one verdict query) — 243 cells and 1 032 verdicts on the local database | nothing to retire: nothing is cached or written | — |
 | `assess/key.json` (E4) | one entry per finding ever blinded, ~200 B → ~300 KB per 1 500-finding campaign | kept forever — a verdict without its key entry cannot be joined back | replaced atomically under a lock: the old key or the new one |
 | `assess/verdicts/<assessor>.jsonl` (E4) | ~1 KB per reading → ~1.5 MB per assessor per campaign | kept forever — the notes are the evidence a hand-check reads | a torn last line of a killed append is skipped on read; its batch never reached the database, so the finding is asked again |
 | `assess/batches/` (E4) | per batch ≈ the rubric (4 KB) + ≤ 24 rows (~1 KB each) + the answer — ≈ 50 KB; ~63 batches per assessor per 1 500 findings, up to twice with retries → ≈ 3–6 MB | kept forever — `prompt.txt` is what the prompt hash on a verdict names | a batch folder is created once and never reused; an interrupted one stays |
@@ -560,11 +603,12 @@ coordinator bumps the qln pin after E6.
 ## What does NOT exist yet
 
 The reviewer catalog's imports (`reviewers add --from-coai-settings` / `--from-calib-models`, E7) and `suite verify
---prune`; the paired-agreement figure between two assessors (E6 — `GatePopulation` keeps one verdict per finding, so
-agreement is computed before that choice); importing the 2026-09-01/02 RAW JSON as runs (the raw is still in the operator's WSL home; E5 stored those documents'
-tables as summary-only numbers); the report verb, the API routes, the Gate tab and the mapping from `ModelTable` to
-`GateModelTableDto` (E6). The per-model TABLES in the public export wait for E6's report; today the export is the
-guarded rows.
+--prune`; the paired-agreement figure between two assessors (one assessor exists in the data; `GatePopulation` keeps one
+verdict per finding, so agreement is computed before that choice); the seed-evidence table on the page (it is read off
+the turn-1 prompt FILES in the artefact root, which no read host carries — `bench gate assess` prints it); importing the
+2026-09-01/02 RAW JSON as runs (the raw is still in the operator's WSL home; E5 stored those documents' tables as
+summary-only numbers). The per-model TABLES are not in the public export: the export is the guarded rows, and the table
+is recomputed from them by `bench gate report`.
 
 ## Measured: the import against the real data (E5, 2026-09-28)
 
@@ -584,3 +628,24 @@ ten locations (a byte copy of one added nothing), four suites (the locations car
 → 692 lenient verdicts (224 were the copy's), 549 unjudged left without a row; a second import: 0 cells, 0 verdicts.
 Three published tables → 220 summary-only numbers. `bench gate export --public` over the whole database: 7 325 rows, no
 violation.
+
+## Measured: the report and the page (E6, 2026-09-28)
+
+**Rendered from this repository's own code** by a throwaway static-SSR host outside the repository that mounts
+`Bench.Ui` the way the qln daemon does (the bench read ports and `IGateReads` registered, `MapBenchApi`, the pages'
+assembly routed): `/benchmarking/gate/feature` against the local bench database lists two feature scopes — the
+calibration's phase 1 (19 runs) and phase 2 (84 runs, 92 attempts, 8 of them superseded) — and, with phase 2 chosen,
+offers exactly one rubric, `strict-v1` (340 verdicts), shows the run list, and refuses the table: the seeded suite's
+tasks were imported before `gate_suite_tasks` existed, so they are not recorded until `bench gate suite record` is run
+with that suite's file (which stays outside git). The API over the same host answered no owner, host, pid, url or user
+path. The same page over a scratch database holding the redacted phase-2 population (`calib-phase2.redacted.json`,
+imported through `bench gate import calib`, which now records the suite) renders the full table; its all-tasks rows
+equal the published `results.json` in every column but the ten E5 named (the strict percentages *not hand-checked*, and
+deepseek-v4-pro's 0.60 / 0.45) — pinned through the query by `GateReadsStoreTests`.
+
+**The cross-repository step** (D11): the qln console freezes at its submodule pin, so the Gate tab reaches it when the
+coordinator bumps `dew_flow_rag_qln · external/dew_flow_benchmark` to this repository's E6 merge commit, in a qln pull
+request opened right after the merge; then the coai cross-reference pull request. The daemon registers its bench read
+ports by hand (`dew_flow_rag_qln · hosts/Daemon/Program.cs`), so that pull request adds ONE registration beside
+`IResultStore` — `IGateReads` as `PostgresGateReads` over the `BenchDbContext`; without it the Gate page renders the
+503 sentence naming exactly that line, and every other route keeps working.
