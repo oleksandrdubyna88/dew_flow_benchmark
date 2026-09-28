@@ -270,9 +270,9 @@ public sealed class Server(Script script)
 
     private static string StageOf(string tool) => tool switch
     {
-        "review_plan" => "plan",
-        "review_code" => "code",
-        _ => "feature",
+        "review_plan" => "PlanReview",
+        "review_code" => "CodeReview",
+        _ => "FeatureReview",
     };
 
     /// <summary>A session file shaped like the product's: <c>state.repoPath</c>, <c>state.branch</c>,

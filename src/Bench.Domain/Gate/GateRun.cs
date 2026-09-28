@@ -19,6 +19,32 @@ public enum DataDirMode
     Shared,
 }
 
+/// <summary>What a resume ASKS for: nothing (the stored mode), or one of the two explicitly — which must then be the
+/// stored one.</summary>
+public enum RequestedDataDir
+{
+    AsStored,
+    Isolated,
+    Shared,
+}
+
+public static class GateRunResume
+{
+    /// <summary>A resume never flips the data-directory mode: a run planned isolated and resumed shared would put its
+    /// later cells in one directory and its earlier ones in their own, and the report could not tell which population
+    /// a number came from. Refused naming the stored mode.</summary>
+    public static Outcome<GateRun> Resume(GateRun run, RequestedDataDir requested) =>
+        (run.IsTerminal, requested, run.Mode) switch
+        {
+            (true, _, _) => Outcome<GateRun>.Failure($"gate run {run.Id} is {run.Status} — a finished run is a record, and it is not resumed"),
+            (_, RequestedDataDir.Shared, DataDirMode.Isolated) or (_, RequestedDataDir.Isolated, DataDirMode.Shared) =>
+                Outcome<GateRun>.Failure(
+                    $"gate run {run.Id} was planned with {run.Mode.ToString().ToLowerInvariant()} data directories and is resumed with the mode it "
+                    + $"was planned with — asking for {requested.ToString().ToLowerInvariant()} would mix two populations in one run"),
+            _ => Outcome<GateRun>.Success(run),
+        };
+}
+
 /// <summary>One <c>bench gate run</c> invocation — the campaign its cells belong to, and the id every artefact
 /// path starts with (<c>runs/&lt;runId&gt;/…</c>).
 /// <para>

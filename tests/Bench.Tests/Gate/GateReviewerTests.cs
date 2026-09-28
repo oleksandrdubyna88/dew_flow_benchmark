@@ -44,8 +44,23 @@ public sealed class GateReviewerTests
     [Fact]
     public void A_mapped_public_address_is_still_a_value()
     {
-        ReviewerEndpoint.Parse("http://[::ffff:8.8.8.8]/v1").Ok().Should().BeOfType<ReviewerEndpoint.Value>(
+        ReviewerEndpoint.Parse("https://[::ffff:8.8.8.8]/v1").Ok().Should().BeOfType<ReviewerEndpoint.Value>(
             "the normalisation is for the range check, not a refusal of the notation — this one names no machine of ours");
+    }
+
+    /// <summary>A value endpoint is published with the results and copied into the product's vendor string, so it
+    /// may carry no credential: no user-info, no query (a <c>?key=</c> is a key), no fragment, and no plain http to a
+    /// public host (a bearer token sent in the clear). The refusal never repeats the url — the url IS the secret.</summary>
+    [Theory]
+    [InlineData("https://user:sentinel-4711@api.vendor.example.com/v1", "user-info")]
+    [InlineData("https://api.vendor.example.com/v1?token=sentinel-4711", "query")]
+    [InlineData("https://api.vendor.example.com/v1#sentinel-4711", "fragment")]
+    [InlineData("http://api.vendor.example.com/sentinel-4711/v1", "https")]
+    public void A_value_endpoint_carrying_a_credential_or_sent_in_the_clear_is_refused_without_repeating_it(string endpoint, string rule)
+    {
+        var reason = ReviewerEndpoint.Parse(endpoint).Reason();
+
+        reason.Should().Contain(rule).And.NotContain("sentinel-4711", "a refusal that quotes the url publishes what it refused");
     }
 
     [Fact]

@@ -31,6 +31,10 @@ public sealed record CoaiVendorsSetting
 
     public string Json { get; }
 
+    /// <summary>Whether <paramref name="name"/> is the vendors variable (any case) — so a caller can leave it out of a hash
+    /// or refuse it as a run setting without the name ever being spelled, or exposed, outside this type.</summary>
+    public static bool IsVariable(string name) => string.Equals(name, VariableName, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Which reviewer rows the string was made from, in order — so a run record can name them
     /// without parsing the string back.</summary>
     public IReadOnlyList<GateReviewerId> Reviewers { get; }
