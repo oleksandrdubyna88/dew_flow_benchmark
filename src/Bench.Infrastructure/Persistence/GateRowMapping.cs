@@ -81,10 +81,10 @@ internal static class GateRowMapping
     {
         var dirty = row.PinDirtyCaptured ? CapturedCount.Number(row.PinDirtyFiles) : CapturedCount.Unavailable(StoredNotCaptured);
 
-        var pin = (row.PinBinarySha256.Length, row.PinGitSha.Length) switch
+        var pin = (row.PinBinarySha256.Length, row.PinVersionText.StartsWith(ProductPin.ImportedPrefix, StringComparison.Ordinal)) switch
         {
             ( > 0, _) => ProductPin.Hashed(row.PinBinarySha256, row.PinVersionText, row.PinGitSha, dirty, row.PinCheckedTree),
-            (0, > 0) => ProductPin.Imported(row.PinGitSha, dirty),
+            (0, true) => ProductPin.ImportedStored(row.PinVersionText, row.PinGitSha, dirty),
             _ => Outcome<ProductPin>.Success(ProductPin.None),
         };
 

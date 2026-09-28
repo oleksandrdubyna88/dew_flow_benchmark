@@ -39,7 +39,7 @@ public sealed class ProductPinTests
     [Fact]
     public void An_imported_pin_never_matches_a_hashed_one_because_nothing_was_hashed()
     {
-        var imported = ProductPin.Imported("98acfa74", CapturedCount.Number(0)).Ok();
+        var imported = ProductPin.Imported("98acfa74", CapturedCount.Number(0), "calib-py phase 2").Ok();
         var hashed = Pin(ShaA, "0.0.0+98acfa74");
 
         imported.BinaryHashed.Should().BeFalse();
@@ -47,6 +47,36 @@ public sealed class ProductPinTests
         imported.Matches(hashed).Should().BeFalse("a sha somebody wrote down is not evidence the bytes were the same");
         imported.Matches(imported).Should().BeFalse("two unhashed pins are not evidence of anything either");
         ProductPin.Continue(imported, hashed).Reason().Should().Contain("unhashed");
+    }
+
+    [Fact]
+    public void Imported_pins_of_one_population_share_a_scope_whatever_commit_each_recorded()
+    {
+        var first = ProductPin.Imported("5d73ead7", CapturedCount.Number(1), "calib-py phase 2").Ok();
+        var later = ProductPin.Imported("98acfa74", CapturedCount.Number(7), "calib-py phase 2").Ok();
+        var phase1 = ProductPin.Imported("0d39a233", CapturedCount.Number(33), "calib-py phase 1").Ok();
+
+        GateScope.Of("s#1", GateKind.Feature, first, "h").Should().Be(GateScope.Of("s#1", GateKind.Feature, later, "h"),
+            "the other harness compared these runs as one population; a scope per commit would split its table into pieces nobody can hold against it");
+        GateScope.Of("s#1", GateKind.Feature, phase1, "h").Should().NotBe(GateScope.Of("s#1", GateKind.Feature, later, "h"),
+            "a different population is a different scope");
+        later.GitSha.Should().Be("98acfa74", "the commit stays on the pin, per cell, for a partition by commit");
+        later.IsPinned.Should().BeTrue();
+        later.IsImported.Should().BeTrue();
+        later.VersionText.Should().NotContain("98acfa74");
+    }
+
+    [Fact]
+    public void An_imported_pin_reads_back_from_its_stored_text_as_the_pin_that_was_written()
+    {
+        var written = ProductPin.Imported(string.Empty, CapturedCount.Unavailable("not recorded"), "coai-bench epic1-v0.17.1").Ok();
+
+        var read = ProductPin.ImportedStored(written.VersionText, written.GitSha, written.DirtyFiles).Ok();
+
+        read.VersionText.Should().Be(written.VersionText);
+        read.IsPinned.Should().BeTrue("a harness that recorded no sha still names the population it measured");
+        ProductPin.Imported("98acfa74", CapturedCount.Number(0), " ").Reason().Should().Contain("population");
+        ProductPin.ImportedStored("0.39.0", "98acfa74", CapturedCount.Number(0)).Reason().Should().Contain("not an imported pin");
     }
 
     [Fact]

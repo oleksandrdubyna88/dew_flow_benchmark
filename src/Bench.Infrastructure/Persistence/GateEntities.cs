@@ -3,7 +3,7 @@ using Bench.Domain.Runs;
 
 namespace Bench.Infrastructure.Persistence;
 
-// The seven gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
+// The eight gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
 // prompt, an answer, a repository name or a path on this machine — only ids, hashes, enum names, numbers, the
 // reviewer catalog's references and the ONE free-text column, the redacted failure cause on a cell.
 // GateEntitiesGuardTests walks every one of these types and holds each text-bearing property to an allow-list
@@ -96,6 +96,10 @@ public sealed class GateCellRow
     public int Turns { get; set; }
 
     public int HttpCalls { get; set; }
+
+    /// <summary>Whether <see cref="Turns"/>, <see cref="HttpCalls"/>, <see cref="Served"/> and <see cref="Refused"/> were
+    /// recorded at all — false only for an import from a harness that kept no ledger (E5).</summary>
+    public bool TurnFactsCaptured { get; set; } = true;
 
     /// <summary>The vendor's own finish words, one per HTTP call (<c>stop</c>, <c>length</c>).</summary>
     public List<string> FinishReasons { get; set; } = [];
@@ -344,4 +348,34 @@ public sealed class GateArtifactRow
     public long Length { get; set; }
 
     public DateTimeOffset RecordedAt { get; set; }
+}
+
+/// <summary>One number of a published results table whose raw data is gone — SUMMARY ONLY (E5): the citation (the
+/// harness label, the document's file name, the section slug, the document's SHA-256), the row's position and slug, the
+/// metric's slug and the value or <i>not captured</i>. No text, no findings, and no report reads it into a run figure.</summary>
+public sealed class GateSummaryRow
+{
+    public long Id { get; set; }
+
+    public GateKind Gate { get; set; }
+
+    public string Source { get; set; } = string.Empty;
+
+    public string Document { get; set; } = string.Empty;
+
+    public string Section { get; set; } = string.Empty;
+
+    public string DocumentSha256 { get; set; } = string.Empty;
+
+    public int RowOrdinal { get; set; }
+
+    public string Label { get; set; } = string.Empty;
+
+    public string Metric { get; set; } = string.Empty;
+
+    public bool Captured { get; set; }
+
+    public double Value { get; set; }
+
+    public DateTimeOffset ImportedAt { get; set; }
 }

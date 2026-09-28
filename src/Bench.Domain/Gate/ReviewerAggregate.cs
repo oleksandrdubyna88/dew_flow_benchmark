@@ -75,6 +75,11 @@ internal sealed record ReviewerAggregate(
 
     public int SeedsFoundTotal => SeedsHitPerRun.Sum();
 
+    /// <summary>A turn-level fact over the runs that RECORDED turn-level facts — an import that kept no ledger is not a
+    /// run of zero turns (<see cref="GateRunFacts.TurnFactsCaptured"/>).</summary>
+    public IReadOnlyList<double> TurnLevel(Func<GateRunRecord, int> read) =>
+        [.. Runs.Where(r => r.Facts.TurnFactsCaptured).Select(r => (double)read(r))];
+
     public IReadOnlyList<double> Captured(Func<GateRunRecord, (bool Captured, double Value)> read) =>
         [.. Runs.Select(read).Where(r => r.Captured).Select(r => r.Value)];
 

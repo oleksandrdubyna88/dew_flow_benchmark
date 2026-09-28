@@ -41,6 +41,23 @@ public static class VendorFamily
         };
     }
 
+    /// <summary>The family of a bare model id (an assessor named only by its model — the coai-bench judge's
+    /// <c>claude-opus-5</c>): its prefix's family, or the model itself when nobody can place it.</summary>
+    public static string OfModel(string model)
+    {
+        var normalised = Normalise(model);
+        var family = Prefixes.Where(p => normalised.StartsWith(p.Prefix, StringComparison.Ordinal)).Select(p => p.Family).FirstOrDefault(string.Empty);
+
+        return family.Length > 0 ? family : $"model:{normalised}";
+    }
+
+    /// <summary>Whether an assessor of <paramref name="assessorModel"/> judges a vendor SET whose members are named only by
+    /// their runtime words (<c>codex,gemini,local</c>) — a match when any member's CLI is the assessor's family. A word no
+    /// family is known for (<c>local</c>) never matches.</summary>
+    public static bool MatchesAnyOf(string assessorModel, IEnumerable<string> runtimeWords) =>
+        runtimeWords.Select(w => Enum.TryParse<ReviewerRuntime>(w.Trim(), ignoreCase: true, out var r) ? ByRuntime(r) : string.Empty)
+            .Any(f => f.Length > 0 && string.Equals(f, OfModel(assessorModel), StringComparison.Ordinal));
+
     public static bool Matches(ReviewerDefinition assessor, ReviewerDefinition reviewer) =>
         string.Equals(Of(assessor), Of(reviewer), StringComparison.Ordinal);
 
