@@ -91,15 +91,35 @@ public abstract record ReviewerEndpoint
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Host.Length == 0)
         {
-            return Outcome<ReviewerEndpoint>.Failure($"'{url}' is not an absolute url with a host");
+            return Outcome<ReviewerEndpoint>.Failure("the endpoint is not an absolute url with a host");
         }
 
-        return IsMachineLocal(uri.Host)
-            ? Outcome<ReviewerEndpoint>.Failure(
-                $"endpoint '{url}' is a machine-local address — store the NAME of the environment variable that holds it, "
-                + "so the row can be published without this machine leaving with it; a public vendor url may be a value")
+        if (IsMachineLocal(uri.Host))
+        {
+            return Outcome<ReviewerEndpoint>.Failure(
+                "the endpoint is a machine-local address — store the NAME of the environment variable that holds it, "
+                + "so the row can be published without this machine leaving with it; a public vendor url may be a value");
+        }
+
+        var credential = CredentialRefusal(uri);
+
+        return credential.Length > 0
+            ? Outcome<ReviewerEndpoint>.Failure(credential)
             : Outcome<ReviewerEndpoint>.Success(new Value(url));
     }
+
+    /// <summary>A value endpoint is PUBLISHED and copied into the product's vendor string, so it carries no
+    /// credential and is not sent in the clear. The sentence never quotes the url: a url that failed this rule is the
+    /// secret it failed on.</summary>
+    private static string CredentialRefusal(Uri uri) =>
+        (uri.UserInfo.Length > 0, uri.Query.Length > 0, uri.Fragment.Length > 0, uri.Scheme == Uri.UriSchemeHttps) switch
+        {
+            (true, _, _, _) => "the endpoint carries user-info (user:password@) — a published url carries no credential; the key is the vault's",
+            (_, true, _, _) => "the endpoint carries a query — a '?key=' is a key, and a published url carries none",
+            (_, _, true, _) => "the endpoint carries a fragment — a public vendor url is a base address and nothing else",
+            (_, _, _, false) => "a public endpoint must be https — a bearer token sent to a public host in the clear is a published secret",
+            _ => string.Empty,
+        };
 
     private static Outcome<ReviewerEndpoint> AsReference(string name) =>
         ModelConfig.IsReference(name)

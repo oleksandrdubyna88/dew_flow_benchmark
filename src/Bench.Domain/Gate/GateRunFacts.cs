@@ -12,6 +12,9 @@ public enum GateVerdictWord
     ContinueAnyway,
     CallHuman,
     Escalated,
+
+    /// <summary>The feature gate's word for a plan it did not review — fewer epics than <c>COAI_FEATURE_MIN_EPICS</c>.</summary>
+    Skipped,
     Unknown,
 }
 
@@ -25,6 +28,7 @@ public static class GateVerdictWords
         "continue_anyway" => GateVerdictWord.ContinueAnyway,
         "call_human" => GateVerdictWord.CallHuman,
         "escalated" => GateVerdictWord.Escalated,
+        "skipped" => GateVerdictWord.Skipped,
         _ => GateVerdictWord.Unknown,
     };
 
@@ -46,6 +50,11 @@ public abstract record GateReply
 
     /// <summary>The tool's text was not JSON. The size is kept; the text goes to the artefact store.</summary>
     public sealed record NotJson(int Chars) : GateReply;
+
+    /// <summary>The tool answered its refusal object, <c>{"error": …}</c> — the product declining to run the review
+    /// (a code gate before any plan round passed, an input it would not take). The sentence is the product's; it is
+    /// redacted before it is stored.</summary>
+    public sealed record Refused(string Error) : GateReply;
 }
 
 /// <summary>One row of the product's usage ledger — one reviewer turn.</summary>
@@ -76,6 +85,7 @@ public enum FailureKind
 {
     None,
     NonJsonReply,
+    ToolRefused,
     HttpError,
     LengthCut,
     EmptyContent,
@@ -139,6 +149,7 @@ public sealed record GateRunFacts(
         var (verdict, findings, parsed) = reply switch
         {
             GateReply.Answered a => (a.Verdict, a.Findings, true),
+            GateReply.Refused => (GateVerdictWord.Unknown, CapturedCount.Unavailable("the tool refused"), false),
             _ => (GateVerdictWord.Unknown, CapturedCount.Unavailable("the reply was not JSON"), false),
         };
 
@@ -237,6 +248,11 @@ public static class FailureCauses
         if (reply is GateReply.NotJson nonJson)
         {
             return new FailureCause(FailureKind.NonJsonReply, $"tool answered non-JSON ({nonJson.Chars} chars)");
+        }
+
+        if (reply is GateReply.Refused refused)
+        {
+            return new FailureCause(FailureKind.ToolRefused, $"the tool refused: {refused.Error}");
         }
 
         var reasons = CallReasons(calls).Concat(ReplyReasons(facts, ledger)).ToList();
