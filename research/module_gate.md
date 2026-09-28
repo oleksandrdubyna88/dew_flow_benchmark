@@ -364,7 +364,12 @@ The calibration harness's `one_run`, in C#, over ports (`GateCellRunner`, Applic
    --shared --no-checkout` from the read-only worktree `ICheckoutProvider` keeps and detached at the variant head; the
    run's ref `bench/gate/<run8>/<reviewer>/<task>-r<n>-a<k>` is made THERE (plan and code). The shared read-only
    checkout is never written. A clone found NOT at the variant head (interrupted between its clone and its checkout) is
-   checked out again, or made anew — never reused as it lies.
+   checked out again, or made anew — never reused as it lies. The clone carries `core.autocrlf=false` (the committed
+   bytes whatever the machine's global setting) and every submodule the variant head pins is initialised, recursively,
+   on every `EnsureAsync` (idempotent) — both found by E7's A/A on 2026-09-28: the machine's `autocrlf=true` had handed
+   the product a CRLF plan, and an empty rules submodule had told the reviewer none of the twelve rules were there, where
+   the calibration's checkout had LF and eight of twelve. A submodule that cannot be fetched fails the checkout by name;
+   a RELATIVE submodule url resolves against the read-only worktree and is not supported.
 3. **References and the key**: the reviewer's references resolved through `ISecretSource` (`GateSecrets`), the vault's
    access key for an `api` row from the variable its `credsKeyRef` names, or — opt-in — from the machine's coai
    `settings.json` (`CoaiSettingsSecrets`), held as a `SecretValue`. `run` and `resume` resolve both for EVERY reviewer
