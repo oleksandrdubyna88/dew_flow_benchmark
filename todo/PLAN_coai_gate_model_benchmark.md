@@ -1369,8 +1369,8 @@ exactly two things: the product's 8-hex SESSION id, which fences every section (
 fences; `coai · src_mcp/src/Server/PanelService.cs:420` makes it `Guid.NewGuid().ToString("N")[..8]`), and the run's
 data directory, named in the gate-history section (`Gate history unavailable: there is no rounds database at
 <data-dir>\coai.db.`). With those two normalised, **all five phase-2 cs2 runs at `5d73ead7`** — grok ×2, deepseek, qwen,
-and glm (a run with one dirty product file) — produce ONE shape, `837fed1ae93f14bf…`. So the turn-1 prompt is the same
-for every API reviewer, and the raw hash is per-run by construction. The A/A compares the NORMALISED prompt.
+and glm (a run with one dirty product file) — produce ONE shape, `837fed1ae93f14bf…`. So on cs2 at `5d73ead7` the turn-1
+prompt is the same for every API reviewer measured, and the raw hash is per-run by construction. The A/A compares the NORMALISED prompt.
 
 - **S7.2a — `PromptShape` and `bench gate aa` (code, RED first; Opus — measurement tooling, no money path).**
   - `src/Bench.Domain/Gate/PromptShape.cs` (pure). `PromptShape.Of(string prompt)` learns the run-specific tokens
@@ -1555,3 +1555,10 @@ both repeats valid. If a line of this does not hold, it is the record of a wrong
 8. ~~**Who bumps the qln submodule pin** for the page, and in which order with the coai cross-reference pull request?~~
    **Settled by the plan round (finding 5):** the coordinator, in a qln pull request right after E6 merges;
    E6 → the qln pin → the coai cross-reference pull request (D11, §6).
+9. **(E7) A recording wrapper for CLI reviewers?** The product passes a CLI reviewer its prompt on stdin and honours
+   `executablePath`, so a wrapper could record the input of Fable/Opus/Astra runs and give them a prompt-shape A/A like
+   the API rows. It is a new binary on the product path (exit, output and cancellation forwarding) and changes the rows'
+   `executable-ref`; not built in E7 — build it as its own plan?
+10. **(E7) `research/module_tests.md` is missing here.** The shared scenario-tests rule requires every repository to
+   catalogue its flows (derived from the CLI verbs) and the ones not covered. This repository has none; a plan of its
+   own?
