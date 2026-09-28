@@ -3,7 +3,7 @@ using Bench.Domain.Runs;
 
 namespace Bench.Infrastructure.Persistence;
 
-// The eight gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
+// The nine gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
 // prompt, an answer, a repository name or a path on this machine — only ids, hashes, enum names, numbers, the
 // reviewer catalog's references and the ONE free-text column, the redacted failure cause on a cell.
 // GateEntitiesGuardTests walks every one of these types and holds each text-bearing property to an allow-list

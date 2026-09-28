@@ -100,6 +100,38 @@ public sealed class GateReportCommandTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public void The_text_report_under_a_lenient_rubric_prints_no_strict_only_column()
+    {
+        var scope = Ui.GateUiFixtures.Scope("aaaaaaaaaaa1", rubrics: [Ui.GateUiFixtures.Lenient]);
+        var text = GateReportText.Of(Ui.GateUiFixtures.Table(scope, Ui.GateUiFixtures.Lenient, [Ui.GateUiFixtures.Row("grok")]));
+        var head = text.Split('\n').Single(l => l.StartsWith("reviewer |", StringComparison.Ordinal));
+        var row = text.Split('\n').Single(l => l.StartsWith("grok |", StringComparison.Ordinal));
+
+        head.Should().Contain("worth having % (lenient-worth-v1)");
+        head.Should().NotContain("partial").And.NotContain("high-value").And.NotContain("overstated",
+            "a lenient reading has no partial, value or severity — a column for them would print the worth-having rate twice or a dash that reads as a gap");
+        row.Split(" | ").Should().HaveSameCount(head.Split(" | "), "every cell sits under its own heading");
+    }
+
+    [Fact]
+    public void A_scope_whose_every_task_is_a_calibration_task_says_it_has_no_measured_task()
+    {
+        var scope = Ui.GateUiFixtures.Scope("aaaaaaaaaaa1", rubrics: [Ui.GateUiFixtures.Strict]);
+        var text = GateReportText.Of(Ui.GateUiFixtures.Table(scope, Ui.GateUiFixtures.Strict, [], calibration: [Ui.GateUiFixtures.Row("grok")]));
+
+        text.Should().Contain("measured tasks — none: every task of this scope is a calibration task");
+    }
+
+    [Fact]
+    public void Only_a_failure_of_the_store_is_reported_as_the_database_and_a_broken_invariant_is_not()
+    {
+        GateReportCommand.IsStoreFailure(new Npgsql.NpgsqlException("down")).Should().BeTrue();
+        GateReportCommand.IsStoreFailure(new TimeoutException()).Should().BeTrue();
+        GateReportCommand.IsStoreFailure(new InvalidOperationException("unreachable")).Should().BeFalse(
+            "an InvalidOperationException is how this code says an invariant broke — reported as an outage, it sends the reader to the database");
+    }
+
+    [Fact]
     public void Suite_record_without_its_flags_is_a_configuration_refusal() =>
         Run("gate", "suite", "record", "--db", "Host=x").Should()
             .Match<(int Code, string Output, string Error)>(r => r.Code == ExitCodes.Configuration && r.Error.Contains("--suite-file"));

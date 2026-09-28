@@ -10,8 +10,20 @@ namespace Bench.Infrastructure.Persistence;
 /// the distinct (id, kind, hash) the stored verdicts and hand-checks carry — a read host carries no prompt folder.</summary>
 public sealed class PostgresGateReads(BenchDbContext db, TimeProvider clock) : IGateReads
 {
-    public Task<IReadOnlyList<GateRunRecord>> RecordsAsync(CancellationToken cancellationToken) =>
-        new GateRecordReader(db).ReadAllAsync(cancellationToken);
+    public Task<IReadOnlyList<GateRunRecord>> RecordsAsync(IReadOnlyCollection<GateKind> gates, CancellationToken cancellationToken) =>
+        new GateRecordReader(db).ReadAllAsync(gates, cancellationToken);
+
+    public async Task<Outcome<GateKind>> GateOfRunAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var gates = await db.GateCells.AsNoTracking()
+            .Where(c => c.Id == runId && c.FactsRecorded)
+            .Join(db.GateRuns.AsNoTracking(), c => c.RunId, r => r.Id, (_, r) => r.Gate)
+            .ToListAsync(cancellationToken);
+
+        return gates.Count == 1
+            ? Outcome<GateKind>.Success(gates[0])
+            : Outcome<GateKind>.Failure($"no gate run {runId} in this database");
+    }
 
     public async Task<IReadOnlyList<TaskSummary>> TasksAsync(string suiteStamp, CancellationToken cancellationToken)
     {
@@ -61,13 +73,13 @@ public sealed class PostgresGateSuiteTasks(BenchDbContext db, TimeProvider clock
 
         return conflict.Length > 0
             ? Outcome<int>.Failure(conflict)
-            : await InsertAsync(suite.Stamp, [.. wanted.Where(t => held.All(h => h.TaskId != t.Id.Value))], cancellationToken);
+            : await InsertAsync(suite, wanted, [.. wanted.Where(t => held.All(h => h.TaskId != t.Id.Value))], cancellationToken);
     }
 
-    private async Task<Outcome<int>> InsertAsync(string stamp, IReadOnlyList<TaskSummary> fresh, CancellationToken cancellationToken)
+    private async Task<Outcome<int>> InsertAsync(GateSuite suite, IReadOnlyList<TaskSummary> wanted, IReadOnlyList<TaskSummary> fresh, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
-        db.GateSuiteTasks.AddRange(fresh.Select(t => GateSuiteTaskMapping.ToRow(stamp, t, now)));
+        db.GateSuiteTasks.AddRange(fresh.Select(t => GateSuiteTaskMapping.ToRow(suite.Stamp, t, now)));
 
         try
         {
@@ -77,12 +89,28 @@ public sealed class PostgresGateSuiteTasks(BenchDbContext db, TimeProvider clock
         }
         catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
         {
-            return Outcome<int>.Failure($"another process recorded suite {stamp} at the same moment — record it again; the same tasks are then a no-op");
+            // Another process recorded this stamp between the read and the insert (two gates of a new suite started side by
+            // side). Nothing of this record was written; what the other wrote decides: the same rows are the same record.
+            db.ChangeTracker.Clear();
+            return await AfterRaceAsync(suite, wanted, cancellationToken);
         }
         finally
         {
             db.ChangeTracker.Clear();
         }
+    }
+
+    private async Task<Outcome<int>> AfterRaceAsync(GateSuite suite, IReadOnlyList<TaskSummary> wanted, CancellationToken cancellationToken)
+    {
+        var held = await db.GateSuiteTasks.AsNoTracking().Where(t => t.SuiteStamp == suite.Stamp).ToListAsync(cancellationToken);
+        var conflict = GateSuiteTaskMapping.Conflict(suite.Stamp, held, wanted);
+
+        return (conflict.Length, held.Count == wanted.Count) switch
+        {
+            ( > 0, _) => Outcome<int>.Failure(conflict),
+            (_, true) => Outcome<int>.Success(0),
+            _ => Outcome<int>.Failure($"another process was recording suite {suite.Stamp} at the same moment and has not finished — record it again"),
+        };
     }
 }
 

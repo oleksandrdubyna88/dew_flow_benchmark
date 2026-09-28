@@ -62,6 +62,45 @@ public sealed class GateReadsStoreTests(PostgresFixture postgres)
         (await check.GateSuiteTasks.CountAsync(Ct)).Should().Be(1, "all or none — the other tasks did not land beside the refused one");
     }
 
+    /// <summary>Two first-time records of one suite at once — the plan and code gates of a new suite started side by side (own
+    /// review of E6). Both read "nothing held"; the loser's insert meets the winner's rows. The same rows are the same record,
+    /// so the loser is a no-op, never a refusal that stops its run before anything is planned.</summary>
+    [Fact]
+    public async Task The_loser_of_two_simultaneous_first_records_of_one_suite_finds_the_same_rows_and_succeeds()
+    {
+        var connection = await ImportRig.DatabaseAsync(postgres, "tasks");
+        var suite = ImportFixture.Suite;
+        var racer = new RecordFirst(connection, suite);
+        await using var db = new BenchDbContext(new DbContextOptionsBuilder<BenchDbContext>().UseNpgsql(connection).AddInterceptors(racer).Options);
+
+        var recorded = await new PostgresGateSuiteTasks(db, TimeProvider.System).RecordAsync(suite, Ct);
+
+        racer.Raced.Should().BeTrue("the other record landed between this one's read and its insert");
+        recorded.Should().Be(Outcome<int>.Success(0), "the rows it found are the rows it would have written");
+        await using var check = PostgresFixture.Context(connection);
+        (await check.GateSuiteTasks.CountAsync(Ct)).Should().Be(suite.Tasks.Count);
+    }
+
+    /// <summary>Records the same suite through ANOTHER context just before this context saves — the race, made deterministic.</summary>
+    private sealed class RecordFirst(string connection, GateSuite suite) : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public bool Raced { get; private set; }
+
+        public override async ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Raced)
+            {
+                Raced = true;
+                (await new PostgresGateSuiteTasks(PostgresFixture.Context(connection), TimeProvider.System).RecordAsync(suite, cancellationToken)).Ok();
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task The_reads_return_every_imported_cell_and_build_their_rubric_catalog_from_the_rows()
     {
@@ -69,7 +108,7 @@ public sealed class GateReadsStoreTests(PostgresFixture postgres)
         (await rig.ImportAsync(Ct)).Ok();
         var reads = Reads(rig.Connection);
 
-        var records = await reads.RecordsAsync(Ct);
+        var records = await reads.RecordsAsync([GateKind.Feature], Ct);
         var rubrics = await reads.RubricsAsync(Ct);
         var verdicts = await reads.VerdictsAsync([.. records.Select(r => r.RunId)], new RubricCatalog(rubrics), Ct);
 
@@ -77,6 +116,9 @@ public sealed class GateReadsStoreTests(PostgresFixture postgres)
         rubrics.Should().ContainSingle().Which.Should().Be(rig.Strict.Rubric, "the stored verdicts carry exactly the rubric they were ingested under");
         verdicts.Should().HaveCount((await rig.VerdictsAsync(records, Ct)).Count);
         (await reads.PromptHashAsync(Guid.CreateVersion7(), Ct)).Should().BeEmpty();
+        (await reads.RecordsAsync([GateKind.Plan, GateKind.Code], Ct)).Should().BeEmpty("a read of the plan and code gates reads none of the feature gate's rows");
+        (await reads.GateOfRunAsync(records[0].RunId, Ct)).Should().Be(Outcome<GateKind>.Success(GateKind.Feature));
+        (await reads.GateOfRunAsync(Guid.CreateVersion7(), Ct)).Should().BeOfType<Outcome<GateKind>.Fail>();
     }
 
     /// <summary>The DoD of E5 re-read through E6's query — the object the API answers and the page renders: the phase-2
