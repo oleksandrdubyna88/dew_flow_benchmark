@@ -4,6 +4,7 @@
        domain — a library that configures a sink is a library that decides for its consumer. -->
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" VersionOverride="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>

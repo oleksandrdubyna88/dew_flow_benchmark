@@ -2,46 +2,46 @@
 
   <ItemGroup>
     <!-- Monthly policy: bump to the latest STABLE each month (previews never; this product is strictly .NET 10). -->
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     <!-- The CLI is a host and reads its Serilog levels from configuration rather than from a call site. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.12" />
     <!-- Aspire SDK and Hosting packages must move as a matched pair — a straddled version spawns a
          second stray dashboard on a random port. The SDK version lives in hosts/AppHost/AppHost.csproj. -->
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.0" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
     <!-- Serilog: the one logging stack, per .claude/rules/common/logging-serilog.md. AspNetCore brings
          Serilog itself plus the console and file sinks. Apache-2.0. -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <!-- Pinned explicitly, and it has to be. Npgsql 10.0.3 depends on EF Core 10.0.4, so without this the
          graph resolves Relational to 10.0.4 while EF Core itself is 10.0.11 — which builds clean and then
          fails at RUN time loading Relational. A carried lesson: see research/MEASURED_LESSONS.md for the
          family of defects that only appear after the compiler is happy. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- Adopted after the spike (research/SPIKE_dotnet_eval_library.md): their evaluator/metric model,
          their stored result shape and their report writers. NOT their orchestration — the measurement key
          and the execution stay ours. .NLP is preview-only and stays out under the no-previews rule. -->
-    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Evaluation" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Evaluation.Reporting" Version="10.9.0" />
-    <PackageVersion Include="xunit.v3" Version="4.0.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
     <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License (non-commercial only). Do NOT bump. -->
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
     <!-- Real Postgres for the durability tests. Claim/settle/sweep are about what happens under genuine
          concurrency, and a fake would only prove that the fake agrees with what we assumed. -->
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <!-- bUnit: renders a Razor component against a real Blazor renderer, so the console pages can be
          asserted as MARKUP rather than by trusting that a table which compiles also displays. Version
          matched to the sibling console (dew_flow_rag_qln), which pins the same 2.9.0 — one family, one
          renderer. It carries no test-framework dependency of its own; xunit.v3 above stays the runner. -->
-    <PackageVersion Include="bunit" Version="2.9.0" />
+    <PackageVersion Include="bunit" Version="2.11.3" />
   </ItemGroup>
 
 </Project>
