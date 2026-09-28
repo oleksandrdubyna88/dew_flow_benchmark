@@ -34,7 +34,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -45,7 +45,7 @@ flowchart TB
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (six tables, ids · hashes · numbers)"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (seven tables, ids · hashes · numbers)"]
         artroot["FileSystemGateArtifactStore<br/>the artefact root — OUTSIDE git"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
@@ -1023,8 +1023,8 @@ completion the harness prompts. The **gate** benchmark measures a REVIEWER MODEL
 gates — plan, code, feature — and its run is seven targets (one seeded repository per task, at its own variant
 commit) × reviewers × repeats, whose leg is a multi-turn product session the harness never prompts, and whose
 result is a reply of findings plus a ledger. Folding that into `cells` and `results` would have left half the
-columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own six `gate_*` tables (E2,
-one migration that touches no existing table) and its own report — and the parts that ARE the same were made shared rather than duplicated:
+columns empty per row, so it is a sibling context, `Bench.Domain.Gate`, with its own `gate_*` tables (six in E2,
+one migration that touches no existing table; E4 adds a seventh) and its own report — and the parts that ARE the same were made shared rather than duplicated:
 `Claimable` (the four claim fields and the claim/settle/reclaim/stale transitions, composed by `RunCell` and
 `GateCell`) and `SlotRotation` (the global slot rotation, called by both matrices). `CellLifecycleTests` and
 `MatrixOrderTests` are byte-for-byte unchanged, which is the proof the extraction changed nothing.
@@ -1069,8 +1069,15 @@ data directory with its own caller session, the vault key joined last into an en
 `api` reviewer's calls through a loopback recording tap, the product pinned at every claim, and the per-endpoint cap
 enforced at the claim itself. It is the one place outside the API that hosts HTTP (the tap's Kestrel), which is why
 `Bench.Infrastructure` carries the ASP.NET Core framework reference. It was run against the real coai-mcp 0.39.0
-(`GateDriverLiveTests`). The blinded assessment, the import of the existing Python and `coai-bench` records, the API
-routes and the Gate tab are E4–E7 of [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+(`GateDriverLiveTests`). The blinded strict assessment (E4, 2026-09-28) exists too: `bench gate assess` reads every
+finding's TEXT from the artefact store, shows it to a CLI assessor (codex read-only with the output schema enforced, or
+the Claude CLI in plan mode with the write tools denied — the one repository-wide widening is `AgentAskOptions` on
+`CliArgv.For`, which refuses a guarantee a CLI has no flag for) under a fresh blinded id whose key never leaves the
+artefact root, and writes verdicts per batch — the log with its text to the artefact root, the verdict (ids, enum
+names, a keyed cluster hash) to `gate_verdicts`. A strict percentage is withheld until a person's hand-check of twenty
+verdicts is recorded (`gate_hand_checks`, the seventh table). The import of the existing Python and `coai-bench`
+records, the API routes and the Gate tab are E5–E7 of
+[todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 
 ## Guards that shape the API
 

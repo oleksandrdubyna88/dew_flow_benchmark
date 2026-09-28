@@ -10,7 +10,7 @@ namespace Bench.Cli;
 
 /// <summary><c>bench gate …</c> — the coai gate-model benchmark's verbs: the two that own its storage (the PUBLIC export —
 /// database rows through the publication guard, never an artefact — and the tap PRUNE), and the driver's (E3): run,
-/// resume, status, sweep, probe, reviewers and suite verify.</summary>
+/// resume, status, sweep, probe, reviewers and suite verify; and the assessment's (E4): assess and hand-check.</summary>
 public static class CoaiGateCommand
 {
     /// <summary>How long a tap request/response body is kept, in days. The facts file of every call is kept forever.</summary>
@@ -27,6 +27,8 @@ public static class CoaiGateCommand
             "sweep" => await GateRunCommand.SweepAsync(command, output, error, cancellationToken),
             "probe" => await GateToolsCommand.ProbeAsync(command, output, error, cancellationToken),
             "reviewers" => await GateToolsCommand.ReviewersAsync(command, output, error, cancellationToken),
+            "assess" => await GateAssessCommand.AssessAsync(command, output, error, cancellationToken),
+            "hand-check" => await GateAssessCommand.HandCheckAsync(command, output, error, cancellationToken),
             "suite" when command.Operand(1) == "verify" => await GateToolsCommand.VerifySuiteAsync(command, output, error, cancellationToken),
             var other => Unknown(other, error),
         };
@@ -235,7 +237,7 @@ public static class CoaiGateCommand
         return ExitCodes.Configuration;
     }
 
-    private const string SubVerbs = "run, resume, status, sweep, probe, reviewers, suite verify, export or prune";
+    private const string SubVerbs = "run, resume, status, sweep, probe, reviewers, suite verify, assess, hand-check, export or prune";
 
     private static string Connection(CommandLine command) =>
         command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);

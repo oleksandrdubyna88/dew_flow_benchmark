@@ -23,7 +23,52 @@ public sealed record AgentAsk(
     string Prompt,
     string WorkingDirectory,
     TimeSpan Wall,
-    string ModelId = "");
+    string ModelId = "")
+{
+    /// <summary>What else the launch must guarantee — a read-only sandbox, an output schema, tools taken away, MCP
+    /// servers off. <see cref="AgentAskOptions.None"/> for every caller that asked for none, so their argv is unchanged.</summary>
+    public AgentAskOptions Options { get; init; } = AgentAskOptions.None;
+}
+
+/// <summary>How far a CLI agent's own sandbox is opened.</summary>
+public enum AgentSandbox
+{
+    /// <summary>Whatever the CLI does by default — the authoring and review passes' launch.</summary>
+    Default,
+
+    /// <summary>It may read, and it may not write, anywhere: the blinded assessor's launch.</summary>
+    ReadOnly,
+}
+
+/// <summary>The guarantees a launch asks the CLI for, beyond "answer once": the blinded assessor's needs, spelled per
+/// CLI by <c>CliArgv</c>. An option a CLI cannot honour is REFUSED there by name, never dropped — a sandbox that is
+/// silently not applied is a sandbox the caller believes in.</summary>
+public sealed record AgentAskOptions
+{
+    public static AgentAskOptions None { get; } = new();
+
+    public AgentSandbox Sandbox { get; init; } = AgentSandbox.Default;
+
+    /// <summary>A JSON Schema file the CLI enforces on its final message (codex <c>--output-schema</c>).</summary>
+    public string OutputSchemaFile { get; init; } = string.Empty;
+
+    /// <summary>Where the CLI writes its final message (codex <c>-o</c>); the answer is then read from this file.</summary>
+    public string LastMessageFile { get; init; } = string.Empty;
+
+    /// <summary>Tools the agent may not call (claude <c>--disallowedTools</c>).</summary>
+    public IReadOnlyList<string> DisallowedTools { get; init; } = [];
+
+    /// <summary>Every MCP server the CLI would load is switched off for this launch.</summary>
+    public bool McpServersOff { get; init; }
+
+    /// <summary>A ceiling on agent turns (claude <c>--max-turns</c>); zero is none.</summary>
+    public int MaxTurns { get; init; }
+
+    /// <summary>Nothing asked beyond "answer once" — the launch every caller before the assessor made.</summary>
+    public bool IsNone =>
+        Sandbox == AgentSandbox.Default && OutputSchemaFile.Length == 0 && LastMessageFile.Length == 0
+        && DisallowedTools.Count == 0 && !McpServersOff && MaxTurns == 0;
+}
 
 /// <param name="ResponseBytes">What the agent actually printed. Recorded for the same reason a leg records
 /// its response size: it is the only honest per-call measure of what a batch cost to produce.</param>

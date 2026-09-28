@@ -74,7 +74,7 @@ public sealed class GateReportTests
             Verdict(run, 2, new Verdict.AssessmentFailure(AssessmentFailureCause.Truncated), StrictHash),
         };
 
-        var row = GateReport.PerModel(Scope(PinA), StrictRubric, Input([run], verdicts)).Rows.Single();
+        var row = GateReport.PerModel(Scope(PinA), StrictRubric, HandChecked(Input([run], verdicts))).Rows.Single();
 
         row.AssessmentFailed.Should().Be(1, "shown as its own count — never read as unassessed, never as refuted");
         row.SupportedPct.Should().Be(Figure.Of(50), "1 supported of 2 JUDGED — the failed batch is not in the denominator");
@@ -148,7 +148,7 @@ public sealed class GateReportTests
             Verdict(run, 2, Strict(StrictReading.Supported, seed: "cs2-S2", value: ValueLevel.High), StrictHash),
         };
 
-        var row = GateReport.PerModel(Scope(PinA), StrictRubric, Input([run], verdicts)).Rows.Single();
+        var row = GateReport.PerModel(Scope(PinA), StrictRubric, HandChecked(Input([run], verdicts))).Rows.Single();
 
         row.SeedsHitMean.Should().Be(Figure.Of(2), "two findings hit one seed — it is one seed");
         row.SeedsHitMin.Should().Be(2);

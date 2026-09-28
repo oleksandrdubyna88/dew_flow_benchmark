@@ -3,7 +3,7 @@ using Bench.Domain.Runs;
 
 namespace Bench.Infrastructure.Persistence;
 
-// The six gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
+// The seven gate_* tables. The publication guard is STRUCTURAL first: no column below can hold a finding's text, a
 // prompt, an answer, a repository name or a path on this machine — only ids, hashes, enum names, numbers, the
 // reviewer catalog's references and the ONE free-text column, the redacted failure cause on a cell.
 // GateEntitiesGuardTests walks every one of these types and holds each text-bearing property to an allow-list
@@ -226,6 +226,32 @@ public sealed class GateVerdictRow
     public string PromptHash { get; set; } = string.Empty;
 
     public bool AssessorFamilyMatches { get; set; }
+
+    public DateTimeOffset RecordedAt { get; set; }
+}
+
+/// <summary>A person's hand-check of one assessor's verdicts under one rubric, over a set of campaigns (E4): the counts and
+/// the HASH of the answered sample file — the file itself (finding text, notes, the person's comments) stays in the
+/// artefact root.</summary>
+public sealed class GateHandCheckRow
+{
+    public long Id { get; set; }
+
+    public List<Guid> Campaigns { get; set; } = [];
+
+    public string RubricId { get; set; } = string.Empty;
+
+    public RubricKind RubricKind { get; set; }
+
+    public string RubricHash { get; set; } = string.Empty;
+
+    public string AssessorId { get; set; } = string.Empty;
+
+    public int Read { get; set; }
+
+    public int Agreed { get; set; }
+
+    public string NoteHash { get; set; } = string.Empty;
 
     public DateTimeOffset RecordedAt { get; set; }
 }

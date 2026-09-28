@@ -142,7 +142,7 @@ public sealed class GateReportPopulationTests
             Verdict(run, 1, Strict(StrictReading.Refuted), StrictHash, assessor: "claude-check"),
         };
 
-        var row = GateReport.PerModel(Scope(PinA), StrictRubric, Input([run], verdicts)).Rows.Single();
+        var row = GateReport.PerModel(Scope(PinA), StrictRubric, HandChecked(Input([run], verdicts))).Rows.Single();
 
         row.Assessed.Should().Be(2, "two findings, one verdict each — a re-ask or a second assessor is not a second finding");
         row.AssessmentFailed.Should().Be(0, "the later real reading supersedes the failure for that finding");
@@ -158,7 +158,7 @@ public sealed class GateReportPopulationTests
         var v1 = GateVerdict.Under(catalog, StrictHash, run.RunId, 0, Strict(StrictReading.Refuted), GateReviewerId.Parse("codex-astra").Ok(), "b1", StrictHash, false).Ok();
         var v2 = GateVerdict.Under(catalog, edited.Hash, run.RunId, 0, Strict(StrictReading.Supported), GateReviewerId.Parse("codex-astra").Ok(), "b2", edited.Hash, false).Ok();
 
-        var table = GateReport.PerModel(Scope(PinA), StrictRubric, Input([run], [v1, v2]));
+        var table = GateReport.PerModel(Scope(PinA), StrictRubric, HandChecked(Input([run], [v1, v2])));
 
         table.Rubric.Should().Be(StrictRubric);
         table.Rows.Single().SupportedPct.Should().Be(Figure.Of(0), "strict-v2 is another wording — its verdicts are another rubric's, not a second opinion here");
@@ -175,7 +175,7 @@ public sealed class GateReportPopulationTests
             Verdict(run, 1, Strict(StrictReading.Supported), StrictHash, assessor: "grok-judge", familyMatches: true),
         };
 
-        var row = GateReport.PerModel(Scope(PinA), StrictRubric, Input([run], verdicts)).Rows.Single();
+        var row = GateReport.PerModel(Scope(PinA), StrictRubric, HandChecked(Input([run], verdicts))).Rows.Single();
 
         row.AssessorFamilyMatched.Should().Be(1, "finding 1 was judged only by its own family — flagged, never refused");
         row.SupportedPct.Should().Be(Figure.Of(50), "finding 0 is read by the INDEPENDENT assessor (refuted); finding 1 by the only one it has");

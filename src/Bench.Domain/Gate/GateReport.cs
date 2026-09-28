@@ -47,8 +47,8 @@ public static class GateReport
         return new ModelTable(
             scope,
             rubric,
-            Rows(population, run => !calibration.Contains(run.Task.Value), input.Tasks),
-            Rows(population, run => calibration.Contains(run.Task.Value), input.Tasks),
+            Rows(population, run => !calibration.Contains(run.Task.Value), input, rubric),
+            Rows(population, run => calibration.Contains(run.Task.Value), input, rubric),
             PerTask(scope, rubric, input),
             Variance(scope, rubric, input));
     }
@@ -113,14 +113,15 @@ public static class GateReport
         runs.GroupBy(r => (r.Task, r.Reviewer))
             .OrderBy(g => g.Key.Task.Value, StringComparer.Ordinal).ThenBy(g => g.Key.Reviewer.Value, StringComparer.Ordinal);
 
-    private static IReadOnlyList<ModelRow> Rows(GatePopulation population, Func<GateRunRecord, bool> include, IReadOnlyList<TaskSummary> tasks)
+    private static IReadOnlyList<ModelRow> Rows(GatePopulation population, Func<GateRunRecord, bool> include, GateReportInput input, Rubric rubric)
     {
         var attempts = population.Attempts.Where(include).ToLookup(r => r.Reviewer.Value, StringComparer.Ordinal);
 
         return [.. population.Runs.Where(include)
             .GroupBy(r => r.Reviewer.Value, StringComparer.Ordinal)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
-            .Select(g => ReviewerRow.Of(ReviewerAggregate.Of(g.First().Reviewer, [.. g], [.. attempts[g.Key]], population.Verdicts, tasks)))];
+            .Select(g => ReviewerAggregate.Of(g.First().Reviewer, [.. g], [.. attempts[g.Key]], population.Verdicts, input.Tasks))
+            .Select(a => ReviewerRow.Of(a, HandCheckGate.Allows(input.HandChecks, rubric, a.VerdictSources)))];
     }
 
     private static VarianceState SpreadState(int readings) => readings switch
@@ -150,7 +151,9 @@ public static class GateReport
 /// <summary>One per-model row, folded from a <see cref="ReviewerAggregate"/>.</summary>
 internal static class ReviewerRow
 {
-    public static ModelRow Of(ReviewerAggregate a)
+    /// <param name="handChecked">Whether every verdict source of this row is covered by a hand-check; when it is not, the
+    /// strict percentages are <see cref="Figure.NotHandChecked"/> — the counts beside them are still shown.</param>
+    public static ModelRow Of(ReviewerAggregate a, bool handChecked)
     {
         var seeds = a.SeedsHitPerRun;
         var seconds = a.Captured(r => (true, r.Facts.SecondsTotal));
@@ -179,8 +182,8 @@ internal static class ReviewerRow
             a.Unresolved,
             a.AssessmentFailed,
             a.AssessorFamilyMatched,
-            Figure.Percent(a.Supported, a.Judged),
-            Figure.Percent(a.Supported + a.Partial, a.Judged),
+            StrictRate(a.Supported, a.Judged, handChecked),
+            StrictRate(a.Supported + a.Partial, a.Judged, handChecked),
             a.HighValuePerRun.Count > 0 ? Figure.Mean([.. a.HighValuePerRun.Select(h => (double)h)]) : Figure.Unassessed,
             Figure.Percent(a.Overstated, a.Graded),
             Quantile.Q(seconds, 0.5),
@@ -203,6 +206,16 @@ internal static class ReviewerRow
             [.. a.Runs.Where(r => !r.Facts.Valid).GroupBy(r => r.Facts.Failure.Kind).OrderBy(g => g.Key)
                 .Select(g => new FailureCount(g.Key, g.Count()))]);
     }
+
+    /// <summary>Nothing judged is a dash whatever the hand-check says; something judged and not hand-checked is withheld
+    /// in words, never shown as a number nobody has verified.</summary>
+    private static Figure StrictRate(int part, int judged, bool handChecked) =>
+        (judged, handChecked) switch
+        {
+            (0, _) => Figure.Unassessed,
+            (_, false) => Figure.NotHandChecked,
+            _ => Figure.Percent(part, judged),
+        };
 
     private static Figure CostPerSeed(IReadOnlyList<double> costs, int seedsFound) =>
         (costs.Count, seedsFound) switch

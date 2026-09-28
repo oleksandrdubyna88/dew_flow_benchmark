@@ -49,6 +49,11 @@ public interface IGateCheckouts
 
     /// <summary>Removes the clones of runs that ended; returns how many were removed.</summary>
     Task<int> RemoveFinishedAsync(IReadOnlyCollection<Guid> finishedRuns, CancellationToken cancellationToken);
+
+    /// <summary>The SHARED read-only worktree at the task's variant head (<c>ICheckoutProvider</c>'s, one per url and
+    /// commit) — what the blinded assessor reads. Never a gate clone: a clone's path names the run, and the product wrote
+    /// its refs there.</summary>
+    Task<Outcome<string>> ReadOnlyAsync(GateTask task, CancellationToken cancellationToken);
 }
 
 /// <summary>The reviewer catalog: rows are added and retired, never edited.</summary>

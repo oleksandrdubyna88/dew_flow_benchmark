@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Bench.Infrastructure.Persistence;
 
-/// <summary>The mapping of the six <c>gate_*</c> tables — a context of its own inside the one database, beside
+/// <summary>The mapping of the seven <c>gate_*</c> tables — a context of its own inside the one database, beside
 /// the retrieval benchmark's tables and touching none of them. Every enum is stored as its NAME, the rule every
 /// other table here follows: an ordinal changes meaning the day somebody inserts a member.</summary>
 internal static class GateModel
@@ -22,6 +22,7 @@ internal static class GateModel
         Verdicts(builder);
         Reviewers(builder);
         Artifacts(builder);
+        HandChecks(builder);
     }
 
     private static void Runs(ModelBuilder builder) =>
@@ -78,6 +79,10 @@ internal static class GateModel
             verdict.Property(v => v.Grounded).HasConversion<string>();
             verdict.Property(v => v.FailureCause).HasConversion<string>();
             verdict.HasIndex(v => new { v.CellId, v.FindingOrdinal, v.RubricHash });
+
+            // A verdict is written once per (finding, rubric, assessor, batch): a replay of a batch after a crash between
+            // the verdict log and the database changes nothing (E4).
+            verdict.HasIndex(v => new { v.CellId, v.FindingOrdinal, v.RubricHash, v.AssessorId, v.BatchId }).IsUnique();
             verdict.HasOne<GateCellRow>().WithMany().HasForeignKey(v => v.CellId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -90,6 +95,15 @@ internal static class GateModel
 
             // "Is this the same configuration under another name" — a lookup, never a re-hash of every row.
             reviewer.HasIndex(r => r.Hash);
+        });
+
+    private static void HandChecks(ModelBuilder builder) =>
+        builder.Entity<GateHandCheckRow>(check =>
+        {
+            check.ToTable("gate_hand_checks");
+            check.HasKey(c => c.Id);
+            check.Property(c => c.RubricKind).HasConversion<string>();
+            check.HasIndex(c => new { c.RubricHash, c.AssessorId });
         });
 
     private static void Artifacts(ModelBuilder builder) =>

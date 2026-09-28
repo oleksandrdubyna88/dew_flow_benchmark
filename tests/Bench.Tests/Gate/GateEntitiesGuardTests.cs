@@ -47,6 +47,10 @@ public sealed class GateEntitiesGuardTests
 
         // gate_artifacts — a path RELATIVE to the artefact root, built from ids, and the bytes' hash.
         "GateArtifactRow.RelativePath", "GateArtifactRow.Sha256",
+
+        // gate_hand_checks (E4) — the rubric's id and hash, the assessor's catalog id, and the HASH of the answered sample
+        // file; the file (finding text, notes, a person's comments) stays in the artefact root.
+        "GateHandCheckRow.RubricId", "GateHandCheckRow.RubricHash", "GateHandCheckRow.AssessorId", "GateHandCheckRow.NoteHash",
     };
 
     /// <summary>The one column that is prose: the failure cause, redacted before it is written.</summary>
@@ -61,10 +65,10 @@ public sealed class GateEntitiesGuardTests
     }
 
     [Fact]
-    public void The_walk_covers_all_six_gate_tables_from_the_model()
+    public void The_walk_covers_all_seven_gate_tables_from_the_model()
     {
         GateEntities().Select(t => t.Name).Should().BeEquivalentTo(
-            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow"],
+            ["GateRunRow", "GateCellRow", "GateFindingRow", "GateVerdictRow", "GateReviewerRow", "GateArtifactRow", "GateHandCheckRow"],
             "a scan that finds nothing passes forever — the tables come from the EF model, so a new one is walked when it is mapped");
     }
 

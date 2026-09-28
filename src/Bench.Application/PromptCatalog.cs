@@ -81,6 +81,29 @@ public static class PromptCatalog
                 ["question"] = brief.QuestionJson,
             });
 
+    /// <summary>The folder the gate benchmark's assessment rubrics live in (E4).</summary>
+    public const string GateAssessRole = "gate-assess";
+
+    /// <summary>One gate-assessment rubric file, whole — <c>prompts/gate-assess/&lt;name&gt;.md</c> — and the hash of its
+    /// text. A rubric has no placeholders: it IS the wording a verdict was judged under, so the hash is of the file,
+    /// with line endings normalised (a checkout that turned LF into CRLF must not become a second rubric). Read at call
+    /// time, never cached, like every other prompt here.</summary>
+    public static Outcome<RenderedPrompt> GateRubric(string root, string name)
+    {
+        var file = Path.Combine(root, GateAssessRole, $"{name}.md");
+
+        if (!File.Exists(file))
+        {
+            return Outcome<RenderedPrompt>.Failure($"the gate rubric '{name}' is not there — expected '{file}'");
+        }
+
+        var text = File.ReadAllText(file).ReplaceLineEndings("\n").TrimEnd() + "\n";
+
+        return text.Trim().Length == 0
+            ? Outcome<RenderedPrompt>.Failure($"the gate rubric '{file}' is empty — a verdict under no wording is a verdict about nothing")
+            : Outcome<RenderedPrompt>.Success(new RenderedPrompt(text, StableHash.Of(text), $"{GateAssessRole}/{name}"));
+    }
+
     private static Outcome<RenderedPrompt> Render(
         string root, string role, string group, IReadOnlyDictionary<string, string> values)
     {

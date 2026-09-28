@@ -1,7 +1,7 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
 > Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27, E3 (the
-> driver) 2026-09-28 — `research/module_gate.md` describes them; E4–E7 open.** Scope: a new bounded context `Gate` across
+> driver) and E4 (the blinded strict assessment) 2026-09-28 — `research/module_gate.md` describes them; E5–E7 open.** Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -937,27 +937,76 @@ for the rest.
 - [x] DoD: a live test class (skipped when `BENCH_GATE_COAI_EXE` is unset, the `QlnEngineLiveTests` shape) drives
   `providers` and one `review_plan` against the real binary with a fake vendor and stores a run.
 
-### E4 — the assessment (Opus)
+### E4 — the assessment (Opus) — DONE 2026-09-28
 
-- **S4.1** `prompts/gate-assess/strict.md` (the calibration's rubric verbatim) + `lenient-worth-v1.md` (the coai
+> Landed on `feat/gate-e4-assessment`; the assessment, its files, the verdict store and the hand-check are in
+> [module_gate.md](../research/module_gate.md). Every guard was reverted in the finished code and its test watched
+> failing for the real symptom, then restored (the observations are in the commit body); the turn-ceiling fix below
+> was RED before it was written.
+>
+> **From E4's plan round (coai, 2026-09-28, `good_enough`, 3 of 3 reviewers, 16 findings — 9 accepted, 7 rejected with
+> reasons on the round), accepted and folded in:** the key is extended under an EXCLUSIVE lock and replaced atomically
+> (staged, flushed, renamed) — a torn or lost key would re-mint ids it held, and two assessors run side by side; the
+> Claude CLI has no output schema, so its answer is extracted from its prose by `AgentJson` (extraction, not repair);
+> `--scope` resolves to the runs of that suite stamp and must be the suite file's own, `--run` must name runs of the
+> suite given; the growth table (below, and in `module_gate.md`); `VendorFamily` normalises case and a `vendor/` route
+> prefix; the database is the commit point per batch — log first, then one transaction, an orphan log line never read
+> as a verdict (the hand-check joins by blinded id AND batch); what the assessor is SENT (prompt, working folder,
+> schema and answer paths) is tested to name no model, reviewer, campaign or cell; a hand-check is recorded only from a
+> DRAWN sample whose rows still show the stored verdicts. Rejected with reasons: a checkout-root pre-check, stale or
+> locked worktrees, the batch-size flag (already refused at parse), a dry run, the file-hash key (already
+> `GateFileHashKeys`), a key per rubric (a blinded id names a finding, and pending is per assessor × rubric), and an
+> `AssessmentFailure` row for ids missing after their re-ask (the stories say *unassessed*).
+>
+> **From the cadence consultation over E4–E6 (codex, closed `solved`):** the verdict store is the ingestion contract E5
+> writes through too — a batch naming a finding no settled attempt stored is refused whole, and a replay is a no-op (a
+> unique index on cell, ordinal, rubric hash, assessor, batch); a hand-check covers (rubric, assessor) over a SET of
+> campaigns — an imported history is many small campaigns — and the gate is computed from the verdicts joined to the
+> row's own runs, never the rubric's whole population; the paired agreement between two assessors is E6's (the
+> population keeps one verdict per finding, so agreement is computed before that choice).
+>
+> **Deviations from the stories as written:**
+> - **The Claude assessor, as specified, cannot read the code — measured.** Claude Code 2.1.258 with `--max-turns 1`
+>   and a prompt that needs one file printed `Error: Reached max turns (1)` and exited 0; the same argv with three turns
+>   read the file and answered. The argv is built as S4.3 says; the pass records such a batch as `NoAnswer` naming the
+>   turn ceiling (RED first: it read as `Unparseable`), and raising the ceiling is the operator's decision (§9).
+> - **The claude launch adds `--permission-mode plan` and `--strict-mcp-config`** — D9's plan mode, and "MCP servers off"
+>   spelled for that CLI (no `--mcp-config` beside it loads none). An option a CLI has no flag for is REFUSED by name
+>   (an output schema on claude, a turn ceiling on codex, anything on gemini). Codex's `-o` answer file is read in place
+>   of stdout; the calibration's `--json` event log is not asked for.
+> - **The verdict log is one file per ASSESSOR** (`assess/verdicts/<assessor>.jsonl`), and one pass per assessor at a
+>   time holds a lock: .NET's `FileMode.Append` is not a kernel append, so two writers into one file would tear it.
+> - **The key is one per artefact root**, not per campaign, so a blinded id is never reused anywhere.
+> - **`laterfix_candidates` is not on the row**: the suite carries none. The strict rubric names it as candidate evidence
+>   only, and is sent verbatim.
+> - **The prompt hash on a verdict is of the batch prompt as SENT**; the rubric hash is of the file.
+> - **Hand-checks are a table** (`gate_hand_checks`, the seventh), not a note on the run: `bench gate hand-check sample`
+>   draws twenty verdicts into a file a person answers in the artefact root, `record` checks and stores the counts and
+>   the file's hash. `Figure.NotHandChecked` is a new state (the DTO's `not-hand-checked` for E6).
+> - **The strict-% gate applies to `SupportedPct` and `SupportedOrPartialPct`**; the counts beside them stay visible.
+> - **Seed evidence is printed by `bench gate assess`, not stored** (it is derivable from the artefacts).
+
+- [x] **S4.1** `prompts/gate-assess/strict.md` (the calibration's rubric verbatim) + `lenient-worth-v1.md` (the coai
   judge's question, for the import's label only), hashed through `PromptCatalog`.
-- **S4.2** blinded export: fresh ids, key to the artefact store, rows carrying the assessor's checkout path from
+- [x] **S4.2** blinded export: fresh ids, key to the artefact store, rows carrying the assessor's checkout path from
   `ICheckoutProvider.EnsureAsync(target at the variant)`. RED: an exported row contains no model, run id or
   reviewer; an id is never reused.
-- **S4.3** `AgentAskOptions` on `CliArgv.For` (sandbox, output schema, disallowed tools, MCP servers off) +
+- [x] **S4.3** `AgentAskOptions` on `CliArgv.For` (sandbox, output schema, disallowed tools, MCP servers off) +
   `FindingAssessor` over `ICliAgentRuntime`. RED: the argv for codex carries `-s read-only` and `--output-schema`;
   the claude argv carries `--disallowedTools Edit Write NotebookEdit --max-turns 1`.
-- **S4.4** batches of ≤ 24, verdict rows appended per batch, prior cluster keys carried; a batch whose output
+- [x] **S4.4** batches of ≤ 24, verdict rows appended per batch, prior cluster keys carried; a batch whose output
   does not parse, is truncated or names unknown ids is retried once, then every finding of it gets an
   `AssessmentFailure` verdict named by cause. RED: a killed batch leaves earlier batches' rows in place; a re-run
   skips them; a batch answering with an extra id is retried and, failing again, yields `UnknownIds` rows for every
   finding it carried; a later pass re-asks exactly the failed rows and its verdicts supersede the failures; the
   report counts failures in their own column and never in supported %.
-- **S4.5** seed matching and evidence: `seedHit` must name a seed of the row's task; `SeedEvidence` from the
+- [x] **S4.5** seed matching and evidence: `seedHit` must name a seed of the row's task; `SeedEvidence` from the
   product's turn-1 prompt file (pack / on request / withheld). RED: a seed id from another task is refused.
-- **S4.6** `bench gate assess --run|--scope … --assessor <reviewer-catalog id> [--rubric strict-v1]`.
-- **S4.7** `AssessorFamilyMatches` flagged on the verdict and counted apart in the report.
-- DoD: the hand-check (twenty verdicts read by a person) is recorded before any strict % is shown for a scope.
+- [x] **S4.6** `bench gate assess --run|--scope … --assessor <reviewer-catalog id> [--rubric strict-v1]`.
+- [x] **S4.7** `AssessorFamilyMatches` flagged on the verdict and counted apart in the report.
+- [x] DoD: the hand-check (twenty verdicts read by a person) is recorded before any strict % is shown for a scope — the
+  report refuses the number (`NotHandChecked`) until `bench gate hand-check record` has stored one; the person's reading
+  itself is E7's campaign (S7.4).
 
 ### E5 — the import (Opus)
 
@@ -1075,6 +1124,9 @@ harness defect, not a model result. If it does not hold, this sentence is the re
    (the calibration's)? Both are pinnable; the plan refuses a silent switch mid-campaign either way.
 3. **The assessor**: keep `codex exec` with `gpt-6-astra` (the calibration's), add the Claude CLI as a second
    assessor for an agreement figure, or both? Its family match with a reviewer is flagged, never refused.
+   **E4 (measured):** as specified (`--max-turns 1`), the Claude assessor stops at its turn ceiling as soon as it
+   reaches for a read tool — raise the ceiling, or inline the code windows into its prompt the way the coai-bench judge
+   does, before it can give an agreement figure worth reading.
 4. **Should the lenient `worth having` verdicts of the 09-05/09-06 campaigns appear on the plan/code pages?** The
    plan says yes, in their own column, labelled — never in a strict figure.
 5. **May the seeded 8-defect plan and coai's own plans be committed as `samples/`?** They are public text; the

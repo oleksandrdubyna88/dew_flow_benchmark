@@ -46,6 +46,7 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
             db.GateReviewers.AddRange(path, url, name, home);
             var run = db.GateRuns.First();
             db.GateArtifacts.Add(new GateArtifactRow { RunId = run.Id, CellId = Guid.Empty, Attempt = 1, Class = ArtifactClass.Other, RelativePath = "D:/work/x.json", Sha256 = new string('1', 64) });
+            db.GateHandChecks.Add(HandCheck(run.Id, "contoso-orders-desk"));
             await db.SaveChangesAsync(Ct);
         }
 
@@ -59,6 +60,7 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
             "gate_reviewers.KeyName row dirty-name: carries private name #1 of the suite",
             "gate_reviewers.ExecutableRef row dirty-home: " + PublicationGuard.HomeRule,
             "gate_artifacts.RelativePath row " + ArtifactRowId(connection) + ": " + PublicationGuard.DriveRule,
+            "gate_hand_checks.AssessorId row " + HandCheckRowId(connection, "contoso-orders-desk") + ": carries private name #1 of the suite",
         ]);
         violations.Should().NotContain(v => v.Contains("contoso", StringComparison.OrdinalIgnoreCase),
             "the refusal names the rule, never the private text — CI logs are public");
@@ -203,6 +205,26 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
             "the key lives in the artefact root and nowhere else");
     }
 
+    private static string HandCheckRowId(string connection, string assessor)
+    {
+        using var db = PostgresFixture.Context(connection);
+        return db.GateHandChecks.Single(c => c.AssessorId == assessor).Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>A hand-check row (E4): the counts and the sample file's hash, never its text.</summary>
+    private static GateHandCheckRow HandCheck(Guid campaign, string assessor) => new()
+    {
+        Campaigns = [campaign],
+        RubricId = "strict-v1",
+        RubricKind = RubricKind.Strict,
+        RubricHash = new string('7', 64),
+        AssessorId = assessor,
+        Read = 20,
+        Agreed = 18,
+        NoteHash = new string('a', 64),
+        RecordedAt = Noon,
+    };
+
     private static string ArtifactRowId(string connection)
     {
         using var db = PostgresFixture.Context(connection);
@@ -246,6 +268,7 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
             PromptHash = new string('9', 64),
             RecordedAt = Noon,
         });
+        db.GateHandChecks.Add(HandCheck(run.Id, "codex-astra"));
         await db.SaveChangesAsync(Ct);
 
         return connection;
