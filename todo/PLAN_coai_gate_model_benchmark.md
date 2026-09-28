@@ -1360,6 +1360,65 @@ the C# driver's per-task validity and seeds-hit range for a model will fall insi
 that model on that task; a difference in turn-1 prompt hash or in the ledger's token sums on a valid run is a
 harness defect, not a model result. If it does not hold, this sentence is the record of a wrong guess.
 
+#### E7 amended 2026-09-28 — measured before S7.2 ran, and the operator's answers
+
+**S7.2's criterion cannot pass as written, and the calibration's own records show it.** Two Python runs of ONE task by
+ONE reviewer at ONE product sha — `p2-grok-4.7-cs2-r1` and `-r2`, both at `5d73ead7` — carry different turn-1 prompt
+hashes (`b9f45507…` and `d6650ee2…` in `gate_cells.PromptHash`). The 184 903-byte prompts differ in 18 lines, and in
+exactly two things: the product's 8-hex SESSION id, which fences every section (`--- the plan — … (fb0f5dd6) ---`, 8
+fences; `coai · src_mcp/src/Server/PanelService.cs:420` makes it `Guid.NewGuid().ToString("N")[..8]`), and the run's
+data directory, named in the gate-history section (`Gate history unavailable: there is no rounds database at
+<data-dir>\coai.db.`). With those two normalised, **all five phase-2 cs2 runs at `5d73ead7`** — grok ×2, deepseek, qwen,
+and glm (a run with one dirty product file) — produce ONE shape, `837fed1ae93f14bf…`. So the turn-1 prompt is the same
+for every API reviewer, and the raw hash is per-run by construction. The A/A compares the NORMALISED prompt.
+
+- **S7.2a — `PromptShape` and `bench gate aa` (code, RED first).**
+  - `src/Bench.Domain/Gate/PromptShape.cs` (pure): `PromptShape.Of(string prompt)` — CRLF→LF, every product fence
+    `(<8 hex>) ---` → `(<session>) ---`, the gate-history path `there is no rounds database at <anything>coai.db.` →
+    `… at <data-dir>/coai.db.`; carries the normalised text's SHA-256. `PromptShape.Compare(a, b)` → equal, or the
+    differing LINE NUMBERS (first 20) and the count — never the lines themselves, because a prompt carries a private
+    repository's source. Anything else that differs FAILS the comparison and is named by line number: a new run-specific
+    field in the product is a loud A/A failure, never a silent pass.
+  - `src/Bench.Application/Gate/GateTurnOnePrompt.cs`: the turn-1 prompt of ONE cell attempt, hash-verified — the lookup
+    `GateSeedEvidence.cs:24-45` already does inline, EXTRACTED (reuse-first, move 2) so seed evidence and the A/A read
+    the same file by the same rule (`answers/NN-…prompt…` class `Prompt`, first by ordinal path; the shim numbers files
+    in write order, `GateDriverAdapters.cs:62-69`, and the import keeps the other harness's `01-` numbering,
+    `ImportedFiles.cs:51,58`). A cell with no prompt file (a CLI reviewer writes none, `GateSeedEvidence.cs:12`) reads as
+    **no prompt**, never as a mismatch.
+  - `bench gate aa --run <native campaign> --against <cell id> --db … --artifact-root …`: every settled cell of the run,
+    one line each — reviewer, task, repeat, raw hash (12), shape hash (12), `same shape` / `differs at lines …` / `no
+    prompt (CLI reviewer)`. Exit 0 every comparable cell has the reference's shape · 1 at least one differs (a harness
+    defect) · 3 database or an artefact unreadable / hash-mismatched · 4 flags, an unknown run or cell. Nothing is
+    stored: like seed evidence it is derivable from the artefacts whenever asked.
+  - Tests: the fence and path vectors from the measured prompts (synthetic text, no private content); a third differing
+    line is reported by number; CRLF against LF is the same shape; the extracted lookup keeps `GateSeedEvidence`'s tests
+    green unchanged; the CLI verb's refusals and exit codes over a `PostgresFixture` run with artefacts on disk.
+- **S7.1 as it stands.** The suite file exists (`<artifact-root>/suite.json`, 7 tasks, stamp `fb80578c897f`); the
+  seeded 8-defect plan is NOT in it, so the gates run over the seven tasks, not eight. `reviewers add
+  --from-calib-models` is not built and not needed: E5's import created the phase-2 rows (`grok-4-7-9ca08acf`
+  xai/medium, `glm-5-3-106e63ec` dashscope/high, 8192 tokens, 20 min, 3 follow-ups). Plan- and code-gate rows are added
+  with `bench gate reviewers add` (rows are immutable; the imported ones host only `feature`).
+- **S7.2 — the A/A, one campaign.** A one-task suite (cs2 only, `<artifact-root>/aa-cs2.suite.json`), the product built
+  from a clean worktree at `5d73ead7`, isolated data directories, two repeats, the feature gate, reviewers (operator,
+  2026-09-28): **grok-4.7 and glm-5.3** (the imported phase-2 rows) and **Fable 5.1, Opus 5.5** (runtime `claude`) and
+  **gpt-6-astra** (runtime `codex`). `bench gate aa --run <it> --against <p2-grok-4.7-cs2-r1's cell>`. For grok and glm
+  that is the port check. For the three CLI reviewers there is no Python baseline and no prompt file, so their A/A is
+  weaker, and said so: both repeats valid, the product pin recorded, findings and seeds hit reported beside each other.
+- **S7.3 — narrowed by the operator (2026-09-28).** The phase-2 feature runs are no longer outstanding (all 84 settled
+  in Python and imported, `RESULTS_gate_feature_first_real_report.md`). What remains is the plan and code gates over the
+  seven tasks × 3 repeats for **grok-4.7 + glm-5.3** (84 runs, ~$25–35), on the current coai `main` built from a clean
+  worktree (its own pin; D5 refuses a moved product mid-campaign). Whether the three CLI reviewers join the matrix is
+  asked with the A/A's result, not assumed.
+- **S7.4 — the hand-check is deferred by the operator.** `bench gate assess` runs with the codex assessor over the new
+  campaigns; strict percentages stay `not hand-checked`, and this plan keeps that item open rather than ticking it.
+- **Code egress, confirmed by the operator:** the same seven repositories and vendors as the 09-27 calibration (xAI,
+  Alibaba DashScope), plus Anthropic (Claude CLI) and OpenAI (Codex CLI) for the A/A.
+
+**Prediction for the amended S7.2, written before it runs:** every grok-4.7 and glm-5.3 cell of the A/A campaign has
+shape `837fed1ae93f14bf…` (the Python runs' shape) — any other shape is a port defect, named by line; grok's seeds hit on
+cs2 falls in the Python range for that task (its three repeats), glm's likewise; each of the three CLI reviewers settles
+both repeats valid. If a line of this does not hold, it is the record of a wrong guess.
+
 ## 6. Boundaries named on both sides
 
 | item | this plan | the other side |
