@@ -82,4 +82,19 @@ internal static class GateReportFixtures
     public static GateVerdict Verdict(
         GateRunRecord run, int ordinal, Verdict reading, string rubricHash, string assessor = "codex-astra", bool familyMatches = false) =>
         GateVerdict.Under(Catalog, rubricHash, run.RunId, ordinal, reading, GateReviewerId.Parse(assessor).Ok(), "b1", rubricHash, familyMatches).Ok();
+
+    /// <summary>The input with a recorded hand-check covering every (campaign, assessor) its strict verdicts come from —
+    /// for the tests that are about the arithmetic of a strict rate, not about the gate that withholds it (E4).</summary>
+    public static GateReportInput HandChecked(GateReportInput input)
+    {
+        var campaignOf = input.Runs.ToDictionary(r => r.RunId, r => r.CampaignId);
+        var checks = input.Verdicts
+            .Where(v => campaignOf.ContainsKey(v.RunId))
+            .Select(v => (Campaign: campaignOf[v.RunId], v.Assessor, v.Rubric))
+            .Distinct()
+            .Select(p => HandCheck.Of([p.Campaign], p.Rubric, p.Assessor, HandCheck.MinVerdicts, HandCheck.MinVerdicts, new string('a', 64), DateTimeOffset.UnixEpoch).Ok())
+            .ToList();
+
+        return input with { HandChecks = checks };
+    }
 }

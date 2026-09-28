@@ -34,6 +34,83 @@ public static class CliArgv
     /// compares that id — so it must name what actually answered.
     /// </para></summary>
     public static Outcome<IReadOnlyList<string>> For(ModelRuntimeKind runtime, string modelId) =>
+        For(runtime, modelId, AgentAskOptions.None, []);
+
+    /// <summary>The same argv, widened by <paramref name="options"/> — the blinded assessor's launch (E4). With
+    /// <see cref="AgentAskOptions.None"/> it is exactly the argv above, so no existing caller's launch changes.
+    /// <list type="bullet">
+    /// <item><b>codex</b>: <c>exec -s read-only --skip-git-repo-check --color never --output-schema &lt;schema&gt; -o &lt;out&gt;
+    /// -m &lt;model&gt; [-c mcp_servers.&lt;name&gt;.enabled=false …] -</c> — the calibration's <c>assess.py</c> launch;
+    /// <paramref name="codexMcpServers"/> are the server names this machine's codex config declares.</item>
+    /// <item><b>claude</b>: <c>-p --model &lt;model&gt; --permission-mode plan --disallowedTools Edit Write NotebookEdit
+    /// --max-turns 1 [--strict-mcp-config]</c> — print mode, plan mode (no edits), the write tools taken away, and with no
+    /// <c>--mcp-config</c> beside it, <c>--strict-mcp-config</c> loads no MCP server at all.</item>
+    /// </list>
+    /// An option the CLI has no flag for is REFUSED by name — claude has no output schema and no last-message file,
+    /// codex has no tool deny-list and no turn ceiling, gemini has none of them: a guarantee silently not applied is one
+    /// the caller goes on believing.</summary>
+    public static Outcome<IReadOnlyList<string>> For(
+        ModelRuntimeKind runtime, string modelId, AgentAskOptions options, IReadOnlyList<string> codexMcpServers)
+    {
+        var refusal = Unsupported(runtime, options);
+
+        if (refusal.Length > 0)
+        {
+            return Outcome<IReadOnlyList<string>>.Failure(refusal);
+        }
+
+        return options.IsNone
+            ? Plain(runtime, modelId)
+            : runtime switch
+            {
+                ModelRuntimeKind.CliCodex => Outcome<IReadOnlyList<string>>.Success(Codex(modelId, options, codexMcpServers)),
+                ModelRuntimeKind.CliClaude => Outcome<IReadOnlyList<string>>.Success(Claude(modelId, options)),
+                _ => Plain(runtime, modelId),
+            };
+    }
+
+    private static IReadOnlyList<string> Codex(string modelId, AgentAskOptions options, IReadOnlyList<string> servers) =>
+    [
+        "exec",
+        .. options.Sandbox == AgentSandbox.ReadOnly ? ["-s", "read-only"] : Array.Empty<string>(),
+        "--skip-git-repo-check", "--color", "never",
+        .. options.OutputSchemaFile.Length > 0 ? ["--output-schema", options.OutputSchemaFile] : Array.Empty<string>(),
+        .. options.LastMessageFile.Length > 0 ? ["-o", options.LastMessageFile] : Array.Empty<string>(),
+        "-m", modelId,
+        .. options.McpServersOff ? servers.SelectMany(name => new[] { "-c", $"mcp_servers.{name}.enabled=false" }) : [],
+        "-",
+    ];
+
+    private static IReadOnlyList<string> Claude(string modelId, AgentAskOptions options) =>
+    [
+        "-p", "--model", modelId,
+        .. options.Sandbox == AgentSandbox.ReadOnly ? ["--permission-mode", "plan"] : Array.Empty<string>(),
+        .. options.DisallowedTools.Count > 0 ? ["--disallowedTools", .. options.DisallowedTools] : Array.Empty<string>(),
+        .. options.MaxTurns > 0 ? ["--max-turns", options.MaxTurns.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
+        .. options.McpServersOff ? ["--strict-mcp-config"] : Array.Empty<string>(),
+    ];
+
+    private static string Unsupported(ModelRuntimeKind runtime, AgentAskOptions o)
+    {
+        var asked = new (bool Asked, string Name, ModelRuntimeKind[] Honoured)[]
+        {
+            (o.Sandbox == AgentSandbox.ReadOnly, "a read-only sandbox", [ModelRuntimeKind.CliCodex, ModelRuntimeKind.CliClaude]),
+            (o.OutputSchemaFile.Length > 0, "an output schema", [ModelRuntimeKind.CliCodex]),
+            (o.LastMessageFile.Length > 0, "a last-message file", [ModelRuntimeKind.CliCodex]),
+            (o.DisallowedTools.Count > 0, "a tool deny-list", [ModelRuntimeKind.CliClaude]),
+            (o.MaxTurns > 0, "a turn ceiling", [ModelRuntimeKind.CliClaude]),
+            (o.McpServersOff, "MCP servers off", [ModelRuntimeKind.CliCodex, ModelRuntimeKind.CliClaude]),
+        };
+
+        var unhonoured = asked.Where(a => a.Asked && !a.Honoured.Contains(runtime)).Select(a => a.Name).ToList();
+
+        return unhonoured.Count == 0
+            ? string.Empty
+            : $"{runtime} has no flag for {string.Join(", ", unhonoured)} — refused rather than launched without it, because a guarantee "
+              + "silently not applied is one the caller goes on believing";
+    }
+
+    private static Outcome<IReadOnlyList<string>> Plain(ModelRuntimeKind runtime, string modelId) =>
         runtime switch
         {
             // `-p` is Claude Code's print mode: it answers once and exits, reading the prompt from stdin when
@@ -79,7 +156,16 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
                 "an agent was asked an empty prompt — a launch that cannot produce an answer must not cost one");
         }
 
-        var argv = CliArgv.For(ask.Runtime, ask.ModelId);
+        var servers = ask.Runtime == ModelRuntimeKind.CliCodex && ask.Options.McpServersOff
+            ? CodexMcpServers.Declared()
+            : Outcome<IReadOnlyList<string>>.Success([]);
+
+        if (servers is Outcome<IReadOnlyList<string>>.Fail unreadable)
+        {
+            return Outcome<AgentAnswer>.Failure(unreadable.Reason);
+        }
+
+        var argv = CliArgv.For(ask.Runtime, ask.ModelId, ask.Options, ((Outcome<IReadOnlyList<string>>.Ok)servers).Value);
 
         if (argv is Outcome<IReadOnlyList<string>>.Fail wrongKind)
         {
@@ -96,7 +182,7 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             ask.Prompt,
             cancellationToken);
 
-        var answer = Read(attempt, ask, clock.Elapsed);
+        var answer = Read(attempt, ask, clock.Elapsed, LastMessage(ask));
 
         answer.Match(
             ok => 0,
@@ -117,8 +203,20 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
     /// question nobody wrote.
     /// </para></summary>
     public static Outcome<AgentAnswer> Read(ProcessAttempt attempt, AgentAsk ask, TimeSpan elapsed) =>
+        Read(attempt, ask, elapsed, string.Empty);
+
+    /// <summary>The same reading, for a launch that asked the CLI to write its final message to a FILE
+    /// (<see cref="AgentAskOptions.LastMessageFile"/>, codex <c>-o</c>): a clean exit is then answered by the file, and a
+    /// clean exit that left the file empty or absent is a refusal naming it — whatever stdout carried, because with
+    /// <c>-o</c> stdout is progress, not the answer.</summary>
+    public static Outcome<AgentAnswer> Read(ProcessAttempt attempt, AgentAsk ask, TimeSpan elapsed, string lastMessage) =>
         attempt switch
         {
+            ProcessAttempt.Completed { Result.Ok: true } when ask.Options.LastMessageFile.Length > 0 => lastMessage.Trim().Length > 0
+                ? Outcome<AgentAnswer>.Success(new AgentAnswer(lastMessage, elapsed, System.Text.Encoding.UTF8.GetByteCount(lastMessage)))
+                : Outcome<AgentAnswer>.Failure(
+                    $"the {ask.Runtime} agent exited 0 and wrote no final message to {Path.GetFileName(ask.Options.LastMessageFile)}"),
+
             ProcessAttempt.NotFound missing => Outcome<AgentAnswer>.Failure(
                 $"'{missing.Executable}' is not installed on this machine — the registry's reference resolved to "
                 + "a path nothing is at, which is a configuration fact rather than an agent's failure"),
@@ -149,6 +247,21 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
 
             _ => Outcome<AgentAnswer>.Failure($"the {ask.Runtime} agent produced an attempt this build cannot read"),
         };
+
+    /// <summary>The final message a launch asked to be written to a file, or empty when none was asked or none was written.</summary>
+    private static string LastMessage(AgentAsk ask)
+    {
+        var file = ask.Options.LastMessageFile;
+
+        try
+        {
+            return file.Length > 0 && File.Exists(file) ? File.ReadAllText(file) : string.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>The END of what a process said, which is where the reason lives — the beginning is banners.
     /// <para>

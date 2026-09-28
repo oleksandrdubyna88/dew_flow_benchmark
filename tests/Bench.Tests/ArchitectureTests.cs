@@ -133,6 +133,12 @@ public sealed class ArchitectureTests
             typeof(Domain.Gate.ArtifactRef),
             typeof(Domain.Gate.PublicationGuard),
             typeof(Domain.Gate.FailureRedaction),
+            typeof(Domain.Gate.BlindExport),
+            typeof(Domain.Gate.AssessorOutput),
+            typeof(Domain.Gate.AssessmentPending),
+            typeof(Domain.Gate.VendorFamily),
+            typeof(Domain.Gate.HandCheckGate),
+            typeof(Domain.Gate.HandCheckAnswers),
         ];
 
         deciders.Should().OnlyContain(
@@ -150,6 +156,10 @@ public sealed class ArchitectureTests
         typeof(global::Bench.Application.Gate.IGateArtifactStore).Assembly.GetName().Name.Should().Be("Bench.Application");
         typeof(global::Bench.Infrastructure.Persistence.PostgresGateStore).Should().Implement<global::Bench.Application.Gate.IGateStore>();
         typeof(global::Bench.Infrastructure.Gate.FileSystemGateArtifactStore).Should().Implement<global::Bench.Application.Gate.IGateArtifactStore>();
+        typeof(global::Bench.Application.Gate.IGateVerdictStore).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Gate.IGateAssessmentFiles).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Persistence.PostgresGateVerdictStore).Should().Implement<global::Bench.Application.Gate.IGateVerdictStore>();
+        typeof(global::Bench.Infrastructure.Gate.FileSystemGateAssessmentFiles).Should().Implement<global::Bench.Application.Gate.IGateAssessmentFiles>();
         typeof(Domain.Gate.GateRun).Assembly.GetReferencedAssemblies().Should().NotContain(
             r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the gate domain stays free of EF");
     }

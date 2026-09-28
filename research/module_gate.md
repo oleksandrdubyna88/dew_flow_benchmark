@@ -1,8 +1,10 @@
 # Module — Gate: the coai gate-model benchmark
 
-> Status: **the domain and the contracts (E1), the store and the privacy guard (E2) and the driver (E3) exist,
-> 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by cell, and stores every session.** The
-> assessment (E4), the import (E5), the report surfaces and the page (E6) and the first campaign (E7) are open in
+> Status: **the domain and the contracts (E1), the store and the privacy guard (E2), the driver (E3) and the blinded
+> strict assessment (E4) exist, 2026-09-28: `bench gate run` drives the product over MCP stdio, cell by cell, and stores
+> every session; `bench gate assess` reads each finding blind and records a verdict per batch; `bench gate hand-check`
+> records the person's check that gates every strict %.** The import (E5), the report surfaces and the page (E6) and the
+> first campaign (E7) are open in
 > [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 > This file describes what is built; a sentence here about something that does not run is a bug in the file.
 
@@ -87,6 +89,16 @@ flowchart TB
         readers["GateReplyParser · LedgerRows · StderrFacts · TapCallFacts · SettingsCheck<br/>ProductPinReader · SessionConfigReader · PostgresGateReviewerCatalog"]
         cli["bench gate run · resume · status · sweep · probe · reviewers · suite verify"]
     end
+    subgraph assess["the assessment (E4) — pure deciders in Domain, the pass in Application, adapters in Infrastructure"]
+        blind["BlindExport · BlindedId · BlindKeyEntry · AssessmentRow<br/>fresh ids, the key only in the artefact root, no identity field on a row"]
+        output["AssessorOutput.Read → BatchReading<br/>Answered(rows, missing) · Failed(Unparseable · Truncated · UnknownIds · NoAnswer)<br/>a seed_hit must be the row's own task's"]
+        pending["AssessmentPending · BatchSize ≤ 24 · VendorFamily<br/>HandCheck · HandCheckGate · HandCheckAnswers"]
+        pass["GateAssessmentPass — export → pending → batches<br/>retry a failed batch once, re-ask missing once · log then database per batch"]
+        assessor["FindingAssessor over ICliAgentRuntime<br/>codex -s read-only --output-schema · claude plan mode, Edit/Write/NotebookEdit denied, --max-turns 1"]
+        verdictstore["PostgresGateVerdictStore : IGateVerdictStore<br/>a stored finding or the batch refused · replay-safe · hand-checks"]
+        assessfiles["FileSystemGateAssessmentFiles : IGateAssessmentFiles<br/>assess/key.json (locked, atomic) · verdicts/per assessor · batches/ · hand-check/"]
+        acli["bench gate assess · hand-check sample | record"]
+    end
     contracts["Bench.Contracts — Gate*Dto<br/>no free text reachable (type-graph walk, Type.Property allow-list)"]
     guard["ArchitectureTests<br/>deciders in Bench.Domain · Ui → Contracts only · one setting producer · name private"]
 
@@ -116,6 +128,17 @@ flowchart TB
     runner --> completion
     campaign --> pgstore
     runner -. "CoaiEnvironment · facts · findings" .-> dom
+    acli --> pass
+    pass --> blind
+    pass --> pending
+    pass --> assessor
+    assessor --> output
+    pass --> verdictstore
+    pass --> assessfiles
+    pass -- "findings.jsonl, hash-verified" --> artstore
+    verdictstore --> pgstore
+    verdict --> verdictstore
+    pending -. "the hand-check gate" .-> report
 ```
 
 ## Core entities, and the rule each one carries
@@ -137,7 +160,13 @@ flowchart TB
 | `Rubric` · `RubricCatalog` · `Verdict` · `GateVerdict` | `Rubric.cs`, `Verdict.cs` | a verdict is issued under a rubric the catalog holds, of that rubric's kind; `AssessmentFailure(cause)` is a verdict case that never counts in a rate; the cluster key travels as a hash |
 | `GatePopulation` | `GatePopulation.cs` | which runs and verdicts a figure is over: the latest attempt per cell (campaign, task, reviewer, repeat), every attempt kept beside; one rubric (id + kind + hash); one verdict per (run, finding) — real reading over `AssessmentFailure`, independent assessor over family-matched, then assessor and batch id; `IsAssessed` = has verdicts, or valid with zero findings |
 | `GateReport` | `GateReport.cs`, `GateReportRows.cs`, `ReviewerAggregate.cs`, `Figure.cs`, `PythonRound.cs` | `PerModel(scope, rubric, input)` — the operator's columns, the `Rubric` required; **calibration tasks in `ModelTable.Calibration`, never in `Rows`**; `Runs` one per cell plus `Attempts` / `AttemptsFailed`; `AssessorFamilyMatched` counted apart; variance as two spreads over the cells, each with a state — seeds need 3 ASSESSED readings, findings 3 cells; `Unassessed` (`—`) where nobody looked; `Unknown` where nothing was metered; a failed run in every denominator; `AssessmentFailed` its own column; `TaskRowOf` / `VarianceOf` take their ids from the caller, so an empty group is an empty state; `Quantile.Q` = `report.py: q`; every rounding the Python report does (`q`, `pct`, the means, the costs) goes through `PythonRound` (the exact binary value, half to even), each pinned on vectors printed by the Python |
-| `SeedEvidence` | `SeedEvidence.cs` | where a seed's evidence sat — pack / pack by file / on request / withheld / unknown — off the product's turn-1 prompt |
+| `SeedEvidence` | `SeedEvidence.cs` | where a seed's evidence sat — pack / pack by file / on request / withheld / unknown — off the product's turn-1 prompt; `GateSeedEvidence` (Application, E4) reads that prompt off disk: the first `Prompt`-class artefact of the task's earliest settled cell, hash-verified; none recorded reads `Unknown` |
+| `BlindedId` · `BlindKeyEntry` · `AssessmentRow` · `BlindExport` | `BlindExport.cs` | E4. A blinded id is eight lower-case hex, minted fresh and never one the key holds. The KEY (blinded id → campaign, cell, ordinal, task, reviewer) lives ONLY in the artefact root. `AssessmentRow` — what the assessor reads — has no model, run, cell, campaign, reviewer or ordinal field (reflection-tested), and its JSON uses the other harness's keys (`repo_path`, `base`, `head`, `seed_spec`) so the strict rubric is sent verbatim. `Plan` skips a finding already in the key and shuffles each task's new entries |
+| `AssessorOutput` · `AssessedRow` · `BatchReading` | `AssessorOutput.cs` | E4. An answer read against its batch: nothing → `NoAnswer`; a JSON document valid so far and cut → `Truncated`; prose, the wrong shape, a word outside the rubric, an id twice → `Unparseable`; an id the batch did not carry → `UnknownIds`; otherwise `Answered(rows, missing, refusals)`. A row naming another task, or a `seed_hit` that is not a seed of ITS task, is refused and counts as missing. `AssessedRow` keeps the note and the cluster TEXT (artefact store); `ToVerdict` gives the database a cluster hash HMAC'd under the artefact root's key |
+| `AssessmentPending` · `BatchSize` | `AssessmentPending.cs` | E4. Pending = no verdict of THIS assessor under THIS rubric, or only `AssessmentFailure` rows (so a later pass re-asks exactly the failed findings). Batches never span a task and hold at most 24 — a larger size is refused at the flag |
+| `VendorFamily` | `VendorFamily.cs` | E4. A row's family from its model id (lower-cased, a `vendor/` route prefix dropped), then its CLI word, then the model id itself; `AssessorFamilyMatches` on every verdict |
+| `HandCheck` · `HandCheckGate` · `HandCheckAnswers` | `HandCheck.cs` | E4, the DoD. A hand-check is (campaigns, rubric, assessor, read ≥ 20, agreed, the answered file's hash). Under a strict rubric a row's `SupportedPct` / `SupportedOrPartialPct` are `Figure.NotHandChecked` unless every (campaign, assessor) its counted verdicts come from is covered; a lenient rubric is not gated; nothing judged stays `Unassessed`. Answers count only when every answered row was DRAWN, still shows the stored verdict (same batch, same reading) and is answered once |
+| `FindingAssessor` · `GateAssessmentPass` · `GateRubrics` · `GateFindingTexts` · `GateHandChecks` | `src/Bench.Application/Gate/` | E4, over the ports. The rubrics are `prompts/gate-assess/strict.md` (the calibration's instructions verbatim) and `lenient-worth-v1.md` (the coai-bench judge's question, a label only), hashed through `PromptCatalog.GateRubric` with line endings normalised; only `strict-v1` is asked. The prompt is the rubric, `PRIOR CLUSTER KEYS`, `INPUT ROWS` — the other harness's framing. A claude answer is taken out of its prose by `AgentJson`; a claude run that stopped at its turn ceiling is `NoAnswer` |
 | `Gate*Dto` | `src/Bench.Contracts/GateContracts.cs` | figures travel as `GateFigureDto(known, value, state)`; `GateContractsGuardTests` walks every `Gate*Dto` into the nested types and collection elements it reaches and holds every text-bearing property — `string`, collections and dictionaries of strings, `object`, `JsonElement`, `JsonNode` — to an allow-list keyed by `Type.Property`, with `GateRunSummaryDto.FailureText` the one named exception; planted negatives (a `FailureText` elsewhere, a nested `FindingNote(string Title)`, `List<string>`) prove it bites |
 | `GateRun` · `GateRunStatus` · `DataDirMode` · `GateSettlement` | `GateRun.cs` | a `bench gate run` invocation — the CAMPAIGN its cells belong to and the id every artefact path starts with. Forward-only status (Planned → Running → Finished or Failed); a terminal run's cells are never swept and never claimed; the data-directory mode is stored on the run so a resume cannot flip it. A product SESSION is one cell's settled attempt (only one attempt of a cell ever settles), so `GateRunRecord.RunId` is the cell's id. `GateSettlement` is `Completed(facts, findings, settingsHash, promptHash)` or `Failed(cause)`; `GateRunFacts.NotProduced(cause)` gives a failed session invalid facts with nothing captured — it stays in every denominator |
 | `CellPaths` · `ArtifactPath` · `ArtifactScope` | `CellPaths.cs` | the ONE path function. `ArtifactPath` is relative to the artefact root: `/`-separated segments of `[A-Za-z0-9._-]`, never empty, `.` or `..`; rooted, drive, url and backslash forms are refused at parse time. `DataDirFor(run, cell, attempt)` is `runs/<run>/cells/<cell>/attempt-<n>/data` (isolated) or `runs/<run>/data-shared` (shared). `Allows(scope, path)` decides by SEGMENT (so `attempt-10` is not under `attempt-1`): an isolated cell cannot reach `data-shared`, a shared run cannot reach a cell's private `data`, no cell reaches another cell or another attempt |
@@ -198,8 +227,23 @@ flowchart TB
   retired, never edited; a row read back whose stored hash no longer matches its definition is refused.
 - `bench gate suite verify --suite-file … [--checkout-root …]` — every task's checkout at its variant head with its
   plan committed there; 3 when any is not.
-- `bench gate assess` (E4), `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6)
-  are open in the plan.
+- `bench gate assess --run <id>[,<id>…] | --scope <suite stamp> --assessor <reviewer id> [--rubric strict-v1]
+  --suite-file … --artifact-root … --db … [--checkout-root …] [--batch-size 24] [--wall-minutes 90] [--prompts prompts]`
+  (E4) — refused in the order a person fixes things: flags 4 (a `--batch-size` outside 1–24, `--run` and `--scope`
+  together, neither) · the suite file 3 · the suite, the artefact root 4 · the rubric files 3 · the database 3 · a run of
+  another suite or a scope that is not the suite file's stamp 4 · the assessor not in the catalog, or not a codex/claude
+  row 4 · its executable reference unset 3 · the file-hash key 3. Prints one line per batch, the seed-evidence line per
+  task (`cs2-S1* pack, cs2-S2 on request` — `*` is cross-epic), and the summary (assessed · assessment failed · left
+  unassessed · newly blinded · read by the reviewer's own family). Exit 0 every finding has a reading · 5 some are left
+  unassessed (resumable) · 3 the assessor never answered at all, or another pass of the same assessor holds the root.
+  `lenient-worth-v1` is refused: it labels imported verdicts and is never asked.
+- `bench gate hand-check sample --run … | --scope … --assessor … [--count 20]` writes
+  `assess/hand-check/<sample>.jsonl` — a header and twenty random verdicts, each WITH the finding's text, the verdict,
+  the seed hit, the cluster and the note, and `"agree": null` — plus `<sample>.drawn.json`. `bench gate hand-check
+  record --file <sample> --run … | --scope … --assessor …` refuses a file outside that folder, a header of another
+  rubric, assessor or campaign set, a row not drawn, a row whose verdict no longer matches the stored one, and fewer than
+  twenty answered rows; then stores the counts and the file's SHA-256.
+- `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
 
 ## The driver — one cell attempt, end to end
 
@@ -280,14 +324,15 @@ folder, when a sibling `<name>.dll` shows a framework-dependent build (an apphos
 the file alone; `--version`'s first line; and under a checkout the short sha and `git status --porcelain
 --untracked-files=no -- <the nearest *.csproj directory>`, naming the tree.
 
-## The store — six tables, two migrations (`GateTables`, E3's `GateDriver`), no existing table touched
+## The store — seven tables, three migrations (`GateTables`, E3's `GateDriver`, E4's `GateAssessment`), no existing table touched
 
 | table | one row per | what it holds |
 |---|---|---|
 | `gate_runs` | `bench gate run` invocation | gate, suite stamp, data-dir mode, status, source (`native` or the harness an import came from); since E3 the prediction's HASH (its text is in the artefact root) and whether a product change is allowed |
 | `gate_cells` | task × reviewer × repeat | the claim (state, attempts, owner label/host/pid, claimed-at), the pin taken at claim, and once settled the session's facts — every count beside a *captured* flag, the vendor's finish WORDS, the verdict word, the failure KIND and the ONE free-text column, `FailureText` (redacted); since E3 the handshake's `ServerVersion`, the `ReferencesHash`, and the settings check as `SettingsChecked` / `SettingsMismatches` |
 | `gate_findings` | finding of a settled session | ordinal, severity, category, gating, line, `TextHash`, `FileHash`; `(cell, attempt, ordinal)` unique |
-| `gate_verdicts` | verdict on a finding under a rubric | rubric id/kind/hash, the verdict case, the strict fields as enum names, cluster hash, seed id, assessor id, batch id, prompt hash, family match (written by E4) |
+| `gate_verdicts` | verdict on a finding under a rubric | rubric id/kind/hash, the verdict case, the strict fields as enum names, cluster hash (HMAC under the artefact root's key), seed id, assessor id, batch id, prompt hash, family match — written by E4 through `PostgresGateVerdictStore`: a batch naming a finding no settled attempt stored is refused whole, and `(cell, ordinal, rubric hash, assessor, batch)` is unique, so a replay changes nothing. Never a note, never a cluster's text, never a blinded id |
+| `gate_hand_checks` | recorded hand-check (E4) | the campaigns covered (uuid[]), rubric id/kind/hash, assessor id, verdicts read, agreed, the answered sample file's SHA-256, recorded at |
 | `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport, prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
 | `gate_artifacts` | committed file | run, cell, attempt, class, RELATIVE path (unique), SHA-256, length |
 
@@ -327,7 +372,22 @@ plus the facts and the findings, in one transaction.
       tap/pruned.jsonl                  what prune released: file, SHA-256, length, when
       run.json                          the LAST artefact an attempt commits
       interrupted.json                  written into an earlier attempt when a later one begins
+  assess/                               the blinded assessment (E4) — FileSystemGateAssessmentFiles
+    key.json                            the blinding key; extended under key.lock, replaced staged → flushed → renamed
+    key.lock                            held exclusively while the key is read, extended and replaced
+    locks/<assessor>.lock               held for one assessor's pass; a second pass of that assessor is refused
+    seeds/<task>.json                   the task's seeds, as the assessor's seed_spec names them
+    batches/<task>-<8hex>-a<n>/         prompt.txt (as sent — its hash is on every verdict), verdict-schema.json,
+                                        answer.json (codex writes it through -o; claude's stdout is copied)
+    verdicts/<assessor>.jsonl           every reading WITH its text (cluster, note) and every failure, one writer per file
+    hand-check/<sample>.jsonl           a sample for a person to answer; <sample>.drawn.json is what was drawn
 ```
+
+**The assessment's commit point is the database.** Per batch the verdict log is appended and flushed, then the
+verdicts are written in one transaction. A crash between the two leaves log lines whose batch never reached the
+database — orphans, never read as verdicts (the hand-check joins a stored verdict to its line by blinded id AND batch);
+the next pass asks those findings again under a new batch id. Two assessors may run side by side (the key is extended
+under an exclusive lock, each writes its own log); two passes of ONE assessor may not.
 
 **Containment** is decided twice. By segment, in the domain (`CellPaths.Allows`). On the real filesystem, by
 `ArtifactContainment`: `Path.GetFullPath`, then every EXISTING component asked whether it is a symbolic link or a
@@ -404,12 +464,21 @@ campaign measures them.
 | gate clones (E3) | one working tree per run × task under `<checkout-root>/gate/<runId>/`, objects borrowed from the mirror | `bench gate sweep` once the run is `Finished` or `Failed` | a clone of a run still open is reused by its resume |
 | per attempt (E3) | `settings.json`, `request.json`, the stage replies, `reply.json`, `stderr.txt`, `findings.jsonl`, `ledger.jsonl`, `settings-check.json`, `answers/`, `run.json`, the product's own data dir (`usage.jsonl`, `sessions/`, `coai.db`, logs) and for `api` rows the tap — ≈ 2.3 MB per feature run as the calibration measured, most of it tap bodies | `bench gate prune` for tap bodies; the rest kept with the run | an interrupted attempt is kept whole and marked; ≤ 2 per cell by the abandon rule |
 | `gate_reviewers` | tens of rows | never deleted, retired | — |
+| `gate_verdicts` (E4) | ≤ findings × assessors real readings (~1 500 × 2 per campaign), plus the failure rows a re-ask superseded (kept: the history of what failed) | kept forever | a batch lands in one transaction or not at all; a replay is a no-op |
+| `gate_hand_checks` (E4) | one row per recorded sample — a handful per campaign | kept forever | one insert |
+| `assess/key.json` (E4) | one entry per finding ever blinded, ~200 B → ~300 KB per 1 500-finding campaign | kept forever — a verdict without its key entry cannot be joined back | replaced atomically under a lock: the old key or the new one |
+| `assess/verdicts/<assessor>.jsonl` (E4) | ~1 KB per reading → ~1.5 MB per assessor per campaign | kept forever — the notes are the evidence a hand-check reads | a torn last line of a killed append is skipped on read; its batch never reached the database, so the finding is asked again |
+| `assess/batches/` (E4) | per batch ≈ the rubric (4 KB) + ≤ 24 rows (~1 KB each) + the answer — ≈ 50 KB; ~63 batches per assessor per 1 500 findings, up to twice with retries → ≈ 3–6 MB | kept forever — `prompt.txt` is what the prompt hash on a verdict names | a batch folder is created once and never reused; an interrupted one stays |
+| `assess/hand-check/` (E4) | ~2 KB per drawn row → ~40 KB per sample | kept forever — the recorded hash names the file | a sample that was never recorded is an unused file, read by nothing |
 
 ## Operator decisions assumed on 2026-09-27, pending the operator
 
 Recorded in the plan's §9 and applied here where a type already carries them: an isolated data directory
 by default (D4); a checkout build is "the product", pinned by sha (`ProductPin`); codex as the primary
-assessor and the Claude CLI for an agreement figure (E4); the lenient 09-05/09-06 verdicts in their own
+assessor and the Claude CLI for an agreement figure (E4 — built; **measured 2026-09-28 against Claude Code 2.1.258:
+with `--max-turns 1` a claude assessor that reaches for a read tool prints `Error: Reached max turns (1)` and exits 0,
+while three turns read the file and answered**, so as specified the Claude assessor cannot read the code; the pass
+records such a batch as `NoAnswer` naming the turn ceiling, and the ceiling is the operator's to raise); the lenient 09-05/09-06 verdicts in their own
 labelled column (`RubricKind.LenientWorth` is a separate population everywhere); the seeded 8-defect plan and
 coai's own plans may go in `samples/`; the suite file lives in the local artefact root outside git; CLI
 reviewers show *cost unknown*, never zero (`CapturedUsd`, `ReviewerPrices.Unknown`, `Figure.Unknown`); the
@@ -418,8 +487,8 @@ coordinator bumps the qln pin after E6.
 ## What does NOT exist yet
 
 The reviewer catalog's imports (`reviewers add --from-coai-settings` / `--from-calib-models`, E7) and `suite verify
---prune`; the blinded export
-and the assessor launch that write `gate_verdicts` (E4); the import of the 71 Python runs and the coai-bench
+--prune`; the paired-agreement figure between two assessors (E6 — `GatePopulation` keeps one verdict per finding, so
+agreement is computed before that choice); the import of the 71 Python runs and the coai-bench
 records (E5); the report verb, the API routes, the Gate tab and the mapping from `ModelTable` to
 `GateModelTableDto` (E6). The per-model TABLES in the public export wait for E6's report; today the export is the
 guarded rows.

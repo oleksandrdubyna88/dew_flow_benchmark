@@ -185,6 +185,13 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         return Task.FromResult(removed);
     }
 
+    /// <summary>The read-only worktree the checkout provider keeps at the variant head — the same one every gate clone is
+    /// cloned FROM, so it exists whenever a cell of the task ran; made when it does not.</summary>
+    public Task<Outcome<string>> ReadOnlyAsync(GateTask task, CancellationToken cancellationToken) =>
+        Target(task).Match(
+            target => provider.EnsureAsync(target, cancellationToken),
+            reason => Task.FromResult(Outcome<string>.Failure(reason)));
+
     /// <summary>An existing clone is reused only at the variant head. One interrupted between its clone and its checkout
     /// (a failure, a timeout, a Ctrl+C) has no working tree or the wrong one; it is checked out again, and made anew when
     /// even that fails — never handed on as it lies to fail every later cell of the task.</summary>
@@ -210,9 +217,7 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
 
     private async Task<Outcome<string>> CloneAsync(string clone, GateTask task, CancellationToken cancellationToken)
     {
-        var source = Target(task).Match(
-            target => provider.EnsureAsync(target, cancellationToken),
-            reason => Task.FromResult(Outcome<string>.Failure(reason)));
+        var source = ReadOnlyAsync(task, cancellationToken);
 
         if (await source is not Outcome<string>.Ok { Value: var worktree })
         {

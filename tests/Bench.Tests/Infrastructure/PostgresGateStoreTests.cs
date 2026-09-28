@@ -302,8 +302,25 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
             ["gate_runs", "gate_cells", "gate_findings", "gate_verdicts", "gate_reviewers", "gate_artifacts"]);
         operations.OfType<ITableMigrationOperation>().Select(o => o.Table).Should().OnlyContain(t => t.StartsWith("gate_", StringComparison.Ordinal),
             "no existing table is touched — the gate is a sibling context in the same database");
-        PostgresGatePublicationSource.GateEntities(db).Select(e => e.GetTableName()).Should().HaveCount(6);
+        PostgresGatePublicationSource.GateEntities(db).Select(e => e.GetTableName()).Should().HaveCount(7, "six from this migration, gate_hand_checks from E4's");
         (await db.GateRuns.CountAsync(Ct)).Should().BeGreaterThanOrEqualTo(0, "the tables exist on a migrated database");
+    }
+
+    /// <summary>The assessment's migration (E4) adds the hand-check table and the verdict replay index, on gate tables only.</summary>
+    [Fact]
+    public async Task The_assessment_migration_adds_the_hand_check_table_and_the_verdict_replay_index_and_touches_no_other()
+    {
+        await using var db = postgres.NewContext();
+        var migrations = db.GetService<IMigrationsAssembly>();
+        var id = migrations.Migrations.Keys.Should().ContainSingle(k => k.EndsWith("_GateAssessment", StringComparison.Ordinal)).Subject;
+
+        var operations = migrations.CreateMigration(migrations.Migrations[id], db.Database.ProviderName!).UpOperations;
+
+        operations.OfType<CreateTableOperation>().Select(o => o.Name).Should().Equal(["gate_hand_checks"]);
+        operations.OfType<CreateIndexOperation>().Should().Contain(i => i.Table == "gate_verdicts" && i.IsUnique
+            && i.Columns.SequenceEqual(new[] { "CellId", "FindingOrdinal", "RubricHash", "AssessorId", "BatchId" }));
+        operations.OfType<ITableMigrationOperation>().Select(o => o.Table).Should().OnlyContain(t => t.StartsWith("gate_", StringComparison.Ordinal));
+        (await db.GateHandChecks.CountAsync(Ct)).Should().BeGreaterThanOrEqualTo(0, "the table exists on a migrated database");
     }
 
     /// <summary>The driver's migration adds columns to gate tables only, and what it adds reads back: the prediction's

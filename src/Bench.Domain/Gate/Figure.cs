@@ -11,6 +11,10 @@ public enum FigureState
     Unknown,
     Withheld,
     NotApplicable,
+
+    /// <summary>A strict percentage nobody has hand-checked yet: the verdicts exist, but no person has read twenty of
+    /// them against the code, so the number is not shown (measurement rule 2).</summary>
+    NotHandChecked,
 }
 
 /// <summary>A number that may not be one — the domain twin of the wire's figure, so a refusal is a state the
@@ -26,6 +30,8 @@ public sealed record Figure(bool Known, double Value, FigureState State)
     public static Figure Withheld { get; } = new(false, 0, FigureState.Withheld);
 
     public static Figure NotApplicable { get; } = new(false, 0, FigureState.NotApplicable);
+
+    public static Figure NotHandChecked { get; } = new(false, 0, FigureState.NotHandChecked);
 
     /// <summary>A percentage of <paramref name="part"/> in <paramref name="whole"/>, or <see cref="Unassessed"/>
     /// when the whole is empty — the Python report's <c>pct</c>, which answers <c>None</c> for a zero denominator.</summary>

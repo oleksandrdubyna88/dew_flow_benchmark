@@ -34,6 +34,11 @@ internal sealed record ReviewerAggregate(
     /// one exists, so this counts the findings that had only their own family to judge them.</summary>
     public int AssessorFamilyMatched => Assessed.SelectMany(a => a.Verdicts).Count(v => v.AssessorFamilyMatches);
 
+    /// <summary>Who read the verdicts that enter this row's rates, per campaign — what a hand-check must cover before a
+    /// strict percentage is shown. Only verdicts joined to THIS row's runs, never the rubric's whole population.</summary>
+    public IReadOnlyList<(Guid Campaign, GateReviewerId Assessor)> VerdictSources =>
+        [.. Assessed.SelectMany(a => a.Verdicts.Where(v => v.Reading.CountsInRates).Select(v => (a.Run.CampaignId, v.Assessor))).Distinct()];
+
     public int RunCount => Runs.Count;
 
     public int ValidRuns => Runs.Count(r => r.Facts.Valid);

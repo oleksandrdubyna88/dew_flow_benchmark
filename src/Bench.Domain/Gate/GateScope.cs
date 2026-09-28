@@ -64,4 +64,9 @@ public sealed record GateRunRecord(
 public sealed record GateReportInput(
     IReadOnlyList<TaskSummary> Tasks,
     IReadOnlyList<GateRunRecord> Runs,
-    IReadOnlyList<GateVerdict> Verdicts);
+    IReadOnlyList<GateVerdict> Verdicts)
+{
+    /// <summary>The recorded hand-checks. A strict percentage is shown only for verdicts a hand-check covers
+    /// (<see cref="HandCheckGate"/>); none recorded means none shown.</summary>
+    public IReadOnlyList<HandCheck> HandChecks { get; init; } = [];
+}
