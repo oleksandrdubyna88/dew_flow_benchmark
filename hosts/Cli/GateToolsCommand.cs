@@ -127,6 +127,34 @@ public static class GateToolsCommand
     {
         var root = Path.Combine(Path.GetTempPath(), "bench-gate-probe", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+
+        try
+        {
+            output.WriteLine($"probe dir      {root}");
+            return await ProbeInAsync(command, exe, reviewer, root, output, error, cancellationToken);
+        }
+        finally
+        {
+            TryDelete(root);
+        }
+    }
+
+    /// <summary>The probe's throwaway data directory goes when the probe does; a product still closing a file only leaves
+    /// it to the operating system's temp cleanup.</summary>
+    private static void TryDelete(string root)
+    {
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Left for the temp folder's owner; never a reason to fail a probe that answered.
+        }
+    }
+
+    private static async Task<int> ProbeInAsync(CommandLine command, string exe, GateReviewer reviewer, string root, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
         var secrets = new GateSecrets(new EnvironmentSecrets(), command.Has("creds-key-from-coai-settings"), GateSecrets.DefaultCoaiSettingsFile);
         var run = GateRun.Planned(Guid.CreateVersion7(), GateKind.Plan, "probe", DataDirMode.Isolated, DateTimeOffset.UtcNow);
         var gate = reviewer.Definition.Gates.Kinds.FirstOrDefault();

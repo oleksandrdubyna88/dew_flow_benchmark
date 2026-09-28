@@ -45,6 +45,8 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
 
         code.Should().Be(ExitCodes.Pass, error);
         output.Should().Contain("campaign       2 cell(s) settled").And.Contain("footprint");
+        output.Should().Contain("settled        cs2/rev-a/r1").And.Contain("settled        cs2/rev-a/r2",
+            "a campaign that runs for hours says what it did as it does it, one line per cell");
         var runId = Guid.Parse(output.Split("gate run ")[1][..36]);
         File.ReadAllText(Path.Combine(setup.ArtifactRoot, "runs", runId.ToString("D"), GateRunCommand.PredictionFile)).Should().Be("every cell is valid");
         await using (var db = PostgresFixture.Context(setup.Connection))
@@ -170,6 +172,8 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
         code.Should().Be(ExitCodes.Pass, error);
         output.Should().Contain("server         connect-other-ais").And.Contain("review_plan").And.Contain("no model was called");
         output.Should().NotContain(GateDriverRig.CredsKey);
+        var probeDir = output.Split("probe dir      ")[1].Split('\n')[0].Trim();
+        Directory.Exists(probeDir).Should().BeFalse("the probe's throwaway data directory is removed when it ends");
     }
 
     [Fact]

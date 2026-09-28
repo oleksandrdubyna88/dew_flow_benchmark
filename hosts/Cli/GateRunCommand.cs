@@ -128,7 +128,7 @@ public static class GateRunCommand
     {
         var gate = Enum.Parse<GateKind>(command.Value("gate"), ignoreCase: true);
         var tasks = inputs.Suite.TasksFor(gate);
-        var settings = GateRunSettings.With(GateCliInputs.Extras(command));
+        var settings = GateCliInputs.Extras(command).Match(GateRunSettings.With, Outcome<GateRunSettings>.Failure);
         var mode = command.Has("shared-data-dir") ? DataDirMode.Shared : DataDirMode.Isolated;
 
         var refusal = (tasks, settings) switch
@@ -212,7 +212,10 @@ public static class GateRunCommand
         var options = new GateCampaignOptions(
             command.Int("parallel", run.Mode == DataDirMode.Shared ? 1 : GateCampaignOptions.DefaultParallel),
             command.Int("per-endpoint", GateCampaignOptions.DefaultPerEndpoint),
-            DrainLimits.Default);
+            DrainLimits.Default)
+        {
+            Progress = Printer(output),
+        };
 
         var report = await new GateCampaign(new ProductPinReader(), new LegDrain(inputs.Logs.CreateLogger<LegDrain>()), TimeProvider.System)
             .RunAsync(campaignInputs, options, n => inputs.Lane(n, command), cancellationToken);
@@ -335,6 +338,20 @@ public static class GateRunCommand
         output.WriteLine($"pins seen      {string.Join("; ", cells.Where(c => c.Pin.IsPinned).Select(c => c.Pin.Describe).Distinct(StringComparer.Ordinal))}");
 
         return ExitCodes.Pass;
+    }
+
+    /// <summary>One line per cell as it ends, written under a lock — lanes finish at once, and interleaved halves of two
+    /// lines would be worse than none.</summary>
+    private static Action<string> Printer(TextWriter output)
+    {
+        var gate = new Lock();
+        return line =>
+        {
+            lock (gate)
+            {
+                output.WriteLine(line);
+            }
+        };
     }
 
     private static RequestedDataDir Requested(CommandLine command) =>

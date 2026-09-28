@@ -8,6 +8,10 @@ namespace Bench.Application.Gate;
 /// <param name="PerEndpoint">Reviews in flight per reviewer endpoint (a url, a reference name, or a CLI's runtime word).</param>
 public sealed record GateCampaignOptions(int Parallel, int PerEndpoint, DrainLimits Limits)
 {
+    /// <summary>One line per cell as it ends — settled or refused — so a campaign that runs for hours says what it did
+    /// as it does it.</summary>
+    public Action<string> Progress { get; init; } = static _ => { };
+
     public const int DefaultParallel = 4;
     public const int DefaultPerEndpoint = 2;
 }
@@ -83,10 +87,11 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         await using var slot = lane.Slot;
         var owner = WorkerIdentity.Here($"gate-lane-{lane.Number}");
 
-        return await drain.DrainAsync(ct => LegAsync(lane, owner, inputs, pool, ct), _ => { }, options.Limits, stopping);
+        return await drain.DrainAsync(ct => LegAsync(lane, owner, inputs, pool, options.Progress, ct), _ => { }, options.Limits, stopping);
     }
 
-    private async Task<Outcome<LegResult>> LegAsync(GateLane lane, WorkerIdentity owner, GateCampaignInputs inputs, EndpointPool pool, CancellationToken cancellationToken)
+    private async Task<Outcome<LegResult>> LegAsync(
+        GateLane lane, WorkerIdentity owner, GateCampaignInputs inputs, EndpointPool pool, Action<string> progress, CancellationToken cancellationToken)
     {
         // The pin is read INSIDE the claim, under the pool's lock, right before the store takes the cell: a lane that
         // waited an hour for its endpoint must see the product as it is when its turn comes, not as it was when it began
@@ -106,6 +111,7 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         {
             var work = new GateCellWork(inputs.Run, cell, inputs.Reviewers[cell.Reviewer.Value], inputs.Tasks[cell.Task.Value], inputs.RunSettings, inputs.Key, owner);
             var settled = await lane.Runner.RunAsync(work, lane.Slot, cancellationToken);
+            progress(Line(cell, settled));
 
             return settled.Match(
                 s => Outcome<LegResult>.Success(LegResult.Of(s.Id, string.Empty, string.Empty, [], clock.GetUtcNow())),
@@ -115,6 +121,18 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         {
             pool.Release(inputs.Reviewers[cell.Reviewer.Value]);
         }
+    }
+
+    private static string Line(GateCell cell, Outcome<GateCell> settled)
+    {
+        var what = $"{cell.Task}/{cell.Reviewer}/r{cell.Repeat} attempt {cell.Attempts}";
+
+        return settled switch
+        {
+            Outcome<GateCell>.Ok { Value: var s } => $"settled        {what} — {s.OutcomeKind}{(s.OutcomeDetail.Length > 0 ? ": " + s.OutcomeDetail : string.Empty)}",
+            Outcome<GateCell>.Fail f => $"refused        {what} — {f.Reason}",
+            _ => what,
+        };
     }
 
     /// <summary>The product as it is NOW — read per claim. A moved product ends the campaign (by answering "no more
