@@ -15,6 +15,12 @@ public sealed record AssessmentRequest(
     FileHashKey Key,
     IReadOnlyDictionary<string, GateReviewer> Reviewers);
 
+/// <summary>One batch about to be put to the assessor — announced before the wait, which can be many minutes.</summary>
+public sealed record BatchStarted(string BatchId, GateTaskId Task, int Asked);
+
+/// <summary>What a pass tells its caller as it goes: a batch sent, a batch settled.</summary>
+public sealed record AssessmentProgress(Action<BatchStarted> Started, Action<BatchOutcome> Finished);
+
 /// <param name="Failure">The cause every finding of the batch was recorded under, or empty when it answered.</param>
 public sealed record BatchOutcome(string BatchId, GateTaskId Task, int Asked, int Assessed, int Missing, string Failure, IReadOnlyList<string> Refusals)
 {
@@ -53,7 +59,10 @@ public sealed class GateAssessmentPass(
     TimeProvider clock,
     Random random)
 {
-    public async Task<Outcome<AssessmentReport>> RunAsync(AssessmentRequest request, Action<BatchOutcome> progress, CancellationToken cancellationToken)
+    public Task<Outcome<AssessmentReport>> RunAsync(AssessmentRequest request, Action<BatchOutcome> finished, CancellationToken cancellationToken) =>
+        RunAsync(request, new AssessmentProgress(_ => { }, finished), cancellationToken);
+
+    public async Task<Outcome<AssessmentReport>> RunAsync(AssessmentRequest request, AssessmentProgress progress, CancellationToken cancellationToken)
     {
         var found = await GateFindingTexts.ReadAsync(store, artifacts, request.Campaigns, cancellationToken);
         if (found is Outcome<IReadOnlyList<FindingToAssess>>.Fail unread)
@@ -92,39 +101,51 @@ public sealed class GateAssessmentPass(
 
     private async Task<AssessmentReport> AssessAsync(
         AssessmentRequest request, IReadOnlyList<FindingToAssess> findings, IReadOnlyList<BlindKeyEntry> key, int exported,
-        Action<BatchOutcome> progress, CancellationToken cancellationToken)
+        AssessmentProgress progress, CancellationToken cancellationToken)
     {
         var selected = findings.Select(f => f.Key).ToHashSet();
         var entries = key.Where(e => selected.Contains((e.RunId, e.Ordinal))).ToList();
         var existing = await verdicts.VerdictsAsync([.. entries.Select(e => e.RunId).Distinct()], request.Catalog, cancellationToken);
         var pending = AssessmentPending.Of(entries, existing, request.Launch.Assessor.Id, request.Launch.Rubric.Rubric);
-        var context = new PassContext(request, findings.ToDictionary(f => f.Key, f => f.FindingJson), await PriorClustersAsync(request, cancellationToken));
+        var prior = await PriorClustersAsync(request, key, pending.Select(e => e.Task.Value).ToHashSet(StringComparer.Ordinal), cancellationToken);
+        var context = new PassContext(request, findings.ToDictionary(f => f.Key, f => f.FindingJson), prior, progress);
         var outcomes = new List<BatchOutcome>();
         var refusals = new List<string>();
 
         foreach (var task in pending.GroupBy(e => e.Task.Value, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
-            var evidence = await EvidenceAsync(request.Suite, task.First().Task, cancellationToken);
-
-            if (evidence is Outcome<(TaskEvidence, IReadOnlyCollection<SeedId>)>.Fail noEvidence)
-            {
-                refusals.Add(noEvidence.Reason);
-                continue;
-            }
-
-            foreach (var batch in AssessmentPending.Batches([.. task], request.Size))
-            {
-                foreach (var outcome in await BatchAsync(context, batch, ((Outcome<(TaskEvidence, IReadOnlyCollection<SeedId>)>.Ok)evidence).Value, cancellationToken))
-                {
-                    outcomes.Add(outcome);
-                    progress(outcome);
-                }
-            }
+            var (taskOutcomes, refusal) = await TaskAsync(context, [.. task], cancellationToken);
+            outcomes.AddRange(taskOutcomes);
+            refusals.AddRange(refusal.Length > 0 ? [refusal] : Array.Empty<string>());
         }
 
         var assessed = outcomes.Sum(o => o.Assessed + o.Failed);
 
         return new AssessmentReport(exported, pending.Count, outcomes, pending.Count - assessed, context.FamilyMatched, [.. refusals, .. outcomes.SelectMany(o => o.Refusals)]);
+    }
+
+    /// <summary>One task's pending findings: its evidence resolved ONCE, then its batches in order — or, when the evidence
+    /// cannot be had, the refusal and no batch at all (the findings stay unassessed).</summary>
+    private async Task<(IReadOnlyList<BatchOutcome> Outcomes, string Refusal)> TaskAsync(
+        PassContext context, IReadOnlyList<BlindKeyEntry> pending, CancellationToken cancellationToken)
+    {
+        var evidence = await EvidenceAsync(context.Request.Suite, pending[0].Task, cancellationToken);
+        if (evidence is not Outcome<(TaskEvidence, IReadOnlyCollection<SeedId>)>.Ok { Value: var task })
+        {
+            return ([], ((Outcome<(TaskEvidence, IReadOnlyCollection<SeedId>)>.Fail)evidence).Reason);
+        }
+
+        var outcomes = new List<BatchOutcome>();
+        foreach (var batch in AssessmentPending.Batches(pending, context.Request.Size))
+        {
+            foreach (var outcome in await BatchAsync(context, batch, task, cancellationToken))
+            {
+                outcomes.Add(outcome);
+                context.Progress.Finished(outcome);
+            }
+        }
+
+        return (outcomes, string.Empty);
     }
 
     /// <summary>One batch: asked (and asked again once if it failed), persisted; then its missing ids asked once more as a
@@ -161,8 +182,11 @@ public sealed class GateAssessmentPass(
     }
 
     private async Task<(string BatchId, BatchAnswer Answer)> AskOnceAsync(
-        PassContext context, string batchId, GateTaskId task, IReadOnlyList<AssessmentRow> rows, IReadOnlyCollection<SeedId> seeds, CancellationToken cancellationToken) =>
-        (batchId, await assessor.AskAsync(context.Request.Launch, new BatchAsk(batchId, task, rows, seeds, context.Prior(task)), cancellationToken));
+        PassContext context, string batchId, GateTaskId task, IReadOnlyList<AssessmentRow> rows, IReadOnlyCollection<SeedId> seeds, CancellationToken cancellationToken)
+    {
+        context.Progress.Started(new BatchStarted(batchId, task, rows.Count));
+        return (batchId, await assessor.AskAsync(context.Request.Launch, new BatchAsk(batchId, task, rows, seeds, context.Prior(task)), cancellationToken));
+    }
 
     private async Task<(BatchOutcome Outcome, IReadOnlySet<string> Missing)> PersistAsync(
         PassContext context, IReadOnlyList<BlindKeyEntry> batch, (string BatchId, BatchAnswer Answer) asked, CancellationToken cancellationToken)
@@ -172,14 +196,19 @@ public sealed class GateAssessmentPass(
         var built = readings.Select(r => Verdict(context, r.Entry, r.Reading, asked)).ToList();
 
         await files.AppendVerdictLinesAsync(context.Request.Launch.Assessor.Id, lines, cancellationToken);
-        var recorded = await verdicts.RecordAsync(built, cancellationToken);
+
+        // The database is the commit point: a batch it refused was NOT assessed, whatever the assessor answered — its
+        // findings stay unassessed (the next pass asks them again) and its log lines are orphans.
+        if (await verdicts.RecordAsync(built, cancellationToken) is Outcome<int>.Fail refused)
+        {
+            return (new BatchOutcome(asked.BatchId, batch[0].Task, batch.Count, 0, batch.Count, string.Empty,
+                [.. refusals, $"batch {asked.BatchId}: not recorded — {refused.Reason}; its findings stay unassessed"]), new HashSet<string>(StringComparer.Ordinal));
+        }
 
         context.Remember(batch[0].Task, lines.Select(l => l.Cluster));
         context.FamilyMatched += built.Count(v => v.AssessorFamilyMatches && v.Reading.CountsInRates);
 
-        var stored = recorded is Outcome<int>.Fail refused ? [$"batch {asked.BatchId}: {refused.Reason}"] : Array.Empty<string>();
-
-        return (new BatchOutcome(asked.BatchId, batch[0].Task, batch.Count, failure.Length > 0 ? 0 : readings.Count, missing.Count, failure, [.. refusals, .. stored]), missing);
+        return (new BatchOutcome(asked.BatchId, batch[0].Task, batch.Count, failure.Length > 0 ? 0 : readings.Count, missing.Count, failure, refusals), missing);
     }
 
     private static (IReadOnlyList<VerdictLine> Lines, IReadOnlyList<(BlindKeyEntry Entry, Verdict Reading)> Readings, IReadOnlySet<string> Missing, string Failure, IReadOnlyList<string> Refusals) Readings(
@@ -243,17 +272,34 @@ public sealed class GateAssessmentPass(
             (new TaskEvidence(repo, task.Case.Base, task.Case.VariantHead, seeds), [.. task.Seeds.Select(s => s.Id)]));
     }
 
-    /// <summary>The cluster keys earlier rows of each task already used under this rubric — carried into every batch of
-    /// the task so one issue keeps one key.</summary>
-    private async Task<Dictionary<string, HashSet<string>>> PriorClustersAsync(AssessmentRequest request, CancellationToken cancellationToken) =>
-        (await files.ReadVerdictLinesAsync(cancellationToken))
-            .Where(l => l.RubricHash == request.Launch.Rubric.Rubric.Hash && l.Cluster.Length > 0)
+    /// <summary>The cluster keys THIS assessor's COMMITTED readings of each task already used under this rubric — carried into
+    /// every batch of the task so one issue keeps one key. A log line counts only when a stored verdict of the same finding
+    /// and batch exists (an orphan line is not a reading), and another assessor's keys are not offered: they would steer
+    /// the second opinion toward the first.</summary>
+    private async Task<Dictionary<string, HashSet<string>>> PriorClustersAsync(
+        AssessmentRequest request, IReadOnlyList<BlindKeyEntry> key, IReadOnlySet<string> tasks, CancellationToken cancellationToken)
+    {
+        var assessor = request.Launch.Assessor.Id;
+        var rubric = request.Launch.Rubric.Rubric;
+        var sameTasks = key.Where(e => tasks.Contains(e.Task.Value)).ToList();
+        var idOf = sameTasks.ToDictionary(e => (e.RunId, e.Ordinal), e => e.Id.Value);
+        var committed = (await verdicts.VerdictsAsync([.. sameTasks.Select(e => e.RunId).Distinct()], request.Catalog, cancellationToken))
+            .Where(v => v.Assessor == assessor && v.Rubric == rubric && idOf.ContainsKey((v.RunId, v.FindingOrdinal)))
+            .Select(v => (idOf[(v.RunId, v.FindingOrdinal)], v.BatchId))
+            .ToHashSet();
+
+        return (await files.ReadVerdictLinesAsync(cancellationToken))
+            .Where(l => l.Assessor == assessor.Value && l.RubricHash == rubric.Hash && l.Cluster.Length > 0 && committed.Contains((l.Id, l.BatchId)))
             .GroupBy(l => l.Task, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(l => l.Cluster).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
+    }
 
-    private sealed class PassContext(AssessmentRequest request, IReadOnlyDictionary<(Guid, int), string> texts, Dictionary<string, HashSet<string>> prior)
+    private sealed class PassContext(
+        AssessmentRequest request, IReadOnlyDictionary<(Guid, int), string> texts, Dictionary<string, HashSet<string>> prior, AssessmentProgress progress)
     {
         public AssessmentRequest Request { get; } = request;
+
+        public AssessmentProgress Progress { get; } = progress;
 
         public IReadOnlyDictionary<(Guid, int), string> Texts { get; } = texts;
 

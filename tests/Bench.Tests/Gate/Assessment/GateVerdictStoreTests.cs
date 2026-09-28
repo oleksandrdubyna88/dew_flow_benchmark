@@ -62,8 +62,14 @@ public sealed class GateVerdictStoreTests(PostgresFixture postgres)
         (await rig.ReportAsync(await rig.NewVerdicts().HandChecksAsync(rig.Catalog, Ct))).Rows.Single().SupportedPct.Should().Be(Figure.Of(100));
     }
 
-    [Fact]
-    public async Task A_sample_whose_verdict_was_edited_after_the_draw_is_not_recorded()
+    /// <summary>A person checks what the sample SHOWED them — the finding, the verdict, the value, the seed hit, the note.
+    /// A row changed after the draw is not a check of the stored verdict, whichever of them was changed.</summary>
+    [Theory]
+    [InlineData("\"verdict\":\"supported\"", "\"verdict\":\"refuted\"")]
+    [InlineData("\"note\":\"", "\"note\":\"edited: ")]
+    [InlineData("\"seed_hit\":\"none\"", "\"seed_hit\":\"cs2-S1\"")]
+    [InlineData("\"title\":\"finding", "\"title\":\"a different finding")]
+    public async Task A_sample_row_edited_after_the_draw_is_not_recorded(string drawn, string edited)
     {
         using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 21, ct: Ct);
         await rig.Pass(ScriptedAssessor.AllSupported()).RunAsync(rig.Request(), _ => { }, Ct);
@@ -71,12 +77,32 @@ public sealed class GateVerdictStoreTests(PostgresFixture postgres)
         var checks = new GateHandChecks(rig.NewStore(), rig.Artifacts, rig.NewVerdicts(), rig.Files, TimeProvider.System, new Random(9));
         var sample = (await checks.SampleAsync(scope, 20, Ct)).Ok();
         var lines = await File.ReadAllLinesAsync(sample, Ct);
+        lines[1].Should().Contain(drawn, "the edit must hit a field the row really carries, or this test proves nothing");
 
-        await File.WriteAllLinesAsync(sample, [lines[0], .. lines.Skip(1).Select((l, i) => i == 0 ? Answered(l, true).Replace("\"supported\"", "\"refuted\"") : Answered(l, true))], Ct);
+        await File.WriteAllLinesAsync(sample, [lines[0], .. lines.Skip(1).Select((l, i) => i == 0 ? Answered(l, true).Replace(drawn, edited) : Answered(l, true))], Ct);
 
-        (await checks.RecordAsync(scope, sample, Ct)).Reason().Should().Contain("no longer shows the verdict as stored");
+        (await checks.RecordAsync(scope, sample, Ct)).Reason().Should().Contain("no longer shows what was drawn");
         (await rig.NewVerdicts().HandChecksAsync(rig.Catalog, Ct)).Should().NotContain(c => c.Campaigns.Contains(rig.Campaign),
             "the store is shared with other tests; the guarantee is that THIS campaign has no hand-check");
+    }
+
+    /// <summary>A hand-check covers the campaigns its verdicts were DRAWN from, never every campaign named on the command
+    /// line: a campaign assessed after the sample has had none of its verdicts read.</summary>
+    [Fact]
+    public async Task A_hand_check_covers_only_the_campaigns_that_had_verdicts_to_draw()
+    {
+        using var rig = await AssessRig.SettledAsync(postgres, cells: 1, findings: 20, ct: Ct);
+        await rig.Pass(ScriptedAssessor.AllSupported()).RunAsync(rig.Request(), _ => { }, Ct);
+        var later = Guid.CreateVersion7();
+        var scope = new HandCheckScope([rig.Campaign, later], AssessRig.Assessor().Id, rig.Strict.Rubric, rig.Catalog);
+        var checks = new GateHandChecks(rig.NewStore(), rig.Artifacts, rig.NewVerdicts(), rig.Files, TimeProvider.System, new Random(9));
+        var sample = (await checks.SampleAsync(scope, 20, Ct)).Ok();
+        var lines = await File.ReadAllLinesAsync(sample, Ct);
+        await File.WriteAllLinesAsync(sample, [lines[0], .. lines.Skip(1).Select(l => Answered(l, true))], Ct);
+
+        var recorded = (await checks.RecordAsync(scope, sample, Ct)).Ok();
+
+        recorded.Campaigns.Should().Equal([rig.Campaign], "the other campaign had nothing to draw — no person has read one of its verdicts");
     }
 
     private static string Answered(string line, bool agree)

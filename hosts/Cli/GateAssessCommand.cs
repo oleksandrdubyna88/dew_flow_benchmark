@@ -112,7 +112,10 @@ public static class GateAssessCommand
 
         var size = BatchSize.Of(command.Int("batch-size", BatchSize.Max)) is Outcome<BatchSize>.Ok { Value: var s } ? s : BatchSize.Default;
         var request = new AssessmentRequest(runs, suite, launch.Launch, GateRubrics.Catalog(session.Rubrics), size, fileKey, byId);
-        var report = await session.Pass(Checkouts(command, session.Logs)).RunAsync(request, batch => output.WriteLine(Describe(batch)), cancellationToken);
+        var progress = new AssessmentProgress(
+            started => output.WriteLine($"sent           {started.BatchId}: {started.Asked} finding(s) of task {started.Task} to '{launch.Launch.Assessor.Id}' — a batch can take many minutes"),
+            batch => output.WriteLine(Describe(batch)));
+        var report = await session.Pass(Checkouts(command, session.Logs)).RunAsync(request, progress, cancellationToken);
 
         return report switch
         {
@@ -223,7 +226,7 @@ public static class GateAssessCommand
     {
         if (command.Value("scope").Length > 0)
         {
-            var scoped = (await store.RecentAsync(10_000, cancellationToken)).Where(r => r.SuiteStamp == command.Value("scope")).Select(r => r.Id).ToList();
+            var scoped = await store.RunsOfSuiteAsync(command.Value("scope"), cancellationToken);
 
             return (scoped.Count, command.Value("scope") == stamp) switch
             {
@@ -369,6 +372,7 @@ public static class GateAssessCommand
         public async ValueTask DisposeAsync()
         {
             await Db.DisposeAsync();
+            Files.Dispose();
             Logs.Dispose();
         }
     }

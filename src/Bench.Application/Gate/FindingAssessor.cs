@@ -132,6 +132,7 @@ public sealed class FindingAssessor(ICliAgentRuntime runtime, IGateAssessmentFil
             await files.WriteBatchFileAsync(directory, AnswerFile, written.Value.Text, cancellationToken);
         }
 
+        await files.ArchiveBatchAsync(directory, ask.BatchId, cancellationToken);
         return new BatchAnswer(reading, StableHash.Of(prompt));
     }
 

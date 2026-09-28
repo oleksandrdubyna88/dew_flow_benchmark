@@ -77,15 +77,18 @@ public static class HandCheckGate
 }
 
 /// <summary>One answered row of a hand-check sample, as the person left it.</summary>
-/// <param name="Reading">The verdict word the sample showed — compared with the stored verdict, so a row edited after
-/// the draw is refused rather than counted as checked.</param>
-public sealed record HandCheckAnswer(BlindedId Id, string BatchId, string Reading, bool Answered, bool Agree);
+/// <param name="Reading">The verdict word the row shows — compared with the verdict as STORED.</param>
+/// <param name="Evidence">The hash of everything the row showed the person (the finding, the verdict, the value, the seed
+/// hit, the cluster, the note — all but their own answer and comment), compared with the hash taken at the draw: a row
+/// edited after the draw is refused rather than counted as a check of what was stored.</param>
+public sealed record HandCheckAnswer(BlindedId Id, string BatchId, string Reading, string Evidence, bool Answered, bool Agree);
 
-/// <summary>A drawn verdict the answers are checked against: the key entry it stands for and the verdict as STORED.</summary>
-public sealed record HandCheckTruth(BlindedId Id, Guid Campaign, string BatchId, string Reading);
+/// <summary>A drawn verdict the answers are checked against: the key entry it stands for, the verdict as STORED now, and
+/// the evidence hash taken when it was drawn.</summary>
+public sealed record HandCheckTruth(BlindedId Id, Guid Campaign, string BatchId, string Reading, string Evidence);
 
-/// <summary>An answered sample, checked before it may count: every answered row is a row that was DRAWN, names the
-/// verdict as it is stored (same batch, same reading), appears once, and at least <see cref="HandCheck.MinVerdicts"/>
+/// <summary>An answered sample, checked before it may count: every answered row is a row that was DRAWN, shows what was
+/// drawn and names the verdict as it is stored (same batch, same reading, same evidence), appears once, and at least <see cref="HandCheck.MinVerdicts"/>
 /// are answered. Returns (read, agreed).</summary>
 public static class HandCheckAnswers
 {
@@ -101,7 +104,7 @@ public static class HandCheckAnswers
         {
             ({ } g, _, _, _) => $"row {g.Key} is answered {g.Count()} times — each drawn verdict is read once",
             (_, { } s, _, _) => $"row {s.Id} was not drawn for this sample — only the drawn verdicts count as checked",
-            (_, _, { } e, _) => $"row {e.Id} no longer shows the verdict as stored — a sample edited after the draw is not a check of the stored verdicts",
+            (_, _, { } e, _) => $"row {e.Id} no longer shows what was drawn — a row edited after the draw (or a verdict changed since) is not a check of the stored verdict",
             (_, _, _, < HandCheck.MinVerdicts) => $"{answered.Count} row(s) answered — a hand-check reads at least {HandCheck.MinVerdicts}; set \"agree\" to true or false on each",
             _ => string.Empty,
         };
@@ -113,5 +116,6 @@ public static class HandCheckAnswers
 
     private static bool Same(HandCheckAnswer answer, HandCheckTruth truth) =>
         string.Equals(answer.BatchId, truth.BatchId, StringComparison.Ordinal)
-        && string.Equals(answer.Reading, truth.Reading, StringComparison.OrdinalIgnoreCase);
+        && string.Equals(answer.Reading, truth.Reading, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(answer.Evidence, truth.Evidence, StringComparison.Ordinal);
 }

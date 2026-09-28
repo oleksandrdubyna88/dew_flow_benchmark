@@ -13,16 +13,53 @@ namespace Bench.Infrastructure.Gate;
 ///   key.json                  the blinding key (blinded id → campaign, cell, ordinal, task, reviewer), replaced atomically
 ///   key.lock                  held EXCLUSIVELY while the key is read, extended and replaced
 ///   locks/&lt;assessor&gt;.lock      held for the length of one assessor's pass
-///   seeds/&lt;task&gt;.json          the task's seeds, as the assessor's seed_spec names them
-///   batches/&lt;batch&gt;/          prompt.txt, verdict-schema.json, answer.json — one folder per batch attempt, never reused
+///   seeds/&lt;task&gt;.json          the task's seeds — the kept copy of what the assessor's seed_spec names
+///   batches/&lt;batch&gt;/          prompt.txt, verdict-schema.json, answer.json — archived per batch attempt, never reused
 ///   verdicts/&lt;assessor&gt;.jsonl  the verdict log WITH its text (cluster keys, notes) — one writer per file
 ///   hand-check/&lt;sample&gt;.jsonl  a hand-check sample, and &lt;sample&gt;.drawn.json, what was drawn
 /// </code>
 /// The root is the artefact root <see cref="FileSystemGateArtifactStore"/> opened (refused inside any git checkout), so
 /// none of this is ever one <c>git add</c> from a public repository. Every name inside it is built from ids — a task id,
-/// an assessor id, a batch id — never from a model, a run or a reviewer.</summary>
-public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAssessmentFiles
+/// an assessor id, a batch id — never from a model, a run or a reviewer.
+/// <para>
+/// <b>What the assessor is HANDED lives outside the artefact root.</b> Its working folder, the schema, its answer file and
+/// the seed list it reads are in a WORKSPACE of their own under the system temp folder (a random name, removed when this
+/// object is disposed) — because a read-only sandbox confines writes, not reads, and a folder inside
+/// <c>assess/</c> would put the key and every run's findings one <c>ls ..</c> away. After each batch the workspace files
+/// are archived into <c>assess/batches/&lt;batch&gt;/</c>; the seed lists are kept in <c>assess/seeds/</c> too.
+/// </para></summary>
+public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAssessmentFiles, IDisposable
 {
+    private readonly string _workspace = Path.Combine(Path.GetTempPath(), $"bench-assess-{Guid.NewGuid():N}");
+
+    /// <summary>Removes the workspace — nothing in it is the only copy of anything.</summary>
+    public void Dispose()
+    {
+        try
+        {
+            if (Directory.Exists(_workspace))
+            {
+                Directory.Delete(_workspace, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A CLI still holding a file in it; the temp folder is the operating system's to clean, and every file in it
+            // was archived into the artefact root already.
+        }
+    }
+
+    public async Task ArchiveBatchAsync(string batchDirectory, string batchId, CancellationToken cancellationToken)
+    {
+        var target = Path.Combine(Root, "batches", Segment(batchId));
+        Directory.CreateDirectory(target);
+
+        foreach (var file in Directory.EnumerateFiles(batchDirectory))
+        {
+            await ReplaceAsync(Path.Combine(target, Path.GetFileName(file)), await File.ReadAllTextAsync(file, cancellationToken), cancellationToken);
+        }
+    }
+
     public const string Folder = "assess";
     private static readonly TimeSpan KeyLockWait = TimeSpan.FromSeconds(60);
 
@@ -72,8 +109,10 @@ public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAs
 
     public async Task<string> WriteSeedSpecAsync(GateTask task, CancellationToken cancellationToken)
     {
-        var file = Path.Combine(Root, "seeds", $"{task.Id.Value}.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var kept = Path.Combine(Root, "seeds", $"{Segment(task.Id.Value)}.json");
+        var handed = Path.Combine(_workspace, "seeds", $"{Segment(task.Id.Value)}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(kept)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(handed)!);
 
         var seeds = new JsonArray([.. task.Seeds.Select(s => (JsonNode)new JsonObject
         {
@@ -81,13 +120,14 @@ public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAs
             ["trigger"] = s.Trigger, ["mechanism"] = s.Mechanism, ["consequence"] = s.Consequence, ["crossEpic"] = s.CrossEpic,
         })]);
 
-        await ReplaceAsync(file, seeds.ToJsonString(), cancellationToken);
-        return file;
+        await ReplaceAsync(kept, seeds.ToJsonString(), cancellationToken);
+        await ReplaceAsync(handed, seeds.ToJsonString(), cancellationToken);
+        return handed;
     }
 
     public Task<string> BeginBatchAsync(string batchId, CancellationToken cancellationToken)
     {
-        var directory = Path.Combine(Root, "batches", Segment(batchId));
+        var directory = Path.Combine(_workspace, "batches", Segment(batchId));
 
         if (Directory.Exists(directory))
         {
@@ -111,10 +151,27 @@ public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAs
         var file = Path.Combine(Root, "verdicts", $"{assessor.Value}.jsonl");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-        // One writer per file (the assessor's pass lock), so an append from this process is the file's only append.
-        await using var stream = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.Read, 4096, FileOptions.WriteThrough);
-        await stream.WriteAsync(Encoding.UTF8.GetBytes(string.Concat(lines.Select(l => l.ToJson() + "\n"))), cancellationToken);
+        // One writer per file (the assessor's pass lock), so an append from this process is the file's only append; readers
+        // (another assessor's pass reading every log at its start) are let in, and tolerate a torn last line.
+        await using var stream = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, 4096, FileOptions.WriteThrough);
+        var text = (EndsTorn(file) ? "\n" : string.Empty) + string.Concat(lines.Select(l => l.ToJson() + "\n"));
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(text), cancellationToken);
         stream.Flush(flushToDisk: true);
+    }
+
+    /// <summary>Whether a killed append left the file ending mid-line — then the next append starts on a fresh line, so the
+    /// fragment is the only thing lost and never the line written after it.</summary>
+    private static bool EndsTorn(string file)
+    {
+        using var read = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        if (read.Length == 0)
+        {
+            return false;
+        }
+
+        read.Seek(-1, SeekOrigin.End);
+        return read.ReadByte() != '\n';
     }
 
     public async Task<IReadOnlyList<VerdictLine>> ReadVerdictLinesAsync(CancellationToken cancellationToken)
@@ -124,13 +181,22 @@ public sealed class FileSystemGateAssessmentFiles(string artifactRoot) : IGateAs
 
         foreach (var file in Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder, "*.jsonl").Order(StringComparer.Ordinal)] : Array.Empty<string>())
         {
-            foreach (var line in (await File.ReadAllTextAsync(file, cancellationToken)).Split('\n').Where(l => l.Trim().Length > 0))
+            foreach (var line in (await ReadSharedAsync(file, cancellationToken)).Split('\n').Where(l => l.Trim().Length > 0))
             {
                 lines.AddRange(VerdictLine.Parse(line));
             }
         }
 
         return lines;
+    }
+
+    /// <summary>A log read while its own writer may hold it open — <c>File.ReadAllText</c> shares for reading only, and on
+    /// Windows that fails against an open writer.</summary>
+    private static async Task<string> ReadSharedAsync(string file, CancellationToken cancellationToken)
+    {
+        await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 
     public async Task<string> WriteHandCheckSampleAsync(string sampleId, string sampleText, string drawnJson, CancellationToken cancellationToken)

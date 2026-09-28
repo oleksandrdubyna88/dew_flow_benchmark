@@ -232,7 +232,8 @@ flowchart TB
   (E4) — refused in the order a person fixes things: flags 4 (a `--batch-size` outside 1–24, `--run` and `--scope`
   together, neither) · the suite file 3 · the suite, the artefact root 4 · the rubric files 3 · the database 3 · a run of
   another suite or a scope that is not the suite file's stamp 4 · the assessor not in the catalog, or not a codex/claude
-  row 4 · its executable reference unset 3 · the file-hash key 3. Prints one line per batch, the seed-evidence line per
+  row 4 · its executable reference unset 3 · the file-hash key 3. `--scope` takes every run of the stamp from the database (`IGateStore.RunsOfSuiteAsync`). Prints a line when each batch
+  is SENT and one when it settles, the seed-evidence line per
   task (`cs2-S1* pack, cs2-S2 on request` — `*` is cross-epic), and the summary (assessed · assessment failed · left
   unassessed · newly blinded · read by the reviewer's own family). Exit 0 every finding has a reading · 5 some are left
   unassessed (resumable) · 3 the assessor never answered at all, or another pass of the same assessor holds the root.
@@ -241,8 +242,10 @@ flowchart TB
   `assess/hand-check/<sample>.jsonl` — a header and twenty random verdicts, each WITH the finding's text, the verdict,
   the seed hit, the cluster and the note, and `"agree": null` — plus `<sample>.drawn.json`. `bench gate hand-check
   record --file <sample> --run … | --scope … --assessor …` refuses a file outside that folder, a header of another
-  rubric, assessor or campaign set, a row not drawn, a row whose verdict no longer matches the stored one, and fewer than
-  twenty answered rows; then stores the counts and the file's SHA-256.
+  rubric or assessor, campaigns outside the ones named, a row not drawn, a row that no longer shows what was drawn (the
+  draw hashes everything a row shows but the person's `agree` and `comment`) or whose verdict changed since, and fewer
+  than twenty answered rows; then stores the counts and the file's SHA-256. The check covers the campaigns that HAD
+  verdicts to draw — never every campaign named, so a campaign assessed afterwards stays `not hand-checked`.
 - `bench gate import` (E5), `bench gate report` + `/api/bench/gate/*` + the Gate tab (E6) are open in the plan.
 
 ## The driver — one cell attempt, end to end
@@ -378,16 +381,29 @@ plus the facts and the findings, in one transaction.
     locks/<assessor>.lock               held for one assessor's pass; a second pass of that assessor is refused
     seeds/<task>.json                   the task's seeds, as the assessor's seed_spec names them
     batches/<task>-<8hex>-a<n>/         prompt.txt (as sent — its hash is on every verdict), verdict-schema.json,
-                                        answer.json (codex writes it through -o; claude's stdout is copied)
+                                        answer.json — ARCHIVED here after the batch; the assessor never works here
     verdicts/<assessor>.jsonl           every reading WITH its text (cluster, note) and every failure, one writer per file
     hand-check/<sample>.jsonl           a sample for a person to answer; <sample>.drawn.json is what was drawn
 ```
 
+**What the assessor is handed lives OUTSIDE the artefact root.** Its working folder, the schema, its answer file and the
+seed list it reads are in a workspace of their own under the system temp folder (`bench-assess-<random>`, removed when
+the pass ends), and archived into `assess/` afterwards. A read-only sandbox confines writes, not reads: a folder inside
+`assess/` would have put the key, the other assessor's log and every run's `findings.jsonl` one `ls ..` away (our own
+review, E4). The rubric's hard rules also forbid opening anything but the row's repository and seed list.
+
+**Each finding's text is CHECKED before it is shown.** Line *n* of a cell's `findings.jsonl` is ordinal *n* by raw
+position, and its text (read by the one reply parser) must hash to the `TextHash` the database stored for that ordinal,
+or the pass is refused — a reordered or edited file would have judged one finding under another's identity.
+
 **The assessment's commit point is the database.** Per batch the verdict log is appended and flushed, then the
 verdicts are written in one transaction. A crash between the two leaves log lines whose batch never reached the
 database — orphans, never read as verdicts (the hand-check joins a stored verdict to its line by blinded id AND batch);
-the next pass asks those findings again under a new batch id. Two assessors may run side by side (the key is extended
-under an exclusive lock, each writes its own log); two passes of ONE assessor may not.
+the next pass asks those findings again under a new batch id. A batch the database REFUSES is reported as not assessed
+(its findings stay unassessed, exit 5), never as read. Prior cluster keys are THIS assessor's committed ones only — an
+orphan line is not a reading, and another assessor's keys would steer the second opinion. An append after a torn last
+line starts on a new line, so only the fragment is lost. Two assessors may run side by side (the key is extended under an
+exclusive lock, each writes its own log, a log is read with the writer's sharing); two passes of ONE assessor may not.
 
 **Containment** is decided twice. By segment, in the domain (`CellPaths.Allows`). On the real filesystem, by
 `ArtifactContainment`: `Path.GetFullPath`, then every EXISTING component asked whether it is a symbolic link or a

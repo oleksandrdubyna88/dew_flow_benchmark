@@ -34,11 +34,14 @@ public sealed class GateHandChecks(
                 $"{candidates.Length} verdict(s) of assessor '{scope.Assessor}' under {scope.Rubric.Stamp} in this scope, and {count} asked — a hand-check reads at least {HandCheck.MinVerdicts}");
         }
 
+        // The campaigns this check can speak for are the ones that HAD verdicts to draw — never every campaign named: one
+        // assessed after the draw has had none of its verdicts read by anybody.
+        var covered = candidates.Select(d => d.Entry.CampaignId).Distinct().Order().ToList();
         random.Shuffle(candidates);
-        var drawn = candidates.Take(count).ToList();
+        var drawn = candidates.Take(count).Select(d => (Drawable: d, Row: Row(d))).ToList();
         var sampleId = $"{clock.GetUtcNow():yyyyMMddHHmmss}-{scope.Assessor}-{random.NextInt64(0, 1L << 32):x8}";
 
-        return Outcome<string>.Success(await files.WriteHandCheckSampleAsync(sampleId, SampleText(sampleId, scope, drawn), DrawnJson(drawn), cancellationToken));
+        return Outcome<string>.Success(await files.WriteHandCheckSampleAsync(sampleId, SampleText(sampleId, scope, covered, drawn), DrawnJson(drawn), cancellationToken));
     }
 
     public async Task<Outcome<HandCheck>> RecordAsync(HandCheckScope scope, string samplePath, CancellationToken cancellationToken)
@@ -49,24 +52,24 @@ public sealed class GateHandChecks(
             return Outcome<HandCheck>.Failure(((Outcome<(string, string, string)>.Fail)read).Reason);
         }
 
-        var header = HeaderRefusal(sample.Sample, scope);
+        var (covered, header) = Header(sample.Sample, scope);
         if (header.Length > 0)
         {
             return Outcome<HandCheck>.Failure(header);
         }
 
-        var joined = await JoinedAsync(scope, cancellationToken);
+        var joined = await JoinedAsync(scope with { Campaigns = covered }, cancellationToken);
         if (joined is Outcome<IReadOnlyList<Drawable>>.Fail fail)
         {
             return Outcome<HandCheck>.Failure(fail.Reason);
         }
 
         var stored = ((Outcome<IReadOnlyList<Drawable>>.Ok)joined).Value.ToDictionary(d => (d.Entry.Id.Value, d.Verdict.BatchId));
-        var truths = Drawn(sample.Drawn).Where(stored.ContainsKey).Select(k => Truth(stored[k])).ToList();
+        var truths = Drawn(sample.Drawn).Where(d => stored.ContainsKey((d.Id, d.Batch))).Select(d => Truth(stored[(d.Id, d.Batch)], d.Evidence)).ToList();
 
         return await HandCheckAnswers.Verify(Answers(sample.Sample), truths).Match(
             async counts => await verdicts.RecordHandCheckAsync(
-                HandCheck.Of(scope.Campaigns, scope.Rubric, scope.Assessor, counts.Read, counts.Agreed, sample.Sha256, clock.GetUtcNow())
+                HandCheck.Of(covered, scope.Rubric, scope.Assessor, counts.Read, counts.Agreed, sample.Sha256, clock.GetUtcNow())
                     .Match(c => c, reason => throw new InvalidOperationException(reason)),
                 cancellationToken),
             reason => Task.FromResult(Outcome<HandCheck>.Failure(reason)));
@@ -100,11 +103,22 @@ public sealed class GateHandChecks(
                 .Select(p => new Drawable(p.Entry, p.Verdict, lines[(p.Entry.Id.Value, p.Verdict.BatchId)], textOf[(p.Verdict.RunId, p.Verdict.FindingOrdinal)]))]);
     }
 
-    private static HandCheckTruth Truth(Drawable d) => new(d.Entry.Id, d.Entry.CampaignId, d.Verdict.BatchId, ReadingWord(d.Verdict.Reading));
+    /// <summary>A drawn verdict as it is STORED now, with the evidence hash the draw took of its row.</summary>
+    private static HandCheckTruth Truth(Drawable d, string evidence) => new(d.Entry.Id, d.Entry.CampaignId, d.Verdict.BatchId, ReadingWord(d.Verdict.Reading), evidence);
+
+    /// <summary>The hash of everything a row SHOWS — all of it but the person's own answer and comment. Re-serialised, so an
+    /// editor that re-indents the line changes nothing; any changed value does.</summary>
+    private static string Evidence(JsonObject row)
+    {
+        var shown = (JsonObject)row.DeepClone();
+        shown.Remove("agree");
+        shown.Remove("comment");
+        return StableHash.Of(shown.ToJsonString());
+    }
 
     private static string ReadingWord(Verdict verdict) => verdict is Verdict.Strict s ? s.Reading.ToString().ToLowerInvariant() : verdict.GetType().Name;
 
-    private static string SampleText(string sampleId, HandCheckScope scope, IReadOnlyList<Drawable> drawn)
+    private static string SampleText(string sampleId, HandCheckScope scope, IReadOnlyList<Guid> covered, IReadOnlyList<(Drawable Drawable, JsonObject Row)> drawn)
     {
         var header = new JsonObject
         {
@@ -113,15 +127,15 @@ public sealed class GateHandChecks(
             ["rubric"] = scope.Rubric.Hash,
             ["rubricId"] = scope.Rubric.Id.Value,
             ["assessor"] = scope.Assessor.Value,
-            ["campaigns"] = new JsonArray([.. scope.Campaigns.Select(c => (JsonNode)c.ToString("D"))]),
+            ["campaigns"] = new JsonArray([.. covered.Select(c => (JsonNode)c.ToString("D"))]),
             ["instructions"] = "Read each finding against the code at its head. Set \"agree\" to true when the verdict, the seed hit and the value are right, "
                                + "false when any is wrong, and say why in \"comment\". Leave the other fields as they are.",
         };
 
-        return string.Join('\n', [header.ToJsonString(), .. drawn.Select(Row)]) + "\n";
+        return string.Join('\n', [header.ToJsonString(), .. drawn.Select(d => d.Row.ToJsonString())]) + "\n";
     }
 
-    private static string Row(Drawable d)
+    private static JsonObject Row(Drawable d)
     {
         var finding = Json(d.FindingJson) as JsonObject ?? [];
 
@@ -140,15 +154,20 @@ public sealed class GateHandChecks(
             ["finding"] = finding.DeepClone(),
             ["agree"] = null,
             ["comment"] = string.Empty,
-        }.ToJsonString();
+        };
     }
 
-    private static string DrawnJson(IReadOnlyList<Drawable> drawn) =>
-        new JsonArray([.. drawn.Select(d => (JsonNode)new JsonObject { ["id"] = d.Entry.Id.Value, ["batch"] = d.Verdict.BatchId })]).ToJsonString();
+    private static string DrawnJson(IReadOnlyList<(Drawable Drawable, JsonObject Row)> drawn) =>
+        new JsonArray([.. drawn.Select(d => (JsonNode)new JsonObject
+        {
+            ["id"] = d.Drawable.Entry.Id.Value,
+            ["batch"] = d.Drawable.Verdict.BatchId,
+            ["evidence"] = Evidence(d.Row),
+        })]).ToJsonString();
 
-    private static IReadOnlyList<(string, string)> Drawn(string json) =>
+    private static IReadOnlyList<(string Id, string Batch, string Evidence)> Drawn(string json) =>
         Json(json) is JsonArray rows
-            ? [.. rows.OfType<JsonObject>().Select(r => (Str(r, "id"), Str(r, "batch")))]
+            ? [.. rows.OfType<JsonObject>().Select(r => (Str(r, "id"), Str(r, "batch"), Str(r, "evidence")))]
             : [];
 
     private static IReadOnlyList<HandCheckAnswer> Answers(string sample) =>
@@ -163,22 +182,29 @@ public sealed class GateHandChecks(
 
         var agree = o["agree"] is JsonValue v && v.TryGetValue<bool>(out var flag) ? (true, flag) : (false, false);
 
-        return [new HandCheckAnswer(id, Str(o, "batch"), Str(o, "verdict"), agree.Item1, agree.Item2)];
+        return [new HandCheckAnswer(id, Str(o, "batch"), Str(o, "verdict"), Evidence(o), agree.Item1, agree.Item2)];
     }
 
-    private static string HeaderRefusal(string sample, HandCheckScope scope)
+    /// <summary>The campaigns the sample covers (those that had verdicts to draw), or a refusal: not this benchmark's file,
+    /// another rubric or assessor, or campaigns outside the ones named.</summary>
+    private static (IReadOnlyList<Guid> Covered, string Refusal) Header(string sample, HandCheckScope scope)
     {
         var header = Json(sample.Split('\n')[0]) as JsonObject ?? [];
-        var campaigns = (header["campaigns"] as JsonArray ?? []).Select(c => c is JsonValue v && v.TryGetValue<string>(out var s) && Guid.TryParse(s, CultureInfo.InvariantCulture, out var g) ? g : Guid.Empty).ToHashSet();
+        var campaigns = (header["campaigns"] as JsonArray ?? [])
+            .Select(c => c is JsonValue v && v.TryGetValue<string>(out var s) && Guid.TryParse(s, CultureInfo.InvariantCulture, out var g) ? g : Guid.Empty)
+            .ToList();
 
-        return (Str(header, "kind") == Kind, Str(header, "rubric") == scope.Rubric.Hash, Str(header, "assessor") == scope.Assessor.Value, campaigns.SetEquals(scope.Campaigns)) switch
+        var refusal = (Str(header, "kind") == Kind, Str(header, "rubric") == scope.Rubric.Hash, Str(header, "assessor") == scope.Assessor.Value,
+                campaigns.Count > 0 && campaigns.All(scope.Campaigns.Contains)) switch
         {
             (false, _, _, _) => "the file is not a hand-check sample this benchmark wrote",
             (_, false, _, _) => $"the sample was drawn under another rubric than {scope.Rubric.Stamp}",
             (_, _, false, _) => $"the sample was drawn from another assessor's verdicts than '{scope.Assessor}'",
-            (_, _, _, false) => "the sample was drawn over other campaigns than the ones named — record it with the same --run/--scope it was sampled with",
+            (_, _, _, false) => "the sample covers campaigns outside the ones named — record it with the same --run/--scope it was sampled with",
             _ => string.Empty,
         };
+
+        return (campaigns, refusal);
     }
 
     private static JsonNode? Json(string line)

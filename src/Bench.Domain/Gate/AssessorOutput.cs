@@ -90,29 +90,18 @@ public static class AssessorOutput
     {
         var seeds = seedsOfTask.Select(s => s.Value).ToHashSet(StringComparer.Ordinal);
         var byId = parsed.ToDictionary(p => p.Id, StringComparer.Ordinal);
-        var rows = new List<AssessedRow>();
-        var missing = new List<BlindedId>();
-        var refusals = new List<string>();
+        var read = batch.Select(asked => (Asked: asked, Row: byId.GetValueOrDefault(asked.Id.Value), Refusal: RefusalOf(byId, asked, seeds))).ToList();
 
-        foreach (var asked in batch)
-        {
-            var refusal = byId.TryGetValue(asked.Id.Value, out var row) ? Refusal(row, asked, seeds) : "no row";
-
-            if (refusal.Length == 0)
-            {
-                rows.Add(row!.ToAssessed(asked));
-                continue;
-            }
-
-            missing.Add(asked.Id);
-            if (refusal != "no row")
-            {
-                refusals.Add($"{asked.Id}: {refusal}");
-            }
-        }
-
-        return new BatchReading.Answered(rows, missing, refusals);
+        return new BatchReading.Answered(
+            [.. read.Where(r => r.Refusal.Length == 0).Select(r => r.Row!.ToAssessed(r.Asked))],
+            [.. read.Where(r => r.Refusal.Length > 0).Select(r => r.Asked.Id)],
+            [.. read.Where(r => r.Refusal.Length > 0 && r.Row is not null).Select(r => $"{r.Asked.Id}: {r.Refusal}")]);
     }
+
+    /// <summary>Why the answer holds no usable row for <paramref name="asked"/> — <c>no row</c> when it is absent (missing,
+    /// not refused) — or empty when it does.</summary>
+    private static string RefusalOf(IReadOnlyDictionary<string, ParsedRow> byId, AssessmentRow asked, IReadOnlySet<string> seeds) =>
+        byId.TryGetValue(asked.Id.Value, out var row) ? Refusal(row, asked, seeds) : "no row";
 
     /// <summary>Why a well-formed row is still not a reading of the case it names — empty when it is.</summary>
     private static string Refusal(ParsedRow row, AssessmentRow asked, IReadOnlySet<string> seeds) =>

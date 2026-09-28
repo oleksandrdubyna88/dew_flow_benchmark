@@ -61,12 +61,13 @@ internal sealed class AssessRig : IDisposable
             Noon);
 
     /// <summary>A campaign of <paramref name="cells"/> settled cells over task cs2, each with <paramref name="findings"/> findings.</summary>
-    public static async Task<AssessRig> SettledAsync(PostgresFixture postgres, int cells, int findings, string reviewerModel = "grok-4.7", CancellationToken ct = default)
+    public static async Task<AssessRig> SettledAsync(
+        PostgresFixture postgres, int cells, int findings, string reviewerModel = "grok-4.7", CancellationToken ct = default, Func<int, string>? fileLine = null)
     {
         var suite = GateSuiteFile.Parse(SuiteJson).Ok();
         var reviewer = GateReviewer.Create(GateReviewerId.Parse("grok-medium").Ok(), GateReviewerTests.Definition(model: reviewerModel).Ok(), Noon);
         var rig = new AssessRig(postgres, suite, reviewer);
-        await rig.SettleAsync(cells, findings, ct);
+        await rig.SettleAsync(cells, findings, fileLine ?? AssessmentFixtures.FindingJson, ct);
         return rig;
     }
 
@@ -74,8 +75,8 @@ internal sealed class AssessRig : IDisposable
 
     public PostgresGateVerdictStore NewVerdicts() => new(Postgres.NewContext(), TimeProvider.System);
 
-    public GateAssessmentPass Pass(ICliAgentRuntime assessor, int seed = 5) =>
-        new(NewStore(), Artifacts, NewVerdicts(), Files, new NeutralCheckouts(), new FindingAssessor(assessor, Files), TimeProvider.System, new Random(seed));
+    public GateAssessmentPass Pass(ICliAgentRuntime assessor, int seed = 5, IGateVerdictStore? verdicts = null) =>
+        new(NewStore(), Artifacts, verdicts ?? NewVerdicts(), Files, new NeutralCheckouts(), new FindingAssessor(assessor, Files), TimeProvider.System, new Random(seed));
 
     public AssessmentRequest Request(GateReviewer? assessor = null, int batchSize = BatchSize.Max) =>
         new([Campaign], Suite, new AssessorLaunch(assessor ?? Assessor(), ModelRuntimeKind.CliCodex, "codex", TimeSpan.FromMinutes(1), Strict), Catalog,
@@ -91,7 +92,15 @@ internal sealed class AssessRig : IDisposable
         return GateReport.PerModel(runs[0].Scope, Strict.Rubric, input);
     }
 
-    private async Task SettleAsync(int count, int findings, CancellationToken ct)
+    /// <summary>The finding the database stores for line <paramref name="ordinal"/> — its text read from the JSON the way the
+    /// driver reads a reply, so the stored TextHash is the one a correct findings.jsonl line hashes to.</summary>
+    public static GateFinding StoredFinding(int ordinal)
+    {
+        var parsed = GateReplyParser.Parse($$"""{"verdict":"revise","findings":[{{AssessmentFixtures.FindingJson(ordinal)}}]}""").Findings[0];
+        return GateFinding.Of(ordinal, parsed.Severity, parsed.Category, parsed.IsGating, parsed.Line, parsed.Text, parsed.File, Key).Ok();
+    }
+
+    private async Task SettleAsync(int count, int findings, Func<int, string> fileLine, CancellationToken ct)
     {
         var store = NewStore();
         var run = GateRun.Planned(Guid.CreateVersion7(), GateKind.Feature, Suite.Stamp, DataDirMode.Isolated, Noon);
@@ -107,17 +116,22 @@ internal sealed class AssessRig : IDisposable
             var scope = ArtifactScope.Of(run, cell).Ok();
             (await Artifacts.BeginAttemptAsync(scope, ct)).Ok();
 
-            var text = string.Concat(Enumerable.Range(0, findings).Select(i => AssessmentFixtures.FindingJson(i) + "\n"));
+            var text = string.Concat(Enumerable.Range(0, findings).Select(i => fileLine(i) + "\n"));
             var written = (await Artifacts.WriteAsync(scope, ArtifactClass.Findings, CellPaths.AttemptRoot(scope).Then("findings.jsonl").Ok(), Encoding.UTF8.GetBytes(text), ct)).Ok();
             (await store.RecordArtifactsAsync([written], ct)).Ok();
-            (await store.SettleAsync(cell.Id, owner, Completed(findings), ct)).Ok();
+            var settlement = Completed(findings) with { Findings = [.. Enumerable.Range(0, findings).Select(StoredFinding)] };
+            (await store.SettleAsync(cell.Id, owner, settlement, ct)).Ok();
         }
 
         Campaign = run.Id;
         Cells = [.. planned.Select(c => c.Id)];
     }
 
-    public void Dispose() => _root.Dispose();
+    public void Dispose()
+    {
+        Files.Dispose();
+        _root.Dispose();
+    }
 
     public const string SuiteJson = """
         { "id": "gate-assess-test", "privateNames": ["contoso-orders"],
@@ -141,6 +155,20 @@ internal sealed class AssessRig : IDisposable
 
         public Task<int> RemoveFinishedAsync(IReadOnlyCollection<Guid> finishedRuns, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
+}
+
+/// <summary>A verdict store whose commit fails — the database refusing or unreachable at the one moment that counts.</summary>
+internal sealed class RefusingVerdicts(IGateVerdictStore inner) : IGateVerdictStore
+{
+    public Task<Outcome<int>> RecordAsync(IReadOnlyList<GateVerdict> verdicts, CancellationToken cancellationToken) =>
+        Task.FromResult(Outcome<int>.Failure("the database refused the batch"));
+
+    public Task<IReadOnlyList<GateVerdict>> VerdictsAsync(IReadOnlyCollection<Guid> runIds, RubricCatalog catalog, CancellationToken cancellationToken) =>
+        inner.VerdictsAsync(runIds, catalog, cancellationToken);
+
+    public Task<Outcome<HandCheck>> RecordHandCheckAsync(HandCheck check, CancellationToken cancellationToken) => inner.RecordHandCheckAsync(check, cancellationToken);
+
+    public Task<IReadOnlyList<HandCheck>> HandChecksAsync(RubricCatalog catalog, CancellationToken cancellationToken) => inner.HandChecksAsync(catalog, cancellationToken);
 }
 
 /// <summary>An assessor that answers from the prompt it was given: <paramref name="answer"/> maps the ids of the batch (in
