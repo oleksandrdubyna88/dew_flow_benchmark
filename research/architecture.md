@@ -34,7 +34,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver<br/>IGateReads · IGateSuiteTasks"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -45,7 +45,7 @@ flowchart TB
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (eight tables, ids · hashes · numbers)"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (nine tables, ids · hashes · numbers)"]
         artroot["FileSystemGateArtifactStore<br/>the artefact root — OUTSIDE git"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
@@ -1083,7 +1083,21 @@ Two cross-cutting consequences: an imported pin's version text names the POPULAT
 (`imported from calib-py phase 2`), not its commit — the commit stays on the pin per cell — so its table is held against
 the published one like with like; and a harness that kept no ledger marks its turn-level facts *not captured*
 (`GateRunFacts.TurnFactsCaptured`), never zeros. Published tables whose raw data is gone are `gate_summaries` rows
-(the eighth table) — numbers with a citation, read by no report. The API routes and the Gate tab are E6–E7 of
+(the eighth table) — numbers with a citation, read by no report.
+
+The report, the API and the page (E6, 2026-09-28) read it back. One use case, `GateReportQuery` over a READ port
+(`IGateReads` — records, the suite's recorded tasks, the rubrics the rows carry, verdicts, hand-checks, a prompt hash;
+nothing that writes), answers both `bench gate report --json` and `GET /api/bench/gate/scopes · /{gate}/models ·
+/{gate}/runs · /runs/{id}` with one mapping (`GateReportContract`), and the console's Gate tab renders that object.
+Three cross-cutting facts: a scope has a KEY (`GateScope.Id`, twelve hex over its five length-prefixed fields) that the
+flag, the query string and the page control all carry; a read builds its rubric catalog from the stored rows, because a
+read host carries no prompt folder; and the report needs the suite's TASKS (language, calibration, seeds) that used to
+live only in the private suite file — so they are recorded as ids and words in `gate_suite_tasks` (the ninth table) by
+every verb that loads a suite, with `bench gate suite record` as the backfill, and a scope whose tasks are not recorded
+answers 409 rather than folding its calibration tasks into the measured rows. The gate routes are mapped from
+`MapBenchApi` and resolve the port from the request's services — a host that never registered it (the qln daemon
+registers its bench ports by hand) answers 503 naming the registration, where a plain parameter would have been inferred
+as a body and failed every route of that host at startup. The first campaign (E7) is open in
 [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
 
 ## Guards that shape the API
