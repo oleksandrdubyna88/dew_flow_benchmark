@@ -162,7 +162,7 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         {
             var made = Directory.Exists(Path.Combine(clone, ".git")) ? await VerifiedAsync(clone, task, cancellationToken) : await CloneAsync(clone, task, cancellationToken);
 
-            return made is Outcome<string>.Ok && File.Exists(Path.Combine(clone, ".gitmodules")) ? await SubmodulesAsync(clone, task, cancellationToken) : made;
+            return made is Outcome<string>.Ok && (HasSubmodules(clone) || task.Case.AbsentSubmodules.Count > 0) ? await SubmodulesAsync(clone, task, cancellationToken) : made;
         }
         finally
         {
@@ -241,10 +241,44 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
     /// calibration's eight). The same line-ending setting rides into the submodules' own clones; a local path is a url a
     /// suite may name, so the file transport is allowed here. Run only where the tree HAS a <c>.gitmodules</c>: the step is
     /// a git process inside the clone's lock, and paying it on every cell of a repository without submodules serialised
-    /// the lanes (the campaign's concurrency tests went red on it).</summary>
-    private static async Task<Outcome<string>> SubmodulesAsync(string clone, GateTask task, CancellationToken cancellationToken) =>
-        (await GitCommand.RunAsync(clone, GitTimeout, cancellationToken, "-c", AsCommitted, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--quiet"))
+    /// the lanes (the campaign's concurrency tests went red on it).
+    /// <para>
+    /// The ones the task declares ABSENT (<see cref="GateCase.AbsentSubmodules"/>) are left uninitialised and never fetched
+    /// — ts2's rules url no longer resolves, and the calibration measured it with the folder empty. A declaration the head
+    /// does not bear out is refused naming the path; an undeclared submodule that cannot be fetched stays a refusal, so a
+    /// failed fetch is never read as "measure it empty".
+    /// </para></summary>
+    private static async Task<Outcome<string>> SubmodulesAsync(string clone, GateTask task, CancellationToken cancellationToken)
+    {
+        var pinned = HasSubmodules(clone) ? await PinnedAsync(clone, cancellationToken) : Outcome<IReadOnlyList<string>>.Success([]);
+        if (pinned is not Outcome<IReadOnlyList<string>>.Ok { Value: var paths })
+        {
+            return Outcome<string>.Failure($"task '{task.Id}': its .gitmodules could not be read — {((Outcome<IReadOnlyList<string>>.Fail)pinned).Reason}");
+        }
+
+        var unpinned = task.Case.AbsentSubmodules.Except(paths, StringComparer.Ordinal).ToList();
+        var wanted = paths.Except(task.Case.AbsentSubmodules, StringComparer.Ordinal).ToList();
+
+        return (unpinned.Count, wanted.Count) switch
+        {
+            ( > 0, _) => Outcome<string>.Failure($"task '{task.Id}' declares absent submodule '{unpinned[0]}', which its variant head does not pin — the suite describes another tree"),
+            (_, 0) => Outcome<string>.Success(clone),
+            _ => await UpdateAsync(clone, task, wanted, cancellationToken),
+        };
+    }
+
+    private static async Task<Outcome<string>> UpdateAsync(string clone, GateTask task, IReadOnlyList<string> paths, CancellationToken cancellationToken) =>
+        (await GitCommand.RunAsync(clone, GitTimeout, cancellationToken, ["-c", AsCommitted, "-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--quiet", "--", .. paths]))
             .Match(_ => Outcome<string>.Success(clone), reason => Outcome<string>.Failure($"task '{task.Id}': the submodules its variant head pins could not be checked out — {reason}"));
+
+    /// <summary>Every submodule path <c>.gitmodules</c> names at the checked-out head, <c>/</c>-separated as git writes them.</summary>
+    private static async Task<Outcome<IReadOnlyList<string>>> PinnedAsync(string clone, CancellationToken cancellationToken) =>
+        (await GitCommand.ReadAsync(clone, GitTimeout, cancellationToken, "config", "--file", ".gitmodules", "--get-regexp", @"^submodule\..*\.path$"))
+            .Match(
+                text => Outcome<IReadOnlyList<string>>.Success([.. text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(l => l[(l.IndexOf(' ') + 1)..])]),
+                Outcome<IReadOnlyList<string>>.Failure);
+
+    private static bool HasSubmodules(string clone) => File.Exists(Path.Combine(clone, ".gitmodules"));
 
     /// <summary>The committed bytes, whatever the machine's global <c>core.autocrlf</c> says: a clone inheriting
     /// <c>true</c> handed the product a CRLF plan the calibration's checkout had as LF (E7's A/A, 2026-09-28).</summary>

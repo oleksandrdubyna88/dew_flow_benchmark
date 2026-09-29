@@ -11,12 +11,13 @@ namespace Bench.Application.Gate;
 /// { "id": "gate-seeded", "privateNames": ["..."],
 ///   "tasks": [ { "id": "cs2", "language": "C#", "gates": ["plan","code","feature"], "calibration": false,
 ///                "repository": "&lt;local path or url&gt;", "base": "&lt;40 hex&gt;", "variantHead": "&lt;40 hex&gt;",
-///                "planPath": "docs/plan.md", "epics": [ ... ], "lessons": { ... },
+///                "planPath": "docs/plan.md", "epics": [ ... ], "lessons": { ... }, "absentSubmodules": [ ... ],
 ///                "seeds": [ { "id": "cs2-S1", "file": "...", "old": "...", "new": "...", "what": "...",
 ///                             "trigger": "...", "mechanism": "...", "consequence": "...", "crossEpic": true } ] } ] }
 /// </code>
 /// <c>epics</c> and <c>lessons</c> may be JSON values or strings; either way the TEXT sent to <c>review_feature</c> is
-/// what is hashed into the stamp. Every refusal names the task and the field.</summary>
+/// what is hashed into the stamp. <c>absentSubmodules</c> (optional) names submodules the task is measured without
+/// (<see cref="GateCase.AbsentSubmodules"/>). Every refusal names the task and the field.</summary>
 public static class GateSuiteFile
 {
     public static Outcome<GateSuite> Parse(string json)
@@ -62,7 +63,18 @@ public static class GateSuiteFile
             ["tasks"] = new System.Text.Json.Nodes.JsonArray([.. suite.Tasks.Select(t => (System.Text.Json.Nodes.JsonNode)TaskJson(t, repository(t)))]),
         }.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 
-    private static System.Text.Json.Nodes.JsonObject TaskJson(GateTask task, string repository) => new()
+    private static System.Text.Json.Nodes.JsonObject TaskJson(GateTask task, string repository)
+    {
+        var json = TaskFields(task, repository);
+        if (task.Case.AbsentSubmodules.Count > 0)
+        {
+            json["absentSubmodules"] = new System.Text.Json.Nodes.JsonArray([.. task.Case.AbsentSubmodules.Select(p => (System.Text.Json.Nodes.JsonNode)p)]);
+        }
+
+        return json;
+    }
+
+    private static System.Text.Json.Nodes.JsonObject TaskFields(GateTask task, string repository) => new()
     {
         ["id"] = task.Id.Value,
         ["language"] = task.Language,
@@ -118,7 +130,7 @@ public static class GateSuiteFile
     private static Outcome<GateCase> Case(JsonElement task) =>
         CommitSha.Parse(Text(task, "base")).Match(
             @base => CommitSha.Parse(Text(task, "variantHead")).Match(
-                head => GateCase.Of(@base, head, Text(task, "planPath"), Raw(task, "epics"), Raw(task, "lessons")),
+                head => GateCase.Of(@base, head, Text(task, "planPath"), Raw(task, "epics"), Raw(task, "lessons"), Strings(task, "absentSubmodules")),
                 reason => Outcome<GateCase>.Failure($"variantHead: {reason}")),
             reason => Outcome<GateCase>.Failure($"base: {reason}"));
 

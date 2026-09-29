@@ -111,6 +111,48 @@ public sealed class GateSuiteTests
         SeedSpec.Of("cs2 S1", "f", "old", "new", "what", "t", "m", "c", crossEpic: false).Reason().Should().Contain("seed id");
     }
 
+    /// <summary>Every suite recorded before the field existed keeps its stamp: a case that declares no absent submodule has
+    /// exactly the canonical form it had — pinned here as the literal, not as "equal to itself".</summary>
+    [Fact]
+    public void A_case_declaring_no_absent_submodule_keeps_the_canonical_form_it_had()
+    {
+        var @case = GateCase.Of(Base, Variant, "docs/plan.md", "e", "l", []).Ok();
+
+        @case.Canonical.Should().Be($"4:case40:{Base.Value}40:{Variant.Value}12:docs/plan.md1:e1:l");
+        GateCase.Of(Base, Variant, "docs/plan.md", "e", "l").Ok().Canonical.Should().Be(@case.Canonical);
+    }
+
+    /// <summary>E7, 2026-09-28: ts2 pins its rules as a submodule whose url no longer resolves, and the calibration measured
+    /// it with the folder empty. Saying so is part of the task — two trees under one stamp is the defect a stamp exists to
+    /// prevent — so the declaration changes the stamp, and its order or separators do not.</summary>
+    [Fact]
+    public void Declaring_a_submodule_absent_changes_the_stamp_and_its_spelling_order_does_not()
+    {
+        var plain = GateCase.Of(Base, Variant, "p.md", "e", "l").Ok();
+        var one = GateCase.Of(Base, Variant, "p.md", "e", "l", [".claude/rules/shared"]).Ok();
+        var two = GateCase.Of(Base, Variant, "p.md", "e", "l", ["vendor/b", @"vendor\a"]).Ok();
+        var twoReordered = GateCase.Of(Base, Variant, "p.md", "e", "l", ["vendor/a", "vendor/b"]).Ok();
+
+        one.Canonical.Should().NotBe(plain.Canonical, "a tree measured without its rules is a different task");
+        two.Canonical.Should().Be(twoReordered.Canonical);
+        two.AbsentSubmodules.Should().Equal(["vendor/a", "vendor/b"]);
+    }
+
+    [Theory]
+    [InlineData("../x", "REPOSITORY-relative")]
+    [InlineData("/x", "REPOSITORY-relative")]
+    [InlineData(" ", "blank")]
+    public void An_absent_submodule_that_is_blank_rooted_or_climbs_out_is_refused(string path, string expected)
+    {
+        GateCase.Of(Base, Variant, "p.md", "e", "l", [path]).Reason().Should().Contain(expected).And.Contain("absent submodule");
+    }
+
+    [Fact]
+    public void An_absent_submodule_named_twice_is_refused()
+    {
+        GateCase.Of(Base, Variant, "p.md", "e", "l", ["vendor/a", @"vendor\a"]).Reason().Should().Contain("'vendor/a' twice");
+    }
+
     [Fact]
     public void A_case_whose_variant_head_is_its_base_or_whose_plan_path_is_absolute_is_refused()
     {
