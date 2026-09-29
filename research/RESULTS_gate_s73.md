@@ -107,8 +107,8 @@ during the code run.
 Run after the four, on the same suite, product and harness (`claude-fable-5-1-cli2284`, the Claude CLI 2.1.284).
 **Fable's month ran out mid-campaign.** From 16:12 UTC on 2026-09-29 every call exited in about 3 s, and the ledger read
 *"exit 1 (the CLI said nothing on stderr)"*. A direct call of the same CLI later gave the real reason: *"You've hit your
-monthly spend limit"* (HTTP 429). coai's Claude adapter drops that reason (D4 of the fidelity plan), so each doomed cell
-ran its plan loop to `Unknown` instead of stopping the campaign.
+monthly spend limit"* (HTTP 429). coai's Claude adapter dropped that reason (D4 of the fidelity plan, fixed since in coai #622), so each doomed
+cell ran its plan loop to `Unknown` instead of stopping the campaign.
 
 | gate | run | cells that reached the model | valid | findings / run | s p50 | cost / run * |
 |---|---|---|---|---|---|---|
@@ -145,8 +145,15 @@ the heaviest reviewer of the five by far: 0.5–1 M tokens in per review.
 - **Not shown:** which reviewer's findings are more often RIGHT — the strict rates are withheld until the hand-check; any
   ranking by quality waits for it. Nor the feature gate at this scale for the CLI reviewers.
 - **Accounts ran out at the end.** grok's xAI balance, Astra's Codex subscription (until 3 October) and Fable's monthly
-  spend limit all ran out on 2026-09-29. Any re-run waits on them.
-- **Open:**
-  - The hand-check.
-  - The fidelity plan (D1–D5), where D4 now carries today's cost.
-  - Fable's code gate, once its limit resets.
+  spend limit all ran out on 2026-09-29.
+- **No re-runs — the operator's decision, 2026-09-29.** The figures above are final as they stand:
+  - The seven account-out code cells stay unmeasured, as the tables record them. This is choice (a) of the tail
+    plan's T3.
+  - Fable's code gate stays at the four cells above, and its plan gate at 15 of 21.
+  - No grok re-runs.
+- **Done since:** the fidelity plan
+  ([PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md), IMPLEMENTED 2026-09-29). Its D4, coai
+  #622, keeps the Claude CLI's reason, so a spend limit now reads as one.
+- **Open**, in [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md):
+  - the hand-check (T1);
+  - the lane stop (T5).
