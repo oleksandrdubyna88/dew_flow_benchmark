@@ -66,7 +66,7 @@ public sealed record CloneLocation
 /// the suite stamp; none of it says where the repository is.</summary>
 public sealed record GateCase
 {
-    private GateCase(CommitSha @base, CommitSha variantHead, string planPath, string epics, string lessons, IReadOnlyList<string> absentSubmodules)
+    private GateCase(CommitSha @base, CommitSha variantHead, string planPath, string epics, string lessons, IReadOnlyList<string> absentSubmodules, string planText)
     {
         Base = @base;
         VariantHead = variantHead;
@@ -74,6 +74,7 @@ public sealed record GateCase
         Epics = epics;
         Lessons = lessons;
         AbsentSubmodules = absentSubmodules;
+        PlanText = planText;
     }
 
     public CommitSha Base { get; }
@@ -96,11 +97,20 @@ public sealed record GateCase
     /// task whose every submodule is part of it.</summary>
     public IReadOnlyList<string> AbsentSubmodules { get; }
 
+    /// <summary>The plan's text when the variant head does NOT commit it — tsx2 and php1 (S7.3, 2026-09-29): the calibration
+    /// wrote a synthetic plan beside its checkout and reviewed that. The clone writes it at <see cref="PlanPath"/> byte for
+    /// byte; empty for a task whose plan is committed (and a carried plan at a committed path is refused there).</summary>
+    public string PlanText { get; }
+
     public static Outcome<GateCase> Of(CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons) =>
-        Of(@base, variantHead, planPath, epics, lessons, []);
+        Of(@base, variantHead, planPath, epics, lessons, [], string.Empty);
 
     public static Outcome<GateCase> Of(
-        CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons, IReadOnlyList<string> absentSubmodules)
+        CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons, IReadOnlyList<string> absentSubmodules) =>
+        Of(@base, variantHead, planPath, epics, lessons, absentSubmodules, string.Empty);
+
+    public static Outcome<GateCase> Of(
+        CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons, IReadOnlyList<string> absentSubmodules, string? planText)
     {
         var plan = (planPath ?? string.Empty).Trim();
         var outside = RepositoryRelative.Refusal(plan);
@@ -117,16 +127,17 @@ public sealed record GateCase
 
         return refusal.Length > 0
             ? Outcome<GateCase>.Failure(refusal)
-            : Outcome<GateCase>.Success(new GateCase(@base, variantHead, plan, epics ?? string.Empty, lessons ?? string.Empty, [.. absent.Order(StringComparer.Ordinal)]));
+            : Outcome<GateCase>.Success(new GateCase(@base, variantHead, plan, epics ?? string.Empty, lessons ?? string.Empty, [.. absent.Order(StringComparer.Ordinal)], planText ?? string.Empty));
     }
 
     /// <summary>Length-prefixed (<see cref="CanonicalFields"/>): the epics and lessons are free text, and a
-    /// separator between them would be forgeable from inside either. The absent submodules are appended ONLY when there are
-    /// any, with their count, so every case recorded before the field existed keeps the canonical form — and the stamp — it
-    /// had.</summary>
+    /// separator between them would be forgeable from inside either. A carried plan text and the absent submodules are
+    /// appended ONLY when there are any, each behind a label field of its own, so every case recorded before those fields
+    /// existed keeps the canonical form — and the stamp — it had.</summary>
     public string Canonical => CanonicalFields.Of(
     [
         "case", Base.Value, VariantHead.Value, PlanPath, Epics, Lessons,
+        .. PlanText.Length == 0 ? [] : (IEnumerable<string>)["plan-text", PlanText],
         .. AbsentSubmodules.Count == 0
             ? []
             : (IEnumerable<string>)["absent-submodules", AbsentSubmodules.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), .. AbsentSubmodules],

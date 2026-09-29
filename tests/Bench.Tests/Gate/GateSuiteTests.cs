@@ -120,6 +120,22 @@ public sealed class GateSuiteTests
 
         @case.Canonical.Should().Be($"4:case40:{Base.Value}40:{Variant.Value}12:docs/plan.md1:e1:l");
         GateCase.Of(Base, Variant, "docs/plan.md", "e", "l").Ok().Canonical.Should().Be(@case.Canonical);
+        GateCase.Of(Base, Variant, "docs/plan.md", "e", "l", [], string.Empty).Ok().Canonical.Should().Be(@case.Canonical,
+            "a case whose plan is committed carries no plan text, and hashes as it always did");
+    }
+
+    /// <summary>tsx2 and php1 (E7, 2026-09-29): the calibration reviewed a plan it WROTE beside the checkout, never committed.
+    /// The suite carries that text, so the text is the task — two different plans under one stamp would be two tasks.</summary>
+    [Fact]
+    public void A_case_carrying_its_plan_text_stamps_by_that_text()
+    {
+        var committed = GateCase.Of(Base, Variant, "todo/PLAN_synthetic.md", "e", "l").Ok();
+        var carried = GateCase.Of(Base, Variant, "todo/PLAN_synthetic.md", "e", "l", [], "# Synthetic\n\nEpic 1.\n").Ok();
+        var other = GateCase.Of(Base, Variant, "todo/PLAN_synthetic.md", "e", "l", [], "# Synthetic\n\nEpic 2.\n").Ok();
+
+        carried.PlanText.Should().Be("# Synthetic\n\nEpic 1.\n");
+        carried.Canonical.Should().NotBe(committed.Canonical);
+        carried.Canonical.Should().NotBe(other.Canonical, "the text is what the reviewer reads");
     }
 
     /// <summary>E7, 2026-09-28: ts2 pins its rules as a submodule whose url no longer resolves, and the calibration measured

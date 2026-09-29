@@ -43,6 +43,20 @@ public sealed class GateSuiteFileTests
     }
 
     [Fact]
+    public void A_task_s_carried_plan_text_is_read_and_written_back_byte_for_byte_with_the_same_stamp()
+    {
+        var json = JsonNode.Parse(Suite(new JsonArray("plan")))!;
+        json["tasks"]![0]!["planText"] = "# Synthetic\r\n\nEpic 1 — orders.\n";
+
+        var frozen = GateSuiteFile.Parse(json.ToJsonString()).Ok();
+        var again = GateSuiteFile.Parse(GateSuiteFile.Json(frozen, _ => "file:///repos/cs2")).Ok();
+
+        frozen.Tasks[0].Case.PlanText.Should().Be("# Synthetic\r\n\nEpic 1 — orders.\n", "line endings and all: the product quotes the plan byte for byte");
+        again.Stamp.Should().Be(frozen.Stamp);
+        again.Tasks[0].Case.PlanText.Should().Be(frozen.Tasks[0].Case.PlanText);
+    }
+
+    [Fact]
     public void A_run_setting_named_twice_is_refused_rather_than_crashing_or_guessing()
     {
         var command = CommandLine.Parse(["gate", "run", "--set", "COAI_ROUNDS_PLANCRITIQUE=2,coai_rounds_plancritique=3"]);

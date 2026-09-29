@@ -16,7 +16,8 @@ namespace Bench.Application.Gate;
 ///                             "trigger": "...", "mechanism": "...", "consequence": "...", "crossEpic": true } ] } ] }
 /// </code>
 /// <c>epics</c> and <c>lessons</c> may be JSON values or strings; either way the TEXT sent to <c>review_feature</c> is
-/// what is hashed into the stamp. <c>absentSubmodules</c> (optional) names submodules the task is measured without
+/// what is hashed into the stamp. <c>planText</c> (optional) carries a plan the variant head does not commit
+/// (<see cref="GateCase.PlanText"/>); <c>absentSubmodules</c> (optional) names submodules the task is measured without
 /// (<see cref="GateCase.AbsentSubmodules"/>). Every refusal names the task and the field.</summary>
 public static class GateSuiteFile
 {
@@ -66,6 +67,11 @@ public static class GateSuiteFile
     private static System.Text.Json.Nodes.JsonObject TaskJson(GateTask task, string repository)
     {
         var json = TaskFields(task, repository);
+        if (task.Case.PlanText.Length > 0)
+        {
+            json["planText"] = task.Case.PlanText;
+        }
+
         if (task.Case.AbsentSubmodules.Count > 0)
         {
             json["absentSubmodules"] = new System.Text.Json.Nodes.JsonArray([.. task.Case.AbsentSubmodules.Select(p => (System.Text.Json.Nodes.JsonNode)p)]);
@@ -130,7 +136,7 @@ public static class GateSuiteFile
     private static Outcome<GateCase> Case(JsonElement task) =>
         CommitSha.Parse(Text(task, "base")).Match(
             @base => CommitSha.Parse(Text(task, "variantHead")).Match(
-                head => GateCase.Of(@base, head, Text(task, "planPath"), Raw(task, "epics"), Raw(task, "lessons"), Strings(task, "absentSubmodules")),
+                head => GateCase.Of(@base, head, Text(task, "planPath"), Raw(task, "epics"), Raw(task, "lessons"), Strings(task, "absentSubmodules"), Text(task, "planText")),
                 reason => Outcome<GateCase>.Failure($"variantHead: {reason}")),
             reason => Outcome<GateCase>.Failure($"base: {reason}"));
 
