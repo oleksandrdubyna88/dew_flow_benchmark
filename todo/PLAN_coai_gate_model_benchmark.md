@@ -1504,6 +1504,11 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   3. `suite-s73b.json` (stamp `gate-seeded#0d0da7662eab`) carries both plans and verifies 7 of 7. The runs on the two
      earlier stamps are abandoned. Their settled cells are valid data on another stamp, and they are not reported with
      S7.3.
+  4. On that stamp the plan gate settled 84 of 84 (`01a0ec70`). The code gate (`01a0ec99`) settled 84 of 84 as
+     **invalid, and nothing was measured**. The driver ticked a code-gate row for `code` only, but the code protocol
+     runs its plan loop first on the same row, and the product refused every plan round. E3's fake product answered
+     an unticked stage, so no driver test saw it. The fix ticks plan on a code-gate row, and the fake now refuses an
+     unticked stage as the product does. The code gate is re-run after it.
 - DoD (E7): `PromptShape`, `GateTurnOnePrompt` and `bench gate aa` merged with every RED watched; the self-check
   printed `same shape` for the five imported cs2 cells; the A/A ran, was compared and assessed; S7.3 ran and was
   assessed; `RESULTS_gate_aa_cs2.md` and `module_gate.md` written; the hand-check still open and said so.

@@ -181,6 +181,8 @@ public sealed class Server(Script script)
 
     private JsonNode Reply(string tool, int call, JsonObject arguments) => tool switch
     {
+        "review_plan" or "review_code" or "review_feature" when Unticked(tool) is { Length: > 0 } stage =>
+            Error($"nothing could review the {stage} stage: no vendor here can run any of the roles this round was going to ask"),
         "review_plan" or "review_feature" => Review(tool, call, arguments),
         "review_code" when !_planProceeded => Error("no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
         "review_code" => Review(tool, call, arguments),
@@ -344,6 +346,18 @@ public sealed class Server(Script script)
         !script.Ignores(variable) && Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value ? value : fallback;
 
     private static string DataDir() => Environment.GetEnvironmentVariable("COAI_DATA_DIR") ?? Path.Combine(Path.GetTempPath(), "fake-coai-data");
+
+    /// <summary>The product refuses a round no vendor row is ticked for (<c>"plan"</c>, <c>"code"</c>, <c>"feature"</c>) — S7.3's
+    /// code gate, 2026-09-29, sent rows ticked for code only, and the real product refused every plan round the code
+    /// protocol needs first; this fake answered them, so no driver test saw it. Empty when some row is ticked, or when
+    /// the run names no vendors at all.</summary>
+    private static string Unticked(string tool)
+    {
+        var vendors = JsonNode.Parse(Environment.GetEnvironmentVariable("COAI_VENDORS") ?? "[]") as JsonArray ?? [];
+        var key = tool switch { "review_plan" => "plan", "review_code" => "code", _ => "feature" };
+
+        return vendors.Count == 0 || vendors.OfType<JsonObject>().Any(v => v[key]?.GetValue<bool>() == true) ? string.Empty : StageOf(tool);
+    }
 
     /// <summary>Where this review would go: the first vendor row's base url, or its runtime word.</summary>
     private static string Endpoint()

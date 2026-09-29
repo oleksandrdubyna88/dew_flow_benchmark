@@ -121,7 +121,7 @@ public sealed record CoaiVendorsSetting
             ["key"] = d.KeyName,
             ["thinking"] = d.Transport.Thinking,
             ["reviewMinutes"] = d.Transport.ReviewMinutesCap,
-            ["plan"] = gate == GateKind.Plan,
+            ["plan"] = gate is GateKind.Plan or GateKind.Code, // the code protocol's plan loop runs first, on this row
             ["code"] = gate == GateKind.Code,
             ["feature"] = gate == GateKind.Feature,
             ["document"] = false,
