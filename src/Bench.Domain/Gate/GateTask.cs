@@ -66,13 +66,14 @@ public sealed record CloneLocation
 /// the suite stamp; none of it says where the repository is.</summary>
 public sealed record GateCase
 {
-    private GateCase(CommitSha @base, CommitSha variantHead, string planPath, string epics, string lessons)
+    private GateCase(CommitSha @base, CommitSha variantHead, string planPath, string epics, string lessons, IReadOnlyList<string> absentSubmodules)
     {
         Base = @base;
         VariantHead = variantHead;
         PlanPath = planPath;
         Epics = epics;
         Lessons = lessons;
+        AbsentSubmodules = absentSubmodules;
     }
 
     public CommitSha Base { get; }
@@ -89,27 +90,62 @@ public sealed record GateCase
     /// <summary>The <c>lessons</c> argument of <c>review_feature</c>, as the text sent.</summary>
     public string Lessons { get; }
 
-    public static Outcome<GateCase> Of(CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons)
+    /// <summary>Submodules the variant head pins that the task is measured WITHOUT — repository-relative, <c>/</c>-separated,
+    /// in ordinal order. ts2 (E7, 2026-09-28) pins its rules at a url that no longer resolves, and the calibration measured
+    /// it with the folder empty; the clone leaves exactly these uninitialised and fetches every other one. Empty for a
+    /// task whose every submodule is part of it.</summary>
+    public IReadOnlyList<string> AbsentSubmodules { get; }
+
+    public static Outcome<GateCase> Of(CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons) =>
+        Of(@base, variantHead, planPath, epics, lessons, []);
+
+    public static Outcome<GateCase> Of(
+        CommitSha @base, CommitSha variantHead, string? planPath, string? epics, string? lessons, IReadOnlyList<string> absentSubmodules)
     {
         var plan = (planPath ?? string.Empty).Trim();
         var outside = RepositoryRelative.Refusal(plan);
+        var absent = absentSubmodules.Select(p => p.Trim().Replace('\\', '/')).ToList();
 
-        var refusal = (plan.Length, outside.Length, @base.Value == variantHead.Value) switch
+        var refusal = (plan.Length, outside.Length, @base.Value == variantHead.Value, AbsentRefusal(absent)) switch
         {
-            (0, _, _) => "a case names the plan the product reviews, as a repository-relative path",
-            (_, > 0, _) => $"{outside} — the plan path is REPOSITORY-relative and stays inside the checkout, so the suite says nothing about this machine",
-            (_, _, true) => $"the variant head is the base ({@base.Short}) — there is no diff to review and nothing was planted",
+            (0, _, _, _) => "a case names the plan the product reviews, as a repository-relative path",
+            (_, > 0, _, _) => $"{outside} — the plan path is REPOSITORY-relative and stays inside the checkout, so the suite says nothing about this machine",
+            (_, _, true, _) => $"the variant head is the base ({@base.Short}) — there is no diff to review and nothing was planted",
+            (_, _, _, { Length: > 0 } bad) => bad,
             _ => string.Empty,
         };
 
         return refusal.Length > 0
             ? Outcome<GateCase>.Failure(refusal)
-            : Outcome<GateCase>.Success(new GateCase(@base, variantHead, plan, epics ?? string.Empty, lessons ?? string.Empty));
+            : Outcome<GateCase>.Success(new GateCase(@base, variantHead, plan, epics ?? string.Empty, lessons ?? string.Empty, [.. absent.Order(StringComparer.Ordinal)]));
     }
 
     /// <summary>Length-prefixed (<see cref="CanonicalFields"/>): the epics and lessons are free text, and a
-    /// separator between them would be forgeable from inside either.</summary>
-    public string Canonical => CanonicalFields.Of("case", Base.Value, VariantHead.Value, PlanPath, Epics, Lessons);
+    /// separator between them would be forgeable from inside either. The absent submodules are appended ONLY when there are
+    /// any, with their count, so every case recorded before the field existed keeps the canonical form — and the stamp — it
+    /// had.</summary>
+    public string Canonical => CanonicalFields.Of(
+    [
+        "case", Base.Value, VariantHead.Value, PlanPath, Epics, Lessons,
+        .. AbsentSubmodules.Count == 0
+            ? []
+            : (IEnumerable<string>)["absent-submodules", AbsentSubmodules.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), .. AbsentSubmodules],
+    ]);
+
+    private static string AbsentRefusal(IReadOnlyList<string> absent)
+    {
+        var blank = absent.Any(p => p.Length == 0);
+        var outside = absent.Select(p => RepositoryRelative.Refusal(p)).FirstOrDefault(r => r.Length > 0) ?? string.Empty;
+        var twice = absent.GroupBy(p => p, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1)?.Key ?? string.Empty;
+
+        return (blank, outside.Length, twice.Length) switch
+        {
+            (true, _, _) => "an absent submodule is blank — name the path the variant head pins it at",
+            (_, > 0, _) => $"{outside} — an absent submodule is a REPOSITORY-relative path inside the checkout",
+            (_, _, > 0) => $"the case names absent submodule '{twice}' twice",
+            _ => string.Empty,
+        };
+    }
 }
 
 /// <summary>One frozen seeded task: what the database knows it as (id, language, hosted gates, calibration

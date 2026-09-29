@@ -29,6 +29,20 @@ public sealed class GateSuiteFileTests
     }
 
     [Fact]
+    public void A_task_s_absent_submodules_are_read_and_written_back_with_the_same_stamp()
+    {
+        var json = JsonNode.Parse(Suite(new JsonArray("plan")))!;
+        json["tasks"]![0]!["absentSubmodules"] = new JsonArray(".claude/rules/shared");
+
+        var frozen = GateSuiteFile.Parse(json.ToJsonString()).Ok();
+        var again = GateSuiteFile.Parse(GateSuiteFile.Json(frozen, _ => "file:///repos/cs2")).Ok();
+
+        frozen.Tasks[0].Case.AbsentSubmodules.Should().Equal([".claude/rules/shared"]);
+        again.Stamp.Should().Be(frozen.Stamp, "a suite an import writes back must stamp as the one it read");
+        GateSuiteFile.Parse(Suite(new JsonArray("plan"))).Ok().Stamp.Should().NotBe(frozen.Stamp);
+    }
+
+    [Fact]
     public void A_run_setting_named_twice_is_refused_rather_than_crashing_or_guessing()
     {
         var command = CommandLine.Parse(["gate", "run", "--set", "COAI_ROUNDS_PLANCRITIQUE=2,coai_rounds_plancritique=3"]);
