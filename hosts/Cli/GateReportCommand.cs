@@ -16,13 +16,14 @@ public static class GateReportCommand
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
-    /// <summary><c>bench gate report --gate plan|code|feature --scope &lt;scope id | suite stamp&gt; --rubric &lt;id&gt; --db … [--json]</c>.</summary>
+    /// <summary><c>bench gate report --gate plan|code|feature --scope &lt;scope id | suite stamp&gt; --rubric &lt;id&gt; [--run &lt;campaign&gt;[,…]] --db … [--json]</c>.</summary>
     public static async Task<int> ReportAsync(CommandLine command, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
-        var flags = (GateWord.Parse(command.Value("gate")), GateCliInputs.Connection(command).Length) switch
+        var flags = (GateWord.Parse(command.Value("gate")), GateCliInputs.Connection(command).Length, RunFlag(command)) switch
         {
-            (Outcome<GateKind>.Fail bad, _) => $"gate report needs --gate plan|code|feature — {bad.Reason}",
-            (_, 0) => "gate report needs the database — pass --db or set BENCH_DB",
+            (Outcome<GateKind>.Fail bad, _, _) => $"gate report needs --gate plan|code|feature — {bad.Reason}",
+            (_, 0, _) => "gate report needs the database — pass --db or set BENCH_DB",
+            (_, _, { Length: > 0 } run) => run,
             _ => string.Empty,
         };
 
@@ -110,9 +111,9 @@ public static class GateReportCommand
     /// <summary>The ask answered from ONE read of the gate (<see cref="GateReportQuery.ReportAsync"/>): a scope that is not one,
     /// a stamp spanning several, a missing rubric — 4, each naming what there is to choose; the suite's tasks not recorded — 3.</summary>
     private static async Task<int> AnswerAsync(CommandLine command, IGateReads reads, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
-        await GateReportQuery.ReportAsync(reads, command.Value("gate"), command.Value("scope"), command.Value("rubric"), cancellationToken) switch
+        await GateReportQuery.ReportAsync(reads, command.Value("gate"), command.Value("scope"), command.Value("rubric"), Campaigns(command), cancellationToken) switch
         {
-            GateAnswer<GateModelTableDto>.Answered table => Printed(output, command.Has("json") ? JsonSerializer.Serialize(table.Value, Web) : GateReportText.Of(table.Value)),
+            GateAnswer<GateModelTableDto>.Answered table => Printed(output, command.Has("json") ? JsonSerializer.Serialize(table.Value, Web) : Narrowing(command) + GateReportText.Of(table.Value)),
             GateAnswer<GateModelTableDto>.Refused { Kind: GateRefusalKind.Conflict } refused => GateRunCommand.Refuse(error, ExitCodes.Environment, refused.Reason),
             GateAnswer<GateModelTableDto>.Refused refused => GateRunCommand.Refuse(error, ExitCodes.Configuration, refused.Reason),
             _ => throw new InvalidOperationException("unreachable"),
@@ -122,6 +123,21 @@ public static class GateReportCommand
     /// <see cref="InvalidOperationException"/> is not one: it is how this code says an invariant broke, and reporting it as an
     /// outage sends the reader to the database when the defect is here (code round). The import verbs' rule, shared.</summary>
     public static bool IsStoreFailure(Exception ex) => ex is Npgsql.NpgsqlException or DbUpdateException or TimeoutException;
+
+    /// <summary>The campaigns <c>--run</c> names; the flag's own check (<see cref="RunFlag"/>) has refused a malformed one.</summary>
+    private static IReadOnlyList<Guid> Campaigns(CommandLine command) => [.. command.List("run").Select(Guid.Parse)];
+
+    /// <summary>Refused when <c>--run</c> names something that is not a run id — empty when it names none or only ids.</summary>
+    private static string RunFlag(CommandLine command) =>
+        command.List("run").FirstOrDefault(r => !Guid.TryParse(r, out _)) is { } bad
+            ? $"gate report --run takes campaign ids, comma-separated — '{bad}' is not one"
+            : string.Empty;
+
+    /// <summary>A narrowed table says so above itself: the scope's figures are over the named runs, not the whole scope.</summary>
+    private static string Narrowing(CommandLine command) =>
+        command.List("run") is { Count: > 0 } runs
+            ? $"runs           {runs.Count} named ({string.Join(", ", runs.Select(r => r[..8]))}) — the scope's other runs are left out{Environment.NewLine}"
+            : string.Empty;
 
     private static int Printed(TextWriter output, string text)
     {

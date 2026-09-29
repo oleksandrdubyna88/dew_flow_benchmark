@@ -56,6 +56,32 @@ public sealed class GateReportCommandTests(PostgresFixture postgres)
         output.Should().Contain("imported from calib-py", "an imported scope says where its runs came from");
     }
 
+    /// <summary><c>--run</c> through the CLI: the table narrowed to the named campaign (the arithmetic of narrowing is
+    /// <c>GateReportQueryTests</c>'), the text saying the scope's other runs are left out, a malformed or unknown campaign
+    /// refused as asked wrongly.</summary>
+    [Fact]
+    public async Task A_report_narrowed_to_named_campaigns_says_so_and_an_unknown_or_malformed_one_is_refused()
+    {
+        using var rig = await ImportRig.NewAsync(postgres);
+        using var files = NewRoot();
+        (await rig.ImportAsync(Ct)).Ok();
+        Run("gate", "suite", "record", "--suite-file", await SuiteFileAsync(files), "--db", rig.Connection).Code.Should().Be(ExitCodes.Pass);
+        var records = await new PostgresGateReads(rig.Db(), TimeProvider.System).RecordsAsync([Domain.Gate.GateKind.Feature], Ct);
+        var campaigns = records.GroupBy(r => r.CampaignId).Select(g => (Id: g.Key, Cells: g.Count())).ToList();
+        string[] ask = ["gate", "report", "--gate", "feature", "--scope", ImportFixture.Suite.Stamp, "--rubric", "strict-v1", "--db", rig.Connection];
+        Run([.. ask, "--run", "not-a-guid"]).Should().Match<(int Code, string Output, string Error)>(r => r.Code == ExitCodes.Configuration && r.Error.Contains("--run"));
+
+        var narrowed = Run([.. ask, "--run", campaigns[0].Id.ToString(), "--json"]);
+        var text = Run([.. ask, "--run", campaigns[0].Id.ToString()]);
+        var unknown = Run([.. ask, "--run", Guid.NewGuid().ToString()]);
+
+        narrowed.Code.Should().Be(ExitCodes.Pass, narrowed.Error);
+        narrowed.Output.Should().Be(Run([.. ask, "--json"]).Output, "the import is one campaign, so narrowed to it the table is the whole scope's");
+        text.Output.Should().Contain("runs           1 named").And.Contain("the scope's other runs are left out");
+        unknown.Code.Should().Be(ExitCodes.Configuration);
+        unknown.Error.Should().Contain("not a feature-gate run in this database");
+    }
+
     [Fact]
     public async Task A_report_asked_without_a_scope_or_a_rubric_is_refused_naming_what_there_is_to_choose()
     {
