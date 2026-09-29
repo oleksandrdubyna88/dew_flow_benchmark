@@ -274,7 +274,8 @@ flowchart TB
   references now resolve to something else than its settled cells were measured under. `--dry-run` is `status`.
 - `bench gate status --run <id>` — pending, claimed (owner, age), abandoned (cause), settled (failed), the pins seen,
   the data-dir mode. Claims nothing. `bench gate sweep` — hands back claims whose owner is provably gone and removes
-  the gate clones of runs that ended.
+  the gate clones of runs that ended. A claim stamped after now (a clock that stepped back) is a candidate like a stale
+  one; ownership still decides.
 - `bench gate probe --coai-exe … --reviewers <id>` — the product started with that reviewer's environment in a throwaway
   data directory: `tools/list`, `providers` (an allow-list of fields), no model called.
 - `bench gate reviewers add --id … --runtime api|codex|gemini|claude|antigravity|local|remote --model … [--endpoint
