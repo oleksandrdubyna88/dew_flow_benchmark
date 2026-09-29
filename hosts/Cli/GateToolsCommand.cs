@@ -116,12 +116,20 @@ public static class GateToolsCommand
 
         return checkout switch
         {
-            Outcome<string>.Ok ok when File.Exists(Path.Combine(ok.Value, task.Case.PlanPath)) => string.Empty,
-            Outcome<string>.Ok => $"the plan {task.Case.PlanPath} is not committed at the variant head",
+            Outcome<string>.Ok ok => PlanVerdict(task, File.Exists(Path.Combine(ok.Value, task.Case.PlanPath))),
             Outcome<string>.Fail fail => $"its checkout could not be made — {fail.Reason}",
             _ => "unreachable",
         };
     }
+
+    /// <summary>A plan is committed at the variant head, or carried by the suite at a path the head does NOT commit — the
+    /// read-only checkout holds exactly the committed tree, so the file's presence there is the commit.</summary>
+    private static string PlanVerdict(GateTask task, bool committed) => (committed, task.Case.PlanText.Length > 0) switch
+    {
+        (true, false) or (false, true) => string.Empty,
+        (true, true) => $"the suite carries a plan for {task.Case.PlanPath}, which the variant head commits — it describes another tree",
+        (false, false) => $"the plan {task.Case.PlanPath} is not committed at the variant head, and the suite carries no planText for it",
+    };
 
     private static async Task<int> ProbeWithAsync(CommandLine command, string exe, GateReviewer reviewer, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {

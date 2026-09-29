@@ -1,5 +1,6 @@
 using Bench.Domain.Gate;
 using Bench.Domain.Targets;
+using Bench.Infrastructure.Gate;
 using Bench.Infrastructure.Git;
 using Bench.Tests.Infrastructure;
 using FluentAssertions;
@@ -117,6 +118,41 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
         (await rig.Checkouts.EnsureAsync(Guid.NewGuid(), At(rig.Task, rig.Task.Case.VariantHead.Value, ["vendor/gone"]), Ct)).Reason()
             .Should().Contain("vendor/gone", "a head with no submodules at all bears out no declaration either");
     }
+
+    /// <summary>tsx2 and php1 (S7.3, 2026-09-29): their plan is not committed — the calibration wrote it beside the checkout —
+    /// so every cell was refused "the plan is not in the checkout". The suite carries the text and the clone holds it at the
+    /// plan path, byte for byte, on a fresh clone and on a reused one alike.</summary>
+    [Fact]
+    public async Task A_plan_the_suite_carries_is_written_into_the_clone_byte_for_byte()
+    {
+        await using var rig = await GateDriverRig.StartAsync(postgres);
+        const string text = "# Synthetic\r\n\nEpic 1 — orders.\n";
+        var task = Carrying(rig.Task, "todo/PLAN_synthetic.md", text);
+        var run = Guid.NewGuid();
+
+        var clone = (await rig.Checkouts.EnsureAsync(run, task, Ct)).Ok();
+        var again = (await rig.Checkouts.EnsureAsync(run, task, Ct)).Ok();
+
+        (await File.ReadAllBytesAsync(Path.Combine(again, "todo", "PLAN_synthetic.md"), Ct)).Should().Equal(System.Text.Encoding.UTF8.GetBytes(text));
+        new FileGateAttemptFiles().ReadPlan(clone, task.Case.PlanPath).Ok().Should().Be(text);
+    }
+
+    /// <summary>A carried plan at a path the head already commits describes another tree: refused, naming the path, never
+    /// written over the committed file.</summary>
+    [Fact]
+    public async Task A_carried_plan_where_the_variant_head_commits_one_is_refused_by_name()
+    {
+        await using var rig = await GateDriverRig.StartAsync(postgres);
+
+        (await rig.Checkouts.EnsureAsync(Guid.NewGuid(), Carrying(rig.Task, "docs/plan.md", "# Another plan\n"), Ct)).Reason()
+            .Should().Contain("docs/plan.md").And.Contain("commits");
+    }
+
+    private static GateTask Carrying(GateTask t, string planPath, string planText) =>
+        GateTask.Of(
+            t.Id, t.Language, t.Hosts, t.IsCalibration,
+            GateCase.Of(t.Case.Base, t.Case.VariantHead, planPath, t.Case.Epics, t.Case.Lessons, [], planText).Ok(),
+            t.Seeds, t.Repository).Ok();
 
     /// <summary>Commits a submodule at <c>.claude/rules/shared</c> from <paramref name="rules"/>; returns the new head.</summary>
     private static async Task<string> PinRulesAsync(GateDriverRig rig, DatedGitRepo rules)

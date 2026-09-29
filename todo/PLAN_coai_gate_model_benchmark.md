@@ -1490,7 +1490,20 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   4. `01a0e9a8` then gave **4 of 4 at `451c8c505317`** (exit 0), and `01a0e9b1` settled Opus and Astra 2 of 2 each.
 
   Every cell hit both cs2 seeds, as every valid Python cs2 cell did. The assessment needed a row naming `codex.exe`
-  (D5 of the fidelity plan). Fable 5.1 is not measured: it is blocked on the account, not on the harness.
+  (D5 of the fidelity plan). Fable 5.1 was blocked by the account's limit on 2026-09-28; it was re-run on 2026-09-29
+  (`01a0ec20`) once the limit reset: 2 of 2 valid, both seeds hit.
+- **S7.3 as run so far (2026-09-29): two stops, two fixes, and a correction to S7.1's record.**
+  1. On the OLD stamp, the first plan and code campaigns (`01a0e9e1`, `01a0e9ea`) stopped after 20 refusals in a row.
+     ts2 pins its rules at a url that no longer resolves; the calibration had measured it with the folder empty.
+     PR #51 added `absentSubmodules`, and `suite-s73.json` declares it for ts2.
+  2. The second pair stopped the same way on tsx2 and php1: their plan is **not committed**. The calibration wrote a
+     synthetic plan beside its checkout. The design's `planSynthetic` (D13's `inputs.py` row) was never built, and
+     *S7.1 as it stands* was wrong to say `suite verify` had proved every plan committed. The fix is the suite carrying
+     the text (`planText`, written into the clone byte for byte) and `suite verify` accepting only a plan that is
+     committed or carried, never both.
+  3. `suite-s73b.json` (stamp `gate-seeded#0d0da7662eab`) carries both plans and verifies 7 of 7. The runs on the two
+     earlier stamps are abandoned. Their settled cells are valid data on another stamp, and they are not reported with
+     S7.3.
 - DoD (E7): `PromptShape`, `GateTurnOnePrompt` and `bench gate aa` merged with every RED watched; the self-check
   printed `same shape` for the five imported cs2 cells; the A/A ran, was compared and assessed; S7.3 ran and was
   assessed; `RESULTS_gate_aa_cs2.md` and `module_gate.md` written; the hand-check still open and said so.

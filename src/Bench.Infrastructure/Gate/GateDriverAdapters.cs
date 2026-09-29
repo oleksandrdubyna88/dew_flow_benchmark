@@ -20,7 +20,7 @@ public sealed class FileGateAttemptFiles : IGateAttemptFiles
 
         return File.Exists(full) && full.StartsWith(Path.GetFullPath(clone), StringComparison.OrdinalIgnoreCase)
             ? Outcome<string>.Success(File.ReadAllText(full))
-            : Outcome<string>.Failure($"the plan {planPath} is not in the checkout at the variant head — a task's plan is committed there (an untracked plan is E7's export)");
+            : Outcome<string>.Failure($"the plan {planPath} is not in the checkout at the variant head — a task's plan is committed there, or carried by the suite as planText");
     }
 
     public long SizeOf(string path) => File.Exists(path) ? new FileInfo(path).Length : 0;
@@ -162,7 +162,9 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
         {
             var made = Directory.Exists(Path.Combine(clone, ".git")) ? await VerifiedAsync(clone, task, cancellationToken) : await CloneAsync(clone, task, cancellationToken);
 
-            return made is Outcome<string>.Ok && (HasSubmodules(clone) || task.Case.AbsentSubmodules.Count > 0) ? await SubmodulesAsync(clone, task, cancellationToken) : made;
+            var whole = made is Outcome<string>.Ok && (HasSubmodules(clone) || task.Case.AbsentSubmodules.Count > 0) ? await SubmodulesAsync(clone, task, cancellationToken) : made;
+
+            return whole is Outcome<string>.Ok && task.Case.PlanText.Length > 0 ? await CarriedPlanAsync(clone, task, cancellationToken) : whole;
         }
         finally
         {
@@ -279,6 +281,26 @@ public sealed class GateCloneCheckouts(ICheckoutProvider provider, string checko
                 Outcome<IReadOnlyList<string>>.Failure);
 
     private static bool HasSubmodules(string clone) => File.Exists(Path.Combine(clone, ".gitmodules"));
+
+    /// <summary>A plan the suite CARRIES (<see cref="GateCase.PlanText"/>) written at the plan path, UTF-8 without a BOM and
+    /// byte for byte — the calibration reviewed tsx2's and php1's plan from an uncommitted file beside the checkout, and a
+    /// cell refused "the plan is not in the checkout" measures nothing. Rewritten on every ensure (same bytes, so a reused
+    /// clone and one interrupted before this step end alike). A carried plan where the head COMMITS one is refused: the
+    /// suite would be describing another tree, and the committed file is never written over.</summary>
+    private static async Task<Outcome<string>> CarriedPlanAsync(string clone, GateTask task, CancellationToken cancellationToken)
+    {
+        var committed = await GitCommand.ReadAsync(clone, GitTimeout, cancellationToken, "cat-file", "-e", $"HEAD:{task.Case.PlanPath}");
+        if (committed is Outcome<string>.Ok)
+        {
+            return Outcome<string>.Failure($"task '{task.Id}' carries a plan for {task.Case.PlanPath}, which its variant head commits — the suite describes another tree");
+        }
+
+        var full = Path.Combine(clone, task.Case.PlanPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllBytesAsync(full, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(task.Case.PlanText), cancellationToken);
+
+        return Outcome<string>.Success(clone);
+    }
 
     /// <summary>The committed bytes, whatever the machine's global <c>core.autocrlf</c> says: a clone inheriting
     /// <c>true</c> handed the product a CRLF plan the calibration's checkout had as LF (E7's A/A, 2026-09-28).</summary>
