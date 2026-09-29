@@ -28,6 +28,20 @@ public sealed class CoaiVendorRowTests
         setting.Reviewers.Select(r => r.Value).Should().Equal(["grok-medium"]);
     }
 
+    /// <summary>The code gate's protocol runs the plan loop FIRST, through the same reviewer, until a round reaches
+    /// <c>proceed</c> — so a code-gate row is ticked for plan and code. S7.3, 2026-09-29: ticked for code only, the product
+    /// refused all 84 plan rounds ("nothing could review the PlanReview stage") and the code gate measured nothing.</summary>
+    [Fact]
+    public void A_code_gate_row_is_ticked_for_the_plan_loop_its_protocol_runs_first()
+    {
+        var row = Rows(CoaiVendorsSetting.From([Reviewer("grok-medium")], GateKind.Code, ResolvedReferences.Empty).Ok().Json).Single();
+
+        row["code"]!.GetValue<bool>().Should().BeTrue();
+        row["plan"]!.GetValue<bool>().Should().BeTrue("review_code refuses until a plan round reached proceed, and that round runs on this row");
+        row["feature"]!.GetValue<bool>().Should().BeFalse();
+        row["document"]!.GetValue<bool>().Should().BeFalse();
+    }
+
     [Fact]
     public void The_row_carries_the_model_the_transport_and_the_vault_entry_name_and_never_a_secret()
     {
