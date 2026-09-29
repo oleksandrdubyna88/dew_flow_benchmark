@@ -214,9 +214,12 @@ public static class GateAssessCommand
             : (GateRunCommand.Refuse(error, ExitCodes.Environment, ((Outcome<string>.Fail)executable).Reason), null);
     }
 
+    /// <summary>The row's reference when it names one; otherwise the runtime's word resolved as a shell would (D5) — so an
+    /// assessor that cannot be launched is refused HERE, before a batch is sent, never finding by finding.</summary>
     private static Outcome<string> Executable(GateReviewer assessor) =>
         assessor.Definition.ExecutableRef.Length == 0
-            ? Outcome<string>.Success(assessor.Definition.Runtime.Word())
+            ? CliExecutable.OnThisMachine(assessor.Definition.Runtime.Word())
+                .Match(Outcome<string>.Success, reason => Outcome<string>.Failure($"assessor '{assessor.Id}': {reason}"))
             : new EnvironmentSecrets().Resolve(assessor.Definition.ExecutableRef)
                 .Match(Outcome<string>.Success, reason => Outcome<string>.Failure($"assessor '{assessor.Id}' names {assessor.Definition.ExecutableRef} for its CLI — {reason}"));
 

@@ -59,6 +59,81 @@ public sealed class CalibImportTests(PostgresFixture postgres)
         (await File.ReadAllTextAsync(Path.Combine(rig.Root, "assess", "verdicts", "codex-astra.jsonl"), Ct)).Should().Be(logBefore, "no log line is appended twice");
     }
 
+    /// <summary>D2 of the fidelity plan: the calibration never wrote a thinking field, so its runs ran at the vendor's
+    /// default — and the import labelled every row thinking-OFF. A fresh import now says what the runs did.</summary>
+    [Fact]
+    public async Task A_fresh_import_labels_its_reviewer_rows_with_the_vendors_default_thinking()
+    {
+        using var rig = await ImportRig.NewAsync(postgres);
+
+        var report = (await rig.ImportAsync(Ct)).Ok();
+
+        await using var db = rig.Db();
+        var catalog = new PostgresGateReviewerCatalog(db);
+        var rows = (await catalog.GetAsync([.. report.ReviewersAdded.Select(id => GateReviewerId.Parse(id).Ok())], Ct)).Ok();
+        rows.Should().NotBeEmpty().And.OnlyContain(r => r.Definition.Transport.Thinking == ThinkingSetting.VendorDefault);
+    }
+
+    /// <summary>A record imported before the label was fixed names a reviewer this import no longer builds (another label,
+    /// another hash, another id). Matching reviewers by hash would ADD new rows and read every cell as unchanged — orphan
+    /// rows, and cells still naming the old ones. Refused before anything is written; the history is never rewritten.</summary>
+    [Fact]
+    public async Task A_re_import_over_a_cell_whose_reviewer_it_no_longer_builds_is_refused_before_anything_is_written()
+    {
+        using var rig = await ImportRig.NewAsync(postgres);
+        (await rig.ImportAsync(Ct)).Ok();
+        var (cellId, oldId) = await PlantAnEarlierLabelAsync(rig);
+        var before = await rig.CountsAsync(Ct);
+
+        var again = await rig.ImportAsync(Ct);
+
+        again.Reason().Should().Contain(oldId).And.Contain("no longer builds");
+        (await rig.CountsAsync(Ct)).Should().Be(before, "no reviewer row, cell or artefact is added by a refused import");
+        await using var db = rig.Db();
+        (await db.GateCells.AsNoTracking().SingleAsync(c => c.Id == cellId, Ct)).ReviewerId.Should().Be(oldId, "the imported history is never rewritten");
+    }
+
+    /// <summary>The guard must not fail OPEN: the catalog's listing silently drops a row that does not read back (its stored
+    /// hash no longer matches), so a cell naming such a row would skip the drift check and let the import add new rows.
+    /// A stored cell whose reviewer the catalog cannot resolve refuses the import too (the cadence consultation, 2026-09-29).</summary>
+    [Fact]
+    public async Task A_re_import_over_a_cell_whose_reviewer_the_catalog_cannot_resolve_is_refused_too()
+    {
+        using var rig = await ImportRig.NewAsync(postgres);
+        (await rig.ImportAsync(Ct)).Ok();
+        var (_, oldId) = await PlantAnEarlierLabelAsync(rig);
+        await using (var db = rig.Db())
+        {
+            await db.GateReviewers.Where(r => r.Id == oldId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Hash, new string('0', 64)), Ct);
+        }
+
+        var before = await rig.CountsAsync(Ct);
+
+        var again = await rig.ImportAsync(Ct);
+
+        again.Reason().Should().Contain(oldId).And.Contain("cannot resolve");
+        (await rig.CountsAsync(Ct)).Should().Be(before, "a guard that fails open is the orphan rows it exists to prevent");
+    }
+
+    /// <summary>Points one imported cell at a reviewer row whose definition says thinking OFF — the state a database
+    /// imported before D2 holds. Returns the cell and that row's id.</summary>
+    private static async Task<(Guid Cell, string Reviewer)> PlantAnEarlierLabelAsync(ImportRig rig)
+    {
+        await using var db = rig.Db();
+        var cell = await db.GateCells.OrderBy(c => c.Id).FirstAsync(Ct);
+        var catalog = new PostgresGateReviewerCatalog(db);
+        var current = (await catalog.GetAsync([GateReviewerId.Parse(cell.ReviewerId).Ok()], Ct)).Ok().Single().Definition;
+        var t = current.Transport;
+        var off = ReviewerDefinition.Parse(
+            current.Runtime, current.Model, current.Endpoint, current.KeyName, current.CredsKeyRef, current.ExecutableRef, current.RemoteVendor,
+            ReviewerTransport.Parse(t.Dialect, t.ReasoningEffort, t.MaxTokens, t.TimeoutMinutes, t.FollowUps, t.ReviewMinutesCap, ThinkingSetting.Off).Ok(),
+            current.Prices, current.Gates).Ok();
+        var oldId = GateReviewerId.Parse($"earlier-{off.Hash[..8]}").Ok();
+        (await catalog.AddAsync(GateReviewer.Create(oldId, off, DateTimeOffset.UnixEpoch), Ct)).Ok();
+        await db.GateCells.Where(c => c.Id == cell.Id).ExecuteUpdateAsync(s => s.SetProperty(c => c.ReviewerId, oldId.Value), Ct);
+        return (cell.Id, oldId.Value);
+    }
+
     [Fact]
     public async Task A_record_that_changed_since_it_was_imported_is_refused_never_overwritten()
     {

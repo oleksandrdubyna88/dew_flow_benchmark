@@ -195,6 +195,39 @@ public sealed class GateReviewerTests
             .Should().Be("9:transport3:xai6:medium4:81922:201:32:2011:thinking-on", "every knob is one length-prefixed field");
     }
 
+    /// <summary>D1 of the fidelity plan: the product reads thinking in THREE states (absent is the vendor's default), the
+    /// bench modelled two, and a row added without the flag asked for OFF — which the product refuses for xai and glm. The
+    /// two states stored before keep their canonical text exactly, so every stored row still hashes to its stored hash.</summary>
+    [Fact]
+    public void Thinking_is_three_states_and_the_two_stored_before_keep_their_canonical_text()
+    {
+        static string Tail(ThinkingSetting t) => ReviewerTransport.Parse("xai", "medium", 8192, 20, 3, 20, t).Ok().Canonical.Split("2:20")[^1];
+
+        Tail(ThinkingSetting.On).Should().Be("11:thinking-on");
+        Tail(ThinkingSetting.Off).Should().Be("12:thinking-off");
+        Tail(ThinkingSetting.VendorDefault).Should().Be("16:thinking-default");
+        ReviewerTransport.Parse("xai", "medium", 8192, 20, 3, 20, true).Ok().Thinking.Should().Be(ThinkingSetting.On);
+        ReviewerTransport.Parse("xai", "medium", 8192, 20, 3, 20, false).Ok().Thinking.Should().Be(ThinkingSetting.Off);
+    }
+
+    /// <summary>The hashes rows were STORED under before three states existed, computed by that code (main `3e08dd7`, with the
+    /// two-state transport) and frozen here — so a change that moved them is a red test, not a catalog of rows refused as
+    /// "edited in place". The canonical text agreeing with itself proves nothing about the rows already stored (the cadence
+    /// consultation, 2026-09-29).</summary>
+    [Theory]
+    [InlineData(true, "8aeec9c5c5a5084a1c47683a2221ad4771bab1ddce2ad3ffa6a132670734b540")]
+    [InlineData(false, "296dfe988e01378c43236fdbc3d4b81f9589f87783ae1288fa2a018e1c0cfc49")]
+    public void A_definition_stored_before_three_states_hashes_exactly_as_it_did(bool thinking, string storedHash)
+    {
+        var definition = ReviewerDefinition.Parse(
+            ReviewerRuntime.Api, "grok-4.7", ReviewerEndpoint.Parse("https://api.x.ai/v1").Ok(), "grok", "COAI_CREDS_KEY", string.Empty, string.Empty,
+            ReviewerTransport.Parse("xai", "medium", 8192, 20, 3, 20, thinking).Ok(),
+            ReviewerPrices.Of(2.0m, 0.5m, 6.0m, 200_000, 4.0m, 1.0m, 12.0m).Ok(),
+            HostedGates.Of([GateKind.Plan, GateKind.Code, GateKind.Feature]).Ok()).Ok();
+
+        definition.Hash.Should().Be(storedHash);
+    }
+
     private static GateReviewerId Id(string value) => GateReviewerId.Parse(value).Ok();
 
     internal static Outcome<ReviewerDefinition> Definition(
@@ -205,7 +238,8 @@ public sealed class GateReviewerTests
         string executableRef = "",
         string effort = "medium",
         ReviewerRuntime runtime = ReviewerRuntime.Api,
-        IReadOnlyList<GateKind>? gates = null) =>
+        IReadOnlyList<GateKind>? gates = null,
+        ThinkingSetting thinking = ThinkingSetting.On) =>
         ReviewerDefinition.Parse(
             runtime,
             model,
@@ -214,7 +248,7 @@ public sealed class GateReviewerTests
             credsKeyRef,
             executableRef,
             remoteVendor: string.Empty,
-            ReviewerTransport.Parse("xai", effort, 8192, 20, 3, 20, true).Ok(),
+            ReviewerTransport.Parse("xai", effort, 8192, 20, 3, 20, thinking).Ok(),
             ReviewerPrices.Of(2.0m, 0.5m, 6.0m, 200_000, 4.0m, 1.0m, 12.0m).Ok(),
             HostedGates.Of(gates ?? [GateKind.Plan, GateKind.Code, GateKind.Feature]).Ok());
 }

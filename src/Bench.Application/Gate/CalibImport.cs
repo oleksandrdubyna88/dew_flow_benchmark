@@ -64,7 +64,7 @@ public sealed class CalibImport(
 
         progress($"read           {source.Cells.Count} record(s), {source.Key.Count} key entr(ies), {source.Verdicts.Count} verdict(s) — every one checked before anything is written");
 
-        var reviewers = await ReviewersAsync(source.Cells, cancellationToken);
+        var reviewers = await ReviewersAsync(request.Suite, source.Cells, cancellationToken);
         return reviewers is Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>.Ok { Value: var (byHash, added) }
             ? await CellsAsync(request, source, byHash, added, progress, cancellationToken)
             : Outcome<CalibImportReport>.Failure(((Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>.Fail)reviewers).Reason);
@@ -147,9 +147,15 @@ public sealed class CalibImport(
     /// <summary>A row per distinct definition: the catalog's own when one already hashes alike (under any name), else a new
     /// row named <c>&lt;model&gt;-&lt;hash8&gt;</c>.</summary>
     private async Task<Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>> ReviewersAsync(
-        IReadOnlyList<CalibCell> cells, CancellationToken cancellationToken)
+        GateSuite suite, IReadOnlyList<CalibCell> cells, CancellationToken cancellationToken)
     {
         var rows = await catalog.ListAsync(includeRetired: true, cancellationToken);
+        var drifted = await DriftedAsync(suite, rows, cells, cancellationToken);
+        if (drifted.Length > 0)
+        {
+            return Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>.Failure(drifted);
+        }
+
         var byHash = new Dictionary<string, GateReviewer>(StringComparer.Ordinal);
         var added = new List<string>();
 
@@ -166,6 +172,31 @@ public sealed class CalibImport(
 
         return Outcome<(IReadOnlyDictionary<string, GateReviewer>, IReadOnlyList<string>)>.Success((byHash, added));
     }
+
+    /// <summary>A record imported before names a reviewer by the definition the import built THEN. When the import now builds
+    /// another (D2 changed the thinking label, so the hash and the id changed with it), matching by hash would add new rows
+    /// that no cell names while every cell reads unchanged. Refused before anything is written; the history is kept.</summary>
+    private async Task<string> DriftedAsync(GateSuite suite, IReadOnlyList<GateReviewer> rows, IReadOnlyList<CalibCell> cells, CancellationToken cancellationToken)
+    {
+        var stored = await store.StoredReviewersAsync([.. cells.Select(c => CellId(suite, c.Record))], cancellationToken);
+        var byId = rows.ToDictionary(r => r.Id.Value, StringComparer.Ordinal);
+
+        return cells
+            .Select(cell => stored.TryGetValue(CellId(suite, cell.Record), out var reviewerId) ? Drift(cell, reviewerId, byId.GetValueOrDefault(reviewerId)) : string.Empty)
+            .FirstOrDefault(refusal => refusal.Length > 0) ?? string.Empty;
+    }
+
+    /// <summary>Why a stored cell stops the import, or empty. A reviewer the catalog's listing does not return — its row does
+    /// not read back — is refused as well: skipping it would fail OPEN into the orphan rows this guard exists to prevent.</summary>
+    private static string Drift(CalibCell cell, string storedId, GateReviewer? stored) => stored switch
+    {
+        null => $"record {cell.Record.Id} was imported under reviewer '{storedId}', which the catalog cannot resolve (its row does not read "
+            + "back — `bench gate reviewers list --all` names it); the import stops rather than add rows beside it",
+        _ when stored.Hash != cell.Definition.Hash => $"record {cell.Record.Id} was imported under reviewer '{stored.Id}', which this import "
+            + "no longer builds (its definition changed since — rows imported before the thinking label was fixed say thinking-off); the "
+            + "imported history is kept, never rewritten — import into a fresh database to import it again",
+        _ => string.Empty,
+    };
 
     private async Task<Outcome<GateReviewer>> AddAsync(CalibCell cell, List<string> added, CancellationToken cancellationToken)
     {

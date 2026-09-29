@@ -207,6 +207,28 @@ public sealed class CoaiVendorRowTests
         read.ReviewMinutes.Should().Be(20);
     }
 
+    /// <summary>D1: the row spells `thinking` only when a state was chosen — a row with no flag reaches the product with no
+    /// field, which the product reads as the vendor's default (E7's first A/A: `false` made it skip grok and glm).</summary>
+    [Theory]
+    [InlineData(ThinkingSetting.VendorDefault, null)]
+    [InlineData(ThinkingSetting.On, true)]
+    [InlineData(ThinkingSetting.Off, false)]
+    public void The_row_writes_thinking_only_for_a_chosen_state_and_reads_back_the_same_state(ThinkingSetting thinking, bool? written)
+    {
+        var json = CoaiVendorsSetting.From([Reviewer("grok-medium", thinking: thinking)], GateKind.Feature, ResolvedReferences.Empty).Ok().Json;
+        var row = Rows(json).Single();
+
+        (row.ContainsKey("thinking") ? row["thinking"]!.GetValue<bool>() : (bool?)null).Should().Be(written);
+        CoaiVendorRow.Read(json).Ok().Single().Thinking.Should().Be(thinking);
+    }
+
+    [Fact]
+    public void A_panel_row_without_thinking_reads_as_the_vendors_default_as_the_product_reads_it()
+    {
+        CoaiVendorRow.Read("""[{"id":"grok"}]""").Ok().Single().Thinking.Should().Be(ThinkingSetting.VendorDefault,
+            "the product reads an absent field as the vendor's default, not as on");
+    }
+
     [Fact]
     public void Malformed_vendor_json_is_refused_rather_than_read_as_nobody()
     {
@@ -229,9 +251,9 @@ public sealed class CoaiVendorRowTests
 
     private static GateReviewer Reviewer(
         string id, string endpoint = "https://api.x.ai/v1", IReadOnlyList<GateKind>? gates = null,
-        ReviewerRuntime runtime = ReviewerRuntime.Api, string effort = "medium") =>
+        ReviewerRuntime runtime = ReviewerRuntime.Api, string effort = "medium", ThinkingSetting thinking = ThinkingSetting.On) =>
         GateReviewer.Create(
             GateReviewerId.Parse(id).Ok(),
-            GateReviewerTests.Definition(endpoint: endpoint, gates: gates, runtime: runtime, effort: effort).Ok(),
+            GateReviewerTests.Definition(endpoint: endpoint, gates: gates, runtime: runtime, effort: effort, thinking: thinking).Ok(),
             Now);
 }

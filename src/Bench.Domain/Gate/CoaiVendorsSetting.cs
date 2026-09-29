@@ -119,7 +119,6 @@ public sealed record CoaiVendorsSetting
             ["executablePath"] = addresses.Executable,
             ["dialect"] = d.Transport.Dialect,
             ["key"] = d.KeyName,
-            ["thinking"] = d.Transport.Thinking,
             ["reviewMinutes"] = d.Transport.ReviewMinutesCap,
             ["plan"] = gate is GateKind.Plan or GateKind.Code, // the code protocol's plan loop runs first, on this row
             ["code"] = gate == GateKind.Code,
@@ -135,6 +134,12 @@ public sealed record CoaiVendorsSetting
         if (!d.Transport.AsksModuleDefault)
         {
             row["effort"] = d.Transport.ReasoningEffort;
+        }
+
+        // Only a chosen state is spelled: the product reads an absent field as the vendor's default (D1).
+        if (d.Transport.Thinking != ThinkingSetting.VendorDefault)
+        {
+            row["thinking"] = d.Transport.Thinking == ThinkingSetting.On;
         }
 
         if (d.Runtime == ReviewerRuntime.Remote && d.RemoteVendor.Length > 0)

@@ -97,7 +97,7 @@ public sealed class PostgresGateReviewerCatalog(BenchDbContext db) : IGateReview
             TimeoutMinutes = t.TimeoutMinutes,
             FollowUps = t.FollowUps,
             ReviewMinutesCap = t.ReviewMinutesCap,
-            Thinking = t.Thinking,
+            Thinking = t.Thinking switch { ThinkingSetting.On => true, ThinkingSetting.Off => false, _ => null },
             PricesKnown = p.Known,
             InPerMTok = p.InPerMTok,
             CachedPerMTok = p.CachedPerMTok,
@@ -135,7 +135,8 @@ public sealed class PostgresGateReviewerCatalog(BenchDbContext db) : IGateReview
     private static Outcome<ReviewerDefinition> Definition(GateReviewerRow row)
     {
         var endpoint = ReviewerEndpoint.Parse(row.EndpointUrl.Length > 0 ? row.EndpointUrl : row.EndpointRef);
-        var transport = ReviewerTransport.Parse(row.Dialect, row.ReasoningEffort, row.MaxTokens, row.TimeoutMinutes, row.FollowUps, row.ReviewMinutesCap, row.Thinking);
+        var thinking = row.Thinking switch { true => ThinkingSetting.On, false => ThinkingSetting.Off, null => ThinkingSetting.VendorDefault };
+        var transport = ReviewerTransport.Parse(row.Dialect, row.ReasoningEffort, row.MaxTokens, row.TimeoutMinutes, row.FollowUps, row.ReviewMinutesCap, thinking);
         var prices = row.PricesKnown
             ? ReviewerPrices.Of(row.InPerMTok, row.CachedPerMTok, row.OutPerMTok, row.TierFromTokens, row.TierIn, row.TierCached, row.TierOut)
             : Outcome<ReviewerPrices>.Success(ReviewerPrices.Unknown);

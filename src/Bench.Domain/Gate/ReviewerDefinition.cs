@@ -16,7 +16,7 @@ namespace Bench.Domain.Gate;
 /// <param name="TimeoutMinutes">The per-turn deadline.</param>
 /// <param name="FollowUps">How many source follow-ups a feature review may ask for.</param>
 /// <param name="ReviewMinutesCap">The whole-review limit — every turn of one reviewer's conversation.</param>
-/// <param name="Thinking">The thinking switch, where the dialect has one.</param>
+/// <param name="Thinking">The thinking switch, where the dialect has one — in the product's three states.</param>
 public sealed record ReviewerTransport(
     string Dialect,
     string ReasoningEffort,
@@ -24,10 +24,16 @@ public sealed record ReviewerTransport(
     int TimeoutMinutes,
     int FollowUps,
     int ReviewMinutesCap,
-    bool Thinking)
+    ThinkingSetting Thinking)
 {
+    /// <summary>The two-state spelling every row stored before three states existed was made with: <c>true</c> is on,
+    /// <c>false</c> is off — never the vendor default, which no stored row asked for.</summary>
     public static Outcome<ReviewerTransport> Parse(
-        string? dialect, string? reasoningEffort, int maxTokens, int timeoutMinutes, int followUps, int reviewMinutesCap, bool thinking)
+        string? dialect, string? reasoningEffort, int maxTokens, int timeoutMinutes, int followUps, int reviewMinutesCap, bool thinking) =>
+        Parse(dialect, reasoningEffort, maxTokens, timeoutMinutes, followUps, reviewMinutesCap, thinking ? ThinkingSetting.On : ThinkingSetting.Off);
+
+    public static Outcome<ReviewerTransport> Parse(
+        string? dialect, string? reasoningEffort, int maxTokens, int timeoutMinutes, int followUps, int reviewMinutesCap, ThinkingSetting thinking)
     {
         var d = (dialect ?? string.Empty).Trim().ToLowerInvariant();
         var effort = (reasoningEffort ?? string.Empty).Trim().ToLowerInvariant();
@@ -61,9 +67,32 @@ public sealed record ReviewerTransport(
     public string Canonical =>
         CanonicalFields.Of(
             "transport", Dialect, ReasoningEffort, Invariant(MaxTokens), Invariant(TimeoutMinutes), Invariant(FollowUps),
-            Invariant(ReviewMinutesCap), Thinking ? "thinking-on" : "thinking-off");
+            Invariant(ReviewMinutesCap), ThinkingWord(Thinking));
+
+    /// <summary>The two words rows were stored under are kept exactly, so every stored row still hashes to its stored
+    /// hash; the vendor default is the new third word.</summary>
+    private static string ThinkingWord(ThinkingSetting thinking) => thinking switch
+    {
+        ThinkingSetting.On => "thinking-on",
+        ThinkingSetting.Off => "thinking-off",
+        _ => "thinking-default",
+    };
 
     private static string Invariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+}
+
+/// <summary>The product's thinking switch in its own three states (<c>coai · src_mcp/core/Api/ApiRowSettings.cs</c>):
+/// the field absent is the vendor's default, <c>true</c> is on, <c>false</c> is off — and off is refused for a family
+/// with no switch. E7's first A/A: a two-state row that could only say on or off asked grok and glm for OFF, and the
+/// product skipped them.</summary>
+public enum ThinkingSetting
+{
+    /// <summary>Send no field; the vendor's default applies.</summary>
+    VendorDefault,
+
+    On,
+
+    Off,
 }
 
 /// <summary>What a reviewer charges per million tokens, or the honest statement that nobody knows.

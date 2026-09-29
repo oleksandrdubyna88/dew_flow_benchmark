@@ -299,7 +299,9 @@ public sealed class GateReviewerRow
 
     public int ReviewMinutesCap { get; set; }
 
-    public bool Thinking { get; set; }
+    /// <summary><c>true</c> on, <c>false</c> off, <c>null</c> the vendor's default — the product's three states (D1). Every
+    /// row stored before the third state existed holds <c>true</c> or <c>false</c> and keeps its meaning.</summary>
+    public bool? Thinking { get; set; }
 
     public bool PricesKnown { get; set; }
 

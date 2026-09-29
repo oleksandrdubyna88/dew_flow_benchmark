@@ -12,8 +12,10 @@ public sealed record CalibPreset(string Dialect, string Effort, int MaxTokens, i
 {
     public const int HarnessDefaultCapMinutes = 20;
 
+    /// <summary>The other harness never wrote a thinking field (<c>child_env</c>), so its runs ran at the vendor's DEFAULT —
+    /// which is what the row now says (D2 of the fidelity plan; rows imported before say OFF, and are kept as they are).</summary>
     public Outcome<ReviewerTransport> Transport =>
-        ReviewerTransport.Parse(Dialect, Effort, MaxTokens, TimeoutMinutes, FollowUps, CapMinutes, thinking: false);
+        ReviewerTransport.Parse(Dialect, Effort, MaxTokens, TimeoutMinutes, FollowUps, CapMinutes, ThinkingSetting.VendorDefault);
 }
 
 /// <summary>One line of the calibration harness's <c>runs.jsonl</c>, read into the gate's shapes. The mapping decisions
