@@ -1,9 +1,10 @@
 # PLAN — a reviewer row that says what the product will do: thinking in three states, the price tier, the import's label
 
-> Status: **plan only, 2026-09-28 — nothing implemented yet.** Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
-> `CoaiVendorsSetting.cs`, `CoaiVendorRow.cs`, `Import/CalibRecord.cs`, `src/Bench.Infrastructure/Persistence`
+> Status: **plan only, 2026-09-28 — nothing implemented yet; references re-verified against `main` `3e08dd7` on
+> 2026-09-29.** Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
+> `CoaiVendorsSetting.cs`, `CoaiVendorRow.cs`, `src/Bench.Domain/Gate/Import/CalibRecord.cs`, `src/Bench.Infrastructure/Persistence`
 > (the `gate_reviewers.Thinking` column), `hosts/Cli/GateToolsCommand.cs` (`reviewers add`), `hosts/Cli/GateAssessCommand.cs` (the assessor's launch), one migration; one
-> cross-repository item in `dew_flow_connect_other_ais` (named, not built here).
+> cross-repository item in `dew_flow_connect_other_ais` (D4, its own pull request there).
 >
 > Related docs: [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) (E7, where this was found),
 > [module_gate.md](../research/module_gate.md), [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md).
@@ -32,9 +33,9 @@ nothing here blocks E7. What remains wrong is below.
 
 | # | where | what is wrong | consequence |
 |---|---|---|---|
-| D1 | `ReviewerDefinition.cs:19, 27, 64` · `CoaiVendorsSetting.cs:122` | `ReviewerTransport.Thinking` is a `bool`, canonical `thinking-on` / `thinking-off`, and the vendor row always spells it | a row added WITHOUT `--thinking` asks for reasoning OFF — not the product's default — and the product refuses it for xai and glm; a person adding a row gets a refusal they did not ask for |
-| D2 | `Import/CalibRecord.cs:16` | the calibration import builds every transport with `thinking: false` | the imported phase-2 rows are LABELLED `thinking-off` (it is inside their hash) while the Python runs measured them at the vendor default — the catalog describes 84 runs as something they were not |
-| D3 | `hosts/Cli/GateToolsCommand.cs:315-316` | `reviewers add` takes `--price-in/--price-cached/--price-out` only; the long-context tier (`TierFromTokens`, `TierIn/Cached/Out`) that the catalog stores (`PostgresGateReviewerCatalog.cs:140`) and the import reads (`Import/CalibReviewers.cs:49`) cannot be given | a grok row added by hand prices a call above 200 000 tokens at the base rate — cost per run under-counted exactly where it is largest |
+| D1 | `ReviewerDefinition.cs:19, 27, 30, 64` · `CoaiVendorsSetting.cs:122` · `CoaiVendorRow.cs:19, 107` (the panel-row reader: absent read as ON, where the product reads absent as the vendor default) · `GateEntities.cs:302` · `PostgresGateReviewerCatalog.cs:100, 138` | `ReviewerTransport.Thinking` is a `bool`, canonical `thinking-on` / `thinking-off`, and the vendor row always spells it | a row added WITHOUT `--thinking` asks for reasoning OFF — not the product's default — and the product refuses it for xai and glm; a person adding a row gets a refusal they did not ask for |
+| D2 | `src/Bench.Domain/Gate/Import/CalibRecord.cs:16` | the calibration import builds every transport with `thinking: false` | the imported phase-2 rows are LABELLED `thinking-off` (it is inside their hash) while the Python runs measured them at the vendor default — the catalog describes 84 runs as something they were not |
+| D3 | `hosts/Cli/GateToolsCommand.cs:320-324` | `reviewers add` takes `--price-in/--price-cached/--price-out` only; the long-context tier (`TierFromTokens`, `TierIn/Cached/Out`) that the catalog stores (`PostgresGateReviewerCatalog.cs:140`) and the import reads (`Import/CalibReviewers.cs:49`) cannot be given | a grok row added by hand prices a call above 200 000 tokens at the base rate — cost per run under-counted exactly where it is largest |
 | D4 | `coai · src_mcp/runners/Reviewers/ReviewerRuntime.cs:263, 372` (origin/main `3f351c05`) | `WhyItFailed` is implemented for codex only; the Claude CLI puts its reason in the stdout JSON (`is_error`, `result`, `api_error_status`) | measured in the same campaign: Fable 5.1's cells read `exit 1 (the CLI said nothing on stderr)` while the CLI had said *"You've reached your Fable limit"* (HTTP 429) — the reason three lines away, as for codex on 2026-09-14. **Again on 2026-09-29, at a cost:** S7.3's Fable campaigns lost 6 plan cells and 38 code cells (runs `01a0edf2`, `01a0ee1f`) to the same line, while the CLI said *"You've hit your monthly spend limit"* (429). Each doomed cell ran its plan loop to `Unknown`; a campaign that could read the reason could have stopped at the first |
 | D5 | `hosts/Cli/GateAssessCommand.cs:217-221` | an assessor row with no executable reference launches the runtime's bare word (`codex`); on Windows the npm install is a `.cmd`/`.ps1` shim beside a native `codex.exe` deep in `node_modules`, and the launcher does not find the bare word | measured 2026-09-28: `bench gate assess --assessor codex-gpt-6-astra` recorded all 16 findings of a campaign as *assessment failed — 'codex' is not installed*, with `codex --version` answering in the same shell; worked around by a row naming the exe through `--executable-ref` |
 
@@ -53,10 +54,11 @@ nothing here blocks E7. What remains wrong is below.
   never silently duplicated; that refusal is tested.
 - **D3 → `--price-tier-from --price-tier-in --price-tier-cached --price-tier-out`**, all four or none (refused by name
   otherwise), through the existing `ReviewerPrices.Of` overload the catalog already calls.
-- **D4 → named, not built here.** A coai pull request: `ClaudeRuntime.WhyItFailed` reads the `is_error` JSON on stdout
-  (`result`, `api_error_status`) — RED first with the measured 429 body. Owner: the next coai session; this plan links it
-  when it exists. On the bench side, once the reason arrives: a reviewer refused for a spend or usage limit is an
-  ENVIRONMENT failure, and the campaign's run of such failures should stop the lane, not settle every remaining cell.
+- **D4 → a coai pull request, built with this plan.** The Claude runtime's failure reader reads the `is_error` JSON on
+  stdout (`result`, `api_error_status`), RED first with the measured 429 body. The **bench-side** half (a reviewer
+  refused for a spend or usage limit stops the lane instead of settling every remaining cell unmeasured) waits on a
+  coai release that carries D4 into a harness's product. It is moved to
+  [PLAN_gate_measurement_tail.md](PLAN_gate_measurement_tail.md) rather than held here.
 
 - **D5 → resolve the bare word the way a shell does, or refuse before the batch.** Look the word up on `PATH` with
   `PATHEXT` on Windows; a `.cmd` shim is not launched (arguments through `cmd.exe` are a quoting hazard) — the refusal
@@ -74,7 +76,9 @@ nothing here blocks E7. What remains wrong is below.
 6. The import builds `VendorDefault` (RED: a fresh import's rows carry no `thinking` field in their vendor row; a
    re-import into a database holding the old label is refused, never duplicated).
 7. RED: an assessor row whose bare word resolves only to a shim is refused 3 before any batch, naming the flag.
-8. Docs: `module_gate.md` (the entity row, the import's labelled-history sentence, the entry point); this plan promoted.
+8. coai (D4, its own branch and gate session): RED with the measured 429 stdout body; the reason reaches the round's
+   `reviewers` line; coai's own suite; a coai PR.
+9. Docs: `module_gate.md` (the entity row, the import's labelled-history sentence, the entry point); this plan promoted.
 
 ## 5. Test plan
 
@@ -89,5 +93,5 @@ Whole suite by the executable, never `dotnet test`.
 - [ ] `reviewers add` can give grok's price tier; a tiered row prices a 250 000-token call at the tier rate.
 - [ ] New imports carry `VendorDefault`; the old rows' label is documented, not rewritten; a re-import is refused.
 - [ ] An assessor that cannot be launched is refused before a finding is sent (D5).
-- [ ] The coai item (D4) is a linked pull request, or its absence is stated here with its owner.
+- [ ] The coai item (D4) is a merged pull request, linked here.
 - [ ] `module_gate.md` updated; this plan promoted with its deviations.

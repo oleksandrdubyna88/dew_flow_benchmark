@@ -29,6 +29,7 @@ rates are withheld until a hand-check covers them (E4). Two of its five reviewer
 | T2 | Fable's code gate: one full campaign of 21 cells | `bench gate run --gate code --suite-file suite-s73b.json --reviewers claude-fable-5-1-cli2284 --repeats 3 --coai-exe <coai-mcp at 3f351c05> --artifact-root <root> --db <bench> --parallel 2 --per-endpoint 2 --creds-key-from-coai-settings --prediction "…"`, with `BENCH_CLAUDE_2284` naming the Claude CLI 2.1.284; assess with `bench gate assess --run <it> --assessor codex-gpt-6-astra-exe …`; read with `bench gate report --gate code --scope gate-seeded#0d0da7662eab --rubric strict-v1 --run <it>`. The 6 lost plan cells need the same with `--gate plan` (21 cells; the matrix cannot run six) | Fable's monthly limit resetting |
 | T3 | the seven account-out code cells of `01a0ecad` (grok php1/tsx2/ts2 r3; Astra php1/py3/tsx2/ts2 r3) | a campaign runs whole reviewers × tasks × repeats, never single cells, so the choice is one of two, recorded in RESULTS_gate_s73.md. (a) Accept: 13 and 11 of 15 measured cells stand, as the record already states. (b) Re-run both reviewers' full code matrix (`--reviewers grok-4-7-think,codex-gpt-6-astra-gates --repeats 3`, otherwise as T2, 42 cells) and report the new campaign alone with `--run` | the xAI balance (for b); Astra's Codex limit, 3 October |
 | T4 | grok re-runs, if any are wanted (for example to fill T2's comparison) | as S7.3 | the xAI balance: $50 spent to $51.63 by 2026-09-29 |
+| T5 | the lane stop — the bench half of D4: a cell whose reviewer is refused for a spend or usage limit is an environment failure, and a run of them stops the lane instead of settling every remaining cell unmeasured (44 Fable cells, 2026-09-29) | RED first over the product's reply once it carries the CLI's reason; the lane's breaker counts them | a coai release carrying D4 ([PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md)), built into the harness's product |
 
 ## 3. Build order
 
@@ -47,4 +48,5 @@ figures it changes.
 - [ ] T1: the S7.3 scopes' strict rates are printed (hand-checked), and RESULTS_gate_s73.md states them.
 - [ ] T2: Fable has 21 code cells on the S7.3 suite, and they are assessed and recorded.
 - [ ] T3: choice (a) or (b) made and recorded in RESULTS_gate_s73.md, with the date.
+- [ ] T5: a limit-refused reviewer stops its lane; the RED test watched failing first.
 - [ ] This plan is promoted, or its remaining items are said and dated.
