@@ -71,15 +71,22 @@ internal sealed class GateDriverRig : IAsyncDisposable
         var ct = Xunit.TestContext.Current.CancellationToken;
         var connection = await postgres.NewDatabaseAsync($"gate_driver_{Guid.NewGuid():N}");
         var repo = new DatedGitRepo(ct);
+        var task = await SeedTaskAsync(repo);
+
+        return new GateDriverRig(postgres, connection, new FakeCoai(script), repo, GateStoreFixtures.NewRoot(), task, ct);
+    }
+
+    /// <summary>The seeded task every driver and clone test runs: a base, a variant head planting one field, and the plan
+    /// committed at <c>docs/plan.md</c>.</summary>
+    public static async Task<GateTask> SeedTaskAsync(DatedGitRepo repo)
+    {
         var @base = await repo.InitAsync(("src/Orders.cs", "class Orders {}"), ("base", "2026-09-01T10:00:00Z"));
         var head = await repo.CommitManyAsync([("src/Orders.cs", "class Orders { int x; }"), ("docs/plan.md", "# Plan\n\nEpic 1: orders.\n")], ("variant", "2026-09-01T11:00:00Z"));
-        var task = GateTask.Of(
+        return GateTask.Of(
             GateTaskId.Parse("cs2").Ok(), "C#", HostedGates.All, false,
             GateCase.Of(CommitSha.Parse(@base).Ok(), CommitSha.Parse(head).Ok(), "docs/plan.md", "[{\"title\":\"Epic 1\",\"summary\":\"orders\"}]", "{\"pitfalls\":[\"none\"],\"blockers\":[\"none\"],\"findings\":[\"none\"]}").Ok(),
             [SeedSpec.Of("cs2-S1", "src/Orders.cs", "class Orders {}", "class Orders { int x; }", "a field", "t", "m", "c", false).Ok()],
             CloneLocation.Parse(repo.Root).Ok()).Ok();
-
-        return new GateDriverRig(postgres, connection, new FakeCoai(script), repo, GateStoreFixtures.NewRoot(), task, ct);
     }
 
     /// <summary>A reviewer on the api runtime at a public (never contacted) vendor url — the fake product counts its
@@ -135,8 +142,15 @@ internal sealed class GateDriverRig : IAsyncDisposable
         Fake.Dispose();
         Repo.Dispose();
         Root.Dispose();
+        DeleteSiblings(Root);
 
-        foreach (var sibling in new[] { "checkouts", "cli-checkouts", "suite" }.Select(Root.Sibling).Where(Directory.Exists))
+        await System.Threading.Tasks.Task.CompletedTask;
+    }
+
+    /// <summary>The checkout, CLI-checkout and suite folders a rig's tests make beside its artefact root.</summary>
+    public static void DeleteSiblings(TempRoot root)
+    {
+        foreach (var sibling in new[] { "checkouts", "cli-checkouts", "suite" }.Select(root.Sibling).Where(Directory.Exists))
         {
             try
             {
@@ -152,8 +166,6 @@ internal sealed class GateDriverRig : IAsyncDisposable
                 // A git process still closing a pack; the temp folder is the operating system's to clean.
             }
         }
-
-        await System.Threading.Tasks.Task.CompletedTask;
     }
 
     /// <summary>The secret source for the rig: the vault key is a fixed sentinel, references resolve to nothing.</summary>
