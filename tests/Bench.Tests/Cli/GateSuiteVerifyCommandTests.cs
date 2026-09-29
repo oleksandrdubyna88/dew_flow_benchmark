@@ -10,13 +10,12 @@ namespace Bench.Tests.Cli;
 /// <summary><c>bench gate suite verify</c> through <see cref="Program.Run"/>: every task's checkout at its variant head, and
 /// its plan either committed there or carried by the suite (<c>planText</c>) at a path the head does not commit. S7.1's
 /// record said verify proved every plan committed; tsx2's and php1's were not, and the campaign found it instead.</summary>
-[Collection("postgres")]
-public sealed class GateSuiteVerifyCommandTests(PostgresFixture postgres)
+public sealed class GateSuiteVerifyCommandTests
 {
     [Fact]
     public async Task A_committed_plan_and_a_carried_one_at_an_uncommitted_path_both_verify()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
 
         var (code, output, error) = Verify(rig, Task(rig, "cs2", "docs/plan.md", null), Task(rig, "tsx2", "todo/PLAN_synthetic.md", "# Synthetic\n"));
 
@@ -27,7 +26,7 @@ public sealed class GateSuiteVerifyCommandTests(PostgresFixture postgres)
     [Fact]
     public async Task A_plan_neither_committed_nor_carried_is_refused_by_name()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
 
         var (code, output, _) = Verify(rig, Task(rig, "tsx2", "todo/PLAN_synthetic.md", null));
 
@@ -38,7 +37,7 @@ public sealed class GateSuiteVerifyCommandTests(PostgresFixture postgres)
     [Fact]
     public async Task A_carried_plan_at_a_path_the_head_commits_is_refused_by_name()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
 
         var (code, output, _) = Verify(rig, Task(rig, "cs2", "docs/plan.md", "# Another plan\n"));
 
@@ -46,7 +45,7 @@ public sealed class GateSuiteVerifyCommandTests(PostgresFixture postgres)
         output.Should().Contain("refused        cs2").And.Contain("docs/plan.md").And.Contain("commits");
     }
 
-    private static JsonObject Task(GateDriverRig rig, string id, string planPath, string? planText)
+    private static JsonObject Task(GateCloneRig rig, string id, string planPath, string? planText)
     {
         var task = new JsonObject
         {
@@ -67,7 +66,7 @@ public sealed class GateSuiteVerifyCommandTests(PostgresFixture postgres)
         return task;
     }
 
-    private static (int Code, string Output, string Error) Verify(GateDriverRig rig, params JsonObject[] tasks)
+    private static (int Code, string Output, string Error) Verify(GateCloneRig rig, params JsonObject[] tasks)
     {
         var dir = rig.Root.Sibling("suite");
         Directory.CreateDirectory(dir);

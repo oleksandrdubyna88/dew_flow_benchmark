@@ -10,15 +10,14 @@ namespace Bench.Tests.Gate.Driver;
 
 /// <summary>The gate's own clones: made once per run and task, detached at the variant head — and a clone left half-made
 /// (a checkout that failed or was interrupted after the clone) is repaired, never reused as it lies.</summary>
-[Collection("postgres")]
-public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
+public sealed class GateCloneCheckoutsTests
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
     public async Task A_clone_is_detached_at_the_variant_head_and_the_shared_checkout_gets_no_ref()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         var run = Guid.NewGuid();
 
         var clone = (await rig.Checkouts.EnsureAsync(run, rig.Task, Ct)).Ok();
@@ -32,7 +31,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_clone_whose_checkout_is_not_at_the_variant_head_is_repaired_before_it_is_reused()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         var run = Guid.NewGuid();
         var clone = (await rig.Checkouts.EnsureAsync(run, rig.Task, Ct)).Ok();
         (await GitCommand.RunAsync(clone, TimeSpan.FromMinutes(1), Ct, "checkout", "--quiet", "--detach", rig.Task.Case.Base.Value)).Ok();
@@ -51,7 +50,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_clone_checks_out_the_committed_bytes_whatever_the_machine_s_line_ending_setting()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
 
         var clone = (await rig.Checkouts.EnsureAsync(Guid.NewGuid(), rig.Task, Ct)).Ok();
 
@@ -65,7 +64,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_clone_carries_the_submodules_the_variant_head_pins()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         using var rules = new DatedGitRepo(Ct);
         var head = await PinRulesAsync(rig, rules);
 
@@ -80,7 +79,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_submodule_the_task_declares_absent_is_left_empty_even_where_it_cannot_be_fetched()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         var rules = new DatedGitRepo(Ct);
         var head = await PinRulesAsync(rig, rules);
         rules.Dispose();
@@ -96,7 +95,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task An_undeclared_submodule_that_cannot_be_fetched_refuses_the_checkout_by_name()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         var rules = new DatedGitRepo(Ct);
         var head = await PinRulesAsync(rig, rules);
         rules.Dispose();
@@ -109,7 +108,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_declared_absent_submodule_the_variant_head_does_not_pin_is_refused_by_name()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         using var rules = new DatedGitRepo(Ct);
         var head = await PinRulesAsync(rig, rules);
 
@@ -125,7 +124,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_plan_the_suite_carries_is_written_into_the_clone_byte_for_byte()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
         const string text = "# Synthetic\r\n\nEpic 1 — orders.\n";
         var task = Carrying(rig.Task, "todo/PLAN_synthetic.md", text);
         var run = Guid.NewGuid();
@@ -142,7 +141,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
     [Fact]
     public async Task A_carried_plan_where_the_variant_head_commits_one_is_refused_by_name()
     {
-        await using var rig = await GateDriverRig.StartAsync(postgres);
+        await using var rig = await GateCloneRig.StartAsync();
 
         (await rig.Checkouts.EnsureAsync(Guid.NewGuid(), Carrying(rig.Task, "docs/plan.md", "# Another plan\n"), Ct)).Reason()
             .Should().Contain("docs/plan.md").And.Contain("commits");
@@ -155,7 +154,7 @@ public sealed class GateCloneCheckoutsTests(PostgresFixture postgres)
             t.Seeds, t.Repository).Ok();
 
     /// <summary>Commits a submodule at <c>.claude/rules/shared</c> from <paramref name="rules"/>; returns the new head.</summary>
-    private static async Task<string> PinRulesAsync(GateDriverRig rig, DatedGitRepo rules)
+    private static async Task<string> PinRulesAsync(GateCloneRig rig, DatedGitRepo rules)
     {
         await rules.InitAsync(("common/rule.md", "# A rule\n"), ("rules", "2026-09-01T09:00:00Z"));
         await rig.Repo.GitAsync("-c", "protocol.file.allow=always", "submodule", "add", "--quiet", rules.Root, ".claude/rules/shared");
