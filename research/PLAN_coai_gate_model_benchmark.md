@@ -8,7 +8,7 @@
 > was replaced by the prompt-shape A/A, and S7.3 needed five harness fixes (#51–#55) before its numbers stood. **Open
 > tail**, extracted to [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): the hand-check (E4's
 > procedure, not yet performed), Fable's code gate (its spend limit), seven code cells lost to reviewers' accounts running
-> out; and [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md) D1–D5. Scope: a new bounded context `Gate` across
+> out; and [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md) D1–D5. Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
@@ -1486,7 +1486,7 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
 - **S7.2 as run (2026-09-28), recorded in [RESULTS_gate_aa_cs2.md](RESULTS_gate_aa_cs2.md).** It took four
   campaigns:
   1. `01a0e98d` found the rows' thinking field. The driver wrote `false`, which the product refuses for xai and glm.
-     The fix is in [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md); the campaign went on with
+     The fix is in [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md); the campaign went on with
      `--thinking` rows. The same campaign found Fable 5.1 at the account's limit (429) and the PATH `claude` too old
      for Opus 5.5 (a row naming CLI 2.1.284 by `--executable-ref`).
   2. `01a0e993` **failed the A/A**: 4 of 4 API cells at `9afba0db90c6`. The gate's clone had inherited the machine's

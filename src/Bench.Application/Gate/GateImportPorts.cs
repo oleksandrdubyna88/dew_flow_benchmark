@@ -39,6 +39,10 @@ public interface IGateImportStore
 {
     Task<ImportedCellState> CellStateAsync(Guid cellId, CancellationToken cancellationToken);
 
+    /// <summary>The reviewer each of <paramref name="cellIds"/> names, for those already stored — ONE read for an import's
+    /// drift preflight, where a read per record was a round trip per record before any work (code round, 2026-09-29).</summary>
+    Task<IReadOnlyDictionary<Guid, string>> StoredReviewersAsync(IReadOnlyCollection<Guid> cellIds, CancellationToken cancellationToken);
+
     /// <summary>Refused when the cell exists already, when the campaign exists under another gate or suite, or when a ref's path
     /// is taken. Nothing of a refused cell is written.</summary>
     Task<Outcome<ImportedCell>> ImportCellAsync(ImportedCell cell, CancellationToken cancellationToken);

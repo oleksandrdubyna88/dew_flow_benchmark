@@ -317,12 +317,12 @@ public static class GateToolsCommand
             ? Outcome<ReviewerRuntime>.Success(parsed)
             : Outcome<ReviewerRuntime>.Failure("--runtime is one of api, codex, gemini, claude, antigravity, local, remote");
         var endpoint = ReviewerEndpoint.Parse(command.Value("endpoint"));
-        var transport = ReviewerTransport.Parse(
-            command.Value("dialect", "openai"), command.Value("effort", ReviewerTransport.ModuleDefault), command.Int("max-tokens", 8192),
-            command.Int("timeout-minutes", 20), command.Int("follow-ups", 3), command.Int("review-minutes", 20), command.Has("thinking"));
-        var prices = command.Has("price-in")
-            ? ReviewerPrices.Of((decimal)command.Double("price-in", 0), (decimal)command.Double("price-cached", 0), (decimal)command.Double("price-out", 0))
-            : Outcome<ReviewerPrices>.Success(ReviewerPrices.Unknown);
+        var transport = Thinking(command).Match(
+            thinking => ReviewerTransport.Parse(
+                command.Value("dialect", "openai"), command.Value("effort", ReviewerTransport.ModuleDefault), command.Int("max-tokens", 8192),
+                command.Int("timeout-minutes", 20), command.Int("follow-ups", 3), command.Int("review-minutes", 20), thinking),
+            Outcome<ReviewerTransport>.Failure);
+        var prices = command.Has("price-in") || TierFlags.Any(command.Has) ? Prices(command) : Outcome<ReviewerPrices>.Success(ReviewerPrices.Unknown);
         var gates = HostedGates.Of([.. command.List("gates").SelectMany(g => Enum.TryParse<GateKind>(g, true, out var k) ? [k] : Array.Empty<GateKind>())]);
 
         return (runtime, endpoint, transport, prices, gates) switch
@@ -338,6 +338,42 @@ public static class GateToolsCommand
                     .Match(d => GateReviewerId.Parse(command.Value("id")).Match(
                         id => Outcome<GateReviewer>.Success(GateReviewer.Create(id, d, DateTimeOffset.UtcNow)), Outcome<GateReviewer>.Failure), Outcome<GateReviewer>.Failure),
             _ => throw new InvalidOperationException("unreachable"),
+        };
+    }
+
+    /// <summary><c>--thinking on|off</c> in the product's three states (D1): absent is the vendor's default — a row added
+    /// without it used to ask for OFF, which the product refuses for xai and glm. The bare flag stays "on", the meaning
+    /// rows were added with before.</summary>
+    private static Outcome<ThinkingSetting> Thinking(CommandLine command) =>
+        (command.Has("thinking"), command.Value("thinking").ToLowerInvariant()) switch
+        {
+            (false, _) => Outcome<ThinkingSetting>.Success(ThinkingSetting.VendorDefault),
+            (_, "true" or "on") => Outcome<ThinkingSetting>.Success(ThinkingSetting.On),
+            (_, "off" or "false") => Outcome<ThinkingSetting>.Success(ThinkingSetting.Off),
+            (_, var other) => Outcome<ThinkingSetting>.Failure($"--thinking takes on or off (leave it out for the vendor's default), got '{other}'"),
+        };
+
+    private static readonly string[] TierFlags = ["price-tier-from", "price-tier-in", "price-tier-cached", "price-tier-out"];
+
+    /// <summary>The base prices and, when given, the long-context tier (D3) — all four tier flags or none, and a tier that
+    /// starts at a real token count: <see cref="ReviewerPrices.Of"/> reads a start of 0 as "no tier", so asked for at 0 it
+    /// would silently vanish.</summary>
+    private static Outcome<ReviewerPrices> Prices(CommandLine command)
+    {
+        var given = TierFlags.Where(command.Has).ToList();
+        var from = given.Count == TierFlags.Length ? command.Int("price-tier-from", 0) : 0;
+
+        return (command.Has("price-in"), given.Count, from) switch
+        {
+            (false, _, _) => Outcome<ReviewerPrices>.Failure(
+                "a price tier needs the base prices it is a tier of — pass --price-in, --price-cached and --price-out with it"),
+            (_, 0, _) => ReviewerPrices.Of((decimal)command.Double("price-in", 0), (decimal)command.Double("price-cached", 0), (decimal)command.Double("price-out", 0)),
+            (_, < 4, _) => Outcome<ReviewerPrices>.Failure(
+                $"a price tier takes all four of {string.Join(", ", TierFlags.Select(f => "--" + f))} — missing {string.Join(", ", TierFlags.Except(given).Select(f => "--" + f))}"),
+            (_, _, < 1) => Outcome<ReviewerPrices>.Failure($"--price-tier-from must be at least 1 token, got {from} — a tier from 0 would read as no tier"),
+            _ => ReviewerPrices.Of(
+                (decimal)command.Double("price-in", 0), (decimal)command.Double("price-cached", 0), (decimal)command.Double("price-out", 0),
+                from, (decimal)command.Double("price-tier-in", 0), (decimal)command.Double("price-tier-cached", 0), (decimal)command.Double("price-tier-out", 0)),
         };
     }
 }

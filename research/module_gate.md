@@ -282,9 +282,16 @@ flowchart TB
   data directory: `tools/list`, `providers` (an allow-list of fields), no model called.
 - `bench gate reviewers add --id … --runtime api|codex|gemini|claude|antigravity|local|remote --model … [--endpoint
   <public https url | VARIABLE_NAME>] [--key-name …] [--creds-key-ref VARIABLE] [--executable-ref VARIABLE]
-  [--dialect …] [--effort …] [--max-tokens …] [--timeout-minutes …] [--follow-ups …] [--review-minutes …] [--thinking]
-  [--price-in/--price-cached/--price-out …] --gates plan,code,feature` · `list [--all]` · `retire --id …` — added and
-  retired, never edited; a row read back whose stored hash no longer matches its definition is refused.
+  [--dialect …] [--effort …] [--max-tokens …] [--timeout-minutes …] [--follow-ups …] [--review-minutes …]
+  [--thinking on|off] [--price-in/--price-cached/--price-out … [--price-tier-from N --price-tier-in … --price-tier-cached …
+  --price-tier-out …]] --gates plan,code,feature` · `list [--all]` · `retire --id …` — added and retired, never edited; a
+  row read back whose stored hash no longer matches its definition is refused. **Thinking is the product's three states**
+  (2026-09-29, fidelity plan D1): absent is the vendor's default and the vendor row then carries no `thinking` field; `on`
+  (or the bare flag, as rows were added before) and `off` are spelled. A row added without the flag used to ask for OFF,
+  which the product refuses for xai and glm. Rows stored before keep their canonical `thinking-on` / `thinking-off`, so
+  every stored hash still matches. **The price tier** (D3) takes all four `--price-tier-*` flags or none, refused naming
+  the missing one, and a tier starting below 1 token is refused (`ReviewerPrices.Of` reads 0 as "no tier"); the vendor
+  row carries it to the product, which prices the call.
 - `bench gate suite verify --suite-file … [--checkout-root …]` — every task's checkout at its variant head with its
   plan committed there, or carried by the suite (`planText`) at a path the head does NOT commit; 3 when any is not.
 - `bench gate assess --run <id>[,<id>…] | --scope <suite stamp> --assessor <reviewer id> [--rubric strict-v1]
@@ -292,7 +299,11 @@ flowchart TB
   (E4) — refused in the order a person fixes things: flags 4 (a `--batch-size` outside 1–24, `--run` and `--scope`
   together, neither) · the suite file 3 · the suite, the artefact root 4 · the rubric files 3 · the database 3 · a run of
   another suite or a scope that is not the suite file's stamp 4 · the assessor not in the catalog, or not a codex/claude
-  row 4 · its executable reference unset 3 · the file-hash key 3. `--scope` takes every run of the stamp from the database (`IGateStore.RunsOfSuiteAsync`). Prints a line when each batch
+  row 4 · its executable reference unset 3 · a row with NO reference whose runtime word does not resolve to a native
+  executable 3 (fidelity plan D5, `CliExecutable`: the word is resolved as a shell resolves it, first `PATH` directory,
+  `PATHEXT` order; a `.cmd`/`.bat`/`.ps1` shim is refused naming it — never launched through `cmd.exe` — as is a word on
+  no directory; both BEFORE a batch is sent, where they used to be recorded finding by finding as *assessment failed*) ·
+  the file-hash key 3. `--scope` takes every run of the stamp from the database (`IGateStore.RunsOfSuiteAsync`). Prints a line when each batch
   is SENT and one when it settles, the seed-evidence line per
   task (`cs2-S1* pack, cs2-S2 on request` — `*` is cross-epic), and the summary (assessed · assessment failed · left
   unassessed · newly blinded · read by the reviewer's own family). Exit 0 every finding has a reading · 5 some are left
@@ -313,7 +324,12 @@ flowchart TB
   `final_attempts`), the run directory copied under `source/`. `--assessor` is REQUIRED when the workspace has an
   assessment and must be a catalog row whose runtime word (or id) is what each verdict line names. Prints every cell as
   `imported` or `unchanged` and a summary; exit 0 when all were imported or already there; 4 for a source record that does
-  not read or changed since it was imported; 3 for a missing source, file-hash key or database.
+  not read or changed since it was imported; 3 for a missing source, file-hash key or database. **Thinking** (fidelity
+  plan D2, 2026-09-29): the calibration never wrote the field, so its runs ran at the vendor's default, and a fresh import
+  now labels its rows `thinking-default`. **Rows imported before say `thinking-off`** for those same runs; they are kept as
+  they are, because a new label is a new hash and a new id, and every imported cell names its row. A re-import over a cell
+  whose stored reviewer the import no longer builds is refused before anything is written (4, naming the record and the
+  row). Matching by hash alone would have added rows no cell names while every cell read unchanged.
 - `bench gate import coai-bench --runs <runs.json>[,…] --repo <the product's checkout> --artifact-root … --db …` (E5) — a
   campaign per (the file's FOLDER, gate) and a cell per RECORD; neither id carries the suite stamp (code round: a stamp
   over every file of one invocation re-keyed every record whenever another file or case came along), so a grown file adds
@@ -457,7 +473,7 @@ the file alone; `--version`'s first line; and under a checkout the short sha and
 | `gate_findings` | finding of a settled session | ordinal, severity, category, gating, line, `TextHash`, `FileHash`; `(cell, attempt, ordinal)` unique |
 | `gate_verdicts` | verdict on a finding under a rubric | rubric id/kind/hash, the verdict case, the strict fields as enum names, cluster hash (HMAC under the artefact root's key), seed id, assessor id, batch id, prompt hash, family match — written by E4 through `PostgresGateVerdictStore`: a batch naming a finding no settled attempt stored is refused whole, and `(cell, ordinal, rubric hash, assessor, batch)` is unique, so a replay changes nothing. Never a note, never a cluster's text, never a blinded id |
 | `gate_hand_checks` | recorded hand-check (E4) | the campaigns covered (uuid[]), rubric id/kind/hash, assessor id, verdicts read, agreed, the answered sample file's SHA-256, recorded at |
-| `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport, prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
+| `gate_reviewers` | reviewer catalog row | the definition flattened: runtime, model, the endpoint as a public url OR a reference name, key/creds/executable NAMES, the transport (`Thinking` nullable since 2026-09-29: `true` on, `false` off, `null` the vendor's default), prices, the gates ticked, added/retired (written by E3's `reviewers add`) |
 | `gate_artifacts` | committed file | run, cell, attempt, class, RELATIVE path (unique), SHA-256, length |
 | `gate_suite_tasks` | task of a recorded suite (E6) | suite stamp, task id, language, calibration flag, hosted gates (`plan,code,feature`), seed ids and their cross-epic flags (parallel lists, id order), recorded at; unique per (stamp, task). What a report puts the calibration tasks apart by; the suite file itself stays outside |
 | `gate_summaries` | number of a published table whose raw data is gone (E5) | gate, source label, document FILE NAME, section slug, document SHA-256, row ordinal, row label slug, metric slug, captured, value; unique per (document sha, section, row, metric). Read by no report — shown, never averaged with runs |

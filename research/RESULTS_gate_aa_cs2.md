@@ -9,7 +9,7 @@
 > Related: [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, S7.1–S7.2a),
 > [module_gate.md](module_gate.md) (the driver's checkout, `bench gate aa`),
 > [RESULTS_gate_feature_first_real_report.md](RESULTS_gate_feature_first_real_report.md) (the imported calibration this
-> is compared with), [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md) (the row defects
+> is compared with), [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md) (the row defects
 > the first campaign found).
 
 ## What was held fixed

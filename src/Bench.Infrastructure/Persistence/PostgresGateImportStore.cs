@@ -25,6 +25,11 @@ public sealed class PostgresGateImportStore(BenchDbContext db, TimeProvider cloc
         return new ImportedCellState(true, sha ?? string.Empty);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> StoredReviewersAsync(IReadOnlyCollection<Guid> cellIds, CancellationToken cancellationToken) =>
+        await db.GateCells.AsNoTracking()
+            .Where(c => cellIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.ReviewerId, cancellationToken);
+
     public async Task<Outcome<ImportedCell>> ImportCellAsync(ImportedCell cell, CancellationToken cancellationToken)
     {
         var refusal = await RefusalAsync(cell, cancellationToken);

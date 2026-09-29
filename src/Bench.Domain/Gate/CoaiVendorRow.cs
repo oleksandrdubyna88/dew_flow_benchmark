@@ -16,7 +16,7 @@ public sealed record CoaiVendorFields(
     string Effort,
     string RemoteVendor,
     int ReviewMinutes,
-    bool Thinking,
+    ThinkingSetting Thinking,
     bool Plan,
     bool Code,
     bool Feature,
@@ -104,8 +104,16 @@ public static class CoaiVendorRow
     private static CoaiVendorFields Bound(JsonObject row) => new(
         Text(row, "id"), Text(row, "runtime"), Text(row, "model"), Text(row, "baseUrl"), Text(row, "executablePath"),
         Text(row, "dialect"), Text(row, "key"), Text(row, "effort"), Text(row, "remoteVendor"),
-        Number(row, "reviewMinutes"), Flag(row, "thinking", true),
+        Number(row, "reviewMinutes"), Thinking(row),
         Flag(row, "plan", true), Flag(row, "code", true), Flag(row, "feature", false), Flag(row, "document", false));
+
+    /// <summary>The product's three states: absent (or null) is the vendor's default, never "on" (D1).</summary>
+    private static ThinkingSetting Thinking(JsonObject row) => row["thinking"]?.GetValueKind() switch
+    {
+        JsonValueKind.True => ThinkingSetting.On,
+        JsonValueKind.False => ThinkingSetting.Off,
+        _ => ThinkingSetting.VendorDefault,
+    };
 
     private static string Unknown(JsonObject row)
     {

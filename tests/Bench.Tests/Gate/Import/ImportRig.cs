@@ -116,6 +116,9 @@ internal sealed class DiesAfter(IGateImportStore inner, int cells) : IGateImport
 
     public Task<ImportedCellState> CellStateAsync(Guid cellId, CancellationToken cancellationToken) => inner.CellStateAsync(cellId, cancellationToken);
 
+    public Task<IReadOnlyDictionary<Guid, string>> StoredReviewersAsync(IReadOnlyCollection<Guid> cellIds, CancellationToken cancellationToken) =>
+        inner.StoredReviewersAsync(cellIds, cancellationToken);
+
     public async Task<Outcome<ImportedCell>> ImportCellAsync(ImportedCell cell, CancellationToken cancellationToken) =>
         ++_written > cells ? throw new SimulatedCrash(ArtifactStep.Renamed) : await inner.ImportCellAsync(cell, cancellationToken);
 

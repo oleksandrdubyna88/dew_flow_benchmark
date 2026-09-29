@@ -1,13 +1,14 @@
 # PLAN — a reviewer row that says what the product will do: thinking in three states, the price tier, the import's label
 
-> Status: **plan only, 2026-09-28 — nothing implemented yet; references re-verified against `main` `3e08dd7` on
-> 2026-09-29.** Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
+> Status: **IMPLEMENTED, 2026-09-29.** D1, D2, D3 and D5 in this repository (PR #57), D4 in coai (PR #622, merged). The
+> deviations are under *As built* below. The open tail, D4's bench-side lane stop, is T5 of
+> [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md). References re-verified against `main` `3e08dd7`. Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
 > `CoaiVendorsSetting.cs`, `CoaiVendorRow.cs`, `src/Bench.Domain/Gate/Import/CalibRecord.cs`, `src/Bench.Infrastructure/Persistence`
 > (the `gate_reviewers.Thinking` column), `hosts/Cli/GateToolsCommand.cs` (`reviewers add`), `hosts/Cli/GateAssessCommand.cs` (the assessor's launch), one migration; one
 > cross-repository item in `dew_flow_connect_other_ais` (D4, its own pull request there).
 >
-> Related docs: [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) (E7, where this was found),
-> [module_gate.md](../research/module_gate.md), [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md).
+> Related docs: [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, where this was found),
+> [module_gate.md](module_gate.md), [RESULTS_gate_aa_cs2.md](RESULTS_gate_aa_cs2.md).
 > Cross-repository citations are paths: `coai ·` is `dew_flow_connect_other_ais`; `calib ·` is the operator's local
 > Python calibration harness (outside every repository), as in the gate plan.
 
@@ -53,17 +54,24 @@ nothing here blocks E7. What remains wrong is below.
   at the default. A re-import into the existing database is refused as a changed record (the import's existing rule),
   never silently duplicated; that refusal is tested.
 - **D3 → `--price-tier-from --price-tier-in --price-tier-cached --price-tier-out`**, all four or none (refused by name
-  otherwise), through the existing `ReviewerPrices.Of` overload the catalog already calls.
+  otherwise), through the existing `ReviewerPrices.Of` overload the catalog already calls. Given, `--price-tier-from`
+  must be at least 1: `Of` reads 0 as "no tier", so a tier asked for at 0 would silently vanish (plan round, finding 3).
+  Negative prices are refused by `Of` already.
 - **D4 → a coai pull request, built with this plan.** The Claude runtime's failure reader reads the `is_error` JSON on
   stdout (`result`, `api_error_status`), RED first with the measured 429 body. The **bench-side** half (a reviewer
   refused for a spend or usage limit stops the lane instead of settling every remaining cell unmeasured) waits on a
   coai release that carries D4 into a harness's product. It is moved to
-  [PLAN_gate_measurement_tail.md](PLAN_gate_measurement_tail.md) rather than held here.
+  [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md) rather than held here.
 
-- **D5 → resolve the bare word the way a shell does, or refuse before the batch.** Look the word up on `PATH` with
-  `PATHEXT` on Windows; a `.cmd` shim is not launched (arguments through `cmd.exe` are a quoting hazard) — the refusal
-  names the shim it found and says to pass `--executable-ref`. Either way it is refused at the assessor check (3), BEFORE
-  any finding is sent, never recorded finding by finding as *assessment failed*.
+- **D5 → resolve the bare word the way a shell does; launch only a native executable; refuse the rest before the
+  batch** (plan round, finding 1: one rule, not two). The word is looked up on `PATH`, with `PATHEXT` on Windows:
+  - it resolves to a native executable (`.exe`, or an extensionless file elsewhere): that full path is launched;
+  - it resolves only to a `.cmd`, `.bat` or `.ps1` shim: refused at the assessor check (3), naming the shim it found
+    and saying to pass `--executable-ref` (arguments through `cmd.exe` are a quoting hazard, so the shim is never
+    launched);
+  - it resolves to nothing: refused (3) the same way.
+
+  A refusal happens BEFORE any finding is sent, never recorded finding by finding as *assessment failed*.
 
 ## 4. Build order
 
@@ -75,10 +83,35 @@ nothing here blocks E7. What remains wrong is below.
 5. `reviewers add --thinking on|off` and the tier flags (RED: refusals by name; a tiered row round-trips).
 6. The import builds `VendorDefault` (RED: a fresh import's rows carry no `thinking` field in their vendor row; a
    re-import into a database holding the old label is refused, never duplicated).
-7. RED: an assessor row whose bare word resolves only to a shim is refused 3 before any batch, naming the flag.
+7. RED: an assessor row whose bare word resolves only to a shim is refused 3 before any batch, naming the shim and
+   the flag; one that resolves to a native executable launches that path.
 8. coai (D4, its own branch and gate session): RED with the measured 429 stdout body; the reason reaches the round's
    `reviewers` line; coai's own suite; a coai PR.
 9. Docs: `module_gate.md` (the entity row, the import's labelled-history sentence, the entry point); this plan promoted.
+
+### As built (2026-09-29), deviations from the text above
+
+- **D1:** the bare `--thinking` keeps meaning ON, the state rows were added with before, next to `on|off`. The panel-row
+  reader (`CoaiVendorRow`) now reads an absent field as the vendor's default; it had read absent as ON.
+- **D2:** the re-import guard is not "the import's existing rule". That rule compares the source bytes, which are
+  unchanged, and reviewers are matched by hash BEFORE any cell is checked. So after the label change a re-import would
+  have added new reviewer rows no cell names, and read every cell unchanged. The guard built instead is a preflight
+  (`CalibImport.DriftedAsync`, reading every stored cell's reviewer in ONE query through
+  `IGateImportStore.StoredReviewersAsync`). A stored cell whose reviewer this import no longer builds, OR whose reviewer
+  the catalog cannot resolve, refuses the import before anything is written. The cadence consultation found the second
+  case: `ListAsync` drops a row that does not read back, and the guard had failed open.
+- **D3:** the bench never prices a call. The tier reaches the product inside the vendor row's `price`, and the product
+  prices the call. The DoD item "prices a 250 000-token call at the tier rate" is therefore met as "the tier is stored and
+  carried". `--price-tier-from` below 1 is refused.
+- **D5:** `CliExecutable.Resolve` is pure over `PATH`, `PATHEXT` and a file-exists function. It joins paths with the
+  separator of the system it resolves for, so the Windows cases run on Linux CI. Proved on the machine where it was found:
+  the original `codex-gpt-6-astra` row is refused 3, naming the npm `codex.cmd` shim, with nothing sent.
+
+- **Gate:** plan round `proceed` (4 findings: 2 accepted, 2 rejected). A cadence consultation (Astra, closed as solved)
+  found the fail-open guard, and the missing freeze of the pre-change hashes: they are frozen from `main`'s own code, for
+  on and off. Code round `proceed`, 8 reviewers, 13 findings: 7 accepted and fixed (a tier without its base prices
+  refused; native extensions always tried whatever `PATHEXT` says; the preflight in one query; the strict `Down`
+  documented), 6 rejected with the code that disproves them.
 
 ## 5. Test plan
 
@@ -88,10 +121,10 @@ Whole suite by the executable, never `dotnet test`.
 
 ## 6. Definition of Done
 
-- [ ] A row added without a thinking flag reaches the product with no `thinking` field (probed against the product).
-- [ ] Every row stored before the change resolves, hash unchanged.
-- [ ] `reviewers add` can give grok's price tier; a tiered row prices a 250 000-token call at the tier rate.
-- [ ] New imports carry `VendorDefault`; the old rows' label is documented, not rewritten; a re-import is refused.
-- [ ] An assessor that cannot be launched is refused before a finding is sent (D5).
-- [ ] The coai item (D4) is a merged pull request, linked here.
-- [ ] `module_gate.md` updated; this plan promoted with its deviations.
+- [x] A row added without a thinking flag reaches the product with no `thinking` field (probed against the product: `glm-5-3-default`, coai 0.40.3, vault key found, no refusal; stored as NULL).
+- [x] Every row stored before the change resolves, hash unchanged (the frozen hashes, and all 20 rows of the real catalog listed after the migration).
+- [x] `reviewers add` can give grok's price tier, and the vendor row carries it to the product, which prices the call (see *As built*).
+- [x] New imports carry `VendorDefault`; the old rows' label is documented, not rewritten; a re-import is refused.
+- [x] An assessor that cannot be launched is refused before a finding is sent (D5).
+- [x] The coai item (D4) is a merged pull request: `dew_flow_connect_other_ais` #622.
+- [x] `module_gate.md` updated; this plan promoted with its deviations.
