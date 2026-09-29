@@ -137,8 +137,8 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
 
     public async Task<GateSweepReport> SweepAsync(TimeSpan staleAfter, CancellationToken cancellationToken)
     {
-        var cutoff = clock.GetUtcNow() - staleAfter;
-        var stranded = await StrandedAsync(cutoff, cancellationToken);
+        var now = clock.GetUtcNow();
+        var stranded = await StrandedAsync(now, now - staleAfter, cancellationToken);
 
         var requeued = 0;
         var abandoned = 0;
@@ -315,11 +315,14 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
                       .SetProperty(c => c.PinCheckedTree, pin.CheckedTree),
                 cancellationToken) == 1;
 
-    /// <summary>Stale claims whose owner is provably gone, of runs that have not ended.</summary>
-    private async Task<List<GateCellRow>> StrandedAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
+    /// <summary>Stale claims whose owner is provably gone, of runs that have not ended. A claim stamped AFTER now is clock
+    /// skew, not a fresh claim — S7.3, 2026-09-29: a reboot brought the clock back an hour behind the one four claims of a
+    /// dead worker were stamped with, and a window that only looked backwards stranded them until it caught up. It is a
+    /// candidate like a stale one, and the ownership check below decides, as it does for every claim.</summary>
+    private async Task<List<GateCellRow>> StrandedAsync(DateTimeOffset now, DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
         var stale = await Live(db.GateCells.AsNoTracking())
-            .Where(c => c.State == CellState.Claimed && c.ClaimedAt <= cutoff)
+            .Where(c => c.State == CellState.Claimed && (c.ClaimedAt <= cutoff || c.ClaimedAt > now))
             .ToListAsync(cancellationToken);
 
         return [.. stale.Where(IsOrphan)];

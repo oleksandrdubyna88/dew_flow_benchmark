@@ -1509,6 +1509,10 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
      runs its plan loop first on the same row, and the product refused every plan round. E3's fake product answered
      an unticked stage, so no driver test saw it. The fix ticks plan on a code-gate row, and the fake now refuses an
      unticked stage as the product does. The code gate is re-run after it.
+  5. The re-run (`01a0ecad`) lost its process to a machine restart at 80 of 84. The restart also stepped the clock back
+     about an hour, so the dead worker's four claims were stamped in the future. `bench gate sweep` (no stale window)
+     matched none of them, which would have stranded the run until the clock caught up. The fix: a claim stamped
+     after now is a sweep candidate, and ownership decides as for every claim. The run was then swept and resumed.
 - DoD (E7): `PromptShape`, `GateTurnOnePrompt` and `bench gate aa` merged with every RED watched; the self-check
   printed `same shape` for the five imported cs2 cells; the A/A ran, was compared and assessed; S7.3 ran and was
   assessed; `RESULTS_gate_aa_cs2.md` and `module_gate.md` written; the hand-check still open and said so.

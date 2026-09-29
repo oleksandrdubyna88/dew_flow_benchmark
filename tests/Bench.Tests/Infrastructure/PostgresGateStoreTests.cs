@@ -193,6 +193,31 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
         after.Single(c => c.Id == cells[1].Id).State.Should().Be(CellState.Claimed, "we cannot see another host's process table");
     }
 
+    /// <summary>S7.3, 2026-09-29: the machine rebooted mid-campaign and its clock came back an hour EARLIER than the one the
+    /// claims were stamped with, so four claims of a dead worker sat in the future — and a sweep with no stale window
+    /// matched none of them ("claimed … -69.6 min ago"), stranding the run until the clock caught up. Ownership decides;
+    /// a claim from the future is clock skew, not a fresh claim, and a LIVE owner's is still left alone.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(30)]
+    public async Task A_dead_owners_claim_stamped_in_the_future_by_a_clock_that_stepped_back_is_still_handed_back(int staleMinutes)
+    {
+        var clock = new TestClock(Noon);
+        var (run, cells) = Planned(count: 2);
+        var store = NewStore(clock);
+        await store.PlanAsync(run, cells, Ct);
+        await store.ClaimNextAsync(run.Id, TestWorkers.Dead("dead-here"), Pin(), Ct);
+        await store.ClaimNextAsync(run.Id, Here(), Pin(), Ct);
+
+        clock.Now = Noon.AddMinutes(-70);
+        var report = await NewStore(clock).SweepAsync(TimeSpan.FromMinutes(staleMinutes), Ct);
+
+        var after = await store.CellsAsync(run.Id, Ct);
+        report.Requeued.Should().Be(1);
+        after.Single(c => c.Id == cells[0].Id).State.Should().Be(CellState.Pending, "its owner is provably gone, whatever the clock says about when it claimed");
+        after.Single(c => c.Id == cells[1].Id).State.Should().Be(CellState.Claimed, "a live owner's claim is never handed back — the skew changes no ownership");
+    }
+
     [Fact]
     public async Task Two_sweepers_racing_over_one_dead_owner_hand_the_cell_back_once()
     {
