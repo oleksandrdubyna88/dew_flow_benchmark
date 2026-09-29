@@ -113,15 +113,38 @@ public static class GateReportQuery
     /// <summary>The CLI's ask — a scope id or a suite stamp, and a rubric — answered from ONE read of the gate: the scope is
     /// resolved and the table computed over the same snapshot (code round: resolving first and then asking for the table read
     /// the gate's whole history twice).</summary>
-    public static async Task<GateAnswer<GateModelTableDto>> ReportAsync(
+    public static Task<GateAnswer<GateModelTableDto>> ReportAsync(
         IGateReads reads, string gateWord, string scopeAsked, string rubric, CancellationToken cancellationToken) =>
+        ReportAsync(reads, gateWord, scopeAsked, rubric, [], cancellationToken);
+
+    /// <summary>The same, narrowed to <paramref name="campaigns"/> when any are named — S7.3's code scope held a campaign a
+    /// harness defect had voided beside the real one, and only a person can say which of a scope's runs measure the models.
+    /// A campaign that is not one of the gate's is refused by name, never read as an empty table.</summary>
+    public static async Task<GateAnswer<GateModelTableDto>> ReportAsync(
+        IGateReads reads, string gateWord, string scopeAsked, string rubric, IReadOnlyList<Guid> campaigns, CancellationToken cancellationToken) =>
         GateWord.Parse(gateWord) switch
         {
-            Outcome<GateKind>.Ok gate => await ReportOfAsync(
-                await GateSnapshot.ReadAsync(reads, [gate.Value], cancellationToken), gate.Value, scopeAsked, rubric, cancellationToken),
+            Outcome<GateKind>.Ok gate => Narrowed(await GateSnapshot.ReadAsync(reads, [gate.Value], cancellationToken), gate.Value, campaigns) switch
+            {
+                Outcome<GateSnapshot>.Ok snapshot => await ReportOfAsync(snapshot.Value, gate.Value, scopeAsked, rubric, cancellationToken),
+                Outcome<GateSnapshot>.Fail unknown => GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.NotFound, unknown.Reason),
+                _ => throw new InvalidOperationException("unreachable"),
+            },
             Outcome<GateKind>.Fail bad => GateAnswer<GateModelTableDto>.Refuse(GateRefusalKind.BadRequest, bad.Reason),
             _ => throw new InvalidOperationException("unreachable"),
         };
+
+    private static Outcome<GateSnapshot> Narrowed(GateSnapshot snapshot, GateKind gate, IReadOnlyList<Guid> campaigns)
+    {
+        var unknown = campaigns.Where(c => !snapshot.Records.Any(r => r.CampaignId == c)).Select(c => c.ToString("D")).FirstOrDefault() ?? string.Empty;
+
+        return (campaigns.Count, unknown.Length) switch
+        {
+            (0, _) => Outcome<GateSnapshot>.Success(snapshot),
+            (_, > 0) => Outcome<GateSnapshot>.Failure($"{unknown} is not a {GateWord.Of(gate)}-gate run in this database"),
+            _ => Outcome<GateSnapshot>.Success(snapshot.Only(campaigns)),
+        };
+    }
 
     private static async Task<GateAnswer<GateModelTableDto>> ReportOfAsync(
         GateSnapshot snapshot, GateKind gate, string scopeAsked, string rubric, CancellationToken cancellationToken) =>

@@ -326,7 +326,9 @@ flowchart TB
   name, the section slug and the document's SHA-256; a re-import is a no-op, an edited document a new citation, and the same
   table imported again under another `--gate` or `--source` is refused (4) rather than kept under the first. A database that
   fails mid-import is 3 for every import verb — each cell is its own transaction, so the next import resumes.
-- `bench gate report --gate plan|code|feature --scope <scope id | suite stamp> --rubric <id or stamp> --db … [--json]` (E6)
+- `bench gate report --gate plan|code|feature --scope <scope id | suite stamp> --rubric <id or stamp> [--run <campaign>[,…]] --db … [--json]` (E6;
+  `--run`, 2026-09-29, narrows the table to the named campaigns and says so above it — S7.3's code scope held a campaign a
+  harness defect had voided beside the real one; an unknown campaign is refused, a malformed id is 4)
   — `--json` prints the object `/api/bench/gate/{gate}/models` answers, byte for byte; text otherwise: the scope, its
   product and source, the rubric, the measured tasks, the calibration tasks apart, all tasks beside them (only when there
   are calibration tasks), the variance sentence — every figure through `GateFigureWords`. No `--scope` → 4 listing the

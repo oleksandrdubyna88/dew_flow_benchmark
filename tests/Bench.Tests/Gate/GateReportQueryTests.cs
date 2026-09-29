@@ -242,6 +242,29 @@ public sealed class GateReportQueryTests
 
     /// <summary>Two partitions of one feature campaign: pin A holds a measured run (one strict verdict) and a calibration
     /// run; pin B holds one unassessed run.</summary>
+    /// <summary>S7.3, 2026-09-29: one code-gate scope held a campaign a harness defect had voided (every cell refused before a
+    /// model call) beside the real one, and the scope-wide table halved every reviewer's validity. A table narrowed to named
+    /// campaigns counts only their cells; a campaign that is not one of the gate's is refused, never read as an empty table.</summary>
+    [Fact]
+    public async Task A_table_narrowed_to_named_campaigns_counts_only_their_cells_and_an_unknown_campaign_is_refused()
+    {
+        var real = Guid.CreateVersion7();
+        var voided = Guid.CreateVersion7();
+        var measured = Run("cs2", "grok", 1, campaign: real) with { Findings = [Finding(1)] };
+        var refused = Run("cs2", "grok", 1, valid: false, findings: 0, campaign: voided);
+        var reads = new ScriptedGateReads(
+            [measured, refused], TasksOf(measured.Scope.SuiteStamp), [StrictRubric], [Verdict(measured, 1, Strict(StrictReading.Supported, "cs2-S1"), StrictHash)], []);
+
+        var whole = Answer(await GateReportQuery.ReportAsync(reads, "feature", measured.Scope.Id, "strict-v1", [], Ct)).Rows.Single();
+        var narrowed = Answer(await GateReportQuery.ReportAsync(reads, "feature", measured.Scope.Id, "strict-v1", [real], Ct)).Rows.Single();
+        var unknown = Refusal(await GateReportQuery.ReportAsync(reads, "feature", measured.Scope.Id, "strict-v1", [Guid.CreateVersion7()], Ct));
+
+        (whole.Runs, whole.ValidRuns).Should().Be((2, 1), "the whole scope holds both campaigns");
+        (narrowed.Runs, narrowed.ValidRuns).Should().Be((1, 1), "only the named campaign's cells are counted");
+        unknown.Kind.Should().Be(GateRefusalKind.NotFound);
+        unknown.Reason.Should().Contain("not a feature-gate run in this database");
+    }
+
     private static ScriptedGateReads Reads(out GateRunRecord a, out GateRunRecord b)
     {
         var campaign = Guid.CreateVersion7();

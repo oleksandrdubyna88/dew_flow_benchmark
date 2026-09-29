@@ -38,6 +38,16 @@ internal sealed class GateSnapshot
         return new GateSnapshot(reads, records, catalog, verdicts, await reads.RecordedStampsAsync(cancellationToken));
     }
 
+    /// <summary>The same read narrowed to the named campaigns — their records and the verdicts on them; every figure is then
+    /// computed over them exactly as over the whole gate.</summary>
+    public GateSnapshot Only(IReadOnlyCollection<Guid> campaigns)
+    {
+        var records = Records.Where(r => campaigns.Contains(r.CampaignId)).ToList();
+        var kept = records.Select(r => r.RunId).ToHashSet();
+
+        return new GateSnapshot(_reads, records, Catalog, [.. Verdicts.Where(v => kept.Contains(v.RunId))], Recorded);
+    }
+
     public IReadOnlyList<GateScope> Scopes() => GateReport.Scopes(Records);
 
     public GateScopeDto ScopeDto(GateScope scope)
