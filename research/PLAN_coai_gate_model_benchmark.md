@@ -1,19 +1,24 @@
 # PLAN — the coai gate-model benchmark: plan, diff and feature gates, in C#, re-runnable
 
-> Status: **E1 (the domain and the contracts) and E2 (the store and the privacy guard) landed 2026-09-27, E3 (the
-> driver), E4 (the blinded strict assessment), E5 (the import) and E6 (the report, the API and the page) 2026-09-28 —
-> `research/module_gate.md` describes them; E7 (the first campaign) open — S7.2a built and S7.2's A/A passed on cs2
-> 2026-09-28 (`research/RESULTS_gate_aa_cs2.md`), S7.3 (plan and code gates) and the hand-check outstanding.** Scope: a new bounded context `Gate` across
+> Status: **IMPLEMENTED, 2026-09-29.** E1 (the domain and the contracts) and E2 (the store and the privacy guard)
+> landed 2026-09-27; E3 (the driver), E4 (the blinded strict assessment), E5 (the import) and E6 (the report, the API and
+> the page) 2026-09-28; E7 (the first campaign) 2026-09-29 — the A/A passed on cs2 (`research/RESULTS_gate_aa_cs2.md`) and
+> S7.3 ran the plan and code gates over the seven tasks (`research/RESULTS_gate_s73.md`). `research/module_gate.md`
+> describes the system. **Deviations** are recorded per epic below (*as built*, *as run*); the largest: S7.2's criterion
+> was replaced by the prompt-shape A/A, and S7.3 needed five harness fixes (#51–#55) before its numbers stood. **Open
+> tail**, extracted to [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): the hand-check (E4's
+> procedure, not yet performed), Fable's code gate (its spend limit), seven code cells lost to reviewers' accounts running
+> out; and [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md) D1–D5. Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
 > the console. The product under measurement is `coai-mcp` (ConnectOtherAIs), driven the way a person's
 > editor drives it — never a side harness.
 >
-> Related docs: [architecture.md](../research/architecture.md), [MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md),
-> [PLAN_rag_bench_repo.md](PLAN_rag_bench_repo.md) §6 (surfaces), [PLAN_scoremeter_port.md](PLAN_scoremeter_port.md)
-> (the permanent-payload precedent), [PLAN_bench_console.md](../research/PLAN_bench_console.md) (how a page is
-> mounted), [PLAN_tool_benchmark.md](PLAN_tool_benchmark.md) (the catalog-row precedent).
+> Related docs: [architecture.md](architecture.md), [MEASURED_LESSONS.md](MEASURED_LESSONS.md),
+> [PLAN_rag_bench_repo.md](../todo/PLAN_rag_bench_repo.md) §6 (surfaces), [PLAN_scoremeter_port.md](../todo/PLAN_scoremeter_port.md)
+> (the permanent-payload precedent), [PLAN_bench_console.md](PLAN_bench_console.md) (how a page is
+> mounted), [PLAN_tool_benchmark.md](../todo/PLAN_tool_benchmark.md) (the catalog-row precedent).
 > Cross-repository citations are **paths, not links**: `coai ·` is `dew_flow_connect_other_ais`; `calib ·` is the
 > operator's local Python harness under the session scratchpad (`calib/harness/*.py`, not in any repository).
 
@@ -498,7 +503,7 @@ for the rest.
 ### E1 — the domain and the contracts (Fable) — DONE 2026-09-27
 
 > Landed as four commits on `feat/gate-e1-domain`; every story's RED is quoted in its commit body and the
-> module is described in [module_gate.md](../research/module_gate.md). Deviations from the text below:
+> module is described in [module_gate.md](module_gate.md). Deviations from the text below:
 > the finding's `category` is an enum of the product's words with `Unknown` as a counted state (a word this
 > build has not met is a state, not a refusal, because the value is the product's); `ReviewerHash` is
 > `ReviewerDefinition.Hash` plus `GateReviewerCatalog.SameConfiguration` rather than a type of its own;
@@ -572,7 +577,7 @@ for the rest.
 ### E2 — the store and the privacy guard (Fable for S2.4; Opus otherwise) — DONE 2026-09-27
 
 > Landed on `feat/gate-e2-store`; the store, the artefact layout and protocol, the guard and the growth table are in
-> [module_gate.md](../research/module_gate.md). Every story's RED was observed by REVERTING its guard in the
+> [module_gate.md](module_gate.md). Every story's RED was observed by REVERTING its guard in the
 > finished code and watching the named test fail for the real symptom (the implementation was drafted before the
 > tests; the revert is how each test proved it has teeth), then restoring it green.
 >
@@ -668,7 +673,7 @@ for the rest.
 ### E3 — the driver (Fable for S3.1, S3.2, S3.7; Opus otherwise) — DONE 2026-09-28
 
 > Landed on `feat/gate-e3-driver`; the driver, the protocols, the tap and the CLI are in
-> [module_gate.md](../research/module_gate.md). Built on Opus throughout (the coordinator's assignment), with the two
+> [module_gate.md](module_gate.md). Built on Opus throughout (the coordinator's assignment), with the two
 > secret-bearing stories (S3.2, S3.7) put to a risk consultation before they were written. Every story's RED is quoted
 > in its commit body: the pure pieces (S3.4–S3.6) failed to compile first and then went red by revert; every guard
 > was reverted in the finished code and its test watched failing for the real symptom, then restored. **Run once
@@ -942,7 +947,7 @@ for the rest.
 ### E4 — the assessment (Opus) — DONE 2026-09-28
 
 > Landed on `feat/gate-e4-assessment`; the assessment, its files, the verdict store and the hand-check are in
-> [module_gate.md](../research/module_gate.md). Every guard was reverted in the finished code and its test watched
+> [module_gate.md](module_gate.md). Every guard was reverted in the finished code and its test watched
 > failing for the real symptom, then restored (the observations are in the commit body); the turn-ceiling fix below
 > was RED before it was written.
 >
@@ -1028,7 +1033,7 @@ for the rest.
 ### E5 — the import (Opus) — DONE 2026-09-28
 
 > Landed on `feat/gate-e5-import`; the import, its verbs, its tables and the real-data measurement are in
-> [module_gate.md](../research/module_gate.md). Every guard was reverted in the finished code and its test watched failing
+> [module_gate.md](module_gate.md). Every guard was reverted in the finished code and its test watched failing
 > for the real symptom, then restored (the observations are in the commit body). **Run against the real data**: the
 > calibration's 111 cells and 340 verdicts, coai-bench's 160 cells and 692 lenient verdicts, three published tables as
 > 220 summary-only numbers; every phase-2 per-model number equal to `results.json` of 2026-09-27 but the two named below.
@@ -1195,7 +1200,7 @@ for the rest.
 ### E6 — report, API, page, docs (Opus) — DONE 2026-09-28
 
 > Landed on `feat/gate-e6-report`; the report, the read port, the ninth table, the routes and the page are in
-> [module_gate.md](../research/module_gate.md). Every story's RED is quoted in the commit body — the domain keys, the
+> [module_gate.md](module_gate.md). Every story's RED is quoted in the commit body — the domain keys, the
 > adapters and the pages watched failing against stubs, the query, the CLI hooks, the API's port resolution and the
 > console's escaping by revert.
 >
@@ -1478,10 +1483,10 @@ prompt is the same for every API reviewer measured, and the raw hash is per-run 
   finding 18 (serial reads, rejected on the 2.3 s measurement) and finding 18 carries none; the code does what finding 17
   asked. (f) The unsettled refusals (5) are checked before the reference is read, not after it: a person resumes a run
   before choosing its reference.
-- **S7.2 as run (2026-09-28), recorded in [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md).** It took four
+- **S7.2 as run (2026-09-28), recorded in [RESULTS_gate_aa_cs2.md](RESULTS_gate_aa_cs2.md).** It took four
   campaigns:
   1. `01a0e98d` found the rows' thinking field. The driver wrote `false`, which the product refuses for xai and glm.
-     The fix is in [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md); the campaign went on with
+     The fix is in [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md); the campaign went on with
      `--thinking` rows. The same campaign found Fable 5.1 at the account's limit (429) and the PATH `claude` too old
      for Opus 5.5 (a row naming CLI 2.1.284 by `--executable-ref`).
   2. `01a0e993` **failed the A/A**: 4 of 4 API cells at `9afba0db90c6`. The gate's clone had inherited the machine's

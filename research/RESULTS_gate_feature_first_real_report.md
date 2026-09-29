@@ -6,7 +6,7 @@
 > and the four coai-bench case suites (2 + 2 + 1 + 2 tasks).
 >
 > Related: [module_gate.md](module_gate.md) (the context, the import, the report),
-> [PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md) (E7, the first re-run through the C# driver, is still open).
+> [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, the first re-run through the C# driver — IMPLEMENTED 2026-09-29, see RESULTS_gate_aa_cs2.md and RESULTS_gate_s73.md).
 > The measurement itself, its protocol and its recommendation are published by the product:
 > `research/RESULTS_feature_reviewer_models.md` in the ConnectOtherAIs repository.
 

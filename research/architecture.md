@@ -1097,8 +1097,9 @@ every verb that loads a suite, with `bench gate suite record` as the backfill, a
 answers 409 rather than folding its calibration tasks into the measured rows. The gate routes are mapped from
 `MapBenchApi` and resolve the port from the request's services — a host that never registered it (the qln daemon
 registers its bench ports by hand) answers 503 naming the registration, where a plain parameter would have been inferred
-as a body and failed every route of that host at startup. The first campaign (E7) is open in
-[todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+as a body and failed every route of that host at startup. The first campaign (E7) ran 2026-09-28/29 — the design record
+is [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md), the results RESULTS_gate_aa_cs2.md and
+RESULTS_gate_s73.md.
 
 ## Guards that shape the API
 
@@ -1342,7 +1343,7 @@ Stated because a description that quietly implies more than is built is the same
 - **The gate benchmark drives the product and assesses nothing yet.** Its store (E2) and its driver (E3) exist
   (*The gate benchmark*, above): cells run and settle with facts and hash-only findings. There is no assessor
   launch, no import, no route and no tab, so no supported-% exists; the first number worth reading waits on E4 and on
-  E7's A/A against a Python run at the same product sha (`todo/PLAN_coai_gate_model_benchmark.md`).
+  E7's A/A against a Python run at the same product sha (`research/PLAN_coai_gate_model_benchmark.md`).
 - **No cloud runtime.** Only the OpenAI-compatible local one.
 - **No hardware sampler** and no UI. The API route group IS hosted now — `hosts/Api` (`bench-api`), the
   AppHost's only project resource — but it is READ-only: nothing over HTTP starts a run, and that is a

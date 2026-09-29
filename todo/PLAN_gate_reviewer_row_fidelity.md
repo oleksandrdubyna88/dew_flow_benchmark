@@ -5,7 +5,7 @@
 > (the `gate_reviewers.Thinking` column), `hosts/Cli/GateToolsCommand.cs` (`reviewers add`), `hosts/Cli/GateAssessCommand.cs` (the assessor's launch), one migration; one
 > cross-repository item in `dew_flow_connect_other_ais` (named, not built here).
 >
-> Related docs: [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, where this was found),
+> Related docs: [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) (E7, where this was found),
 > [module_gate.md](../research/module_gate.md), [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md).
 > Cross-repository citations are paths: `coai ·` is `dew_flow_connect_other_ais`; `calib ·` is the operator's local
 > Python calibration harness (outside every repository), as in the gate plan.
@@ -35,7 +35,7 @@ nothing here blocks E7. What remains wrong is below.
 | D1 | `ReviewerDefinition.cs:19, 27, 64` · `CoaiVendorsSetting.cs:122` | `ReviewerTransport.Thinking` is a `bool`, canonical `thinking-on` / `thinking-off`, and the vendor row always spells it | a row added WITHOUT `--thinking` asks for reasoning OFF — not the product's default — and the product refuses it for xai and glm; a person adding a row gets a refusal they did not ask for |
 | D2 | `Import/CalibRecord.cs:16` | the calibration import builds every transport with `thinking: false` | the imported phase-2 rows are LABELLED `thinking-off` (it is inside their hash) while the Python runs measured them at the vendor default — the catalog describes 84 runs as something they were not |
 | D3 | `hosts/Cli/GateToolsCommand.cs:315-316` | `reviewers add` takes `--price-in/--price-cached/--price-out` only; the long-context tier (`TierFromTokens`, `TierIn/Cached/Out`) that the catalog stores (`PostgresGateReviewerCatalog.cs:140`) and the import reads (`Import/CalibReviewers.cs:49`) cannot be given | a grok row added by hand prices a call above 200 000 tokens at the base rate — cost per run under-counted exactly where it is largest |
-| D4 | `coai · src_mcp/runners/Reviewers/ReviewerRuntime.cs:263, 372` (origin/main `3f351c05`) | `WhyItFailed` is implemented for codex only; the Claude CLI puts its reason in the stdout JSON (`is_error`, `result`, `api_error_status`) | measured in the same campaign: Fable 5.1's cells read `exit 1 (the CLI said nothing on stderr)` while the CLI had said *"You've reached your Fable limit"* (HTTP 429) — the reason three lines away, as for codex on 2026-09-14 |
+| D4 | `coai · src_mcp/runners/Reviewers/ReviewerRuntime.cs:263, 372` (origin/main `3f351c05`) | `WhyItFailed` is implemented for codex only; the Claude CLI puts its reason in the stdout JSON (`is_error`, `result`, `api_error_status`) | measured in the same campaign: Fable 5.1's cells read `exit 1 (the CLI said nothing on stderr)` while the CLI had said *"You've reached your Fable limit"* (HTTP 429) — the reason three lines away, as for codex on 2026-09-14. **Again on 2026-09-29, at a cost:** S7.3's Fable campaigns lost 6 plan cells and 38 code cells (runs `01a0edf2`, `01a0ee1f`) to the same line, while the CLI said *"You've hit your monthly spend limit"* (429). Each doomed cell ran its plan loop to `Unknown`; a campaign that could read the reason could have stopped at the first |
 | D5 | `hosts/Cli/GateAssessCommand.cs:217-221` | an assessor row with no executable reference launches the runtime's bare word (`codex`); on Windows the npm install is a `.cmd`/`.ps1` shim beside a native `codex.exe` deep in `node_modules`, and the launcher does not find the bare word | measured 2026-09-28: `bench gate assess --assessor codex-gpt-6-astra` recorded all 16 findings of a campaign as *assessment failed — 'codex' is not installed*, with `codex --version` answering in the same shell; worked around by a row naming the exe through `--executable-ref` |
 
 ## 3. Decisions
@@ -55,7 +55,8 @@ nothing here blocks E7. What remains wrong is below.
   otherwise), through the existing `ReviewerPrices.Of` overload the catalog already calls.
 - **D4 → named, not built here.** A coai pull request: `ClaudeRuntime.WhyItFailed` reads the `is_error` JSON on stdout
   (`result`, `api_error_status`) — RED first with the measured 429 body. Owner: the next coai session; this plan links it
-  when it exists.
+  when it exists. On the bench side, once the reason arrives: a reviewer refused for a spend or usage limit is an
+  ENVIRONMENT failure, and the campaign's run of such failures should stop the lane, not settle every remaining cell.
 
 - **D5 → resolve the bare word the way a shell does, or refuse before the batch.** Look the word up on `PATH` with
   `PATHEXT` on Windows; a `.cmd` shim is not launched (arguments through `cmd.exe` are a quoting hazard) — the refusal

@@ -7,8 +7,10 @@
 > gate import` brings the calibration's Python runs, the coai-bench records and the published summary tables in,
 > read-only and idempotent; `bench gate report`, `/api/bench/gate/*` and the console's Gate tab answer ONE object per
 > scope and rubric; `bench gate aa` (E7) compares every cell of a finished run with one reference cell's turn-1 prompt
-> by its normalised shape.** The first campaign (E7) is open in
-> [todo/PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md).
+> by its normalised shape.** The first campaign (E7) ran 2026-09-28/29 ([RESULTS_gate_aa_cs2.md](RESULTS_gate_aa_cs2.md),
+> [RESULTS_gate_s73.md](RESULTS_gate_s73.md)); the design record is
+> [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md), its open tail
+> [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md).
 > This file describes what is built; a sentence here about something that does not run is a bug in the file.
 
 ## Purpose

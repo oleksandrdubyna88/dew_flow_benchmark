@@ -6,7 +6,7 @@
 > first comparison found the driver handing the product a different tree. PR #49 fixed it, and the re-run matches the
 > calibration byte for byte after normalisation.
 >
-> Related: [PLAN_coai_gate_model_benchmark.md](../todo/PLAN_coai_gate_model_benchmark.md) (E7, S7.1–S7.2a),
+> Related: [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, S7.1–S7.2a),
 > [module_gate.md](module_gate.md) (the driver's checkout, `bench gate aa`),
 > [RESULTS_gate_feature_first_real_report.md](RESULTS_gate_feature_first_real_report.md) (the imported calibration this
 > is compared with), [PLAN_gate_reviewer_row_fidelity.md](../todo/PLAN_gate_reviewer_row_fidelity.md) (the row defects
@@ -37,6 +37,7 @@ So all of the Python harness's own cs2 runs at `5d73ead7` share one shape, and t
 | `01a0e993` | grok-think, glm-think, Opus (CLI 2.1.284) × 2 | 6 of 6 valid. **The A/A failed:** 4 of 4 API cells at shape `9afba0db90c6`, differing from the reference at 3 431 lines |
 | `01a0e9a8` | grok-think, glm-think × 2, **fixed driver** | 4 of 4 valid, **4 of 4 at shape `451c8c505317`**, `bench gate aa` exit 0 |
 | `01a0e9b1` | Opus (CLI 2.1.284), Astra × 2, **fixed driver** | 4 of 4 valid |
+| `01a0ec20` | Fable 5.1 (CLI 2.1.284) × 2, fixed driver, 2026-09-29 once the account's limit had reset | 2 of 2 valid |
 
 ### Why campaign 2 differed
 
@@ -80,8 +81,10 @@ range.* **Held.** The comparison is per cell on cs2 only; n is 2 for C# and 3–
 | glm-5.3 | C# | 2 of 2 | S1 + S2, both | 5–6 | $0.20–0.21 | 366–377 |
 | Opus 5.5 | C# only | 2 of 2 | S1 + S2, both | 10–11 | $3.91–3.99 * | 410–447 |
 | Astra | C# only | 2 of 2 | S1 + S2, both | 3–4 | — (subscription) | 48–50 |
+| Fable 5.1 | C# only | 2 of 2 | S1 + S2, both | 10–12 | $6.69–13.89 * | 614–1 360 |
 
-\* Opus's cost is the CLI's own reported figure at list price, not an invoice.
+\* Opus's and Fable's costs are the CLI's own reported figures at list price, not an invoice. Fable's second repeat read
+twice the tokens of its first (750 k against 356 k), which is where its cost and time spread comes from.
 
 The strict readings are **not an A/A of the assessor**. The Python cells were read by the calibration's own assessor
 prompt; these were read by `strict-v1`. So the difference below is recorded, not concluded:
@@ -91,6 +94,7 @@ prompt; these were read by `strict-v1`. So the difference below is recorded, not
 | Python grok + glm, cs2 | 18 | 3 | 1 | — |
 | C# grok + glm, cs2 | 8 | 5 | 3 | — |
 | C# Opus 5.5 | 13 | 5 | 2 | 1 unresolved |
+| C# Fable 5.1 | 6 | 9 | 3 | 4 unresolved |
 | C# Astra | 7 | — | — | read by its own family, counted apart |
 
 The strict percentages stay **not hand-checked** (E4). The hand-check was deferred by the operator on 2026-09-28.
@@ -102,9 +106,9 @@ The strict percentages stay **not hand-checked** (E4). The hand-check was deferr
   are the Python harness's cells.
 - **Not shown:**
   - The other six tasks. The A/A is scoped to one task at one commit on purpose.
-  - The CLI reviewers' prompts. A CLI reviewer leaves no turn-1 prompt by design, so Opus and Astra have no A/A.
-    Their cells are simply the first C# measurements of them.
-  - Fable 5.1. It is still blocked by the account's limit, re-probed after campaign 3 with the same 429.
+  - The CLI reviewers' prompts. A CLI reviewer leaves no turn-1 prompt by design, so Opus, Astra and Fable have no A/A.
+    Their cells are simply the first C# measurements of them. (Fable was blocked by the account's limit on 2026-09-28
+    and measured on 2026-09-29, `01a0ec20`.)
 - **Found on the way** (in the fidelity plan):
   - D1 and D2: thinking is two-state in the bench and three-state in the product, and the import labels the calibration's
     rows thinking-off.
