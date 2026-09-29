@@ -7,8 +7,12 @@
 > describes the system. **Deviations** are recorded per epic below (*as built*, *as run*); the largest: S7.2's criterion
 > was replaced by the prompt-shape A/A, and S7.3 needed five harness fixes (#51–#55) before its numbers stood. **Open
 > tail**, extracted to [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): the hand-check (E4's
-> procedure, not yet performed), Fable's code gate (its spend limit), seven code cells lost to reviewers' accounts running
-> out; and [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md) D1–D5. Scope: a new bounded context `Gate` across
+> procedure, not yet performed) and the lane stop (T5).
+> - **Dropped:** the re-runs, by the operator on 2026-09-29. Fable's code gate and the seven account-out code cells
+>   stand as recorded.
+> - **IMPLEMENTED 2026-09-29:** [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md) D1–D5.
+>
+> Scope: a new bounded context `Gate` across
 > `src/Bench.Domain`, `src/Bench.Application`, `src/Bench.Infrastructure`, `src/Bench.Contracts`,
 > `src/Bench.Api`, `src/Bench.Ui` and `hosts/Cli`; new Postgres tables `gate_*` (no existing table is
 > touched); a private artefact root OUTSIDE git; a hashed `prompts/gate-assess/` catalog; one `Gate` tab in
