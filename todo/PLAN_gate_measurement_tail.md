@@ -1,14 +1,14 @@
 # PLAN — the gate benchmark's measurement tail: the hand-check and the lane stop
 
-> Status: **open, 2026-09-30 — T1 remains; T5 built 2026-09-30, only its real-world check open; T2–T4 closed without
-> re-runs (the operator's decision, 2026-09-29).**
+> Status: **open, 2026-09-30 — only T1 remains. T5 was built and checked on a real product on 2026-09-30; T2–T4 were
+> closed without re-runs (the operator's decision, 2026-09-29).**
 > Extracted from [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) when it was promoted
 > (E1–E7 built and run).
 > - T1 is reading, not building.
 > - T5 is the bench half of D4 of
->   [PLAN_gate_reviewer_row_fidelity.md](../research/PLAN_gate_reviewer_row_fidelity.md). It is built and tested
->   against the reply shape #622 produces (§6). The check on a real product waits for a coai release carrying #622:
->   mcp 0.40.4 is prepared as coai PR #625 and not yet merged, and mcp-v0.40.3 predates #622.
+>   [PLAN_gate_reviewer_row_fidelity.md](../research/PLAN_gate_reviewer_row_fidelity.md). It was built against the
+>   reply shape #622 produces (§6, PR #59) and checked on coai mcp 0.40.4, released 2026-09-30: run `01a0f1b7`, see
+>   [RESULTS_gate_mistral.md](../research/RESULTS_gate_mistral.md).
 >
 > Related docs: [RESULTS_gate_s73.md](../research/RESULTS_gate_s73.md), [RESULTS_gate_aa_cs2.md](../research/RESULTS_gate_aa_cs2.md),
 > [module_gate.md](../research/module_gate.md).
@@ -46,7 +46,7 @@ T1 and T5 are independent, and either can go first. Owners:
 | item | owner | what the owner carries |
 |---|---|---|
 | T1 | **the operator** — the hand-check needs a person's judgement, which is why E4 deferred it | draw the samples, set `agree`, record them, and add the strict rates to RESULTS_gate_s73.md (an agent may run the commands and write the record once the rows are set) |
-| T5 | **the next agent session on this repository** | built 2026-09-30 (§6). Left: once coai mcp 0.40.4 (#625) is released, run one Fable-limited cell on it and see the campaign end `AccountOut` |
+| T5 | **the next agent session on this repository** | **done 2026-09-30:** built (§6, #59) and checked on coai mcp 0.40.4 (run `01a0f1b7`) |
 
 - **T1** runs now over the two S7.3 campaigns as they stand; no re-run will add cells to it.
 - **T5** is built against the reply shape #622 produces. What is left is the check on a released product.
@@ -68,7 +68,10 @@ figures it changes.
 - [x] T4: closed without a run (the operator, 2026-09-29).
 - [x] T5: a limit-refused reviewer is benched, its cells stay pending, and the campaign ends `AccountOut`, exit 3. Every
   test was watched RED first. The order test and the CLI test were proved by reverting the fix. 2026-09-30.
-- [ ] T5's check on a real product: one Fable-limited cell on coai mcp 0.40.4, once it is released.
+- [x] T5's check on a real product, 2026-09-30. Run `01a0f1b7`, on coai mcp 0.40.4 with `--allow-product-change`.
+  **Deviation:** Fable's limit had reset by then, so the account used was grok's spent xAI key. The reply was
+  `the API refused the key … (HTTP 403)`; the first cell was refused as account-out and grok was benched. The campaign
+  ended `AccountOut` with exit 3: 0 settled, 7 pending.
 - [ ] This plan is promoted, or its remaining items are said and dated.
 
 ## 6. T5 — the design (2026-09-30)

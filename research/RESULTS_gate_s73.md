@@ -6,6 +6,8 @@
 > afterwards on the same inputs (§ Fable). **Strict percentages stay "not hand-checked"** — the hand-check is deferred by
 > the operator (E4) — so the rates below are counts, validity, cost, time and agreement, not a supported-rate ranking.
 >
+> Mistral Medium 3.5 was run later on the same inputs: [RESULTS_gate_mistral.md](RESULTS_gate_mistral.md).
+>
 > Related: [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md) (E7, *S7.3 as run so far*),
 > [RESULTS_gate_aa_cs2.md](RESULTS_gate_aa_cs2.md) (the A/A that made these cells comparable with the calibration's),
 > [module_gate.md](module_gate.md).
