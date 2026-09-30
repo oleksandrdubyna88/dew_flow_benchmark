@@ -174,6 +174,71 @@ public sealed class PostgresGateStoreTests(PostgresFixture postgres)
         facts.Failure.Kind.Should().Be(FailureKind.ProcessDied);
     }
 
+    /// <summary>T5: a cell whose session ran but met the reviewer's empty account goes back to Pending with the attempt
+    /// COUNTED — its directory exists, so the next claim must take attempt 2 — and with its cause recorded.</summary>
+    [Fact]
+    public async Task A_requeue_after_a_session_keeps_the_attempt_counted_and_records_the_cause()
+    {
+        var (run, cells) = Planned(count: 1);
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        var owner = Here();
+        await store.ClaimNextAsync(run.Id, owner, Pin(), Ct);
+
+        var requeued = (await store.RequeueUnmeasuredAsync(cells[0].Id, owner, attempt: 1, "the reviewer's account is out: rev-a: spend limit", Ct)).Ok();
+
+        requeued.State.Should().Be(CellState.Pending);
+        requeued.Attempts.Should().Be(1, "the attempt ran and has a directory; it is not given back");
+        requeued.Owner.Should().Be(WorkerIdentity.Nobody);
+        requeued.OutcomeDetail.Should().Contain("spend limit");
+        (await store.ClaimNextAsync(run.Id, owner, Pin(), Ct)).Ok().Attempts.Should().Be(2, "the next attempt is a fresh one");
+    }
+
+    /// <summary>An empty account is not the cell's fault: a requeue never walks a cell toward Abandoned, however many
+    /// resumes met the same empty account.</summary>
+    [Fact]
+    public async Task A_requeue_never_abandons_the_cell()
+    {
+        var (run, cells) = Planned(count: 1);
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        var owner = Here();
+
+        for (var attempt = 1; attempt <= Claimable.MaxAttempts + 1; attempt++)
+        {
+            await store.ClaimNextAsync(run.Id, owner, Pin(), Ct);
+            (await store.RequeueUnmeasuredAsync(cells[0].Id, owner, attempt, "out", Ct)).Ok().State.Should().Be(CellState.Pending);
+        }
+    }
+
+    [Fact]
+    public async Task A_requeue_from_a_worker_that_does_not_hold_the_cell_changes_nothing()
+    {
+        var (run, cells) = Planned(count: 1);
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        await store.ClaimNextAsync(run.Id, WorkerIdentity.Here("lane-a"), Pin(), Ct);
+
+        (await store.RequeueUnmeasuredAsync(cells[0].Id, WorkerIdentity.Here("lane-b"), attempt: 1, "out", Ct)).Reason().Should().Contain("not claimed by");
+        (await store.CellAsync(cells[0].Id, Ct)).Ok().State.Should().Be(CellState.Claimed);
+    }
+
+    /// <summary>The hand-back it sits beside: refused before launch, so the attempt is given back too.</summary>
+    [Fact]
+    public async Task A_hand_back_before_launch_gives_the_attempt_back()
+    {
+        var (run, cells) = Planned(count: 1);
+        var store = NewStore(new TestClock(Noon));
+        await store.PlanAsync(run, cells, Ct);
+        var owner = Here();
+        await store.ClaimNextAsync(run.Id, owner, Pin(), Ct);
+
+        var handed = (await store.HandBackUnmeasuredAsync(cells[0].Id, owner, attempt: 1, "refused before launch: no key", Ct)).Ok();
+
+        handed.State.Should().Be(CellState.Pending);
+        handed.Attempts.Should().Be(0, "a refusal before launch is not an attempt");
+    }
+
     [Fact]
     public async Task A_stale_claim_by_a_dead_pid_on_this_host_is_handed_back_and_one_on_another_host_is_left_alone()
     {

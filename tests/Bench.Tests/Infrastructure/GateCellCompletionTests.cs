@@ -190,6 +190,9 @@ internal abstract class ForwardingGateStore(IGateStore inner) : IGateStore
     public Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken) =>
         inner.HandBackUnmeasuredAsync(cellId, owner, attempt, cause, cancellationToken);
 
+    public Task<Outcome<GateCell>> RequeueUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken) =>
+        inner.RequeueUnmeasuredAsync(cellId, owner, attempt, cause, cancellationToken);
+
     public Task<IReadOnlyList<(GateReviewerId Reviewer, string ReferencesHash)>> ReferenceHashesAsync(Guid runId, CancellationToken cancellationToken) =>
         inner.ReferenceHashesAsync(runId, cancellationToken);
 }

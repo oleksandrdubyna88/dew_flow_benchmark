@@ -37,6 +37,10 @@ public enum CampaignStop
 
     /// <summary>The product could not be pinned at a claim — it is gone, or it no longer answers <c>--version</c>.</summary>
     PinUnreadable,
+
+    /// <summary>A reviewer's account ran out (<see cref="ReviewerAccountOut"/>): it was benched, its cells are still
+    /// pending, and the run is resumable once the account is back.</summary>
+    AccountOut,
 }
 
 public sealed record GateCampaignReport(int Settled, int Refused, int Faulted, CampaignStop Stop, string Reason, IReadOnlyList<ProductPin> PinsSeen);
@@ -79,7 +83,7 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         var pool = new EndpointPool(options.PerEndpoint, inputs.Reviewers.Values);
         var reports = await Task.WhenAll(Enumerable.Range(1, options.Parallel).Select(n => LaneAsync(lanes(n), inputs, pool, options, stopping)));
 
-        return Outcome<GateCampaignReport>.Success(Report(reports, stopping));
+        return Outcome<GateCampaignReport>.Success(Report(reports, pool, stopping));
     }
 
     private async Task<DrainReport> LaneAsync(GateLane lane, GateCampaignInputs inputs, EndpointPool pool, GateCampaignOptions options, CancellationToken stopping)
@@ -111,6 +115,11 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         {
             var work = new GateCellWork(inputs.Run, cell, inputs.Reviewers[cell.Reviewer.Value], inputs.Tasks[cell.Task.Value], inputs.RunSettings, inputs.Key, owner);
             var settled = await lane.Runner.RunAsync(work, lane.Slot, cancellationToken);
+            if (settled is Outcome<GateCell>.Fail { Reason: var refusal } && ReviewerAccountOut.IsRefusal(refusal))
+            {
+                settled = await BenchAsync(lane, work, pool, refusal);
+            }
+
             progress(Line(cell, settled));
 
             return settled.Match(
@@ -121,6 +130,17 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         {
             pool.Release(inputs.Reviewers[cell.Reviewer.Value]);
         }
+    }
+
+    /// <summary>The reviewer's account is out. It is benched FIRST — the cell is still claimed by this lane — and only
+    /// then is the cell requeued, so no other lane can claim it between the two and one campaign can never spend attempt
+    /// after attempt on an empty account. The requeue gets no token: like a settle, it must land even during a stop.</summary>
+    private static async Task<Outcome<GateCell>> BenchAsync(GateLane lane, GateCellWork work, EndpointPool pool, string refusal)
+    {
+        pool.Bench(work.Reviewer, refusal);
+        var requeued = await lane.Store.RequeueUnmeasuredAsync(work.Cell.Id, work.Owner, work.Cell.Attempts, refusal, CancellationToken.None);
+
+        return Outcome<GateCell>.Failure(requeued is Outcome<GateCell>.Fail notRequeued ? $"{refusal} — and the requeue failed: {notRequeued.Reason}" : refusal);
     }
 
     private static string Line(GateCell cell, Outcome<GateCell> settled)
@@ -199,18 +219,24 @@ public sealed class GateCampaign(IProductPinReader pins, LegDrain drain, TimePro
         }
     }
 
-    private GateCampaignReport Report(DrainReport[] lanes, CancellationToken stopping)
+    private GateCampaignReport Report(DrainReport[] lanes, EndpointPool pool, CancellationToken stopping)
     {
-        var (stop, reason) = (Stopped, lanes.FirstOrDefault(l => l.Stop == DrainStop.TooManyFailures)) switch
+        var (stop, reason) = (Stopped, lanes.FirstOrDefault(l => l.Stop == DrainStop.TooManyFailures), pool.Benched) switch
         {
-            (true, _) => (_stop, _stopReason),
-            (_, { Stop: DrainStop.TooManyFailures } broken) => (CampaignStop.TooManyFailures, broken.Reason),
+            (true, _, _) => (_stop, _stopReason),
+            (_, { Stop: DrainStop.TooManyFailures } broken, _) => (CampaignStop.TooManyFailures, broken.Reason),
+            (_, _, { Count: > 0 } benched) => (CampaignStop.AccountOut, AccountOutReason(benched)),
             _ when stopping.IsCancellationRequested => (CampaignStop.Cancelled, "a stop was requested; the run is resumable"),
             _ => (CampaignStop.Drained, "every pending cell of the run is settled"),
         };
 
         return new GateCampaignReport(lanes.Sum(l => l.Scored), lanes.Sum(l => l.Refused), lanes.Sum(l => l.Faulted), stop, reason, [.. _pins]);
     }
+
+    private static string AccountOutReason(IReadOnlyDictionary<GateReviewerId, string> benched) =>
+        $"no further cell of {string.Join(", ", benched.Keys.Select(k => k.Value).Order(StringComparer.Ordinal))} was claimed — "
+        + string.Join("; ", benched.OrderBy(b => b.Key.Value, StringComparer.Ordinal).Select(b => b.Value))
+        + " — its cells stay pending; resume the run once the account is back";
 }
 
 /// <summary>The per-endpoint slots, shared by the lanes of one campaign. Claiming happens UNDER the pool's lock, among
@@ -220,6 +246,7 @@ public sealed class EndpointPool
     private readonly int _cap;
     private readonly IReadOnlyList<GateReviewer> _reviewers;
     private readonly Dictionary<string, int> _inflight = new(StringComparer.Ordinal);
+    private readonly Dictionary<GateReviewerId, string> _benched = [];
     private readonly SemaphoreSlim _lock = new(1, 1);
     private TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -248,8 +275,13 @@ public sealed class EndpointPool
 
             try
             {
-                var free = _reviewers.Where(r => _inflight.GetValueOrDefault(KeyOf(r)) < _cap).Select(r => r.Id).ToList();
+                var free = _reviewers.Where(r => !_benched.ContainsKey(r.Id) && _inflight.GetValueOrDefault(KeyOf(r)) < _cap).Select(r => r.Id).ToList();
                 var busy = _inflight.Values.Any(n => n > 0);
+
+                if (_benched.Count == _reviewers.Count)
+                {
+                    return Outcome<GateCell>.Failure(ClaimRefusal.NoPendingCell); // every reviewer's account is out: nothing here can be claimed
+                }
 
                 if (free.Count > 0)
                 {
@@ -286,14 +318,41 @@ public sealed class EndpointPool
         }
     }
 
-    public void Release(GateReviewer reviewer)
+    public void Release(GateReviewer reviewer) =>
+        Locked(() => _inflight[KeyOf(reviewer)] = Math.Max(0, _inflight.GetValueOrDefault(KeyOf(reviewer)) - 1));
+
+    /// <summary>Takes a reviewer out of the claimable set for the rest of this campaign — its account is out. Under the
+    /// same lock as every claim, so no claim decided after this returns can take one of its cells; the waiting lanes are
+    /// woken to see it. The first reason recorded is the one kept.</summary>
+    public void Bench(GateReviewer reviewer, string reason) =>
+        Locked(() => _benched.TryAdd(reviewer.Id, reason));
+
+    /// <summary>The reviewers benched so far, and why — a snapshot.</summary>
+    public IReadOnlyDictionary<GateReviewerId, string> Benched
+    {
+        get
+        {
+            _lock.Wait();
+
+            try
+            {
+                return new Dictionary<GateReviewerId, string>(_benched);
+            }
+            finally
+            {
+                _lock.Release();
+            }
+        }
+    }
+
+    /// <summary>Changes the pool's state under its lock and wakes every lane waiting for a change.</summary>
+    private void Locked(Action change)
     {
         _lock.Wait();
 
         try
         {
-            var key = KeyOf(reviewer);
-            _inflight[key] = Math.Max(0, _inflight.GetValueOrDefault(key) - 1);
+            change();
             var released = _released;
             _released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             released.TrySetResult();
