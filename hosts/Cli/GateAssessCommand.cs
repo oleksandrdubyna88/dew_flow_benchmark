@@ -208,9 +208,17 @@ public static class GateAssessCommand
             return (GateRunCommand.Refuse(error, ExitCodes.Configuration, rubric is Outcome<LoadedRubric>.Fail r ? r.Reason : ((Outcome<Domain.Registry.ModelRuntimeKind>.Fail)kind).Reason), null);
         }
 
+        if (TurnsRefusal(command, cli, row!) is { Length: > 0 } turns)
+        {
+            return (GateRunCommand.Refuse(error, ExitCodes.Configuration, turns), null);
+        }
+
         var executable = Executable(row!);
         return executable is Outcome<string>.Ok { Value: var exe }
-            ? (ExitCodes.Pass, new AssessorLaunch(row!, cli, exe, TimeSpan.FromMinutes(command.Int("wall-minutes", DefaultWallMinutes)), loaded))
+            ? (ExitCodes.Pass, new AssessorLaunch(row!, cli, exe, TimeSpan.FromMinutes(command.Int("wall-minutes", DefaultWallMinutes)), loaded)
+            {
+                Turns = AssessorTurns.Of(command.Int("max-turns", AssessorTurns.One.Value)) is Outcome<AssessorTurns>.Ok { Value: var ceiling } ? ceiling : AssessorTurns.One,
+            })
             : (GateRunCommand.Refuse(error, ExitCodes.Environment, ((Outcome<string>.Fail)executable).Reason), null);
     }
 
@@ -299,13 +307,21 @@ public static class GateAssessCommand
     };
 
     private static string AssessFlags(CommandLine command) =>
-        (Common(command), Suite(command).Length > 0, BatchSize.Of(command.Int("batch-size", BatchSize.Max))) switch
+        (Common(command), Suite(command).Length > 0, BatchSize.Of(command.Int("batch-size", BatchSize.Max)), AssessorTurns.Of(command.Int("max-turns", AssessorTurns.One.Value))) switch
         {
-            ({ Length: > 0 } common, _, _) => common,
-            (_, false, _) => "gate assess needs the suite — pass --suite-file (or set BENCH_GATE_SUITE); the seeds and the checkouts are its",
-            (_, _, Outcome<BatchSize>.Fail f) => $"--batch-size: {f.Reason}",
+            ({ Length: > 0 } common, _, _, _) => common,
+            (_, false, _, _) => "gate assess needs the suite — pass --suite-file (or set BENCH_GATE_SUITE); the seeds and the checkouts are its",
+            (_, _, Outcome<BatchSize>.Fail f, _) => $"--batch-size: {f.Reason}",
+            (_, _, _, Outcome<AssessorTurns>.Fail t) => $"--max-turns: {t.Reason}",
             _ => string.Empty,
         };
+
+    /// <summary>A turn ceiling named for an assessor whose CLI has no turn flag is refused, never dropped — the same rule
+    /// the launch applies to every option a CLI cannot spell.</summary>
+    private static string TurnsRefusal(CommandLine command, Domain.Registry.ModelRuntimeKind cli, GateReviewer assessor) =>
+        cli == Domain.Registry.ModelRuntimeKind.CliCodex && command.Value("max-turns").Length > 0
+            ? $"--max-turns sets a claude assessor's turn ceiling; '{assessor.Id}' runs on codex, which has none — drop the flag"
+            : string.Empty;
 
     private static string HandCheckFlags(CommandLine command) => Common(command);
 

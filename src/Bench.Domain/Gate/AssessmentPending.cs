@@ -19,6 +19,24 @@ public sealed record BatchSize
             : Outcome<BatchSize>.Failure($"a batch holds 1 to {Max} findings, got {value} — the strict rubric was calibrated on batches of {Max}");
 }
 
+/// <summary>A claude assessor's turn ceiling — ONE by specification (the benchmark plan, E4: one turn cannot read the
+/// code), raised only by the operator, and never above <see cref="Most"/>. Refused at the flag, like a batch size.</summary>
+public sealed record AssessorTurns
+{
+    public const int Most = 100;
+
+    private AssessorTurns(int value) => Value = value;
+
+    public int Value { get; }
+
+    public static AssessorTurns One { get; } = new(1);
+
+    public static Outcome<AssessorTurns> Of(int value) =>
+        value is >= 1 and <= Most
+            ? Outcome<AssessorTurns>.Success(new AssessorTurns(value))
+            : Outcome<AssessorTurns>.Failure($"a claude assessor's turn ceiling is 1 to {Most}, got {value} — a mistyped 3000 would be thousands of paid turns per batch");
+}
+
 /// <summary>Which blinded findings still need a reading from ONE assessor under ONE rubric, and in which batches.
 /// <para>
 /// A finding is pending when this assessor has no verdict on it under this rubric's hash, or ONLY

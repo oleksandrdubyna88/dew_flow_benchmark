@@ -1,5 +1,6 @@
 using Bench.Application;
 using Bench.Application.Gate;
+using Bench.Domain.Gate;
 using Bench.Domain.Registry;
 using Bench.Infrastructure.Models;
 using Bench.Infrastructure.Process;
@@ -38,6 +39,19 @@ public sealed class AssessorArgvTests
         argv.Should().ContainInConsecutiveOrder("--permission-mode", "plan");
         argv.Should().Contain("--strict-mcp-config");
         argv.Should().StartWith(["-p", "--model", "claude-opus-5"]);
+    }
+
+    /// <summary>The ceiling is the operator's (the benchmark plan, E4): with one turn a claude assessor that reaches for a
+    /// file stops at "Reached max turns (1)" and answers nothing — measured again 2026-09-30 on Opus 5.5, every batch. The
+    /// operator raised it for the Mistral assessment; the default stays one.</summary>
+    [Fact]
+    public void The_claude_assessors_turn_ceiling_is_the_one_the_operator_passed_and_codex_is_never_given_one()
+    {
+        var raised = CliArgv.For(ModelRuntimeKind.CliClaude, "claude-opus-5", FindingAssessor.OptionsFor(ModelRuntimeKind.CliClaude, Work, AssessorTurns.Of(30).Ok()), []).Ok();
+
+        raised.Should().ContainInConsecutiveOrder("--max-turns", "30");
+        FindingAssessor.OptionsFor(ModelRuntimeKind.CliCodex, Work, AssessorTurns.Of(30).Ok()).MaxTurns.Should().Be(0, "codex has no turn flag, and an option a CLI cannot spell is refused, never dropped");
+        FindingAssessor.OptionsFor(ModelRuntimeKind.CliClaude, Work).MaxTurns.Should().Be(1, "unless the operator raises it");
     }
 
     [Fact]

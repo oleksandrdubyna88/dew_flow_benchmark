@@ -9,7 +9,12 @@ namespace Bench.Application.Gate;
 
 /// <summary>Who assesses, and with what: a reviewer-catalog row (the assessor is a model plus its transport too), the
 /// executable resolved on THIS machine, a wall per call, and the rubric it is asked under.</summary>
-public sealed record AssessorLaunch(GateReviewer Assessor, ModelRuntimeKind Kind, string Executable, TimeSpan Wall, LoadedRubric Rubric);
+public sealed record AssessorLaunch(GateReviewer Assessor, ModelRuntimeKind Kind, string Executable, TimeSpan Wall, LoadedRubric Rubric)
+{
+    /// <summary>A claude assessor's turn ceiling — ONE by specification, raised only by the operator (<c>--max-turns</c>).
+    /// With one turn an assessor that reaches for a file stops before answering; codex has no such ceiling.</summary>
+    public AssessorTurns Turns { get; init; } = AssessorTurns.One;
+}
 
 /// <summary>One batch put to the assessor: its id, its task, the blinded rows, the task's seed ids (what a
 /// <c>seed_hit</c> may name) and the cluster keys earlier batches of the task already minted.</summary>
@@ -76,8 +81,10 @@ public sealed class FindingAssessor(ICliAgentRuntime runtime, IGateAssessmentFil
     };
 
     /// <summary>The launch options per CLI: the read-only sandbox, the schema and the answer file for codex; plan mode, the
-    /// write tools denied and one turn for claude; MCP servers off for both.</summary>
-    public static AgentAskOptions OptionsFor(ModelRuntimeKind kind, string batchDirectory) => kind == ModelRuntimeKind.CliCodex
+    /// write tools denied and the turn ceiling for claude (one unless the operator raised it); MCP servers off for both.</summary>
+    public static AgentAskOptions OptionsFor(ModelRuntimeKind kind, string batchDirectory) => OptionsFor(kind, batchDirectory, AssessorTurns.One);
+
+    public static AgentAskOptions OptionsFor(ModelRuntimeKind kind, string batchDirectory, AssessorTurns turns) => kind == ModelRuntimeKind.CliCodex
         ? new AgentAskOptions
         {
             Sandbox = AgentSandbox.ReadOnly,
@@ -89,7 +96,7 @@ public sealed class FindingAssessor(ICliAgentRuntime runtime, IGateAssessmentFil
         {
             Sandbox = AgentSandbox.ReadOnly,
             DisallowedTools = ["Edit", "Write", "NotebookEdit"],
-            MaxTurns = 1,
+            MaxTurns = turns.Value,
             McpServersOff = true,
         };
 
@@ -114,7 +121,7 @@ public sealed class FindingAssessor(ICliAgentRuntime runtime, IGateAssessmentFil
         var answer = await runtime.AskAsync(
             new AgentAsk(launch.Kind, launch.Executable, prompt, directory, launch.Wall, launch.Assessor.Definition.Model)
             {
-                Options = OptionsFor(launch.Kind, directory),
+                Options = OptionsFor(launch.Kind, directory, launch.Turns),
             },
             cancellationToken);
 

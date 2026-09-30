@@ -99,7 +99,7 @@ flowchart TB
         output["AssessorOutput.Read → BatchReading<br/>Answered(rows, missing) · Failed(Unparseable · Truncated · UnknownIds · NoAnswer)<br/>a seed_hit must be the row's own task's"]
         pending["AssessmentPending · BatchSize ≤ 24 · VendorFamily<br/>HandCheck · HandCheckGate · HandCheckAnswers"]
         pass["GateAssessmentPass — export → pending → batches<br/>retry a failed batch once, re-ask missing once · log then database per batch"]
-        assessor["FindingAssessor over ICliAgentRuntime<br/>codex -s read-only --output-schema · claude plan mode, Edit/Write/NotebookEdit denied, --max-turns 1"]
+        assessor["FindingAssessor over ICliAgentRuntime<br/>codex -s read-only --output-schema · claude plan mode, Edit/Write/NotebookEdit denied, --max-turns 1 unless the operator raises it"]
         verdictstore["PostgresGateVerdictStore : IGateVerdictStore<br/>a stored finding or the batch refused · replay-safe · hand-checks"]
         assessfiles["FileSystemGateAssessmentFiles : IGateAssessmentFiles<br/>assess/key.json (locked, atomic) · verdicts/per assessor · batches/ · hand-check/"]
         acli["bench gate assess · hand-check sample | record"]
@@ -295,11 +295,14 @@ flowchart TB
 - `bench gate suite verify --suite-file … [--checkout-root …]` — every task's checkout at its variant head with its
   plan committed there, or carried by the suite (`planText`) at a path the head does NOT commit; 3 when any is not.
 - `bench gate assess --run <id>[,<id>…] | --scope <suite stamp> --assessor <reviewer id> [--rubric strict-v1]
-  --suite-file … --artifact-root … --db … [--checkout-root …] [--batch-size 24] [--wall-minutes 90] [--prompts prompts]`
+  --suite-file … --artifact-root … --db … [--checkout-root …] [--batch-size 24] [--wall-minutes 90] [--prompts prompts]
+  [--max-turns 1]`
   (E4) — refused in the order a person fixes things: flags 4 (a `--batch-size` outside 1–24, `--run` and `--scope`
-  together, neither) · the suite file 3 · the suite, the artefact root 4 · the rubric files 3 · the database 3 · a run of
-  another suite or a scope that is not the suite file's stamp 4 · the assessor not in the catalog, or not a codex/claude
-  row 4 · its executable reference unset 3 · a row with NO reference whose runtime word does not resolve to a native
+  together, neither, a `--max-turns` outside 1–100) · the suite file 3 · the suite, the artefact root 4 · the rubric files 3 ·
+  the database 3 · a run of another suite or a scope that is not the suite file's stamp 4 · the assessor not in the
+  catalog, or not a codex/claude row 4 · `--max-turns` for a codex assessor 4 (codex has no turn ceiling; an option a CLI
+  cannot spell is refused, never dropped) · its executable reference unset 3 · a row with NO reference whose runtime word
+  does not resolve to a native
   executable 3 (fidelity plan D5, `CliExecutable`: the word is resolved as a shell resolves it, first `PATH` directory,
   `PATHEXT` order; a `.cmd`/`.bat`/`.ps1` shim is refused naming it — never launched through `cmd.exe` — as is a word on
   no directory; both BEFORE a batch is sent, where they used to be recorded finding by finding as *assessment failed*) ·
@@ -679,7 +682,7 @@ by default (D4); a checkout build is "the product", pinned by sha (`ProductPin`)
 assessor and the Claude CLI for an agreement figure (E4 — built; **measured 2026-09-28 against Claude Code 2.1.258:
 with `--max-turns 1` a claude assessor that reaches for a read tool prints `Error: Reached max turns (1)` and exits 0,
 while three turns read the file and answered**, so as specified the Claude assessor cannot read the code; the pass
-records such a batch as `NoAnswer` naming the turn ceiling, and the ceiling is the operator's to raise); the lenient 09-05/09-06 verdicts in their own
+records such a batch as `NoAnswer` naming the turn ceiling, and the ceiling is the operator's to raise. **Raised by the operator on 2026-09-30, to 30, for the Mistral assessment** (`bench gate assess --max-turns 30`): Opus 5.5 on the Claude CLI 2.1.284 answered NO batch at one turn — every one stopped at `Reached max turns (1)` — and the default stays one); the lenient 09-05/09-06 verdicts in their own
 labelled column (`RubricKind.LenientWorth` is a separate population everywhere); the seeded 8-defect plan and
 coai's own plans may go in `samples/`; the suite file lives in the local artefact root outside git; CLI
 reviewers show *cost unknown*, never zero (`CapturedUsd`, `ReviewerPrices.Unknown`, `Figure.Unknown`); the
