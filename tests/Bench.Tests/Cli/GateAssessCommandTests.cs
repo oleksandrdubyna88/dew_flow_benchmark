@@ -21,6 +21,8 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
     [InlineData("--batch-size", "25")]
     [InlineData("--scope", "both")]
     [InlineData("--run", "")]
+    [InlineData("--max-turns", "0")]
+    [InlineData("--max-turns", "101")]
     public void A_bad_invocation_is_a_configuration_error_before_anything_is_opened(string flag, string value)
     {
         var args = new List<string> { "gate", "assess", "--db", "Host=x", "--artifact-root", "a", "--suite-file", "s.json", "--assessor", "codex-astra", "--run", Guid.NewGuid().ToString() };
@@ -34,6 +36,7 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
             "--assessor" => "--assessor",
             "--batch-size" => "1 to 24",
             "--scope" => "name the same thing twice",
+            "--max-turns" => "--max-turns",
             _ => "--run <id>",
         });
     }
@@ -55,10 +58,14 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
         var suite = Path.Combine(rig.Root, "suite.json");
         await File.WriteAllTextAsync(suite, AssessRig.SuiteJson, Ct);
         var apiId = $"api-{Guid.NewGuid():N}"[..12];
+        var codexId = $"codex-{Guid.NewGuid():N}"[..14];
         await using (var db = postgres.NewContext())
         {
             (await new PostgresGateReviewerCatalog(db).AddAsync(
                 GateReviewer.Create(GateReviewerId.Parse(apiId).Ok(), GateReviewerTests.Definition().Ok(), DateTimeOffset.UtcNow), Ct)).Ok();
+            (await new PostgresGateReviewerCatalog(db).AddAsync(
+                GateReviewer.Create(GateReviewerId.Parse(codexId).Ok(),
+                    GateReviewerTests.Definition(model: "gpt-6-astra", endpoint: "", keyName: "", credsKeyRef: "", runtime: ReviewerRuntime.Codex).Ok(), DateTimeOffset.UtcNow), Ct)).Ok();
         }
 
         string[] Args(string assessor, params string[] more) =>
@@ -76,6 +83,10 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
         var api = Run(Args(apiId, "--run", rig.Campaign.ToString()));
         api.Code.Should().Be(ExitCodes.Configuration, api.Error);
         api.Error.Should().Contain("a codex or claude row");
+
+        var codexTurns = Run(Args(codexId, "--run", rig.Campaign.ToString(), "--max-turns", "30"));
+        codexTurns.Code.Should().Be(ExitCodes.Configuration, codexTurns.Error);
+        codexTurns.Error.Should().Contain("--max-turns").And.Contain("claude");
     }
 
     [Fact]
@@ -103,7 +114,8 @@ public sealed class GateAssessCommandTests(PostgresFixture postgres)
                 args.AddRange(["--scope", "gate-assess-test#000000000000"]);
                 break;
             case "--batch-size":
-                args.AddRange(["--batch-size", value]);
+            case "--max-turns":
+                args.AddRange([flag, value]);
                 break;
             default:
                 args.RemoveRange(at, 2);
