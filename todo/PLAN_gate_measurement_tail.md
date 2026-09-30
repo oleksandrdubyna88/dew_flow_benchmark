@@ -26,8 +26,8 @@ rates are withheld until a hand-check covers them (E4). Two of its five reviewer
   3 October.
 
 **Neither gap is re-run (the operator, 2026-09-29).** Fable's cells and the seven account-out cells stay as
-RESULTS_gate_s73.md records them. What remains is the hand-check over what exists, and the lane stop, so that a future
-campaign which meets a spend limit stops instead of burning its cells.
+RESULTS_gate_s73.md records them. What remains is the hand-check over what exists. The lane stop, so that a future campaign
+which meets a spend limit stops instead of burning its cells, was built on 2026-09-30 (T5).
 
 ## 2. The items
 

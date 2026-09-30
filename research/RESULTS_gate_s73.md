@@ -156,6 +156,7 @@ the heaviest reviewer of the five by far: 0.5–1 M tokens in per review.
 - **Done since:** the fidelity plan
   ([PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md), IMPLEMENTED 2026-09-29). Its D4, coai
   #622, keeps the Claude CLI's reason, so a spend limit now reads as one.
-- **Open**, in [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md):
-  - the hand-check (T1);
-  - the lane stop (T5).
+- **Done since, 2026-09-30:**
+  - the lane stop (T5, #59): a reviewer whose account ran out is benched, not measured;
+  - Mistral Medium 3.5 on the same inputs ([RESULTS_gate_mistral.md](RESULTS_gate_mistral.md)).
+- **Open**, in [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): the hand-check (T1).

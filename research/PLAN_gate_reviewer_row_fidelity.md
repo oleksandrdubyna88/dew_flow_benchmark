@@ -1,8 +1,9 @@
 # PLAN — a reviewer row that says what the product will do: thinking in three states, the price tier, the import's label
 
 > Status: **IMPLEMENTED, 2026-09-29.** D1, D2, D3 and D5 in this repository (PR #57), D4 in coai (PR #622, merged). The
-> deviations are under *As built* below. The open tail, D4's bench-side lane stop, is T5 of
-> [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md). References re-verified against `main` `3e08dd7`. Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
+> deviations are under *As built* below. D4's bench-side lane stop was T5 of
+> [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): built 2026-09-30 (#59), and checked on coai
+> mcp 0.40.4. References re-verified against `main` `3e08dd7`. Scope: `src/Bench.Domain/Gate/ReviewerDefinition.cs`,
 > `CoaiVendorsSetting.cs`, `CoaiVendorRow.cs`, `src/Bench.Domain/Gate/Import/CalibRecord.cs`, `src/Bench.Infrastructure/Persistence`
 > (the `gate_reviewers.Thinking` column), `hosts/Cli/GateToolsCommand.cs` (`reviewers add`), `hosts/Cli/GateAssessCommand.cs` (the assessor's launch), one migration; one
 > cross-repository item in `dew_flow_connect_other_ais` (D4, its own pull request there).
