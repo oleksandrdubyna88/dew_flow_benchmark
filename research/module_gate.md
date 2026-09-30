@@ -80,13 +80,13 @@ flowchart TB
         report["GateReport.PerModel / PerTask / Variance / Scopes<br/>Figure · Quantile.Q · PythonRound · SeedEvidence.Classify"]
     end
     subgraph store["the store (E2) — ports in Bench.Application.Gate, adapters in Bench.Infrastructure"]
-        pgstore["PostgresGateStore : IGateStore<br/>six gate_* tables · guarded claim · one-statement hand-back<br/>the sweep never reaches a Finished or Failed run"]
+        pgstore["PostgresGateStore : IGateStore<br/>six gate_* tables · guarded claim · one-statement hand-back and requeue<br/>the sweep never reaches a Finished or Failed run"]
         artstore["FileSystemGateArtifactStore : IGateArtifactStore<br/>artefact root OUTSIDE git · CellPaths · links resolved<br/>stage → flush → hash → rename · file-hash.key owner-only"]
         completion["GateCellCompletion<br/>artefacts, run.json last → refs → settle"]
         pub["PublicationGuard + FailureRedaction<br/>PostgresGatePublicationSource: every gate_* row, from the EF model<br/>bench gate export --public · bench gate prune"]
     end
     subgraph driver["the driver (E3) — Application over ports, adapters in Infrastructure"]
-        campaign["GateCampaign<br/>--parallel lanes (LegDrain) · EndpointPool: claim only where the endpoint has room<br/>pin read per claim · a moved product stops the run unless allowed"]
+        campaign["GateCampaign<br/>--parallel lanes (LegDrain) · EndpointPool: claim only where the endpoint has room<br/>pin read per claim · a moved product stops the run unless allowed<br/>an empty account benches its reviewer, then requeues the cell"]
         runner["GateCellRunner — one cell attempt<br/>fresh attempt dir · gate-owned clone + run ref · CoaiEnvironment (secret last)<br/>ONE process in the lane's LaneSlot · protocol under the cell deadline"]
         protocols["PlanGateProtocol · CodeGateProtocol · FeatureGateProtocol<br/>open → review → resolve accept-all · plan loop ≤ 4 · again never sent"]
         mcp["McpStdioClient over ProcessSession<br/>handshake first · absolute per-call timeout kills the tree · stderr streamed, scrubbed"]
@@ -418,6 +418,40 @@ cause recorded on the cell (`refused before launch: …`, shown by `status`), an
 still ends a dead environment (exit 3). A product that STARTED and then failed is a measured attempt: it settles
 `Failed` and counts. `run` and `resume` also resolve every reviewer's references and key before anything is planned.
 
+**An empty account is not a measurement** (T5 of `todo/PLAN_gate_measurement_tail.md`, 2026-09-30).
+
+- **The symptom.** On 2026-09-29 three accounts ran dry in a day, and every cell after that settled as a result:
+  verdict `Unknown`, "the plan loop never passed". A settled cell resets the lane breaker, so 44 Fable cells went
+  that way.
+- **How it is recognised.** `ReviewerAccountOut.Reason` reads a stage reply's `reviewers` line. It matches when
+  NOBODY answered and the failure names an account running out:
+  - the markers are `spend limit`, `usage limit`, `credit balance`, `insufficient credit`, `insufficient_quota`,
+    `(HTTP 402)` and `refused the key`;
+  - it does not match a plain `rate limited`, `billing` alone, or `connection refused`;
+  - it does not match the empty `exit 1 (the CLI said nothing on stderr)` that the Claude CLI produced before coai
+    #622.
+- **What the runner does.** When any stage of a session reads that way, the runner does not settle. It returns a
+  refusal starting with `ReviewerAccountOut.Marker` and leaves the cell claimed.
+- **What the campaign does, in this order.**
+  1. It benches the reviewer in `EndpointPool`, under the claim lock. No lane claims that reviewer again this
+     campaign; the other reviewers keep running.
+  2. Only then does it requeue the cell (`IGateStore.RequeueUnmeasuredAsync`). This is the same guarded UPDATE as the
+     hand-back above, except that the attempt stays counted: its directory exists, so the next claim takes
+     `attempt-N+1`. It is never abandoned.
+
+  Requeue-then-bench would let a freed lane re-claim the cell inside that window. A test proves this: with the order
+  swapped, a cell reaches attempt 2.
+- **What is kept.** The stage replies are not written, but the attempt's `stderr.txt` keeps the product's full
+  `failed: …` line.
+- **The lane breaker** still counts the refusal. Benching bounds it at `--per-endpoint` per out reviewer.
+- **The campaign's stop.** It ends `AccountOut` and names each benched reviewer and why. `run` / `resume` then:
+  - exit 3 (`ExitCodes.Environment`);
+  - print `pending        <reviewer> <n>`;
+  - name `bench gate resume --run <id>`;
+  - leave the run unfinished.
+
+  A resume after the account is back measures the requeued cells in fresh attempts.
+
 **The child's environment is inherited, the artefacts are scrubbed** (the coordinator's decision, 2026-09-28): the
 product runs with the harness's environment minus `COAI_*` and the creds-ref variable, as the editor launches it — a
 CLI reviewer may sign in through a variable — and every text the harness WRITES is scrubbed of the vault key and of
@@ -453,7 +487,10 @@ takes the cell, so a lane that waited an hour for its endpoint sees the product 
 seen are listed. The per-endpoint cap is enforced AT THE CLAIM (`EndpointPool`): under one lock, a lane claims only
 among reviewers whose endpoint has a free slot (`IGateStore.ClaimNextAmongAsync`), and waits for a release only when
 every pending cell's endpoint is full — so no lane holds a claimed cell at the head of the line while another endpoint
-idles. The endpoint key is the url value, the reference name, or a CLI row's runtime word.
+idles. The endpoint key is the url value, the reference name, or a CLI row's runtime word. A reviewer whose account ran
+out is BENCHED in the same pool (see *An empty account is not a measurement* above). Its cells are skipped by every
+later claim, and a lane stops claiming once every reviewer is benched, or once nothing unbenched is pending and nothing
+is in flight.
 
 **Measured against the real product** (`GateDriverLiveTests`, 2026-09-28, the installed coai-mcp 0.39.0, a `local`
 reviewer at a loopback stand-in vendor): `providers` answered, one plan cell completed — verdict proceed, valid, one

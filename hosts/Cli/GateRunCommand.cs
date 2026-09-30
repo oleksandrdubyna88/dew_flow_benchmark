@@ -252,15 +252,27 @@ public static class GateRunCommand
         output.WriteLine($"campaign       {report.Settled} cell(s) settled, {report.Refused} refused, {report.Faulted} faulted — {report.Stop}: {report.Reason}");
         output.WriteLine($"pins seen      {string.Join("; ", report.PinsSeen.Select(p => p.Describe))}");
         output.WriteLine($"footprint      run {run.Id}: {(await inputs.Artifacts.FootprintAsync(run.Id, CancellationToken.None)).Describe}");
+        if (Pending(cells) is { Length: > 0 } pending)
+        {
+            output.WriteLine($"pending        {pending}");
+        }
 
         return report.Stop switch
         {
             CampaignStop.ProductMoved => Refuse(error, ExitCodes.Configuration, report.Reason),
             CampaignStop.PinUnreadable or CampaignStop.TooManyFailures => Refuse(error, ExitCodes.Environment, report.Reason),
+            CampaignStop.AccountOut => Refuse(error, ExitCodes.Environment, $"{report.Reason} (bench gate resume --run {run.Id})"),
             CampaignStop.Drained when report.Settled > 0 => ExitCodes.Pass,
             _ => Refuse(error, ExitCodes.NoReport, $"no cell was produced — {report.Reason}; the run is resumable (bench gate resume --run {run.Id})"),
         };
     }
+
+    /// <summary>The cells still pending, per reviewer — what a benched reviewer left for the resume.</summary>
+    private static string Pending(IReadOnlyList<GateCell> cells) =>
+        string.Join(" · ", cells.Where(c => c.State == CellState.Pending)
+            .GroupBy(c => c.Reviewer.Value, StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => $"{g.Key} {g.Count()}"));
 
     private static async Task<GateRun> PersistAsync(
         CommandLine command, GateCliInputs inputs, GateKind gate, DataDirMode mode, GateRunSettings settings, IReadOnlyList<GateMatrixCell> matrix, CancellationToken cancellationToken)

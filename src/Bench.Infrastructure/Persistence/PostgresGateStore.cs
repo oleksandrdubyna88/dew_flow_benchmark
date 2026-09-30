@@ -231,21 +231,32 @@ public sealed class PostgresGateStore(BenchDbContext db, TimeProvider clock) : I
 
     public Task<bool> HasFindingsAsync(CancellationToken cancellationToken) => db.GateFindings.AnyAsync(cancellationToken);
 
-    public async Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken)
+    /// <summary>Refused before launch: the attempt is given back with the cell.</summary>
+    public Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken) =>
+        ReturnClaimAsync(cellId, owner, attempt, cause, attemptsGivenBack: 1, cancellationToken);
+
+    /// <summary>The session ran and met an empty account: the attempt stays counted, so the next claim is a fresh one.</summary>
+    public Task<Outcome<GateCell>> RequeueUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken) =>
+        ReturnClaimAsync(cellId, owner, attempt, cause, attemptsGivenBack: 0, cancellationToken);
+
+    /// <summary>The ONE guarded UPDATE both unmeasured returns share — still claimed, by this owner, at this attempt, in a
+    /// run that has not ended — differing only in whether the attempt goes back with the cell.</summary>
+    private async Task<Outcome<GateCell>> ReturnClaimAsync(
+        Guid cellId, WorkerIdentity owner, int attempt, string cause, int attemptsGivenBack, CancellationToken cancellationToken)
     {
-        var handed = await Live(db.GateCells)
+        var returned = await Live(db.GateCells)
             .Where(c => c.Id == cellId && c.State == CellState.Claimed && c.Attempts == attempt
                         && c.Owner == owner.Label && c.OwnerHost == owner.Host && c.OwnerPid == owner.Pid)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(c => c.State, CellState.Pending)
-                      .SetProperty(c => c.Attempts, c => c.Attempts - 1)
+                      .SetProperty(c => c.Attempts, c => c.Attempts - attemptsGivenBack)
                       .SetProperty(c => c.Owner, string.Empty)
                       .SetProperty(c => c.OwnerHost, string.Empty)
                       .SetProperty(c => c.OwnerPid, 0)
                       .SetProperty(c => c.FailureText, cause),
                 cancellationToken);
 
-        return handed == 1
+        return returned == 1
             ? await CellAsync(cellId, cancellationToken)
             : Outcome<GateCell>.Failure($"gate cell {cellId} is not claimed by {owner.Canonical} at attempt {attempt} — nothing was handed back");
     }

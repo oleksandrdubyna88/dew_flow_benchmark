@@ -62,6 +62,33 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
         status.Output.Should().Contain("pending        0").And.Contain("settled        2").And.Contain("pins seen").And.Contain("isolated data directories");
     }
 
+    /// <summary>T5 through the binary: a campaign whose reviewer's account is out is the ENVIRONMENT — exit 3, the run left
+    /// running with its cells pending, and the resume named — never a pass over cells that measured nothing.</summary>
+    [Fact]
+    public async Task A_campaign_whose_reviewers_account_is_out_exits_as_the_environment_and_leaves_the_run_resumable()
+    {
+        await using var setup = await CliSetup.StartAsync(postgres);
+        var script = Path.Combine(setup.ArtifactRoot, "..", "account-out.json");
+        await File.WriteAllTextAsync(script, new JsonObject { ["accountOut"] = new JsonObject { ["rev-a"] = "exit 1: You've hit your monthly spend limit. (HTTP 429)" } }.ToJsonString(), Ct);
+        Environment.SetEnvironmentVariable("FAKE_COAI_SCRIPT", script);
+
+        try
+        {
+            var (code, output, error) = Run(setup.RunArgs("plan"));
+
+            code.Should().Be(ExitCodes.Environment, output + error);
+            error.Should().Contain("monthly spend limit").And.Contain("bench gate resume --run");
+            output.Should().Contain("AccountOut").And.Contain("pending        rev-a 2");
+            var runId = Guid.Parse(output.Split("gate run ")[1][..36]);
+            await using var db = PostgresFixture.Context(setup.Connection);
+            (await new PostgresGateStore(db, TimeProvider.System).LoadAsync(runId, Ct)).Ok().Status.Should().NotBe(GateRunStatus.Finished, "its cells are still to be measured");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKE_COAI_SCRIPT", null);
+        }
+    }
+
     [Fact]
     public async Task Status_lists_claimed_cells_with_owner_and_age_and_abandoned_ones_with_their_cause_and_claims_nothing()
     {

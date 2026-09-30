@@ -208,7 +208,7 @@ public sealed class Server(Script script)
         WriteSession(arguments);
         _events.Write($"review-end {endpoint}");
 
-        var reply = script.ReplyFor(tool, call) as JsonObject ?? DefaultReview(tool);
+        var reply = AccountOut() is { Length: > 0 } sentence ? NobodyAnswered(sentence) : script.ReplyFor(tool, call) as JsonObject ?? DefaultReview(tool);
         if (script.Root["replyEchoesKey"]?.GetValue<bool>() == true)
         {
             reply["instruction"] = $"resolve with key {Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}";
@@ -260,6 +260,31 @@ public sealed class Server(Script script)
         ["instruction"] = "resolve every finding",
         ["cost"] = new JsonObject { ["tokensIn"] = 1000, ["tokensOut"] = 100 },
     };
+
+    /// <summary>The failure sentence the script's <c>accountOut</c> map gives THIS process's reviewer (the first vendor
+    /// row's id), or empty — the switch a test uses to put one reviewer's account out while another's still answers.</summary>
+    private string AccountOut() =>
+        script.Root["accountOut"]?[VendorId()]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>A round no reviewer answered, worded as the product words it: the reviewer, its role, and what failed.</summary>
+    private static JsonObject NobodyAnswered(string sentence)
+    {
+        var line = $"0 of 1 reviewers answered; failed: {VendorId()}/PlanCritique: {sentence}";
+
+        return new JsonObject
+        {
+            ["verdict"] = "call_human",
+            ["gatingCount"] = 0,
+            ["threshold"] = 6,
+            ["reviewers"] = line,
+            ["findings"] = new JsonArray(),
+            ["instruction"] = $"Rounds exhausted: no reviewer answered — nothing was reviewed. {line}. A human decides.",
+            ["cost"] = new JsonObject { ["tokensIn"] = 0, ["tokensOut"] = 0 },
+        };
+    }
+
+    private static string VendorId() =>
+        (JsonNode.Parse(Environment.GetEnvironmentVariable("COAI_VENDORS") ?? "[]") as JsonArray)?.FirstOrDefault()?["id"]?.GetValue<string>() ?? string.Empty;
 
     private static JsonObject Error(string text) => new() { ["error"] = text };
 

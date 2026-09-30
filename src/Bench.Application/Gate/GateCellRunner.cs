@@ -33,6 +33,11 @@ public sealed record GateCellWork(GateRun Run, GateCell Cell, GateReviewer Revie
 /// back → facts, findings (hashes to the database, text to the artefact root), the settings check → every artefact
 /// committed with the run record LAST → the settle. A session that broke is a FAILED cell with its cause; a session
 /// that ended with a verdict nobody may build on is a completed, INVALID run.
+/// </para>
+/// <para>
+/// One session is neither: a round nobody answered because the reviewer's ACCOUNT is out (<see cref="ReviewerAccountOut"/>).
+/// That cell is not settled — the refusal starts with <see cref="ReviewerAccountOut.Marker"/> and the cell is left claimed,
+/// for the caller to bench the reviewer and then requeue it (<see cref="IGateStore.RequeueUnmeasuredAsync"/>).
 /// </para></summary>
 public sealed class GateCellRunner(
     IGateStore store,
@@ -214,6 +219,13 @@ public sealed class GateCellRunner(
 
         var run = Scrubbed(session.Run, prepared.Child.Scrub);
 
+        // An empty account is the environment, not a result: nothing is settled, and the cell is left CLAIMED for the
+        // campaign, which benches the reviewer BEFORE it requeues the cell — so no other lane can claim it in between.
+        if (AccountOut(run) is { Length: > 0 } why)
+        {
+            return Outcome<GateCell>.Failure(ReviewerAccountOut.Refusal(FailureRedaction.Redact(why, settings.PrivateNames)));
+        }
+
         var evidence = Read(work, scope, prepared, run, ledgerPath, ledgerOffset, stderrPath, session.ServerVersion, marked, mark);
 
         return await CompleteAsync(work, scope, evidence, Settlement(work, run, evidence), cancellationToken);
@@ -311,6 +323,11 @@ public sealed class GateCellRunner(
             Notes = evidence.Notes,
         };
     }
+
+    /// <summary>Why the reviewer's account was out, from the first stage whose round nobody answered for that reason — a
+    /// code cell meets it in its plan loop, before <c>review_code</c> is ever called — or empty.</summary>
+    private static string AccountOut(ProtocolRun run) =>
+        run.Stages.Append(run.Measured).Select(s => ReviewerAccountOut.Reason(s.Reply)).FirstOrDefault(r => r.Length > 0) ?? string.Empty;
 
     private GateSettlement.Failed Failed(FailureKind kind, string reason, GateCellWork work) =>
         new(FailureRedaction.Redact(new FailureCause(kind, reason), settings.PrivateNames));

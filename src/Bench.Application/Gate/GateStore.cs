@@ -47,6 +47,12 @@ public interface IGateStore
     /// toward Abandoned. The cause (redacted) is recorded on the cell.</summary>
     Task<Outcome<GateCell>> HandBackUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken);
 
+    /// <summary>Hands a claimed cell back AFTER its session ran and measured nothing the bench may use — the reviewer's
+    /// account was out (<see cref="ReviewerAccountOut"/>). The same guarded UPDATE as <see cref="HandBackUnmeasuredAsync"/>,
+    /// except that the attempt STAYS counted: its directory exists, so the next claim takes a fresh one. Never abandons —
+    /// an empty account is not the cell's fault. The cause (redacted) is recorded on the cell.</summary>
+    Task<Outcome<GateCell>> RequeueUnmeasuredAsync(Guid cellId, WorkerIdentity owner, int attempt, string cause, CancellationToken cancellationToken);
+
     /// <summary>Hands back the stale claims whose owner is provably gone — each with ONE guarded UPDATE that
     /// re-checks the state, the owner, the claim time and the attempt count it decided on — and never a cell of a
     /// run that is <see cref="GateRunStatus.Finished"/> or <see cref="GateRunStatus.Failed"/>.</summary>
