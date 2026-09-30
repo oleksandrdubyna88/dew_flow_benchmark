@@ -1,6 +1,6 @@
-# RESULTS — Mistral Medium 3.5 on the S7.3 plan and code gates
+# RESULTS — Mistral Medium 3.5 on the S7.3 plan, code and feature gates
 
-> Status: **measured, 2026-09-30.**
+> Status: **measured, 2026-09-30.** The feature gate was added the same day, with 1 repeat.
 > - **What ran:** Mistral Medium 3.5 (`mistralai/mistral-medium-3-5`, through OpenRouter, at the vendor's default
 >   thinking), over the same seven seeded tasks, gates, repeats, product commit, settings and assessor as
 >   [RESULTS_gate_s73.md](RESULTS_gate_s73.md).
@@ -17,9 +17,9 @@
 |---|---|
 | suite | `gate-seeded#0d0da7662eab`, the S7.3 suite file `suite-s73b.json` unchanged |
 | product | coai `3f351c05`, 0 dirty files, rebuilt 2026-09-30 in a clean worktree as the same Debug build |
-| harness | `bench` `99f0cc5` |
-| runs | plan `01a0f1b6`, code `01a0f1ba`: 7 tasks × 3 repeats = 21 cells each, isolated data directories, `--parallel 2 --per-endpoint 2` |
-| reviewer | `openrouter-mistral-medium-3-5`: api, `https://openrouter.ai/api/v1`, dialect openai, thinking at the vendor's default (no `thinking` field), list price $1.50 / $7.50 per M tokens in / out, the other api rows' transport (8192 max tokens, 20 min, 3 follow-ups) |
+| harness | `bench` `99f0cc5` (plan, code) and `699db4b` (feature) |
+| runs | plan `01a0f1b6`, code `01a0f1ba`: 7 tasks × 3 repeats = 21 cells each. Feature `01a0f28e`: 7 tasks × **1** repeat = 7 cells, at the operator's choice. All with isolated data directories, `--parallel 2 --per-endpoint 2` |
+| reviewer | `openrouter-mistral-medium-3-5` (plan, code) and `openrouter-mistral-medium-3-5-all` (the same definition, ticked for all three gates, because a row is never edited): api, `https://openrouter.ai/api/v1`, dialect openai, thinking at the vendor's default (no `thinking` field), list price $1.50 / $7.50 per M tokens in / out, the other api rows' transport (8192 max tokens, 20 min, 3 follow-ups) |
 | assessor | `codex-gpt-6-astra-exe`, `strict-v1`, as in S7.3 |
 | reading | `bench gate report --gate … --scope <scope id> --rubric strict-v1 --run <campaign>` |
 
@@ -31,7 +31,8 @@ Cell counts, "invalid" counts and the campaign cost totals are over **all 21 cel
 
 **Why the scope differs.** The same commit rebuilt is not byte-identical: this build hashes `8b1c538643ca`, S7.3's
 `44467c1c14a5`. The report refuses to mix two product binaries in one table. So Mistral's figures are reported from
-their own scopes, `dabef85d5da4` (plan) and `6e8e3e1f1827` (code), and set beside S7.3's figures from its record.
+their own scopes, `dabef85d5da4` (plan), `6e8e3e1f1827` (code) and `a797c446cdb4` (feature), and set beside the
+other reviewers' figures from their records.
 
 Same product code and settings, different bytes. What that could change is not measured here.
 
@@ -84,6 +85,35 @@ missed too.
 The invalid cells are again all `GoodEnough`: 8 of the 15 measured runs (hence 46.7 % valid), and 13 of all 21 cells.
 On the calibration tasks, reported apart, it hit 0 seeds in 6 runs.
 
+## Feature gate (`01a0f28e`)
+
+**Every row is over the measured tasks only, and so is every column.**
+- **Mistral:** 5 runs, one per task.
+- **The other reviewers:** the 2026-09-27 calibration, 15 runs each, the "measured tasks (calibration tasks excluded)"
+  table of [RESULTS_gate_feature_first_real_report.md](RESULTS_gate_feature_first_real_report.md). deepseek's one
+  invalid run is among its 15. That calibration ran
+through the Python harness on another suite stamp (`gate-seeded#fb80578c897f`, scope `a9f0231334d8`), so this is a
+comparison across harnesses as well as scopes.
+
+| reviewer | runs | valid % | findings / run | **seeds hit / run** (of 2) | high-value / run | overstated % | s p50 | cost / run | cost / seed |
+|---|---|---|---|---|---|---|---|---|---|
+| **Mistral Medium 3.5** | 5 | 100 | 9.0 | **0.40** | 0.20 | 33.3 | **93** | $0.43 | $1.08 |
+| grok-4.7 | 15 | 100 | 4.33 | 1.47 | 1.8 | 22.2 | 549 | $0.54 | $0.37 |
+| glm-5.3 | 15 | 100 | 3.8 | 1.07 | 0.8 | 22.2 | 326 | $0.27 | $0.25 |
+| deepseek-v4-pro | 15 | 93.3 | 1.8 | 0.86 | 0.57 | 40.9 | 317 | $0.29 | $0.36 |
+| qwen3.8-max | 15 | 100 | 5.2 | 0.80 | 0.53 | 23.5 | 557 | $0.35 | $0.43 |
+
+- **Seeds and high-value:** the fewest of the five on both. It hit 2 seeds in 5 runs (0 or 1 per task) and 0.20
+  high-value findings per run, against 0.80–1.47 seeds and 0.53–1.8 high-value.
+- **Speed and cost:** it is the fastest (93 s against 317–557 s), but not the cheapest per run. Per seed it costs
+  about three to four times the others.
+- **Validity:** every cell settled valid. The feature gate runs no plan loop, so the round budget that stopped it on the
+  other two gates did not apply.
+- **Calibration tasks,** reported apart: 0 seeds in 2 runs, and 100 % overstated.
+- **The prediction held:** "fewer seeds per run than glm-5.3 (1.07) and grok-4.7 (1.47); about $0.3 per run".
+  Seeds held; cost came in higher, at $0.43.
+- **One repeat is a difference, not a spread.** The report withholds the seeds-hit spread for all 7 task pairs.
+
 ## Agreement
 
 "The same issue" is Astra's cluster within a task. Astra carries its cluster keys from pass to pass, so Mistral's
@@ -109,10 +139,12 @@ of its issues in ten are its own. With the seed rate above, that reads as distan
 |---|---|
 | plan campaign | $0.92, the product ledger's sum over all 21 cells |
 | code campaign | $8.56, the product ledger's sum over all 21 cells |
+| feature campaign | $3.00, the product ledger's sum over all 7 cells: 5 measured runs at $0.432 and 2 calibration runs at $0.419 |
 | assessment | Astra, on the Codex subscription |
 
 The per-run costs in the tables are over the 15 measured runs only. They do not multiply up to these totals, because
-the totals also hold the 6 calibration runs, at $0.055 (plan) and $0.39 (code) per run.
+the totals also hold the calibration runs: 6 each on plan and code, at $0.055 and $0.39 per run, and 2 on feature, at
+$0.419.
 
 The estimate before the run was $20–25, from glm-5.3's token use on the same cells.
 
@@ -133,7 +165,8 @@ The estimate before the run was $20–25, from glm-5.3's token use on the same c
 
 - **Shown:**
   - on these seven tasks, Mistral Medium 3.5 through OpenRouter produces a high volume of findings, fast and cheaply;
-  - by Astra's strict reading, it lands on the planted defects far less often than any reviewer S7.3 measured;
+  - by Astra's strict reading, it lands on the planted defects far less often than any other reviewer measured. On
+    the code gate that is against S7.3's five; on the feature gate, against the calibration's other four models, over 5 runs;
   - it marks most of its findings in a way the assessor reads as overstated.
 - **Not shown:**
   - whether its findings are right more or less often in general: the strict rates wait for the hand-check (T1);

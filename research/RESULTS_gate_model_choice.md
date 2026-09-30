@@ -15,7 +15,9 @@
 
 ## The evidence, per gate
 
-**Feature gate.** Only the four API models were measured.
+**Feature gate.** The four API models are from the 2026-09-27 calibration, 15 runs each. Mistral was added on
+2026-09-30 with **5 runs** (1 repeat) in a separate scope ([RESULTS_gate_mistral.md](RESULTS_gate_mistral.md)), so its
+row is a smaller sample.
 
 | reviewer | seeds hit / run (of 2) | high-value / run | overstated % | cost / run | cost / seed |
 |---|---|---|---|---|---|
@@ -23,6 +25,7 @@
 | glm-5.3 | 1.07 | 0.8 | 22 | **$0.27** | **$0.25** |
 | deepseek-v4-pro | 0.86 | 0.57 | 41 | $0.29 | $0.36 |
 | qwen3.8-max | 0.80 | 0.53 | 24 | $0.35 | $0.43 |
+| Mistral Medium 3.5 (5 runs) | 0.40 | 0.20 | 33 | $0.43 | $1.08 |
 
 **Code gate.**
 
@@ -90,8 +93,12 @@ coverage.**
   independent.
 
 **5. Do not use:**
-- **Mistral Medium 3.5:** 0.13 seeds per code run, and 71–100 % of its findings read as overstated. It is fast and
-  cheap, and it misses what was planted.
+- **Mistral Medium 3.5:** the fewest seeds on both gates where seeds can be hit.
+  - **Code:** 0.13 seeds per run, with 71 % of its findings read as overstated.
+  - **Feature:** 0.40 per run over 5 runs, against 0.80–1.47 for the others.
+
+  It is fast and cheap per run, and it misses what was planted. Its cost per seed is the highest of the API
+  reviewers.
 - **deepseek-v4-pro:** the overstatement outlier on the feature gate (41 %, and 100 % on the calibration tasks).
 - **qwen3.8-max:** the fewest feature-gate seeds of the four API models, at a higher cost than glm.
 
