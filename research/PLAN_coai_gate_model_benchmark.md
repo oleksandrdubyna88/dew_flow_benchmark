@@ -7,7 +7,7 @@
 > describes the system. **Deviations** are recorded per epic below (*as built*, *as run*); the largest: S7.2's criterion
 > was replaced by the prompt-shape A/A, and S7.3 needed five harness fixes (#51–#55) before its numbers stood. **Open
 > tail**, extracted to [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md): the hand-check (E4's
-> procedure, not yet performed) and the lane stop (T5).
+> procedure, not yet performed). The lane stop (T5) was built and checked on a real product on 2026-09-30 (#59).
 > - **Dropped:** the re-runs, by the operator on 2026-09-29. Fable's code gate and the seven account-out code cells
 >   stand as recorded.
 > - **IMPLEMENTED 2026-09-29:** [PLAN_gate_reviewer_row_fidelity.md](PLAN_gate_reviewer_row_fidelity.md) D1–D5.
