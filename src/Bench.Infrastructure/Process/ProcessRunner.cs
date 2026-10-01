@@ -11,7 +11,9 @@ namespace Bench.Infrastructure.Process;
 /// it was handed something that was not the agent's answer. Merging is right for git and wrong for an agent,
 /// so both are available and the caller says which it means.
 /// </para></param>
-public sealed record ProcessResult(int ExitCode, string Output, string StandardOutput = "")
+/// <param name="StandardError">Stderr ALONE — for a caller that stores the two pipes as two artefacts (the probes, S2): a CLI's
+/// quota marker and its usage error arrive on stderr, and a transcript on stdout is read by a grammar that must not meet them.</param>
+public sealed record ProcessResult(int ExitCode, string Output, string StandardOutput = "", string StandardError = "")
 {
     public bool Ok => ExitCode == 0;
 }
@@ -24,7 +26,8 @@ public abstract record ProcessAttempt
 
     public sealed record Completed(ProcessResult Result) : ProcessAttempt;
 
-    public sealed record TimedOut(TimeSpan Budget, string Output) : ProcessAttempt;
+    /// <param name="StandardOutput">What had reached stdout before the kill, alone — a probe keeps it as the attempt's artefact.</param>
+    public sealed record TimedOut(TimeSpan Budget, string Output, string StandardOutput = "", string StandardError = "") : ProcessAttempt;
 
     public sealed record NotFound(string Executable) : ProcessAttempt;
 
@@ -68,12 +71,26 @@ public static class ProcessRunner
     /// starts its own process because this one could not take input — is how this repository ended up with a
     /// duplicated process launcher the first time.
     /// </para></summary>
+    public static Task<ProcessAttempt> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        string input,
+        CancellationToken cancellationToken) =>
+        RunAsync(executable, arguments, workingDirectory, timeout, input, environment: null, cancellationToken);
+
+    /// <summary>The same launch under a REPLACED environment: when <paramref name="environment"/> is given, the child gets
+    /// exactly those variables and inherits nothing else — the shape <see cref="ProcessSession"/> launches the product with,
+    /// now available to the one-shot launcher so <c>coai-mcp --probe-api</c> (the probes, S2) gets the vault key once, under
+    /// the product's name, and none of the harness's <c>COAI_*</c>. Null inherits the parent's, as every other caller does.</summary>
     public static async Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         TimeSpan timeout,
         string input,
+        IReadOnlyDictionary<string, string>? environment,
         CancellationToken cancellationToken)
     {
         var start = new ProcessStartInfo
@@ -93,6 +110,8 @@ public static class ProcessRunner
         {
             start.ArgumentList.Add(argument);
         }
+
+        Replace(start, environment);
 
         using var process = new System.Diagnostics.Process { StartInfo = start };
 
@@ -168,20 +187,33 @@ public static class ProcessRunner
                 throw;
             }
 
-            return new ProcessAttempt.TimedOut(timeout, await Merge(stdout, stderr));
+            var (hungOut, hungErr) = (await stdout, await stderr);
+            return new ProcessAttempt.TimedOut(timeout, Merge(hungOut, hungErr), hungOut.Trim(), hungErr.Trim());
         }
 
-        var printed = await stdout;
+        var (printed, errors) = (await stdout, await stderr);
 
         return new ProcessAttempt.Completed(
-            new ProcessResult(process.ExitCode, await Merge(printed, stderr), printed.Trim()));
+            new ProcessResult(process.ExitCode, Merge(printed, errors), printed.Trim(), errors.Trim()));
     }
 
-    private static async Task<string> Merge(string stdout, Task<string> stderr) =>
-        (stdout + await stderr).Trim();
+    private static string Merge(string stdout, string stderr) => (stdout + stderr).Trim();
 
-    private static async Task<string> Merge(Task<string> stdout, Task<string> stderr) =>
-        await Merge(await stdout, stderr);
+    /// <summary>The environment is REPLACED, not merged, when one is given: whatever the caller did not put in the map is not
+    /// inherited, so a parent's <c>COAI_*</c> cannot reach the product behind the harness's back.</summary>
+    private static void Replace(ProcessStartInfo start, IReadOnlyDictionary<string, string>? environment)
+    {
+        if (environment is null)
+        {
+            return;
+        }
+
+        start.Environment.Clear();
+        foreach (var (name, value) in environment)
+        {
+            start.Environment[name] = value;
+        }
+    }
 
     private static void Kill(System.Diagnostics.Process process)
     {

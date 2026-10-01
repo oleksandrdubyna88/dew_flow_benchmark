@@ -30,6 +30,22 @@ public sealed class ProcessRunnerTests
             .Which.Result.Ok.Should().BeFalse("a failing git command is a result, not a crash");
     }
 
+    /// <summary>S2 of the probes: the two pipes are kept APART beside the merged text — a quota marker and a usage error arrive on
+    /// stderr, and a transcript on stdout is read by a grammar that must not meet them.</summary>
+    [Fact]
+    public async Task Stderr_is_captured_apart_from_stdout_and_both_are_in_the_merged_output()
+    {
+        var attempt = await ProcessRunner.RunAsync(
+            "git", ["rev-parse", "--verify", "definitely-not-a-revision-7c21"], Path.GetTempPath(),
+            TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        var result = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
+        result.Ok.Should().BeFalse();
+        result.StandardError.Should().Contain("fatal", "git explains a bad revision on stderr");
+        result.StandardOutput.Should().NotContain("fatal", "stdout alone never carries the explanation");
+        result.Output.Should().Contain("fatal", "the merged text is what a diagnostic report wants");
+    }
+
     [Fact]
     public async Task Input_reaches_the_child_on_STDIN()
     {

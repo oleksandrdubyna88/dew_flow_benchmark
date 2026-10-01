@@ -243,6 +243,20 @@ public sealed record CoaiEnvironment
         return new CoaiEnvironment(variables, snapshot, dataDir, caller, inherited);
     }
 
+    /// <summary>The environment of a product launch that carries NO knobs — <c>coai-mcp --probe-api</c> (the probes, S2): the
+    /// parent's variables minus every <c>COAI_*</c>, so the product reads nothing behind the harness's back, and the secret
+    /// joins LAST through <see cref="WithSecret"/> exactly as for a cell, scrubbed from every text written beside the operator's
+    /// inherited secrets. No data directory, no caller session, an empty snapshot — there is no session to key them by.</summary>
+    public static CoaiEnvironment Bare(IReadOnlyDictionary<string, string> parent)
+    {
+        var variables = parent
+            .Where(v => !v.Key.StartsWith("COAI_", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
+        var inherited = variables.Where(v => IsSecretName(v.Key) && v.Value.Trim().Length >= ShortestScrubbed).Select(v => v.Value.Trim()).Distinct(StringComparer.Ordinal).ToList();
+
+        return new CoaiEnvironment(variables, new Dictionary<string, string>(StringComparer.Ordinal), string.Empty, string.Empty, inherited);
+    }
+
     /// <summary>The launch environment: every variable, then the secret, LAST — nothing after this step can read or
     /// overwrite it, and nothing before it could see one. A reviewer that needs no vault gets no key.</summary>
     public ChildEnvironment WithSecret(SecretValue credsKey) =>

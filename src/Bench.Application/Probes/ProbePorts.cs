@@ -88,8 +88,49 @@ public abstract record ProbeAttemptResult
 
 /// <summary>One attempt of one claimed cell — the port the campaign (S2) drives a CLI or the product through. The runner
 /// builds the fixture, launches, reads the transcript through <see cref="ProbeVerdicts"/>, commits the artefacts, and answers;
-/// the store is the campaign's to call.</summary>
+/// the store is the campaign's to call. A runner ALWAYS answers — a settlement or a hand-back — because a cell it left claimed
+/// would stay claimed for as long as this process lives.</summary>
 public interface IProbeRunner
 {
     Task<ProbeAttemptResult> RunAsync(ProbeRun run, ProbeSubject subject, ProbeCell claimed, CancellationToken cancellationToken);
+}
+
+/// <summary>The phrase a claim refusal carries when a subject has nothing pending — read by the campaign as the end of its
+/// lane, the way <c>ClaimRefusal.NoPendingCell</c> is read by the drain.</summary>
+public static class ProbeClaimRefusal
+{
+    public const string NoPendingCell = "no pending probe cell to claim";
+}
+
+/// <summary>An attempt's fixture directories under the WORK root (§4, §6): a fresh root per attempt with fresh random tokens,
+/// deleted after the attempt, and the cleanup keyed to the DIRECTORY (finding 3) that every verb runs on entry.</summary>
+public interface IProbeFixtures
+{
+    /// <summary>Makes <c>probes/&lt;run&gt;/&lt;cell&gt;/g&lt;n&gt;/a&lt;k&gt;/</c> with the files <see cref="ProbePaths.Layout"/> says
+    /// the probe wants, under two tokens no earlier attempt used. Refuses a directory that already exists — it is a leftover,
+    /// and leftovers are <see cref="DeleteStranded"/>'s to remove, never continued.</summary>
+    Outcome<ProbeFixture> Begin(ProbeKind probe, ProbeAttemptScope scope);
+
+    /// <summary>Removes the attempt's root. Best effort and never throws: a tree a dying child still holds is the next entry's
+    /// <see cref="DeleteStranded"/> to remove.</summary>
+    void Delete(ProbeFixture fixture);
+
+    /// <summary>Finding 3: every cell folder under the run's root whose cell is not in <paramref name="liveCells"/> — Pending
+    /// cells included — is deleted whole; nothing outside <c>probes/&lt;run&gt;/</c> is touched and no link is followed. Returns
+    /// how many were removed.</summary>
+    int DeleteStranded(Guid runId, IReadOnlySet<Guid> liveCells);
+}
+
+/// <summary>The attempt's three files under the ARTEFACT root — answer, stdout, stderr — committed stage → flush → rename and
+/// handed back as refs (path relative to the root, SHA-256, length) for the cell row (D11).</summary>
+public interface IProbeArtifacts
+{
+    Task<Outcome<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, ProbeArtifactKind kind, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken);
+}
+
+/// <summary>Where the product's vault key comes from for the api probe (D6) — the machine's coai settings in production,
+/// a sentinel in the rig. The bench never reads a vendor key; this is the one secret it passes on, by name.</summary>
+public interface IProbeSecrets
+{
+    Outcome<SecretValue> CredsKey();
 }

@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bench.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(BenchDbContext))]
-    [Migration("20261001123126_ProbeTables")]
+    [Migration("20261001134508_ProbeTables")]
     partial class ProbeTables
     {
         /// <inheritdoc />
@@ -1348,6 +1348,14 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     b.Property<int>("Repeats")
                         .HasColumnType("integer");
 
+                    b.PrimitiveCollection<List<string>>("SubjectDialects")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<List<string>>("SubjectEndpoints")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.PrimitiveCollection<List<string>>("SubjectExecutableRefs")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -1361,6 +1369,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
                         .HasColumnType("text[]");
 
                     b.PrimitiveCollection<List<string>>("SubjectRuntimes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<List<string>>("SubjectVendors")
                         .IsRequired()
                         .HasColumnType("text[]");
 

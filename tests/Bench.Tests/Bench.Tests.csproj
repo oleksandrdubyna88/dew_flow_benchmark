@@ -32,6 +32,9 @@
     <!-- The fake coai-mcp: built first, NOT referenced as an assembly — the tests launch it from its own output
          folder, so its deployment set is its own and the product pin hashes a folder of the product's shape. -->
     <ProjectReference Include="..\FakeCoai\FakeCoai.csproj" ReferenceOutputAssembly="false" />
+    <!-- The fake CLI the probe runner and campaign tests launch (S2): the same arrangement — built first, launched from its
+         own output folder, pinned by the real ProductPinReader. -->
+    <ProjectReference Include="..\FakeCli\FakeCli.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

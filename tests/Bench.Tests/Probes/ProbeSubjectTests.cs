@@ -44,6 +44,39 @@ public sealed class ProbeSubjectTests
         ProbeSubject.Parse("grok-api", "api", modelId, "BENCH_GATE_COAI_EXE").Reason().Should().Contain("model id");
     }
 
+    /// <summary>S2 — the api subject's transport is frozen on the run (the S1 open question): <c>coai-mcp --probe-api</c> needs the
+    /// vendor id, the endpoint and the dialect beside the model, and <c>resume</c> must not read them from a file.</summary>
+    [Fact]
+    public void An_api_subject_freezes_its_vendor_public_endpoint_and_dialect_and_a_cli_subject_may_name_none()
+    {
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", " grok ", "https://api.x.ai/v1", "xai").Ok();
+
+        (grok.Vendor, grok.Endpoint, grok.Dialect).Should().Be(("grok", "https://api.x.ai/v1", "xai"));
+        grok.Describe.Should().Contain("grok @ https://api.x.ai/v1 (xai)");
+
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "https://api.x.ai/v1", "xai").Reason().Should().Contain("vendor id");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "").Reason().Should().Contain("dialect");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "", "xai").Reason().Should().Contain("public vendor url");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "BENCH_GROK_URL", "xai").Reason().Should().Contain("public vendor url", "a reference is not the product's literal endpoint (D6)");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "http://127.0.0.1:8080/v1", "xai").Reason().Should().Contain("machine-local");
+        ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE", "anthropic", "", "").Reason().Should().Contain("runs on a CLI");
+        var cli = ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE").Ok();
+        (cli.Vendor, cli.Endpoint, cli.Dialect).Should().Be((string.Empty, string.Empty, string.Empty));
+    }
+
+    [Fact]
+    public void The_subjects_file_reads_the_api_transport_fields()
+    {
+        const string file = """
+            { "subjects": [ { "id": "grok-api", "runtime": "api", "model": "grok-4.7", "executableRef": "BENCH_GATE_COAI_EXE", "vendor": "grok", "endpoint": "https://api.x.ai/v1", "dialect": "xai" } ] }
+            """;
+
+        var grok = ProbeSubjectsFile.Read(file).Ok().Single();
+
+        (grok.Vendor, grok.Endpoint, grok.Dialect).Should().Be(("grok", "https://api.x.ai/v1", "xai"));
+        ProbeSubjectsFile.Read(file.Replace("\"vendor\": \"grok\",", string.Empty, StringComparison.Ordinal)).Reason().Should().Contain("vendor id");
+    }
+
     [Fact]
     public void An_unknown_runtime_word_is_refused_naming_the_words()
     {
@@ -59,7 +92,7 @@ public sealed class ProbeSubjectTests
               "subjects": [
                 { "id": "claude-sonnet", "runtime": "claude", "model": "claude-sonnet-4-5", "executableRef": "BENCH_CLAUDE" },
                 { "id": "codex-astra", "runtime": "codex", "model": "gpt-6-astra", "executableRef": "BENCH_CODEX" },
-                { "id": "grok-api", "runtime": "api", "model": "grok-4.7", "executableRef": "BENCH_GATE_COAI_EXE" }
+                { "id": "grok-api", "runtime": "api", "model": "grok-4.7", "executableRef": "BENCH_GATE_COAI_EXE", "vendor": "grok", "endpoint": "https://api.x.ai/v1", "dialect": "xai" }
               ]
             }
             """;

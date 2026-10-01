@@ -17,6 +17,10 @@ public enum ModelRuntimeKind
 
     /// <summary>A local model driven in-process through the bridge, in agent mode.</summary>
     BridgeLocal,
+
+    /// <summary>The Antigravity CLI (<c>agy</c>, gemini-cli lineage) in print mode — a probe subject of the question-consultant
+    /// plan (S2, 2026-10-01). Last, so the stored ordinal of every earlier kind is unchanged.</summary>
+    CliAntigravity,
 }
 
 /// <summary>A registry row's configuration: <b>references, never values</b>.

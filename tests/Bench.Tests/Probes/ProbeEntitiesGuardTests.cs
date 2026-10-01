@@ -14,10 +14,13 @@ public sealed class ProbeEntitiesGuardTests
 {
     private static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
-        // probe_runs — the oracle's semver, and the frozen subjects as four parallel lists: slug ids, runtime enum NAMES, model
-        // ids (the string a runtime is asked for, never a url or a path — ProbeSubject refuses one), and environment variable
-        // NAMES for the executables (D4; a path or a key is refused by ProbeSubject).
+        // probe_runs — the oracle's semver, and the frozen subjects as seven parallel lists: slug ids, runtime enum NAMES, model
+        // ids (the string a runtime is asked for, never a url or a path — ProbeSubject refuses one), environment variable
+        // NAMES for the executables (D4; a path or a key is refused by ProbeSubject), and the api subject's transport (S2):
+        // the vendor id and the dialect are slugs, the endpoint is a PUBLIC vendor url by design — the one probe column the
+        // guard checks by the endpoint rule (ProbeModel.PublicUrlColumns), a machine-local address refused by ProbeSubject.
         "ProbeRunRow.OracleVersion", "ProbeRunRow.SubjectIds", "ProbeRunRow.SubjectRuntimes", "ProbeRunRow.SubjectModels", "ProbeRunRow.SubjectExecutableRefs",
+        "ProbeRunRow.SubjectVendors", "ProbeRunRow.SubjectEndpoints", "ProbeRunRow.SubjectDialects",
 
         // probe_cells — a slug id, the claim's owner (a label, a host name — never published, GatePublication.ClaimOwnerColumns),
         // the pin (hashes, the --version text, the tree the dirty check covered), and the artefacts as kind names, paths RELATIVE

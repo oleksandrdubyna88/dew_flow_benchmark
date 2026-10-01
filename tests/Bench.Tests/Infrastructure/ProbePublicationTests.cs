@@ -33,6 +33,29 @@ public sealed class ProbePublicationTests(PostgresFixture postgres)
         document.ToJsonString().Should().NotContain(Environment.MachineName);
     }
 
+    /// <summary>S2: the api subject's endpoint is a PUBLIC vendor url by design — the one probe column checked by the gate's
+    /// endpoint rule rather than the plain <c>://</c> rule; a machine-local address planted there is still refused.</summary>
+    [Fact]
+    public async Task An_api_subjects_public_endpoint_passes_the_guard_and_a_machine_local_one_planted_there_is_refused()
+    {
+        var connection = await postgres.NewDatabaseAsync($"probe_pub_{Guid.NewGuid():N}");
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "xai").Ok();
+        var run = Run(grok);
+        var cell = ProbeCell.Pending(Guid.CreateVersion7(), run.Id, new ProbeMatrixCell(ProbeKind.ApiReachable, grok.Id, Repeat: 1, Slot: 0, Position: 0));
+        await new PostgresProbeStore(PostgresFixture.Context(connection), new TestClock(Noon)).PlanAsync(run, [cell], Ct);
+
+        (await ViolationsAsync(connection)).Should().BeEmpty("a public vendor url is a value there by design, as gate_reviewers.EndpointUrl is");
+
+        await using (var db = PostgresFixture.Context(connection))
+        {
+            db.ProbeRuns.Single().SubjectEndpoints = ["http://10.0.0.7:8000/v1"];
+            await db.SaveChangesAsync(Ct);
+        }
+
+        (await ViolationsAsync(connection)).Select(v => v.Describe).Should().ContainSingle()
+            .Which.Should().Be($"probe_runs.SubjectEndpoints row {run.Id}: " + PublicationGuard.EndpointRule);
+    }
+
     [Fact]
     public async Task A_path_planted_in_a_probe_row_is_refused_naming_table_column_and_row()
     {

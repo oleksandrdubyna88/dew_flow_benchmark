@@ -13,7 +13,9 @@ namespace Bench.Infrastructure.Persistence;
 /// they go through the same guard and the same export rather than a second one.</summary>
 public sealed class PostgresGatePublicationSource(BenchDbContext db) : IGatePublicationSource
 {
-    public IReadOnlySet<string> PublicUrlColumns => GateModel.PublicUrlColumns;
+    /// <summary>The gate's public-url column and the probes' — one set, because one guard reads both tables.</summary>
+    public IReadOnlySet<string> PublicUrlColumns { get; } =
+        new HashSet<string>([.. GateModel.PublicUrlColumns, .. ProbeModel.PublicUrlColumns], StringComparer.Ordinal);
 
     /// <summary>The gate entity types, as the model maps them — also what the structural guard test walks.</summary>
     public static IReadOnlyList<IEntityType> GateEntities(BenchDbContext context) => WithPrefix(context, GateModel.TablePrefix);

@@ -31,6 +31,10 @@ public enum ProbeAttemptKind
     /// <summary>The attempt ran and measured nothing the bench may use — an empty account (D8). The cell is handed back
     /// Pending with this kind on it; such an attempt is never SETTLED.</summary>
     Unmeasured,
+
+    /// <summary>The CLI ran and exited non-zero with neither a usage error nor a quota marker — a crash, an API error, a
+    /// model refusal. Every fact is <i>not captured</i>; the exit code and the stderr artefact say why (S2).</summary>
+    Failed,
 }
 
 /// <summary>The one "why" a probe cell row may carry — an allow-listed WORD (D11), never a sentence.</summary>

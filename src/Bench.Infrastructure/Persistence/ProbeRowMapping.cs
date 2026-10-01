@@ -21,13 +21,18 @@ internal static class ProbeRowMapping
         SubjectRuntimes = [.. run.Subjects.Select(s => s.Runtime.ToString())],
         SubjectModels = [.. run.Subjects.Select(s => s.ModelId)],
         SubjectExecutableRefs = [.. run.Subjects.Select(s => s.ExecutableRef)],
+        SubjectVendors = [.. run.Subjects.Select(s => s.Vendor)],
+        SubjectEndpoints = [.. run.Subjects.Select(s => s.Endpoint)],
+        SubjectDialects = [.. run.Subjects.Select(s => s.Dialect)],
     };
 
     public static Outcome<ProbeRun> ToDomain(ProbeRunRow row)
     {
-        if (!SameLength(row.SubjectIds.Count, row.SubjectRuntimes.Count, row.SubjectModels.Count, row.SubjectExecutableRefs.Count))
+        if (!SameLength(
+                row.SubjectIds.Count, row.SubjectRuntimes.Count, row.SubjectModels.Count, row.SubjectExecutableRefs.Count,
+                row.SubjectVendors.Count, row.SubjectEndpoints.Count, row.SubjectDialects.Count))
         {
-            return Outcome<ProbeRun>.Failure($"probe run {row.Id}: its four subject columns disagree in length — the row was edited");
+            return Outcome<ProbeRun>.Failure($"probe run {row.Id}: its seven subject columns disagree in length — the row was edited");
         }
 
         return ProbeOracle.Parse(row.OracleVersion, row.OracleSource).Match(
@@ -46,7 +51,9 @@ internal static class ProbeRowMapping
 
         foreach (var i in Enumerable.Range(0, row.SubjectIds.Count))
         {
-            var subject = ProbeSubject.Parse(row.SubjectIds[i], RuntimeWord(row.SubjectRuntimes[i]), row.SubjectModels[i], row.SubjectExecutableRefs[i]);
+            var subject = ProbeSubject.Parse(
+                row.SubjectIds[i], RuntimeWord(row.SubjectRuntimes[i]), row.SubjectModels[i], row.SubjectExecutableRefs[i],
+                row.SubjectVendors[i], row.SubjectEndpoints[i], row.SubjectDialects[i]);
 
             if (subject is Outcome<ProbeSubject>.Fail fail)
             {

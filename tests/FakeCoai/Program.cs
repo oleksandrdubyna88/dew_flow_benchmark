@@ -21,7 +21,40 @@ public static class Program
             return 0;
         }
 
+        if (args.Contains("--probe-api"))
+        {
+            return ProbeApi(script, args);
+        }
+
         return new Server(script).Serve();
+    }
+
+    /// <summary>The product's <c>--probe-api</c> (the probes, S2): logs the argv, prints the scripted report lines (default: one
+    /// 200 row), echoes the vault key on stderr when the script asks — the scrub test's planted leak — and exits as scripted
+    /// (0 ok · 65 bad arguments · 78 no vault/no key).</summary>
+    private static int ProbeApi(Script script, string[] args)
+    {
+        var probe = script.Root["probeApi"] as JsonObject ?? [];
+        new Events().Write($"probe-api {string.Join(' ', args)}");
+
+        if (probe["echoCredsKey"]?.GetValue<bool>() == true)
+        {
+            Console.Error.WriteLine($"debug: COAI_CREDS_KEY={Environment.GetEnvironmentVariable("COAI_CREDS_KEY")}");
+        }
+
+        if (probe["echoVariable"]?.GetValue<string>() is { Length: > 0 } echoed)
+        {
+            Console.Error.WriteLine($"debug: {echoed}={Environment.GetEnvironmentVariable(echoed) ?? "<unset>"}");
+        }
+
+        foreach (var line in probe["lines"] is JsonArray lines ? lines.Select(l => l?.GetValue<string>() ?? string.Empty) : ["probe-api vendor row: HTTP 200 chat/completions model=fake tokens=12/34"])
+        {
+            Console.Out.WriteLine(line);
+        }
+
+        Console.Out.Flush();
+        Console.Error.Flush();
+        return probe["exitCode"]?.GetValue<int>() ?? 0;
     }
 }
 

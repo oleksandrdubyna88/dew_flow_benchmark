@@ -1,6 +1,6 @@
 # PLAN — capability probes for the question consultant: what each CLI and API vendor can actually do
 
-> Status: **S1 implemented 2026-10-01; S2–S5 open.** Scope: a new `Probes` module in this repository —
+> Status: **S1–S2 implemented 2026-10-01; S3–S5 open.** Scope: a new `Probes` module in this repository —
 > domain (`src/Bench.Domain/Probes`), ports and driver (`src/Bench.Application/Probes`), a Postgres store and the
 > probe runners (`src/Bench.Infrastructure`), the `bench probes` verbs (`hosts/Cli`), a read API and a **Probes**
 > tab in `Bench.Ui`. Results are written up in the PRODUCT repository, not here.
@@ -262,6 +262,52 @@ wrong deletion scope is lost evidence.
 
 **Not here.** No verb, no exit code, no oracle fetch (the campaign takes the oracle from the run), no prune, no API or
 page, no live CLI.
+
+**Deviations (S2, 2026-10-01).**
+- *`ArtifactScope` was not widened.* It composes `GateRun` (its data-dir mode decides the layout) and a probe attempt has a
+  generation the gate has no axis for. The shared half — stage → flush → hash → rename — was EXTRACTED into
+  `ArtifactCommit` (reuse-first step 2.2), which both stores now call with the gate's sentences unchanged; the probe layout
+  `probes/<run>/<cell>/g<n>/a<k>/` is `ProbePaths` + `ProbeAttemptScope`, deciders beside `CellPaths`, the same relative path
+  under the work root (fixtures) and the artefact root (files).
+- *`AgentAnswer` was not widened either*: a probe needs the FAILURE shapes (exit code, both pipes, the wall). A second port
+  `ICliAgentTranscripts.TranscriptAsync` sits beside `ICliAgentRuntime`, implemented by the same `CliAgentRuntime` over the same
+  launch; `ProcessRunner` gained `StandardError`, both pipes on `TimedOut`, and a replaced-environment overload (the
+  `ProcessSession` shape) for the product launch. Existing callers and fakes are untouched.
+- *Applicability moved as the plan foresaw, in the other direction*: agy 1.2.14 HAS `--add-dir`, so `read-outside-granted ×
+  antigravity` is planned; what agy lacks is a tool deny-list and any flag that turns the web OFF, so `read-denied ×
+  antigravity` (web OFF + file tools denied by definition) is the pair dropped by name. `CliArgv` refuses `web search off` and
+  `a tool deny-list` on agy; a test asserts the planner's table and `CliArgv` agree pair by pair. `web-confined` still runs on
+  codex and agy with nothing denied ("where the CLI has a flag for it").
+- *The api subject's transport is frozen on the run*: `vendor`, `endpoint` (a PUBLIC vendor url, `ReviewerEndpoint.Value`),
+  `dialect` — three `text[]` columns on `probe_runs`, the migration regenerated in place (`20261001134508_ProbeTables`
+  replaces `20261001123126_ProbeTables`; the snapshot differs by the three columns), `probe_runs.SubjectEndpoints` joined the
+  guard's public-url columns. A CLI subject that names any of them is refused.
+- *`ProbeAttemptKind.Failed`* was added: a non-zero exit that is neither a usage error (`ProbeExits`, per CLI) nor a quota
+  marker, or a clean exit that SAID nothing (an empty answer would read every canary as `no`). Every fact *not captured*.
+- *The answer is the grammar's final message* (`ProbeTranscripts.Answer`), never the whole transcript: a codex
+  `command_execution` output or an agy `tool_result` can carry the canary's bytes the model never repeated.
+- *The quota reading* (`ReviewerAccountOut.CliReason`) runs over stderr and the ANSWER; the whole stdout only on a non-zero
+  exit — a web result quoting "usage limit" inside a tool result must not bench a subject that answered. The product markers
+  apply too; agy's `RESOURCE_EXHAUSTED` counts only beside quota wording (it is also its plain 429).
+- *The api probe reads a refused key as the MEASUREMENT* (`accountOut = yes`, `reachable = no` on 401/402/403 or a marker) —
+  Q5 asks what the account says. Only exit 78 (no vault/no key) or no key on this machine hands the attempt back unmeasured
+  and benches the subject; exit 65 settles *launch refused*. `CoaiEnvironment.Bare` builds the knob-less launch; the key
+  joins last through `WithSecret` and is scrubbed from every text written (proved by planting the leak: the test went red
+  with the sentinel in the stderr artefact).
+- *One lane per subject needs no `EndpointPool`*: a subject is its own lane and its own quota, so the bench is a flag per
+  subject, set FIRST, then the guarded hand-back. `OwnerLiveness` is injected into the campaign — the Application layer cannot
+  ask the process table — and `PrepareAsync(store, run, staleAfter)` is the entry step S3 wires to every verb.
+- *The fake CLI finds its script by the MODEL ID the argv pins* (`%TEMP%/bench-fake-cli/<model>/`), because the probe runner
+  launches with the harness's own environment — as the real CLIs are launched — and tests run in parallel. `FakeCoai` gained
+  `--probe-api`. The real `ProductPinReader` pins the fake at every claim (`fake-cli 1.0.0-fake`).
+- *`Delete` prunes the empty `g<n>` and `<cell>` folders* above the attempt root (the run's root stays for the other lanes),
+  so a settled cell leaves no husk for `DeleteStranded` to count.
+- *`ProbeVerdicts.UnderControl`* (a `read-inside` `no` voids the subject's read probes) is applied where a subject's verdicts
+  are read together — `report` (S3) — not by the runner, which measures one cell on its own.
+- *Measured as flags that EXIST, not as behaviour*: agy `--print` with the prompt on stdin, `--mode plan` as its read-only
+  launch, `--output-format stream-json`; claude's exit code and envelope on a quota stop; codex's acceptance of top-level
+  `--search` under `exec --json`; the real `--probe-api` report shape against `ProbeApiOutput`'s `HTTP ddd` / `status ddd`
+  reading. Each is S5's first-cell hand-check.
 
 ### S3 — the `bench probes` verbs: run it, resume it, re-measure one cell, prune it
 

@@ -17,8 +17,10 @@ public sealed class ProbeMatrixTests
     {
         var plan = ProbeMatrix.Plan(ProbeWord.All, Subjects(("claude-sonnet", "claude"), ("codex-astra", "codex"), ("agy-gemini", "antigravity"), ("grok-api", "api")), repeats: 3).Ok();
 
-        // claude 6 + codex 6 + agy 5 (no grant flag measured) + api 1 = 18 cells a repeat.
+        // claude 6 + codex 6 + agy 5 (read-denied needs web OFF, which antigravity has no flag for) + api 1 = 18 cells a repeat.
         plan.Cells.Should().HaveCount(18 * 3);
+        plan.Cells.Should().Contain(c => c.Probe == ProbeKind.ReadOutsideGranted && c.Subject.Value == "agy-gemini",
+            "agy 1.2.14 takes --add-dir (measured 2026-10-01) — the grant pair is measured, not dropped");
         plan.Cells.Select(c => c.Repeat).Distinct().Should().BeEquivalentTo([1, 2, 3], "repeats are numbered from one");
 
         var slots = plan.Cells.GroupBy(c => c.Slot).OrderBy(g => g.Key).Select(g => g.First()).ToList();
@@ -40,9 +42,11 @@ public sealed class ProbeMatrixTests
             "an api subject runs no CLI probe");
         plan.Dropped.Should().Contain(d => d.Probe == ProbeKind.ApiReachable && d.Subject.Value == "claude-sonnet",
             "api-reachable runs through the product, not a CLI");
-        plan.Dropped.Should().Contain(d => d.Probe == ProbeKind.ReadOutsideGranted && d.Subject.Value == "agy-gemini" && d.Reason.Contains("antigravity", StringComparison.Ordinal),
-            "no directory grant has been measured for antigravity — the pair is dropped by name, not measured as a refusal");
-        plan.Dropped.Should().HaveCount(6 + 2 + 1, "api × six CLI probes, two CLIs × api-reachable, antigravity × granted");
+        plan.Dropped.Should().Contain(d => d.Probe == ProbeKind.ReadDenied && d.Subject.Value == "agy-gemini" && d.Reason.Contains("web", StringComparison.Ordinal),
+            "read-denied is web OFF with the file tools denied, and antigravity has a flag for neither — the pair is dropped by name, not measured as a refusal");
+        plan.Dropped.Should().NotContain(d => d.Probe == ProbeKind.ReadOutsideGranted && d.Subject.Value == "agy-gemini",
+            "every CLI here takes a directory grant (claude, codex and agy all have --add-dir)");
+        plan.Dropped.Should().HaveCount(6 + 2 + 1, "api × six CLI probes, two CLIs × api-reachable, antigravity × read-denied");
         plan.Cells.Should().NotContain(c => plan.Dropped.Any(d => d.Probe == c.Probe && d.Subject == c.Subject), "a dropped pair is planned nowhere");
         plan.Cells.Should().ContainSingle(c => c.Probe == ProbeKind.ApiReachable).Which.Subject.Value.Should().Be("grok-api");
     }
@@ -88,5 +92,7 @@ public sealed class ProbeMatrixTests
     }
 
     internal static IReadOnlyList<ProbeSubject> Subjects(params (string Id, string Runtime)[] subjects) =>
-        [.. subjects.Select(s => ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X").Ok())];
+        [.. subjects.Select(s => s.Runtime == "api"
+            ? ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X", "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok()
+            : ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X").Ok())];
 }
