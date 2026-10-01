@@ -128,6 +128,8 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
                       .SetProperty(c => c.ReadAttempted, ProbeFact.NotCaptured)
                       .SetProperty(c => c.AnswerCurrent, ProbeFact.NotCaptured)
                       .SetProperty(c => c.ToolEvidence, ProbeFact.NotCaptured)
+                      .SetProperty(c => c.ShellUsed, ProbeFact.NotCaptured)
+                      .SetProperty(c => c.ReaderOffered, ProbeFact.NotCaptured)
                       .SetProperty(c => c.Reachable, ProbeFact.NotCaptured)
                       .SetProperty(c => c.AccountOut, ProbeFact.NotCaptured)
                       .SetProperty(c => c.Reason, reason),

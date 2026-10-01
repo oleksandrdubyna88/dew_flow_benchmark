@@ -39,7 +39,7 @@ public sealed class ProbePublicationTests(PostgresFixture postgres)
     public async Task An_api_subjects_public_endpoint_passes_the_guard_and_a_machine_local_one_planted_there_is_refused()
     {
         var connection = await postgres.NewDatabaseAsync($"probe_pub_{Guid.NewGuid():N}");
-        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "xai").Ok();
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", string.Empty, "grok", "https://api.x.ai/v1", "xai").Ok();
         var run = Run(grok);
         var cell = ProbeCell.Pending(Guid.CreateVersion7(), run.Id, new ProbeMatrixCell(ProbeKind.ApiReachable, grok.Id, Repeat: 1, Slot: 0, Position: 0));
         await new PostgresProbeStore(PostgresFixture.Context(connection), new TestClock(Noon)).PlanAsync(run, [cell], Ct);

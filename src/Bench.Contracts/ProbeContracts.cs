@@ -43,8 +43,9 @@ public sealed record ProbeOracleDto(string Version, string Source);
 public sealed record ProbeProgressDto(int Pending, int Claimed, int Settled, int Abandoned, bool Open);
 
 /// <summary>A subject as the run froze it (D4): references, never values — the executable is a variable NAME; the api
-/// subject's endpoint is a public vendor url, empty for a CLI.</summary>
-public sealed record ProbeSubjectDto(string Id, string Runtime, string Model, string ExecutableRef, string Vendor, string Endpoint, string Dialect);
+/// subject's endpoint is a public vendor url, empty for a CLI. <paramref name="Confinement"/> is the claude mode the subject's
+/// tools were confined under (<c>denylist</c>, <c>allowlist</c>, <c>restricted</c>; <c>default</c> on every other runtime — S2b).</summary>
+public sealed record ProbeSubjectDto(string Id, string Runtime, string Model, string ExecutableRef, string Confinement, string Vendor, string Endpoint, string Dialect);
 
 /// <summary>One lineage (probe × subject × repeat) as the report reads it: the highest SETTLED generation when there is one
 /// (D2), else the highest generation as it stands. <paramref name="LatestGeneration"/>/<paramref name="LatestState"/> say
@@ -77,8 +78,11 @@ public sealed record ProbeCellReportDto(
 public sealed record ProbeExitDto(bool Captured, long Code);
 
 /// <summary>Every fact of an attempt as a word — <c>yes</c>, <c>no</c> or <c>not-captured</c>; never a bool, because a gap in
-/// the instrumentation must not read as <c>no</c>.</summary>
-public sealed record ProbeFactsDto(string CanaryRead, string ReadAttempted, string AnswerCurrent, string ToolEvidence, string Reachable, string AccountOut);
+/// the instrumentation must not read as <c>no</c>. <paramref name="ShellUsed"/> (a code-running tool was called) and
+/// <paramref name="ReaderOffered"/> (the CLI offered a file-capable tool at all) are S2b's: which tool reached a file, and whether a
+/// missing canary is confinement by absence.</summary>
+public sealed record ProbeFactsDto(
+    string CanaryRead, string ReadAttempted, string AnswerCurrent, string ToolEvidence, string ShellUsed, string ReaderOffered, string Reachable, string AccountOut);
 
 /// <summary>The CLI build that answered (D9): its <c>--version</c> line and the hash of its bytes. Empty for a cell nobody claimed.</summary>
 public sealed record ProbePinDto(string Version, string BinarySha256);

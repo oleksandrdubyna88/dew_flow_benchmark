@@ -1,5 +1,4 @@
-using System.Text.RegularExpressions;
-using Bench.Domain.Gate;
+using System.Text.Json;
 
 namespace Bench.Domain.Probes;
 
@@ -43,24 +42,52 @@ public static class ProbeExits
     };
 }
 
-/// <summary>What <c>coai-mcp --probe-api</c> printed (D6): status codes, model ids, refused fields and token counts, the vendor's
-/// text redacted. Read for the HTTP statuses its rows answered with, and whether the key was refused — a 401/402/403, or an
-/// account marker in the text. Statuses nobody printed leave <c>reachable</c> <i>not captured</i>.</summary>
-public static partial class ProbeApiOutput
+/// <summary>What <c>coai-mcp --probe-api</c> printed, read: the completion cases' HTTP statuses and whether any of them said the
+/// account is out. <paramref name="Captured"/> is false when stdout was not the report at all.</summary>
+public sealed record ProbeApiReport(bool Captured, IReadOnlyList<int> Statuses, bool AccountMarker)
 {
-    [GeneratedRegex(@"(?:\bHTTP\b|\bstatus\b)[ :=]*(\d{3})\b", RegexOptions.IgnoreCase)]
-    private static partial Regex Status { get; }
+    public static ProbeApiReport NotCaptured { get; } = new(false, [], false);
+}
 
-    public static IReadOnlyList<int> Statuses(string stdout) =>
-        [.. Status.Matches(stdout).Select(m => int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture))];
+/// <summary>What <c>coai-mcp --probe-api</c> prints (D6) — as coai-mcp 0.40.3 printed it on 2026-10-01 (S2b, finding 4;
+/// <c>tests/Bench.Tests/Fixtures/probes/coai-mcp-0.40.3-probe-api-grok-403.json</c>): ONE JSON object on stdout —
+/// <c>{vendor, endpoint, dialect, model, models{status, ids, error}, requests[{model, case, status, refusedField, error, …}]}</c> —
+/// with the progress lines on stderr. The S2 guess of <c>HTTP ddd</c> text lines is withdrawn.
+/// <para>
+/// The <c>requests</c> are the completion cases; the deliberate <c>wrong_key</c> case (a 400 the product provokes on purpose) is
+/// excluded from both facts. The account is OUT on a 401/402/403, or on the vendor's own wording — the live grok run answered 403
+/// on every case with "…has either used all available credits or reached its monthly spending limit…".
+/// </para></summary>
+public static class ProbeApiOutput
+{
+    private const string WrongKeyCase = "wrong_key";
 
-    /// <summary>Whether the vendor refused the ACCOUNT: a 401, 402 or 403 among the statuses, or a marker in the text (the same
-    /// reading a CLI's stdout gets); <c>no</c> when statuses were captured and none refuses; <i>not captured</i> otherwise.</summary>
-    public static ProbeFact KeyRefused(IReadOnlyList<int> statuses, string text) =>
-        (statuses.Any(s => s is 401 or 402 or 403) || ReviewerAccountOut.CliReason(text).Length > 0, statuses.Count > 0) switch
+    private static readonly string[] AccountMarkers = ["credits", "spending limit", "spend limit", "quota", "usage limit", "credit balance", "insufficient"];
+
+    public static ProbeApiReport Read(string stdout)
+    {
+        using var document = ProbeJson.Parse(stdout);
+
+        if (document is null || document.RootElement.ValueKind != JsonValueKind.Object || !document.RootElement.TryGetProperty("requests", out var requests) || requests.ValueKind != JsonValueKind.Array)
         {
-            (true, _) => ProbeFact.Yes,
-            (_, true) => ProbeFact.No,
-            _ => ProbeFact.NotCaptured,
+            return ProbeApiReport.NotCaptured;
+        }
+
+        var cases = requests.EnumerateArray().Where(r => ProbeJson.Text(r, "case") != WrongKeyCase).ToList();
+
+        return new ProbeApiReport(
+            true,
+            [.. cases.Where(r => ProbeJson.Number(r, "status", out _)).Select(r => ProbeJson.Number(r, "status", out var status) ? (int)status : 0)],
+            cases.Any(r => AccountMarkers.Any(m => ProbeJson.Text(r, "error").Contains(m, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    /// <summary>Whether the vendor refused the ACCOUNT: a 401, 402 or 403 among the completion cases, or the credits / spending-limit /
+    /// quota wording in one; <c>no</c> when the report was read and none says so; <i>not captured</i> when there was no report.</summary>
+    public static ProbeFact AccountOut(ProbeApiReport report) =>
+        (report.Captured, report.Statuses.Any(s => s is 401 or 402 or 403) || report.AccountMarker) switch
+        {
+            (false, _) => ProbeFact.NotCaptured,
+            (_, true) => ProbeFact.Yes,
+            _ => ProbeFact.No,
         };
 }

@@ -20,14 +20,14 @@ public sealed class ProbeSubjectTests
     [InlineData("", "environment variable NAME")]
     public void A_path_or_a_key_shaped_executable_reference_is_refused_by_name(string executableRef, string shape)
     {
-        ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", executableRef).Reason()
+        ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", executableRef, "denylist").Reason()
             .Should().Contain(shape, "the refusal names the shape, so the operator learns the rule rather than 'invalid'");
     }
 
     [Fact]
     public void A_name_is_accepted_and_stored_as_given()
     {
-        var subject = ProbeSubject.Parse(" claude-sonnet ", "Claude", " claude-sonnet-4-5 ", "BENCH_CLAUDE").Ok();
+        var subject = ProbeSubject.Parse(" claude-sonnet ", "Claude", " claude-sonnet-4-5 ", "BENCH_CLAUDE", "denylist").Ok();
 
         subject.Id.Value.Should().Be("claude-sonnet");
         subject.Runtime.Should().Be(ProbeRuntime.Claude);
@@ -49,19 +49,46 @@ public sealed class ProbeSubjectTests
     [Fact]
     public void An_api_subject_freezes_its_vendor_public_endpoint_and_dialect_and_a_cli_subject_may_name_none()
     {
-        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", " grok ", "https://api.x.ai/v1", "xai").Ok();
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", " grok ", "https://api.x.ai/v1", "xai").Ok();
 
         (grok.Vendor, grok.Endpoint, grok.Dialect).Should().Be(("grok", "https://api.x.ai/v1", "xai"));
         grok.Describe.Should().Contain("grok @ https://api.x.ai/v1 (xai)");
 
-        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "https://api.x.ai/v1", "xai").Reason().Should().Contain("vendor id");
-        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "").Reason().Should().Contain("dialect");
-        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "", "xai").Reason().Should().Contain("public vendor url");
-        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "BENCH_GROK_URL", "xai").Reason().Should().Contain("public vendor url", "a reference is not the product's literal endpoint (D6)");
-        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "http://127.0.0.1:8080/v1", "xai").Reason().Should().Contain("machine-local");
-        ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE", "anthropic", "", "").Reason().Should().Contain("runs on a CLI");
-        var cli = ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE").Ok();
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "", "https://api.x.ai/v1", "xai").Reason().Should().Contain("vendor id");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "grok", "https://api.x.ai/v1", "").Reason().Should().Contain("dialect");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "grok", "", "xai").Reason().Should().Contain("public vendor url");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "grok", "BENCH_GROK_URL", "xai").Reason().Should().Contain("public vendor url", "a reference is not the product's literal endpoint (D6)");
+        ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "", "grok", "http://127.0.0.1:8080/v1", "xai").Reason().Should().Contain("machine-local");
+        ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE", "denylist", "anthropic", "", "").Reason().Should().Contain("runs on a CLI");
+        var cli = ProbeSubject.Parse("claude-sonnet", "claude", "claude-sonnet-4-5", "BENCH_CLAUDE", "denylist").Ok();
         (cli.Vendor, cli.Endpoint, cli.Dialect).Should().Be((string.Empty, string.Empty, string.Empty));
+    }
+
+    /// <summary>S2b, finding 1: the live run showed a deny list is not a confinement (claude 2.1.258 kept <c>PowerShell</c> offered and the
+    /// canary leaked), so a claude subject NAMES how it is confined — and a runtime with no such flag accepts only <c>default</c>.</summary>
+    [Theory]
+    [InlineData("denylist", ProbeConfinement.Denylist)]
+    [InlineData(" Allowlist ", ProbeConfinement.Allowlist)]
+    [InlineData("restricted", ProbeConfinement.Restricted)]
+    public void A_claude_subject_names_one_of_the_three_confinement_modes(string word, ProbeConfinement mode)
+    {
+        var subject = ProbeSubject.Parse("claude-sonnet", "claude", "sonnet", "BENCH_CLAUDE", word).Ok();
+
+        subject.Confinement.Should().Be(mode);
+        subject.Describe.Should().Contain(ProbeConfinementWord.Of(mode));
+    }
+
+    [Fact]
+    public void A_claude_subject_without_a_confinement_is_refused_and_so_is_a_mode_on_a_runtime_that_has_no_flag_for_it()
+    {
+        ProbeSubject.Parse("claude-sonnet", "claude", "sonnet", "BENCH_CLAUDE").Reason()
+            .Should().Contain("names no confinement").And.Contain("denylist").And.Contain("allowlist").And.Contain("restricted");
+        ProbeSubject.Parse("claude-sonnet", "claude", "sonnet", "BENCH_CLAUDE", "default").Reason().Should().Contain("names no confinement");
+        ProbeSubject.Parse("claude-sonnet", "claude", "sonnet", "BENCH_CLAUDE", "sandbox").Reason().Should().Contain("'sandbox' is not a confinement mode");
+        ProbeSubject.Parse("codex-astra", "codex", "gpt-6-astra", "BENCH_CODEX", "allowlist").Reason().Should().Contain("codex, which has no confinement flag");
+        ProbeSubject.Parse("agy-gemini", "antigravity", "gemini-3.1-pro-high", "BENCH_AGY", "restricted").Reason().Should().Contain("antigravity, which has no confinement flag");
+        ProbeSubject.Parse("codex-astra", "codex", "gpt-6-astra", "BENCH_CODEX", "default").Ok().Confinement.Should().Be(ProbeConfinement.Default);
+        ProbeSubject.Parse("codex-astra", "codex", "gpt-6-astra", "BENCH_CODEX").Ok().Describe.Should().NotContain("default", "a runtime with no modes says nothing about one");
     }
 
     [Fact]
@@ -90,7 +117,7 @@ public sealed class ProbeSubjectTests
         const string file = """
             {
               "subjects": [
-                { "id": "claude-sonnet", "runtime": "claude", "model": "claude-sonnet-4-5", "executableRef": "BENCH_CLAUDE" },
+                { "id": "claude-sonnet", "runtime": "claude", "model": "claude-sonnet-4-5", "executableRef": "BENCH_CLAUDE", "confinement": "denylist" },
                 { "id": "codex-astra", "runtime": "codex", "model": "gpt-6-astra", "executableRef": "BENCH_CODEX" },
                 { "id": "grok-api", "runtime": "api", "model": "grok-4.7", "executableRef": "BENCH_GATE_COAI_EXE", "vendor": "grok", "endpoint": "https://api.x.ai/v1", "dialect": "xai" }
               ]

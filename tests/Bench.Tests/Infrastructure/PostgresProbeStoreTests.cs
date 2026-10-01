@@ -52,8 +52,8 @@ public sealed class PostgresProbeStoreTests(PostgresFixture postgres)
     [Fact]
     public async Task An_api_subjects_vendor_endpoint_and_dialect_are_frozen_on_the_run_and_read_back()
     {
-        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "xai").Ok();
-        var run = Run(Subject("claude-sonnet", "claude"), grok);
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", string.Empty, "grok", "https://api.x.ai/v1", "xai").Ok();
+        var run = Run(Subject("claude-sonnet", "claude", "restricted"), grok);
         var cells = ProbeMatrix.Plan(ProbeWord.All, run.Subjects, repeats: 1).Ok().Cells.Select(c => ProbeCell.Pending(Guid.CreateVersion7(), run.Id, c)).ToList();
         var store = NewStore(new TestClock(Noon));
 

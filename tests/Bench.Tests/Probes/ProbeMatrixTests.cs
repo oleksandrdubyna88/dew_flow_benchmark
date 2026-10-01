@@ -92,7 +92,10 @@ public sealed class ProbeMatrixTests
     }
 
     internal static IReadOnlyList<ProbeSubject> Subjects(params (string Id, string Runtime)[] subjects) =>
-        [.. subjects.Select(s => s.Runtime == "api"
-            ? ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X", "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok()
-            : ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X").Ok())];
+        [.. subjects.Select(s => s.Runtime switch
+        {
+            "api" => ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X", string.Empty, "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok(),
+            "claude" => ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X", "denylist").Ok(),
+            _ => ProbeSubject.Parse(s.Id, s.Runtime, "model-x", "BENCH_X").Ok(),
+        })];
 }

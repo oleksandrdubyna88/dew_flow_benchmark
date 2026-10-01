@@ -26,7 +26,7 @@ public sealed class CoaiApiProbeRunnerTests : IDisposable
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static readonly ProbeSubject Grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "xai").Ok();
+    private static readonly ProbeSubject Grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", string.Empty, "grok", "https://api.x.ai/v1", "xai").Ok();
 
     [Fact]
     public async Task The_product_is_launched_with_D6s_argv_the_key_reaches_its_environment_and_appears_in_no_artefact()
@@ -53,13 +53,17 @@ public sealed class CoaiApiProbeRunnerTests : IDisposable
     [Fact]
     public async Task A_refused_key_at_the_vendor_is_the_measurement_account_out_yes_reachable_no()
     {
-        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject { ["lines"] = new JsonArray("models: HTTP 403 forbidden", "chat/completions: HTTP 403 forbidden") } });
+        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject { ["stdout"] = ProbeVerdictsTests.Fixture("coai-mcp-0.40.3-probe-api-grok-403.json") } });
         var run = Run();
 
-        var facts = (await runner.RunAsync(run, Grok, Claimed(run), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement.Facts;
+        var settlement = (await runner.RunAsync(run, Grok, Claimed(run), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement;
 
-        facts.AccountOut.Should().Be(ProbeFact.Yes, "Q5 asks what the account says right now — a refused key is the answer, not an interruption");
-        facts.Reachable.Should().Be(ProbeFact.No);
+        settlement.Facts.Kind.Should().Be(ProbeAttemptKind.Answered);
+        settlement.Facts.AccountOut.Should().Be(ProbeFact.Yes, "Q5 asks what the account says right now — a refused key is the answer, not an interruption (the live grok report of 2026-10-01: every case 403, 'used all available credits or reached its monthly spending limit')");
+        settlement.Facts.Reachable.Should().Be(ProbeFact.No, "the endpoint answered, but no completion case was a 200");
+        settlement.Artifacts.Select(a => a.Kind).Should().BeEquivalentTo([ProbeArtifactKind.Stdout, ProbeArtifactKind.Stderr, ProbeArtifactKind.Argv], "the raw evidence and the exact argv (S2b)");
+        var argv = await File.ReadAllTextAsync(Path.Combine([_root.Path, .. settlement.Artifacts.Single(a => a.Kind == ProbeArtifactKind.Argv).Path.Segments]), Ct);
+        argv.Should().Contain("\"--probe-api\"").And.Contain("\"grok-4.7\"").And.NotContain(Key);
     }
 
     [Theory]
@@ -67,14 +71,15 @@ public sealed class CoaiApiProbeRunnerTests : IDisposable
     [InlineData(3, ProbeAttemptKind.Failed)]
     public async Task The_products_own_exits_read_as_the_plan_says(int exit, ProbeAttemptKind kind)
     {
-        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject { ["exitCode"] = exit, ["lines"] = new JsonArray() } });
+        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject { ["exitCode"] = exit, ["stdout"] = "usage: coai-mcp --probe-api ..." } });
         var run = Run();
 
         var facts = (await runner.RunAsync(run, Grok, Claimed(run), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement.Facts;
 
         facts.Kind.Should().Be(kind);
         facts.ExitCode.Value.Should().Be(exit);
-        facts.Reachable.Should().Be(ProbeFact.NotCaptured, "no status was printed");
+        facts.Reachable.Should().Be(ProbeFact.NotCaptured, "no report was printed");
+        facts.AccountOut.Should().Be(ProbeFact.NotCaptured);
     }
 
     [Fact]

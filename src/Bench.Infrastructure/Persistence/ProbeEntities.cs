@@ -45,6 +45,10 @@ public sealed class ProbeRunRow
     /// <summary>The api subject's wire dialect word; empty for a CLI subject.</summary>
     public List<string> SubjectDialects { get; set; } = [];
 
+    /// <summary>The confinement mode's enum NAME per subject (S2b): a claude subject's <c>Denylist</c>/<c>Allowlist</c>/<c>Restricted</c>,
+    /// <c>Default</c> for every other runtime. Parallel to <see cref="SubjectIds"/>.</summary>
+    public List<string> SubjectConfinements { get; set; } = [];
+
     /// <summary>The probes the run was ASKED for (S4) — enum NAMES, in the order asked. Frozen because the planner's dropped pairs
     /// are recomputed from them and the frozen subjects: a probe every subject dropped plans no cell, so the cells alone cannot
     /// name it.</summary>
@@ -112,6 +116,10 @@ public sealed class ProbeCellRow
     public ProbeFact AnswerCurrent { get; set; }
 
     public ProbeFact ToolEvidence { get; set; }
+
+    public ProbeFact ShellUsed { get; set; }
+
+    public ProbeFact ReaderOffered { get; set; }
 
     public ProbeFact Reachable { get; set; }
 

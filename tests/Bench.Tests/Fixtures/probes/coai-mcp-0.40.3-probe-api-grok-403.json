@@ -1,0 +1,127 @@
+{
+  "vendor": "grok",
+  "endpoint": "https://api.x.ai/v1",
+  "dialect": "xai",
+  "model": "grok-4.7",
+  "models": {
+    "status": 403,
+    "ids": [],
+    "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}"
+  },
+  "requests": [
+    {
+      "model": "grok-4.7",
+      "case": "json_schema",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "json_object",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "temperature",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "seed",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "frequency_penalty",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "reasoning_effort=low",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "reasoning_effort=medium",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "reasoning_effort=high",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "second_turn",
+      "status": 403,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022permission-denied\u0022,\u0022error\u0022:\u0022Your team <team-id> has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    },
+    {
+      "model": "grok-4.7",
+      "case": "wrong_key",
+      "status": 400,
+      "refusedField": "",
+      "error": "{\u0022code\u0022:\u0022invalid-argument\u0022,\u0022error\u0022:\u0022Incorrect API key provided. You can obtain an API key from https://console.x.ai.\u0022}",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "cachedTokens": 0,
+      "cost": null
+    }
+  ],
+  "notes": [
+    "a 429 is not provoked on purpose: a burst against a paid key is not something a probe does unasked \u2014 record one from a real round, or run the matrix twice in quick succession",
+    "cost is null: an OpenAI-compatible response carries no price; multiply the token counts by the vendor\u0027s rate"
+  ]
+}

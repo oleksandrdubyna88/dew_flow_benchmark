@@ -24,6 +24,7 @@ internal static class ProbeRowMapping
         SubjectVendors = [.. run.Subjects.Select(s => s.Vendor)],
         SubjectEndpoints = [.. run.Subjects.Select(s => s.Endpoint)],
         SubjectDialects = [.. run.Subjects.Select(s => s.Dialect)],
+        SubjectConfinements = [.. run.Subjects.Select(s => s.Confinement.ToString())],
         Probes = [.. run.Probes.Select(p => p.ToString())],
     };
 
@@ -31,9 +32,9 @@ internal static class ProbeRowMapping
     {
         if (!SameLength(
                 row.SubjectIds.Count, row.SubjectRuntimes.Count, row.SubjectModels.Count, row.SubjectExecutableRefs.Count,
-                row.SubjectVendors.Count, row.SubjectEndpoints.Count, row.SubjectDialects.Count))
+                row.SubjectVendors.Count, row.SubjectEndpoints.Count, row.SubjectDialects.Count, row.SubjectConfinements.Count))
         {
-            return Outcome<ProbeRun>.Failure($"probe run {row.Id}: its seven subject columns disagree in length — the row was edited");
+            return Outcome<ProbeRun>.Failure($"probe run {row.Id}: its eight subject columns disagree in length — the row was edited");
         }
 
         return ProbeOracle.Parse(row.OracleVersion, row.OracleSource).Match(
@@ -65,7 +66,7 @@ internal static class ProbeRowMapping
         foreach (var i in Enumerable.Range(0, row.SubjectIds.Count))
         {
             var subject = ProbeSubject.Parse(
-                row.SubjectIds[i], RuntimeWord(row.SubjectRuntimes[i]), row.SubjectModels[i], row.SubjectExecutableRefs[i],
+                row.SubjectIds[i], RuntimeWord(row.SubjectRuntimes[i]), row.SubjectModels[i], row.SubjectExecutableRefs[i], ConfinementWord(row.SubjectConfinements[i]),
                 row.SubjectVendors[i], row.SubjectEndpoints[i], row.SubjectDialects[i]);
 
             if (subject is Outcome<ProbeSubject>.Fail fail)
@@ -82,6 +83,9 @@ internal static class ProbeRowMapping
     /// <summary>A stored enum NAME back to its word; anything else is handed to the parser as it is, to be refused by name.</summary>
     private static string RuntimeWord(string stored) =>
         Enum.TryParse<ProbeRuntime>(stored, ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) ? ProbeRuntimeWord.Of(parsed) : stored;
+
+    private static string ConfinementWord(string stored) =>
+        Enum.TryParse<ProbeConfinement>(stored, ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) ? ProbeConfinementWord.Of(parsed) : stored;
 
     public static ProbeCellRow ToRow(ProbeCell cell)
     {
@@ -125,6 +129,8 @@ internal static class ProbeRowMapping
         row.ReadAttempted = facts.ReadAttempted;
         row.AnswerCurrent = facts.AnswerCurrent;
         row.ToolEvidence = facts.ToolEvidence;
+        row.ShellUsed = facts.ShellUsed;
+        row.ReaderOffered = facts.ReaderOffered;
         row.Reachable = facts.Reachable;
         row.AccountOut = facts.AccountOut;
         row.ArtifactKinds = [.. artifacts.Select(a => a.Kind.ToString())];
@@ -165,6 +171,8 @@ internal static class ProbeRowMapping
                 row.ReadAttempted,
                 row.AnswerCurrent,
                 row.ToolEvidence,
+                row.ShellUsed,
+                row.ReaderOffered,
                 row.Reachable,
                 row.AccountOut);
 

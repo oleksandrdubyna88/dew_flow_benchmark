@@ -1,8 +1,8 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using Bench.Application;
 using Bench.Application.Probes;
 using Bench.Domain;
-using Bench.Domain.Gate;
 using Bench.Domain.Probes;
 using Bench.Domain.Trace;
 using Microsoft.Extensions.Logging;
@@ -15,42 +15,52 @@ namespace Bench.Infrastructure.Probes;
 public sealed record CliProbeSettings(IReadOnlyDictionary<string, string> Executables, TimeSpan Wall);
 
 /// <summary>One CLI attempt end to end (S2): fixture → <see cref="ICliAgentTranscripts"/> (the one launcher, through
-/// <c>CliArgv</c>) → the three artefacts committed → the facts read through <see cref="ProbeTranscripts"/> and
-/// <see cref="ProbeVerdicts"/> → a settlement, or the unmeasured hand-back.
+/// <c>CliArgv</c>) → the RAW evidence committed → the reading (<see cref="IProbeAttemptReader"/>) → the extracted artefacts →
+/// a settlement, or the unmeasured hand-back.
 /// <list type="bullet">
-/// <item>A quota marker on the CLI's own stderr or in its answer (<see cref="ReviewerAccountOut.CliReason"/>) hands the attempt
-/// back <see cref="ProbeReason.AccountOut"/> — D8, a quota stop is not a measurement — with the artefacts kept.</item>
-/// <item>A usage-error exit settles <i>launch refused</i>, every fact <i>not captured</i>, the exit code kept; the wall settles
-/// <i>timed out</i>; any other non-zero exit, or a clean exit that said nothing, settles <i>failed</i>.</item>
-/// <item>The artefacts are committed BEFORE the settlement is decided and referenced by hash, so a verdict is auditable from disk
-/// the moment it exists; the fixture is deleted in <c>finally</c>, whatever happened.</item>
+/// <item><b>The raw evidence goes to disk BEFORE anything is parsed</b> (S2b, finding 6): stdout, stderr, the exact argv and the
+/// prompt. Two live codex cells faulted inside the reader and left no artefact; now a reader that throws settles the attempt
+/// <i>failed</i> with every fact <i>not captured</i> and a <c>fault.txt</c> saying why — a parse fault is a fact about our reader,
+/// never a leg fault, and the transcript is there to fix the reader against.</item>
+/// <item>A quota marker on the CLI's own stderr or in its answer (<see cref="Domain.Gate.ReviewerAccountOut.CliReason"/>) hands the
+/// attempt back <see cref="ProbeReason.AccountOut"/> — D8, a quota stop is not a measurement — with the artefacts kept.</item>
+/// <item>The answer and the tool trace (<c>tools.json</c>: offered, used, denied — WHICH tool reached a file) are committed beside the
+/// raw files; every artefact is referenced by hash, so a verdict is auditable from disk the moment it exists.</item>
+/// <item>The fixture is deleted in <c>finally</c>, whatever happened.</item>
 /// </list>
 /// The <c>read-inside</c> control's voiding of the subject's read probes (<see cref="ProbeVerdicts.UnderControl"/>) is applied
 /// where the subject's verdicts are read together — the report — not here, where one cell is measured on its own.</summary>
 public sealed class CliProbeRunner(
-    ICliAgentTranscripts agents, IProbeFixtures fixtures, IProbeArtifacts artifacts, CliProbeSettings settings, ILogger<CliProbeRunner> logger) : IProbeRunner
+    ICliAgentTranscripts agents, IProbeFixtures fixtures, IProbeArtifacts artifacts, CliProbeSettings settings, IProbeAttemptReader reader, ILogger<CliProbeRunner> logger) : IProbeRunner
 {
+    /// <summary>The production composition: the live reader.</summary>
+    public CliProbeRunner(ICliAgentTranscripts agents, IProbeFixtures fixtures, IProbeArtifacts artifacts, CliProbeSettings settings, ILogger<CliProbeRunner> logger)
+        : this(agents, fixtures, artifacts, settings, ProbeAttemptReader.Live, logger)
+    {
+    }
+
     public async Task<ProbeAttemptResult> RunAsync(ProbeRun run, ProbeSubject subject, ProbeCell claimed, CancellationToken cancellationToken)
     {
         var prepared = Prepare(subject, claimed);
 
-        if (prepared is Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Fail notPrepared)
+        if (prepared is Outcome<Prepared>.Fail notPrepared)
         {
             logger.LogWarning("Probe cell {Cell} could not be prepared and settles failed: {Reason}", claimed.Id, notPrepared.Reason);
             return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, CapturedCount.Unavailable(notPrepared.Reason)), []);
         }
 
-        var (scope, kind, executable, fixture) = ((Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Ok)prepared).Value;
+        var (scope, kind, executable, fixture) = ((Outcome<Prepared>.Ok)prepared).Value;
 
         try
         {
-            var ask = new AgentAsk(kind, executable, ProbeLaunch.Prompt(claimed.Probe, fixture), fixture.Cwd, settings.Wall, subject.ModelId)
+            var prompt = ProbeLaunch.Prompt(claimed.Probe, fixture);
+            var ask = new AgentAsk(kind, executable, prompt, fixture.Cwd, settings.Wall, subject.ModelId)
             {
-                Options = ProbeLaunch.OptionsFor(claimed.Probe, subject.Runtime, fixture),
+                Options = ProbeLaunch.OptionsFor(claimed.Probe, subject.Runtime, subject.Confinement, fixture),
             };
 
             return await (await agents.TranscriptAsync(ask, cancellationToken)).Match(
-                transcript => MeasureAsync(run, subject, claimed, scope, fixture, transcript, cancellationToken),
+                transcript => MeasureAsync(run, subject, claimed, scope, fixture, prompt, transcript, cancellationToken),
                 reason => Task.FromResult(Refused(claimed, reason)));
         }
         finally
@@ -59,19 +69,21 @@ public sealed class CliProbeRunner(
         }
     }
 
+    private sealed record Prepared(ProbeAttemptScope Scope, Domain.Registry.ModelRuntimeKind Kind, string Executable, ProbeFixture Fixture);
+
     /// <summary>Everything decided before the launch: the scope (a claimed cell's attempt), the CLI kind, the executable, the
     /// fixture. A refusal here is a cell that could not be measured as itself and settles <i>failed</i> with the reason as its
     /// uncaptured exit code's note.</summary>
-    private Outcome<(ProbeAttemptScope Scope, Domain.Registry.ModelRuntimeKind Kind, string Executable, ProbeFixture Fixture)> Prepare(ProbeSubject subject, ProbeCell claimed) =>
+    private Outcome<Prepared> Prepare(ProbeSubject subject, ProbeCell claimed) =>
         ProbeAttemptScope.Of(claimed).Match(
             scope => ProbeLaunch.RuntimeKind(subject.Runtime).Match(
                 kind => Executable(subject).Match(
                     executable => fixtures.Begin(claimed.Probe, scope).Match(
-                        fixture => Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Success((scope, kind, executable, fixture)),
-                        Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Failure),
-                    Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Failure),
-                Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Failure),
-            Outcome<(ProbeAttemptScope, Domain.Registry.ModelRuntimeKind, string, ProbeFixture)>.Failure);
+                        fixture => Outcome<Prepared>.Success(new Prepared(scope, kind, executable, fixture)),
+                        Outcome<Prepared>.Failure),
+                    Outcome<Prepared>.Failure),
+                Outcome<Prepared>.Failure),
+            Outcome<Prepared>.Failure);
 
     private Outcome<string> Executable(ProbeSubject subject) =>
         settings.Executables.TryGetValue(subject.Id.Value, out var executable) && executable.Length > 0
@@ -87,49 +99,63 @@ public sealed class CliProbeRunner(
     }
 
     private async Task<ProbeAttemptResult> MeasureAsync(
-        ProbeRun run, ProbeSubject subject, ProbeCell claimed, ProbeAttemptScope scope, ProbeFixture fixture, AgentTranscript transcript, CancellationToken cancellationToken)
+        ProbeRun run, ProbeSubject subject, ProbeCell claimed, ProbeAttemptScope scope, ProbeFixture fixture, string prompt, AgentTranscript transcript, CancellationToken cancellationToken)
     {
-        var answer = ProbeTranscripts.Answer(subject.Runtime, transcript.Stdout);
-        var committed = await CommitAsync(scope, answer, transcript, cancellationToken);
+        // The raw evidence FIRST — whatever the readers then make of it.
+        var raw = await CommitAsync(scope, cancellationToken,
+            (ProbeArtifactKind.Stdout, transcript.Stdout), (ProbeArtifactKind.Stderr, transcript.Stderr), (ProbeArtifactKind.Argv, ArgvJson(transcript.Argv)), (ProbeArtifactKind.Prompt, prompt));
 
-        if (ReviewerAccountOut.CliReason(AccountOutText(transcript, answer)) is { Length: > 0 } quota)
+        return TryRead(run, subject, claimed.Probe, fixture.Tokens, transcript) switch
         {
-            logger.LogWarning("Probe cell {Cell}: the subject's account is out — {Line}", claimed.Id, quota);
+            Outcome<ProbeAttemptReading>.Ok read => await SettleReadAsync(claimed, scope, read.Value, raw, cancellationToken),
+            Outcome<ProbeAttemptReading>.Fail fault => await FaultedAsync(claimed, scope, fault.Reason, transcript, raw, cancellationToken),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+    }
+
+    /// <summary>The one place a reader bug is allowed to land: as a value this runner settles FAILED on, with the raw transcript already
+    /// on disk. Two live codex cells faulted this way (a duplicate JSON key) and left no artefact at all.</summary>
+    private Outcome<ProbeAttemptReading> TryRead(ProbeRun run, ProbeSubject subject, ProbeKind probe, ProbeTokens tokens, AgentTranscript transcript)
+    {
+        try
+        {
+            return Outcome<ProbeAttemptReading>.Success(reader.Read(run, subject, probe, tokens, transcript));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Outcome<ProbeAttemptReading>.Failure($"{ex.GetType().FullName}: {ex.Message}");
+        }
+    }
+
+    private async Task<ProbeAttemptResult> SettleReadAsync(ProbeCell claimed, ProbeAttemptScope scope, ProbeAttemptReading reading, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
+    {
+        var extracted = await CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Answer, reading.Answer), (ProbeArtifactKind.Tools, reading.Trace.ToJson()));
+
+        if (reading.QuotaLine.Length > 0)
+        {
+            logger.LogWarning("Probe cell {Cell}: the subject's account is out — {Line}", claimed.Id, reading.QuotaLine);
             return new ProbeAttemptResult.Unmeasured(ProbeReason.AccountOut);
         }
 
-        return Settled(Facts(run, subject, claimed, fixture, transcript, answer), committed);
+        return Settled(reading.Facts, [.. raw, .. extracted]);
     }
 
-    /// <summary>What the quota reading sees: stderr and the model's own answer always; the whole transcript only when the exit
-    /// was non-zero — a web-search result quoting "usage limit" inside a tool result must not bench a subject that answered.</summary>
-    private static string AccountOutText(AgentTranscript transcript, string answer) =>
-        transcript.ExitCode is { WasCaptured: true, Value: 0 } ? transcript.Stderr + "\n" + answer : transcript.Stderr + "\n" + answer + "\n" + transcript.Stdout;
-
-    private static ProbeFacts Facts(ProbeRun run, ProbeSubject subject, ProbeCell claimed, ProbeFixture fixture, AgentTranscript transcript, string answer)
+    private async Task<ProbeAttemptResult> FaultedAsync(ProbeCell claimed, ProbeAttemptScope scope, string reason, AgentTranscript transcript, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
     {
-        var kind = Kind(subject, transcript, answer);
+        logger.LogError("Probe cell {Cell}: the reader faulted on this transcript — {Reason}. The attempt settles failed with every fact not captured; the raw evidence is kept to fix the reader against", claimed.Id, reason);
+        var fault = await CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Fault, reason + "\n"));
 
-        return kind == ProbeAttemptKind.Answered
-            ? ProbeVerdicts.For(claimed.Probe, answer, ProbeTranscripts.Read(subject.Runtime, transcript.Stdout), fixture.Tokens, run.Oracle) with { ExitCode = transcript.ExitCode }
-            : ProbeFacts.NothingCaptured(kind, transcript.ExitCode);
+        return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, transcript.ExitCode), [.. raw, .. fault]);
     }
 
-    /// <summary>Timed out before anything else; then the exit as <see cref="ProbeExits"/> reads it; a clean exit that SAID
-    /// nothing is a failure, not an answer — an empty answer would read every canary as <i>no</i>.</summary>
-    private static ProbeAttemptKind Kind(ProbeSubject subject, AgentTranscript transcript, string answer) =>
-        (transcript.TimedOut, transcript.ExitCode.WasCaptured ? ProbeExits.Classify(subject.Runtime, (int)transcript.ExitCode.Value, transcript.Stderr) : ProbeAttemptKind.Failed, answer.Length) switch
-        {
-            (true, _, _) => ProbeAttemptKind.TimedOut,
-            (_, ProbeAttemptKind.Answered, 0) => ProbeAttemptKind.Failed,
-            (_, var kind, _) => kind,
-        };
+    /// <summary>The exact argv, one JSON array — a CLI launch carries no secret, so there is nothing to scrub here.</summary>
+    private static string ArgvJson(IReadOnlyList<string> argv) => new JsonArray([.. argv.Select(a => (JsonNode)JsonValue.Create(a))]).ToJsonString() + "\n";
 
-    private async Task<IReadOnlyList<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, string answer, AgentTranscript transcript, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, CancellationToken cancellationToken, params (ProbeArtifactKind Kind, string Text)[] files)
     {
         var committed = new List<ProbeArtifact>();
 
-        foreach (var (kind, text) in new[] { (ProbeArtifactKind.Answer, answer), (ProbeArtifactKind.Stdout, transcript.Stdout), (ProbeArtifactKind.Stderr, transcript.Stderr) })
+        foreach (var (kind, text) in files)
         {
             switch (await artifacts.CommitAsync(scope, kind, Encoding.UTF8.GetBytes(text), cancellationToken))
             {

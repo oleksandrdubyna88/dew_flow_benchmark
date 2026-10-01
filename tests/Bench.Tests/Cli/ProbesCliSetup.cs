@@ -48,13 +48,20 @@ internal sealed class ProbesCliSetup : IAsyncDisposable
     public static async Task<ProbesCliSetup> StartAsync(PostgresFixture postgres) =>
         new(await postgres.NewDatabaseAsync($"probes_cli_{Guid.NewGuid():N}"), GateStoreFixtures.NewRoot());
 
-    /// <summary>A CLI subject on <paramref name="runtime"/> answered by a fresh fake, its reference resolving to the fake's apphost.</summary>
-    public FakeCli AddSubject(string id, string runtime, JsonObject? script = null, bool resolvable = true)
+    /// <summary>A CLI subject on <paramref name="runtime"/> answered by a fresh fake, its reference resolving to the fake's apphost; a claude
+    /// subject under <paramref name="confinement"/> (the deny list unless the test says otherwise — S2b).</summary>
+    public FakeCli AddSubject(string id, string runtime, JsonObject? script = null, bool resolvable = true, string confinement = "")
     {
         var fake = new FakeCli(script);
         var reference = "BENCH_TEST_" + id.Replace('-', '_').ToUpperInvariant();
         _fakes[id] = fake;
-        _subjects.Add(new JsonObject { ["id"] = id, ["runtime"] = runtime, ["model"] = fake.Model, ["executableRef"] = reference });
+        var entry = new JsonObject { ["id"] = id, ["runtime"] = runtime, ["model"] = fake.Model, ["executableRef"] = reference };
+        if (runtime == "claude")
+        {
+            entry["confinement"] = confinement.Length > 0 ? confinement : "denylist";
+        }
+
+        _subjects.Add(entry);
 
         if (resolvable)
         {

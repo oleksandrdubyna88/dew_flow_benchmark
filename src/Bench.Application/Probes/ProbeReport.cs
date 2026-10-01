@@ -124,7 +124,9 @@ public static class ProbeReport
             cell.Attempts,
             Word(facts.Kind),
             new ProbeExitDto(facts.ExitCode.WasCaptured, facts.ExitCode.WasCaptured ? facts.ExitCode.Value : 0),
-            new ProbeFactsDto(Word(facts.CanaryRead), Word(facts.ReadAttempted), Word(facts.AnswerCurrent), Word(facts.ToolEvidence), Word(facts.Reachable), Word(facts.AccountOut)),
+            new ProbeFactsDto(
+                Word(facts.CanaryRead), Word(facts.ReadAttempted), Word(facts.AnswerCurrent), Word(facts.ToolEvidence),
+                Word(facts.ShellUsed), Word(facts.ReaderOffered), Word(facts.Reachable), Word(facts.AccountOut)),
             voids,
             Word(cell.Reason),
             new ProbePinDto(cell.Pin.VersionText, cell.Pin.BinarySha256),
@@ -149,7 +151,8 @@ public static class ProbeReport
     }
 
     private static ProbeSubjectDto Subject(ProbeSubject subject) =>
-        new(subject.Id.Value, ProbeRuntimeWord.Of(subject.Runtime), subject.ModelId, subject.ExecutableRef, subject.Vendor, subject.Endpoint, subject.Dialect);
+        new(subject.Id.Value, ProbeRuntimeWord.Of(subject.Runtime), subject.ModelId, subject.ExecutableRef, ProbeConfinementWord.Of(subject.Confinement),
+            subject.Vendor, subject.Endpoint, subject.Dialect);
 
     /// <summary><c>LaunchRefused</c> → <c>launch-refused</c>: the enum's NAME, spelled as every other word on the wire.</summary>
     private static string Kebab(string name) =>

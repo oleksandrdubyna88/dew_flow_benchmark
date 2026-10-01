@@ -41,6 +41,8 @@ internal static class ProbeModel
             cell.Property(c => c.ReadAttempted).HasConversion<string>();
             cell.Property(c => c.AnswerCurrent).HasConversion<string>();
             cell.Property(c => c.ToolEvidence).HasConversion<string>();
+            cell.Property(c => c.ShellUsed).HasConversion<string>();
+            cell.Property(c => c.ReaderOffered).HasConversion<string>();
             cell.Property(c => c.Reachable).HasConversion<string>();
             cell.Property(c => c.AccountOut).HasConversion<string>();
             cell.Property(c => c.Reason).HasConversion<string>();

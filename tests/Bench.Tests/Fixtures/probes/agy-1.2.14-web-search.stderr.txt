@@ -1,0 +1,1 @@
+jetski: no output produced — a tool required the "read_url" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. read_url(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.

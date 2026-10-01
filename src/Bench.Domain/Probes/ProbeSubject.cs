@@ -40,6 +40,56 @@ public static class ProbeRuntimeWord
     }
 }
 
+/// <summary>HOW a claude subject's tools are confined (S2b, finding 1 — measured on claude 2.1.258, 2026-10-01). The live run showed
+/// that a deny list is not a confinement: <c>--disallowedTools Read Glob Grep Bash …</c> still offered <c>PowerShell</c>, and the
+/// read-denied cell returned the out-of-cwd canary. A claude subject therefore names its mode, frozen on the run, so the three are
+/// measured side by side; codex and antigravity have no such flags and accept only <see cref="Default"/>.</summary>
+public enum ProbeConfinement
+{
+    /// <summary>No confinement flag beyond the launch's own — the only mode a non-claude runtime has.</summary>
+    Default,
+
+    /// <summary>Exactly what coai ships today: <c>--disallowedTools</c> with its consultant's list (<c>Edit Write NotebookEdit Bash WebFetch
+    /// WebSearch Task Agent</c>, <c>src_mcp/runners/Consultation/ClaudeConsultant.cs</c>) and, for a confined row, its reviewer's
+    /// (<c>Bash Read Glob Grep WebFetch WebSearch Task Agent</c> on top of the write tools, <c>src_mcp/runners/Reviewers/ClaudeRuntime.cs</c>).</summary>
+    Denylist,
+
+    /// <summary><c>--tools</c> naming exactly what the probe needs — the readers for a read probe, the two web tools for a web probe, nothing
+    /// (<c>--tools ""</c>) for the control; a tool not named is not offered.</summary>
+    Allowlist,
+
+    /// <summary><c>--restricted</c> — the CLI removes its code-running tools and WebFetch, ignores the user's settings files, and confines the
+    /// file tools to the working directories — with <c>--tools</c> naming what the probe needs beside it (WebFetch comes back only by name).</summary>
+    Restricted,
+}
+
+/// <summary>The one reading of a confinement word — <c>default</c>, <c>denylist</c>, <c>allowlist</c>, <c>restricted</c>.</summary>
+public static class ProbeConfinementWord
+{
+    private static readonly IReadOnlyDictionary<ProbeConfinement, string> Words = new Dictionary<ProbeConfinement, string>
+    {
+        [ProbeConfinement.Default] = "default",
+        [ProbeConfinement.Denylist] = "denylist",
+        [ProbeConfinement.Allowlist] = "allowlist",
+        [ProbeConfinement.Restricted] = "restricted",
+    };
+
+    public static string Of(ProbeConfinement confinement) => Words[confinement];
+
+    /// <summary>Empty reads as <see cref="ProbeConfinement.Default"/> — the subjects file need not spell it for a CLI that has no modes.</summary>
+    public static Outcome<ProbeConfinement> Parse(string? word)
+    {
+        var trimmed = (word ?? string.Empty).Trim();
+        var match = trimmed.Length == 0
+            ? ProbeConfinement.Default
+            : Words.Where(w => string.Equals(w.Value, trimmed, StringComparison.OrdinalIgnoreCase)).Select(w => (ProbeConfinement?)w.Key).FirstOrDefault();
+
+        return match is { } confinement
+            ? Outcome<ProbeConfinement>.Success(confinement)
+            : Outcome<ProbeConfinement>.Failure($"'{trimmed}' is not a confinement mode — one of {string.Join(", ", Words.Values)}");
+    }
+}
+
 /// <summary>A subject's id — <c>claude-sonnet</c>, <c>codex-astra</c>: <see cref="Slug"/>-shaped, the word a column is headed with.</summary>
 public sealed record ProbeSubjectId
 {
@@ -64,12 +114,13 @@ public sealed record ProbeSubjectId
 /// depend on a file that may have changed, and the database stays publishable (<c>ModelConfig</c>'s publication rule).</summary>
 public sealed partial record ProbeSubject
 {
-    private ProbeSubject(ProbeSubjectId id, ProbeRuntime runtime, string modelId, string executableRef, ApiTransport api)
+    private ProbeSubject(ProbeSubjectId id, ProbeRuntime runtime, string modelId, string executableRef, ProbeConfinement confinement, ApiTransport api)
     {
         Id = id;
         Runtime = runtime;
         ModelId = modelId;
         ExecutableRef = executableRef;
+        Confinement = confinement;
         Vendor = api.Vendor;
         Endpoint = api.Endpoint;
         Dialect = api.Dialect;
@@ -80,6 +131,10 @@ public sealed partial record ProbeSubject
     public ProbeRuntime Runtime { get; }
 
     public string ModelId { get; }
+
+    /// <summary>How a claude subject's tools are confined (S2b) — named, never defaulted, on claude; <see cref="ProbeConfinement.Default"/>
+    /// everywhere else, because no other runtime has the flags.</summary>
+    public ProbeConfinement Confinement { get; }
 
     /// <summary>The NAME of the environment variable holding the executable's path — <c>BENCH_CLAUDE</c>.</summary>
     public string ExecutableRef { get; }
@@ -114,30 +169,47 @@ public sealed partial record ProbeSubject
     [GeneratedRegex(@"^(?:sk-|xai-|AIza|ghp_|gsk_|AKIA|pk-)|^(?=.*[a-z])(?=.*[A-Z0-9])[A-Za-z0-9+/=-]{24,}$")]
     private static partial Regex KeyShaped { get; }
 
-    /// <summary>A CLI subject — no vendor, endpoint or dialect.</summary>
-    public static Outcome<ProbeSubject> Parse(string? id, string? runtimeWord, string? modelId, string? executableRef) =>
-        Parse(id, runtimeWord, modelId, executableRef, string.Empty, string.Empty, string.Empty);
+    /// <summary>A CLI subject — no vendor, endpoint or dialect; the confinement word empty for every runtime but claude.</summary>
+    public static Outcome<ProbeSubject> Parse(string? id, string? runtimeWord, string? modelId, string? executableRef, string? confinement = "") =>
+        Parse(id, runtimeWord, modelId, executableRef, confinement, string.Empty, string.Empty, string.Empty);
 
     /// <summary>Any subject. An <c>api</c> subject needs all three of vendor, endpoint and dialect (D6 spells them on the launch,
     /// and <c>resume</c> must not depend on a file); a CLI subject is refused when given any of them — a transport nothing reads
-    /// is a typo the run would otherwise freeze.</summary>
-    public static Outcome<ProbeSubject> Parse(string? id, string? runtimeWord, string? modelId, string? executableRef, string? vendor, string? endpoint, string? dialect) =>
+    /// is a typo the run would otherwise freeze. A claude subject NAMES its confinement (S2b); any other runtime accepts only
+    /// <c>default</c>, because it has no flag to honour another.</summary>
+    public static Outcome<ProbeSubject> Parse(
+        string? id, string? runtimeWord, string? modelId, string? executableRef, string? confinement, string? vendor, string? endpoint, string? dialect) =>
         ProbeSubjectId.Parse(id).Match(
             subjectId => ProbeRuntimeWord.Parse(runtimeWord).Match(
-                runtime => Checked(subjectId, runtime, (modelId ?? string.Empty).Trim(), (executableRef ?? string.Empty).Trim(),
-                    new ApiTransport((vendor ?? string.Empty).Trim(), (endpoint ?? string.Empty).Trim(), (dialect ?? string.Empty).Trim())),
+                runtime => ProbeConfinementWord.Parse(confinement).Match(
+                    mode => Checked(subjectId, runtime, (modelId ?? string.Empty).Trim(), (executableRef ?? string.Empty).Trim(), mode,
+                        new ApiTransport((vendor ?? string.Empty).Trim(), (endpoint ?? string.Empty).Trim(), (dialect ?? string.Empty).Trim())),
+                    reason => Outcome<ProbeSubject>.Failure($"subject '{subjectId}': {reason}")),
                 Outcome<ProbeSubject>.Failure),
             Outcome<ProbeSubject>.Failure);
 
-    private static Outcome<ProbeSubject> Checked(ProbeSubjectId id, ProbeRuntime runtime, string model, string executableRef, ApiTransport api)
+    private static Outcome<ProbeSubject> Checked(ProbeSubjectId id, ProbeRuntime runtime, string model, string executableRef, ProbeConfinement confinement, ApiTransport api)
     {
         var refusal = Refusal(id, model, executableRef);
-        var transport = refusal.Length > 0 ? refusal : TransportRefusal(id, runtime, api);
+        var mode = refusal.Length > 0 ? refusal : ConfinementRefusal(id, runtime, confinement);
+        var transport = mode.Length > 0 ? mode : TransportRefusal(id, runtime, api);
 
         return transport.Length > 0
             ? Outcome<ProbeSubject>.Failure(transport)
-            : Outcome<ProbeSubject>.Success(new ProbeSubject(id, runtime, model, executableRef, api));
+            : Outcome<ProbeSubject>.Success(new ProbeSubject(id, runtime, model, executableRef, confinement, api));
     }
+
+    /// <summary>S2b: claude names one of the three measured modes — a default would silently be "whatever the deny list does", which the
+    /// live run showed is not a confinement; every other runtime has no such flag and must say <c>default</c> or nothing.</summary>
+    private static string ConfinementRefusal(ProbeSubjectId id, ProbeRuntime runtime, ProbeConfinement confinement) =>
+        (runtime == ProbeRuntime.Claude, confinement == ProbeConfinement.Default) switch
+        {
+            (true, true) => $"subject '{id}' runs on claude and names no confinement — a claude subject says how its tools are confined: "
+                            + "denylist (coai's --disallowedTools lists as shipped), allowlist (--tools naming what each probe needs) or restricted (--restricted)",
+            (false, false) => $"subject '{id}' runs on {ProbeRuntimeWord.Of(runtime)}, which has no confinement flag — "
+                              + $"'{ProbeConfinementWord.Of(confinement)}' is a claude mode; leave it out or say default",
+            _ => string.Empty,
+        };
 
     private static string Refusal(ProbeSubjectId id, string model, string executableRef) =>
         (IsModelId(model), ExecutableRefusal(executableRef)) switch
@@ -188,7 +260,9 @@ public sealed partial record ProbeSubject
     private static string Short(string value) => value.Length <= 40 ? value : value[..40] + "…";
 
     public string Describe =>
-        $"{Id} · {ProbeRuntimeWord.Of(Runtime)} · {ModelId} · {ExecutableRef}" + (Runtime == ProbeRuntime.Api ? $" · {Vendor} @ {Endpoint} ({Dialect})" : string.Empty);
+        $"{Id} · {ProbeRuntimeWord.Of(Runtime)} · {ModelId} · {ExecutableRef}"
+        + (Confinement != ProbeConfinement.Default ? $" · {ProbeConfinementWord.Of(Confinement)}" : string.Empty)
+        + (Runtime == ProbeRuntime.Api ? $" · {Vendor} @ {Endpoint} ({Dialect})" : string.Empty);
 }
 
 /// <summary>The subjects file — <c>samples/question-consultant-probe-subjects.json</c> — read into frozen subjects. A field
@@ -197,7 +271,7 @@ public sealed partial record ProbeSubject
 public static class ProbeSubjectsFile
 {
     private static readonly IReadOnlySet<string> KnownFields =
-        new HashSet<string>(StringComparer.Ordinal) { "id", "runtime", "model", "executableRef", "vendor", "endpoint", "dialect" };
+        new HashSet<string>(StringComparer.Ordinal) { "id", "runtime", "model", "executableRef", "confinement", "vendor", "endpoint", "dialect" };
 
     public static Outcome<IReadOnlyList<ProbeSubject>> Read(string json)
     {
@@ -247,7 +321,7 @@ public static class ProbeSubjectsFile
 
         return unknown is null
             ? ProbeSubject.Parse(
-                Text(entry, "id"), Text(entry, "runtime"), Text(entry, "model"), Text(entry, "executableRef"),
+                Text(entry, "id"), Text(entry, "runtime"), Text(entry, "model"), Text(entry, "executableRef"), Text(entry, "confinement"),
                 Text(entry, "vendor"), Text(entry, "endpoint"), Text(entry, "dialect"))
             : Outcome<ProbeSubject>.Failure(
                 $"subjects[{index}] ('{Text(entry, "id")}') carries a field this reader does not know: '{unknown}' — the fields are {string.Join(", ", KnownFields)}");

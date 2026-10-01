@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Nodes;
 using Bench.Application.Probes;
 using Bench.Domain;
 using Bench.Domain.Gate;
@@ -23,9 +24,11 @@ public sealed record CoaiApiProbeSettings(string ProductExecutable, IReadOnlyDic
 /// <list type="bullet">
 /// <item>No key on this machine, or the product's "no vault / no key" exit (78): nothing about the vendor can be measured now —
 /// the attempt is handed back unmeasured and the subject is benched; a resume with the key in place measures it.</item>
-/// <item>A refused KEY at the vendor (401/402/403, or a spent-account marker) IS the measurement: <c>accountOut = yes</c>,
-/// <c>reachable = no</c> — that is what Q5 asks.</item>
+/// <item>A refused KEY at the vendor (401/402/403, or the credits / spending-limit wording) IS the measurement: <c>accountOut = yes</c>
+/// (<see cref="ProbeApiOutput"/>, the JSON report coai-mcp 0.40.3 prints — S2b, finding 4) — that is what Q5 asks.</item>
 /// <item>Exit 65 (bad arguments) settles <i>launch refused</i>; the wall settles <i>timed out</i>; any other non-zero exit <i>failed</i>.</item>
+/// <item>The raw stdout, stderr and the scrubbed argv are committed BEFORE the report is read (S2b, finding 6); a reader that throws
+/// settles <i>failed</i> with every fact <i>not captured</i> and a <c>fault.txt</c>.</item>
 /// </list></summary>
 public sealed class CoaiApiProbeRunner(IProbeArtifacts artifacts, IProbeSecrets secrets, CoaiApiProbeSettings settings, ILogger<CoaiApiProbeRunner> logger) : IProbeRunner
 {
@@ -48,10 +51,11 @@ public sealed class CoaiApiProbeRunner(IProbeArtifacts artifacts, IProbeSecrets 
         }
 
         var child = CoaiEnvironment.Bare(settings.ParentEnvironment).WithSecret(((Outcome<SecretValue>.Ok)key).Value);
+        var argv = Argv(subject);
         var attempt = await ProcessRunner.RunAsync(
-            settings.ProductExecutable, Argv(subject), Path.GetDirectoryName(Path.GetFullPath(settings.ProductExecutable)) ?? ".", settings.Wall, string.Empty, child.Variables, cancellationToken);
+            settings.ProductExecutable, argv, Path.GetDirectoryName(Path.GetFullPath(settings.ProductExecutable)) ?? ".", settings.Wall, string.Empty, child.Variables, cancellationToken);
 
-        return await MeasureAsync(((Outcome<ProbeAttemptScope>.Ok)scope).Value, claimed, attempt, child, cancellationToken);
+        return await MeasureAsync(((Outcome<ProbeAttemptScope>.Ok)scope).Value, claimed, argv, attempt, child, cancellationToken);
     }
 
     /// <summary>D6's argv, spelled once.</summary>
@@ -67,7 +71,8 @@ public sealed class CoaiApiProbeRunner(IProbeArtifacts artifacts, IProbeSecrets 
 
     private IReadOnlyList<string> Argv(ProbeSubject subject) => Argv(subject, settings.TimeoutSeconds);
 
-    private async Task<ProbeAttemptResult> MeasureAsync(ProbeAttemptScope scope, ProbeCell claimed, ProcessAttempt attempt, ChildEnvironment child, CancellationToken cancellationToken)
+    private async Task<ProbeAttemptResult> MeasureAsync(
+        ProbeAttemptScope scope, ProbeCell claimed, IReadOnlyList<string> argv, ProcessAttempt attempt, ChildEnvironment child, CancellationToken cancellationToken)
     {
         if (attempt is ProcessAttempt.NotFound missing)
         {
@@ -83,7 +88,9 @@ public sealed class CoaiApiProbeRunner(IProbeArtifacts artifacts, IProbeSecrets 
             _ => throw new InvalidOperationException("unreachable"),
         };
 
-        var committed = await CommitAsync(scope, stdout, stderr, cancellationToken);
+        // The raw evidence FIRST (S2b, finding 6) — the argv scrubbed like every other text, in case a secret is ever spelled into it.
+        var raw = await CommitAsync(scope, cancellationToken,
+            (ProbeArtifactKind.Stdout, stdout), (ProbeArtifactKind.Stderr, stderr), (ProbeArtifactKind.Argv, child.Scrub(ArgvJson(argv))));
 
         if (exit is { WasCaptured: true, Value: ProbeExits.CoaiNoVaultExit })
         {
@@ -91,26 +98,53 @@ public sealed class CoaiApiProbeRunner(IProbeArtifacts artifacts, IProbeSecrets 
             return new ProbeAttemptResult.Unmeasured(ProbeReason.AccountOut);
         }
 
-        return Settled(Facts(exit, stdout, stderr), committed);
+        return Read(exit, stdout, stderr) switch
+        {
+            Outcome<ProbeFacts>.Ok facts => Settled(facts.Value, raw),
+            Outcome<ProbeFacts>.Fail fault => await FaultedAsync(claimed, scope, fault.Reason, exit, raw, cancellationToken),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+    }
+
+    /// <summary>The reading, as a value: a reader that throws is a fault of ours on this report, never a leg fault.</summary>
+    private static Outcome<ProbeFacts> Read(CapturedCount exit, string stdout, string stderr)
+    {
+        try
+        {
+            return Outcome<ProbeFacts>.Success(Facts(exit, stdout, stderr));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Outcome<ProbeFacts>.Failure($"{ex.GetType().FullName}: {ex.Message}");
+        }
     }
 
     private static ProbeFacts Facts(CapturedCount exit, string stdout, string stderr)
     {
         var kind = exit.WasCaptured ? ProbeExits.Classify(ProbeRuntime.Api, (int)exit.Value, stderr) : ProbeAttemptKind.TimedOut;
-        var statuses = ProbeApiOutput.Statuses(stdout);
 
         return kind switch
         {
-            ProbeAttemptKind.Answered or ProbeAttemptKind.Failed => ProbeVerdicts.ApiReachable((int)exit.Value, statuses, statuses.Count > 0, ProbeApiOutput.KeyRefused(statuses, stdout + "\n" + stderr)) with { Kind = kind },
+            ProbeAttemptKind.Answered or ProbeAttemptKind.Failed => ProbeVerdicts.ApiReachable((int)exit.Value, ProbeApiOutput.Read(stdout)) with { Kind = kind },
             _ => ProbeFacts.NothingCaptured(kind, exit),
         };
     }
 
-    private async Task<IReadOnlyList<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, string stdout, string stderr, CancellationToken cancellationToken)
+    private async Task<ProbeAttemptResult> FaultedAsync(ProbeCell claimed, ProbeAttemptScope scope, string reason, CapturedCount exit, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
+    {
+        logger.LogError("Probe cell {Cell}: the reader faulted on the product's report — {Reason}. The attempt settles failed with every fact not captured; the raw evidence is kept", claimed.Id, reason);
+        var fault = await CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Fault, reason + "\n"));
+
+        return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, exit), [.. raw, .. fault]);
+    }
+
+    private static string ArgvJson(IReadOnlyList<string> argv) => new JsonArray([.. argv.Select(a => (JsonNode)JsonValue.Create(a))]).ToJsonString() + "\n";
+
+    private async Task<IReadOnlyList<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, CancellationToken cancellationToken, params (ProbeArtifactKind Kind, string Text)[] files)
     {
         var committed = new List<ProbeArtifact>();
 
-        foreach (var (kind, text) in new[] { (ProbeArtifactKind.Stdout, stdout), (ProbeArtifactKind.Stderr, stderr) })
+        foreach (var (kind, text) in files)
         {
             switch (await artifacts.CommitAsync(scope, kind, Encoding.UTF8.GetBytes(text), cancellationToken))
             {

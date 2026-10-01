@@ -22,20 +22,32 @@ public sealed class ProbeExitsTests
     public void A_usage_error_is_a_launch_refused_by_the_build_and_any_other_non_zero_exit_is_failed(ProbeRuntime runtime, int exit, string stderr, ProbeAttemptKind kind) =>
         ProbeExits.Classify(runtime, exit, stderr).Should().Be(kind);
 
+    /// <summary>S2b, finding 4: the report is ONE JSON object (coai-mcp 0.40.3); the completion cases carry the statuses, the deliberate
+    /// <c>wrong_key</c> case is excluded, and the account is out on a 401/402/403 or on the vendor's credits / spending-limit wording.</summary>
     [Fact]
-    public void The_api_probes_statuses_are_read_off_its_report_and_a_refused_key_is_a_401_402_403_or_a_marker()
+    public void The_api_probes_report_is_json_its_completion_cases_carry_the_statuses_and_the_wrong_key_case_is_excluded()
     {
-        const string report = "probe-api grok @ https://api.x.ai/v1 (xai)\nmodels: HTTP 200 (12 ids)\nchat/completions: status 200, model grok-4.7, tokens 12/34\n";
+        var live = ProbeApiOutput.Read(ProbeVerdictsTests.Fixture("coai-mcp-0.40.3-probe-api-grok-403.json"));
 
-        ProbeApiOutput.Statuses(report).Should().Equal([200, 200]);
-        ProbeApiOutput.KeyRefused([200, 200], report).Should().Be(ProbeFact.No);
-        ProbeApiOutput.KeyRefused([200, 403], report).Should().Be(ProbeFact.Yes, "the vendor refused the key");
-        ProbeApiOutput.KeyRefused([402], report).Should().Be(ProbeFact.Yes, "payment required is a spent account");
-        ProbeApiOutput.KeyRefused([200], report + "You've hit your usage limit.").Should().Be(ProbeFact.Yes, "a marker in the text counts as a CLI's would");
-        ProbeApiOutput.KeyRefused([], "no rows").Should().Be(ProbeFact.NotCaptured, "statuses nobody printed are not a 'no'");
-        ProbeApiOutput.Statuses("version 2.1.258 and 404 things").Should().BeEmpty("a bare number is not a status");
-        ProbeVerdicts.ApiReachable(0, [200, 200], true, ProbeFact.No).Reachable.Should().Be(ProbeFact.Yes);
-        ProbeVerdicts.ApiReachable(0, [200, 403], true, ProbeFact.Yes).Reachable.Should().Be(ProbeFact.No);
+        live.Captured.Should().BeTrue();
+        live.Statuses.Should().HaveCount(9).And.OnlyContain(s => s == 403, "nine completion cases answered 403; the wrong_key case (400) is the product's own control");
+        live.AccountMarker.Should().BeTrue("'…has either used all available credits or reached its monthly spending limit…'");
+        ProbeApiOutput.AccountOut(live).Should().Be(ProbeFact.Yes);
+        ProbeVerdicts.ApiReachable(0, live).Should().Match<ProbeFacts>(f => f.Reachable == ProbeFact.No && f.AccountOut == ProbeFact.Yes);
+
+        var healthy = ProbeApiOutput.Read("""{"vendor":"grok","requests":[{"case":"json_schema","status":200,"error":""},{"case":"seed","status":400,"error":"seed is not supported"},{"case":"wrong_key","status":400,"error":"Incorrect API key provided."}]}""");
+        healthy.Statuses.Should().Equal([200, 400]);
+        ProbeApiOutput.AccountOut(healthy).Should().Be(ProbeFact.No, "a refused FIELD is not a refused account, and the wrong_key 400 is never counted");
+        ProbeVerdicts.ApiReachable(0, healthy).Reachable.Should().Be(ProbeFact.Yes, "the endpoint answered and at least one completion case was a 200");
+        ProbeVerdicts.ApiReachable(1, healthy).Reachable.Should().Be(ProbeFact.Yes, "the product's exit code does not decide whether the vendor was reached");
+
+        ProbeApiOutput.AccountOut(ProbeApiOutput.Read("""{"requests":[{"case":"json_schema","status":200,"error":"Your quota for today is exhausted"}]}""")).Should().Be(ProbeFact.Yes, "the wording counts even beside a 200");
+        ProbeApiOutput.AccountOut(ProbeApiOutput.Read("""{"requests":[{"case":"json_schema","status":402,"error":""}]}""")).Should().Be(ProbeFact.Yes, "payment required is a spent account");
+        var none = ProbeApiOutput.Read("probe-api grok @ https://api.x.ai/v1 (xai)\nmodels: HTTP 200 (12 ids)\n");
+        none.Should().Be(ProbeApiReport.NotCaptured, "text lines are not the report — the S2 guess is withdrawn");
+        ProbeApiOutput.AccountOut(none).Should().Be(ProbeFact.NotCaptured, "statuses nobody printed are not a 'no'");
+        ProbeVerdicts.ApiReachable(0, none).Reachable.Should().Be(ProbeFact.NotCaptured);
+        ProbeVerdicts.ApiReachable(0, ProbeApiOutput.Read("""{"requests":[]}""")).Reachable.Should().Be(ProbeFact.No, "a report with no completion case reached nothing");
     }
 
     [Fact]

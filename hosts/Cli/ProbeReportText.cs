@@ -23,6 +23,7 @@ public static class ProbeReportText
         foreach (var subject in report.Subjects)
         {
             text.AppendLine($"subject        {subject.Id} · {subject.Runtime} · {subject.Model} · {subject.ExecutableRef}"
+                            + (subject.Confinement != "default" ? $" · {subject.Confinement}" : string.Empty)
                             + (subject.Endpoint.Length > 0 ? $" · {subject.Vendor} @ {subject.Endpoint} ({subject.Dialect})" : string.Empty));
         }
 
@@ -63,10 +64,11 @@ public static class ProbeReportText
             ? string.Empty
             : cell.Probe switch
             {
-                "web-search" => $"  answerCurrent={cell.Facts.AnswerCurrent} toolEvidence={cell.Facts.ToolEvidence}",
-                "read-denied" => $"  canaryRead={cell.Facts.CanaryRead} readAttempted={cell.Facts.ReadAttempted}",
-                "web-confined" => $"  canaryRead={cell.Facts.CanaryRead} readAttempted={cell.Facts.ReadAttempted} answerCurrent={cell.Facts.AnswerCurrent}",
+                "web-search" => $"  answerCurrent={cell.Facts.AnswerCurrent} toolEvidence={cell.Facts.ToolEvidence} shellUsed={cell.Facts.ShellUsed}",
+                "read-denied" => $"  canaryRead={cell.Facts.CanaryRead} readAttempted={cell.Facts.ReadAttempted} shellUsed={cell.Facts.ShellUsed} readerOffered={cell.Facts.ReaderOffered}",
+                "web-confined" => $"  canaryRead={cell.Facts.CanaryRead} readAttempted={cell.Facts.ReadAttempted} answerCurrent={cell.Facts.AnswerCurrent} "
+                                  + $"shellUsed={cell.Facts.ShellUsed} readerOffered={cell.Facts.ReaderOffered}",
                 "api-reachable" => $"  reachable={cell.Facts.Reachable} accountOut={cell.Facts.AccountOut}",
-                _ => $"  canaryRead={cell.Facts.CanaryRead}",
+                _ => $"  canaryRead={cell.Facts.CanaryRead} shellUsed={cell.Facts.ShellUsed}",
             } + (cell.VoidedByControl ? " (voided: read-inside read no)" : string.Empty);
 }

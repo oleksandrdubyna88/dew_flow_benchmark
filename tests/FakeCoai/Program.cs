@@ -29,9 +29,11 @@ public static class Program
         return new Server(script).Serve();
     }
 
-    /// <summary>The product's <c>--probe-api</c> (the probes, S2): logs the argv, prints the scripted report lines (default: one
-    /// 200 row), echoes the vault key on stderr when the script asks — the scrub test's planted leak — and exits as scripted
-    /// (0 ok · 65 bad arguments · 78 no vault/no key).</summary>
+    /// <summary>The product's <c>--probe-api</c> (the probes, S2; its real shape S2b — coai-mcp 0.40.3 prints ONE JSON object on stdout,
+    /// <c>{vendor, endpoint, dialect, model, models{…}, requests[{model, case, status, error, …}]}</c>, and progress lines on stderr):
+    /// logs the argv, prints the scripted <c>report</c> (default: one 200 completion case beside the deliberate <c>wrong_key</c> 400),
+    /// or the scripted raw <c>stdout</c> text, echoes the vault key on stderr when the script asks — the scrub test's planted leak —
+    /// and exits as scripted (0 ok · 65 bad arguments · 78 no vault/no key).</summary>
     private static int ProbeApi(Script script, string[] args)
     {
         var probe = script.Root["probeApi"] as JsonObject ?? [];
@@ -47,15 +49,24 @@ public static class Program
             Console.Error.WriteLine($"debug: {echoed}={Environment.GetEnvironmentVariable(echoed) ?? "<unset>"}");
         }
 
-        foreach (var line in probe["lines"] is JsonArray lines ? lines.Select(l => l?.GetValue<string>() ?? string.Empty) : ["probe-api vendor row: HTTP 200 chat/completions model=fake tokens=12/34"])
-        {
-            Console.Out.WriteLine(line);
-        }
-
+        Console.Out.WriteLine(probe["stdout"]?.GetValue<string>() ?? (probe["report"] as JsonObject ?? DefaultReport()).ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        Console.Error.WriteLine("[coai-mcp] grok-fake · json_schema: HTTP 200");
         Console.Out.Flush();
         Console.Error.Flush();
         return probe["exitCode"]?.GetValue<int>() ?? 0;
     }
+
+    private static JsonObject DefaultReport() => new()
+    {
+        ["vendor"] = "grok",
+        ["endpoint"] = "https://api.x.ai/v1",
+        ["dialect"] = "xai",
+        ["model"] = "grok-fake",
+        ["models"] = new JsonObject { ["status"] = 200, ["ids"] = new JsonArray("grok-fake"), ["error"] = string.Empty },
+        ["requests"] = new JsonArray(
+            new JsonObject { ["model"] = "grok-fake", ["case"] = "json_schema", ["status"] = 200, ["refusedField"] = string.Empty, ["error"] = string.Empty, ["promptTokens"] = 12, ["completionTokens"] = 34 },
+            new JsonObject { ["model"] = "grok-fake", ["case"] = "wrong_key", ["status"] = 400, ["refusedField"] = string.Empty, ["error"] = "Incorrect API key provided.", ["promptTokens"] = 0, ["completionTokens"] = 0 }),
+    };
 }
 
 /// <summary>What one run of the fake does, read from the JSON file <c>FAKE_COAI_SCRIPT</c> names. Every field is

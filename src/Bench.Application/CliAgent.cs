@@ -71,15 +71,51 @@ public sealed record AgentAskOptions
     /// <summary>Directories the CLI is granted beyond its working directory (<c>--add-dir</c> on claude, codex and agy).</summary>
     public IReadOnlyList<string> AddDirectories { get; init; } = [];
 
-    /// <summary>The CLI prints its machine-readable transcript — claude <c>--output-format json</c>, codex <c>--json</c>, agy
-    /// <c>--output-format stream-json</c> — so tool evidence can be read off it.</summary>
+    /// <summary>The CLI prints its machine-readable transcript — claude <c>--output-format stream-json --verbose</c> (the <c>json</c>
+    /// envelope is blind to the tools, S2b), codex <c>--json</c>, agy <c>--output-format stream-json</c> — so tool evidence can be read off it.</summary>
     public bool JsonEvents { get; init; }
+
+    /// <summary>The ONLY built-in tools the CLI may offer (claude <c>--tools</c>; a named-but-empty list is <c>--tools ""</c>, nothing
+    /// offered). An allow-list is a confinement in itself: web OFF under one is the web tools' absence, not a deny entry (S2b).</summary>
+    public AgentToolAllowlist AllowedTools { get; init; } = AgentToolAllowlist.NotAsked;
+
+    /// <summary>claude <c>--restricted</c>: the code-running tools and WebFetch removed unless <see cref="AllowedTools"/> names them, the
+    /// file tools confined to the working directories, the user's settings files ignored (S2b).</summary>
+    public bool Restricted { get; init; }
 
     /// <summary>Nothing asked beyond "answer once" — the launch every caller before the assessor made.</summary>
     public bool IsNone =>
         Sandbox == AgentSandbox.Default && OutputSchemaFile.Length == 0 && LastMessageFile.Length == 0
         && DisallowedTools.Count == 0 && !McpServersOff && MaxTurns == 0
-        && WebSearch == AgentWebSearch.Default && AddDirectories.Count == 0 && !JsonEvents;
+        && WebSearch == AgentWebSearch.Default && AddDirectories.Count == 0 && !JsonEvents
+        && !AllowedTools.Asked && !Restricted;
+}
+
+/// <summary>A tool allow-list as a launch option: not asked (the CLI's default set), or ONLY these names — where an empty list is
+/// a real request ("offer nothing"), which is why this is not a bare list. Equal by content, so two launches built the same way
+/// compare equal.</summary>
+public sealed record AgentToolAllowlist
+{
+    private AgentToolAllowlist(bool asked, IReadOnlyList<string> names)
+    {
+        Asked = asked;
+        Names = names;
+    }
+
+    public static AgentToolAllowlist NotAsked { get; } = new(false, []);
+
+    public static AgentToolAllowlist Only(IReadOnlyList<string> names) => new(true, [.. names]);
+
+    public bool Asked { get; }
+
+    public IReadOnlyList<string> Names { get; }
+
+    public bool Equals(AgentToolAllowlist? other) =>
+        other is not null && Asked == other.Asked && Names.SequenceEqual(other.Names, StringComparer.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(Asked, Names.Count);
+
+    public override string ToString() => Asked ? $"only [{string.Join(' ', Names)}]" : "not asked";
 }
 
 /// <summary>Whether a launch may reach the web. <see cref="Default"/> asks nothing — every caller before the probes.</summary>
@@ -103,7 +139,12 @@ public sealed record AgentAnswer(string Text, TimeSpan Elapsed, long ResponseByt
 /// <summary>Everything one CLI launch produced, for a caller that reads the TRANSCRIPT rather than an answer (the probes,
 /// S2): the exit code — <i>not captured</i> when the wall ended the process —, whether it did, stdout and stderr APART (a
 /// quota marker and a usage error arrive on stderr; a grammar reads stdout and must not meet them), and the time it took.</summary>
-public sealed record AgentTranscript(CapturedCount ExitCode, bool TimedOut, string Stdout, string Stderr, TimeSpan Elapsed);
+public sealed record AgentTranscript(CapturedCount ExitCode, bool TimedOut, string Stdout, string Stderr, TimeSpan Elapsed)
+{
+    /// <summary>The exact argv the CLI was launched with (S2b, finding 6) — the launcher's own record, committed as <c>argv.json</c>
+    /// beside the transcript before anything is parsed, so a faulted reading can still be replayed by hand.</summary>
+    public IReadOnlyList<string> Argv { get; init; } = [];
+}
 
 /// <summary>The same launch as <see cref="ICliAgentRuntime"/> — one argv, the prompt on stdin, the wall — read whole rather
 /// than as an answer. A refusal here is only what stopped the LAUNCH: an empty prompt, an option the CLI has no flag for, a

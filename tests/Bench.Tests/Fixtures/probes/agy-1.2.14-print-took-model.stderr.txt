@@ -1,0 +1,2 @@
+Error: --print took "--model" as its prompt, so the intended prompt was left as an argument and ignored.
+Attach the prompt to the flag (--print='your prompt') and move --model elsewhere on the command line.

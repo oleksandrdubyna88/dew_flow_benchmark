@@ -13,12 +13,12 @@ public sealed class ProbeContractsGuardTests
     private static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
         "ProbeOracleDto.Version", "ProbeOracleDto.Source",
-        "ProbeSubjectDto.Id", "ProbeSubjectDto.Runtime", "ProbeSubjectDto.Model", "ProbeSubjectDto.ExecutableRef",
+        "ProbeSubjectDto.Id", "ProbeSubjectDto.Runtime", "ProbeSubjectDto.Model", "ProbeSubjectDto.ExecutableRef", "ProbeSubjectDto.Confinement",
         "ProbeSubjectDto.Vendor", "ProbeSubjectDto.Endpoint", "ProbeSubjectDto.Dialect",
         "ProbeCellReportDto.Probe", "ProbeCellReportDto.Subject", "ProbeCellReportDto.State", "ProbeCellReportDto.Kind",
         "ProbeCellReportDto.Reason", "ProbeCellReportDto.LatestState", "ProbeCellReportDto.RerunCommand",
         "ProbeFactsDto.CanaryRead", "ProbeFactsDto.ReadAttempted", "ProbeFactsDto.AnswerCurrent", "ProbeFactsDto.ToolEvidence",
-        "ProbeFactsDto.Reachable", "ProbeFactsDto.AccountOut",
+        "ProbeFactsDto.ShellUsed", "ProbeFactsDto.ReaderOffered", "ProbeFactsDto.Reachable", "ProbeFactsDto.AccountOut",
         "ProbePinDto.Version", "ProbePinDto.BinarySha256",
         "ProbeArtifactDto.Kind", "ProbeArtifactDto.Path", "ProbeArtifactDto.Sha256",
         "ProbeDroppedPairDto.Probe", "ProbeDroppedPairDto.Subject", "ProbeDroppedPairDto.Reason",

@@ -15,10 +15,15 @@ internal static class ProbeStoreFixtures
 
     public static ProbeOracle Oracle() => ProbeOracle.Parse("0.52.0", OracleSource.Registry).Ok();
 
-    public static ProbeSubject Subject(string id = "claude-sonnet", string runtime = "claude") =>
-        runtime == "api"
-            ? ProbeSubject.Parse(id, runtime, "model-x", "BENCH_GATE_COAI_EXE", "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok()
-            : ProbeSubject.Parse(id, runtime, "model-x", "BENCH_CLAUDE").Ok();
+    /// <summary>A subject on <paramref name="runtime"/>; a claude subject under <paramref name="confinement"/> (S2b — the deny list, coai's
+    /// own, unless a test asks for another mode), the others under none.</summary>
+    public static ProbeSubject Subject(string id = "claude-sonnet", string runtime = "claude", string confinement = "") =>
+        runtime switch
+        {
+            "api" => ProbeSubject.Parse(id, runtime, "model-x", "BENCH_GATE_COAI_EXE", string.Empty, "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok(),
+            "claude" => ProbeSubject.Parse(id, runtime, "model-x", "BENCH_CLAUDE", confinement.Length > 0 ? confinement : "denylist").Ok(),
+            _ => ProbeSubject.Parse(id, runtime, "model-x", "BENCH_CLAUDE").Ok(),
+        };
 
     public static ProbeRun Run(params ProbeSubject[] subjects) =>
         ProbeRun.Planned(Guid.CreateVersion7(), Oracle(), subjects.Length == 0 ? [Subject()] : subjects, repeats: 3, Noon).Ok();
