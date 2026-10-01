@@ -1,6 +1,6 @@
 # PLAN — the gate benchmark's measurement tail: the hand-check and the lane stop
 
-> Status: **open, 2026-09-30 — only T1 remains. T5 was built and checked on a real product on 2026-09-30; T2–T4 were
+> Status: **open, 2026-10-01 — T1 and T6 remain** (T6: the feature runs of 2026-09-30/10-01 await Astra, back 2026-10-06). T5 was built and checked on a real product on 2026-09-30; T2–T4 were
 > closed without re-runs (the operator's decision, 2026-09-29).**
 > Extracted from [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) when it was promoted
 > (E1–E7 built and run).
@@ -38,6 +38,7 @@ which meets a spend limit stops instead of burning its cells, was built on 2026-
 | T3 | **decided (2026-09-29): (a), accept.** The seven account-out code cells of `01a0ecad` (grok php1/tsx2/ts2 r3; Astra php1/py3/tsx2/ts2 r3) | a campaign runs whole reviewers × tasks × repeats, never single cells, so the choice is one of two, recorded in RESULTS_gate_s73.md. (a) Accept: 13 and 11 of 15 measured cells stand, as the record already states. (b) Re-run both reviewers' full code matrix (`--reviewers grok-4-7-think,codex-gpt-6-astra-gates --repeats 3`, otherwise as T2, 42 cells) and report the new campaign alone with `--run` | nothing — closed; (b) would have waited on the xAI balance and Astra's Codex limit |
 | T4 | **closed, not run (2026-09-29).** grok re-runs, if any are wanted (for example to fill T2's comparison) | as S7.3 | the xAI balance: $50 spent to $51.63 by 2026-09-29 |
 | T5 | the lane stop — the bench half of D4: a cell whose reviewer is refused for a spend or usage limit is an environment failure, and a run of them stops the lane instead of settling every remaining cell unmeasured (44 Fable cells, 2026-09-29) | RED first over the product's reply once it carries the CLI's reason; the lane's breaker counts them | a coai release carrying D4 ([PLAN_gate_reviewer_row_fidelity.md](../research/PLAN_gate_reviewer_row_fidelity.md)), built into the harness's product |
+| T6 | **the feature gate on the S7.3 suite, assessment** — Fable, Opus, Astra, devstral-2512 and codestral-2508 ran 2026-09-30/10-01 ([RESULTS_gate_feature_s73.md](../research/RESULTS_gate_feature_s73.md)); seeds, high-value and overstatement need the assessor | `bench gate resume --run 01a0f2a7…` for Astra's 13 pending reviewer cells, with `BENCH_CLAUDE_2284` set to the old VS Code path STRING for that resume only (the Claude rows' references must match their settled cells; see the record), then `bench gate assess --assessor codex-gpt-6-astra-exe` over runs `01a0f2a7`, `01a0f2a8`, `01a0f2ea`, `01a0f67a`, `01a0f74d`, `01a0f778` (and `01a0f28e`, Mistral Medium's); then the record and RESULTS_gate_model_choice.md | Astra's Codex usage limit, until 2026-10-06 |
 
 ## 3. Build order
 
@@ -72,6 +73,7 @@ figures it changes.
   **Deviation:** Fable's limit had reset by then, so the account used was grok's spent xAI key. The reply was
   `the API refused the key … (HTTP 403)`; the first cell was refused as account-out and grok was benched. The campaign
   ended `AccountOut` with exit 3: 0 settled, 7 pending.
+- [ ] T6: the feature runs of 2026-09-30/10-01 are assessed by Astra and recorded, and RESULTS_gate_model_choice.md gains their rows.
 - [ ] This plan is promoted, or its remaining items are said and dated.
 
 ## 6. T5 — the design (2026-09-30)
