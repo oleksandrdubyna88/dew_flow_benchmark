@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A stand-in for the three CLIs the probes measure (claude, codex, agy): a console that reads a prompt on stdin,
+       answers in whichever transcript grammar its argv asks for (claude `-\-output-format json`, codex `-\-json`, agy
+       `-\-output-format stream-json`), with or without the fixture's tokens and with or without tool evidence, refuses an
+       argv (exit 2), hangs, or prints each CLI's quota marker — scripted by the JSON file FAKE_CLI_SCRIPT names, per
+       model id, and logging every call it received into FAKE_CLI_EVENTS. The probe runner and campaign tests run the real
+       launcher and the real pin reader against it.
+
+       Not under tests/Bench.Tests/Fixtures/: the test project compiles every .cs file below it. Beside tests/FakeCoai. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>fake-cli</AssemblyName>
+    <RootNamespace>FakeCli</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

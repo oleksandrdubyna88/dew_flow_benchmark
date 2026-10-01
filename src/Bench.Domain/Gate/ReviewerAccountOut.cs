@@ -40,6 +40,28 @@ public static class ReviewerAccountOut
 
     public static bool IsRefusal(string text) => text.StartsWith(Marker, StringComparison.Ordinal);
 
+    /// <summary>The markers a CLI prints on its OWN stdout/stderr when its account is out (S2 of the question-consultant plan,
+    /// D8; measured 2026-10-01): claude <c>Claude AI usage limit reached</c>, codex <c>You've hit your usage limit</c> /
+    /// <c>usage_limit_reached</c>, agy <c>Individual quota reached</c>. The product markers above apply too — a CLI signed in
+    /// with an API key prints the vendor's <c>credit balance</c> sentence.</summary>
+    private static readonly string[] CliMarkers = ["usage_limit_reached", "quota reached"];
+
+    /// <summary>agy's gRPC code for a spent quota is also its code for a plain rate limit; it counts only beside quota wording.</summary>
+    private const string ResourceExhausted = "RESOURCE_EXHAUSTED";
+
+    /// <summary>The LINE of a CLI's own output that says its account is out — <see cref="CliMarkers"/>, the product markers, or
+    /// <c>RESOURCE_EXHAUSTED</c> with quota wording beside it — trimmed to a sentence; empty when nothing does. A plain 429 or
+    /// <c>rate limited</c> is transient and never benches a subject.</summary>
+    public static string CliReason(string text) =>
+        text.Split('\n').Select(line => line.Trim()).FirstOrDefault(IsCliAccountOut) is { } found ? Short(found) : string.Empty;
+
+    private static bool IsCliAccountOut(string line) =>
+        NamesAnAccount(line)
+        || CliMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase))
+        || (line.Contains(ResourceExhausted, StringComparison.Ordinal) && line.Contains("quota", StringComparison.OrdinalIgnoreCase));
+
+    private static string Short(string line) => line.Length <= 200 ? line : line[..200] + "…";
+
     private static string FromLine(string line)
     {
         var at = line.IndexOf(Failed, StringComparison.Ordinal);

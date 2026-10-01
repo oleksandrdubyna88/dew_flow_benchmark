@@ -35,6 +35,16 @@ public sealed class ProbeRunRow
     /// <summary>Environment variable NAMES, never paths (D4).</summary>
     public List<string> SubjectExecutableRefs { get; set; } = [];
 
+    /// <summary>The api subject's coai vendor id (S2); empty for a CLI subject. Parallel to <see cref="SubjectIds"/>.</summary>
+    public List<string> SubjectVendors { get; set; } = [];
+
+    /// <summary>The api subject's PUBLIC vendor base url — the one probe column the guard checks by the endpoint rule
+    /// (<see cref="ProbeModel.PublicUrlColumns"/>); empty for a CLI subject.</summary>
+    public List<string> SubjectEndpoints { get; set; } = [];
+
+    /// <summary>The api subject's wire dialect word; empty for a CLI subject.</summary>
+    public List<string> SubjectDialects { get; set; } = [];
+
     public List<ProbeCellRow> Cells { get; set; } = [];
 }
 

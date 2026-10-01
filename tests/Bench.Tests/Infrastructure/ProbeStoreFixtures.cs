@@ -16,7 +16,9 @@ internal static class ProbeStoreFixtures
     public static ProbeOracle Oracle() => ProbeOracle.Parse("0.52.0", OracleSource.Registry).Ok();
 
     public static ProbeSubject Subject(string id = "claude-sonnet", string runtime = "claude") =>
-        ProbeSubject.Parse(id, runtime, "model-x", "BENCH_CLAUDE").Ok();
+        runtime == "api"
+            ? ProbeSubject.Parse(id, runtime, "model-x", "BENCH_GATE_COAI_EXE", "vendor-x", "https://api.vendor.example.com/v1", "openai").Ok()
+            : ProbeSubject.Parse(id, runtime, "model-x", "BENCH_CLAUDE").Ok();
 
     public static ProbeRun Run(params ProbeSubject[] subjects) =>
         ProbeRun.Planned(Guid.CreateVersion7(), Oracle(), subjects.Length == 0 ? [Subject()] : subjects, repeats: 3, Noon).Ok();

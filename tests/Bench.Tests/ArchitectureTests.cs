@@ -153,6 +153,11 @@ public sealed class ArchitectureTests
             typeof(Domain.Probes.ProbeSubject),
             typeof(Domain.Probes.ProbeSubjectsFile),
             typeof(Domain.Probes.ProbeOracle),
+            // S2: the attempt's layout under both roots, how an exit reads, what the product's api probe printed.
+            typeof(Domain.Probes.ProbePaths),
+            typeof(Domain.Probes.ProbeAttemptScope),
+            typeof(Domain.Probes.ProbeExits),
+            typeof(Domain.Probes.ProbeApiOutput),
         ];
 
         deciders.Should().OnlyContain(
@@ -170,6 +175,15 @@ public sealed class ArchitectureTests
         typeof(global::Bench.Application.Probes.IProbeRunner).Assembly.GetName().Name.Should().Be("Bench.Application");
         typeof(global::Bench.Infrastructure.Persistence.PostgresProbeStore).Should().Implement<global::Bench.Application.Probes.IProbeStore>();
         typeof(global::Bench.Infrastructure.Persistence.PostgresProbeReads).Should().Implement<global::Bench.Application.Probes.IProbeReads>();
+        typeof(global::Bench.Application.Probes.IProbeFixtures).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Probes.IProbeArtifacts).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Probes.IProbeSecrets).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.ICliAgentTranscripts).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Probes.ProbeFixtures).Should().Implement<global::Bench.Application.Probes.IProbeFixtures>();
+        typeof(global::Bench.Infrastructure.Probes.ProbeArtifacts).Should().Implement<global::Bench.Application.Probes.IProbeArtifacts>();
+        typeof(global::Bench.Infrastructure.Probes.CliProbeRunner).Should().Implement<global::Bench.Application.Probes.IProbeRunner>();
+        typeof(global::Bench.Infrastructure.Probes.CoaiApiProbeRunner).Should().Implement<global::Bench.Application.Probes.IProbeRunner>();
+        typeof(global::Bench.Infrastructure.Models.CliAgentRuntime).Should().Implement<global::Bench.Application.ICliAgentTranscripts>();
         typeof(global::Bench.Application.Probes.IProbeReads).GetMethods().Select(m => m.Name).Should().NotContain(n => WriteVerbs.Any(v => n.StartsWith(v, StringComparison.Ordinal)),
             "the read port a read host registers carries no write");
         typeof(Domain.Probes.ProbeCell).Assembly.GetReferencedAssemblies().Should().NotContain(

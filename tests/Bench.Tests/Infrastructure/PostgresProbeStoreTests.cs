@@ -47,6 +47,25 @@ public sealed class PostgresProbeStoreTests(PostgresFixture postgres)
         (await store.PlanAsync(Run(), cells, Ct)).Reason().Should().Contain("names that run");
     }
 
+    /// <summary>S2: the api subject's transport (vendor, public endpoint, dialect) survives the row — <c>resume</c> launches the
+    /// product from the run, never from a file that may have changed.</summary>
+    [Fact]
+    public async Task An_api_subjects_vendor_endpoint_and_dialect_are_frozen_on_the_run_and_read_back()
+    {
+        var grok = ProbeSubject.Parse("grok-api", "api", "grok-4.7", "BENCH_GATE_COAI_EXE", "grok", "https://api.x.ai/v1", "xai").Ok();
+        var run = Run(Subject("claude-sonnet", "claude"), grok);
+        var cells = ProbeMatrix.Plan(ProbeWord.All, run.Subjects, repeats: 1).Ok().Cells.Select(c => ProbeCell.Pending(Guid.CreateVersion7(), run.Id, c)).ToList();
+        var store = NewStore(new TestClock(Noon));
+
+        (await store.PlanAsync(run, cells, Ct)).Ok();
+
+        var loaded = (await store.LoadAsync(run.Id, Ct)).Ok();
+        loaded.Subjects.Should().Equal(run.Subjects, "the transport is part of the frozen subject");
+        var stored = loaded.Subject(grok.Id).Ok();
+        (stored.Vendor, stored.Endpoint, stored.Dialect).Should().Be(("grok", "https://api.x.ai/v1", "xai"));
+        loaded.Subject(run.Subjects[0].Id).Ok().Endpoint.Should().BeEmpty("a CLI subject has none");
+    }
+
     [Fact]
     public async Task Two_workers_racing_for_one_cell_produce_exactly_one_winner()
     {

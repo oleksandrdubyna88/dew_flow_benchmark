@@ -33,6 +33,26 @@ public static class ProbeTranscripts
     private static readonly IReadOnlySet<string> AgyReadTools =
         new HashSet<string>(StringComparer.Ordinal) { "read_file", "read_many_files", "list_directory", "glob", "search_file_content", "grep_search", "run_shell_command", "shell" };
 
+    /// <summary>What the model SAID — the final message of each grammar — as the text the verdict's canary check runs over
+    /// (S2). Never the whole transcript: a codex <c>command_execution</c> item's <c>aggregated_output</c> or an agy
+    /// <c>tool_result</c> can carry a file's bytes the model never repeated, and a token found there is not a token read into
+    /// the answer. A transcript that is not the grammar at all is its own answer, trimmed — a CLI that printed plain text still
+    /// answered; a grammar that parsed and carried no message answered nothing.</summary>
+    public static string Answer(ProbeRuntime runtime, string stdout) => runtime switch
+    {
+        ProbeRuntime.Claude when Json(stdout) is JsonObject result => Text(result, "result").Trim(),
+        ProbeRuntime.Codex when Lines(stdout) is { Count: > 0 } events => Joined(events
+            .Select(e => e["item"]).OfType<JsonObject>()
+            .Where(item => Text(item, "type") == "agent_message")
+            .Select(item => Text(item, "text"))),
+        ProbeRuntime.Antigravity when Lines(stdout) is { Count: > 0 } events => Joined(events
+            .Where(e => Text(e, "type") == "message" && Text(e, "role") == "assistant")
+            .Select(e => Text(e, "content"))),
+        _ => stdout.Trim(),
+    };
+
+    private static string Joined(IEnumerable<string> messages) => string.Join('\n', messages.Select(m => m.Trim()).Where(m => m.Length > 0));
+
     public static TranscriptEvidence Read(ProbeRuntime runtime, string stdout) => runtime switch
     {
         ProbeRuntime.Claude => ClaudeJson(stdout),

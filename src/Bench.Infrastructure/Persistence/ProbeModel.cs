@@ -8,6 +8,11 @@ internal static class ProbeModel
 {
     public const string TablePrefix = "probe_";
 
+    /// <summary>The one probe column that holds a public vendor url by design — the api subject's endpoint (S2) — checked by the
+    /// guard's endpoint rule, as <see cref="GateModel.PublicUrlColumns"/> is; a CLI subject's entry there is empty.</summary>
+    public static IReadOnlySet<string> PublicUrlColumns { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { "probe_runs.SubjectEndpoints" };
+
     public static void Configure(ModelBuilder builder)
     {
         Runs(builder);

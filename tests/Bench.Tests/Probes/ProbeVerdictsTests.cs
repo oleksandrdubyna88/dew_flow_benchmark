@@ -177,5 +177,5 @@ public sealed class ProbeVerdictsTests
         ProbeTokens.Of("IN-7f3a9c2e1b", "IN-7f3a9c2e1b-OUT").Reason().Should().Contain("contain each other");
     }
 
-    private static string Fixture(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "probes", name));
+    internal static string Fixture(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "probes", name));
 }

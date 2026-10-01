@@ -18,8 +18,6 @@ namespace Bench.Infrastructure.Gate;
 /// </para></summary>
 public sealed class FileSystemGateArtifactStore : IGateArtifactStore
 {
-    private const string StagingMarker = ".staging-";
-
     private readonly string _root;
     private readonly TimeProvider _clock;
     private readonly ArtifactProbe _probe;
@@ -205,65 +203,16 @@ public sealed class FileSystemGateArtifactStore : IGateArtifactStore
         Stage(marker, Encoding.UTF8.GetBytes(body));
     }
 
+    /// <summary>Stage → flush → hash → rename is <see cref="ArtifactCommit"/>'s — one protocol, shared with the probes' store
+    /// (S2); what stays here is the containment above and the ref below.</summary>
     private async Task<Outcome<ArtifactRef>> CommitAsync(
-        ArtifactScope scope, ArtifactClass kind, ArtifactPath path, string full, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
-    {
-        if (File.Exists(full) || Directory.Exists(full))
-        {
-            return Outcome<ArtifactRef>.Failure($"{path} already exists — an artefact is committed once and never overwritten");
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        var staging = await StageAsync(full, bytes, cancellationToken);
-
-        var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes.Span));
-        _probe.Reached(ArtifactStep.Hashed);
-
-        try
-        {
-            File.Move(staging, full, overwrite: false);
-        }
-        catch (IOException) when (File.Exists(full))
-        {
-            File.Delete(staging);
-            return Outcome<ArtifactRef>.Failure($"{path} appeared while it was being committed — nothing was overwritten");
-        }
-
-        _probe.Reached(ArtifactStep.Renamed);
-
-        return ArtifactRef.Of(scope, kind, path, sha256, bytes.Length);
-    }
-
-    /// <summary>Writes the bytes to a staging name beside the target and flushes them to the disk. A crash leaves a
-    /// file whose name says it is not an artefact; nothing ever reads a staging file as one.</summary>
-    private async Task<string> StageAsync(string full, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
-    {
-        var staging = full + StagingMarker + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-
-        await using (var stream = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        {
-            await stream.WriteAsync(bytes, cancellationToken);
-            _probe.Reached(ArtifactStep.Staged);
-            stream.Flush(flushToDisk: true);
-            _probe.Reached(ArtifactStep.Flushed);
-        }
-
-        return staging;
-    }
+        ArtifactScope scope, ArtifactClass kind, ArtifactPath path, string full, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
+        (await ArtifactCommit.CommitAsync(full, bytes, _probe, cancellationToken)).Match(
+            committed => ArtifactRef.Of(scope, kind, path, committed.Sha256, committed.Length),
+            reason => Outcome<ArtifactRef>.Failure($"{path} {reason}"));
 
     /// <summary>The synchronous twin for the small markers the store writes itself.</summary>
-    private static void Stage(string full, byte[] bytes)
-    {
-        var staging = full + StagingMarker + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-
-        using (var stream = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        {
-            stream.Write(bytes);
-            stream.Flush(flushToDisk: true);
-        }
-
-        File.Move(staging, full, overwrite: false);
-    }
+    private static void Stage(string full, byte[] bytes) => ArtifactCommit.Stage(full, bytes);
 
     /// <summary>The target on disk, resolved, and inside the artefact root AND one of the attempt's writable roots.
     /// A link INSIDE a writable root is followed and judged by where it leads; a writable root that is itself reached

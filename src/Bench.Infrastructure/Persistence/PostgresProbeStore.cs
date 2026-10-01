@@ -21,7 +21,8 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
     /// <summary>How many lost claim races in a row mean "the queue is contended", as in <see cref="PostgresRunStore"/>.</summary>
     private const int ClaimAttempts = 8;
 
-    public const string NoPendingCell = "no pending probe cell to claim";
+    /// <summary>The Application layer's phrase (<see cref="ProbeClaimRefusal.NoPendingCell"/>) — the campaign reads it off a refusal.</summary>
+    public const string NoPendingCell = ProbeClaimRefusal.NoPendingCell;
 
     public async Task<Outcome<ProbeRun>> PlanAsync(ProbeRun run, IReadOnlyList<ProbeCell> cells, CancellationToken cancellationToken)
     {

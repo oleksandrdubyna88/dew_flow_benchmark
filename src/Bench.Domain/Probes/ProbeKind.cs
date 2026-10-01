@@ -73,4 +73,16 @@ public static class ProbeTraits
 
     /// <summary>Needs the CLI to take a directory grant.</summary>
     public static bool NeedsGrant(ProbeKind probe) => probe == ProbeKind.ReadOutsideGranted;
+
+    /// <summary>Runs with the web switched OFF by definition — the <see cref="ProbeKind.ReadDenied"/> control. A CLI with no
+    /// flag for that (antigravity) can still run the read probes, whose prompt never asks a web question, but not the control,
+    /// whose definition is web OFF with the file tools denied.</summary>
+    public static bool NeedsWebOff(ProbeKind probe) => probe == ProbeKind.ReadDenied;
+
+    /// <summary>Runs with the web switched ON — the two web probes.</summary>
+    public static bool NeedsWebOn(ProbeKind probe) => probe is ProbeKind.WebSearch or ProbeKind.WebConfined;
+
+    /// <summary>Asks the CLI to deny its file tools where it has a flag for that — the control and the confined web row share
+    /// ONE denial list, so the control measures the denial the row runs under.</summary>
+    public static bool DeniesFileTools(ProbeKind probe) => probe is ProbeKind.ReadDenied or ProbeKind.WebConfined;
 }
