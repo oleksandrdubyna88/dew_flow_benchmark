@@ -91,6 +91,7 @@ public static class Program
             "questions" => Questions(command, output, error, stopping),
             "models" => Models(command, output, error, stopping),
             "gate" => CoaiGateCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "probes" => ProbesCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -480,6 +481,24 @@ public static class Program
         output.WriteLine("  bench gate prune  --artifact-root <dir> [--tap-retention-days 30] [--dry-run] [--json]");
         output.WriteLine("             releases tap request/response bodies past the window; every facts file is kept,");
         output.WriteLine("             an unfinished attempt is listed and never touched; prints each run's footprint");
+        output.WriteLine();
+        output.WriteLine("  bench probes run    --subjects-file <subjects.json> [--probes read-inside,web-search,..] [--repeats 3]");
+        output.WriteLine("             [--oracle-version <semver>] [--cell-timeout-minutes 5] --artifact-root <dir> [--work-root <dir>]");
+        output.WriteLine("             --db <connection>   the question consultant's capability probes: every subject's");
+        output.WriteLine("             executable reference resolved (4), the @openai/codex web oracle read from the npm");
+        output.WriteLine("             registry BEFORE anything is planned (3 when it cannot be; --oracle-version pins it");
+        output.WriteLine("             by hand), then one lane per subject, one cell at a time, each settled as it ends");
+        output.WriteLine("  bench probes resume --run <id>   exactly the cells not settled; oracle and subjects from the run");
+        output.WriteLine("  bench probes rerun  --cell <id> | --run <id> --subject <id> [--probe <word>]");
+        output.WriteLine("             appends a new generation of what it names; the old one stays (refused while that");
+        output.WriteLine("             subject still has cells pending - resume first)");
+        output.WriteLine("  bench probes status --run <id>   every cell, every generation; claims nothing");
+        output.WriteLine("  bench probes sweep  [--run <id>] hands back dead owners' claims, deletes stranded fixtures");
+        output.WriteLine("  bench probes report --run <id> [--json]   the highest settled generation per cell, the CLI");
+        output.WriteLine("             build that answered, the rerun command; the object the read API answers");
+        output.WriteLine("  bench probes prune  --run <id>   deletes the run's artefacts; refused while a cell is open");
+        output.WriteLine("             (--artifact-root or BENCH_ARTIFACT_ROOT, --db or BENCH_DB, on every verb that needs them;");
+        output.WriteLine("             the work root defaults to %LOCALAPPDATA%/bench/probes-work and must not overlap it)");
         output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");
         output.WriteLine("  bench questions author --group <key> --authors <registry keys> --repo <url>");

@@ -183,6 +183,8 @@ public sealed class ArchitectureTests
         typeof(global::Bench.Infrastructure.Probes.ProbeArtifacts).Should().Implement<global::Bench.Application.Probes.IProbeArtifacts>();
         typeof(global::Bench.Infrastructure.Probes.CliProbeRunner).Should().Implement<global::Bench.Application.Probes.IProbeRunner>();
         typeof(global::Bench.Infrastructure.Probes.CoaiApiProbeRunner).Should().Implement<global::Bench.Application.Probes.IProbeRunner>();
+        typeof(global::Bench.Application.Probes.IProbeOracle).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Probes.NpmRegistryOracle).Should().Implement<global::Bench.Application.Probes.IProbeOracle>();
         typeof(global::Bench.Infrastructure.Models.CliAgentRuntime).Should().Implement<global::Bench.Application.ICliAgentTranscripts>();
         typeof(global::Bench.Application.Probes.IProbeReads).GetMethods().Select(m => m.Name).Should().NotContain(n => WriteVerbs.Any(v => n.StartsWith(v, StringComparison.Ordinal)),
             "the read port a read host registers carries no write");

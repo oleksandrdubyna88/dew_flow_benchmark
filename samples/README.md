@@ -6,6 +6,7 @@ Suites you can run. Two files, and they are not the same kind of thing.
 |---|---|
 | [polly-smoke-suite.json](polly-smoke-suite.json) | **A real suite against a real target.** Three questions, every anchor verified by reading the tree at a pinned commit |
 | [demo-suite.json](demo-suite.json) | **A shape example, not a suite.** Its anchors point at `src/Orders/OrderService.cs` and friends, which exist in no repository. It shows the file FORMAT and nothing else — running it measures nothing |
+| [question-consultant-probe-subjects.json](question-consultant-probe-subjects.json) | **The subjects of the capability-probe run** (`bench probes run --subjects-file`, `todo/PLAN_question_consultant_probes.md`). References, never values: each executable is the NAME of a variable (`BENCH_CLAUDE`, `BENCH_CODEX`, `BENCH_AGY`, `BENCH_GATE_COAI_EXE`). `claude-sonnet` asks for the CLI's `sonnet` alias, not a pinned id — the probes measure the CLI build (pinned per cell), and the model that answered is in each cell's stdout artefact; `agy-gemini` is `gemini-3.1-pro-high`, read off `agy models` on 2026-10-01 (never a Claude model through agy). The format takes no comments — a field the reader does not know is refused |
 | [gate-suite.sample.json](gate-suite.sample.json) | **A shape example for the coai gate benchmark.** No tasks; three made-up `privateNames` the publication guard test always loads, so a refusal is exercised on every machine. The real suite lives in the operator's artefact root, outside git (`research/module_gate.md`) |
 
 ## The smoke suite
