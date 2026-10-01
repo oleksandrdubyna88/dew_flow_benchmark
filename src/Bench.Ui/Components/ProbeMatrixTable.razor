@@ -1,0 +1,78 @@
+@* The probe × subject matrix of one run: a row per probe, a column per subject, and in each cell every repeat — its state, how its
+   attempt ended, the facts its probe reads (yes / no / not captured, never a zero), the generation shown, the CLI build that
+   answered, and the command that re-measures it. A pair the planner dropped is said to be not measured, never drawn as an empty
+   measurement. *@
+
+<div class="table-responsive">
+    <table class="table table-sm table-bordered align-top small" data-test="probe-matrix">
+        <caption>Each repeat: its state, how the attempt ended, the facts its probe reads, the generation shown, the CLI build, and the
+            command that re-measures it.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Probe</th>
+                @foreach (var subject in Report.Subjects)
+                {
+                    <th scope="col" title="@subject.Runtime · @subject.Model">@subject.Id</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var probe in Probes(Report))
+            {
+                <tr data-probe="@probe">
+                    <th scope="row">@probe</th>
+                    @foreach (var subject in Report.Subjects)
+                    {
+                        var repeats = Repeats(Report, probe, subject.Id);
+                        <td data-subject="@subject.Id">
+                            @if (repeats.Count == 0)
+                            {
+                                <span class="text-body-secondary">@(IsDropped(Report, probe, subject.Id) ? "not measured" : "—")</span>
+                            }
+                            @foreach (var cell in repeats)
+                            {
+                                <div class="border rounded p-1 mb-1" data-repeat="@cell.Repeat" data-state="@cell.State" data-cell="@cell.CellId">
+                                    <div>
+                                        <span class="fw-semibold">r@(cell.Repeat)</span>
+                                        <span class="badge @StateBadge(cell.State)">@StateWords(cell.State)</span>
+                                        @if (cell.Generation > 1)
+                                        {
+                                            <span class="badge text-bg-info" data-test="probe-generation" title="generation @cell.Generation — re-measured; the highest settled is shown">g@(cell.Generation)</span>
+                                        }
+                                        @if (cell.LatestGeneration > cell.Generation)
+                                        {
+                                            <span class="text-body-secondary" data-test="probe-newer">g@(cell.LatestGeneration) @cell.LatestState</span>
+                                        }
+                                    </div>
+                                    @if (cell.State == ProbeWords.Settled)
+                                    {
+                                        <div data-test="probe-kind">@Words(cell.Kind) · @Exit(cell.Exit)</div>
+                                        <ul class="list-unstyled mb-0">
+                                            @foreach (var (name, word) in Facts(cell))
+                                            {
+                                                <li>@Label(name): <span data-fact="@name" class="@FactClass(word)">@FactWord(word)</span></li>
+                                            }
+                                        </ul>
+                                        @if (cell.VoidedByControl)
+                                        {
+                                            <div class="text-warning-emphasis" data-test="probe-voided">voided — this subject's read-inside control read no</div>
+                                        }
+                                    }
+                                    else if (cell.Reason != "none")
+                                    {
+                                        <div>@Words(cell.Reason)</div>
+                                    }
+                                    @if (cell.Pin.Version.Length > 0)
+                                    {
+                                        <div class="text-body-secondary" data-test="probe-pin">@cell.Pin.Version</div>
+                                    }
+                                    <code class="d-block text-break user-select-all" data-test="probe-rerun">@cell.RerunCommand</code>
+                                </div>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

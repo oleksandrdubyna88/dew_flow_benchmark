@@ -66,6 +66,27 @@ public sealed class PostgresProbeStoreTests(PostgresFixture postgres)
         loaded.Subject(run.Subjects[0].Id).Ok().Endpoint.Should().BeEmpty("a CLI subject has none");
     }
 
+    /// <summary>S4: the probes a run was ASKED for are frozen in the order asked — the report recomputes the planner's dropped pairs
+    /// from them — and a row naming something that is not a probe was edited, and is refused by name.</summary>
+    [Fact]
+    public async Task The_asked_probes_are_frozen_on_the_run_in_order_and_a_hand_edited_name_is_refused()
+    {
+        var run = Run(Subject("claude-sonnet", "claude")) with { Probes = [ProbeKind.WebSearch, ProbeKind.ReadInside, ProbeKind.ApiReachable] };
+        var cells = ProbeMatrix.Plan(run.Probes, run.Subjects, repeats: 1).Ok().Cells.Select(c => ProbeCell.Pending(Guid.CreateVersion7(), run.Id, c)).ToList();
+        var store = NewStore(new TestClock(Noon));
+        (await store.PlanAsync(run, cells, Ct)).Ok();
+
+        (await store.LoadAsync(run.Id, Ct)).Ok().Probes.Should().Equal([ProbeKind.WebSearch, ProbeKind.ReadInside, ProbeKind.ApiReachable],
+            "api-reachable planned no cell here, and only the frozen list still names it");
+
+        await using (var db = postgres.NewContext())
+        {
+            await db.ProbeRuns.Where(r => r.Id == run.Id).ExecuteUpdateAsync(u => u.SetProperty(r => r.Probes, ["ReadInside", "Frobnicate"]), Ct);
+        }
+
+        (await store.LoadAsync(run.Id, Ct)).Reason().Should().Contain("'Frobnicate' is not a probe");
+    }
+
     [Fact]
     public async Task Two_workers_racing_for_one_cell_produce_exactly_one_winner()
     {

@@ -6,10 +6,30 @@ namespace Bench.Domain.Probes;
 /// in within that slot — <c>GateMatrixCell</c>'s shape over the probe axes.</summary>
 public sealed record ProbeMatrixCell(ProbeKind Probe, ProbeSubjectId Subject, int Repeat, int Slot, int Position);
 
+/// <summary>Why a (probe, subject) pair cannot be measured — a closed set, so the reason travels to the report and the page as
+/// a WORD (D11: no sentence reaches the wire) while the CLI still prints the sentence <see cref="ProbeApplicability.Sentence"/>
+/// spells for it. <see cref="None"/> is "the pair applies".</summary>
+public enum ProbeDrop
+{
+    None,
+
+    /// <summary><c>api-reachable</c> on a CLI subject — the api probe runs through the product, not a CLI.</summary>
+    ApiProbeOnCli,
+
+    /// <summary>A CLI probe on the api subject — the product answers over HTTP; there is no process to confine.</summary>
+    CliProbeOnApi,
+
+    /// <summary><c>read-denied</c> on a CLI with neither a flag that turns the web OFF nor a tool deny-list (antigravity).</summary>
+    NoWebOffFlag,
+}
+
 /// <summary>A (probe, subject) pair the planner left out, and why — a dropped pair is NAMED, never silently absent, so the
 /// write-up's "not measured" list is read off the plan rather than guessed.</summary>
-public sealed record DroppedPair(ProbeKind Probe, ProbeSubjectId Subject, string Reason)
+public sealed record DroppedPair(ProbeKind Probe, ProbeSubjectId Subject, ProbeDrop Why)
 {
+    /// <summary>The sentence the CLI prints for <see cref="Why"/>.</summary>
+    public string Reason => ProbeApplicability.Sentence(Why);
+
     public string Describe => $"{ProbeWord.Of(Probe)} × {Subject}: {Reason}";
 }
 
@@ -24,16 +44,27 @@ public sealed record ProbePlan(IReadOnlyList<ProbeMatrixCell> Cells, IReadOnlyLi
 /// still runs there as is (web ON, nothing to deny): it answers whether the CLI reads the disk at all.</summary>
 public static class ProbeApplicability
 {
-    /// <summary>Empty when the pair applies; otherwise the reason it is dropped.</summary>
-    public static string Reason(ProbeKind probe, ProbeRuntime runtime) =>
+    /// <summary>Empty when the pair applies; otherwise the sentence saying why it is dropped.</summary>
+    public static string Reason(ProbeKind probe, ProbeRuntime runtime) => Sentence(Drop(probe, runtime));
+
+    /// <summary><see cref="ProbeDrop.None"/> when the pair applies; otherwise which rule drops it.</summary>
+    public static ProbeDrop Drop(ProbeKind probe, ProbeRuntime runtime) =>
         (ProbeTraits.IsApi(probe), runtime == ProbeRuntime.Api, ProbeTraits.NeedsWebOff(probe) && runtime == ProbeRuntime.Antigravity) switch
         {
-            (true, false, _) => "api-reachable runs through the product's api path, not a CLI",
-            (false, true, _) => "an api subject runs no CLI probe — the product answers over HTTP, there is no process to confine",
-            (_, _, true) => "read-denied is web OFF with the file tools denied, and antigravity has a flag for neither (1.2.14, measured 2026-10-01) — "
-                            + "the pair is dropped by name rather than measured with the web on",
-            _ => string.Empty,
+            (true, false, _) => ProbeDrop.ApiProbeOnCli,
+            (false, true, _) => ProbeDrop.CliProbeOnApi,
+            (_, _, true) => ProbeDrop.NoWebOffFlag,
+            _ => ProbeDrop.None,
         };
+
+    public static string Sentence(ProbeDrop drop) => drop switch
+    {
+        ProbeDrop.ApiProbeOnCli => "api-reachable runs through the product's api path, not a CLI",
+        ProbeDrop.CliProbeOnApi => "an api subject runs no CLI probe — the product answers over HTTP, there is no process to confine",
+        ProbeDrop.NoWebOffFlag => "read-denied is web OFF with the file tools denied, and antigravity has a flag for neither (1.2.14, measured 2026-10-01) — "
+                                  + "the pair is dropped by name rather than measured with the web on",
+        _ => string.Empty,
+    };
 }
 
 /// <summary>Materialising a probe run as probe × subject × repeat, <b>repeats outermost</b> and the subjects rotated on
@@ -54,7 +85,7 @@ public static class ProbeMatrix
             return Outcome<ProbePlan>.Failure(refusal);
         }
 
-        var dropped = Dropped(probes, subjects);
+        var dropped = DroppedPairs(probes, subjects);
         var slots = Slots(probes, subjects, repeats);
 
         return slots.Count == 0
@@ -62,10 +93,12 @@ public static class ProbeMatrix
             : Outcome<ProbePlan>.Success(new ProbePlan(Cells(slots), dropped));
     }
 
-    private static IReadOnlyList<DroppedPair> Dropped(IReadOnlyList<ProbeKind> probes, IReadOnlyList<ProbeSubject> subjects) =>
+    /// <summary>Every (probe, subject) pair the runtime cannot honour, in probe order then subject order — pure over the probes and
+    /// the FROZEN subjects, so the report recomputes the list a run's planner printed without a column of its own.</summary>
+    public static IReadOnlyList<DroppedPair> DroppedPairs(IReadOnlyList<ProbeKind> probes, IReadOnlyList<ProbeSubject> subjects) =>
         [.. probes.SelectMany(probe => subjects
-            .Select(subject => new DroppedPair(probe, subject.Id, ProbeApplicability.Reason(probe, subject.Runtime)))
-            .Where(d => d.Reason.Length > 0))];
+            .Select(subject => new DroppedPair(probe, subject.Id, ProbeApplicability.Drop(probe, subject.Runtime)))
+            .Where(d => d.Why != ProbeDrop.None))];
 
     /// <summary>Repeats OUTERMOST: every probe once, then every probe again; inside a slot, the subjects that can run it.</summary>
     private static IReadOnlyList<(ProbeKind Probe, int Repeat, IReadOnlyList<ProbeSubjectId> Subjects)> Slots(
@@ -75,7 +108,7 @@ public static class ProbeMatrix
             .Where(slot => slot.Item3.Count > 0)];
 
     private static IReadOnlyList<ProbeSubjectId> Applicable(ProbeKind probe, IReadOnlyList<ProbeSubject> subjects) =>
-        [.. subjects.Where(s => ProbeApplicability.Reason(probe, s.Runtime).Length == 0).Select(s => s.Id)];
+        [.. subjects.Where(s => ProbeApplicability.Drop(probe, s.Runtime) == ProbeDrop.None).Select(s => s.Id)];
 
     private static IReadOnlyList<ProbeMatrixCell> Cells(IReadOnlyList<(ProbeKind Probe, int Repeat, IReadOnlyList<ProbeSubjectId> Subjects)> slots) =>
         [.. slots.SelectMany((slot, slotIndex) => SlotRotation.Rotated(slot.Subjects, slotIndex)

@@ -1342,6 +1342,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.PrimitiveCollection<List<string>>("Probes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<int>("Repeats")
                         .HasColumnType("integer");
 

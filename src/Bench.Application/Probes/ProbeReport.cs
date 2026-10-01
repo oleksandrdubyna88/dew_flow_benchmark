@@ -44,7 +44,31 @@ public static class ProbeReport
             !run.ArtifactsPruned,
             new ProbeProgressDto(progress.Pending, progress.Claimed, progress.Settled, progress.Abandoned, progress.IsOpen),
             [.. run.Subjects.Select(Subject)],
-            [.. lineages.Select(l => Cell(l, voided.Contains(l.Shown.Subject.Value)))]);
+            [.. lineages.Select(l => Cell(l, voided.Contains(l.Shown.Subject.Value)))],
+            Dropped(run, cells));
+    }
+
+    /// <summary>The run picker's row: the run and where it stands, read off its cells (D3).</summary>
+    public static ProbeRunSummaryDto Summary(ProbeRun run, IReadOnlyList<ProbeCell> cells)
+    {
+        var progress = ProbeRunProgress.Of(cells);
+
+        return new ProbeRunSummaryDto(run.Id, run.CreatedAt, run.Subjects.Count, run.Repeats, run.ArtifactsPruned,
+            new ProbeProgressDto(progress.Pending, progress.Claimed, progress.Settled, progress.Abandoned, progress.IsOpen));
+    }
+
+    /// <summary>The newest runs first, each with its progress — what <c>GET /api/bench/probes/runs</c> answers.</summary>
+    public static async Task<IReadOnlyList<ProbeRunSummaryDto>> RecentAsync(IProbeReads reads, int limit, CancellationToken cancellationToken)
+    {
+        var runs = await reads.RecentRunsAsync(limit, cancellationToken);
+        var summaries = new List<ProbeRunSummaryDto>(runs.Count);
+
+        foreach (var run in runs)
+        {
+            summaries.Add(Summary(run, await reads.CellsAsync(run.Id, cancellationToken)));
+        }
+
+        return summaries;
     }
 
     /// <summary>The copyable re-measurement of a cell's lineage — the command <c>bench probes rerun</c> accepts.</summary>
@@ -70,6 +94,8 @@ public static class ProbeReport
     public static string Word(ProbeReason reason) => Kebab(reason.ToString());
 
     public static string Word(OracleSource source) => Kebab(source.ToString());
+
+    public static string Word(ProbeDrop drop) => Kebab(drop.ToString());
 
     private sealed record Lineage(ProbeCell Shown, ProbeCell Latest);
 
@@ -106,6 +132,20 @@ public static class ProbeReport
             lineage.Latest.Generation,
             Word(lineage.Latest.State),
             RerunCommand(cell.Id));
+    }
+
+    /// <summary>The pairs the planner dropped, RECOMPUTED rather than stored: the planner's rule is pure over the probes and the
+    /// subjects, and both are frozen on the run (D4; <see cref="ProbeRun.Probes"/>). A probe a <c>--probes</c> subset never asked for is
+    /// not reported as dropped; a run that froze no probe list falls back to the probes its cells name; a pair that holds cells (the
+    /// applicability table moved after the run was made) is reported as what it is, measured.</summary>
+    private static IReadOnlyList<ProbeDroppedPairDto> Dropped(ProbeRun run, IReadOnlyList<ProbeCell> cells)
+    {
+        var planned = run.Probes.Count > 0 ? run.Probes : [.. ProbeWord.All.Where(probe => cells.Any(c => c.Probe == probe))];
+        var measured = cells.Select(c => (c.Probe, c.Subject.Value)).ToHashSet();
+
+        return [.. ProbeMatrix.DroppedPairs(planned, run.Subjects)
+            .Where(d => !measured.Contains((d.Probe, d.Subject.Value)))
+            .Select(d => new ProbeDroppedPairDto(ProbeWord.Of(d.Probe), d.Subject.Value, Word(d.Why)))];
     }
 
     private static ProbeSubjectDto Subject(ProbeSubject subject) =>

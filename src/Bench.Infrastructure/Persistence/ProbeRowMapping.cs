@@ -24,6 +24,7 @@ internal static class ProbeRowMapping
         SubjectVendors = [.. run.Subjects.Select(s => s.Vendor)],
         SubjectEndpoints = [.. run.Subjects.Select(s => s.Endpoint)],
         SubjectDialects = [.. run.Subjects.Select(s => s.Dialect)],
+        Probes = [.. run.Probes.Select(p => p.ToString())],
     };
 
     public static Outcome<ProbeRun> ToDomain(ProbeRunRow row)
@@ -37,9 +38,21 @@ internal static class ProbeRowMapping
 
         return ProbeOracle.Parse(row.OracleVersion, row.OracleSource).Match(
             oracle => Subjects(row).Match(
-                subjects => Outcome<ProbeRun>.Success(new ProbeRun(row.Id, oracle, subjects, row.Repeats, row.CreatedAt) { ArtifactsPruned = row.ArtifactsPruned }),
+                subjects => Probes(row).Match(
+                    probes => Outcome<ProbeRun>.Success(new ProbeRun(row.Id, oracle, subjects, row.Repeats, row.CreatedAt) { ArtifactsPruned = row.ArtifactsPruned, Probes = probes }),
+                    Outcome<ProbeRun>.Failure),
                 Outcome<ProbeRun>.Failure),
             Outcome<ProbeRun>.Failure);
+    }
+
+    /// <summary>The asked probes back from their enum NAMES; a name that is no probe was written by hand, and is refused by name.</summary>
+    private static Outcome<IReadOnlyList<ProbeKind>> Probes(ProbeRunRow row)
+    {
+        var unknown = row.Probes.FirstOrDefault(name => !Enum.TryParse<ProbeKind>(name, ignoreCase: false, out var kind) || !Enum.IsDefined(kind));
+
+        return unknown is null
+            ? Outcome<IReadOnlyList<ProbeKind>>.Success([.. row.Probes.Select(Enum.Parse<ProbeKind>)])
+            : Outcome<IReadOnlyList<ProbeKind>>.Failure($"probe run {row.Id}: '{unknown}' is not a probe — the row was edited");
     }
 
     /// <summary>Parallel list columns are read only when every list has the same length — a row where they do not was edited.</summary>

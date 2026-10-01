@@ -21,6 +21,7 @@ public sealed class ProbeContractsGuardTests
         "ProbeFactsDto.Reachable", "ProbeFactsDto.AccountOut",
         "ProbePinDto.Version", "ProbePinDto.BinarySha256",
         "ProbeArtifactDto.Kind", "ProbeArtifactDto.Path", "ProbeArtifactDto.Sha256",
+        "ProbeDroppedPairDto.Probe", "ProbeDroppedPairDto.Subject", "ProbeDroppedPairDto.Reason",
     };
 
     [Fact]
@@ -33,7 +34,8 @@ public sealed class ProbeContractsGuardTests
     [Fact]
     public void The_walk_reaches_the_nested_probe_shapes_and_every_allow_list_entry_still_exists()
     {
-        TextSurface.Reachable(ProbeDtos()).Should().Contain([typeof(ProbeCellReportDto), typeof(ProbeFactsDto), typeof(ProbePinDto), typeof(ProbeArtifactDto)]);
+        TextSurface.Reachable(ProbeDtos()).Should().Contain([typeof(ProbeCellReportDto), typeof(ProbeFactsDto), typeof(ProbePinDto), typeof(ProbeArtifactDto),
+            typeof(ProbeDroppedPairDto), typeof(ProbeRunSummaryDto)]);
         var carriers = TextSurface.Carriers(ProbeDtos()).Select(c => c.Key).ToHashSet(StringComparer.Ordinal);
         Allowed.Where(entry => !carriers.Contains(entry)).Should().BeEmpty("an entry for a property that is gone is a door left open");
     }

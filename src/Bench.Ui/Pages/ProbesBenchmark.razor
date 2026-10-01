@@ -1,0 +1,99 @@
+@page "/benchmarking/probes"
+
+<PageTitle>Benchmarking · Probes</PageTitle>
+
+<h1 class="h3 mb-3">Benchmarking</h1>
+<BenchmarkTabs />
+
+<div class="d-flex align-items-start justify-content-between">
+    <p class="text-body-secondary mb-2">
+        <strong>Capability probes — the question consultant.</strong> What each CLI and api vendor can actually do: read a file
+        outside its directory, search the web, be confined to the question text. Every cell is one probe × subject × repeat, a fact
+        about the CLI build that answered it; a fact nobody could read is <em>not captured</em>, never a <em>no</em>. Re-measure a
+        cell with the command it shows — this page is read-only.
+    </p>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-3 ms-3 flex-shrink-0"
+            disabled="@(Loading || RunId == Guid.Empty)" @onclick="RefreshAsync">
+        @(Loading ? "Reading…" : "Refresh")
+    </button>
+</div>
+
+@if (!Runs.Available && Runs.Detail.Length > 0)
+{
+    @* The API could not be read — not the same panel as "nothing measured": one sends the reader to the host, the other to the CLI. *@
+    <div class="alert alert-warning">@Runs.Detail</div>
+}
+else if (Runs.Available && Runs.Value!.Count == 0 && RunId == Guid.Empty)
+{
+    <div class="alert alert-secondary">
+        <strong>No probe run has been measured yet.</strong> Measure one with
+        <code>bench probes run --subjects-file samples/question-consultant-probe-subjects.json --artifact-root &lt;dir&gt; --db …</code>.
+    </div>
+}
+else if (Runs.Available)
+{
+    <div class="mb-3" style="max-width: 48rem">
+        <label class="form-label" for="probe-run">Run</label>
+        <select class="form-select" id="probe-run" value="@RunId" @onchange="ChooseRunAsync" disabled="@Loading">
+            @if (!Listed && RunId != Guid.Empty)
+            {
+                <option value="@RunId">@RunId — named in the address</option>
+            }
+            @foreach (var run in Runs.Value!)
+            {
+                <option value="@run.RunId">@RunLabel(run)</option>
+            }
+        </select>
+    </div>
+
+    @if (Report.Value is { } report)
+    {
+        @if (PollProblem.Length > 0)
+        {
+            <div class="alert alert-warning small">The last re-read failed — @PollProblem. What is shown is the last answer that arrived.</div>
+        }
+
+        <dl class="row small mb-2">
+            <dt class="col-sm-2">Run</dt>
+            <dd class="col-sm-10" data-test="probe-run-id"><code>@report.RunId</code></dd>
+            <dt class="col-sm-2">Created</dt>
+            <dd class="col-sm-10"><time datetime="@report.CreatedAt.ToString("O")">@report.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm") UTC</time></dd>
+            <dt class="col-sm-2">Web oracle</dt>
+            <dd class="col-sm-10"><code>@@openai/codex</code> @report.Oracle.Version (@report.Oracle.Source)</dd>
+            <dt class="col-sm-2">Subjects</dt>
+            <dd class="col-sm-10">
+                @foreach (var subject in report.Subjects)
+                {
+                    <span class="me-3"><strong>@subject.Id</strong> · @subject.Runtime · @subject.Model</span>
+                }
+            </dd>
+        </dl>
+
+        <p class="small" data-test="probe-progress" role="status" aria-live="polite">@ProgressSentence(report.Progress)</p>
+
+        @if (!report.Auditable)
+        {
+            <div class="alert alert-warning" data-test="probe-pruned">
+                <strong>The artefacts of this run were pruned.</strong> Its verdicts are no longer auditable from disk — the answers and
+                transcripts they were read from are gone.
+            </div>
+        }
+
+        <ProbeMatrixTable Report="report" />
+
+        @if (report.Dropped.Count > 0)
+        {
+            <h2 class="h6 mt-3">Not measured</h2>
+            <ul class="small" data-test="probe-dropped">
+                @foreach (var dropped in report.Dropped)
+                {
+                    <li><strong>@dropped.Probe</strong> × <strong>@dropped.Subject</strong> — <code>@dropped.Reason</code>: @DroppedSentence(dropped.Reason)</li>
+                }
+            </ul>
+        }
+    }
+    else if (!Report.Available && Report.Detail.Length > 0)
+    {
+        <div class="alert alert-warning">@Report.Detail</div>
+    }
+}

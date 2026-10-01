@@ -24,6 +24,9 @@ public static class BenchUiExtensions
     public static IServiceCollection AddBenchUi(this IServiceCollection services)
     {
         services.TryAddScoped<BenchConsoleApi>();
+
+        // The clock the Probes tab polls on (S4). The system's unless the host — or a test — registered its own first.
+        services.TryAddSingleton(TimeProvider.System);
         return services;
     }
 }

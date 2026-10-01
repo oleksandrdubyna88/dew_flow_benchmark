@@ -63,6 +63,10 @@ public static class BenchApi
         // port is resolved per request, so a host that never registered it still starts and answers 503 naming it.
         app.MapGateReads();
 
+        // The capability probes' reads (S4 of the question-consultant probes plan) — the same per-request resolution: a host that
+        // never registered IProbeReads starts, and its probe routes answer 503 naming it.
+        app.MapProbeReads();
+
         return app;
     }
 

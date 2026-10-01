@@ -49,6 +49,12 @@ public sealed record ProbeRun(Guid Id, ProbeOracle Oracle, IReadOnlyList<ProbeSu
     /// <summary>Set by <c>bench probes prune --run</c>: the artefacts are gone and the verdicts are no longer auditable from disk.</summary>
     public bool ArtifactsPruned { get; init; }
 
+    /// <summary>The probes this run was ASKED for (<c>--probes</c>, default all seven), frozen so the planner's dropped pairs can be
+    /// recomputed from them and the frozen subjects (<see cref="ProbeMatrix.DroppedPairs"/>) — a probe every subject dropped plans no
+    /// cell, so the cells alone cannot name it. Empty on a run that recorded none; the report then falls back to the probes its cells
+    /// name.</summary>
+    public IReadOnlyList<ProbeKind> Probes { get; init; } = [];
+
     public static Outcome<ProbeRun> Planned(Guid id, ProbeOracle oracle, IReadOnlyList<ProbeSubject> subjects, int repeats, DateTimeOffset now)
     {
         var refusal = PlannedRefusal(subjects, repeats);

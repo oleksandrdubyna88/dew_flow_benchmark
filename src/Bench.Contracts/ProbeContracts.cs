@@ -11,6 +11,8 @@ namespace Bench.Contracts;
 /// </para></summary>
 /// <param name="Auditable">False once <c>bench probes prune</c> deleted the run's artefacts: the verdicts below can no longer
 /// be checked against the files they were read from.</param>
+/// <param name="Dropped">The (probe, subject) pairs the planner left out, each with its reason WORD — the write-up's "not
+/// measured" list, read off the run rather than off a terminal that printed it once.</param>
 public sealed record ProbeRunReportDto(
     Guid RunId,
     DateTimeOffset CreatedAt,
@@ -20,7 +22,17 @@ public sealed record ProbeRunReportDto(
     bool Auditable,
     ProbeProgressDto Progress,
     IReadOnlyList<ProbeSubjectDto> Subjects,
-    IReadOnlyList<ProbeCellReportDto> Cells);
+    IReadOnlyList<ProbeCellReportDto> Cells,
+    IReadOnlyList<ProbeDroppedPairDto> Dropped);
+
+/// <summary>One run in the read API's run list (<c>GET /api/bench/probes/runs</c>) — what the page's run picker offers: when it
+/// was made, how big it is, and whether anything is still being measured (<see cref="ProbeProgressDto.Open"/>, read off its
+/// cells — a run has no status of its own, D3).</summary>
+public sealed record ProbeRunSummaryDto(Guid RunId, DateTimeOffset CreatedAt, int Subjects, int Repeats, bool ArtifactsPruned, ProbeProgressDto Progress);
+
+/// <summary>A pair the planner did not measure: the probe word, the subject id, and why as a closed word —
+/// <c>api-probe-on-cli</c>, <c>cli-probe-on-api</c>, <c>no-web-off-flag</c>.</summary>
+public sealed record ProbeDroppedPairDto(string Probe, string Subject, string Reason);
 
 /// <summary>The frozen web oracle (D7): the version of <c>@openai/codex</c> the <c>web-search</c> answers are compared with,
 /// and where it came from — <c>registry</c> (read once at <c>run</c>) or <c>manual</c> (<c>--oracle-version</c>).</summary>

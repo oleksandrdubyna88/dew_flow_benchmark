@@ -26,6 +26,11 @@ public static class ProbeReportText
                             + (subject.Endpoint.Length > 0 ? $" · {subject.Vendor} @ {subject.Endpoint} ({subject.Dialect})" : string.Empty));
         }
 
+        foreach (var dropped in report.Dropped)
+        {
+            text.AppendLine($"not measured   {dropped.Probe} × {dropped.Subject} ({dropped.Reason})");
+        }
+
         text.AppendLine();
         foreach (var cell in report.Cells)
         {

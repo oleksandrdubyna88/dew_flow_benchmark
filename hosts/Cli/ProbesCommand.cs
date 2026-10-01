@@ -114,7 +114,8 @@ public static class ProbesCommand
         ProbesInputs inputs, RunAsk ask, IReadOnlyList<ProbeSubject> subjects, ProbeOracle oracle, TextWriter output, CancellationToken cancellationToken)
     {
         var plan = ProbeMatrix.Plan(ask.Probes, subjects, ask.Repeats);
-        var run = ProbeRun.Planned(Guid.CreateVersion7(), oracle, subjects, ask.Repeats, DateTimeOffset.UtcNow);
+        var run = ProbeRun.Planned(Guid.CreateVersion7(), oracle, subjects, ask.Repeats, DateTimeOffset.UtcNow)
+            .Match(r => Outcome<ProbeRun>.Success(r with { Probes = ask.Probes }), Outcome<ProbeRun>.Failure);
 
         if ((plan, run) is not (Outcome<ProbePlan>.Ok { Value: var matrix }, Outcome<ProbeRun>.Ok { Value: var planned }))
         {
@@ -350,13 +351,13 @@ public static class ProbesCommand
 
             var refusal = (command.Value("subjects-file").Length > 0, probes.OfType<Outcome<ProbeKind>.Fail>().FirstOrDefault(), command.Int("repeats", DefaultRepeats) >= 1,
                     oracle.Length == 0 || ProbeOracle.Parse(oracle, OracleSource.Manual) is Outcome<ProbeOracle>.Ok) switch
-                {
-                    (false, _, _, _) => "probes run needs --subjects-file <subjects.json> (samples/question-consultant-probe-subjects.json is the plan's)",
-                    (_, { } bad, _, _) => $"--probes: {bad.Reason}",
-                    (_, _, false, _) => "--repeats must be at least 1 (three is the floor for a variance)",
-                    (_, _, _, false) => $"--oracle-version: {((Outcome<ProbeOracle>.Fail)ProbeOracle.Parse(oracle, OracleSource.Manual)).Reason}",
-                    _ => string.Empty,
-                };
+            {
+                (false, _, _, _) => "probes run needs --subjects-file <subjects.json> (samples/question-consultant-probe-subjects.json is the plan's)",
+                (_, { } bad, _, _) => $"--probes: {bad.Reason}",
+                (_, _, false, _) => "--repeats must be at least 1 (three is the floor for a variance)",
+                (_, _, _, false) => $"--oracle-version: {((Outcome<ProbeOracle>.Fail)ProbeOracle.Parse(oracle, OracleSource.Manual)).Reason}",
+                _ => string.Empty,
+            };
 
             return refusal.Length > 0
                 ? Outcome<RunAsk>.Failure(refusal)

@@ -39,6 +39,11 @@ try
     builder.Services.AddScoped<Bench.Application.Gate.IGateReads>(services =>
         new PostgresGateReads(services.GetRequiredService<BenchDbContext>(), TimeProvider.System));
 
+    // The capability probes' read port (S4): runs and cells, read only. The probe STORE — the one that plans, claims, settles and
+    // sweeps — is deliberately not registered: re-measuring is `bench probes rerun`, a CLI verb the Probes tab shows as a command.
+    builder.Services.AddScoped<Bench.Application.Probes.IProbeReads>(services =>
+        new PostgresProbeReads(services.GetRequiredService<BenchDbContext>()));
+
     // The session-trace read port. Registered here and its WRITE half deliberately not: the ingest route
     // lives on the collector, which is the one process an agent's hook may reach. A store that can write is
     // harmless in a host that maps no route to it, and mapping one here would undo the boundary above.

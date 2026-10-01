@@ -19,14 +19,17 @@ public sealed class GatePagesTests : BunitContext
     private const string Scopes = "/api/bench/gate/scopes";
 
     [Fact]
-    public void The_Gate_tab_sits_between_Code_and_Math()
+    public void The_Gate_tab_sits_between_Code_and_Probes_and_Probes_before_Math()
     {
         var markup = Render<Benchmarking>(new ScriptedBenchApi().Answers("/api/bench/runs", Array.Empty<RunSummaryDto>())).Markup;
 
         markup.Should().Contain(">Gate<").And.Contain("/benchmarking/gate");
-        markup.IndexOf(">Code<", StringComparison.Ordinal).Should().BeLessThan(markup.IndexOf(">Gate<", StringComparison.Ordinal));
-        markup.IndexOf(">Gate<", StringComparison.Ordinal).Should().BeLessThan(markup.IndexOf(">Math<", StringComparison.Ordinal));
+        Tabs(markup).Should().Equal(["RAG", "MCP", "Sidecar", "Code", "Gate", "Probes", "Math"],
+            "the kinds of test, in the order the section declares them — Probes (S4) after Gate");
     }
+
+    private static IReadOnlyList<string> Tabs(string markup) =>
+        [.. System.Text.RegularExpressions.Regex.Matches(markup, @"class=""nav-link[^""]*""[^>]*>([^<]+)<").Select(m => m.Groups[1].Value.Trim())];
 
     [Fact]
     public void The_scope_control_offers_only_the_scopes_the_runs_echoed()
