@@ -1,8 +1,7 @@
-using System.Text;
-using System.Text.Json.Nodes;
 using Bench.Application;
 using Bench.Application.Probes;
 using Bench.Domain;
+using Bench.Domain.Gate;
 using Bench.Domain.Probes;
 using Bench.Domain.Trace;
 using Microsoft.Extensions.Logging;
@@ -12,20 +11,26 @@ namespace Bench.Infrastructure.Probes;
 /// <param name="Executables">Every subject's executable as resolved on this machine (subject id → absolute path).</param>
 /// <param name="Wall">The ceiling on one CLI call (<c>--cell-timeout-minutes</c>, default five minutes): at it the process tree
 /// is killed and the attempt settles <i>timed out</i>.</param>
-public sealed record CliProbeSettings(IReadOnlyDictionary<string, string> Executables, TimeSpan Wall);
+/// <param name="ParentEnvironment">The harness's own environment — what <see cref="ProbeChildEnvironment"/> builds the CLI's minimal
+/// environment FROM, and whose secret-named values are scrubbed from every text written (S2c, finding 3).</param>
+public sealed record CliProbeSettings(IReadOnlyDictionary<string, string> Executables, TimeSpan Wall, IReadOnlyDictionary<string, string> ParentEnvironment);
 
 /// <summary>One CLI attempt end to end (S2): fixture → <see cref="ICliAgentTranscripts"/> (the one launcher, through
-/// <c>CliArgv</c>) → the RAW evidence committed → the reading (<see cref="IProbeAttemptReader"/>) → the extracted artefacts →
-/// a settlement, or the unmeasured hand-back.
+/// <c>CliArgv</c>, under the MINIMAL environment) → the RAW evidence committed → the reading (<see cref="IProbeAttemptReader"/>) →
+/// the extracted artefacts → a settlement, or the unmeasured hand-back.
 /// <list type="bullet">
-/// <item><b>The raw evidence goes to disk BEFORE anything is parsed</b> (S2b, finding 6): stdout, stderr, the exact argv and the
-/// prompt. Two live codex cells faulted inside the reader and left no artefact; now a reader that throws settles the attempt
-/// <i>failed</i> with every fact <i>not captured</i> and a <c>fault.txt</c> saying why — a parse fault is a fact about our reader,
-/// never a leg fault, and the transcript is there to fix the reader against.</item>
-/// <item>A quota marker on the CLI's own stderr or in its answer (<see cref="Domain.Gate.ReviewerAccountOut.CliReason"/>) hands the
+/// <item><b>The CLI inherits nothing the harness owns</b> (S2c, finding 3): the child gets <see cref="ProbeChildEnvironment"/>'s set by
+/// name — never <c>BENCH_DB</c>, never a <c>*_KEY</c> — and every secret-named value of the bench's own environment is scrubbed from the
+/// CLI's stdout and stderr (and so from the answer read off them) BEFORE anything is written. <c>argv.json</c> records the exact argv
+/// and the environment's names.</item>
+/// <item><b>The raw evidence goes to disk BEFORE anything is parsed</b> (S2b, finding 6): stdout, stderr, the launch record and the
+/// prompt. A reader that throws settles the attempt <i>failed</i> with every fact <i>not captured</i> and a <c>fault.txt</c> saying why —
+/// a parse fault is a fact about our reader, never a leg fault, and the transcript is there to fix the reader against. Evidence the
+/// artefact root REFUSES hands the attempt back unmeasured (S2c, finding 6): a verdict nobody can audit from disk is not recorded.</item>
+/// <item>A quota marker on the CLI's own stderr or in its own envelope (<see cref="Domain.Gate.ReviewerAccountOut.CliReason"/>) hands the
 /// attempt back <see cref="ProbeReason.AccountOut"/> — D8, a quota stop is not a measurement — with the artefacts kept.</item>
-/// <item>The answer and the tool trace (<c>tools.json</c>: offered, used, denied — WHICH tool reached a file) are committed beside the
-/// raw files; every artefact is referenced by hash, so a verdict is auditable from disk the moment it exists.</item>
+/// <item>The answer and the tool trace (<c>tools.json</c>: offered, used, stopped, denied, unknown — WHICH tool reached a file) are
+/// committed beside the raw files; every artefact is referenced by hash, so a verdict is auditable from disk the moment it exists.</item>
 /// <item>The fixture is deleted in <c>finally</c>, whatever happened.</item>
 /// </list>
 /// The <c>read-inside</c> control's voiding of the subject's read probes (<see cref="ProbeVerdicts.UnderControl"/>) is applied
@@ -33,6 +38,9 @@ public sealed record CliProbeSettings(IReadOnlyDictionary<string, string> Execut
 public sealed class CliProbeRunner(
     ICliAgentTranscripts agents, IProbeFixtures fixtures, IProbeArtifacts artifacts, CliProbeSettings settings, IProbeAttemptReader reader, ILogger<CliProbeRunner> logger) : IProbeRunner
 {
+    private readonly ProbeAttemptCommits _commits = new(artifacts, logger);
+    private readonly ChildEnvironment _child = ProbeChildEnvironment.Of(settings.ParentEnvironment);
+
     /// <summary>The production composition: the live reader.</summary>
     public CliProbeRunner(ICliAgentTranscripts agents, IProbeFixtures fixtures, IProbeArtifacts artifacts, CliProbeSettings settings, ILogger<CliProbeRunner> logger)
         : this(agents, fixtures, artifacts, settings, ProbeAttemptReader.Live, logger)
@@ -46,7 +54,7 @@ public sealed class CliProbeRunner(
         if (prepared is Outcome<Prepared>.Fail notPrepared)
         {
             logger.LogWarning("Probe cell {Cell} could not be prepared and settles failed: {Reason}", claimed.Id, notPrepared.Reason);
-            return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, CapturedCount.Unavailable(notPrepared.Reason)), []);
+            return ProbeAttemptCommits.Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, CapturedCount.Unavailable(notPrepared.Reason)), []);
         }
 
         var (scope, kind, executable, fixture) = ((Outcome<Prepared>.Ok)prepared).Value;
@@ -57,10 +65,11 @@ public sealed class CliProbeRunner(
             var ask = new AgentAsk(kind, executable, prompt, fixture.Cwd, settings.Wall, subject.ModelId)
             {
                 Options = ProbeLaunch.OptionsFor(claimed.Probe, subject.Runtime, subject.Confinement, fixture),
+                Environment = AgentEnvironment.Only(_child.Variables),
             };
 
             return await (await agents.TranscriptAsync(ask, cancellationToken)).Match(
-                transcript => MeasureAsync(run, subject, claimed, scope, fixture, prompt, transcript, cancellationToken),
+                transcript => MeasureAsync(run, subject, claimed, scope, fixture, prompt, Scrubbed(transcript), cancellationToken),
                 reason => Task.FromResult(Refused(claimed, reason)));
         }
         finally
@@ -95,41 +104,43 @@ public sealed class CliProbeRunner(
         // The launch never happened — an executable not installed, an option the CLI has no flag for. Nothing was spent and
         // nothing was measured; the cell settles failed with the reason as its note, never as a fact about the CLI.
         logger.LogWarning("Probe cell {Cell}: the launch was refused — {Reason}", claimed.Id, reason);
-        return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, CapturedCount.Unavailable(reason)), []);
+        return ProbeAttemptCommits.Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, CapturedCount.Unavailable(reason)), []);
     }
+
+    /// <summary>Both pipes scrubbed of every secret-named value of the bench's environment BEFORE they are read or written (S2c): the
+    /// answer and the tools are read off the scrubbed stdout, so nothing downstream can see a value the child never had.</summary>
+    private AgentTranscript Scrubbed(AgentTranscript transcript) =>
+        transcript with { Stdout = _child.Scrub(transcript.Stdout), Stderr = _child.Scrub(transcript.Stderr) };
 
     private async Task<ProbeAttemptResult> MeasureAsync(
         ProbeRun run, ProbeSubject subject, ProbeCell claimed, ProbeAttemptScope scope, ProbeFixture fixture, string prompt, AgentTranscript transcript, CancellationToken cancellationToken)
     {
-        // The raw evidence FIRST — whatever the readers then make of it.
-        var raw = await CommitAsync(scope, cancellationToken,
-            (ProbeArtifactKind.Stdout, transcript.Stdout), (ProbeArtifactKind.Stderr, transcript.Stderr), (ProbeArtifactKind.Argv, ArgvJson(transcript.Argv)), (ProbeArtifactKind.Prompt, prompt));
+        // The raw evidence FIRST — whatever the readers then make of it; refused, the attempt is handed back (finding 6).
+        var raw = await _commits.CommitAsync(scope, cancellationToken,
+            (ProbeArtifactKind.Stdout, transcript.Stdout), (ProbeArtifactKind.Stderr, transcript.Stderr),
+            (ProbeArtifactKind.Argv, ProbeAttemptCommits.LaunchJson(transcript.Argv, _child.Names)), (ProbeArtifactKind.Prompt, prompt));
 
-        return TryRead(run, subject, claimed.Probe, fixture.Tokens, transcript) switch
-        {
-            Outcome<ProbeAttemptReading>.Ok read => await SettleReadAsync(claimed, scope, read.Value, raw, cancellationToken),
-            Outcome<ProbeAttemptReading>.Fail fault => await FaultedAsync(claimed, scope, fault.Reason, transcript, raw, cancellationToken),
-            _ => throw new InvalidOperationException("unreachable"),
-        };
+        return await raw.Match(
+            files => ReadAsync(run, subject, claimed, scope, fixture, transcript, files, cancellationToken),
+            reason => Task.FromResult(_commits.NotCommitted(claimed, reason)));
     }
 
     /// <summary>The one place a reader bug is allowed to land: as a value this runner settles FAILED on, with the raw transcript already
     /// on disk. Two live codex cells faulted this way (a duplicate JSON key) and left no artefact at all.</summary>
-    private Outcome<ProbeAttemptReading> TryRead(ProbeRun run, ProbeSubject subject, ProbeKind probe, ProbeTokens tokens, AgentTranscript transcript)
-    {
-        try
-        {
-            return Outcome<ProbeAttemptReading>.Success(reader.Read(run, subject, probe, tokens, transcript));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return Outcome<ProbeAttemptReading>.Failure($"{ex.GetType().FullName}: {ex.Message}");
-        }
-    }
+    private Task<ProbeAttemptResult> ReadAsync(
+        ProbeRun run, ProbeSubject subject, ProbeCell claimed, ProbeAttemptScope scope, ProbeFixture fixture, AgentTranscript transcript, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken) =>
+        ProbeAttemptCommits.Try(() => reader.Read(run, subject, claimed.Probe, fixture.Tokens, transcript)).Match(
+            reading => SettleReadAsync(subject, claimed, scope, reading, raw, cancellationToken),
+            fault => _commits.FaultedAsync(claimed, scope, fault, transcript.ExitCode, raw, cancellationToken));
 
-    private async Task<ProbeAttemptResult> SettleReadAsync(ProbeCell claimed, ProbeAttemptScope scope, ProbeAttemptReading reading, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
+    private async Task<ProbeAttemptResult> SettleReadAsync(ProbeSubject subject, ProbeCell claimed, ProbeAttemptScope scope, ProbeAttemptReading reading, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
     {
-        var extracted = await CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Answer, reading.Answer), (ProbeArtifactKind.Tools, reading.Trace.ToJson()));
+        var extracted = await _commits.CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Answer, reading.Answer), (ProbeArtifactKind.Tools, reading.Trace.ToJson(subject.Runtime)));
+
+        if (extracted is Outcome<IReadOnlyList<ProbeArtifact>>.Fail notCommitted)
+        {
+            return _commits.NotCommitted(claimed, notCommitted.Reason);
+        }
 
         if (reading.QuotaLine.Length > 0)
         {
@@ -137,42 +148,6 @@ public sealed class CliProbeRunner(
             return new ProbeAttemptResult.Unmeasured(ProbeReason.AccountOut);
         }
 
-        return Settled(reading.Facts, [.. raw, .. extracted]);
+        return ProbeAttemptCommits.Settled(reading.Facts, [.. raw, .. ((Outcome<IReadOnlyList<ProbeArtifact>>.Ok)extracted).Value]);
     }
-
-    private async Task<ProbeAttemptResult> FaultedAsync(ProbeCell claimed, ProbeAttemptScope scope, string reason, AgentTranscript transcript, IReadOnlyList<ProbeArtifact> raw, CancellationToken cancellationToken)
-    {
-        logger.LogError("Probe cell {Cell}: the reader faulted on this transcript — {Reason}. The attempt settles failed with every fact not captured; the raw evidence is kept to fix the reader against", claimed.Id, reason);
-        var fault = await CommitAsync(scope, cancellationToken, (ProbeArtifactKind.Fault, reason + "\n"));
-
-        return Settled(ProbeFacts.NothingCaptured(ProbeAttemptKind.Failed, transcript.ExitCode), [.. raw, .. fault]);
-    }
-
-    /// <summary>The exact argv, one JSON array — a CLI launch carries no secret, so there is nothing to scrub here.</summary>
-    private static string ArgvJson(IReadOnlyList<string> argv) => new JsonArray([.. argv.Select(a => (JsonNode)JsonValue.Create(a))]).ToJsonString() + "\n";
-
-    private async Task<IReadOnlyList<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, CancellationToken cancellationToken, params (ProbeArtifactKind Kind, string Text)[] files)
-    {
-        var committed = new List<ProbeArtifact>();
-
-        foreach (var (kind, text) in files)
-        {
-            switch (await artifacts.CommitAsync(scope, kind, Encoding.UTF8.GetBytes(text), cancellationToken))
-            {
-                case Outcome<ProbeArtifact>.Ok ok:
-                    committed.Add(ok.Value);
-                    break;
-                case Outcome<ProbeArtifact>.Fail fail:
-                    logger.LogError("Probe artefact {Kind} of {Scope} was not committed: {Reason}", kind, scope, fail.Reason);
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        return committed;
-    }
-
-    private static ProbeAttemptResult Settled(ProbeFacts facts, IReadOnlyList<ProbeArtifact> artifacts) =>
-        new ProbeAttemptResult.Settled(new ProbeSettlement(facts, artifacts));
 }

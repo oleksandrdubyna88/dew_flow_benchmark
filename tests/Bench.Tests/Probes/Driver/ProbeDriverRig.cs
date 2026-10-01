@@ -86,7 +86,11 @@ internal sealed class ProbeDriverRig : IAsyncDisposable
     }
 
     public CliProbeRunner Runner() => new(
-        new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), Fixtures, Artifacts, new CliProbeSettings(Executables, Wall), NullLogger<CliProbeRunner>.Instance);
+        new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), Fixtures, Artifacts, new CliProbeSettings(Executables, Wall, ParentEnvironment()), NullLogger<CliProbeRunner>.Instance);
+
+    /// <summary>The harness's own environment — the runner builds the CLI's minimal one from it (S2c).</summary>
+    private static IReadOnlyDictionary<string, string> ParentEnvironment() =>
+        Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => e.Value as string ?? string.Empty, StringComparer.Ordinal);
 
     public ProbeCampaign Campaign() =>
         new(new ProductPinReader(), Fixtures, new LegDrain(NullLogger<LegDrain>.Instance), TimeProvider.System, new OwnerLiveness(WorkerLiveness.ThisHost, WorkerLiveness.ProcessIsAlive));

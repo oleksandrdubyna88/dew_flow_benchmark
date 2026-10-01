@@ -83,6 +83,10 @@ public sealed class ProbeCellRow
 
     public int Attempts { get; set; }
 
+    /// <summary>How many of <see cref="Attempts"/> were handed back unmeasured (S2c) — a quota stop, an unwritable artefact root. The
+    /// sweep abandons on <c>Attempts - UnmeasuredAttempts</c>, so a quota stop is never a step toward Abandoned (D8).</summary>
+    public int UnmeasuredAttempts { get; set; }
+
     public string Owner { get; set; } = string.Empty;
 
     public string OwnerHost { get; set; } = string.Empty;

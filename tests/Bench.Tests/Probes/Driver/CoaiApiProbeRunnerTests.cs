@@ -94,7 +94,42 @@ public sealed class CoaiApiProbeRunnerTests : IDisposable
         _fakes[1].Events().Should().BeEmpty("without a key the product is never launched");
     }
 
-    private (CoaiApiProbeRunner Runner, FakeCoai Fake) Rig(JsonObject script, Dictionary<string, string>? parentExtras = null, IProbeSecrets? secrets = null)
+    /// <summary>S2c, review finding 6 — the product runner has the same rule as the CLI runner: raw evidence that cannot be written means
+    /// an attempt handed back unmeasured, never a settled cell with no stdout on disk.</summary>
+    [Fact]
+    public async Task A_raw_artefact_that_cannot_be_committed_hands_the_attempt_back_unmeasured_and_never_settles()
+    {
+        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject() }, artifacts: new RefusingArtifacts());
+        var run = Run();
+
+        var result = await runner.RunAsync(run, Grok, Claimed(run), Ct);
+
+        result.Should().BeOfType<ProbeAttemptResult.Unmeasured>("a cell with no stdout on disk must not settle").Subject.Reason.Should().Be(ProbeReason.ArtifactsNotCommitted);
+    }
+
+    /// <summary>S2c, review finding 3: the product launch, too, inherits nothing the harness owns — no <c>BENCH_*</c> (the database url
+    /// carries a password) and no secret-named variable of the operator's shell; the vault key alone joins, under the product's name.</summary>
+    [Fact]
+    public async Task The_product_inherits_no_bench_variable_and_no_secret_named_variable_of_the_harness()
+    {
+        var (runner, _) = Rig(new JsonObject { ["probeApi"] = new JsonObject { ["echoVariable"] = "BENCH_DB" } }, parentExtras: new() { ["BENCH_DB"] = "Host=db;Password=hunter2-planted", ["OPENAI_API_KEY"] = "sk-planted-operator-key-77" });
+        var run = Run();
+
+        var settlement = (await runner.RunAsync(run, Grok, Claimed(run), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement;
+
+        var stderr = await File.ReadAllTextAsync(Path.Combine([_root.Path, .. settlement.Artifacts.Single(a => a.Kind == ProbeArtifactKind.Stderr).Path.Segments]), Ct);
+        stderr.Should().Contain("BENCH_DB=<unset>", "the bench's own variables never reach the product");
+        var argv = await File.ReadAllTextAsync(Path.Combine([_root.Path, .. settlement.Artifacts.Single(a => a.Kind == ProbeArtifactKind.Argv).Path.Segments]), Ct);
+        argv.Should().Contain("\"environment\"").And.Contain("COAI_CREDS_KEY").And.NotContain("OPENAI_API_KEY").And.NotContain("BENCH_DB").And.NotContain("hunter2", "the names the product was launched with, and never a value");
+    }
+
+    private sealed class RefusingArtifacts : IProbeArtifacts
+    {
+        public Task<Outcome<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, ProbeArtifactKind kind, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
+            Task.FromResult(Outcome<ProbeArtifact>.Failure("the artefact root refused the write: disk full"));
+    }
+
+    private (CoaiApiProbeRunner Runner, FakeCoai Fake) Rig(JsonObject script, Dictionary<string, string>? parentExtras = null, IProbeSecrets? secrets = null, IProbeArtifacts? artifacts = null)
     {
         var fake = new FakeCoai(script);
         _fakes.Add(fake);
@@ -108,7 +143,7 @@ public sealed class CoaiApiProbeRunnerTests : IDisposable
         }
 
         var runner = new CoaiApiProbeRunner(
-            new ProbeArtifacts(_root.Path), secrets ?? new ScriptedSecrets(SecretValue.Of(Key, "rig")),
+            artifacts ?? new ProbeArtifacts(_root.Path), secrets ?? new ScriptedSecrets(SecretValue.Of(Key, "rig")),
             new CoaiApiProbeSettings(FakeCoai.Executable, parent, TimeSpan.FromSeconds(60)), NullLogger<CoaiApiProbeRunner>.Instance);
 
         return (runner, fake);

@@ -17,8 +17,9 @@ public sealed class ProbeMatrixTests
     {
         var plan = ProbeMatrix.Plan(ProbeWord.All, Subjects(("claude-sonnet", "claude"), ("codex-astra", "codex"), ("agy-gemini", "antigravity"), ("grok-api", "api")), repeats: 3).Ok();
 
-        // claude 6 + codex 6 + agy 5 (read-denied needs web OFF, which antigravity has no flag for) + api 1 = 18 cells a repeat.
-        plan.Cells.Should().HaveCount(18 * 3);
+        // claude 6 + codex 5 (read-denied needs a tool deny-list, which codex has not — S2c) + agy 5 (read-denied needs web OFF, which
+        // antigravity has no flag for) + api 1 = 17 cells a repeat.
+        plan.Cells.Should().HaveCount(17 * 3);
         plan.Cells.Should().Contain(c => c.Probe == ProbeKind.ReadOutsideGranted && c.Subject.Value == "agy-gemini",
             "agy 1.2.14 takes --add-dir (measured 2026-10-01) — the grant pair is measured, not dropped");
         plan.Cells.Select(c => c.Repeat).Distinct().Should().BeEquivalentTo([1, 2, 3], "repeats are numbered from one");
@@ -49,6 +50,22 @@ public sealed class ProbeMatrixTests
         plan.Dropped.Should().HaveCount(6 + 2 + 1, "api × six CLI probes, two CLIs × api-reachable, antigravity × read-denied");
         plan.Cells.Should().NotContain(c => plan.Dropped.Any(d => d.Probe == c.Probe && d.Subject == c.Subject), "a dropped pair is planned nowhere");
         plan.Cells.Should().ContainSingle(c => c.Probe == ProbeKind.ApiReachable).Which.Subject.Value.Should().Be("grok-api");
+    }
+
+    /// <summary>S2c, review finding 7: codex has no tool deny-list and <c>CliArgv</c> spells nothing for web OFF on codex, so a
+    /// <c>read-denied</c> cell on codex would be <c>read-outside-bare</c> under another name — dropped BY NAME, like agy's.</summary>
+    [Fact]
+    public void Read_denied_on_codex_is_dropped_by_name_because_codex_has_no_tool_deny_list()
+    {
+        var plan = ProbeMatrix.Plan(ProbeWord.All, Subjects(("codex-astra", "codex"), ("codex-terra", "codex")), repeats: 1).Ok();
+
+        plan.Dropped.Should().Contain(d => d.Probe == ProbeKind.ReadDenied && d.Subject.Value == "codex-astra" && d.Reason.Contains("deny", StringComparison.Ordinal),
+            "with nothing denied the cell equals read-outside-bare — a measurement of something else");
+        plan.Dropped.Where(d => d.Probe == ProbeKind.ReadDenied).Should().HaveCount(2);
+        plan.Cells.Should().NotContain(c => c.Probe == ProbeKind.ReadDenied);
+        plan.Cells.Should().Contain(c => c.Probe == ProbeKind.WebConfined, "web-confined still runs on codex with nothing denied: it answers whether the CLI reads the disk at all with the web on");
+        ProbeApplicability.Drop(ProbeKind.ReadDenied, ProbeRuntime.Codex).Should().NotBe(ProbeDrop.None);
+        ProbeApplicability.Drop(ProbeKind.ReadDenied, ProbeRuntime.Codex).Should().NotBe(ProbeApplicability.Drop(ProbeKind.ReadDenied, ProbeRuntime.Antigravity), "a different reason word: codex has a web-off (its default), what it lacks is the deny-list");
     }
 
     [Fact]

@@ -150,6 +150,7 @@ public partial class ProbesBenchmark(BenchConsoleApi api, TimeProvider clock) : 
         "api-probe-on-cli" => "the api probe runs through the product's api path, not a CLI",
         "cli-probe-on-api" => "an api subject runs no CLI probe — there is no process to confine",
         "no-web-off-flag" => "the CLI has no flag that turns the web off and no tool deny-list",
+        "no-deny-list" => "the CLI has no tool deny-list — with nothing denied the cell would equal read-outside-bare",
         _ => reason,
     };
 }

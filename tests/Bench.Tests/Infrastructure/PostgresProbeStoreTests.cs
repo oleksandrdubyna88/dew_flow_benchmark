@@ -275,6 +275,36 @@ public sealed class PostgresProbeStoreTests(PostgresFixture postgres)
         (await store.ClaimNextAsync(run.Id, run.Subjects[0].Id, Here(), Pin(), Ct)).Reason().Should().Contain(PostgresProbeStore.NoPendingCell, "abandoned is terminal");
     }
 
+    /// <summary>S2c, review finding 4: the hand-back kept the attempt and the sweep abandoned at <c>Attempts &gt;= 3</c> whatever the cause,
+    /// so three quota stops and one crash abandoned a cell — against D8's "a quota stop is never a step toward Abandoned". Only MEASURED
+    /// attempts count: three unmeasured hand-backs, then a dead owner's claim, and the sweep REQUEUES.</summary>
+    [Fact]
+    public async Task Three_unmeasured_hand_backs_then_a_dead_owner_sweep_requeue_the_cell_and_never_abandon_it()
+    {
+        var connection = await postgres.NewDatabaseAsync($"probe_unmeasured_{Guid.NewGuid():N}");
+        var clock = new TestClock(Noon);
+        var (run, cells) = Planned(count: 1);
+        var store = new PostgresProbeStore(PostgresFixture.Context(connection), clock);
+        await store.PlanAsync(run, cells, Ct);
+        var owner = Here();
+
+        for (var attempt = 1; attempt <= Claimable.MaxAttempts; attempt++)
+        {
+            (await store.ClaimNextAsync(run.Id, run.Subjects[0].Id, owner, Pin(), Ct)).Ok();
+            (await store.HandBackUnmeasuredAsync(cells[0].Id, owner, attempt, ProbeReason.AccountOut, Ct)).Ok();
+        }
+
+        (await store.ClaimNextAsync(run.Id, run.Subjects[0].Id, TestWorkers.Dead("crashed"), Pin(), Ct)).Ok().Attempts.Should().Be(Claimable.MaxAttempts + 1);
+        clock.Now = Noon.AddHours(1);
+        var report = await store.SweepAsync(TimeSpan.FromMinutes(30), Ct);
+
+        (report.Requeued, report.Abandoned).Should().Be((1, 0), "three quota stops are not three failures — the first MEASURED attempt died, and the cell gets its second");
+        var cell = (await store.CellAsync(cells[0].Id, Ct)).Ok();
+        cell.State.Should().Be(CellState.Pending);
+        cell.Reason.Should().Be(ProbeReason.None);
+        (cell.Attempts, cell.UnmeasuredAttempts, cell.MeasuredAttempts).Should().Be((4, 3, 1), "the unmeasured attempts keep their numbers (their directories exist) and count for nothing");
+    }
+
     [Fact]
     public async Task Two_sweepers_racing_over_one_dead_owner_hand_the_cell_back_once()
     {

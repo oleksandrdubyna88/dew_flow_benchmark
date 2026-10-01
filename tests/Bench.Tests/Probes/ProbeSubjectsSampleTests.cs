@@ -29,7 +29,7 @@ public sealed class ProbeSubjectsSampleTests
 
         var plan = ProbeMatrix.Plan(ProbeWord.All, subjects, repeats: 3).Ok();
 
-        plan.Cells.Should().HaveCount(3 * ((6 * 6) - 1 + 1), "six CLI subjects × six CLI probes, less read-denied on agy, plus api-reachable on grok — three repeats");
+        plan.Cells.Should().HaveCount(3 * ((6 * 6) - 1 - 2 + 1), "six CLI subjects × six CLI probes, less read-denied on agy and on the two codex subjects (S2c: no deny-list), plus api-reachable on grok — three repeats");
         plan.Dropped.Select(d => $"{ProbeWord.Of(d.Probe)} × {d.Subject}").Should().Contain(["read-denied × agy-gemini", "api-reachable × claude-sonnet-denylist", "read-inside × grok-api"]);
     }
 }

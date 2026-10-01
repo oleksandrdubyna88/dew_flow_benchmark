@@ -63,11 +63,24 @@ public static class ProbeLaunch
         JsonEvents = true,
         McpServersOff = runtime is ProbeRuntime.Claude or ProbeRuntime.Codex,
         AddDirectories = ProbeTraits.NeedsGrant(probe) ? [fixture.OutsideDirectory] : [],
-        DisallowedTools = confinement == ProbeConfinement.Denylist ? Denials(probe) : [],
+        DisallowedTools = Denied(probe, confinement),
         AllowedTools = confinement is ProbeConfinement.Allowlist or ProbeConfinement.Restricted ? AgentToolAllowlist.Only(Allowed(probe, confinement)) : AgentToolAllowlist.NotAsked,
         Restricted = confinement == ProbeConfinement.Restricted,
         WebSearch = Web(probe, runtime),
     };
+
+    /// <summary>The deny list: under claude's denylist mode, coai's lists; under its other modes nothing (the allow-list or the flag is the
+    /// confinement). Under NO mode — codex, agy — <c>read-denied</c> still ASKS for the file-tool denial, because that denial is its
+    /// definition: <c>CliArgv</c> then refuses the launch by name ("a tool deny-list"), and the planner drops the same pair by name
+    /// (<see cref="ProbeApplicability"/>) — the two tables agree pair by pair (S2c, finding 7). <c>web-confined</c> asks nothing there
+    /// and runs with nothing denied, as S2 decided: it measures whether the CLI reads the disk at all with the web on.</summary>
+    private static IReadOnlyList<string> Denied(ProbeKind probe, ProbeConfinement confinement) =>
+        (confinement, ProbeTraits.NeedsWebOff(probe)) switch
+        {
+            (ProbeConfinement.Denylist, _) => Denials(probe),
+            (ProbeConfinement.Default, true) => FileToolDenials,
+            _ => [],
+        };
 
     private static IReadOnlyList<string> Denials(ProbeKind probe) => ProbeTraits.DeniesFileTools(probe) ? FileToolDenials : ConsultantDenials;
 

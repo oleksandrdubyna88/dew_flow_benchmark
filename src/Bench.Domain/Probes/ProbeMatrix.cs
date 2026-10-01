@@ -21,6 +21,10 @@ public enum ProbeDrop
 
     /// <summary><c>read-denied</c> on a CLI with neither a flag that turns the web OFF nor a tool deny-list (antigravity).</summary>
     NoWebOffFlag,
+
+    /// <summary><c>read-denied</c> on a CLI whose web is off by default but which has no tool deny-list (codex, S2c): with nothing
+    /// denied the cell would be <c>read-outside-bare</c> under another name.</summary>
+    NoDenyList,
 }
 
 /// <summary>A (probe, subject) pair the planner left out, and why — a dropped pair is NAMED, never silently absent, so the
@@ -38,10 +42,11 @@ public sealed record ProbePlan(IReadOnlyList<ProbeMatrixCell> Cells, IReadOnlyLi
 /// <summary>Which probes a subject's runtime can be measured on. The table lives in the domain so the planner and the
 /// write-up agree on what was NOT measured, and it says exactly what <c>CliArgv</c> can spell (S2, measured 2026-10-01):
 /// every CLI takes a directory grant (<c>--add-dir</c> on claude, codex AND agy 1.2.14 — the S1 guess that antigravity had
-/// none is withdrawn), while antigravity has neither a tool deny-list nor a flag that turns the web OFF. <c>read-denied</c>
-/// is defined as web OFF with the file tools denied, so on antigravity it cannot be launched as itself — that pair is
-/// dropped BY NAME rather than run with the web on and recorded as a measurement of something else. <c>web-confined</c>
-/// still runs there as is (web ON, nothing to deny): it answers whether the CLI reads the disk at all.</summary>
+/// none is withdrawn), while antigravity has neither a tool deny-list nor a flag that turns the web OFF, and codex has no tool
+/// deny-list (S2c). <c>read-denied</c> is defined as web OFF with the file tools denied, so on antigravity and codex it cannot be
+/// launched as itself — those pairs are dropped BY NAME rather than run with nothing denied and recorded as a measurement of
+/// something else (on codex the cell would be <c>read-outside-bare</c> twice). <c>web-confined</c> still runs on both as is (web
+/// ON, nothing to deny): it answers whether the CLI reads the disk at all.</summary>
 public static class ProbeApplicability
 {
     /// <summary>Empty when the pair applies; otherwise the sentence saying why it is dropped.</summary>
@@ -49,11 +54,12 @@ public static class ProbeApplicability
 
     /// <summary><see cref="ProbeDrop.None"/> when the pair applies; otherwise which rule drops it.</summary>
     public static ProbeDrop Drop(ProbeKind probe, ProbeRuntime runtime) =>
-        (ProbeTraits.IsApi(probe), runtime == ProbeRuntime.Api, ProbeTraits.NeedsWebOff(probe) && runtime == ProbeRuntime.Antigravity) switch
+        (ProbeTraits.IsApi(probe), runtime == ProbeRuntime.Api, ProbeTraits.NeedsWebOff(probe) ? runtime : ProbeRuntime.Api) switch
         {
             (true, false, _) => ProbeDrop.ApiProbeOnCli,
             (false, true, _) => ProbeDrop.CliProbeOnApi,
-            (_, _, true) => ProbeDrop.NoWebOffFlag,
+            (_, _, ProbeRuntime.Antigravity) => ProbeDrop.NoWebOffFlag,
+            (_, _, ProbeRuntime.Codex) => ProbeDrop.NoDenyList,
             _ => ProbeDrop.None,
         };
 
@@ -63,6 +69,8 @@ public static class ProbeApplicability
         ProbeDrop.CliProbeOnApi => "an api subject runs no CLI probe — the product answers over HTTP, there is no process to confine",
         ProbeDrop.NoWebOffFlag => "read-denied is web OFF with the file tools denied, and antigravity has a flag for neither (1.2.14, measured 2026-10-01) — "
                                   + "the pair is dropped by name rather than measured with the web on",
+        ProbeDrop.NoDenyList => "read-denied is web OFF with the file tools denied, and codex has no tool deny-list (codex-cli 0.156.1, measured 2026-10-01) — "
+                                + "with nothing denied the cell would equal read-outside-bare, so the pair is dropped by name",
         _ => string.Empty,
     };
 }

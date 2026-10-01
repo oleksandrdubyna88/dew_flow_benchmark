@@ -1318,6 +1318,9 @@ namespace Bench.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("UnmeasuredAttempts")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("State", "ClaimedAt");

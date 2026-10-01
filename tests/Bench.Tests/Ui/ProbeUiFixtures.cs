@@ -30,7 +30,7 @@ internal static class ProbeUiFixtures
         var cellId = id ?? Guid.CreateVersion7();
 
         return new ProbeCellReportDto(
-            cellId, probe, subject, repeat, generation, state, state == ProbeWords.Pending ? 0 : 1, kind,
+            cellId, probe, subject, repeat, generation, state, state == ProbeWords.Pending ? 0 : 1, 0, kind,
             exit ?? new ProbeExitDto(false, 0), facts ?? NothingCaptured, voided, reason,
             new ProbePinDto(pin, pin.Length > 0 ? new string('a', 64) : string.Empty), [],
             latestGeneration == 0 ? generation : latestGeneration, latestState.Length == 0 ? state : latestState,

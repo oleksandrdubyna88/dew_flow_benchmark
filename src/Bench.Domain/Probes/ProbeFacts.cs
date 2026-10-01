@@ -54,6 +54,11 @@ public enum ProbeReason
 
     /// <summary>The CLI exited 0 and printed nothing.</summary>
     NoAnswer,
+
+    /// <summary>The attempt ran but its raw evidence — stdout, stderr, argv, prompt — could not be written under the artefact root
+    /// (S2c, finding 6): a verdict nobody can audit from disk is not recorded; the cell went back Pending with the attempt
+    /// counted as unmeasured, and the subject is benched until the root is writable again.</summary>
+    ArtifactsNotCommitted,
 }
 
 /// <summary>Which file of an attempt an artefact is. The RAW evidence — <see cref="Stdout"/>, <see cref="Stderr"/>, <see cref="Argv"/>,

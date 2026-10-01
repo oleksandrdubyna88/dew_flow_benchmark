@@ -50,8 +50,11 @@ public sealed class ProbeExitsTests
         ProbeVerdicts.ApiReachable(0, ProbeApiOutput.Read("""{"requests":[]}""")).Reachable.Should().Be(ProbeFact.No, "a report with no completion case reached nothing");
     }
 
+    /// <summary>S2c, review finding 3 widened the bare environment: the product never inherits a <c>BENCH_*</c> (the database url carries a
+    /// password) or a secret-named variable of the operator's shell either — it authenticates through the vault, by the one key joined
+    /// LAST. The system variables still pass, as the live launch of 2026-10-01 needed them.</summary>
     [Fact]
-    public void The_bare_environment_drops_every_coai_variable_keeps_the_rest_and_takes_the_secret_last()
+    public void The_bare_environment_drops_every_coai_bench_and_secret_named_variable_keeps_the_rest_and_takes_the_secret_last()
     {
         var parent = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -60,12 +63,14 @@ public sealed class ProbeExitsTests
             ["coai_data_dir"] = "/somebody/elses/data",
             ["COAI_CREDS_KEY"] = "a-parent-key-1234",
             ["OPENAI_API_KEY"] = "sk-operators-own-key-5678",
+            ["BENCH_DB"] = "Host=db;Password=hunter2-planted",
         };
 
         var bare = CoaiEnvironment.Bare(parent);
         var child = bare.WithSecret(SecretValue.Of("sentinel-creds-key-rig-31", "rig").Ok());
 
-        bare.Variables.Keys.Should().BeEquivalentTo(["PATH", "OPENAI_API_KEY"], "every COAI_* is dropped, whatever its case; the operator's other variables pass, as the editor passes them");
+        bare.Variables.Keys.Should().BeEquivalentTo(["PATH"], "every COAI_*, every BENCH_* and every secret-named variable is dropped, whatever its case; the system variables pass");
+        child.Scrub("BENCH_DB=Host=db;Password=hunter2-planted").Should().Be("BENCH_DB=[redacted]", "a bench variable's value is scrubbed like a secret's — the database url carries a password");
         bare.Snapshot.Should().BeEmpty("there is no session to snapshot");
         child.Variables[CoaiEnvironment.CredsKeyVariable].Should().Be("sentinel-creds-key-rig-31");
         child.Variables.Values.Should().NotContain("a-parent-key-1234", "the parent's key never reaches the product");

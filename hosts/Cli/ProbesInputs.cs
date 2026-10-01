@@ -201,7 +201,7 @@ public sealed class ProbesInputs : IAsyncDisposable
 
         IProbeRunner runner = subject.Runtime == ProbeRuntime.Api
             ? new CoaiApiProbeRunner(Artifacts, services.ApiKey, new CoaiApiProbeSettings(executables[subject.Id.Value], ParentEnvironment(), wall), Logs.CreateLogger<CoaiApiProbeRunner>())
-            : new CliProbeRunner(new CliAgentRuntime(Logs.CreateLogger<CliAgentRuntime>()), Fixtures, Artifacts, new CliProbeSettings(executables, wall), Logs.CreateLogger<CliProbeRunner>());
+            : new CliProbeRunner(new CliAgentRuntime(Logs.CreateLogger<CliAgentRuntime>()), Fixtures, Artifacts, new CliProbeSettings(executables, wall, ParentEnvironment()), Logs.CreateLogger<CliProbeRunner>());
 
         return new ProbeLane(subject, new PostgresProbeStore(db, TimeProvider.System), runner);
     }

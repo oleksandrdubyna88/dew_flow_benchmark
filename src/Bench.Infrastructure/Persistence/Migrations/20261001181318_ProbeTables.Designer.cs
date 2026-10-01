@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bench.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(BenchDbContext))]
-    [Migration("20261001165028_ProbeTables")]
+    [Migration("20261001181318_ProbeTables")]
     partial class ProbeTables
     {
         /// <inheritdoc />
@@ -1320,6 +1320,9 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     b.Property<string>("ToolEvidence")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("UnmeasuredAttempts")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

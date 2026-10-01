@@ -11,7 +11,10 @@ namespace Bench.Domain.Probes;
 /// </para>
 /// <para>
 /// What is its own is <see cref="Generation"/> (D2): a settled cell is terminal, so a re-run never reopens it — it appends a
-/// new Pending cell with the next generation for the same (run, probe, subject, repeat), and the history stays.
+/// new Pending cell with the next generation for the same (run, probe, subject, repeat), and the history stays — and
+/// <see cref="UnmeasuredAttempts"/> (S2c): how many of its attempts were handed back UNMEASURED (a quota stop, an unwritable
+/// artefact root). Those keep their number — their directory exists — but never count toward the abandonment (D8: "a quota stop
+/// is never a step toward Abandoned"), so the sweep abandons on <see cref="MeasuredAttempts"/>.
 /// </para></summary>
 public sealed record ProbeCell(
     Guid Id,
@@ -26,7 +29,8 @@ public sealed record ProbeCell(
     ProductPin Pin,
     ProbeFacts Facts,
     IReadOnlyList<ProbeArtifact> Artifacts,
-    ProbeReason Reason)
+    ProbeReason Reason,
+    int UnmeasuredAttempts = 0)
 {
     public const int FirstGeneration = 1;
 
@@ -50,6 +54,9 @@ public sealed record ProbeCell(
     public CellState State => Claim.State;
 
     public int Attempts => Claim.Attempts;
+
+    /// <summary>The attempts that count toward <see cref="Claimable.MaxAttempts"/>: every attempt minus the unmeasured ones.</summary>
+    public int MeasuredAttempts => Attempts - UnmeasuredAttempts;
 
     public WorkerIdentity Owner => Claim.Owner;
 
@@ -105,7 +112,8 @@ public static class ProbeCellLifecycle
     }
 
     /// <summary>The attempt ran and measured nothing the bench may use (D8): back to Pending, the attempt STAYS counted (its
-    /// directory exists), the kind says <i>unmeasured</i> and the reason says why. Never a step toward Abandoned.</summary>
+    /// directory exists) but is counted UNMEASURED (S2c), the kind says <i>unmeasured</i> and the reason says why. Never a step
+    /// toward Abandoned — <see cref="Reclaim"/> forgives every unmeasured attempt.</summary>
     public static Outcome<ProbeCell> HandBackUnmeasured(ProbeCell cell, ProbeReason reason) =>
         (cell.State, reason) switch
         {
@@ -116,14 +124,17 @@ public static class ProbeCellLifecycle
                 Claim = cell.Claim with { State = CellState.Pending, Owner = WorkerIdentity.Nobody, ClaimedAt = default },
                 Facts = ProbeFacts.NothingCaptured(ProbeAttemptKind.Unmeasured, cell.Facts.ExitCode),
                 Reason = reason,
+                UnmeasuredAttempts = cell.UnmeasuredAttempts + 1,
             }),
         };
 
-    /// <summary>The sweep decision for one cell. The pin stays: the next claim overwrites it with the build THEN.</summary>
+    /// <summary>The sweep decision for one cell, on its MEASURED attempts (S2c). The pin stays: the next claim overwrites it with the build
+    /// THEN. A requeue clears the reason — the store's sweep writes <see cref="ProbeReason.None"/> on a requeue, and a cell handed back by a
+    /// crash is not "account out" because its previous attempt was.</summary>
     public static ProbeCell Reclaim(ProbeCell cell) =>
-        Claimable.Reclaim(cell.Claim) switch
+        Claimable.Reclaim(cell.Claim, cell.UnmeasuredAttempts) switch
         {
-            ReclaimDecision.Requeued requeued => cell with { Claim = requeued.Claim },
+            ReclaimDecision.Requeued requeued => cell with { Claim = requeued.Claim, Reason = ProbeReason.None },
             ReclaimDecision.Abandoned abandoned => cell with { Claim = abandoned.Claim, Reason = ProbeReason.Abandoned },
             _ => cell,
         };
