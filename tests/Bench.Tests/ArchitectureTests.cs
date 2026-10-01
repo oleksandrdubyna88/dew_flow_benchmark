@@ -142,11 +142,38 @@ public sealed class ArchitectureTests
             typeof(Domain.Gate.VendorFamily),
             typeof(Domain.Gate.HandCheckGate),
             typeof(Domain.Gate.HandCheckAnswers),
+            // The probes (the question-consultant plan, S1): the matrix and what it drops, the claim/settle/generation rules, the
+            // three transcript readers and the §4 verdict rules, the generation reading, the subject's reference rule.
+            typeof(Domain.Probes.ProbeMatrix),
+            typeof(Domain.Probes.ProbeApplicability),
+            typeof(Domain.Probes.ProbeCellLifecycle),
+            typeof(Domain.Probes.ProbeTranscripts),
+            typeof(Domain.Probes.ProbeVerdicts),
+            typeof(Domain.Probes.ProbeGenerations),
+            typeof(Domain.Probes.ProbeSubject),
+            typeof(Domain.Probes.ProbeSubjectsFile),
+            typeof(Domain.Probes.ProbeOracle),
         ];
 
         deciders.Should().OnlyContain(
             type => type.Assembly.GetName().Name == "Bench.Domain",
             "a gate decision made where a model or a store is reachable is a decision nobody can replay");
+    }
+
+    /// <summary>The probes' ports (S1 of the question-consultant plan) follow the gate's rule: declared in the Application layer,
+    /// implemented in Infrastructure, the READ port carrying no write — so a read host that registers it can reach no claim.</summary>
+    [Fact]
+    public void The_probe_ports_live_in_the_application_layer_and_their_adapters_in_infrastructure()
+    {
+        typeof(global::Bench.Application.Probes.IProbeStore).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Probes.IProbeReads).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Application.Probes.IProbeRunner).Assembly.GetName().Name.Should().Be("Bench.Application");
+        typeof(global::Bench.Infrastructure.Persistence.PostgresProbeStore).Should().Implement<global::Bench.Application.Probes.IProbeStore>();
+        typeof(global::Bench.Infrastructure.Persistence.PostgresProbeReads).Should().Implement<global::Bench.Application.Probes.IProbeReads>();
+        typeof(global::Bench.Application.Probes.IProbeReads).GetMethods().Select(m => m.Name).Should().NotContain(n => WriteVerbs.Any(v => n.StartsWith(v, StringComparison.Ordinal)),
+            "the read port a read host registers carries no write");
+        typeof(Domain.Probes.ProbeCell).Assembly.GetReferencedAssemblies().Should().NotContain(
+            r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the probe domain stays free of EF");
     }
 
     /// <summary>The gate's two storage PORTS are declared in the Application layer and implemented in Infrastructure —

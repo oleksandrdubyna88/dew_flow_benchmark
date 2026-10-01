@@ -225,6 +225,10 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<GateSuiteTaskRow> GateSuiteTasks => Set<GateSuiteTaskRow>();
 
+    public DbSet<ProbeRunRow> ProbeRuns => Set<ProbeRunRow>();
+
+    public DbSet<ProbeCellRow> ProbeCells => Set<ProbeCellRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         Bank(builder);
@@ -232,6 +236,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
         Retrieval(builder);
         Sessions(builder);
         GateModel.Configure(builder);
+        ProbeModel.Configure(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {

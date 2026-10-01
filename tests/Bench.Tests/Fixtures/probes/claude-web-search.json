@@ -1,0 +1,33 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 18234,
+  "duration_api_ms": 17102,
+  "num_turns": 3,
+  "result": "The latest published version of @openai/codex on npm is 0.52.0. I read it from https://www.npmjs.com/package/@openai/codex.",
+  "session_id": "6d0a1f2e-3b4c-4d5e-8f90-1a2b3c4d5e6f",
+  "total_cost_usd": 0.0412,
+  "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 4821,
+    "cache_read_input_tokens": 14022,
+    "output_tokens": 236,
+    "server_tool_use": {
+      "web_search_requests": 1
+    },
+    "service_tier": "standard"
+  },
+  "modelUsage": {
+    "claude-sonnet-4-5-20250929": {
+      "inputTokens": 12,
+      "outputTokens": 236,
+      "cacheReadInputTokens": 14022,
+      "cacheCreationInputTokens": 4821,
+      "webSearchRequests": 1,
+      "costUSD": 0.0412
+    }
+  },
+  "permission_denials": [],
+  "uuid": "0f1e2d3c-4b5a-4968-8776-655443322110"
+}

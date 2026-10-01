@@ -77,14 +77,19 @@ internal static class GateRowMapping
                 Outcome<GateCell>.Failure),
             Outcome<GateCell>.Failure);
 
-    public static ProductPin Pin(GateCellRow row)
-    {
-        var dirty = row.PinDirtyCaptured ? CapturedCount.Number(row.PinDirtyFiles) : CapturedCount.Unavailable(StoredNotCaptured);
+    public static ProductPin Pin(GateCellRow row) =>
+        Pin(row.PinBinarySha256, row.PinVersionText, row.PinGitSha, row.PinDirtyCaptured, row.PinDirtyFiles, row.PinCheckedTree);
 
-        var pin = (row.PinBinarySha256.Length, row.PinVersionText.StartsWith(ProductPin.ImportedPrefix, StringComparison.Ordinal)) switch
+    /// <summary>The pin read back from its six columns — shared by the gate cell and the probe cell, which carry the same six,
+    /// so "which bytes answered" is read one way wherever a cell is pinned.</summary>
+    public static ProductPin Pin(string binarySha256, string versionText, string gitSha, bool dirtyCaptured, long dirtyFiles, string checkedTree)
+    {
+        var dirty = dirtyCaptured ? CapturedCount.Number(dirtyFiles) : CapturedCount.Unavailable(StoredNotCaptured);
+
+        var pin = (binarySha256.Length, versionText.StartsWith(ProductPin.ImportedPrefix, StringComparison.Ordinal)) switch
         {
-            ( > 0, _) => ProductPin.Hashed(row.PinBinarySha256, row.PinVersionText, row.PinGitSha, dirty, row.PinCheckedTree),
-            (0, true) => ProductPin.ImportedStored(row.PinVersionText, row.PinGitSha, dirty),
+            ( > 0, _) => ProductPin.Hashed(binarySha256, versionText, gitSha, dirty, checkedTree),
+            (0, true) => ProductPin.ImportedStored(versionText, gitSha, dirty),
             _ => Outcome<ProductPin>.Success(ProductPin.None),
         };
 
