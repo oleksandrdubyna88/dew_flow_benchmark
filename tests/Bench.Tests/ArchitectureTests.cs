@@ -192,6 +192,35 @@ public sealed class ArchitectureTests
             r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the probe domain stays free of EF");
     }
 
+    /// <summary>S4 (D10): <c>bench-api</c> is the READ surface — it registers the probes' read port and NOTHING that can plan, claim,
+    /// settle, sweep or launch a probe. Its composition root is top-level statements with no seam to resolve, so the guard reads the
+    /// file: a write type named there is a registration (or a use) a read host must not make.</summary>
+    [Fact]
+    public void The_read_api_host_registers_the_probe_read_port_and_nothing_that_can_claim_or_settle()
+    {
+        var program = File.ReadAllText(Path.Combine(Cli.Repository.Root, "hosts", "Api", "Program.cs"));
+
+        program.Should().Contain("IProbeReads").And.Contain("PostgresProbeReads", "the guard below is only a guard while the read port is visibly there");
+        ReadHostOffenders(program).Should().BeEmpty("a read host that can reach a claim or a settle is a write door (D10)");
+    }
+
+    /// <summary>The scan's planted negative: a host text registering the probe store is found by name.</summary>
+    [Fact]
+    public void A_planted_write_registration_in_a_read_host_is_found()
+    {
+        ReadHostOffenders("builder.Services.AddScoped<IProbeStore>(s => new PostgresProbeStore(db, TimeProvider.System));")
+            .Should().Equal(["IProbeStore", "PostgresProbeStore"]);
+    }
+
+    private static readonly string[] ProbeAndGateWriteTypes =
+    [
+        "IProbeStore", "PostgresProbeStore", "ProbeCampaign", "IProbeRunner", "CliProbeRunner", "CoaiApiProbeRunner",
+        "IProbeFixtures", "IProbeArtifacts", "IProbeOracle", "IGateStore", "PostgresGateStore", "GateCampaign",
+    ];
+
+    private static IReadOnlyList<string> ReadHostOffenders(string program) =>
+        [.. ProbeAndGateWriteTypes.Where(type => System.Text.RegularExpressions.Regex.IsMatch(program, $@"\b{type}\b"))];
+
     /// <summary>The gate's two storage PORTS are declared in the Application layer and implemented in Infrastructure —
     /// the rule every other port here follows — and nothing in the domain knows EF exists (the first test in this file
     /// says the domain references nothing; this names the gate's own pair so moving one is a red build).</summary>

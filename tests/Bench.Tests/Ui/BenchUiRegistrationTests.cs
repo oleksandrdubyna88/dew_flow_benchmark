@@ -53,6 +53,30 @@ public sealed class BenchUiRegistrationTests : BunitContext
     }
 
     [Fact]
+    public void AddBenchUi_is_what_makes_the_probes_page_constructible_and_it_reads_through_it()
+    {
+        // The Probes tab (S4) takes the console API AND a clock (its live poll's timer) through its primary constructor; the one
+        // registration a host already makes supplies both — the system clock unless the host registered its own first.
+        var api = new ScriptedBenchApi().Answers("/api/bench/probes/runs", Array.Empty<Bench.Contracts.ProbeRunSummaryDto>());
+        Services.AddSingleton(api.Client());
+        Services.AddBenchUi();
+
+        Render<ProbesBenchmark>().Markup.Should().Contain("Capability probes");
+        api.Calls.Should().Equal("/api/bench/probes/runs?limit=50");
+        Services.GetRequiredService<TimeProvider>().Should().BeSameAs(TimeProvider.System);
+    }
+
+    [Fact]
+    public void A_host_s_own_clock_is_kept_by_the_registration()
+    {
+        var clock = new ManualClock();
+        Services.AddSingleton<TimeProvider>(clock);
+        Services.AddBenchUi();
+
+        Services.GetRequiredService<TimeProvider>().Should().BeSameAs(clock, "TryAdd: a clock the host chose is never replaced");
+    }
+
+    [Fact]
     public void Without_it_a_gate_page_cannot_be_built_either()
     {
         Services.AddSingleton(new ScriptedBenchApi().Client());

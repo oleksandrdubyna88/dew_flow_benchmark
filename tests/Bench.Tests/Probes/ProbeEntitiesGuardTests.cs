@@ -21,6 +21,8 @@ public sealed class ProbeEntitiesGuardTests
         // guard checks by the endpoint rule (ProbeModel.PublicUrlColumns), a machine-local address refused by ProbeSubject.
         "ProbeRunRow.OracleVersion", "ProbeRunRow.SubjectIds", "ProbeRunRow.SubjectRuntimes", "ProbeRunRow.SubjectModels", "ProbeRunRow.SubjectExecutableRefs",
         "ProbeRunRow.SubjectVendors", "ProbeRunRow.SubjectEndpoints", "ProbeRunRow.SubjectDialects",
+        // S4: the probes the run was asked for, as ProbeKind enum NAMES — refused on read when one is not a probe.
+        "ProbeRunRow.Probes",
 
         // probe_cells — a slug id, the claim's owner (a label, a host name — never published, GatePublication.ClaimOwnerColumns),
         // the pin (hashes, the --version text, the tree the dirty check covered), and the artefacts as kind names, paths RELATIVE

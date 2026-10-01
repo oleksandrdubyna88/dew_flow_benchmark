@@ -86,6 +86,15 @@ public sealed class BenchConsoleApi(HttpClient http)
     public Task<Read<GateRunDetailDto>> GetGateRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
         GetAsync<GateRunDetailDto>($"api/bench/gate/runs/{runId}", cancellationToken);
 
+    /// <summary>The capability probe runs, newest first, each with where it stands — the Probes tab's run picker (S4).</summary>
+    public Task<Read<IReadOnlyList<ProbeRunSummaryDto>>> GetProbeRunsAsync(int limit = 50, CancellationToken cancellationToken = default) =>
+        GetAsync<IReadOnlyList<ProbeRunSummaryDto>>($"api/bench/probes/runs?limit={limit}", cancellationToken);
+
+    /// <summary>One probe run whole — the object <c>bench probes report --json</c> prints. A 404 is a run this database does not
+    /// hold, and its sentence says so.</summary>
+    public Task<Read<ProbeRunReportDto>> GetProbeRunAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        GetAsync<ProbeRunReportDto>($"api/bench/probes/runs/{runId}", cancellationToken);
+
     private async Task<Read<T>> GetAsync<T>(string route, CancellationToken cancellationToken)
         where T : class
     {

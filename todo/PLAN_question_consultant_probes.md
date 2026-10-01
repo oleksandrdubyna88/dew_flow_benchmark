@@ -1,6 +1,6 @@
 # PLAN — capability probes for the question consultant: what each CLI and API vendor can actually do
 
-> Status: **S1–S3 implemented 2026-10-01; S4–S5 open.** Scope: a new `Probes` module in this repository —
+> Status: **S1–S4 implemented 2026-10-01; S5 open.** Scope: a new `Probes` module in this repository —
 > domain (`src/Bench.Domain/Probes`), ports and driver (`src/Bench.Application/Probes`), a Postgres store and the
 > probe runners (`src/Bench.Infrastructure`), the `bench probes` verbs (`hosts/Cli`), a read API and a **Probes**
 > tab in `Bench.Ui`. Results are written up in the PRODUCT repository, not here.
@@ -417,6 +417,42 @@ notice; a disposal-safe `PeriodicTimer` polling every 3 s while any cell is Pend
 **Model.** Opus — a read surface and a page on patterns the Gate tab already pins.
 
 **Not here.** No write endpoint, no re-run button, no CLI change, no measurement.
+
+**Deviations (S4, 2026-10-01).**
+- *The planner's dropped pairs are in the report* (`ProbeRunReportDto.Dropped`: probe, subject, reason WORD), so S5's "not measured" list
+  is read off the run. The reason became a closed enum, `ProbeDrop` (`api-probe-on-cli`, `cli-probe-on-api`, `no-web-off-flag`) —
+  `DroppedPair` carries it and `Reason` is now the sentence spelled from it, so the CLI's `run` text is unchanged and no sentence reaches
+  the wire (D11). The pairs are RECOMPUTED (`ProbeMatrix.DroppedPairs`, made public) from the frozen subjects and **the frozen asked
+  probes**: the cells alone cannot name a probe that EVERY subject dropped (no cell is planned for it — `--probes ...,api-reachable` over
+  CLI subjects only), so recomputing from the cells was lossy. `probe_runs.Probes` (`text[]` of `ProbeKind` names, refused on read when one
+  is not a probe) was added to THE migration, regenerated in place per §8's one-migration rule: `20261001151659_ProbeTables` replaces
+  `20261001134508_ProbeTables` and differs by that one column (a database that applied the S2 id must drop the probe tables and its
+  history row before `bench` migrates it — nothing has shipped). A run that froze no list falls back to the probes its cells name; a pair
+  that holds cells is never reported dropped. `bench probes report` (text) prints the pairs as `not measured` lines too.
+- *The run list has its own contract*, `ProbeRunSummaryDto` (id, created, subject count, repeats, pruned, progress — open/finished derived from
+  the cells, D3), built by `ProbeReport.Summary`/`RecentAsync`. `GET /api/bench/probes/runs?limit=` refuses a window outside 1..500 with 400
+  (the gate's routes have no window; this one is the picker's).
+- *The API's bytes are proved, not assumed*: `ProbeApiReportBytesTests` runs the real verbs against the fake CLI, executes the route's
+  `IResult` through the minimal-API JSON writer and compares the bytes with `report --json`'s stdout. The http suite (`http/probes/probes.http`,
+  six requests) was run against a live `bench-api` on a fresh schema: 6 requests, 11 checks, 0 failed (exit 0); http-coverage 18/18.
+- *The read host's guard reads its source*: `bench-api`'s composition root is top-level statements with no seam, so
+  `The_read_api_host_registers_the_probe_read_port_and_nothing_that_can_claim_or_settle` scans `hosts/Api/Program.cs` for the probe and gate
+  WRITE types by word (planted negative included). The `IProbeReads` no-write-verb assertion already existed from S1.
+- *The page is `ProbesBenchmark`* (`Pages/ProbesBenchmark.razor` + `.razor.cs`), not `Probes`: the test namespace `Bench.Tests.Probes`
+  shadows a type named `Probes`, and the neighbours are `MathBenchmark`/`CodeBenchmark`. The matrix is its own component,
+  `Components/ProbeMatrixTable.razor(.cs)`. The client methods follow `BenchConsoleApi`'s `Get…Async` naming (`GetProbeRunsAsync`,
+  `GetProbeRunAsync`).
+- *The poll is a reusable `Services/LivePoller`* (no poller existed in `Bench.Ui`): a `PeriodicTimer` on an injected `TimeProvider` —
+  `AddBenchUi` now `TryAddSingleton(TimeProvider.System)`, so a host's own clock wins —, started at most once, stopped from inside a tick,
+  and on disposal the timer goes FIRST and synchronously, then the one token every tick holds is cancelled; it does NOT wait a running tick
+  out (a read that ignores cancellation would hold the page's teardown hostage). Every read takes a ticket (`_read`), so a late answer for a
+  run the reader left is dropped. Tests drive it with a `ManualClock` (`tests/Bench.Tests/Ui/ManualClock.cs`) — no sleeps; the one bounded
+  negative wait is the late-answer race (a dropped answer has no positive signal), and mutating the ticket check out turns it red 3/3.
+  The token check before a tick renders survives mutation in bUnit — the renderer drops renders of a disposed component — so the disposal test
+  pins the observable half: no timer, no further read, no render.
+- *Added*: a `Refresh` button (`type="button"`, re-reads the shown run), a `?run=` id that is not in the list's window still opens (the server
+  answers 404 for one it does not hold), and a failed POLL keeps the last report on screen with the reason above it while polling continues.
+- *For S5*: the api subject's vault key is still not preflighted before planning (S3's open note).
 
 ### S5 — the measurement, the write-up, the docs, the pin
 

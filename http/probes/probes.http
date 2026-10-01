@@ -1,0 +1,89 @@
+# The capability probes' reads (S4 of todo/PLAN_question_consultant_probes.md) — `/api/bench/probes/*`, the object
+# `bench probes report --json` prints.
+#
+# Every request here READS: the probe routes map no write (D10 — a cell is re-measured with `bench probes rerun`, a CLI verb),
+# and the port behind them is a read port. Against the fresh database the suite runs on there are no probe runs at all, so
+# what is asserted is the shape of an EMPTY answer and every refusal the handlers decide: 400 asked wrongly, 404 not here.
+
+# @name probes_runs_answer_an_empty_list_on_a_fresh_install
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('no runs is [], never null — the run picker then offers nothing rather than breaking', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# @name probes_runs_with_a_window_answer_a_list
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs?limit=5
+Accept: application/json
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('a window answers a list too', () => {
+    assert.ok(Array.isArray(response.parsedBody));
+  });
+}}
+
+###
+# @name probes_runs_with_a_window_of_zero_is_400
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs?limit=0
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal names the bounds of the window', () => {
+    assert.match(response.parsedBody.reason, /limit must be between 1 and 500/);
+  });
+}}
+
+###
+# @name probes_runs_with_a_window_past_the_maximum_is_400
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs?limit=501
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('a window past the maximum is a scan, refused by name', () => {
+    assert.match(response.parsedBody.reason, /got 501/);
+  });
+}}
+
+###
+# @name probes_run_that_does_not_exist_is_404
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs/{{unknownRunId}}
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('a run this database does not hold says so', () => {
+    assert.match(response.parsedBody.reason, /no probe run/);
+  });
+}}
+
+###
+# The id is a route constraint: a word that is no guid matches no route at all.
+# @name probes_run_id_that_is_no_guid_is_404
+# @prod
+GET {{baseUrl}}/api/bench/probes/runs/not-a-run
+
+?? status == 404
+
+# @uncovered 200 with a populated run list or one run — needs a measured probe run, which the fresh database this suite runs
+#            against does not hold (the route's bytes are pinned to `bench probes report --json` in-process, ProbeApiReportBytesTests).
+# @uncovered 503 — reached only on a host that never registered the probes' read port; the read API registers it.

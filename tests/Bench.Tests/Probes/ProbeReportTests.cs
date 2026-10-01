@@ -92,6 +92,47 @@ public sealed class ProbeReportTests
         report.Subjects.Single().Should().Be(new ProbeSubjectDto("claude-a", "claude", "model-x", "BENCH_CLAUDE", string.Empty, string.Empty, string.Empty));
     }
 
+    [Fact]
+    public void The_report_names_every_pair_the_planner_dropped_with_a_reason_word_recomputed_from_the_frozen_subjects()
+    {
+        var agy = Subject("agy-c", "antigravity");
+        var api = Subject("grok-d", "api");
+        var (run, plan, cells) = PlannedMatrix([ProbeKind.ReadInside, ProbeKind.ReadDenied, ProbeKind.ApiReachable], Claude, agy, api);
+
+        var dropped = ProbeReport.Of(run, cells).Dropped;
+
+        dropped.Should().Equal(
+            new ProbeDroppedPairDto("read-inside", "grok-d", "cli-probe-on-api"),
+            new ProbeDroppedPairDto("read-denied", "agy-c", "no-web-off-flag"),
+            new ProbeDroppedPairDto("read-denied", "grok-d", "cli-probe-on-api"),
+            new ProbeDroppedPairDto("api-reachable", "claude-a", "api-probe-on-cli"),
+            new ProbeDroppedPairDto("api-reachable", "agy-c", "api-probe-on-cli"));
+        dropped.Select(d => $"{d.Probe} × {d.Subject}").Should().Equal(plan.Dropped.Select(d => $"{ProbeWord.Of(d.Probe)} × {d.Subject}"),
+            "the report names exactly the pairs the planner printed as not measured when the run was made");
+    }
+
+    [Fact]
+    public void A_probe_the_run_never_planned_is_not_reported_as_dropped()
+    {
+        var api = Subject("grok-d", "api");
+        var (run, _, cells) = PlannedMatrix([ProbeKind.ReadInside], Claude, api);
+
+        ProbeReport.Of(run, cells).Dropped.Should().Equal([new ProbeDroppedPairDto("read-inside", "grok-d", "cli-probe-on-api")],
+            "api-reachable was not asked for (--probes read-inside), so claude × api-reachable was never the planner's to drop");
+    }
+
+    [Fact]
+    public void A_probe_every_subject_dropped_plans_no_cell_and_is_still_named_from_the_probes_the_run_froze()
+    {
+        var (run, _, cells) = PlannedMatrix([ProbeKind.ReadInside, ProbeKind.ApiReachable], Claude);
+
+        var dropped = ProbeReport.Of(run with { Probes = [ProbeKind.ReadInside, ProbeKind.ApiReachable] }, cells).Dropped;
+
+        cells.Should().NotContain(c => c.Probe == ProbeKind.ApiReachable, "no subject of this run can be asked api-reachable");
+        dropped.Should().Equal([new ProbeDroppedPairDto("api-reachable", "claude-a", "api-probe-on-cli")],
+            "a probe with no cell at all is the clearest 'not measured' of all, and the cells alone cannot name it");
+    }
+
     private static (ProbeRun Run, IReadOnlyList<ProbeCell> Cells) Matrix(IReadOnlyList<ProbeKind> probes, params ProbeSubject[] more)
     {
         var (run, _, cells) = PlannedMatrix(probes, [Claude, .. more]);

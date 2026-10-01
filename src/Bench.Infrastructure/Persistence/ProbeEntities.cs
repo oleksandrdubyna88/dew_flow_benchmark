@@ -45,6 +45,11 @@ public sealed class ProbeRunRow
     /// <summary>The api subject's wire dialect word; empty for a CLI subject.</summary>
     public List<string> SubjectDialects { get; set; } = [];
 
+    /// <summary>The probes the run was ASKED for (S4) — enum NAMES, in the order asked. Frozen because the planner's dropped pairs
+    /// are recomputed from them and the frozen subjects: a probe every subject dropped plans no cell, so the cells alone cannot
+    /// name it.</summary>
+    public List<string> Probes { get; set; } = [];
+
     public List<ProbeCellRow> Cells { get; set; } = [];
 }
 

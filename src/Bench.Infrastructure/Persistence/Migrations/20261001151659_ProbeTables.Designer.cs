@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Bench.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(BenchDbContext))]
-    [Migration("20261001134508_ProbeTables")]
+    [Migration("20261001151659_ProbeTables")]
     partial class ProbeTables
     {
         /// <inheritdoc />
@@ -1344,6 +1344,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     b.Property<string>("OracleVersion")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Probes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<int>("Repeats")
                         .HasColumnType("integer");

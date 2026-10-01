@@ -51,6 +51,7 @@ dotnet build dew_flow_benchmark.slnx -c Release
 
 # The same object over HTTP. bench-api is READ-only and applies no migrations; the AppHost starts it.
 # GET /api/runs · /api/runs/{id}/report?metric=... · /api/runs/{id}/scoreboard
+# GET /api/bench/probes/runs[?limit=50] · /api/bench/probes/runs/{id} — the probe report, byte for byte `bench probes report --json`
 
 # The question consultant's capability probes (todo/PLAN_question_consultant_probes.md). The web oracle is read from
 # the npm registry BEFORE anything is planned (exit 3 when it cannot be; --oracle-version pins it by hand). Exit 0 cells

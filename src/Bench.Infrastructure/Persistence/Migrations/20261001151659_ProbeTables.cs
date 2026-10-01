@@ -28,7 +28,8 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     SubjectExecutableRefs = table.Column<List<string>>(type: "text[]", nullable: false),
                     SubjectVendors = table.Column<List<string>>(type: "text[]", nullable: false),
                     SubjectEndpoints = table.Column<List<string>>(type: "text[]", nullable: false),
-                    SubjectDialects = table.Column<List<string>>(type: "text[]", nullable: false)
+                    SubjectDialects = table.Column<List<string>>(type: "text[]", nullable: false),
+                    Probes = table.Column<List<string>>(type: "text[]", nullable: false)
                 },
                 constraints: table =>
                 {
