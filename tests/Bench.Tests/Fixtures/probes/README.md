@@ -1,7 +1,7 @@
 # Probe transcript fixtures — LIVE since S2b (2026-10-01)
 
 These files pin the verdict readers of `Bench.Domain.Probes` — `ClaudeStream`, `CodexEvents`, `AntigravityStream`,
-`ProbeApiOutput` — on transcripts the real CLIs printed (plan `todo/PLAN_question_consultant_probes.md`, S1 acceptance
+`ProbeApiOutput` — on transcripts the real CLIs printed (plan `research/PLAN_question_consultant_probes.md`, S1 acceptance
 1–2 and S5.2's hand-check, brought forward as S2b after the first live runs). **Every file below is LIVE**, named by CLI and
 version; the only edits are redactions: the operator's Windows user name is spelled `operator`, and the xAI team id in the
 grok report is `<team-id>` — with ONE exception, marked **DERIVED** in its row (S2c): a live stream whose final answer was

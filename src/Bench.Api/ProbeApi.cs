@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Bench.Api;
 
-/// <summary>The question consultant's capability probes, READ (S4 of <c>todo/PLAN_question_consultant_probes.md</c>) —
+/// <summary>The question consultant's capability probes, READ (S4 of <c>research/PLAN_question_consultant_probes.md</c>) —
 /// <c>/api/bench/probes/*</c>, over the same <see cref="ProbeReport"/> <c>bench probes report --json</c> prints, so the page and
 /// the terminal read one run one way, byte for byte.
 /// <para>

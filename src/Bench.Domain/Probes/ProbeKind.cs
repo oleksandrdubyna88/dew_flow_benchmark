@@ -1,6 +1,6 @@
 namespace Bench.Domain.Probes;
 
-/// <summary>The seven capability probes of the question-consultant plan (<c>todo/PLAN_question_consultant_probes.md</c> §4),
+/// <summary>The seven capability probes of the question-consultant plan (<c>research/PLAN_question_consultant_probes.md</c> §4),
 /// stored as NAMES like every enum in this schema. Each is a question about ONE CLI build: can it read inside its working
 /// directory (the control), outside it bare and granted, can it search the web, does it still read the disk when its
 /// file tools are denied — and, for the one API subject, whether the product's transport reaches the vendor at all.</summary>

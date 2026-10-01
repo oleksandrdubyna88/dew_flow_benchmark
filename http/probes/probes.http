@@ -1,4 +1,4 @@
-# The capability probes' reads (S4 of todo/PLAN_question_consultant_probes.md) — `/api/bench/probes/*`, the object
+# The capability probes' reads (S4 of research/PLAN_question_consultant_probes.md) — `/api/bench/probes/*`, the object
 # `bench probes report --json` prints.
 #
 # Every request here READS: the probe routes map no write (D10 — a cell is re-measured with `bench probes rerun`, a CLI verb),
