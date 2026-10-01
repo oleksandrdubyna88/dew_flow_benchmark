@@ -18,10 +18,18 @@ namespace Bench.Tests.Infrastructure;
 /// </para></summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
+    /// <summary>Postgres's default <c>max_connections</c> is 100, and the whole suite now holds more pooled connections than that at
+    /// once: every per-test database (<see cref="NewDatabaseAsync"/>) is its own connection string, so its own Npgsql pool, whose
+    /// idle connections stay open for minutes after the test. Measured 2026-10-01 when the probe store tests added six more such
+    /// databases: 34 tests across the gate driver, the import and the CLI failed with <c>53300: sorry, too many clients already</c>
+    /// — an infrastructure limit, not a test. The container is ours, so the limit is raised here, and the per-test strings below
+    /// prune their idle connections quickly so the demand stays bounded as stories add databases.</summary>
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("bench")
         .WithUsername("bench")
         .WithPassword("bench")
+        // Appended to the image's own `postgres` command — spelling `postgres` here again made the server refuse its own name.
+        .WithCommand("-c", "max_connections=400")
         .Build();
 
     public string ConnectionString => _container.GetConnectionString();
@@ -75,6 +83,18 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </para></summary>
     public async Task<string> NewDatabaseAsync(string name)
     {
+        var connection = await NewEmptyDatabaseAsync(name);
+
+        await using var db = Context(connection);
+        await db.Database.MigrateAsync();
+
+        return connection;
+    }
+
+    /// <summary>A database of its own with NO migration applied — for a test that applies them itself, step by step, to prove a
+    /// migration lands on a database already holding an earlier one's tables.</summary>
+    public async Task<string> NewEmptyDatabaseAsync(string name)
+    {
         // CREATE DATABASE takes no parameters in any provider, so the name has to be interpolated. It is
         // checked against a character class first rather than trusted: the callers all build it from a Guid,
         // and a check that costs one line is cheaper than relying on that staying true.
@@ -88,12 +108,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         await server.Database.ExecuteSqlRawAsync($"CREATE DATABASE \"{name}\"");
 #pragma warning restore EF1002
 
-        var connection = new Npgsql.NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ToString();
-
-        await using var db = Context(connection);
-        await db.Database.MigrateAsync();
-
-        return connection;
+        // A per-test database's pool gives its idle connections back within seconds rather than Npgsql's default five minutes, so
+        // forty such databases in one process do not hold forty pools' worth of idle clients open at once.
+        return new Npgsql.NpgsqlConnectionStringBuilder(ConnectionString) { Database = name, ConnectionIdleLifetime = 5, ConnectionPruningInterval = 1 }.ToString();
     }
 
     public static BenchDbContext Context(string connectionString) =>

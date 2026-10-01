@@ -6,24 +6,34 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Bench.Infrastructure.Persistence;
 
-/// <summary>Every row of every <c>gate_*</c> table, read through the EF MODEL rather than through a list of
+/// <summary>Every row of every <c>gate_*</c> and <c>probe_*</c> table, read through the EF MODEL rather than through a list of
 /// columns — so a column added next month is read, guarded and exported without anyone remembering to add it
-/// here. That is the property that makes this the guard's input rather than a second opinion about it.</summary>
+/// here. That is the property that makes this the guard's input rather than a second opinion about it. The probe
+/// tables joined the walk with S1 of the question-consultant plan: they are published under the same rule (D11), so
+/// they go through the same guard and the same export rather than a second one.</summary>
 public sealed class PostgresGatePublicationSource(BenchDbContext db) : IGatePublicationSource
 {
     public IReadOnlySet<string> PublicUrlColumns => GateModel.PublicUrlColumns;
 
     /// <summary>The gate entity types, as the model maps them — also what the structural guard test walks.</summary>
-    public static IReadOnlyList<IEntityType> GateEntities(BenchDbContext context) =>
+    public static IReadOnlyList<IEntityType> GateEntities(BenchDbContext context) => WithPrefix(context, GateModel.TablePrefix);
+
+    /// <summary>The probe entity types, as the model maps them — what <c>ProbeEntitiesGuardTests</c> walks.</summary>
+    public static IReadOnlyList<IEntityType> ProbeEntities(BenchDbContext context) => WithPrefix(context, ProbeModel.TablePrefix);
+
+    /// <summary>Every entity type the public export carries and the guard re-reads: the gate's, then the probes'.</summary>
+    public static IReadOnlyList<IEntityType> PublishedEntities(BenchDbContext context) => [.. GateEntities(context), .. ProbeEntities(context)];
+
+    private static IReadOnlyList<IEntityType> WithPrefix(BenchDbContext context, string prefix) =>
         [.. context.Model.GetEntityTypes()
-            .Where(e => (e.GetTableName() ?? string.Empty).StartsWith(GateModel.TablePrefix, StringComparison.Ordinal))
+            .Where(e => (e.GetTableName() ?? string.Empty).StartsWith(prefix, StringComparison.Ordinal))
             .OrderBy(e => e.GetTableName(), StringComparer.Ordinal)];
 
     public async Task<IReadOnlyList<PublishedTable>> ReadAsync(CancellationToken cancellationToken)
     {
         var tables = new List<PublishedTable>();
 
-        foreach (var entity in GateEntities(db))
+        foreach (var entity in PublishedEntities(db))
         {
             tables.Add(new PublishedTable(entity.GetTableName()!, await RowsAsync(entity, cancellationToken)));
         }
