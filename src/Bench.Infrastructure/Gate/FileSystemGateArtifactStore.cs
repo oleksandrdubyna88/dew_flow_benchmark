@@ -154,7 +154,7 @@ public sealed class FileSystemGateArtifactStore : IGateArtifactStore
 
     /// <summary>The nearest directory at or above <paramref name="directory"/> holding a <c>.git</c> folder or file
     /// (a worktree's pointer), or empty when there is none.</summary>
-    private static string GitCheckoutAbove(string directory)
+    internal static string GitCheckoutAbove(string directory)
     {
         for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
         {

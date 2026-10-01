@@ -325,18 +325,5 @@ public sealed class GatePublicationTests(PostgresFixture postgres)
     }
 
     public static PrivateNames SampleNames() =>
-        GatePrivateNames.Read(File.ReadAllText(Path.Combine(RepositoryRoot(), "samples", "gate-suite.sample.json"))).Ok();
-
-    private static string RepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (directory.GetFiles("*.slnx").Length > 0)
-            {
-                return directory.FullName;
-            }
-        }
-
-        throw new InvalidOperationException("no *.slnx above the test binary — the guard test reads the checked-in sample suite and cannot guess where it is");
-    }
+        GatePrivateNames.Read(File.ReadAllText(Path.Combine(TestRepository.Root(), "samples", "gate-suite.sample.json"))).Ok();
 }

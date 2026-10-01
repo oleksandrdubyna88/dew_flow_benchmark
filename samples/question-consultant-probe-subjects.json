@@ -1,0 +1,17 @@
+{
+  "subjects": [
+    { "id": "claude-sonnet", "runtime": "claude", "model": "sonnet", "executableRef": "BENCH_CLAUDE" },
+    { "id": "codex-astra", "runtime": "codex", "model": "gpt-6-astra", "executableRef": "BENCH_CODEX" },
+    { "id": "codex-terra", "runtime": "codex", "model": "gpt-5.6-terra", "executableRef": "BENCH_CODEX" },
+    { "id": "agy-gemini", "runtime": "antigravity", "model": "gemini-3.1-pro-high", "executableRef": "BENCH_AGY" },
+    {
+      "id": "grok-api",
+      "runtime": "api",
+      "model": "grok-4.7",
+      "executableRef": "BENCH_GATE_COAI_EXE",
+      "vendor": "grok",
+      "endpoint": "https://api.x.ai/v1",
+      "dialect": "xai"
+    }
+  ]
+}

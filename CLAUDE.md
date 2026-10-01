@@ -52,6 +52,20 @@ dotnet build dew_flow_benchmark.slnx -c Release
 # The same object over HTTP. bench-api is READ-only and applies no migrations; the AppHost starts it.
 # GET /api/runs · /api/runs/{id}/report?metric=... · /api/runs/{id}/scoreboard
 
+# The question consultant's capability probes (todo/PLAN_question_consultant_probes.md). The web oracle is read from
+# the npm registry BEFORE anything is planned (exit 3 when it cannot be; --oracle-version pins it by hand). Exit 0 cells
+# produced · 3 account out / environment (resumable — the resume line is printed) · 4 configuration · 5 nothing produced.
+# The work root (fixtures, wiped per run on every verb's entry) defaults to %LOCALAPPDATA%/bench/probes-work and must not
+# overlap the artefact root; --artifact-root falls back to BENCH_ARTIFACT_ROOT, --db to BENCH_DB.
+./hosts/Cli/bin/Release/net10.0/bench.exe probes run --subjects-file samples/question-consultant-probe-subjects.json \
+  --artifact-root <dir outside git> --db "$BENCH_DB" [--probes read-inside,web-search] [--repeats 3] [--oracle-version x.y.z]
+./hosts/Cli/bin/Release/net10.0/bench.exe probes resume --run <guid>           # exactly the unsettled cells
+./hosts/Cli/bin/Release/net10.0/bench.exe probes rerun --cell <guid>           # or --run <guid> --subject <id> [--probe <word>]
+./hosts/Cli/bin/Release/net10.0/bench.exe probes status --run <guid>           # every cell, every generation
+./hosts/Cli/bin/Release/net10.0/bench.exe probes report --run <guid> [--json]  # highest settled generation per cell
+./hosts/Cli/bin/Release/net10.0/bench.exe probes sweep [--run <guid>]
+./hosts/Cli/bin/Release/net10.0/bench.exe probes prune --run <guid>            # refused while any cell is open
+
 # Agent-session traces (todo/ai_math/) — what an agent ACTUALLY did, call by call, so the steps a
 # formula could do instead can be found. `sessions list` is also the verb that creates the schema:
 # bench-collector refuses to start against a database that is behind, and the CLI owns migrations.

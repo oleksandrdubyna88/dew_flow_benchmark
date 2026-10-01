@@ -1,6 +1,6 @@
 # PLAN — capability probes for the question consultant: what each CLI and API vendor can actually do
 
-> Status: **S1–S2 implemented 2026-10-01; S3–S5 open.** Scope: a new `Probes` module in this repository —
+> Status: **S1–S3 implemented 2026-10-01; S4–S5 open.** Scope: a new `Probes` module in this repository —
 > domain (`src/Bench.Domain/Probes`), ports and driver (`src/Bench.Application/Probes`), a Postgres store and the
 > probe runners (`src/Bench.Infrastructure`), the `bench probes` verbs (`hosts/Cli`), a read API and a **Probes**
 > tab in `Bench.Ui`. Results are written up in the PRODUCT repository, not here.
@@ -345,6 +345,50 @@ primitive it calls is guarded and tested in the story below it.
 
 **Not here.** No contract DTO, no HTTP, no page, no live CLI; no change to an S1 or S2 rule — a rule found wrong here
 goes back to that story's tests first.
+
+**Deviations (S3, 2026-10-01).**
+- *The report's object IS a contract now* (decision asked of S3): `src/Bench.Contracts/ProbeContracts.cs` (`ProbeRunReportDto` and
+  its nested `Probe*Dto`, the closed words in `ProbeWords`) built by ONE pure function, `Bench.Application.Probes.ProbeReport.Of`
+  (`ReadAsync` over `IProbeReads`) — the gate's own shape (`GateReportQuery` → `GateModelTableDto`). `report --json` serialises it
+  with `JsonSerializerDefaults.Web`, the minimal-API default, so S4's route returns `ProbeReport.ReadAsync(...)` and is byte for
+  byte by construction; a test pins the CLI's bytes to that call. The text-surface guard came with the DTOs
+  (`ProbeContractsGuardTests`, `TextSurface` allow-list by `Type.Property`, a planted `AnswerText` red), so S4's acceptance 1 is
+  "extend it for any DTO S4 adds", not "build it". S4 adds the API, the `Read<T>` client and the page only.
+- *The entry step's staleness is ZERO by default*, not S2's `DefaultStaleAfter` (30 min): ownership decides (a dead pid on this
+  host is handed back at once; a live owner and another host's claim never), exactly as the gate's `resume` and `sweep` call it — with
+  30 min a resume right after a crash would leave the crashed cell Claimed and break §2's "resumable from any point".
+  `--stale-after-minutes` widens it.
+- *"A cell whose CLI hangs past the wall is left for resume"* — S2's rule stands: a hang past the wall settles `TimedOut` (a fact
+  about the build; `rerun` re-measures it). What `resume` finishes is the hang the BENCH did not survive (killed, or Ctrl+C past the
+  drain's 30 s grace): its claim is a dead owner's, handed back on resume's entry with its fixture deleted, and measured in attempt 2
+  — proven by planting exactly that state (`Resume_hands_back_a_cell_a_killed_bench_left_claimed…`). `--cell-timeout-minutes` is whole
+  minutes, so no verb-level wall test was added; S2's rig proves the wall in seconds.
+- *`rerun` measures only what it names*: the campaign claims a subject's Pending cells in matrix order, so a re-run over a subject that
+  still has cells Pending or Claimed is refused (4) naming `bench probes resume --run <id>` (`ProbeRerunTargets`); its lanes are only
+  the named subjects (the run handed to the campaign is narrowed to them, so an unrelated subject's executable need not resolve). A
+  PRUNED run refuses `resume` and `rerun` (4) — a new generation beside unauditable verdicts is not a measurement anyone can check.
+- *`prune` flags first, deletes second*: the guarded `MarkArtifactsPrunedAsync` (refused while open → 4, nothing deleted), then
+  `ProbeArtifacts.DeleteRun` — a delete the filesystem half-refuses exits 3 with the flag set (prune again), so a flag can over-state a
+  deletion but a deleted run never reads auditable. The tree deletion (`IsUnder`/`Remove`/`TryDeleteTree`) was EXTRACTED from
+  `ProbeFixtures` into `ProbeTrees` (reuse-first 2.2) — one rule for what a link is, under both roots.
+- *The two roots* (`ProbeRoots`): `--work-root` defaults to `%LOCALAPPDATA%/bench/probes-work` (beside `RunCommand.DefaultCheckoutRoot`);
+  refused inside a git checkout (a CLI started in a fixture there would read that repository's `CLAUDE.md`) and when it overlaps the
+  artefact root either way round (both use `probes/<run>/<cell>/…`, and the work root's cleanup would delete the evidence).
+  `FileSystemGateArtifactStore.GitCheckoutAbove` widened to `internal`. `--artifact-root` falls back to `BENCH_ARTIFACT_ROOT`, so the
+  printed `bench probes rerun --cell <id>` runs as printed where `BENCH_DB` and it are set.
+- *The verbs' outside world is one value*, `ProbeVerbServices` (the oracle, the references as `ISecretSource`, the `PATH` lookup, the
+  codex config reader, the product's key) — the machine's by default, a counting oracle and a dictionary in the tests, so no test sets
+  a process-wide variable or reaches the registry. An unresolved reference and an unreadable codex config are both 4, decided BEFORE
+  the oracle is read (nothing is fetched for a run that cannot start).
+- *The control voids per SUBJECT*: when any shown `read-inside` of a subject reads `no`, every read probe of that subject shows
+  `canaryRead` as `not-captured` and `voidedByControl = true` (§4: "voids the cell's subject for the read probes").
+- *Added*: `run --probes a,b` (a subset of the seven; default all) and `sweep` without `--run` (every run in the store). A Ctrl+C stop
+  exits 5 with the resume line. `run` prints each dropped pair as `not measured`; the report does not carry them (open for S4/S5).
+- *Subjects*: `claude-sonnet` asks for the CLI's `sonnet` ALIAS, not a pinned id — the probes are facts about the CLI build (pinned per
+  cell) and the answering model is recorded in each cell's stdout artefact; `agy-gemini` is `gemini-3.1-pro-high`, read off `agy models`
+  on 2026-10-01 (never a Claude model through agy). The subjects format takes no comments; the decisions are in `samples/README.md`.
+- *Not preflighted*: the api subject's vault key. S2 hands a keyless attempt back unmeasured, which benches the subject and exits 3
+  naming the resume — S4/S5 may want it checked before planning, as the gate's preflight does.
 
 ### S4 — the read API and the Probes tab
 

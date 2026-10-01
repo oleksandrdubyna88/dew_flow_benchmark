@@ -128,6 +128,15 @@ public interface IProbeArtifacts
     Task<Outcome<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, ProbeArtifactKind kind, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken);
 }
 
+/// <summary>The web oracle (D7): the registry's current version of <c>@openai/codex</c>, read ONCE by <c>bench probes run</c>
+/// BEFORE anything is planned and frozen on the run — <c>resume</c> and <c>rerun</c> read it from the run and never call this. A
+/// read that fails (offline, the registry down, rate-limited) is a refusal naming the cause, never an empty version: an oracle
+/// that cannot be read stops the run rather than freezing nothing (gate round 1, finding 0).</summary>
+public interface IProbeOracle
+{
+    Task<Outcome<ProbeOracle>> LatestAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>Where the product's vault key comes from for the api probe (D6) — the machine's coai settings in production,
 /// a sentinel in the rig. The bench never reads a vendor key; this is the one secret it passes on, by name.</summary>
 public interface IProbeSecrets

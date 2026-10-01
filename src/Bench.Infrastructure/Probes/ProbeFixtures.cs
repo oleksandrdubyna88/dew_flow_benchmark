@@ -69,12 +69,12 @@ public sealed class ProbeFixtures(string workRoot) : IProbeFixtures
     /// cell leaves no husk for <see cref="DeleteStranded"/> to count. The run's root stays: other lanes are creating under it.</summary>
     public void Delete(ProbeFixture fixture)
     {
-        if (!Directory.Exists(fixture.Root) || !IsUnder(fixture.Root, _root))
+        if (!Directory.Exists(fixture.Root) || !ProbeTrees.IsUnder(fixture.Root, _root))
         {
             return;
         }
 
-        if (TryDeleteTree(fixture.Root))
+        if (ProbeTrees.TryDeleteTree(fixture.Root))
         {
             PruneEmptyParents(fixture.Root, levels: 2);
         }
@@ -106,59 +106,16 @@ public sealed class ProbeFixtures(string workRoot) : IProbeFixtures
     {
         var runRoot = Absolute(ProbePaths.RunRoot(runId));
 
-        if (!Directory.Exists(runRoot) || !IsUnder(runRoot, _root))
+        if (!Directory.Exists(runRoot) || !ProbeTrees.IsUnder(runRoot, _root))
         {
             return 0;
         }
 
-        return Directory.EnumerateDirectories(runRoot).Count(folder => !IsLive(folder, liveCells) && Remove(folder, runRoot));
+        return Directory.EnumerateDirectories(runRoot).Count(folder => !IsLive(folder, liveCells) && ProbeTrees.Remove(folder, runRoot));
     }
 
     private static bool IsLive(string folder, IReadOnlySet<Guid> liveCells) =>
         ProbePaths.CellOf(Path.GetFileName(folder)) is Outcome<Guid>.Ok { Value: var cell } && liveCells.Contains(cell);
-
-    /// <summary>A link is removed as ITSELF — never followed; a real directory is checked to resolve under the run's root
-    /// before anything is deleted. Anything the filesystem refuses is left for the next entry.</summary>
-    private static bool Remove(string folder, string runRoot)
-    {
-        try
-        {
-            if (new DirectoryInfo(folder).LinkTarget is not null)
-            {
-                Directory.Delete(folder);
-                return true;
-            }
-
-            return IsUnder(folder, runRoot) && TryDeleteTree(folder);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>Whether <paramref name="path"/> REALLY lies under <paramref name="root"/> — resolved on the filesystem, links included.</summary>
-    private static bool IsUnder(string path, string root) =>
-        ArtifactContainment.Resolve(path).Match(full => ArtifactContainment.IsWithin(full, root), _ => false);
-
-    private static bool TryDeleteTree(string path)
-    {
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }))
-            {
-                File.SetAttributes(file, FileAttributes.Normal);
-            }
-
-            // A recursive delete does not follow a link inside the tree — the link is removed, its target untouched.
-            Directory.Delete(path, recursive: true);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
 
     private string Absolute(Bench.Domain.Gate.ArtifactPath path) => Path.Combine([_root, .. path.Segments]);
 }

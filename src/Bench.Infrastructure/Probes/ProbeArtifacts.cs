@@ -30,4 +30,20 @@ public sealed class ProbeArtifacts(string artifactRoot) : IProbeArtifacts
             committed => ProbeArtifact.Of(kind, path, committed.Sha256, committed.Length),
             reason => Outcome<ProbeArtifact>.Failure($"{path} {reason}"));
     }
+
+    /// <summary><c>bench probes prune --run</c>'s deletion: every cell folder under <c>probes/&lt;run&gt;/</c> of the artefact root, then
+    /// that folder — nothing above it, no link followed (<see cref="ProbeTrees"/>). The caller has already flagged the run pruned
+    /// through the guarded UPDATE that refuses an open run (finding 5). Answers how many cell folders went; a run with no folder
+    /// (nothing was ever committed) is zero, not a refusal.</summary>
+    public Outcome<int> DeleteRun(Guid runId)
+    {
+        var runRoot = Path.Combine([_root, .. ProbePaths.RunRoot(runId).Segments]);
+
+        return (Directory.Exists(runRoot), Directory.Exists(runRoot) && ProbeTrees.IsUnder(runRoot, _root)) switch
+        {
+            (false, _) => Outcome<int>.Success(0),
+            (_, false) => Outcome<int>.Failure($"{ProbePaths.RunRoot(runId)} resolves outside the artefact root — a link on the way leads elsewhere, and nothing was deleted through it"),
+            _ => ProbeTrees.RemoveAll(runRoot),
+        };
+    }
 }
