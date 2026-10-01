@@ -262,10 +262,12 @@ flowchart TB
 - `bench gate run --gate plan|code|feature --suite-file <suite.json> --reviewers <id,…> --coai-exe <coai-mcp>
   --artifact-root <dir> --db <conn> [--repeats 3] [--parallel 4] [--per-endpoint 2] [--shared-data-dir] [--no-tap]
   [--prediction "<text>"] [--allow-product-change] [--set "COAI_X=1,…"] [--cell-timeout-minutes 300]
-  [--checkout-root <dir>] [--creds-key-from-coai-settings]` — loads and refuses in the order a person fixes things
+  [--checkout-root <dir>] [--creds-key-from-coai-settings] [--tasks <id,…>]` — loads and refuses in the order a person fixes things
   (flags 4 · missing files 3 · suite 4 · database 3 · reviewers 4 · pin and file-hash key 3), refuses a product that
   moved since an earlier native run of this gate and suite measured any of these reviewers (4, both shas named) unless
-  allowed, plans the matrix (repeats outermost), writes the prediction to `runs/<id>/prediction.txt` (its hash on the
+  allowed, plans the matrix (repeats outermost; `--tasks` narrows it to the named tasks of the same suite file, in the suite's
+  order, so a re-run of a campaign's missing cells lands in the same scope; an empty `--tasks`, which would otherwise mean every task, an unknown task or a non-hosting task is refused by
+  name, 4), writes the prediction to `runs/<id>/prediction.txt` (its hash on the
   run) and the run settings to `runs/<id>/run-settings.json`, drives the campaign — one line per cell as it ends
   (`settled … — Completed` / `refused … — <why>`) —, prints the pins seen and the footprint. Exit 0 cells produced ·
   3 pin unreadable / too many failures · 4 product moved · 5 nothing produced (resumable). A shared data directory

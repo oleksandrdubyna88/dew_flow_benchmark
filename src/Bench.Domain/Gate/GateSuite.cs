@@ -66,6 +66,28 @@ public sealed record GateSuite
             : Outcome<IReadOnlyList<GateTask>>.Failure($"no task in suite '{Id}' hosts the {Name(gate)} gate");
     }
 
+    /// <summary><see cref="TasksFor(GateKind)"/> narrowed to <paramref name="only"/> when it names any — kept in the SUITE's
+    /// order, so the matrix nests as in every run. Each named task must exist and host the gate, refused by name as
+    /// <see cref="Task"/> refuses it. Naming none narrows nothing.</summary>
+    public Outcome<IReadOnlyList<GateTask>> TasksFor(GateKind gate, IReadOnlyList<GateTaskId> only)
+    {
+        var refusals = only.Select(id => Task(id, gate)).OfType<Outcome<GateTask>.Fail>().Select(f => f.Reason).ToList();
+
+        return (only.Count, refusals.Count) switch
+        {
+            (0, _) => TasksFor(gate),
+            (_, > 0) => Outcome<IReadOnlyList<GateTask>>.Failure(string.Join("; ", refusals)),
+            _ => Outcome<IReadOnlyList<GateTask>>.Success(Named(only)),
+        };
+    }
+
+    /// <summary>The suite's tasks whose id is named, in the suite's order — one set lookup per task.</summary>
+    private List<GateTask> Named(IReadOnlyList<GateTaskId> only)
+    {
+        var named = only.Select(o => o.Value).ToHashSet(StringComparer.Ordinal);
+        return [.. Tasks.Where(t => named.Contains(t.Id.Value))];
+    }
+
     /// <summary>One task, for one gate — refused by name when the task cannot host that gate.</summary>
     public Outcome<GateTask> Task(GateTaskId id, GateKind gate)
     {
