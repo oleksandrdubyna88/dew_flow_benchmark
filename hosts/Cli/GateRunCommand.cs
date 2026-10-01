@@ -127,7 +127,7 @@ public static class GateRunCommand
     private static async Task<int> PlanAndDriveAsync(CommandLine command, GateCliInputs inputs, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var gate = Enum.Parse<GateKind>(command.Value("gate"), ignoreCase: true);
-        var tasks = inputs.Suite.TasksFor(gate);
+        var tasks = TaskIds(command).Match(ids => inputs.Suite.TasksFor(gate, ids), Outcome<IReadOnlyList<GateTask>>.Failure);
         var settings = GateCliInputs.Extras(command).Match(GateRunSettings.With, Outcome<GateRunSettings>.Failure);
         var mode = command.Has("shared-data-dir") ? DataDirMode.Shared : DataDirMode.Isolated;
 
@@ -267,6 +267,18 @@ public static class GateRunCommand
         };
     }
 
+    /// <summary>`--tasks a,b`: the suite's tasks to plan over, by id. None named is every task that hosts the gate; an
+    /// id that does not parse is refused by name.</summary>
+    private static Outcome<IReadOnlyList<GateTaskId>> TaskIds(CommandLine command)
+    {
+        var parsed = command.List("tasks").Select(GateTaskId.Parse).ToList();
+        var refused = parsed.OfType<Outcome<GateTaskId>.Fail>().Select(f => $"--tasks: {f.Reason}").ToList();
+
+        return refused.Count > 0
+            ? Outcome<IReadOnlyList<GateTaskId>>.Failure(string.Join("; ", refused))
+            : Outcome<IReadOnlyList<GateTaskId>>.Success([.. parsed.OfType<Outcome<GateTaskId>.Ok>().Select(o => o.Value)]);
+    }
+
     /// <summary>The cells still pending, per reviewer — what a benched reviewer left for the resume.</summary>
     private static string Pending(IReadOnlyList<GateCell> cells) =>
         string.Join(" · ", cells.Where(c => c.State == CellState.Pending)
@@ -388,11 +400,13 @@ public static class GateRunCommand
         };
 
     private static string RunRefusal(CommandLine command) =>
-        (Enum.TryParse<GateKind>(command.Value("gate"), ignoreCase: true, out _), command.List("reviewers").Count > 0, command.Int("repeats", DefaultRepeats) >= 1) switch
+        (Enum.TryParse<GateKind>(command.Value("gate"), ignoreCase: true, out _), command.List("reviewers").Count > 0, command.Int("repeats", DefaultRepeats) >= 1,
+            command.Has("tasks") && command.List("tasks").Count == 0) switch
         {
-            (false, _, _) => "gate run needs --gate plan|code|feature",
-            (_, false, _) => "gate run needs --reviewers <id,…> — an id from `bench gate reviewers list`; a run measures somebody",
-            (_, _, false) => "--repeats must be at least 1 (three is the floor for a variance)",
+            (false, _, _, _) => "gate run needs --gate plan|code|feature",
+            (_, false, _, _) => "gate run needs --reviewers <id,…> — an id from `bench gate reviewers list`; a run measures somebody",
+            (_, _, false, _) => "--repeats must be at least 1 (three is the floor for a variance)",
+            (_, _, _, true) => "--tasks names no task — name the task ids, or leave the flag out to run every task of the suite",
             _ => string.Empty,
         };
 

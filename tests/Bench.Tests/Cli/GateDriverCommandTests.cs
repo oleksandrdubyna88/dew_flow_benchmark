@@ -89,6 +89,38 @@ public sealed class GateDriverCommandTests(PostgresFixture postgres)
         }
     }
 
+    /// <summary>`--tasks` plans only the named tasks of the same suite file, so a re-run of the missing cells lands in the
+    /// scope the earlier cells were measured in; a task the suite does not have is refused by name before anything is
+    /// planned.</summary>
+    [Fact]
+    public async Task A_run_can_be_limited_to_named_tasks_and_an_unknown_one_is_refused_by_name()
+    {
+        await using var setup = await CliSetup.StartAsync(postgres);
+
+        var unknown = Run([.. setup.RunArgs("plan"), "--tasks", "nope"]);
+        unknown.Code.Should().Be(ExitCodes.Configuration, unknown.Output + unknown.Error);
+        unknown.Error.Should().Contain("'nope'");
+
+        var (code, output, error) = Run([.. setup.RunArgs("plan"), "--tasks", "cs2"]);
+        code.Should().Be(ExitCodes.Pass, error);
+        output.Should().Contain("1 task(s)").And.Contain("campaign       2 cell(s) settled");
+    }
+
+    /// <summary>An empty `--tasks` — a script's `--tasks "$MISSING"` with nothing missing — must not fall back to every task:
+    /// that is the whole-suite run, the Claude Max window the flag exists to avoid. It is refused before anything is
+    /// planned (the plan round, 2026-10-01).</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(" , ")]
+    public void A_tasks_flag_that_names_no_task_is_refused_rather_than_running_them_all(string value)
+    {
+        var (code, output, error) = Run("gate", "run", "--gate", "plan", "--reviewers", "rev-a", "--db", "Host=x", "--suite-file", "s.json",
+            "--coai-exe", "c.exe", "--artifact-root", "a", "--tasks", value);
+
+        code.Should().Be(ExitCodes.Configuration, output + error);
+        error.Should().Contain("--tasks").And.Contain("names no task");
+    }
+
     [Fact]
     public async Task Status_lists_claimed_cells_with_owner_and_age_and_abandoned_ones_with_their_cause_and_claims_nothing()
     {

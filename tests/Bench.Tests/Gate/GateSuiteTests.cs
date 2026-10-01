@@ -75,6 +75,22 @@ public sealed class GateSuiteTests
         planOnly.TasksFor(GateKind.Feature).Reason().Should().Contain("no task").And.Contain("feature gate");
     }
 
+    /// <summary>`bench gate run --tasks`: re-running only the cells a campaign is missing (2026-10-01, Fable's tsx2 and php1,
+    /// which every campaign reaches last and the Claude Max window kept cutting off) without changing the suite — so the
+    /// stamp, and with it the report scope, stays the one the earlier cells were measured in.</summary>
+    [Fact]
+    public void Tasks_for_a_gate_can_be_narrowed_to_named_ones_in_the_suites_own_order()
+    {
+        var suite = Suite(Task("plan8", hosts: [GateKind.Plan]), Task("cs2"), Task("rs3"), Task("php1"));
+        static GateTaskId Id(string id) => GateTaskId.Parse(id).Ok();
+
+        suite.TasksFor(GateKind.Code, [Id("php1"), Id("cs2")]).Ok().Select(t => t.Id.Value)
+            .Should().Equal(["cs2", "php1"], "the suite's order, not the caller's, so repeats stay outermost as in every run");
+        suite.TasksFor(GateKind.Code, []).Ok().Should().HaveCount(3, "naming none narrows nothing");
+        suite.TasksFor(GateKind.Code, [Id("plan8")]).Reason().Should().Contain("'plan8'").And.Contain("hosts plan");
+        suite.TasksFor(GateKind.Code, [Id("nope")]).Reason().Should().Contain("'nope'").And.Contain("it has:");
+    }
+
     [Fact]
     public void A_task_with_no_seeds_is_refused_a_seeded_recall_column()
     {
