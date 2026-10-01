@@ -201,7 +201,9 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
         }
     }
 
-    /// <summary>Finding 5: one guarded UPDATE that refuses while any cell of the run is Pending or Claimed.</summary>
+    /// <summary>Finding 5: one guarded UPDATE that refuses while any cell of the run is Pending or Claimed. It deliberately does NOT
+    /// filter on the flag itself: an already-pruned run is flagged again, so a prune the filesystem half-refused is finished by the
+    /// next one (gate code round 2, finding 4 — pinned by <c>ProbesDriverCommandTests</c>).</summary>
     public async Task<Outcome<ProbeRun>> MarkArtifactsPrunedAsync(Guid runId, CancellationToken cancellationToken)
     {
         var marked = await db.ProbeRuns
