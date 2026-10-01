@@ -122,6 +122,7 @@ public static class ProbeReport
             cell.Generation,
             Word(cell.State),
             cell.Attempts,
+            cell.UnmeasuredAttempts,
             Word(facts.Kind),
             new ProbeExitDto(facts.ExitCode.WasCaptured, facts.ExitCode.WasCaptured ? facts.ExitCode.Value : 0),
             new ProbeFactsDto(

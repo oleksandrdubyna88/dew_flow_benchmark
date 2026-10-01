@@ -17,13 +17,15 @@ public interface IProbeAttemptReader
     ProbeAttemptReading Read(ProbeRun run, ProbeSubject subject, ProbeKind probe, ProbeTokens tokens, AgentTranscript transcript);
 }
 
-/// <summary>The live reading: <see cref="ProbeTranscripts"/> for the answer and the tools, <see cref="ProbeExits"/> for the exit,
-/// <see cref="ReviewerAccountOut.CliReason"/> for the quota, <see cref="ProbeVerdicts"/> for the facts.
+/// <summary>The live reading: <see cref="ProbeTranscripts"/> for the answer, the tools and the CLI's own voice, <see cref="ProbeExits"/>
+/// for the exit, <see cref="ReviewerAccountOut.CliReason"/> for the quota, <see cref="ProbeVerdicts"/> for the facts.
 /// <list type="bullet">
 /// <item>A usage-error exit is <i>launch refused</i>, the wall <i>timed out</i>, any other non-zero exit <i>failed</i>; every fact <i>not captured</i>.</item>
 /// <item>A clean exit that SAID nothing is <i>failed</i> — unless the grammar's stream reached its final event (S2b): then the silence
 /// is the answer, the facts off the answer read <i>not captured</i>, and the tool facts are read off the stream (agy's headless
 /// web-search cell of 2026-10-01: a <c>search_web</c> step, a <c>read_url</c> auto-denied, an empty response).</item>
+/// <item>The quota reading sees stderr, the answer and the CLI's OWN envelope (<see cref="ProbeTranscripts.OwnVoice"/>) — never a tool
+/// result or fetched content, whatever the exit code (S2c, finding 5).</item>
 /// </list></summary>
 public sealed class ProbeAttemptReader : IProbeAttemptReader
 {
@@ -35,16 +37,16 @@ public sealed class ProbeAttemptReader : IProbeAttemptReader
         var trace = ProbeTranscripts.Trace(subject.Runtime, transcript.Stdout);
         var kind = Kind(subject, transcript, answer, trace);
         var facts = kind == ProbeAttemptKind.Answered
-            ? ProbeVerdicts.For(probe, answer, ProbeTranscripts.Evidence(subject.Runtime, trace), tokens, run.Oracle) with { ExitCode = transcript.ExitCode }
+            ? ProbeVerdicts.For(probe, answer, transcript.Stdout, ProbeTranscripts.Evidence(subject.Runtime, trace), tokens, run.Oracle) with { ExitCode = transcript.ExitCode }
             : ProbeFacts.NothingCaptured(kind, transcript.ExitCode);
 
-        return new ProbeAttemptReading(answer, kind, facts, trace, ReviewerAccountOut.CliReason(AccountOutText(transcript, answer)));
+        return new ProbeAttemptReading(answer, kind, facts, trace, ReviewerAccountOut.CliReason(AccountOutText(subject, transcript, answer)));
     }
 
-    /// <summary>What the quota reading sees: stderr and the model's own answer always; the whole transcript only when the exit
-    /// was non-zero — a web-search result quoting "usage limit" inside a tool result must not bench a subject that answered.</summary>
-    private static string AccountOutText(AgentTranscript transcript, string answer) =>
-        transcript.ExitCode is { WasCaptured: true, Value: 0 } ? transcript.Stderr + "\n" + answer : transcript.Stderr + "\n" + answer + "\n" + transcript.Stdout;
+    /// <summary>What the quota reading sees: stderr, the model's own answer, and the CLI's own result/error envelope — a web-search
+    /// result quoting "usage limit" inside a tool result must not bench a subject, whether it answered, failed or hung.</summary>
+    private static string AccountOutText(ProbeSubject subject, AgentTranscript transcript, string answer) =>
+        transcript.Stderr + "\n" + answer + "\n" + ProbeTranscripts.OwnVoice(subject.Runtime, transcript.Stdout);
 
     private static ProbeAttemptKind Kind(ProbeSubject subject, AgentTranscript transcript, string answer, ToolTrace trace) =>
         (transcript.TimedOut, Exit(subject, transcript), answer.Length == 0 && !trace.Complete) switch

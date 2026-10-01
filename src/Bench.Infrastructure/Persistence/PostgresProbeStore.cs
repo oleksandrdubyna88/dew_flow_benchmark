@@ -104,8 +104,9 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
         return await CellAsync(cellId, cancellationToken);
     }
 
-    /// <summary>D8, ONE guarded UPDATE — still claimed, by this owner, at this attempt: back to Pending with the attempt KEPT, every
-    /// fact <i>not captured</i>, the kind <i>unmeasured</i> and the reason on the row. Never a step toward Abandoned.</summary>
+    /// <summary>D8, ONE guarded UPDATE — still claimed, by this owner, at this attempt: back to Pending with the attempt KEPT and
+    /// counted UNMEASURED (S2c), every fact <i>not captured</i>, the kind <i>unmeasured</i> and the reason on the row. Never a step toward
+    /// Abandoned: the sweep counts measured attempts only.</summary>
     public async Task<Outcome<ProbeCell>> HandBackUnmeasuredAsync(
         Guid cellId, WorkerIdentity owner, int attempt, ProbeReason reason, CancellationToken cancellationToken)
     {
@@ -123,6 +124,7 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
                       .SetProperty(c => c.OwnerHost, string.Empty)
                       .SetProperty(c => c.OwnerPid, 0)
                       .SetProperty(c => c.ClaimedAt, default(DateTimeOffset))
+                      .SetProperty(c => c.UnmeasuredAttempts, c => c.UnmeasuredAttempts + 1)
                       .SetProperty(c => c.AttemptKind, ProbeAttemptKind.Unmeasured)
                       .SetProperty(c => c.CanaryRead, ProbeFact.NotCaptured)
                       .SetProperty(c => c.ReadAttempted, ProbeFact.NotCaptured)
@@ -152,7 +154,7 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
         {
             if (await HandBackAsync(cell, cancellationToken) == 1)
             {
-                (requeued, abandoned) = cell.Attempts >= Claimable.MaxAttempts ? (requeued, abandoned + 1) : (requeued + 1, abandoned);
+                (requeued, abandoned) = Abandons(cell) ? (requeued, abandoned + 1) : (requeued + 1, abandoned);
             }
         }
 
@@ -301,16 +303,20 @@ public sealed class PostgresProbeStore(BenchDbContext db, TimeProvider clock) : 
         return [.. stale.Where(IsOrphan)];
     }
 
-    /// <summary>THE hand-back: one statement, guarded on every fact the decision read — state, owner triple, claim time, attempt
-    /// count — choosing requeue or abandonment inside it. Zero rows means something else moved the cell first.</summary>
+    /// <summary>S2c: abandonment counts MEASURED attempts — the unmeasured hand-backs (a quota stop, an unwritable artefact root) keep
+    /// their number and count for nothing (<see cref="Claimable.Reclaim(Claimable, int)"/>).</summary>
+    private static bool Abandons(ProbeCellRow seen) => seen.Attempts - seen.UnmeasuredAttempts >= Claimable.MaxAttempts;
+
+    /// <summary>THE hand-back: one statement, guarded on every fact the decision read — state, owner triple, claim time, both attempt
+    /// counts — choosing requeue or abandonment inside it. Zero rows means something else moved the cell first.</summary>
     private Task<int> HandBackAsync(ProbeCellRow seen, CancellationToken cancellationToken)
     {
-        var abandon = seen.Attempts >= Claimable.MaxAttempts;
+        var abandon = Abandons(seen);
 
         return db.ProbeCells
             .Where(c => c.Id == seen.Id && c.State == CellState.Claimed
                      && c.Owner == seen.Owner && c.OwnerHost == seen.OwnerHost && c.OwnerPid == seen.OwnerPid
-                     && c.ClaimedAt == seen.ClaimedAt && c.Attempts == seen.Attempts)
+                     && c.ClaimedAt == seen.ClaimedAt && c.Attempts == seen.Attempts && c.UnmeasuredAttempts == seen.UnmeasuredAttempts)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(c => c.State, abandon ? CellState.Abandoned : CellState.Pending)
                       .SetProperty(c => c.Owner, string.Empty)

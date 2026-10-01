@@ -219,15 +219,71 @@ public sealed class CliProbeRunnerTests : IDisposable
         facts.ExitCode.Value.Should().Be(0);
     }
 
-    private (CliProbeRunner Runner, ProbeRun Run, ProbeSubject Subject) Rig(string runtime, JsonObject script, TimeSpan? wall = null, string confinement = "", IProbeAttemptReader? reader = null)
+    /// <summary>S2c, review finding 3 (security): the CLI used to inherit the bench's WHOLE environment — <c>BENCH_DB</c> with its password,
+    /// every <c>*_KEY</c> — and its stdout went to disk unscrubbed under a comment claiming a CLI launch carries no secret. Now the child
+    /// gets the minimal set by name, the names (never the values) are in <c>argv.json</c>, and every secret-named value of the bench's
+    /// environment is scrubbed from stdout, stderr and the answer before they are committed.</summary>
+    [Fact]
+    public async Task The_cli_is_launched_under_a_minimal_environment_whose_names_are_recorded_and_whose_secrets_are_scrubbed()
+    {
+        const string token = "sentinel-bench-token-4411";
+        const string key = "sentinel-api-key-9922";
+        var (runner, run, subject) = Rig("claude", new JsonObject { ["readInside"] = true, ["stderr"] = $"debug: BENCH_PLANTED_TOKEN={token} SOME_API_KEY={key}" },
+            parentExtras: new() { ["BENCH_PLANTED_TOKEN"] = token, ["COAI_PLANTED"] = "coai-planted-value", ["SOME_API_KEY"] = key, ["HARMLESS_PLANTED"] = "harmless" });
+
+        var settlement = (await runner.RunAsync(run, subject, Claimed(run, subject, ProbeKind.ReadInside), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement;
+
+        var call = _fakes[0].Calls().Should().ContainSingle().Subject;
+        call.EnvironmentNames.Should().OnlyContain(n => ProbeChildEnvironment.Passes(n), "the child sees the minimal set and nothing the harness owns — found: " + string.Join(", ", call.EnvironmentNames));
+        call.EnvironmentNames.Should().NotContain(["BENCH_PLANTED_TOKEN", "COAI_PLANTED", "SOME_API_KEY", "HARMLESS_PLANTED"]);
+        call.EnvironmentNames.Should().Contain(n => n.Equals("TEMP", StringComparison.OrdinalIgnoreCase) || n.Equals("TMP", StringComparison.OrdinalIgnoreCase) || n.Equals("HOME", StringComparison.OrdinalIgnoreCase),
+            "the fake finds its script under the temp folder — a CLI needs its home");
+        settlement.Facts.CanaryRead.Should().Be(ProbeFact.Yes, "the fake still ran and read inside.txt under the minimal environment");
+        var argv = await File.ReadAllTextAsync(Path.Combine([_root.Path, .. settlement.Artifacts.Single(a => a.Kind == ProbeArtifactKind.Argv).Path.Segments]), Ct);
+        argv.Should().Contain("\"environment\"").And.Contain("\"argv\"").And.NotContain(token).And.NotContain(key, "argv.json records the environment's NAMES, never a value");
+        var stderr = await File.ReadAllTextAsync(Path.Combine([_root.Path, .. settlement.Artifacts.Single(a => a.Kind == ProbeArtifactKind.Stderr).Path.Segments]), Ct);
+        stderr.Should().Contain("[redacted]").And.NotContain(token).And.NotContain(key, "the secret-named values of the bench's own environment are scrubbed before the commit");
+        Directory.EnumerateFiles(_root.Path, "*", SearchOption.AllDirectories).Should().OnlyContain(f => !File.ReadAllText(f).Contains(token, StringComparison.Ordinal) && !File.ReadAllText(f).Contains(key, StringComparison.Ordinal));
+    }
+
+    /// <summary>S2c, review finding 6: a raw-evidence commit that failed was only LOGGED, and the cell then settled with no stdout
+    /// artefact — a verdict nobody can audit. Now the attempt is handed back unmeasured (<see cref="ProbeReason.ArtifactsNotCommitted"/>):
+    /// a bench fault is not a fact about the CLI, the cell waits for a resume, and the subject is benched for the invocation.</summary>
+    [Fact]
+    public async Task A_raw_artefact_that_cannot_be_committed_hands_the_attempt_back_unmeasured_and_never_settles()
+    {
+        var (runner, run, subject) = Rig("claude", new JsonObject { ["readInside"] = true }, artifacts: new RefusingArtifacts(ProbeArtifactKind.Stdout));
+
+        var result = await runner.RunAsync(run, subject, Claimed(run, subject, ProbeKind.ReadInside), Ct);
+
+        result.Should().BeOfType<ProbeAttemptResult.Unmeasured>("a cell with no stdout on disk must not settle").Subject.Reason.Should().Be(ProbeReason.ArtifactsNotCommitted);
+    }
+
+    /// <summary>An artefact adapter whose disk refuses one kind — the artefact root gone read-only, a full disk.</summary>
+    private sealed class RefusingArtifacts(ProbeArtifactKind refused) : IProbeArtifacts
+    {
+        public Task<Bench.Domain.Outcome<ProbeArtifact>> CommitAsync(ProbeAttemptScope scope, ProbeArtifactKind kind, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
+            Task.FromResult(kind == refused
+                ? Bench.Domain.Outcome<ProbeArtifact>.Failure("the artefact root refused the write: disk full")
+                : ProbeArtifact.Of(kind, Bench.Domain.Gate.ArtifactPath.Parse(ProbePaths.Artifact(scope, kind).Value).Ok(), Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span)), bytes.Length));
+    }
+
+    private (CliProbeRunner Runner, ProbeRun Run, ProbeSubject Subject) Rig(
+        string runtime, JsonObject script, TimeSpan? wall = null, string confinement = "", IProbeAttemptReader? reader = null, Dictionary<string, string>? parentExtras = null, IProbeArtifacts? artifacts = null)
     {
         var fake = new FakeCli(script);
         _fakes.Add(fake);
         var subject = ProbeSubject.Parse($"{runtime}-fake-{_fakes.Count}", runtime, fake.Model, "BENCH_FAKE_CLI", runtime == "claude" && confinement.Length == 0 ? "denylist" : confinement).Ok();
         var run = ProbeRun.Planned(Guid.CreateVersion7(), ProbeStoreFixtures.Oracle(), [subject], 1, DateTimeOffset.UtcNow).Ok();
+        var parent = Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => e.Value as string ?? string.Empty, StringComparer.Ordinal);
+        foreach (var (name, value) in parentExtras ?? [])
+        {
+            parent[name] = value;
+        }
+
         var runner = new CliProbeRunner(
-            new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), new ProbeFixtures(WorkRoot), new ProbeArtifacts(_root.Path),
-            new CliProbeSettings(new Dictionary<string, string> { [subject.Id.Value] = FakeCli.Executable }, wall ?? TimeSpan.FromSeconds(60)),
+            new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), new ProbeFixtures(WorkRoot), artifacts ?? new ProbeArtifacts(_root.Path),
+            new CliProbeSettings(new Dictionary<string, string> { [subject.Id.Value] = FakeCli.Executable }, wall ?? TimeSpan.FromSeconds(60), parent),
             reader ?? ProbeAttemptReader.Live,
             NullLogger<CliProbeRunner>.Instance);
 

@@ -9,7 +9,8 @@ namespace Bench.Domain.Probes;
 /// <list type="bullet">
 /// <item><c>{"event":"init","init":{"model":…,"cwd":…,"tools":[…]}}</c> — the tools OFFERED;</item>
 /// <item><c>{"event":"step_update","step_update":{"step_index":n,"state":"ACTIVE"|"DONE","step_type":"tool","tool_name":…,"tool_info":{"parameters":{…}}}}</c>
-/// — one tool step, printed twice (active, then done), counted once by its <c>step_index</c>;</item>
+/// — one tool step, printed twice (active, then done), counted once by its <c>step_index</c>. <c>DONE</c> says nothing about success or
+/// failure, so a step's fate is <i>not captured</i> (S2c, finding 1) — only a <c>denied_actions</c> entry is a STOP;</item>
 /// <item><c>{"event":"result","result":{"status":…,"response":"…","denied_actions":[{"action":…}]}}</c> — the answer, and what headless
 /// mode auto-denied (the live web-search cell: <c>read_url</c>, with an EMPTY response).</item>
 /// </list></summary>
@@ -29,6 +30,26 @@ public static class AntigravityStream
         }
     }
 
+    /// <summary>The CLI's own voice (S2c, finding 5): the <c>result</c>'s status and response, and any <c>error</c> event — never a step's output.</summary>
+    public static string OwnVoice(string stdout)
+    {
+        var documents = ProbeJson.Lines(stdout);
+
+        try
+        {
+            var events = documents.Select(d => d.RootElement).ToList();
+            var result = ProbeJson.Object(events.LastOrDefault(e => ProbeJson.Text(e, "event") == "result"), "result");
+            var errors = events.Where(e => ProbeJson.Text(e, "event") == "error")
+                .Select(e => ProbeJson.Text(e, "message") is { Length: > 0 } message ? message : ProbeJson.Text(ProbeJson.Object(e, "error"), "message"));
+
+            return string.Join('\n', new[] { ProbeJson.Text(result, "status"), ProbeJson.Text(result, "response") }.Concat(errors).Where(t => t.Length > 0));
+        }
+        finally
+        {
+            ProbeJson.Dispose(documents);
+        }
+    }
+
     private static (string Answer, ToolTrace Trace) Read(IReadOnlyList<JsonElement> events)
     {
         var init = ProbeJson.Object(events.FirstOrDefault(e => ProbeJson.Text(e, "event") == "init"), "init");
@@ -38,7 +59,7 @@ public static class AntigravityStream
             .GroupBy(s => ProbeJson.Number(s, "step_index", out var index) ? index : -1)
             .Select(g => new ProbeToolCall(ProbeJson.Text(g.Last(), "tool_name"), ProbeJson.Raw(ProbeJson.Object(ProbeJson.Object(g.Last(), "tool_info"), "parameters"))))
             .ToList();
-        var denied = ProbeJson.Array(result, "denied_actions").Select(d => new ProbeToolCall(ProbeJson.Text(d, "action"), ProbeJson.Text(d, "display_name"))).ToList();
+        var denied = ProbeJson.Array(result, "denied_actions").Select(d => new ProbeToolCall(ProbeJson.Text(d, "action"), ProbeJson.Text(d, "display_name"), ProbeFact.Yes)).ToList();
 
         return (
             ProbeJson.Text(result, "response").Trim(),

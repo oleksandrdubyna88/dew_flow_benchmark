@@ -4,8 +4,9 @@ namespace Bench.Tests.Probes.Driver;
 
 /// <summary>The fake CLI (<c>tests/FakeCli</c>) as one probe SUBJECT sees it: a fresh model id per instance, which is the key the
 /// fake finds its script and writes its call log under (<c>%TEMP%/bench-fake-cli/&lt;model&gt;/</c>), so two subjects of one
-/// campaign — and two tests in parallel — never read each other's script. The probe runner launches it with the harness's own
-/// environment, as the real CLIs are launched, so nothing here sets a process-wide variable.</summary>
+/// campaign — and two tests in parallel — never read each other's script. The probe runner launches it under a MINIMAL replaced
+/// environment (S2c — <c>TEMP</c> passes, nothing the harness owns does), as the real CLIs are launched, so nothing here sets a
+/// process-wide variable and the model id in the argv is the one thing every launch carries.</summary>
 internal sealed class FakeCli : IDisposable
 {
     public FakeCli(JsonObject? script = null)
@@ -59,7 +60,8 @@ internal sealed class FakeCli : IDisposable
             o["pid"]?.GetValue<int>() ?? 0,
             [.. (o["argv"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)],
             o["cwd"]?.GetValue<string>() ?? string.Empty,
-            o["prompt"]?.GetValue<string>() ?? string.Empty);
+            o["prompt"]?.GetValue<string>() ?? string.Empty,
+            [.. (o["env"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)]);
     }
 
     public void Dispose()
@@ -75,4 +77,5 @@ internal sealed class FakeCli : IDisposable
     }
 }
 
-internal sealed record FakeCliCall(int Call, int Pid, IReadOnlyList<string> Argv, string Cwd, string Prompt);
+/// <param name="EnvironmentNames">The names of the variables the fake saw — what the launcher let through (S2c), never their values.</param>
+internal sealed record FakeCliCall(int Call, int Pid, IReadOnlyList<string> Argv, string Cwd, string Prompt, IReadOnlyList<string> EnvironmentNames);

@@ -101,6 +101,7 @@ internal static class ProbeRowMapping
             Position = cell.Position,
             State = cell.State,
             Attempts = cell.Attempts,
+            UnmeasuredAttempts = cell.UnmeasuredAttempts,
             Owner = cell.Owner.Label,
             OwnerHost = cell.Owner.Host,
             OwnerPid = cell.Owner.Pid,
@@ -155,7 +156,8 @@ internal static class ProbeRowMapping
                     GateRowMapping.Pin(row.PinBinarySha256, row.PinVersionText, row.PinGitSha, row.PinDirtyCaptured, row.PinDirtyFiles, row.PinCheckedTree),
                     Facts(row),
                     artifacts,
-                    row.Reason)),
+                    row.Reason,
+                    row.UnmeasuredAttempts)),
                 Outcome<ProbeCell>.Failure),
             Outcome<ProbeCell>.Failure);
 

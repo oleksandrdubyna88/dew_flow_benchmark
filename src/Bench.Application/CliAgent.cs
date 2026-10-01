@@ -29,6 +29,36 @@ public sealed record AgentAsk(
     /// <summary>What else the launch must guarantee — a read-only sandbox, an output schema, tools taken away, MCP
     /// servers off. <see cref="AgentAskOptions.None"/> for every caller that asked for none, so their argv is unchanged.</summary>
     public AgentAskOptions Options { get; init; } = AgentAskOptions.None;
+
+    /// <summary>The environment the CLI process runs under — the harness's own, inherited, for every caller before the probes; a
+    /// REPLACED minimal set for a probe launch (S2c), so a shell-capable model cannot read the bench's secrets out of its environment.</summary>
+    public AgentEnvironment Environment { get; init; } = AgentEnvironment.Inherited;
+}
+
+/// <summary>How a CLI child's environment is built: inherited whole from the harness (the authoring and assessor launches — their
+/// behaviour is unchanged), or REPLACED by exactly the variables given, nothing else inherited (the probes, S2c). Two states rather
+/// than a nullable dictionary, so "inherit" is a word and not an absence.</summary>
+public sealed record AgentEnvironment
+{
+    private AgentEnvironment(bool replaced, IReadOnlyDictionary<string, string> variables)
+    {
+        IsReplaced = replaced;
+        Variables = variables;
+    }
+
+    public static AgentEnvironment Inherited { get; } = new(false, new Dictionary<string, string>(StringComparer.Ordinal));
+
+    /// <summary>Exactly these variables; the parent's are not inherited.</summary>
+    public static AgentEnvironment Only(IReadOnlyDictionary<string, string> variables) => new(true, variables);
+
+    public bool IsReplaced { get; }
+
+    public IReadOnlyDictionary<string, string> Variables { get; }
+
+    /// <summary>The names, sorted — what a record of the launch may carry. Never the values.</summary>
+    public IReadOnlyList<string> Names => [.. Variables.Keys.Order(StringComparer.Ordinal)];
+
+    public override string ToString() => IsReplaced ? $"replaced: {Variables.Count} variable(s)" : "inherited";
 }
 
 /// <summary>How far a CLI agent's own sandbox is opened.</summary>

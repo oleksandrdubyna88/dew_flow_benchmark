@@ -36,7 +36,8 @@ public sealed class ProbeCampaignTests(PostgresFixture postgres)
         stored.Should().OnlyContain(c => c.State == CellState.Settled && c.Attempts == 1 && c.Facts.Kind == ProbeAttemptKind.Answered);
         stored.Should().OnlyContain(c => c.Pin.VersionText == "fake-cli 1.0.0-fake", "every claim carries the build that answered --version (D9), read by the real pin reader");
         stored.Where(c => c.Probe == ProbeKind.ReadInside).Should().OnlyContain(c => c.Facts.CanaryRead == ProbeFact.Yes);
-        stored.Where(c => c.Probe == ProbeKind.ReadOutsideBare && c.Subject.Value == "claude-fake").Should().OnlyContain(c => c.Facts.CanaryRead == ProbeFact.No);
+        stored.Where(c => c.Probe == ProbeKind.ReadOutsideBare && c.Subject.Value == "claude-fake").Should().OnlyContain(c => c.Facts.CanaryRead == ProbeFact.NotCaptured,
+            "this fake declines without a single call while Read is offered — a missing canary with no stop in the transcript is not confinement (S2c)");
         stored.Where(c => c.Probe == ProbeKind.ReadOutsideBare && c.Subject.Value == "codex-fake").Should().OnlyContain(c => c.Facts.CanaryRead == ProbeFact.Yes, "this fake reads anywhere");
         stored.Where(c => c.Probe == ProbeKind.WebSearch && c.Subject.Value == "claude-fake").Should().OnlyContain(c => c.Facts.AnswerCurrent == ProbeFact.Yes && c.Facts.ToolEvidence == ProbeFact.Yes);
         stored.Where(c => c.Probe == ProbeKind.WebSearch && c.Subject.Value == "codex-fake").Should().OnlyContain(c => c.Facts.ToolEvidence == ProbeFact.No, "no web_search item in its transcript");

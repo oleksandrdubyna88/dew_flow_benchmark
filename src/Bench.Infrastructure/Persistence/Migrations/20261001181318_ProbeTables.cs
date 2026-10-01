@@ -51,6 +51,7 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     Position = table.Column<int>(type: "integer", nullable: false),
                     State = table.Column<string>(type: "text", nullable: false),
                     Attempts = table.Column<int>(type: "integer", nullable: false),
+                    UnmeasuredAttempts = table.Column<int>(type: "integer", nullable: false),
                     Owner = table.Column<string>(type: "text", nullable: false),
                     OwnerHost = table.Column<string>(type: "text", nullable: false),
                     OwnerPid = table.Column<int>(type: "integer", nullable: false),

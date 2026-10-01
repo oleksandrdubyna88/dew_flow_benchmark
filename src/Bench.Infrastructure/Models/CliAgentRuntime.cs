@@ -261,13 +261,15 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
         var clock = Stopwatch.StartNew();
         var arguments = ((Outcome<IReadOnlyList<string>>.Ok)argv).Value;
 
-        // agy reads one NDJSON user message per line (S2b, finding 3); every other CLI reads the prompt as text.
+        // agy reads one NDJSON user message per line (S2b, finding 3); every other CLI reads the prompt as text. The environment is
+        // the harness's own unless the ask REPLACES it (the probes, S2c) — null inherits, as every other caller of the launcher does.
         var attempt = await ProcessRunner.RunAsync(
             ask.Executable,
             arguments,
             ask.WorkingDirectory,
             ask.Wall,
             ask.Runtime == ModelRuntimeKind.CliAntigravity ? AntigravityStdin.UserMessage(ask.Prompt) : ask.Prompt,
+            ask.Environment.IsReplaced ? ask.Environment.Variables : null,
             cancellationToken);
 
         return Outcome<Launched>.Success(new Launched(attempt, clock.Elapsed, arguments));

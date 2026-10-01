@@ -295,19 +295,19 @@ public static class Grammar
         if (tools.ReadAttempted)
         {
             lines.Append(Assistant(ToolUseBlock("Read", new JsonObject { ["file_path"] = tools.Canary })));
-            lines.Append(User(ToolResult("<tool_use_error>Error: No such tool available: Read. Read is disabled for this session, in subagents as well as here.</tool_use_error>", isError: true)));
+            lines.Append(User(ToolResult("Read", "<tool_use_error>Error: No such tool available: Read. Read is disabled for this session, in subagents as well as here.</tool_use_error>", isError: true)));
         }
 
         if (tools.Shell)
         {
             lines.Append(Assistant(ToolUseBlock("PowerShell", new JsonObject { ["command"] = $"Get-Content -Raw -LiteralPath '{tools.Canary}'", ["description"] = "Read the canary" })));
-            lines.Append(User(ToolResult("(file contents)", isError: false)));
+            lines.Append(User(ToolResult("PowerShell", ShellOutput(tools.Canary), isError: false)));
         }
 
         if (tools.WebSearch)
         {
             lines.Append(Assistant(ToolUseBlock("WebSearch", new JsonObject { ["query"] = "@openai/codex npm package latest version" })));
-            lines.Append(User(ToolResult("Web search results for query: ...", isError: false)));
+            lines.Append(User(ToolResult("WebSearch", "Web search results for query: ...", isError: false)));
         }
 
         lines.Append(Assistant(new JsonObject { ["type"] = "text", ["text"] = text }));
@@ -325,9 +325,15 @@ public static class Grammar
         return lines.ToString();
     }
 
+    /// <summary>What a shell read of the canary prints — the file's bytes, as the live PowerShell and pwsh results carried them (S2c: the
+    /// verdict reads the token off the whole transcript, tool results included).</summary>
+    public static string ShellOutput(string canary) => canary.Length > 0 && File.Exists(canary) ? File.ReadAllText(canary).Trim() : "(no such file)";
+
     private static JsonObject ToolUseBlock(string name, JsonObject input) => new() { ["type"] = "tool_use", ["id"] = $"toolu_fake_{name}", ["name"] = name, ["input"] = input };
 
-    private static JsonObject ToolResult(string content, bool isError) => new() { ["type"] = "tool_result", ["content"] = content, ["is_error"] = isError, ["tool_use_id"] = "toolu_fake" };
+    /// <summary>A result is paired with its call by <c>tool_use_id</c>, as the live stream pairs them — the reader reads a call's fate
+    /// (stopped or ran) off that pairing (S2c), so a fake that mismatched the ids would leave every call's fate unknown.</summary>
+    private static JsonObject ToolResult(string tool, string content, bool isError) => new() { ["type"] = "tool_result", ["content"] = content, ["is_error"] = isError, ["tool_use_id"] = $"toolu_fake_{tool}" };
 
     private static string Assistant(JsonObject block) =>
         Line(new JsonObject { ["type"] = "assistant", ["message"] = new JsonObject { ["role"] = "assistant", ["content"] = new JsonArray(block) }, ["session_id"] = "fake-session" });
@@ -356,7 +362,7 @@ public static class Grammar
                     ["id"] = "item_2",
                     ["type"] = "command_execution",
                     ["command"] = $"pwsh.exe -Command \"Get-Content -Raw -LiteralPath '{tools.Canary}'\"",
-                    ["aggregated_output"] = tools.Shell ? "(file contents)\n" : "Operation not permitted\n",
+                    ["aggregated_output"] = tools.Shell ? ShellOutput(tools.Canary) + "\n" : "Operation not permitted\n",
                     ["exit_code"] = tools.Shell ? 0 : 1,
                     ["status"] = tools.Shell ? "completed" : "failed",
                 },
@@ -428,8 +434,8 @@ public static class Grammar
 }
 
 /// <summary>Where a model's script and call log live when no environment variable names them: a folder per MODEL ID under the
-/// system temp folder. The probe runner launches the CLI with the harness's own environment — as the editor does — so a test
-/// cannot hand the fake a variable without setting one process-wide; the model id the argv pins is the one thing every launch
+/// system temp folder. The probe runner launches the CLI under a MINIMAL replaced environment (S2c) — <c>TEMP</c> passes, nothing the
+/// harness owns does — so a test cannot hand the fake a variable at all; the model id the argv pins is the one thing every launch
 /// carries, and a test mints a fresh one per subject.</summary>
 public static class FakeHome
 {
@@ -456,6 +462,9 @@ public static class Events
             ["argv"] = new JsonArray([.. args.Select(a => (JsonNode)JsonValue.Create(a))]),
             ["cwd"] = Directory.GetCurrentDirectory(),
             ["prompt"] = prompt,
+            // The NAMES of the environment the fake was launched under — never the values — so a test can see what the launcher let
+            // through (S2c: the probes launch a CLI under a minimal, replaced environment).
+            ["env"] = new JsonArray([.. Environment.GetEnvironmentVariables().Keys.Cast<object>().Select(k => (JsonNode)JsonValue.Create(k.ToString() ?? string.Empty)).OrderBy(n => n!.GetValue<string>(), StringComparer.Ordinal)]),
         };
 
         File.WriteAllText(Path.Combine(dir, $"call-{key}-{call:000}-{Environment.ProcessId}-{Guid.NewGuid():N}.json"), record.ToJsonString());

@@ -246,16 +246,36 @@ public sealed record CoaiEnvironment
     /// <summary>The environment of a product launch that carries NO knobs — <c>coai-mcp --probe-api</c> (the probes, S2): the
     /// parent's variables minus every <c>COAI_*</c>, so the product reads nothing behind the harness's back, and the secret
     /// joins LAST through <see cref="WithSecret"/> exactly as for a cell, scrubbed from every text written beside the operator's
-    /// inherited secrets. No data directory, no caller session, an empty snapshot — there is no session to key them by.</summary>
-    public static CoaiEnvironment Bare(IReadOnlyDictionary<string, string> parent)
+    /// inherited secrets. No data directory, no caller session, an empty snapshot — there is no session to key them by.
+    /// Since S2c (finding 3) the parent's <c>BENCH_*</c> and secret-named variables are dropped as well: the product authenticates
+    /// through the vault by the one key joined last, and the database url it would otherwise inherit carries a password.</summary>
+    public static CoaiEnvironment Bare(IReadOnlyDictionary<string, string> parent) => Minimal(parent, static _ => true);
+
+    /// <summary>A MINIMAL child environment (S2c, finding 3): only the parent's variables <paramref name="passes"/> admits — never a
+    /// <c>BENCH_*</c>, never a <c>COAI_*</c>, never a secret-named one, whatever the predicate says — while every secret-named value and
+    /// every <c>BENCH_*</c> value of the parent is still scrubbed from the texts written (<see cref="ChildEnvironment.Scrub"/>): the child
+    /// cannot see them, and a text that quotes one anyway (a log line, an echo) must not carry it to disk. No snapshot, no data
+    /// directory, no caller session — the probes' launches have none of those.</summary>
+    public static CoaiEnvironment Minimal(IReadOnlyDictionary<string, string> parent, Func<string, bool> passes)
     {
         var variables = parent
-            .Where(v => !v.Key.StartsWith("COAI_", StringComparison.OrdinalIgnoreCase))
+            .Where(v => passes(v.Key) && !IsHarnessVariable(v.Key) && !IsSecretName(v.Key))
             .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
-        var inherited = variables.Where(v => IsSecretName(v.Key) && v.Value.Trim().Length >= ShortestScrubbed).Select(v => v.Value.Trim()).Distinct(StringComparer.Ordinal).ToList();
+        var inherited = parent
+            .Where(v => IsScrubbedName(v.Key) && v.Value.Trim().Length >= ShortestScrubbed)
+            .Select(v => v.Value.Trim()).Distinct(StringComparer.Ordinal).ToList();
 
         return new CoaiEnvironment(variables, new Dictionary<string, string>(StringComparer.Ordinal), string.Empty, string.Empty, inherited);
     }
+
+    /// <summary>A variable whose VALUE is scrubbed from every text a probe writes: a secret-named one, or a <c>BENCH_*</c> one — the
+    /// database url among them, and a url carries its password.</summary>
+    private static bool IsScrubbedName(string name) => IsSecretName(name) || name.StartsWith("BENCH_", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A variable the HARNESS owns — <c>BENCH_*</c> (the database url with its password, the artefact root, the CLI references)
+    /// and <c>COAI_*</c> (the product's knobs) — which no probe child may inherit (S2c).</summary>
+    public static bool IsHarnessVariable(string name) =>
+        name.StartsWith("BENCH_", StringComparison.OrdinalIgnoreCase) || name.StartsWith("COAI_", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The launch environment: every variable, then the secret, LAST — nothing after this step can read or
     /// overwrite it, and nothing before it could see one. A reviewer that needs no vault gets no key.</summary>

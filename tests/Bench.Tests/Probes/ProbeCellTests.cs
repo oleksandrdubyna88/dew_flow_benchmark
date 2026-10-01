@@ -67,6 +67,25 @@ public sealed class ProbeCellTests
         ProbeCellLifecycle.Settle(claimed, new ProbeSettlement(ProbeFacts.None, [])).Reason().Should().Contain("no attempt kind");
     }
 
+    /// <summary>S2c, review finding 4: the sweep decides on MEASURED attempts — a cell handed back unmeasured three times is still on
+    /// its first measured attempt when a crash strands it, and is requeued, not abandoned.</summary>
+    [Fact]
+    public void Unmeasured_hand_backs_never_count_toward_the_abandonment()
+    {
+        var cell = Cell();
+
+        for (var i = 0; i < Claimable.MaxAttempts; i++)
+        {
+            cell = ProbeCellLifecycle.HandBackUnmeasured(ProbeCellLifecycle.Claim(cell, Worker("lane-1"), Noon, Pin('a')).Ok(), ProbeReason.AccountOut).Ok();
+        }
+
+        var crashed = ProbeCellLifecycle.Reclaim(ProbeCellLifecycle.Claim(cell, Worker("crashed"), Noon, Pin('a')).Ok());
+
+        (crashed.Attempts, crashed.UnmeasuredAttempts, crashed.MeasuredAttempts).Should().Be((4, 3, 1));
+        crashed.State.Should().Be(CellState.Pending, "the first MEASURED attempt died; the rule counts measured attempts, so the cell gets its second");
+        crashed.Reason.Should().Be(ProbeReason.None);
+    }
+
     [Fact]
     public void A_hand_back_keeps_the_attempt_counted_marks_it_unmeasured_and_never_abandons()
     {

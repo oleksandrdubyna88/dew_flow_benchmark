@@ -61,10 +61,15 @@ public sealed record Claimable(CellState State, int Attempts, WorkerIdentity Own
     /// <summary>The sweep decision for one claim. Not an <c>Outcome</c>: a sweep over a thousand cells asks
     /// this of every one of them, and "nothing to do here" is the normal answer rather than a failure. The
     /// composing cell decides what an abandonment means for ITS outcome columns; this decides only the claim.</summary>
-    public static ReclaimDecision Reclaim(Claimable claim) =>
+    public static ReclaimDecision Reclaim(Claimable claim) => Reclaim(claim, unmeasured: 0);
+
+    /// <summary>The same decision with <paramref name="unmeasured"/> attempts FORGIVEN (the probes, S2c): an attempt handed back
+    /// because an account was out or the artefact root was unwritable keeps its number — its directory exists — but was never a
+    /// failure of the cell, so it does not count toward <see cref="MaxAttempts"/>. The gate's cells pass zero.</summary>
+    public static ReclaimDecision Reclaim(Claimable claim, int unmeasured) =>
         claim.State != CellState.Claimed
             ? new ReclaimDecision.Untouched()
-            : claim.Attempts >= MaxAttempts
+            : claim.Attempts - unmeasured >= MaxAttempts
                 ? new ReclaimDecision.Abandoned(
                     claim with { State = CellState.Abandoned, Owner = WorkerIdentity.Nobody },
                     $"abandoned after {claim.Attempts} attempts — a cell that kills its host will kill the next one")

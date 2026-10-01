@@ -31,7 +31,7 @@ public sealed record ProbeRunReportDto(
 public sealed record ProbeRunSummaryDto(Guid RunId, DateTimeOffset CreatedAt, int Subjects, int Repeats, bool ArtifactsPruned, ProbeProgressDto Progress);
 
 /// <summary>A pair the planner did not measure: the probe word, the subject id, and why as a closed word —
-/// <c>api-probe-on-cli</c>, <c>cli-probe-on-api</c>, <c>no-web-off-flag</c>.</summary>
+/// <c>api-probe-on-cli</c>, <c>cli-probe-on-api</c>, <c>no-web-off-flag</c>, <c>no-deny-list</c>.</summary>
 public sealed record ProbeDroppedPairDto(string Probe, string Subject, string Reason);
 
 /// <summary>The frozen web oracle (D7): the version of <c>@openai/codex</c> the <c>web-search</c> answers are compared with,
@@ -54,6 +54,8 @@ public sealed record ProbeSubjectDto(string Id, string Runtime, string Model, st
 /// <c>canaryRead</c> is shown <c>not-captured</c> (<c>ProbeVerdicts.UnderControl</c>).</param>
 /// <param name="RerunCommand">The copyable re-measurement — <c>bench probes rerun --cell &lt;id&gt;</c> — the tab shows it
 /// rather than offering a button (D10).</param>
+/// <param name="UnmeasuredAttempts">How many of <paramref name="Attempts"/> were handed back unmeasured (S2c) — a quota stop, an
+/// unwritable artefact root — and count for nothing toward abandonment.</param>
 public sealed record ProbeCellReportDto(
     Guid CellId,
     string Probe,
@@ -62,6 +64,7 @@ public sealed record ProbeCellReportDto(
     int Generation,
     string State,
     int Attempts,
+    int UnmeasuredAttempts,
     string Kind,
     ProbeExitDto Exit,
     ProbeFactsDto Facts,

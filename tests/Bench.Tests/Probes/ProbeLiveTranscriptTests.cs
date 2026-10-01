@@ -143,7 +143,8 @@ public sealed class ProbeLiveTranscriptTests : IDisposable
         var run = ProbeRun.Planned(Guid.CreateVersion7(), ProbeStoreFixtures.Oracle(), [subject], 1, DateTimeOffset.UtcNow).Ok();
         var runner = new CliProbeRunner(
             new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance), new ProbeFixtures(_root.Sibling("work")), new ProbeArtifacts(_root.Path),
-            new CliProbeSettings(new Dictionary<string, string> { [subject.Id.Value] = FakeCli.Executable }, TimeSpan.FromSeconds(60)),
+            new CliProbeSettings(new Dictionary<string, string> { [subject.Id.Value] = FakeCli.Executable }, TimeSpan.FromSeconds(60),
+                Environment.GetEnvironmentVariables().Cast<System.Collections.DictionaryEntry>().ToDictionary(e => (string)e.Key, e => e.Value as string ?? string.Empty, StringComparer.Ordinal)),
             NullLogger<CliProbeRunner>.Instance);
 
         return (runner, run, subject);
