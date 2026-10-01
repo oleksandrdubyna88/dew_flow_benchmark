@@ -15,7 +15,8 @@ namespace Bench.Cli;
 /// <item><c>sweep [--run]</c> — the entry step alone (S2's <see cref="ProbeCampaign.PrepareAsync"/>), over one run or every run.</item>
 /// <item><c>report --run [--json]</c> — <see cref="ProbeReport"/>: the object S4's API answers, as JSON or as text.</item>
 /// <item><c>prune --run</c> — finding 5: refused while any cell is Pending or Claimed; else the run is flagged pruned FIRST (the guarded
-/// UPDATE) and its artefacts deleted after, so a flag can over-state a deletion but never hide one.</item>
+/// UPDATE) and its artefacts deleted after, so a flag can over-state a deletion but never hide one. Idempotent: a prune of an
+/// already-pruned run deletes whatever is left and exits 0 once nothing is (0 folders deleted is an answer, not a refusal).</item>
 /// </list></summary>
 public static class ProbesReadCommand
 {

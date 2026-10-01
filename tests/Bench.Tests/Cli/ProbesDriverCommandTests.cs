@@ -213,6 +213,96 @@ public sealed class ProbesDriverCommandTests(PostgresFixture postgres)
             r.Code == ExitCodes.Configuration && r.Error.Contains("pruned"), "a pruned run measures nothing more");
     }
 
+    /// <summary>Gate code round 2, finding 4: <c>prune</c> flags the run BEFORE it deletes, so a deletion the filesystem half-refuses
+    /// leaves a run flagged pruned with artefacts still on disk. The guarantee is that this is recoverable — a prune of an already-pruned
+    /// run retries whatever remains and exits 0 once nothing does, and a prune with nothing left is a 0, not a refusal. The first
+    /// deletion is made to fail partway with a REAL filesystem refusal: a file held open without sharing on Windows, its folder made
+    /// read-only on Unix (where an open handle does not stop an unlink).</summary>
+    [Fact]
+    public async Task A_prune_the_filesystem_half_refused_is_finished_by_a_second_prune_which_exits_0_and_a_third_with_nothing_left_still_exits_0()
+    {
+        await using var setup = await ProbesCliSetup.StartAsync(postgres);
+        setup.AddSubject("claude-fake", "claude");
+        var run = await setup.PlanAndRunAsync("read-inside", 2);
+        run.Code.Should().Be(ExitCodes.Pass, run.Output + run.Error);
+        var runId = ProbesCliSetup.RunIdOf(run.Output);
+        var runFolder = Path.Combine(setup.ArtifactRoot, ProbePaths.Folder, runId.ToString("D"));
+        var cellFolders = Directory.EnumerateDirectories(runFolder).Order(StringComparer.Ordinal).ToList();
+        cellFolders.Should().HaveCount(2);
+        var held = Directory.EnumerateFiles(cellFolders[1], "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).First();
+
+        (int Code, string Output, string Error) first;
+        using (HoldAgainstDeletion(held))
+        {
+            first = await setup.RunAsync("prune", "--run", runId.ToString());
+        }
+
+        first.Code.Should().Be(ExitCodes.Environment, first.Output + first.Error);
+        first.Error.Should().Contain("flagged pruned").And.Contain("prune again");
+        Directory.Exists(cellFolders[0]).Should().BeFalse("the deletion went partway — the folder nothing held is gone");
+        File.Exists(held).Should().BeTrue("the folder the filesystem refused is still on disk");
+        (await setup.NewStore().LoadAsync(runId, Ct)).Ok().ArtifactsPruned.Should().BeTrue();
+
+        var second = await setup.RunAsync("prune", "--run", runId.ToString());
+
+        second.Code.Should().Be(ExitCodes.Pass, "a prune of an already-pruned run retries what remains — " + second.Output + second.Error);
+        second.Output.Should().Contain("1 cell folder(s) of artefacts deleted");
+        Directory.Exists(runFolder).Should().BeFalse("the retry finished the cleanup");
+
+        var third = await setup.RunAsync("prune", "--run", runId.ToString());
+
+        third.Code.Should().Be(ExitCodes.Pass, "nothing left to delete is an answer, not a refusal — " + third.Output + third.Error);
+        third.Output.Should().Contain("0 cell folder(s) of artefacts deleted");
+    }
+
+    /// <summary>A real refusal to delete <paramref name="file"/>, released on dispose: no-share open on Windows; a read-only parent
+    /// folder on Unix — skipped when this user can write there anyway (root ignores the mode).</summary>
+    private static IDisposable HoldAgainstDeletion(string file)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+        }
+
+        return ReadOnlyFolder.Hold(Path.GetDirectoryName(file)!);
+    }
+
+    private static bool CanWriteIn(string folder)
+    {
+        try
+        {
+            var probe = Path.Combine(folder, ".write-probe");
+            File.WriteAllText(probe, string.Empty);
+            File.Delete(probe);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A folder made read-only until disposed — an unlink inside it is refused for any user but root.</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private sealed class ReadOnlyFolder(string folder, UnixFileMode mode) : IDisposable
+    {
+        public static ReadOnlyFolder Hold(string folder)
+        {
+            var held = new ReadOnlyFolder(folder, File.GetUnixFileMode(folder));
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+            if (CanWriteIn(folder))
+            {
+                held.Dispose();
+                Assert.Skip("this user writes through a read-only folder (root) — no filesystem refusal can be planted");
+            }
+
+            return held;
+        }
+
+        public void Dispose() => File.SetUnixFileMode(folder, mode);
+    }
+
     /// <summary>A run of two read-inside cells for the setup's subject: the first settled through the verb, the second left Claimed by
     /// a bench process that is gone — the state a kill mid-attempt leaves.</summary>
     private static async Task<(Guid RunId, Guid Cell)> StrandedRunAsync(ProbesCliSetup setup)
