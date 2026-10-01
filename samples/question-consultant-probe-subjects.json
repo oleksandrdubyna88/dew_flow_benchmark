@@ -1,6 +1,8 @@
 {
   "subjects": [
-    { "id": "claude-sonnet", "runtime": "claude", "model": "sonnet", "executableRef": "BENCH_CLAUDE" },
+    { "id": "claude-sonnet-denylist", "runtime": "claude", "model": "sonnet", "executableRef": "BENCH_CLAUDE", "confinement": "denylist" },
+    { "id": "claude-sonnet-allowlist", "runtime": "claude", "model": "sonnet", "executableRef": "BENCH_CLAUDE", "confinement": "allowlist" },
+    { "id": "claude-sonnet-restricted", "runtime": "claude", "model": "sonnet", "executableRef": "BENCH_CLAUDE", "confinement": "restricted" },
     { "id": "codex-astra", "runtime": "codex", "model": "gpt-6-astra", "executableRef": "BENCH_CODEX" },
     { "id": "codex-terra", "runtime": "codex", "model": "gpt-5.6-terra", "executableRef": "BENCH_CODEX" },
     { "id": "agy-gemini", "runtime": "antigravity", "model": "gemini-3.1-pro-high", "executableRef": "BENCH_AGY" },

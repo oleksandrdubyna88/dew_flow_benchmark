@@ -40,7 +40,7 @@ public sealed class ProbeCampaignTests(PostgresFixture postgres)
         stored.Where(c => c.Probe == ProbeKind.ReadOutsideBare && c.Subject.Value == "codex-fake").Should().OnlyContain(c => c.Facts.CanaryRead == ProbeFact.Yes, "this fake reads anywhere");
         stored.Where(c => c.Probe == ProbeKind.WebSearch && c.Subject.Value == "claude-fake").Should().OnlyContain(c => c.Facts.AnswerCurrent == ProbeFact.Yes && c.Facts.ToolEvidence == ProbeFact.Yes);
         stored.Where(c => c.Probe == ProbeKind.WebSearch && c.Subject.Value == "codex-fake").Should().OnlyContain(c => c.Facts.ToolEvidence == ProbeFact.No, "no web_search item in its transcript");
-        stored.Should().OnlyContain(c => c.Artifacts.Count == 3, "answer, stdout and stderr per cell");
+        stored.Should().OnlyContain(c => c.Artifacts.Count == 6, "stdout, stderr, argv and prompt (the raw evidence), then answer and tools per cell (S2b)");
         lines.Should().HaveCount(cells.Count).And.OnlyContain(l => l.StartsWith("settled", StringComparison.Ordinal));
         var runRoot = Path.Combine(rig.WorkRoot, "probes", run.Id.ToString("D"));
         (Directory.Exists(runRoot) ? Directory.EnumerateDirectories(runRoot) : []).Should().BeEmpty("every fixture is deleted after its attempt");

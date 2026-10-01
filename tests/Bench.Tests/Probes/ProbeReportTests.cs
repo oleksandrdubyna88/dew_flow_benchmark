@@ -89,7 +89,8 @@ public sealed class ProbeReportTests
         var report = ProbeReport.Of(run with { ArtifactsPruned = true }, cells);
 
         report.Should().Match<ProbeRunReportDto>(r => r.ArtifactsPruned && !r.Auditable && r.Oracle == new ProbeOracleDto("0.52.0", "registry"));
-        report.Subjects.Single().Should().Be(new ProbeSubjectDto("claude-a", "claude", "model-x", "BENCH_CLAUDE", string.Empty, string.Empty, string.Empty));
+        report.Subjects.Single().Should().Be(new ProbeSubjectDto("claude-a", "claude", "model-x", "BENCH_CLAUDE", "denylist", string.Empty, string.Empty, string.Empty),
+            "the confinement mode travels with the frozen subject (S2b)");
     }
 
     [Fact]

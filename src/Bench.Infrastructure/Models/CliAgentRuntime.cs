@@ -48,13 +48,15 @@ public static class CliArgv
     /// </list>
     /// <item><b>the probes</b> (S2 of the question-consultant plan, flags measured on this machine 2026-10-01): web search
     /// ON is codex's TOP-LEVEL <c>--search</c> — <c>codex exec --search</c> exits 2 — placed BEFORE <c>exec</c>; on claude it
-    /// is the two web tools NOT in the deny list, and OFF puts <c>WebSearch WebFetch</c> there; agy as it is for ON and has no
-    /// flag for OFF. A directory grant is <c>--add-dir</c> on all three. JSON events are claude <c>--output-format json</c>,
-    /// codex <c>--json</c>, agy <c>--output-format stream-json</c>. agy's read-only launch is <c>--mode plan</c>.</item>
+    /// is the two web tools NOT in the deny list, and OFF puts <c>WebSearch WebFetch</c> there (unless an allow-list is asked — then
+    /// OFF is their absence from it, S2b); agy as it is for ON and has no flag for OFF. A directory grant is <c>--add-dir</c> on all
+    /// three. JSON events are claude <c>--output-format stream-json --verbose</c> (the <c>json</c> envelope is blind to the tools, S2b),
+    /// codex <c>--json</c>, agy <c>--output-format stream-json</c> (its only launch). agy's read-only launch is <c>--mode plan</c>;
+    /// claude's confinement modes are <c>--tools</c> (an allow-list) and <c>--restricted</c>.</item>
     /// </list>
     /// An option the CLI has no flag for is REFUSED by name — claude has no output schema and no last-message file,
-    /// codex has no tool deny-list and no turn ceiling, agy has neither a deny-list nor a web-off switch, gemini has none of
-    /// the probe options: a guarantee silently not applied is one the caller goes on believing.</summary>
+    /// codex has no tool deny-list, allow-list, restricted mode or turn ceiling, agy has none of those and no web-off switch, gemini
+    /// has none of the probe options: a guarantee silently not applied is one the caller goes on believing.</summary>
     public static Outcome<IReadOnlyList<string>> For(
         ModelRuntimeKind runtime, string modelId, AgentAskOptions options, IReadOnlyList<string> codexMcpServers)
     {
@@ -92,31 +94,40 @@ public static class CliArgv
         "-",
     ];
 
+    /// <summary>claude 2.1.258 (S2b, measured 2026-10-01): the transcript is <c>--output-format stream-json --verbose</c> — the <c>json</c>
+    /// envelope shows only the final result and never which tool ran; <c>--tools</c> is an allow-list of the built-in set (<c>""</c>
+    /// offers nothing, and <c>default</c> does NOT compose with names); <c>--restricted</c> removes the code-running tools and WebFetch
+    /// and confines the file tools to the working directories. Under an allow-list web OFF is the web tools' absence from it.</summary>
     private static IReadOnlyList<string> Claude(string modelId, AgentAskOptions options) =>
     [
         "-p", "--model", modelId,
-        .. options.JsonEvents ? ["--output-format", "json"] : Array.Empty<string>(),
+        .. options.JsonEvents ? ["--output-format", "stream-json", "--verbose"] : Array.Empty<string>(),
         .. options.Sandbox == AgentSandbox.ReadOnly ? ["--permission-mode", "plan"] : Array.Empty<string>(),
+        .. options.Restricted ? ["--restricted"] : Array.Empty<string>(),
         .. Grants(options),
+        .. options.AllowedTools.Asked ? ["--tools", .. options.AllowedTools.Names.Count == 0 ? [string.Empty] : options.AllowedTools.Names] : Array.Empty<string>(),
         .. ClaudeDenied(options) is { Count: > 0 } denied ? ["--disallowedTools", .. denied] : Array.Empty<string>(),
         .. options.MaxTurns > 0 ? ["--max-turns", options.MaxTurns.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
         .. options.McpServersOff ? ["--strict-mcp-config"] : Array.Empty<string>(),
     ];
 
-    /// <summary>agy 1.2.14: <c>--print</c> answers once from stdin; <c>--output-format stream-json</c> is its event transcript;
-    /// <c>--mode plan</c> is its no-edits mode; <c>--add-dir</c> is repeatable. Measured as flags that EXIST (2026-10-01); what
-    /// each does on a live run is S5's first-cell hand-check.</summary>
+    /// <summary>agy 1.2.14, as coai launches it (<c>src_mcp/runners/Consultation/AntigravityConsultant.cs</c>, measured there 2026-09-12 and
+    /// here 2026-10-01 — S2b, finding 3): the EMPTY <c>--print=</c> is mandatory in stream mode and a bare <c>--print</c> takes the next
+    /// token as its prompt ("<c>--print took "--model" as its prompt</c>", every live cell exit 2); the prompt rides stdin as one NDJSON
+    /// user message (<see cref="AntigravityStdin"/>), which requires <c>--input-format stream-json</c> and therefore
+    /// <c>--output-format stream-json</c> — so the stream is the only launch, with or without <see cref="AgentAskOptions.JsonEvents"/>.
+    /// <c>--mode plan</c> is its no-edits mode; <c>--add-dir</c> is repeatable.</summary>
     private static IReadOnlyList<string> Antigravity(string modelId, AgentAskOptions options) =>
     [
-        "--print", "--model", modelId,
-        .. options.JsonEvents ? ["--output-format", "stream-json"] : Array.Empty<string>(),
+        .. AntigravityStdin.StreamFlags,
         .. options.Sandbox == AgentSandbox.ReadOnly ? ["--mode", "plan"] : Array.Empty<string>(),
+        "--model", modelId,
         .. Grants(options),
     ];
 
-    /// <summary>Claude's deny list: the caller's tools, then — for web OFF — the two web tools, each once.</summary>
+    /// <summary>Claude's deny list: the caller's tools, then — for web OFF with no allow-list asked — the two web tools, each once.</summary>
     private static IReadOnlyList<string> ClaudeDenied(AgentAskOptions options) =>
-        [.. options.DisallowedTools.Concat(options.WebSearch == AgentWebSearch.Off ? ["WebSearch", "WebFetch"] : []).Distinct(StringComparer.Ordinal)];
+        [.. options.DisallowedTools.Concat(options.WebSearch == AgentWebSearch.Off && !options.AllowedTools.Asked ? ["WebSearch", "WebFetch"] : []).Distinct(StringComparer.Ordinal)];
 
     private static IEnumerable<string> Grants(AgentAskOptions options) => options.AddDirectories.SelectMany(dir => new[] { "--add-dir", dir });
 
@@ -136,6 +147,8 @@ public static class CliArgv
             (o.WebSearch == AgentWebSearch.Off, "web search off", [ModelRuntimeKind.CliCodex, ModelRuntimeKind.CliClaude]),
             (o.AddDirectories.Count > 0, "a directory grant", probeClis),
             (o.JsonEvents, "JSON events", probeClis),
+            (o.AllowedTools.Asked, "a tool allow-list", [ModelRuntimeKind.CliClaude]),
+            (o.Restricted, "restricted mode", [ModelRuntimeKind.CliClaude]),
         };
 
         var unhonoured = asked.Where(a => a.Asked && !a.Honoured.Contains(runtime)).Select(a => a.Name).ToList();
@@ -169,9 +182,9 @@ public static class CliArgv
             // one THIS harness created, at a commit it pinned, from a repository the operator named.
             ModelRuntimeKind.CliGemini => Outcome<IReadOnlyList<string>>.Success(["-m", modelId, "--skip-trust"]),
 
-            // `--print` is agy's print mode (its `-p`), the prompt on stdin; `--model` pins the model. agy 1.2.14's
-            // flags measured 2026-10-01; whether the pipe answers is S5's first live cell.
-            ModelRuntimeKind.CliAntigravity => Outcome<IReadOnlyList<string>>.Success(["--print", "--model", modelId]),
+            // agy's one launch shape (see Antigravity above): the stream flags, the prompt as an NDJSON user message on stdin.
+            // Measured live 2026-10-01 — a bare `--print` took `--model` as its prompt and every cell exited 2.
+            ModelRuntimeKind.CliAntigravity => Outcome<IReadOnlyList<string>>.Success([.. AntigravityStdin.StreamFlags, "--model", modelId]),
 
             _ => Outcome<IReadOnlyList<string>>.Failure(
                 $"{runtime} is not a CLI agent — it is answered over HTTP, and asking it to author a question "
@@ -197,7 +210,7 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             return Outcome<AgentAnswer>.Failure(refused.Reason);
         }
 
-        var (attempt, elapsed) = ((Outcome<Launched>.Ok)launched).Value;
+        var (attempt, elapsed, _) = ((Outcome<Launched>.Ok)launched).Value;
         var answer = Read(attempt, ask, elapsed, LastMessage(ask));
 
         answer.Match(
@@ -213,9 +226,11 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
 
     /// <summary>The probes' reading (S2): the same launch, handed back whole — see <see cref="Transcript"/>.</summary>
     public async Task<Outcome<AgentTranscript>> TranscriptAsync(AgentAsk ask, CancellationToken cancellationToken) =>
-        (await LaunchAsync(ask, cancellationToken)).Match(launched => Transcript(launched.Attempt, launched.Elapsed, ask), Outcome<AgentTranscript>.Failure);
+        (await LaunchAsync(ask, cancellationToken)).Match(
+            launched => Transcript(launched.Attempt, launched.Elapsed, ask).Match(t => Outcome<AgentTranscript>.Success(t with { Argv = launched.Argv }), Outcome<AgentTranscript>.Failure),
+            Outcome<AgentTranscript>.Failure);
 
-    private sealed record Launched(ProcessAttempt Attempt, TimeSpan Elapsed);
+    private sealed record Launched(ProcessAttempt Attempt, TimeSpan Elapsed, IReadOnlyList<string> Argv);
 
     /// <summary>What both readings share: the prompt check, the argv, the one launcher, the clock. A refusal here is one that
     /// stopped the launch — nothing was spent.</summary>
@@ -244,16 +259,18 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
         }
 
         var clock = Stopwatch.StartNew();
+        var arguments = ((Outcome<IReadOnlyList<string>>.Ok)argv).Value;
 
+        // agy reads one NDJSON user message per line (S2b, finding 3); every other CLI reads the prompt as text.
         var attempt = await ProcessRunner.RunAsync(
             ask.Executable,
-            ((Outcome<IReadOnlyList<string>>.Ok)argv).Value,
+            arguments,
             ask.WorkingDirectory,
             ask.Wall,
-            ask.Prompt,
+            ask.Runtime == ModelRuntimeKind.CliAntigravity ? AntigravityStdin.UserMessage(ask.Prompt) : ask.Prompt,
             cancellationToken);
 
-        return Outcome<Launched>.Success(new Launched(attempt, clock.Elapsed));
+        return Outcome<Launched>.Success(new Launched(attempt, clock.Elapsed, arguments));
     }
 
     /// <summary>One <see cref="ProcessAttempt"/> as a transcript: a completed run keeps its exit code and both pipes; a run

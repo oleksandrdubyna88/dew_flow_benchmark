@@ -50,7 +50,11 @@ public static class ProbePaths
     {
         ProbeArtifactKind.Answer => "answer.txt",
         ProbeArtifactKind.Stdout => "stdout.txt",
-        _ => "stderr.txt",
+        ProbeArtifactKind.Stderr => "stderr.txt",
+        ProbeArtifactKind.Argv => "argv.json",
+        ProbeArtifactKind.Prompt => "prompt.txt",
+        ProbeArtifactKind.Tools => "tools.json",
+        _ => "fault.txt",
     };
 
     /// <summary>§4: the read probes have both files; the web search runs in an EMPTY <c>cwd/</c> with no canary anywhere; the

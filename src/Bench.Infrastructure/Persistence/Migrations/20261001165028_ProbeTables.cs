@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 
@@ -29,6 +29,7 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     SubjectVendors = table.Column<List<string>>(type: "text[]", nullable: false),
                     SubjectEndpoints = table.Column<List<string>>(type: "text[]", nullable: false),
                     SubjectDialects = table.Column<List<string>>(type: "text[]", nullable: false),
+                    SubjectConfinements = table.Column<List<string>>(type: "text[]", nullable: false),
                     Probes = table.Column<List<string>>(type: "text[]", nullable: false)
                 },
                 constraints: table =>
@@ -67,6 +68,8 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     ReadAttempted = table.Column<string>(type: "text", nullable: false),
                     AnswerCurrent = table.Column<string>(type: "text", nullable: false),
                     ToolEvidence = table.Column<string>(type: "text", nullable: false),
+                    ShellUsed = table.Column<string>(type: "text", nullable: false),
+                    ReaderOffered = table.Column<string>(type: "text", nullable: false),
                     Reachable = table.Column<string>(type: "text", nullable: false),
                     AccountOut = table.Column<string>(type: "text", nullable: false),
                     ArtifactKinds = table.Column<List<string>>(type: "text[]", nullable: false),

@@ -56,12 +56,26 @@ public enum ProbeReason
     NoAnswer,
 }
 
-/// <summary>Which file of an attempt an artefact is.</summary>
+/// <summary>Which file of an attempt an artefact is. The RAW evidence — <see cref="Stdout"/>, <see cref="Stderr"/>, <see cref="Argv"/>,
+/// <see cref="Prompt"/> — is committed BEFORE anything is parsed (S2b, finding 6: two faulted codex cells left no artefact at all);
+/// <see cref="Answer"/> and <see cref="Tools"/> are what the readers extracted; <see cref="Fault"/> says why a reader could not.</summary>
 public enum ProbeArtifactKind
 {
     Answer,
     Stdout,
     Stderr,
+
+    /// <summary>The exact argv the CLI was launched with, as JSON, secrets scrubbed.</summary>
+    Argv,
+
+    /// <summary>The prompt as sent on stdin.</summary>
+    Prompt,
+
+    /// <summary>The tools the transcript showed — offered, used, denied (<see cref="ToolTrace.ToJson"/>).</summary>
+    Tools,
+
+    /// <summary>The exception a reader threw on this transcript — a fact about the reader, kept so the cell can be re-measured once it is fixed.</summary>
+    Fault,
 }
 
 /// <summary>What the database knows of an attempt's file: its path RELATIVE to the artefact root, the bytes' SHA-256 and
@@ -110,6 +124,8 @@ public sealed partial record ProbeArtifact
 
 /// <summary>Every fact one attempt produced, each in three states, beside the attempt's kind and exit code. Which facts a
 /// probe fills is <see cref="ProbeVerdicts"/>' business; this is the shape the cell stores.</summary>
+/// <param name="ShellUsed">A code-running tool was called (S2b): the way around a file-tool denial, and the security answer when a canary leaks.</param>
+/// <param name="ReaderOffered">The CLI's offered-tool list named a file-capable tool (S2b): <i>no</i> is confinement by absence.</param>
 public sealed record ProbeFacts(
     ProbeAttemptKind Kind,
     CapturedCount ExitCode,
@@ -117,15 +133,17 @@ public sealed record ProbeFacts(
     ProbeFact ReadAttempted,
     ProbeFact AnswerCurrent,
     ProbeFact ToolEvidence,
+    ProbeFact ShellUsed,
+    ProbeFact ReaderOffered,
     ProbeFact Reachable,
     ProbeFact AccountOut)
 {
     /// <summary>A cell nobody has attempted.</summary>
     public static ProbeFacts None { get; } = NothingCaptured(ProbeAttemptKind.None, CapturedCount.Unavailable("not attempted"));
 
-    /// <summary>Every fact <i>not captured</i> — a refused launch, a timeout, an unmeasured attempt.</summary>
+    /// <summary>Every fact <i>not captured</i> — a refused launch, a timeout, an unmeasured attempt, a reader that faulted.</summary>
     public static ProbeFacts NothingCaptured(ProbeAttemptKind kind, CapturedCount exitCode) =>
-        new(kind, exitCode, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured);
+        new(kind, exitCode, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured, ProbeFact.NotCaptured);
 
     /// <summary>An answered attempt, every fact <i>not captured</i> until a reader fills it.</summary>
     public static ProbeFacts Answered(CapturedCount exitCode) => NothingCaptured(ProbeAttemptKind.Answered, exitCode);

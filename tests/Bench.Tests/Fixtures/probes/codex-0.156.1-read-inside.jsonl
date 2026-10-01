@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a0f80a-e4cd-79f1-978a-71ba72380f6a"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"\"C:\\\\Users\\\\operator\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\pwsh.exe\" -Command 'Get-Content -Raw -LiteralPath inside.txt'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"\"C:\\\\Users\\\\operator\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\pwsh.exe\" -Command 'Get-Content -Raw -LiteralPath inside.txt'","aggregated_output":"IN-4d968cf87911\n\r\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"IN-4d968cf87911"}}
+{"type":"turn.completed","usage":{"input_tokens":27499,"cached_input_tokens":19968,"cache_write_input_tokens":0,"output_tokens":181,"reasoning_output_tokens":38}}

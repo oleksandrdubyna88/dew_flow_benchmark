@@ -10,8 +10,9 @@ internal static class ProbeUiFixtures
 
     public static readonly DateTimeOffset Noon = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
 
-    public static readonly ProbeFactsDto NothingCaptured =
-        new(ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured);
+    public static readonly ProbeFactsDto NothingCaptured = new(
+        ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured,
+        ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured, ProbeWords.NotCaptured);
 
     public static string RunRoute(Guid runId) => $"{RunsRoute}/{runId}";
 
@@ -49,8 +50,8 @@ internal static class ProbeUiFixtures
             runId, Noon, new ProbeOracleDto("0.52.0", "registry"), 3, pruned, !pruned,
             new ProbeProgressDto(pending, claimed, settled, abandoned, pending + claimed > 0),
             [
-                new ProbeSubjectDto("claude-a", "claude", "sonnet", "BENCH_CLAUDE", string.Empty, string.Empty, string.Empty),
-                new ProbeSubjectDto("codex-b", "codex", "gpt-6-astra", "BENCH_CODEX", string.Empty, string.Empty, string.Empty),
+                new ProbeSubjectDto("claude-a", "claude", "sonnet", "BENCH_CLAUDE", "denylist", string.Empty, string.Empty, string.Empty),
+                new ProbeSubjectDto("codex-b", "codex", "gpt-6-astra", "BENCH_CODEX", "default", string.Empty, string.Empty, string.Empty),
             ],
             cells,
             dropped ?? []);

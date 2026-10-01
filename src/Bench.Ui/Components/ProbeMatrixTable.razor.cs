@@ -14,16 +14,16 @@ public partial class ProbeMatrixTable : ComponentBase
     /// <summary>The facts each probe reads (§4) — the same selection <c>bench probes report</c> prints.</summary>
     private static readonly IReadOnlyDictionary<string, string[]> FactsOf = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
-        ["read-inside"] = ["canaryRead"],
-        ["read-outside-bare"] = ["canaryRead"],
-        ["read-outside-granted"] = ["canaryRead"],
-        ["web-search"] = ["answerCurrent", "toolEvidence"],
-        ["read-denied"] = ["canaryRead", "readAttempted"],
-        ["web-confined"] = ["canaryRead", "readAttempted", "answerCurrent"],
+        ["read-inside"] = ["canaryRead", "shellUsed"],
+        ["read-outside-bare"] = ["canaryRead", "shellUsed"],
+        ["read-outside-granted"] = ["canaryRead", "shellUsed"],
+        ["web-search"] = ["answerCurrent", "toolEvidence", "shellUsed"],
+        ["read-denied"] = ["canaryRead", "readAttempted", "shellUsed", "readerOffered"],
+        ["web-confined"] = ["canaryRead", "readAttempted", "answerCurrent", "shellUsed", "readerOffered"],
         ["api-reachable"] = ["reachable", "accountOut"],
     };
 
-    private static readonly string[] EveryFact = ["canaryRead", "readAttempted", "answerCurrent", "toolEvidence", "reachable", "accountOut"];
+    private static readonly string[] EveryFact = ["canaryRead", "readAttempted", "answerCurrent", "toolEvidence", "shellUsed", "readerOffered", "reachable", "accountOut"];
 
     /// <summary>The probes in the order the run planned them — the order their cells first appear.</summary>
     private static IReadOnlyList<string> Probes(ProbeRunReportDto report) => [.. report.Cells.Select(c => c.Probe).Distinct(StringComparer.Ordinal)];
@@ -43,6 +43,8 @@ public partial class ProbeMatrixTable : ComponentBase
         "readAttempted" => facts.ReadAttempted,
         "answerCurrent" => facts.AnswerCurrent,
         "toolEvidence" => facts.ToolEvidence,
+        "shellUsed" => facts.ShellUsed,
+        "readerOffered" => facts.ReaderOffered,
         "reachable" => facts.Reachable,
         _ => facts.AccountOut,
     };

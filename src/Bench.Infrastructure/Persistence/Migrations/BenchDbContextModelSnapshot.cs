@@ -1285,6 +1285,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ReaderOffered")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1294,6 +1298,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ShellUsed")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("Slot")
                         .HasColumnType("integer");
@@ -1348,6 +1356,10 @@ namespace Bench.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Repeats")
                         .HasColumnType("integer");
+
+                    b.PrimitiveCollection<List<string>>("SubjectConfinements")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.PrimitiveCollection<List<string>>("SubjectDialects")
                         .IsRequired()

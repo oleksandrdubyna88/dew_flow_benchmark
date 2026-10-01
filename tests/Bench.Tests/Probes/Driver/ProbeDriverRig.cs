@@ -60,11 +60,12 @@ internal sealed class ProbeDriverRig : IAsyncDisposable
         return new ProbeDriverRig(postgres, connection, GateStoreFixtures.NewRoot(), ct);
     }
 
-    /// <summary>A CLI subject on <paramref name="runtime"/> whose executable is the fake, scripted by <paramref name="script"/>.</summary>
-    public ProbeSubject AddSubject(string id, string runtime, JsonObject? script = null)
+    /// <summary>A CLI subject on <paramref name="runtime"/> whose executable is the fake, scripted by <paramref name="script"/>; a claude subject
+    /// under the deny list unless <paramref name="confinement"/> says otherwise (S2b).</summary>
+    public ProbeSubject AddSubject(string id, string runtime, JsonObject? script = null, string confinement = "")
     {
         var fake = new FakeCli(script);
-        var subject = ProbeSubject.Parse(id, runtime, fake.Model, "BENCH_FAKE_CLI").Ok();
+        var subject = ProbeSubject.Parse(id, runtime, fake.Model, "BENCH_FAKE_CLI", runtime == "claude" && confinement.Length == 0 ? "denylist" : confinement).Ok();
         _fakes[id] = fake;
         _subjects.Add(subject);
 

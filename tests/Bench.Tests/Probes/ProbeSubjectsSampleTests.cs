@@ -6,7 +6,8 @@ using Xunit;
 namespace Bench.Tests.Probes;
 
 /// <summary>The checked-in subjects file the plan's run uses (<c>samples/question-consultant-probe-subjects.json</c>) parses under the
-/// D4 rules and plans the matrix §4 describes — the pairs the planner drops are the ones the write-up lists as not measured.</summary>
+/// D4 rules and plans the matrix §4 describes — the pairs the planner drops are the ones the write-up lists as not measured. Since S2b
+/// the claude CLI is three subjects, one per confinement mode, measured side by side.</summary>
 public sealed class ProbeSubjectsSampleTests
 {
     [Fact]
@@ -14,19 +15,21 @@ public sealed class ProbeSubjectsSampleTests
     {
         var subjects = ProbeSubjectsFile.Read(File.ReadAllText(Path.Combine(TestRepository.Root(), "samples", "question-consultant-probe-subjects.json"))).Ok();
 
-        subjects.Select(s => (s.Id.Value, s.Runtime, s.ModelId, s.ExecutableRef)).Should().Equal(
+        subjects.Select(s => (s.Id.Value, s.Runtime, s.ModelId, s.ExecutableRef, s.Confinement)).Should().Equal(
         [
-            ("claude-sonnet", ProbeRuntime.Claude, "sonnet", "BENCH_CLAUDE"),
-            ("codex-astra", ProbeRuntime.Codex, "gpt-6-astra", "BENCH_CODEX"),
-            ("codex-terra", ProbeRuntime.Codex, "gpt-5.6-terra", "BENCH_CODEX"),
-            ("agy-gemini", ProbeRuntime.Antigravity, "gemini-3.1-pro-high", "BENCH_AGY"),
-            ("grok-api", ProbeRuntime.Api, "grok-4.7", "BENCH_GATE_COAI_EXE"),
+            ("claude-sonnet-denylist", ProbeRuntime.Claude, "sonnet", "BENCH_CLAUDE", ProbeConfinement.Denylist),
+            ("claude-sonnet-allowlist", ProbeRuntime.Claude, "sonnet", "BENCH_CLAUDE", ProbeConfinement.Allowlist),
+            ("claude-sonnet-restricted", ProbeRuntime.Claude, "sonnet", "BENCH_CLAUDE", ProbeConfinement.Restricted),
+            ("codex-astra", ProbeRuntime.Codex, "gpt-6-astra", "BENCH_CODEX", ProbeConfinement.Default),
+            ("codex-terra", ProbeRuntime.Codex, "gpt-5.6-terra", "BENCH_CODEX", ProbeConfinement.Default),
+            ("agy-gemini", ProbeRuntime.Antigravity, "gemini-3.1-pro-high", "BENCH_AGY", ProbeConfinement.Default),
+            ("grok-api", ProbeRuntime.Api, "grok-4.7", "BENCH_GATE_COAI_EXE", ProbeConfinement.Default),
         ]);
         subjects[^1].Should().Match<ProbeSubject>(s => s.Vendor == "grok" && s.Endpoint == "https://api.x.ai/v1" && s.Dialect == "xai");
 
         var plan = ProbeMatrix.Plan(ProbeWord.All, subjects, repeats: 3).Ok();
 
-        plan.Cells.Should().HaveCount(3 * ((4 * 6) - 1 + 1), "four CLIs × six CLI probes, less read-denied on agy, plus api-reachable on grok — three repeats");
-        plan.Dropped.Select(d => $"{ProbeWord.Of(d.Probe)} × {d.Subject}").Should().Contain(["read-denied × agy-gemini", "api-reachable × claude-sonnet", "read-inside × grok-api"]);
+        plan.Cells.Should().HaveCount(3 * ((6 * 6) - 1 + 1), "six CLI subjects × six CLI probes, less read-denied on agy, plus api-reachable on grok — three repeats");
+        plan.Dropped.Select(d => $"{ProbeWord.Of(d.Probe)} × {d.Subject}").Should().Contain(["read-denied × agy-gemini", "api-reachable × claude-sonnet-denylist", "read-inside × grok-api"]);
     }
 }
