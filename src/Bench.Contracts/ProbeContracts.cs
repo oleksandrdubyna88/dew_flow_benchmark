@@ -1,7 +1,7 @@
 namespace Bench.Contracts;
 
 /// <summary>The capability probes' wire shapes — <c>bench probes report --json</c> prints this object, and the read API
-/// (S4 of <c>todo/PLAN_question_consultant_probes.md</c>) answers the SAME object, serialised with the web defaults, so the
+/// (S4 of <c>research/PLAN_question_consultant_probes.md</c>) answers the SAME object, serialised with the web defaults, so the
 /// two surfaces cannot drift into two readings of one run.
 /// <para>
 /// <b>No free text travels here</b> (D11). Every string is an id, a word from a closed set (<see cref="ProbeWords"/>), a model

@@ -10,7 +10,7 @@ using Bench.Infrastructure.Probes;
 namespace Bench.Cli;
 
 /// <summary><c>bench probes run | resume | rerun | status | sweep | report | prune</c> — the question consultant's capability
-/// probes (<c>todo/PLAN_question_consultant_probes.md</c>, S3). The measuring verbs are here; the reading and housekeeping ones
+/// probes (<c>research/PLAN_question_consultant_probes.md</c>, S3). The measuring verbs are here; the reading and housekeeping ones
 /// are <see cref="ProbesReadCommand"/>.
 /// <para>
 /// Exit codes (§5): 0 cells produced · 3 resumable — an account out, the environment (oracle, database, pin, a broken lane) ·

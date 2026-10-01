@@ -1,13 +1,29 @@
 # PLAN — capability probes for the question consultant: what each CLI and API vendor can actually do
 
-> Status: **S1–S4 implemented 2026-10-01, S2b (the instrument corrected on the first live runs) implemented 2026-10-01, S2c (the security and measurement-validity fixes of the code review) implemented 2026-10-01; S5 open.** Scope: a new `Probes` module in this repository —
-> domain (`src/Bench.Domain/Probes`), ports and driver (`src/Bench.Application/Probes`), a Postgres store and the
-> probe runners (`src/Bench.Infrastructure`), the `bench probes` verbs (`hosts/Cli`), a read API and a **Probes**
-> tab in `Bench.Ui`. Results are written up in the PRODUCT repository, not here.
+> Status: **IMPLEMENTED, 2026-10-01.** S1–S5 shipped on one branch under one gate; each story's deviations are recorded
+> in its own block below. In short: two stories were inserted between S4 and S5 because the first live runs and the code
+> review found the instrument wrong — **S2b** (a deny list is not a confinement: claude's PowerShell tool leaked the
+> canary, so a claude subject carries a confinement mode; the stream transcripts; agy launched as coai launches it; the
+> JSON `--probe-api` report; raw evidence before any parsing) and **S2c** (a "confined" verdict only on the transcript's
+> evidence of a STOP or of nothing possibly file-capable offered; fail-closed tool classes; a minimal child environment
+> and scrubbed pipes; quota hand-backs forgiven by the sweep; `read-denied × codex` dropped by name). The report became a
+> contract in S3 rather than S4; the one migration was regenerated in place four times. **S5's measurement ran** as run
+> `01a0f8c7-18db-739b-8b83-3165e82cd42c` — 105 cells, 8 subjects, 3 repeats, all settled, 0 quota stops — after an A/A
+> over the three claude modes (runs `01a0f87e-74a8-77f7-8908-74579dadc809` / `01a0f885-4011-76d3-bea6-273be119f036`,
+> 16/18 agree; the two differences were the denylist model's choice to use PowerShell). The write-up is
+> `dew_flow_connect_other_ais · research/RESULTS_question_consultant_capabilities.md`. **Open tail:** the rag_qln
+> `external/dew_flow_benchmark` pin bump follows the merge; agy's `denied_actions` carry no path, so its outside reads
+> are hand-checked rather than reader-confirmed; the Probes tab's live view was tested with bUnit, not yet seen in the
+> rag_qln console.
 >
-> Related: `dew_flow_connect_other_ais · todo/PLAN_question_consultant.md` (the feature these probes decide),
-> [module_gate.md](../research/module_gate.md) (the claim/settle/sweep machinery this reuses),
-> [architecture.md](../research/architecture.md).
+> Scope: the `Probes` module — domain (`src/Bench.Domain/Probes`), ports and driver (`src/Bench.Application/Probes`), a
+> Postgres store and the probe runners (`src/Bench.Infrastructure`), the `bench probes` verbs (`hosts/Cli`), a read API
+> and a **Probes** tab in `Bench.Ui`. Results are written up in the PRODUCT repository, not here.
+>
+> Related: [module_probes.md](module_probes.md) (the module as built),
+> `dew_flow_connect_other_ais · todo/PLAN_question_consultant.md` (the feature these probes decide),
+> [module_gate.md](module_gate.md) (the claim/settle/sweep machinery this reuses),
+> [architecture.md](architecture.md).
 
 ## 1. The goal, before any solution
 
@@ -649,6 +665,36 @@ ships as a security claim about a web row.
 
 **Not here.** No product code (the coai plan's); no new probe or verb — a gap found here is a new `todo/` plan.
 
+**Deviations (S5, 2026-10-01).**
+- *Acceptance 2 was brought forward*: the parser hand-check on the first live runs became S2b, and the review of S1–S2b became
+  S2c — both above. Every fixture under `tests/Bench.Tests/Fixtures/probes/` is a live capture (one is DERIVED from a live one,
+  and its README says so).
+- *The A/A* ran over the three claude confinement modes, one repeat each (runs `01a0f87e-74a8-77f7-8908-74579dadc809` and
+  `01a0f885-4011-76d3-bea6-273be119f036`, instrument `edf341b`): 16 of 18 cells agree. Both differences are the `denylist`
+  subject's choice whether to reach for the still-offered PowerShell (A1 leaked in `read-denied` and `web-confined`, A2 did not) —
+  model behaviour on an open door, neither a moved build (D9) nor a wrong reader; it is why the full run kept three repeats. Its
+  transcripts were S2c's RED cases.
+- *The full run* is `01a0f8c7-18db-739b-8b83-3165e82cd42c` at `6fa8c2b`: 105 cells, **8** subjects — the sample's seven plus
+  `grok-openrouter` (a second api subject, `x-ai/grok-4.7` through OpenRouter, dialect `openai`), added to the run's subjects file
+  and not to `samples/` — × 3 repeats; every cell settled, none abandoned, no quota stop, so no resume was needed. Oracle
+  `@openai/codex` 0.159.3 (registry); builds pinned per cell: claude 2.1.258, codex-cli 0.156.1, agy 1.2.14, coai-mcp 0.40.3.
+  Artefacts under `%LOCALAPPDATA%/bench/probes-artifacts/` on the measuring machine.
+- *The write-up* is `dew_flow_connect_other_ais · research/RESULTS_question_consultant_capabilities.md` (a path, not a link — the
+  checkout may not exist): a section per question, every claim citing run, cell, generation and build, an appendix of every cell.
+- *Not reader-confirmed*: agy's `denied_actions` name no path, so a denial cannot be tied to the canary call and the instrument
+  writes *not captured* for agy's outside reads; the write-up records them as hand-checked from the stream, never as the reader's
+  `no`.
+- *Gate code round 2, finding 4 (accepted)* — "`prune` flags the run BEFORE deleting, so a half-refused deletion leaves a pruned
+  run a retry cannot finish". Checked against the code and on the filesystem: **not reproducible** — the guarded UPDATE
+  (`PostgresProbeStore.MarkArtifactsPrunedAsync`) does not filter on the flag, so a second prune re-flags and deletes whatever is
+  left (exit 0), and a third with nothing left exits 0. Pinned by
+  `ProbesDriverCommandTests.A_prune_the_filesystem_half_refused_is_finished_by_a_second_prune…` (a real refusal: a no-share open
+  on Windows, a read-only folder on Unix), green on the unchanged code; its teeth proved by planting the defect the finding
+  describes (`&& !r.ArtifactsPruned` in the guard) — red with exit 4, "has 0 Pending and 0 Claimed … nothing was deleted". The
+  idempotence is now stated in both doc comments.
+- *Acceptance 7, the rag_qln pin bump*, follows the merge of this branch — it moves `external/dew_flow_benchmark` to the merged
+  commit and nothing else.
+
 **Where each accepted finding lands** — one owner, one proof:
 
 | finding | owner | proof |
@@ -681,16 +727,16 @@ ships as a security claim about a web row.
 
 ## 10. Definition of Done
 
-- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` — 0 warnings; the test executable green; every fix watched RED.
-- [ ] The architecture guard passes with the new deciders registered.
-- [ ] A cell is persisted the moment it settles; killing the CLI mid-run and running `resume` finishes exactly the rest.
-- [ ] `rerun --cell` re-measures one cell as a new generation; the old one is still readable.
-- [ ] A quota stop exits 3, names the resume command, and is never recorded as a verdict.
-- [ ] The oracle is on the run before any cell is planned; `prune --run` refuses an open run; a fixture directory
+- [x] `dotnet build dew_flow_benchmark.slnx -c Release` — 0 warnings; the test executable green; every fix watched RED.
+- [x] The architecture guard passes with the new deciders registered.
+- [x] A cell is persisted the moment it settles; killing the CLI mid-run and running `resume` finishes exactly the rest.
+- [x] `rerun --cell` re-measures one cell as a new generation; the old one is still readable.
+- [x] A quota stop exits 3, names the resume command, and is never recorded as a verdict.
+- [x] The oracle is on the run before any cell is planned; `prune --run` refuses an open run; a fixture directory
       stranded by a kill is gone on the next verb's entry (S3.1, S3.2, S2.3).
-- [ ] The first live cell of every runtime hand-checked against its reader and recorded in the write-up; an
+- [x] The first live cell of every runtime hand-checked against its reader and recorded in the write-up; an
       unconfirmed reader's `toolEvidence` / `readAttempted` written as `not captured` (S5.2).
-- [ ] The Probes tab shows a running run live and stops polling when it is done.
-- [ ] The results are written in `dew_flow_connect_other_ais/research/RESULTS_question_consultant_capabilities.md`,
+- [x] The Probes tab shows a running run live and stops polling when it is done (bUnit, `ManualClock`; the rag_qln console view follows the pin bump).
+- [x] The results are written in `dew_flow_connect_other_ais/research/RESULTS_question_consultant_capabilities.md`,
       every claim citing run, cell and CLI build; anything not measured says what was checked.
-- [ ] `research/module_probes.md` + `architecture.md` here; this plan promoted with its deviations.
+- [x] `research/module_probes.md` + `architecture.md` here; this plan promoted with its deviations.

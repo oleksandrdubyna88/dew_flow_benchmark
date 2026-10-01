@@ -53,7 +53,7 @@ dotnet build dew_flow_benchmark.slnx -c Release
 # GET /api/runs · /api/runs/{id}/report?metric=... · /api/runs/{id}/scoreboard
 # GET /api/bench/probes/runs[?limit=50] · /api/bench/probes/runs/{id} — the probe report, byte for byte `bench probes report --json`
 
-# The question consultant's capability probes (todo/PLAN_question_consultant_probes.md). The web oracle is read from
+# The question consultant's capability probes (research/PLAN_question_consultant_probes.md). The web oracle is read from
 # the npm registry BEFORE anything is planned (exit 3 when it cannot be; --oracle-version pins it by hand). Exit 0 cells
 # produced · 3 account out / environment (resumable — the resume line is printed) · 4 configuration · 5 nothing produced.
 # The work root (fixtures, wiped per run on every verb's entry) defaults to %LOCALAPPDATA%/bench/probes-work and must not

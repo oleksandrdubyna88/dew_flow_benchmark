@@ -19,7 +19,7 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · sessions · version/help"]
+        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · sessions · gate · probes · version/help"]
         apihost["Api — bench-api, READ only, starts nothing"]
         collector["Collector — bench-collector, the WRITE door for<br/>session traces, loopback 5177"]
         hook["Hook — bench-hook, one run per agent tool call"]
@@ -27,6 +27,7 @@ flowchart TB
     end
     subgraph api["Bench.Api — the route group"]
         routes["GET /runs · /runs/id/report · /runs/id/scoreboard<br/>POST /plan"]
+        proberoutes["GET /api/bench/probes/runs · /runs/id — read only"]
         sessionroutes["GET /sessions · /sessions/id<br/>POST /sessions/events — collector only"]
     end
     subgraph app["Bench.Application — use cases + PORTS"]
@@ -34,7 +35,7 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver<br/>IGateReads · IGateSuiteTasks"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver<br/>IGateReads · IGateSuiteTasks<br/>IProbeStore · IProbeReads · IProbeRunner · IProbeArtifacts · IProbeFixtures · IProbeOracle"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -43,10 +44,12 @@ flowchart TB
         axes["Variants · Authoring · Engines · Bank · Registry"]
         sessions["Sessions — ToolTaxonomy · CommandClassifier<br/>PhaseClassifier · SessionAnalysis (pure, no model)"]
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
+        probes["Probes — ProbeSubject · ProbeMatrix · ProbeCell · ProbeFacts · ProbeVerdicts<br/>(the question consultant's capability probes; module_probes.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (nine tables, ids · hashes · numbers)"]
-        artroot["FileSystemGateArtifactStore<br/>the artefact root — OUTSIDE git"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (nine tables, ids · hashes · numbers)<br/>probe_runs · probe_cells"]
+        artroot["FileSystemGateArtifactStore · ProbeArtifacts<br/>the artefact root — OUTSIDE git"]
+        probeclis["CliProbeRunner · CoaiApiProbeRunner<br/>claude · codex · agy · coai-mcp --probe-api"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
         rt["OpenAiCompatibleRuntime"]
@@ -92,6 +95,16 @@ statement costs what the one-liner costs) and the two corrections that run after
 that DECLARE themselves repeats, and an allowance that stops rescued points from pricing a one-line diff at
 79). Every constant it inherited from that corpus lives in one file with the measurement that produced it,
 and that file is designed to SHRINK: a constant re-measured here moves out of it.
+
+## Module map
+
+The retrieval benchmark is described in this file; the sibling contexts that grew beside it have a module document
+each.
+
+| Module | Document | What it measures | Its own storage |
+|---|---|---|---|
+| Gate | [module_gate.md](module_gate.md) | which reviewer MODEL, on each of coai's three review gates, finds the planted defects — at what cost, how repeatably | nine `gate_*` tables; the artefact root's `runs/` |
+| Probes | [module_probes.md](module_probes.md) | what each CLI build and api vendor can actually do for coai's question consultant — web search, reads outside the working directory, confinement under denied file tools | `probe_runs`, `probe_cells`; the artefact root's `probes/` |
 
 ## The measurement contract
 
@@ -1100,6 +1113,36 @@ registers its bench ports by hand) answers 503 naming the registration, where a 
 as a body and failed every route of that host at startup. The first campaign (E7) ran 2026-09-28/29 — the design record
 is [PLAN_coai_gate_model_benchmark.md](PLAN_coai_gate_model_benchmark.md), the results RESULTS_gate_aa_cs2.md and
 RESULTS_gate_s73.md.
+
+## The capability probes — a second sibling context (2026-10-01)
+
+coai's question consultant blocks a row whose model cannot honour its prompt's capability (`disk`, `web`, `none`), and
+those rows rest on facts about each CLI BUILD: does it search the web headless, does it read outside its working
+directory with and without a grant, does it still read the disk when its file tools are denied. `Bench.Domain.Probes`
+measures them as a third shape of run — probes × subjects × repeats × GENERATIONS, each cell one CLI launch (or one
+`coai-mcp --probe-api` call) against random tokens in a file inside the working directory and a canary outside it, and
+the npm registry's `@openai/codex` version frozen on the run. The tuple, the launch table, the verdict rules and the
+artefacts are in [module_probes.md](module_probes.md); the conclusions are written up in the product repository,
+`dew_flow_connect_other_ais · research/RESULTS_question_consultant_capabilities.md`. What cuts across modules:
+
+- **The same claim lifecycle, composed again.** `ProbeCell` composes `Claimable` and `ProductPin` exactly as `GateCell`
+  does; `Claimable.Reclaim` was widened with a forgiven count (the gate passes zero) so a quota hand-back never counts
+  toward abandonment. The store reuses the gate store's guarded claim and owner-checked sweep; the probe tables joined
+  the gate's publication walk, so `bench gate export --public` guards them with the same `PublicationGuard`.
+- **A re-run APPENDS a generation; a run has no status.** The gate's forward-only `Finished` is what makes a re-run
+  impossible there, so a probe run's open/finished is derived from its cells and `bench probes rerun` inserts generation
+  max + 1 beside the old one; every read takes the highest SETTLED generation per lineage.
+- **The one launcher was widened, not copied.** `AgentAskOptions` gained `AddDirectories`, `WebSearch`, `JsonEvents`, a
+  tool allow-list and restricted mode; `ModelRuntimeKind` gained `CliAntigravity`; `CliArgv.For` refuses by name every
+  option a CLI has no flag for. A second port, `ICliAgentTranscripts`, beside `ICliAgentRuntime`, hands the probes the
+  failure shapes (exit code, both pipes, the wall) over the same launch, and `AgentAsk.Environment` lets a caller replace
+  the child's environment — every existing caller still inherits; the probes pass a minimal set by NAME and scrub every
+  secret-named and `BENCH_*` value from what the CLI printed. `ArtifactCommit` (stage → flush → hash → rename) was
+  extracted from the gate's artefact store so both stores commit one way.
+- **The read side is the gate's shape.** One pure `ProbeReport` answers `bench probes report --json`, `GET
+  /api/bench/probes/runs[/{id}]` (mapped from `MapBenchApi`, the read port resolved per request, 503 when a host never
+  registered it) and the console's **Probes** tab, byte for byte; the tab polls every 3 s through `LivePoller` while a
+  cell is open, and re-measuring stays a CLI verb the page shows as a command (`bench-api` is read-only by decision).
 
 ## Guards that shape the API
 

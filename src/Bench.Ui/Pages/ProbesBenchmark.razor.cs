@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Components;
 
 namespace Bench.Ui.Pages;
 
-/// <summary>The <b>Probes</b> tab (S4 of <c>todo/PLAN_question_consultant_probes.md</c>): what each CLI and api vendor can actually
+/// <summary>The <b>Probes</b> tab (S4 of <c>research/PLAN_question_consultant_probes.md</c>): what each CLI and api vendor can actually
 /// do for the question consultant, as facts per CLI build — one probe run at a time, read through <c>/api/bench/probes/*</c>, the
 /// object <c>bench probes report --json</c> prints.
 ///
