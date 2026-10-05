@@ -14,7 +14,7 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.12" />
     <!-- Aspire SDK and Hosting packages must move as a matched pair — a straddled version spawns a
          second stray dashboard on a random port. The SDK version lives in hosts/AppHost/AppHost.csproj. -->
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.0" />
     <!-- Serilog: the one logging stack, per .claude/rules/common/logging-serilog.md. AspNetCore brings
          Serilog itself plus the console and file sinks. Apache-2.0. -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -41,7 +41,7 @@
          asserted as MARKUP rather than by trusting that a table which compiles also displays. Version
          matched to the sibling console (dew_flow_rag_qln), which pins the same 2.9.0 — one family, one
          renderer. It carries no test-framework dependency of its own; xunit.v3 above stays the runner. -->
-    <PackageVersion Include="bunit" Version="2.9.0" />
+    <PackageVersion Include="bunit" Version="2.11.3" />
   </ItemGroup>
 
 </Project>
