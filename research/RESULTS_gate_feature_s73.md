@@ -1,12 +1,12 @@
 # RESULTS — the feature gate on the S7.3 suite: Fable, Opus, Astra, devstral, codestral, and the attempted mistral-large
 
-> Status: **campaigns run 2026-09-30 to 2026-10-01; the assessment is pending.** Astra, the assessor, is at its Codex
-> usage limit until 2026-10-06 (T6 of [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md)).
+> Status: **campaigns run 2026-09-30 to 2026-10-01; assessed by Astra 2026-10-09** (T6 of
+> [PLAN_gate_measurement_tail.md](../todo/PLAN_gate_measurement_tail.md); § *The assessment*).
 >
-> - **What is in this record:** what can be known without the assessor — validity, findings, tokens, cost, time — and
->   every failure, with its cause.
-> - **What is not here yet:** seeds hit, high-value findings and overstatement. They need Astra and are added when it
->   is back.
+> - **What is in this record:** the campaigns, every failure with its cause, and Astra's strict reading of every valid
+>   finding — seeds hit, high-value, overstatement.
+> - **Astra as a reviewer stays at one cell.** Its 13 other cells are pending: the operator chose not to fill them
+>   (2026-10-09).
 > - **Not hand-checked:** strict percentages stay "not hand-checked" (E4).
 > - **Added 2026-10-09:** NVIDIA Nemotron 3 Ultra and 3 Super through OpenRouter (§ *Nemotron*). By the operator's
 >   choice they were read by hand, not by Astra.
@@ -54,7 +54,7 @@ devstral and codestral are one valid cell per task, all from `01a0f2a8`.
 | devstral-2512 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 7 |
 | codestral-2508 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 7 |
 
-## What is known before the assessment
+## What was known before the assessment
 
 Valid cells only, all seven tasks. **Every "per run" figure is per valid cell, which is one review by one reviewer of
 one task, averaged over that reviewer's valid cells**; "s p50" is the median over them. The cost column is the product ledger's list-price estimate. For Fable and Opus it
@@ -97,7 +97,8 @@ is notional: the Claude CLI runs on a Claude Max subscription, which bills nothi
     (2026-10-01).
   - **Its replacement:** within Mistral, the coding model devstral-2512 is the candidate, decided by the assessment.
 - **Astra benched for its own account.** Its Codex limit comes back on 2026-10-06. As a reviewer it was benched after one
-  cell (T5 worked), leaving 13 cells pending in `01a0f2a7`. They are resumable then, with one detail.
+  cell (T5 worked), leaving 13 cells pending in `01a0f2a7`. They are resumable then, with one detail. **On 2026-10-09 the operator chose
+  not to resume them;** the assessment went ahead without them.
   - **Why the detail is needed:** `resume` compares each reviewer's resolved references with those its settled cells
     were measured under. The Claude rows in this run were measured with `BENCH_CLAUDE_2284` pointing at the VS Code copy,
     which is now deleted, so with the pinned path the resume is refused.
@@ -124,6 +125,40 @@ of 2026-10-01, shows the actual bill:
   set at the input price).
 
 So read the cost columns as close estimates, not invoices.
+
+## The assessment (T6, 2026-10-09)
+
+Astra (`codex-gpt-6-astra-exe`, `strict-v1`) read every valid finding of runs `01a0f2a7`, `01a0f2a8`, `01a0f2ea`,
+`01a0f67a`, `01a0f74d` and `01a0f778` in one pass:
+- 437 findings assessed, 0 assessment failures;
+- 1 finding left unassessed: twice Astra wrote two seeds into one `seed_hit` string, and the pass refused that answer;
+- 3 findings were Astra's own as a reviewer, counted apart.
+
+Read with `bench gate report --gate feature --scope a797c446cdb4 --rubric strict-v1 --run <the six>`.
+
+**Measured tasks.** The seeds, high-value and overstated columns are over VALID cells. "Valid %" counts every settled
+cell, including the `TurnFailed` cells that the Claude Max window ended.
+
+| reviewer | settled | valid % | seeds hit / run (of 2) | high-value / run | overstated % | findings / run | cost / run | s p50 |
+|---|---|---|---|---|---|---|---|---|
+| **Fable 5.1** | 28 | 42.9 | **1.83** | **2.08** | 4.2 | 4.93 | $13.05 (notional) | 1 044 † |
+| **Opus 5.5** | 26 | 50 | **1.54** | 1.77 | 8.8 | 4.04 | $3.11 (notional) | 261 † |
+| Astra | 1 | 100 | 2 (one cell) | 0 | 0 | 3 | subscription | 47 |
+| devstral-2512 | 5 | 100 | 0.60 | 0.80 | 71.4 | 7.0 | $0.13 | 96 |
+| mistral-large-2512 | 5 | 40 | 0.50 (two cells) | 0.50 | 0 | 1.6 | $0.05 | 249 |
+| codestral-2508 | 5 | 100 | 0.20 | 0 | 50 | 1.6 | $0.03 | 13 |
+
+† Valid cells only; the report's own median also counts the 3–5 s `TurnFailed` cells.
+
+- **Fable and Opus are the strongest reviewers measured on this gate.**
+  - Seeds: 1.83 and 1.54 per run, against grok-4.7's 1.47 and glm-5.3's 1.07 in the 2026-09-27 calibration.
+  - Precision: the most high-value findings, and the least overstatement (4–9 %, against 22 % for grok and glm).
+  - Caveat: that calibration ran on another harness and suite stamp, so the comparison is across scopes.
+  - Cost: list-price only, and notional; the CLI runs on a Claude Max subscription. Its usage window is what cut these
+    campaigns, and it bounds how often they can review.
+- **devstral-2512 does not pay its way.** 0.60 seeds per run at 71 % overstatement: cheap, and mostly noise.
+- **codestral-2508 is not a reviewer.** 0.20 seeds per run, with "no issues" on most tasks.
+- **mistral-large-2512 stays dropped.** Its two valid cells are not a measurement.
 
 ## Nemotron 3 Ultra and 3 Super (2026-10-09)
 
