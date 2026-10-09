@@ -26,6 +26,7 @@ row is a smaller sample.
 | deepseek-v4-pro | 0.86 | 0.57 | 41 | $0.29 | $0.36 |
 | qwen3.8-max | 0.80 | 0.53 | 24 | $0.35 | $0.43 |
 | Mistral Medium 3.5 (5 runs) | 0.40 | 0.20 | 33 | $0.43 | $1.08 |
+| Nemotron 3 Ultra (5 runs, read by hand, not strict-v1) | 0.40 | — | — | $0.11 | $0.27 |
 
 **Code gate.**
 
@@ -101,6 +102,9 @@ coverage.**
   reviewers.
 - **deepseek-v4-pro:** the overstatement outlier on the feature gate (41 %, and 100 % on the calibration tasks).
 - **qwen3.8-max:** the fewest feature-gate seeds of the four API models, at a higher cost than glm.
+- **NVIDIA Nemotron 3 Ultra and 3 Super** (2026-10-09, [RESULTS_gate_feature_s73.md](RESULTS_gate_feature_s73.md)):
+  - **Ultra** is cheap and fast but hits Mistral Medium's 0.40 seeds per run, read by hand.
+  - **Super** produced no review: its reasoning exhausted the 8,192-token output cap on every cell.
 
 **6. Undecided: Fable 5.1.** It sits beside Opus on the plan gate (1.36 high-value per run) at about four times the
 cost. Its code gate reached only 4 cells before its spend limit, which is not a measurement.

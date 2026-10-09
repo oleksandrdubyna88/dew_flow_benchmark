@@ -8,6 +8,8 @@
 > - **What is not here yet:** seeds hit, high-value findings and overstatement. They need Astra and are added when it
 >   is back.
 > - **Not hand-checked:** strict percentages stay "not hand-checked" (E4).
+> - **Added 2026-10-09:** NVIDIA Nemotron 3 Ultra and 3 Super through OpenRouter (§ *Nemotron*). By the operator's
+>   choice they were read by hand, not by Astra.
 >
 > Related: [RESULTS_gate_mistral.md](RESULTS_gate_mistral.md) (Mistral Medium 3.5, including its feature gate),
 > [RESULTS_gate_feature_first_real_report.md](RESULTS_gate_feature_first_real_report.md) (the four API models'
@@ -122,6 +124,42 @@ of 2026-10-01, shows the actual bill:
   set at the input price).
 
 So read the cost columns as close estimates, not invoices.
+
+## Nemotron 3 Ultra and 3 Super (2026-10-09)
+
+**What ran:** run `01a1217f`, feature gate, 7 tasks × 1, on the same product build (`8b1c538643ca`), `bench`
+`c0ef2f7`. The two models went through OpenRouter's **paid** endpoints, `nvidia/nemotron-3-ultra-550b-a55b` and
+`nvidia/nemotron-3-super-120b-a12b`, with the api rows' transport: the vendor's default thinking and 8,192 output tokens.
+
+**Why the paid endpoints:**
+- **The free one was overloaded.** An earlier attempt on the `:free` endpoints (run `01a12171`) was stopped after its
+  first cell. NVIDIA's free pool answered `provider_overloaded`.
+- **That answer exposed a product defect.** OpenRouter delivered the overload as **HTTP 200 with an `error` object**,
+  which coai read as an empty answer: lost, not retried. Filed as coai issue #721.
+- **The operator approved the paid endpoints** for that reason, at about $0.70 for both models.
+
+**How it was read: by hand, at the operator's choice, not by Astra.** Each finding was compared, task by task, with
+the two planted defects in the suite's seed specs. A finding counts when it names the defect's mechanism in the seeded
+file. This is not the strict rubric, so treat the rate as an order of magnitude beside the Astra-read rows.
+
+| reviewer | valid | findings / run | seeds hit (of 14) | seeds / run, measured tasks | cost (7 runs) | s p50 |
+|---|---|---|---|---|---|---|
+| Nemotron 3 Ultra | 7 / 7 | 4.1 | **2** (both in rs3) | **0.40** | $0.67 | 50 |
+| Nemotron 3 Super | 0 / 7 | — | — | — | $0.07 | 500 |
+
+- **Ultra found both of rs3's planted defects** and nothing planted anywhere else.
+  - It rated `engine_cache_dir` ignoring the shape as Blocking, exactly right.
+  - It found the poisoned-ledger `snapshot()` returning `None`, but rated it only Minor.
+  - Elsewhere it came close twice: it looked at `isTransientResolverError` in ts2, and mentioned the too-thin status
+    in py3. Both times it argued a different point.
+- **The rest of its findings are mostly minor or nit-level** (logging, validation, hard-coded paths). Some contradict
+  themselves: one says a constant is "not in scope", then that it "works"; another says a navigation "is not relevant
+  here".
+- **0.40 seeds per run is Mistral Medium 3.5's level.** The calibration's API reviewers are at 0.80–1.47 on this
+  gate.
+- **Super produced no review.** Six cells were cut at the 8,192-token output cap (`LengthCut`): its reasoning used
+  the whole budget before any answer. The seventh ended `EmptyContent`, with `finish=error` after 3,220 reasoning
+  tokens. A larger output cap would change the transport the other rows were measured under, so it was not tried.
 
 ## What this does and does not show
 
