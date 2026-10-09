@@ -1,6 +1,8 @@
 # RESULTS — which reviewer models to choose for coai's gates
 
-> Status: **conclusions drawn 2026-09-30** from the three measurements below. It adds no new measurement.
+> Status: **conclusions drawn 2026-09-30** from the three measurements below. **Updated 2026-10-09:** the feature-gate
+> campaigns on the S7.3 suite, assessed by Astra
+> ([RESULTS_gate_feature_s73.md](RESULTS_gate_feature_s73.md), § *The assessment*), and NVIDIA Nemotron.
 >
 > - **Feature gate:** [RESULTS_gate_feature_first_real_report.md](RESULTS_gate_feature_first_real_report.md). The
 >   2026-09-27 calibration: four API models, 7 tasks × 3 repeats.
@@ -27,6 +29,20 @@ row is a smaller sample.
 | qwen3.8-max | 0.80 | 0.53 | 24 | $0.35 | $0.43 |
 | Mistral Medium 3.5 (5 runs) | 0.40 | 0.20 | 33 | $0.43 | $1.08 |
 | Nemotron 3 Ultra (5 runs, read by hand, not strict-v1) | 0.40 | — | — | $0.11 | $0.27 |
+
+**Feature gate, the S7.3 suite** (assessed 2026-10-09). This is another harness and scope (`a797c446cdb4`), with one
+repeat. A Claude Max window cut Fable and Opus short, so about half their cells are `TurnFailed`. The figures are over
+valid runs. Cost is the list price; for Fable and Opus it is notional, since they run on the subscription.
+
+| reviewer | valid runs | seeds hit / run (of 2) | high-value / run | overstated % | cost / run | cost / seed |
+|---|---|---|---|---|---|---|
+| Fable 5.1 | 12 | **1.83** | **2.08** | **4.2** | $13.05 | $7.71 |
+| Opus 5.5 | 13 | 1.54 | 1.77 | 8.8 | $3.11 | $2.02 |
+| devstral-2512 | 5 | 0.60 | 0.80 | 71 | $0.13 | $0.21 |
+| codestral-2508 | 5 | 0.20 | 0 | 50 | $0.03 | — |
+
+Fable and Opus find more planted defects than grok-4.7 (1.47) and are far more precise: 4–9 % overstated against 22 %.
+That comparison crosses scopes, and their price and the subscription window keep them out of the default.
 
 **Code gate.**
 
@@ -108,6 +124,15 @@ coverage.**
 
 **6. Undecided: Fable 5.1.** It sits beside Opus on the plan gate (1.36 high-value per run) at about four times the
 cost. Its code gate reached only 4 cells before its spend limit, which is not a measurement.
+- On the S7.3 feature gate it is the strongest reviewer measured (1.83 seeds per run, 4 % overstated), with Opus next
+  (1.54).
+- Both cost far more than an API pair (notionally $13 and $3 a review) and share one subscription window, which twice
+  ended a campaign early.
+- They are the candidates for an epic's final feature round, not for every round.
+
+**7. Also do not use on the feature gate: devstral-2512 and codestral-2508.**
+- **devstral-2512** hits 0.60 seeds per run, with 71 % of its findings overstated.
+- **codestral-2508** hits 0.20 seeds per run and reports "no issues" on most tasks.
 
 ## What would change this
 

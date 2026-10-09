@@ -1,7 +1,7 @@
 # PLAN — the gate benchmark's measurement tail: the hand-check and the lane stop
 
-> Status: **open, 2026-10-01 — T1 and T6 remain** (T6: the feature runs of 2026-09-30/10-01 await Astra, back 2026-10-06). T5 was built and checked on a real product on 2026-09-30; T2–T4 were
-> closed without re-runs (the operator's decision, 2026-09-29).**
+> Status: **open, 2026-10-09 — T1 remains.** T6 was assessed by Astra on 2026-10-09 ([RESULTS_gate_feature_s73.md](../research/RESULTS_gate_feature_s73.md)). T5 was built and checked on a real product on 2026-09-30; T2–T4 were
+> closed without re-runs (the operator's decision, 2026-09-29).
 > Extracted from [PLAN_coai_gate_model_benchmark.md](../research/PLAN_coai_gate_model_benchmark.md) when it was promoted
 > (E1–E7 built and run).
 > - T1 is reading, not building.
@@ -73,7 +73,7 @@ figures it changes.
   **Deviation:** Fable's limit had reset by then, so the account used was grok's spent xAI key. The reply was
   `the API refused the key … (HTTP 403)`; the first cell was refused as account-out and grok was benched. The campaign
   ended `AccountOut` with exit 3: 0 settled, 7 pending.
-- [ ] T6: the feature runs of 2026-09-30/10-01 are assessed by Astra and recorded, and RESULTS_gate_model_choice.md gains their rows.
+- [x] T6: the feature runs of 2026-09-30/10-01 are assessed by Astra and recorded (RESULTS_gate_feature_s73.md, § *The assessment*), and RESULTS_gate_model_choice.md gains their rows — 2026-10-09. Astra's 13 pending reviewer cells were not filled, by the operator's choice.
 - [ ] This plan is promoted, or its remaining items are said and dated.
 
 ## 6. T5 — the design (2026-09-30)
