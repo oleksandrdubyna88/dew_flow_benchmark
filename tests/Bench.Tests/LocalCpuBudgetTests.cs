@@ -76,11 +76,11 @@ public sealed partial class LocalCpuBudgetTests
             "a documented test run goes through the mount's low-priority.mjs");
     }
 
-    // A test executable path, with or without `.exe` (README names the Linux binary): `.../Bench.Tests` or
-    // `.../Bench.Tests.exe` followed by a space or the line end — never the `tests/Bench.Tests/` folder.
     internal static bool IsCi() =>
         Environment.GetEnvironmentVariable("CI") is { Length: > 0 } ci && !ci.Equals("false", StringComparison.OrdinalIgnoreCase) && ci != "0";
 
+    // A test executable path, with or without `.exe` (README names the Linux binary): `.../Bench.Tests` or
+    // `.../Bench.Tests.exe` followed by a space or the line end — never the `tests/Bench.Tests/` folder.
     [GeneratedRegex(@"[/\\][\w.]+\.Tests(\.exe)?(\s|$)")]
     private static partial Regex TestExe();
 }
