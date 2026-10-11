@@ -15,7 +15,7 @@ namespace Bench.Tests;
 /// no file, 24 at once; a file beside the project but not copied, still 24; copied, 8.</para></summary>
 public sealed partial class LocalCpuBudgetTests
 {
-    private const int FamilyCap = 8;
+    internal const int FamilyCap = 8;
 
     private static readonly string Root = FindRoot();
 
@@ -78,7 +78,7 @@ public sealed partial class LocalCpuBudgetTests
 
     // A test executable path, with or without `.exe` (README names the Linux binary): `.../Bench.Tests` or
     // `.../Bench.Tests.exe` followed by a space or the line end — never the `tests/Bench.Tests/` folder.
-    private static bool IsCi() =>
+    internal static bool IsCi() =>
         Environment.GetEnvironmentVariable("CI") is { Length: > 0 } ci && !ci.Equals("false", StringComparison.OrdinalIgnoreCase) && ci != "0";
 
     [GeneratedRegex(@"[/\\][\w.]+\.Tests(\.exe)?(\s|$)")]
@@ -96,13 +96,14 @@ internal static class ConcurrencyGauge
     private static int _peak;
 
     /// <summary>The probe's assertion. Skipped when the run was started with an explicit max-threads
-    /// switch: that is a deliberate override the rule allows, and a red probe would report the person's
-    /// choice as a defect.</summary>
+    /// switch — a deliberate override the rule allows — and on CI, which is exempt and does not copy the cap.</summary>
     public static void AssertNeverMoreThanTheCap()
     {
         if (Environment.GetCommandLineArgs().Any(arg => arg.StartsWith("--max-threads", StringComparison.Ordinal)))
             Assert.Skip("the run set its own max-threads; the default cap is not what is being run");
-        Meet().Should().BeLessThanOrEqualTo(8, "the runner must never run more tests at once than its cap");
+        if (LocalCpuBudgetTests.IsCi())
+            Assert.Skip("CI is exempt: its build does not copy the cap, so a large runner may legitimately run nine at once");
+        Meet().Should().BeLessThanOrEqualTo(LocalCpuBudgetTests.FamilyCap, "the runner must never run more tests at once than its cap");
     }
 
     // Blocking on purpose: xUnit caps how many tests RUN at once, and a probe that awaited would hand its
