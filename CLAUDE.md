@@ -21,16 +21,19 @@ out.
 ## Commands
 
 ```bash
-# Build
-dotnet build dew_flow_benchmark.slnx -c Release
+# Local builds and test runs are capped and lowered (shared rule common.local-cpu-budget): at most 8
+# test threads (tests/Bench.Tests/xunit.runner.json), BelowNormal (Windows) / nice 19, through the mount's wrapper.
+
+# Build (-m:4 per csharp.dotnet-build)
+node .claude/rules/shared/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4
 
 # Run tests — ALWAYS via the test project's executable, NEVER `dotnet test`
 # (xUnit v3 / Microsoft Testing Platform: there is no VSTest testhost, so `dotnet test` aborts)
 # `.exe` because this machine is Windows and pwsh does not resolve an extensionless relative path;
 # ubuntu CI runs the same binary without the extension — that is the Linux name, not a different runner.
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-method "*SomeTestName*"
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-class "*MatrixOrderTests"
+node .claude/rules/shared/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe
+node .claude/rules/shared/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-method "*SomeTestName*"
+node .claude/rules/shared/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests.exe --filter-class "*MatrixOrderTests"
 
 # The CLI (same `.exe` note as above)
 # The variant catalog — retrieval configurations as rows, added and retired, never edited

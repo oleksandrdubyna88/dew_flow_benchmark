@@ -1424,3 +1424,15 @@ Stated because a description that quietly implies more than is built is the same
   the fs-bridge agentic lane roots `FilesystemEngine` at the run's pinned checkout, and a CLI subject
   investigates its own disposable worktree copy of that tree (*A CLI as a measured subject*, above). The
   retrieval lane still reads the engine's index, which is its design rather than a gap.
+
+## Local test runs are capped and lowered (2026-10-11)
+
+The shared rule `common.local-cpu-budget` applies here. `tests/Bench.Tests/xunit.runner.json` sets
+`maxParallelThreads: 8` and is copied to the output. Measured on xunit.v3 4.0.1: an uncopied file is never read, and
+the runner then takes one thread per CPU. Builds and test runs go through `.claude/rules/shared/tools/low-priority.mjs`
+(BelowNormal on Windows, nice 19 elsewhere). CI is exempt and unchanged. `LocalCpuBudgetTests` checks four things:
+
+- the config and its Content item;
+- the copy this run read;
+- the documented commands;
+- an observed peak, from nine probe classes that must never all run at once.

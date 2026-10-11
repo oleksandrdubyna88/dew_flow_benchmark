@@ -4,8 +4,8 @@ Measure **any code repository, at any commit, through any retrieval engine** —
 survives being asked ten thousand times.
 
 ```bash
-dotnet build dew_flow_benchmark.slnx -c Release
-./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
+node .claude/rules/shared/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4
+node .claude/rules/shared/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests
 
 ./hosts/Cli/bin/Release/net10.0/bench plan \
   --repo https://github.com/App-vNext/Polly.git \
