@@ -44,14 +44,14 @@ pilot sizes the experiment to distinguish it (§3.8); it does not move it.
 |---|---|
 | One launcher for every CLI, already widened once for the probes: `JsonEvents` (claude `--output-format stream-json --verbose`), `DisallowedTools`, an `AllowedTools` allow-list, `McpServersOff`, `MaxTurns`, `Restricted`, `AddDirectories` | `src/Bench.Application/CliAgent.cs:77-123`, argv at `src/Bench.Infrastructure/Models/CliAgentRuntime.cs:97-109` |
 | A stream-json reader that already knows the event shapes, skips `system/task_*`, reads tool fates without reading tool content | `src/Bench.Domain/Probes/ClaudeStream.cs:1-116` |
-| A campaign with `run · resume · rerun · status · sweep · report · prune`, exit codes 0/3/4/5, an owner-checked sweep before any claim, generations appended on re-run | `hosts/Cli/ProbesCommand.cs:9-40`, `src/Bench.Application/Probes/ProbeCampaign.cs` |
+| A campaign with `run · resume · rerun · status · sweep · report · prune`, exit codes 0/3/4/5, an owner-checked sweep before any claim, generations appended on re-run | `hosts/Cli/ProbesCommand.cs:9-40`, `src/Bench.Application/Probes/ProbeCampaign.cs:46-67` (`PrepareAsync` at :55, `RunAsync` at :67) |
 | Cells that compose `Claimable` and `ProductPin`, the gate store's guarded claim, `ArtifactCommit`, `PublicationGuard` on public export | [architecture.md § The capability probes](../research/architecture.md) |
 | A blinded assessor with fresh shuffled ids; codex runs it read-only, claude only with `MaxTurns = 1` (cannot open files) | `src/Bench.Application/Gate/FindingAssessor.cs:81-94`, `src/Bench.Domain/Gate/BlindExport.cs:133-153` |
 | Pre-trust of a working tree, only under the checkout root | `src/Bench.Infrastructure/Models/WorkspaceTrust.cs:52-85` |
 | A task base at the parent of a fix commit, merge commits refused | `hosts/Cli/HarvestCommand.cs:13-25` |
 | **Gap:** the CLI-subject worktree is a git worktree whose `.git` redirects to a full mirror that holds the later fix — only the agent's behaviour keeps it out of the future | `src/Bench.Infrastructure/Git/ScratchWorktree.cs:21-33`, [architecture.md:411-416](../research/architecture.md) |
 | **Gap:** no `--forward-subagent-text`, no `--max-budget-usd` option on the launcher | `src/Bench.Application/CliAgent.cs:77-123` |
-| **Gap:** `ClaudeStream` does not group by `parent_tool_use_id`, so it cannot tell one subagent from another | `src/Bench.Domain/Probes/ClaudeStream.cs` |
+| **Gap:** `ClaudeStream` does not group by `parent_tool_use_id`, so it cannot tell one subagent from another | `src/Bench.Domain/Probes/ClaudeStream.cs:25-58` (`Read` takes the whole stream as one tool trace) |
 
 **Feasibility probe, 2026-10-12, claude 2.1.289** (prediction written first; the stream was read, nothing scored). A main
 `claude -p --model opus --output-format stream-json --verbose --forward-subagent-text --max-budget-usd 2 --disallowedTools
@@ -247,7 +247,10 @@ Written into `research/RESULTS_scout_models.md` before cell one, with its commit
   for while it runs, so: every **attempt** carries its own reservation row; the stream is written to the artefact root
   line by line as it arrives (the launcher widened with an output sink, not copied); and recovery settles each attempt
   exactly once — from its `result` envelope when one survived, otherwise as an explicit **unknown-cost charge** equal
-  to its reservation, counted in the ledger and reported. A crash before launch releases the reservation. The run's
+  to its reservation, counted in the ledger and reported. **The launch boundary is durable, and doubt is charged:** the attempt is marked *launching* in the store BEFORE the CLI
+  is invoked, so recovery never has to guess — an attempt with no *launching* mark provably never started and its
+  reservation is released; an attempt marked *launching* with no surviving `result` is charged its reservation as
+  unknown cost, even if the process may have died before spending anything. The run's
   final check is then *ledger = Σ `total_cost_usd` of settled attempts + Σ unknown-cost charges*, never a bare
   equality that a crash would break.
 
@@ -426,7 +429,8 @@ fixture with a live capture, and a reader that was wrong goes RED on the capture
   the run; exit 3 when the next reservation does not fit.
 - `alias-check` exits non-zero on a replayed stream whose `resolvedModel` differs from the recorded id.
 - **Crash tests at the money boundaries**, by fault injection through a checkpoint port the runner calls: a crash
-  before launch releases the reservation; a crash after paid output with the stream on disk settles once from it; a
+  before the *launching* mark releases the reservation; a crash after the mark with no output is charged as unknown;
+  a crash after paid output with the stream on disk settles once from it; a
   crash after paid output with no `result` line becomes an unknown-cost charge; a crash after the artefact commit but
   before settlement settles once, never twice. Plus ONE out-of-process test: a real `bench scouts run` process killed
   mid-cell, then `resume` — the ledger identity holds. The existing probe test that plants a dead owner's row stays
