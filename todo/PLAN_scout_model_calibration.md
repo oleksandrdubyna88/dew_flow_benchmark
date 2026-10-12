@@ -310,12 +310,12 @@ round over the epic's diff, the fixes folded into that commit. (E2 adds three ev
 pre-registration — see S5.) Every epic ends green from the test executable at zero
 warnings and is coherent alone. The model is fixed per story — Opus for ordinary work, Fable where a wrong answer is paid
 later. The context has ONE migration (E1 S1); a column a later story needs is added to it before E1's commit, as the
-probes did. The split was decided on Fable (2026-10-12).
+probes did. The split was decided on Fable (2026-10-12); the operator then put S1 and S2 on Opus.
 
 **E1 — The scouts context, end to end offline.** Branch `feat/scouts-context`. Goal: `bench scouts` plans, runs,
 resumes, scores and reports a run against a controlled CLI and real storage, and no paid model has been called.
 
-- **S1 — The facts and the store** *(Fable: the deciders every later story composes, a migration, a ledger holding
+- **S1 — The facts and the store** *(Opus, by the operator's decision of 2026-10-12, which overrides the split's Fable choice: the deciders every later story composes, a migration, a ledger holding
   money, the read-back deciding validity).* `Bench.Domain.Scouts`: `ScoutTask`, `ScoutArm` (seven arms + Explore),
   `ScoutCell` composing `Claimable` + `ProductPin` as `ProbeCell` does, `ScoutRun` (no status column, frozen pins,
   ceiling), `ScoutSchedule` (seeded, arms interleaved per task), generations. `ClaudeSubagents` beside `ClaudeStream`.
@@ -329,7 +329,7 @@ resumes, scores and reports a run against a controlled CLI and real storage, and
   Testcontainers; the migration on an empty and on a gate-holding database) and no process is launched yet. The §2
   probe stream, scrubbed, is the first fixture under `tests/Bench.Tests/Fixtures/scouts/` (kept locally since the
   probe; one re-run, about $0.60, if it is lost).
-- **S2 — One cell end to end, then the measuring verbs** *(Fable: the history-free tree and the launch deny-list are
+- **S2 — One cell end to end, then the measuring verbs** *(Opus, by the same decision: the history-free tree and the launch deny-list are
   the measurement's trust boundary; the budget cap and the ledger are money).* `AgentAskOptions.ForwardSubagentText` and
   `MaxBudgetUsd` in `CliArgv.For` for claude, refused by name elsewhere. `ScoutTrees` (§3.2). `CliScoutRunner`: reserve →
   launch → raw stream committed FIRST → read → read-back → cost check → settle / void / abort. `ScoutCampaign`: one cell at
