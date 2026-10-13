@@ -152,13 +152,61 @@ public sealed record AgentAskOptions
     /// nothing a later session could resume or read.</summary>
     public bool NoSessionPersistence { get; init; }
 
+    /// <summary>claude <c>--setting-sources &lt;list&gt;</c>: WHICH settings files the CLI loads — <c>user</c>, <c>project</c>, <c>local</c>, or
+    /// none at all (<see cref="AgentSettingSources.None"/>, spelled <c>--setting-sources ""</c> — an EMPTY ARGUMENT, not an absent flag). The
+    /// scouts load none (S5, measured 2026-10-13 on claude 2.1.289): the login stays, the user settings' directory grant
+    /// (<c>permissions.additionalDirectories</c>) and the user-level hooks are not loaded, and the plugin and the effort come back through
+    /// <see cref="PluginDirectories"/> and <see cref="SettingsFile"/>.</summary>
+    public AgentSettingSources SettingSources { get; init; } = AgentSettingSources.NotAsked;
+
+    /// <summary>claude <c>--settings &lt;file&gt;</c>: ONE settings file loaded beside — or, with no sources, instead of — the settings files: the
+    /// scouts' pinned effort file, holding only <c>effortLevel</c> and <c>modelSettings</c>.</summary>
+    public string SettingsFile { get; init; } = string.Empty;
+
+    /// <summary>claude <c>--plugin-dir &lt;dir&gt;</c>, once per directory: a plugin loaded from a directory rather than from the user settings'
+    /// <c>enabledPlugins</c> — how the scouts keep <c>feature-dev:code-explorer</c> while no user settings file is loaded.</summary>
+    public IReadOnlyList<string> PluginDirectories { get; init; } = [];
+
     /// <summary>Nothing asked beyond "answer once" — the launch every caller before the assessor made.</summary>
     public bool IsNone =>
         Sandbox == AgentSandbox.Default && OutputSchemaFile.Length == 0 && LastMessageFile.Length == 0
         && DisallowedTools.Count == 0 && !McpServersOff && MaxTurns == 0
         && WebSearch == AgentWebSearch.Default && AddDirectories.Count == 0 && !JsonEvents
         && !AllowedTools.Asked && !Restricted && !ForwardSubagentText && MaxBudgetUsd == 0m
-        && McpConfigFile.Length == 0 && !NoSessionPersistence;
+        && McpConfigFile.Length == 0 && !NoSessionPersistence
+        && !SettingSources.Asked && SettingsFile.Length == 0 && PluginDirectories.Count == 0;
+}
+
+/// <summary>Which settings files a launch asks the CLI to load: not asked (the CLI's default — every source), or ONLY these — where an EMPTY
+/// list is a real request ("load no settings file"), which is why this is not a bare list. Equal by content, as <see cref="AgentToolAllowlist"/>.</summary>
+public sealed record AgentSettingSources
+{
+    private AgentSettingSources(bool asked, IReadOnlyList<string> names)
+    {
+        Asked = asked;
+        Names = names;
+    }
+
+    public static AgentSettingSources NotAsked { get; } = new(false, []);
+
+    /// <summary>No settings file at all — <c>--setting-sources ""</c>.</summary>
+    public static AgentSettingSources None { get; } = new(true, []);
+
+    public static AgentSettingSources Only(IReadOnlyList<string> names) => new(true, [.. names]);
+
+    public bool Asked { get; }
+
+    public IReadOnlyList<string> Names { get; }
+
+    /// <summary>The flag's VALUE as claude reads it: the names comma-joined, and the empty string for none.</summary>
+    public string Argument => string.Join(',', Names);
+
+    public bool Equals(AgentSettingSources? other) =>
+        other is not null && Asked == other.Asked && Names.SequenceEqual(other.Names, StringComparer.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(Asked, Names.Count);
+
+    public override string ToString() => Asked ? $"only [{Argument}]" : "not asked";
 }
 
 /// <summary>A tool allow-list as a launch option: not asked (the CLI's default set), or ONLY these names — where an empty list is

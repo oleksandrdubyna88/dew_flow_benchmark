@@ -19,7 +19,7 @@ public static class ScoutReportText
         text.AppendLine(Inv($"scout run      {report.RunId} — {report.Kind}, created {report.CreatedAt:yyyy-MM-dd HH:mm} UTC · seed {report.Seed} · {report.Repeats} repeat(s)"));
         text.AppendLine($"verdict        {Verdict(report.Verdict)}");
         text.AppendLine($"cells          {report.Progress.Pending} pending · {report.Progress.Claimed} claimed · {report.Progress.Settled} settled · {report.Progress.Abandoned} abandoned — {(report.Progress.Open ? "open" : "finished")}");
-        text.AppendLine(Inv($"ledger         ${l.SettledUsd} settled + ${l.UnknownUsd} unknown ({l.UnknownCharges} charge(s)) = ${l.SpentUsd} spent of ${l.CeilingUsd} · ${l.ReservedUsd} reserved · {l.Attempts} attempt(s)"));
+        text.AppendLine(Inv($"ledger         ${l.SettledUsd} settled + ${l.UnknownUsd} unknown ({l.UnknownCharges} charge(s)) = ${l.SpentUsd} spent of ${l.CeilingUsd} · ${l.ReservedUsd} reserved · {l.Attempts} attempt(s) · {l.Overshoots} overshoot(s)"));
         text.AppendLine(Inv($"pinned         claude {report.Pins.CliVersion} · opus {report.Pins.ResolvedOpus} · sonnet {report.Pins.ResolvedSonnet}"));
         text.AppendLine(Inv($"intervals      paired, clustered by repository · seed {report.Bootstrap.Seed} · {report.Bootstrap.Resamples} resamples · one-sided 95 % · pass needs Δrecall lower ≥ {report.Bootstrap.RecallMargin} and Δwrong upper ≤ +{report.Bootstrap.WrongMargin}"));
         text.AppendLine();
@@ -74,8 +74,13 @@ public static class ScoutReportText
     }
 
     private static string Task(ScoutTaskReportDto task) =>
-        Inv($"task {task.Task} ({task.Repository}, {task.Kind}, |G| {task.GroundTruth}): ")
+        Inv($"task {task.Task} ({Where(task)}, {task.Kind}, |G| {task.GroundTruth}): ")
         + string.Join(" · ", task.Arms.Select(a => Inv($"{a.Arm} recall {F(a.Recall)} wrong/10 {F(a.WrongPerTen)} ({a.Scored}/{a.Cells} scored)")));
+
+    /// <summary>A public task by its repository (and language when it names one); a private task by the word and its language — the DTO
+    /// already carries the label as its repository, and the text says why it reads so.</summary>
+    public static string Where(ScoutTaskReportDto task) =>
+        task.Privacy == "private" ? $"private · {task.Language}" : task.Language.Length > 0 ? $"{task.Repository} · {task.Language}" : task.Repository;
 
     private static string F(ScoutFigureDto figure) => figure.State switch
     {

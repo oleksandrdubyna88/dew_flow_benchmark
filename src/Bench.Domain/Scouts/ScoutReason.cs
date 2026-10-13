@@ -57,6 +57,10 @@ public enum ScoutReason
     /// <summary>The computed cost and <c>total_cost_usd</c> differ by more than 2 %.</summary>
     CostMismatch,
 
+    /// <summary>The main session or a child continued on another model after the API's safeguards refused a request — a
+    /// <c>system/model_refusal_fallback</c> event (E2 S8): a moved pin the init event does not show.</summary>
+    ModelRefusalFallback,
+
     /// <summary>A frozen pin moved mid-run.</summary>
     PinMoved,
 

@@ -41,9 +41,10 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
         public Pass Storing(int asked, int stored) => this with { Asked = Asked + asked, Stored = Stored + stored, InARow = 0 };
     }
 
+    /// <param name="digest">How a stored claim's statement is digested per task — a private task's as its HMAC (S4).</param>
     public async Task<ScoutAssessReport> RunAsync(
         ScoutRun run, IReadOnlyList<ScoutTask> tasks, IReadOnlyList<ScoutCell> cells, IReadOnlyList<ScoutAttempt> attempts,
-        ScoutAssessorLaunch launch, Random blinding, Action<string> progress, CancellationToken cancellationToken)
+        ScoutAssessorLaunch launch, Random blinding, ScoutClaimDigest digest, Action<string> progress, CancellationToken cancellationToken)
     {
         var read = ScoutSettledOutputs.Of(tasks, cells, attempts, streams);
         var assessed = (await verdicts.AssessedKeysAsync(run.Id, cancellationToken)).ToHashSet();
@@ -59,7 +60,7 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
                 break;
             }
 
-            pass = await TaskAsync(run, task, [.. openByTask[task.Id.Value]], launch, blinding, pass, progress, cancellationToken);
+            pass = await TaskAsync(run, task, [.. openByTask[task.Id.Value]], launch, blinding, digest, pass, progress, cancellationToken);
         }
 
         var remaining = open.Count - pass.Stored;
@@ -71,8 +72,8 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
     }
 
     private async Task<Pass> TaskAsync(
-        ScoutRun run, ScoutTask task, IReadOnlyList<ScoutClaimToAssess> claims, ScoutAssessorLaunch launch, Random blinding, Pass pass, Action<string> progress,
-        CancellationToken cancellationToken)
+        ScoutRun run, ScoutTask task, IReadOnlyList<ScoutClaimToAssess> claims, ScoutAssessorLaunch launch, Random blinding, ScoutClaimDigest digest, Pass pass,
+        Action<string> progress, CancellationToken cancellationToken)
     {
         if (await trees.PrepareAsync(task, cancellationToken) is not Outcome<ScoutTree>.Ok { Value: var tree })
         {
@@ -86,7 +87,7 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
                 break;
             }
 
-            pass = await BatchAsync(run, task, tree, batch, launch, pass, progress, cancellationToken);
+            pass = await BatchAsync(run, task, tree, batch, launch, digest, pass, progress, cancellationToken);
         }
 
         return pass;
@@ -95,8 +96,8 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
     /// <summary>One batch, its own unit: asked, read, and its verdicts stored before the next batch is asked; a failure is recorded on the
     /// pass it returns and the campaign goes on.</summary>
     private async Task<Pass> BatchAsync(
-        ScoutRun run, ScoutTask task, ScoutTree tree, IReadOnlyList<ScoutBlindClaim> batch, ScoutAssessorLaunch launch, Pass pass, Action<string> progress,
-        CancellationToken cancellationToken)
+        ScoutRun run, ScoutTask task, ScoutTree tree, IReadOnlyList<ScoutBlindClaim> batch, ScoutAssessorLaunch launch, ScoutClaimDigest digest, Pass pass,
+        Action<string> progress, CancellationToken cancellationToken)
     {
         var answers = await assessor.AskAsync(launch, run.Id, batch, tree.Root, cancellationToken);
 
@@ -108,7 +109,7 @@ public sealed class ScoutAssessCampaign(IScoutVerdicts verdicts, IScoutTrees tre
 
         var now = clock.GetUtcNow();
         var given = ((Outcome<IReadOnlyList<ScoutClaimAnswer>>.Ok)answers).Value;
-        var stored = await verdicts.StoreVerdictsAsync([.. given.Select(a => ScoutAssessment.Stored(a, run.Id, tree.Root, launch.Model, now))], cancellationToken);
+        var stored = await verdicts.StoreVerdictsAsync([.. given.Select(a => ScoutAssessment.Stored(a, run.Id, tree.Root, launch.Model, now, digest))], cancellationToken);
         progress(string.Create(CultureInfo.InvariantCulture,
             $"assessed       task {task.Id} — {stored} of {batch.Count} claim(s) given a verdict{(given.Count < batch.Count ? $"; {batch.Count - given.Count} unanswered, asked again next pass" : string.Empty)}"));
         return pass.Storing(batch.Count, stored);

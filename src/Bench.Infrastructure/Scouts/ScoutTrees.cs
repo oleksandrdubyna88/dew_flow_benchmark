@@ -85,7 +85,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
     public async Task<Outcome<ScoutTree>> PrepareAsync(ScoutTask task, CancellationToken cancellationToken)
     {
-        var built = await BuildAsync(new ScoutTreeSpec(task.Id, task.Repository, task.Parent, task.Removals), cancellationToken);
+        var built = await BuildAsync(new ScoutTreeSpec(task.Id, task.Repository, task.Parent, task.Removals) { Privacy = task.Privacy }, cancellationToken);
 
         return built switch
         {
@@ -124,10 +124,10 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
         return (commits, grant.Length > 0) switch
         {
-            (Outcome<string>.Fail fail, _) => Outcome<ScoutTree>.Failure($"the tree of task {spec.Task} is not a git repository any more — {fail.Reason}"),
+            (Outcome<string>.Fail fail, _) => Outcome<ScoutTree>.Failure(Withheld(spec, "the tree is not a git repository any more", $"the tree of task {spec.Task} is not a git repository any more — {fail.Reason}")),
             (Outcome<string>.Ok { Value: var count }, _) when count.Trim() != "1" => Outcome<ScoutTree>.Failure(
                 $"the tree of task {spec.Task} carries {count.Trim()} commits — a history-free tree has exactly one; {ScoutTreeRefusal.HashChanged}"),
-            (_, true) => Outcome<ScoutTree>.Failure($"task {spec.Task}: {grant}"),
+            (_, true) => Outcome<ScoutTree>.Failure(Withheld(spec, "the tree's own Claude settings grant a directory outside it", $"task {spec.Task}: {grant}")),
             _ => Outcome<ScoutTree>.Success(Hashed(tree) with { Removed = Recorded(spec.Task) }),
         };
     }
@@ -135,22 +135,26 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
     /// <summary>The archive, the submodules and the removals, under the staging folder. Answers the files removed.</summary>
     private async Task<Outcome<IReadOnlyList<string>>> StageAsync(string staging, ScoutTreeSpec spec, CancellationToken cancellationToken)
     {
-        var archived = await ArchiveAsync(settings.UrlOf(spec.Repository), spec.Parent, staging, 0, cancellationToken);
+        var archived = await ArchiveAsync(settings.UrlOf(spec.Repository), spec.Parent, staging, 0, spec.Privacy, cancellationToken);
 
         if (archived is Outcome<bool>.Fail fail)
         {
-            return Outcome<IReadOnlyList<string>>.Failure($"task {spec.Task}: {fail.Reason}");
+            return Outcome<IReadOnlyList<string>>.Failure(Withheld(spec, "the tree could not be archived from the mirror", $"task {spec.Task}: {fail.Reason}"));
         }
 
         IReadOnlyList<string> removed = [.. spec.Remove.Where(path => RemoveFile(staging, path))];
         var grant = ScoutGrantGuard.ProjectRefusal(staging);
 
         return grant.Length > 0
-            ? Outcome<IReadOnlyList<string>>.Failure($"task {spec.Task}: {grant}")
+            ? Outcome<IReadOnlyList<string>>.Failure(Withheld(spec, "the tree's own Claude settings grant a directory outside it", $"task {spec.Task}: {grant}"))
             : await InitAsync(staging, spec, removed, cancellationToken);
     }
 
-    private async Task<Outcome<bool>> ArchiveAsync(Outcome<RepoUrl> url, CommitSha commit, string into, int depth, CancellationToken cancellationToken)
+    /// <summary>A refusal about the tree as a public writer may print it: a public task's as written; a private task's by label and summary, the
+    /// detail kept under <c>.scout-trees/</c> (<see cref="ScoutWithheld"/>).</summary>
+    private string Withheld(ScoutTreeSpec spec, string summary, string detail) => ScoutWithheld.Refusal(Root, spec.Privacy, spec.Task.Value, summary, detail);
+
+    private async Task<Outcome<bool>> ArchiveAsync(Outcome<RepoUrl> url, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         if (url is Outcome<RepoUrl>.Fail badUrl)
         {
@@ -161,13 +165,13 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
         return mirror switch
         {
-            Outcome<string>.Ok bare => await ExtractAsync(bare.Value, commit, into, depth, cancellationToken),
+            Outcome<string>.Ok bare => await ExtractAsync(bare.Value, commit, into, depth, privacy, cancellationToken),
             Outcome<string>.Fail fail => Outcome<bool>.Failure(fail.Reason),
             _ => Outcome<bool>.Failure("unreachable"),
         };
     }
 
-    private async Task<Outcome<bool>> ExtractAsync(string bare, CommitSha commit, string into, int depth, CancellationToken cancellationToken)
+    private async Task<Outcome<bool>> ExtractAsync(string bare, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var zip = Path.Combine(Path.GetTempPath(), $"bench-scout-{Guid.NewGuid():N}.zip");
 
@@ -184,7 +188,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
             Directory.CreateDirectory(into);
             ZipFile.ExtractToDirectory(zip, into, overwriteFiles: false);
-            return await SubmodulesAsync(bare, commit, into, depth, cancellationToken);
+            return await SubmodulesAsync(bare, commit, into, depth, privacy, cancellationToken);
         }
         finally
         {
@@ -194,7 +198,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
     /// <summary>Each submodule's content at the sha P pins, archived into its path from its OWN mirror — the url read from P's
     /// <c>.gitmodules</c>. A submodule whose url cannot be read or reached refuses the tree: a tree missing a directory is not P.</summary>
-    private async Task<Outcome<bool>> SubmodulesAsync(string bare, CommitSha commit, string into, int depth, CancellationToken cancellationToken)
+    private async Task<Outcome<bool>> SubmodulesAsync(string bare, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var listed = await GitCommand.ReadAsync(bare, settings.GitTimeout, cancellationToken, "ls-tree", "-r", commit.Value);
         var pinned = listed.Match(text => ScoutSubmodules.Pinned(text), _ => []);
@@ -213,7 +217,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
         foreach (var (path, sha) in pinned)
         {
-            var archived = await SubmoduleAsync(modules, path, sha, into, depth, cancellationToken);
+            var archived = await SubmoduleAsync(modules, path, sha, into, depth, privacy, cancellationToken);
 
             if (archived is Outcome<bool>.Fail)
             {
@@ -224,7 +228,8 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
         return Outcome<bool>.Success(true);
     }
 
-    private async Task<Outcome<bool>> SubmoduleAsync(IReadOnlyDictionary<string, string> modules, string path, string sha, string into, int depth, CancellationToken cancellationToken)
+    private async Task<Outcome<bool>> SubmoduleAsync(
+        IReadOnlyDictionary<string, string> modules, string path, string sha, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var commit = CommitSha.Parse(sha);
         var target = Path.GetFullPath(Path.Combine(into, path));
@@ -234,8 +239,8 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
             return Outcome<bool>.Failure($"submodule '{path}' has no url in .gitmodules at P, a sha that is not one, or a path outside the tree");
         }
 
-        logger.LogInformation("Archiving submodule {Path} at {Sha}", path, sha[..12]);
-        return await ArchiveAsync(RepoUrl.Parse(url), ((Outcome<CommitSha>.Ok)commit).Value, target, depth + 1, cancellationToken);
+        logger.LogInformation("Archiving submodule {Path} at {Sha}", ScoutPublication.Path(privacy, path), privacy == ScoutTaskPrivacy.Private ? ScoutPublication.PrivateMark : sha[..12]);
+        return await ArchiveAsync(RepoUrl.Parse(url), ((Outcome<CommitSha>.Ok)commit).Value, target, depth + 1, privacy, cancellationToken);
     }
 
     private static bool RemoveFile(string root, string relative)
@@ -252,27 +257,35 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
     }
 
     /// <summary><c>git init</c> and ONE commit, identity and date from the environment, no hook, no config touched.</summary>
-    private async Task<Outcome<IReadOnlyList<string>>> InitAsync(string staging, ScoutTreeSpec spec, IReadOnlyList<string> removed, CancellationToken cancellationToken)
+    private async Task<Outcome<IReadOnlyList<string>>> InitAsync(string staging, ScoutTreeSpec spec, IReadOnlyList<string> removed, CancellationToken cancellationToken) =>
+        (await InitOneCommitAsync(staging, $"scout tree {spec.Task} at {spec.Parent.Value}", settings.GitTimeout, cancellationToken)).Match(
+            _ => Outcome<IReadOnlyList<string>>.Success(removed),
+            reason => Outcome<IReadOnlyList<string>>.Failure(Withheld(spec, $"{reason.Split(" — ")[0]} in the new tree", $"task {spec.Task}: {reason}")));
+
+    /// <summary>A folder made a ONE-commit repository: <c>git init</c>, everything added, one commit — identity and date FIXED through the
+    /// environment, no hook (<c>--no-verify</c>), per-invocation <c>-c</c> flags only, no config written. What every history-free tree is
+    /// finished with, and what the access check (S5) builds its scratch tree with. A refusal names the git step that failed.</summary>
+    public static async Task<Outcome<bool>> InitOneCommitAsync(string folder, string message, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var environment = GitEnvironment();
         (string Name, string[] Argv)[] steps =
         [
             ("init", ["-c", "init.defaultBranch=main", "init", "-q"]),
             ("add", ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "add", "-A", "-f", "."]),
-            ("commit", ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "--allow-empty", "-m", $"scout tree {spec.Task} at {spec.Parent.Value}"]),
+            ("commit", ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "--allow-empty", "-m", message]),
         ];
 
         foreach (var (name, argv) in steps)
         {
-            var ran = await ProcessRunner.RunAsync("git", argv, staging, settings.GitTimeout, string.Empty, environment, cancellationToken);
+            var ran = await ProcessRunner.RunAsync("git", argv, folder, timeout, string.Empty, environment, cancellationToken);
 
             if (ran is not ProcessAttempt.Completed { Result.Ok: true })
             {
-                return Outcome<IReadOnlyList<string>>.Failure($"task {spec.Task}: git {name} in the new tree failed — {Said(ran)}");
+                return Outcome<bool>.Failure($"git {name} failed — {Said(ran)}");
             }
         }
 
-        return Outcome<IReadOnlyList<string>>.Success(removed);
+        return Outcome<bool>.Success(true);
     }
 
     private Outcome<ScoutTree> Commit(string staging, string tree, ScoutTreeSpec spec, IReadOnlyList<string> removed)
@@ -290,7 +303,8 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
             ["removed"] = new JsonArray([.. removed.Select(r => (JsonNode)JsonValue.Create(r))]),
         }.ToJsonString() + "\n");
 
-        logger.LogInformation("Built the history-free tree of {Task} at {Parent}: {Files} file(s), hash {Hash}", spec.Task, spec.Parent.Short, hashed.Files.Count, hashed.TreeHash[..12]);
+        // A log line is a public writer too (§3.13): a private task's P is a digest of its history, so the line carries the label and the mark.
+        logger.LogInformation("Built the history-free tree of {Task} at {Parent}: {Files} file(s), hash {Hash}", spec.Task, ScoutPublication.CommitShort(spec.Privacy, spec.Parent), hashed.Files.Count, hashed.TreeHash[..12]);
         return Outcome<ScoutTree>.Success(hashed);
     }
 

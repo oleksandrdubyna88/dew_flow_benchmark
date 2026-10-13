@@ -41,15 +41,24 @@ public static class ScoutsAssessCommand
 
     private static async Task<int> AssessAsync(ScoutsInputs inputs, ScoutRun run, ScoutAssessorLaunch launch, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
+        var tasks = await inputs.Store.TasksAsync(run.Id, cancellationToken);
+        var digest = ScoutsReadCommand.Digest(inputs.Command, run, tasks);
+
+        if (digest is Outcome<ScoutClaimDigest>.Fail noKey)
+        {
+            return GateRunCommand.Refuse(error, ExitCodes.Configuration, noKey.Reason);
+        }
+
         var assessor = new ScoutClaimAssessor(new CliAgentRuntime(inputs.Logs.CreateLogger<CliAgentRuntime>()), inputs.Artifacts);
         var campaign = new ScoutAssessCampaign(inputs.Verdicts, inputs.Trees, inputs.Artifacts, assessor, TimeProvider.System);
         var report = await campaign.RunAsync(
             run,
-            await inputs.Store.TasksAsync(run.Id, cancellationToken),
+            tasks,
             await inputs.Store.CellsAsync(run.Id, cancellationToken),
             await inputs.Store.AttemptsAsync(run.Id, cancellationToken),
             launch,
             new Random(),
+            ((Outcome<ScoutClaimDigest>.Ok)digest).Value,
             output.WriteLine,
             cancellationToken);
 

@@ -203,7 +203,7 @@ public static class ScoutAnalysis
     /// <summary>The paired readings of W1..W3 — B − A per task, over the tasks where both arms have the value, clustered by repository.</summary>
     private static IReadOnlyList<ScoutWorkloadReading> Workloads(IReadOnlyList<ScoutTaskArm> taskArms, IReadOnlyList<ScoutArmSummary> summaries, BootstrapSettings settings) =>
         [.. Enum.GetValues<ScoutWorkload>()
-            .Select(w => (Workload: w, A: summaries.FirstOrDefault(s => Is(s.Arm, w, ScoutModel.Opus)), B: summaries.FirstOrDefault(s => Is(s.Arm, w, ScoutModel.Sonnet))))
+            .Select(w => (Workload: w, A: summaries.FirstOrDefault(s => IsDeciding(s.Arm, w, ScoutModel.Opus)), B: summaries.FirstOrDefault(s => IsDeciding(s.Arm, w, ScoutModel.Sonnet))))
             .Where(pair => pair.A is not null && pair.B is not null)
             .Select(pair => new ScoutWorkloadReading(
                 pair.Workload,
@@ -211,8 +211,9 @@ public static class ScoutAnalysis
                 ScoutBootstrap.Of(Deltas(taskArms, pair.A.Arm.Id, pair.B.Arm.Id, t => t.Wrong.Measured ? Figure.Of((double)t.Wrong.PerTen) : Figure.Unknown), settings),
                 pair.A.WrongMeasured && pair.B.WrongMeasured))];
 
-    /// <summary>The DECIDING pair of a workload: A (Opus N) against B (Sonnet ⌈1.5·N⌉) — C3 and the Explore replication are reported, not decided.</summary>
-    private static bool Is(ScoutArm arm, ScoutWorkload workload, ScoutModel model) =>
+    /// <summary>The DECIDING pair of a workload: A (Opus N) against B (Sonnet ⌈1.5·N⌉) — C3 and the Explore replication are reported, not decided.
+    /// Public since E2 S8: the sizing simulates exactly the pairs the decision reads.</summary>
+    public static bool IsDeciding(ScoutArm arm, ScoutWorkload workload, ScoutModel model) =>
         arm.Workload == workload && arm.Model == model && !arm.IsReplication && arm.Id != ScoutArmId.C3;
 
     public static IReadOnlyList<TaskDelta> Deltas(IReadOnlyList<ScoutTaskArm> taskArms, ScoutArmId a, ScoutArmId b, Func<ScoutTaskArm, Figure> value) =>

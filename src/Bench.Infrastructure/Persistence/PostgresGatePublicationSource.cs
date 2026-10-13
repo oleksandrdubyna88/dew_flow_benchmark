@@ -37,18 +37,27 @@ public sealed class PostgresGatePublicationSource(BenchDbContext db) : IGatePubl
     public async Task<IReadOnlyList<PublishedTable>> ReadAsync(CancellationToken cancellationToken)
     {
         var tables = new List<PublishedTable>();
+        var privateRows = await PrivateRowsAsync(cancellationToken);
 
         foreach (var entity in PublishedEntities(db))
         {
-            tables.Add(new PublishedTable(entity.GetTableName()!, await RowsAsync(entity, cancellationToken)));
+            tables.Add(new PublishedTable(entity.GetTableName()!, await RowsAsync(entity, privateRows, cancellationToken)));
         }
 
         return tables;
     }
 
-    private async Task<IReadOnlyList<PublishedRow>> RowsAsync(IEntityType entity, CancellationToken cancellationToken)
+    /// <summary>The scouts' PRIVATE tasks and their cells (S4, §3.13): read first, so every scout row the walk reaches can be projected
+    /// (<see cref="ScoutRowPublication"/>) before the guard reads it — a private task's url, statement, G, KEY FILES and claim paths never
+    /// become a published value, and the export needs no key: the commitments are stored.</summary>
+    private async Task<ScoutRowPublication.PrivateRows> PrivateRowsAsync(CancellationToken cancellationToken) =>
+        ScoutRowPublication.PrivateRows.Of(
+            await db.ScoutTasks.AsNoTracking().Where(t => t.Privacy == Bench.Domain.Scouts.ScoutTaskPrivacy.Private).ToListAsync(cancellationToken),
+            await db.ScoutCells.AsNoTracking().ToListAsync(cancellationToken));
+
+    private async Task<IReadOnlyList<PublishedRow>> RowsAsync(IEntityType entity, ScoutRowPublication.PrivateRows privateRows, CancellationToken cancellationToken)
     {
-        var rows = await ListAsync(entity, cancellationToken);
+        var rows = (await ListAsync(entity, cancellationToken)).Select(row => ScoutRowPublication.Published(row, privateRows)).ToList();
         // The claim owner (label, host, pid) never becomes a field of a public row: it names a machine and a process,
         // and it is sweep state, not a measurement. It stays in the database; the guard refuses it if it ever returns.
         var columns = entity.GetProperties()

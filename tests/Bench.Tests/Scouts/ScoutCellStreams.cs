@@ -28,6 +28,10 @@ public enum CellVariant
     /// <summary>The main session launched the scouts on the OTHER alias (opus for a Sonnet arm, sonnet for an Opus arm), and they answered on
     /// it — the pins hold, the envelope agrees, and the read-back VOIDS the cell (<see cref="ScoutReason.InputModelMismatch"/>).</summary>
     WrongModel,
+
+    /// <summary>S6: the CLI overshot its cap — the envelope reports <see cref="ScoutCellStreams.OvershootUsd"/> ($4.10), with the Opus output
+    /// tokens raised so the computed cost agrees (the cost check passes); the cell is clean otherwise.</summary>
+    Overshoot,
 }
 
 /// <summary>Whole synthetic cell streams for a (task, arm) — S1's <see cref="ScoutStreams"/> builder in claude 2.1.289's shape, with the
@@ -49,7 +53,8 @@ internal static class ScoutCellStreams
           { "modelId": "claude-sonnet-5-5", "input": 3, "output": 15, "cacheRead": 0.3, "cacheWrite5m": 3.75, "cacheWrite1h": 6 } ] }
         """;
 
-    public static string For(ScoutTask task, ScoutArm arm, CellVariant variant = CellVariant.Clean, string tree = Cwd)
+    /// <param name="claim">The statement every scout's first CLAIMS line makes about its G file — a test plants a private phrase here.</param>
+    public static string For(ScoutTask task, ScoutArm arm, CellVariant variant = CellVariant.Clean, string tree = Cwd, string claim = "defines the type")
     {
         var prompts = ScoutPrompts.ForCell(task, arm);
         var model = ModelOf(arm, variant);
@@ -61,7 +66,7 @@ internal static class ScoutCellStreams
             MessageModel: resolved,
             AgentType: arm.AgentType,
             Tools: [Tool(variant, i)],
-            Report: Report(task, i))).ToList();
+            Report: Report(task, i, claim))).ToList();
 
         var stream = ScoutStreams.Cell(children, completed: variant == CellVariant.Void ? children.Count - 1 : null).Replace(ScoutStreams.Tree, Cwd, StringComparison.Ordinal);
 
@@ -85,8 +90,8 @@ internal static class ScoutCellStreams
             ? new ToolSpec("Read", """{"file_path":"C:/elsewhere/future/Store.cs"}""", Result: "class Store { /* the answer */ }")
             : new ToolSpec("Read", $$"""{"file_path":"{{ScoutStreams.Tree}}/src/Alpha.cs"}""", Result: "class Alpha {}");
 
-    private static string Report(ScoutTask task, int i) =>
-        $"Found it.\n\nKEY FILES\n- {task.GroundTruth[i % task.GroundTruth.Count]}\n- README.md\n\nCLAIMS\n- {task.GroundTruth[i % task.GroundTruth.Count]}:1 — defines the type\n- README.md — describes the project";
+    private static string Report(ScoutTask task, int i, string claim) =>
+        $"Found it.\n\nKEY FILES\n- {task.GroundTruth[i % task.GroundTruth.Count]}\n- README.md\n\nCLAIMS\n- {task.GroundTruth[i % task.GroundTruth.Count]}:1 — {claim}\n- README.md — describes the project";
 
     /// <summary>The envelope made consistent: <c>modelUsage</c> per model (the main session's output on Opus, 50 per child on its model), then
     /// <c>total_cost_usd</c> = the cost the calculator computes from it — or 10 % off it for <see cref="CellVariant.CostOff"/>.</summary>
@@ -94,12 +99,19 @@ internal static class ScoutCellStreams
     private static ScoutModel ModelOf(ScoutArm arm, CellVariant variant) =>
         variant != CellVariant.WrongModel ? arm.Model : arm.Model == ScoutModel.Opus ? ScoutModel.Sonnet : ScoutModel.Opus;
 
+    /// <summary>What an overshooting cell reports (S6): $4.10 under a $3 cap.</summary>
+    public const decimal OvershootUsd = 4.10m;
+
+    /// <summary>Opus output tokens at $25 per Mtok that cost exactly $4.10 — added to the main session's line so the computed cost agrees with
+    /// the reported one within the 2 % check.</summary>
+    private const long OvershootOutputTokens = 164_000;
+
     private static string Priced(string stream, ScoutArm arm, CellVariant variant)
     {
         var scoutModel = ModelOf(arm, variant) == ScoutModel.Opus ? ScoutStreams.Opus : ScoutStreams.Sonnet;
         var usage = new JsonObject
         {
-            [ScoutStreams.Opus] = Line(100 + (scoutModel == ScoutStreams.Opus ? 50 * arm.Count : 0)),
+            [ScoutStreams.Opus] = Line(100 + (scoutModel == ScoutStreams.Opus ? 50 * arm.Count : 0) + (variant == CellVariant.Overshoot ? OvershootOutputTokens : 0)),
         };
 
         if (scoutModel == ScoutStreams.Sonnet)
@@ -109,7 +121,12 @@ internal static class ScoutCellStreams
 
         var withUsage = ScoutStreams.Edit(stream, e => Result(e, r => r["modelUsage"] = usage.DeepClone()));
         var cost = ScoutCost.Of(ScoutTokens.Attribute(ClaudeSubagents.Read(withUsage)).Ok(), Prices).Ok().TotalUsd;
-        var reported = variant == CellVariant.CostOff ? decimal.Round(cost * 1.1m, 6) : decimal.Round(cost, 6);
+        var reported = variant switch
+        {
+            CellVariant.CostOff => decimal.Round(cost * 1.1m, 6),
+            CellVariant.Overshoot => OvershootUsd,
+            _ => decimal.Round(cost, 6),
+        };
 
         return ScoutStreams.Edit(withUsage, e => Result(e, r =>
         {

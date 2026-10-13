@@ -1,0 +1,34 @@
+#!/bin/sh
+# OPT-IN (research/module_scouts.md, "Hygiene"): `git config core.hooksPath .githooks` installs this pair for YOUR clone only.
+#
+# For every ref being pushed, scans the blobs the push would carry — the files changed between the remote's sha and the local one, read
+# at the local sha; a new branch (no remote sha) is scanned whole — against the local deny-list named by BENCH_SCOUT_DENYLIST.
+# Refuses the push on a leftover (exit 1), and refuses to run at all when it cannot scan.
+set -u
+
+bench="${BENCH_EXE:-}"
+if [ -z "$bench" ]; then
+  for candidate in ./hosts/Cli/bin/Release/net10.0/bench ./hosts/Cli/bin/Release/net10.0/bench.exe ./hosts/Cli/bin/Debug/net10.0/bench ./hosts/Cli/bin/Debug/net10.0/bench.exe; do
+    if [ -x "$candidate" ]; then bench="$candidate"; break; fi
+  done
+fi
+
+if [ -z "$bench" ]; then
+  echo "pre-push: no bench executable — build the solution (dotnet build dew_flow_benchmark.slnx -c Release -m:4) or set BENCH_EXE" >&2
+  exit 1
+fi
+
+zero="0000000000000000000000000000000000000000"
+top="$(git rev-parse --show-toplevel)"
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue   # a deletion pushes no blob
+  if [ "$remote_sha" = "$zero" ]; then
+    "$bench" scouts hygiene --tree "$local_sha" --repo "$top" || status=$?
+  else
+    "$bench" scouts hygiene --range "$remote_sha..$local_sha" --repo "$top" || status=$?
+  fi
+done
+
+exit $status

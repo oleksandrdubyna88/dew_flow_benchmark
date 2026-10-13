@@ -25,6 +25,11 @@ public sealed record ScoutRun(
     /// <summary>What the run may conclude (D7) — frozen with it. A preliminary run's report carries its intervals and no verdict.</summary>
     public ScoutRunKind Kind { get; init; } = ScoutRunKind.Preliminary;
 
+    /// <summary>The campaign's seed string (plan §4 S4, S7) — the domain every private task's commitment is bound to
+    /// (<see cref="ScoutCommitment"/>), carried from <c>tasks.json</c> onto the run so <c>assess</c> and the hand-check commit a claim or a G
+    /// file under the same string the tasks were committed under. Empty on a run with no private task.</summary>
+    public string Campaign { get; init; } = string.Empty;
+
     /// <summary>The arm's budget, or a refusal naming it — a cell is never launched under a default cap.</summary>
     public Outcome<ScoutArmBudget> BudgetOf(ScoutArmId arm) =>
         Budgets.FirstOrDefault(b => b.Arm == arm) is { } budget

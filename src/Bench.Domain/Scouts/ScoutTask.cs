@@ -34,10 +34,16 @@ public enum ScoutQuestionKind
     WhatMustChange,
 }
 
-/// <summary>One task (§3.1): a past change in a PUBLIC family repository, investigated at its parent commit P. Frozen before any run:
+/// <summary>One task (§3.1): a past change in a family repository, investigated at its parent commit P. Frozen before any run:
 /// the statement, the ground truth G, the files removed from the tree (the PR's own plan when it existed at P), and the tree's hash.
 /// <para>
 /// <see cref="Frozen"/> is the only door, and it runs the leak check — a statement naming the answer is refused, never stored.
+/// </para>
+/// <para>
+/// <see cref="Privacy"/> classifies the task (D10): a PRIVATE task's id is its label (<c>p03</c>), it names its <see cref="Language"/>, and what
+/// of it may be published is decided in ONE place, <see cref="ScoutPublication"/> — its repository, statement, G and removals stay in the local
+/// files and the local database, and the public records carry its <see cref="Commitments"/> instead. A refusal about a private task names its
+/// label and nothing it holds.
 /// </para></summary>
 public sealed partial record ScoutTask(
     ScoutTaskId Id,
@@ -52,9 +58,23 @@ public sealed partial record ScoutTask(
 {
     public const int MaxSentences = 3;
 
-    /// <summary>Freezes a task. Refused: a repository that is not <c>owner/name</c>, an empty or over-long statement, an empty ground
-    /// truth, a ground-truth or removed path that is not repository-relative, a tree hash that is not SHA-256 — and a statement that
-    /// leaks (<see cref="LeakCheck"/>), naming every leaked token so the operator can rewrite it.</summary>
+    public ScoutTaskPrivacy Privacy { get; init; } = ScoutTaskPrivacy.Public;
+
+    /// <summary>The repository's language (<c>PHP</c>, <c>C#</c>) — the one thing a private task's committed record says about the repository;
+    /// optional for a public task.</summary>
+    public string Language { get; init; } = string.Empty;
+
+    /// <summary>A private task's HMAC commitments under the campaign key (<see cref="ScoutCommitment"/>); <see cref="ScoutTaskCommitments.None"/>
+    /// for a public task, and for a private one until <c>bench scouts tasks</c> or <c>run</c> computed them.</summary>
+    public ScoutTaskCommitments Commitments { get; init; } = ScoutTaskCommitments.None;
+
+    public bool IsPrivate => Privacy == ScoutTaskPrivacy.Private;
+
+    /// <summary>Freezes a task. Refused: a repository that is neither a slug nor a url, an empty or over-long statement, an empty ground
+    /// truth, a ground-truth or removed path that is not repository-relative, a tree hash that is not SHA-256, a private task whose id is
+    /// not a label or that names no language — and a statement that leaks (<see cref="LeakCheck"/>), naming every leaked token so the
+    /// operator can rewrite it. For a PRIVATE task the refusal names the label and the count of leaked tokens only; the tokens themselves
+    /// are the caller's to write where nothing public reads (<see cref="Leaks"/>).</summary>
     public static Outcome<ScoutTask> Frozen(
         ScoutTaskId id,
         string repository,
@@ -65,21 +85,40 @@ public sealed partial record ScoutTask(
         IReadOnlyList<string> groundTruth,
         IReadOnlyList<string> addedIdentifiers,
         IReadOnlyList<string> removals,
-        string treeHash)
+        string treeHash,
+        ScoutTaskPrivacy privacy = ScoutTaskPrivacy.Public,
+        string language = "")
     {
-        var refusal = Shape(repository, statement, groundTruth, removals, treeHash);
+        var refusal = ScoutTaskPrivacies.Refusal(privacy, id.Value, language) is { Length: > 0 } classified
+            ? classified
+            : Prefixed(id, Shape(repository, statement, groundTruth, removals, treeHash));
 
         if (refusal.Length > 0)
         {
-            return Outcome<ScoutTask>.Failure($"task {id}: {refusal}");
+            return Outcome<ScoutTask>.Failure(refusal);
         }
 
-        var leaks = LeakCheck.Find(statement, groundTruth, addedIdentifiers);
+        var leaks = Leaks(statement, groundTruth, addedIdentifiers);
 
         return leaks.Count > 0
-            ? Outcome<ScoutTask>.Failure($"task {id}: the statement leaks the answer — {string.Join(", ", leaks.Select(l => $"{l.Kind} '{l.Token}'"))}")
-            : Outcome<ScoutTask>.Success(new ScoutTask(id, repository.Trim(), parent, fix, kind, statement.Trim(), [.. groundTruth], [.. removals], treeHash.Trim().ToLowerInvariant()));
+            ? Outcome<ScoutTask>.Failure(LeakRefusal(id, privacy, leaks))
+            : Outcome<ScoutTask>.Success(new ScoutTask(id, repository.Trim(), parent, fix, kind, statement.Trim(), [.. groundTruth], [.. removals], treeHash.Trim().ToLowerInvariant())
+            {
+                Privacy = privacy,
+                Language = language.Trim(),
+            });
     }
+
+    /// <summary>The leak check a freeze runs — exposed so the caller of a PRIVATE freeze can write the tokens where nothing public reads.</summary>
+    public static IReadOnlyList<LeakFinding> Leaks(string statement, IReadOnlyList<string> groundTruth, IReadOnlyList<string> addedIdentifiers) =>
+        LeakCheck.Find(statement, groundTruth, addedIdentifiers);
+
+    private static string LeakRefusal(ScoutTaskId id, ScoutTaskPrivacy privacy, IReadOnlyList<LeakFinding> leaks) =>
+        privacy == ScoutTaskPrivacy.Private
+            ? $"task {id} (private): the statement leaks the answer — {leaks.Count} token(s), withheld from every public writer"
+            : $"task {id}: the statement leaks the answer — {string.Join(", ", leaks.Select(l => $"{l.Kind} '{l.Token}'"))}";
+
+    private static string Prefixed(ScoutTaskId id, string refusal) => refusal.Length > 0 ? $"task {id}: {refusal}" : string.Empty;
 
     /// <summary>Sentences, counted as the runs of text ended by <c>.</c>, <c>!</c> or <c>?</c> followed by a space or the end.</summary>
     public static int Sentences(string statement) =>

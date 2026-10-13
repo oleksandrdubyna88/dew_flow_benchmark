@@ -103,6 +103,14 @@ public sealed record ResultEnvelope(
         false, false, string.Empty, CapturedCount.Unavailable("no result envelope"), CapturedUsd.Unavailable("no result envelope"), TokenUsage.Zero, [], SubagentStats.NotCaptured);
 }
 
+/// <summary>One <c>system/model_refusal_fallback</c> event: claude 2.1.289 continues a SESSION on another model when the API's safeguards
+/// refuse a request (seen live 2026-10-13, <c>claude-opus-5-5 → claude-opus-4-8</c>, category <c>cyber</c>), and <c>init.model</c> still names
+/// the original. <see cref="ParentToolUseId"/> is empty for the main session and the Agent call's id for a child.</summary>
+public sealed record ModelFallback(string ParentToolUseId, string OriginalModel, string FallbackModel, string Category)
+{
+    public bool InMainSession => ParentToolUseId.Length == 0;
+}
+
 /// <summary>A scout cell's stream, read: what <see cref="ClaudeSubagents.Read"/> returns. Missing pieces are values — an incomplete
 /// stream, an absent result, a child with no resolved model — and never an exception.</summary>
 public sealed record SubagentTranscript(
@@ -115,6 +123,10 @@ public sealed record SubagentTranscript(
     IReadOnlyList<SubagentCall> Agents,
     ResultEnvelope Envelope)
 {
+    /// <summary>Every <c>system/model_refusal_fallback</c> event of the stream, the main session's and every child's (E2 S8) — empty when
+    /// the session stayed on the models it started on.</summary>
+    public IReadOnlyList<ModelFallback> Fallbacks { get; init; } = [];
+
     /// <summary>Team time (§3.6): the first Agent <c>tool_use</c> event's timestamp to the last Agent <c>tool_result</c> event's, in ms.
     /// Not captured when there is no Agent call or any of those events carried no timestamp.</summary>
     public CapturedCount TeamMs =>

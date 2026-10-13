@@ -46,6 +46,9 @@ public sealed class ScoutRunRow
     /// <summary>What the run may conclude (S3, plan D7) — preliminary or decision, stored by NAME.</summary>
     public ScoutRunKind Kind { get; set; }
 
+    /// <summary>The campaign's seed string (S4) — the domain the private tasks' commitments are bound to; empty on a run with none.</summary>
+    public string Campaign { get; set; } = string.Empty;
+
     public decimal CeilingUsd { get; set; }
 
     public decimal ReservedUsd { get; set; }
@@ -59,8 +62,10 @@ public sealed class ScoutRunRow
     public List<ScoutCellRow> Cells { get; set; } = [];
 }
 
-/// <summary>One frozen task of one run (§3.1): a PUBLIC repository's slug, P and S, the kind, the statement, G and the removals as
-/// repository-relative paths, and the tree's hash.</summary>
+/// <summary>One frozen task of one run (§3.1): the repository (a public slug, or a private task's local url — LOCAL: the publication walk
+/// replaces it with the label), P and S, the kind, the statement, G and the removals as repository-relative paths, the tree's hash — and, S4,
+/// the task's privacy, its language and a private task's two HMAC commitments, which are what the walk publishes in place of the
+/// statement and G (<c>ScoutRowPublication</c>), so the export needs no key.</summary>
 public sealed class ScoutTaskRow
 {
     public Guid Id { get; set; }
@@ -86,6 +91,17 @@ public sealed class ScoutTaskRow
     public List<string> Removals { get; set; } = [];
 
     public string TreeHash { get; set; } = string.Empty;
+
+    /// <summary>Public or private (S4, D10), stored by NAME.</summary>
+    public ScoutTaskPrivacy Privacy { get; set; }
+
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>A private task's HMAC-SHA256 commitment of its statement under the campaign key (lower-case hex); empty for a public task.</summary>
+    public string StatementCommitment { get; set; } = string.Empty;
+
+    /// <summary>A private task's HMAC-SHA256 commitment of its whole ground truth; empty for a public task.</summary>
+    public string GroundTruthCommitment { get; set; } = string.Empty;
 }
 
 /// <summary>One cell — its lineage and generation, its claim, the pin it was claimed under, and once settled its outcome, reason and

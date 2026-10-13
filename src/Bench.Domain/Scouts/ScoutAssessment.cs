@@ -139,15 +139,16 @@ public static class ScoutAssessment
             [.. batch.Where(c => said.ContainsKey(c.Id.Value)).Select(c => new ScoutClaimAnswer(c, said[c.Id.Value]))]);
     }
 
-    /// <summary>What the store keeps of one answered claim: never the statement, only its hash; the path only when it is repository-relative
-    /// once the tree's own root is taken off it (a claim naming a machine path keeps an empty path).</summary>
-    public static ScoutAssessedClaim Stored(ScoutClaimAnswer answer, Guid runId, string treeRoot, string assessorModel, DateTimeOffset now)
+    /// <summary>What the store keeps of one answered claim: never the statement, only its digest (<see cref="ScoutClaimDigest"/>: a plain SHA-256
+    /// for a public task, the claim's HMAC for a private one); the path only when it is repository-relative once the tree's own root is taken off
+    /// it (a claim naming a machine path keeps an empty path).</summary>
+    public static ScoutAssessedClaim Stored(ScoutClaimAnswer answer, Guid runId, string treeRoot, string assessorModel, DateTimeOffset now, ScoutClaimDigest digest)
     {
         var path = RecallMatcher.Normalise(answer.Claim.Claim.Claim.Path, treeRoot);
 
         return new ScoutAssessedClaim(
             answer.Claim.Claim.Key, runId, RepositoryRelative.Refusal(path).Length == 0 ? path : string.Empty, answer.Claim.Claim.Claim.Line,
-            answer.Claim.Claim.StatementSha256, answer.Verdict, assessorModel, RubricSha256, now);
+            digest.Of(answer.Claim.Claim.Task, answer.Claim.Claim.Claim.Statement), answer.Verdict, assessorModel, RubricSha256, now);
     }
 
     private static Outcome<JsonArray> Rows(string answer)

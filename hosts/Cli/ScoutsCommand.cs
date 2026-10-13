@@ -6,10 +6,13 @@ using Bench.Domain.Scouts;
 
 namespace Bench.Cli;
 
-/// <summary><c>bench scouts tasks | run | resume | rerun | sweep | prune | alias-check | status | score | assess | report</c> — the scout model
-/// calibration (<c>todo/PLAN_scout_model_calibration.md</c>, E1 S2 and S3). The measuring verbs are here; <see cref="ScoutsTasksCommand"/> freezes the tasks,
-/// <see cref="ScoutsHousekeepingCommand"/> sweeps and prunes, <see cref="ScoutsAliasCommand"/> watches the alias; S3 reads and judges a run —
-/// <see cref="ScoutsReadCommand"/> (<c>status</c>, <c>report</c>), <see cref="ScoutsScoreCommand"/> and <see cref="ScoutsAssessCommand"/>.
+/// <summary><c>bench scouts tasks | run | resume | rerun | sweep | prune | alias-check | access-check | status | score | assess | report | schedule | sizing | key | hygiene</c> — the
+/// scout model calibration (<c>todo/PLAN_scout_model_calibration.md</c>, E1 S2 and S3, E2 S4–S7). The measuring verbs are here; <see cref="ScoutsTasksCommand"/>
+/// freezes the tasks, <see cref="ScoutsHousekeepingCommand"/> sweeps and prunes, <see cref="ScoutsAliasCommand"/> watches the alias; S3 reads and
+/// judges a run — <see cref="ScoutsReadCommand"/> (<c>status</c>, <c>report</c>), <see cref="ScoutsScoreCommand"/> and <see cref="ScoutsAssessCommand"/>;
+/// S4 guards the private tasks — <see cref="ScoutsKeyCommand"/> (the campaign key, created once) and <see cref="ScoutsHygieneCommand"/> (the
+/// staged-blob scan); S5 proves the confined launch LIVE — <see cref="ScoutsAccessCommand"/> (the access check); S6 derives the next run's caps and
+/// walls from the pilot — <see cref="ScoutsScheduleCommand"/>; S8 sizes a decision run from a run's cells — <see cref="ScoutsSizingCommand"/>.
 /// <para>
 /// Exit codes, as the probes': 0 cells produced · 3 resumable — a pin moved, the next reservation does not fit, a cell stopped the campaign
 /// (path audit, cost check, changed tree, moved alias), a spend limit, the environment (database, git, an unreadable pin) · 4 configuration —
@@ -20,7 +23,7 @@ public static class ScoutsCommand
 {
     public const int DefaultCellTimeoutMinutes = ScoutArmBudget.DefaultWallSeconds / 60;
 
-    private const string SubVerbs = "tasks, run, resume, rerun, sweep, prune, alias-check, status, score, assess or report";
+    private const string SubVerbs = "tasks, run, resume, rerun, sweep, prune, alias-check, access-check, status, score, assess, report, schedule, sizing, key or hygiene";
 
     public static Task<int> RunAsync(CommandLine command, TextWriter output, TextWriter error, CancellationToken cancellationToken) =>
         RunAsync(command, ScoutVerbServices.Machine, output, error, cancellationToken);
@@ -36,10 +39,15 @@ public static class ScoutsCommand
             "sweep" => await ScoutsHousekeepingCommand.SweepAsync(command, output, error, cancellationToken),
             "prune" => await ScoutsHousekeepingCommand.PruneAsync(command, output, error, cancellationToken),
             "alias-check" => await ScoutsAliasCommand.RunAsync(command, services, output, error, cancellationToken),
+            "access-check" => await ScoutsAccessCommand.RunAsync(command, services, output, error, cancellationToken),
             "status" => await ScoutsReadCommand.StatusAsync(command, output, error, cancellationToken),
             "score" => await ScoutsScoreCommand.RunAsync(command, output, error, cancellationToken),
             "assess" => await ScoutsAssessCommand.RunAsync(command, services, output, error, cancellationToken),
             "report" => await ScoutsReadCommand.ReportAsync(command, output, error, cancellationToken),
+            "schedule" => await ScoutsScheduleCommand.RunAsync(command, output, error, cancellationToken),
+            "sizing" => await ScoutsSizingCommand.RunAsync(command, output, error, cancellationToken),
+            "key" => await ScoutsKeyCommand.RunAsync(command, output, error, cancellationToken),
+            "hygiene" => await ScoutsHygieneCommand.RunAsync(command, output, error, cancellationToken),
             var other => GateRunCommand.Refuse(error, ExitCodes.Configuration, other.Length == 0
                 ? $"scouts needs a sub-verb — {SubVerbs}"
                 : $"unknown scouts sub-verb '{other}' — {SubVerbs}"),

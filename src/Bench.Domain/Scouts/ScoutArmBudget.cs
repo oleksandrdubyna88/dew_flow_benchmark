@@ -24,10 +24,47 @@ public sealed record ScoutArmBudget(ScoutArmId Arm, decimal CapUsd, int WallSeco
         };
 }
 
-/// <summary>The budgets of a run's arms from the verb's flags: one default cap for every arm, overridden per arm by
-/// <c>A1=1.5,B3=0.9</c>. An override naming an arm the run does not hold, or one that is not a number, is refused by name.</summary>
+/// <summary>The budgets of a run's arms — from the verb's flags on a PILOT (<see cref="For"/>: one default cap for every arm, overridden per arm
+/// by <c>A1=1.5,B3=0.9</c>; an override naming an arm the run does not hold, or one that is not a number, is refused by name), from a pilot's
+/// settled cells for the schedule (<see cref="FromPilot"/>), and from <c>schedule.json</c> on a preliminary or decision run (<see cref="FromSchedule"/>).</summary>
 public static class ScoutArmBudgets
 {
+    /// <summary>The cap is the largest settled cell cost of the arm × this.</summary>
+    public const decimal CapFactor = 1.5m;
+
+    /// <summary>The wall is the slowest settled cell of the arm × this.</summary>
+    public const int WallFactor = 2;
+
+    /// <summary>E2 S6: per arm, the largest settled cell cost (the envelope's <c>total_cost_usd</c>) × 1.5, rounded UP to the cent, and the
+    /// slowest cell's session (<c>duration_ms</c>) × 2, rounded up to the second. Every settled cell with a captured cost counts — a void cell
+    /// spent money too. An arm with no such cell is refused by name: a cap nobody measured is a default, and a cell is never launched under one.</summary>
+    public static Outcome<IReadOnlyList<ScoutArmBudget>> FromPilot(IReadOnlyList<ScoutArmId> arms, IReadOnlyList<ScoutCell> settled)
+    {
+        var measured = settled.Where(c => c.Facts.ReportedUsd.WasCaptured && c.Facts.SessionMs.WasCaptured).ToLookup(c => c.Arm);
+        var missing = arms.Where(arm => !measured[arm].Any()).ToList();
+
+        return missing.Count > 0
+            ? Outcome<IReadOnlyList<ScoutArmBudget>>.Failure($"arm {string.Join(", ", missing.Select(ScoutArms.Word))} has no settled cell with a reported cost and session in the pilot — a cap nobody measured is a default, and a cell is never launched under one")
+            : Collect([.. arms.Select(arm => ScoutArmBudget.Of(arm, PilotCap(measured[arm]), PilotWall(measured[arm])))]);
+    }
+
+    /// <summary>The largest reported cost × 1.5, rounded UP to the cent.</summary>
+    private static decimal PilotCap(IEnumerable<ScoutCell> cells) => decimal.Ceiling(cells.Max(c => c.Facts.ReportedUsd.Value) * CapFactor * 100m) / 100m;
+
+    /// <summary>The slowest session × 2, rounded up to the second.</summary>
+    private static int PilotWall(IEnumerable<ScoutCell> cells) => (int)Math.Ceiling(cells.Max(c => c.Facts.SessionMs.Value) * WallFactor / 1000.0);
+
+    /// <summary>The run's arms taken from a schedule: every arm must be there, by name; an arm the schedule names and the run does not hold is
+    /// left where it is.</summary>
+    public static Outcome<IReadOnlyList<ScoutArmBudget>> FromSchedule(IReadOnlyList<ScoutArmId> arms, IReadOnlyList<ScoutArmBudget> scheduled)
+    {
+        var missing = arms.Where(arm => scheduled.All(b => b.Arm != arm)).ToList();
+
+        return missing.Count > 0
+            ? Outcome<IReadOnlyList<ScoutArmBudget>>.Failure($"schedule.json carries no cap and wall for arm {string.Join(", ", missing.Select(ScoutArms.Word))} — a preliminary or decision run launches every arm under the pilot's measured budget, never a default")
+            : Outcome<IReadOnlyList<ScoutArmBudget>>.Success([.. arms.Select(arm => scheduled.First(b => b.Arm == arm))]);
+    }
+
     public static Outcome<IReadOnlyList<ScoutArmBudget>> For(IReadOnlyList<ScoutArmId> arms, decimal defaultCapUsd, IReadOnlyList<string> overrides, int wallSeconds)
     {
         var parsed = overrides.Select(Override).ToList();

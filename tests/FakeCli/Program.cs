@@ -116,7 +116,15 @@ public sealed class Script
     /// <summary>The replay file for THIS prompt — <c>stdoutByPrompt.&lt;sha256 of the prompt&gt;</c> — so every scout cell, all launched
     /// <c>--model opus</c>, replays its own recorded stream; falls back to <see cref="StdoutFile"/>.</summary>
     public string StdoutFor(string prompt) =>
-        Node("stdoutByPrompt")?[Sha256(prompt)]?.GetValue<string>() is { Length: > 0 } file ? file : StdoutFile;
+        Node("stdoutByPrompt")?[Sha256(prompt)]?.GetValue<string>() is { Length: > 0 } file ? file
+            : StdoutContaining(prompt) is { Length: > 0 } partial ? partial
+            : StdoutFile;
+
+    /// <summary>A replay chosen by a SUBSTRING of the prompt — <c>stdoutByPromptContaining.&lt;text&gt;</c>, the first entry whose key the prompt
+    /// contains — for a test that cannot hash its prompts in advance (the access check's name a work folder minted per run) but can tell them
+    /// apart by the agent type they name. After the exact hash, before <see cref="StdoutFile"/>.</summary>
+    private string StdoutContaining(string prompt) =>
+        (Node("stdoutByPromptContaining") as JsonObject)?.FirstOrDefault(kv => prompt.Contains(kv.Key, StringComparison.Ordinal)).Value?.GetValue<string>() ?? string.Empty;
 
     /// <summary>A replay prints its lines with this pause between them — what a test watching the stream arrive needs; zero = at once.</summary>
     public int LineDelayMs => Int("lineDelayMs", 0);

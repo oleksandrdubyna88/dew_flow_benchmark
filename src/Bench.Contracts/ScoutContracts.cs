@@ -33,9 +33,10 @@ public sealed record ScoutPinsDto(string CliVersion, string PluginCacheHash, str
 public sealed record ScoutProgressDto(int Pending, int Claimed, int Settled, int Abandoned, bool Open);
 
 /// <summary>The spend ledger (§3.10): the ceiling, what is still reserved, what settled from a <c>result</c>, what was charged as unknown, and
-/// the identity <c>spent = settled + unknown</c>; with the attempts behind it.</summary>
+/// the identity <c>spent = settled + unknown</c>; with the attempts behind it, and (S6) how many of them settled ABOVE their arm's cap — an
+/// overshoot is settled at its real total, never clipped, and counted.</summary>
 public sealed record ScoutLedgerDto(
-    decimal CeilingUsd, decimal ReservedUsd, decimal SettledUsd, decimal UnknownUsd, decimal SpentUsd, decimal FreeUsd, int Attempts, int UnknownCharges);
+    decimal CeilingUsd, decimal ReservedUsd, decimal SettledUsd, decimal UnknownUsd, decimal SpentUsd, decimal FreeUsd, int Attempts, int UnknownCharges, int Overshoots);
 
 /// <summary>How the intervals were drawn (§3.8): the fixed seed, the resamples, the one-sided percentiles, and D5's margins.</summary>
 public sealed record ScoutBootstrapDto(int Seed, int Resamples, double LowerPercentile, double UpperPercentile, double RecallMargin, double WrongMargin);
@@ -92,6 +93,9 @@ public sealed record ScoutCountsDto(
     int TeamTimeBelowSlowestScout);
 
 /// <summary>One task: its repository, its kind, the size of G, and each arm's numbers on it (its runs averaged first).</summary>
-public sealed record ScoutTaskReportDto(string Task, string Repository, string Kind, int GroundTruth, IReadOnlyList<ScoutTaskArmDto> Arms);
+/// <param name="Repository">A public task's slug or url; a PRIVATE task's LABEL — its id — and nothing else (plan D10, the one projection).</param>
+/// <param name="Privacy"><c>public</c> or <c>private</c>.</param>
+/// <param name="Language">The repository's language word (<c>PHP</c>, <c>C#</c>); empty when a public task named none.</param>
+public sealed record ScoutTaskReportDto(string Task, string Repository, string Privacy, string Language, string Kind, int GroundTruth, IReadOnlyList<ScoutTaskArmDto> Arms);
 
 public sealed record ScoutTaskArmDto(string Arm, int Cells, int Scored, ScoutFigureDto Recall, ScoutFigureDto WrongPerTen, ScoutFigureDto TeamMs, ScoutFigureDto TeamUsd);

@@ -60,6 +60,12 @@ public static class PathAudit
         return [.. transcript.Agents.SelectMany(a => a.Child.Tools).Where(c => AuditedTools.Contains(c.Name)).Select(c => Call(c, root, cwd, links))];
     }
 
+    /// <summary>The resolved target of one child call, as the audit resolves it — what the access check (S5) matches to its planted targets.</summary>
+    public static string TargetOf(ChildToolCall call, string cwd) => Target(call, cwd).Target;
+
+    /// <summary>Whether a result's text is one of the CLI's explicitly empty answers.</summary>
+    public static bool IsEmptyResult(string result) => EmptyResults.Contains(result.Trim());
+
     public static ScoutReason StopReason(PathFinding finding) => finding switch
     {
         PathFinding.OutsideContent => ScoutReason.OutsideReadReturnedContent,

@@ -316,6 +316,52 @@ public sealed class PostgresScoutStoreTests(PostgresFixture postgres)
         return (store, run, reserved.Attempt);
     }
 
+    /// <summary>S4's SECOND migration (the plan's one-migration rule cannot hold once E1 is merged): it adds the privacy, language and the two
+    /// commitment columns to <c>scout_tasks</c> and the campaign string to <c>scout_runs</c>, touches no other table, and applies on a database
+    /// already holding E1's scout tables — every task frozen before it reads back PUBLIC.</summary>
+    [Fact]
+    public async Task The_privacy_migration_adds_the_four_task_columns_and_the_campaign_and_applies_over_the_first_scout_migration()
+    {
+        using var model = postgres.NewContext();
+        var migrations = model.GetService<IMigrationsAssembly>();
+        var id = migrations.Migrations.Keys.Should().ContainSingle(k => k.EndsWith("_ScoutTaskPrivacy", StringComparison.Ordinal)).Subject;
+        var operations = migrations.CreateMigration(migrations.Migrations[id], model.Database.ProviderName!).UpOperations;
+
+        operations.Should().AllBeOfType<AddColumnOperation>();
+        operations.OfType<AddColumnOperation>().Select(o => (o.Table, o.Name)).Should().BeEquivalentTo(
+            [("scout_tasks", "Privacy"), ("scout_tasks", "Language"), ("scout_tasks", "StatementCommitment"), ("scout_tasks", "GroundTruthCommitment"), ("scout_runs", "Campaign")]);
+        operations.OfType<AddColumnOperation>().Single(o => o.Name == "Privacy").DefaultValue.Should().Be("Public", "every task frozen before S4 was public");
+
+        var connection = await postgres.NewEmptyDatabaseAsync($"scout_priv_{Guid.NewGuid():N}");
+        await using var db = PostgresFixture.Context(connection);
+        await db.GetService<IMigrator>().MigrateAsync("20261012140639_ScoutTables", Ct);
+        var runId = Guid.CreateVersion7();
+        await E1RowsAsync(db, runId);
+
+        await db.Database.MigrateAsync(Ct);
+
+        var task = (await new PostgresScoutStore(db, new TestClock(Noon)).TasksAsync(runId, Ct)).Should().ContainSingle().Subject;
+        (task.Privacy, task.Language, task.Commitments).Should().Be((ScoutTaskPrivacy.Public, string.Empty, ScoutTaskCommitments.None));
+        (await new PostgresScoutStore(db, new TestClock(Noon)).LoadAsync(runId, Ct)).Ok().Campaign.Should().BeEmpty();
+    }
+
+    /// <summary>A run and a task as E1's store wrote them — in SQL, because the current model already knows S4's columns and would write them.</summary>
+    private static async Task E1RowsAsync(BenchDbContext db, Guid runId)
+    {
+        var task = FrozenTask("t01");
+        await db.Database.ExecuteSqlInterpolatedAsync($$"""
+            insert into scout_runs ("Id", "CreatedAt", "Seed", "Repeats", "PinCliVersion", "PinPluginCacheHash", "PinResolvedOpus", "PinResolvedSonnet", "PinSettingsHash",
+                "Arms", "TaskIds", "ArmCapsUsd", "ArmWallSeconds", "Kind", "CeilingUsd", "ReservedUsd", "SettledUsd", "UnknownUsd")
+            values ({{runId}}, {{Noon}}, 7, 1, '2.1.289', 'f359d43b4060', 'claude-opus-5-5', 'claude-sonnet-5-5', {{new string('9', 64)}},
+                '{A1}'::text[], '{t01}'::text[], '{1}'::numeric[], '{1200}'::integer[], 'Preliminary', 10, 0, 0, 0)
+            """, Ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($$"""
+            insert into scout_tasks ("Id", "RunId", "TaskId", "Repository", "ParentSha", "FixSha", "Kind", "Statement", "GroundTruth", "Removals", "TreeHash")
+            values ({{Guid.CreateVersion7()}}, {{runId}}, 't01', {{task.Repository}}, {{task.Parent.Value}}, {{task.Fix.Value}}, 'HowEndToEnd', {{task.Statement}},
+                '{src/Store.cs,src/Sweep.cs}'::text[], '{todo/PLAN_x.md}'::text[], {{task.TreeHash}})
+            """, Ct);
+    }
+
     private static async Task<IReadOnlyList<string>> TablesAsync(BenchDbContext db) =>
         await db.Database.SqlQueryRaw<string>("select table_name as \"Value\" from information_schema.tables where table_schema = 'public'").ToListAsync(Ct);
 }

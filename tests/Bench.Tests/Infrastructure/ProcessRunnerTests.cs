@@ -80,6 +80,24 @@ public sealed class ProcessRunnerTests
         output.Output.Trim().Should().HaveLength(40, "a hash means the whole 200 KB was read");
     }
 
+    /// <summary>The byte-stream launch (the hygiene scan's <c>git cat-file --batch</c>, E2 code round): stdout reaches the reader as raw bytes —
+    /// a blob is a payload, and the text decode of the other launches would change it — and stdin is written WHILE stdout is read, so a child
+    /// whose answers outgrow its stdout pipe before its input is fully written is not deadlocked against a writer that has not started reading.</summary>
+    [Fact]
+    public async Task Stdout_reaches_a_byte_reader_as_it_is_while_stdin_is_written()
+    {
+        var received = new MemoryStream();
+
+        var attempt = await ProcessRunner.StreamAsync(
+            "git", ["hash-object", "--stdin"], Path.GetTempPath(), TimeSpan.FromSeconds(30), "hello",
+            (stdout, ct) => stdout.CopyToAsync(received, ct), TestContext.Current.CancellationToken);
+
+        var result = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject.Result;
+        result.Ok.Should().BeTrue(result.Output);
+        System.Text.Encoding.ASCII.GetString(received.ToArray()).Should().StartWith("b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0", "the bytes went to the reader");
+        result.StandardOutput.Should().BeEmpty("the reader owns stdout; the attempt carries none of it");
+    }
+
     [Fact]
     public async Task A_child_that_reads_no_input_is_not_left_waiting_on_an_open_pipe()
     {

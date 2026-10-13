@@ -21,12 +21,13 @@ public sealed class ScoutsAnalysisCommandTests(PostgresFixture postgres)
 
     private static readonly ScoutArmId[] TwoArms = [ScoutArmId.A1, ScoutArmId.B1];
 
-    /// <summary>Two tasks × A1/B1, every cell clean: 4 scored cells; A1 has one scout, B1 two; every scout makes 2 claims → 12 claims.</summary>
+    /// <summary>Two tasks × A1/B1, every cell clean: 4 scored cells; A1 has one scout, B1 two; every scout makes 2 claims → 12 claims. A
+    /// PRELIMINARY run (S6: its caps from <c>schedule.json</c>), so the readers print the kind these verbs are documented for.</summary>
     private static async Task<(ScoutsCliSetup Setup, Guid Run)> SettledAsync(PostgresFixture postgres)
     {
         var setup = await ScoutsCliSetup.StartAsync(postgres, tasks: 2);
         setup.Answer(TwoArms);
-        var (code, output, error) = await setup.RunAsync(setup.Services(), setup.RunArgs(TwoArms));
+        var (code, output, error) = await setup.RunAsync(setup.Services(), setup.RunArgs(TwoArms, extra: ["--kind", "preliminary"]));
         code.Should().Be(ExitCodes.Pass, output + error);
         return (setup, ScoutsCliSetup.RunIdOf(output));
     }

@@ -157,6 +157,8 @@ public sealed class ScoutCampaign(IScoutStore store, IScoutRunner runner, IScout
 
     private async Task<Step> SettleAsync(ScoutCell cell, ScoutAttempt attempt, ScoutAttemptResult.Settled settled, ScoutCampaignOptions options)
     {
+        // The REAL total, never clipped to the arm's cap (S6, §3.10): the CLI's cap is an estimate, an overshoot is money spent, and a ledger that
+        // booked the cap instead would let the next reservation fit into money that is already gone. Overshoots are counted, not hidden.
         var money = settled.ReportedUsd.WasCaptured
             ? await store.SettleAttemptAsync(attempt.Id, settled.ReportedUsd.Value, CancellationToken.None)
             : await store.ChargeUnknownAsync(attempt.Id, CancellationToken.None);

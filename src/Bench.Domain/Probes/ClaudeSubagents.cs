@@ -15,6 +15,9 @@ namespace Bench.Domain.Probes;
 /// <c>status</c>, the final iteration's <c>usage</c> and the report text — or a STRING when the call failed
 /// ("Agent type … not found");</item>
 /// <item>a <c>system/permission_denied</c> event names the <c>tool_use_id</c> it refused;</item>
+/// <item>a <c>system/model_refusal_fallback</c> event (claude 2.1.289, seen live 2026-10-13) says the session — or, under a
+/// <c>parent_tool_use_id</c>, a child — went on with ANOTHER model after the API's safeguards refused a request; <c>init.model</c> does not
+/// change, so the event is the only witness (<see cref="SubagentTranscript.Fallbacks"/>);</item>
 /// <item>the final <c>result</c> envelope carries <c>duration_ms</c>, <c>total_cost_usd</c>, the main session's <c>usage</c>,
 /// <c>modelUsage</c> and <c>subagent_stats</c>.</item>
 /// </list>
@@ -54,8 +57,17 @@ public static class ClaudeSubagents
             [.. mainCalls.Select(c => c.Call)],
             DeduplicatedUsage(main),
             [.. mainCalls.Where(c => c.Call.Name == AgentTool).Select(c => Agent(c.Event, c.Block, events, results, denied))],
-            Envelope(result));
+            Envelope(result))
+        {
+            Fallbacks = Fallbacks(events),
+        };
     }
+
+    /// <summary>Every <c>system/model_refusal_fallback</c> event, the main session's (no <c>parent_tool_use_id</c>) and each child's (its Agent
+    /// call's id) — read wherever it sits in the stream, since a refusal can land at any turn.</summary>
+    private static IReadOnlyList<ModelFallback> Fallbacks(IReadOnlyList<JsonElement> events) =>
+        [.. events.Where(e => Is(e, "system", "model_refusal_fallback")).Select(e => new ModelFallback(
+            Parent(e), ProbeJson.Text(e, "original_model"), ProbeJson.Text(e, "fallback_model"), ProbeJson.Text(e, "api_refusal_category")))];
 
     private static SubagentCall Agent(JsonElement useEvent, JsonElement block, IReadOnlyList<JsonElement> events, IReadOnlyDictionary<string, (JsonElement Event, JsonElement Block)> results, IReadOnlySet<string> denied)
     {

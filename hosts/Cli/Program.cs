@@ -36,14 +36,6 @@ public static class Program
             Console.Error.WriteLine("bench: stopped before the measurement finished — the next run's sweep reclaims what was held");
             return ExitCodes.NoReport;
         }
-        catch (Exception ex)
-        {
-            // The last frame before "nobody above me". Without it an unhandled fault leaves a stack trace
-            // on a terminal nobody is watching and an exit code nothing agreed on.
-            Serilog.Log.Fatal(ex, "bench exited on an unhandled exception");
-            Console.Error.WriteLine($"bench: unhandled {ex.GetType().Name} — {ex.Message.Split('\n')[0]}");
-            return ExitCodes.Environment;
-        }
         finally
         {
             // A file sink that is never closed loses whatever the last seconds had to say — which is
@@ -54,7 +46,11 @@ public static class Program
 
     /// <summary>The testable seam: writers are injected so the contract can be asserted without a
     /// process launch — and the exit-code contract is the part most worth asserting.</summary>
-    public static int Run(string[] args, TextWriter output, TextWriter error, CancellationToken stopping = default)
+    public static int Run(string[] args, TextWriter output, TextWriter error, CancellationToken stopping = default) =>
+        Run(args, output, error, stopping, ScoutsFault.DefaultDirectory);
+
+    /// <summary>The seam with the scouts' fault folder named — a test points it at its own temp directory.</summary>
+    public static int Run(string[] args, TextWriter output, TextWriter error, CancellationToken stopping, string scoutsFaultDirectory)
     {
         var command = CommandLine.Parse(args);
 
@@ -69,6 +65,28 @@ public static class Program
             error.WriteLine($"bench: {refused.Message}");
             return ExitCodes.Configuration;
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Unhandled(command, ex, error, scoutsFaultDirectory);
+        }
+    }
+
+    /// <summary>The last frame before "nobody above me". Without it an unhandled fault leaves a stack trace on a terminal nobody is watching
+    /// and an exit code nothing agreed on. For a SCOUTS verb (S4, §3.13) the exception's message is withheld from the console and the log —
+    /// an I/O failure quotes the path it failed on, and a private task's tree holds private paths — and written whole to a local fault file.</summary>
+    private static int Unhandled(CommandLine command, Exception ex, TextWriter error, string scoutsFaultDirectory)
+    {
+        if (command.Verb != "scouts")
+        {
+            Serilog.Log.Fatal(ex, "bench exited on an unhandled exception");
+            error.WriteLine($"bench: unhandled {ex.GetType().Name} — {ex.Message.Split('\n')[0]}");
+            return ExitCodes.Environment;
+        }
+
+        var kept = ScoutsFault.Withhold(ex, scoutsFaultDirectory);
+        Serilog.Log.Fatal("bench exited on an unhandled {Type} in a scouts verb — the message is withheld (it may quote a private task); the detail is in fault file {File}", ex.GetType().Name, kept);
+        error.WriteLine($"bench: unhandled {ex.GetType().Name} in a scouts verb — the message is withheld (it may quote a private task); the detail is in {ScoutsFault.Describe(scoutsFaultDirectory, kept)}");
+        return ExitCodes.Environment;
     }
 
     private static int Dispatch(CommandLine command, TextWriter output, TextWriter error, CancellationToken stopping)
@@ -502,26 +520,55 @@ public static class Program
         output.WriteLine("             the work root defaults to %LOCALAPPDATA%/bench/probes-work and must not overlap it)");
         output.WriteLine();
         output.WriteLine("  bench scouts tasks  --candidates <file> --cutoffs <cutoffs.json> --opus-id <id> --sonnet-id <id>");
-        output.WriteLine("             --out <tasks.json> [--pilot a,b] [--seed 1] [--per-repository 1]   the scout calibration's");
-        output.WriteLine("             tasks: only after the later published cut-off (a missing or ambiguous id stops it), never a");
-        output.WriteLine("             pilot task, a seeded draw, each tree built history-free and each statement leak-checked");
+        output.WriteLine("             --campaign <seed string> --out <tasks.json>   the scout calibration's tasks: only after the");
+        output.WriteLine("             later published cut-off (a missing or ambiguous id stops it), P verified per merge style");
+        output.WriteLine("             (pr-squash, pr-rebase, merge-commit, local-squash — a mismatch excludes by id), then the D10");
+        output.WriteLine("             draw seeded by the campaign string: repositories with >= 5 admissible candidates ordered by");
+        output.WriteLine("             sha256(seed|repository), candidates by sha256(seed|repo#number or repo@fixsha); the first 8");
+        output.WriteLine("             repositories give one main task each and a reserve, 9 and 10 the pilot (pilot-tasks.json");
+        output.WriteLine("             beside --out); each tree built history-free and each statement leak-checked");
+        output.WriteLine("             [--campaign-key <file> --private-tasks-file <file>]   a PRIVATE candidate (\"private\": true,");
+        output.WriteLine("             \"language\") is written as label, language, sizes and HMAC commitments; its detail goes to the");
+        output.WriteLine("             private file (refused inside git), a private pilot task's to pilot-<that file>");
         output.WriteLine("  bench scouts run    --tasks-file <tasks.json> --opus-id <id> --sonnet-id <id> --ceiling-usd <USD>");
-        output.WriteLine("             --cap-usd <USD> [--arm-caps A1=1.5,..] [--arms A1,B1,..] [--repeats 1] [--seed 1]");
-        output.WriteLine("             [--kind preliminary|decision]   preliminary (the default) reports intervals and NO verdict");
-        output.WriteLine("             --prices <prices.json> --artifact-root <dir> --db <connection> [--claude-exe <path>]");
-        output.WriteLine("             [--cell-timeout-minutes 20] [--trees-root <dir>] [--checkout-root <dir>]   one cell at a time,");
-        output.WriteLine("             each reserved against the ceiling, marked launching before the CLI starts, streamed to disk");
+        output.WriteLine("             --kind pilot --cap-usd <USD> [--arm-caps A1=1.5,..] [--cell-timeout-minutes 20]   a PILOT takes its");
+        output.WriteLine("             caps from flags and refuses by name a cap above $3, a wall above 20 min, a ceiling above $60");
+        output.WriteLine("             --kind preliminary|decision --schedule <schedule.json>   caps and walls from the pilot's schedule");
+        output.WriteLine("             ONLY (a budget flag is refused by name); preliminary (the default) reports intervals and NO verdict");
+        output.WriteLine("             [--arms A1,B1,..] [--repeats 1] [--seed 1] --prices <prices.json> --artifact-root <dir>");
+        output.WriteLine("             --db <connection> [--claude-exe <path>] [--trees-root <dir>] [--checkout-root <dir>]   one cell");
+        output.WriteLine("             at a time, each reserved against the ceiling (cap × 1.2), marked launching before the CLI starts,");
+        output.WriteLine("             streamed to disk; an attempt that overshoots its cap settles at its REAL total and is counted");
+        output.WriteLine("             [--campaign-key <file> --private-tasks-file <file>]   needed when tasks.json holds a private");
+        output.WriteLine("             task: every commitment is re-derived and a mismatch refused by label");
+        output.WriteLine("  bench scouts key init --campaign-key <file>   creates the campaign key ONCE (32 random bytes, owner-only);");
+        output.WriteLine("             refused inside a git checkout, the trees or mirror root, or a granted directory; never regenerated");
+        output.WriteLine("  bench scouts hygiene --staged | --range <a..b> | --tree <rev> [--repo <dir>] --deny-list <file>");
+        output.WriteLine("             scans every staged (or pushed) blob and file name, whole from git, against the local deny-list");
+        output.WriteLine("             (or BENCH_SCOUT_DENYLIST); exit 1 on a leftover, 4 without a list, 3 when it cannot scan;");
+        output.WriteLine("             .githooks/pre-commit and pre-push call it — opt in with git config core.hooksPath .githooks");
         output.WriteLine("  bench scouts resume --run <id> --prices <file>   the entry step (sweep + recovery), then the rest");
         output.WriteLine("  bench scouts rerun  --cell <id> --prices <file>  appends the next generation of that cell");
         output.WriteLine("  bench scouts sweep  [--run <id>]   hands back dead owners' claims, settles orphaned attempts once");
         output.WriteLine("  bench scouts prune  --run <id>     deletes the trees the run's tasks built; refused while a cell is open");
-        output.WriteLine("  bench scouts alias-check --opus-id <id> --sonnet-id <id>   one tiny paid cell; exit 3 when an alias moved");
-        output.WriteLine("  bench scouts status --run <id>     every cell by state and outcome; the ledger and the ceiling left");
+        output.WriteLine("  bench scouts alias-check --opus-id <id> --sonnet-id <id> --artifact-root <dir>   one tiny paid cell; exit 3 when an alias moved");
+        output.WriteLine("  bench scouts access-check --out <summary.md> --artifact-root <dir> [--work-root <dir>]   LIVE: the campaign launch");
+        output.WriteLine("             (--setting-sources \"\" --plugin-dir <pinned> --settings <pinned>) for feature-dev:code-explorer and Explore");
+        output.WriteLine("             against a sibling tree, each granted directory (read only), the mirror root and a junction; exit 0 every");
+        output.WriteLine("             target denied · 3 content returned or a target inconclusive for both agents · 4 configuration · 5 no launch");
+        output.WriteLine("  bench scouts status --run <id>     every cell by state and outcome; the ledger, the ceiling left, the overshoots");
+        output.WriteLine("  bench scouts schedule --run <pilot run> --out <schedule.json>   the next run's caps and walls from the pilot's");
+        output.WriteLine("             settled cells: per arm the largest cost × 1.5 and the slowest cell × 2; refused for a non-pilot run");
+        output.WriteLine("  bench scouts sizing --run <id> --out <sizing.md> [--seed S] [--simulations 1000] [--resamples 1000]   how many");
+        output.WriteLine("             tasks a decision run would need: the pre-registered decision simulated from the run's cells at Δ = 0");
+        output.WriteLine("             and at the −0.03 margin for 8..30 tasks — REPORTED, not a gate (exit 0 found or not; 5 nothing to size)");
         output.WriteLine("  bench scouts score  --run <id> [--handcheck N --seed S] [--out <file>]   recall recomputed from the");
         output.WriteLine("             streams and stored; with --handcheck, N found + N not-found pairs and N claim verdicts drawn");
-        output.WriteLine("             by the seed into a Markdown file a person marks agree / disagree item by item");
+        output.WriteLine("             by the seed into a Markdown file a person marks agree / disagree item by item; a private");
+        output.WriteLine("             task's items by label and commitment (--campaign-key), their plaintext in --private-out");
         output.WriteLine("  bench scouts assess --run <id> --assessor-model <id> [--codex-exe <path>]   PAID: every claim with no");
-        output.WriteLine("             verdict yet, blinded, to codex read-only in the task's tree; re-running asks only the rest");
+        output.WriteLine("             verdict yet, blinded, to codex read-only in the task's tree; re-running asks only the rest;");
+        output.WriteLine("             a private task's claim is stored as its HMAC (--campaign-key)");
         output.WriteLine("  bench scouts report --run <id> [--json] [--bootstrap-seed 20261012] [--resamples 10000]   per arm and");
         output.WriteLine("             workload: recall, wrong claims, time, tokens, cost, the paired clustered intervals, the verdict");
         output.WriteLine("             (exit 0 cells produced · 3 resumable stop · 4 configuration · 5 nothing produced)");

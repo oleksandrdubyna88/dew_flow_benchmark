@@ -33,8 +33,11 @@ public sealed class FileHashKey
                 $"a file-hash key is at least {MinBytes} bytes, got {key.Length} — a short key is one a published hash can be searched under");
 
     /// <summary>Lower-case hex HMAC-SHA256 of <paramref name="text"/> under this key.</summary>
-    public string Hash(string text) =>
-        Convert.ToHexStringLower(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes(text)));
+    public string Hash(string text) => Hash(Encoding.UTF8.GetBytes(text));
+
+    /// <summary>Lower-case hex HMAC-SHA256 of <paramref name="bytes"/> under this key — the one MAC every commitment is made with
+    /// (the scouts' <c>ScoutCommitment</c> frames its fields itself and hands the frame here).</summary>
+    public string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(HMACSHA256.HashData(_key, bytes));
 
     public override string ToString() => "FileHashKey(redacted)";
 }

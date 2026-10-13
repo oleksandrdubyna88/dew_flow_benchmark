@@ -50,6 +50,13 @@ public static class ScoutsReadCommand
     /// <summary>The report's JSON — the web defaults, as the probes' report and the API serialise it.</summary>
     public static string Json(Contracts.ScoutRunReportDto report) => JsonSerializer.Serialize(report, Web);
 
+    /// <summary>The claim digest of a run (S4): a run with a private task needs the campaign key and the run's campaign string; one without
+    /// needs nothing. Refused by name before any claim is read, so a verb never stores a private claim's plain hash for want of a key.</summary>
+    public static Outcome<ScoutClaimDigest> Digest(CommandLine command, ScoutRun run, IReadOnlyList<ScoutTask> tasks) =>
+        tasks.Any(t => t.IsPrivate)
+            ? ScoutsInputs.Committer(command, run.Campaign).Match(committer => ScoutClaimDigest.Of(tasks, committer), Outcome<ScoutClaimDigest>.Failure)
+            : ScoutClaimDigest.Of(tasks, null);
+
     /// <summary>The run a read verb is about, through the loader (4 for the flags and roots, 3 for the database), or 4 for an id the store
     /// does not hold.</summary>
     internal static async Task<int> WithRunAsync(
@@ -88,7 +95,7 @@ public static class ScoutsReadCommand
         output.WriteLine($"cells          {progress.Pending} pending · {progress.Claimed} claimed · {progress.Settled} settled · {progress.Abandoned} abandoned — {(progress.IsOpen ? "open" : "finished")}");
         output.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"outcomes       {Count(latest, ScoutCellOutcome.Scored)} scored · {Count(latest, ScoutCellOutcome.Void)} void · {Count(latest, ScoutCellOutcome.Stopped)} stopped · {Count(latest, ScoutCellOutcome.Aborted)} aborted (each lineage at its latest settled generation)"));
-        output.WriteLine(Ledger(run.Ledger, attempts));
+        output.WriteLine(Ledger(run.Ledger, attempts, ScoutOvershoots.Of(attempts, cells, run.Budgets)));
 
         foreach (var cell in cells)
         {
@@ -96,10 +103,17 @@ public static class ScoutsReadCommand
         }
     }
 
-    /// <summary>The ledger as <c>status</c> prints it: reserved, settled, unknown charges, spent, and the ceiling left.</summary>
-    public static string Ledger(SpendLedger ledger, IReadOnlyList<ScoutAttempt> attempts) =>
-        string.Create(CultureInfo.InvariantCulture,
-            $"ledger         ${ledger.ReservedUsd} reserved · ${ledger.SettledUsd} settled · ${ledger.UnknownUsd} unknown ({attempts.Count(a => a.State == ScoutAttemptState.ChargedUnknown)} charge(s)) · ${ledger.SpentUsd} spent · ${ledger.FreeUsd} of the ${ledger.CeilingUsd} ceiling left · {attempts.Count} attempt(s)");
+    /// <summary>The ledger as <c>status</c> prints it: reserved, settled, unknown charges, spent, the ceiling left, and (S6) the attempts that
+    /// settled ABOVE their arm's cap — each at its real total, never clipped.</summary>
+    public static string Ledger(SpendLedger ledger, IReadOnlyList<ScoutAttempt> attempts, IReadOnlyList<ScoutOvershoot> overshoots)
+    {
+        var line = string.Create(CultureInfo.InvariantCulture,
+            $"ledger         ${ledger.ReservedUsd} reserved · ${ledger.SettledUsd} settled · ${ledger.UnknownUsd} unknown ({attempts.Count(a => a.State == ScoutAttemptState.ChargedUnknown)} charge(s)) · ${ledger.SpentUsd} spent · ${ledger.FreeUsd} of the ${ledger.CeilingUsd} ceiling left · {attempts.Count} attempt(s) · {overshoots.Count} overshoot(s)");
+        var detail = overshoots.Select(o => string.Create(CultureInfo.InvariantCulture,
+            $"\novershoot      {ScoutArms.Word(o.Arm)} attempt {o.AttemptId} settled at ${o.SettledUsd}, ${o.OverUsd} over its ${o.CapUsd} cap — booked whole, never clipped"));
+
+        return line + string.Concat(detail);
+    }
 
     private static int Count(IReadOnlyList<ScoutCell> cells, ScoutCellOutcome outcome) => cells.Count(c => c.Outcome == outcome);
 

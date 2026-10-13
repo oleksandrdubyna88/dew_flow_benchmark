@@ -65,7 +65,7 @@ public sealed class ScoutReportTests
         (b1.Recall.Value, b1.WrongPerTen.Value, b1.UsdPerRightFile.Value).Should().Be((1.0, 5.0, 0.005));
         a1.Counts.Should().Be(new ScoutCountsDto(2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0), "the fixture scout carries one unparseable claim line per cell");
         a1.WrongGap.Should().Be("none");
-        report.Ledger.Should().Be(new ScoutLedgerDto(10m, 0m, 0m, 0m, 0m, 10m, 4, 0), "the hand-built run row carries an untouched ledger; the attempts are counted beside it");
+        report.Ledger.Should().Be(new ScoutLedgerDto(10m, 0m, 0m, 0m, 0m, 10m, 4, 0, 0), "the hand-built run row carries an untouched ledger; the attempts are counted beside it");
         report.Tasks.Select(t => (t.Task, t.Repository, t.GroundTruth)).Should().Equal(("t01", "org/repo-a", 2), ("t02", "org/repo-b", 2));
         ScoutReportText.Of(report).Should().Contain("verdict        preliminary — not a verdict").And.Contain("Δrecall +0.5 [+0.5, +0.5] over 2 task(s) in 2 repo(s)");
     }
