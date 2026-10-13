@@ -101,16 +101,19 @@ A task is one past change in a **public** family repository, investigated at its
   the selection — it is not guessed. A candidate whose P lies before the later cut-off is excluded, because a model
   that saw the code in training gains recall that says nothing about scouting. Per repository, a seeded draw picks from the candidates; the seed and the candidate
   list are committed before the draw. Sources: the six public family repositories; the one private family repository
-  is excluded. **A P whose own `.claude` settings grant a directory outside the repository** (or cannot be read) is
-  excluded at admission, by a code that never names the path (amended 2026-10-13: the first selection over the D10 pool
-  drew a private task whose P granted such a directory; the guard that refuses it when its tree is built stopped the
-  whole selection over one task. Excluded at admission, the repository's next candidate takes its place by the same
-  seeded order, and the tree guard stays as the backstop).
+  is excluded. **A P whose own `.claude` settings grant a directory outside the repository is admitted** — its tree
+  drops those settings (§3.2). Amended twice on 2026-10-13: the first selection over the D10 pool drew a private task
+  whose P granted such a directory, and the tree guard stopped the whole selection over that one task; excluding such
+  a P at admission (PR #84) then excluded **431 candidates — three whole private repositories (50 of 50, 218 of 219,
+  161 of 161) and 2 of another's 50**, i.e. every repository that commits its Claude settings with a grant outside it.
+  That is a selection bias against exactly the repositories that use the tool together, so the exclusion was replaced
+  by the removal.
 - **Three kinds of question**, roughly a third each: *where is X decided*, *how does Y work end to end*, *what must
   change if Z changes*.
 - **Ground truth G** = `git diff --name-only P S` restricted to files that exist at P, minus lockfiles, generated files,
   changelogs, version manifests, **submodule gitlinks** (not a tree file — found 2026-10-12 in a candidate whose G held one),
-  and the PR's own plan or results document. **P is the PR's base, not `S^1`**: for a squash merge they are the same;
+  **the project's own Claude settings** (`.claude/settings.json`, `.claude/settings.local.json` — the tree drops them, §3.2;
+  2026-10-13), and the PR's own plan or results document. **P is the PR's base, not `S^1`**: for a squash merge they are the same;
   for a rebase merge `S^1` is a commit inside the PR (6 of the first 13 family picks were rebase-merged), so P is the
   PR's `baseRefOid`; for a merge commit P is its first parent.
 - **The task statement** is at most three sentences about the problem, written before any run and frozen. An automatic
@@ -122,7 +125,12 @@ A task is one past change in a **public** family repository, investigated at its
 `git archive P` from the existing bare mirror, extracted under the checkout root, then a fresh `git init` and ONE
 commit — so `WorktreeAudit` and `WorkspaceTrust` keep working, and there is no later history to read. A submodule's
 content at its pinned sha is archived into its path. If the PR's own plan existed at P, it is removed and the removal
-is recorded on the task. The tree's hash is recorded and checked before every cell.
+is recorded on the task. **The project's own Claude settings** (`.claude/settings.json` and a committed
+`settings.local.json`) are removed the same way and recorded (2026-10-13, §3.1): they configure the scouting tool, can
+grant a directory outside the tree, and the launch reads no project settings anyway (`--setting-sources ""`); the rest
+of `.claude/` and `CLAUDE.md` stay as P has them, and the guard that refuses a tree whose own settings grant outside it
+stays as the backstop. The tree's git runs with `core.longpaths` per invocation (2026-10-13: a private repository's
+path exceeded Windows' 260 characters under the trees root). The tree's hash is recorded and checked before every cell.
 
 **Removing history is not confinement.** The archive removes the future from the tree; it does not stop a child from
 reading elsewhere. Measured 2026-10-12 on claude 2.1.289, from a one-commit tree with a random-token canary in its parent
