@@ -268,7 +268,7 @@ public static class Grammar
             return [.. allowed.Where(t => t.Length > 0)];
         }
 
-        return [.. ClaudeDefaultTools.Where(t => !(denied ?? []).Contains(t) && !(args.Contains("--restricted") && ClaudeRestrictedRemoves.Contains(t)))];
+        return [.. ClaudeDefaultTools.Where(t => !denied!.Contains(t) && !(args.Contains("--restricted") && ClaudeRestrictedRemoves.Contains(t)))];
     }
 
     /// <summary>The values after a variadic flag, up to the next <c>--</c> option; null when the flag is absent.</summary>
