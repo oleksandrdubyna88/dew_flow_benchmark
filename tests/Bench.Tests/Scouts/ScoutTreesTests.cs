@@ -98,16 +98,55 @@ public sealed class ScoutTreesTests : IDisposable
         ScoutGrantGuard.Refusal(_root.Sibling("trees"), _root.Sibling("mirrors"), [settings]).Should().Contain(_root.Sibling("trees"));
     }
 
+    /// <summary>§3.2 as amended 2026-10-13: a tree DROPS the project's own Claude settings (<c>.claude/settings.json</c> and a committed
+    /// <c>settings.local.json</c>) and records the removal, instead of refusing the task. Measured on the D10 pool: refusing excluded 431
+    /// candidates and three whole repositories — every one that commits its Claude settings with a grant outside it — a selection bias against
+    /// exactly the repositories that use the tool together. The settings configure the scouting tool, not the code under investigation; the
+    /// rest of <c>.claude/</c> and <c>CLAUDE.md</c> stay, as P has them.</summary>
     [Fact]
-    public async Task A_tree_whose_own_settings_grant_a_directory_outside_it_is_refused()
+    public async Task A_tree_drops_the_projects_own_Claude_settings_records_the_removal_and_keeps_the_rest_of_dot_claude()
     {
         await _repo.InitAsync(("README.md", "# example\n"), ("init", "2026-05-01T10:00:00+00:00"));
-        var parent = await _repo.CommitAsync((".claude/settings.json", """{ "permissions": { "additionalDirectories": [ "../.." ] } }"""), ("grant", "2026-05-02T10:00:00+00:00"));
+        Directory.CreateDirectory(Path.Combine(_repo.Root, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(_repo.Root, ".claude", "settings.local.json"), """{ "permissions": { "additionalDirectories": [ "/elsewhere" ] } }""", Ct);
+        await _repo.GitAsync("add", "-f", ".claude/settings.local.json");
+        var parent = await _repo.CommitManyAsync(
+            [(".claude/settings.json", """{ "permissions": { "additionalDirectories": [ "../.." ] } }"""), (".claude/agents/reader.md", "# reader\n"), ("CLAUDE.md", "# rules\n")],
+            ("grant", "2026-05-02T10:00:00+00:00"));
 
-        var built = await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), "org/repo", CommitSha.Parse(parent).Ok(), []), Ct);
+        var built = (await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), "org/repo", CommitSha.Parse(parent).Ok(), []), Ct)).Ok();
 
-        built.Reason().Should().Contain("own .claude settings grant").And.Contain("excluded");
-        Directory.Exists(Path.Combine(_root.Sibling("trees-a"), "t01")).Should().BeFalse("a refused tree is never left behind");
+        built.Removed.Should().Equal(".claude/settings.json", ".claude/settings.local.json");
+        built.Files.Should().Equal(".claude/agents/reader.md", "CLAUDE.md", "README.md");
+        ScoutGrantGuard.ProjectRefusal(built.Root).Should().BeEmpty("the tree grants nothing once its settings are gone");
+    }
+
+    /// <summary>The backstop stays: a folder whose own settings grant a directory outside it is still refused by name.</summary>
+    [Fact]
+    public void A_folder_whose_own_settings_grant_outside_it_is_still_refused_by_the_guard()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_root.Path, "granting", ".claude")).Parent!.FullName;
+        File.WriteAllText(Path.Combine(folder, ".claude", "settings.json"), """{ "permissions": { "additionalDirectories": [ "../.." ] } }""");
+
+        ScoutGrantGuard.ProjectRefusal(folder).Should().Contain("own .claude settings grant").And.Contain("excluded");
+    }
+
+    /// <summary>Found live 2026-10-13: a private repository holds a file whose path, under the trees root, is longer than Windows' 260
+    /// characters — <c>git add</c> in the new tree failed ("Filename too long") and stopped the selection. The tree's git runs with
+    /// <c>core.longpaths</c> per invocation (on Linux it changes nothing).</summary>
+    [Fact]
+    public async Task A_tree_holds_a_path_longer_than_the_Windows_limit()
+    {
+        var deep = string.Join('/', Enumerable.Range(0, 6).Select(i => $"segment{i}-{new string('d', 30)}")) + "/" + new string('f', 40) + ".js";
+        await _repo.InitAsync(("README.md", "# example\n"), ("init", "2026-05-01T10:00:00+00:00"));
+        await _repo.GitAsync("config", "core.longpaths", "true");
+        var parent = await _repo.CommitAsync((deep, "export {};\n"), ("deep", "2026-05-02T10:00:00+00:00"));
+
+        var built = (await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), "org/repo", CommitSha.Parse(parent).Ok(), []), Ct)).Ok();
+
+        Path.Combine(built.Root, deep).Length.Should().BeGreaterThan(260, "the path must exceed the limit for the test to mean anything");
+        built.Files.Should().Contain(deep);
+        (await Git(built.Root, "ls-files")).Should().Contain(deep, "the one commit holds it");
     }
 
     [Fact]

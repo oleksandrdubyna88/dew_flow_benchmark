@@ -34,7 +34,9 @@ public sealed record ScoutTreeSettings(string Root, string RepositoryUrl, TimeSp
 
 /// <summary>The history-free trees of §3.2. <c>git archive P</c> from the bare mirror <see cref="GitCheckoutProvider"/> keeps (as a ZIP — a
 /// symlink in it lands as a plain file, never as a link that could lead a scout out of the tree), extracted under the trees root; each
-/// submodule archived at its pinned sha into its path; the PR's own plan removed (and the removal recorded); then a fresh <c>git init</c>
+/// submodule archived at its pinned sha into its path; the PR's own plan and the project's own Claude settings
+/// (<see cref="ScoutGroundTruth.ClaudeProjectSettings"/>, §3.2 as amended 2026-10-13 — they configure the scouting tool and may grant a
+/// directory outside the tree) removed, and each removal recorded; then a fresh <c>git init</c>
 /// and ONE commit, author and date FIXED through the environment so the commit is the same on every machine — no git config is read for
 /// identity or written at all, and no hook runs (<c>--no-verify</c>). There is no later history to read.
 /// <para>
@@ -142,7 +144,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
             return Outcome<IReadOnlyList<string>>.Failure(Withheld(spec, "the tree could not be archived from the mirror", $"task {spec.Task}: {fail.Reason}"));
         }
 
-        IReadOnlyList<string> removed = [.. spec.Remove.Where(path => RemoveFile(staging, path))];
+        IReadOnlyList<string> removed = [.. spec.Remove.Concat(ScoutGroundTruth.ClaudeProjectSettings).Distinct(StringComparer.Ordinal).Where(path => RemoveFile(staging, path))];
         var grant = ScoutGrantGuard.ProjectRefusal(staging);
 
         return grant.Length > 0
@@ -271,8 +273,10 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
         (string Name, string[] Argv)[] steps =
         [
             ("init", ["-c", "init.defaultBranch=main", "init", "-q"]),
-            ("add", ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "add", "-A", "-f", "."]),
-            ("commit", ["-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "--allow-empty", "-m", message]),
+            // core.longpaths: a repository can hold a path longer than Windows' 260 characters under the trees root — found live 2026-10-13,
+            // "Filename too long" from git add stopped the selection. Per invocation, nothing written; on Linux it changes nothing.
+            ("add", ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.longpaths=true", "add", "-A", "-f", "."]),
+            ("commit", ["-c", "commit.gpgsign=false", "-c", "core.longpaths=true", "commit", "-q", "--no-verify", "--allow-empty", "-m", message]),
         ];
 
         foreach (var (name, argv) in steps)
