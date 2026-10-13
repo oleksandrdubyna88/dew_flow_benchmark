@@ -1793,6 +1793,478 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     b.ToTable("run_subjects", (string)null);
                 });
 
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutAttemptRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CellId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ReservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("ReservedUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("SettledUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CellId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("RunId", "State");
+
+                    b.ToTable("scout_attempts", (string)null);
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutCellRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Arm")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("ComputedUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("ComputedUsdCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Generation")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OwnerHost")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("OwnerPid")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PinBinarySha256")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinCheckedTree")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("PinDirtyCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("PinDirtyFiles")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PinGitSha")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinVersionText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("RecallFound")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("RecallFoundCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("RecallTotal")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("RecallTotalCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Repeat")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ReportedUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("ReportedUsdCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SessionMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("SessionMsCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("TeamCacheReadTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamCacheWrite1hTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamCacheWrite5mTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamInputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TeamMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("TeamMsCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("TeamOutputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("TeamTokensCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("TeamUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("TeamUsdCaptured")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("State", "ClaimedAt");
+
+                    b.HasIndex("RunId", "State", "Slot", "Position");
+
+                    b.HasIndex("RunId", "TaskId", "Arm", "Repeat", "Generation")
+                        .IsUnique();
+
+                    b.ToTable("scout_cells", (string)null);
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutClaimRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AssessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssessorModel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CellId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Line")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("LineCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RubricSha256")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StatementSha256")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Verdict")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("CellId", "Ordinal", "Index")
+                        .IsUnique();
+
+                    b.ToTable("scout_claims", (string)null);
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutRecordRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CacheReadTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CacheWrite1hTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CacheWrite5mTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("CellId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ClaimsExtra")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ClaimsParsed")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ClaimsUnparseable")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("CostCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("CostUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("DurationCaptured")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Focus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("InputModel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("bigint");
+
+                    b.PrimitiveCollection<List<string>>("KeyFiles")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<int>("KeyFilesExtra")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("KeyFilesUnparseable")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("OutputSeparable")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PromptSha256")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResolvedModel")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Silent")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CellId", "Ordinal")
+                        .IsUnique();
+
+                    b.ToTable("scout_records", (string)null);
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutRunRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<List<decimal>>("ArmCapsUsd")
+                        .IsRequired()
+                        .HasColumnType("numeric[]");
+
+                    b.PrimitiveCollection<List<int>>("ArmWallSeconds")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.PrimitiveCollection<List<string>>("Arms")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<decimal>("CeilingUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinCliVersion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinPluginCacheHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinResolvedOpus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinResolvedSonnet")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PinSettingsHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Repeats")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("ReservedUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<int>("Seed")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("SettledUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.PrimitiveCollection<List<string>>("TaskIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<decimal>("UnknownUsd")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("scout_runs", (string)null);
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutTaskRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FixSha")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("GroundTruth")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ParentSha")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Removals")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Repository")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Statement")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TaskId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TreeHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "TaskId")
+                        .IsUnique();
+
+                    b.ToTable("scout_tasks", (string)null);
+                });
+
             modelBuilder.Entity("Bench.Infrastructure.Persistence.SessionRunRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2443,6 +2915,69 @@ namespace Bench.Infrastructure.Persistence.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutAttemptRow", b =>
+                {
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutCellRow", null)
+                        .WithMany()
+                        .HasForeignKey("CellId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutRunRow", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutCellRow", b =>
+                {
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutRunRow", "Run")
+                        .WithMany("Cells")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutClaimRow", b =>
+                {
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutCellRow", null)
+                        .WithMany()
+                        .HasForeignKey("CellId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutRunRow", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutRecordRow", b =>
+                {
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutCellRow", "Cell")
+                        .WithMany("Scouts")
+                        .HasForeignKey("CellId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Cell");
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutTaskRow", b =>
+                {
+                    b.HasOne("Bench.Infrastructure.Persistence.ScoutRunRow", "Run")
+                        .WithMany("Tasks")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("Bench.Infrastructure.Persistence.SessionToolCallRow", b =>
                 {
                     b.HasOne("Bench.Infrastructure.Persistence.SessionRunRow", "Session")
@@ -2500,6 +3035,18 @@ namespace Bench.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Bench.Infrastructure.Persistence.RunRow", b =>
                 {
                     b.Navigation("Cells");
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutCellRow", b =>
+                {
+                    b.Navigation("Scouts");
+                });
+
+            modelBuilder.Entity("Bench.Infrastructure.Persistence.ScoutRunRow", b =>
+                {
+                    b.Navigation("Cells");
+
+                    b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("Bench.Infrastructure.Persistence.SessionRunRow", b =>

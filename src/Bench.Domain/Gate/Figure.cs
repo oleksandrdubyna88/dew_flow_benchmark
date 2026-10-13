@@ -52,17 +52,22 @@ public sealed record Figure(bool Known, double Value, FigureState State)
 /// by ten first, and <c>0.35 × 10</c> lands on the tie <c>3.5</c> that the true value (0.3499…) never was.</summary>
 public static class Quantile
 {
-    public static Figure Q(IReadOnlyList<double> readings, double p)
+    public static Figure Q(IReadOnlyList<double> readings, double p) =>
+        readings.Count == 0 ? Figure.Unknown : Figure.Of(PythonRound.Of(Interpolated([.. readings.Order()], p), 1));
+
+    /// <summary>The same linear interpolation, UNROUNDED, over readings already sorted ascending — what a bootstrap's percentile bound is
+    /// read with (the scouts' §3.8), where a one-decimal rounding would move a bound across a 0.03 margin. Zero readings is the caller's
+    /// to refuse; this answers 0 for them.</summary>
+    public static double Interpolated(IReadOnlyList<double> sorted, double p)
     {
-        var xs = readings.Order().ToList();
-        if (xs.Count == 0)
+        if (sorted.Count == 0)
         {
-            return Figure.Unknown;
+            return 0;
         }
 
-        var k = (xs.Count - 1) * p;
+        var k = (sorted.Count - 1) * p;
         var lo = (int)k;
-        var hi = Math.Min(lo + 1, xs.Count - 1);
-        return Figure.Of(PythonRound.Of(xs[lo] + (xs[hi] - xs[lo]) * (k - lo), 1));
+        var hi = Math.Min(lo + 1, sorted.Count - 1);
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * (k - lo);
     }
 }

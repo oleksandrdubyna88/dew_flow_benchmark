@@ -229,6 +229,18 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
 
     public DbSet<ProbeCellRow> ProbeCells => Set<ProbeCellRow>();
 
+    public DbSet<ScoutRunRow> ScoutRuns => Set<ScoutRunRow>();
+
+    public DbSet<ScoutTaskRow> ScoutTasks => Set<ScoutTaskRow>();
+
+    public DbSet<ScoutCellRow> ScoutCells => Set<ScoutCellRow>();
+
+    public DbSet<ScoutRecordRow> ScoutRecords => Set<ScoutRecordRow>();
+
+    public DbSet<ScoutAttemptRow> ScoutAttempts => Set<ScoutAttemptRow>();
+
+    public DbSet<ScoutClaimRow> ScoutClaims => Set<ScoutClaimRow>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         Bank(builder);
@@ -237,6 +249,7 @@ public sealed class BenchDbContext(DbContextOptions<BenchDbContext> options) : D
         Sessions(builder);
         GateModel.Configure(builder);
         ProbeModel.Configure(builder);
+        ScoutModel.Configure(builder);
 
         builder.Entity<ToolTelemetryRow>(telemetry =>
         {

@@ -56,11 +56,19 @@ public static class CliArgv
     /// </list>
     /// An option the CLI has no flag for is REFUSED by name — claude has no output schema and no last-message file,
     /// codex has no tool deny-list, allow-list, restricted mode or turn ceiling, agy has none of those and no web-off switch, gemini
-    /// has none of the probe options: a guarantee silently not applied is one the caller goes on believing.</summary>
+    /// has none of the probe options: a guarantee silently not applied is one the caller goes on believing.
+    /// <para>
+    /// <b>The scouts</b> (scouts plan §3.4, claude 2.1.289): <c>--forward-subagent-text</c> (each child's events under its Agent call's
+    /// <c>parent_tool_use_id</c>), <c>--max-budget-usd &lt;x&gt;</c> (invariant culture), <c>--mcp-config &lt;file&gt;</c> beside
+    /// <c>--strict-mcp-config</c> (an empty config, as the confinement probe ran) and <c>--no-session-persistence</c> — claude only; codex,
+    /// agy and gemini refuse each BY NAME.
+    /// </para></summary>
     public static Outcome<IReadOnlyList<string>> For(
         ModelRuntimeKind runtime, string modelId, AgentAskOptions options, IReadOnlyList<string> codexMcpServers)
     {
-        var refusal = Unsupported(runtime, options);
+        var refusal = options.MaxBudgetUsd < 0m
+            ? $"a budget cap of ${options.MaxBudgetUsd} is not a cap — zero asks for none, a positive amount caps the session"
+            : Unsupported(runtime, options);
 
         if (refusal.Length > 0)
         {
@@ -109,6 +117,10 @@ public static class CliArgv
         .. ClaudeDenied(options) is { Count: > 0 } denied ? ["--disallowedTools", .. denied] : Array.Empty<string>(),
         .. options.MaxTurns > 0 ? ["--max-turns", options.MaxTurns.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
         .. options.McpServersOff ? ["--strict-mcp-config"] : Array.Empty<string>(),
+        .. options.McpConfigFile.Length > 0 ? ["--mcp-config", options.McpConfigFile] : Array.Empty<string>(),
+        .. options.ForwardSubagentText ? ["--forward-subagent-text"] : Array.Empty<string>(),
+        .. options.MaxBudgetUsd > 0m ? ["--max-budget-usd", options.MaxBudgetUsd.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
+        .. options.NoSessionPersistence ? ["--no-session-persistence"] : Array.Empty<string>(),
     ];
 
     /// <summary>agy 1.2.14, as coai launches it (<c>src_mcp/runners/Consultation/AntigravityConsultant.cs</c>, measured there 2026-09-12 and
@@ -149,6 +161,10 @@ public static class CliArgv
             (o.JsonEvents, "JSON events", probeClis),
             (o.AllowedTools.Asked, "a tool allow-list", [ModelRuntimeKind.CliClaude]),
             (o.Restricted, "restricted mode", [ModelRuntimeKind.CliClaude]),
+            (o.ForwardSubagentText, "forwarded subagent text", [ModelRuntimeKind.CliClaude]),
+            (o.MaxBudgetUsd != 0m, "a budget cap", [ModelRuntimeKind.CliClaude]),
+            (o.McpConfigFile.Length > 0, "an MCP config file", [ModelRuntimeKind.CliClaude]),
+            (o.NoSessionPersistence, "no session persistence", [ModelRuntimeKind.CliClaude]),
         };
 
         var unhonoured = asked.Where(a => a.Asked && !a.Honoured.Contains(runtime)).Select(a => a.Name).ToList();
@@ -270,6 +286,7 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             ask.Wall,
             ask.Runtime == ModelRuntimeKind.CliAntigravity ? AntigravityStdin.UserMessage(ask.Prompt) : ask.Prompt,
             ask.Environment.IsReplaced ? ask.Environment.Variables : null,
+            ask.Output.IsNone ? null : ask.Output.Line,
             cancellationToken);
 
         return Outcome<Launched>.Success(new Launched(attempt, clock.Elapsed, arguments));

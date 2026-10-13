@@ -92,6 +92,7 @@ public static class Program
             "models" => Models(command, output, error, stopping),
             "gate" => CoaiGateCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "probes" => ProbesCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
+            "scouts" => ScoutsCommand.RunAsync(command, output, error, stopping).GetAwaiter().GetResult(),
             "version" => Version(output),
             "" or "help" => Help(output),
             _ => Unknown(command.Verb, error),
@@ -499,6 +500,31 @@ public static class Program
         output.WriteLine("  bench probes prune  --run <id>   deletes the run's artefacts; refused while a cell is open");
         output.WriteLine("             (--artifact-root or BENCH_ARTIFACT_ROOT, --db or BENCH_DB, on every verb that needs them;");
         output.WriteLine("             the work root defaults to %LOCALAPPDATA%/bench/probes-work and must not overlap it)");
+        output.WriteLine();
+        output.WriteLine("  bench scouts tasks  --candidates <file> --cutoffs <cutoffs.json> --opus-id <id> --sonnet-id <id>");
+        output.WriteLine("             --out <tasks.json> [--pilot a,b] [--seed 1] [--per-repository 1]   the scout calibration's");
+        output.WriteLine("             tasks: only after the later published cut-off (a missing or ambiguous id stops it), never a");
+        output.WriteLine("             pilot task, a seeded draw, each tree built history-free and each statement leak-checked");
+        output.WriteLine("  bench scouts run    --tasks-file <tasks.json> --opus-id <id> --sonnet-id <id> --ceiling-usd <USD>");
+        output.WriteLine("             --cap-usd <USD> [--arm-caps A1=1.5,..] [--arms A1,B1,..] [--repeats 1] [--seed 1]");
+        output.WriteLine("             [--kind preliminary|decision]   preliminary (the default) reports intervals and NO verdict");
+        output.WriteLine("             --prices <prices.json> --artifact-root <dir> --db <connection> [--claude-exe <path>]");
+        output.WriteLine("             [--cell-timeout-minutes 20] [--trees-root <dir>] [--checkout-root <dir>]   one cell at a time,");
+        output.WriteLine("             each reserved against the ceiling, marked launching before the CLI starts, streamed to disk");
+        output.WriteLine("  bench scouts resume --run <id> --prices <file>   the entry step (sweep + recovery), then the rest");
+        output.WriteLine("  bench scouts rerun  --cell <id> --prices <file>  appends the next generation of that cell");
+        output.WriteLine("  bench scouts sweep  [--run <id>]   hands back dead owners' claims, settles orphaned attempts once");
+        output.WriteLine("  bench scouts prune  --run <id>     deletes the trees the run's tasks built; refused while a cell is open");
+        output.WriteLine("  bench scouts alias-check --opus-id <id> --sonnet-id <id>   one tiny paid cell; exit 3 when an alias moved");
+        output.WriteLine("  bench scouts status --run <id>     every cell by state and outcome; the ledger and the ceiling left");
+        output.WriteLine("  bench scouts score  --run <id> [--handcheck N --seed S] [--out <file>]   recall recomputed from the");
+        output.WriteLine("             streams and stored; with --handcheck, N found + N not-found pairs and N claim verdicts drawn");
+        output.WriteLine("             by the seed into a Markdown file a person marks agree / disagree item by item");
+        output.WriteLine("  bench scouts assess --run <id> --assessor-model <id> [--codex-exe <path>]   PAID: every claim with no");
+        output.WriteLine("             verdict yet, blinded, to codex read-only in the task's tree; re-running asks only the rest");
+        output.WriteLine("  bench scouts report --run <id> [--json] [--bootstrap-seed 20261012] [--resamples 10000]   per arm and");
+        output.WriteLine("             workload: recall, wrong claims, time, tokens, cost, the paired clustered intervals, the verdict");
+        output.WriteLine("             (exit 0 cells produced · 3 resumable stop · 4 configuration · 5 nothing produced)");
         output.WriteLine();
         output.WriteLine("  bench questions import --file <path> --db <connection>");
         output.WriteLine("  bench questions author --group <key> --authors <registry keys> --repo <url>");

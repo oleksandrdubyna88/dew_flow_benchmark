@@ -65,7 +65,8 @@ public sealed class ProbeEntitiesGuardTests
         using var db = Context();
 
         PostgresGatePublicationSource.GateEntities(db).Should().HaveCount(9, "the probe tables join the EXPORT walk, not the gate's own list");
-        PostgresGatePublicationSource.PublishedEntities(db).Select(e => e.GetTableName()).Should().EndWith(["probe_cells", "probe_runs"]);
+        // The probe tables follow the gate's; since the scout calibration plan's S1 the scout tables follow them (ScoutEntitiesGuardTests).
+        PostgresGatePublicationSource.PublishedEntities(db).Select(e => e.GetTableName()).Should().ContainInOrder(["gate_verdicts", "probe_cells", "probe_runs", "scout_attempts"]);
     }
 
     private static IReadOnlyList<Type> ProbeEntities()

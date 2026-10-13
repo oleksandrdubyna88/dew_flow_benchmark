@@ -84,6 +84,25 @@ public static class ProcessRunner
     /// exactly those variables and inherits nothing else — the shape <see cref="ProcessSession"/> launches the product with,
     /// now available to the one-shot launcher so <c>coai-mcp --probe-api</c> (the probes, S2) gets the vault key once, under
     /// the product's name, and none of the harness's <c>COAI_*</c>. Null inherits the parent's, as every other caller does.</summary>
+    public static Task<ProcessAttempt> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        string input,
+        IReadOnlyDictionary<string, string>? environment,
+        CancellationToken cancellationToken) =>
+        RunAsync(executable, arguments, workingDirectory, timeout, input, environment, stdoutLine: null, cancellationToken);
+
+    /// <summary>The same launch with stdout handed to <paramref name="stdoutLine"/> LINE BY LINE AS IT ARRIVES (the scouts, S2): a child
+    /// that is paid for while it runs must leave its stream on disk before it exits, so a crash of the harness loses at most the line in
+    /// flight — the buffered launch hands the output back only at exit (scouts plan §3.10). The whole stdout is still returned.
+    /// <para>
+    /// <b>The wall and the tree kill are unchanged</b>: the child's whole process tree dies at the wall AND on any external cancellation,
+    /// exactly as for the buffered launch. A sink that THROWS (an artefact root that refused a line, or a harness stopping at a
+    /// checkpoint) ends the launch the same way — the child is killed, never left spending with nobody reading it — and the sink's
+    /// exception is what the caller sees.
+    /// </para></summary>
     public static async Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
@@ -91,6 +110,7 @@ public static class ProcessRunner
         TimeSpan timeout,
         string input,
         IReadOnlyDictionary<string, string>? environment,
+        Action<string>? stdoutLine,
         CancellationToken cancellationToken)
     {
         var start = new ProcessStartInfo
@@ -113,6 +133,11 @@ public static class ProcessRunner
 
         Replace(start, environment);
 
+        if (stdoutLine is not null)
+        {
+            Utf8(start);
+        }
+
         using var process = new System.Diagnostics.Process { StartInfo = start };
 
         try
@@ -131,7 +156,7 @@ public static class ProcessRunner
             await WriteAsync(process, input, cancellationToken);
         }
 
-        return await AwaitAsync(process, timeout, cancellationToken);
+        return await AwaitAsync(process, timeout, stdoutLine, cancellationToken);
     }
 
     /// <summary>Writes the input and CLOSES the pipe.
@@ -156,7 +181,7 @@ public static class ProcessRunner
     }
 
     private static async Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, CancellationToken cancellationToken)
+        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, CancellationToken cancellationToken)
     {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeout);
@@ -165,7 +190,9 @@ public static class ProcessRunner
         // killed and its output is still MERGED into the report below. A cancelled read would throw
         // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
         // unavailable at the only moment it matters. The reads end on their own when the pipes close.
-        var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stdout = stdoutLine is null
+            ? process.StandardOutput.ReadToEndAsync(CancellationToken.None)
+            : PumpAsync(process.StandardOutput, stdoutLine, budget);
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
         try
@@ -198,6 +225,47 @@ public static class ProcessRunner
     }
 
     private static string Merge(string stdout, string stderr) => (stdout + stderr).Trim();
+
+    /// <summary>A streamed launch reads and writes its pipes as UTF-8 (no BOM), whatever the console's code page: the CLIs it serves (claude)
+    /// speak UTF-8, and the scouts' stream carries the frozen prompts BACK — an em dash decoded through the console's code page would turn
+    /// every prompt hash into a mismatch (found by the fake CLI's replay test, where the OEM code page decoded <c>—</c> as <c>ΓÇö</c>). The
+    /// buffered launch keeps the platform default every earlier caller was measured under.</summary>
+    private static void Utf8(ProcessStartInfo start)
+    {
+        var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+        start.StandardOutputEncoding = utf8;
+        start.StandardErrorEncoding = utf8;
+
+        if (start.RedirectStandardInput)
+        {
+            start.StandardInputEncoding = utf8;
+        }
+    }
+
+    /// <summary>Stdout read line by line, each line handed to the sink the moment it is read, and the whole text kept. A sink that throws
+    /// cancels the wait's budget — which kills the child's tree in <see cref="AwaitAsync"/> — and its exception travels out of the read.</summary>
+    private static async Task<string> PumpAsync(StreamReader reader, Action<string> stdoutLine, CancellationTokenSource budget)
+    {
+        var text = new System.Text.StringBuilder();
+
+        try
+        {
+            while (await reader.ReadLineAsync(CancellationToken.None) is { } line)
+            {
+                text.Append(line).Append('\n');
+                stdoutLine(line);
+            }
+        }
+        catch (Exception)
+        {
+            // Whatever the sink refused, the child must not keep spending with nobody reading it.
+            await budget.CancelAsync();
+            throw;
+        }
+
+        return text.ToString();
+    }
 
     /// <summary>The environment is REPLACED, not merged, when one is given: whatever the caller did not put in the map is not
     /// inherited, so a parent's <c>COAI_*</c> cannot reach the product behind the harness's back.</summary>

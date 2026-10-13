@@ -11,7 +11,8 @@ namespace Bench.Domain.Probes;
 /// <c>PROCESSOR_*</c>, <c>ProgramFiles*</c>, <c>ProgramData</c>;</item>
 /// <item>where its login and settings live — <c>USERPROFILE</c>, <c>HOME</c>, <c>HOMEDRIVE</c>, <c>HOMEPATH</c>, <c>APPDATA</c>, <c>LOCALAPPDATA</c>,
 /// <c>USERNAME</c> (claude keeps its OAuth under <c>~/.claude</c>, codex under <c>~/.codex</c>, agy under <c>%LOCALAPPDATA%</c>);</item>
-/// <item>a scratch place — <c>TEMP</c>, <c>TMP</c>.</item>
+/// <item>a scratch place — <c>TEMP</c>, <c>TMP</c>, and <c>TMPDIR</c>, which .NET and most CLIs read on Linux and macOS instead (added
+/// 2026-10-13: with TEMP alone a Linux child wrote its scratch under /tmp, outside the place the launcher chose).</item>
 /// </list>
 /// Measured live on 2026-10-01 with exactly this set: claude 2.1.258 (<c>sonnet</c>), codex-cli 0.156.1 (<c>gpt-5.6-terra</c>) and agy
 /// 1.2.14 (<c>gemini-3.1-pro-high</c>) each started, found their login and answered. Never a <c>BENCH_*</c>, never a <c>COAI_*</c>, never a
@@ -25,7 +26,7 @@ public static class ProbeChildEnvironment
     [
         "PATH", "PATHEXT", "SystemRoot", "windir", "ComSpec", "OS", "NUMBER_OF_PROCESSORS", "ProgramData",
         "USERPROFILE", "HOME", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "USERNAME",
-        "TEMP", "TMP",
+        "TEMP", "TMP", "TMPDIR",
     ];
 
     /// <summary>Name prefixes, compared case-insensitively: <c>ProgramFiles</c>, <c>ProgramFiles(x86)</c>, <c>ProgramW6432</c>; <c>PROCESSOR_ARCHITECTURE</c>, …</summary>

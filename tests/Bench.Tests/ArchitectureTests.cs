@@ -158,6 +158,37 @@ public sealed class ArchitectureTests
             typeof(Domain.Probes.ProbeAttemptScope),
             typeof(Domain.Probes.ProbeExits),
             typeof(Domain.Probes.ProbeApiOutput),
+            // The scouts (the scout calibration plan, S1): the subagent stream reader, the arms and the schedule, the claim/settle/
+            // generation rules, the output contract's parsers, the read-back and its path audit, the leak check, the recall matcher,
+            // the token attribution and the cost check, the spend ledger and the attempt's launch boundary, the scrubber.
+            typeof(Domain.Probes.ClaudeSubagents),
+            typeof(Domain.Scouts.ScoutArms),
+            typeof(Domain.Scouts.ScoutSchedule),
+            typeof(Domain.Scouts.ScoutPins),
+            typeof(Domain.Scouts.ScoutRun),
+            typeof(Domain.Scouts.ScoutTask),
+            typeof(Domain.Scouts.ScoutCellLifecycle),
+            typeof(Domain.Scouts.ScoutGenerations),
+            typeof(Domain.Scouts.ScoutOutput),
+            typeof(Domain.Scouts.ScoutClaimRates),
+            typeof(Domain.Scouts.ScoutReadBack),
+            typeof(Domain.Scouts.PathAudit),
+            typeof(Domain.Scouts.TreePaths),
+            typeof(Domain.Scouts.LeakCheck),
+            typeof(Domain.Scouts.RecallMatcher),
+            typeof(Domain.Scouts.ScoutTokens),
+            typeof(Domain.Scouts.ScoutCost),
+            typeof(Domain.Scouts.SpendLedger),
+            typeof(Domain.Scouts.ScoutAttemptLifecycle),
+            typeof(Domain.Scouts.ScoutScrubber),
+            // S3: the analysis (§3.6), the clustered bootstrap and its seeded draws, the decision (§3.8), the assessor's rubric and its
+            // blinding, the hand-check draw (§3.7).
+            typeof(Domain.Scouts.ScoutAnalysis),
+            typeof(Domain.Scouts.ScoutBootstrap),
+            typeof(Domain.SeededDraws),
+            typeof(Domain.Scouts.ScoutDecisions),
+            typeof(Domain.Scouts.ScoutAssessment),
+            typeof(Domain.Scouts.ScoutHandcheck),
         ];
 
         deciders.Should().OnlyContain(
@@ -192,6 +223,29 @@ public sealed class ArchitectureTests
             r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the probe domain stays free of EF");
     }
 
+    /// <summary>The scouts' ports (S1 of the scout calibration plan) follow the probes' rule: declared in the Application layer,
+    /// implemented in Infrastructure, the READ port carrying no write; the runner and the trees are S2's to implement.</summary>
+    [Fact]
+    public void The_scout_ports_live_in_the_application_layer_and_their_adapters_in_infrastructure()
+    {
+        Type[] ports =
+        [
+            typeof(global::Bench.Application.Scouts.IScoutStore), typeof(global::Bench.Application.Scouts.IScoutReads),
+            typeof(global::Bench.Application.Scouts.IScoutRunner), typeof(global::Bench.Application.Scouts.IScoutTrees),
+            typeof(global::Bench.Application.Scouts.IScoutVerdicts), typeof(global::Bench.Application.Scouts.IScoutAssessmentFiles),
+        ];
+
+        ports.Should().OnlyContain(p => p.Assembly.GetName().Name == "Bench.Application" && p.IsInterface);
+        typeof(global::Bench.Infrastructure.Persistence.PostgresScoutStore).Should().Implement<global::Bench.Application.Scouts.IScoutStore>();
+        typeof(global::Bench.Infrastructure.Persistence.PostgresScoutVerdicts).Should().Implement<global::Bench.Application.Scouts.IScoutVerdicts>();
+        typeof(global::Bench.Infrastructure.Scouts.ScoutArtifacts).Should().Implement<global::Bench.Application.Scouts.IScoutAssessmentFiles>();
+        typeof(global::Bench.Infrastructure.Persistence.PostgresScoutReads).Should().Implement<global::Bench.Application.Scouts.IScoutReads>();
+        typeof(global::Bench.Application.Scouts.IScoutReads).GetMethods().Select(m => m.Name).Should().NotContain(n => WriteVerbs.Any(v => n.StartsWith(v, StringComparison.Ordinal)),
+            "the read port a read host registers carries no write");
+        typeof(Domain.Scouts.ScoutCell).Assembly.GetReferencedAssemblies().Should().NotContain(
+            r => r.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal), "the scout domain stays free of EF");
+    }
+
     /// <summary>S4 (D10): <c>bench-api</c> is the READ surface — it registers the probes' read port and NOTHING that can plan, claim,
     /// settle, sweep or launch a probe. Its composition root is top-level statements with no seam to resolve, so the guard reads the
     /// file: a write type named there is a registration (or a use) a read host must not make.</summary>
@@ -216,6 +270,7 @@ public sealed class ArchitectureTests
     [
         "IProbeStore", "PostgresProbeStore", "ProbeCampaign", "IProbeRunner", "CliProbeRunner", "CoaiApiProbeRunner",
         "IProbeFixtures", "IProbeArtifacts", "IProbeOracle", "IGateStore", "PostgresGateStore", "GateCampaign",
+        "IScoutStore", "PostgresScoutStore", "IScoutRunner", "IScoutTrees", "IScoutVerdicts", "PostgresScoutVerdicts", "ScoutAssessCampaign", "ScoutScoring",
     ];
 
     private static IReadOnlyList<string> ReadHostOffenders(string program) =>
