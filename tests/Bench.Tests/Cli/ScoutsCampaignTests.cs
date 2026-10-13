@@ -51,10 +51,13 @@ public sealed class ScoutsCampaignTests(PostgresFixture postgres)
         [
             "-p", "--model", "opus", "--output-format", "stream-json", "--verbose", "--tools", "Task", "Read", "Glob", "Grep",
             "--strict-mcp-config", "--mcp-config", mcp, "--forward-subagent-text", "--max-budget-usd", "1", "--no-session-persistence",
+            "--setting-sources", "", "--settings", setup.PinnedSettingsFile, "--plugin-dir", Path.GetFullPath(setup.PluginCache),
         ];
         setup.Fake.Calls().Should().HaveCount(4, "one launch per cell, in schedule order");
-        setup.Fake.Calls().Should().OnlyContain(c => c.Argv.SequenceEqual(launch), "the scout launch of §3.4, exactly");
+        setup.Fake.Calls().Should().OnlyContain(c => c.Argv.SequenceEqual(launch), "the scout launch of §3.4, widened by S5, exactly");
         File.ReadAllText(mcp).Should().Be(ScoutLaunch.EmptyMcpConfig);
+        File.ReadAllText(setup.PinnedSettingsFile).Should().Be("{\n  \"effortLevel\": \"high\"\n}\n", "the pinned settings file carries the user settings' two keys and nothing else");
+        output.Should().Contain("pinned settings " + Bench.Infrastructure.Scouts.ScoutPinReader.SettingsHash([setup.PinnedSettingsFile])[..12], "the pinned file's hash is the settings pin");
         setup.Fake.Calls().Should().OnlyContain(c => c.EnvironmentNames.Contains("FAKE_CLI_HOME") && !c.EnvironmentNames.Any(n => n.StartsWith("BENCH_", StringComparison.Ordinal)),
             "the child runs under the probes' minimal environment, plus the test's own home and nothing else");
         setup.Fake.Calls().Select(c => Path.GetFileName(c.Cwd)).Should().BeEquivalentTo(["t01", "t01", "t02", "t02"], "every cell runs in its task's history-free tree");
@@ -185,12 +188,12 @@ public sealed class ScoutsCampaignTests(PostgresFixture postgres)
 
     /// <summary>A run whose harness crashed at <paramref name="point"/> while claiming as an owner that is now provably gone — the state a
     /// killed bench leaves. Answers the run id.</summary>
-    internal static async Task<Guid> CrashedRunAsync(ScoutsCliSetup setup, ScoutCheckpoint point, IReadOnlyList<ScoutArmId>? arms = null)
+    internal static async Task<Guid> CrashedRunAsync(ScoutsCliSetup setup, ScoutCheckpoint point, IReadOnlyList<ScoutArmId>? arms = null, params string[] extra)
     {
         var crash = new CrashAt(point);
         var output = new StringWriter();
         var run = async () => await ScoutsCommand.RunAsync(
-            CommandLine.Parse(["scouts", .. setup.WithDefaults(setup.RunArgs(arms ?? TwoArms))]), setup.Services(crash, TestWorkers.Dead("crashed-bench")), output, new StringWriter(), Ct);
+            CommandLine.Parse(["scouts", .. setup.WithDefaults(setup.RunArgs(arms ?? TwoArms, extra: extra))]), setup.Services(crash, TestWorkers.Dead("crashed-bench")), output, new StringWriter(), Ct);
 
         await run.Should().ThrowAsync<ScoutCrash>();
         crash.Fired.Should().BeTrue();

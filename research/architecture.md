@@ -1156,8 +1156,8 @@ of them, without finding fewer of the files that matter or making more wrong cla
 size (W1–W3): one cell = one `claude -p --model opus` session in a task's history-free tree, launching N scouts in one
 message, read back from its stream (every child told apart by `parent_tool_use_id`). The tuple, the launch, the read-back,
 the ledger, the analysis and the verbs are in [module_scouts.md](module_scouts.md); the plan is
-[PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) (E1 built — S1–S3; E2 and E3 open). What it
-COMPOSES from the contexts beside it, and what it ADDS:
+[PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) (E1 built — S1–S3; E2 S4–S7 built and S8's code; S8's live pilot and E3 open).
+What it COMPOSES from the contexts beside it, and what it ADDS:
 
 - **Composed.** The probes' claim lifecycle and generations (`ScoutCell` = `Claimable` + `ProductPin`, a run with no
   status, re-runs appended), the gate store's guarded claim and owner-checked sweep, the one launcher (widened again:
@@ -1175,6 +1175,15 @@ COMPOSES from the contexts beside it, and what it ADDS:
   not-measured rule, a paired bootstrap that resamples whole REPOSITORIES with a fixed seed (`SeededDraws`, SplitMix64 —
   never `Random`), and `ScoutDecisions.Decide`, which reads only the one-sided bounds against the operator's margins. A run's
   KIND is frozen on it: a PRELIMINARY run (D7) reports its intervals and states no verdict.
+- **Added (E2 S4, 2026-10-13): private tasks behind ONE projection.** A task is classified public or private (D10); a private
+  task's id is its label (`p03`), so every tree, artefact and log path carries the label only. `ScoutPublication` is the one
+  door every public writer takes — `tasks.json`, the report and its JSON and text, `cells.jsonl`, the RESULTS skeleton, the
+  hand-check Markdown, the export walk's rows (`ScoutRowPublication`, projected copies), console and log lines, the refusals
+  of trees and mirrors (the detail withheld to a local file), and `Program.cs`'s exception path for a scouts verb. What a
+  private task publishes instead is an HMAC commitment (`ScoutCommitment`, `scout-commit-v1`: length-prefixed fields under a
+  campaign key composed from the gate's `FileHashKey`/`FileHashKeyFile`, created once by `bench scouts key init` outside every
+  checkout, root and grant, never regenerated). The deny-list scan of staged blobs (`bench scouts hygiene`, the opt-in
+  `.githooks/`) is the second line, behind the projection. A second migration (`ScoutTaskPrivacy`) carries the classification.
 - **The read side so far is the CLI.** One pure `ScoutReport` answers `bench scouts report [--json]` (byte-deterministic);
   the read API and the console's Scouts tab answer the same object in E3 S8 (D8). The scenario test that drives the whole
   flow is `ScoutsScenarioTests`, catalogued in [module_tests.md](module_tests.md).

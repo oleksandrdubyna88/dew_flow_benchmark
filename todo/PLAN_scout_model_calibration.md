@@ -1,8 +1,16 @@
 # PLAN — Scout subagents: does a Sonnet team find what an Opus team finds, how fast, at what price?
 
-> Status: **E1 built, 2026-10-12 — S1, S2 and S3 (the context end to end offline; nothing paid has run); E2 (pilot and sizing) and E3
-> (the preliminary run, its write-up, the read API and the tab) are open.** What was built, and S3's choices where this plan's words left one,
-> are in [module_scouts.md](../research/module_scouts.md). Scope: a new **Scouts section** of this benchmark — its
+> Status: **E1 built, 2026-10-12 — S1, S2 and S3 (the context end to end offline). E2 S4, S5, S6 and S7 built, 2026-10-13 —
+> private tasks (the classification, the campaign key, the commitments, the one projection, the second migration, the hygiene
+> scan); the confined launch (`--setting-sources ""`, the pinned plugin directory, the pinned settings file as the settings pin)
+> and `bench scouts access-check`, run live once with every target denied for both agents; the money (the pilot kind under its
+> bounds, caps from `schedule.json` only, overshoots settled whole and counted, `bench scouts schedule`); the D10 selection
+> (merge styles, P verified per style, the draw seeded by the campaign string, reserves and the pilot's files). E2 S8's CODE built,
+> 2026-10-13 — a model fallback stops the cell, the prompts state the run's purpose (v2), `bench scouts sizing`, four-digit private
+> labels. E2 S8's live pilot, hand-checks and evidence commits, and E3 (the preliminary run, its write-up, the read API and the tab)
+> are open.** What was built, and S3's to S8's choices where
+> this plan's words left one, are in [module_scouts.md](../research/module_scouts.md).
+> Scope: a new **Scouts section** of this benchmark — its
 > own sibling context `Bench.*.Scouts`, the `bench scouts` verbs, a read API and a **Scouts** tab in the console, as the
 > gate and the probes each have — two options added to the one launcher, and the detailed results in `research/`
 > (`RESULTS_scout_models.md` plus the per-cell records under `research/scout-calibration/`).
@@ -302,21 +310,24 @@ The results are written out **in detail** in `research/`, not summarised:
 | File | Holds |
 |---|---|
 | `research/RESULTS_scout_models.md` | labelled *preliminary* under D7; the reading per workload; recall, wrong claims, team/scout/session time and cost per workload with intervals; observed against predicted; per-task tables (task id, repository, kind, \|G\|, each arm's recall, time, cost); (in a decision run: the Explore replication and arm C against A and B); void and aborted cells with reasons; hand-check outcomes; every pin; what it does not settle |
-| `research/scout-calibration/tasks.json` | each task: id, repository, P, S, kind, statement, G, removals, tree hash |
+| `research/scout-calibration/tasks.json` | each task: id, kind, \|G\|, tree hash, merge style; a PUBLIC task adds repository, P, S, statement, G, removals; a PRIVATE task adds its language and the HMAC-SHA256 commitments of its statement and G under the campaign key — no url, path, statement or raw hash |
 | `research/scout-calibration/prompts.json` | the frozen focus prompts per task and the driver prompt, with hashes |
 | `research/scout-calibration/schedule.json` | the seeded schedule and the seed |
 | `research/scout-calibration/cells.jsonl` | one line per cell: arm, run, pins, read-back result, per-scout model / time / tokens / cost / KEY FILES, recall, assessed claims |
 | `research/scout-calibration/pilot.md` | the pilot: every cell with its outcome, the hand read-back, the access check, the budget-exhausted cell, the A/A, and each instrument correction with the RED fixture behind it |
 | `research/scout-calibration/cutoffs.json` | per resolved model id: the published cut-off, its source URL, the date read — committed before the candidate list |
-| `research/scout-calibration/handcheck.md` | the 20 + 20 hand-checked items and the person's reading of each |
+| `research/scout-calibration/handcheck.md` | the 20 + 20 hand-checked items and the reading of each; a private item by label and commitment |
 | `research/module_scouts.md` | the section as built: the tuple, the verbs, the store, the report |
 
 ### 3.13 Public-repository hygiene
 
-The repository is public. Committed records hold repository-relative paths, metrics and scrubbed scout texts only. The
-scrubber removes drive and home paths, e-mail addresses, and every entry of a deny-list that is read from a local file
-and never committed; a test fails when a committed record still matches, and when any file under the trees' directory
-is tracked.
+The repository is public. A PUBLIC task's committed records hold repository-relative paths, metrics and scrubbed scout
+texts; a PRIVATE task's hold its label, language, sizes, metrics, reason codes and HMAC commitments under a campaign key
+kept outside every checkout — never a url, path, statement, identifier, KEY FILES list or claim, on the deny-list or
+not (D10, E2 S4). The projection is explicit code — one door every writer goes through — and the local deny-list scan
+of staged blobs and file names is the second line, not the first. The scrubber still removes drive and home paths,
+e-mails and deny-list entries from public texts; a test fails when a committed record matches, when a planted private
+string leaves any writer or error path, or when a tree file is tracked.
 
 ### 3.14 Watching the alias after the verdict
 
@@ -380,27 +391,91 @@ Code round: the trust boundary (tree, deny-list, child environment), the ledger'
 the claims and matcher rules, DTO allow-lists, the migration. Cost: nothing beyond the fixture. Risk: a large round — the
 story boundaries are the reviewer's map.
 
-**E2 — Pilot and sizing.** Branch `feat/scouts-pilot`. Goal: the instrument is corrected on live streams, the
-hand-checks pass, and the task set, prompts, schedule and prediction are committed before cell one.
+**E2 — Private tasks, the confined launch, the money, the selection, the pilot.** Branch `feat/scouts-pilot`. Goal:
+nothing private can leave through any writer; the launch drops the user grant and is pinned; every ceiling binds before
+the first paid call; the D10 selection is the product's; the pilot corrects the instrument on live streams; tasks,
+prompts, schedule, caps, walls and prediction are committed before cell one. ONE code commit, one code round over the
+epic; three evidence commits in order (S8). Only S5 and S8 spend. The split was decided on Fable (2026-10-13); the plan
+round's three accepted findings (HMAC commitments, ceilings before the first paid call, P verified per merge style) and
+the risk consultation (an explicit public projection, verified in code: `ScoutReport.cs:114` published a private task's
+`file://` url and the scrubber keeps relative claims by design) are folded in.
 
-- **S4 — The pilot** *(Fable: each correction changes a validity rule on evidence).* `cutoffs.json` first; two pilot
-  tasks, excluded from the later candidate list; every arm once. The access check (canary, sibling path); the read-back
-  by hand on one cell per arm; one budget-exhausted cell settles `aborted:spend` unscored; a randomized A/A; the cost
-  check within 2 %; `CLAIMS` parsed and assessed on real output, silent and unparseable counts seen; one `alias-check`.
-  Every live stream becomes a fixture named by CLI version, and a reader that was wrong goes RED on it first. Record:
-  `research/scout-calibration/pilot.md`. Done when every pilot cell is settled, void or aborted with its reason and the
-  hand read-back agrees.
-- **S5 — Hand-checks, sizing, pre-registration** *(Opus; the sizing simulation is pure code with its own tests, reusing
-  S3's bootstrap).* Matcher ≥ 19/20 and assessor ≥ 18/20 into `handcheck.md`;
-  the per-arm budget cap fixed (§3.4); the sizing simulation at Δ = 0 and −0.03 → a task count ≤ 30, **or STOP with the
-  numbers, and E3 does not start**; candidates, seeded draw, statements written and leak-checked → `tasks.json`,
-  `prompts.json`, `schedule.json`; §3.9 into the RESULTS skeleton. **Pre-registration needs an order a single commit
-  cannot prove**, so E2 lands as separate evidence commits — (1) `cutoffs.json`; (2) the candidate list and the seed;
-  (3) the draw, statements, prompts, schedule, caps and prediction — each sha recorded in RESULTS, with E2's code and
-  fixture changes in its one reviewed commit and one code round over the whole epic.
+- **S4 — Private tasks: the campaign key, the commitments, the public projection** *(Fable: private data; a wrong
+  encoding or an unguarded writer is a disclosure a public repository cannot take back).* `ScoutTaskPrivacy`
+  (Public/Private) is a classified field on `ScoutTask`; a private task's **id is its label** (`p03`), so every tree,
+  artefact and log path carries the label only. `ScoutCampaignKey` composes the gate's `FileHashKey`/`FileHashKeyFile`
+  (32 random bytes, owner-only, redacted `ToString`) at `--campaign-key`/`BENCH_SCOUT_CAMPAIGN_KEY`; refused when its
+  resolved path (junctions followed) lies inside any git checkout, the trees root, the mirror root or a granted
+  directory; created once by `bench scouts key init`; a later verb that needs it refuses a missing key (exit 4), never
+  regenerates; never in argv, child environment or a prompt. `ScoutCommitment` encoding `scout-commit-v1`:
+  length-prefixed version · campaign · label · field (`statement`, `g`, `g-file`, `claim`) · content; statements NFC,
+  LF, trimmed, UTF-8; G as `/`-paths ordinal-sorted and LF-joined, plus one `g-file` commitment per path. **No raw hash
+  beside an HMAC** (a private claim's stored SHA-256 becomes its `claim` HMAC). `ScoutPublication` is the ONE projection
+  every public writer takes — `tasks.json`, `cells.jsonl` and the RESULTS skeleton writers (built here), `ScoutReport`
+  (gains `Privacy`, `Language`; a private task's `Repository` is its label), the text report, the hand-check Markdown
+  (private items by label and commitment; plaintext in a local-only companion for D9), console and log lines, refusal
+  strings from trees and mirrors, and `Program.cs`'s exception path. Private detail lives in `tasks.private.json`
+  (refused inside git) and the local database; `run` re-derives every commitment and refuses a mismatch by label. A
+  SECOND migration adds `Privacy`, `Language` and the two commitments to `scout_tasks` (deviation: E1's one-migration
+  rule cannot hold once E1 is merged); the publication walk empties statement, G, removals, repository, KEY FILES and
+  claim paths for private rows and publishes the stored commitments, so export needs no key. Second line of defence:
+  `bench scouts hygiene --staged` scans full staged blobs and file names against the local deny-list and refuses when
+  it cannot scan; it is run before every commit and push of this work. A `.githooks/` pair is provided and documented
+  but NOT installed automatically — `core.hooksPath` is shared configuration and would change other sessions' commits.
+- **S5 — The launch that drops the grant, pinned** *(Fable: the operator's granted directory is private data, and the
+  boundary is the measurement's validity; spends ≤ $5).* `AgentAskOptions.SettingSources`, `SettingsFile`,
+  `PluginDirectories` — claude only, refused by name elsewhere. The scout launch adds `--setting-sources ""`,
+  `--plugin-dir <the pinned feature-dev cache>` and `--settings <artifact-root>/scouts/pinned-settings.json`, written
+  once from the operator's user settings copying ONLY `effortLevel` and `modelSettings`, refused if it drifts. Measured
+  2026-10-13 on claude 2.1.289 before this story: with empty (or `project,local`) setting sources and `--plugin-dir`, the
+  login and `feature-dev:code-explorer` stay, and Read/Glob inside the user-granted directory are denied; user-level hooks
+  — a future sub-agent model guard included — are not loaded, so no guard switch is needed for scouts. The pinned
+  file's hash is a pin. `alias-check` uses the same launch. `bench scouts access-check` (live): a random canary, for
+  `feature-dev:code-explorer` AND Explore, against a sibling task tree, the granted directory, the mirror root and a
+  junction escaping the tree; denied = protected, no attempt = *inconclusive*, content returned = exit 3. The two
+  2026-10-13 streams become fixtures, scrubbed.
+  **Built and run live 2026-10-13** (what was built, and its deviations — the plugin hash over the ONE pinned version folder skipping
+  claude's `.in_use` markers, the settings pin over the pinned file, the drift rule, the prompts' framing — in
+  `research/module_scouts.md`, *The confined launch*). The live result: **every target denied for both agents**, 12 denied calls each,
+  scouts on `claude-sonnet-5-5`, $0.32; one earlier attempt was REFUSED (the API's "cyber" safeguard on a blind-relay driver, then the
+  session's fallback model declining to launch the agent — $0.57, verdict *inconclusive*, nothing concluded), which is why the prompts now
+  state the check's purpose. **Two findings handed to S8:** the CLI continues a refused session on another model
+  (`system/model_refusal_fallback`, `claude-opus-5-5 → claude-opus-4-8`) with `init.model` unchanged — the cell reader must stop such a
+  cell as a moved pin; and a cell driver shaped as a blind verbatim relay can be refused, costing the cap — the pilot watches for it.
+- **S6 — Money before the first paid call** *(Fable: spend caps and the ledger).* `ScoutRunKind.Pilot`; `ScoutRunLimits`
+  (pure): a pilot refuses by name a cap above $3 per cell, a wall above 20 minutes, a ceiling above $60; reservation =
+  cap × 1.2. A preliminary or decision run takes caps and walls from `schedule.json`, never a flag. **Overshoot**: an
+  attempt whose `total_cost_usd` exceeds its cap settles at the real total (never clipped) and is counted by `status`
+  and `report`. `ScoutArmBudgets.FromPilot`: per arm the largest settled cell × 1.5 and the slowest × 2, into
+  `schedule.json`.
+- **S7 — The D10 selection in `bench scouts tasks`, and P verified** *(Opus: pure rules over git facts).* Candidates
+  gain `private`, `label`, `language`, `mergeStyle` (`pr-squash` · `pr-rebase` · `merge-commit` · `local-squash`) and
+  `baseRefOid` with its source. The order is the one the 2026-10-12 screen used, so the draw is reproduced, not redone:
+  the seed is the string `scouts-preliminary-2026-10-12`; repositories with ≥ 5 admissible candidates are ordered by
+  SHA-256 of UTF-8 `"{seed}|{repository}"`, candidates by SHA-256 of `"{seed}|{key}"` (`repo#number` for a GitHub PR,
+  `repo@fixsha` for a local commit); the first 8 repositories give one main task each (the next candidate is the
+  reserve), the next 2 the pilot; written through S4's projection; `--pilot` and `--per-repository` go. `ScoutParentCheck`
+  over the mirror: `merge-commit` → two parents and P = fix^1; `pr-squash`/`local-squash` → one parent and P = fix^1;
+  `pr-rebase` → P = the recorded `baseRefOid`; a mismatch excludes the candidate by id.
+- **S8 — The pilot, the hand-checks, the sizing, the pre-registration** *(Opus for the code; this session runs it and
+  does the hand-checks, D9; spends the $60 pilot ceiling plus one $1 alias-check and the codex assessor).* Order:
+  evidence commit 1 (`cutoffs.json`, `prices.json`); `access-check` live; the pilot run (`--kind pilot`: 2 pilot tasks ×
+  A1/B1, A2/B2, A3/B3 + a randomized A/A pair + one budget-exhausted cell ≈ 15 cells); the hand read-back of one cell per
+  arm; the cost check within 2 % (Sonnet's cache-read rate — 10 % observed against 5 % documented — is settled here from
+  live cells); `CLAIMS` parsed and assessed; the 20 + 20 hand-checks into `handcheck.md` (private items by label and
+  commitment); `ScoutSizing` (pure, reusing the bootstrap and `Decide()`) at Δ = 0 and −0.03, reported not gated;
+  `FromPilot` → caps and walls; evidence commit 2 (the screened candidate list — private rows as label and commitment —
+  and the seed); evidence commit 3 (the draw, statements, prompts, `schedule.json`, §3.9 into the RESULTS skeleton).
+  Every live stream becomes a fixture named by CLI version, scrubbed; a private task's stream is NEVER committed.
+  Record: `pilot.md`.
+  **Code built 2026-10-13, before the pilot** (in `research/module_scouts.md`): S5's two findings — a `model_refusal_fallback` in the main
+  session or any child stops the cell (`ModelRefusalFallback`, S5's live refused stream as the RED fixture), and the cell prompts state the
+  run's purpose (`scout-prompts-v2`, every pinned property kept); `ScoutSizing` + `bench scouts sizing` (measured while building it: the
+  percentile bootstrap lets 5–15 % false passes through at the boundary for symmetric pilots, so the answer may well be *none*); private
+  labels widened to four digits (about 1 080 admissible private candidates). The live run, the hand-checks and the evidence commits are open.
 
-Code round: the RED fixtures behind each correction, the pre-registered files, the stop-or-go. Cost: about 25 cells — the
-last point where a finding is cheap.
+Code round: the key path refusals and the encoding, the projection's reach (every writer, every error path), the launch
+argv, the limits and the overshoot arithmetic, the P check, the RED fixtures, the evidence order.
 
 **E3 — The preliminary run and its write-up** *(D7).* Branch `feat/scouts-main-run`. Goal: 50 frozen cells run to the
 end and RESULTS reports §1's three questions per team size, against the prediction, as a preliminary reading.
@@ -487,6 +562,30 @@ turns the planted-mismatch case red.
 
 All suites run from the test executable, never `dotnet test`.
 
+**E2**
+
+- *Private tasks (RED first):* ONE synthetic private task with planted statement, path, identifier, claim and url
+  strings NOT on the deny-list drives `tasks`, `run`, `score --handcheck`, `assess`, `status`, `report`,
+  `report --json`, the `cells.jsonl`/RESULTS writers, the public export, the log sink and every error path (malformed
+  candidates, a missing mirror, an injected I/O failure in trees or artefacts, an unhandled exception); no planted string
+  appears anywhere. Key: refused inside git (also through a junction), inside the trees or mirror root, in a granted
+  directory; missing on a later verb → exit 4, nothing created. Encoding: distinct label/field/content give distinct
+  HMACs; a separator inside content does not collide; G order-independent; CRLF and LF statements commit equal. A
+  restart reproduces every commitment; a wrong key fails verification by label. The staged-blob scan refuses a planted
+  deny-list entry and a planted file name, and refuses when it cannot scan.
+- *Launch:* the whole argv; each new option refused by name for codex, agy, gemini; the pinned settings file carries
+  only the two keys and a drifted file is refused; the two `confine-sources` fixtures read as denied; `access-check`
+  on a replayed "content returned" stream exits 3; "no attempt" is inconclusive.
+- *Money:* `ScoutRunLimits` as a table; an overshoot ($4.10 under a $3 cap) settles unclipped, is counted, and the
+  next reservation is refused when it no longer fits; `FromPilot` against a hand-computed table; a preliminary run
+  without `schedule.json` caps is refused.
+- *Selection:* the D10 order and reserves as a golden test reproducing the 2026-10-12 picks from the screened list; a
+  repository with 4 admissible candidates is left out; P verified per merge style on a dated test repository, a
+  mismatch refusing by id.
+- *Pilot:* each correction's live fixture goes RED before the fix; `pilot.md` names fixture and test.
+- *Break-its:* the projection bypassed for `report --json`; the key regenerated on absence; the overshoot clipped to the
+  cap; the P check reading `fix^1` for a rebase merge — each red, then green.
+
 ## 6. What this does not settle
 
 - Scouts that are not file finders: web research, documentation lookup — the rule will say these are extrapolated.
@@ -532,6 +631,15 @@ Named here so they are not lost; each needs its own decision.
 - [ ] Nothing committed carries a private name, a home path or a key, and no tree file is tracked.
 - [ ] `module_scouts.md`, `architecture.md`, `research/README.md` and `todo/README.md` are updated; this plan is
       promoted with its deviations.
+- [ ] E2: the campaign key exists outside every checkout and scout-readable directory; a missing key refuses, never
+      regenerates; every public writer, console line, log and the export carry only label, language, sizes, metrics,
+      HMAC commitments and reason codes for a private task — proved by the planted-strings test.
+- [ ] E2: the launch is `--setting-sources "" --plugin-dir <pinned cache> --settings <pinned effort file>`, recorded as
+      a pin; `access-check` found every target denied for both agents before the pilot.
+- [ ] E2: the pilot ran under cap $3, wall 20 min, ceiling $60; every overshoot is settled at its real total and listed;
+      E3's caps and walls come from the pilot into `schedule.json`.
+- [ ] E2: P was verified per merge style; `tasks.json` names the merge style; no private stream, statement or path is
+      committed.
 - [ ] Open tail, outside this repository: the preliminary reading handed to
       `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there; if it is promising,
       `todo/PLAN_scout_decision_run.md` exists here.

@@ -152,8 +152,13 @@ public sealed record ScoutTree(string Root, string TreeHash, IReadOnlyList<strin
     public IReadOnlyList<string> Removed { get; init; } = [];
 }
 
-/// <summary>What a tree is built from: the task id (its folder), the PUBLIC repository's slug, P, and the files to take out of it.</summary>
-public sealed record ScoutTreeSpec(ScoutTaskId Task, string Repository, CommitSha Parent, IReadOnlyList<string> Remove);
+/// <summary>What a tree is built from: the task id (its folder), the repository (a public slug, or a private task's local url), P, and the
+/// files to take out of it. <see cref="Privacy"/> decides what a refusal or a log line about the build may say (<see cref="ScoutPublication"/>):
+/// for a PRIVATE task, the label and nothing the tree holds.</summary>
+public sealed record ScoutTreeSpec(ScoutTaskId Task, string Repository, CommitSha Parent, IReadOnlyList<string> Remove)
+{
+    public ScoutTaskPrivacy Privacy { get; init; } = ScoutTaskPrivacy.Public;
+}
 
 /// <summary>The phrase a tree refusal carries when the tree exists and no longer hashes to the task's frozen hash — read by the runner as
 /// a STOP (§3.2), not as an environment fault.</summary>
@@ -229,6 +234,9 @@ public interface IScoutStreams
 /// the CLI-version pin), the plugin cache hash and the settings hash. The resolved model ids are read off each cell's own stream.</summary>
 public sealed record ScoutLocalPins(ProductPin Binary, string CliVersion, string PluginCacheHash, string SettingsHash)
 {
+    /// <summary>The plugin directory the hash was taken over — what the launch passes as <c>--plugin-dir</c> (S5).</summary>
+    public string PluginDirectory { get; init; } = string.Empty;
+
     /// <summary>The run's pins as they stand on this machine now — the frozen resolved ids carried over, since they are checked per cell.</summary>
     public Outcome<ScoutPins> Against(ScoutPins frozen) =>
         ScoutPins.Of(CliVersion, PluginCacheHash, frozen.ResolvedOpus, frozen.ResolvedSonnet, SettingsHash);

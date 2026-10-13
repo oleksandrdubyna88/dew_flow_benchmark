@@ -16,8 +16,9 @@ public sealed record ScoutCellVerdict(ScoutSettlement Settlement, IReadOnlyList<
 
 /// <summary>A cell's stream read into a settlement — pure, so every rule below is a table test with no process behind it:
 /// <list type="number">
-/// <item><b>Stops</b> outrank everything: the path audit's (§3.2), and a moved alias — the main session or a child answered with a
-/// resolved id other than the one frozen on the run (§3.4, <see cref="ScoutPinDrift"/>).</item>
+/// <item><b>Stops</b> outrank everything: the path audit's (§3.2), then a moved pin (§3.4, <see cref="ScoutPinDrift"/>) — a safeguard
+/// fallback in the main session or any child (<see cref="ScoutReason.ModelRefusalFallback"/>, E2 S8), else a main session or child that
+/// answered with a resolved id other than the one frozen on the run (<see cref="ScoutReason.PinMoved"/>).</item>
 /// <item><b>aborted:spend</b> next (§3.10): a quota marker on stderr or in the result, the CLI's own budget cap reached, or a subagent
 /// refused for budget — never scored.</item>
 /// <item><b>The cost check</b> (§3.6): computed main + scouts + internal cost against <c>total_cost_usd</c> within 2 %; a larger gap — or a
@@ -43,13 +44,23 @@ public static class ScoutCellReading
     }
 
     private static (ScoutCellOutcome, ScoutReason) Decide(SubagentTranscript t, ReadBackVerdict readBack, CostCheck cost, bool aborted, ScoutPins pins) =>
-        (readBack.Stops.Count > 0, ScoutPinDrift.Moved(t, pins), aborted, cost is CostCheck.Disagrees) switch
+        (readBack.Stops.Count > 0, Drift(t, pins), aborted, cost is CostCheck.Disagrees) switch
         {
             (true, _, _, _) => (ScoutCellOutcome.Stopped, readBack.Stops[0]),
-            (_, true, _, _) => (ScoutCellOutcome.Stopped, ScoutReason.PinMoved),
+            (_, var moved and not ScoutReason.None, _, _) => (ScoutCellOutcome.Stopped, moved),
             (_, _, true, _) => (ScoutCellOutcome.Aborted, ScoutReason.SpendLimit),
             (_, _, _, true) => (ScoutCellOutcome.Stopped, ScoutReason.CostMismatch),
             _ => (readBack.Outcome, readBack.Reason),
+        };
+
+    /// <summary>A moved pin, and which: a safeguard fallback names its own event (S8) — it is the more specific word, and a fallback model
+    /// often answers under a pinned-looking init, so it is checked first — else a moved alias.</summary>
+    private static ScoutReason Drift(SubagentTranscript t, ScoutPins pins) =>
+        (ScoutPinDrift.FellBack(t), ScoutPinDrift.Moved(t, pins)) switch
+        {
+            (true, _) => ScoutReason.ModelRefusalFallback,
+            (_, true) => ScoutReason.PinMoved,
+            _ => ScoutReason.None,
         };
 
     /// <summary>The cost check; a stream with an envelope whose tokens cannot be attributed or priced DISAGREES — the price table or the
@@ -198,12 +209,19 @@ public sealed record ScoutCallReport(int Ordinal, SubagentCall Call, string Text
 
 /// <summary>A moved alias, read off a cell's own stream (§3.4: a change of any pin mid-run stops the run). The resolved ids cannot be read
 /// before a claim without a paid call, so they are checked on every cell AFTER it ran: the main session's <c>init.model</c> must be the run's
-/// resolved Opus id, and each Agent result's <c>resolvedModel</c> the run's resolved id for the alias that call named.</summary>
+/// resolved Opus id, and each Agent result's <c>resolvedModel</c> the run's resolved id for the alias that call named. Since E2 S8 a
+/// <c>model_refusal_fallback</c> event anywhere in the stream is a moved pin of its own (<see cref="FellBack"/>): the CLI keeps the session
+/// going on another model and <c>init.model</c> still names the original.</summary>
 public static class ScoutPinDrift
 {
     public static bool Moved(SubagentTranscript transcript, ScoutPins pins) =>
         transcript.MainModel.Length > 0 && !string.Equals(transcript.MainModel, pins.ResolvedOpus, StringComparison.Ordinal)
         || transcript.Agents.Any(call => ChildMoved(call, pins));
+
+    /// <summary>E2 S8: the main session or any child continued on another model after a safeguard refusal (a <c>model_refusal_fallback</c>
+    /// event). <c>init.model</c> and a child's <c>resolvedModel</c> can still name the pinned ids, so this is read on its own — the cell was not
+    /// measured on the models the run froze, whichever side fell back.</summary>
+    public static bool FellBack(SubagentTranscript transcript) => transcript.Fallbacks.Count > 0;
 
     private static bool ChildMoved(SubagentCall call, ScoutPins pins) =>
         call.Result.ResolvedModel.Length > 0

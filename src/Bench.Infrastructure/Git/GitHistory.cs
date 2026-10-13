@@ -44,6 +44,22 @@ public static class GitCommand
             _ => Outcome<string>.Failure($"git {arguments[0]} {attempt.Describe}"),
         };
     }
+
+    /// <summary>A yes/no question — <c>merge-base --is-ancestor A B</c>, <c>diff --quiet</c> — whose exit 1 is git's ANSWER, not a failure
+    /// (S7: the scouts' parent check asks whether a rebase-merged PR's base is an ancestor of its fix). Any other exit is still a refusal.</summary>
+    public static async Task<Outcome<bool>> AskAsync(
+        string workingDirectory, TimeSpan timeout, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var attempt = await ProcessRunner.RunAsync("git", arguments, workingDirectory, timeout, cancellationToken);
+
+        return attempt switch
+        {
+            ProcessAttempt.Completed { Result.ExitCode: 0 } => Outcome<bool>.Success(true),
+            ProcessAttempt.Completed { Result.ExitCode: 1 } => Outcome<bool>.Success(false),
+            ProcessAttempt.Completed c => Outcome<bool>.Failure($"git {arguments[0]} exited {c.Result.ExitCode}: {c.Result.Output}"),
+            _ => Outcome<bool>.Failure($"git {arguments[0]} {attempt.Describe}"),
+        };
+    }
 }
 
 /// <summary>The target's change history, rendered for an author's brief.

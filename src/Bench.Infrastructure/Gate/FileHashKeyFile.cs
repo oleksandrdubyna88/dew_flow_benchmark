@@ -24,9 +24,13 @@ public static class FileHashKeyFile
 
     public const int KeyBytes = 32;
 
-    public static FileHashKeyRead Read(string root)
+    public static FileHashKeyRead Read(string root) => ReadFile(Path.Combine(root, FileName));
+
+    /// <summary>The key file at <paramref name="path"/> — the gate's under the artefact root, or the scouts' campaign key wherever the operator
+    /// placed it; one reader, one permission check.</summary>
+    public static FileHashKeyRead ReadFile(string path)
     {
-        var path = Path.Combine(root, FileName);
+        var name = Path.GetFileName(path);
 
         if (!File.Exists(path))
         {
@@ -36,7 +40,7 @@ public static class FileHashKeyFile
         if (!IsOwnerOnly(path))
         {
             return new FileHashKeyRead.Unusable(
-                $"{FileName} is readable by someone other than its owner — a key another user can read lets them confirm private paths "
+                $"{name} is readable by someone other than its owner — a key another user can read lets them confirm private paths "
                 + "from the published hashes; restore owner-only access (0600, or an access list naming only you) and run again");
         }
 
@@ -44,17 +48,19 @@ public static class FileHashKeyFile
         {
             return FileHashKey.Of(File.ReadAllBytes(path)).Match<FileHashKeyRead>(
                 key => new FileHashKeyRead.Present(key),
-                reason => new FileHashKeyRead.Unusable($"{FileName}: {reason}"));
+                reason => new FileHashKeyRead.Unusable($"{name}: {reason}"));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new FileHashKeyRead.Unusable($"{FileName} could not be read — {ex.GetType().Name}");
+            return new FileHashKeyRead.Unusable($"{name} could not be read — {ex.GetType().Name}");
         }
     }
 
-    public static Outcome<FileHashKey> Create(string root)
+    public static Outcome<FileHashKey> Create(string root) => CreateFile(Path.Combine(root, FileName));
+
+    /// <summary>A key created at <paramref name="path"/> exactly once — <see cref="FileMode.CreateNew"/>, owner-only at creation.</summary>
+    public static Outcome<FileHashKey> CreateFile(string path)
     {
-        var path = Path.Combine(root, FileName);
         var bytes = RandomNumberGenerator.GetBytes(KeyBytes);
 
         try
@@ -69,7 +75,7 @@ public static class FileHashKeyFile
         }
         catch (IOException) when (File.Exists(path))
         {
-            return Outcome<FileHashKey>.Failure($"{FileName} already exists — a key is created once and never replaced");
+            return Outcome<FileHashKey>.Failure($"{Path.GetFileName(path)} already exists — a key is created once and never replaced");
         }
         finally
         {

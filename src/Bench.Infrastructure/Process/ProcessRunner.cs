@@ -113,6 +113,60 @@ public static class ProcessRunner
         Action<string>? stdoutLine,
         CancellationToken cancellationToken)
     {
+        var start = StartInfo(executable, arguments, workingDirectory, input, environment);
+
+        if (stdoutLine is not null)
+        {
+            Utf8(start);
+        }
+
+        using var process = new System.Diagnostics.Process { StartInfo = start };
+
+        if (!TryStart(process))
+        {
+            return new ProcessAttempt.NotFound(executable);
+        }
+
+        if (input.Length > 0)
+        {
+            await WriteAsync(process, input, cancellationToken);
+        }
+
+        return await AwaitAsync(process, timeout, stdoutLine, cancellationToken);
+    }
+
+    /// <summary>The same launch with stdout handed to <paramref name="readStdout"/> as a raw byte STREAM, and stdin written WHILE it is read
+    /// (<c>git cat-file --batch</c>, the hygiene scan — E2 code round). Two things the other launches cannot do: a blob is a binary payload a
+    /// text decode would change; and a child that answers each input line with a payload fills its stdout pipe before a long input is fully
+    /// written, so write-then-read would leave both sides waiting on a full pipe. The reader owns the stream to its end — the token it is handed
+    /// is never cancelled, so a child killed at the wall still reads as end-of-stream, as the line pump does; a reader that throws kills the
+    /// child as a line sink does, and its exception is what the caller sees. The attempt's <c>StandardOutput</c> is empty — the bytes went to
+    /// the reader — and <c>Output</c> is stderr alone.</summary>
+    public static async Task<ProcessAttempt> StreamAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        string input,
+        Func<Stream, CancellationToken, Task> readStdout,
+        CancellationToken cancellationToken)
+    {
+        using var process = new System.Diagnostics.Process { StartInfo = StartInfo(executable, arguments, workingDirectory, input, environment: null) };
+
+        if (!TryStart(process))
+        {
+            return new ProcessAttempt.NotFound(executable);
+        }
+
+        var writing = input.Length > 0 ? WriteAsync(process, input, cancellationToken) : Task.CompletedTask;
+        var attempt = await AwaitAsync(process, timeout, budget => ReadAsync(process.StandardOutput.BaseStream, readStdout, budget), cancellationToken);
+        await writing;
+
+        return attempt;
+    }
+
+    private static ProcessStartInfo StartInfo(string executable, IReadOnlyList<string> arguments, string workingDirectory, string input, IReadOnlyDictionary<string, string>? environment)
+    {
         var start = new ProcessStartInfo
         {
             FileName = executable,
@@ -132,31 +186,22 @@ public static class ProcessRunner
         }
 
         Replace(start, environment);
+        return start;
+    }
 
-        if (stdoutLine is not null)
-        {
-            Utf8(start);
-        }
-
-        using var process = new System.Diagnostics.Process { StartInfo = start };
-
+    /// <summary>Whether the child started. False when the executable is not installed — an environment answer the caller renders as an exit
+    /// code, not an exception that unwinds a run.</summary>
+    private static bool TryStart(System.Diagnostics.Process process)
+    {
         try
         {
             process.Start();
+            return true;
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            // Expected: the executable is not installed. An environment answer the caller renders as an
-            // exit code, not an exception that unwinds a run.
-            return new ProcessAttempt.NotFound(executable);
+            return false;
         }
-
-        if (input.Length > 0)
-        {
-            await WriteAsync(process, input, cancellationToken);
-        }
-
-        return await AwaitAsync(process, timeout, stdoutLine, cancellationToken);
     }
 
     /// <summary>Writes the input and CLOSES the pipe.
@@ -180,19 +225,26 @@ public static class ProcessRunner
         }
     }
 
+    private static Task<ProcessAttempt> AwaitAsync(
+        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, CancellationToken cancellationToken) =>
+        AwaitAsync(
+            process, timeout,
+            // None, deliberately, and this is the reason rather than an omission: on a timeout the child is
+            // killed and its output is still MERGED into the report below. A cancelled read would throw
+            // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
+            // unavailable at the only moment it matters. The reads end on their own when the pipes close.
+            budget => stdoutLine is null ? process.StandardOutput.ReadToEndAsync(CancellationToken.None) : PumpAsync(process.StandardOutput, stdoutLine, budget),
+            cancellationToken);
+
+    /// <summary>The wait, the wall and the tree kill, over whichever stdout reader the launch chose: buffered text, a line pump, or a byte
+    /// reader (<see cref="StreamAsync"/>) — one copy of the part that must never differ between them.</summary>
     private static async Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, CancellationToken cancellationToken)
+        System.Diagnostics.Process process, TimeSpan timeout, Func<CancellationTokenSource, Task<string>> readStdout, CancellationToken cancellationToken)
     {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeout);
 
-        // None, deliberately, and this is the reason rather than an omission: on a timeout the child is
-        // killed and its output is still MERGED into the report below. A cancelled read would throw
-        // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
-        // unavailable at the only moment it matters. The reads end on their own when the pipes close.
-        var stdout = stdoutLine is null
-            ? process.StandardOutput.ReadToEndAsync(CancellationToken.None)
-            : PumpAsync(process.StandardOutput, stdoutLine, budget);
+        var stdout = readStdout(budget);
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
         try
@@ -265,6 +317,23 @@ public static class ProcessRunner
         }
 
         return text.ToString();
+    }
+
+    /// <summary>Stdout handed to a byte reader whole, under a token that is never cancelled (the pipe's close is its end, as for the line pump);
+    /// a reader that throws cancels the wait's budget — which kills the child's tree in <see cref="AwaitAsync"/> — and its exception travels
+    /// out of the read. Nothing of stdout is kept here: the reader had it.</summary>
+    private static async Task<string> ReadAsync(Stream stdout, Func<Stream, CancellationToken, Task> reader, CancellationTokenSource budget)
+    {
+        try
+        {
+            await reader(stdout, CancellationToken.None);
+            return string.Empty;
+        }
+        catch (Exception)
+        {
+            await budget.CancelAsync();
+            throw;
+        }
     }
 
     /// <summary>The environment is REPLACED, not merged, when one is given: whatever the caller did not put in the map is not

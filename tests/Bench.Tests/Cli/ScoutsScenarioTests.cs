@@ -54,7 +54,8 @@ public sealed class ScoutsScenarioTests(PostgresFixture postgres)
     //
     //   W1    Δrecall: t01 only (t02's B1 is void) = 2/3 − 1/3 = +0.333333, 1 task, 1 repository → not estimable
     //         Δwrong:  t01 = 7.5 − 5 = +2.5
-    //   The run is PRELIMINARY (the default kind): verdict "preliminary", W1 "preliminary" with reason one-repository; W2, W3 missing.
+    //   The run is PRELIMINARY (the default kind — S6: its caps and walls come from schedule.json, never a flag): verdict "preliminary",
+    //   W1 "preliminary" with reason one-repository; W2, W3 missing.
     //   Claims: A1 2 cells × 2 + B1 1 cell × 4 = 8 assessed (the void cell's are never put to the assessor).
     // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ public sealed class ScoutsScenarioTests(PostgresFixture postgres)
         using var codex = new FakeCli(new JsonObject { ["assessVerdicts"] = new JsonObject { ["README.md"] = "wrong", ["src/Beta.cs"] = "wrong" } });
 
         // 1. run — the harness dies once the first cell's result reached disk (a crash in flight, its owner then provably gone).
-        var run = await ScoutsCampaignTests.CrashedRunAsync(setup, ScoutCheckpoint.AfterResultLine, W1);
+        var run = await ScoutsCampaignTests.CrashedRunAsync(setup, ScoutCheckpoint.AfterResultLine, W1, "--kind", "preliminary");
         var interrupted = await setup.RunAsync(setup.Services(), "status", "--run", run.ToString());
         interrupted.Output.Should().Contain("1 claimed", "the crashed cell is still held by its dead owner");
 

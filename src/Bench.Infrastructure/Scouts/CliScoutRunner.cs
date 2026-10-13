@@ -15,7 +15,8 @@ namespace Bench.Infrastructure.Scouts;
 /// <param name="Executable">The claude CLI resolved on this machine.</param>
 /// <param name="Prices">The vendor price table read on the run date — what the cost check prices the stream's tokens with (§3.6).</param>
 /// <param name="ParentEnvironment">The harness's own environment — what <see cref="ProbeChildEnvironment"/> builds the CLI's minimal one FROM.</param>
-public sealed record CliScoutSettings(string Executable, PriceTable Prices, IReadOnlyDictionary<string, string> ParentEnvironment)
+/// <param name="Pins">Where the pinned plugin directory and the pinned settings file are (S5) — the launch names both.</param>
+public sealed record CliScoutSettings(string Executable, PriceTable Prices, IReadOnlyDictionary<string, string> ParentEnvironment, ScoutPinSources Pins)
 {
     /// <summary>Variables added to the child's allow-listed environment — TESTS ONLY (the fake CLI's own home, <c>FAKE_CLI_HOME</c>, so two
     /// setups that both launch <c>--model opus</c> never share one); production composes none, and its environment is exactly the probes'.</summary>
@@ -67,23 +68,42 @@ public sealed class CliScoutRunner(
         };
     }
 
-    /// <summary>Everything decided before anything is marked: the arm's budget, the tree, the MCP config, the prompts, an argv the CLI has
-    /// flags for, an executable that is there.</summary>
+    /// <summary>Everything decided before anything is marked: the arm's budget, the tree, the three launch files (the MCP config, the pinned
+    /// plugin directory, the pinned settings file), the prompts, an argv the CLI has flags for, an executable that is there.</summary>
     private async Task<Outcome<Launch>> PrepareAsync(ScoutRun run, ScoutTask task, ScoutCell claimed, CancellationToken cancellationToken)
     {
         var arm = ScoutArms.Of(claimed.Arm);
         var budget = run.BudgetOf(claimed.Arm);
         var tree = budget is Outcome<ScoutArmBudget>.Ok ? await trees.PrepareAsync(task, cancellationToken) : Outcome<ScoutTree>.Failure(string.Empty);
-        var mcp = artifacts.EmptyMcpConfig();
+        var files = LaunchFiles();
 
-        return (budget, tree, mcp, File.Exists(settings.Executable)) switch
+        return (budget, tree, files, File.Exists(settings.Executable)) switch
         {
             (Outcome<ScoutArmBudget>.Fail fail, _, _, _) => Outcome<Launch>.Failure(fail.Reason),
             (_, Outcome<ScoutTree>.Fail fail, _, _) => Outcome<Launch>.Failure(fail.Reason),
-            (_, _, Outcome<string>.Fail fail, _) => Outcome<Launch>.Failure(fail.Reason),
+            (_, _, Outcome<ScoutLaunchFiles>.Fail fail, _) => Outcome<Launch>.Failure(fail.Reason),
             (_, _, _, false) => Outcome<Launch>.Failure($"the claude executable {settings.Executable} is not there"),
-            (Outcome<ScoutArmBudget>.Ok b, Outcome<ScoutTree>.Ok t, Outcome<string>.Ok m, _) => Argv(new Launch(arm, b.Value, t.Value, ScoutPrompts.ForCell(task, arm), ScoutLaunch.Options(b.Value.CapUsd, m.Value))),
+            (Outcome<ScoutArmBudget>.Ok b, Outcome<ScoutTree>.Ok t, Outcome<ScoutLaunchFiles>.Ok f, _) => Argv(new Launch(arm, b.Value, t.Value, ScoutPrompts.ForCell(task, arm), ScoutLaunch.Options(b.Value.CapUsd, f.Value))),
             _ => Outcome<Launch>.Failure("unreachable"),
+        };
+    }
+
+    /// <summary>The three files the launch names (S5): the empty MCP config (written once), the pinned plugin directory (resolved from the
+    /// cache and the registry) and the pinned settings file (there, and holding only its two keys — the pin reader checked it before the
+    /// claim; this is the launch's own look, since a file can vanish between the two).</summary>
+    private Outcome<ScoutLaunchFiles> LaunchFiles()
+    {
+        var mcp = artifacts.EmptyMcpConfig();
+        var plugin = ScoutPluginDirectory.Resolve(settings.Pins);
+        var pinned = ScoutPinReader.PinnedSettings(artifacts.PinnedSettingsFile);
+
+        return (mcp, plugin, pinned) switch
+        {
+            (Outcome<string>.Fail fail, _, _) => Outcome<ScoutLaunchFiles>.Failure(fail.Reason),
+            (_, Outcome<string>.Fail fail, _) => Outcome<ScoutLaunchFiles>.Failure(fail.Reason),
+            (_, _, Outcome<string>.Fail fail) => Outcome<ScoutLaunchFiles>.Failure(fail.Reason),
+            (Outcome<string>.Ok m, Outcome<string>.Ok p, Outcome<string>.Ok s) => Outcome<ScoutLaunchFiles>.Success(new ScoutLaunchFiles(m.Value, p.Value, s.Value)),
+            _ => Outcome<ScoutLaunchFiles>.Failure("unreachable"),
         };
     }
 

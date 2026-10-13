@@ -23,6 +23,9 @@ internal sealed class ScoutsCliSetup : IAsyncDisposable
 {
     public static readonly string[] GroundTruth = ["src/Alpha.cs", "src/Beta.cs", "src/Gamma.cs"];
 
+    /// <summary>The campaign string the setup's <c>tasks.json</c> is written under — the draw's seed (S7).</summary>
+    public const string Campaign = "scouts-test-campaign-2026";
+
     private ScoutsCliSetup(string connection, TempRoot root, DatedGitRepo repo)
     {
         Connection = connection;
@@ -36,7 +39,9 @@ internal sealed class ScoutsCliSetup : IAsyncDisposable
         PricesFile = Path.Combine(root.Sibling("files"), "prices.json");
         Fake = new ScoutFake(root.Sibling("fake"));
 
-        Directory.CreateDirectory(PluginCache);
+        // A plugin folder of its own (its manifest makes it the pinned plugin directory, S5), no registry needed.
+        Directory.CreateDirectory(Path.Combine(PluginCache, ".claude-plugin"));
+        File.WriteAllText(Path.Combine(PluginCache, ".claude-plugin", "plugin.json"), "{\"name\":\"feature-dev\"}\n");
         File.WriteAllText(Path.Combine(PluginCache, "code-explorer.md"), "# code explorer, pinned\n");
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!);
         File.WriteAllText(SettingsFile, "{\"effortLevel\":\"high\"}\n");
@@ -63,6 +68,9 @@ internal sealed class ScoutsCliSetup : IAsyncDisposable
     public string TasksFile { get; }
 
     public string PricesFile { get; }
+
+    /// <summary>Where <c>run</c> pins the user settings' effort (S5) — under the artefact root.</summary>
+    public string PinnedSettingsFile => Path.Combine(ArtifactRoot, ScoutArtifacts.Folder, ScoutPinnedSettings.FileName);
 
     public ScoutFake Fake { get; }
 
@@ -108,7 +116,7 @@ internal sealed class ScoutsCliSetup : IAsyncDisposable
         }
 
         Tasks = [.. frozen.Select(f => f.Task)];
-        await File.WriteAllTextAsync(TasksFile, ScoutFiles.WriteTasks(frozen, 1, "cutoffs.json"));
+        await File.WriteAllTextAsync(TasksFile, ScoutFiles.WriteTasks(frozen, Campaign, "cutoffs.json"));
     }
 
     public ScoutTrees TreeBuilder() =>
@@ -160,13 +168,33 @@ internal sealed class ScoutsCliSetup : IAsyncDisposable
         return [.. all];
     }
 
-    /// <summary><c>scouts run</c> over the frozen tasks with the given arms, ceiling and cap.</summary>
-    public string[] RunArgs(IReadOnlyList<ScoutArmId> arms, decimal ceilingUsd = 50m, decimal capUsd = 1m, params string[] extra) =>
-    [
-        "run", "--tasks-file", TasksFile, "--opus-id", ScoutStreams.Opus, "--sonnet-id", ScoutStreams.Sonnet,
-        "--ceiling-usd", ceilingUsd.ToString(CultureInfo.InvariantCulture), "--cap-usd", capUsd.ToString(CultureInfo.InvariantCulture),
-        "--arms", string.Join(',', arms.Select(ScoutArms.Word)), .. extra,
-    ];
+    /// <summary><c>scouts run</c> over the frozen tasks with the given arms, ceiling and cap — a PILOT unless <paramref name="extra"/> names
+    /// another <c>--kind</c> (S6: a pilot takes its caps from flags; a preliminary or decision run takes them from <c>schedule.json</c>, which
+    /// this writes for every arm at <paramref name="capUsd"/> and the default wall, under the setup's campaign).</summary>
+    public string[] RunArgs(IReadOnlyList<ScoutArmId> arms, decimal ceilingUsd = 50m, decimal capUsd = 1m, params string[] extra)
+    {
+        var at = Array.IndexOf(extra, "--kind");
+        var pilot = at < 0 || extra[at + 1] == ScoutRunKinds.Word(ScoutRunKind.Pilot);
+        string[] budgets = pilot
+            ? ["--cap-usd", capUsd.ToString(CultureInfo.InvariantCulture)]
+            : ["--schedule", WriteSchedule(arms, capUsd, ScoutArmBudget.DefaultWallSeconds)];
+
+        return
+        [
+            "run", "--tasks-file", TasksFile, "--opus-id", ScoutStreams.Opus, "--sonnet-id", ScoutStreams.Sonnet,
+            "--ceiling-usd", ceilingUsd.ToString(CultureInfo.InvariantCulture), .. budgets,
+            "--arms", string.Join(',', arms.Select(ScoutArms.Word)), .. pilot && at < 0 ? ["--kind", "pilot"] : Array.Empty<string>(), .. extra,
+        ];
+    }
+
+    public string ScheduleFile => Path.Combine(Path.GetDirectoryName(TasksFile)!, "schedule.json");
+
+    /// <summary>A <c>schedule.json</c> for <paramref name="arms"/>, each at the same cap and wall, under the setup's campaign.</summary>
+    public string WriteSchedule(IReadOnlyList<ScoutArmId> arms, decimal capUsd, int wallSeconds, string? campaign = null)
+    {
+        File.WriteAllText(ScheduleFile, ScoutFiles.WriteSchedule(new ScoutScheduleFile(campaign ?? Campaign, Guid.Empty.ToString(), [.. arms.Select(arm => ScoutArmBudget.Of(arm, capUsd, wallSeconds).Ok())])));
+        return ScheduleFile;
+    }
 
     public static Guid RunIdOf(string output) => Guid.Parse(output.Split("scout run ")[1][..36]);
 

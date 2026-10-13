@@ -26,12 +26,19 @@ public static class ScoutAliasCheck
 {
     public const decimal CapUsd = 1m;
 
+    /// <summary>What the run is, said first — S5 saw a driver shaped as a blind verbatim relay refused by the API's safeguards (E2 S8).</summary>
+    public const string Purpose =
+        "This is a benchmark check. It confirms which model versions answer the \"sonnet\" and \"opus\" aliases when this session launches "
+        + "read-only code-exploring subagents. Nothing is modified: each subagent only lists one directory of this snapshot.";
+
     public const string ScoutPrompt = "List the files in your working directory. Read nothing else. Reply with KEY FILES then CLAIMS, one line each.";
 
     public static string Driver() =>
-        "Launch exactly 2 Agent calls in ONE message, all at once, then reply DONE and nothing else.\n"
+        Purpose + "\n\n"
+        + "Launch exactly 2 Agent calls in ONE message, all at once, then reply DONE and nothing else.\n"
         + $"Both calls use subagent_type \"{ScoutArms.CodeExplorerType}\". The first uses model \"sonnet\", the second model \"opus\".\n"
-        + "Both calls use the prompt between the markers, copied VERBATIM. Read nothing yourself and call no other tool.\n\n"
+        + "Both calls get the prompt between the markers as it is, because the check compares the two answers to the same question. "
+        + "Read nothing yourself and call no other tool.\n\n"
         + "=== PROMPT BEGIN ===\n" + ScoutPrompt + "\n=== PROMPT END ===\n";
 
     public static AliasVerdict Compare(SubagentTranscript transcript, string opusId, string sonnetId)

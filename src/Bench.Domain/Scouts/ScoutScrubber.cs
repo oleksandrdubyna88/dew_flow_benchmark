@@ -30,6 +30,18 @@ public static partial class ScoutScrubber
 
     public const string EmailRule = "carries an e-mail address";
 
+    /// <summary>A blob with a NUL in this many leading bytes is binary — git's own rule of thumb.</summary>
+    public const int BinaryProbeBytes = 8192;
+
+    public static bool IsBinary(ReadOnlySpan<byte> bytes) => bytes[..Math.Min(bytes.Length, BinaryProbeBytes)].Contains((byte)0);
+
+    /// <summary>What a BINARY blob leaves behind (E2 code round): every deny-list entry looked for in its bytes as UTF-8 and as UTF-16LE,
+    /// ASCII letters case-insensitively (<see cref="BinaryScan"/>) — a name inside a .pdb, a zip's directory, a compiled resource or a UTF-16
+    /// text file is as published as one in a text file. Named by index and encoding, never by value. Home paths and e-mails are text rules
+    /// and stay with <see cref="Leftovers"/>.</summary>
+    public static IReadOnlyList<string> BinaryLeftovers(ReadOnlySpan<byte> bytes, ScrubDenyList denyList) =>
+        BinaryScan.FirstIn(bytes, denyList.Entries) is { Found: true } hit ? [$"carries deny-list entry #{hit.Entry} in its bytes ({hit.Encoding})"] : [];
+
     public static string Scrub(string text, ScrubDenyList denyList) =>
         FailureRedaction.Redact(Email().Replace(text, EmailPlaceholder), PrivateNames.Of(denyList.Entries));
 

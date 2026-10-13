@@ -17,7 +17,8 @@ public sealed class ScoutContractsGuardTests
         "ScoutWorkloadDto.Workload", "ScoutWorkloadDto.ArmA", "ScoutWorkloadDto.ArmB", "ScoutWorkloadDto.Outcome", "ScoutWorkloadDto.Reasons",
         "ScoutFigureDto.State",
         "ScoutArmReportDto.Arm", "ScoutArmReportDto.Workload", "ScoutArmReportDto.Model", "ScoutArmReportDto.Agent", "ScoutArmReportDto.WrongGap",
-        "ScoutTaskReportDto.Task", "ScoutTaskReportDto.Repository", "ScoutTaskReportDto.Kind",
+        // S4: a private task's Repository is its LABEL (ScoutPublication); Privacy is a closed word; Language a word like PHP or C#.
+        "ScoutTaskReportDto.Task", "ScoutTaskReportDto.Repository", "ScoutTaskReportDto.Privacy", "ScoutTaskReportDto.Language", "ScoutTaskReportDto.Kind",
         "ScoutTaskArmDto.Arm",
     };
 

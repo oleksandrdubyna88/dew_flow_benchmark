@@ -76,27 +76,28 @@ public static class ScoutDecisions
         var decided = Enum.GetValues<ScoutWorkload>()
             .Select(w => readings.FirstOrDefault(r => r.Workload == w) is { } reading
                 ? Workload(reading, kind)
-                : new ScoutWorkloadDecision(w, kind == ScoutRunKind.Preliminary ? ScoutWorkloadOutcome.Preliminary : ScoutWorkloadOutcome.NotShown, [ScoutDecisionReason.WorkloadMissing]))
+                : new ScoutWorkloadDecision(w, kind != ScoutRunKind.Decision ? ScoutWorkloadOutcome.Preliminary : ScoutWorkloadOutcome.NotShown, [ScoutDecisionReason.WorkloadMissing]))
             .ToList();
 
         return new ScoutDecision(Verdict(decided, kind), decided);
     }
 
+    /// <summary>Only a DECISION run states a verdict; a preliminary run and a pilot (S6) carry their intervals and the word <c>preliminary</c>.</summary>
     private static ScoutVerdict Verdict(IReadOnlyList<ScoutWorkloadDecision> decided, ScoutRunKind kind) =>
         (kind, decided.All(d => d.Outcome == ScoutWorkloadOutcome.Pass)) switch
         {
-            (ScoutRunKind.Preliminary, _) => ScoutVerdict.Preliminary,
+            (not ScoutRunKind.Decision, _) => ScoutVerdict.Preliminary,
             (_, true) => ScoutVerdict.RuleChangeShown,
             _ => ScoutVerdict.NotShown,
         };
 
-    /// <summary>One workload. A preliminary run keeps only the reasons that say a half was not MEASURED — where its intervals sit against the
-    /// margins is for the reader of the intervals, not a reading the run states.</summary>
+    /// <summary>One workload. A preliminary run (or a pilot) keeps only the reasons that say a half was not MEASURED — where its intervals sit
+    /// against the margins is for the reader of the intervals, not a reading the run states.</summary>
     public static ScoutWorkloadDecision Workload(ScoutWorkloadReading reading, ScoutRunKind kind)
     {
         IReadOnlyList<ScoutDecisionReason> reasons = [.. RecallReasons(reading.Recall).Concat(WrongReasons(reading)).Distinct()];
 
-        return kind == ScoutRunKind.Preliminary
+        return kind != ScoutRunKind.Decision
             ? new ScoutWorkloadDecision(reading.Workload, ScoutWorkloadOutcome.Preliminary, [.. reasons.Where(IsMeasurement)])
             : new ScoutWorkloadDecision(reading.Workload, Outcome(reasons), reasons);
     }

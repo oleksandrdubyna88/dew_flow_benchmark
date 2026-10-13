@@ -88,7 +88,7 @@ public sealed class ScoutAssessmentTests
     {
         var blind = ScoutAssessment.Blind([Claim(1, path: "C:/work/tree/src/Alpha.cs"), Claim(2, path: "D:/elsewhere/x.cs")], new Random(3));
 
-        var stored = blind.Select(b => ScoutAssessment.Stored(new ScoutClaimAnswer(b, ScoutClaimVerdict.Right), Guid.Empty, "C:/work/tree", "gpt-test", ScoutStoreFixtures.Noon))
+        var stored = blind.Select(b => ScoutAssessment.Stored(new ScoutClaimAnswer(b, ScoutClaimVerdict.Right), Guid.Empty, "C:/work/tree", "gpt-test", ScoutStoreFixtures.Noon, ScoutClaimDigest.PublicOnly))
             .OrderBy(s => s.Key.Index).ToList();
 
         stored.Select(s => s.Path).Should().Equal("src/Alpha.cs", string.Empty);

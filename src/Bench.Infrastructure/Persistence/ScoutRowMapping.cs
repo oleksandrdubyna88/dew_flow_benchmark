@@ -28,6 +28,7 @@ internal static class ScoutRowMapping
         ArmCapsUsd = [.. run.Arms.Select(a => run.Budgets.Where(b => b.Arm == a).Select(b => b.CapUsd).DefaultIfEmpty(0m).First())],
         ArmWallSeconds = [.. run.Arms.Select(a => run.Budgets.Where(b => b.Arm == a).Select(b => b.WallSeconds).DefaultIfEmpty(0).First())],
         Kind = run.Kind,
+        Campaign = run.Campaign,
         CeilingUsd = run.Ledger.CeilingUsd,
         ReservedUsd = run.Ledger.ReservedUsd,
         SettledUsd = run.Ledger.SettledUsd,
@@ -53,7 +54,7 @@ internal static class ScoutRowMapping
                     [.. row.Arms.Select(Enum.Parse<ScoutArmId>)],
                     [.. tasks.Select(t => ((Outcome<ScoutTaskId>.Ok)t).Value)],
                     new SpendLedger(row.CeilingUsd, row.ReservedUsd, row.SettledUsd, row.UnknownUsd))
-                { Budgets = Budgets(row), Kind = row.Kind }),
+                { Budgets = Budgets(row), Kind = row.Kind, Campaign = row.Campaign }),
                 reason => Outcome<ScoutRun>.Failure($"scout run {row.Id}: {reason}"));
     }
 
@@ -78,15 +79,20 @@ internal static class ScoutRowMapping
         GroundTruth = [.. task.GroundTruth],
         Removals = [.. task.Removals],
         TreeHash = task.TreeHash,
+        Privacy = task.Privacy,
+        Language = task.Language,
+        StatementCommitment = task.Commitments.Statement,
+        GroundTruthCommitment = task.Commitments.GroundTruth,
     };
 
     /// <summary>The task read back through <see cref="ScoutTask.Frozen"/> again — its shape and its leak check against G (the diff's added
-    /// identifiers are not stored, so that half of the check ran once, at freezing).</summary>
+    /// identifiers are not stored, so that half of the check ran once, at freezing) — with its privacy, language and commitments.</summary>
     public static Outcome<ScoutTask> ToDomain(ScoutTaskRow row) =>
         ScoutTaskId.Parse(row.TaskId).Match(
             id => CommitSha.Parse(row.ParentSha).Match(
                 parent => CommitSha.Parse(row.FixSha).Match(
-                    fix => ScoutTask.Frozen(id, row.Repository, parent, fix, row.Kind, row.Statement, row.GroundTruth, [], row.Removals, row.TreeHash),
+                    fix => ScoutTask.Frozen(id, row.Repository, parent, fix, row.Kind, row.Statement, row.GroundTruth, [], row.Removals, row.TreeHash, row.Privacy, row.Language)
+                        .Match(task => Outcome<ScoutTask>.Success(task with { Commitments = new ScoutTaskCommitments(row.StatementCommitment, row.GroundTruthCommitment) }), Outcome<ScoutTask>.Failure),
                     Outcome<ScoutTask>.Failure),
                 Outcome<ScoutTask>.Failure),
             Outcome<ScoutTask>.Failure);

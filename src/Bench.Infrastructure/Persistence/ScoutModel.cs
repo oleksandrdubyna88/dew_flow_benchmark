@@ -47,6 +47,7 @@ internal static class ScoutModel
             task.HasKey(t => t.Id);
             task.HasIndex(t => new { t.RunId, t.TaskId }).IsUnique();
             task.Property(t => t.Kind).HasConversion<string>();
+            task.Property(t => t.Privacy).HasConversion<string>();
         });
 
     private static void Cells(ModelBuilder builder) =>

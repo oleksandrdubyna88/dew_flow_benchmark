@@ -61,7 +61,9 @@ public static class CliArgv
     /// <b>The scouts</b> (scouts plan §3.4, claude 2.1.289): <c>--forward-subagent-text</c> (each child's events under its Agent call's
     /// <c>parent_tool_use_id</c>), <c>--max-budget-usd &lt;x&gt;</c> (invariant culture), <c>--mcp-config &lt;file&gt;</c> beside
     /// <c>--strict-mcp-config</c> (an empty config, as the confinement probe ran) and <c>--no-session-persistence</c> — claude only; codex,
-    /// agy and gemini refuse each BY NAME.
+    /// agy and gemini refuse each BY NAME. E2 S5 (measured 2026-10-13): <c>--setting-sources &lt;list&gt;</c> (an EMPTY argument for none —
+    /// what drops the user settings' directory grant), <c>--settings &lt;file&gt;</c> and <c>--plugin-dir &lt;dir&gt;</c> (repeatable, placed
+    /// last) — claude only, refused by name elsewhere.
     /// </para></summary>
     public static Outcome<IReadOnlyList<string>> For(
         ModelRuntimeKind runtime, string modelId, AgentAskOptions options, IReadOnlyList<string> codexMcpServers)
@@ -121,6 +123,11 @@ public static class CliArgv
         .. options.ForwardSubagentText ? ["--forward-subagent-text"] : Array.Empty<string>(),
         .. options.MaxBudgetUsd > 0m ? ["--max-budget-usd", options.MaxBudgetUsd.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
         .. options.NoSessionPersistence ? ["--no-session-persistence"] : Array.Empty<string>(),
+        // S5 (claude 2.1.289, measured 2026-10-13): `--setting-sources ""` is an EMPTY ARGUMENT — the flag absent loads every source, and the
+        // user settings would hand the scouts their directory grant back. The plugin directories go LAST: `--plugin-dir` is repeatable.
+        .. options.SettingSources.Asked ? ["--setting-sources", options.SettingSources.Argument] : Array.Empty<string>(),
+        .. options.SettingsFile.Length > 0 ? ["--settings", options.SettingsFile] : Array.Empty<string>(),
+        .. options.PluginDirectories.SelectMany(dir => new[] { "--plugin-dir", dir }),
     ];
 
     /// <summary>agy 1.2.14, as coai launches it (<c>src_mcp/runners/Consultation/AntigravityConsultant.cs</c>, measured there 2026-09-12 and
@@ -165,6 +172,9 @@ public static class CliArgv
             (o.MaxBudgetUsd != 0m, "a budget cap", [ModelRuntimeKind.CliClaude]),
             (o.McpConfigFile.Length > 0, "an MCP config file", [ModelRuntimeKind.CliClaude]),
             (o.NoSessionPersistence, "no session persistence", [ModelRuntimeKind.CliClaude]),
+            (o.SettingSources.Asked, "setting sources", [ModelRuntimeKind.CliClaude]),
+            (o.SettingsFile.Length > 0, "a settings file", [ModelRuntimeKind.CliClaude]),
+            (o.PluginDirectories.Count > 0, "plugin directories", [ModelRuntimeKind.CliClaude]),
         };
 
         var unhonoured = asked.Where(a => a.Asked && !a.Honoured.Contains(runtime)).Select(a => a.Name).ToList();

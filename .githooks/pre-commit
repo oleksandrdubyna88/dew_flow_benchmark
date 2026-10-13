@@ -1,0 +1,21 @@
+#!/bin/sh
+# OPT-IN (research/module_scouts.md, "Hygiene"): `git config core.hooksPath .githooks` installs this pair for YOUR clone only.
+# Nothing here is run by a bench verb — core.hooksPath is shared configuration and would change other sessions' commits.
+#
+# Scans every STAGED blob and file name, whole from git, against the local deny-list named by BENCH_SCOUT_DENYLIST
+# (or --deny-list). Refuses the commit on a leftover (exit 1), and refuses to run at all when it cannot scan.
+set -u
+
+bench="${BENCH_EXE:-}"
+if [ -z "$bench" ]; then
+  for candidate in ./hosts/Cli/bin/Release/net10.0/bench ./hosts/Cli/bin/Release/net10.0/bench.exe ./hosts/Cli/bin/Debug/net10.0/bench ./hosts/Cli/bin/Debug/net10.0/bench.exe; do
+    if [ -x "$candidate" ]; then bench="$candidate"; break; fi
+  done
+fi
+
+if [ -z "$bench" ]; then
+  echo "pre-commit: no bench executable — build the solution (dotnet build dew_flow_benchmark.slnx -c Release -m:4) or set BENCH_EXE" >&2
+  exit 1
+fi
+
+exec "$bench" scouts hygiene --staged --repo "$(git rev-parse --show-toplevel)"

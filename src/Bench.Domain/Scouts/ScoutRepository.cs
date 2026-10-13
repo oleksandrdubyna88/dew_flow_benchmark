@@ -22,4 +22,15 @@ public static partial class ScoutRepository
     /// <summary>Why <paramref name="repository"/> is not a repository, naming it and the legal forms; empty when it is one.</summary>
     public static string Refusal(string repository) =>
         IsSlug(repository) || IsUrl(repository) ? string.Empty : $"'{repository}' is not a repository — {Forms}";
+
+    /// <summary>The SHORT repository name the D10 draw hashes (S7): for <c>owner/name</c> the <c>name</c>; for a url its last path segment
+    /// (<c>file:////wsl.localhost/Ubuntu/home/u/git/repo</c> → <c>repo</c>, <c>git@github.com:owner/name.git</c> → <c>name</c>), a trailing
+    /// <c>.git</c> dropped so one repository hashes the same however it was referenced.</summary>
+    public static string ShortName(string repository)
+    {
+        var trimmed = repository.Trim().TrimEnd('/');
+        var last = trimmed[(trimmed.LastIndexOfAny(['/', ':']) + 1)..];
+
+        return last.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? last[..^4] : last;
+    }
 }

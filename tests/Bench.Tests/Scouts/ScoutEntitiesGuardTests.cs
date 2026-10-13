@@ -14,14 +14,18 @@ public sealed class ScoutEntitiesGuardTests
 {
     private static readonly IReadOnlySet<string> Allowed = new HashSet<string>(StringComparer.Ordinal)
     {
-        // scout_runs — the frozen pins (a version, hashes, model ids), the arms as enum NAMES, the task ids as slugs.
+        // scout_runs — the frozen pins (a version, hashes, model ids), the arms as enum NAMES, the task ids as slugs, and (S4) the campaign's
+        // seed string — a published word, the domain the private commitments are bound to.
         "ScoutRunRow.PinCliVersion", "ScoutRunRow.PinPluginCacheHash", "ScoutRunRow.PinResolvedOpus", "ScoutRunRow.PinResolvedSonnet", "ScoutRunRow.PinSettingsHash",
-        "ScoutRunRow.Arms", "ScoutRunRow.TaskIds",
+        "ScoutRunRow.Arms", "ScoutRunRow.TaskIds", "ScoutRunRow.Campaign",
 
-        // scout_tasks — a slug, a PUBLIC repository's owner/name, two shas, G and the removals as repository-relative paths
-        // (RepositoryRelative refuses a rooted, url or climbing one), a tree hash, and the statement (leak-checked, ≤ 3 sentences).
+        // scout_tasks — a slug, a repository (a public slug; a PRIVATE task's local url is LOCAL ONLY — the publication walk replaces it with the
+        // label, ScoutRowPublication), two shas, G and the removals as repository-relative paths (RepositoryRelative refuses a rooted, url or
+        // climbing one; emptied for a private task by the walk), a tree hash, the statement (leak-checked, ≤ 3 sentences; emptied for a private
+        // task), and (S4) a language word and the two HMAC commitments a private task is published as.
         "ScoutTaskRow.TaskId", "ScoutTaskRow.Repository", "ScoutTaskRow.ParentSha", "ScoutTaskRow.FixSha", "ScoutTaskRow.Statement",
         "ScoutTaskRow.GroundTruth", "ScoutTaskRow.Removals", "ScoutTaskRow.TreeHash",
+        "ScoutTaskRow.Language", "ScoutTaskRow.StatementCommitment", "ScoutTaskRow.GroundTruthCommitment",
 
         // scout_cells — a slug, the claim's owner (never published: GatePublication.ClaimOwnerColumns), the CLI pin.
         "ScoutCellRow.TaskId", "ScoutCellRow.Owner", "ScoutCellRow.OwnerHost",

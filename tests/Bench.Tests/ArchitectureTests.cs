@@ -181,6 +181,7 @@ public sealed class ArchitectureTests
             typeof(Domain.Scouts.SpendLedger),
             typeof(Domain.Scouts.ScoutAttemptLifecycle),
             typeof(Domain.Scouts.ScoutScrubber),
+            typeof(Domain.Scouts.BinaryScan),
             // S3: the analysis (§3.6), the clustered bootstrap and its seeded draws, the decision (§3.8), the assessor's rubric and its
             // blinding, the hand-check draw (§3.7).
             typeof(Domain.Scouts.ScoutAnalysis),
@@ -189,6 +190,9 @@ public sealed class ArchitectureTests
             typeof(Domain.Scouts.ScoutDecisions),
             typeof(Domain.Scouts.ScoutAssessment),
             typeof(Domain.Scouts.ScoutHandcheck),
+            // E2 S8: the sizing simulation (§3.8) — the decision repeated over simulated runs.
+            typeof(Domain.Scouts.ScoutSizing),
+            typeof(Domain.Scouts.ScoutSizingReport),
         ];
 
         deciders.Should().OnlyContain(

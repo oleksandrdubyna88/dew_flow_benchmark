@@ -53,7 +53,7 @@ public static class ScoutReport
             run.Seed,
             run.Repeats,
             new ScoutProgressDto(progress.Pending, progress.Claimed, progress.Settled, progress.Abandoned, progress.IsOpen),
-            Ledger(run.Ledger, attempts),
+            Ledger(run, attempts, cells),
             new ScoutBootstrapDto(settings.Seed, settings.Resamples, ScoutBootstrap.LowerPercentile, ScoutBootstrap.UpperPercentile, ScoutDecisions.RecallMargin, ScoutDecisions.WrongMargin),
             [.. decision.Workloads.Select(d => Workload(d, analysis))],
             [.. analysis.Arms.Select(Arm)],
@@ -75,9 +75,11 @@ public static class ScoutReport
             [.. said[cell.Id]]))];
     }
 
-    private static ScoutLedgerDto Ledger(SpendLedger ledger, IReadOnlyList<ScoutAttempt> attempts) =>
-        new(ledger.CeilingUsd, ledger.ReservedUsd, ledger.SettledUsd, ledger.UnknownUsd, ledger.SpentUsd, ledger.FreeUsd,
-            attempts.Count, attempts.Count(a => a.State == ScoutAttemptState.ChargedUnknown));
+    /// <summary>The ledger with its attempts counted beside it — the unknown charges, and (S6) the overshoots: attempts settled above their
+    /// arm's cap, at their real total.</summary>
+    private static ScoutLedgerDto Ledger(ScoutRun run, IReadOnlyList<ScoutAttempt> attempts, IReadOnlyList<ScoutCell> cells) =>
+        new(run.Ledger.CeilingUsd, run.Ledger.ReservedUsd, run.Ledger.SettledUsd, run.Ledger.UnknownUsd, run.Ledger.SpentUsd, run.Ledger.FreeUsd,
+            attempts.Count, attempts.Count(a => a.State == ScoutAttemptState.ChargedUnknown), ScoutOvershoots.Of(attempts, cells, run.Budgets).Count);
 
     private static ScoutWorkloadDto Workload(ScoutWorkloadDecision decision, ScoutAnalysisResult analysis)
     {
@@ -110,8 +112,9 @@ public static class ScoutReport
                 s.Counts.Cells, s.Counts.Scored, s.Counts.Void, s.Counts.Stopped, s.Counts.Aborted, s.Counts.SilentCells, s.Counts.SilentScouts,
                 s.Counts.UnparseableClaims, s.Counts.Wrong, s.Counts.Decided, s.Counts.Unresolved, s.Counts.Unassessed, s.Counts.TeamTimeBelowSlowestScout));
 
+    /// <summary>The task on the wire — through the one projection: a private task's repository is its label (<see cref="ScoutPublication"/>).</summary>
     private static ScoutTaskReportDto Task(ScoutTask task, IReadOnlyList<ScoutTaskArm> taskArms) =>
-        new(task.Id.Value, task.Repository, ProbeReport.Kebab(task.Kind.ToString()), task.GroundTruth.Count,
+        new(task.Id.Value, ScoutPublication.Repository(task), ScoutTaskPrivacies.Word(task.Privacy), task.Language, ProbeReport.Kebab(task.Kind.ToString()), task.GroundTruth.Count,
             [.. taskArms.Where(t => t.Task == task.Id.Value).Select(t => new ScoutTaskArmDto(
                 ScoutArms.Word(t.Arm), t.Cells, t.Scored, Wire(t.Recall),
                 t.Wrong.Measured ? Wire(Domain.Gate.Figure.Of((double)t.Wrong.PerTen)) : Wire(Domain.Gate.Figure.Unknown),

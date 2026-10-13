@@ -141,6 +141,44 @@ public sealed class ScoutArtifacts(string artifactRoot) : IScoutStreams, IScoutA
         return Outcome<string>.Success(path);
     }
 
+    /// <summary>Where the pinned settings file lives — <c>scouts/pinned-settings.json</c> under the artefact root (S5).</summary>
+    public string PinnedSettingsFile => Path.Combine(_root, Folder, ScoutPinnedSettings.FileName);
+
+    /// <summary>The pinned settings file the scout launch points <c>--settings</c> at (S5): written ONCE from the operator's user settings —
+    /// <c>effortLevel</c> and <c>modelSettings</c> only — and never rewritten. Found again, it must still hold only those two keys and still say
+    /// what the user settings say now; otherwise the verb refuses and names what to do, because a run that silently started under another
+    /// effort than the operator's would measure a condition nobody chose. (A run in progress is held to the file's HASH — the settings pin —
+    /// by the pin reader, not to the user settings.)</summary>
+    public Outcome<string> PinnedSettings(IReadOnlyList<string> userSettingsFiles)
+    {
+        var path = PinnedSettingsFile;
+        var user = userSettingsFiles.Where(File.Exists).Select(File.ReadAllText).FirstOrDefault() ?? "{}";
+        var projection = ScoutPinnedSettings.Project(user);
+
+        if (projection is Outcome<string>.Fail unreadable)
+        {
+            return Outcome<string>.Failure($"the user settings could not be projected into the pinned settings file — {unreadable.Reason}");
+        }
+
+        if (!File.Exists(path))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            ArtifactCommit.Stage(path, Encoding.UTF8.GetBytes(((Outcome<string>.Ok)projection).Value));
+            return Outcome<string>.Success(path);
+        }
+
+        return Found(path, File.ReadAllText(path), user);
+    }
+
+    private static Outcome<string> Found(string path, string pinned, string user) =>
+        ScoutPinnedSettings.Verify(pinned) switch
+        {
+            Outcome<string>.Fail fail => Outcome<string>.Failure($"{path}: {fail.Reason} — delete it and run again to pin the user settings afresh"),
+            _ => ScoutPinnedSettings.Drift(pinned, user) is { Length: > 0 } drift
+                ? Outcome<string>.Failure($"{path} no longer matches the user settings it was pinned from — {drift}; delete it to pin again, or restore the settings (a run in progress keeps its pin: resume it before re-pinning)")
+                : Outcome<string>.Success(path),
+        };
+
     /// <summary>The assessor's batch folder (S3): <c>scouts/&lt;run&gt;/assess/&lt;batch&gt;/</c> — fresh, contained, beside the attempts and never
     /// inside a task's tree, so the assessor reading the tree never meets a prompt, a schema or a blinding key.</summary>
     public Task<string> BeginBatchAsync(Guid runId, string batchId, CancellationToken cancellationToken)
