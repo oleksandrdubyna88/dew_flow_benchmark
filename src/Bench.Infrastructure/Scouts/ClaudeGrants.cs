@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bench.Domain;
+using Bench.Domain.Scouts;
 
 namespace Bench.Infrastructure.Scouts;
 
@@ -16,9 +17,12 @@ public static class ClaudeGrants
     /// <summary>The user's own settings file — the one the operator's grants live in.</summary>
     public static string UserSettings => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "settings.json");
 
+    /// <summary>A project's settings files relative to its root, as git names them.</summary>
+    public static IReadOnlyList<string> ProjectSettingsPaths { get; } = [".claude/settings.json", ".claude/settings.local.json"];
+
     /// <summary>A project's settings files, as the CLI reads them from the project root.</summary>
     public static IReadOnlyList<string> ProjectSettings(string projectRoot) =>
-        [Path.Combine(projectRoot, ".claude", "settings.json"), Path.Combine(projectRoot, ".claude", "settings.local.json")];
+        [.. ProjectSettingsPaths.Select(path => Path.Combine(projectRoot, path.Replace('/', Path.DirectorySeparatorChar)))];
 
     /// <summary>Every directory <paramref name="settingsFiles"/> grant, resolved against <paramref name="sessionDirectory"/>; a file that is
     /// absent grants nothing; one that cannot be read is a refusal — a grant nobody could read is a grant nobody checked.</summary>
@@ -119,4 +123,17 @@ public static class ScoutGrantGuard
                 $"the tree's own .claude settings grant {outside}, outside the tree — a scout launched there could read it; the task is excluded",
             _ => string.Empty,
         };
+
+    /// <summary>The admission's version of <see cref="ProjectRefusal"/> (§3.1 as amended 2026-10-13), over the settings texts git read at P
+    /// before any tree exists: <see cref="ScoutCandidates.ProjectSettingsUnreadable"/> when one could not be read or parsed,
+    /// <see cref="ScoutCandidates.ProjectGrantsOutside"/> when one grants a directory outside <paramref name="treeRoot"/> (where the tree
+    /// will be built, so a relative grant resolves as the CLI would resolve it there), otherwise empty. A CODE, never the path.</summary>
+    public static string ProjectCode(IReadOnlyList<Outcome<string>> settingsTexts, string treeRoot)
+    {
+        var read = settingsTexts.Select(text => text.Match(json => ClaudeGrants.Parse(json, treeRoot), Outcome<IReadOnlyList<string>>.Failure)).ToList();
+
+        return read.Any(r => r is Outcome<IReadOnlyList<string>>.Fail) ? ScoutCandidates.ProjectSettingsUnreadable
+            : read.OfType<Outcome<IReadOnlyList<string>>.Ok>().SelectMany(r => r.Value).Any(g => !ClaudeGrants.Within(g, treeRoot)) ? ScoutCandidates.ProjectGrantsOutside
+            : string.Empty;
+    }
 }

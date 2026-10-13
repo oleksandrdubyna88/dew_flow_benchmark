@@ -101,7 +101,11 @@ A task is one past change in a **public** family repository, investigated at its
   the selection — it is not guessed. A candidate whose P lies before the later cut-off is excluded, because a model
   that saw the code in training gains recall that says nothing about scouting. Per repository, a seeded draw picks from the candidates; the seed and the candidate
   list are committed before the draw. Sources: the six public family repositories; the one private family repository
-  is excluded.
+  is excluded. **A P whose own `.claude` settings grant a directory outside the repository** (or cannot be read) is
+  excluded at admission, by a code that never names the path (amended 2026-10-13: the first selection over the D10 pool
+  drew a private task whose P granted such a directory; the guard that refuses it when its tree is built stopped the
+  whole selection over one task. Excluded at admission, the repository's next candidate takes its place by the same
+  seeded order, and the tree guard stays as the backstop).
 - **Three kinds of question**, roughly a third each: *where is X decided*, *how does Y work end to end*, *what must
   change if Z changes*.
 - **Ground truth G** = `git diff --name-only P S` restricted to files that exist at P, minus lockfiles, generated files,
