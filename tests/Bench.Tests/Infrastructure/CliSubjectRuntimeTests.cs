@@ -49,6 +49,64 @@ public sealed class CliSubjectRuntimeTests
     }
 
     [Fact]
+    public void The_subject_launch_switches_the_model_guard_off_and_still_inherits_the_environment()
+    {
+        var environment = CliSubjectRuntime.SubjectEnvironment();
+
+        environment["SUBAGENT_MODEL_GUARD"].Should().Be("off",
+            "a harness that measures models must not be steered by the user-level sub-agent guard hook");
+        environment.Should().ContainKey("PATH", "the replaced environment must still carry everything the parent had");
+    }
+
+    [Fact]
+    public async Task The_real_subject_launch_reaches_the_cli_with_the_model_guard_off()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var root = Path.Combine(Path.GetTempPath(), $"bench-subject-guard-{Guid.NewGuid():N}");
+        var repo = new DatedGitRepo(ct);
+        using var fake = new Bench.Tests.Probes.Driver.FakeCli();
+
+        try
+        {
+            var sha = await repo.InitAsync(("a.txt", "x"), ("seed", "2026-01-01T00:00:00Z"));
+            Directory.CreateDirectory(root);
+
+            // `claude -p --output-format json` prints ONE envelope; the fake replays it verbatim from a file.
+            var envelope = Path.Combine(root, "envelope.json");
+            await File.WriteAllTextAsync(envelope, Envelope, ct);
+            fake.Rewrite(new System.Text.Json.Nodes.JsonObject { ["stdoutFile"] = envelope });
+
+            var runtime = new CliSubjectRuntime(
+                new CliSubjectOptions(
+                    Bench.Tests.Probes.Driver.FakeCli.Executable,
+                    repo.Root,
+                    Bench.Domain.Targets.CommitSha.Parse(sha).Ok(),
+                    Path.Combine(root, "trees"),
+                    new WorkspaceTrust(Path.Combine(root, ".claude.json"), root)),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<CliSubjectRuntime>.Instance);
+            var request = new Bench.Application.ModelRequest(
+                Bench.Domain.Models.ModelEndpoint.Cli(ModelRef.Parse(fake.Model, ModelHosting.Cloud).Ok()),
+                Sampling.Deterministic(7),
+                string.Empty,
+                "say ready",
+                [Budget.Of(BudgetKind.Wall, BudgetScope.Question, 60).ConfirmedBy("test")]);
+
+            var answered = await runtime.AskAsync(request, ct);
+
+            answered.Failed().Should().BeFalse(answered.Failed() ? answered.Reason() : string.Empty);
+            fake.Calls().Should().ContainSingle().Which.SubagentModelGuard.Should().Be("off");
+        }
+        finally
+        {
+            repo.Dispose();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task A_turn_ceiling_is_refused_because_nobody_can_enforce_it()
     {
         var runtime = new CliSubjectRuntime(

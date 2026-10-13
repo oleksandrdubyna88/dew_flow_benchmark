@@ -61,7 +61,8 @@ internal sealed class FakeCli : IDisposable
             [.. (o["argv"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)],
             o["cwd"]?.GetValue<string>() ?? string.Empty,
             o["prompt"]?.GetValue<string>() ?? string.Empty,
-            [.. (o["env"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)]);
+            [.. (o["env"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)],
+            o["subagentModelGuard"]?.GetValue<string>() ?? string.Empty);
     }
 
     public void Dispose()
@@ -78,4 +79,4 @@ internal sealed class FakeCli : IDisposable
 }
 
 /// <param name="EnvironmentNames">The names of the variables the fake saw — what the launcher let through (S2c), never their values.</param>
-internal sealed record FakeCliCall(int Call, int Pid, IReadOnlyList<string> Argv, string Cwd, string Prompt, IReadOnlyList<string> EnvironmentNames);
+internal sealed record FakeCliCall(int Call, int Pid, IReadOnlyList<string> Argv, string Cwd, string Prompt, IReadOnlyList<string> EnvironmentNames, string SubagentModelGuard = "");

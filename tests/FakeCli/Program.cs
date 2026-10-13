@@ -462,6 +462,8 @@ public static class Events
             ["argv"] = new JsonArray([.. args.Select(a => (JsonNode)JsonValue.Create(a))]),
             ["cwd"] = Directory.GetCurrentDirectory(),
             ["prompt"] = prompt,
+            // The one VALUE the fake reports: whether the launch carried the sub-agent model-guard switch (a measured subject must run unguarded).
+            ["subagentModelGuard"] = Environment.GetEnvironmentVariable("SUBAGENT_MODEL_GUARD") ?? string.Empty,
             // The NAMES of the environment the fake was launched under — never the values — so a test can see what the launcher let
             // through (S2c: the probes launch a CLI under a minimal, replaced environment).
             ["env"] = new JsonArray([.. Environment.GetEnvironmentVariables().Keys.Cast<object>().Select(k => (JsonNode)JsonValue.Create(k.ToString() ?? string.Empty)).OrderBy(n => n!.GetValue<string>(), StringComparer.Ordinal)]),
