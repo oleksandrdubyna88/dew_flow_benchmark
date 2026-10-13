@@ -77,6 +77,28 @@ public sealed class ScoutTreesTests : IDisposable
         Directory.Exists(Path.Combine(tree.Root, "vendor", "lib", ".git")).Should().BeFalse("the submodule's content, not its repository");
     }
 
+    /// <summary>Found live 2026-10-14 (D10): a private repository read from the operator's local clone pins a submodule whose
+    /// <c>.gitmodules</c> url is a private GitHub repository this machine cannot reach ("Repository not found"), which stopped the
+    /// selection. The local clone already holds the submodule's objects under <c>.git/modules/&lt;path&gt;</c> — so for a LOCAL source the
+    /// submodule is archived from there, and the url is only the fallback.</summary>
+    [Fact]
+    public async Task A_local_sources_submodule_is_archived_from_its_own_git_modules_when_the_url_cannot_be_reached()
+    {
+        using var module = new DatedGitRepo(Ct);
+        var pinned = await module.InitAsync(("lib.txt", "pinned content\n"), ("m1", "2026-05-01T10:00:00+00:00"));
+        await _repo.InitAsync(("README.md", "# example\n"), ("init", "2026-05-01T10:00:00+00:00"));
+        await _repo.GitAsync("-c", "protocol.file.allow=always", "submodule", "add", "-q", module.Url, "vendor/lib");
+        await _repo.GitAsync("config", "-f", ".gitmodules", "submodule.vendor/lib.url", "https://example.invalid/private/lib.git");
+        await _repo.GitAsync("add", "-A");
+        await _repo.GitAsync("commit", "-q", "-m", "pin the submodule behind an unreachable url");
+        var parent = (await _repo.GitAsync("rev-parse", "HEAD")).Trim();
+
+        var tree = (await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), _repo.Url, CommitSha.Parse(parent).Ok(), []), Ct)).Ok();
+
+        File.ReadAllText(Path.Combine(tree.Root, "vendor", "lib", "lib.txt")).Should().Be("pinned content\n");
+        pinned.Should().NotBeEmpty();
+    }
+
     [Fact]
     public void A_trees_root_inside_a_directory_the_user_settings_grant_is_refused_naming_both_paths()
     {
