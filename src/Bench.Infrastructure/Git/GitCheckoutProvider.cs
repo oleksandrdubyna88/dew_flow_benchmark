@@ -185,31 +185,64 @@ public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<Gi
     private async Task<Outcome<string>> EnsureMirrorAsync(
         MeasurementTarget target, string bare, CancellationToken cancellationToken)
     {
-        if (Directory.Exists(Path.Combine(bare, "objects")))
-        {
-            logger.LogDebug("Refreshing mirror of {Repo}", target.Repo.Value);
+        var mirrored = Directory.Exists(Path.Combine(bare, "objects"))
+            ? await RefreshMirrorAsync(target, bare, cancellationToken)
+            : await CloneMirrorAsync(target, bare, cancellationToken);
 
-            // A fetch failure is not fatal on its own: the commit may already be present, which is the
-            // common case for a re-run and the only case that works offline. The commit check decides.
-            var fetched = await GitAsync(bare, cancellationToken, "fetch", "--quiet", "--prune", "origin");
+        return mirrored is Outcome<string>.Fail
+            ? mirrored
+            : await VerifyCommitAsync(target, bare, cancellationToken);
+    }
 
-            if (fetched is Outcome<string>.Fail fetchFail)
-            {
-                logger.LogWarning("Fetch failed for {Repo}: {Reason}", target.Repo.Value, fetchFail.Reason);
-            }
+    private async Task<Outcome<string>> RefreshMirrorAsync(
+        MeasurementTarget target, string bare, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Refreshing mirror of {Repo}", target.Repo.Value);
 
-            return await VerifyCommitAsync(target, bare, cancellationToken);
-        }
+        // A fetch failure is not fatal on its own: the commit may already be present, which is the
+        // common case for a re-run and the only case that works offline. The commit check decides.
+        await TryFetchAsync(target, bare, ["fetch", "--quiet", "--prune", "origin"], cancellationToken);
+        await FetchSourceRemotesAsync(target, bare, cancellationToken);
 
+        return Outcome<string>.Success(bare);
+    }
+
+    private async Task<Outcome<string>> CloneMirrorAsync(
+        MeasurementTarget target, string bare, CancellationToken cancellationToken)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(bare) ?? options.Root);
         logger.LogInformation("Mirroring {Repo}", target.Repo.Value);
 
         var cloned = await GitAsync(
             options.Root, cancellationToken, "clone", "--bare", "--quiet", target.Repo.Value, bare);
 
-        return cloned is Outcome<string>.Fail cloneFail
-            ? Outcome<string>.Failure($"could not mirror {target.Repo.Value}: {cloneFail.Reason}")
-            : await VerifyCommitAsync(target, bare, cancellationToken);
+        if (cloned is Outcome<string>.Fail cloneFail)
+        {
+            return Outcome<string>.Failure($"could not mirror {target.Repo.Value}: {cloneFail.Reason}");
+        }
+
+        await FetchSourceRemotesAsync(target, bare, cancellationToken);
+        return Outcome<string>.Success(bare);
+    }
+
+    /// <summary>A LOCAL source's remote-tracking refs (see <see cref="SourceRemoteFetches"/>); nothing for a network source.</summary>
+    private async Task FetchSourceRemotesAsync(MeasurementTarget target, string bare, CancellationToken cancellationToken)
+    {
+        foreach (var fetch in SourceRemoteFetches(target.Repo.Value))
+        {
+            await TryFetchAsync(target, bare, fetch, cancellationToken);
+        }
+    }
+
+    private async Task TryFetchAsync(
+        MeasurementTarget target, string bare, string[] arguments, CancellationToken cancellationToken)
+    {
+        var fetched = await GitAsync(bare, cancellationToken, arguments);
+
+        if (fetched is Outcome<string>.Fail fetchFail)
+        {
+            logger.LogWarning("Fetch failed for {Repo}: {Reason}", target.Repo.Value, fetchFail.Reason);
+        }
     }
 
     private async Task<Outcome<string>> VerifyCommitAsync(
@@ -239,6 +272,25 @@ public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<Gi
         logger.LogInformation("Checked out {Repo} at {Commit}", target.Repo.Value, target.Commit.Short);
         return Outcome<string>.Success(worktree);
     }
+
+    /// <summary>Where a LOCAL source's remote-tracking refs land in the mirror: their own namespace, never <c>refs/heads</c>, so the
+    /// mirror's branches stay the source's branches and nothing here can be mistaken for one.</summary>
+    public const string SourceRemotesRefspec = "+refs/remotes/*:refs/source-remotes/*";
+
+    /// <summary>A repository on this machine — a <c>file://</c> url or a plain rooted path — as opposed to https/ssh/<c>git@</c>.</summary>
+    public static bool IsLocalSource(string repository) =>
+        repository.StartsWith("file://", StringComparison.OrdinalIgnoreCase)
+        || (Path.IsPathRooted(repository) && !repository.Contains("://", StringComparison.Ordinal));
+
+    /// <summary>The extra fetches a mirror of <paramref name="repository"/> needs after its clone and on every refresh.
+    /// <para>
+    /// A LOCAL working clone (D10: a private task read from the operator's clone) keeps its default branch's history in
+    /// <c>refs/remotes/origin/*</c> while its local branch is usually behind, and <c>clone --bare</c> / <c>fetch origin</c> bring only
+    /// <c>refs/heads</c> and tags — so a commit the operator's clone does hold was "not in" the mirror. For such a source the
+    /// remote-tracking refs are fetched too. The source is only READ. A network source gets nothing extra: its behaviour is unchanged.
+    /// </para></summary>
+    public static IReadOnlyList<string[]> SourceRemoteFetches(string repository) =>
+        IsLocalSource(repository) ? [["fetch", "--quiet", "--prune", "origin", SourceRemotesRefspec]] : [];
 
     // The runner is GitCommand's, shared with the history reader: one launcher and one refusal shape for every
     // git call this repository makes.

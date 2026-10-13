@@ -782,7 +782,10 @@ command is a second worker rather than a duplicate run.
 
 **It checks the target out first.** A bare mirror per url and a worktree per commit, under a cache root
 this process owns (`--checkout-root`, default under the user's local application data) — never a directory
-anyone works in. A commit that is unpushed, on a fork, or garbage-collected ends the run *there*, by name,
+anyone works in. A LOCAL source (a `file://` url or a plain path, e.g. a private scout task's working clone)
+is mirrored with its remote-tracking refs as well (`+refs/remotes/*:refs/source-remotes/*`, after the clone
+and on every refresh), because a working clone's default-branch history lives there; https/ssh sources are
+fetched as before. A commit that is unpushed, on a fork, or garbage-collected ends the run *there*, by name,
 instead of producing a campaign of results labelled with a tree nobody ever saw. The provider had existed,
 tested, since the first commits with **no caller**; until it was wired in, every run printed that its
 commit was "recorded but unverified" and measured anyway. `--no-checkout` keeps that older behaviour for a
