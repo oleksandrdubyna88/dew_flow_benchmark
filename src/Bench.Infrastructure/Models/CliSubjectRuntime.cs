@@ -64,6 +64,24 @@ public sealed class CliSubjectRuntime(CliSubjectOptions options, ILogger<CliSubj
                 + "context-compaction lie, re-run"),
         });
 
+    /// <summary>The subject launch measures a model, so the shared sub-agent model-guard hook installed in the user's
+    /// ~/.claude must stay silent for it (<c>SUBAGENT_MODEL_GUARD=off</c>). The launcher REPLACES the environment when
+    /// given one, so this is the parent's whole environment plus that single override.</summary>
+    public static IReadOnlyDictionary<string, string> SubjectEnvironment()
+    {
+        var variables = new Dictionary<string, string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            variables[(string)entry.Key] = entry.Value?.ToString() ?? string.Empty;
+        }
+
+        variables["SUBAGENT_MODEL_GUARD"] = "off";
+
+        return variables;
+    }
+
     public async Task<Outcome<ModelAnswer>> AskAsync(ModelRequest request, CancellationToken cancellationToken)
     {
         var wall = Wall(request);
@@ -110,6 +128,7 @@ public sealed class CliSubjectRuntime(CliSubjectOptions options, ILogger<CliSubj
             worktree,
             wall,
             Prompt(request),
+            SubjectEnvironment(),
             cancellationToken);
 
         var read = Read(attempt, clock.Elapsed);

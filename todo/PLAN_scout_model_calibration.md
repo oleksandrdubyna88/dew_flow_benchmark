@@ -8,7 +8,11 @@
 > Related: [module_probes.md](../research/module_probes.md) (the context this one is composed from),
 > [module_gate.md](../research/module_gate.md) (the blinded assessor), [architecture.md](../research/architecture.md).
 > The rule this measurement decides lives in the shared conventions: `dew_flow_conventions · common/subagent-models.md`,
-> and its own plan is `dew_flow_conventions · todo/PLAN_scout_subagents_on_sonnet.md`.
+> and its own plan is `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md`.
+>
+> **Since 2026-10-13 this plan's verdict no longer gates the shared rule:** the operator switched without waiting for it.
+> The calibration, if finished, is a check after the fact; a result worse than the pre-registered margin (3 recall points,
+> +0.5 wrong claims per 10) reopens the decision with the operator.
 
 ## 1. The question, before any solution
 
@@ -114,7 +118,10 @@ newer CLI denies them unless a setting grants the directory. So the boundary is 
 future evidence**, not where the tree is placed:
 
 - **Launch:** the explicit allow-list (`AllowedTools` → `--tools "Task,Read,Glob,Grep"`) and MCP off — never `--restricted`,
-  which removes the agent under test.
+  which removes the agent under test. **Environment requirement:** the scout runner, the alias check and the probe runner
+  build their child environment from an allow-list (`AgentEnvironment.Only`), so `SUBAGENT_MODEL_GUARD=off` must be added
+  to that allow-list explicitly before the user-level guard is installed (after the conventions release cascade), or the
+  guard's model-policy hint would steer the arms.
 - **Grants:** a granted directory is readable from any tree. E2 S4 first tries a launch that keeps the plugin but drops the
   user grant (a pinned `--settings` file and the setting sources narrowed, the plugin supplied by `--plugin-dir` from
   the pinned cache) and proves it with the canary. If no such launch exists, every task whose repository has a checkout
@@ -386,7 +393,7 @@ schedule runs to the end and RESULTS answers §1 per workload against the predic
 - **S7 — The write-up and the hand-over** *(Fable: the conclusion becomes a rule about every scout).*
   `RESULTS_scout_models.md` as §3.12 lists, its `research/README.md` row, `module_scouts.md` with the run, `todo/README.md`,
   the alias check registered as a weekly scheduled task (§3.14), the plan promoted with its deviations, `prune`. The
-  verdict goes to `dew_flow_conventions · todo/PLAN_scout_subagents_on_sonnet.md` as a PR there — the open tail outside
+  verdict goes to `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there — the open tail outside
   this repository.
 
 Code round: no new code expected — every RESULTS number checked against `cells.jsonl` and the prediction's sha; the
@@ -500,4 +507,4 @@ Named here so they are not lost; each needs its own decision.
 - [ ] `module_scouts.md`, `architecture.md`, `research/README.md` and `todo/README.md` are updated; this plan is
       promoted with its deviations.
 - [ ] Open tail, outside this repository: the verdict handed to
-      `dew_flow_conventions · todo/PLAN_scout_subagents_on_sonnet.md` as a PR there.
+      `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there.
