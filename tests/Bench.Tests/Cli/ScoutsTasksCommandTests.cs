@@ -57,19 +57,39 @@ public sealed class ScoutsTasksCommandTests : IDisposable
     }
 
     /// <summary>Review finding (UX): reading each candidate off its mirror is serial and slow on a cold mirror, so every candidate is
-    /// announced as it starts — <c>[i/n] id</c>, in the listed order, before the selection's own lines.</summary>
+    /// announced as it starts — <c>[i/n] id</c>, in the listed order under <c>--read-all</c>, before the selection's own lines.</summary>
     [Fact]
     public async Task Every_candidate_is_announced_with_its_place_in_the_list_as_it_is_read()
     {
         var (parent, fix) = await HistoryAsync();
         var candidates = Candidates((parent, fix, "c-one", 1, Statement), (parent, fix, "c-two", 2, Statement));
 
-        var (_, output, _) = await RunAsync(candidates, Cutoffs("2026-03-31"));
+        var (_, output, _) = await RunAsync(candidates, Cutoffs("2026-03-31"), "--read-all");
 
         var lines = output.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
         lines.Where(l => l.StartsWith("reading ", StringComparison.Ordinal)).Should().Equal("reading        [1/2] c-one …", "reading        [2/2] c-two …");
         lines.FindIndex(l => l.StartsWith("reading ", StringComparison.Ordinal)).Should().BeLessThan(lines.FindIndex(l => l.StartsWith("drawn ", StringComparison.Ordinal)),
             "the progress is printed while the candidates are read, before the draw");
+    }
+
+    /// <summary>Operator, 2026-10-14: the lazy read (the default) stops a repository at its fifth admissible candidate in the draw's order —
+    /// seven listed, five read — and draws exactly the pair <c>--read-all</c> draws.</summary>
+    [Fact]
+    public async Task The_lazy_read_stops_at_the_fifth_admissible_candidate_and_draws_what_reading_all_draws()
+    {
+        var (parent, fix) = await HistoryAsync();
+        var candidates = Candidates([.. new[] { "c-one", "c-two", "c-three", "c-four", "c-five", "c-six", "c-seven" }.Select((id, i) => (parent, fix, id, i + 1, Statement))]);
+
+        var (lazyCode, lazy, lazyError) = await RunAsync(candidates, Cutoffs("2026-03-31"));
+        var lazyEntries = ScoutFiles.Entries(File.ReadAllText(TasksFile)).Ok().Select(e => (e.Id, e.Role)).ToList();
+        var (allCode, all, allError) = await RunAsync(candidates, Cutoffs("2026-03-31"), "--read-all");
+
+        lazyCode.Should().Be(ExitCodes.Pass, lazy + lazyError);
+        allCode.Should().Be(ExitCodes.Pass, all + allError);
+        lazy.Split('\n').Count(l => l.StartsWith("reading ", StringComparison.Ordinal)).Should().Be(5, "the repository is decided at its fifth admissible candidate");
+        lazy.Should().Contain("read           5 of 7 candidate(s) in the draw's order");
+        all.Split('\n').Count(l => l.StartsWith("reading ", StringComparison.Ordinal)).Should().Be(7);
+        lazyEntries.Should().Equal(ScoutFiles.Entries(File.ReadAllText(TasksFile)).Ok().Select(e => (e.Id, e.Role)), "the same main task and reserve either way");
     }
 
     [Fact]

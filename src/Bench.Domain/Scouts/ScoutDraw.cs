@@ -72,10 +72,7 @@ public static class ScoutSelectionDraw
 
     public static ScoutDraw Of(IReadOnlyList<ScoutCandidateFacts> admitted, string seed)
     {
-        var groups = admitted.GroupBy(c => c.Candidate.Repository, StringComparer.Ordinal)
-            .Select(g => new Group(g.Key, ScoutRepository.ShortName(g.Key), [.. g.OrderBy(c => Hash(seed, c.Candidate.Key), StringComparer.Ordinal).ThenBy(c => c.Candidate.Key, StringComparer.Ordinal)]))
-            .OrderBy(g => Hash(seed, g.ShortName), StringComparer.Ordinal).ThenBy(g => g.Repository, StringComparer.Ordinal)
-            .ToList();
+        var groups = Ordered(admitted, f => f.Candidate, seed).Select(g => new Group(g.Repository, ScoutRepository.ShortName(g.Repository), g.Members)).ToList();
         var eligible = groups.Where(g => g.Eligible).ToList();
         var main = eligible.Take(MainRepositories).ToList();
         var pilot = eligible.Skip(MainRepositories).Take(PilotRepositories).ToList();
@@ -88,6 +85,18 @@ public static class ScoutSelectionDraw
                 .. pilot.Select(g => new ScoutDrawnTask(g.Candidates[0], ScoutTaskRole.Pilot)),
             ]);
     }
+
+    /// <summary>The draw's order over the candidate LIST alone — repositories, and inside each its candidates, exactly as <see cref="Of"/>
+    /// orders the admitted ones. Nothing in it needs the mirror, which is what lets <see cref="ScoutLazySelection"/> read in this order and
+    /// stop as soon as the draw is decided.</summary>
+    public static IReadOnlyList<IReadOnlyList<ScoutCandidate>> ReadingOrder(IReadOnlyList<ScoutCandidate> candidates, string seed) =>
+        [.. Ordered(candidates, c => c, seed).Select(g => g.Members)];
+
+    /// <summary>THE order, once: repositories by <c>sha256(seed|short name)</c> then name, candidates by <c>sha256(seed|key)</c> then key.</summary>
+    private static IEnumerable<(string Repository, IReadOnlyList<T> Members)> Ordered<T>(IEnumerable<T> items, Func<T, ScoutCandidate> candidate, string seed) =>
+        items.GroupBy(i => candidate(i).Repository, StringComparer.Ordinal)
+            .Select(g => (g.Key, (IReadOnlyList<T>)[.. g.OrderBy(i => Hash(seed, candidate(i).Key), StringComparer.Ordinal).ThenBy(i => candidate(i).Key, StringComparer.Ordinal)]))
+            .OrderBy(g => Hash(seed, ScoutRepository.ShortName(g.Key)), StringComparer.Ordinal).ThenBy(g => g.Key, StringComparer.Ordinal);
 
     /// <summary>SHA-256 over UTF-8 <c>"{seed}|{name}"</c>, lower-case hex — the order of the 2026-10-12 screen.</summary>
     public static string Hash(string seed, string name) => StableHash.Of($"{seed}|{name}");

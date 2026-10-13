@@ -68,24 +68,14 @@ public static class ScoutsTasksCommand
         var mirrors = new GitCheckoutProvider(CheckoutCacheOptions.Under(roots.Mirrors), NullLogger<GitCheckoutProvider>.Instance);
         var settings = new ScoutTreeSettings(roots.Trees, ScoutsInputs.RepositoryUrlOf(command), TimeSpan.FromMinutes(20));
         var history = new ScoutHistory(mirrors, settings);
-        var facts = new List<ScoutCandidateFacts>();
+        var read = await ReadAsync(command, candidates, later, history, output, cancellationToken);
 
-        foreach (var (candidate, at) in candidates.Select((c, i) => (c, i + 1)))
+        if (read is Outcome<IReadOnlyList<ScoutCandidateFacts>>.Fail unread)
         {
-            output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"reading        [{at}/{candidates.Count}] {candidate.Id} …"));
-
-            switch (await history.FactsAsync(candidate, cancellationToken))
-            {
-                case Outcome<ScoutCandidateFacts>.Ok ok:
-                    facts.Add(ok.Value);
-                    break;
-                case Outcome<ScoutCandidateFacts>.Fail fail:
-                    return GateRunCommand.Refuse(error, ExitCodes.Environment, fail.Reason);
-                default:
-                    break;
-            }
+            return GateRunCommand.Refuse(error, ExitCodes.Environment, unread.Reason);
         }
 
+        var facts = ((Outcome<IReadOnlyList<ScoutCandidateFacts>>.Ok)read).Value;
         var selection = ScoutCandidates.Admit(facts, later);
 
         foreach (var excluded in selection.Excluded)
@@ -105,6 +95,36 @@ public static class ScoutsTasksCommand
 
         var trees = new ScoutTrees(settings, mirrors, NullLogger<ScoutTrees>.Instance);
         return await FreezeAsync(command, draw.Tasks, trees, history, ((Outcome<PrivateInputs>.Ok)privacy).Value, output, error, cancellationToken);
+    }
+
+    /// <summary>The candidates' facts off their mirrors. LAZILY by default (<see cref="ScoutLazySelection"/>, operator 2026-10-14): in the
+    /// draw's order, only as far as the draw needs — the same tasks in the same roles, in minutes rather than an hour. <c>--read-all</c>
+    /// reads every candidate in the listed order, for the full exclusion statistics. Each read is announced as it starts (<c>[i/n] id</c>).</summary>
+    private static async Task<Outcome<IReadOnlyList<ScoutCandidateFacts>>> ReadAsync(
+        CommandLine command, IReadOnlyList<ScoutCandidate> candidates, DateOnly later, ScoutHistory history, TextWriter output, CancellationToken cancellationToken)
+    {
+        var at = 0;
+
+        Task<Outcome<ScoutCandidateFacts>> One(ScoutCandidate candidate)
+        {
+            output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"reading        [{++at}/{candidates.Count}] {candidate.Id} …"));
+            return history.FactsAsync(candidate, cancellationToken);
+        }
+
+        if (command.Has("read-all"))
+        {
+            return await ScoutLazySelection.ReadEveryAsync(candidates, One);
+        }
+
+        var read = await ScoutLazySelection.ReadAsync(candidates, command.Value("campaign"), later, One);
+
+        if (read is Outcome<IReadOnlyList<ScoutCandidateFacts>>.Ok { Value: var facts })
+        {
+            output.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"read           {facts.Count} of {candidates.Count} candidate(s) in the draw's order — enough to decide it (--read-all reads every one, for the full exclusion statistics)"));
+        }
+
+        return read;
     }
 
     /// <summary>The draw as it was made, line by line — a private repository by its label and the mark, never by name.</summary>
