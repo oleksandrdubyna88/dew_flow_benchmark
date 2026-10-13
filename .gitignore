@@ -66,3 +66,7 @@ logs/
 # lockfile are committed; a report you did not just produce proves nothing.
 node_modules/
 .http-artifacts/
+
+# The scouts' history-free trees (research/module_scouts.md): whole repositories at P, each with its own .git — never tracked
+# here, the repository is public (a hygiene test holds it to that).
+scout-trees/

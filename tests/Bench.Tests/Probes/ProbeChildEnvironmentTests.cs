@@ -50,6 +50,7 @@ public sealed class ProbeChildEnvironmentTests
     [InlineData("path", true)]
     [InlineData("ProgramW6432", true)]
     [InlineData("PROCESSOR_LEVEL", true)]
+    [InlineData("TMPDIR", true)]
     [InlineData("BENCH_CLAUDE", false)]
     [InlineData("bench_db", false)]
     [InlineData("COAI_VENDORS", false)]

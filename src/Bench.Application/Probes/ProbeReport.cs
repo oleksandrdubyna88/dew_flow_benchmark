@@ -156,6 +156,6 @@ public static class ProbeReport
             subject.Vendor, subject.Endpoint, subject.Dialect);
 
     /// <summary><c>LaunchRefused</c> → <c>launch-refused</c>: the enum's NAME, spelled as every other word on the wire.</summary>
-    private static string Kebab(string name) =>
+    public static string Kebab(string name) =>
         string.Concat(name.Select((c, i) => char.IsUpper(c) && i > 0 ? "-" + char.ToLowerInvariant(c) : char.ToLowerInvariant(c).ToString()));
 }

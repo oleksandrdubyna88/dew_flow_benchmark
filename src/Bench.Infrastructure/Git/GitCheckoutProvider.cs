@@ -82,6 +82,42 @@ public sealed class GitCheckoutProvider(CheckoutCacheOptions options, ILogger<Gi
         }
     }
 
+    /// <summary>The BARE mirror alone, with the target's commit verified in it — no worktree (the scouts' history-free trees, plan §3.2,
+    /// read <c>git archive P</c> out of it). The same mirror, the same per-repository gate and the same root rule as
+    /// <see cref="EnsureAsync"/>; answers the bare repository's path.</summary>
+    public async Task<Outcome<string>> EnsureMirrorAsync(MeasurementTarget target, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(options.Root);
+
+        var key = StableHash.Of(target.Repo.Value)[..16];
+        var bare = Path.Combine(options.Root, "bare", $"{key}.git");
+
+        if (!IsInsideRoot(bare))
+        {
+            return Outcome<string>.Failure($"refusing to work outside the cache root '{options.Root}'");
+        }
+
+        var gate = Rent(key);
+
+        try
+        {
+            await gate.Semaphore.WaitAsync(cancellationToken);
+
+            try
+            {
+                return await EnsureMirrorAsync(target, bare, cancellationToken);
+            }
+            finally
+            {
+                gate.Semaphore.Release();
+            }
+        }
+        finally
+        {
+            Return(key, gate);
+        }
+    }
+
     /// <summary>Takes a share of this repository's gate, creating it if this caller is the first.
     /// <para>
     /// Counted rather than cached, because the alternative was a dictionary that only ever grew: one

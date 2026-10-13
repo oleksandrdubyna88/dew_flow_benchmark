@@ -288,7 +288,7 @@ CLIs inherited `BENCH_DB` with its password and every `*_KEY` in the operator's 
 - process basics — `PATH`, `PATHEXT`, `ComSpec`, `SystemRoot`, `windir`, `OS`, `NUMBER_OF_PROCESSORS`, `PROCESSOR_*`,
   `ProgramFiles*`, `ProgramW6432`, `ProgramData`;
 - where the login lives — `USERPROFILE`, `HOME`, `HOMEDRIVE`, `HOMEPATH`, `APPDATA`, `LOCALAPPDATA`, `USERNAME`;
-- scratch — `TEMP`, `TMP`.
+- scratch — `TEMP`, `TMP`, and `TMPDIR` (the one Linux and macOS read; added 2026-10-13 after a Linux CI run showed a child scratching under `/tmp`).
 
 Names compare case-insensitively; a `BENCH_*`, a `COAI_*` or a secret-named variable never passes whatever it is called
 (`CoaiEnvironment.Minimal`). Every secret-named and every `BENCH_*` VALUE of the bench's own environment is scrubbed from

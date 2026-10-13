@@ -57,6 +57,19 @@ internal static class ProbeJson
                && found.ValueKind == JsonValueKind.Number && found.TryGetInt64(out value);
     }
 
+    /// <summary>A number as a decimal — money, read without a double's drift (the scouts' <c>total_cost_usd</c>, <c>costUSD</c>).</summary>
+    public static bool Decimal(JsonElement element, string name, out decimal value)
+    {
+        value = 0m;
+        return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var found)
+               && found.ValueKind == JsonValueKind.Number && found.TryGetDecimal(out value);
+    }
+
+    /// <summary>A property of ANY kind, or an undefined element — for a field that is an object on success and a string on error
+    /// (claude's <c>tool_use_result</c>).</summary>
+    public static JsonElement Property(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : default;
+
     /// <summary>The element's own JSON, for a tool input kept as the CLI printed it; empty for an undefined element.</summary>
     public static string Raw(JsonElement element) => element.ValueKind == JsonValueKind.Undefined ? string.Empty : element.GetRawText();
 

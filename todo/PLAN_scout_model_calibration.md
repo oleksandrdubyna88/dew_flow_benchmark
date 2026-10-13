@@ -1,6 +1,8 @@
 # PLAN — Scout subagents: does a Sonnet team find what an Opus team finds, how fast, at what price?
 
-> Status: **plan only, nothing implemented yet, 2026-10-12.** Scope: a new **Scouts section** of this benchmark — its
+> Status: **E1 built, 2026-10-12 — S1, S2 and S3 (the context end to end offline; nothing paid has run); E2 (pilot and sizing) and E3
+> (the preliminary run, its write-up, the read API and the tab) are open.** What was built, and S3's choices where this plan's words left one,
+> are in [module_scouts.md](../research/module_scouts.md). Scope: a new **Scouts section** of this benchmark — its
 > own sibling context `Bench.*.Scouts`, the `bench scouts` verbs, a read API and a **Scouts** tab in the console, as the
 > gate and the probes each have — two options added to the one launcher, and the detailed results in `research/`
 > (`RESULTS_scout_models.md` plus the per-cell records under `research/scout-calibration/`).
@@ -38,6 +40,10 @@ The operator chose to **measure before switching**. This plan answers, for each 
 | D4 | Calibrate first; switch only on the result. |
 | D5 | The accepted loss: the Sonnet team may find at most **3 percentage points** fewer of the right files, and make at most **0.5 more wrong claims per 10 claims**. Each team size passes or fails on its own; the rule changes only if all three pass. |
 | D6 | Time and cost are measured and reported for every team size. They do not gate the decision unless the operator says so before the main run starts. |
+| D7 | **E3 is a preliminary run of 50 cells, not a verdict** (operator, 2026-10-12). Told beforehand that 8 tasks cannot resolve a 3-point margin — the spread of the difference between teams over so few tasks is likely ±10–15 points — the operator chose a preliminary reading over a decision. 50 cells = 8 tasks × the six arms A1/B1, A2/B2, A3/B3 × one run, plus 2 spare for void re-runs; arm C and the Explore replication are dropped. The result is recall, wrong claims, time and cost per team size with their intervals, labelled *preliminary*. The shared rule does **not** change on it; if it is promising, a full decision run under §3.8 becomes its own plan. |
+| D8 | **Numbers first, screens after** (operator, 2026-10-12): the read API and the console's Scouts tab move from E1 S3 to a story after the run (E3 S8). The results are written out in `research/` and printed by `bench scouts report` either way. |
+| D10 | **The task pool extends to the operator's local repositories** (operator, 2026-10-12: "there are good PRs there"). The pool is the public family repositories plus about twenty repositories cloned in the operator's WSL home — four public open-source projects and fifteen private company repositories. Private repositories are measured and **published anonymised**: committed records carry a label and a language (`p03 · PHP`), sizes and metrics, and a SHA-256 of each private statement and ground truth, so the pre-registration stays provable; the plaintext statements, paths, scout texts and claims stay in a local file that is never committed, and the scrubber's deny-list holds every private repository and organisation name. Selection: repositories with at least 5 admissible candidates, ordered by sha256(seed|repository); the first 8 give ONE main task each (more clusters for §3.8's bootstrap), the next 2 the pilot, and each main repository's next candidate is its reserve. A private repository is mirrored from its local clone through a `file://` url — read only — because its GitHub remote is not reachable from this machine. |
+| D9 | **The session does the hand-checks** (operator, 2026-10-12): the 20 + 20 items of §3.7 are read by this session, opening every file, and its reading is recorded item by item in `handcheck.md` so the operator can audit it. |
 
 D5 is a non-inferiority margin, and it is the operator's, not the harness's: a noisy harness must never widen it. The
 pilot sizes the experiment to distinguish it (§3.8); it does not move it.
@@ -91,7 +97,10 @@ A task is one past change in a **public** family repository, investigated at its
 - **Three kinds of question**, roughly a third each: *where is X decided*, *how does Y work end to end*, *what must
   change if Z changes*.
 - **Ground truth G** = `git diff --name-only P S` restricted to files that exist at P, minus lockfiles, generated files,
-  changelogs, version manifests, and the PR's own plan or results document.
+  changelogs, version manifests, **submodule gitlinks** (not a tree file — found 2026-10-12 in a candidate whose G held one),
+  and the PR's own plan or results document. **P is the PR's base, not `S^1`**: for a squash merge they are the same;
+  for a rebase merge `S^1` is a commit inside the PR (6 of the first 13 family picks were rebase-merged), so P is the
+  PR's `baseRefOid`; for a merge commit P is its first parent.
 - **The task statement** is at most three sentences about the problem, written before any run and frozen. An automatic
   leak check refuses a statement that contains a basename or stem from G, or an identifier the diff added.
 - **How many**: at least 12; the final count comes from §3.8's simulation, capped at 30.
@@ -145,7 +154,7 @@ future evidence**, not where the tree is placed:
 | W3 | 3 × opus, F1–F3 | 5 × sonnet, F1–F5 | C: 3 × sonnet, F1–F3 (separates the model effect from the count effect) |
 
 - Every scout is `feature-dev:code-explorer` with `model` named explicitly; the agent type is pinned by the plugin
-  cache hash. An **Explore replication** — W3, arms A and B only, a quarter of the tasks — tells the rule whether its
+  cache hash. An **Explore replication** (decision run only — dropped from the preliminary E3 by D7) — W3, arms A and B only, a quarter of the tasks — tells the rule whether its
   Explore clause is measured or extrapolated.
 - **Focus areas are frozen per task before the run**, distinct, never copies: F1 similar features, F2 architecture and
   abstractions, F3 current implementation, F4 tests and fixtures, F5 wiring, configuration and entry points. The extra
@@ -185,7 +194,7 @@ makes the cell void with its reason. The main session making any call other than
 | Team time | the first Agent `tool_use` event's `timestamp` → the last Agent `tool_result` event's `timestamp` (both carry one in the probe; `task_notification` does not); cross-checked against the slowest `totalDurationMs` | reported (D6) |
 | Scout time | each child's `totalDurationMs` | reported |
 | Session time | `result.duration_ms` | reported |
-| Tokens per scout | input, output, cache read, cache write — summed over the child's messages, deduplicated by message id | reported |
+| Tokens per scout | input, cache read, cache write — summed over the child's messages, deduplicated by message id (exact: they match `modelUsage` to the token on the live fixture). **Output is exact per TEAM, not per scout**: each assistant event carries usage as of the message's start (a Sonnet child streamed 16 + 22 output tokens and was billed 118), so a team's output comes from `modelUsage[model]` minus the main session's own output when it shares the model; one scout's output is exact only when it is the only scout on its model, otherwise *not captured* (found in E1 S1). Team cost — the question "who is cheaper" — is therefore exact | reported |
 | **Cost per scout and per team** | tokens × the vendor price table read on the run date (URL and date recorded) | reported (D6) |
 | Cost per right file | team cost ÷ files of G found | reported |
 | Caller load | size of the union — the files the Opus caller must then open | reported |
@@ -204,7 +213,7 @@ claim does not weigh as much as a run with ten.
 ### 3.7 Hand-checks before any number is published
 
 - **Recall matcher**: 20 seeded (output, G file) pairs, half found and half not, with basename-only and `path:line`
-  forms planted. At least 19 of 20 must agree with a person's reading; otherwise fix the matcher and draw 20 new pairs.
+  forms planted. At least 19 of 20 must agree with the hand reading (D9: done by the session, opening each file); otherwise fix the matcher and draw 20 new pairs.
 - **Assessor**: codex read-only, launched with the options `FindingAssessor.OptionsFor` already builds (claude is capped
   at one turn there and cannot open a file) — but with its **own** prompt, schema and working directory (the task's
   tree), because the gate's assessor is shaped for finding batches, not for one-line claims. 20 verdicts re-checked by
@@ -224,7 +233,8 @@ Per workload W, over tasks (the task is the unit; its runs are averaged first):
 - Explore: its clause in the rule is written as *measured* only if the replication passes the same test; otherwise the
   rule says its Explore clause is an extrapolation.
 
-**Sizing (E2).** The pilot's variance feeds a simulation of exactly this procedure — clustered tasks, repeated runs —
+**Sizing (E2).** Under D7 the sizing no longer gates E3: it is computed and REPORTED, so the preliminary result says
+how many tasks a decision would need. The pilot's variance feeds a simulation of exactly this procedure — clustered tasks, repeated runs —
 at a true Δ of 0 and at the −0.03 boundary. The task count is the smallest that gives ≥ 80 % passes at Δ = 0 and
 ≤ 5 % false passes at the boundary, with runs per task fixed at 3. If 30 tasks do not reach that, the run is not
 started and the operator gets the numbers instead: precision is bought with tasks, never with a wider margin.
@@ -257,7 +267,14 @@ Written into `research/RESULTS_scout_models.md` before cell one, with its commit
   to its reservation, counted in the ledger and reported. **The launch boundary is durable, and doubt is charged:** the attempt is marked *launching* in the store BEFORE the CLI
   is invoked, so recovery never has to guess — an attempt with no *launching* mark provably never started and its
   reservation is released; an attempt marked *launching* with no surviving `result` is charged its reservation as
-  unknown cost, even if the process may have died before spending anything. The run's
+  unknown cost, even if the process may have died before spending anything. **The unknown charge is the attempt's whole
+  reservation** (the cap plus its 20 % headroom), booked against the run's ceiling the moment recovery finds it and never
+  released afterwards, so a later reservation cannot fit into money that may already be spent.
+- **A hung CLI cannot keep spending.** Every cell has a wall (fixed per arm in E2 from the pilot's slowest cell × 2, a
+  default of 20 minutes until then). The shared launcher already kills the child's whole process tree at the wall and on
+  any external cancellation (`src/Bench.Infrastructure/Process/ProcessRunner.cs:175-182`, `Kill(entireProcessTree: true)`
+  at `:222`); the streaming output sink must keep that path, and a timed-out attempt settles from whatever stream
+  reached disk, or as an unknown charge. The run's
   final check is then *ledger = Σ `total_cost_usd` of settled attempts + Σ unknown-cost charges*, never a bare
   equality that a crash would break.
 
@@ -266,8 +283,8 @@ Written into `research/RESULTS_scout_models.md` before cell one, with its commit
 | Surface | Projected size | Retired by |
 |---|---|---|
 | History-free trees | ≤ 30 tasks × ~40 MB ≈ 1.2 GB, under a git-ignored directory of the checkout root (each has its own `.git`) | `bench scouts prune --run` after RESULTS is merged — only directories the run created, path checked |
-| Raw streams | main run ≈ 30 tasks × 3 runs × 7 arms = 630 cells, + ~45 Explore cells, + void re-runs (budget 10 %) ≈ 740 × ~1 MB ≈ 0.75 GB, local only | kept until the conventions rule ships, then gzipped; never committed |
-| Wall clock | ~740 cells one at a time ≈ two days of serial running for E3 | resumable at any cell |
+| Raw streams | pilot ≈ 25 cells + the preliminary run's 50 (D7) ≈ 75 × ~1 MB, local only | kept until a decision run or the plan's promotion, then gzipped; never committed |
+| Wall clock | 50 cells one at a time — a few hours for E3 | resumable at any cell |
 | Committed records | per-cell metrics + scrubbed scout texts ≈ 5 MB | kept with RESULTS |
 | Interrupted cells | the existing owner-checked sweep | at every verb's entry |
 
@@ -284,7 +301,7 @@ The results are written out **in detail** in `research/`, not summarised:
 
 | File | Holds |
 |---|---|
-| `research/RESULTS_scout_models.md` | the verdict per workload; recall, wrong claims, team/scout/session time and cost per workload with intervals; observed against predicted; per-task tables (task id, repository, kind, \|G\|, each arm's recall, time, cost); the Explore replication; arm C against A and B; void and aborted cells with reasons; hand-check outcomes; every pin; what it does not settle |
+| `research/RESULTS_scout_models.md` | labelled *preliminary* under D7; the reading per workload; recall, wrong claims, team/scout/session time and cost per workload with intervals; observed against predicted; per-task tables (task id, repository, kind, \|G\|, each arm's recall, time, cost); (in a decision run: the Explore replication and arm C against A and B); void and aborted cells with reasons; hand-check outcomes; every pin; what it does not settle |
 | `research/scout-calibration/tasks.json` | each task: id, repository, P, S, kind, statement, G, removals, tree hash |
 | `research/scout-calibration/prompts.json` | the frozen focus prompts per task and the driver prompt, with hashes |
 | `research/scout-calibration/schedule.json` | the seeded schedule and the seed |
@@ -320,7 +337,8 @@ later. The context has ONE migration (E1 S1); a column a later story needs is ad
 probes did. The split was decided on Fable (2026-10-12); the operator then put S1 and S2 on Opus.
 
 **E1 — The scouts context, end to end offline.** Branch `feat/scouts-context`. Goal: `bench scouts` plans, runs,
-resumes, scores and reports a run against a controlled CLI and real storage, and no paid model has been called.
+resumes, scores and reports a run against a controlled CLI and real storage, and no paid model has been called — every
+verb that would call one (`run`, `assess`, `alias-check`) is exercised only against fakes in this epic.
 
 - **S1 — The facts and the store** *(Opus, by the operator's decision of 2026-10-12, which overrides the split's Fable choice: the deciders every later story composes, a migration, a ledger holding
   money, the read-back deciding validity).* `Bench.Domain.Scouts`: `ScoutTask`, `ScoutArm` (seven arms + Explore),
@@ -348,12 +366,12 @@ resumes, scores and reports a run against a controlled CLI and real storage, and
   home. It gains a test-owned home that does not depend on the model, passed through the runner's allow-listed
   environment in tests only (production argv and environment unchanged), and a per-prompt-hash `stdoutFile`. Implements the §2 gaps, §3.1, §3.2, §3.4,
   §3.10, §3.11, §3.14. Done when `run` settles a two-task replay with one void and one aborted cell, and the crash tests (§5) pass.
-- **S3 — The analysis, the read side and the scenario** *(Opus: composes `ProbeReport`, the probes API and tab,
-  `LivePoller`).* Pure analysis first: claim-rate pooling, the clustered bootstrap and `Decide()` (§3.8), tested as a
+- **S3 — The analysis, the report and the scenario** *(Opus; the API and the tab moved to E3 S8 by D8).* Pure analysis first: claim-rate pooling, the clustered bootstrap and `Decide()` (§3.8), tested as a
   table before anything renders them.
   Verbs `status`, `score` (with `--handcheck N --seed` drawing the 20 + 20 for a person), `assess` (every `CLAIMS` line
-  through codex read-only, §3.7). `ScoutReport` (pure) → `report --json`, `GET /api/bench/scouts/runs[/{id}]`, the
-  Scouts tab (`.razor` + `.razor.cs`, bUnit), the contracts guard. The scenario test (§5). `research/module_scouts.md`,
+  through codex read-only, §3.7). `assess` is a PAID verb: E1 builds it and tests it only against a fake codex that
+  replays recorded verdicts; its first real call is in E2 S4. `ScoutReport` (pure) → `report --json` and a human-readable `report`. The scenario test (§5), read through
+  the CLI report in this epic. `research/module_scouts.md`,
   the `architecture.md` section, and `research/module_tests.md` — created, as a catalogue derived from the CLI's verbs and
   the API's routes: the scouts flows `covered` naming their test, everything else `not covered` with a reason, the run
   command, and what it does not prove. Done when the scenario is green and catalogued.
@@ -384,20 +402,26 @@ hand-checks pass, and the task set, prompts, schedule and prediction are committ
 Code round: the RED fixtures behind each correction, the pre-registered files, the stop-or-go. Cost: about 25 cells — the
 last point where a finding is cheap.
 
-**E3 — The main run and the result** *(conditional on S5's go).* Branch `feat/scouts-main-run`. Goal: the frozen
-schedule runs to the end and RESULTS answers §1 per workload against the prediction.
+**E3 — The preliminary run and its write-up** *(D7).* Branch `feat/scouts-main-run`. Goal: 50 frozen cells run to the
+end and RESULTS reports §1's three questions per team size, against the prediction, as a preliminary reading.
 
-- **S6 — The run** *(Opus: operating a frozen design).* `run` / `resume` across days; a pin change stops it; void cells
-  re-run as generations; the Explore replication; `assess` over every claim; `score`; ledger total = Σ `total_cost_usd`;
+- **S6 — The run** *(Opus: operating a frozen design).* `run` / `resume`; a pin change stops it; void cells re-run as
+  generations within the 2 spare cells (more voids are reported, not replaced); `assess` over every claim; `score`; ledger total = Σ `total_cost_usd`;
   `cells.jsonl` scrubbed. Done when nothing is pending or claimed and every void and aborted cell carries its reason.
-- **S7 — The write-up and the hand-over** *(Fable: the conclusion becomes a rule about every scout).*
-  `RESULTS_scout_models.md` as §3.12 lists, its `research/README.md` row, `module_scouts.md` with the run, `todo/README.md`,
-  the alias check registered as a weekly scheduled task (§3.14), the plan promoted with its deviations, `prune`. The
-  verdict goes to `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there — the open tail outside
-  this repository.
+- **S7 — The write-up** *(Opus).* `RESULTS_scout_models.md` as §3.12 lists, marked *preliminary — not a verdict* in its
+  title and status line, with the sizing simulation's answer to "how many tasks would a decision need"; its
+  `research/README.md` row, `module_scouts.md` with the run, `todo/README.md`, the plan promoted with its deviations
+  (D7 first among them), `prune`. The reading goes to `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a
+  PR there: since 2026-10-13 the rule is already switched, so the reading is a check after the fact — one worse than the
+  pre-registered margin reopens the decision with the operator, and a promising one may justify a full decision run
+  (`todo/PLAN_scout_decision_run.md`). The weekly alias check (§3.14) is registered once the reading is recorded.
+- **S8 — The read side** *(Opus, D8: composes `ProbeReport`'s API and the Probes tab, `LivePoller`).*
+  `GET /api/bench/scouts/runs[/{id}]` from the same `ScoutReport`, the console's Scouts tab (`.razor` + `.razor.cs`,
+  bUnit), the contracts guard, and the scenario extended: the API's bytes equal the CLI report's, and the tab shows the
+  same verdict, per-arm numbers and void count. Its own code round.
 
 Code round: no new code expected — every RESULTS number checked against `cells.jsonl` and the prediction's sha; the
-hygiene test. Cost: about 740 cells, about two days of serial wall clock.
+hygiene test. Cost: 50 cells, a few hours of serial wall clock.
 
 ## 5. Test plan
 
@@ -445,15 +469,15 @@ fixture with a live capture, and a reader that was wrong goes RED on the capture
 - `FakeCli` isolation: two setups in parallel, both launching `--model opus` with the same prompt, each receive their
   own stream and their own call count.
 
-**S3 — read side and scenario**
+**S3 — analysis, report and scenario**
 
-- `ScoutReport` from a hand-built run; CLI bytes = API bytes; the tab's states (empty, running, finished, refused);
-  the poller stops when no cell is open.
+- `Decide()` as a table; claim-rate pooling and the *not measured* rule; the bootstrap fixed by its seed.
+- `ScoutReport` from a hand-built run; `report --json` deterministic byte for byte across two calls.
 - **Scenario (offline, the real flow).** `bench scouts run` against a two-task fixture set, with the real store and
   `FakeCli` replaying recorded streams per arm — one cell goes void (wrong model), one is interrupted and resumed by
-  `bench scouts resume`. The run is then read three ways: `bench scouts report --json` and
-  `GET /api/bench/scouts/runs/{id}` must agree byte for byte; the Scouts tab, rendered with bUnit over the API client
-  fed those bytes, must show the same verdict, per-arm numbers and void count. Catalogued in `research/module_tests.md`
+  `bench scouts resume`. The run is then read through `bench scouts report --json`: the verdict, per-arm numbers
+  and void count are the ones computed by hand for the fixture. (D8: the API and the tab join this scenario in E3 S8,
+  with byte equality between the CLI and the API.) Catalogued in `research/module_tests.md`
   with its run command, as the scenario-tests rule requires — that file does not exist yet (checked 2026-10-12), so S3
   creates it.
 
@@ -488,23 +512,26 @@ Named here so they are not lost; each needs its own decision.
 - [ ] The launcher has the two new options, tested, refused by name where a CLI has no flag.
 - [ ] `bench scouts` runs, resumes, sweeps, checks the alias and reports; every verb has tests; every break-it went red
       and back.
-- [ ] The Scouts section answers the CLI report and the API byte for byte, and the console tab shows the same verdict,
+- [ ] E1: the scenario is green through `bench scouts report`. E3 S8: the API answers the CLI report byte for byte, and
+      the console tab shows the same verdict,
       per-arm numbers and void count; the scenario test proves it and is catalogued in `research/module_tests.md`.
 - [ ] `cutoffs.json` — per resolved id, the cut-off, its source and the date read — was committed before the candidate
       list.
 - [ ] `pilot.md` holds the pilot: the hand read-back, the access check, the budget-exhausted cell, the A/A, the cost
       check, and each correction with its RED fixture.
 - [ ] The matcher and the assessor passed their hand-checks before any number appeared.
-- [ ] The task set, prompts, schedule, per-arm budget caps, sizing and prediction were committed before cell one — or
-      the sizing said STOP, the numbers are recorded, and E3 did not start.
+- [ ] The task set (8 tasks), prompts, schedule, per-arm budget caps, sizing and prediction were committed before cell
+      one; the sizing's answer is reported, not used as a gate (D7).
 - [ ] Every `CLAIMS` line was assessed; silent and unparseable counts are reported per arm; a workload with more than
       10 % silent cells is reported *not measured*.
 - [ ] `research/RESULTS_scout_models.md` and `research/scout-calibration/*` hold everything §3.12 lists: per workload
       and per task, recall, wrong claims, time and cost against the prediction, the subject shas, the harness path,
       the date and every pin, void and aborted cells, and what the run does not settle.
-- [ ] The weekly alias check is registered and has run once green.
+- [ ] `RESULTS_scout_models.md` is labelled *preliminary — not a verdict*; the alias check exists and is tested, and is
+      registered as a scheduled task only once a verdict exists.
 - [ ] Nothing committed carries a private name, a home path or a key, and no tree file is tracked.
 - [ ] `module_scouts.md`, `architecture.md`, `research/README.md` and `todo/README.md` are updated; this plan is
       promoted with its deviations.
-- [ ] Open tail, outside this repository: the verdict handed to
-      `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there.
+- [ ] Open tail, outside this repository: the preliminary reading handed to
+      `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there; if it is promising,
+      `todo/PLAN_scout_decision_run.md` exists here.

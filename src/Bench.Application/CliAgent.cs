@@ -33,6 +33,29 @@ public sealed record AgentAsk(
     /// <summary>The environment the CLI process runs under — the harness's own, inherited, for every caller before the probes; a
     /// REPLACED minimal set for a probe launch (S2c), so a shell-capable model cannot read the bench's secrets out of its environment.</summary>
     public AgentEnvironment Environment { get; init; } = AgentEnvironment.Inherited;
+
+    /// <summary>Where stdout goes AS IT ARRIVES, line by line — <see cref="AgentOutputSink.None"/> for every caller before the scouts, whose
+    /// launch is unchanged; the scouts' runner writes each line to the artefact root the moment it is read (plan §3.10).</summary>
+    public AgentOutputSink Output { get; init; } = AgentOutputSink.None;
+}
+
+/// <summary>A line-by-line stdout sink for one launch. Two states rather than a nullable delegate, so "no sink" is a word. A sink that
+/// throws ends the launch: the child's process tree is killed and the exception is the caller's.</summary>
+public sealed record AgentOutputSink
+{
+    private AgentOutputSink(bool isNone, Action<string> line)
+    {
+        IsNone = isNone;
+        Line = line;
+    }
+
+    public static AgentOutputSink None { get; } = new(true, static _ => { });
+
+    public static AgentOutputSink Lines(Action<string> line) => new(false, line);
+
+    public bool IsNone { get; }
+
+    public Action<string> Line { get; }
 }
 
 /// <summary>How a CLI child's environment is built: inherited whole from the harness (the authoring and assessor launches — their
@@ -113,12 +136,29 @@ public sealed record AgentAskOptions
     /// file tools confined to the working directories, the user's settings files ignored (S2b).</summary>
     public bool Restricted { get; init; }
 
+    /// <summary>claude <c>--forward-subagent-text</c>: every subagent's events are printed into the stream, each under its Agent call's
+    /// <c>parent_tool_use_id</c> — what the scouts read one child apart from another by (scouts plan §2, claude 2.1.289).</summary>
+    public bool ForwardSubagentText { get; init; }
+
+    /// <summary>claude <c>--max-budget-usd</c>: the CLI's own spend cap for this session, in USD, printed invariant; zero is none. An
+    /// ESTIMATE that can overshoot — the scouts' ledger reserves it plus 20 % (§3.10).</summary>
+    public decimal MaxBudgetUsd { get; init; }
+
+    /// <summary>claude <c>--mcp-config &lt;file&gt;</c>: the ONLY MCP configuration the CLI reads beside <c>--strict-mcp-config</c> — the scouts
+    /// pass an empty one (<c>{"mcpServers":{}}</c>), the launch the confinement probe measured (§3.2).</summary>
+    public string McpConfigFile { get; init; } = string.Empty;
+
+    /// <summary>claude <c>--no-session-persistence</c>: the session is not written to the CLI's own history, so a measured cell leaves
+    /// nothing a later session could resume or read.</summary>
+    public bool NoSessionPersistence { get; init; }
+
     /// <summary>Nothing asked beyond "answer once" — the launch every caller before the assessor made.</summary>
     public bool IsNone =>
         Sandbox == AgentSandbox.Default && OutputSchemaFile.Length == 0 && LastMessageFile.Length == 0
         && DisallowedTools.Count == 0 && !McpServersOff && MaxTurns == 0
         && WebSearch == AgentWebSearch.Default && AddDirectories.Count == 0 && !JsonEvents
-        && !AllowedTools.Asked && !Restricted;
+        && !AllowedTools.Asked && !Restricted && !ForwardSubagentText && MaxBudgetUsd == 0m
+        && McpConfigFile.Length == 0 && !NoSessionPersistence;
 }
 
 /// <summary>A tool allow-list as a launch option: not asked (the CLI's default set), or ONLY these names — where an empty list is

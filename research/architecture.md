@@ -19,7 +19,7 @@ reading assembly references, so a violation is a red build rather than a review 
 ```mermaid
 flowchart TB
     subgraph hosts["hosts"]
-        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · sessions · gate · probes · version/help"]
+        cli["Cli — plan · run · judge · report · sweep · prune<br/>telemetry · variants · questions · models · sessions · gate · probes · scouts · version/help"]
         apihost["Api — bench-api, READ only, starts nothing"]
         collector["Collector — bench-collector, the WRITE door for<br/>session traces, loopback 5177"]
         hook["Hook — bench-hook, one run per agent tool call"]
@@ -35,7 +35,8 @@ flowchart TB
         plan["PlanRun / PlanRequestHandler"]
         report["RunReport → RunReportView<br/>RunReportContract"]
         codecs["MetricCodec · TelemetryCodec · SuiteJsonLoader<br/>QuestionJson · VariantJson · ResponseMetaJson · RagPrompt"]
-        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver<br/>IGateReads · IGateSuiteTasks<br/>IProbeStore · IProbeReads · IProbeRunner · IProbeArtifacts · IProbeFixtures · IProbeOracle"]
+        ports["IRunStore · IResultStore · IEngine · IRetriever · IModelRuntime<br/>IRunTrace · IJudge · ICheckoutProvider · ITelemetryStore<br/>IVariantCatalog · IQuestionBank · IModelRegistry<br/>IFunnelSink · IHardwareSampler · ISessionStore<br/>IGateStore · IGateArtifactStore · IMcpSessionFactory<br/>IProductPinReader · IRecordingTapFactory · IGateCheckouts · IGateReviewerCatalog<br/>IGateVerdictStore · IGateAssessmentFiles<br/>IGateImportStore · IImportSource · ICommitResolver<br/>IGateReads · IGateSuiteTasks<br/>IProbeStore · IProbeReads · IProbeRunner · IProbeArtifacts · IProbeFixtures · IProbeOracle<br/>IScoutStore · IScoutReads · IScoutRunner · IScoutTrees · IScoutStreams · IScoutVerdicts · IScoutAssessmentFiles"]
+        scoutuse["ScoutCampaign · ScoutRecoveryStep · ScoutScoring · ScoutAssessCampaign<br/>ScoutClaimAssessor · ScoutReport (one pure report)"]
     end
     subgraph dom["Bench.Domain — no packages, no IO"]
         contract["Targets · Suites · Runs · Splitting"]
@@ -45,11 +46,13 @@ flowchart TB
         sessions["Sessions — ToolTaxonomy · CommandClassifier<br/>PhaseClassifier · SessionAnalysis (pure, no model)"]
         gate["Gate — GateSuite · GateReviewer · CoaiVendorRow · ProductPin<br/>GateCell · GateMatrix · GateRunFacts · Verdict · GateReport<br/>(a sibling context; module_gate.md)"]
         probes["Probes — ProbeSubject · ProbeMatrix · ProbeCell · ProbeFacts · ProbeVerdicts<br/>(the question consultant's capability probes; module_probes.md)"]
+        scouts["Scouts — ScoutArms · ScoutCell · ScoutReadBack · PathAudit · SpendLedger<br/>ScoutAnalysis · ScoutBootstrap · ScoutDecisions · ScoutAssessment<br/>(the scout calibration; module_scouts.md)"]
     end
     subgraph infra["Bench.Infrastructure — adapters"]
-        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (nine tables, ids · hashes · numbers)<br/>probe_runs · probe_cells"]
-        artroot["FileSystemGateArtifactStore · ProbeArtifacts<br/>the artefact root — OUTSIDE git"]
+        pg["Postgres: runs · results · funnels · hits<br/>telemetry · variants · bank · registry<br/>session_runs · session_tool_calls<br/>gate_* (nine tables, ids · hashes · numbers)<br/>probe_runs · probe_cells<br/>scout_* (six tables, the spend ledger on scout_runs)"]
+        artroot["FileSystemGateArtifactStore · ProbeArtifacts · ScoutArtifacts<br/>the artefact root — OUTSIDE git"]
         probeclis["CliProbeRunner · CoaiApiProbeRunner<br/>claude · codex · agy · coai-mcp --probe-api"]
+        scoutclis["CliScoutRunner (claude) · ScoutTrees (history-free)<br/>codex for assess · PostgresScoutVerdicts"]
         git["GitCheckoutProvider + ProcessRunner"]
         eng["FilesystemEngine · QlnEngine · QlnRetriever"]
         rt["OpenAiCompatibleRuntime"]
@@ -105,6 +108,8 @@ each.
 |---|---|---|---|
 | Gate | [module_gate.md](module_gate.md) | which reviewer MODEL, on each of coai's three review gates, finds the planted defects — at what cost, how repeatably | nine `gate_*` tables; the artefact root's `runs/` |
 | Probes | [module_probes.md](module_probes.md) | what each CLI build and api vendor can actually do for coai's question consultant — web search, reads outside the working directory, confinement under denied file tools | `probe_runs`, `probe_cells`; the artefact root's `probes/` |
+| Scouts | [module_scouts.md](module_scouts.md) | whether a Sonnet team of ⌈1.5·N⌉ read-only scouts finds the files an Opus team of N finds, without more wrong claims — and how fast, at what price | six `scout_*` tables; the artefact root's `scouts/`; the history-free trees under the trees root |
+| Tests | [module_tests.md](module_tests.md) | not a measurement — the scenario harness (`tests/Bench.Tests/Cli`, real store, real git, `tests/FakeCli` for the paid CLIs) and the flow catalogue derived from the CLI's verbs and the API's routes | none |
 
 ## The measurement contract
 
@@ -1143,6 +1148,36 @@ artefacts are in [module_probes.md](module_probes.md); the conclusions are writt
   /api/bench/probes/runs[/{id}]` (mapped from `MapBenchApi`, the read port resolved per request, 503 when a host never
   registered it) and the console's **Probes** tab, byte for byte; the tab polls every 3 s through `LivePoller` while a
   cell is open, and re-measuring stays a CLI verb the page shows as a command (`bench-api` is read-only by decision).
+
+## The scout calibration — a third sibling context (2026-10-12)
+
+The shared rule puts every subagent on Opus; the operator asked whether the read-only SCOUTS can run on Sonnet, ⌈1.5·N⌉
+of them, without finding fewer of the files that matter or making more wrong claims. `Bench.*.Scouts` measures it per team
+size (W1–W3): one cell = one `claude -p --model opus` session in a task's history-free tree, launching N scouts in one
+message, read back from its stream (every child told apart by `parent_tool_use_id`). The tuple, the launch, the read-back,
+the ledger, the analysis and the verbs are in [module_scouts.md](module_scouts.md); the plan is
+[PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) (E1 built — S1–S3; E2 and E3 open). What it
+COMPOSES from the contexts beside it, and what it ADDS:
+
+- **Composed.** The probes' claim lifecycle and generations (`ScoutCell` = `Claimable` + `ProductPin`, a run with no
+  status, re-runs appended), the gate store's guarded claim and owner-checked sweep, the one launcher (widened again:
+  `ForwardSubagentText`, `MaxBudgetUsd`, `McpConfigFile`, `NoSessionPersistence`, and a line-by-line stdout sink in
+  `ProcessRunner`), `ArtifactCommit`, the publication walk and `PublicationGuard` (the six `scout_*` tables joined it), the
+  gate's blinded ids (`BlindedId.Mint`) and its codex read-only assessor launch (`FindingAssessor.OptionsFor`), the gate's
+  quantile (`Quantile.Interpolated`, widened unrounded), and the probes' wire words (`ProbeReport.Kebab`).
+- **Added: money that survives a crash.** A spend ledger on the run row — every attempt reserves its cap plus 20 %, is
+  marked *launching* BEFORE the CLI starts, and settles exactly once: from its `result`'s `total_cost_usd`, or charged its
+  whole reservation as unknown cost when no result survived. The stream is written to the artefact root as it arrives.
+- **Added: a trust boundary measured, not assumed.** History-free trees (`git archive P` + one commit), an allow-list
+  launch, a grant guard over the user settings, and a path audit that STOPS the campaign on an outside read that returned
+  content.
+- **Added: a pre-registered analysis.** Recall and wrong claims per task (runs averaged first, claims POOLED), the
+  not-measured rule, a paired bootstrap that resamples whole REPOSITORIES with a fixed seed (`SeededDraws`, SplitMix64 —
+  never `Random`), and `ScoutDecisions.Decide`, which reads only the one-sided bounds against the operator's margins. A run's
+  KIND is frozen on it: a PRELIMINARY run (D7) reports its intervals and states no verdict.
+- **The read side so far is the CLI.** One pure `ScoutReport` answers `bench scouts report [--json]` (byte-deterministic);
+  the read API and the console's Scouts tab answer the same object in E3 S8 (D8). The scenario test that drives the whole
+  flow is `ScoutsScenarioTests`, catalogued in [module_tests.md](module_tests.md).
 
 ## Guards that shape the API
 

@@ -12,6 +12,11 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        // The CLIs this fake stands in for read and write UTF-8 on their pipes, whatever the console's code page — a prompt carrying an
+        // em dash must hash the same on both sides of the pipe (the scouts' read-back compares prompt hashes).
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true });
+        Console.SetError(new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true });
         var script = Script.Load(ModelOf(args));
 
         if (args.Contains("--version"))
@@ -20,7 +25,7 @@ public static class Program
             return 0;
         }
 
-        var prompt = PromptOf(args, Console.IsInputRedirected ? Console.In.ReadToEnd() : string.Empty);
+        var prompt = PromptOf(args, Console.IsInputRedirected ? new StreamReader(Console.OpenStandardInput(), utf8).ReadToEnd() : string.Empty);
         var call = Events.Record(ModelOf(args), args, prompt);
 
         return new Behaviour(script, args, prompt, call).Run();
@@ -108,9 +113,35 @@ public sealed class Script
     /// transcript (<c>tests/Bench.Tests/Fixtures/probes/</c>) through the real runner; empty = compose.</summary>
     public string StdoutFile => Text("stdoutFile", string.Empty);
 
+    /// <summary>The replay file for THIS prompt — <c>stdoutByPrompt.&lt;sha256 of the prompt&gt;</c> — so every scout cell, all launched
+    /// <c>--model opus</c>, replays its own recorded stream; falls back to <see cref="StdoutFile"/>.</summary>
+    public string StdoutFor(string prompt) =>
+        Node("stdoutByPrompt")?[Sha256(prompt)]?.GetValue<string>() is { Length: > 0 } file ? file : StdoutFile;
+
+    /// <summary>A replay prints its lines with this pause between them — what a test watching the stream arrive needs; zero = at once.</summary>
+    public int LineDelayMs => Int("lineDelayMs", 0);
+
+    /// <summary>A replay HOLDS after this many lines (1-based; zero = never): it flushes them, writes <c>held-&lt;pid&gt;</c> into its home
+    /// and sleeps until it is killed — a CLI hung mid-stream, or a cell a test kills at a deterministic point.</summary>
+    public int HoldAfterLine => Int("holdAfterLine", 0);
+
+    /// <summary>The fake plays the scouts' claim ASSESSOR (codex <c>-o</c>): it reads the blinded rows out of the prompt and writes one verdict
+    /// per row to the last-message file — <see cref="AssessVerdicts"/> maps a substring of a row to its verdict (first match wins), anything
+    /// else gets <see cref="AssessDefault"/>, and a row matching <see cref="AssessSkip"/> is left out of the answer (an unanswered id).</summary>
+    public bool Assessor => Node("assessVerdicts") is JsonObject || Bool("assessor", false);
+
+    public JsonObject AssessVerdicts => Node("assessVerdicts") as JsonObject ?? [];
+
+    public string AssessDefault => Text("assessDefault", "right");
+
+    public string AssessSkip => Text("assessSkip", string.Empty);
+
+    public static string Sha256(string text) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
     public static Script Load(string model)
     {
-        var path = Environment.GetEnvironmentVariable("FAKE_CLI_SCRIPT") is { Length: > 0 } env ? env : Path.Combine(FakeHome.For(model), "script.json");
+        var path = Environment.GetEnvironmentVariable("FAKE_CLI_SCRIPT") is { Length: > 0 } env ? env : Path.Combine(FakeHome.Of(model), "script.json");
         var root = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? [] : [];
         var overrides = model.Length > 0 && root["subjects"]?[model] is JsonObject o ? o : [];
 
@@ -173,12 +204,14 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
 
     private int Answer()
     {
-        if (script.StdoutFile.Length > 0)
+        if (script.Assessor && Assessor.LastMessageFile(args) is { Length: > 0 } lastMessage)
         {
-            using var stdout = Console.OpenStandardOutput();
-            stdout.Write(File.ReadAllBytes(script.StdoutFile));
-            stdout.Flush();
-            return 0;
+            return Assessor.Answer(script, prompt, lastMessage);
+        }
+
+        if (script.StdoutFor(prompt) is { Length: > 0 } replay)
+        {
+            return Replay(replay);
         }
 
         var canary = CanaryPath.Match(prompt) is { Success: true } m ? m.Groups[1].Value : string.Empty;
@@ -201,6 +234,41 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
 
         return 0;
     }
+
+    /// <summary>A recorded stream printed VERBATIM — except <c>__CWD__</c>, which becomes this process's working directory as a JSON string
+    /// body (a synthetic scout stream names its tree's paths that way, so the path audit sees them inside the tree it was launched in). With
+    /// no pause and no hold the bytes go out at once, as before; otherwise line by line, flushed, so a reader sees each line as it comes.</summary>
+    private int Replay(string file)
+    {
+        var text = File.ReadAllText(file).Replace("__CWD__", JsonEscaped(Directory.GetCurrentDirectory()), StringComparison.Ordinal);
+
+        if (script.LineDelayMs == 0 && script.HoldAfterLine == 0)
+        {
+            using var stdout = Console.OpenStandardOutput();
+            stdout.Write(Encoding.UTF8.GetBytes(text));
+            stdout.Flush();
+            return 0;
+        }
+
+        var lines = text.Split('\n');
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i == script.HoldAfterLine && script.HoldAfterLine > 0)
+            {
+                File.WriteAllText(Path.Combine(FakeHome.Of(Program.ModelOf(args)), $"held-{Environment.ProcessId}"), i.ToString(CultureInfo.InvariantCulture));
+                return Hang();
+            }
+
+            Console.Out.Write(lines[i] + (i < lines.Length - 1 ? "\n" : string.Empty));
+            Console.Out.Flush();
+            Thread.Sleep(script.LineDelayMs);
+        }
+
+        return 0;
+    }
+
+    private static string JsonEscaped(string text) => JsonValue.Create(text).ToJsonString()[1..^1];
 
     /// <summary>The model's words: the web answer when asked, the inside file when asked and allowed, the canary when asked
     /// and allowed — and an honest refusal sentence when asked and not allowed.</summary>
@@ -226,6 +294,42 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
 
         return parts.Count == 0 ? "ready" : string.Join(' ', parts);
     }
+}
+
+/// <summary>The scouts' claim assessor, replayed: the verdicts a recorded codex gave, keyed by what the row says rather than by its blinded id
+/// (the ids are minted fresh on every pass, so a recording keyed by id could never be replayed). Writes the answer where codex <c>-o</c> would
+/// and prints codex's progress line on stdout, which with <c>-o</c> is progress, not the answer.</summary>
+public static class Assessor
+{
+    public static string LastMessageFile(string[] args)
+    {
+        var at = Array.IndexOf(args, "-o");
+        return at >= 0 && at + 1 < args.Length ? args[at + 1] : string.Empty;
+    }
+
+    public static int Answer(Script script, string prompt, string lastMessageFile)
+    {
+        var rows = new JsonArray();
+
+        foreach (var row in prompt.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("{\"id\"", StringComparison.Ordinal)))
+        {
+            if (script.AssessSkip.Length > 0 && row.Contains(script.AssessSkip, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var id = (JsonNode.Parse(row) as JsonObject)?["id"]?.GetValue<string>() ?? string.Empty;
+            rows.Add(new JsonObject { ["id"] = id, ["verdict"] = Verdict(script, row), ["note"] = "replayed" });
+        }
+
+        File.WriteAllText(lastMessageFile, new JsonObject { ["rows"] = rows }.ToJsonString());
+        Console.Out.Write("codex: answer written\n");
+        Console.Out.Flush();
+        return 0;
+    }
+
+    private static string Verdict(Script script, string row) =>
+        script.AssessVerdicts.FirstOrDefault(kv => row.Contains(kv.Key, StringComparison.Ordinal)).Value?.GetValue<string>() ?? script.AssessDefault;
 }
 
 /// <summary>What the scripted model did with its tools: a web search, a file-tool read of the canary, a SHELL read of it.</summary>
@@ -268,7 +372,7 @@ public static class Grammar
             return [.. allowed.Where(t => t.Length > 0)];
         }
 
-        return [.. ClaudeDefaultTools.Where(t => !denied!.Contains(t) && !(args.Contains("--restricted") && ClaudeRestrictedRemoves.Contains(t)))];
+        return [.. ClaudeDefaultTools.Where(t => !(denied ?? []).Contains(t) && !(args.Contains("--restricted") && ClaudeRestrictedRemoves.Contains(t)))];
     }
 
     /// <summary>The values after a variadic flag, up to the next <c>--</c> option; null when the flag is absent.</summary>
@@ -440,6 +544,11 @@ public static class Grammar
 public static class FakeHome
 {
     public static string For(string model) => Path.Combine(Path.GetTempPath(), "bench-fake-cli", model.Length > 0 ? model : "nomodel");
+
+    /// <summary>The home THIS launch uses: <c>FAKE_CLI_HOME</c> when the launcher let it through — a test-owned home that does not depend
+    /// on the model, which every scout cell pins to the same <c>opus</c> (the scouts' runner passes it in TESTS only) — else the model's.</summary>
+    public static string Of(string model) =>
+        Environment.GetEnvironmentVariable("FAKE_CLI_HOME") is { Length: > 0 } home ? home : For(model);
 }
 
 /// <summary>The fake's call log: one JSON file per call in <c>FAKE_CLI_EVENTS</c> (or the model's home) — <c>call-&lt;model&gt;-&lt;n&gt;-&lt;pid&gt;.json</c>
@@ -449,7 +558,7 @@ public static class Events
 {
     public static int Record(string model, string[] args, string prompt)
     {
-        var dir = Environment.GetEnvironmentVariable("FAKE_CLI_EVENTS") is { Length: > 0 } env ? env : Path.Combine(FakeHome.For(model), "events");
+        var dir = Environment.GetEnvironmentVariable("FAKE_CLI_EVENTS") is { Length: > 0 } env ? env : Path.Combine(FakeHome.Of(model), "events");
 
         Directory.CreateDirectory(dir);
         var key = model.Length > 0 ? model : "nomodel";
