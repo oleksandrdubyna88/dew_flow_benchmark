@@ -37,8 +37,8 @@ public sealed class ProbeChildEnvironmentTests
 
         var child = ProbeChildEnvironment.Of(parent);
 
-        child.Names.Should().BeEquivalentTo(["Path", "PATHEXT", "SystemRoot", "USERPROFILE", "LOCALAPPDATA", "TEMP", "ProgramFiles(x86)", "PROCESSOR_ARCHITECTURE", "HOME"],
-            "the named set, case-insensitively, the prefixes included; nothing else — not the module path, not the domain, not OneDrive");
+        child.Names.Should().BeEquivalentTo(["Path", "PATHEXT", "SystemRoot", "USERPROFILE", "LOCALAPPDATA", "TEMP", "ProgramFiles(x86)", "PROCESSOR_ARCHITECTURE", "HOME", "SUBAGENT_MODEL_GUARD"],
+            "the named set, case-insensitively, the prefixes included, plus the fixed model-guard opt-out; nothing else — not the module path, not the domain, not OneDrive");
         child.CarriesSecret.Should().BeFalse("a CLI launch gets no vault key");
         child.Scrub("env: BENCH_DB=Host=db;Password=hunter2-planted key sk-operators-own-key-5678 token ghp_planted_token_9012 vault a-vault-key-1234")
             .Should().Be("env: BENCH_DB=[redacted] key [redacted] token [redacted] vault [redacted]", "every secret-named value of the parent is scrubbed — and every BENCH_* value, the database url carries a password");
@@ -61,6 +61,24 @@ public sealed class ProbeChildEnvironmentTests
     [InlineData("DOTNET_ROOT", false)]
     public void A_name_passes_only_when_it_is_on_the_list_and_never_when_the_harness_owns_it_or_it_names_a_secret(string name, bool passes) =>
         ProbeChildEnvironment.Passes(name).Should().Be(passes);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("on")]
+    [InlineData("warn")]
+    public void The_model_guard_is_always_off_in_the_child_whatever_the_parent_holds(string? parentValue)
+    {
+        var parent = new Dictionary<string, string>(StringComparer.Ordinal) { ["PATH"] = "/bin" };
+        if (parentValue is not null)
+        {
+            parent["subagent_model_guard"] = parentValue;
+        }
+
+        var child = ProbeChildEnvironment.Of(parent);
+
+        child.Variables["SUBAGENT_MODEL_GUARD"].Should().Be("off", "a fixed policy value: a measuring launch is never refused or hinted by the user-level hook");
+        child.Names.Should().BeEquivalentTo(["PATH", "SUBAGENT_MODEL_GUARD"], "the parent's own spelling is replaced, not carried beside it");
+    }
 
     [Fact]
     public void A_harness_variable_is_a_bench_or_a_coai_name_whatever_its_case()

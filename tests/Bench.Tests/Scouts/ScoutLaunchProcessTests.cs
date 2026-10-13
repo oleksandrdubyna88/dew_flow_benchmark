@@ -34,6 +34,7 @@ public sealed class ScoutLaunchProcessTests
         seen.Select(s => s.Line).Should().Equal(Stream(4).TrimEnd('\n').Split('\n'));
         seen.Take(3).Should().OnlyContain(s => s.ChildAlive, "a line reaches the sink as it arrives — not at exit, when a crash would have lost it");
         transcript.Stdout.Should().Be(Stream(4).TrimEnd('\n'), "the whole stdout is still handed back");
+        fake.Calls().Should().ContainSingle().Which.SubagentModelGuard.Should().Be("off", "a scout launch measures a model: the allow-listed child environment carries the guard opt-out");
     }
 
     [Fact]

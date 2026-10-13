@@ -50,6 +50,8 @@ public sealed class ScoutsOutOfProcessTests(PostgresFixture postgres)
 
         code.Should().Be(ExitCodes.Pass, output);
         output.Should().Contain("1 settled from their stream");
+        fake.Calls().Should().NotBeEmpty().And.OnlyContain(c => c.SubagentModelGuard == "off",
+            "the scout launch measures a model: the real launch path hands the child SUBAGENT_MODEL_GUARD=off, which the allow-list would not inherit");
         var attempts = (await setup.NewStore().AttemptsAsync(runId, Ct)).OrderBy(a => a.Number).ToList();
         attempts.Should().HaveCount(2).And.OnlyContain(a => a.State == ScoutAttemptState.Settled);
         attempts[0].SettledUsd.Should().Be(ScoutCellStreams.CostOf(stream), "the killed attempt settled once, from its own stream");

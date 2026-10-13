@@ -38,7 +38,26 @@ public static class ProbeChildEnvironment
         !CoaiEnvironment.IsHarnessVariable(name) && !CoaiEnvironment.IsSecretName(name)
         && (Names.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) || Prefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
 
+    /// <summary>The model-guard opt-out every probe and scout child carries (2026-10-13): these launches MEASURE a model, so the sub-agent
+    /// model-guard hook installed in the user's <c>~/.claude</c> must neither refuse nor hint during one. A FIXED policy value, never
+    /// inherited — the allow-list copies only named parent variables, so without this the child would not see it at all.</summary>
+    public const string ModelGuardVariable = "SUBAGENT_MODEL_GUARD";
+
+    public const string ModelGuardOff = "off";
+
     /// <summary>The child environment for a CLI launch over <paramref name="parent"/> (the bench's own): the pass-through variables and
-    /// no secret — <see cref="ChildEnvironment.Scrub"/> still knows every secret-named value of the parent.</summary>
-    public static ChildEnvironment Of(IReadOnlyDictionary<string, string> parent) => CoaiEnvironment.Minimal(parent, Passes).WithSecret(SecretValue.None);
+    /// no secret — <see cref="ChildEnvironment.Scrub"/> still knows every secret-named value of the parent — plus
+    /// <see cref="ModelGuardVariable"/>=<see cref="ModelGuardOff"/>, always, whatever the parent holds (any parent spelling of it is replaced).</summary>
+    public static ChildEnvironment Of(IReadOnlyDictionary<string, string> parent) =>
+        CoaiEnvironment.Minimal(WithGuardOff(parent), static name => Passes(name) || name == ModelGuardVariable).WithSecret(SecretValue.None);
+
+    private static Dictionary<string, string> WithGuardOff(IReadOnlyDictionary<string, string> parent)
+    {
+        var variables = parent
+            .Where(v => !string.Equals(v.Key, ModelGuardVariable, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
+        variables[ModelGuardVariable] = ModelGuardOff;
+
+        return variables;
+    }
 }

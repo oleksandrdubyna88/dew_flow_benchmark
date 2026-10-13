@@ -234,7 +234,7 @@ public sealed class CliProbeRunnerTests : IDisposable
         var settlement = (await runner.RunAsync(run, subject, Claimed(run, subject, ProbeKind.ReadInside), Ct)).Should().BeOfType<ProbeAttemptResult.Settled>().Subject.Settlement;
 
         var call = _fakes[0].Calls().Should().ContainSingle().Subject;
-        call.EnvironmentNames.Should().OnlyContain(n => ProbeChildEnvironment.Passes(n), "the child sees the minimal set and nothing the harness owns — found: " + string.Join(", ", call.EnvironmentNames));
+        call.EnvironmentNames.Should().OnlyContain(n => ProbeChildEnvironment.Passes(n) || n == ProbeChildEnvironment.ModelGuardVariable, "the child sees the minimal set and nothing the harness owns — found: " + string.Join(", ", call.EnvironmentNames));
         call.EnvironmentNames.Should().NotContain(["BENCH_PLANTED_TOKEN", "COAI_PLANTED", "SOME_API_KEY", "HARMLESS_PLANTED"]);
         call.EnvironmentNames.Should().Contain(n => n.Equals("TEMP", StringComparison.OrdinalIgnoreCase) || n.Equals("TMP", StringComparison.OrdinalIgnoreCase) || n.Equals("HOME", StringComparison.OrdinalIgnoreCase),
             "the fake finds its script under the temp folder — a CLI needs its home");
