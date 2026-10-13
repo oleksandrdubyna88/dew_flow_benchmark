@@ -71,7 +71,8 @@ internal sealed class ScoutFake : IDisposable
             [.. (o["argv"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)],
             o["cwd"]?.GetValue<string>() ?? string.Empty,
             o["prompt"]?.GetValue<string>() ?? string.Empty,
-            [.. (o["env"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)]);
+            [.. (o["env"] as JsonArray ?? []).Select(a => a?.GetValue<string>() ?? string.Empty)],
+            o["subagentModelGuard"]?.GetValue<string>() ?? string.Empty);
     }
 
     public void Dispose()
