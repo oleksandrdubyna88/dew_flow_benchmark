@@ -1,0 +1,6 @@
+{
+  "models": [
+    { "modelId": "claude-opus-5-5", "cutoff": "2026-06-30", "source": "https://platform.claude.com/docs/en/about-claude/models/overview", "readOn": "2026-10-12" },
+    { "modelId": "claude-sonnet-5-5", "cutoff": "2026-06-30", "source": "https://platform.claude.com/docs/en/about-claude/models/overview", "readOn": "2026-10-12" }
+  ]
+}
