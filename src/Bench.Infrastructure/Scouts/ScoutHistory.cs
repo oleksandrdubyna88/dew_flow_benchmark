@@ -26,11 +26,13 @@ public sealed class ScoutHistory(GitCheckoutProvider mirrors, ScoutTreeSettings 
         var changed = await GitAsync(mirror, cancellationToken, "diff", "--name-only", "--no-renames", candidate.Parent.Value, candidate.Fix.Value);
         var atParent = await GitAsync(mirror, cancellationToken, "ls-tree", "-r", "--full-tree", candidate.Parent.Value);
         var lineage = await LineageAsync(mirror, candidate, cancellationToken);
+        var entries = atParent is Outcome<string>.Ok listed ? ScoutGroundTruth.TreeEntries(listed.Value) : [];
+        var grant = await ProjectGrantAsync(mirror, candidate, entries, cancellationToken);
 
         return (date, changed, atParent, lineage) switch
         {
-            (Outcome<string>.Ok d, Outcome<string>.Ok c, Outcome<string>.Ok p, Outcome<ScoutParentFacts>.Ok l) when DateTimeOffset.TryParse(d.Value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parentDate) =>
-                Outcome<ScoutCandidateFacts>.Success(new ScoutCandidateFacts(candidate, parentDate, ScoutGroundTruth.Of(Lines(c.Value), ScoutGroundTruth.TreeEntries(p.Value), candidate.PlanFile), l.Value)),
+            (Outcome<string>.Ok d, Outcome<string>.Ok c, Outcome<string>.Ok, Outcome<ScoutParentFacts>.Ok l) when DateTimeOffset.TryParse(d.Value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parentDate) =>
+                Outcome<ScoutCandidateFacts>.Success(new ScoutCandidateFacts(candidate, parentDate, ScoutGroundTruth.Of(Lines(c.Value), entries, candidate.PlanFile), l.Value) { ProjectGrant = grant }),
             _ => Outcome<ScoutCandidateFacts>.Failure(Withheld(candidate, "the mirror could not say when P was committed, what changed, what existed at P or how the fix landed",
                 $"candidate {candidate.Id}: the mirror could not say when P was committed, what changed, what existed at P or how the fix landed — {Said(date)}{Said(changed)}{Said(atParent)}{Said(lineage)}")),
         };
@@ -53,6 +55,20 @@ public sealed class ScoutHistory(GitCheckoutProvider mirrors, ScoutTreeSettings 
             (_, Outcome<bool>.Fail f) => Outcome<ScoutParentFacts>.Failure(f.Reason),
             _ => Outcome<ScoutParentFacts>.Failure("unreachable"),
         };
+    }
+
+    /// <summary>P's OWN Claude settings, read off the mirror (<c>git show P:.claude/settings.json</c> and <c>settings.local.json</c>, each only
+    /// when P's tree holds it as a file), judged against where this candidate's tree would be built (§3.1 as amended 2026-10-13).</summary>
+    private async Task<string> ProjectGrantAsync(string mirror, ScoutCandidate candidate, IReadOnlyList<ScoutTreeEntry> atParent, CancellationToken cancellationToken)
+    {
+        var texts = new List<Outcome<string>>();
+
+        foreach (var path in ClaudeGrants.ProjectSettingsPaths.Where(path => atParent.Any(e => !e.IsGitlink && e.Path == path)))
+        {
+            texts.Add(await GitAsync(mirror, cancellationToken, "show", $"{candidate.Parent.Value}:{path}"));
+        }
+
+        return ScoutGrantGuard.ProjectCode(texts, Path.Combine(settings.Root, candidate.Id.Value));
     }
 
     /// <summary>The lines the change ADDED (<c>+</c> lines of the unified diff, headers excluded).</summary>

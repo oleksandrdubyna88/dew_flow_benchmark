@@ -105,7 +105,12 @@ public sealed record ScoutParentFacts(IReadOnlyList<CommitSha> FixParents, bool 
 
 /// <summary>A candidate with what the mirror says about it: P's commit date, the ground truth G (§3.1) computed from the diff, and the fix's
 /// lineage for the parent check.</summary>
-public sealed record ScoutCandidateFacts(ScoutCandidate Candidate, DateTimeOffset ParentDate, IReadOnlyList<string> GroundTruth, ScoutParentFacts Parents);
+public sealed record ScoutCandidateFacts(ScoutCandidate Candidate, DateTimeOffset ParentDate, IReadOnlyList<string> GroundTruth, ScoutParentFacts Parents)
+{
+    /// <summary>Empty when P's own Claude settings grant nothing outside the repository; otherwise <see cref="ScoutCandidates.ProjectGrantsOutside"/>
+    /// or <see cref="ScoutCandidates.ProjectSettingsUnreadable"/> — a code, never the granted path.</summary>
+    public string ProjectGrant { get; init; } = string.Empty;
+}
 
 /// <summary>A candidate the selection left out, and why — every exclusion is recorded, never silent.</summary>
 public sealed record ScoutExclusion(ScoutTaskId Id, string Reason);
@@ -119,6 +124,9 @@ public sealed record ScoutSelection(IReadOnlyList<ScoutCandidateFacts> Admitted,
 /// cut-offs is excluded: a model that saw the code in training gains recall that says nothing about scouting;</item>
 /// <item><b>P verified per merge style</b> (S7, <see cref="ScoutParentCheck"/>) — a mismatch excludes the candidate by id with a reason CODE,
 /// never a value;</item>
+/// <item><b>no grant outside the repository</b> (§3.1 as amended 2026-10-13) — a P whose own <c>.claude</c> settings grant a directory outside
+/// it, or cannot be read, is excluded by code: a scout launched in its tree could read that directory. It used to be refused only when the
+/// tree was built, which stopped the whole selection over one drawn task;</item>
 /// <item><b>3–15 files of G</b>, not docs-only — a release, a version bump or a dependency bump leaves too few files once lockfiles,
 /// manifests and changelogs are out.</item>
 /// </list>
@@ -129,6 +137,15 @@ public static class ScoutCandidates
     public const int MinFiles = 3;
 
     public const int MaxFiles = 15;
+
+    /// <summary>The code for a P whose OWN Claude settings grant a directory outside the repository — never the path itself, which for a
+    /// private repository names the operator's folders.</summary>
+    public const string ProjectGrantsOutside =
+        "P's own .claude settings grant a directory outside the repository — a scout launched in its tree could read it";
+
+    /// <summary>The code for a P whose own Claude settings could not be read — a grant nobody could read is a grant nobody checked.</summary>
+    public const string ProjectSettingsUnreadable =
+        "P's own .claude settings could not be read — a grant nobody could read is a grant nobody checked";
 
     public static ScoutSelection Admit(IReadOnlyList<ScoutCandidateFacts> candidates, DateOnly laterCutoff)
     {
@@ -144,6 +161,7 @@ public static class ScoutCandidates
         {
             (false, _) => $"P was committed {c.ParentDate.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}, not after the later cut-off {laterCutoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
             (_, { Length: > 0 } code) => code,
+            _ when c.ProjectGrant.Length > 0 => c.ProjectGrant,
             _ => ScoutGroundTruth.Refusal(c.GroundTruth),
         };
 }
