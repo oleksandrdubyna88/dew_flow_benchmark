@@ -399,7 +399,12 @@ unit of its own, and the fourth is the one every writer goes through:
 **1. The classification.** `ScoutTaskPrivacy` on `ScoutTask` (and on a candidate: `"private": true`, `"language": "PHP"`). A private task's
 id IS its label — `p03`, a `p` and two to four digits (four since E2 S8: about 1 080 admissible private candidates), never a name — so every tree (`<trees root>/p03`), artefact (`scouts/<run>/<cell>/`)
 and log path carries the label only; it names its language, the one thing its committed record says about the repository. Its repository
-is a local `file://` url (the WSL clone), read by the trees and the history exactly as a public slug is.
+is a local `file://` url (the WSL clone), read by the trees and the history exactly as a public slug is. Because a working clone keeps its
+default branch's history in `refs/remotes/origin/*` (its local branch is usually behind) and `clone --bare` / `fetch origin` copy only
+`refs/heads` and tags, the mirror of a LOCAL source (`file://` or a plain path — `GitCheckoutProvider.IsLocalSource`) also fetches
+`+refs/remotes/*:refs/source-remotes/*` after the clone and on every refresh, reading the clone and writing nothing to it; an https/ssh
+source is fetched as before (fixed 2026-10-13 after a live `tasks` run stopped on "commit 3f51… is not in file:////…";
+`GitCheckoutLocalSourceTests`, red first with `commit 062d1b6487bb is not in file:///…`).
 
 **2. The campaign key** (`ScoutCampaignKey`, composing the gate's `FileHashKey` and `FileHashKeyFile`, widened to a path): 32 random bytes,
 owner-only, a redacted `ToString`, named by `--campaign-key` or `BENCH_SCOUT_CAMPAIGN_KEY`. Its resolved path (links and junctions followed,
