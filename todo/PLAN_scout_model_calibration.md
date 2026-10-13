@@ -18,7 +18,7 @@
 > Related: [module_probes.md](../research/module_probes.md) (the context this one is composed from),
 > [module_gate.md](../research/module_gate.md) (the blinded assessor), [architecture.md](../research/architecture.md).
 > The rule this measurement decides lives in the shared conventions: `dew_flow_conventions · common/subagent-models.md`,
-> and its own plan is `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md`.
+> and its own plan is `dew_flow_conventions · research/PLAN_subagent_model_tiers.md`.
 >
 > **Since 2026-10-13 this plan's verdict no longer gates the shared rule:** the operator switched without waiting for it.
 > The calibration, if finished, is a check after the fact; a result worse than the pre-registered margin (3 recall points,
@@ -498,7 +498,7 @@ end and RESULTS reports §1's three questions per team size, against the predict
 - **S7 — The write-up** *(Opus).* `RESULTS_scout_models.md` as §3.12 lists, marked *preliminary — not a verdict* in its
   title and status line, with the sizing simulation's answer to "how many tasks would a decision need"; its
   `research/README.md` row, `module_scouts.md` with the run, `todo/README.md`, the plan promoted with its deviations
-  (D7 first among them), `prune`. The reading goes to `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a
+  (D7 first among them), `prune`. The reading goes to `dew_flow_conventions · research/PLAN_subagent_model_tiers.md` as a
   PR there: since 2026-10-13 the rule is already switched, so the reading is a check after the fact — one worse than the
   pre-registered margin reopens the decision with the operator, and a promising one may justify a full decision run
   (`todo/PLAN_scout_decision_run.md`). The weekly alias check (§3.14) is registered once the reading is recorded.
@@ -653,5 +653,5 @@ Named here so they are not lost; each needs its own decision.
 - [ ] E2: P was verified per merge style; `tasks.json` names the merge style; no private stream, statement or path is
       committed.
 - [ ] Open tail, outside this repository: the preliminary reading handed to
-      `dew_flow_conventions · todo/PLAN_subagent_model_tiers.md` as a PR there; if it is promising,
+      `dew_flow_conventions · research/PLAN_subagent_model_tiers.md` as a PR there; if it is promising,
       `todo/PLAN_scout_decision_run.md` exists here.
