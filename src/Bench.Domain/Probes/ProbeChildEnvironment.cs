@@ -51,13 +51,9 @@ public static class ProbeChildEnvironment
     public static ChildEnvironment Of(IReadOnlyDictionary<string, string> parent) =>
         CoaiEnvironment.Minimal(WithGuardOff(parent), static name => Passes(name) || name == ModelGuardVariable).WithSecret(SecretValue.None);
 
-    private static Dictionary<string, string> WithGuardOff(IReadOnlyDictionary<string, string> parent)
-    {
-        var variables = parent
+    private static Dictionary<string, string> WithGuardOff(IReadOnlyDictionary<string, string> parent) =>
+        parent
             .Where(v => !string.Equals(v.Key, ModelGuardVariable, StringComparison.OrdinalIgnoreCase))
+            .Append(KeyValuePair.Create(ModelGuardVariable, ModelGuardOff))
             .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
-        variables[ModelGuardVariable] = ModelGuardOff;
-
-        return variables;
-    }
 }
