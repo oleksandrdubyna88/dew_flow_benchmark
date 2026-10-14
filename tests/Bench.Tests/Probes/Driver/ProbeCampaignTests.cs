@@ -26,9 +26,11 @@ public sealed class ProbeCampaignTests(PostgresFixture postgres)
         rig.AddSubject("claude-fake", "claude", new JsonObject { ["readInside"] = true, ["webSearch"] = true });
         rig.AddSubject("codex-fake", "codex", new JsonObject { ["readInside"] = true, ["readOutside"] = true });
         var (run, cells) = await rig.PlanAsync(ThreeProbes, repeats: 2);
-        var lines = new List<string>();
+        // The two subjects' lanes report concurrently: a List<string> lost lines under that race ("found 9" of 12 — 6 of 6 runs red
+        // locally on 2026-10-14, and on CI), while every cell had settled and been stored. A concurrent queue keeps every line.
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
 
-        var report = await rig.CampaignAsync(run, lines.Add);
+        var report = await rig.CampaignAsync(run, lines.Enqueue);
 
         report.Stop.Should().Be(CampaignStop.Drained, report.Reason);
         report.Settled.Should().Be(cells.Count);

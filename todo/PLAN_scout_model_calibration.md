@@ -124,7 +124,7 @@ A task is one past change in a **public** family repository, investigated at its
 
 `git archive P` from the existing bare mirror, extracted under the checkout root, then a fresh `git init` and ONE
 commit — so `WorktreeAudit` and `WorkspaceTrust` keep working, and there is no later history to read. A submodule's
-content at its pinned sha is archived into its path. If the PR's own plan existed at P, it is removed and the removal
+content at its pinned sha is archived into its path (for a local source, from the objects its clone keeps under `.git/modules/<path>`, or else from a clone beside it whose `origin` is the submodule's own repository — 2026-10-14: a private repository's submodule url was unreachable from this machine). If the PR's own plan existed at P, it is removed and the removal
 is recorded on the task. **The project's own Claude settings** (`.claude/settings.json` and a committed
 `settings.local.json`) are removed the same way and recorded (2026-10-13, §3.1): they configure the scouting tool, can
 grant a directory outside the tree, and the launch reads no project settings anyway (`--setting-sources ""`); the rest

@@ -77,6 +77,80 @@ public sealed class ScoutTreesTests : IDisposable
         Directory.Exists(Path.Combine(tree.Root, "vendor", "lib", ".git")).Should().BeFalse("the submodule's content, not its repository");
     }
 
+    /// <summary>Found live 2026-10-14 (D10): a private repository read from the operator's local clone pins a submodule whose
+    /// <c>.gitmodules</c> url is a private GitHub repository this machine cannot reach ("Repository not found"), which stopped the
+    /// selection. The local clone already holds the submodule's objects under <c>.git/modules/&lt;path&gt;</c> — so for a LOCAL source the
+    /// submodule is archived from there, and the url is only the fallback.</summary>
+    [Fact]
+    public async Task A_local_sources_submodule_is_archived_from_its_own_git_modules_when_the_url_cannot_be_reached()
+    {
+        using var module = new DatedGitRepo(Ct);
+        var pinned = await module.InitAsync(("lib.txt", "pinned content\n"), ("m1", "2026-05-01T10:00:00+00:00"));
+        await _repo.InitAsync(("README.md", "# example\n"), ("init", "2026-05-01T10:00:00+00:00"));
+        await _repo.GitAsync("-c", "protocol.file.allow=always", "submodule", "add", "-q", module.Url, "vendor/lib");
+        await _repo.GitAsync("config", "-f", ".gitmodules", "submodule.vendor/lib.url", "https://example.invalid/private/lib.git");
+        await _repo.GitAsync("add", "-A");
+        await _repo.GitAsync("commit", "-q", "-m", "pin the submodule behind an unreachable url");
+        var parent = (await _repo.GitAsync("rev-parse", "HEAD")).Trim();
+
+        var tree = (await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), _repo.Url, CommitSha.Parse(parent).Ok(), []), Ct)).Ok();
+
+        File.ReadAllText(Path.Combine(tree.Root, "vendor", "lib", "lib.txt")).Should().Be("pinned content\n");
+        pinned.Should().NotBeEmpty();
+    }
+
+    /// <summary>The same day, the next drawn task: its clone never initialised the submodule (no <c>.git/modules</c>), but the operator keeps
+    /// a clone of that very repository BESIDE it. A sibling named as the submodule's repository is used — only when its own <c>origin</c> is
+    /// the same repository (host, owner and name; https and ssh alike), so a folder that merely shares the name is never taken for it.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_local_sources_submodule_is_archived_from_a_sibling_clone_only_when_that_clone_is_the_same_repository(bool sameOrigin)
+    {
+        var name = $"lib-{Guid.NewGuid():N}"[..16];
+        using var module = new DatedGitRepo(Ct);
+        var pinned = await module.InitAsync(("lib.txt", "pinned content\n"), ("m1", "2026-05-01T10:00:00+00:00"));
+        await _repo.InitAsync(("README.md", "# example\n"), ("init", "2026-05-01T10:00:00+00:00"));
+        await _repo.CommitAsync((".gitmodules", $"[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = https://example.invalid/acme/{name}.git\n"), ("modules", "2026-05-02T10:00:00+00:00"));
+        await _repo.GitAsync("update-index", "--add", "--cacheinfo", $"160000,{pinned},vendor/lib");
+        await _repo.GitAsync("commit", "-q", "-m", "pin the submodule, never initialised here");
+        var parent = (await _repo.GitAsync("rev-parse", "HEAD")).Trim();
+        var sibling = Path.Combine(Path.GetDirectoryName(_repo.Root)!, name);
+        await GitIn(Path.GetDirectoryName(_repo.Root)!, "-c", "protocol.file.allow=always", "clone", "-q", module.Url, name);
+        await GitIn(sibling, "remote", "set-url", "origin", sameOrigin ? $"git@example.invalid:acme/{name}.git" : $"git@example.invalid:someone-else/{name}.git");
+
+        try
+        {
+            var built = await Builder("a").BuildAsync(new ScoutTreeSpec(ScoutTaskId.Parse("t01").Ok(), _repo.Url, CommitSha.Parse(parent).Ok(), []), Ct);
+
+            if (sameOrigin)
+            {
+                File.ReadAllText(Path.Combine(built.Ok().Root, "vendor", "lib", "lib.txt")).Should().Be("pinned content\n");
+            }
+            else
+            {
+                built.Reason().Should().Contain($"https://example.invalid/acme/{name}.git", "a sibling of another origin is not the submodule's repository");
+            }
+        }
+        finally
+        {
+            TempGitRepo.DeleteTree(sibling);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://github.com/acme/lib.git", "git@github.com:acme/lib.git", true)]
+    [InlineData("https://github.com/Acme/Lib", "ssh://git@github.com/acme/lib.git", true)]
+    [InlineData("https://github.com/acme/lib.git/", "https://github.com/acme/lib", true)]
+    [InlineData("https://github.com/acme/lib.git", "git@github.com:someone-else/lib.git", false)]
+    [InlineData("https://github.com/acme/lib.git", "git@gitlab.com:acme/lib.git", false)]
+    [InlineData("https://github.com/acme/lib.git", "", false)]
+    public void Two_urls_are_the_same_repository_when_host_and_path_agree(string a, string b, bool same) =>
+        ScoutLocalModules.SameRepository(a, b).Should().Be(same);
+
+    private static async Task<string> GitIn(string directory, params string[] args) =>
+        (await GitCommand.ReadAsync(directory, TimeSpan.FromSeconds(60), Ct, args)).Ok();
+
     [Fact]
     public void A_trees_root_inside_a_directory_the_user_settings_grant_is_refused_naming_both_paths()
     {

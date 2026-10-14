@@ -167,13 +167,13 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
         return mirror switch
         {
-            Outcome<string>.Ok bare => await ExtractAsync(bare.Value, commit, into, depth, privacy, cancellationToken),
+            Outcome<string>.Ok bare => await ExtractAsync(bare.Value, ((Outcome<RepoUrl>.Ok)url).Value.Value, commit, into, depth, privacy, cancellationToken),
             Outcome<string>.Fail fail => Outcome<bool>.Failure(fail.Reason),
             _ => Outcome<bool>.Failure("unreachable"),
         };
     }
 
-    private async Task<Outcome<bool>> ExtractAsync(string bare, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
+    private async Task<Outcome<bool>> ExtractAsync(string bare, string source, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var zip = Path.Combine(Path.GetTempPath(), $"bench-scout-{Guid.NewGuid():N}.zip");
 
@@ -190,7 +190,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
             Directory.CreateDirectory(into);
             ZipFile.ExtractToDirectory(zip, into, overwriteFiles: false);
-            return await SubmodulesAsync(bare, commit, into, depth, privacy, cancellationToken);
+            return await SubmodulesAsync(bare, source, commit, into, depth, privacy, cancellationToken);
         }
         finally
         {
@@ -199,8 +199,9 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
     }
 
     /// <summary>Each submodule's content at the sha P pins, archived into its path from its OWN mirror — the url read from P's
-    /// <c>.gitmodules</c>. A submodule whose url cannot be read or reached refuses the tree: a tree missing a directory is not P.</summary>
-    private async Task<Outcome<bool>> SubmodulesAsync(string bare, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
+    /// <c>.gitmodules</c> — or, for a LOCAL source, from the objects its clone keeps under <c>.git/modules/&lt;path&gt;</c>
+    /// (<see cref="ScoutLocalModules"/>). A submodule whose url cannot be read or reached refuses the tree: a tree missing a directory is not P.</summary>
+    private async Task<Outcome<bool>> SubmodulesAsync(string bare, string source, CommitSha commit, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var listed = await GitCommand.ReadAsync(bare, settings.GitTimeout, cancellationToken, "ls-tree", "-r", commit.Value);
         var pinned = listed.Match(text => ScoutSubmodules.Pinned(text), _ => []);
@@ -219,7 +220,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
 
         foreach (var (path, sha) in pinned)
         {
-            var archived = await SubmoduleAsync(modules, path, sha, into, depth, privacy, cancellationToken);
+            var archived = await SubmoduleAsync(modules, source, path, sha, into, depth, privacy, cancellationToken);
 
             if (archived is Outcome<bool>.Fail)
             {
@@ -231,7 +232,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
     }
 
     private async Task<Outcome<bool>> SubmoduleAsync(
-        IReadOnlyDictionary<string, string> modules, string path, string sha, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, string> modules, string source, string path, string sha, string into, int depth, ScoutTaskPrivacy privacy, CancellationToken cancellationToken)
     {
         var commit = CommitSha.Parse(sha);
         var target = Path.GetFullPath(Path.Combine(into, path));
@@ -242,7 +243,7 @@ public sealed class ScoutTrees(ScoutTreeSettings settings, GitCheckoutProvider m
         }
 
         logger.LogInformation("Archiving submodule {Path} at {Sha}", ScoutPublication.Path(privacy, path), privacy == ScoutTaskPrivacy.Private ? ScoutPublication.PrivateMark : sha[..12]);
-        return await ArchiveAsync(RepoUrl.Parse(url), ((Outcome<CommitSha>.Ok)commit).Value, target, depth + 1, privacy, cancellationToken);
+        return await ArchiveAsync(RepoUrl.Parse(ScoutLocalModules.Source(source, path, url)), ((Outcome<CommitSha>.Ok)commit).Value, target, depth + 1, privacy, cancellationToken);
     }
 
     private static bool RemoveFile(string root, string relative)
