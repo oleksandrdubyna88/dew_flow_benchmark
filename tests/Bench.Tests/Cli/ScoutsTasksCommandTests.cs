@@ -113,7 +113,9 @@ public sealed class ScoutsTasksCommandTests : IDisposable
             (parent, fix, "c-one", 1, Statement), (parent, fix, "c-two", 2, Statement), (parent, fix, "c-three", 3, Statement), (parent, fix, "c-four", 4, Statement), (parent, fix, "c-five", 5, Statement),
             (parent, fix, "c-merge", 0, Statement));
 
-        var (code, output, error) = await RunAsync(candidates, Cutoffs("2026-03-31"));
+        // --read-all: the exclusion line is the full read's statistics. c-merge is a LOCAL commit, keyed by its fix sha, which this fixture
+        // makes anew on every run — so under the lazy read it falls before or after the fifth admissible candidate by chance (CI found it).
+        var (code, output, error) = await RunAsync(candidates, Cutoffs("2026-03-31"), "--read-all");
 
         code.Should().Be(ExitCodes.Pass, output + error);
         output.Should().Contain($"excluded       c-merge — {ScoutParentCheck.MergeCommitNeedsTwoParents}").And.Contain("selected       main    example-repo → c-four");
