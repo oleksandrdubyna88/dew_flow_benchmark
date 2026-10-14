@@ -39,7 +39,13 @@ public sealed record ScoutArmCounts(
 
 /// <summary>An arm's tokens: the team's per scored cell (exact), and one scout's — input and cache always its own, its OUTPUT only where the
 /// scout was the one scout on its model (<see cref="ScoutTokens"/>), else not captured.</summary>
-public sealed record ScoutArmTokens(Figure TeamInput, Figure TeamOutput, Figure TeamCacheRead, Figure TeamCacheWrite, Figure ScoutInput, Figure ScoutOutput);
+public sealed record ScoutArmTokens(Figure TeamInput, Figure TeamOutput, Figure TeamCacheRead, Figure TeamCacheWrite, Figure ScoutInput, Figure ScoutOutput)
+{
+    /// <summary>The team's cache writes by their TTL — priced differently, so the cost split (2026-10-14) needs them apart.</summary>
+    public Figure TeamCacheWrite5m { get; init; } = Figure.Unknown;
+
+    public Figure TeamCacheWrite1h { get; init; } = Figure.Unknown;
+}
 
 /// <summary>Why an arm's wrong-claim result is not measured — the half of D5 it cannot then answer.</summary>
 public enum ScoutWrongGap
@@ -188,7 +194,11 @@ public static class ScoutAnalysis
             Mean(teams.Select(t => Figure.Of(t.CacheRead))),
             Mean(teams.Select(t => Figure.Of(t.CacheWrite))),
             Mean(scouts.Select(s => Figure.Of(s.Tokens.Input))),
-            Mean(scouts.Where(s => s.OutputSeparable).Select(s => Figure.Of(s.Tokens.Output))));
+            Mean(scouts.Where(s => s.OutputSeparable).Select(s => Figure.Of(s.Tokens.Output))))
+        {
+            TeamCacheWrite5m = Mean(teams.Select(t => Figure.Of(t.CacheWrite5m))),
+            TeamCacheWrite1h = Mean(teams.Select(t => Figure.Of(t.CacheWrite1h))),
+        };
     }
 
     /// <summary>Team cost ÷ files of G found, over the scored cells whose cost and recall were captured; unknown when nothing was found.</summary>

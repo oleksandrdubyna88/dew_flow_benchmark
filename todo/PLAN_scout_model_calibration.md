@@ -492,6 +492,9 @@ the risk consultation (an explicit public projection, verified in code: `ScoutRe
   Sonnet 5.5 cache hit at $0.20/M (Sonnet $1.10243 = its tokens exactly at that rate) while the pricing page, re-read that night, says
   $0.10/M (0.05× input, footnote 2). Every reported dollar stays at the PUBLISHED price; `prices.json` carries the CLI's observed rate
   beside it (`cliRates`), used only by the cost check, which compares like with like.
+  **The effort was unequal (2026-10-14, after the pilot):** the pinned settings ran Opus scouts at `high` and Sonnet scouts at `xhigh`
+  (read from persisted child transcripts). `--effort <level>` now pins one level for every model; the follow-up cells run at `high`
+  (a model comparison), with a contemporaneous Sonnet-at-xhigh control; `report --prices` splits each team's cost by token kind.
 
 Code round: the key path refusals and the encoding, the projection's reach (every writer, every error path), the launch
 argv, the limits and the overshoot arithmetic, the P check, the RED fixtures, the evidence order.

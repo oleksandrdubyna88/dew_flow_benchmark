@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Bench.Contracts;
+using Bench.Domain.Scouts;
 
 namespace Bench.Cli;
 
@@ -11,7 +12,11 @@ public static class ScoutReportText
 {
     public const string PreliminaryLabel = "preliminary — not a verdict";
 
-    public static string Of(ScoutRunReportDto report)
+    public static string Of(ScoutRunReportDto report) => Of(report, []);
+
+    /// <summary>The report with each arm's team cost split by token kind at <paramref name="prices"/> (<c>report --prices</c>, 2026-10-14) —
+    /// tokens and dollars per kind; no prices, no split line.</summary>
+    public static string Of(ScoutRunReportDto report, IReadOnlyList<ModelPrice> prices)
     {
         var text = new StringBuilder();
         var l = report.Ledger;
@@ -33,6 +38,7 @@ public static class ScoutReportText
         {
             text.AppendLine();
             Arm(text, arm);
+            Split(text, arm, report.Pins, prices);
         }
 
         text.AppendLine();
@@ -57,6 +63,18 @@ public static class ScoutReportText
 
     private static string Interval(ScoutIntervalDto i) =>
         i.Known ? Inv($"{Signed(i.Point)} [{Signed(i.Lower)}, {Signed(i.Upper)}] over {i.Tasks} task(s) in {i.Clusters} repo(s)") : "— (no paired task)";
+
+    /// <summary>The arm's mean team tokens by kind, each with its dollars at the price of the model its scouts ran on (the run's pinned id).</summary>
+    private static void Split(StringBuilder text, ScoutArmReportDto a, ScoutPinsDto pins, IReadOnlyList<ModelPrice> prices)
+    {
+        var model = a.Model == "opus" ? pins.ResolvedOpus : pins.ResolvedSonnet;
+        var t = a.Tokens;
+
+        if (prices.FirstOrDefault(p => p.ModelId == model) is { } price && t.TeamInput.Known)
+        {
+            text.AppendLine("  cost split   " + ScoutCostSplit.Line(ScoutCostSplit.Of(t.TeamInput.Value, t.TeamOutput.Value, t.TeamCacheRead.Value, t.TeamCacheWrite5m.Value, t.TeamCacheWrite1h.Value, price)));
+        }
+    }
 
     private static void Arm(StringBuilder text, ScoutArmReportDto a)
     {

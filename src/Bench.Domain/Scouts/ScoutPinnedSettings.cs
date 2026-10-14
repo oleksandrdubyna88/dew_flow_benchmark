@@ -84,6 +84,25 @@ public static class ScoutPinnedSettings
         return projection.ToJsonString(Canonical) + "\n";
     }
 
+    /// <summary>The effort levels Claude Code accepts for <c>effortLevel</c>.</summary>
+    public static IReadOnlyList<string> EffortLevels { get; } = ["low", "medium", "high", "xhigh", "max"];
+
+    /// <summary>The pinned file's name: the operator's configuration (<see cref="FileName"/>) when no effort is named, else a file of its own
+    /// per level — so the two conditions never share a file, and a run's settings pin says which one it measured.</summary>
+    public static string FileNameFor(string effort) => effort.Length == 0 ? FileName : $"pinned-settings.effort-{effort.Trim().ToLowerInvariant()}.json";
+
+    /// <summary>ONE effort for every model (the pilot, 2026-10-14: projected from the operator's settings a Sonnet child ran at <c>xhigh</c>,
+    /// an Opus child at <c>high</c>): <c>{"effortLevel": level}</c> and no <c>modelSettings</c>, so no model can differ. Refused for a level
+    /// Claude Code does not accept, naming the ones it does.</summary>
+    public static Outcome<string> Explicit(string effort)
+    {
+        var level = effort.Trim().ToLowerInvariant();
+
+        return EffortLevels.Contains(level, StringComparer.Ordinal)
+            ? Outcome<string>.Success(new JsonObject { ["effortLevel"] = level }.ToJsonString(Canonical) + "\n")
+            : Outcome<string>.Failure($"'{effort}' is not an effort level — {string.Join(", ", EffortLevels)}");
+    }
+
     /// <summary>One key's value as a compact JSON text, or the word <c>absent</c>.</summary>
     private static string Value(JsonObject o, string key) => o[key] is { } node ? node.ToJsonString() : "absent";
 }

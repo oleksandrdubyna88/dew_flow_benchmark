@@ -84,7 +84,13 @@ public sealed record ScoutArmReportDto(
 
 /// <summary>Tokens per scored cell: the team's (exact), and one scout's — its output only where it was the one scout on its model.</summary>
 public sealed record ScoutTokensDto(
-    ScoutFigureDto TeamInput, ScoutFigureDto TeamOutput, ScoutFigureDto TeamCacheRead, ScoutFigureDto TeamCacheWrite, ScoutFigureDto ScoutInput, ScoutFigureDto ScoutOutput);
+    ScoutFigureDto TeamInput, ScoutFigureDto TeamOutput, ScoutFigureDto TeamCacheRead, ScoutFigureDto TeamCacheWrite, ScoutFigureDto ScoutInput, ScoutFigureDto ScoutOutput)
+{
+    /// <summary>The team's cache writes by TTL (2026-10-14) — what the report's cost split prices apart.</summary>
+    public ScoutFigureDto TeamCacheWrite5m { get; init; } = new(false, 0, ScoutFigureDto.NotCapturedState);
+
+    public ScoutFigureDto TeamCacheWrite1h { get; init; } = new(false, 0, ScoutFigureDto.NotCapturedState);
+}
 
 /// <summary>An arm's cells by how they ended, and its scored cells' claims by what became of them.</summary>
 public sealed record ScoutCountsDto(

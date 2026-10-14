@@ -48,6 +48,9 @@ public sealed class ScoutArtifacts(string artifactRoot) : IScoutStreams, IScoutA
 
     public string Root => _root;
 
+    /// <summary>The run's explicit effort (<c>--effort</c>, the pilot 2026-10-14) — empty for the operator's configuration.</summary>
+    public string Effort { get; init; } = string.Empty;
+
     public static string FileName(ScoutArtifactKind kind) => kind switch
     {
         ScoutArtifactKind.Stream => "stream.ndjson",
@@ -142,7 +145,7 @@ public sealed class ScoutArtifacts(string artifactRoot) : IScoutStreams, IScoutA
     }
 
     /// <summary>Where the pinned settings file lives — <c>scouts/pinned-settings.json</c> under the artefact root (S5).</summary>
-    public string PinnedSettingsFile => Path.Combine(_root, Folder, ScoutPinnedSettings.FileName);
+    public string PinnedSettingsFile => Path.Combine(_root, Folder, ScoutPinnedSettings.FileNameFor(Effort));
 
     /// <summary>The pinned settings file the scout launch points <c>--settings</c> at (S5): written ONCE from the operator's user settings —
     /// <c>effortLevel</c> and <c>modelSettings</c> only — and never rewritten. Found again, it must still hold only those two keys and still say
@@ -151,6 +154,11 @@ public sealed class ScoutArtifacts(string artifactRoot) : IScoutStreams, IScoutA
     /// by the pin reader, not to the user settings.)</summary>
     public Outcome<string> PinnedSettings(IReadOnlyList<string> userSettingsFiles)
     {
+        if (Effort.Length > 0)
+        {
+            return ExplicitEffort();
+        }
+
         var path = PinnedSettingsFile;
         var user = userSettingsFiles.Where(File.Exists).Select(File.ReadAllText).FirstOrDefault() ?? "{}";
         var projection = ScoutPinnedSettings.Project(user);
@@ -168,6 +176,29 @@ public sealed class ScoutArtifacts(string artifactRoot) : IScoutStreams, IScoutA
         }
 
         return Found(path, File.ReadAllText(path), user);
+    }
+
+    /// <summary>An explicit effort's pinned file (the pilot, 2026-10-14): <c>{"effortLevel": level}</c> alone, written once in its own file and
+    /// held to exactly that text — the operator's settings play no part, so no model can run at another level.</summary>
+    private Outcome<string> ExplicitEffort()
+    {
+        var path = PinnedSettingsFile;
+
+        if (ScoutPinnedSettings.Explicit(Effort) is not Outcome<string>.Ok { Value: var text })
+        {
+            return ScoutPinnedSettings.Explicit(Effort);
+        }
+
+        if (!File.Exists(path))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            ArtifactCommit.Stage(path, Encoding.UTF8.GetBytes(text));
+            return Outcome<string>.Success(path);
+        }
+
+        return string.Equals(File.ReadAllText(path), text, StringComparison.Ordinal)
+            ? Outcome<string>.Success(path)
+            : Outcome<string>.Failure($"{path} does not hold the one effort level it is named for — delete it and run again to pin it afresh");
     }
 
     private static Outcome<string> Found(string path, string pinned, string user) =>
