@@ -1,0 +1,347 @@
+{
+ "codexVersion": "codex-cli 0.160.0",
+ "codexModel": null,
+ "sanityGate": {
+  "referenceMet": 11,
+  "threshold": 9,
+  "pass": true
+ },
+ "sources": {
+  "reference": {
+   "counts": {
+    "met": 11,
+    "partial": 1,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 66.475,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/entitySlots.ts:60 declares bundleKey: SecretMapKey; all ten rows supply keys at lines 76–151.",
+     "note": "Uses the vault's key type; every slot supplies its corresponding bundle key."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/revisionHistory.ts:56 defines RevisionSecrets through (typeof SMALL_FIELDS)[number]; the handwritten interface is removed.",
+     "note": "SMALL_FIELDS retains its original values and order; parsing code is unchanged."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/revisionSnapshot.ts:37–38 iterates SECRET_SLOTS, assigning await slot.read(...) to secrets[slot.revisionField].",
+     "note": "Preserves snapshot fields, undefined values, and timestamp capture before reads."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/test/syncPinRule.test.ts:31–37 compares sorted SEALABLE_MAPS against sorted slot.bundleKey values.",
+     "note": "The assertion checks exact equality; SEALABLE_MAPS production code is unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/test/slotTable.test.ts:64–71 compares table bundle keys plus attachments and images against SECRET_KINDS bundle keys.",
+     "note": "Equality checks both coverage directions and references the previously missing bundleKey column."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/test/slotTable.test.ts:74–104 records table and snapshot getters; summary.txt:25–26 reports green BEFORE and AFTER.",
+     "note": "Compares recorded calls including multiplicity and verifies one distinct getter per slot."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/storedSecret.ts:18–21 defines a unique-symbol object phantom; carried returns string at line 31.",
+     "note": "Neither string assignment direction is allowed; no other production file introduces StoredSecret returns."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/test/typedFixtures.test.ts:88–110,126–136 builds programs and checks diagnostics; all three named fixture files are added.",
+     "note": "Negative fixtures expect TS2322 at line 7; the positive control must compile. The harness follows the existing test filename convention."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "src_vs_code/src/test/typedFixtures.test.ts:107–110 names code, line, filename, and 'the fixture compiled'; stored_is_not_a_string.ts:7 contains the rejected assignment.",
+     "note": "Requires exactly the expected diagnostic code and line, rather than any error."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "src_vs_code/tsconfig.json:18 excludes src/test/fixtures/typed; src_vs_code/eslint.config.mjs:14 ignores src/test/fixtures/typed/**.",
+     "note": "Deliberately failing fixtures are excluded from project compilation and lint."
+    },
+    {
+     "id": "R11",
+     "verdict": "met",
+     "evidence": "candidate.diff adds assertions without editing existing ones and contains no baseline change; summary.txt:30–38,85–89 reports green tests and unchanged ratchet.",
+     "note": "Named regression tests remain unchanged or only extended; production changes preserve resulting secret values."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt:21–26 records TS2339 and guard observations; :63–66 records planted-alias failure and restoration; :81–83 records program-build timing.",
+     "note": "Required technical observations are recorded, but unavailable review, consultation, and PR steps are not stated as skipped."
+    }
+   ]
+  },
+  "c3": {
+   "counts": {
+    "met": 9,
+    "partial": 3,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 82.414,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:72; candidate.diff:81-153",
+     "note": "bundleKey uses the vault's SecretMapKey type; all ten rows supply their corresponding bundle keys."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:165-188; candidate.diff:215-218",
+     "note": "The handwritten interface is replaced by optional string properties mapped from the SMALL_FIELDS literal tuple; parsing remains unchanged."
+    },
+    {
+     "id": "R3",
+     "verdict": "partial",
+     "evidence": "candidate.diff:281-301",
+     "note": "Table iteration preserves secret fields, but Date.now() now executes after all awaited reads, changing the snapshot timestamp."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:368-369; candidate.diff:529-533",
+     "note": "Sorted map keys are compared directly with slot bundle keys; SEALABLE_MAPS retains its runtime definition."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:444-451",
+     "note": "Equality against SECRET_KINDS covers both directions, with exactly attachments and images as named exceptions."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:468-496; summary.txt: \"The snapshot check passed before and after the change.\"",
+     "note": "Recording sources derive getters from slot reads and compare them with snapshot calls, also checking field placement."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:338-353; candidate.diff contains no StoredSecret return changes in other production files",
+     "note": "The unique-symbol object type rejects assignment both ways; carried returns string. Only the mint in storedSecret.ts returns StoredSecret."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:375-405; candidate.diff:597-607; candidate.diff:640-679",
+     "note": "Three named fixtures run through TypeScript in a node:test harness, checking exact diagnostics and a diagnostic-free positive control."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:399-405; candidate.diff:602-615; candidate.diff:691-697",
+     "note": "The rejected assignment occupies line 7; failures name code, line, fixture, and explicitly distinguish a fixture that compiled."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:12; candidate.diff:729-730",
+     "note": "The fixture directory is excluded from the project build and globally ignored by ESLint; the harness remains included."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:526-533; candidate.diff:281-299; summary.txt: \"npm run ratchet is at baseline\" and \"0 fail\"",
+     "note": "Suite success and unchanged ratchet are reported, but an existing sync assertion is replaced and snapshot timestamp timing changes."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt: \"TS2339: Property 'bundleKey' does not exist on type 'SecretSlot'\"; teeth failure and restoration recorded; timing: \"8.4 to 12.4 s\"; skipped steps documented",
+     "note": "RED, guard, teeth, restoration, and skipped steps are recorded; timing describes full typechecking rather than a concrete millisecond ts.Program build measurement."
+    }
+   ]
+  },
+  "c2": {
+   "counts": {
+    "met": 9,
+    "partial": 3,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 74.338,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:63; candidate.diff:68-145",
+     "note": "bundleKey uses the vault's SecretMapKey type; all ten rows supply the corresponding bundle key."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:188-213; candidate.diff:226",
+     "note": "RevisionSecrets maps over RevisionField, derived from SMALL_FIELDS; the handwritten interface is removed and parsing remains unchanged."
+    },
+    {
+     "id": "R3",
+     "verdict": "partial",
+     "evidence": "candidate.diff:277-297",
+     "note": "The table loop preserves secret fields and values, but Date.now() now executes after all awaited reads, changing the snapshot timestamp."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:365-366; candidate.diff:603-609",
+     "note": "The added assertion compares sorted SEALABLE_MAPS and slot bundle keys; the runtime map list remains unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:559-569",
+     "note": "Coverage compares vault SECRET_KINDS against slot bundle keys plus exactly attachments and images, enforcing both directions."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:465; candidate.diff:534-539; candidate.diff:576-590; summary.txt:13",
+     "note": "Shared recording storage compares snapshot calls against table-derived slotGetters and checks field placement; the summary records green before and after."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:331-352; summary.txt:18",
+     "note": "StoredSecret is an opaque object type, carried returns string, and no production consumer is changed to return StoredSecret."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:416-454; candidate.diff:614-658; candidate.diff:801-803; candidate.diff:819-842",
+     "note": "The test suite compiles all three fixtures, enforcing exact TS2322 diagnostics for negatives and no diagnostics for the positive control."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:448-454; candidate.diff:677-691; candidate.diff:828-842",
+     "note": "The rejected assignment occupies line 7; failure names code, line, fixture, and compilation success. Matching requires exact code and line."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:10; candidate.diff:858; candidate.diff:700-704",
+     "note": "TypeScript excludes the fixture directory, ESLint globally ignores it, and the harness checks that fixtures were not emitted."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:277-295; candidate.diff:455-493; summary.txt:34-35",
+     "note": "Existing assertions and ratchet remain unchanged, with the suite reported green; moving timestamp capture after awaited reads violates strict behavioral equivalence."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt:13-14; summary.txt:25-26; summary.txt:48-50",
+     "note": "RED, guard, mutation/restoration, and skips are recorded. Timing reports combined construction and typechecking in seconds, not a separate program-build measurement in milliseconds."
+    }
+   ]
+  },
+  "c1": {
+   "counts": {
+    "met": 10,
+    "partial": 2,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 74.779,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:60; candidate.diff:65-142; candidate.diff:565-575",
+     "note": "All ten rows declare bundleKey using the vault's SecretMapKey type; per-slot tests verify storage mappings."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:182-211; candidate.diff:224",
+     "note": "RevisionSecrets is mapped from SMALL_FIELDS through SmallField; the handwritten interface is removed."
+    },
+    {
+     "id": "R3",
+     "verdict": "partial",
+     "evidence": "candidate.diff:276-297",
+     "note": "Walks SECRET_SLOTS and preserves secret fields, but captures timestamp and metadata after awaited reads instead of before."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:365-366; candidate.diff:635-638",
+     "note": "Sorted equality asserts SEALABLE_MAPS against slot bundle keys; its runtime definition remains unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:551-562",
+     "note": "Compares vault keys with slot bundle keys plus exactly attachments and images; also checks slot-key uniqueness."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:513-531; candidate.diff:579-586; summary.txt:22",
+     "note": "Shared recording storage compares snapshot getter calls with table-derived slotGetters; summary records green before and after."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:328-349; candidate.diff:61; summary.txt:13",
+     "note": "Opaque object type rejects both string assignments; carried returns string. Only the mint within storedSecret.ts returns StoredSecret."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:416-455; candidate.diff:644-654; candidate.diff:783-798",
+     "note": "Three fixtures provide two TS2322 failures and a compiling positive control; the test compiles each and checks diagnostics."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:449-455; candidate.diff:711-721",
+     "note": "Rejected assignment occupies line 7; harness checks code, line, and filename, explicitly reporting when the fixture compiled."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-12; candidate.diff:808-810",
+     "note": "TypeScript excludes the typed fixture directory; ESLint globally ignores it. Harness reads fixture files dynamically."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:277-297; candidate.diff:456-491; summary.txt:24",
+     "note": "Existing assertions and size baseline are unchanged, and suite passes are reported; snapshot timestamp placement nevertheless changes runtime behavior."
+    },
+    {
+     "id": "R12",
+     "verdict": "met",
+     "evidence": "summary.txt:21-26; summary.txt:38-39",
+     "note": "Records TS2339, guard results, planted/restored harness teeth, concrete program/type-query timing, and unavailable review, consultation, and PR skips."
+    }
+   ]
+  }
+ }
+}

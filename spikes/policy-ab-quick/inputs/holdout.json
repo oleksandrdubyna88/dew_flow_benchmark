@@ -1,0 +1,107 @@
+{
+  "source": "S = 9369b4d3093c0852b9969b53ba8c1912141398db (squash of PR #176), parent P = 9f62e4db07a05e247b0fa25ea380cac21909b323. Paths relative to the repo root.",
+  "materialisationRule": "Only entries with kind \"test\" are materialised over a copy of the candidate tree, one file at a time (the whole S version of the file replaces the candidate's), compiled, and the compiled out/test/<name>.test.js run alone. Entries of kind \"harness\" and \"fixture\" are T2's compile-fail harness (typedFixtures.test.ts) and its fixtures under src_vs_code/src/test/fixtures/typed/ — they are DELIVERABLES of the statement, not hold-out tests: they are scored only through checklist items R7-R10 and are NEVER copied over the candidate. The same holds for S's tsconfig.json `exclude` and eslint.config.mjs `ignores` lines (non-test config, scored via R10, not materialised).",
+  "notes": [
+    "slotTable.test.ts and syncPinRule.test.ts are CHANGED files: materialising S's version also re-runs the tests that existed at P in them (P's assertions, unchanged in S). Those are spec-implied regression guards (E1 DoD: whole suite green, no assertion edited) and are listed per file as 'pre-existing'.",
+    "The header convention (`// expect TS<code> at line <n>` / `// expect compiles`) and the fixture folder `src/test/fixtures/typed/` are NOT in the frozen statement; they are in P's tree (plan §3 item 3, lines 358-363). The package-root / zero-fixtures-fail / positive-control-required rules are likewise in P's tree (plan §4.0, E1 row, plan round finding 0) but not in the statement. The `oldProgram` reuse came from the E1 CODE round (finding 5) — after P, so beyond-spec."
+  ],
+  "files": [
+    {
+      "path": "src_vs_code/src/test/slotTable.test.ts",
+      "status": "changed",
+      "kind": "test",
+      "tests": [
+        {
+          "name": "every bundle key the vault stores is a slot’s bundleKey or one of the two outside the PIN, and no slot names a key the vault does not store",
+          "class": "spec-implied",
+          "reason": "Verbatim the T1 RED of the statement. Uses only `SECRET_SLOTS` (P), `SECRET_KINDS` + its existing `bundleKey` (secretMaps.ts at P) and `SecretSlot.bundleKey` (named by the statement). The two exceptions are hard-coded as 'attachments', 'images' — the vault's own kinds outside the PIN (P's plan §2.5 names them); any correct bundleKey column must make the sets equal."
+        },
+        {
+          "name": "snapshotForRevision reads exactly the table’s getters — every slot once, nothing beside them",
+          "class": "spec-implied",
+          "reason": "The statement's T1 guard ('snapshotForRevision reads exactly the table's getters', recording storage). Calls `slot.read(storage, 'acc', 'e1')` and `snapshotForRevision(storage, 'acc', { id, name, details })` — both signatures exist at P; storage is a Proxy cast to `never`, so it type-checks against any narrowing of the read parameter. Passes on P's hand-written snapshot as well as on a table walk (green before and after, as the statement requires). Would fail only if the candidate's snapshot reads a getter no slot names, skips a slot, or changes the slot read signature arity/order."
+        },
+        {
+          "name": "pre-existing (P): 'every slot names the revision field it is kept under…', 'no two slots share a label or a revision field', 'every slot has a remove, and each one really empties its slot…'",
+          "class": "spec-implied",
+          "reason": "Unchanged P assertions; imports `SMALL_FIELDS` from '../revisionHistory' (exported at P). Regression guard for 'no behaviour change / no assertion edited'. A candidate that stops exporting SMALL_FIELDS from revisionHistory.ts fails here — that is a statement violation (RevisionSecrets typed FROM SMALL_FIELDS, not a move), not an interface artefact."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/syncPinRule.test.ts",
+      "status": "changed",
+      "kind": "test",
+      "tests": [
+        {
+          "name": "the maps the merge judges are exactly the slot table’s bundle keys — the same ten, by name",
+          "class": "spec-implied",
+          "reason": "The statement's '`SEALABLE_MAPS` asserted against the table'. Imports only names present at P (`SEALABLE_MAPS`, `SECRET_SLOTS`) plus `bundleKey` (named by the statement). Sorted deep-equal of SEALABLE_MAPS vs the slots' bundleKeys."
+        },
+        {
+          "name": "pre-existing (P): the ten other tests of the file ('the merge judges exactly the slots the PIN wraps…' through 'the review’s case, in both argument orders…')",
+          "class": "spec-implied",
+          "reason": "Unchanged P assertions over syncPinRule/syncMerge/syncProtection; regression guard for 'no behaviour change'."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/typedFixtures.test.ts",
+      "status": "added",
+      "kind": "harness",
+      "tests": [
+        {
+          "name": "the harness finds its fixtures, from the package root, and at least one of them must compile",
+          "class": "beyond-spec",
+          "reason": "Encodes plan-round finding 0 (package root, zero fixtures FAILS, a compiles-fixture required). The statement only says 'harness green with its positive control'; the three refusal rules sit in P's plan §4.0 E1 row, outside the frozen statement. Not materialised — scored via R8/R9."
+        },
+        {
+          "name": "<fixture> compiles | <fixture> is refused with TS<code> at line <n>  (one dynamic test per fixture file)",
+          "class": "interface-bound",
+          "reason": "Behaviour (two TS2322 refusals + one compile, exact code AND line, failure text 'expected TS2322 at line 7 of stored_is_not_a_string.ts — the fixture compiled') is spec-implied, but the test is bound to: the fixture folder `src/test/fixtures/typed/` resolved as PACKAGE_ROOT/src/test/fixtures/typed, the first-line header grammar `// expect TS<code> at line <n>` | `// expect compiles`, and reading the project's tsconfig.json — none fixed by the statement (folder + header are in P's plan §3 item 3). The `oldProgram` chaining is beyond-spec (E1 code round, finding 5). Not materialised — scored via R8/R9."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/fixtures/typed/stored_is_not_a_string.ts",
+      "status": "added",
+      "kind": "fixture",
+      "tests": [
+        {
+          "name": "expect TS2322 at line 7 (`const text: string = held` where held: StoredSecret)",
+          "class": "interface-bound",
+          "reason": "TS2322 at line 7 is fixed by the statement. Bound to: names `StoredSecret` (statement) and `stored` (NOT in the statement — P's plan §2.2), import path '../../../storedSecret' (fixture folder not in statement), header grammar. Not materialised — scored via R8/R9."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/fixtures/typed/a_string_is_not_stored.ts",
+      "status": "added",
+      "kind": "fixture",
+      "tests": [
+        {
+          "name": "expect TS2322 at line 7 (`const posing: StoredSecret = plaintext`)",
+          "class": "interface-bound",
+          "reason": "TS2322 is fixed by the statement; the line (7) is NOT. Bound to `StoredSecret`, the import path and the header grammar. Not materialised — scored via R8."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/fixtures/typed/carried_is_a_string.ts",
+      "status": "added",
+      "kind": "fixture",
+      "tests": [
+        {
+          "name": "expect compiles (`const wire: string = carried(stored(...))`; `const maybe: StoredSecret | undefined = stored(undefined as string | undefined)`)",
+          "class": "interface-bound",
+          "reason": "'carried_is_a_string.ts (compiles)' is fixed by the statement. Bound to `carried` (implied by the fixture's name only), `stored` and its `string | undefined` overload (P's plan §2.2, not the statement). Not materialised — scored via R8."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "materialisable": ["src_vs_code/src/test/slotTable.test.ts", "src_vs_code/src/test/syncPinRule.test.ts"],
+    "newTestsByClass": { "spec-implied": 3, "beyond-spec": 1, "interface-bound": 4 },
+    "newTestsByClassNote": "Counted over S's NEW test cases only: spec-implied = slotTable x2 + syncPinRule x1 (all materialisable); beyond-spec = the harness's discovery test; interface-bound = the harness's per-fixture test + 3 fixtures. Pre-existing P tests re-run by materialisation (3 in slotTable, 10 in syncPinRule) are spec-implied regression guards, not counted."
+  }
+}

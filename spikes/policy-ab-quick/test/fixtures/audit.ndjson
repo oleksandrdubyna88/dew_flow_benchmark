@@ -1,0 +1,5 @@
+{"ts":"t","event":"InstructionsLoaded","agent_id":null,"file_path":"D:\\runs\\A1\\tree\\.claude\\rules\\shared\\common\\subagent-models.md","load_reason":"session_start","sha256":"abc","input":{}}
+{"ts":"t","event":"PreToolUse","agent_id":null,"tool_name":"Edit","effort":{"level":"high"},"input":{"file_path":"x.ts","added":3,"removed":1}}
+{"ts":"t","event":"PreToolUse","agent_id":"ag1","tool_name":"Write","effort":{"level":"high"},"input":{"file_path":"y.ts","added":10,"removed":0}}
+{"ts":"t","event":"PreToolUse","agent_id":"ag1","tool_name":"Bash","effort":{"level":"medium"},"input":{"command":"cat D:\\rsd\\dew_flow_creds_for_devs\\x"}}
+{"ts":"t","event":"PreToolUse","agent_id":null,"tool_name":"Bash","effort":{"level":"high"},"input":{"command":"node D:\\runs\\A1\\tree\\src_vs_code\\a.js"}}

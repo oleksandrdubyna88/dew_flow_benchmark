@@ -1,0 +1,2193 @@
+{
+  "generatedUtc": "2026-10-14T18:30:55.255Z",
+  "seed": "q1-c8e411697155848824235d9e86bbd3adbe1496c0",
+  "order": [
+    "A",
+    "A",
+    "B"
+  ],
+  "story": {
+    "repo": "dew_flow_creds_for_devs",
+    "pr": 176,
+    "P": "9f62e4db07a05e247b0fa25ea380cac21909b323",
+    "S": "9369b4d3093c0852b9969b53ba8c1912141398db"
+  },
+  "arms": {
+    "A": "3df745a7ce9959c251c65dd688c16be0295e8724",
+    "B": "ea3252f2bd88db1fc7e698c2c9a1a58ca7b916c0"
+  },
+  "cells": [
+    {
+      "cell": "c1",
+      "arm": "A",
+      "armSha": "3df745a7ce9959c251c65dd688c16be0295e8724",
+      "overlay": {
+        ".claude/rules/shared/common/subagent-models.md": "abf1763d8d1297867093dba84a303159b8764718fe77de4d2b81520b599f2923",
+        ".claude/rules/shared/common/planning-docs.md": "aa1fafbc182ad8b8612e31bca366fc3caf9b5d3e9b3a6d1a90e57ce6dbed9591"
+      },
+      "summary": {
+        "cell": "c1",
+        "result": {
+          "present": true,
+          "subtype": "success",
+          "is_error": false,
+          "total_cost_usd": 4.8894844,
+          "duration_ms": 1865353,
+          "duration_api_ms": 517392,
+          "num_turns": 70,
+          "modelUsage": {
+            "claude-haiku-4-5-20251001": {
+              "inputTokens": 1113,
+              "outputTokens": 16,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.001193,
+              "contextWindow": 200000,
+              "maxOutputTokens": 32000,
+              "thinkingTokens": 0,
+              "canonicalModel": "claude-haiku-4-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            },
+            "claude-opus-5-5": {
+              "inputTokens": 118,
+              "outputTokens": 49958,
+              "cacheReadInputTokens": 10385257,
+              "cacheCreationInputTokens": 226451,
+              "webSearchRequests": 0,
+              "costUSD": 4.8882914,
+              "contextWindow": 1000000,
+              "maxOutputTokens": 128000,
+              "thinkingTokens": 18278,
+              "canonicalModel": "claude-opus-5-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            }
+          }
+        },
+        "costSource": "envelope",
+        "usd": 4.8894844,
+        "init": {
+          "present": true,
+          "model": "claude-opus-5-5",
+          "cwdSha256": "9ebf1ad8da1ec58848bb75f142a7f214f3bfeceaa6205732435a35e00fc1d604",
+          "tools": [
+            "Task",
+            "Bash",
+            "Edit",
+            "Glob",
+            "Grep",
+            "PowerShell",
+            "Read",
+            "Write"
+          ],
+          "agents": [
+            "claude",
+            "claude-code-guide",
+            "Explore",
+            "general-purpose",
+            "Plan",
+            "statusline-setup"
+          ],
+          "skills": [
+            "deep-research",
+            "design",
+            "slides",
+            "design-sync",
+            "dataviz",
+            "artifact-diagramming",
+            "artifact-capabilities",
+            "update-config",
+            "verify",
+            "debug",
+            "code-review",
+            "simplify",
+            "batch",
+            "fewer-permission-prompts",
+            "doctor",
+            "loop",
+            "schedule",
+            "claude-api",
+            "workflow-authoring",
+            "run",
+            "run-skill-generator",
+            "plugin-authoring"
+          ],
+          "plugins": [
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "mcpServers": [],
+          "slashCommands": 58
+        },
+        "agentCalls": [],
+        "childrenPerModel": {},
+        "unobservedChildren": 0,
+        "editBoundDenials": 0,
+        "denials": {
+          "modelGuard": 0,
+          "other": 0
+        },
+        "effortByAgent": {
+          "main": [
+            "high"
+          ]
+        },
+        "effortNotHigh": [],
+        "mainSessionEffortRecorded": true,
+        "instructions": {
+          "loads": [
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\reuse-first.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "cca5a18852128ca7a48ac7d70cad2cdfc029d56efe4869542436e68a223814ec"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\coai-consultant.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "f6370f5740b3c55b0a890b225dc24145dfd05c9dd00ce74d22025c6f5803c381"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\coai-caller-model.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c0b4e91a2087c4326f70dc5235c0099a33305f3411bc5ef33db1bfac35f54d9b"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\automated-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "a8a48ec322dc1a98a88af7d70376c2a74032a8dbdb1ba9d37226899e531ef509"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\CLAUDE.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "e63de38cd7baa0eb21efe11a525437ea58993c2eab72ec88bfc3f2ed2adff4fa"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\coai-document-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d99fd1459e8fe312879fbcb0b0a8e76fd1faa2284d47fff4a2bfde1419648876"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\coding-style.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\development-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "da129ea177acce51a72c57146ad3099f0e01c375733a479e7272908875f38ca2"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\durable-status.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d81661f7466fa8ff5d180f305dfc173eef5c367948b4a4cbf6e54ffa7931783c"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\generated-code-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "34b9f90371423cc02d30a7c4db56458128cc71da23e1e372e3be378c52f410b2"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\measurement.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4074874477301e9816f8ac821465bb453beac4142c393b72b3ed615417f939c7"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\gpu-lease.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "536da7bd20b578d3624dd402671ab8839c331c7d2d4235b9f7f23d6f57c7eeb0"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\coai-review-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c29dee8fa799d33bb1ebae446e1356366dc0e5fd5e75b9138f07b7ba0e236c2a"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\git-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4af9e6232514e4f9396110db7d331de99fcff4f749ecc4f479a9269d8c6e9bd3"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\knowledge-base.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\post-deploy-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "56b55fe32c43aef8965ff2d88e844992b6b4331c25ac92d050c7b6a3a9b9511e"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\reliability.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "52c78e222f9d7d55dd127a1d01837753d6c9926237445f6ecce33d20a53c0b90"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\platform-limits.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "6bac305005b8a6e0322be4822759ce551164a1540668f92ebd24efc5fb4a2bbb"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\scenario-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "b769c0734d49d607bba1ef7ccdbc6774b6357439d474718b50c4b3e98e704a7f"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\pull-requests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c2c1bcf00949a9d9012f2730b2eb0cd0ce2b571522a0fd7a735e2043c203c108"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\security.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "47bbde205659cfc62a2fe57340d808483dd18b50762e13ce6af4d13a246c20a5"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\subagent-models.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "abf1763d8d1297867093dba84a303159b8764718fe77de4d2b81520b599f2923"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\task-lifecycle.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "2769609f1163c9ab7f32e7ee89f3834b3a4cb2c92a01d95867ea0ae26967c4bc"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\testing.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "bbb3577addbf9ba4652a50dc734c28d6242cc403250361f180fbd4b784a6f879"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\utc-timestamps.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "eee558bf77b709778f45f1187db8d232cb2f011e878cffcf206b0b79a641ee77"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\typescript\\doctrine.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "b9db690bd9f5f7cf4d296b33a0106c1bf74b3f1e66338217404a12d21d787719"
+            },
+            {
+              "file_path": "<runs>\\c1\\tree\\.claude\\rules\\shared\\common\\planning-docs.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "aa1fafbc182ad8b8612e31bca366fc3caf9b5d3e9b3a6d1a90e57ce6dbed9591"
+            }
+          ],
+          "ruleLoaded": true,
+          "loadReason": "session_start",
+          "shaMatchesOverlay": true
+        },
+        "edits": {
+          "main": {
+            "calls": 16,
+            "files": [
+              "<runs>\\c1\\tree\\src_vs_code\\src\\storedSecret.ts",
+              "<runs>\\c1\\tree\\src_vs_code\\src\\test\\pinReaderBoundary.test.ts",
+              "<runs>\\c1\\tree\\src_vs_code\\src\\test\\slotRecorder.ts",
+              "<runs>\\c1\\tree\\src_vs_code\\src\\test\\slotTable.test.ts",
+              "<runs>\\c1\\tree\\src_vs_code\\src\\test\\syncPinRule.test.ts",
+              "<runs>\\c1\\tree\\src_vs_code\\src\\test\\typedFixtures.test.ts",
+              "<runs>\\c1\\tree\\todo\\PLAN_typed_stored_secrets.md",
+              "<runs>\\c1\\tree\\todo\\README.md"
+            ],
+            "approxLines": 355
+          },
+          "children": {
+            "calls": 0,
+            "files": [],
+            "approxLines": 0
+          }
+        },
+        "leakSuspects": [
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\tool-results\\bgqcwcavf.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\tool-results\\bgqcwcavf.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\tool-results\\bgqcwcavf.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\tool-results\\bgqcwcavf.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c1\\storageManager"
+            ],
+            "command": "../storageManager"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c1\\revisionHistory"
+            ],
+            "command": "../revisionHistory"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c1\\revisionSnapshot"
+            ],
+            "command": "../revisionSnapshot"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c1\\secretMaps"
+            ],
+            "command": "../secretMaps"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:h:\\"
+            ],
+            "command": "h://"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:D:\\rsd\\storedSecret"
+            ],
+            "command": "../../../storedSecret"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/285117e6-75b8-44cc-b502-992b4edf7a0d/scratchpad"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\285117e6-75b8-44cc-b502-992b4edf7a0d\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/285117e6-75b8-44cc-b502-992b4edf7a0d/scratchpad"
+          },
+          {
+            "agent": "main",
+            "tool": "Grep",
+            "reasons": [
+              "outside:t:\\s*"
+            ],
+            "command": "t:\\s*"
+          },
+          {
+            "agent": "main",
+            "tool": "Grep",
+            "reasons": [
+              "outside:d:\\s*"
+            ],
+            "command": "d:\\s*"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c1"
+            ],
+            "command": ".."
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "npx tsc -p ./ ; echo tsc=$?; node --test out/test/slotTable.test.js out/test/pinReaderBoundary.test.js 2>&1 | grep -E \"^(✔|✖|ℹ (tests|pass|fail))\" "
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "sed -i '/second: await storage.getSecondRaw/d' src/revisionSnapshot.ts && npx tsc -p ./ >/dev/null; node --test --test-name-pattern=\"snapshot for history\" out/test/slotTable.test.js 2>&1 | grep -E \"✖|getSecondRaw|\\+|-  \" | head -12; git checkout -- src/revisionSnapshot.ts && git diff --stat src/revisionSnapshot.ts"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "npx tsc -p ./ --noEmit 2>&1 | head; echo tsc=$?"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "npx tsc -p ./ >/dev/null; node --test out/test/slotTable.test.js out/test/syncPinRule.test.js 2>&1 | grep -E \"^✖|AssertionError|undefined\" | head -12"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "python - <<'EOF'\np='src/syncProtection.ts'\ns=open(p,encoding='utf8').read()\ns=s.replace(\"import type { Revision, RevisionSecrets } from './revisionHistory';\",\"import { SECRET_SLOTS } from './entitySlots';\\nimport type { Revision, RevisionSecrets } from './revisionHistory';\",1)\nopen(p,'w',encoding='utf8').write(s)\np='src/syncPinRule.ts'\ns=open(p,encoding='utf8').read()\nold=\"\"\" * slot table (`entity"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "sed -i \"s/bundleKey: 'notes'/bundleKey: 'XX'/; s/bundleKey: 'fields'/bundleKey: 'notes'/; s/bundleKey: 'XX'/bundleKey: 'fields'/\" out/entitySlots.js && grep -n \"bundleKey\" out/entitySlots.js | head -3; node --test out/test/slotTable.test.js 2>&1 | grep -E \"^✔|^✖|AssertionError\" | head -10; npx tsc -p ./ && grep -n \"bundleKey\" out/entitySlots.js | head -2"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "cd <runs>/c1/tree/src_vs_code && python - <<'EOF'\np='tsconfig.json'\ns=open(p,encoding='utf8').read()\nold='  \"include\": [\"src\"]\\n'\nassert old in s\ns=s.replace(old,'  \"include\": [\"src\"],\\n  \"exclude\": [\"src/test/fixtures/typed\"]\\n')\nopen(p,'w',encoding='utf8').write(s)\np='eslint.config.mjs'\ns=open(p,encoding='utf8').read()\nold=\"\"\"export default [\n  {\n    // A disable that\"\"\"\nnew=\"\"\"export defaul"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "python - <<'EOF'\np='src/test/typedFixtures.test.ts'\ns=open(p,encoding='utf8').read()\nstart=s.index(\"/** Why the diagnostics do not meet the expectation\")\nend=s.index(\"/** The project's own compiler options\")\nnew='''type ErrorExpected = Extract<Expectation, { kind: 'error' }>;\n\n/** Why the diagnostics do not meet the expectation — or `undefined` when they do. */\nexport function verdict(name: string"
+          }
+        ],
+        "canary": {
+          "count": 0,
+          "hits": []
+        },
+        "referenceOnly": {
+          "count": 15,
+          "hits": [
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "OUTSIDE_THE_PIN"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "PACKAGE_ROOT"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "expectationOf"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "stream",
+              "kind": "phrase",
+              "token": "a harness over nothing passes"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "OUTSIDE_THE_PIN"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "PACKAGE_ROOT"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "expectationOf"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "phrase",
+              "token": "a harness over nothing passes"
+            },
+            {
+              "source": "excludedDiff",
+              "kind": "identifier",
+              "token": "SlotSource"
+            }
+          ]
+        },
+        "tamper": {
+          "excluded": [],
+          "calls": []
+        },
+        "arm": "A",
+        "run": {
+          "startedUtc": "2026-10-14T15:55:45.507Z",
+          "endedUtc": "2026-10-14T16:26:54.262Z",
+          "wallMs": 1868752,
+          "exitCode": 0,
+          "timedOut": false,
+          "pid": 45516,
+          "wallMin": 120,
+          "capUsd": 40,
+          "pinnedEffortSha256": "2b28ca6da607357a50e6ffaa09f5316eb9269d988f45fa055c7f58700b42ca3b",
+          "candidateFiles": [
+            "src_vs_code/eslint.config.mjs",
+            "src_vs_code/src/entitySlots.ts",
+            "src_vs_code/src/revisionHistory.ts",
+            "src_vs_code/src/revisionSnapshot.ts",
+            "src_vs_code/src/storedSecret.ts",
+            "src_vs_code/src/syncPinRule.ts",
+            "src_vs_code/src/syncProtection.ts",
+            "src_vs_code/src/test/fixtures/typed/a_string_is_not_stored.ts",
+            "src_vs_code/src/test/fixtures/typed/carried_is_a_string.ts",
+            "src_vs_code/src/test/fixtures/typed/stored_is_not_a_string.ts",
+            "src_vs_code/src/test/pinReaderBoundary.test.ts",
+            "src_vs_code/src/test/slotRecorder.ts",
+            "src_vs_code/src/test/slotTable.test.ts",
+            "src_vs_code/src/test/syncPinRule.test.ts",
+            "src_vs_code/src/test/typedFixtures.test.ts",
+            "src_vs_code/tsconfig.json"
+          ],
+          "excludedFiles": [
+            "research/module_extension.md",
+            "research/module_tests.md",
+            "todo/PLAN_typed_stored_secrets.md",
+            "todo/README.md"
+          ]
+        }
+      },
+      "score": {
+        "cell": "c1",
+        "scoredUtc": "2026-10-14T16:33:19.094Z",
+        "holdout": [
+          {
+            "path": "src_vs_code/src/test/slotTable.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 5,
+              "passed": 5,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          },
+          {
+            "path": "src_vs_code/src/test/syncPinRule.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 11,
+              "passed": 11,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          }
+        ],
+        "ownSuite": {
+          "verdict": "pass",
+          "exitCode": 0,
+          "tests": 5208,
+          "passed": 5204,
+          "failed": 0,
+          "skipped": 4,
+          "failedCases": [],
+          "detail": "",
+          "compile": {
+            "ok": true,
+            "exitCode": 0,
+            "diagnosticCount": 0,
+            "diagnostics": [],
+            "tail": ""
+          }
+        }
+      }
+    },
+    {
+      "cell": "c2",
+      "arm": "A",
+      "armSha": "3df745a7ce9959c251c65dd688c16be0295e8724",
+      "overlay": {
+        ".claude/rules/shared/common/subagent-models.md": "abf1763d8d1297867093dba84a303159b8764718fe77de4d2b81520b599f2923",
+        ".claude/rules/shared/common/planning-docs.md": "aa1fafbc182ad8b8612e31bca366fc3caf9b5d3e9b3a6d1a90e57ce6dbed9591"
+      },
+      "summary": {
+        "cell": "c2",
+        "result": {
+          "present": true,
+          "subtype": "success",
+          "is_error": false,
+          "total_cost_usd": 4.747263599999998,
+          "duration_ms": 1614680,
+          "duration_api_ms": 510541,
+          "num_turns": 65,
+          "modelUsage": {
+            "claude-haiku-4-5-20251001": {
+              "inputTokens": 1113,
+              "outputTokens": 16,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.001193,
+              "contextWindow": 200000,
+              "maxOutputTokens": 32000,
+              "thinkingTokens": 0,
+              "canonicalModel": "claude-haiku-4-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            },
+            "claude-opus-5-5": {
+              "inputTokens": 120,
+              "outputTokens": 49382,
+              "cacheReadInputTokens": 10330833,
+              "cacheCreationInputTokens": 211473,
+              "webSearchRequests": 0,
+              "costUSD": 4.746070599999999,
+              "contextWindow": 1000000,
+              "maxOutputTokens": 128000,
+              "thinkingTokens": 18237,
+              "canonicalModel": "claude-opus-5-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            }
+          }
+        },
+        "costSource": "envelope",
+        "usd": 4.747263599999998,
+        "init": {
+          "present": true,
+          "model": "claude-opus-5-5",
+          "cwdSha256": "2b665deea9c02b0d4616e7b00824a2795a182cecf772d124b447aabc6cc3448c",
+          "tools": [
+            "Task",
+            "Bash",
+            "Edit",
+            "Glob",
+            "Grep",
+            "PowerShell",
+            "Read",
+            "Write"
+          ],
+          "agents": [
+            "claude",
+            "claude-code-guide",
+            "Explore",
+            "general-purpose",
+            "Plan",
+            "statusline-setup"
+          ],
+          "skills": [
+            "deep-research",
+            "design",
+            "slides",
+            "design-sync",
+            "dataviz",
+            "artifact-diagramming",
+            "artifact-capabilities",
+            "update-config",
+            "verify",
+            "debug",
+            "code-review",
+            "simplify",
+            "batch",
+            "fewer-permission-prompts",
+            "doctor",
+            "loop",
+            "schedule",
+            "claude-api",
+            "workflow-authoring",
+            "run",
+            "run-skill-generator",
+            "plugin-authoring"
+          ],
+          "plugins": [
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "mcpServers": [],
+          "slashCommands": 58
+        },
+        "agentCalls": [],
+        "childrenPerModel": {},
+        "unobservedChildren": 0,
+        "editBoundDenials": 0,
+        "denials": {
+          "modelGuard": 0,
+          "other": 0
+        },
+        "effortByAgent": {
+          "main": [
+            "high"
+          ]
+        },
+        "effortNotHigh": [],
+        "mainSessionEffortRecorded": true,
+        "instructions": {
+          "loads": [
+            {
+              "file_path": "<runs>\\c2\\tree\\CLAUDE.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "e63de38cd7baa0eb21efe11a525437ea58993c2eab72ec88bfc3f2ed2adff4fa"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\coai-caller-model.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c0b4e91a2087c4326f70dc5235c0099a33305f3411bc5ef33db1bfac35f54d9b"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\coai-consultant.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "f6370f5740b3c55b0a890b225dc24145dfd05c9dd00ce74d22025c6f5803c381"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\coding-style.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\measurement.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4074874477301e9816f8ac821465bb453beac4142c393b72b3ed615417f939c7"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\generated-code-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "34b9f90371423cc02d30a7c4db56458128cc71da23e1e372e3be378c52f410b2"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\coai-document-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d99fd1459e8fe312879fbcb0b0a8e76fd1faa2284d47fff4a2bfde1419648876"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\security.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "47bbde205659cfc62a2fe57340d808483dd18b50762e13ce6af4d13a246c20a5"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\durable-status.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d81661f7466fa8ff5d180f305dfc173eef5c367948b4a4cbf6e54ffa7931783c"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\knowledge-base.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\reliability.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "52c78e222f9d7d55dd127a1d01837753d6c9926237445f6ecce33d20a53c0b90"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\platform-limits.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "6bac305005b8a6e0322be4822759ce551164a1540668f92ebd24efc5fb4a2bbb"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\post-deploy-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "56b55fe32c43aef8965ff2d88e844992b6b4331c25ac92d050c7b6a3a9b9511e"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\gpu-lease.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "536da7bd20b578d3624dd402671ab8839c331c7d2d4235b9f7f23d6f57c7eeb0"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\automated-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "a8a48ec322dc1a98a88af7d70376c2a74032a8dbdb1ba9d37226899e531ef509"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\scenario-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "b769c0734d49d607bba1ef7ccdbc6774b6357439d474718b50c4b3e98e704a7f"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\reuse-first.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "cca5a18852128ca7a48ac7d70cad2cdfc029d56efe4869542436e68a223814ec"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\pull-requests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c2c1bcf00949a9d9012f2730b2eb0cd0ce2b571522a0fd7a735e2043c203c108"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\git-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4af9e6232514e4f9396110db7d331de99fcff4f749ecc4f479a9269d8c6e9bd3"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\development-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "da129ea177acce51a72c57146ad3099f0e01c375733a479e7272908875f38ca2"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\coai-review-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c29dee8fa799d33bb1ebae446e1356366dc0e5fd5e75b9138f07b7ba0e236c2a"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\task-lifecycle.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "2769609f1163c9ab7f32e7ee89f3834b3a4cb2c92a01d95867ea0ae26967c4bc"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\subagent-models.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "abf1763d8d1297867093dba84a303159b8764718fe77de4d2b81520b599f2923"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\testing.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "bbb3577addbf9ba4652a50dc734c28d6242cc403250361f180fbd4b784a6f879"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\common\\utc-timestamps.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "eee558bf77b709778f45f1187db8d232cb2f011e878cffcf206b0b79a641ee77"
+            },
+            {
+              "file_path": "<runs>\\c2\\tree\\.claude\\rules\\shared\\typescript\\doctrine.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "b9db690bd9f5f7cf4d296b33a0106c1bf74b3f1e66338217404a12d21d787719"
+            }
+          ],
+          "ruleLoaded": true,
+          "loadReason": "session_start",
+          "shaMatchesOverlay": true
+        },
+        "edits": {
+          "main": {
+            "calls": 9,
+            "files": [
+              "<runs>\\c2\\tree\\src_vs_code\\src\\revisionHistory.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\storedSecret.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\fixtures\\typed\\a_string_is_not_stored.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\fixtures\\typed\\carried_is_a_string.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\fixtures\\typed\\stored_is_not_a_string.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\slotRecorder.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\slotTable.test.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\typedFixtures.test.ts",
+              "<runs>\\c2\\tree\\src_vs_code\\src\\test\\typedHarness.ts"
+            ],
+            "approxLines": 336
+          },
+          "children": {
+            "calls": 0,
+            "files": [],
+            "approxLines": 0
+          }
+        },
+        "leakSuspects": [
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\tool-results\\bda5e9dph.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\tool-results\\bda5e9dph.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\tool-results\\bda5e9dph.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\tool-results\\bda5e9dph.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\baseline_test.log"
+            ],
+            "command": "../../baseline_test.log"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb/scratchpad/"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\baseline_test.log"
+            ],
+            "command": "../../baseline_test.log"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\storageManager"
+            ],
+            "command": "..\\/storageManager"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\revisionHistory"
+            ],
+            "command": "../revisionHistory"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\revisionSnapshot"
+            ],
+            "command": "../revisionSnapshot"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\revisionSnapshot"
+            ],
+            "command": "../revisionSnapshot"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\secretMaps"
+            ],
+            "command": "../secretMaps"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:h:\\"
+            ],
+            "command": "h://"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:S:\\bundleKey:"
+            ],
+            "command": "/s//bundleKey:"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb/scratchpad"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb/scratchpad"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb/scratchpad"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c2\\todo\\PLAN_typed_stored_secrets.md"
+            ],
+            "command": "../todo/PLAN_typed_stored_secrets.md"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:s:\\"
+            ],
+            "command": "s:/"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:\\bnpx\\b"
+            ],
+            "command": "npx eslint src >/dev/null 2>&1; echo lint_exit=$?; npx eslint src/test/fixtures/typed/stored_is_not_a_string.ts 2>&1 | head -4; SP=\"~/AppData/Local/Temp/claude/<slug>/e17dd4c7-1b9c-4719-9bbf-9f2f702f12eb/scratchpad\"; npm test > \"$SP/after_test.log\" 2>&1; echo test_exit=$?; tail -9 \"$SP/after_test.log\"; grep -E \"^✖\" \"$SP/after_test.log\" | head"
+          }
+        ],
+        "canary": {
+          "count": 0,
+          "hits": []
+        },
+        "referenceOnly": {
+          "count": 13,
+          "hits": [
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "PACKAGE_ROOT"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "expectationOf"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "stream",
+              "kind": "phrase",
+              "token": "never a second copy written here"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "PACKAGE_ROOT"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "expectationOf"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "phrase",
+              "token": "never a second copy written here"
+            },
+            {
+              "source": "excludedDiff",
+              "kind": "identifier",
+              "token": "SlotSource"
+            }
+          ]
+        },
+        "tamper": {
+          "excluded": [],
+          "calls": []
+        },
+        "arm": "A",
+        "run": {
+          "startedUtc": "2026-10-14T16:33:33.834Z",
+          "endedUtc": "2026-10-14T17:00:32.283Z",
+          "wallMs": 1618449,
+          "exitCode": 0,
+          "timedOut": false,
+          "pid": 51028,
+          "wallMin": 120,
+          "capUsd": 40,
+          "pinnedEffortSha256": "2b28ca6da607357a50e6ffaa09f5316eb9269d988f45fa055c7f58700b42ca3b",
+          "candidateFiles": [
+            "src_vs_code/eslint.config.mjs",
+            "src_vs_code/src/entitySlots.ts",
+            "src_vs_code/src/revisionHistory.ts",
+            "src_vs_code/src/revisionSnapshot.ts",
+            "src_vs_code/src/storedSecret.ts",
+            "src_vs_code/src/syncPinRule.ts",
+            "src_vs_code/src/syncProtection.ts",
+            "src_vs_code/src/test/fixtures/typed/a_string_is_not_stored.ts",
+            "src_vs_code/src/test/fixtures/typed/carried_is_a_string.ts",
+            "src_vs_code/src/test/fixtures/typed/stored_is_not_a_string.ts",
+            "src_vs_code/src/test/pinReaderBoundary.test.ts",
+            "src_vs_code/src/test/slotRecorder.ts",
+            "src_vs_code/src/test/slotTable.test.ts",
+            "src_vs_code/src/test/syncPinRule.test.ts",
+            "src_vs_code/src/test/typedFixtures.test.ts",
+            "src_vs_code/src/test/typedHarness.ts",
+            "src_vs_code/tsconfig.json"
+          ],
+          "excludedFiles": [
+            "research/module_extension.md",
+            "research/module_tests.md",
+            "todo/PLAN_typed_stored_secrets.md"
+          ]
+        }
+      },
+      "score": {
+        "cell": "c2",
+        "scoredUtc": "2026-10-14T17:07:20.945Z",
+        "holdout": [
+          {
+            "path": "src_vs_code/src/test/slotTable.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 5,
+              "passed": 5,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          },
+          {
+            "path": "src_vs_code/src/test/syncPinRule.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 11,
+              "passed": 11,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          }
+        ],
+        "ownSuite": {
+          "verdict": "pass",
+          "exitCode": 0,
+          "tests": 5214,
+          "passed": 5210,
+          "failed": 0,
+          "skipped": 4,
+          "failedCases": [],
+          "detail": "",
+          "compile": {
+            "ok": true,
+            "exitCode": 0,
+            "diagnosticCount": 0,
+            "diagnostics": [],
+            "tail": ""
+          }
+        }
+      }
+    },
+    {
+      "cell": "c3",
+      "arm": "B",
+      "armSha": "ea3252f2bd88db1fc7e698c2c9a1a58ca7b916c0",
+      "overlay": {
+        ".claude/rules/shared/common/subagent-models.md": "9c636c9bc04373e1456b4bb883673e18b6c57ad3e723eea5d8e0831d60418380",
+        ".claude/rules/shared/common/planning-docs.md": "478f339110013fcd167f47cb6d3d5c59688994def8e59a06c88f9a902a3dcde1"
+      },
+      "summary": {
+        "cell": "c3",
+        "result": {
+          "present": true,
+          "subtype": "success",
+          "is_error": false,
+          "total_cost_usd": 5.429578300000001,
+          "duration_ms": 2285205,
+          "duration_api_ms": 578212,
+          "num_turns": 40,
+          "modelUsage": {
+            "claude-haiku-4-5-20251001": {
+              "inputTokens": 1113,
+              "outputTokens": 16,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.001193,
+              "contextWindow": 200000,
+              "maxOutputTokens": 32000,
+              "thinkingTokens": 0,
+              "canonicalModel": "claude-haiku-4-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            },
+            "claude-opus-5-5": {
+              "inputTokens": 74,
+              "outputTokens": 36205,
+              "cacheReadInputTokens": 6069329,
+              "cacheCreationInputTokens": 203738,
+              "webSearchRequests": 0,
+              "costUSD": 3.5681658000000005,
+              "contextWindow": 1000000,
+              "maxOutputTokens": 128000,
+              "thinkingTokens": 14765,
+              "canonicalModel": "claude-opus-5-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            },
+            "claude-sonnet-5-5": {
+              "inputTokens": 82,
+              "outputTokens": 27436,
+              "cacheReadInputTokens": 3993665,
+              "cacheCreationInputTokens": 314785,
+              "webSearchRequests": 0,
+              "costUSD": 1.8602194999999997,
+              "contextWindow": 1000000,
+              "maxOutputTokens": 128000,
+              "thinkingTokens": 2824,
+              "canonicalModel": "claude-sonnet-5-5",
+              "provider": "firstParty",
+              "costBasis": "list"
+            }
+          }
+        },
+        "costSource": "envelope",
+        "usd": 5.429578300000001,
+        "init": {
+          "present": true,
+          "model": "claude-opus-5-5",
+          "cwdSha256": "dad2ee42d237cc0eb70cd2b0983ea0fd215a1a457dc00c4a1d7cf13af5f4115e",
+          "tools": [
+            "Task",
+            "Bash",
+            "Edit",
+            "Glob",
+            "Grep",
+            "PowerShell",
+            "Read",
+            "Write"
+          ],
+          "agents": [
+            "claude",
+            "claude-code-guide",
+            "Explore",
+            "general-purpose",
+            "Plan",
+            "statusline-setup"
+          ],
+          "skills": [
+            "deep-research",
+            "design",
+            "slides",
+            "design-sync",
+            "dataviz",
+            "artifact-diagramming",
+            "artifact-capabilities",
+            "update-config",
+            "verify",
+            "debug",
+            "code-review",
+            "simplify",
+            "batch",
+            "fewer-permission-prompts",
+            "doctor",
+            "loop",
+            "schedule",
+            "claude-api",
+            "workflow-authoring",
+            "run",
+            "run-skill-generator",
+            "plugin-authoring"
+          ],
+          "plugins": [
+            "cc-plugin-agents-md",
+            "cc-plugin-telemetry",
+            "cc-plugin-plugin-authoring"
+          ],
+          "mcpServers": [],
+          "slashCommands": 58
+        },
+        "agentCalls": [
+          {
+            "id": "toolu_01MiwGPU9CjPDfCh9JJxCuPc",
+            "launchedBy": "main",
+            "subagent_type": "general-purpose",
+            "model": "sonnet",
+            "effortRequested": null,
+            "description": "T1: slot table bundleKey",
+            "denied": null,
+            "hasResult": true,
+            "resolvedModels": [
+              "claude-sonnet-5-5"
+            ],
+            "childToolCalls": 22
+          },
+          {
+            "id": "toolu_01Aae8SeKA8mxGNtomZtEdFD",
+            "launchedBy": "main",
+            "subagent_type": "general-purpose",
+            "model": "sonnet",
+            "effortRequested": null,
+            "description": "T2: StoredSecret + harness",
+            "denied": null,
+            "hasResult": true,
+            "resolvedModels": [
+              "claude-sonnet-5-5"
+            ],
+            "childToolCalls": 16
+          },
+          {
+            "id": "toolu_01S136meUZTFvX1g3JK61Nnt",
+            "launchedBy": "main",
+            "subagent_type": "general-purpose",
+            "model": "sonnet",
+            "effortRequested": null,
+            "description": "Make harness verdict file-aware",
+            "denied": null,
+            "hasResult": true,
+            "resolvedModels": [
+              "claude-sonnet-5-5"
+            ],
+            "childToolCalls": 8
+          }
+        ],
+        "childrenPerModel": {
+          "claude-sonnet-5-5": 3
+        },
+        "unobservedChildren": 0,
+        "editBoundDenials": 1,
+        "denials": {
+          "modelGuard": 0,
+          "other": 0
+        },
+        "effortByAgent": {
+          "main": [
+            "high"
+          ],
+          "ac8ffb6b03ecfb996": [
+            "high"
+          ],
+          "abc465c9dac6b5023": [
+            "high"
+          ],
+          "a89c5f9b1afb6afe7": [
+            "high"
+          ]
+        },
+        "effortNotHigh": [],
+        "mainSessionEffortRecorded": true,
+        "instructions": {
+          "loads": [
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\coai-review-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c29dee8fa799d33bb1ebae446e1356366dc0e5fd5e75b9138f07b7ba0e236c2a"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\CLAUDE.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "e63de38cd7baa0eb21efe11a525437ea58993c2eab72ec88bfc3f2ed2adff4fa"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\coai-consultant.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "f6370f5740b3c55b0a890b225dc24145dfd05c9dd00ce74d22025c6f5803c381"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\coai-caller-model.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c0b4e91a2087c4326f70dc5235c0099a33305f3411bc5ef33db1bfac35f54d9b"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\automated-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "a8a48ec322dc1a98a88af7d70376c2a74032a8dbdb1ba9d37226899e531ef509"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\coai-document-gate.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d99fd1459e8fe312879fbcb0b0a8e76fd1faa2284d47fff4a2bfde1419648876"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\generated-code-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "34b9f90371423cc02d30a7c4db56458128cc71da23e1e372e3be378c52f410b2"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\coding-style.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\durable-status.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "d81661f7466fa8ff5d180f305dfc173eef5c367948b4a4cbf6e54ffa7931783c"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\git-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4af9e6232514e4f9396110db7d331de99fcff4f749ecc4f479a9269d8c6e9bd3"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\measurement.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "4074874477301e9816f8ac821465bb453beac4142c393b72b3ed615417f939c7"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\gpu-lease.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "536da7bd20b578d3624dd402671ab8839c331c7d2d4235b9f7f23d6f57c7eeb0"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\knowledge-base.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\pull-requests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "c2c1bcf00949a9d9012f2730b2eb0cd0ce2b571522a0fd7a735e2043c203c108"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\post-deploy-checks.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "56b55fe32c43aef8965ff2d88e844992b6b4331c25ac92d050c7b6a3a9b9511e"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\platform-limits.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "6bac305005b8a6e0322be4822759ce551164a1540668f92ebd24efc5fb4a2bbb"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\security.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "47bbde205659cfc62a2fe57340d808483dd18b50762e13ce6af4d13a246c20a5"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\reuse-first.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "cca5a18852128ca7a48ac7d70cad2cdfc029d56efe4869542436e68a223814ec"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\scenario-tests.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "b769c0734d49d607bba1ef7ccdbc6774b6357439d474718b50c4b3e98e704a7f"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\development-workflow.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "da129ea177acce51a72c57146ad3099f0e01c375733a479e7272908875f38ca2"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\reliability.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "52c78e222f9d7d55dd127a1d01837753d6c9926237445f6ecce33d20a53c0b90"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\subagent-models.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "9c636c9bc04373e1456b4bb883673e18b6c57ad3e723eea5d8e0831d60418380"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\task-lifecycle.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "2769609f1163c9ab7f32e7ee89f3834b3a4cb2c92a01d95867ea0ae26967c4bc"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\testing.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "bbb3577addbf9ba4652a50dc734c28d6242cc403250361f180fbd4b784a6f879"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\utc-timestamps.md",
+              "load_reason": "session_start",
+              "memory_type": "Project",
+              "sha256": "eee558bf77b709778f45f1187db8d232cb2f011e878cffcf206b0b79a641ee77"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\typescript\\doctrine.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "b9db690bd9f5f7cf4d296b33a0106c1bf74b3f1e66338217404a12d21d787719"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\typescript\\doctrine.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "b9db690bd9f5f7cf4d296b33a0106c1bf74b3f1e66338217404a12d21d787719"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\typescript\\doctrine.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "b9db690bd9f5f7cf4d296b33a0106c1bf74b3f1e66338217404a12d21d787719"
+            },
+            {
+              "file_path": "<runs>\\c3\\tree\\.claude\\rules\\shared\\common\\planning-docs.md",
+              "load_reason": "path_glob_match",
+              "memory_type": "Project",
+              "sha256": "478f339110013fcd167f47cb6d3d5c59688994def8e59a06c88f9a902a3dcde1"
+            }
+          ],
+          "ruleLoaded": true,
+          "loadReason": "session_start",
+          "shaMatchesOverlay": true
+        },
+        "edits": {
+          "main": {
+            "calls": 4,
+            "files": [
+              "<runs>\\c3\\tree\\src_vs_code\\src\\test\\slotTable.test.ts",
+              "<runs>\\c3\\tree\\src_vs_code\\src\\test\\syncPinRule.test.ts",
+              "<runs>\\c3\\tree\\todo\\PLAN_typed_stored_secrets.md"
+            ],
+            "approxLines": 50
+          },
+          "children": {
+            "calls": 0,
+            "files": [],
+            "approxLines": 0
+          }
+        },
+        "leakSuspects": [
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\tool-results\\b2n5n44qu.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\tool-results\\b2n5n44qu.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Read",
+            "reasons": [
+              "outside:~\\.claude\\projects\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\tool-results\\b2n5n44qu.txt"
+            ],
+            "command": "~\\.claude\\projects\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\tool-results\\b2n5n44qu.txt"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3\\research\\module_tests.md"
+            ],
+            "command": "../research/module_tests.md"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3\\entitySlots"
+            ],
+            "command": "../entitySlots"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3\\secretMaps"
+            ],
+            "command": "../secretMaps"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3\\storageManager"
+            ],
+            "command": "../storageManager"
+          },
+          {
+            "agent": "ac8ffb6b03ecfb996",
+            "tool": "Bash",
+            "reasons": [
+              "outside:h:\\"
+            ],
+            "command": "h://"
+          },
+          {
+            "agent": "ac8ffb6b03ecfb996",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\research\\module_extension.md"
+            ],
+            "command": "../../research/module_extension.md"
+          },
+          {
+            "agent": "ac8ffb6b03ecfb996",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\research\\module_tests.md"
+            ],
+            "command": "../../research/module_tests.md"
+          },
+          {
+            "agent": "ac8ffb6b03ecfb996",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\research\\module_tests.md"
+            ],
+            "command": "../../research/module_tests.md"
+          },
+          {
+            "agent": "ac8ffb6b03ecfb996",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3\\src_vs_code"
+            ],
+            "command": "../src_vs_code"
+          },
+          {
+            "agent": "abc465c9dac6b5023",
+            "tool": "Bash",
+            "reasons": [
+              "outside:D:\\rsd\\storedSecret"
+            ],
+            "command": "../../../storedSecret"
+          },
+          {
+            "agent": "abc465c9dac6b5023",
+            "tool": "Bash",
+            "reasons": [
+              "outside:D:\\"
+            ],
+            "command": "../../../.."
+          },
+          {
+            "agent": "abc465c9dac6b5023",
+            "tool": "Bash",
+            "reasons": [
+              "outside:<runs>\\c3"
+            ],
+            "command": ".."
+          },
+          {
+            "agent": "abc465c9dac6b5023",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/24828b06-2bbc-4d20-a3d0-612ece1a9d71/scratchpad"
+          },
+          {
+            "agent": "abc465c9dac6b5023",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\scratchpad"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/24828b06-2bbc-4d20-a3d0-612ece1a9d71/scratchpad"
+          },
+          {
+            "agent": "a89c5f9b1afb6afe7",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\scratchpad\\storedSecret.ts.bak"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/24828b06-2bbc-4d20-a3d0-612ece1a9d71/scratchpad/storedSecret.ts.bak"
+          },
+          {
+            "agent": "a89c5f9b1afb6afe7",
+            "tool": "Bash",
+            "reasons": [
+              "outside:~\\AppData\\Local\\Temp\\claude\\<slug>\\24828b06-2bbc-4d20-a3d0-612ece1a9d71\\scratchpad\\storedSecret.ts.bak"
+            ],
+            "command": "~/AppData/Local/Temp/claude/<slug>/24828b06-2bbc-4d20-a3d0-612ece1a9d71/scratchpad/storedSecret.ts.bak"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:dotnet\\s+restore"
+            ],
+            "command": "ls \"$USERPROFILE/.nuget/packages\" 2>/dev/null | wc -l; timeout 300 dotnet restore dew_flow_creds_for_devs.slnx --source \"$USERPROFILE/.nuget/packages\" -p:NuGetAudit=false 2>&1 | tail -6"
+          },
+          {
+            "agent": "main",
+            "tool": "Bash",
+            "reasons": [
+              "network:git\\s+(fetch|push|pull|ls-remote|remote)\\b"
+            ],
+            "command": "grep -l -E \"fetch\\(|https?://|ls-remote|git fetch\" .claude/rules/shared/tools/pin-check.mjs .claude/rules/shared/tools/plan-lifecycle.mjs 2>&1; grep -n -E \"fetch\\(|ls-remote|'fetch'\" .claude/rules/shared/tools/pin-check.mjs | head"
+          }
+        ],
+        "canary": {
+          "count": 0,
+          "hits": []
+        },
+        "referenceOnly": {
+          "count": 16,
+          "hits": [
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "fromTable"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "fromSnapshot"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "describeFound"
+            },
+            {
+              "source": "stream",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "stream",
+              "kind": "phrase",
+              "token": "program built and checked in"
+            },
+            {
+              "source": "stream",
+              "kind": "phrase",
+              "token": "the PIN never wraps"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "SlotSource"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "fromTable"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "fromSnapshot"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "projectOptions"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "describeFound"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "identifier",
+              "token": "Expectation"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "phrase",
+              "token": "program built and checked in"
+            },
+            {
+              "source": "candidateDiff",
+              "kind": "phrase",
+              "token": "the PIN never wraps"
+            }
+          ]
+        },
+        "tamper": {
+          "excluded": [],
+          "calls": []
+        },
+        "arm": "B",
+        "run": {
+          "startedUtc": "2026-10-14T17:07:42.132Z",
+          "endedUtc": "2026-10-14T17:45:51.156Z",
+          "wallMs": 2289023,
+          "exitCode": 0,
+          "timedOut": false,
+          "pid": 51312,
+          "wallMin": 120,
+          "capUsd": 40,
+          "pinnedEffortSha256": "2b28ca6da607357a50e6ffaa09f5316eb9269d988f45fa055c7f58700b42ca3b",
+          "candidateFiles": [
+            "src_vs_code/eslint.config.mjs",
+            "src_vs_code/src/entitySlots.ts",
+            "src_vs_code/src/revisionHistory.ts",
+            "src_vs_code/src/revisionSnapshot.ts",
+            "src_vs_code/src/storedSecret.ts",
+            "src_vs_code/src/syncPinRule.ts",
+            "src_vs_code/src/test/fixtures/typed/a_string_is_not_stored.ts",
+            "src_vs_code/src/test/fixtures/typed/carried_is_a_string.ts",
+            "src_vs_code/src/test/fixtures/typed/stored_is_not_a_string.ts",
+            "src_vs_code/src/test/slotTable.test.ts",
+            "src_vs_code/src/test/syncPinRule.test.ts",
+            "src_vs_code/src/test/typedFixtures.test.ts",
+            "src_vs_code/tsconfig.json"
+          ],
+          "excludedFiles": [
+            "research/module_extension.md",
+            "research/module_tests.md",
+            "todo/PLAN_typed_stored_secrets.md"
+          ]
+        }
+      },
+      "score": {
+        "cell": "c3",
+        "scoredUtc": "2026-10-14T18:23:13.335Z",
+        "holdout": [
+          {
+            "path": "src_vs_code/src/test/slotTable.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 5,
+              "passed": 5,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          },
+          {
+            "path": "src_vs_code/src/test/syncPinRule.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 11,
+              "passed": 11,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          }
+        ],
+        "ownSuite": {
+          "verdict": "fail",
+          "exitCode": 1,
+          "tests": 5214,
+          "passed": 5209,
+          "failed": 1,
+          "skipped": 4,
+          "failedCases": [
+            "copying the same secret again restarts its window instead of racing the first"
+          ],
+          "detail": "",
+          "compile": {
+            "ok": true,
+            "exitCode": 0,
+            "diagnosticCount": 0,
+            "diagnostics": [],
+            "tail": ""
+          }
+        }
+      }
+    },
+    {
+      "cell": "reference",
+      "arm": null,
+      "armSha": null,
+      "overlay": null,
+      "summary": null,
+      "score": {
+        "cell": "reference",
+        "scoredUtc": "2026-10-14T18:30:55.006Z",
+        "holdout": [
+          {
+            "path": "src_vs_code/src/test/slotTable.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 5,
+              "passed": 5,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          },
+          {
+            "path": "src_vs_code/src/test/syncPinRule.test.ts",
+            "verdict": "pass",
+            "testVerdict": "pass",
+            "emitted": true,
+            "candidateCompile": {
+              "ok": true,
+              "exitCode": 0,
+              "diagnosticCount": 0,
+              "diagnostics": [],
+              "tail": ""
+            },
+            "withHoldout": {
+              "exitCode": 0,
+              "holdoutDiagnostics": [],
+              "otherNewDiagnosticCount": 0
+            },
+            "test": {
+              "verdict": "pass",
+              "exitCode": 0,
+              "tests": 11,
+              "passed": 11,
+              "failed": 0,
+              "skipped": 0,
+              "failedCases": [],
+              "detail": ""
+            }
+          }
+        ],
+        "ownSuite": {
+          "verdict": "pass",
+          "exitCode": 0,
+          "tests": 5207,
+          "passed": 5203,
+          "failed": 0,
+          "skipped": 4,
+          "failedCases": [],
+          "detail": "",
+          "compile": {
+            "ok": true,
+            "exitCode": 0,
+            "diagnosticCount": 0,
+            "diagnostics": [],
+            "tail": ""
+          }
+        }
+      }
+    }
+  ]
+}

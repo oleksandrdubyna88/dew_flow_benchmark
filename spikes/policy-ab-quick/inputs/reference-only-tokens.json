@@ -1,0 +1,32 @@
+{
+  "source": "Tokens present in S (9369b4d3, diff + squash message) and absent from P's whole tree (git grep -F over 9f62e4db, count 0) and from statement.md. Generic TypeScript-API names a harness would use anyway (getPreEmitDiagnostics, createProgram, readConfigFile, parseJsonConfigFileContent, flattenDiagnosticMessageText, oldProgram) are deliberately left out; so are names already in P's plan (stored, carried, StoredSecret, STORED, SMALL_FIELDS, bundleKey, the fixture folder and header grammar of §3 item 3).",
+  "identifiers": [
+    "SlotSource",
+    "slotValues",
+    "OUTSIDE_THE_PIN",
+    "recordedReads",
+    "fromTable",
+    "fromSnapshot",
+    "PACKAGE_ROOT",
+    "fixtureFiles",
+    "expectationOf",
+    "projectOptions",
+    "describeFound",
+    "assertCompiles",
+    "assertRefused",
+    "Expectation",
+    "empty_for_teeth"
+  ],
+  "phrases": [
+    "a harness over nothing passes",
+    "nothing proves the programs are built and checked",
+    "the same ten, by name",
+    "every slot once, nothing beside them",
+    "program built and checked in",
+    "a value sync drops",
+    "the PIN never wraps",
+    "answers every method with nothing",
+    "never a second copy written here",
+    "written, not copied"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "source": "src_vs_code/package.json at P (9f62e4db): compile = `tsc -p ./`, typecheck = `tsc -p ./ --noEmit`, lint = `eslint src`, test = `npm run compile && node --test \"out/test/*.test.js\"`, ratchet = `npm run compile && node scripts/size-ratchet.mjs`. tsconfig: rootDir src, outDir out, so src/test/X.test.ts -> out/test/X.test.js. Lockfile pins typescript 5.9.3, eslint 10.11.0. Local node v24.18.0 (node --test expands the glob itself, no shell needed).",
+  "cwd": "src_vs_code",
+  "shell": false,
+  "commands": {
+    "restore": { "exe": "npm.cmd", "args": ["ci"] },
+    "typecheck": { "exe": "node", "args": ["node_modules/typescript/bin/tsc", "-p", "./", "--noEmit"] },
+    "compile": { "exe": "node", "args": ["node_modules/typescript/bin/tsc", "-p", "./"] },
+    "lint": { "exe": "node", "args": ["node_modules/eslint/bin/eslint.js", "src"] },
+    "ratchet": { "exe": "node", "args": ["scripts/size-ratchet.mjs"], "requires": "compile first (imports out/sizeRatchet.js)" },
+    "testAll": { "exe": "node", "args": ["--test", "out/test/*.test.js"], "requires": "compile first" },
+    "testOneFile": {
+      "exe": "node",
+      "args": ["--test", "--test-reporter=junit", "--test-reporter-destination=<junit-output.xml>", "out/test/<name>.test.js"],
+      "requires": "compile first",
+      "holdoutTargets": ["out/test/slotTable.test.js", "out/test/syncPinRule.test.js"]
+    }
+  },
+  "notes": [
+    "tsc emits even when it reports errors (no noEmitOnError in tsconfig), exit code 2. After materialising a hold-out .ts, record compile's exit code and diagnostics SEPARATELY from the test run: a non-zero compile caused by the hold-out file (e.g. TS2339 'bundleKey' does not exist) is itself the hold-out failing; an emitted .js may still run.",
+    "A stale out/ can hide a missing compile: delete out/test/<name>.test.js before compiling a materialised hold-out, and fail the run if it was not re-emitted.",
+    "The compile-fail harness (out/test/typedFixtures.test.js) resolves its fixtures from the package root at run time, so testAll needs the candidate's own src fixtures present — it is the candidate's harness, never S's."
+  ]
+}

@@ -1,0 +1,2 @@
+seed: q1-c8e411697155848824235d9e86bbd3adbe1496c0
+committed before the draw, 2026-10-14; order = position of B among [A,A,B] = sha256(seed) mod 3 (pilot.mjs)

@@ -1,0 +1,77 @@
+{
+  "source": "statement.md (frozen E1 text at P = 9f62e4db, model lines struck). Written before reading S's diff.",
+  "items": [
+    {
+      "id": "R1",
+      "requirement": "The slot table gains a bundle-key column: `SecretSlot` has a `bundleKey` field and every row of `SECRET_SLOTS` sets it to the vault bundle key that slot is stored under.",
+      "howToVerify": "In the diff of entitySlots.ts: the `SecretSlot` type/interface declares `bundleKey`, and every `SECRET_SLOTS` row supplies a value. A key typed as the vault's own key type (not a free `string`) is the stronger form; a plain string still satisfies R1 but note it.",
+      "anchors": ["entitySlots.ts", "SecretSlot", "SECRET_SLOTS", "bundleKey"]
+    },
+    {
+      "id": "R2",
+      "requirement": "`RevisionSecrets` is typed from `SMALL_FIELDS` (derived from that list, not a hand-written copy of the field names).",
+      "howToVerify": "In revisionHistory.ts: the `RevisionSecrets` declaration is computed from `SMALL_FIELDS` (e.g. a mapped/indexed type over it, with `SMALL_FIELDS` made a literal tuple if needed) and the hand-listed fields are gone. Runtime behaviour of revision parsing unchanged.",
+      "anchors": ["revisionHistory.ts", "RevisionSecrets", "SMALL_FIELDS"]
+    },
+    {
+      "id": "R3",
+      "requirement": "`snapshotForRevision` walks `SECRET_SLOTS` instead of reading each secret through a hand-written getter call, with the same resulting snapshot.",
+      "howToVerify": "In revisionSnapshot.ts: the per-field getter reads inside `snapshotForRevision` are replaced by an iteration over `SECRET_SLOTS` (using each slot's read and its revision field). The produced object has the same fields/values as before (no behaviour change).",
+      "anchors": ["revisionSnapshot.ts", "snapshotForRevision", "SECRET_SLOTS"]
+    },
+    {
+      "id": "R4",
+      "requirement": "`SEALABLE_MAPS` is asserted against the table — a test holds it equal to the set of the slots' `bundleKey`s.",
+      "howToVerify": "A test in the syncPinRule tests (or slotTable test) compares `SEALABLE_MAPS` with `SECRET_SLOTS.map(s => s.bundleKey)` as sets (or equal after sort) and fails on any difference. Deriving `SEALABLE_MAPS` from the table in syncPinRule.ts is acceptable only if the assertion still exists; SEALABLE_MAPS' runtime value must not change.",
+      "anchors": ["syncPinRule.ts", "SEALABLE_MAPS", "the syncPinRule tests"]
+    },
+    {
+      "id": "R5",
+      "requirement": "The coverage test: every bundle key the vault stores is a slot's `bundleKey` or one of the two keys outside the PIN, and no slot names a key the vault does not store.",
+      "howToVerify": "test/slotTable.test.ts (or the file the statement names) gains a test that takes the vault's full list of stored bundle keys, and asserts (a) each one is either some slot's `bundleKey` or one of exactly two named exceptions, and (b) each slot's `bundleKey` is in the vault's list. Equality-of-sets form is fine. It must reference `bundleKey` so it would have been red as TS2339 before R1.",
+      "anchors": ["test/slotTable.test.ts", "bundleKey"]
+    },
+    {
+      "id": "R6",
+      "requirement": "Guard: `snapshotForRevision` reads exactly the table's getters — checked with a recording storage of `pinReaderBoundary.slotGetters` against what the snapshot calls.",
+      "howToVerify": "A test exists (new, or present and kept) that runs `snapshotForRevision` over a recording/spy storage and asserts the set of getters it called equals the getters derived from the table (`slotGetters` in pinReaderBoundary, or the same derivation). Candidate states it was green before and after T1.",
+      "anchors": ["pinReaderBoundary", "slotGetters", "snapshotForRevision"]
+    },
+    {
+      "id": "R7",
+      "requirement": "`storedSecret.ts` exists and defines `StoredSecret`, a type that is assignable neither to nor from `string`, plus a `carried` function giving back a `string`; nothing in production code returns a `StoredSecret` yet.",
+      "howToVerify": "New file storedSecret.ts exports `StoredSecret` (not a plain or branded-string alias — a planted `type StoredSecret = string` must be the thing that makes the harness fail) and a `carried(...)` returning `string`. No other src file outside test/ and the fixtures has a function returning or a getter typed `StoredSecret`.",
+      "anchors": ["storedSecret.ts", "StoredSecret", "carried"]
+    },
+    {
+      "id": "R8",
+      "requirement": "A compile-fail harness `test/typedFixtures.test.ts` runs as part of `npm test` with three fixtures: `stored_is_not_a_string.ts` (expects TS2322), `a_string_is_not_stored.ts` (expects TS2322), `carried_is_a_string.ts` (must compile — the positive control).",
+      "howToVerify": "The test file compiles each fixture with the TypeScript compiler and checks the diagnostics: the two negative fixtures must produce TS2322 at their expected line, the positive fixture must produce no error. It is picked up by the existing `npm test` glob (lands as out/test/typedFixtures.test.js). The three fixture files exist with those names and contents that produce those outcomes.",
+      "anchors": ["test/typedFixtures.test.ts", "stored_is_not_a_string.ts", "a_string_is_not_stored.ts", "carried_is_a_string.ts", "TS2322"]
+    },
+    {
+      "id": "R9",
+      "requirement": "The harness has teeth: if a negative fixture compiles, it fails naming the expected code, the line and the fixture — specifically `stored_is_not_a_string.ts` expects TS2322 at line 7, so planting `type StoredSecret = string` yields a failure like \"expected TS2322 at line 7 of stored_is_not_a_string.ts — the fixture compiled\".",
+      "howToVerify": "The harness's failure message includes the expected diagnostic code, line number and fixture file name, and distinguishes 'the fixture compiled'. The fixture's assignment that must be rejected sits on line 7 (or the harness's expectation names the line it really sits on and the statement's line-7 example still holds). Assertions are on the code AND line, not merely 'some error'.",
+      "anchors": ["stored_is_not_a_string.ts", "line 7", "TS2322"]
+    },
+    {
+      "id": "R10",
+      "requirement": "The `tsconfig` / ESLint exclusions: the fixtures (which deliberately do not compile) are excluded from the project build and lint, so `npm run compile` (and typecheck/lint) is unaffected by them.",
+      "howToVerify": "tsconfig.json gains an `exclude` (or equivalent) for the fixture location, and eslint.config.mjs ignores it. A failing fixture would otherwise break `tsc -p ./`; check that no fixture path is inside the compiled include set.",
+      "anchors": ["tsconfig", "ESLint", "npm run compile"]
+    },
+    {
+      "id": "R11",
+      "requirement": "No behaviour change and no assertion edited: `slotTable`, `pinSlotMatrix`, `pinReaderBoundary`, `syncMerge` tests stay green unchanged; the size ratchet is unchanged (baseline not raised).",
+      "howToVerify": "The diff does not modify or delete existing assertions in existing test files (additions only); pinSlotMatrix/pinReaderBoundary/syncMerge test files are untouched or only extended; `.size-baseline.json` is not changed upward; production changes are type-level or equivalent refactors (R1–R3) only.",
+      "anchors": ["slotTable", "pinSlotMatrix", "pinReaderBoundary", "syncMerge", "ratchet"]
+    },
+    {
+      "id": "R12",
+      "requirement": "The observations are recorded in the commit(s)/summary: T1's RED watched as TS2339 (`bundleKey` does not exist on `SecretSlot`); the guard green before and after; T2's teeth both ways (planted `type StoredSecret = string` → the harness fails with the expected message; restored → green); the program-build timing for §3 item 2; and that the review/consultation/PR steps were skipped as unavailable.",
+      "howToVerify": "Read the candidate's commit message(s) or final summary: each of the five items is present with concrete output (the TS2339 text, the failing harness message, a millisecond timing of building the ts.Program), not just a claim.",
+      "anchors": ["TS2339", "type StoredSecret = string", "§3 item 2"]
+    }
+  ]
+}
