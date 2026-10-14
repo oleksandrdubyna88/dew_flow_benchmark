@@ -1,0 +1,36 @@
+{
+  "campaign": "scouts-preliminary-2026-10-12",
+  "fromPilotRun": "01a13812-0a7d-7720-ac97-a66df19042db",
+  "budgets": [
+    {
+      "arm": "A1",
+      "capUsd": 0.87,
+      "wallSeconds": 127
+    },
+    {
+      "arm": "B1",
+      "capUsd": 2.16,
+      "wallSeconds": 179
+    },
+    {
+      "arm": "A2",
+      "capUsd": 1.94,
+      "wallSeconds": 161
+    },
+    {
+      "arm": "B2",
+      "capUsd": 2.06,
+      "wallSeconds": 217
+    },
+    {
+      "arm": "A3",
+      "capUsd": 2.46,
+      "wallSeconds": 159
+    },
+    {
+      "arm": "B3",
+      "capUsd": 3.74,
+      "wallSeconds": 284
+    }
+  ]
+}

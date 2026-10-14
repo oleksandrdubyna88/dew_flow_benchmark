@@ -1,0 +1,12 @@
+{
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "readOn": "2026-10-12",
+  "models": [
+    { "modelId": "claude-opus-5-5", "input": 4, "output": 20, "cacheRead": 0.20, "cacheWrite5m": 5, "cacheWrite1h": 8 },
+    { "modelId": "claude-sonnet-5-5", "input": 2, "output": 10, "cacheRead": 0.10, "cacheWrite5m": 2.50, "cacheWrite1h": 4 },
+    { "modelId": "claude-haiku-4-5-20251001", "input": 1, "output": 5, "cacheRead": 0.10, "cacheWrite5m": 1.25, "cacheWrite1h": 2 }
+  ],
+  "cliRates": [
+    { "modelId": "claude-sonnet-5-5", "cacheRead": 0.20, "observed": "pilot run 01a13812, the B2 cell on the OpenHands pilot task, 2026-10-14: claude 2.1.289 reported Sonnet 5.5 at $1.10243, exactly its tokens with a cache hit at $0.20/M; the pricing page, re-read the same night, says $0.10/M (0.05x input, footnote 2)" }
+  ]
+}
