@@ -1,9 +1,9 @@
 # RESULTS — Opus scouts against Sonnet scouts (preliminary — not a verdict)
 
 > Status: **the preliminary run ran to the end, 2026-10-14 — preliminary, not a verdict** (plan D7). §1–§4 were committed before cell
-> one (`a69e3de`); §5–§7 are the results. **Short answer: at one effort, Sonnet teams found at least as many of the needed files as Opus
+> one (`a69e3de`); §5–§7 are the results; every cell of every run is in [scout-calibration/cells.md](scout-calibration/cells.md). **Short answer: at one effort, Sonnet teams found at least as many of the needed files as Opus
 > teams, 1.6–1.8× faster and 34–56 % cheaper; they made more wrong claims (+0.15 to +0.98 per 10).**
-> Plan: [PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) · the pilot: [scout-calibration/pilot.md](scout-calibration/pilot.md) ·
+> Plan: [PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md) · the pilot: [scout-calibration/pilot.md](scout-calibration/pilot.md) ·
 > module: [module_scouts.md](module_scouts.md).
 
 ## 1. The question
@@ -131,6 +131,49 @@ on six of eight tasks — and **every Sonnet team was faster than its Opus count
 | Wrong claims B ≈ A + 0.3 per 10 | +0.15, +0.98, +0.75 | higher than predicted at W2/W3 |
 | Team time B ≈ 0.6–0.8 × A | 0.63, 0.55, 0.64 | held — slightly faster at W2 |
 | Team cost B ≈ 0.3–0.5 × A | 0.66, 0.44, 0.55 | **less saving than predicted** at W1 and W3 |
+
+### 5.6 The wrong claims, split: citation or substance
+
+All 215 `wrong` verdicts of the run were unblinded locally (claim, cell, arm, the assessor's note — the texts stay local, they name
+private code) and each was classed from the assessor's own note: **citation** when the note says the stated fact holds but a part of the
+claim sits more than 10 lines from the cited line (the rubric's line rule), **substance** when the code contradicts what the claim says.
+The classing is a pattern over the notes; this session read 20 of them (ten of each class) against their notes — 19 agreed, and the one
+miss (a note saying "beyond the cited range") widened the pattern and was re-run.
+
+| workload | arm | decided | citation | substance | citation / 10 | **substance / 10** |
+|---|---|---|---|---|---|---|
+| W1 | A1 · 1 Opus | 80 | 4 | 10 | 0.50 | **1.25** |
+| | B1 · 2 Sonnet | 158 | 9 | 21 | 0.57 | **1.33** |
+| W2 | A2 · 2 Opus | 159 | 11 | 9 | 0.69 | **0.57** |
+| | B2 · 3 Sonnet | 238 | 22 | 31 | 0.92 | **1.30** |
+| W3 | A3 · 3 Opus | 240 | 11 | 22 | 0.46 | **0.92** |
+| | B3 · 5 Sonnet | 346 | 30 | 35 | 0.87 | **1.01** |
+| all | Opus | 479 | 26 | 41 | 0.54 | **0.86** |
+| all | Sonnet | 742 | 61 | 87 | 0.82 | **1.17** |
+
+On substance alone the Sonnet teams are close to the Opus teams at W1 (+0.08 per 10) and W3 (+0.09), and clearly worse only at W2
+(+0.73); the rest of the gap in §5.2 is line-citation precision. The pre-registered rule counts both, and §5.2 reports it that way.
+
+### 5.7 Every condition measured, side by side
+
+The same arms under the three conditions this calibration ran (team means; the per-cell rows are in
+[scout-calibration/cells.md](scout-calibration/cells.md)):
+
+| condition | tasks | arm | recall | team time | team cost | wrong / 10 |
+|---|---|---|---|---|---|---|
+| **Pilot** — Opus `high`, Sonnet `xhigh` (unequal) | 2 | A1 · B1 | 0.76 · 0.68 | 57.7 s · 77.4 s | $0.39 · $0.81 | 0.50 · 2.00 |
+| | | A2 · B2 | 0.83 · 0.76 | 71.1 s · 90.3 s | $0.95 · $0.97 | 0.25 · 1.83 |
+| | | A3 · B3 | 0.83 · 1.00 | 73.5 s · 113.6 s | $1.28 · $1.70 | 1.33 · 2.00 |
+| **Follow-up** — both `high` | 2 | A1 · B1 | 0.77 · 0.73 | 75.9 s · 41.4 s | $0.48 · $0.29 | 0.75 · 1.50 |
+| | | A2 · B2 | 0.85 · 0.77 | 69.5 s · 51.3 s | $0.80 · $0.44 | 1.25 · 1.83 |
+| | | A3 · B3 · C3 | 0.85 · 0.85 · 0.85 | 70.9 s · 63.1 s · 45.8 s | $1.23 · $0.78 · $0.46 | 0.83 · 1.40 · 1.58 |
+| **Follow-up control** — Sonnet `xhigh` | 2 | B1 | 0.73 | 91.7 s | $0.73 | 1.38 |
+| **Preliminary run** — both `high` | 8 | A1 · B1 | 0.79 · 0.82 | 95.8 s · 60.3 s | $0.59 · $0.39 | 1.75 · 1.90 |
+| | | A2 · B2 | 0.78 · 0.83 | 101.4 s · 55.9 s | $1.12 · $0.49 | 1.26 · 2.24 |
+| | | A3 · B3 | 0.78 · 0.85 | 97.0 s · 62.1 s | $1.54 · $0.84 | 1.38 · 1.89 |
+
+The pilot's recall is pooled over its two tasks, the preliminary run's is the mean over tasks (as `bench scouts report` prints it); the
+times and costs are cell means. **The reading flips between the first block and the rest only through the Sonnet scouts' effort.**
 
 ## 6. Deviations, voids and spend
 

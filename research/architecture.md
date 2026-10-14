@@ -1154,12 +1154,17 @@ artefacts are in [module_probes.md](module_probes.md); the conclusions are writt
 
 ## The scout calibration — a third sibling context (2026-10-12)
 
-The shared rule puts every subagent on Opus; the operator asked whether the read-only SCOUTS can run on Sonnet, ⌈1.5·N⌉
+Until 2026-10-13 the shared rule put every subagent on Opus; the operator asked whether the read-only SCOUTS can run on Sonnet, ⌈1.5·N⌉
 of them, without finding fewer of the files that matter or making more wrong claims. `Bench.*.Scouts` measures it per team
 size (W1–W3): one cell = one `claude -p --model opus` session in a task's history-free tree, launching N scouts in one
 message, read back from its stream (every child told apart by `parent_tool_use_id`). The tuple, the launch, the read-back,
 the ledger, the analysis and the verbs are in [module_scouts.md](module_scouts.md); the plan is
-[PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) (E1 built — S1–S3; E2 S4–S7 built and S8's code; S8's live pilot and E3 open).
+[PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md) (IMPLEMENTED 2026-10-14). **Measured:** at one effort (`high`), Sonnet
+teams found at least as many of the needed files as Opus teams, 1.6–1.8× faster and 34–56 % cheaper, with more wrong claims —
+[RESULTS_scout_models.md](RESULTS_scout_models.md) (preliminary, 8 tasks), every cell in
+[scout-calibration/cells.md](scout-calibration/cells.md); the pilot's Sonnet scouts had run at `xhigh` against Opus at `high` and
+looked slow and dear until `--effort` pinned one level ([scout-calibration/pilot.md](scout-calibration/pilot.md) §11). The read API and
+the Scouts tab are open in [todo/PLAN_scout_calibration_followups.md](../todo/PLAN_scout_calibration_followups.md).
 What it COMPOSES from the contexts beside it, and what it ADDS:
 
 - **Composed.** The probes' claim lifecycle and generations (`ScoutCell` = `Claimable` + `ProductPin`, a run with no

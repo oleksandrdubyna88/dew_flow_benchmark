@@ -1,7 +1,7 @@
 # The pilot — scout model calibration (E2 S8), 2026-10-13 to 2026-10-14
 
 > Status: **the pilot ran to the end; preliminary, not a verdict** (plan D7). Two pilot tasks, every workload's pair, an A/A
-> replication and one budget-exhausted cell; the hand-checks passed. Plan: [PLAN_scout_model_calibration.md](../../todo/PLAN_scout_model_calibration.md) ·
+> replication and one budget-exhausted cell; the hand-checks passed. Plan: [PLAN_scout_model_calibration.md](../PLAN_scout_model_calibration.md) ·
 > module: [module_scouts.md](../module_scouts.md).
 >
 > **Read §11 first.** §4's Opus-against-Sonnet numbers were measured with the Sonnet scouts at effort `xhigh` and the Opus scouts at

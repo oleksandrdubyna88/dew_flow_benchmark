@@ -1,6 +1,6 @@
 # Module — Tests: the scenario harness and its flow catalogue
 
-> Status: **created 2026-10-12 with the scouts' scenario (E1 S3 of [PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md)); the
+> Status: **created 2026-10-12 with the scouts' scenario (E1 S3 of [PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md)); the
 > private-task scenario and the `key` / `hygiene` rows added 2026-10-13 (E2 S4); the `access-check` row 2026-10-13 (E2 S5); the `tasks`,
 > `access-check` and `hygiene` rows widened by the E2 code round, 2026-10-13.**
 > The record the shared rule `common.scenario-tests` requires in every repository: where the harness is, how it runs, every flow with
