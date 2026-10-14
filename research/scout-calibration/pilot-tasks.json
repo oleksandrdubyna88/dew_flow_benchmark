@@ -1,0 +1,59 @@
+{
+  "campaign": "scouts-preliminary-2026-10-12",
+  "cutoffs": "cutoffs.json",
+  "tasks": [
+    {
+      "id": "p1539",
+      "role": "pilot",
+      "privacy": "private",
+      "language": "Python",
+      "kind": "where-decided",
+      "groundTruthCount": 6,
+      "treeHash": "f19426ce2f30c9f1837d60161f3c8c33de8c3d54a77355b06f252aaf708f3c05",
+      "statementCommitment": "471d3547a2c09df5d446e3e3c61cdd2539adfc7aba08d9a4580041011c2eb715",
+      "groundTruthCommitment": "aabaf73b39a132c8c013d6647ef6051f07e31f8692b244b22c942757daed1d87",
+      "groundTruthFileCommitments": [
+        "5f62adbf67f09ebf1fe50004c708a5e5da5acbedabf7cd01a43d108a9907d0f6",
+        "f46d58561eb451e6e306f3ab2259279d4cb28a46e563a0e162e48f2a30ae9b55",
+        "5ca0d72803d86b7d9568c733c5d5cd8d93184ff2380e87f2297252abe4d2f75c",
+        "facbc04637b0126656d2bd3a0a7ce2bdc5fe83f3eab2a3d63e5636aad4545cd0",
+        "9863a42daef910b340d5ff2e1f3b739fc5ea700d59028ef84ca4720ed4bdf4ed",
+        "c3d50e195eeb99858d5b30ac0a60f2856f84f33527189eb7ffd3c8b3aa4b1da8"
+      ]
+    },
+    {
+      "id": "t-openhands-de5a79b4ce",
+      "role": "pilot",
+      "privacy": "public",
+      "language": "",
+      "kind": "where-decided",
+      "groundTruthCount": 7,
+      "treeHash": "7e4832f51a3fc558c67fe8b4b65b180c0b6e58c73095acf50fd118acedb9fcf5",
+      "repository": "OpenHands/OpenHands",
+      "parent": "2c5ce2fa2dca3aa9c7442ff1c46876c60a794eeb",
+      "fix": "de5a79b4ce578c56f5fef330551a0c1fb8bd12bc",
+      "statement": "The Codex harness that the front end starts over the agent client protocol must offer a newly supported OpenAI model as its first choice, but the pinned typed client still reports a launcher version that rejects that model. Where does the front end build its list of agent-protocol harnesses with their launch commands and model choices, and which mocks and test fixtures list the selectable language models?",
+      "groundTruth": [
+        "__tests__/api/agent-server-adapter.test.ts",
+        "__tests__/constants/acp-providers.test.ts",
+        "__tests__/routes/agent-settings.test.tsx",
+        "src/constants/acp-providers.test.ts",
+        "src/constants/acp-providers.ts",
+        "src/mocks/settings-handlers.ts",
+        "tests/e2e/support/onboarding-helpers.ts"
+      ],
+      "addedIdentifiers": [
+        "Astra",
+        "CODEX_ASTRA_ACP_VERSION",
+        "CODEX_ASTRA_COMMAND",
+        "CODEX_ASTRA_MODEL",
+        "CODEX_LEGACY_ACP_COMMAND",
+        "astra",
+        "getAvailableModels",
+        "registryCommand",
+        "resolveCodexDefaultCommand"
+      ],
+      "removals": []
+    }
+  ]
+}
