@@ -11,3 +11,6 @@ without it the CLI's own command checks fail on this machine. Fix: the child env
 $5.75 + $6.63 + $9.61 = $21.99 (cells) — kept as a record, not as a comparison.
 
 ## Generation 2 — D:/rsd/_q2 — the same committed seed, so the same order
+
+## Generation 3 — D:/rsd/_q3
+B gets a test-only main-session edit bound (owner, 2026-10-14; conventions unchanged); A unchanged; same seed.

@@ -1,0 +1,347 @@
+{
+ "codexVersion": "codex-cli 0.160.0",
+ "codexModel": "gpt-6.1-sol (config.toml default, reasoning effort high)",
+ "sanityGate": {
+  "referenceMet": 11,
+  "threshold": 9,
+  "pass": true
+ },
+ "sources": {
+  "reference": {
+   "counts": {
+    "met": 11,
+    "partial": 1,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 64.724,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff: entitySlots.ts:60 declares bundleKey: SecretMapKey; all ten rows supply keys at lines 76–151.",
+     "note": "Uses the vault's key type; all rows provide corresponding bundle keys."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff: revisionHistory.ts:56 defines RevisionSecrets using (typeof SMALL_FIELDS)[number].",
+     "note": "Handwritten interface removed; SMALL_FIELDS values and parsing behavior preserved."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff: revisionSnapshot.ts:37–38 iterates SECRET_SLOTS and assigns await slot.read(...) under slot.revisionField.",
+     "note": "Preserves snapshot fields, undefined values, and timestamp capture before reads."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff: syncPinRule.test.ts:31–37 compares sorted SEALABLE_MAPS with sorted slot.bundleKey values.",
+     "note": "Equality assertion added; SEALABLE_MAPS runtime definition unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff: slotTable.test.ts:64–71 compares slot bundle keys plus attachments/images with SECRET_KINDS bundle keys.",
+     "note": "Sorted equality checks coverage in both directions with exactly two named exceptions."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff: slotTable.test.ts:74–103 records table and snapshot getter calls; summary.txt:25–26 records green BEFORE and AFTER.",
+     "note": "Recording proxy compares complete call lists, including multiplicity, against table-derived getters."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff: storedSecret.ts:18–21 defines the unique-symbol object type; :31 exports carried(...): string.",
+     "note": "Neither string assignment direction is allowed; only the mint in storedSecret.ts returns StoredSecret."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff: typedFixtures.test.ts:88–110,126–135 builds programs and checks diagnostics; all three named fixtures are added.",
+     "note": "Two TS2322 fixtures and a compiling positive control; test file follows the existing test output convention."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff: typedFixtures.test.ts:106–110 checks exact code and line, naming compiled fixtures; stored_is_not_a_string.ts:7 contains the rejected assignment.",
+     "note": "Failure identifies TS2322, line 7, filename, and that the fixture compiled."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff: tsconfig.json:18 excludes src/test/fixtures/typed; eslint.config.mjs:14 globally ignores src/test/fixtures/typed/**.",
+     "note": "Fixtures remain outside project compilation and lint; the harness explicitly compiles them."
+    },
+    {
+     "id": "R11",
+     "verdict": "met",
+     "evidence": "candidate.diff contains only added test assertions and no baseline changes; summary.txt:30–37,86–89 reports unchanged assertions, green suite, and unchanged ratchet.",
+     "note": "Named existing tests remain untouched or extended; production changes preserve returned values."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt:21–26 records TS2339 and guard observations; :63–66 records planted/restored teeth; :82 records build 1044–1151 ms; :102,116 describes review/PR activity.",
+     "note": "All technical observations recorded; required statement that review, consultation, and PR steps were skipped as unavailable is missing."
+    }
+   ]
+  },
+  "c3": {
+   "counts": {
+    "met": 8,
+    "partial": 4,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 92.219,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:102,111-183",
+     "note": "bundleKey uses the vault's SecretMapKey type; all ten rows supply their corresponding bundle keys."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:195-240",
+     "note": "The handwritten interface becomes a mapped type over the literal SMALL_FIELDS tuple; parsing remains unchanged."
+    },
+    {
+     "id": "R3",
+     "verdict": "partial",
+     "evidence": "candidate.diff:318,334-338",
+     "note": "The table supplies all secret fields, but Date.now() moves after asynchronous reads, changing the snapshot timestamp."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:403-405,577-579",
+     "note": "A sorted equality assertion compares SEALABLE_MAPS with slot bundle keys; filtering retains the same two exclusions."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:69,543-554",
+     "note": "Coverage compares the vault's complete bundle-key list with slot bundle keys plus attachments and images, enforcing both directions."
+    },
+    {
+     "id": "R6",
+     "verdict": "partial",
+     "evidence": "candidate.diff:501-522,556-564; summary.txt: \"no test was watched passing\"",
+     "note": "The recording-storage guard compares snapshot calls with table-derived getters, but green observations before and after are absent."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:367-381",
+     "note": "StoredSecret is an opaque object type incompatible with string; carried returns string. No other production file gains StoredSecret returns."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:409-449,584-594,727-756",
+     "note": "The discoverable test harness builds each fixture, checks exact diagnostics, and includes both TS2322 negatives and the compiling positive control."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:443-449,658-664,760-773",
+     "note": "The rejected assignment is on line 7; verdicts check code, line, and filename and explicitly report when the fixture compiled."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-13,817-819",
+     "note": "ESLint globally ignores the fixture directory, and tsconfig excludes it from the project build."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:318,338,450-568; summary.txt: \"Build and tests: none ran.\"",
+     "note": "Existing assertions and the size baseline are unchanged, but green tests are unobserved and snapshot timestamp behavior changes."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt: \"no RED was watched failing, no test was watched passing, and the timing measurement wasn't taken\"; \"Skipped, as you instructed\"",
+     "note": "Required review, consultation, and PR skips are documented; observed TS2339, guard passes, teeth outcomes, and millisecond timing are missing."
+    }
+   ]
+  },
+  "c2": {
+   "counts": {
+    "met": 8,
+    "partial": 4,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 80.299,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:106 declares bundleKey: SecretMapKey; candidate.diff:115–187 supplies all ten rows.",
+     "note": "Uses the vault's key type, with a bundle key on every slot."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:229–251 defines SMALL_FIELDS as a literal tuple and maps RevisionSecrets over its entries.",
+     "note": "Hand-listed interface removed; field order and revision parsing preserved."
+    },
+    {
+     "id": "R3",
+     "verdict": "partial",
+     "evidence": "candidate.diff:310–331 iterates SECRET_SLOTS using slot.read and slot.revisionField, before evaluating Date.now().",
+     "note": "Secret fields preserved, but timestamp capture moves after awaited reads and getter order changes."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:594–597 compares sorted SEALABLE_MAPS with sorted slot.bundleKey values; candidate.diff:395–405 changes only its comment.",
+     "note": "Equality assertion added; runtime map list unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:490–498 compares SECRET_KINDS bundle keys with slot bundle keys plus attachments and images.",
+     "note": "Covers both directions with exactly two named exceptions and references the missing column."
+    },
+    {
+     "id": "R6",
+     "verdict": "partial",
+     "evidence": "candidate.diff:516–540 records table and snapshot getter calls and compares them; summary.txt:26 says green runs were blocked.",
+     "note": "Recording guard implemented, but green before and after was never observed."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:368–389 defines the unique-symbol object type, mint, and carried returning string; no other production changes introduce StoredSecret returns.",
+     "note": "Object phantom prevents assignment in either direction; production getters remain strings."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:406–450 adds all three fixtures; candidate.diff:724–765 builds fixture programs and checks diagnostics through node:test.",
+     "note": "Standard test location supports discovery; negative fixtures expect TS2322 and positive control requires no diagnostics."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:442–448 places the rejected assignment on line 7; candidate.diff:687–698 checks code, line, filename and reports 'the fixture compiled'.",
+     "note": "Failure message and exact diagnostic matching are implemented; planted-type observations are assessed under R12."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:8–14 adds the ESLint fixture ignore; candidate.diff:808–809 excludes src/test/fixtures/typed from the project build.",
+     "note": "Deliberately failing fixtures are excluded while the harness remains included."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff preserves existing assertions and contains no baseline change; candidate.diff:310–316 changes timestamp timing; summary.txt:26 reports no tests run.",
+     "note": "Assertions and ratchet preserved, but suite green is unverified and snapshot timing changes behavior."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt:26 says all verification was blocked; summary.txt:21 says timing was never run; summary.txt:36–37 records review and consultation skips.",
+     "note": "Skip outcome partly recorded; RED, guard greens, planted/restored harness outputs and millisecond timing are absent. PR skip is not explicit."
+    }
+   ]
+  },
+  "c1": {
+   "counts": {
+    "met": 9,
+    "partial": 3,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 73.829,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:61; candidate.diff:70-142",
+     "note": "bundleKey uses the vault's SecretMapKey type; all ten rows supply their corresponding bundle keys."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:184-203",
+     "note": "RevisionSecrets is mapped over SmallField, derived directly from the SMALL_FIELDS literal tuple; parsing remains unchanged."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:286-291",
+     "note": "Snapshot iterates SECRET_SLOTS using each revisionField and read function, preserving the timestamp capture and secret fields."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:543-550; candidate.diff:348-356",
+     "note": "Added sorted equality assertion compares SEALABLE_MAPS with slot bundle keys; its runtime definition is unchanged."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:505-518",
+     "note": "Coverage compares vault keys against slot keys plus exactly attachments and images, checking duplicate slots and exception exclusion."
+    },
+    {
+     "id": "R6",
+     "verdict": "partial",
+     "evidence": "candidate.diff:455-480,521-529; summary.txt: \"there is no RED to report, no green\"",
+     "note": "Recording guard uses the shared slotGetters derivation, but green observations before and after T1 were not obtained."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:321-342; candidate.diff:293-318",
+     "note": "Opaque unique-symbol object type rejects assignment both ways; carried returns string. Only the new module's mint returns StoredSecret."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:357-396,556-566,656-682,724-734",
+     "note": "Included .test.ts harness builds fixture programs, checks exact diagnostics, and requires the positive control to compile."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:390-396,660-671,715-720",
+     "note": "Rejected assignment is on line 7; failures name code, line, fixture, and compilation success. Matching requires exactly the expected diagnostic."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-13,743-745",
+     "note": "Project compilation excludes src/test/fixtures; ESLint globally ignores that directory. The harness remains included."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:397-434,496-550; summary.txt: \"none of it has been built or tested\"",
+     "note": "Existing assertions and size baseline remain unchanged; helper extraction preserves assertions. Required green suite and ratchet results are absent."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "summary.txt: \"Skipped: the review gate\"; \"Not done: every RED-then-green observation, the teeth proof\"; \"the program-build timing\"",
+     "note": "Unavailable review, consultation, and PR steps are explicitly skipped; observed TS2339, guard results, mutation proof, restored green, and timing are missing."
+    }
+   ]
+  }
+ }
+}

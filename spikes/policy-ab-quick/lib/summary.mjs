@@ -154,6 +154,7 @@ export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(
     agentCalls: calls,
     childrenPerModel: childrenPerModel(calls),
     unobservedChildren: unobservedChildren(calls, audit),
+    editBoundDenials: toolResults(events).filter(r => r.text.includes('the main session edits at most one file')).length,
     denials: { modelGuard: calls.filter(c => c.denied === 'model-guard').length, other: calls.filter(c => c.denied === 'other-error').length },
     effortByAgent: byAgent,
     effortNotHigh: effortFlags(byAgent),

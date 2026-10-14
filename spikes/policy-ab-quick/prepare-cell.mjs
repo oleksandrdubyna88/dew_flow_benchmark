@@ -80,6 +80,7 @@ async function writeHooks(treeDir, arm) {
   const put = (name, bytes) => { writeFileMaking(path.join(treeDir, '.claude/hooks', name), bytes); hooks[name] = sha256(bytes); };
   for (const name of ['audit.mjs']) put(name, fs.readFileSync(path.join(SPIKE_DIR, 'hooks', name)));
   if (arm === 'B') put('subagent-model.mjs', await gitShow(CONV_CLONE, ARM_SHAS.B, GUARD_SOURCE));
+  if (arm === 'B') for (const [src, dst] of [['hooks/edit-bound.mjs', 'edit-bound.mjs'], ['lib/edit-bound.mjs', 'edit-bound-core.mjs']]) put(dst, fs.readFileSync(path.join(SPIKE_DIR, src)));
   const file = path.join(treeDir, '.claude/settings.json');
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   const merged = `${JSON.stringify(applyOverlaySettings(existing, arm), null, 2)}\n`;

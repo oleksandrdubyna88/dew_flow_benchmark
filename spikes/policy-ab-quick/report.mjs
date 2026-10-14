@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // Combine each cell's summary.json + score.json into research/policy-ab/quick-pilot-data.json.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { parseCli } from './lib/args.mjs';
-import { ARM_SHAS, DEFAULT_RUNS_ROOT, P, REPO_ROOT, S } from './lib/consts.mjs';
+import { ARM_SHAS, CREDS_CLONE, DEFAULT_RUNS_ROOT, P, REPO_ROOT, S } from './lib/consts.mjs';
 import { readRunMap } from './lib/runmap.mjs';
-import { pathVariants, scrub } from './lib/scrub.mjs';
+import { machineScrubber, scrubStrings } from './lib/scrub.mjs';
 
 const SPEC = {
   'runs-root': { type: 'string', default: DEFAULT_RUNS_ROOT, help: 'runs root' },
@@ -21,18 +20,13 @@ export function cellRecord(name, summary, score, cellJson, mapEntry) {
   return { cell: name, arm: mapEntry?.arm ?? null, armSha: mapEntry?.armSha ?? null, overlay: cellJson?.overlay ?? null, summary, score };
 }
 
-function replacementsFor(root) {
-  const rootName = path.basename(root);
-  return [...pathVariants(root).map(v => [v, `<${rootName}>`]), ...pathVariants(os.homedir()).map(v => [v, '<home>'])];
-}
-
 function main(v) {
   const root = path.resolve(v['runs-root']);
   const cells = CELLS.map(name => {
     const dir = path.join(root, name);
     return cellRecord(name, readJson(path.join(dir, 'summary.json')), readJson(path.join(dir, 'score.json')), readJson(path.join(dir, 'cell.json')), readRunMap().cells?.[name]);
   }).filter(c => c.summary || c.score);
-  const data = scrub({ generatedUtc: new Date().toISOString(), seed: readRunMap().seed ?? null, order: readRunMap().order ?? null, story: { repo: 'dew_flow_creds_for_devs', pr: 176, P, S }, arms: ARM_SHAS, cells }, replacementsFor(root));
+  const data = scrubStrings({ generatedUtc: new Date().toISOString(), seed: readRunMap().seed ?? null, order: readRunMap().order ?? null, story: { repo: 'dew_flow_creds_for_devs', pr: 176, P, S }, arms: ARM_SHAS, cells }, machineScrubber({ runsRoot: root, creds: CREDS_CLONE }));
   const out = v.out ? path.resolve(v.out) : path.join(REPO_ROOT, 'research', 'bench', 'quick-pilot-data.json');
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, `${JSON.stringify(data, null, 2)}\n`);

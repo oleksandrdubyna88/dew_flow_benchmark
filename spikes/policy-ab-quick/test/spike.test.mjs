@@ -45,7 +45,7 @@ test('settings overlay keeps project keys, adds arm B guard, refuses double wiri
   const b = applyOverlaySettings(base, 'B');
   assert.equal(a.permissions.defaultMode, 'acceptEdits');
   assert.equal(a.hooks.PreToolUse.length, 2);
-  assert.equal(b.hooks.PreToolUse.length, 3);
+  assert.equal(b.hooks.PreToolUse.length, 4);
   assert.equal(a.hooks.InstructionsLoaded.length, 1);
   assert.ok(JSON.stringify(b).includes('subagent-model.mjs') && !JSON.stringify(a).includes('subagent-model.mjs'));
   assert.equal(base.hooks.PreToolUse.length, 1, 'input not mutated');
