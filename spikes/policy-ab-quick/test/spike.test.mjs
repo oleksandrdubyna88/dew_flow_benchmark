@@ -16,8 +16,8 @@ import { applyOverlaySettings } from '../lib/settings.mjs';
 import { parseStruck, strikeTargets } from '../lib/strike.mjs';
 import { parseNdjson, summarize } from '../lib/summary.mjs';
 import { scrub } from '../lib/scrub.mjs';
-import { auditRecord } from '../hooks/policy-audit.mjs';
-import { effortPinOutput } from '../hooks/effort-pin.mjs';
+import { auditRecord } from '../hooks/audit.mjs';
+import { effortPinOutput } from '../hooks/effort.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = name => fs.readFileSync(path.join(here, 'fixtures', name), 'utf8');
@@ -98,7 +98,7 @@ test('junit fixture from a real node --test run parses', () => {
 
 test('summary over the synthetic stream and audit log', () => {
   const cellJson = { cell: 'A1', arm: 'A', overlay: { '.claude/rules/shared/common/subagent-models.md': 'abc' } };
-  const s = summarize({ events: parseNdjson(fx('stream.ndjson')), audit: parseNdjson(fx('audit.ndjson')), cellJson, treeDir: 'D:/runs/A1/tree', tokens: ['CANARY-zzz'], rawTexts: [{ source: 'stream', text: 'x CANARY-zzz y' }] });
+  const s = summarize({ events: parseNdjson(fx('stream.ndjson')), audit: parseNdjson(fx('audit.ndjson')), cellJson, treeDir: 'D:/runs/A1/tree', canaryTokens: ['CANARY-zzz'], texts: { stream: 'x CANARY-zzz y' } });
   assert.equal(s.result.total_cost_usd, 1.5);
   assert.equal(s.agentCalls.length, 3);
   assert.deepEqual(s.agentCalls.map(c => c.denied), [null, 'model-guard', 'effort-pin']);
@@ -110,7 +110,7 @@ test('summary over the synthetic stream and audit log', () => {
   assert.deepEqual([s.edits.main.approxLines, s.edits.children.approxLines], [4, 10]);
   assert.equal(s.leakSuspects.length, 1);
   assert.match(s.leakSuspects[0].reasons[0], /outside/);
-  assert.equal(s.canaryHits.length, 1);
+  assert.equal(s.canary.count, 1);
 });
 
 test('summary leak check flags gh in the stream when no audit exists', () => {
@@ -134,7 +134,7 @@ test('effort pin denies non-high only', () => {
   assert.equal(effortPinOutput({ tool_input: { effort: null } }), '');
   const out = JSON.parse(effortPinOutput({ tool_input: { effort: 'xhigh' } }));
   assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
-  assert.ok(out.hookSpecificOutput.permissionDecisionReason.startsWith('policy-effort-pin:'));
+  assert.ok(out.hookSpecificOutput.permissionDecisionReason.startsWith('effort-pin:'));
 });
 
 test('hooks run as processes: audit appends under its own .git, pin denies', () => {
@@ -142,16 +142,16 @@ test('hooks run as processes: audit appends under its own .git, pin denies', () 
   try {
     fs.mkdirSync(path.join(tmp, '.git'));
     fs.mkdirSync(path.join(tmp, '.claude', 'hooks'), { recursive: true });
-    for (const n of ['policy-audit.mjs', 'effort-pin.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
+    for (const n of ['audit.mjs', 'effort.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
     const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, effort: { level: 'high' } });
-    const a = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'policy-audit.mjs')], { input, cwd: os.tmpdir() });
+    const a = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input, cwd: os.tmpdir() });
     assert.equal(a.status, 0);
     assert.equal(a.stdout.length, 0);
-    const line = JSON.parse(fs.readFileSync(path.join(tmp, '.git', 'policy-audit.ndjson'), 'utf8').trim());
+    const line = JSON.parse(fs.readFileSync(path.join(tmp, '.git', 'audit.ndjson'), 'utf8').trim());
     assert.equal(line.input.command, 'ls');
-    const p = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'effort-pin.mjs')], { input: JSON.stringify({ tool_input: { effort: 'low' } }) });
+    const p = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'effort.mjs')], { input: JSON.stringify({ tool_input: { effort: 'low' } }) });
     assert.match(p.stdout.toString(), /"permissionDecision":"deny"/);
-    const bad = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'policy-audit.mjs')], { input: 'not json' });
+    const bad = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input: 'not json' });
     assert.equal(bad.status, 0);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

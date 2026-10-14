@@ -9,16 +9,18 @@ import { git, gitEnv, gitShow } from './lib/git.mjs';
 import { compiledTestPath, entryPath, fileStem, holdoutEntries, repoPathOf } from './lib/holdout.mjs';
 import { parseJunit, verdictOf } from './lib/junit.mjs';
 import { run } from './lib/proc.mjs';
+import { attributeDiagnostics, parseTscDiagnostics } from './lib/tsc.mjs';
 import { extractBase, npmCi, writeFileMaking } from './lib/tree.mjs';
 
 const SPEC = {
-  cell: { type: 'string', help: 'A1 | B | A2 | reference' },
+  cell: { type: 'string', help: 'c1 | c2 | c3 | reference' },
   'runs-root': { type: 'string', default: DEFAULT_RUNS_ROOT, help: 'runs root' },
   'skip-npm': { type: 'boolean', help: 'reference only: skip npm ci (tests only)' },
 };
 
 const readJson = file => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
 const tail = buf => buf.toString('utf8').slice(-1500);
+const MAX_DIAGS = 20;
 
 /** The reference tree: P plus the src_vs_code part of the P..S diff. Its own folder, built once. */
 async function ensureReferenceTree(cellDir, skipNpm) {
@@ -41,11 +43,21 @@ function copyTree(from, to) {
   fs.cpSync(from, to, { recursive: true, filter: src => path.basename(src) !== '.git' });
 }
 
+/** Compile in a copy whose out/ was removed first, so nothing stale can stand in for a fresh emit. */
 async function compile(webDir, commands) {
+  fs.rmSync(path.join(webDir, 'out'), { recursive: true, force: true });
+  return compileKeepingOut(webDir, commands);
+}
+
+async function compileKeepingOut(webDir, commands) {
   const { exe, args } = resolveCompile(commands);
   const r = await run(exe, args, { cwd: webDir, env: process.env });
-  return { ok: r.code === 0, exitCode: r.code, detail: r.code === 0 ? '' : tail(Buffer.concat([r.stdout, r.stderr])) };
+  const output = Buffer.concat([r.stdout, r.stderr]).toString('utf8');
+  const diagnostics = parseTscDiagnostics(output);
+  return { ok: r.code === 0, exitCode: r.code, diagnostics, tail: r.code === 0 ? '' : tail(Buffer.from(output)) };
 }
+
+const compileInfo = c => ({ ok: c.ok, exitCode: c.exitCode, diagnosticCount: c.diagnostics.length, diagnostics: c.diagnostics.slice(0, MAX_DIAGS), tail: c.diagnostics.length === 0 ? c.tail : '' });
 
 async function nodeTest(webDir, targets, xmlPath) {
   const r = await run(process.execPath, ['--test', '--test-reporter=junit', `--test-reporter-destination=${xmlPath}`, ...targets], { cwd: webDir, env: process.env });
@@ -53,20 +65,32 @@ async function nodeTest(webDir, targets, xmlPath) {
   return { verdict: verdictOf(parsed, r.code), exitCode: r.code, tests: parsed.tests, passed: parsed.passed, failed: parsed.failed, skipped: parsed.skipped, failedCases: parsed.cases.filter(c => c.status === 'fail').map(c => c.name), detail: parsed.tests === 0 ? tail(Buffer.concat([r.stdout, r.stderr])) : '' };
 }
 
+/** Pure: the combined verdict. A compile error counts against the hold-out only when it is located in the hold-out file. */
+export function holdoutVerdict({ holdoutDiagnostics, emitted, testVerdict }) {
+  if (holdoutDiagnostics > 0 || !emitted) return 'compile-error';
+  return testVerdict;
+}
+
 async function scoreHoldout(entry, treeDir, scoreDir, commands) {
   const repoPath = repoPathOf(entryPath(entry));
   const copy = path.join(scoreDir, fileStem(repoPath));
   copyTree(treeDir, copy);
-  writeFileMaking(path.join(copy, repoPath), await gitShow(CREDS_CLONE, S, repoPath));
   const webDir = path.join(copy, WEB_DIR);
-  const emitted = path.join(webDir, compiledTestPath(repoPath));
-  fs.rmSync(emitted, { force: true }); // a stale out/ must not hide a missing compile
-  const built = await compile(webDir, commands);
-  const compileInfo = { ok: built.ok, exitCode: built.exitCode, diagnostics: built.detail };
-  if (!fs.existsSync(emitted)) return { path: repoPath, verdict: 'compile-error', compile: compileInfo, emitted: false };
-  const test = await nodeTest(webDir, [compiledTestPath(repoPath)], path.join(copy, 'junit.xml'));
-  // tsc emits even on errors: a failed compile is itself the hold-out failing, the test result is kept beside it.
-  return { path: repoPath, verdict: built.ok ? test.verdict : 'compile-error', compile: compileInfo, emitted: true, test };
+  const candidateCompile = await compile(webDir, commands); // the candidate as delivered, before the hold-out file
+  writeFileMaking(path.join(copy, repoPath), await gitShow(CREDS_CLONE, S, repoPath));
+  const emittedPath = path.join(webDir, compiledTestPath(repoPath));
+  fs.rmSync(emittedPath, { force: true });
+  const withHoldout = await compileKeepingOut(webDir, commands);
+  const attributed = attributeDiagnostics(withHoldout.diagnostics, repoPath.slice(WEB_DIR.length + 1), candidateCompile.diagnostics);
+  const emitted = fs.existsSync(emittedPath);
+  const test = emitted ? await nodeTest(webDir, [compiledTestPath(repoPath)], path.join(copy, 'junit.xml')) : null;
+  const verdict = holdoutVerdict({ holdoutDiagnostics: attributed.holdout.length, emitted, testVerdict: test?.verdict });
+  return {
+    path: repoPath, verdict, testVerdict: test?.verdict ?? null, emitted,
+    candidateCompile: compileInfo(candidateCompile),
+    withHoldout: { exitCode: withHoldout.exitCode, holdoutDiagnostics: attributed.holdout.slice(0, MAX_DIAGS), otherNewDiagnosticCount: attributed.otherNew.length },
+    test,
+  };
 }
 
 async function scoreOwnSuite(treeDir, scoreDir, commands) {
@@ -75,7 +99,7 @@ async function scoreOwnSuite(treeDir, scoreDir, commands) {
   const webDir = path.join(copy, WEB_DIR);
   const built = await compile(webDir, commands);
   const test = await nodeTest(webDir, ['out/test/*.test.js'], path.join(copy, 'junit.xml'));
-  return { ...test, verdict: built.ok ? test.verdict : 'compile-error', compile: { ok: built.ok, exitCode: built.exitCode, diagnostics: built.detail } };
+  return { ...test, compile: compileInfo(built) };
 }
 
 async function main(v) {
@@ -95,7 +119,7 @@ async function main(v) {
 }
 
 if (process.argv[1]?.endsWith('score-cell.mjs')) {
-  const { help, values } = parseCli(process.argv.slice(2), SPEC, 'node score-cell.mjs --cell <A1|B|A2|reference> [--runs-root dir]');
+  const { help, values } = parseCli(process.argv.slice(2), SPEC, 'node score-cell.mjs --cell <c1|c2|c3|reference> [--runs-root dir]');
   if (help) console.log(help);
   else {
     requireValues(values, ['cell']);

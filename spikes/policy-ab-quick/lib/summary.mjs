@@ -1,10 +1,16 @@
 // Pure core of summarize-cell: stream events + audit records + cell.json -> summary object.
 const MAIN = 'main';
-const NETWORK = [/\bgh\s/, /git\s+clone/, /git\s+fetch/, /\bcurl\b/, /Invoke-WebRequest/i, /https:\/\//];
-const OUTSIDE = [/D:\\rsd/i, /D:\/rsd/i, /~\/\.claude/, /C:\\Users\\/i, /C:\/Users\//i, /\$env:USERPROFILE/i, /%USERPROFILE%/i];
+import { createHash } from 'node:crypto';
+import os from 'node:os';
+import { findOutsideAccesses } from './leak.mjs';
+import { costFromMessages } from './pricing.mjs';
+import { scanTokens, tamperFindings } from './scan.mjs';
+
+const NETWORK = [/\bgh\s/, /git\s+clone/, /git\s+(fetch|push|pull|ls-remote|remote)\b/, /\bcurl\b/, /\bwget\b/, /Invoke-(WebRequest|RestMethod)/i, /https:\/\//, /\bnpm\s+(i|install)\b/, /\bnpx\b/, /dotnet\s+restore/];
+
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const GUARD_MARKER = 'subagent-models.md:';
-const PIN_MARKER = 'policy-effort-pin:';
+const PIN_MARKER = 'effort-pin:';
 
 export const parseNdjson = text => text.split('\n').map(l => l.trim()).filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
 
@@ -95,48 +101,70 @@ export function editsBy(audit) {
   return { main: summarize(edits.filter(r => !r.agent_id)), children: summarize(edits.filter(r => r.agent_id)) };
 }
 
-/** Normalise the tree path out so a command inside the tree is not an "outside path". */
-function stripTree(text, treeDir) {
-  if (!treeDir) return text;
-  const variants = [treeDir, treeDir.replace(/\//g, '\\'), treeDir.replace(/\\/g, '/')];
-  return variants.reduce((t, v) => t.split(v).join('<tree>'), text);
+/** Uniform tool calls: audit records when there are any, otherwise the stream's tool_use blocks. */
+export function toolCalls(audit, events) {
+  const fromAudit = audit.filter(r => r.event === 'PreToolUse' && r.tool_name).map(r => ({ agent: r.agent_id ?? MAIN, tool: r.tool_name, input: r.input ?? {} }));
+  if (fromAudit.length > 0) return fromAudit;
+  return toolUses(events).map(u => ({ agent: u.parent ?? MAIN, tool: u.name, input: u.input ?? {} }));
 }
 
-export function commandsFrom(audit, events) {
-  const fromAudit = audit.filter(r => r.event === 'PreToolUse' && ['Bash', 'PowerShell'].includes(r.tool_name)).map(r => ({ agent: r.agent_id ?? MAIN, tool: r.tool_name, command: r.input?.command ?? '' }));
-  const fromStream = toolUses(events).filter(u => ['Bash', 'PowerShell'].includes(u.name)).map(u => ({ agent: u.parent ?? MAIN, tool: u.name, command: u.input?.command ?? '' }));
-  return fromAudit.length > 0 ? fromAudit : fromStream;
-}
-
-export function leakSuspects(commands, treeDir) {
-  return commands.flatMap(c => {
-    const text = stripTree(c.command, treeDir);
-    const outside = OUTSIDE.filter(re => re.test(text)).map(re => `outside:${re.source}`);
-    const network = NETWORK.filter(re => re.test(text)).map(re => `network:${re.source}`);
-    const reasons = [...outside, ...network];
-    return reasons.length > 0 ? [{ agent: c.agent, tool: c.tool, reasons, command: c.command.slice(0, 400) }] : [];
+export function leakSuspects(calls, { treeRoot, home }) {
+  const network = calls.filter(c => ['Bash', 'PowerShell'].includes(c.tool)).flatMap(c => {
+    const reasons = NETWORK.filter(re => re.test(c.input?.command ?? '')).map(re => `network:${re.source}`);
+    return reasons.length > 0 ? [{ agent: c.agent, tool: c.tool, reasons, command: (c.input.command ?? '').slice(0, 400) }] : [];
   });
+  const outside = treeRoot ? findOutsideAccesses(calls, { treeRoot, home }).map(o => ({ agent: o.agent, tool: o.tool, reasons: [`outside:${o.resolved}`], command: o.path })) : [];
+  return [...outside, ...network];
 }
 
-export function canaryHits(rawTexts, tokens) {
-  return tokens.filter(Boolean).flatMap(token => rawTexts.flatMap(({ source, text }) => (text.includes(token) ? [{ source, tokenPrefix: token.slice(0, 6) }] : [])));
+export function initInfo(events) {
+  const i = events.find(e => e.type === 'system' && e.subtype === 'init');
+  if (!i) return { present: false };
+  const { cwd, ...rest } = i;
+  const names = list => (list ?? []).map(x => (typeof x === 'string' ? x : x?.name ?? JSON.stringify(x)));
+  return {
+    present: true, model: rest.model ?? null, cwdSha256: createHash('sha256').update(cwd ?? '').digest('hex'),
+    tools: names(rest.tools), agents: names(rest.agents), skills: names(rest.skills), plugins: names(rest.plugins), mcpServers: names(rest.mcp_servers),
+    slashCommands: names(rest.slash_commands).length,
+  };
 }
 
-export function summarize({ events, audit, cellJson, treeDir, tokens = [], rawTexts = [] }) {
+/** Agent calls that ran minus the distinct child agent ids the audit log saw. */
+export function unobservedChildren(calls, audit) {
+  const ran = calls.filter(c => c.denied === null && c.hasResult).length;
+  const seen = new Set(audit.map(r => r.agent_id).filter(Boolean)).size;
+  return Math.max(0, ran - seen);
+}
+
+function costOf(events, result) {
+  if (result.present && result.total_cost_usd !== null) return { costSource: 'envelope', usd: result.total_cost_usd };
+  const m = costFromMessages(events);
+  return { costSource: 'messages', usd: m.usd, estimated: true, messageUsage: m.tokensByModel };
+}
+
+export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(), canaryTokens = [], reference = {}, texts = {}, excludedFiles = [] }) {
   const calls = agentCalls(events);
   const byAgent = effortByAgent(audit);
+  const result = resultEnvelope(events);
+  const all = toolCalls(audit, events);
+  const sources = (names) => names.map(n => ({ source: n, text: texts[n] ?? '' }));
+  const cost = costOf(events, result);
   return {
-    cell: cellJson?.cell ?? null, arm: cellJson?.arm ?? null,
-    result: resultEnvelope(events),
+    cell: cellJson?.cell ?? null,
+    result, ...cost,
+    init: initInfo(events),
     agentCalls: calls,
     childrenPerModel: childrenPerModel(calls),
+    unobservedChildren: unobservedChildren(calls, audit),
     denials: { modelGuard: calls.filter(c => c.denied === 'model-guard').length, effortPin: calls.filter(c => c.denied === 'effort-pin').length, other: calls.filter(c => c.denied === 'other-error').length },
     effortByAgent: byAgent,
     effortNotHigh: effortFlags(byAgent),
     mainSessionEffortRecorded: Boolean(byAgent[MAIN]),
     instructions: instructionsLoaded(audit, cellJson),
     edits: editsBy(audit),
-    leakSuspects: leakSuspects(commandsFrom(audit, events), treeDir),
-    canaryHits: canaryHits(rawTexts, tokens),
+    leakSuspects: leakSuspects(all, { treeRoot: treeDir, home }),
+    canary: scanTokens(sources(['stream', 'audit', 'stderr', 'candidateDiff', 'excludedDiff']), { canary: canaryTokens }),
+    referenceOnly: scanTokens(sources(['stream', 'candidateDiff', 'excludedDiff']), reference),
+    tamper: tamperFindings(excludedFiles, all),
   };
 }

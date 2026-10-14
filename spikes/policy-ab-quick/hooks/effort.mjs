@@ -1,9 +1,6 @@
 #!/usr/bin/env node
-/**
- * Effort pin (policy A/B pilot). PreToolUse Agent|Task: deny a launch whose `effort` argument is
- * present and not "high". Every other call is allowed silently. Fails OPEN on any error.
- */
-export const DENY_MARKER = 'policy-effort-pin:';
+/** Deny an Agent launch whose `effort` argument is present and not "high". Fails open. */
+export const DENY_MARKER = 'effort-pin:';
 
 /** Pure: the hook's stdout for one payload ('' = allow). */
 export function effortPinOutput(payload) {
@@ -29,7 +26,7 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-if (process.argv[1]?.endsWith('effort-pin.mjs')) {
+if (process.argv[1]?.endsWith('effort.mjs')) {
   let out = '';
   try { out = effortPinOutput(JSON.parse(await readStdin())); } catch { out = ''; }
   if (out === '') process.exit(0);

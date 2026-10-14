@@ -8,8 +8,8 @@ export const gitEnv = (extra = {}) => ({
 });
 
 export const AUTHOR_ENV = Object.freeze({
-  GIT_AUTHOR_NAME: 'policy-ab', GIT_AUTHOR_EMAIL: 'policy-ab@invalid',
-  GIT_COMMITTER_NAME: 'policy-ab', GIT_COMMITTER_EMAIL: 'policy-ab@invalid',
+  GIT_AUTHOR_NAME: 'bench', GIT_AUTHOR_EMAIL: 'bench@invalid',
+  GIT_COMMITTER_NAME: 'bench', GIT_COMMITTER_EMAIL: 'bench@invalid',
 });
 
 /** git with exe+args, returning stdout as a Buffer. */

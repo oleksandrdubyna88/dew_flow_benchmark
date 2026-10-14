@@ -1,11 +1,8 @@
 #!/usr/bin/env node
-/**
- * Observe-only audit hook (policy A/B pilot). PreToolUse (every tool) and InstructionsLoaded:
- * appends ONE JSON line to <tree>/.git/policy-audit.ndjson. Prints nothing, exits 0, never blocks,
- * reads no environment variable. The log path comes from this script's own location.
- */
+/** Observe-only tool log. Appends one JSON line per event; prints nothing, exits 0, never blocks. */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const STDIN_LIMIT = 1024 * 1024;
@@ -18,6 +15,7 @@ export function inputSummary(toolName, input) {
   switch (toolName) {
     case 'Bash':
     case 'PowerShell': return { command: i.command ?? '' };
+    case 'NotebookEdit': return { file_path: i.notebook_path ?? '' };
     case 'Read': return { file_path: i.file_path ?? '' };
     case 'Edit': return { file_path: i.file_path ?? '', added: countLines(i.new_string), removed: countLines(i.old_string) };
     case 'Write': return { file_path: i.file_path ?? '', added: countLines(i.content), removed: 0 };
@@ -49,6 +47,14 @@ export function auditRecord(payload, nowIso, sha256Of) {
   return record;
 }
 
+/** Pure-ish: the git dir for a tree root. `.git` may be a FILE (`gitdir: <path>`) in a worktree child. */
+export function gitDirFor(root, fsApi = fs) {
+  const dotGit = path.join(root, '.git');
+  if (!fsApi.statSync(dotGit).isFile()) return dotGit;
+  const m = /^gitdir:s*(.+)$/m.exec(fsApi.readFileSync(dotGit, 'utf8'));
+  return m ? path.resolve(root, m[1].trim()) : dotGit;
+}
+
 const sha256File = file => {
   try { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch { return null; }
 };
@@ -69,10 +75,11 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-if (process.argv[1]?.endsWith('policy-audit.mjs')) {
+if (process.argv[1]?.endsWith('audit.mjs')) {
   try {
     const payload = JSON.parse(await readStdin());
-    const logPath = fileURLToPath(new URL('../../.git/policy-audit.ndjson', import.meta.url));
+    const root = fileURLToPath(new URL('../../', import.meta.url));
+    const logPath = path.join(gitDirFor(root), 'audit.ndjson');
     fs.appendFileSync(logPath, `${JSON.stringify(auditRecord(payload, new Date().toISOString(), sha256File))}\n`);
   } catch { /* observe-only: never fail the tool call */ }
   process.exit(0);

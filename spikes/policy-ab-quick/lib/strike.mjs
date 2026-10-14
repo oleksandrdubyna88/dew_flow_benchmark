@@ -33,3 +33,15 @@ export function strikeTargets(planText, edits) {
   }
   return { text, notFound };
 }
+
+const MODEL_WORD = /\b(opus|sonnet|fable|haiku)\b/gi;
+export const WITHHELD = '[model withheld]';
+
+/** Replace every whole-word model name; the count goes into cell.json. */
+export function withholdModels(text) {
+  let count = 0;
+  const out = text.replace(MODEL_WORD, () => { count += 1; return WITHHELD; });
+  return { text: out, count };
+}
+
+export const remainingModels = text => [...text.matchAll(MODEL_WORD)].map(m => m[0]);

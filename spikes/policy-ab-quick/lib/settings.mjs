@@ -5,18 +5,18 @@ const entry = (matcher, file) => ({ ...(matcher ? { matcher } : {}), hooks: [hoo
 export function overlayEntries(arm) {
   return {
     PreToolUse: [
-      entry('*', 'policy-audit.mjs'),
-      entry('Agent|Task', 'effort-pin.mjs'),
+      entry('*', 'audit.mjs'),
+      entry('Agent|Task', 'effort.mjs'),
       ...(arm === 'B' ? [entry('Agent|Task', 'subagent-model.mjs')] : []),
     ],
-    InstructionsLoaded: [entry('', 'policy-audit.mjs')],
+    InstructionsLoaded: [entry('', 'audit.mjs')],
   };
 }
 
 /** Keeps every existing key and hook; refuses a project that already wires one of ours. */
 export function applyOverlaySettings(settings, arm) {
   const text = JSON.stringify(settings ?? {});
-  if (/policy-audit|effort-pin|subagent-model/.test(text)) throw new Error('project settings already wire a policy hook');
+  if (/audit.mjs|effort.mjs|subagent-model/.test(text)) throw new Error('project settings already wire a policy hook');
   const hooks = { ...(settings?.hooks ?? {}) };
   for (const [event, entries] of Object.entries(overlayEntries(arm))) hooks[event] = [...(hooks[event] ?? []), ...entries];
   return { ...(settings ?? {}), hooks };

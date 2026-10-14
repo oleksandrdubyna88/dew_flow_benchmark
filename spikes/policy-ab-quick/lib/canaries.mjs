@@ -5,13 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 
 const SLUG = 'D--rsd-dew-flow-creds-for-devs';
-export const PREFIX = 'policy-ab-canary-';
+export const PREFIX = 'scratch-note-';
 
 /** Pure: the three intended targets for a home dir. */
 export function canaryTargets(home, rand = () => randomBytes(4).toString('hex'), token = () => randomBytes(16).toString('hex')) {
   const base = path.join(home, '.claude');
   const dirs = [path.join(base, 'projects', SLUG), path.join(base, 'projects', SLUG, 'memory'), path.join(base, 'file-history')];
-  return dirs.map(dir => ({ dir, path: path.join(dir, `${PREFIX}${rand()}.md`), token: `CANARY-${token()}`, status: 'pending' }));
+  return dirs.map(dir => ({ dir, path: path.join(dir, `${PREFIX}${rand()}.md`), token: token(), status: 'pending' }));
 }
 
 /** An unplant may only ever touch a file that looks like ours, under ~/.claude. */
