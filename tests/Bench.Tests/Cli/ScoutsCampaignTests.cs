@@ -60,6 +60,8 @@ public sealed class ScoutsCampaignTests(PostgresFixture postgres)
         output.Should().Contain("pinned settings " + Bench.Infrastructure.Scouts.ScoutPinReader.SettingsHash([setup.PinnedSettingsFile])[..12], "the pinned file's hash is the settings pin");
         setup.Fake.Calls().Should().OnlyContain(c => c.EnvironmentNames.Contains("FAKE_CLI_HOME") && !c.EnvironmentNames.Any(n => n.StartsWith("BENCH_", StringComparison.Ordinal)),
             "the child runs under the probes' minimal environment, plus the test's own home and nothing else");
+        setup.Fake.Calls().Should().OnlyContain(c => c.EnvironmentNames.Contains(Bench.Domain.Probes.ProbeChildEnvironment.BackgroundTasksVariable),
+            "every scout cell turns the CLI's background tasks off — the pilot's first cell ran its agent in the background (2026-10-14)");
         setup.Fake.Calls().Select(c => Path.GetFileName(c.Cwd)).Should().BeEquivalentTo(["t01", "t01", "t02", "t02"], "every cell runs in its task's history-free tree");
     }
 

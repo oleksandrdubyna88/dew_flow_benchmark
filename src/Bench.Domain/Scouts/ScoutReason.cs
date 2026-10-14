@@ -61,6 +61,11 @@ public enum ScoutReason
     /// <c>system/model_refusal_fallback</c> event (E2 S8): a moved pin the init event does not show.</summary>
     ModelRefusalFallback,
 
+    /// <summary>An Agent call ran in the BACKGROUND (<c>status: async_launched</c>, E2 S8's pilot, 2026-10-14): its result carries no duration
+    /// and no usage, the answer arrives in a task notification and the main session takes a second turn — the instrument reads a
+    /// synchronous Agent result, so such a cell is never scored.</summary>
+    AgentBackgrounded,
+
     /// <summary>A frozen pin moved mid-run.</summary>
     PinMoved,
 

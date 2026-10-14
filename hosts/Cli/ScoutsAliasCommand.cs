@@ -90,7 +90,7 @@ public static class ScoutsAliasCommand
 
     /// <summary>The probes' minimal environment, plus what a TEST adds (the fake CLI's home) and nothing else — as the runner composes it.</summary>
     internal static IReadOnlyDictionary<string, string> ChildEnvironment(ScoutVerbServices services) =>
-        ProbeChildEnvironment.Of(ScoutsInputs.ParentEnvironment()).Variables.Concat(services.TestChildVariables)
+        ProbeChildEnvironment.ForScouts(ScoutsInputs.ParentEnvironment()).Variables.Concat(services.TestChildVariables)
             .GroupBy(v => v.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Last().Value, StringComparer.OrdinalIgnoreCase);
 
     private static int Verdict(AliasVerdict verdict, string work, TextWriter output, TextWriter error)
