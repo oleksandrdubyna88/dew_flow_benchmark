@@ -23,6 +23,9 @@ export function buildChildEnv(parent, { arm, emptyGitConfig, hasGh = dirHasGh })
     ...kept,
     ...filtered,
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
+    // Fixed, never inherited: measured 2026-10-14, without an entrypoint the CLI's own command checks fail on this
+    // machine (Bash "requires approval", PowerShell "The command line is too long") and no cell can build or test.
+    CLAUDE_CODE_ENTRYPOINT: 'claude-vscode',
     GIT_CONFIG_GLOBAL: emptyGitConfig,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',

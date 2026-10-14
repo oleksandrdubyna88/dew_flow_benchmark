@@ -74,6 +74,8 @@ test('child env: deny families, allow back three, arm A adds guard off', () => {
   for (const k of ['CLAUDE_FOO', 'ANTHROPIC_BASE_URL', 'MCP_TIMEOUT', 'OTEL_X', 'TRACEPARENT', 'AI_AGENT', 'GITHUB_TOKEN']) assert.ok(!(k in e), k);
   for (const k of ['CLAUDE_CODE_GIT_BASH_PATH', 'CLAUDE_CODE_USE_POWERSHELL_TOOL', 'CLAUDE_CONFIG_DIR', 'HOME', 'ANTHROPIC_API_KEY']) assert.ok(k in e, k);
   assert.ok(!('SUBAGENT_MODEL_GUARD' in e));
+  assert.equal(e.CLAUDE_CODE_ENTRYPOINT, 'claude-vscode');
+  assert.equal(buildChildEnv({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts' }, { arm: 'A', emptyGitConfig: 'E', hasGh: () => false }).CLAUDE_CODE_ENTRYPOINT, 'claude-vscode');
   assert.equal(buildChildEnv(parent, { arm: 'A', emptyGitConfig: 'E', hasGh: () => false }).SUBAGENT_MODEL_GUARD, 'off');
   assert.ok(buildClaudeArgs({ settingsPath: 'S', mcpPath: 'M', cap: 1 }).includes('--forward-subagent-text'));
 });
