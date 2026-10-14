@@ -12,7 +12,7 @@
 >
 > Related: [module_scouts.md](../research/module_scouts.md), [module_tests.md](../research/module_tests.md),
 > [architecture.md](../research/architecture.md), [PLAN_code_lane.md](PLAN_code_lane.md),
-> [PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md), the scouts' pilot record
+> [PLAN_scout_model_calibration.md](../research/PLAN_scout_model_calibration.md), the scouts' pilot record
 > [scout-calibration/pilot.md](../research/scout-calibration/pilot.md) (the model this pilot's record follows).
 
 ## 1. What this epic delivers, before any step

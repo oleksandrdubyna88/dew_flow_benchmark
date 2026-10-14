@@ -1,22 +1,34 @@
 # PLAN — Scout subagents: does a Sonnet team find what an Opus team finds, how fast, at what price?
 
-> Status: **E1 built, 2026-10-12 — S1, S2 and S3 (the context end to end offline). E2 S4, S5, S6 and S7 built, 2026-10-13 —
-> private tasks (the classification, the campaign key, the commitments, the one projection, the second migration, the hygiene
-> scan); the confined launch (`--setting-sources ""`, the pinned plugin directory, the pinned settings file as the settings pin)
-> and `bench scouts access-check`, run live once with every target denied for both agents; the money (the pilot kind under its
-> bounds, caps from `schedule.json` only, overshoots settled whole and counted, `bench scouts schedule`); the D10 selection
-> (merge styles, P verified per style, the draw seeded by the campaign string, reserves and the pilot's files). E2 S8's CODE built,
-> 2026-10-13 — a model fallback stops the cell, the prompts state the run's purpose (v2), `bench scouts sizing`, four-digit private
-> labels. E2 S8's live pilot, hand-checks and evidence commits, and E3 (the preliminary run, its write-up, the read API and the tab)
-> are open.** What was built, and S3's to S8's choices where
-> this plan's words left one, are in [module_scouts.md](../research/module_scouts.md).
+> Status: **IMPLEMENTED, 2026-10-14** — E1, E2 and E3's measurement shipped: the Scouts section (context, verbs, store), the
+> confined launch and its live access check, the D10 selection, the pilot with its hand-checks, and the **preliminary run (50 cells,
+> preliminary — not a verdict)** with its write-up [RESULTS_scout_models.md](RESULTS_scout_models.md); every cell is in
+> [scout-calibration/cells.md](scout-calibration/cells.md), the pilot in [scout-calibration/pilot.md](scout-calibration/pilot.md).
+> **Answer:** at one effort, Sonnet teams at ⌈1.5·N⌉ found at least as many of the needed files as Opus teams, 1.6–1.8× faster and
+> 34–56 % cheaper, with more wrong claims (+0.15 to +0.98 per 10; on substance alone +0.08 to +0.73).
+>
+> **Deviations from this plan, recorded where they happened:** (1) **the effort** — the pinned settings projected the operator's
+> configuration, so the pilot ran Opus scouts at `high` and Sonnet scouts at `xhigh`; `--effort` (benchmark #93) pins one level and
+> every later run used `high` (pilot.md §11); (2) the CLI ran agents in the BACKGROUND under the scout launch — every launch now carries
+> `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` and a backgrounded agent stops a cell (#91); (3) the CLI bills a Sonnet 5.5 cache hit at
+> twice the published rate — the cost check compares at `cliRates`, every reported dollar stays published (#91); (4) the selection read
+> lazily (#87), dropped a project's own Claude settings from its tree (#85), survived long paths (#85) and local submodules (#90), and
+> mirrored a local clone's remote refs (#83); (5) the preliminary run's walls and caps were widened to 15 min and $5 after the
+> pilot-derived walls cut a valid cell (RESULTS §6); (6) the operator decided recall is the primary metric and the wrong claims are
+> for the statistics (RESULTS §2); (7) evidence 2's public projection of the whole screened candidate list was not written — the frozen
+> draw is published through the one projection with HMAC commitments (`scout-calibration/tasks.json`).
+>
+> **Open tail, moved to [todo/PLAN_scout_calibration_followups.md](../todo/PLAN_scout_calibration_followups.md):** the read API and the
+> console's Scouts tab (D8), the weekly alias watch, evidence 2's writer, a decision run (its interval method — the sizing found
+> none from 8 to 30 tasks), and the void rule for a REFUSED out-of-set tool call. What was built, and S3's to S8's choices where
+> this plan's words left one, are in [module_scouts.md](module_scouts.md).
 > Scope: a new **Scouts section** of this benchmark — its
 > own sibling context `Bench.*.Scouts`, the `bench scouts` verbs, a read API and a **Scouts** tab in the console, as the
 > gate and the probes each have — two options added to the one launcher, and the detailed results in `research/`
 > (`RESULTS_scout_models.md` plus the per-cell records under `research/scout-calibration/`).
 >
-> Related: [module_probes.md](../research/module_probes.md) (the context this one is composed from),
-> [module_gate.md](../research/module_gate.md) (the blinded assessor), [architecture.md](../research/architecture.md).
+> Related: [module_probes.md](module_probes.md) (the context this one is composed from),
+> [module_gate.md](module_gate.md) (the blinded assessor), [architecture.md](architecture.md).
 > The rule this measurement decides lives in the shared conventions: `dew_flow_conventions · common/subagent-models.md`,
 > and its own plan is `dew_flow_conventions · research/PLAN_subagent_model_tiers.md`.
 >
@@ -63,11 +75,11 @@ pilot sizes the experiment to distinguish it (§3.8); it does not move it.
 | One launcher for every CLI, already widened once for the probes: `JsonEvents` (claude `--output-format stream-json --verbose`), `DisallowedTools`, an `AllowedTools` allow-list, `McpServersOff`, `MaxTurns`, `Restricted`, `AddDirectories` | `src/Bench.Application/CliAgent.cs:77-123`, argv at `src/Bench.Infrastructure/Models/CliAgentRuntime.cs:97-109` |
 | A stream-json reader that already knows the event shapes, skips `system/task_*`, reads tool fates without reading tool content | `src/Bench.Domain/Probes/ClaudeStream.cs:1-116` |
 | A campaign with `run · resume · rerun · status · sweep · report · prune`, exit codes 0/3/4/5, an owner-checked sweep before any claim, generations appended on re-run | `hosts/Cli/ProbesCommand.cs:9-40`, `src/Bench.Application/Probes/ProbeCampaign.cs:46-67` (`PrepareAsync` at :55, `RunAsync` at :67) |
-| Cells that compose `Claimable` and `ProductPin`, the gate store's guarded claim, `ArtifactCommit`, `PublicationGuard` on public export | [architecture.md § The capability probes](../research/architecture.md) |
+| Cells that compose `Claimable` and `ProductPin`, the gate store's guarded claim, `ArtifactCommit`, `PublicationGuard` on public export | [architecture.md § The capability probes](architecture.md) |
 | A blinded assessor with fresh shuffled ids; codex runs it read-only, claude only with `MaxTurns = 1` (cannot open files) | `src/Bench.Application/Gate/FindingAssessor.cs:81-94`, `src/Bench.Domain/Gate/BlindExport.cs:133-153` |
 | Pre-trust of a working tree, only under the checkout root | `src/Bench.Infrastructure/Models/WorkspaceTrust.cs:52-85` |
 | A task base at the parent of a fix commit, merge commits refused | `hosts/Cli/HarvestCommand.cs:13-25` |
-| **Gap:** the CLI-subject worktree is a git worktree whose `.git` redirects to a full mirror that holds the later fix — only the agent's behaviour keeps it out of the future | `src/Bench.Infrastructure/Git/ScratchWorktree.cs:21-33`, [architecture.md:411-416](../research/architecture.md) |
+| **Gap:** the CLI-subject worktree is a git worktree whose `.git` redirects to a full mirror that holds the later fix — only the agent's behaviour keeps it out of the future | `src/Bench.Infrastructure/Git/ScratchWorktree.cs:21-33`, [architecture.md:411-416](architecture.md) |
 | **Gap:** no `--forward-subagent-text`, no `--max-budget-usd` option on the launcher | `src/Bench.Application/CliAgent.cs:77-123` |
 | **Gap:** `ClaudeStream` does not group by `parent_tool_use_id`, so it cannot tell one subagent from another | `src/Bench.Domain/Probes/ClaudeStream.cs:25-58` (`Read` takes the whole stream as one tool trace) |
 

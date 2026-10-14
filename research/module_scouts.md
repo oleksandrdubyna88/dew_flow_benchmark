@@ -1,6 +1,11 @@
 # Module — Scouts: does a Sonnet team find what an Opus team finds, how fast, at what price
 
-> Status: **E1 built, 2026-10-12 — S1, S2 and S3: the context end to end offline; nothing paid has run.**
+> Status: **MEASURED, 2026-10-14 — the pilot, the effort follow-up and the preliminary run (50 cells) ran; results in
+> [RESULTS_scout_models.md](RESULTS_scout_models.md), every cell in [scout-calibration/cells.md](scout-calibration/cells.md).** At one
+> effort (`high`) Sonnet teams at ⌈1.5·N⌉ found at least as many of the needed files as Opus teams, 1.6–1.8× faster and 34–56 % cheaper,
+> with more wrong claims (+0.15 to +0.98 per 10). The history below is how the section was built; *The measured answer* says what it found.
+>
+> **E1 built, 2026-10-12 — S1, S2 and S3: the context end to end offline.**
 > S1: the domain, the stream reader, the read-back with its path audit, the pure deciders, the store with its spend ledger, the four live
 > fixtures. S2: the two launcher options and the streaming output sink, the history-free trees and their grant guard, `CliScoutRunner`,
 > `ScoutCampaign` with the entry step's recovery, and the verbs `tasks`, `run`, `resume`, `rerun`, `sweep`, `prune`, `alias-check` —
@@ -21,13 +26,40 @@
 > deny a target), the hygiene scan reading binary blobs by their bytes and every blob off ONE `git cat-file --batch`, `tasks` refusing a private
 > candidate by label and code and refusing colliding output paths, `cells.jsonl` refusing a cell with no task, every check launch announced and
 > timed on the console, the walls named (see *The code round* under *Tests*).
-> The design record is [PLAN_scout_model_calibration.md](../todo/PLAN_scout_model_calibration.md) (still open in `todo/`: E2 S8's live
-> pilot and evidence commits, and E3). This file
+> The design record is [PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md) (IMPLEMENTED 2026-10-14; its open tail — the
+> read API and the Scouts tab, the alias watch, evidence 2's writer, a decision run — is in
+> [todo/PLAN_scout_calibration_followups.md](../todo/PLAN_scout_calibration_followups.md)). This file
 > describes what is built; a sentence here about something that does not run is a bug in the file.
+
+## The measured answer (2026-10-14)
+
+The preliminary run (`01a139f4`, 8 main tasks in 8 repositories, `--effort high` for every model, 47 of 48 cells scored, $50.53;
+[RESULTS_scout_models.md](RESULTS_scout_models.md) §5):
+
+| workload | recall Opus → Sonnet | team time | team cost | wrong / 10 (all · substance only) |
+|---|---|---|---|---|
+| W1 · 1 Opus → 2 Sonnet | 0.79 → 0.82 | 95.8 s → 60.3 s | $0.59 → $0.39 | 1.75 → 1.90 · 1.25 → 1.33 |
+| W2 · 2 Opus → 3 Sonnet | 0.78 → 0.83 | 101.4 s → 55.9 s | $1.12 → $0.49 | 1.26 → 2.24 · 0.57 → 1.30 |
+| W3 · 3 Opus → 5 Sonnet | 0.78 → 0.85 | 97.0 s → 62.1 s | $1.54 → $0.84 | 1.38 → 1.89 · 0.92 → 1.01 |
+
+What the measurement depends on, each found while running it:
+
+- **The effort, per model.** Projected from the operator's settings, the pilot ran Sonnet scouts at `xhigh` and Opus scouts at `high`
+  (a child takes `modelSettings` by its own model on claude 2.1.289); at `xhigh` the same 2-Sonnet team took 92 s and $0.73 against
+  41 s and $0.29 at `high`. `--effort <level>` pins one level for a model comparison (*One effort for every model* below).
+- **Synchronous agents.** The scout launch made claude background the Agent call; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` keeps it
+  synchronous and a backgrounded agent stops a cell (*Agents stay synchronous* below).
+- **The CLI's own Sonnet cache-read rate** — twice the published one; the cost check compares at `cliRates`, every reported dollar
+  stays published.
+- **Walls and caps from a two-task pilot are too tight** for larger tasks — the first launch cut a valid cell; the run used 15 min and
+  $5 per cell. **A REFUSED out-of-set call still voids a cell** under the registered rule: Sonnet scouts called the session's disabled
+  `Bash` on one task (three cells, nothing ran), no Opus scout did.
+
+Every cell of every run, numbers only: [scout-calibration/cells.md](scout-calibration/cells.md).
 
 ## Purpose
 
-The shared rule puts every subagent on Opus. The operator wants the read-only **scouts** — code explorers, Explore, lookup agents —
+Until 2026-10-13 the shared rule put every subagent on Opus. The operator wanted the read-only **scouts** — code explorers, Explore, lookup agents —
 on Sonnet, launched ⌈1.5·N⌉ where N Opus scouts would run, and chose to MEASURE first (plan §1, decisions D1–D6). This section
 measures, per team size W1/W2/W3, the share of the files that mattered each team found (recall), its wrong claims per 10, its time
 and its cost. It is shaped like the gate and the probes: its own context, store tables and verbs — and, in E3 S8, a read API and a tab.

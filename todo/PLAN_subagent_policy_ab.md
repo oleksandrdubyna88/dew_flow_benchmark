@@ -8,7 +8,7 @@
 > after the owner's go. Records under `research/policy-ab/`.
 >
 > Related: [module_scouts.md](../research/module_scouts.md) (the pieces this composes),
-> [PLAN_scout_model_calibration.md](PLAN_scout_model_calibration.md) (the scout half of the same rule),
+> [PLAN_scout_model_calibration.md](../research/PLAN_scout_model_calibration.md) (the scout half of the same rule),
 > [PLAN_code_lane.md](PLAN_code_lane.md) (signals 3–4 and the attended-only rule), [module_gate.md](../research/module_gate.md)
 > (the blinded assessor), [MEASURED_LESSONS.md](../research/MEASURED_LESSONS.md). The rule under test lives in
 > `dew_flow_conventions · common/subagent-models.md`; its plan and results are `dew_flow_conventions ·

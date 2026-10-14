@@ -1,8 +1,11 @@
 # The pilot — scout model calibration (E2 S8), 2026-10-13 to 2026-10-14
 
 > Status: **the pilot ran to the end; preliminary, not a verdict** (plan D7). Two pilot tasks, every workload's pair, an A/A
-> replication and one budget-exhausted cell; the hand-checks passed. Plan: [PLAN_scout_model_calibration.md](../../todo/PLAN_scout_model_calibration.md) ·
+> replication and one budget-exhausted cell; the hand-checks passed. Plan: [PLAN_scout_model_calibration.md](../PLAN_scout_model_calibration.md) ·
 > module: [module_scouts.md](../module_scouts.md).
+>
+> **Read §11 first.** §4's Opus-against-Sonnet numbers were measured with the Sonnet scouts at effort `xhigh` and the Opus scouts at
+> `high` (found after the pilot, from the child transcripts); §11 re-measures every pair at ONE effort, `high`, and reverses the reading.
 
 The pilot's job is to prove the instrument before the preliminary run spends its money: that a cell launches confined, that its
 stream is read right, that cost and time are captured exactly, that the matcher and the assessor agree with a person — and to set
@@ -160,3 +163,60 @@ At the pilot's mean costs, eight main tasks × six arms come to about **$60** (p
 2. **The wrong-claim margin** — Sonnet's excess is mostly line-citation precision; whether the +0.5 margin should read substance
    only is a decision the pilot cannot make.
 3. **The preliminary run** (50 cells, ≈ $60) — ready to launch on the operator's word: tasks frozen, schedule written, instrument proven.
+
+## 11. After the pilot: the effort was unequal — 26 cells at one effort (2026-10-14)
+
+**What was wrong.** The operator's experience said Sonnet scouts are much faster and cheaper; the pilot said the opposite. A persisted
+two-child session with the scout launch's flags read each child's effort from its transcript (`effort` / `perTurnEffort`): the Opus
+child ran at **`high`**, the Sonnet child at **`xhigh`**. The pinned settings projected the operator's configuration — `effortLevel: xhigh`,
+with `modelSettings` lowering only `opus` to `high` — and on claude 2.1.289 a child takes `modelSettings` by its own model, else the global
+level (a consultant's prior that children inherit the parent's effort was refuted by this read). §4 therefore compared *configurations*,
+not models. Benchmark #93 added `--effort <level>`: one explicit level for every model, in a settings file of its own (its own settings
+pin, `d7972dfc7004` for `high`), and `report --prices`: each team's cost split by token kind. A second confound the consultant named — a
+team of N takes the first N focus areas, so B1's two Sonnet scouts cover two areas against A1's one — is separated by arm **C3**: three
+Sonnet scouts on exactly A3's three areas.
+
+**What ran.** Four pilot runs on the same two tasks, one cell at a time: `01a13949` (A3 and C3, two repeats each, `--effort high`),
+`01a13952` (A1, B1, A2, B2, B3, `--effort high`), `01a1395e` (B1, two repeats, the operator's configuration — Sonnet at `xhigh`, the
+contemporaneous control), `01a13965` (A1 and B1 once more, `--effort high`). **26 cells, every one scored, $20.91**; 640 claims assessed.
+
+### 11.1 One effort (`high`) for both models
+
+| workload | arm | cells | recall | wrong / 10 | team time | team cost | output tokens | cache read | cache write |
+|---|---|---|---|---|---|---|---|---|---|
+| W1 | A1 · 1 Opus | 4 | 0.77 | 0.75 | 75.9 s | $0.48 | 6 830 | 471 k | 50 k |
+| | B1 · 2 Sonnet | 4 | 0.73 | 1.50 | **41.4 s** | **$0.29** | 9 545 | 244 k | 68 k |
+| W2 | A2 · 2 Opus | 2 | 0.85 | 1.25 | 69.5 s | $0.80 | 12 798 | 652 k | 83 k |
+| | B2 · 3 Sonnet | 2 | 0.77 | 1.83 | **51.3 s** | **$0.44** | 15 074 | 435 k | 98 k |
+| W3 | A3 · 3 Opus | 4 | 0.85 | 0.83 | 70.9 s | $1.23 | 18 326 | 1 049 k | 130 k |
+| | B3 · 5 Sonnet | 2 | 0.85 | 1.40 | **63.1 s** | **$0.78** | 24 376 | 899 k | 179 k |
+| | C3 · 3 Sonnet (A3's areas) | 4 | 0.85 | 1.58 | **45.8 s** | **$0.46** | 14 583 | 449 k | 108 k |
+
+Recall is files of G found over files of G, pooled over the arm's cells; team cost at the published prices; tokens are the team's mean per
+cell. Cells per arm are few (2–4 on two tasks), so every figure carries the A/A noise of §6 (recall ± one file, time ± a fifth, cost up to
+a third).
+
+### 11.2 The control: the same Sonnet team at the operator's `xhigh`
+
+| B1 · 2 Sonnet | cells | recall | wrong / 10 | team time | team cost | output tokens | cache read |
+|---|---|---|---|---|---|---|---|
+| `high` (§11.1) | 4 | 0.73 | 1.50 | 41.4 s | $0.29 | 9 545 | 244 k |
+| `xhigh`, run at the same time | 4 | 0.73 | 1.38 | 91.7 s | $0.73 | 20 441 | 1 365 k |
+| `xhigh`, the pilot (§4) | 2 | 0.69 | 2.00 | 77.4 s | $0.81 | 20 773 | 1 552 k |
+
+At `xhigh` a Sonnet scout reads about five times the cache and writes twice the output it does at `high`, for the same recall and no
+fewer wrong claims: **the effort alone made §4's Sonnet teams slow and dear.** The Opus arms barely moved between §4 and §11.1 — they
+were at `high` both times.
+
+### 11.3 What this reads as — two tasks, preliminary
+
+- **Faster: Sonnet**, in every workload at equal effort — 1.8× at W1, 1.35× at W2, 1.1× at W3 (B3) and 1.55× for the same three areas (C3).
+- **Cheaper: Sonnet** — 40 % less at W1, 45 % at W2, 37 % at W3 (B3), 63 % for the same three areas (C3).
+- **Recall: Sonnet at 95 % of Opus at W1, 91 % at W2, equal at W3** (and equal for C3) — near the operator's remembered "87 %".
+- **Wrong claims: Sonnet still higher**, about +0.6 per 10 (Opus 0.75–1.25, Sonnet 1.40–1.83) — around the +0.5 margin, unchanged by
+  the effort (the `xhigh` control is 1.38). §5.3's review found most of the pilot's excess was line-citation precision rather than
+  substance; these runs' verdicts have not been hand-read that way yet.
+
+**For the preliminary run:** launch it with `--effort high` (a model comparison), and keep the operator's configuration as a separately
+labelled arm if the deployment question is wanted too. The operator's own setup runs every Sonnet subagent at `xhigh`; a
+`modelSettings` entry for `sonnet` at `high` would give the scouts the speed and price measured here.

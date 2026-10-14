@@ -7,7 +7,7 @@ using Bench.Domain.Scouts;
 namespace Bench.Cli;
 
 /// <summary><c>bench scouts tasks | run | resume | rerun | sweep | prune | alias-check | access-check | status | score | assess | report | schedule | sizing | key | hygiene</c> — the
-/// scout model calibration (<c>todo/PLAN_scout_model_calibration.md</c>, E1 S2 and S3, E2 S4–S7). The measuring verbs are here; <see cref="ScoutsTasksCommand"/>
+/// scout model calibration (<c>research/PLAN_scout_model_calibration.md</c>, E1 S2 and S3, E2 S4–S7). The measuring verbs are here; <see cref="ScoutsTasksCommand"/>
 /// freezes the tasks, <see cref="ScoutsHousekeepingCommand"/> sweeps and prunes, <see cref="ScoutsAliasCommand"/> watches the alias; S3 reads and
 /// judges a run — <see cref="ScoutsReadCommand"/> (<c>status</c>, <c>report</c>), <see cref="ScoutsScoreCommand"/> and <see cref="ScoutsAssessCommand"/>;
 /// S4 guards the private tasks — <see cref="ScoutsKeyCommand"/> (the campaign key, created once) and <see cref="ScoutsHygieneCommand"/> (the
