@@ -106,7 +106,11 @@ public static class ScoutReport
             Wire(s.Recall), Wire(s.WrongPerTen), ProbeReport.Kebab(s.WrongGap.ToString()),
             Wire(s.TeamMs), Wire(s.SlowestScoutMs), Wire(s.ScoutMs), Wire(s.SessionMs),
             new ScoutTokensDto(Wire(s.Tokens.TeamInput), Wire(s.Tokens.TeamOutput), Wire(s.Tokens.TeamCacheRead), Wire(s.Tokens.TeamCacheWrite),
-                Wire(s.Tokens.ScoutInput), Wire(s.Tokens.ScoutOutput)),
+                Wire(s.Tokens.ScoutInput), Wire(s.Tokens.ScoutOutput))
+            {
+                TeamCacheWrite5m = Wire(s.Tokens.TeamCacheWrite5m),
+                TeamCacheWrite1h = Wire(s.Tokens.TeamCacheWrite1h),
+            },
             Wire(s.TeamUsd), Wire(s.SessionUsd), Wire(s.UsdPerRightFile), Wire(s.CallerLoad),
             new ScoutCountsDto(
                 s.Counts.Cells, s.Counts.Scored, s.Counts.Void, s.Counts.Stopped, s.Counts.Aborted, s.Counts.SilentCells, s.Counts.SilentScouts,

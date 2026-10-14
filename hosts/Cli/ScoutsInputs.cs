@@ -45,7 +45,7 @@ public sealed class ScoutsInputs : IAsyncDisposable
         Command = command;
         Roots = roots;
         // The pinned settings file lives under the artefact root (S5): a verb loaded with one reads the settings pin from there.
-        PinSources = roots.Artifacts.Length > 0 ? pins with { PinnedSettingsFile = new ScoutArtifacts(roots.Artifacts).PinnedSettingsFile } : pins;
+        PinSources = roots.Artifacts.Length > 0 ? pins with { PinnedSettingsFile = new ScoutArtifacts(roots.Artifacts) { Effort = EffortOf(command) }.PinnedSettingsFile } : pins;
         Logs = logs;
         Store = new PostgresScoutStore(db, TimeProvider.System);
         Reads = new PostgresScoutReads(db);
@@ -80,8 +80,12 @@ public sealed class ScoutsInputs : IAsyncDisposable
     public ScoutTrees Trees { get; }
 
     public ScoutArtifacts Artifacts => Roots.Artifacts.Length > 0
-        ? new ScoutArtifacts(Roots.Artifacts)
+        ? new ScoutArtifacts(Roots.Artifacts) { Effort = EffortOf(Command) }
         : throw new InvalidOperationException("this verb was loaded without an artefact root and writes none");
+
+    /// <summary><c>--effort &lt;level&gt;</c> (the pilot, 2026-10-14): one explicit effort for every scout model — a MODEL comparison; absent,
+    /// the operator's configuration is pinned, per model as it stands (a CONFIGURATION comparison). A run and its resume must name the same.</summary>
+    public static string EffortOf(CommandLine command) => command.Value("effort", string.Empty).Trim();
 
     public static string Connection(CommandLine command) => command.Value("db", Environment.GetEnvironmentVariable("BENCH_DB") ?? string.Empty);
 
@@ -109,7 +113,7 @@ public sealed class ScoutsInputs : IAsyncDisposable
     /// the pinned plugin directory, the empty MCP config, then the local pins read with the CLI binary — the same launch files a cell gets.</summary>
     public static async Task<Outcome<ScoutLaunchContext>> LaunchContextAsync(CommandLine command, ScoutRootSet roots, string executable, CancellationToken cancellationToken)
     {
-        var artifacts = new ScoutArtifacts(roots.Artifacts);
+        var artifacts = new ScoutArtifacts(roots.Artifacts) { Effort = EffortOf(command) };
         var pins = PinSourcesOf(command) with { PinnedSettingsFile = artifacts.PinnedSettingsFile };
         var settings = artifacts.PinnedSettings(pins.SettingsFiles);
         var plugin = settings is Outcome<string>.Ok ? ScoutPluginDirectory.Resolve(pins) : Outcome<string>.Failure(string.Empty);

@@ -51,4 +51,18 @@ public sealed class ScoutPinnedSettingsTests
             .Should().Contain("effortLevel").And.Contain("\"xhigh\"").And.Contain("\"medium\"");
         ScoutPinnedSettings.Drift(Pinned, "{ \"effortLevel\": \"xhigh\" }").Should().Contain("modelSettings").And.Contain("absent");
     }
+
+    /// <summary>The pilot's finding (2026-10-14): projected from these settings, a SONNET child ran at <c>xhigh</c> and an OPUS child at
+    /// <c>high</c> — read from a persisted child transcript's <c>effort</c>. A MODEL comparison needs one explicit level for every model:
+    /// <c>--effort &lt;level&gt;</c> pins <c>{"effortLevel": level}</c> alone, in a file of its own, so a run's settings pin says which
+    /// condition it measured — the operator's configuration (no flag) or one effort for all.</summary>
+    [Fact]
+    public void An_explicit_effort_pins_one_level_for_every_model_in_a_file_of_its_own()
+    {
+        ScoutPinnedSettings.Explicit("high").Ok().Should().Be("{\n  \"effortLevel\": \"high\"\n}\n", "no modelSettings: no model may differ");
+        ScoutPinnedSettings.Explicit("XHigh").Ok().Should().Contain("\"xhigh\"");
+        ScoutPinnedSettings.Explicit("turbo").Reason().Should().Contain("turbo").And.Contain("low, medium, high, xhigh, max");
+        ScoutPinnedSettings.FileNameFor("high").Should().Be("pinned-settings.effort-high.json");
+        ScoutPinnedSettings.FileNameFor(string.Empty).Should().Be(ScoutPinnedSettings.FileName, "no flag: the operator's configuration, as before");
+    }
 }

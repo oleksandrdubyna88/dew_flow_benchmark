@@ -373,7 +373,7 @@ settles exactly once, whoever recovers it. Measured by `ScoutsCrashTests`, one c
 | `bench scouts status --run <id>` (S3, S6) | every cell, every generation, by state and outcome; the outcomes of each lineage's latest settled generation; the ledger — reserved, settled, unknown (with the count of charges), spent, the ceiling LEFT, the attempts, and (S6) the overshoots, one line each naming the arm, the attempt, what it settled at and how far over its cap. Claims nothing |
 | `bench scouts score --run <id> [--handcheck N --seed S] [--out file] [--deny-list file]` (S3) | recall of every scored cell recomputed from its stream and stored (`ScoutScoring`); with `--handcheck`, the draw written as Markdown (default `scouts/<run>/handcheck-seed<S>.md` under the artefact root), scrubbed (§3.13) before it is written. A deny-list named by `--deny-list` or `BENCH_SCOUT_DENYLIST` MUST load: a missing or unreadable path refuses the verb before anything is scored or written, the refusal naming the path and where it came from. 0 · 3 a stream or tree unreadable · 4 a flag, an unknown run, a named deny-list that does not load · 5 no scored cell |
 | `bench scouts assess --run <id> --assessor-model <id> [--codex-exe path] [--assess-timeout-minutes 10]` (S3) | PAID — see *The assessor*. 0 every claim has a verdict · 3 claims remain (re-run asks exactly those) · 5 no claim to assess |
-| `bench scouts report --run <id> [--json] [--bootstrap-seed 20261012] [--resamples 10000]` (S3) | `ScoutReport` as JSON (web defaults, byte-deterministic) or text; a PRELIMINARY run (or a pilot) prints "preliminary — not a verdict" and its intervals. S4: a private task's `repository` is its label, with `privacy` and `language` beside it. S6: the ledger carries `overshoots` |
+| `bench scouts report --run <id> [--json] [--bootstrap-seed 20261012] [--resamples 10000] [--prices <prices.json>]` (S3; `--prices` 2026-10-14: the per-arm cost split by token kind) | `ScoutReport` as JSON (web defaults, byte-deterministic) or text; a PRELIMINARY run (or a pilot) prints "preliminary — not a verdict" and its intervals. S4: a private task's `repository` is its label, with `privacy` and `language` beside it. S6: the ledger carries `overshoots` |
 | `bench scouts schedule --run <pilot run> --out schedule.json` (S6) | E3's caps and walls from the pilot's settled cells (`ScoutArmBudgets.FromPilot`), written under the pilot's campaign with its run id; refused (4) for a run that is not a pilot, or for an arm with no settled cell carrying a cost. Launches nothing, claims nothing |
 | `bench scouts sizing --run <id> --out <sizing.md> [--seed 20261013] [--simulations 1000] [--resamples 1000]` (S8) | §3.8's sizing from the run's scored cells (any kind — the pilot first, the preliminary run's in E3 S7), printed one line per task count and written as Markdown — see *The sizing*. REPORTED, never a gate (D7): 0 written, found or not · 4 a flag, bad settings, an unknown run · 5 nothing to size (no workload with both deciding arms scored on one task). Counts and rates only — no task, label, repository or statement. Launches nothing, claims nothing |
 | `bench scouts key init --campaign-key <file>` (S4) | the campaign key created ONCE at the path (`--campaign-key`, else `BENCH_SCOUT_CAMPAIGN_KEY`): 32 random bytes, owner-only at creation and on every read; refused (4) when the resolved path — junctions followed — lies inside any git checkout, the trees root, the mirror root or a directory the Claude user settings grant, and when a key is there already. No other verb creates one |
@@ -527,6 +527,25 @@ Two consequences for S8 (the pilot) — both handled in E2 S8's code, below:
 - **A refused main session falls back to another model, and `init.model` does not say so** → *A model fallback stops the cell*.
 - **The driver's framing is part of the instrument** (the cells' driver had the same "verbatim … reply DONE" shape the access check was
   refused for) → *The cell prompts, v2*.
+
+### One effort for every model, or the operator's configuration (the pilot, 2026-10-14)
+
+The pilot's Sonnet teams were slower and dearer than its Opus teams. A persisted two-child session with the scout launch's flags read
+the answer from each child transcript's `effort` / `perTurnEffort`: the **Opus child ran at `high`, the Sonnet child at `xhigh`** — the
+pinned settings project the operator's `effortLevel: xhigh` with `modelSettings` lowering only `opus` to `high`, and on claude 2.1.289 a
+child takes `modelSettings` by its OWN model, else the global level (it does not inherit the parent's). So the pilot compared Opus at high
+with Sonnet at xhigh: a configuration comparison, not a model comparison. `--effort <low|medium|high|xhigh|max>` now pins ONE level for
+every model — `ScoutPinnedSettings.Explicit`: `{"effortLevel": level}` and no `modelSettings`, in its own file
+(`pinned-settings.effort-<level>.json`, `ScoutArtifacts.Effort`), so a run's settings pin says which condition it measured; without the
+flag the operator's configuration is pinned as before. A run and its resume must name the same (a different file is a different pin,
+which stops the run). Tests: `ScoutPinnedSettingsTests` (the text, the levels, the file name), `ScoutArtifactsEffortTests` (written in its
+own file whatever the user settings say per model; a file saying anything else, and an unknown level, refused — RED first: the effort file
+held the projection, `xhigh`).
+
+`bench scouts report --prices <prices.json>` adds a `cost split` line per arm (operator, 2026-10-14): the team's mean tokens by kind —
+input, output, cache read, cache write 5 m, cache write 1 h — each with its dollars at the published price of the arm's pinned model
+(`ScoutCostSplit`; the parts sum to the team cost; `ScoutArmTokens` / `ScoutTokensDto` carry the two cache-write TTLs apart). The pilot's
+split showed where the money went: most of every team's cost is the cache WRITE of what its scouts read, not output.
 
 ### Agents stay synchronous — and a backgrounded agent stops the cell (the pilot, 2026-10-14)
 

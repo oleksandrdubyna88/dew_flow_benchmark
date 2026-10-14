@@ -42,10 +42,17 @@ public static class ScoutsReadCommand
                     return GateRunCommand.Refuse(error, ExitCodes.Configuration, $"scout run {run.Id} could not be read back");
                 }
 
-                output.WriteLine(command.Has("json") ? Json(report) : ScoutReportText.Of(report));
+                output.WriteLine(command.Has("json") ? Json(report) : ScoutReportText.Of(report, PricesOf(command)));
                 return ExitCodes.Pass;
             });
     }
+
+    /// <summary><c>report --prices &lt;prices.json&gt;</c> (2026-10-14): the models whose prices split each arm's team cost by token kind; none
+    /// without the flag, or when the file cannot be read (the report itself still prints).</summary>
+    private static IReadOnlyList<ModelPrice> PricesOf(CommandLine command) =>
+        command.Has("prices") && File.Exists(command.Value("prices"))
+            ? ScoutFiles.Prices(File.ReadAllText(command.Value("prices"))).Match(t => t.Models, _ => [])
+            : [];
 
     /// <summary>The report's JSON — the web defaults, as the probes' report and the API serialise it.</summary>
     public static string Json(Contracts.ScoutRunReportDto report) => JsonSerializer.Serialize(report, Web);
