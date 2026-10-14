@@ -3,7 +3,7 @@
 These files pin the readers of the scouts context — `ClaudeSubagents` (`src/Bench.Domain/Probes/ClaudeSubagents.cs`), the
 read-back and its path audit (`src/Bench.Domain/Scouts/ScoutReadBack.cs`, `PathAudit.cs`), the token attribution
 (`ScoutCost.cs`) and the access check's judge (`ScoutAccessCheck.cs`, E2 S5) — on streams the real CLI printed for plan
-`todo/PLAN_scout_model_calibration.md` (§2's feasibility probe, §3.2's three confinement probes, the two grant-drop probes and S5's
+`research/PLAN_scout_model_calibration.md` (§2's feasibility probe, §3.2's three confinement probes, the two grant-drop probes and S5's
 refused access-check launch).
 **Every file is LIVE**; the only edits are SCRUBS, made before the files were committed (plan §3.13), each line re-serialised as the
 same JSON with these string replacements — and, in the three 2026-10-13 files, the removal of every `skills` and `slash_commands`
