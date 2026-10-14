@@ -20,9 +20,24 @@ public sealed record ModelPrice(string ModelId, decimal InputPerMtok, decimal Ou
          + usage.CacheWrite5m * CacheWrite5mPerMtok + usage.CacheWrite1h * CacheWrite1hPerMtok) / 1_000_000m;
 }
 
-/// <summary>The vendor price table read on the run date (§3.6): where it was read, when, and a price per exact model id.</summary>
+/// <summary>A rate the CLI's own <c>total_cost_usd</c> bills that differs from the published price — OBSERVED, never assumed, and named with
+/// where it was observed (the pilot, 2026-10-14: claude 2.1.289 bills a Sonnet 5.5 cache hit at $0.20 per million, the page says $0.10).
+/// Used ONLY by the cost check, which compares like with like; every reported dollar stays at the published price.</summary>
+public sealed record CliRate(string ModelId, decimal CacheReadPerMtok, string Observed);
+
+/// <summary>The vendor price table read on the run date (§3.6): where it was read, when, and a price per exact model id — and, beside it,
+/// the rates the CLI was observed to bill differently (<see cref="CliRates"/>).</summary>
 public sealed record PriceTable(string SourceUrl, DateOnly ReadOn, IReadOnlyList<ModelPrice> Models)
 {
+    public IReadOnlyList<CliRate> CliRates { get; init; } = [];
+
+    /// <summary>The table with each observed CLI rate attached — refused when a rate names a model the table does not price, has no
+    /// observation, or is negative.</summary>
+    public Outcome<PriceTable> WithCliRates(IReadOnlyList<CliRate> rates) =>
+        rates.FirstOrDefault(r => For(r.ModelId) is Outcome<ModelPrice>.Fail || r.Observed.Trim().Length == 0 || r.CacheReadPerMtok < 0m) is { } bad
+            ? Outcome<PriceTable>.Failure($"the CLI rate for '{bad.ModelId}' is refused — it must name a priced model, a non-negative cacheRead and where it was observed")
+            : Outcome<PriceTable>.Success(this with { CliRates = [.. rates] });
+
     public static Outcome<PriceTable> Of(string sourceUrl, DateOnly readOn, IReadOnlyList<ModelPrice> models) =>
         (sourceUrl.StartsWith("https://", StringComparison.Ordinal), models.Count > 0, models.Select(m => m.ModelId).Distinct(StringComparer.Ordinal).Count() == models.Count) switch
         {
@@ -31,6 +46,10 @@ public sealed record PriceTable(string SourceUrl, DateOnly ReadOn, IReadOnlyList
             (_, _, false) => Outcome<PriceTable>.Failure("a price table prices each model id once"),
             _ => Outcome<PriceTable>.Success(new PriceTable(sourceUrl, readOn, [.. models])),
         };
+
+    /// <summary>The table as the CLI bills: each model with an observed CLI rate carries that cache-read rate. The cost check's basis.</summary>
+    public PriceTable AsTheCliBills() =>
+        this with { Models = [.. Models.Select(m => CliRates.FirstOrDefault(r => r.ModelId == m.ModelId) is { } r ? m with { CacheReadPerMtok = r.CacheReadPerMtok } : m)] };
 
     public Outcome<ModelPrice> For(string modelId) =>
         Models.FirstOrDefault(m => string.Equals(m.ModelId, modelId, StringComparison.Ordinal)) is { } price

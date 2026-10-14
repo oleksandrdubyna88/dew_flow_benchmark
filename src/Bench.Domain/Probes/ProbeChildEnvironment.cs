@@ -45,6 +45,27 @@ public static class ProbeChildEnvironment
 
     public const string ModelGuardOff = "off";
 
+    /// <summary>The background-task switch every SCOUT launch turns off (E2 S8's pilot, 2026-10-14): under the scout launch claude 2.1.289
+    /// ran the Agent call in the background — a result with no duration and no usage, the answer in a later notification, a second
+    /// turn — and with this variable at <c>1</c> the same launch ran it synchronously, measured the same night. A probe launch does not
+    /// carry it: the probes measure the CLI as it ships.</summary>
+    public const string BackgroundTasksVariable = "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS";
+
+    public const string BackgroundTasksOff = "1";
+
+    /// <summary>A scout child's environment: <see cref="Of"/> plus <see cref="BackgroundTasksVariable"/>=<see cref="BackgroundTasksOff"/>, a
+    /// FIXED policy value whatever the parent holds.</summary>
+    public static ChildEnvironment ForScouts(IReadOnlyDictionary<string, string> parent) =>
+        CoaiEnvironment.Minimal(
+            Fixed(WithGuardOff(parent), BackgroundTasksVariable, BackgroundTasksOff),
+            static name => Passes(name) || name == ModelGuardVariable || name == BackgroundTasksVariable).WithSecret(SecretValue.None);
+
+    private static Dictionary<string, string> Fixed(IReadOnlyDictionary<string, string> variables, string name, string value) =>
+        variables
+            .Where(v => !string.Equals(v.Key, name, StringComparison.OrdinalIgnoreCase))
+            .Append(KeyValuePair.Create(name, value))
+            .ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
+
     /// <summary>The child environment for a CLI launch over <paramref name="parent"/> (the bench's own): the pass-through variables and
     /// no secret — <see cref="ChildEnvironment.Scrub"/> still knows every secret-named value of the parent — plus
     /// <see cref="ModelGuardVariable"/>=<see cref="ModelGuardOff"/>, always, whatever the parent holds (any parent spelling of it is replaced).</summary>

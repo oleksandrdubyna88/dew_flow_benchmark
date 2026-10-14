@@ -41,7 +41,7 @@ public sealed class CliScoutRunner(
     ICliAgentTranscripts agents, IScoutTrees trees, ScoutArtifacts artifacts, IScoutStore store, IScoutCheckpoints checkpoints, CliScoutSettings settings, ILogger<CliScoutRunner> logger)
     : IScoutRunner
 {
-    private readonly ChildEnvironment _child = ProbeChildEnvironment.Of(settings.ParentEnvironment);
+    private readonly ChildEnvironment _child = ProbeChildEnvironment.ForScouts(settings.ParentEnvironment);
 
     private sealed record Launch(ScoutArm Arm, ScoutArmBudget Budget, ScoutTree Tree, ScoutCellPrompts Prompts, AgentAskOptions Options);
 

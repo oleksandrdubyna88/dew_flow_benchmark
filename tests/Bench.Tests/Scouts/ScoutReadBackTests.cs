@@ -148,7 +148,7 @@ public sealed class ScoutReadBackTests
     public void Every_reason_the_read_back_gives_is_a_void_or_a_stop_word_from_the_allow_list()
     {
         Enum.GetValues<ScoutReason>().Where(ScoutReasons.IsVoid).Should().HaveCount(11);
-        Enum.GetValues<ScoutReason>().Where(ScoutReasons.IsStop).Should().HaveCount(6, "S8 added the model-refusal fallback");
+        Enum.GetValues<ScoutReason>().Where(ScoutReasons.IsStop).Should().HaveCount(7, "S8 added the model-refusal fallback, and the pilot the backgrounded agent");
         Enum.GetValues<ScoutReason>().Should().OnlyContain(r => !(ScoutReasons.IsVoid(r) && ScoutReasons.IsStop(r)));
     }
 

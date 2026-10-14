@@ -17,7 +17,8 @@ public sealed record ScoutCellVerdict(ScoutSettlement Settlement, IReadOnlyList<
 /// <summary>A cell's stream read into a settlement — pure, so every rule below is a table test with no process behind it:
 /// <list type="number">
 /// <item><b>Stops</b> outrank everything: the path audit's (§3.2), then a moved pin (§3.4, <see cref="ScoutPinDrift"/>) — a safeguard
-/// fallback in the main session or any child (<see cref="ScoutReason.ModelRefusalFallback"/>, E2 S8), else a main session or child that
+/// fallback in the main session or any child (<see cref="ScoutReason.ModelRefusalFallback"/>, E2 S8), an Agent call the CLI ran in the
+/// background (<see cref="ScoutReason.AgentBackgrounded"/>, the pilot's first cell), else a main session or child that
 /// answered with a resolved id other than the one frozen on the run (<see cref="ScoutReason.PinMoved"/>).</item>
 /// <item><b>aborted:spend</b> next (§3.10): a quota marker on stderr or in the result, the CLI's own budget cap reached, or a subagent
 /// refused for budget — never scored.</item>
@@ -28,6 +29,9 @@ public sealed record ScoutCellVerdict(ScoutSettlement Settlement, IReadOnlyList<
 /// </list></summary>
 public static class ScoutCellReading
 {
+    /// <summary>The Agent result status of a call the CLI ran in the background (<see cref="ScoutReason.AgentBackgrounded"/>).</summary>
+    public const string AsyncLaunched = "async_launched";
+
     public static ScoutCellVerdict Read(SubagentTranscript transcript, string stdout, ScoutCellContext context, LinkTargets links)
     {
         var readBack = ScoutReadBack.Check(transcript, context.Expectation, links);
@@ -56,12 +60,18 @@ public static class ScoutCellReading
     /// <summary>A moved pin, and which: a safeguard fallback names its own event (S8) — it is the more specific word, and a fallback model
     /// often answers under a pinned-looking init, so it is checked first — else a moved alias.</summary>
     private static ScoutReason Drift(SubagentTranscript t, ScoutPins pins) =>
-        (ScoutPinDrift.FellBack(t), ScoutPinDrift.Moved(t, pins)) switch
+        (ScoutPinDrift.FellBack(t), Backgrounded(t), ScoutPinDrift.Moved(t, pins)) switch
         {
-            (true, _) => ScoutReason.ModelRefusalFallback,
-            (_, true) => ScoutReason.PinMoved,
+            (true, _, _) => ScoutReason.ModelRefusalFallback,
+            (_, true, _) => ScoutReason.AgentBackgrounded,
+            (_, _, true) => ScoutReason.PinMoved,
             _ => ScoutReason.None,
         };
+
+    /// <summary>Whether the CLI ran any Agent call in the background (E2 S8's pilot, 2026-10-14) — a mode the instrument does not read:
+    /// the result carries no duration and no usage, and the answer and a second turn come later.</summary>
+    public static bool Backgrounded(SubagentTranscript t) =>
+        t.Agents.Any(a => string.Equals(a.Result.Status, AsyncLaunched, StringComparison.Ordinal));
 
     /// <summary>The cost check; a stream with an envelope whose tokens cannot be attributed or priced DISAGREES — the price table or the
     /// token sum is wrong, and every cost after it would be too.</summary>
@@ -72,7 +82,7 @@ public static class ScoutCellReading
             return new CostCheck.Unchecked("no result envelope");
         }
 
-        var computed = ScoutTokens.Attribute(transcript).Match(usage => ScoutCost.Of(usage, prices), Outcome<CellCost>.Failure);
+        var computed = ScoutTokens.Attribute(transcript).Match(usage => ScoutCost.Of(usage, prices.AsTheCliBills()), Outcome<CellCost>.Failure);
 
         return computed is Outcome<CellCost>.Ok ok
             ? ScoutCost.Check(ok.Value.TotalUsd, transcript.Envelope.TotalCostUsd)
@@ -114,18 +124,20 @@ public static class ScoutCellReading
             scored ? CapturedCount.Number(recall.Total) : CapturedCount.Unavailable($"a {outcome} cell has no recall"),
             t.TeamMs,
             t.Envelope.DurationMs,
-            cost switch
-            {
-                CostCheck.Agrees a => CapturedUsd.Amount(a.ComputedUsd),
-                CostCheck.Disagrees { ComputedUsd: > 0m } d => CapturedUsd.Amount(d.ComputedUsd),
-                _ => CapturedUsd.Unavailable("the cost could not be computed"),
-            },
+            Published(t, context.Prices, cost),
             t.Envelope.TotalCostUsd)
         {
             TeamTokens = team.Tokens,
             TeamUsd = team.Usd,
         };
     }
+
+    /// <summary>The cell's cost at the PUBLISHED prices — what every reported dollar is (the check compares at the CLI's own rates,
+    /// <see cref="CostOf"/>); not captured when the check could not compute one either.</summary>
+    private static CapturedUsd Published(SubagentTranscript t, PriceTable prices, CostCheck cost) =>
+        cost is CostCheck.Agrees or CostCheck.Disagrees { ComputedUsd: > 0m }
+            ? ScoutTokens.Attribute(t).Match(u => ScoutCost.Of(u, prices).Match(c => CapturedUsd.Amount(c.TotalUsd), CapturedUsd.Unavailable), CapturedUsd.Unavailable)
+            : CapturedUsd.Unavailable("the cost could not be computed");
 
     /// <summary>One record per Agent call whose prompt is one of the frozen prompts — its ordinal and focus are that prompt's place in the
     /// arm (F1..F5). A call with another prompt has no focus to record; the read-back has voided its cell.</summary>

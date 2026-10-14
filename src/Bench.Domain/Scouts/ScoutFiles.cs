@@ -18,7 +18,8 @@ namespace Bench.Domain.Scouts;
 /// <item><b>private tasks</b> (<c>tasks.private.json</c>, refused inside git) — the private tasks' detail, what <c>run</c> re-derives the
 /// commitments from (<see cref="Resolve"/>);</item>
 /// <item><b>prices</b> (<c>--prices</c>) — <c>{ "source": "https://…", "readOn": "yyyy-MM-dd", "models": [ { "modelId", "input", "output",
-/// "cacheRead", "cacheWrite5m", "cacheWrite1h" } ] }</c>, USD per million tokens.</item>
+/// "cacheRead", "cacheWrite5m", "cacheWrite1h" } ], "cliRates": [ { "modelId", "cacheRead", "observed" } ] }</c>, USD per million tokens —
+/// <c>cliRates</c> optional: a rate the CLI was OBSERVED to bill differently, used by the cost check alone (<see cref="CliRate"/>).</item>
 /// </list></summary>
 public static class ScoutFiles
 {
@@ -280,10 +281,18 @@ public static class ScoutFiles
         {
             (Outcome<IReadOnlyList<JsonNode?>>.Fail f, _) => Outcome<PriceTable>.Failure(f.Reason),
             (_, false) => Outcome<PriceTable>.Failure("the price table has no \"readOn\" date (yyyy-MM-dd) — the date it was read is part of every cost"),
-            (Outcome<IReadOnlyList<JsonNode?>>.Ok ok, _) => Collect(ok.Value.Select(Price)).Match(prices => PriceTable.Of(Text(root, "source"), date, prices), Outcome<PriceTable>.Failure),
+            (Outcome<IReadOnlyList<JsonNode?>>.Ok ok, _) => Collect(ok.Value.Select(Price))
+                .Match(prices => PriceTable.Of(Text(root, "source"), date, prices), Outcome<PriceTable>.Failure)
+                .Match(table => table.WithCliRates(CliRates(root)), Outcome<PriceTable>.Failure),
             _ => Outcome<PriceTable>.Failure("unreachable"),
         };
     }
+
+    /// <summary>The optional <c>cliRates</c> beside the published prices — each <c>{ "modelId", "cacheRead", "observed" }</c>; none when absent.</summary>
+    private static IReadOnlyList<CliRate> CliRates(JsonNode? root) =>
+        root?["cliRates"] is JsonArray rates
+            ? [.. rates.Select(r => new CliRate(Text(r, "modelId"), Number(r, "cacheRead"), Text(r, "observed")))]
+            : [];
 
     private static Outcome<ModelPrice> Price(JsonNode? node) =>
         ModelPrice.Of(Text(node, "modelId"), Number(node, "input"), Number(node, "output"), Number(node, "cacheRead"), Number(node, "cacheWrite5m"), Number(node, "cacheWrite1h"));
