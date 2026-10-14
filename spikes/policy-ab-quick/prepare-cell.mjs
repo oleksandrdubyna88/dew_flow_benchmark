@@ -8,6 +8,7 @@ import { AUTHOR_ENV, git, gitEnv, gitShow } from './lib/git.mjs';
 import { updateRunMap } from './lib/runmap.mjs';
 import { applyOverlaySettings } from './lib/settings.mjs';
 import { parseStruck, remainingModels, strikeTargets, withholdModels } from './lib/strike.mjs';
+import { selectRemovals } from './lib/trim.mjs';
 import { extractBase, npmCi, sha256, writeFileMaking } from './lib/tree.mjs';
 
 const SPEC = {
@@ -51,10 +52,33 @@ function strikePlan(treeDir) {
   return { planSha256: sha256(Buffer.from(text)), modelWordsWithheld };
 }
 
+/** Delete everything under the mount that is not inside a rule directory; refuse if the guard rule is gone. */
+export function trimMount(treeDir) {
+  const mount = path.join(treeDir, MOUNT);
+  const all = listFiles(mount).map(f => path.relative(mount, f).replace(/\\/g, '/'));
+  const doomed = selectRemovals(all);
+  let bytes = 0;
+  for (const rel of doomed) { bytes += fs.statSync(path.join(mount, rel)).size; fs.rmSync(path.join(mount, rel)); }
+  pruneEmptyDirs(mount);
+  if (!fs.existsSync(path.join(mount, 'common/subagent-models.md'))) throw new Error('common/subagent-models.md is missing after the trim');
+  return { files: doomed.length, bytes };
+}
+
+function listFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? listFiles(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+}
+
+function pruneEmptyDirs(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true }).filter(x => x.isDirectory())) {
+    pruneEmptyDirs(path.join(dir, e.name));
+    if (fs.readdirSync(path.join(dir, e.name)).length === 0) fs.rmdirSync(path.join(dir, e.name));
+  }
+}
+
 async function writeHooks(treeDir, arm) {
   const hooks = {};
   const put = (name, bytes) => { writeFileMaking(path.join(treeDir, '.claude/hooks', name), bytes); hooks[name] = sha256(bytes); };
-  for (const name of ['audit.mjs', 'effort.mjs']) put(name, fs.readFileSync(path.join(SPIKE_DIR, 'hooks', name)));
+  for (const name of ['audit.mjs']) put(name, fs.readFileSync(path.join(SPIKE_DIR, 'hooks', name)));
   if (arm === 'B') put('subagent-model.mjs', await gitShow(CONV_CLONE, ARM_SHAS.B, GUARD_SOURCE));
   const file = path.join(treeDir, '.claude/settings.json');
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
@@ -92,11 +116,12 @@ async function main(v) {
   const plan = strikePlan(treeDir);
   const baseTree = await initAndBaseTree(treeDir);
   const overlay = await writeOverlay(treeDir, v.arm);
+  const trimmed = trimMount(treeDir);
   const hooks = await writeHooks(treeDir, v.arm);
   const committed = await commitTree(treeDir);
   if (!v['skip-npm']) await npmCi(treeDir);
   updateRunMap({ cells: { [v.cell]: { arm: v.arm, armSha: ARM_SHAS[v.arm] } } });
-  const record = { cell: v.cell, P, submodulePin, baseTree, ...committed, overlay, treeSha256: sha256(Buffer.from(JSON.stringify(overlay))), ...plan, ...hooks, createdUtc: new Date().toISOString() };
+  const record = { cell: v.cell, P, submodulePin, baseTree, ...committed, overlay, treeSha256: sha256(Buffer.from(JSON.stringify(overlay))), ...plan, trimmedMount: trimmed, ...hooks, createdUtc: new Date().toISOString() };
   fs.writeFileSync(path.join(cellDir, 'cell.json'), `${JSON.stringify(record, null, 2)}\n`);
   console.log(`prepared ${v.cell} at ${treeDir}`);
 }

@@ -18,6 +18,7 @@ const SPEC = {
   'runs-root': { type: 'string', default: DEFAULT_RUNS_ROOT, help: 'runs root' },
   cap: { type: 'string', default: '40', help: 'max budget USD' },
   'wall-min': { type: 'string', default: '120', help: 'wall limit in minutes' },
+  'prompt-file': { type: 'string', default: '', help: 'instrument probe only: a prompt other than prompt.md' },
 };
 
 function ensureSharedFiles(root) {
@@ -81,7 +82,7 @@ async function main(v) {
   const startedUtc = new Date().toISOString();
   const t0 = Date.now();
   const result = await launch(exe, args, {
-    cwd: treeDir, env, prompt: fs.readFileSync(path.join(SPIKE_DIR, 'prompt.md'), 'utf8'),
+    cwd: treeDir, env, prompt: fs.readFileSync(v['prompt-file'] || path.join(SPIKE_DIR, 'prompt.md'), 'utf8'),
     streamPath: path.join(cellDir, 'stream.ndjson'), stderrPath: path.join(cellDir, 'stderr.txt'), wallMs: Number(v['wall-min']) * 60_000,
   });
   const run = { startedUtc, endedUtc: new Date().toISOString(), wallMs: Date.now() - t0, exitCode: result.code, timedOut: result.timedOut, pid: result.pid, wallMin: Number(v['wall-min']), capUsd: Number(v.cap), pinnedEffortSha256: sha256(fs.readFileSync(files.settings)) };

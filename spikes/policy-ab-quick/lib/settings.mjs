@@ -6,7 +6,6 @@ export function overlayEntries(arm) {
   return {
     PreToolUse: [
       entry('*', 'audit.mjs'),
-      entry('Agent|Task', 'effort.mjs'),
       ...(arm === 'B' ? [entry('Agent|Task', 'subagent-model.mjs')] : []),
     ],
     InstructionsLoaded: [entry('', 'audit.mjs')],
@@ -16,7 +15,7 @@ export function overlayEntries(arm) {
 /** Keeps every existing key and hook; refuses a project that already wires one of ours. */
 export function applyOverlaySettings(settings, arm) {
   const text = JSON.stringify(settings ?? {});
-  if (/audit.mjs|effort.mjs|subagent-model/.test(text)) throw new Error('project settings already wire a policy hook');
+  if (/audit.mjs|subagent-model/.test(text)) throw new Error('project settings already wire a policy hook');
   const hooks = { ...(settings?.hooks ?? {}) };
   for (const [event, entries] of Object.entries(overlayEntries(arm))) hooks[event] = [...(hooks[event] ?? []), ...entries];
   return { ...(settings ?? {}), hooks };

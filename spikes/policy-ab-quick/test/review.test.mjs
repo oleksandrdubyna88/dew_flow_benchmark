@@ -9,6 +9,7 @@ import { remainingModels, withholdModels } from '../lib/strike.mjs';
 import { attributeDiagnostics, parseTscDiagnostics } from '../lib/tsc.mjs';
 import { gitDirFor } from '../hooks/audit.mjs';
 import { initInfo, summarize } from '../lib/summary.mjs';
+import { selectRemovals } from '../lib/trim.mjs';
 
 const ctx = { treeRoot: 'D:/rsd/_q1/c1/tree', home: 'C:\\Users\\me' };
 const call = (tool, input, agent = 'main') => ({ agent, tool, input });
@@ -178,4 +179,14 @@ test('a cell with a stream already on disk is refused', async () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('mount trim keeps only rule directories', () => {
+  const files = ['common/a.md', 'common/sub/b.md', 'csharp/c.md', 'typescript/d.md', 'rust/e.md', 'research/x.md', 'todo/y.md', 'README.md', 'settings/hooks/h.mjs', 'AGENTS.md', 'commonx/z.md'];
+  assert.deepEqual(selectRemovals(files).sort(), ['AGENTS.md', 'README.md', 'commonx/z.md', 'research/x.md', 'settings/hooks/h.mjs', 'todo/y.md']);
+});
+
+test('agent calls report the effort as requested', () => {
+  const ev = [{ type: 'assistant', parent_tool_use_id: null, message: { model: 'o', content: [{ type: 'tool_use', id: 't', name: 'Agent', input: { model: 'sonnet', effort: 'xhigh' } }] } }];
+  assert.equal(summarize({ events: ev, audit: [], cellJson: {}, treeDir: '' }).agentCalls[0].effortRequested, 'xhigh');
 });

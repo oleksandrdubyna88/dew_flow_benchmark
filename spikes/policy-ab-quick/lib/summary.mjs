@@ -10,7 +10,6 @@ const NETWORK = [/\bgh\s/, /git\s+clone/, /git\s+(fetch|push|pull|ls-remote|remo
 
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const GUARD_MARKER = 'subagent-models.md:';
-const PIN_MARKER = 'effort-pin:';
 
 export const parseNdjson = text => text.split('\n').map(l => l.trim()).filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
 
@@ -48,7 +47,6 @@ export function resultEnvelope(events) {
 function denialKind(result) {
   if (!result?.isError && !/denied|blocked|refus/i.test(result?.text ?? '')) return null;
   if (result.text.includes(GUARD_MARKER)) return 'model-guard';
-  if (result.text.includes(PIN_MARKER)) return 'effort-pin';
   return result.isError ? 'other-error' : null;
 }
 
@@ -61,7 +59,7 @@ export function agentCalls(events) {
     const result = results.get(u.id);
     return {
       id: u.id, launchedBy: u.parent ?? MAIN,
-      subagent_type: u.input?.subagent_type ?? null, model: u.input?.model ?? null, effort: u.input?.effort ?? null,
+      subagent_type: u.input?.subagent_type ?? null, model: u.input?.model ?? null, effortRequested: u.input?.effort ?? null,
       description: u.input?.description ?? '', denied: denialKind(result), hasResult: Boolean(result),
       resolvedModels: [...new Set(events.filter(e => e.type === 'assistant' && e.parent_tool_use_id === u.id).map(e => e.message?.model).filter(Boolean))],
       childToolCalls: childMsgs.length,
@@ -156,7 +154,7 @@ export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(
     agentCalls: calls,
     childrenPerModel: childrenPerModel(calls),
     unobservedChildren: unobservedChildren(calls, audit),
-    denials: { modelGuard: calls.filter(c => c.denied === 'model-guard').length, effortPin: calls.filter(c => c.denied === 'effort-pin').length, other: calls.filter(c => c.denied === 'other-error').length },
+    denials: { modelGuard: calls.filter(c => c.denied === 'model-guard').length, other: calls.filter(c => c.denied === 'other-error').length },
     effortByAgent: byAgent,
     effortNotHigh: effortFlags(byAgent),
     mainSessionEffortRecorded: Boolean(byAgent[MAIN]),

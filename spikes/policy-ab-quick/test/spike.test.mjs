@@ -17,7 +17,6 @@ import { parseStruck, strikeTargets } from '../lib/strike.mjs';
 import { parseNdjson, summarize } from '../lib/summary.mjs';
 import { scrub } from '../lib/scrub.mjs';
 import { auditRecord } from '../hooks/audit.mjs';
-import { effortPinOutput } from '../hooks/effort.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fx = name => fs.readFileSync(path.join(here, 'fixtures', name), 'utf8');
@@ -45,8 +44,8 @@ test('settings overlay keeps project keys, adds arm B guard, refuses double wiri
   const a = applyOverlaySettings(base, 'A');
   const b = applyOverlaySettings(base, 'B');
   assert.equal(a.permissions.defaultMode, 'acceptEdits');
-  assert.equal(a.hooks.PreToolUse.length, 3);
-  assert.equal(b.hooks.PreToolUse.length, 4);
+  assert.equal(a.hooks.PreToolUse.length, 2);
+  assert.equal(b.hooks.PreToolUse.length, 3);
   assert.equal(a.hooks.InstructionsLoaded.length, 1);
   assert.ok(JSON.stringify(b).includes('subagent-model.mjs') && !JSON.stringify(a).includes('subagent-model.mjs'));
   assert.equal(base.hooks.PreToolUse.length, 1, 'input not mutated');
@@ -101,10 +100,10 @@ test('summary over the synthetic stream and audit log', () => {
   const s = summarize({ events: parseNdjson(fx('stream.ndjson')), audit: parseNdjson(fx('audit.ndjson')), cellJson, treeDir: 'D:/runs/A1/tree', canaryTokens: ['CANARY-zzz'], texts: { stream: 'x CANARY-zzz y' } });
   assert.equal(s.result.total_cost_usd, 1.5);
   assert.equal(s.agentCalls.length, 3);
-  assert.deepEqual(s.agentCalls.map(c => c.denied), [null, 'model-guard', 'effort-pin']);
+  assert.deepEqual(s.agentCalls.map(c => c.denied), [null, 'model-guard', 'other-error']);
   assert.deepEqual(s.agentCalls[0].resolvedModels, ['claude-sonnet-x']);
   assert.deepEqual(s.childrenPerModel, { 'claude-sonnet-x': 1 });
-  assert.deepEqual(s.denials, { modelGuard: 1, effortPin: 1, other: 0 });
+  assert.deepEqual(s.denials, { modelGuard: 1, other: 1 });
   assert.deepEqual(s.effortNotHigh, [{ agent: 'ag1', levels: ['high', 'medium'] }]);
   assert.ok(s.instructions.ruleLoaded && s.instructions.shaMatchesOverlay);
   assert.deepEqual([s.edits.main.approxLines, s.edits.children.approxLines], [4, 10]);
@@ -128,29 +127,18 @@ test('audit record summarises inputs and hashes instruction files', () => {
   assert.equal(auditRecord({ hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { model: 'sonnet', effort: 'high' } }, 'T', () => '').input.model, 'sonnet');
 });
 
-test('effort pin denies non-high only', () => {
-  assert.equal(effortPinOutput({ tool_input: {} }), '');
-  assert.equal(effortPinOutput({ tool_input: { effort: 'high' } }), '');
-  assert.equal(effortPinOutput({ tool_input: { effort: null } }), '');
-  const out = JSON.parse(effortPinOutput({ tool_input: { effort: 'xhigh' } }));
-  assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
-  assert.ok(out.hookSpecificOutput.permissionDecisionReason.startsWith('effort-pin:'));
-});
-
-test('hooks run as processes: audit appends under its own .git, pin denies', () => {
+test('audit hook runs as a process and appends under its own .git', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pab-hook-'));
   try {
     fs.mkdirSync(path.join(tmp, '.git'));
     fs.mkdirSync(path.join(tmp, '.claude', 'hooks'), { recursive: true });
-    for (const n of ['audit.mjs', 'effort.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
+    for (const n of ['audit.mjs']) fs.copyFileSync(path.join(here, '..', 'hooks', n), path.join(tmp, '.claude', 'hooks', n));
     const input = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, effort: { level: 'high' } });
     const a = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input, cwd: os.tmpdir() });
     assert.equal(a.status, 0);
     assert.equal(a.stdout.length, 0);
     const line = JSON.parse(fs.readFileSync(path.join(tmp, '.git', 'audit.ndjson'), 'utf8').trim());
     assert.equal(line.input.command, 'ls');
-    const p = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'effort.mjs')], { input: JSON.stringify({ tool_input: { effort: 'low' } }) });
-    assert.match(p.stdout.toString(), /"permissionDecision":"deny"/);
     const bad = spawnSync(process.execPath, [path.join(tmp, '.claude', 'hooks', 'audit.mjs')], { input: 'not json' });
     assert.equal(bad.status, 0);
   } finally {
