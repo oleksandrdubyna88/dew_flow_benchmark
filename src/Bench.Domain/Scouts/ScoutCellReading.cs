@@ -82,7 +82,7 @@ public static class ScoutCellReading
             return new CostCheck.Unchecked("no result envelope");
         }
 
-        var computed = ScoutTokens.Attribute(transcript).Match(usage => ScoutCost.Of(usage, prices), Outcome<CellCost>.Failure);
+        var computed = ScoutTokens.Attribute(transcript).Match(usage => ScoutCost.Of(usage, prices.AsTheCliBills()), Outcome<CellCost>.Failure);
 
         return computed is Outcome<CellCost>.Ok ok
             ? ScoutCost.Check(ok.Value.TotalUsd, transcript.Envelope.TotalCostUsd)
@@ -124,18 +124,20 @@ public static class ScoutCellReading
             scored ? CapturedCount.Number(recall.Total) : CapturedCount.Unavailable($"a {outcome} cell has no recall"),
             t.TeamMs,
             t.Envelope.DurationMs,
-            cost switch
-            {
-                CostCheck.Agrees a => CapturedUsd.Amount(a.ComputedUsd),
-                CostCheck.Disagrees { ComputedUsd: > 0m } d => CapturedUsd.Amount(d.ComputedUsd),
-                _ => CapturedUsd.Unavailable("the cost could not be computed"),
-            },
+            Published(t, context.Prices, cost),
             t.Envelope.TotalCostUsd)
         {
             TeamTokens = team.Tokens,
             TeamUsd = team.Usd,
         };
     }
+
+    /// <summary>The cell's cost at the PUBLISHED prices — what every reported dollar is (the check compares at the CLI's own rates,
+    /// <see cref="CostOf"/>); not captured when the check could not compute one either.</summary>
+    private static CapturedUsd Published(SubagentTranscript t, PriceTable prices, CostCheck cost) =>
+        cost is CostCheck.Agrees or CostCheck.Disagrees { ComputedUsd: > 0m }
+            ? ScoutTokens.Attribute(t).Match(u => ScoutCost.Of(u, prices).Match(c => CapturedUsd.Amount(c.TotalUsd), CapturedUsd.Unavailable), CapturedUsd.Unavailable)
+            : CapturedUsd.Unavailable("the cost could not be computed");
 
     /// <summary>One record per Agent call whose prompt is one of the frozen prompts — its ordinal and focus are that prompt's place in the
     /// arm (F1..F5). A call with another prompt has no focus to record; the read-back has voided its cell.</summary>

@@ -488,6 +488,10 @@ the risk consultation (an explicit public projection, verified in code: `ScoutRe
   **The pilot's first cell (2026-10-14)** stopped on `CostMismatch`: the scout launch had made claude run the Agent call in the
   background (`async_launched`, no duration, no usage, a second turn). Every scout launch now carries
   `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` (probed: synchronous again), and a backgrounded agent stops a cell as `AgentBackgrounded`.
+  **The Sonnet cache-read rate is settled (2026-10-14):** the pilot's B2 cell (synchronous) stopped on `CostMismatch` — the CLI bills a
+  Sonnet 5.5 cache hit at $0.20/M (Sonnet $1.10243 = its tokens exactly at that rate) while the pricing page, re-read that night, says
+  $0.10/M (0.05× input, footnote 2). Every reported dollar stays at the PUBLISHED price; `prices.json` carries the CLI's observed rate
+  beside it (`cliRates`), used only by the cost check, which compares like with like.
 
 Code round: the key path refusals and the encoding, the projection's reach (every writer, every error path), the launch
 argv, the limits and the overshoot arithmetic, the P check, the RED fixtures, the evidence order.
