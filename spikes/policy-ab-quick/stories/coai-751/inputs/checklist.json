@@ -1,0 +1,89 @@
+{
+  "source": "statement.md (frozen E2 text at P = af7f2856, lines 458-468, plus the per-story preamble, lines 271-272; nothing struck — P's E2 carries no model line). Written before reading S's diff. Disclosure: S's squash MESSAGE (git show --stat 3ebf208c prints it) had been seen before this file was written; no R-item below is taken from it — every item quotes the statement, and items the message describes but the statement does not fix (firstSeen kept, Forget refused on this window's own row, a refused stamp logged, an implausible time rejected, CoaiExports) are deliberately NOT required here. One post-diff edit, wording only: R6's howToVerify said 'activate's signature/return timing is unchanged by E2'; after reading S (which changes activate's return TYPE to a synchronous value for the test:host scenario) it was reworded to 'activate stays synchronous with respect to the stamp (returning a new VALUE is fine)', so that S's own legitimate change is not misread as a timing defect. No requirement was added or removed.",
+  "items": [
+    {
+      "id": "R1",
+      "requirement": "A pure module `sidesSeen.ts` exports `stampSide(stored, side, family, label, now)` and `knownFamilies(records, now)` — parameters in that order, time injected as `now`.",
+      "howToVerify": "New file src_vs_code/src/sidesSeen.ts. It imports nothing from `vscode`, does no I/O and never calls `Date.now()` / `new Date()` without an argument for a decision: every time it compares is the `now` it was given. Both functions are exported with those parameter lists (extra trailing optional parameters are acceptable; reordering or dropping `now` is not). Other helpers in the module are fine.",
+      "anchors": ["sidesSeen.ts", "stampSide", "knownFamilies", "now"]
+    },
+    {
+      "id": "R2",
+      "requirement": "`knownFamilies(records, now)` answers the set of families seen within 90 days of `now`: a Windows record and a WSL record both within 90 days give `{windows, posix}`; a record older than the window does not count.",
+      "howToVerify": "In sidesSeen.ts: families are exactly `windows` and `posix` (WSL is `posix`); a record counts only when its last-seen time is within 90 days of the given `now`. A unit test asserts the statement's RED: a Windows + a WSL record inside 90 days → both families. The result may be a Set, a sorted array or an object — what matters is that both appear and nothing else does. A window measured from firstSeen instead of last seen, or from the wall clock instead of `now`, is not_met.",
+      "anchors": ["knownFamilies", "90", "windows", "posix"]
+    },
+    {
+      "id": "R3",
+      "requirement": "Pruning: a record past the 90-day window is pruned — a 91-day-old WSL record is removed, records within the window are kept; pruning and `knownFamilies` use the same window.",
+      "howToVerify": "The module decides which stored records are past the window (a 91-day-old WSL record is), and the extension actually removes them from globalState (`update(key, undefined)` or equivalent) — merely leaving them out of `knownFamilies` while they stay stored is `partial`. One window constant (90 days) serves both the count and the pruning; a unit test asserts the 91-day-old record is pruned and a recent one is not. Pruning must not remove a record that is inside the window.",
+      "anchors": ["pruned", "91", "90-day window"]
+    },
+    {
+      "id": "R4",
+      "requirement": "`stampSide` writes at most once a day per side: when this side's stored record was last seen less than a day before `now`, it answers 'no write'; otherwise it answers this side's record with last seen = `now`.",
+      "howToVerify": "In stampSide: the once-a-day decision compares the given `now` with the STORED record of the same side (another side's record never suppresses this side's stamp). A second stamp within one day yields no new value / no write; a stamp after ≥ 1 day (or with no stored record, or an unreadable one) yields a record carrying the given family, label and last seen = `now`. A unit test covers both the same-day 'no write' and a first stamp. A guard that compares against the wall clock, or one keyed on the profile rather than the side, is not_met.",
+      "anchors": ["stampSide", "at most once a day per side", "now"]
+    },
+    {
+      "id": "R5",
+      "requirement": "At activation (`extension.ts`) each window stamps ITS OWN side into globalState under `coai.sideSeen@<side key>`, with this side's family and label, through `stampSide`.",
+      "howToVerify": "extension.ts's activate computes this side's key from the existing side identity (`sideKey` of the side `thisSide`/`Side` describes — reuse, not a new identity), its family (windows on a Windows host, posix otherwise) and its label (`thisSideLabel`), calls stampSide with the activation's `now`, and writes the answer to `context.globalState` under a key beginning `coai.sideSeen@` — one key per side, so two windows never write the same key. When stampSide answers 'no write', nothing is written.",
+      "anchors": ["extension.ts", "coai.sideSeen@", "sideKey", "thisSideLabel", "globalState"]
+    },
+    {
+      "id": "R6",
+      "requirement": "Timing: the stamp is never awaited by activation — activation does not wait on, and is not delayed by, the stamp's write (or its pruning).",
+      "howToVerify": "In activate: the stamp is started fire-and-forget (`void …`, an unawaited promise, or a deferred call) and no `await` in activate's path (nor a returned promise activate waits for) depends on it; activate stays synchronous with respect to the stamp (returning a new VALUE from activate is fine; making activate async and awaiting the stamp is not). Code that runs after the stamp in activate must not be sequenced behind it. Logging an unawaited rejection is NOT required by the statement (it is beyond-spec — do not mark R6 down for its absence); an `await` of the stamp anywhere on activation's path is not_met.",
+      "anchors": ["never awaited by activation", "activate", "void"]
+    },
+    {
+      "id": "R7",
+      "requirement": "`coai.pathFieldsPerSide` is declared in the manifest with exactly the values `auto`, `always`, `never` and `application` scope.",
+      "howToVerify": "src_vs_code/package.json contributes.configuration gains `coai.pathFieldsPerSide`: type string, `enum` [auto, always, never] (any order), `scope: \"application\"`, a description. A default of `auto` is what P's plan design names (Design (a), not the statement) — note the default; do not mark down for it alone. A boolean, a different value set, or a window/resource scope is not_met.",
+      "anchors": ["coai.pathFieldsPerSide", "auto", "always", "never", "application"]
+    },
+    {
+      "id": "R8",
+      "requirement": "The setting is described in the five help languages.",
+      "howToVerify": "Each of the five help content files (P: helpContent.ts = English, helpRu.ts, helpUk.ts, helpDe.ts, helpEs.ts) gains a description of the switch — what it decides and its three choices — in that language. Four of five is `partial`. If the repository's help-coverage test enforces settings coverage, it stays green.",
+      "anchors": ["helpContent.ts", "helpRu.ts", "helpUk.ts", "helpDe.ts", "helpEs.ts", "five help languages"]
+    },
+    {
+      "id": "R9",
+      "requirement": "The setting is never exported: `pathFieldsPerSide` is in `configTransfer.ts`'s `NEVER_TRANSFERRED`, so *Export settings* does not carry it.",
+      "howToVerify": "configTransfer.ts NEVER_TRANSFERRED gains the key `pathFieldsPerSide` with a reason string; a configTransfer test shows an export of a configuration where it differs from its default does not contain it (and/or an import refuses or ignores it by name, consistent with the file's existing keys).",
+      "anchors": ["configTransfer.ts", "NEVER_TRANSFERRED", "pathFieldsPerSide"]
+    },
+    {
+      "id": "R10",
+      "requirement": "Setup › This side lists the sides seen — one row per recorded side showing its label, its family and when it was last seen — and draws the `coai.pathFieldsPerSide` switch.",
+      "howToVerify": "The This side place of the Settings/panel page (panelView.ts or a new view module it calls) renders, from the `coai.sideSeen@…` records read from globalState, one row per side with label, family (a readable name for windows / posix is fine) and the last-seen date. The page also draws a control for `coai.pathFieldsPerSide` offering auto / always / never that writes the setting. The list is read from storage on render, not a constant.",
+      "anchors": ["This side", "label", "family", "last seen", "the switch"]
+    },
+    {
+      "id": "R11",
+      "requirement": "**Forget** per side: the row's Forget control posts the side KEY, and the host removes that side's record.",
+      "howToVerify": "Each listed side has a Forget button (a real `<button type=\"button\">`) whose posted message carries the side's key (the `<sideKey>` part of, or the whole, `coai.sideSeen@<sideKey>`) — never the label, which is not unique. The extension host handles that message by removing exactly that record from globalState (`update(key, undefined)` or equivalent) and re-rendering. A Forget that posts the label, or a host that does not delete the record, is not_met.",
+      "anchors": ["Forget", "posts the side key", "globalState"]
+    },
+    {
+      "id": "R12",
+      "requirement": "A local window names itself with `thisSideLabel`, not *\"this machine\"*.",
+      "howToVerify": "The This side place no longer falls back to the literal 'this machine' for a local window (P: panelView.ts:1497 `state.side.length === 0 ? 'this machine' : state.side`); a local Windows window reads 'Windows' (macOS/Linux by their names), using the existing `thisSideLabel` (consultantSides.ts) rather than a second copy of the rule. Any existing test that asserted 'this machine' is updated to the new name — that is the one assertion change the statement implies.",
+      "anchors": ["thisSideLabel", "this machine", "panelView.ts"]
+    },
+    {
+      "id": "R13",
+      "requirement": "The statement's tests exist: the 2.1 unit RED; a page test RUN through `runPanel` + `pageTree` in which two seeded records draw two rows and Forget posts the side key; and a `test:host` scenario in which activation leaves a `coai.sideSeen@…` record for the test window's side.",
+      "howToVerify": "(a) A unit test file over sidesSeen.ts asserts the two REDs of 2.1. (b) A page test drives the page with `runPanel` (src/test/panelPageHarness.ts) and reads it with `pageTree` — no regex over the HTML string — seeds two side records, asserts two rows, clicks/fires Forget and asserts the posted message carries the side key. (c) A scenario under src/test/host/ registered in scenarios.ts asserts that after activation the extension's globalState holds a `coai.sideSeen@` key for this window's side. Any of the three missing is `partial`; a page test that regex-matches HTML does not count for (b).",
+      "anchors": ["runPanel", "pageTree", "src/test/host/scenarios.ts", "coai.sideSeen@"]
+    },
+    {
+      "id": "R14",
+      "requirement": "Process evidence: each story RED first with its failure message recorded, then green, then break-it on the line that decides; and the review_plan / review_code / consultation / PR steps reported as skipped because unavailable.",
+      "howToVerify": "Read the candidate's commit message(s) and final summary: for each of 2.1–2.4 a concrete RED failure text (assertion output, not a claim), a green result, and a break-it naming the deciding line and the red it produced; the suite/lint result; and an explicit sentence that the gate, consultation and PR steps were skipped as unavailable. `test:host` cannot run in the measurement environment — a candidate that says so (rather than claiming it ran) satisfies this for 2.4's scenario.",
+      "anchors": ["RED first", "break-it", "skip them and say so"]
+    }
+  ]
+}

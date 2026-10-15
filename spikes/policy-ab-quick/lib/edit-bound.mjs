@@ -1,5 +1,5 @@
-// Pure verdict of the test-only main-session edit bound (arm B). Copied into the tree as
-// .claude/hooks/edit-bound-core.mjs, so it imports nothing from the spike.
+// Pure verdict of the per-request bound on the main session's edits. Copied into the tree as
+// .claude/hooks/edit-bound-core.mjs, so it imports nothing outside this file.
 import path from 'node:path';
 
 export const MAX_FILES = 1;

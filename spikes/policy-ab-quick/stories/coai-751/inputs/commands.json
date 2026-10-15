@@ -1,0 +1,37 @@
+{
+  "source": "src_vs_code/package.json at P (af7f2856): precompile = pretypecheck = `npm run prepare:gate` (= node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs); compile = `npm run clean && tsc -p ./`; typecheck = `tsc -p ./ --noEmit`; lint = `eslint src`; test = `npm run compile && node scripts/run-tests.mjs` (one `node --test` batch over every out/test/*.test.js, then each src/test/*.test.mjs in its own process). test:host / test:seam / test:contract are NOT used. tsconfig: rootDir src, outDir out, `noEmitOnError: true`, strict, noUnusedLocals/Parameters, exactOptionalPropertyTypes. Lockfile pins typescript 6.0.3, eslint 10.11.0, @types/vscode 1.134.0. Local node v24.18.0.",
+  "cwd": "src_vs_code",
+  "shell": false,
+  "commands": {
+    "restore": { "exe": "npm", "args": ["ci", "--no-audit", "--no-fund"], "resolvedBy": "lib/commands.mjs toInvocation -> lib/proc.mjs npmInvocation: process.execPath + <dirname(process.execPath)>/node_modules/npm/bin/npm-cli.js (no shell; npm.cmd cannot be spawned without one)" },
+    "prepareGenerated": {
+      "exe": "node",
+      "args": ["<harness script, TO BE WRITTEN>", "<tree root>"],
+      "requires": "restore not needed; run before typecheck/compile in every scoring copy",
+      "recipe": "Write the four GIT-IGNORED modules src_vs_code/src/generated/{gateRule,consultantRule,featureRule,questionRule}.ts exactly as P's prepareGate() does, WITHOUT its `rules.mjs check` step: import { gateBody, documentBody, callerBody, consultantBody, featureBody, questionBody, SOURCE, DOCUMENT_SOURCE, CALLER_SOURCE, CONSULTANT_SOURCE, FEATURE_SOURCE, QUESTION_SOURCE } from '<tree>/src_vs_code/scripts/prepare-gate.mjs' (importing does not run it — it runs only when argv[1] is itself); read each SOURCE from '<tree>/<SOURCE>' (the mount at P's pin bb022429); write gateRule.ts = '// Generated from pinned conventions; do not edit.\\n' + 'export const GATE_RULE = ' + JSON.stringify(gateBody(src)) + ';\\n' + 'export const DOCUMENT_RULE = ' + JSON.stringify(documentBody(doc)) + ';\\n' + 'export const CALLER_RULE = ' + JSON.stringify(callerBody(caller)) + ';\\n', and consultantRule.ts / featureRule.ts / questionRule.ts = the same header + 'export const CONSULTANT_RULE|FEATURE_RULE|QUESTION_RULE = ' + JSON.stringify(<body>(src)) + ';\\n'. Without these four files claudeSnippet.ts does not compile and, under noEmitOnError, NOTHING is emitted. src/securityLane.generated.ts is tracked at P and needs nothing.",
+      "why": "prepare:gate runs `.agents/conventions/tools/rules.mjs check --repo <root>`, which (conventions bb022429, tools/lib/rule-cli.mjs:80-90) requires the mount to be a git checkout whose HEAD equals the outer index's gitlink and has no uncommitted changes, CLAUDE.md to be exactly '@AGENTS.md', and the conventions' own node_modules. A cell tree (archive-extracted mount, fresh `git init`, arm overlay written into the mount) fails every one of those, so `npm run compile`, `npm run typecheck` and `npm test` FAIL in a cell at precompile — and prepareGate() deletes src/generated/gateRule.ts BEFORE the check throws."
+    },
+    "typecheck": { "exe": "node", "args": ["node_modules/typescript/bin/tsc", "-p", "./", "--noEmit"], "requires": "prepareGenerated" },
+    "compile": { "exe": "node", "args": ["node_modules/typescript/bin/tsc", "-p", "./"], "requires": "prepareGenerated; delete out/ first (the npm script's `clean`)" },
+    "lint": { "exe": "node", "args": ["node_modules/eslint/bin/eslint.js", "src"], "requires": "prepareGenerated (type-aware rules, incl. @typescript-eslint/no-floating-promises — relevant to 2.2's unawaited stamp)" },
+    "testAll": { "exe": "node", "args": ["--test", "out/test/*.test.js"], "requires": "compile first; node 24 expands the glob itself" },
+    "testSources": {
+      "exe": "node",
+      "args": ["--test", "src/test/<name>.test.mjs"],
+      "requires": "one process per file, as scripts/run-tests.mjs does; OPTIONAL",
+      "note": "The 10 source tests at P are tests of scripts; prepareGate.test.mjs, claudeAdapter.test.mjs and theBundleLoads.test.mjs read the conventions mount / build the bundle and are expected to fail in a cell-shaped tree. Baseline them on the reference in the same environment or leave them out of the own-suite verdict."
+    },
+    "testOneFile": {
+      "exe": "node",
+      "args": ["--test", "--test-reporter=junit", "--test-reporter-destination=<junit-output.xml>", "out/test/<name>.test.js"],
+      "requires": "compile first",
+      "holdoutTargets": ["out/test/configTransfer.test.js", "out/test/panelView.test.js"]
+    }
+  },
+  "notes": [
+    "noEmitOnError is ON in this package (unlike the previous story): a materialised hold-out with a type error emits NOTHING, so `compile-error` is the verdict and there is no stale-but-runnable out/ to fall back on. Still delete out/test/<name>.test.js before compiling so a previous emit cannot stand in.",
+    "Own-suite baselining is mandatory here: several compiled tests at P read the conventions mount (featureSnippet, projectIdentity, questionSnippet, snippetDiscovery, snippetVersion, workflowGuards — the compiled test files at P that mention '.agents/conventions' or 'generated/'; not each verified to fail), and the arm overlay rewrites two mount files. Run the reference (P + S's diff) through the identical copy + prepareGenerated + compile + testAll pipeline and score a candidate's own suite as 'no NEW failure against the reference's failing set', not as 'zero failures'.",
+    "Cells (not this file's scope, but the same cause): an agent that runs `npm run compile` / `npm test` in a cell will hit prepare:gate's refusal and lose src/generated/gateRule.ts; whatever the harness does about it (keep a real submodule checkout at the pin with its node_modules and commit the overlay inside it with the gitlink moved, or pre-generate and accept the refusal) must be identical for both arms and probed BEFORE generation 1 — the previous pilot's generation 1 was voided by exactly this class of environment failure.",
+    "eslint at P is type-aware (`no-floating-promises`): a candidate that calls an async stamp from activate() without `void` or `.catch` is red on lint — that is the repository's own enforcement of 2.2, not a hold-out."
+  ]
+}

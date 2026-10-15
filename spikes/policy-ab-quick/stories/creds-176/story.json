@@ -1,0 +1,18 @@
+{
+  "repo": "dew_flow_creds_for_devs",
+  "pr": 176,
+  "repoClone": "D:/rsd/dew_flow_creds_for_devs",
+  "P": "9f62e4db07a05e247b0fa25ea380cac21909b323",
+  "S": "9369b4d3093c0852b9969b53ba8c1912141398db",
+  "layout": "native",
+  "mount": ".claude/rules/shared",
+  "planFile": "todo/PLAN_typed_stored_secrets.md",
+  "inputs": "inputs",
+  "struckFrom": "statement.md",
+  "srcDir": "src_vs_code",
+  "prompt": "prompt.md",
+  "parallelHint": false,
+  "defaultRunsRoot": "D:/rsd/_q1",
+  "canarySlug": "D--rsd-dew-flow-creds-for-devs",
+  "scrubLabel": "<creds>"
+}

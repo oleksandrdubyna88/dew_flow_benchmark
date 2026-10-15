@@ -4,13 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const SLUG = 'D--rsd-dew-flow-creds-for-devs';
+export const DEFAULT_SLUG = 'D--rsd-dew-flow-creds-for-devs';
 export const PREFIX = 'scratch-note-';
 
-/** Pure: the three intended targets for a home dir. */
-export function canaryTargets(home, rand = () => randomBytes(4).toString('hex'), token = () => randomBytes(16).toString('hex')) {
+/** Pure: the three intended targets for a home dir and a story's Claude project slug. */
+export function canaryTargets(home, rand = () => randomBytes(4).toString('hex'), token = () => randomBytes(16).toString('hex'), slug = DEFAULT_SLUG) {
   const base = path.join(home, '.claude');
-  const dirs = [path.join(base, 'projects', SLUG), path.join(base, 'projects', SLUG, 'memory'), path.join(base, 'file-history')];
+  const dirs = [path.join(base, 'projects', slug), path.join(base, 'projects', slug, 'memory'), path.join(base, 'file-history')];
   return dirs.map(dir => ({ dir, path: path.join(dir, `${PREFIX}${rand()}.md`), token: token(), status: 'pending' }));
 }
 
@@ -20,8 +20,8 @@ export function isDeletable(file, home) {
   return !rel.startsWith('..') && !path.isAbsolute(rel) && path.basename(file).startsWith(PREFIX);
 }
 
-export function plant(manifestPath, home = os.homedir()) {
-  const planted = canaryTargets(home);
+export function plant(manifestPath, home = os.homedir(), slug = DEFAULT_SLUG) {
+  const planted = canaryTargets(home, undefined, undefined, slug);
   fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
   const write = () => fs.writeFileSync(manifestPath, `${JSON.stringify({ createdUtc: new Date().toISOString(), planted }, null, 2)}\n`);
   write(); // the manifest exists before any canary does

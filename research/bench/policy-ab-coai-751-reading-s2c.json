@@ -1,0 +1,786 @@
+{
+ "codexVersion": "codex-cli 0.160.0",
+ "codexModel": null,
+ "sanityGate": {
+  "referenceMet": 11,
+  "threshold": 11,
+  "pass": true
+ },
+ "sources": {
+  "planted": {
+   "counts": {
+    "met": 10,
+    "partial": 3,
+    "not_met": 1,
+    "unresolved": 0
+   },
+   "wallSeconds": 82.719,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "partial",
+     "evidence": "candidate.diff:412,445,568-586",
+     "note": "Required exports and injected time are correct, but the module also performs storage I/O through store.update."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:445-451,860-876",
+     "note": "Uses injected now and lastSeen with a 90-day window; tests cover both families and expired WSL records."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:438-457,573-574,866-877,1174-1187",
+     "note": "Counting and pruning share the window; activation removes expired records from storage. Tests preserve recent records."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:412-423,569,880-895",
+     "note": "Reads this side's stored record; first stamps write now, same-day stamps write nothing, and one-day boundary stamps succeed."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:95,398-404,569-571",
+     "note": "Activation uses existing thisSide identity, sideKey, platform family and thisSideLabel, writing only when stampSide returns a value."
+    },
+    {
+     "id": "R6",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:84,95-99",
+     "note": "Activation is async and explicitly awaits stampThisSide, delaying subsequent activation work until stamping and pruning finish."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-23",
+     "note": "Declares a described string setting with exactly auto, always and never, application scope, and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:136,149,162,175,188,703-727; summary.txt:49",
+     "note": "All five help languages describe the switch and its choices; help coverage is reported green."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:38,682-689",
+     "note": "NEVER_TRANSFERRED includes the setting with a reason; export test excludes its non-default value."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:209,280,623-647,1065-1074",
+     "note": "Each render reads storage; rows show label, family and date. Three-choice control posts a plain setting write."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:229-234,582-586,644,1040-1046",
+     "note": "Forget posts keys and deletes other sides, but the current side lacks a button and its deletion is explicitly refused."
+    },
+    {
+     "id": "R12",
+     "verdict": "met",
+     "evidence": "candidate.diff:249,270-289,398-399,823-827",
+     "note": "Local naming reuses thisSideLabel; the previous this machine assertion is updated."
+    },
+    {
+     "id": "R13",
+     "verdict": "met",
+     "evidence": "candidate.diff:739-751,786-805,860-877,1005-1046",
+     "note": "Includes both unit RED cases, runPanel/pageTree tests for two rows and Forget's key, and a registered activation host scenario."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:12-15,28-33,47-51,68-74,142; candidate.diff:827",
+     "note": "RED/green/break-it and suite/lint evidence exists. Required unavailable-step skips are absent; the modified legacy page test still regex-matches HTML."
+    }
+   ]
+  },
+  "reference": {
+   "counts": {
+    "met": 11,
+    "partial": 3,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 69.058,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "partial",
+     "evidence": "candidate.diff:412,445,545-593",
+     "note": "Both signatures and injected time are correct, but the module also performs storage reads, writes, and deletions, violating module purity."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:354,445-451,860-877",
+     "note": "Uses lastSeen and injected now with a 90-day window; tests cover both families and exclusion of a 91-day-old record."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:438-457,573-574,866-877,1167-1180",
+     "note": "Counting and pruning share KNOWN_FOR_MS; storage deletes expired records, and tests preserve recent records."
+    },
+    {
+     "id": "R4",
+     "verdict": "met",
+     "evidence": "candidate.diff:412-423,569,880-905",
+     "note": "Reads this side's stored record; first, unreadable, same-day, and exactly-one-day cases are covered."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:94-96,398-404,569-571",
+     "note": "Activation reuses thisSide and sideKey, derives family and thisSideLabel, and writes only when stampSide returns a stamp."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:81-83,94-98,105-106",
+     "note": "Activation remains synchronous and invokes stampThisSide with void; subsequent activation work does not wait for storage operations."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-24",
+     "note": "Declares a described string setting with exactly auto, always, never, application scope, and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:136,149,162,175,188,703-717; summary.txt:49",
+     "note": "All five help files describe the switch and its three choices; help coverage is reported green."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:35-38,683-689",
+     "note": "NEVER_TRANSFERRED includes pathFieldsPerSide with a reason; an export test excludes its nondefault value."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:208-209,280,623-647,1058-1065",
+     "note": "Every render reads stored sides; rows show label, family, and date, and the three-choice switch posts a setting write."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:229-235,582-586,641-647,1040-1047",
+     "note": "Other sides have real buttons posting keys and deleting records; the current side has no Forget button and host deletion is refused."
+    },
+    {
+     "id": "R12",
+     "verdict": "met",
+     "evidence": "candidate.diff:249,270-271,288-289,823-827",
+     "note": "Local naming uses thisSideLabel, and the former this-machine assertion is updated."
+    },
+    {
+     "id": "R13",
+     "verdict": "met",
+     "evidence": "candidate.diff:739-751,786-805,860-877,984-985,1004-1047",
+     "note": "Unit RED cases, two-record runPanel/pageTree rendering and Forget messaging, and a registered activation host scenario are present."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:12-15,28-33,47-51,68-74,142; candidate.diff:823-829",
+     "note": "Story RED/green/mutation and suite/lint evidence exists; unavailable-step skips are absent, test:host is claimed run, and an edited page test retains HTML regex."
+    }
+   ]
+  },
+  "c5": {
+   "counts": {
+    "met": 8,
+    "partial": 4,
+    "not_met": 2,
+    "unresolved": 0
+   },
+   "wallSeconds": 68.29,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:409",
+     "note": "stampSide exports (stored, family, label, now), omitting the required side parameter. The module otherwise uses injected time and remains pure."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:445-446,471,877-895",
+     "note": "knownFamilies filters lastSeen against injected now; tests assert both families within 90 days and exclusion of a 91-day-old WSL record."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:364,432-441,533-536,887-895,1033-1051",
+     "note": "Counting and pruning share the window; activation deletes stale storage keys. Tests retain recent records and prune stale ones."
+    },
+    {
+     "id": "R4",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:429,947-950",
+     "note": "A changed label bypasses the daily limit; a test explicitly requires another write after one millisecond."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:80,531-536,675-679,687-689",
+     "note": "Activation reuses sideKey(thisSide(...)), hostFamily and thisSideLabel, then stamps the side-specific globalState key only when a value is returned."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:70-71,80,687-692",
+     "note": "Activation remains synchronous; stampAtActivation starts the write and pruning promise without awaiting or returning it."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:21-36",
+     "note": "Manifest declares a described string setting with exactly auto, always, never, application scope, and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:124,146,168,190,212; summary.txt:4-5",
+     "note": "All five help languages describe the switch and its three choices. Reported suite failures concern unrelated repository checks."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:50,737-754",
+     "note": "NEVER_TRANSFERRED includes a reason; tests assert a nondefault value is excluded from export and refused during import."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:244,594-635,703-711,1155-1165",
+     "note": "Each render reads stored sides; rows show label, family and UTC date. The three-choice switch posts the selected setting value."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:251-257,548-550,629-634,1132-1139",
+     "note": "Available Forget buttons post side keys and trigger deletion plus rendering, but the current side's row deliberately has no Forget button."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:319-320,679,709,1149-1152",
+     "note": "Production wiring supplies thisSideLabel, but the literal 'this machine' fallback remains and a new test explicitly preserves it."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:880-895,800-805,839-854,1109-1139",
+     "note": "Unit and registered host scenarios exist. Forget runs through runPanel, but the two-row assertion parses static markup without running the page."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:4-12,32",
+     "note": "Reports checks, mutations and unavailable host execution, but lacks concrete RED failures for every story, complete break-it evidence, and explicit unavailable PR reporting."
+    }
+   ]
+  },
+  "c2": {
+   "counts": {
+    "met": 9,
+    "partial": 3,
+    "not_met": 2,
+    "unresolved": 0
+   },
+   "wallSeconds": 56.97,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:419,446",
+     "note": "Module is pure and injects time, but stampSide omits the required side parameter."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:382,446-447,474-475,598-606",
+     "note": "Uses injected now and lastSeen with the shared 90-day window; tests assert both families and exclusion of expired WSL."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:91-92,466-475,609-622",
+     "note": "Activation deletes expired storage keys; counting and pruning share isLive. Tests retain recent records and identify expired records for deletion."
+    },
+    {
+     "id": "R4",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:419-438,580-595",
+     "note": "stampSide always returns a record, including within one day. Separate isStampDue also permits immediate writes when label or family changes."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:68,81-89,379,409-410",
+     "note": "Activation reuses thisSide and sideKey, derives family and thisSideLabel, reads its own storage key, and conditionally writes through stampSide."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:62-70,81-94",
+     "note": "Activation remains synchronous; stamp and pruning writes use void without awaiting their promises."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-24",
+     "note": "Manifest declares a described string setting with exactly auto, always, never; application scope and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:125,138,151,164,177,532; summary.txt:17",
+     "note": "All five help languages describe the switch and its three choices. Help coverage is reported green."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:32-38,512-518",
+     "note": "NEVER_TRANSFERRED includes pathFieldsPerSide with a reason; an export test verifies a nondefault value is omitted."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:200-202,277-278,291-310,318-342",
+     "note": "Render reads live records from globalState, displays label, family and last-seen date, and provides all three modes through data-setting."
+    },
+    {
+     "id": "R11",
+     "verdict": "met",
+     "evidence": "candidate.diff:210-216,325-330,674-679",
+     "note": "Real buttons carry side keys; the host deletes the corresponding record and documents subsequent rendering. Page test verifies the posted key."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:200,257-268,682-688",
+     "note": "Provider supplies thisSideLabel and the local-name test passes, but sideHereName retains the literal 'this machine' fallback."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:598-622,644-679; summary.txt:29",
+     "note": "Unit and runPanel/pageTree tests exist, including two rows and Forget posting the key. The required host scenario is explicitly unbuilt."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:14-19,29,33",
+     "note": "Some RED, green, break-it and skip evidence exists; concrete per-story failures and deciding-line evidence are incomplete. PR skip is not explicit."
+    }
+   ]
+  },
+  "c1": {
+   "counts": {
+    "met": 8,
+    "partial": 5,
+    "not_met": 1,
+    "unresolved": 0
+   },
+   "wallSeconds": 72.43,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:513",
+     "note": "stampSide exports (stored, here, now), omitting the required separate side, family, and label parameters."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:523-524,550-551,955-968",
+     "note": "Uses injected now and lastSeen; tests cover both families within 90 days and exclusion at 91 days."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:400,543-546,660-667,959-977,1204-1210",
+     "note": "Counting and pruning share the window; storage deletes stale records and preserves records within it."
+    },
+    {
+     "id": "R4",
+     "verdict": "partial",
+     "evidence": "candidate.diff:491-519,1012-1031",
+     "note": "First and same-day stamps are tested, but changing the label bypasses throttling and writes again within a day."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:79,250-255,665-667",
+     "note": "Activation reuses sideKey(thisSide), host family, and thisSideLabel; writes only stampSide results under the side-specific storage key."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:69,79-83",
+     "note": "Synchronous activation starts stamping with void and continues without awaiting stamping or pruning."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-23",
+     "note": "String setting declares exactly auto, always, never, application scope, descriptions, and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:120,142,164,186,208,818-839; summary.txt:13",
+     "note": "All five help languages describe the switch and name its choices; coverage checks are extended and no new failures reported."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:32-38,786-804",
+     "note": "NEVER_TRANSFERRED includes a reason; tests exclude a nondefault value from export and refuse it during import."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:299-301,724-755,1304-1315,1388-1396",
+     "note": "Render reads stored sides, displays label, family, and last-seen date, and provides a tested three-choice setting control."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:313-317,676-679,718-721,1324-1334; summary.txt:23",
+     "note": "Other sides have real buttons posting keys and deleting records; the current side deliberately has no Forget and refuses deletion."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:250-255,775-776,1337-1342",
+     "note": "Production uses thisSideLabel and tests Windows, but the literal local 'this machine' fallback remains when sides state is absent."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:955-977,1267-1334,851-863,891-905",
+     "note": "Unit and executed page tests exist. Registered host scenario checks family count, not whether the record key belongs to this window."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:11-18,32-33; summary.txt:12: 'The exact messages are recorded in research/module_tests.md.'",
+     "note": "Suite, lint, and host limitation are reported; supplied files lack concrete per-story RED/break-it evidence and explicit unavailable PR skip."
+    }
+   ]
+  },
+  "c6": {
+   "counts": {
+    "met": 9,
+    "partial": 5,
+    "not_met": 0,
+    "unresolved": 0
+   },
+   "wallSeconds": 78.789,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:313,490,517",
+     "note": "Pure module exports both functions in the required argument order, with injected time and no runtime I/O."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:338,517-518,1001-1013",
+     "note": "Uses lastSeen and injected now; tests cover both families within 90 days and exclusion at 91 days."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:474,610-617,1007-1025,1316-1319",
+     "note": "Counting and pruning share KNOWN_FOR_MS; the store deletes stale keys and tests preserve recent records."
+    },
+    {
+     "id": "R4",
+     "verdict": "partial",
+     "evidence": "candidate.diff:440-450,1040-1057",
+     "note": "Normal daily throttling works, but changing family or label permits another write within the same day."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:41-109,609-617; summary.txt:9",
+     "note": "Activation passes the existing side identity, host family, thisSideLabel and time; the store writes only the returned record."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:41-109; summary.txt:9",
+     "note": "Synchronous activate starts stampThisSide with void; activation does not await its writes or pruning."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:8-25",
+     "note": "Manifest declares a described string setting with exactly auto, always, never; application scope and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:136,149,162,175,188,848; summary.txt:28",
+     "note": "All five help files explain the switch and three choices; help coverage is extended and checks reportedly pass."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:37,812-833",
+     "note": "NEVER_TRANSFERRED includes a reason; tests verify exclusion from nondefault exports and refusal on import."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:212-214,237-240,714-716,793-801,1527-1540",
+     "note": "Rendering reads stored sides, displays label, family and date, and provides a tested three-choice setting control."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:223-226,622-641,706-711,1506-1510",
+     "note": "Other sides have working key-based Forget buttons and deletion; the current side has no button and its deletion is refused."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:212,281-283,1513-1524",
+     "note": "Production supplies thisSideLabel, but the view retains the literal fallback and new tests explicitly preserve “this machine” assertions."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:1001-1013,1470-1475,1484-1510,860-872,936-939",
+     "note": "Unit and executed page tests exist; the registered host scenario matches family and label without asserting this window’s side key."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:23-30,34-36",
+     "note": "Suite/lint and unavailable gates are reported; concrete per-story RED failures, deciding-line break-it outputs, and an explicit unavailable PR skip are missing."
+    }
+   ]
+  },
+  "c3": {
+   "counts": {
+    "met": 8,
+    "partial": 5,
+    "not_met": 1,
+    "unresolved": 0
+   },
+   "wallSeconds": 75.477,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:379; candidate.diff:448-464",
+     "note": "stampSide omits the required side parameter. The supposedly pure module also performs storage writes through injected store methods."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:409-417,489-491,510-512,762-778",
+     "note": "Uses injected now and lastSeen with the shared 90-day constant; tests cover both families and exclusion of a 91-day-old record."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:420-422,448-455,769-778,840-846",
+     "note": "Activation invokes pruning that deletes expired storage keys. Tests verify stale WSL deletion and preservation of a recent other-side record."
+    },
+    {
+     "id": "R4",
+     "verdict": "partial",
+     "evidence": "candidate.diff:379-395,449,789-804",
+     "note": "Normal first and daily stamps work with per-side storage lookup, but changing label or family permits another write within one day."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:68,182-187,326,367-369,448-452",
+     "note": "Activation reuses sideKey(thisSide), hostFamily and thisSideLabel; writes its own prefixed globalState key only when stampSide returns a record."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:62-72",
+     "note": "Synchronous activation starts recordThisSide with void and continues immediately; storage writes and pruning are not awaited by activation."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-24",
+     "note": "Manifest declares a described application-scoped string setting with exactly auto, always and never; default is auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:100,113,126,139,152,705; summary.txt:5,10",
+     "note": "All five help files gain explanations of the switch and its three choices; help coverage gains the setting alias."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:32-37,680-691",
+     "note": "NEVER_TRANSFERRED includes pathFieldsPerSide with a reason; tests verify exclusion of a nondefault value and refusal on import."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:218-221,271-284,579-608,966-978",
+     "note": "Render reads stored sides and displays labels, families and last-seen dates; the three-choice control posts setting changes."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:231-234,438-464,600-608,943-949",
+     "note": "Other-side buttons post keys and trigger exact deletion plus rendering. The current side has no Forget button, and its deletion is refused."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:186,219,274,561-566,959-963",
+     "note": "Production state supplies thisSideLabel and the Windows test passes, but the helper retains the literal 'this machine' fallback."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:762-778,899-900,925-949; summary.txt:24-25",
+     "note": "Unit assertions, pageTree row checks and runPanel Forget interaction exist. The required registered test:host scenario is explicitly unwritten."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:11-17,23-25,31",
+     "note": "Some RED messages, green results and mutation claims are recorded. Per-story ordered evidence and concrete break failures are missing; PR remains owed."
+    }
+   ]
+  },
+  "c4": {
+   "counts": {
+    "met": 9,
+    "partial": 4,
+    "not_met": 1,
+    "unresolved": 0
+   },
+   "wallSeconds": 58.56,
+   "attempts": 1,
+   "verdicts": [
+    {
+     "id": "R1",
+     "verdict": "met",
+     "evidence": "candidate.diff:373-553; exported signatures at candidate.diff:447 and candidate.diff:505",
+     "note": "Pure module exports both functions with the required parameter order and injected time."
+    },
+    {
+     "id": "R2",
+     "verdict": "met",
+     "evidence": "candidate.diff:480-506; candidate.diff:1147-1177",
+     "note": "Both families count using lastSeen and injected now; tests cover recent Windows/WSL records and exclusion after 91 days."
+    },
+    {
+     "id": "R3",
+     "verdict": "met",
+     "evidence": "candidate.diff:493-501; candidate.diff:585-592; candidate.diff:1153-1169; candidate.diff:1317-1328",
+     "note": "Shared window governs counting and pruning; activation deletes expired storage entries. Tests retain records at the boundary."
+    },
+    {
+     "id": "R4",
+     "verdict": "not_met",
+     "evidence": "candidate.diff:447-457; candidate.diff:1090-1095",
+     "note": "Changed labels or families bypass the daily limit. A test explicitly requires rewriting the same side after only one second."
+    },
+    {
+     "id": "R5",
+     "verdict": "met",
+     "evidence": "candidate.diff:115-127; candidate.diff:423-429; candidate.diff:585-590",
+     "note": "Activation reuses sideKey(thisSide(...)), derives family and thisSideLabel, and stores stampSide's result under the prefixed side key."
+    },
+    {
+     "id": "R6",
+     "verdict": "met",
+     "evidence": "candidate.diff:107; candidate.diff:117-127",
+     "note": "Synchronous activation starts stampThisSide with void; subsequent activation work does not await stamping or pruning."
+    },
+    {
+     "id": "R7",
+     "verdict": "met",
+     "evidence": "candidate.diff:9-26",
+     "note": "Manifest declares a string with exactly auto, always, never, application scope, descriptions, and default auto."
+    },
+    {
+     "id": "R8",
+     "verdict": "met",
+     "evidence": "candidate.diff:160; candidate.diff:173; candidate.diff:186; candidate.diff:199; candidate.diff:212; candidate.diff:797-810",
+     "note": "All five help languages describe the setting and its three choices; help coverage assertions were added."
+    },
+    {
+     "id": "R9",
+     "verdict": "met",
+     "evidence": "candidate.diff:52-53; candidate.diff:763-783",
+     "note": "NEVER_TRANSFERRED includes a reason; tests verify exclusion from nondefault exports and refusal on import."
+    },
+    {
+     "id": "R10",
+     "verdict": "met",
+     "evidence": "candidate.diff:257-263; candidate.diff:663-685; candidate.diff:721-738; candidate.diff:1558-1587",
+     "note": "Rendering reads stored records, displays label, family and last-seen date, and provides the three-choice setting control with page-message coverage."
+    },
+    {
+     "id": "R11",
+     "verdict": "partial",
+     "evidence": "candidate.diff:280-286; candidate.diff:605-610; candidate.diff:664-670; candidate.diff:1497-1504",
+     "note": "Other sides have working key-based Forget buttons and deletion. The current side has no button, and the host refuses its deletion."
+    },
+    {
+     "id": "R12",
+     "verdict": "partial",
+     "evidence": "candidate.diff:259; candidate.diff:331-332; candidate.diff:752-753; candidate.diff:1522-1526",
+     "note": "Production rendering uses thisSideLabel, but the literal fallback remains and a new test explicitly preserves the old wording for fixtures."
+    },
+    {
+     "id": "R13",
+     "verdict": "partial",
+     "evidence": "candidate.diff:1147-1158; candidate.diff:1460-1494; candidate.diff:862-866; candidate.diff:900-923",
+     "note": "Unit and executed-page cases exist. Registered host scenario selects by family, allowing another same-family side to satisfy the assertion."
+    },
+    {
+     "id": "R14",
+     "verdict": "partial",
+     "evidence": "summary.txt:11-16; summary.txt:28-31; candidate.diff:941-950",
+     "note": "Suite/lint and skipped reviews are reported, but per-story concrete RED/break-it outputs are missing, PR unavailability is unspecified, and an HTML-regex page check remains."
+    }
+   ]
+  }
+ },
+ "plantedDefect": {
+  "item": "R6",
+  "verdict": "not_met",
+  "pass": true,
+  "plantedMet": 10,
+  "referenceMet": 11
+ }
+}

@@ -1,0 +1,123 @@
+{
+  "source": "S = 3ebf208c55c591103140cd2f3148c4869e14ff7b (squash of PR #751), parent P = af7f2856ecfaa732159db7dacda3255dfbde2334. PR commits (gh pr view 751): a56015c2 E2.1, 48956d2c E2.2, cf0e638e E2.3, 2f38dca1 E2.4, 32b071b1 docs, 6af34c8c fix (a refused side stamp is logged), 8d93b32b docs(plan), d24596fc merge of main, dd610613 fix (an impossible or far-future side time). Paths relative to the repo root. Written AFTER checklist.json.",
+  "materialisationRule": "Only entries with kind \"test\" are materialised over a copy of the candidate tree, one file at a time (S's whole version of the file replaces the candidate's), compiled, and the compiled out/test/<name>.test.js run alone. Entries of kind \"unit-bound\" are S's own tests of S's own module API: they are NOT materialised (they import names the statement does not fix and fail to compile against any other design — tsconfig has noEmitOnError, so one such import error emits nothing at all); their behaviour is scored through the checklist. Entries of kind \"host\" need a VS Code extension host (npm run test:host) and are never run.",
+  "notes": [
+    "The statement fixes only two names of the module: `stampSide(stored, side, family, label, now)` and `knownFamilies(records, now)` — plus `sidesSeen.ts`, `coai.sideSeen@`, `coai.pathFieldsPerSide`, `NEVER_TRANSFERRED`, `thisSideLabel`. Everything else S's unit and page tests import (SIDE_SEEN_PREFIX, KNOWN_FOR_MS, STAMP_EVERY_MS, SideRecord, SeenSide, SidesView, SideHere, SideStore, sideSeenKey, seenSides, prunedKeys, sidesIn, stampThisSide, forgetSide, sideHereOf, pathFieldsModeOf, twoPathFields, seenDay, PanelState.sides) is S's design. The record shape {family, label, firstSeen, lastSeen} and the family values windows/posix are in P's plan Design (a) (lines 125-128), visible to the agents but NOT in the statement — the same convention as the previous story (a name from P's plan outside the statement binds the test).",
+    "Neither fix commit's behaviour is fixed by the statement. 6af34c8c: the statement says only 'never awaited by activation' (2.2) — nothing about what happens to a rejection of the unawaited stamp; logging it is beyond-spec. dd610613: the statement says nothing about malformed or implausible stored times (the closest is P's plan Design (a)/Growth, also silent on it); beyond-spec. 6af34c8c ALSO changed the four existing call sites in sidesSeenStore.test.ts to pass a 4th `failed` reporter argument — that binding is beyond-spec as well.",
+    "Two files may be materialised alone into a candidate copy: src_vs_code/src/test/configTransfer.test.ts and src_vs_code/src/test/panelView.test.ts. Both import only names that exist at P, and each differs from P by one test (added / one assertion reversed). Materialising them also re-runs their P tests (21 and 84), which are spec-implied regression guards ('never exported', and the panel unchanged except the side's name).",
+    "Caveat, panelView.test.ts: its `state()` fixture (line 22 at P) builds a full PanelState literal. A candidate that adds a REQUIRED field to PanelState (S added `sides?:` optional) gets a TS2741 inside the hold-out file — that is an interface artefact, not a defect: read the attributed diagnostics before scoring compile-error. Also the reversed assertion is pinned to P's markup `This side is <b>…</b>` with the label filled by `thisSideLabel(undefined, '', process.platform)` — a candidate that rewords that sentence fails for an interface reason; check the junit message.",
+    "Caveat, configTransfer.test.ts: the new test reads the CANDIDATE's package.json (`shipped()`). If the candidate never declares `coai.pathFieldsPerSide`, `exportedSettings` cannot export it and the test passes vacuously — R7 catches that, not the hold-out.",
+    "helpCoverage.test.ts is NOT materialisable although it imports only P names: (a) its new test asks every language for S's on-page labels ('**Path fields per side**', '**Forget**', '*Automatic*', '*Always two*', '*Always one*', '90') — none fixed by the statement; (b) its SETTING_ALIAS row 'coai.pathFieldsPerSide': 'path fields per side' binds P's pre-existing 'every setting is described in the help' test to S's phrase. NB P's own version of that pre-existing test FORCES every candidate that declares the setting to add a SETTING_ALIAS row of its own — an edit of a test file the statement implies (R8).",
+    "Skipped: src_vs_code/src/test/host/sideSeenScenario.ts and the scenarios.ts registration — they need a VS Code extension host (test:host). The scenario is the statement's 2.4 test:host scenario (spec-implied in intent) but reads the registry through `CoaiExports.sidesSeen`, an activate() return value S introduced for it (interface-bound). Scored through R13(c) only."
+  ],
+  "files": [
+    {
+      "path": "src_vs_code/src/test/configTransfer.test.ts",
+      "status": "changed",
+      "kind": "test",
+      "addedIn": "cf0e638e (E2.3)",
+      "tests": [
+        {
+          "name": "how many fields a path setting shows is never exported — it is about this machine's sides (E2.3)",
+          "class": "spec-implied",
+          "reason": "Statement 2.3: 'never exported (`configTransfer.ts` `NEVER_TRANSFERRED`)'. Uses only P helpers (`exportedSettings`, `shipped()`, `base`) and the setting name the statement fixes; the premise (maxConcurrency exported) guards against an empty export."
+        },
+        {
+          "name": "pre-existing (P): the 21 other tests of the file",
+          "class": "spec-implied",
+          "reason": "Unchanged P assertions over export/import; regression guard."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/panelView.test.ts",
+      "status": "changed",
+      "kind": "test",
+      "addedIn": "2f38dca1 (E2.4)",
+      "tests": [
+        {
+          "name": "with the switch off the panel says the settings are shared, and does not tick the box (one assertion reversed: a local window says `This side is <b>${thisSideLabel(undefined, '', process.platform)}</b>`, never `this machine`)",
+          "class": "spec-implied",
+          "reason": "Statement 2.4: 'a local window names itself (`thisSideLabel`, not *\"this machine\"*)'. Imports `thisSideLabel` (consultantSides.ts at P). Drives `everyPageHtml(state({ side: '', perSide: false }))` — a local window with no side list — so a candidate whose fallback for an empty side still prints 'this machine' fails, which is the defect the statement names. Interface risk noted above (PanelState required fields; P's sentence markup)."
+        },
+        {
+          "name": "pre-existing (P): the 84 other tests of the file",
+          "class": "spec-implied",
+          "reason": "Unchanged P assertions over the panel; regression guard."
+        }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/sidesSeen.test.ts",
+      "status": "added",
+      "kind": "unit-bound",
+      "addedIn": "a56015c2 (E2.1); tests 8-9 added in 2f38dca1; test 10 added in dd610613",
+      "tests": [
+        { "name": "a Windows and a WSL record seen within 90 days make both families known", "class": "interface-bound", "reason": "Behaviour is verbatim the 2.1 RED (spec-implied), but the records are typed `SideRecord` (an S export) with fields firstSeen/lastSeen/family/label (P's plan Design (a), not the statement), and the result is spread as an iterable." },
+        { "name": "a side seen 91 days ago is pruned and no longer known — one seen exactly 90 days ago still is", "class": "interface-bound", "reason": "The 91-day pruning is the 2.1 RED, but it is asserted through `prunedKeys(entries, now)` / `seenSides` / `sideSeenKey` / `KNOWN_FOR_MS` — S's API. The inclusive exactly-90-days boundary is S's choice; the statement fixes 'within 90 days' and '91-day-old … pruned' only." },
+        { "name": "a side never seen is stamped now, under its own key", "class": "interface-bound", "reason": "stampSide's signature is fixed; its return shape `{ key: 'coai.sideSeen@…', record }` is not. firstSeen = now comes from Design (a)'s record shape." },
+        { "name": "a side is stamped at most once a day, and a later stamp keeps when it was first seen", "class": "interface-bound", "reason": "Once a day is statement 2.2 (spec-implied behaviour); bound to `STAMP_EVERY_MS`, the return shape, the exactly-one-day boundary, and 'keeps firstSeen' (Design (a), not the statement)." },
+        { "name": "whatever else is stored under a side key reads as no record: stamped afresh, pruned, never listed", "class": "beyond-spec", "reason": "Robustness to malformed stored values — not in the statement (P's newTags.ts precedent, P's plan Design (a) does not say it either)." },
+        { "name": "only keys of the side registry are read or pruned — every other key of the store is left alone", "class": "interface-bound", "reason": "Pruning only the registry's own records is implied by 'pruning'; asserted through `prunedKeys` / `seenSides` (S's API)." },
+        { "name": "the sides seen are listed newest first, each with the side it belongs to", "class": "beyond-spec", "reason": "The statement fixes the columns (label, family, last seen), not an order." },
+        { "name": "the switch: Automatic gives two fields once both families were seen within 90 days, counting this window itself", "class": "beyond-spec", "reason": "What `auto` decides is Design (a)/(d) and E4's concern; E2's statement only declares and draws the switch. `twoPathFields` and 'counting this window itself' are S's." },
+        { "name": "the switch reads auto from anything but always or never", "class": "beyond-spec", "reason": "Normalisation of a stored value (`pathFieldsModeOf`) — not in the statement." },
+        { "name": "a stored time outside what a Date can hold, or more than a day ahead, reads as no record: never listed, never known, pruned, stamped over", "class": "beyond-spec", "reason": "Fix commit dd610613 (code round). The statement says nothing about implausible stored times." }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/sidesSeenStore.test.ts",
+      "status": "added",
+      "kind": "unit-bound",
+      "addedIn": "48956d2c (E2.2); test 6 added and the 4 call sites given a 4th argument in 6af34c8c",
+      "tests": [
+        { "name": "activation stamps this side, and the store then lists it beside the other side it already held", "class": "interface-bound", "reason": "2.2's stamp (spec-implied behaviour) through `stampThisSide(store, here, now, failed)` + `sidesIn` + a `SideStore` of three Memento members — S's API, and the 4th `failed` argument is the beyond-spec 6af34c8c reporter." },
+        { "name": "a second activation the same day writes nothing at all", "class": "interface-bound", "reason": "'at most once a day per side' (spec-implied); bound to `stampThisSide` and to the exact write count (1) of a first stamp — i.e. to pruning writing nothing when nothing is stale." },
+        { "name": "a stamp prunes the sides not seen for 90 days, and leaves every other key of the store alone", "class": "interface-bound", "reason": "Pruning is in the statement; doing it inside the activation stamp is S's choice (the statement does not say when pruning runs)." },
+        { "name": "Forget removes another side's record — and never this window's own, which is in use now", "class": "beyond-spec", "reason": "Forget removing a record is spec-implied, but the assertion's point — refusing this window's own side, `forgetSide` returning a boolean — is not in the statement." },
+        { "name": "a window names its side as the This side page does: a local Windows window is Windows, never \"this machine\"", "class": "interface-bound", "reason": "thisSideLabel for a local Windows window (spec-implied, 2.4) through S's `sideHereOf(side, platform) -> { key, family, label }`." },
+        { "name": "a store that refuses the stamp is reported, never thrown — and the next activation with a working store still records the side", "class": "beyond-spec", "reason": "Fix commit 6af34c8c. The statement says only 'never awaited by activation' (2.2); what happens to a rejection is not fixed." }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/sidesSeenOnThisSide.test.ts",
+      "status": "added",
+      "kind": "unit-bound",
+      "addedIn": "2f38dca1 (E2.4); test 7 added in dd610613",
+      "tests": [
+        { "name": "two sides seen draw two rows — name, the paths they spell, the day last seen — this window first and marked", "class": "interface-bound", "reason": "'two seeded records draw two rows' is the statement's page test, but rows are found as `tr[data-side]`, fed through `PanelState.sides: SidesView`, and the cells are pinned to S's text ('Windows (this window)', 'WSL / Linux', `seenDay`, no Forget on this window's row)." },
+        { "name": "Forget posts the side's key — and this window's own row offers none", "class": "interface-bound", "reason": "'Forget posts the side key' is the statement's; bound to the command name `forgetSide` and the data-command/data-id convention; 'own row offers none' is beyond-spec." },
+        { "name": "a local window names itself by its operating system, never \"this machine\"", "class": "interface-bound", "reason": "Spec-implied behaviour (2.4) asserted through `SidesView.here.label` and the sentence 'This side is Windows.'." },
+        { "name": "the switch writes coai.pathFieldsPerSide as a plain, shared setting", "class": "interface-bound", "reason": "'… and the switch' (2.4); bound to a control with data-setting=pathFieldsPerSide and value 'always' (P's segmentedRadio convention) drawn only when `PanelState.sides` is given." },
+        { "name": "the page says what the switch decides today, and why", "class": "beyond-spec", "reason": "S's explanatory sentences ('two fields — … within 90 days', 'Always two is chosen') — not in the statement." },
+        { "name": "a side stamped by another window appears at the next render — the list is drawn from what the render is handed", "class": "interface-bound", "reason": "Listing what is stored (implied) via S's SidesView input; holds for any view that renders its input." },
+        { "name": "a stored record with a time no Date can hold is ignored, and the page still opens", "class": "beyond-spec", "reason": "Fix commit dd610613. Not in the statement." }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/helpCoverage.test.ts",
+      "status": "changed",
+      "kind": "unit-bound",
+      "addedIn": "cf0e638e (E2.3)",
+      "tests": [
+        { "name": "every language describes the sides seen and the path-fields switch, by the controls' own English labels (paths per side E2.3)", "class": "interface-bound", "reason": "'described in the five help languages' is the statement's; the asserted strings are S's UI labels and the article id 'settings-and-the-server' (P) — a candidate with other labels fails for an interface reason." },
+        { "name": "SETTING_ALIAS row 'coai.pathFieldsPerSide': 'path fields per side' (feeds P's 'every setting is described in the help')", "class": "interface-bound", "reason": "Binds a pre-existing P test to S's phrase. P's own version of that test forces the candidate to add an alias of its own." }
+      ]
+    },
+    {
+      "path": "src_vs_code/src/test/host/sideSeenScenario.ts",
+      "status": "added",
+      "kind": "host",
+      "addedIn": "48956d2c (E2.2)",
+      "tests": [
+        { "name": "activation leaves a coai.sideSeen record for this window's side, fresh, with its family and its name (registered in host/scenarios.ts)", "class": "interface-bound", "reason": "The statement's 2.4 test:host scenario, read back through `CoaiExports.sidesSeen` (activate's new return value, S's). Needs a VS Code host — skipped; scored through R13(c)." }
+      ]
+    }
+  ],
+  "summary": {
+    "materialisable": ["src_vs_code/src/test/configTransfer.test.ts", "src_vs_code/src/test/panelView.test.ts"],
+    "newTestsByClass": { "spec-implied": 2, "interface-bound": 16, "beyond-spec": 9 },
+    "newTestsByClassNote": "Over S's 27 new or changed test entries outside test/host (26 test cases + the helpCoverage SETTING_ALIAS row): spec-implied = configTransfer 1 + panelView 1 (both materialisable); interface-bound = sidesSeen 5 + sidesSeenStore 4 + sidesSeenOnThisSide 5 + helpCoverage 2 (its new test and the alias row); beyond-spec = sidesSeen 5 + sidesSeenStore 2 + sidesSeenOnThisSide 2. From the two fix commits: 3 tests, all beyond-spec (sidesSeen 'a stored time outside…', sidesSeenStore 'a store that refuses the stamp…', sidesSeenOnThisSide 'a stored record with a time no Date can hold…'), plus 6af34c8c's 4th-argument edit of four existing calls. The host scenario (1, interface-bound) is skipped. Pre-existing P tests re-run by materialisation: 21 (configTransfer) + 84 (panelView).",
+    "weakness": "Only 2 spec-implied hold-outs, both thin (an export filter and one label). Every behaviour the story is really about — the 90-day window, pruning, the once-a-day stamp, never awaited, Forget — is S-API-bound and must be scored by the reading (R1-R6, R10-R11). This is a property of a story whose statement fixes two function names and no return shapes, not of the classification."
+  }
+}

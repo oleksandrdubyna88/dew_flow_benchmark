@@ -12,17 +12,18 @@ export function splitSections(diffText) {
 }
 
 /** Overlay paths and documentation: not part of the candidate code. */
-export function isExcludedPath(p) {
-  return /^(\.claude|todo|docs|research)\//.test(p) || /\.md$/i.test(p);
+export function isExcludedPath(p, extraPrefixes = []) {
+  return /^(\.claude|todo|docs|research)\//.test(p) || /\.md$/i.test(p) || extraPrefixes.some(x => p.startsWith(`${x}/`));
 }
 
-export function routeDiff(diffText) {
+export function routeDiff(diffText, extraPrefixes = []) {
   const sections = splitSections(diffText);
+  const excludedPath = p => isExcludedPath(p, extraPrefixes);
   const join = list => list.map(s => s.text).join('\n');
   return {
-    candidate: join(sections.filter(s => !isExcludedPath(s.path))),
-    excluded: join(sections.filter(s => isExcludedPath(s.path))),
-    candidateFiles: sections.filter(s => !isExcludedPath(s.path)).map(s => s.path),
-    excludedFiles: sections.filter(s => isExcludedPath(s.path)).map(s => s.path),
+    candidate: join(sections.filter(s => !excludedPath(s.path))),
+    excluded: join(sections.filter(s => excludedPath(s.path))),
+    candidateFiles: sections.filter(s => !excludedPath(s.path)).map(s => s.path),
+    excludedFiles: sections.filter(s => excludedPath(s.path)).map(s => s.path),
   };
 }

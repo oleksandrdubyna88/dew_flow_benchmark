@@ -3,37 +3,45 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseCli, requireValues } from './lib/args.mjs';
-import { resolveCompile } from './lib/commands.mjs';
-import { CREDS_CLONE, DEFAULT_RUNS_ROOT, INPUTS_DIR, P, S, WEB_DIR } from './lib/consts.mjs';
-import { git, gitEnv, gitShow } from './lib/git.mjs';
+import { ownSuiteTargets, resolveCompile } from './lib/commands.mjs';
+import { git, gitEnv, gitShow, gitlinkAt } from './lib/git.mjs';
 import { compiledTestPath, entryPath, fileStem, holdoutEntries, repoPathOf } from './lib/holdout.mjs';
-import { parseJunit, verdictOf } from './lib/junit.mjs';
+import { assertRunsRoot, removeUnder } from './lib/safe-rm.mjs';
+import { nodeTest } from './lib/suite.mjs';
 import { run } from './lib/proc.mjs';
+import { fileURLToPath } from 'node:url';
+import { referencePlan } from './lib/refscore.mjs';
+import { shedCell } from './lib/shed.mjs';
+import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
 import { attributeDiagnostics, parseTscDiagnostics } from './lib/tsc.mjs';
-import { extractBase, npmCi, writeFileMaking } from './lib/tree.mjs';
+import { extractBase, extractConventionsInto, mountDirOf, npmCi, writeFileMaking } from './lib/tree.mjs';
+
+const PREPARE_GENERATED = fileURLToPath(new URL('./lib/prepare-generated.mjs', import.meta.url));
 
 const SPEC = {
-  cell: { type: 'string', help: 'c1 | c2 | c3 | reference' },
-  'runs-root': { type: 'string', default: DEFAULT_RUNS_ROOT, help: 'runs root' },
+  cell: { type: 'string', help: 'c1..c9 | reference' },
+  story: STORY_OPTION,
+  'runs-root': { type: 'string', help: "runs root (default: the story's defaultRunsRoot)" },
   'skip-npm': { type: 'boolean', help: 'reference only: skip npm ci (tests only)' },
+  shed: { type: 'boolean', help: 'after scoring, delete this cell\'s score/ copies and its node_modules (by exact path; the records stay)' },
 };
 
 const readJson = file => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
 const tail = buf => buf.toString('utf8').slice(-1500);
 const MAX_DIAGS = 20;
 
-/** The reference tree: P plus the src_vs_code part of the P..S diff. Its own folder, built once. */
-async function ensureReferenceTree(cellDir, skipNpm) {
+/** The reference tree: P plus the story's source-folder part of the P..S diff. Its own folder, built once. */
+async function ensureReferenceTree(cellDir, skipNpm, story) {
   const treeDir = path.join(cellDir, 'tree');
   if (fs.existsSync(treeDir)) return treeDir;
   fs.mkdirSync(cellDir, { recursive: true });
-  await extractBase(cellDir);
-  const diff = await git(CREDS_CLONE, ['diff', '--binary', P, S, '--', WEB_DIR]);
+  await extractBase(cellDir, story);
+  const diff = await git(story.repoClone, ['diff', '--binary', story.P, story.S, '--', story.srcDir]);
   const patch = path.join(cellDir, '_reference.patch');
   fs.writeFileSync(patch, diff);
   await git(treeDir, ['apply', '--whitespace=nowarn', patch], gitEnv());
   fs.rmSync(patch);
-  if (!skipNpm) await npmCi(treeDir);
+  if (!skipNpm) await npmCi(treeDir, story);
   return treeDir;
 }
 
@@ -43,9 +51,27 @@ function copyTree(from, to) {
   fs.cpSync(from, to, { recursive: true, filter: src => path.basename(src) !== '.git' });
 }
 
+/**
+ * A scoring copy is the same for every cell: the resolver layout's mount (a per-arm git checkout in the cell) is replaced by P's
+ * pinned conventions, so both arms are scored against one environment, and the git-ignored generated modules are written the way
+ * the story's prepare-gate does (commands.prepareGenerated) - the copy has no checkout for `rules.mjs check` to accept.
+ */
+async function prepareCopy(copy, story, commands, pin) {
+  if (story.layout === 'resolver') {
+    const mount = mountDirOf(copy, story);
+    removeUnder(mount, copy); // refuses a link or junction at the mount, or one above it that leaves the copy
+
+    await extractConventionsInto(copy, story.mount, pin);
+  }
+  if (commands?.commands?.prepareGenerated) {
+    const r = await run(process.execPath, [PREPARE_GENERATED, copy, story.srcDir], { cwd: copy, env: process.env });
+    if (r.code !== 0) throw new Error(`prepareGenerated failed: ${tail(Buffer.concat([r.stdout, r.stderr]))}`);
+  }
+}
+
 /** Compile in a copy whose out/ was removed first, so nothing stale can stand in for a fresh emit. */
 async function compile(webDir, commands) {
-  fs.rmSync(path.join(webDir, 'out'), { recursive: true, force: true });
+  removeUnder(path.join(webDir, 'out'), webDir); // a scoring copy's own out/: through the one safe delete, never a bare recursive rm
   return compileKeepingOut(webDir, commands);
 }
 
@@ -59,31 +85,26 @@ async function compileKeepingOut(webDir, commands) {
 
 const compileInfo = c => ({ ok: c.ok, exitCode: c.exitCode, diagnosticCount: c.diagnostics.length, diagnostics: c.diagnostics.slice(0, MAX_DIAGS), tail: c.diagnostics.length === 0 ? c.tail : '' });
 
-async function nodeTest(webDir, targets, xmlPath) {
-  const r = await run(process.execPath, ['--test', '--test-reporter=junit', `--test-reporter-destination=${xmlPath}`, ...targets], { cwd: webDir, env: process.env });
-  const parsed = fs.existsSync(xmlPath) ? parseJunit(fs.readFileSync(xmlPath, 'utf8')) : parseJunit('');
-  return { verdict: verdictOf(parsed, r.code), exitCode: r.code, tests: parsed.tests, passed: parsed.passed, failed: parsed.failed, skipped: parsed.skipped, failedCases: parsed.cases.filter(c => c.status === 'fail').map(c => c.name), detail: parsed.tests === 0 ? tail(Buffer.concat([r.stdout, r.stderr])) : '' };
-}
-
 /** Pure: the combined verdict. A compile error counts against the hold-out only when it is located in the hold-out file. */
 export function holdoutVerdict({ holdoutDiagnostics, emitted, testVerdict }) {
   if (holdoutDiagnostics > 0 || !emitted) return 'compile-error';
   return testVerdict;
 }
 
-async function scoreHoldout(entry, treeDir, scoreDir, commands) {
-  const repoPath = repoPathOf(entryPath(entry));
+async function scoreHoldout(entry, treeDir, scoreDir, commands, story, pin) {
+  const repoPath = repoPathOf(entryPath(entry), story.srcDir);
   const copy = path.join(scoreDir, fileStem(repoPath));
   copyTree(treeDir, copy);
-  const webDir = path.join(copy, WEB_DIR);
+  await prepareCopy(copy, story, commands, pin);
+  const webDir = path.join(copy, story.srcDir);
   const candidateCompile = await compile(webDir, commands); // the candidate as delivered, before the hold-out file
-  writeFileMaking(path.join(copy, repoPath), await gitShow(CREDS_CLONE, S, repoPath));
-  const emittedPath = path.join(webDir, compiledTestPath(repoPath));
+  writeFileMaking(path.join(copy, repoPath), await gitShow(story.repoClone, story.S, repoPath));
+  const emittedPath = path.join(webDir, compiledTestPath(repoPath, story.srcDir));
   fs.rmSync(emittedPath, { force: true });
   const withHoldout = await compileKeepingOut(webDir, commands);
-  const attributed = attributeDiagnostics(withHoldout.diagnostics, repoPath.slice(WEB_DIR.length + 1), candidateCompile.diagnostics);
+  const attributed = attributeDiagnostics(withHoldout.diagnostics, repoPath.slice(story.srcDir.length + 1), candidateCompile.diagnostics);
   const emitted = fs.existsSync(emittedPath);
-  const test = emitted ? await nodeTest(webDir, [compiledTestPath(repoPath)], path.join(copy, 'junit.xml')) : null;
+  const test = emitted ? await nodeTest(webDir, [compiledTestPath(repoPath, story.srcDir)], path.join(copy, 'junit.xml')) : null;
   const verdict = holdoutVerdict({ holdoutDiagnostics: attributed.holdout.length, emitted, testVerdict: test?.verdict });
   return {
     path: repoPath, verdict, testVerdict: test?.verdict ?? null, emitted,
@@ -93,33 +114,58 @@ async function scoreHoldout(entry, treeDir, scoreDir, commands) {
   };
 }
 
-async function scoreOwnSuite(treeDir, scoreDir, commands) {
+async function scoreOwnSuite(treeDir, scoreDir, commands, story, pin) {
   const copy = path.join(scoreDir, '_own');
   copyTree(treeDir, copy);
-  const webDir = path.join(copy, WEB_DIR);
+  await prepareCopy(copy, story, commands, pin);
+  const webDir = path.join(copy, story.srcDir);
   const built = await compile(webDir, commands);
-  const test = await nodeTest(webDir, ['out/test/*.test.js'], path.join(copy, 'junit.xml'));
+  const test = await nodeTest(webDir, ownSuiteTargets(commands), path.join(copy, 'junit.xml'));
   return { ...test, compile: compileInfo(built) };
 }
 
+function reportShed({ removed, refused }) {
+  for (const p of removed) console.log(`shed ${p}`);
+  for (const r of refused) console.log(`shed REFUSED ${r.target}: ${r.reason}`);
+}
+
+/**
+ * The reference: keep a valid score (a resume must not re-score a tree the first run shed), else build the tree if it is gone and install its
+ * dependencies if they are gone - never score it bare. Returns '' when the existing score stays.
+ */
+async function prepareReference(cellDir, v, story) {
+  const treeDir = path.join(cellDir, 'tree');
+  const scoreFile = path.join(cellDir, 'score.json');
+  const plan = referencePlan({ score: readJson(scoreFile), treeExists: fs.existsSync(treeDir), hasNodeModules: fs.existsSync(path.join(treeDir, story.srcDir, 'node_modules')), skipNpm: v['skip-npm'] });
+  if (plan.action === 'keep') { console.log('reference: a valid score exists; kept'); return ''; }
+  if (fs.existsSync(scoreFile)) fs.renameSync(scoreFile, path.join(cellDir, `score.invalid-${Date.now()}.json`)); // the record of the bad score stays
+  await ensureReferenceTree(cellDir, true, story);
+  if (plan.install) await npmCi(treeDir, story);
+  return treeDir;
+}
+
 async function main(v) {
-  const root = path.resolve(v['runs-root']);
+  const story = loadStory(v.story);
+  const root = assertRunsRoot(runsRootOf(v, story));
   const cellDir = path.join(root, v.cell);
-  const treeDir = v.cell === 'reference' ? await ensureReferenceTree(cellDir, v['skip-npm']) : path.join(cellDir, 'tree');
+  const treeDir = v.cell === 'reference' ? await prepareReference(cellDir, v, story) : path.join(cellDir, 'tree');
+  if (treeDir === '') return; // a valid reference score is kept
   if (!fs.existsSync(treeDir)) throw new Error(`no tree at ${treeDir}`);
   const scoreDir = path.join(cellDir, 'score');
   if (fs.existsSync(scoreDir)) throw new Error(`refusing: ${scoreDir} already exists`);
   fs.mkdirSync(scoreDir, { recursive: true });
-  const commands = readJson(path.join(INPUTS_DIR, 'commands.json'));
+  const commands = readJson(path.join(story.inputsDir, 'commands.json'));
+  const pin = await gitlinkAt(story.repoClone, story.P, story.mount);
   const holdout = [];
-  for (const entry of holdoutEntries(readJson(path.join(INPUTS_DIR, 'holdout.json')))) holdout.push(await scoreHoldout(entry, treeDir, scoreDir, commands));
-  const ownSuite = await scoreOwnSuite(treeDir, scoreDir, commands);
+  for (const entry of holdoutEntries(readJson(path.join(story.inputsDir, 'holdout.json')))) holdout.push(await scoreHoldout(entry, treeDir, scoreDir, commands, story, pin));
+  const ownSuite = await scoreOwnSuite(treeDir, scoreDir, commands, story, pin);
   fs.writeFileSync(path.join(cellDir, 'score.json'), `${JSON.stringify({ cell: v.cell, scoredUtc: new Date().toISOString(), holdout, ownSuite }, null, 2)}\n`);
+  if (v.shed) reportShed(shedCell(root, v.cell, { srcDir: story.srcDir, mount: story.mount }));
   console.log(`scored ${v.cell}: ${holdout.map(h => `${path.basename(h.path)}=${h.verdict}`).join(', ')}; own=${ownSuite.verdict}`);
 }
 
 if (process.argv[1]?.endsWith('score-cell.mjs')) {
-  const { help, values } = parseCli(process.argv.slice(2), SPEC, 'node score-cell.mjs --cell <c1|c2|c3|reference> [--runs-root dir]');
+  const { help, values } = parseCli(process.argv.slice(2), SPEC, 'node score-cell.mjs --cell <c1..c9|reference> [--story creds-176] [--runs-root dir] [--shed]');
   if (help) console.log(help);
   else {
     requireValues(values, ['cell']);
