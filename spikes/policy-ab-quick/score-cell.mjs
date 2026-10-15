@@ -10,6 +10,7 @@ import { assertRunsRoot, removeUnder } from './lib/safe-rm.mjs';
 import { nodeTest } from './lib/suite.mjs';
 import { run } from './lib/proc.mjs';
 import { fileURLToPath } from 'node:url';
+import { referencePlan } from './lib/refscore.mjs';
 import { shedCell } from './lib/shed.mjs';
 import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
 import { attributeDiagnostics, parseTscDiagnostics } from './lib/tsc.mjs';
@@ -128,11 +129,27 @@ function reportShed({ removed, refused }) {
   for (const r of refused) console.log(`shed REFUSED ${r.target}: ${r.reason}`);
 }
 
+/**
+ * The reference: keep a valid score (a resume must not re-score a tree the first run shed), else build the tree if it is gone and install its
+ * dependencies if they are gone - never score it bare. Returns '' when the existing score stays.
+ */
+async function prepareReference(cellDir, v, story) {
+  const treeDir = path.join(cellDir, 'tree');
+  const scoreFile = path.join(cellDir, 'score.json');
+  const plan = referencePlan({ score: readJson(scoreFile), treeExists: fs.existsSync(treeDir), hasNodeModules: fs.existsSync(path.join(treeDir, story.srcDir, 'node_modules')), skipNpm: v['skip-npm'] });
+  if (plan.action === 'keep') { console.log('reference: a valid score exists; kept'); return ''; }
+  if (fs.existsSync(scoreFile)) fs.renameSync(scoreFile, path.join(cellDir, `score.invalid-${Date.now()}.json`)); // the record of the bad score stays
+  await ensureReferenceTree(cellDir, true, story);
+  if (plan.install) await npmCi(treeDir, story);
+  return treeDir;
+}
+
 async function main(v) {
   const story = loadStory(v.story);
   const root = assertRunsRoot(runsRootOf(v, story));
   const cellDir = path.join(root, v.cell);
-  const treeDir = v.cell === 'reference' ? await ensureReferenceTree(cellDir, v['skip-npm'], story) : path.join(cellDir, 'tree');
+  const treeDir = v.cell === 'reference' ? await prepareReference(cellDir, v, story) : path.join(cellDir, 'tree');
+  if (treeDir === '') return; // a valid reference score is kept
   if (!fs.existsSync(treeDir)) throw new Error(`no tree at ${treeDir}`);
   const scoreDir = path.join(cellDir, 'score');
   if (fs.existsSync(scoreDir)) throw new Error(`refusing: ${scoreDir} already exists`);
