@@ -7,6 +7,8 @@
 > The **pilot** is built small (§8); everything a full series needs and the pilot does not is listed apart in §12 and built only
 > after the owner's go. Records under `research/policy-ab/`.
 >
+> **A first series ran on the quick spike, not on this plan's instrument (2026-10-15): coai #751 E2, n = 3 per arm — the plan stays open; its result is recorded in [../research/policy-ab/series-coai-751.md](../research/policy-ab/series-coai-751.md).**
+>
 > Related: [module_scouts.md](../research/module_scouts.md) (the pieces this composes),
 > [PLAN_scout_model_calibration.md](../research/PLAN_scout_model_calibration.md) (the scout half of the same rule),
 > [PLAN_code_lane.md](PLAN_code_lane.md) (signals 3–4 and the attended-only rule), [module_gate.md](../research/module_gate.md)
