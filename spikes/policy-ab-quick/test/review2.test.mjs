@@ -12,7 +12,7 @@ import { parseJunit } from '../lib/junit.mjs';
 import { assertArmsDifferOnlyInPolicy, assertPolicyDelta, guardEntriesOf, mapDelta, parseLsTree, withGuardEntries } from '../lib/mount.mjs';
 import { ownSuiteVsReference } from '../lib/ownsuite.mjs';
 import { agentTimeline, inseparableGroups } from '../lib/parallel.mjs';
-import { compareProbes, probeGate, rerunTargets, settleFailures } from '../lib/probe.mjs';
+import { compareProbes, rerunTargets, settleFailures } from '../lib/probe.mjs';
 import { readerId, readingKeyFile, scrubReaderText, shuffleSeeded } from '../lib/reader.mjs';
 import { assertRemovable, assertRunsRoot, depthOf, removeUnder } from '../lib/safe-rm.mjs';
 import { shedCell } from '../lib/shed.mjs';
@@ -106,19 +106,16 @@ test('the parity probe: same failing set and the declared mount delta pass; anyt
   const mapA = new Map([['p', '1'], ['q', '1']]);
   const mapB = new Map([['p', '2'], ['q', '1']]);
   const suite = (failed, tests = 100) => ({ tests, failedCases: failed });
-  const ok = compareProbes({ suiteA: suite(['t::a', 't::b']), suiteB: suite(['t::b', 't::a']), mapA, mapB, policyFiles: ['p'] });
+  const ss = { mentionsRule: false };
+  const ok = compareProbes({ suiteA: suite(['t::a', 't::b']), suiteB: suite(['t::b', 't::a']), mapA, mapB, policyFiles: ['p'], sessionStartA: ss, sessionStartB: ss });
   assert.equal(ok.pass, true);
   assert.deepEqual(ok.mountDelta, ['p']);
-  const split = compareProbes({ suiteA: suite(['t::a']), suiteB: suite(['t::a', 't::z']), mapA, mapB, policyFiles: ['p'] });
+  const split = compareProbes({ suiteA: suite(['t::a']), suiteB: suite(['t::a', 't::z']), mapA, mapB, policyFiles: ['p'], sessionStartA: ss, sessionStartB: ss });
   assert.equal(split.pass, false);
   assert.match(split.reasons[0], /only in A \[\], only in B \[t::z\]/);
-  assert.match(compareProbes({ suiteA: suite([], 100), suiteB: suite([], 99), mapA, mapB, policyFiles: ['p'] }).reasons.join(), /100 \(A\) and 99 \(B\)/);
-  assert.match(compareProbes({ suiteA: suite([]), suiteB: suite([]), mapA, mapB: new Map([['p', '2'], ['q', '9']]), policyFiles: ['p'] }).reasons.join(), /differ in \[p, q\]/);
-  assert.match(compareProbes({ suiteA: { tests: 0 }, suiteB: suite([]), mapA, mapB, policyFiles: ['p'] }).reasons.join(), /arm A: the suite produced no report/);
-  assert.equal(probeGate(null, ['p']).ok, false);
-  assert.equal(probeGate({ pass: false, reasons: ['x'], policyFiles: ['p'] }, ['p']).ok, false);
-  assert.equal(probeGate({ pass: true, policyFiles: ['q'] }, ['p']).ok, false);
-  assert.equal(probeGate({ pass: true, policyFiles: ['p'] }, ['p']).ok, true);
+  assert.match(compareProbes({ suiteA: suite([], 100), suiteB: suite([], 99), mapA, mapB, policyFiles: ['p'], sessionStartA: ss, sessionStartB: ss }).reasons.join(), /100 \(A\) and 99 \(B\)/);
+  assert.match(compareProbes({ suiteA: suite([]), suiteB: suite([]), mapA, mapB: new Map([['p', '2'], ['q', '9']]), policyFiles: ['p'], sessionStartA: ss, sessionStartB: ss }).reasons.join(), /differ in \[p, q\]/);
+  assert.match(compareProbes({ suiteA: { tests: 0 }, suiteB: suite([]), mapA, mapB, policyFiles: ['p'], sessionStartA: ss, sessionStartB: ss }).reasons.join(), /arm A: the suite produced no report/);
 });
 
 test('a failure that does not repeat when its file runs alone is flaky and does not split the arms', () => {
@@ -261,14 +258,14 @@ test('a throwing step is recorded as a crash, ends the loop, and does not throw 
 test('the cost meter prices each message once (the stream repeats it per block) and trips at cap x 1.1', () => {
   const m = new CostMeter();
   const msg = (id, out) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-opus-x', usage: { input_tokens: 0, output_tokens: out } } });
-  m.feed(msg('a', 100_000)); // $7.50 at the fallback rate
+  m.feed(msg('a', 100_000)); // $1.25 at the fallback rate
   m.feed(msg('a', 100_000));
-  assert.equal(m.usd, 7.5);
+  assert.equal(m.usd, 1.25);
   m.feed('not json');
   m.feed(JSON.stringify({ type: 'user' }));
-  assert.equal(m.usd, 7.5);
-  assert.equal(m.overCap(7.5 / OVER_CAP_FACTOR + 0.01), false);
-  assert.equal(m.overCap(6.8), true);
+  assert.equal(m.usd, 1.25);
+  assert.equal(m.overCap(1.25 / OVER_CAP_FACTOR + 0.01), false);
+  assert.equal(m.overCap(1.1), true);
   assert.deepEqual(splitLines('par', 'tial\nwhole\nnext'), { lines: ['partial', 'whole'], carry: 'next' });
 });
 

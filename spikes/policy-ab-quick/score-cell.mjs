@@ -70,7 +70,7 @@ async function prepareCopy(copy, story, commands, pin) {
 
 /** Compile in a copy whose out/ was removed first, so nothing stale can stand in for a fresh emit. */
 async function compile(webDir, commands) {
-  fs.rmSync(path.join(webDir, 'out'), { recursive: true, force: true });
+  removeUnder(path.join(webDir, 'out'), webDir); // a scoring copy's own out/: through the one safe delete, never a bare recursive rm
   return compileKeepingOut(webDir, commands);
 }
 

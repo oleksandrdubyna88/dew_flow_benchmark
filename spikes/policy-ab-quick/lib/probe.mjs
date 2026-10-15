@@ -5,8 +5,14 @@ import { assertArmsDifferOnlyInPolicy } from './mount.mjs';
 
 const sorted = list => [...(list ?? [])].sort();
 
-export function compareProbes({ suiteA, suiteB, mapA, mapB, policyFiles }) {
+export function compareProbes({ suiteA, suiteB, mapA, mapB, policyFiles, sessionStartA = null, sessionStartB = null }) {
   const reasons = [];
+  // The rule-load signal must be the same in both arms: if the SessionStart hook's output mentions the rule in one arm only, the arms are not
+  // getting the same instructions at session start.
+  const ruleLoadA = sessionStartA?.mentionsRule ?? null;
+  const ruleLoadB = sessionStartB?.mentionsRule ?? null;
+  if (ruleLoadA === null || ruleLoadB === null) reasons.push('a SessionStart probe is missing: the rule-load signal was not recorded');
+  else if (ruleLoadA !== ruleLoadB) reasons.push(`the rule-load signal differs: SessionStart output mentions the rule in A=${ruleLoadA}, B=${ruleLoadB}`);
   const a = new Set(suiteA?.failedCases ?? []);
   const b = new Set(suiteB?.failedCases ?? []);
   for (const [name, suite] of [['A', suiteA], ['B', suiteB]]) if (!suite || !suite.tests) reasons.push(`arm ${name}: the suite produced no report`);
@@ -16,14 +22,22 @@ export function compareProbes({ suiteA, suiteB, mapA, mapB, policyFiles }) {
   if (suiteA?.tests !== suiteB?.tests) reasons.push(`the suites ran ${suiteA?.tests} (A) and ${suiteB?.tests} (B) tests`);
   let delta = [];
   try { delta = assertArmsDifferOnlyInPolicy(mapA, mapB, policyFiles); } catch (e) { reasons.push(e.message); }
-  return { pass: reasons.length === 0, reasons, failingSetA: sorted([...a]), failingSetB: sorted([...b]), testsA: suiteA?.tests ?? null, testsB: suiteB?.tests ?? null, mountDelta: delta };
+  return { pass: reasons.length === 0, reasons, sessionStartMentionsRule: { A: ruleLoadA, B: ruleLoadB }, failingSetA: sorted([...a]), failingSetB: sorted([...b]), testsA: suiteA?.tests ?? null, testsB: suiteB?.tests ?? null, mountDelta: delta };
 }
 
-/** The pilot's gate: a probe record that passed and was made for the story's current policy file list. */
-export function probeGate(record, policyFiles) {
+/** What a probe is made FOR: if any of it changed, the probe says nothing about the series about to start. */
+export function probeSubject({ story, pin, armShas, harness }) {
+  return { storyId: story.id, P: story.P, mountPin: pin, armShas, policyFiles: sorted(story.policyFiles), harnessSpikeTree: harness.spikeTree };
+}
+
+/** The pilot's gate: a passing probe, made for exactly this story, base pin, arm commits, policy files and harness version, on a clean folder. */
+export function probeGate(record, expected, currentHarness = { dirty: false }) {
   if (!record) return { ok: false, why: 'no probe record: run probe-series.mjs for this story first' };
   if (!record.pass) return { ok: false, why: `the last probe failed: ${(record.reasons ?? []).join('; ')}` };
-  if (JSON.stringify(sorted(record.policyFiles)) !== JSON.stringify(sorted(policyFiles))) return { ok: false, why: 'the probe was made for a different policy file list' };
+  const was = record.subject ?? {};
+  const differs = Object.keys(expected).filter(k => JSON.stringify(was[k]) !== JSON.stringify(expected[k]));
+  if (differs.length > 0) return { ok: false, why: `the probe was made for something else (${differs.join(', ')} differ): run probe-series.mjs again` };
+  if (record.harness?.dirty || currentHarness.dirty) return { ok: false, why: 'the harness folder has uncommitted changes (at probe time or now): commit, then probe again' };
   return { ok: true, why: '' };
 }
 

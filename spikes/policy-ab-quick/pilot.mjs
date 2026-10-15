@@ -12,7 +12,10 @@ import { parseCli, requireValues } from './lib/args.mjs';
 import { plant, unplant } from './lib/canaries.mjs';
 import { DEFAULT_CAP_USD, DEFAULT_STOP_AFTER_USD, NEUTRAL_CELLS } from './lib/consts.mjs';
 import { drawBlocks, drawOrder } from './lib/order.mjs';
-import { probeGate } from './lib/probe.mjs';
+import { ARM_SHAS } from './lib/consts.mjs';
+import { gitlinkAt } from './lib/git.mjs';
+import { harnessIdentity } from './lib/harness.mjs';
+import { probeGate, probeSubject } from './lib/probe.mjs';
 import { updateRunMap } from './lib/runmap.mjs';
 import { costOfSummary, spendDecision } from './lib/spend.mjs';
 import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
@@ -98,10 +101,12 @@ function parseBlocks(text) {
 
 const readJsonIf = file => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null);
 
-function requireProbe(story, v) {
+async function requireProbe(story, v) {
   if (story.layout !== 'resolver' || v['skip-probe']) return;
   const probeRoot = v['probe-root'] ? path.resolve(v['probe-root']) : `${story.defaultRunsRoot}-probe`;
-  const gate = probeGate(readJsonIf(path.join(probeRoot, 'probe.json')), story.policyFiles);
+  const harness = await harnessIdentity();
+  const pin = await gitlinkAt(story.repoClone, story.P, story.mount);
+  const gate = probeGate(readJsonIf(path.join(probeRoot, 'probe.json')), probeSubject({ story, pin, armShas: ARM_SHAS, harness }), harness);
   if (!gate.ok) throw new Error(`arm-parity probe: ${gate.why} (node probe-series.mjs --story ${story.id})`);
 }
 
@@ -119,7 +124,7 @@ async function finish(v, failures) {
 async function main(v) {
   const story = loadStory(v.story);
   v['runs-root'] = runsRootOf(v, story);
-  requireProbe(story, v);
+  await requireProbe(story, v);
   const stopAfter = Number(v['stop-after']);
   const cap = Number(v.cap);
   if (![stopAfter, cap].every(Number.isFinite)) throw new Error('--cap and --stop-after must be numbers');

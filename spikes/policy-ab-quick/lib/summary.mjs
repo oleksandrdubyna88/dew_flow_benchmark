@@ -3,7 +3,7 @@ const MAIN = 'main';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { findOutsideAccesses } from './leak.mjs';
-import { costFromMessages } from './pricing.mjs';
+import { costFromMessages, OUTPUT_FLOOR_PER_MESSAGE } from './pricing.mjs';
 import { editsByAgent, parallelism, agentTimeline, sumEdits } from './parallel.mjs';
 import { resolverRecord } from './resolver.mjs';
 import { scanTokens, tamperFindings } from './scan.mjs';
@@ -139,8 +139,9 @@ export function unobservedChildren(calls, audit) {
 
 function costOf(events, result) {
   if (result.present && result.total_cost_usd !== null) return { costSource: 'envelope', usd: result.total_cost_usd };
-  const m = costFromMessages(events);
-  return { costSource: 'messages', usd: m.usd, estimated: true, messageUsage: m.tokensByModel };
+  const m = costFromMessages(events, { outputFloor: OUTPUT_FLOOR_PER_MESSAGE });
+  // No envelope (a cell killed over the cap, at the wall limit, or crashed): priced from the FITTED fallback rates of pricing.mjs.
+  return { costSource: 'messages', usd: m.usd, estimated: true, estimateNote: 'no result envelope: priced from fitted fallback rates (lib/pricing.mjs) with an output floor per message; fable assumed = opus', messageUsage: m.tokensByModel };
 }
 
 export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(), canaryTokens = [], reference = {}, texts = {}, excludedFiles = [], story = {}, run = {} }) {

@@ -33,9 +33,26 @@ export function assertRemovable(target, boundary, fsApi = fs) {
   return true;
 }
 
-/** Delete one directory tree after assertRemovable agreed. Returns whether it deleted anything. */
+/**
+ * The first link, junction or other reparse point anywhere inside a directory tree, or ''. Every entry is lstat'ed (a junction reports as
+ * a symlink); a recursive delete follows none of them on current Node, but a link is exactly what a deleted-by-mistake tree looks like
+ * when it leads somewhere that is not ours, so the walk REFUSES rather than trusting that.
+ */
+export function findLinkInside(dir, fsApi = fs) {
+  for (const name of fsApi.readdirSync(dir)) {
+    const p = path.join(dir, name);
+    const st = fsApi.lstatSync(p);
+    if (st.isSymbolicLink()) return p;
+    if (st.isDirectory()) { const hit = findLinkInside(p, fsApi); if (hit) return hit; }
+  }
+  return '';
+}
+
+/** Delete one directory tree after assertRemovable agreed AND a walk found no link anywhere inside it. Returns whether it deleted anything. */
 export function removeUnder(target, boundary, fsApi = fs) {
   if (!assertRemovable(target, boundary, fsApi)) return false;
+  const link = findLinkInside(target, fsApi);
+  if (link) throw new Error(`refusing to delete ${target}: it contains a link or junction at ${link}`);
   fsApi.rmSync(target, { recursive: true, force: true });
   return true;
 }

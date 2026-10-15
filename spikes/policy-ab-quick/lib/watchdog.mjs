@@ -1,6 +1,6 @@
 // Pure: the cost watchdog and the cell outcome. The CLI's own --max-budget-usd is checked between turns and parallel children can
 // overshoot it, so run-cell also meters the stream and kills the process tree (by the PID it started) at cap x 1.1.
-import { costFromMessages } from './pricing.mjs';
+import { costFromMessages, OUTPUT_FLOOR_PER_MESSAGE } from './pricing.mjs';
 
 export const OVER_CAP_FACTOR = 1.1;
 
@@ -23,7 +23,7 @@ export class CostMeter {
   }
 
   get usd() {
-    return costFromMessages([...this.#seen.values()]).usd;
+    return costFromMessages([...this.#seen.values()], { outputFloor: OUTPUT_FLOOR_PER_MESSAGE }).usd;
   }
 
   overCap(capUsd) {

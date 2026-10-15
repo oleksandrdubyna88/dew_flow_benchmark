@@ -14,5 +14,7 @@ export const OVERLAY_RULES = Object.freeze(['common/subagent-models.md', 'common
 export const NEUTRAL_CELLS = Object.freeze(['c1', 'c2', 'c3']);
 export const GUARD_SOURCE = 'settings/hooks/subagent-model.mjs';
 export const AUDIT_REL = '.git/audit.ndjson';
+/** Every file of this folder that is copied into a cell's tree (the model can read all of them). A test keeps them free of tells. */
+export const INJECTED_SOURCES = Object.freeze(['hooks/audit.mjs', 'hooks/edit-bound.mjs', 'lib/edit-bound.mjs']);
 export const DEFAULT_CAP_USD = 30;
 export const DEFAULT_STOP_AFTER_USD = 100;
