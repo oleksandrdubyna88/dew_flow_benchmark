@@ -1,0 +1,18 @@
+{
+  "repo": "dew_flow_connect_other_ais",
+  "pr": 751,
+  "repoClone": "D:/rsd/dew_flow_connect_other_ais",
+  "P": "af7f2856ecfaa732159db7dacda3255dfbde2334",
+  "S": "3ebf208c55c591103140cd2f3148c4869e14ff7b",
+  "layout": "resolver",
+  "mount": ".agents/conventions",
+  "planFile": "todo/PLAN_paths_per_side.md",
+  "inputs": "stories/coai-751/inputs",
+  "struckFrom": "statement.md",
+  "srcDir": "src_vs_code",
+  "prompt": "stories/coai-751/prompt.md",
+  "parallelHint": true,
+  "defaultRunsRoot": "D:/rsd/_s2",
+  "canarySlug": "D--rsd-dew-flow-connect-other-ais",
+  "scrubLabel": "<repo>"
+}

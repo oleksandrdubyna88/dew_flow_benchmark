@@ -14,15 +14,15 @@ export function scanTokens(sources, tokens) {
   return { count: hits.length, hits };
 }
 
-const INSTRUMENT_FILES = ['.claude/settings.json', '.claude/rules/shared/common/subagent-models.md', '.claude/rules/shared/common/planning-docs.md'];
-const touchesInstrument = p => INSTRUMENT_FILES.includes(p) || p.startsWith('.claude/hooks/');
+const instrumentFiles = mount => ['.claude/settings.json', `${mount}/common/subagent-models.md`, `${mount}/common/planning-docs.md`];
+const touchesInstrument = (p, mount) => instrumentFiles(mount).includes(p) || p.startsWith('.claude/hooks/');
 const AUDIT_LOG = /audit\.ndjson/;
 
 /** Excluded-diff files that touch the instrument, and tool calls whose inputs name the audit log. */
-export function tamperFindings(excludedFiles, calls) {
+export function tamperFindings(excludedFiles, calls, mount = '.claude/rules/shared') {
   const text = c => JSON.stringify(c.input ?? {});
   return {
-    excluded: excludedFiles.filter(touchesInstrument),
+    excluded: excludedFiles.filter(p => touchesInstrument(p, mount)),
     calls: calls.filter(c => AUDIT_LOG.test(text(c)) || /\.claude[\\/]+(hooks|settings\.json)/.test(text(c)) && ['Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell'].includes(c.tool)).map(c => ({ agent: c.agent, tool: c.tool })),
   };
 }

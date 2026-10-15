@@ -3,14 +3,16 @@
 import path from 'node:path';
 import { parseCli, requireValues } from './lib/args.mjs';
 import { plant, unplant } from './lib/canaries.mjs';
+import os from 'node:os';
+import { loadStory, STORY_OPTION } from './lib/story.mjs';
 
-const SPEC = { manifest: { type: 'string', help: 'manifest path (written before planting)' } };
+const SPEC = { manifest: { type: 'string', help: 'manifest path (written before planting)' }, story: STORY_OPTION };
 const [verb, ...rest] = process.argv.slice(2);
 const { help, values } = parseCli(rest, SPEC, 'node canaries.mjs <plant|unplant> --manifest <runs-root>/canaries.json');
 if (help || !['plant', 'unplant'].includes(verb)) console.log(help || 'usage: node canaries.mjs <plant|unplant> --manifest <file> (--help)');
 else {
   requireValues(values, ['manifest']);
   const manifest = path.resolve(values.manifest);
-  const rows = verb === 'plant' ? plant(manifest) : unplant(manifest);
+  const rows = verb === 'plant' ? plant(manifest, os.homedir(), loadStory(values.story).canarySlug) : unplant(manifest);
   for (const r of rows) console.log(`${r.status}\t${r.path}`);
 }

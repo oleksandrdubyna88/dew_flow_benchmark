@@ -15,10 +15,14 @@ export function inputSummary(toolName, input) {
   switch (toolName) {
     case 'Bash':
     case 'PowerShell': return { command: i.command ?? '' };
-    case 'NotebookEdit': return { file_path: i.notebook_path ?? '' };
+    case 'NotebookEdit': return { file_path: i.notebook_path ?? '', added: countLines(i.new_source), removed: 0 };
     case 'Read': return { file_path: i.file_path ?? '' };
     case 'Edit': return { file_path: i.file_path ?? '', added: countLines(i.new_string), removed: countLines(i.old_string) };
     case 'Write': return { file_path: i.file_path ?? '', added: countLines(i.content), removed: 0 };
+    case 'MultiEdit': {
+      const edits = Array.isArray(i.edits) ? i.edits : [];
+      return { file_path: i.file_path ?? '', added: edits.reduce((n, e) => n + countLines(e?.new_string), 0), removed: edits.reduce((n, e) => n + countLines(e?.old_string), 0) };
+    }
     case 'Agent':
     case 'Task': return { model: i.model ?? null, effort: i.effort ?? null, subagent_type: i.subagent_type ?? null, description: i.description ?? '' };
     case 'Glob':

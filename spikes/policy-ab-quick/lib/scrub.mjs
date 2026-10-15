@@ -16,10 +16,10 @@ export function scrubStrings(value, fn) {
 
 const PROFILE_PATTERNS = [/[A-Za-z]:(?:\\{1,2}|\/)Users(?:\\{1,2}|\/)[^\\/\s"']+/g, /\/[a-zA-Z]\/Users\/[^/\s"']+/g];
 
-/** A string scrubber for committed files: runs root -> <runs>, creds clone -> <creds>, any user profile -> ~. */
-export function machineScrubber({ runsRoot, creds }) {
+/** A string scrubber for committed files: runs root -> <runs>, the story's clone -> `label` (<creds> by default), any user profile -> ~. */
+export function machineScrubber({ runsRoot, creds, label = '<creds>' }) {
   const withBash = p => [...pathVariants(p), p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`)];
-  const pairs = [...withBash(runsRoot).map(v => [v, '<runs>']), ...withBash(creds).map(v => [v, '<creds>'])];
+  const pairs = [...withBash(runsRoot).map(v => [v, '<runs>']), ...withBash(creds).map(v => [v, label])];
   return text => {
     const mapped = pairs.reduce((t, [from, to]) => t.split(from).join(to), text);
     return PROFILE_PATTERNS.reduce((t, re) => t.replace(re, '~'), mapped);

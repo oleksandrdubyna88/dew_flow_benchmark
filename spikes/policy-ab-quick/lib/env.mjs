@@ -35,11 +35,12 @@ export function buildChildEnv(parent, { arm, emptyGitConfig, hasGh = dirHasGh })
   };
 }
 
-/** Pure: the claude argv (the prompt goes on stdin). */
-export function buildClaudeArgs({ settingsPath, mcpPath, cap }) {
+/** Pure: the claude argv (the prompt goes on stdin). `hookEvents` adds the stream's hook lifecycle events (resolver layout: the SessionStart output is a signal). */
+export function buildClaudeArgs({ settingsPath, mcpPath, cap, hookEvents = false }) {
   return ['-p', '--model', 'opus', '--output-format', 'stream-json', '--verbose',
     '--setting-sources', 'project', '--settings', settingsPath,
     '--strict-mcp-config', '--mcp-config', mcpPath,
     '--no-session-persistence', '--forward-subagent-text', '--max-budget-usd', String(cap),
+    ...(hookEvents ? ['--include-hook-events'] : []),
     '--tools', 'Task,Bash,PowerShell,Read,Edit,Write,Glob,Grep,TodoWrite'];
 }

@@ -1,0 +1,6 @@
+{"ts":"2026-10-15T10:00:30.000Z","event":"PreToolUse","agent_id":null,"tool_name":"Edit","effort":{"level":"high"},"input":{"file_path":"main.ts","added":3,"removed":1}}
+{"ts":"2026-10-15T10:01:10.000Z","event":"PreToolUse","agent_id":"agA","tool_name":"Edit","effort":{"level":"high"},"input":{"file_path":"a.ts","added":4,"removed":2}}
+{"ts":"2026-10-15T10:01:11.000Z","event":"PreToolUse","agent_id":"agA","tool_name":"MultiEdit","effort":{"level":"high"},"input":{"file_path":"a2.ts","added":6,"removed":0}}
+{"ts":"2026-10-15T10:01:20.000Z","event":"PreToolUse","agent_id":"agB","tool_name":"Bash","effort":{"level":"high"},"input":{"command":"sed -i s/a/b/ b.ts"}}
+{"ts":"2026-10-15T10:01:21.000Z","event":"PreToolUse","agent_id":"agB","tool_name":"Bash","effort":{"level":"high"},"input":{"command":"node --test out/x.js 2>&1 | tail"}}
+{"ts":"2026-10-15T10:01:30.000Z","event":"PreToolUse","agent_id":"agC","tool_name":"Read","effort":{"level":"high"},"input":{"file_path":"c.ts"}}

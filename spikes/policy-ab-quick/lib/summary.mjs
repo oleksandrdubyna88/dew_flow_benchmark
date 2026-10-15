@@ -4,12 +4,15 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import { findOutsideAccesses } from './leak.mjs';
 import { costFromMessages } from './pricing.mjs';
+import { editsByAgent, parallelism, agentTimeline, sumEdits } from './parallel.mjs';
+import { resolverRecord } from './resolver.mjs';
 import { scanTokens, tamperFindings } from './scan.mjs';
 
 const NETWORK = [/\bgh\s/, /git\s+clone/, /git\s+(fetch|push|pull|ls-remote|remote)\b/, /\bcurl\b/, /\bwget\b/, /Invoke-(WebRequest|RestMethod)/i, /https:\/\//, /\bnpm\s+(i|install)\b/, /\bnpx\b/, /dotnet\s+restore/];
 
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const GUARD_MARKER = 'subagent-models.md:';
+export const NATIVE_MOUNT = '.claude/rules/shared';
 
 export const parseNdjson = text => text.split('\n').map(l => l.trim()).filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } });
 
@@ -86,17 +89,17 @@ export function effortByAgent(audit) {
 
 export const effortFlags = byAgent => Object.entries(byAgent).filter(([, lv]) => lv.some(l => l !== 'high')).map(([agent, levels]) => ({ agent, levels }));
 
-export function instructionsLoaded(audit, cellJson) {
+export function instructionsLoaded(audit, cellJson, mount = NATIVE_MOUNT) {
   const loads = audit.filter(r => r.event === 'InstructionsLoaded').map(r => ({ file_path: r.file_path, load_reason: r.load_reason, memory_type: r.memory_type, sha256: r.sha256 }));
-  const key = '.claude/rules/shared/common/subagent-models.md';
+  const key = `${mount}/common/subagent-models.md`;
   const hit = loads.find(l => (l.file_path ?? '').replace(/\\/g, '/').endsWith(key));
   return { loads, ruleLoaded: Boolean(hit), loadReason: hit?.load_reason ?? null, shaMatchesOverlay: Boolean(hit) && hit.sha256 === (cellJson?.overlay?.[key] ?? null) };
 }
 
-export function editsBy(audit) {
-  const edits = audit.filter(r => r.event === 'PreToolUse' && ['Edit', 'Write', 'NotebookEdit'].includes(r.tool_name));
-  const summarize = list => ({ calls: list.length, files: [...new Set(list.map(r => r.input?.file_path).filter(Boolean))].sort(), approxLines: list.reduce((n, r) => n + (r.input?.added ?? 0) + (r.input?.removed ?? 0), 0) });
-  return { main: summarize(edits.filter(r => !r.agent_id)), children: summarize(edits.filter(r => r.agent_id)) };
+/** Edits by the main session and by the children (edit tools + shell-write calls), and per agent id. */
+export function editsBy(audit, timeline = []) {
+  const byAgent = editsByAgent(audit, timeline);
+  return { ...sumEdits(byAgent), byAgent };
 }
 
 /** Uniform tool calls: audit records when there are any, otherwise the stream's tool_use blocks. */
@@ -140,7 +143,8 @@ function costOf(events, result) {
   return { costSource: 'messages', usd: m.usd, estimated: true, messageUsage: m.tokensByModel };
 }
 
-export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(), canaryTokens = [], reference = {}, texts = {}, excludedFiles = [] }) {
+export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(), canaryTokens = [], reference = {}, texts = {}, excludedFiles = [], story = {}, run = {} }) {
+  const mount = story.mount ?? NATIVE_MOUNT;
   const calls = agentCalls(events);
   const byAgent = effortByAgent(audit);
   const result = resultEnvelope(events);
@@ -159,11 +163,14 @@ export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(
     effortByAgent: byAgent,
     effortNotHigh: effortFlags(byAgent),
     mainSessionEffortRecorded: Boolean(byAgent[MAIN]),
-    instructions: instructionsLoaded(audit, cellJson),
-    edits: editsBy(audit),
+    instructions: instructionsLoaded(audit, cellJson, mount),
+    edits: editsBy(audit, agentTimeline(events)),
+    parallel: parallelism(events, { wallMs: result.duration_ms ?? run.wallMs ?? null }),
+    wall: { cellMs: result.duration_ms ?? null, launcherMs: run.wallMs ?? null },
+    ...(story.layout === 'resolver' ? { resolver: resolverRecord(events, all, mount) } : {}),
     leakSuspects: leakSuspects(all, { treeRoot: treeDir, home }),
     canary: scanTokens(sources(['stream', 'audit', 'stderr', 'candidateDiff', 'excludedDiff']), { canary: canaryTokens }),
     referenceOnly: scanTokens(sources(['stream', 'candidateDiff', 'excludedDiff']), reference),
-    tamper: tamperFindings(excludedFiles, all),
+    tamper: tamperFindings(excludedFiles, all, mount),
   };
 }

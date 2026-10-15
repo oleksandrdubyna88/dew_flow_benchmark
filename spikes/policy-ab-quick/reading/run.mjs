@@ -1,9 +1,11 @@
 import path from 'path'; import {fileURLToPath} from 'url';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const REPO=process.env.BENCH_REPO||path.resolve(HERE,'../../..').split(path.sep).join('/');
-const CREDS=process.env.CREDS_REPO||'D:/rsd/dew_flow_creds_for_devs';
+import {loadStory} from '../lib/story.mjs';
+const STORY=loadStory(process.env.STORY||'creds-176');
+const CREDS=process.env.CREDS_REPO||STORY.repoClone;
 import fs from 'fs'; import {spawnSync} from 'child_process';
-const Q=path.resolve(process.argv[2]||process.env.RUNS_ROOT||'.').split(path.sep).join('/')+'/';const I=REPO+'/spikes/policy-ab-quick/inputs/';
+const Q=path.resolve(process.argv[2]||process.env.RUNS_ROOT||'.').split(path.sep).join('/')+'/';const I=STORY.inputsDir.split(path.sep).join('/')+'/';
 const stmt=fs.readFileSync(I+'statement.md','utf8');const cl=JSON.parse(fs.readFileSync(I+'checklist.json','utf8'));
 const hold=JSON.parse(fs.readFileSync(I+'holdout.json','utf8'));
 const key=JSON.parse(fs.readFileSync(Q+'assess-key.json','utf8'));
@@ -12,13 +14,13 @@ const prompt=(extra='')=>`You are assessing a candidate implementation against a
 === STATEMENT ===
 ${stmt}
 
-=== CHECKLIST (R1-R12) ===
+=== CHECKLIST (${cl.items[0].id}-${cl.items.at(-1).id}) ===
 ${JSON.stringify(cl.items,null,1)}
 
-Note: R7-R10 (harness/fixture items) are judged by reading the diff, not by running tests. R12 is judged from summary.txt (and any commit text in it).
+${cl.readerNote??(STORY.id==='creds-176'?'Note: R7-R10 (harness/fixture items) are judged by reading the diff, not by running tests. R12 is judged from summary.txt (and any commit text in it).':'')}
 
-Reply with ONLY a JSON object, no prose, no code fence: {"verdicts":[{"id":"R1","verdict":"met|partial|not_met|unresolved","evidence":"file:line or summary quote","note":"<=25 words"}, ... 12 items R1..R12]}. 'met' and 'partial' require non-empty evidence.${extra}`;
-const IDS=Array.from({length:12},(_,i)=>'R'+(i+1));
+Reply with ONLY a JSON object, no prose, no code fence: {"verdicts":[{"id":"R1","verdict":"met|partial|not_met|unresolved","evidence":"file:line or summary quote","note":"<=25 words"}, ... one item per checklist id]}. 'met' and 'partial' require non-empty evidence.${extra}`;
+const IDS=cl.items.map(i=>i.id);
 function check(t){let j;try{const m=t.match(/\{[\s\S]*\}/);j=JSON.parse(m[0])}catch(e){return 'not JSON'}
  const v=j.verdicts;if(!Array.isArray(v))return 'no verdicts';
  for(const id of IDS){const x=v.find(y=>y.id===id);if(!x)return 'missing '+id;
