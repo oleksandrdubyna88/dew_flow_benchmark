@@ -10,6 +10,8 @@ import { routeDiff } from './lib/diffsplit.mjs';
 import { buildChildEnv, buildClaudeArgs } from './lib/env.mjs';
 import { AUTHOR_ENV, git, gitEnv } from './lib/git.mjs';
 import { findOnPath, killTree } from './lib/proc.mjs';
+import { parseNdjson } from './lib/summary.mjs';
+import { rateLimitSignal } from './lib/ratelimit.mjs';
 import { CostMeter, outcomeOf, splitLines } from './lib/watchdog.mjs';
 import { PINNED_EFFORT } from './lib/settings.mjs';
 import { sha256 } from './lib/tree.mjs';
@@ -102,7 +104,8 @@ async function main(v) {
     cwd: treeDir, env, prompt: composePrompt(fs.readFileSync(v['prompt-file'] || story.promptFile, 'utf8'), story.parallelHint),
     streamPath: path.join(cellDir, 'stream.ndjson'), stderrPath: path.join(cellDir, 'stderr.txt'), wallMs: Number(v['wall-min']) * 60_000, capUsd: Number(v.cap),
   });
-  const run = { story: story.id, startedUtc, endedUtc: new Date().toISOString(), wallMs: Date.now() - t0, exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap, outcome: outcomeOf({ exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap }), meterUsdEstimated: result.meterUsd, pid: result.pid, wallMin: Number(v['wall-min']), capUsd: Number(v.cap), pinnedEffortSha256: sha256(fs.readFileSync(files.settings)) };
+  const limit = rateLimitSignal(parseNdjson(fs.readFileSync(path.join(cellDir, 'stream.ndjson'), 'utf8')));
+  const run = { story: story.id, startedUtc, endedUtc: new Date().toISOString(), wallMs: Date.now() - t0, exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap, outcome: outcomeOf({ exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap, rateLimited: limit.void }), ...(limit.void ? { rateLimit: limit } : {}), meterUsdEstimated: result.meterUsd, pid: result.pid, wallMin: Number(v['wall-min']), capUsd: Number(v.cap), pinnedEffortSha256: sha256(fs.readFileSync(files.settings)) };
   const candidate = await collectCandidate(treeDir, cellDir, root, cellJson.baseCommit, story);
   const auditSrc = path.join(treeDir, '.git', 'audit.ndjson');
   if (fs.existsSync(auditSrc)) fs.copyFileSync(auditSrc, path.join(cellDir, 'audit.ndjson'));

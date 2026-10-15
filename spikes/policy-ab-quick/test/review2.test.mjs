@@ -250,7 +250,7 @@ test('a throwing step is recorded as a crash, ends the loop, and does not throw 
   const logs = [];
   const ended = await runAll(plan, { cap: 30, stopAfter: 1000, spent: () => 0, log: l => logs.push(l), record, runCell: async p => { ran.push(p.cell); if (p.cell === 'c2') throw new Error('run-cell.mjs exited 1'); } });
   assert.deepEqual(ran, ['c1', 'c2']);
-  assert.deepEqual(ended, { stoppedBefore: '', crashedAt: 'c2' });
+  assert.deepEqual(ended, { stoppedBefore: '', crashedAt: 'c2', voidAt: '' });
   assert.deepEqual(calls.crash, [['c2', 'run-cell.mjs exited 1']]);
   assert.ok(logs.some(l => /CRASHED/.test(l)));
 });

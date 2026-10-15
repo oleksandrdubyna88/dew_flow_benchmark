@@ -169,6 +169,8 @@ export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(
     parallel: parallelism(events, { wallMs: result.duration_ms ?? run.wallMs ?? null }),
     wall: { cellMs: result.duration_ms ?? null, launcherMs: run.wallMs ?? null },
     outcome: run.outcome ?? null,
+    // A void cell measured the account's limit, not the policy: its spend is real, it is never a data point.
+    void: String(run.outcome ?? '').startsWith('void'),
     ...(story.layout === 'resolver' ? { resolver: resolverRecord(events, all, mount) } : {}),
     leakSuspects: leakSuspects(all, { treeRoot: treeDir, home }),
     canary: scanTokens(sources(['stream', 'audit', 'stderr', 'candidateDiff', 'excludedDiff']), { canary: canaryTokens }),

@@ -1,6 +1,7 @@
 // Pure: the cost watchdog and the cell outcome. The CLI's own --max-budget-usd is checked between turns and parallel children can
 // overshoot it, so run-cell also meters the stream and kills the process tree (by the PID it started) at cap x 1.1.
 import { costFromMessages, OUTPUT_FLOOR_PER_MESSAGE } from './pricing.mjs';
+import { VOID_OUTCOME } from './ratelimit.mjs';
 
 export const OVER_CAP_FACTOR = 1.1;
 
@@ -37,8 +38,12 @@ export function splitLines(carry, chunk) {
   return { lines: parts.slice(0, -1), carry: parts.at(-1) };
 }
 
-/** The cell's outcome: completed / killed: wall / killed: over cap / crashed. A kill outranks the exit code it caused. */
-export function outcomeOf({ exitCode, timedOut = false, overCap = false, threw = false }) {
+/**
+ * The cell's outcome: void: rate limit / completed / killed: wall / killed: over cap / crashed. The account's limit outranks everything (the
+ * session measured the account, whatever else happened); a kill outranks the exit code it caused.
+ */
+export function outcomeOf({ exitCode, timedOut = false, overCap = false, threw = false, rateLimited = false }) {
+  if (rateLimited) return VOID_OUTCOME;
   if (overCap) return 'killed: over cap';
   if (timedOut) return 'killed: wall';
   if (threw || exitCode !== 0) return 'crashed';

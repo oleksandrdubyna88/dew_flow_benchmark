@@ -5,7 +5,7 @@ import path from 'node:path';
 import { parseCli } from './lib/args.mjs';
 import { ARM_SHAS, REPO_ROOT } from './lib/consts.mjs';
 import { readRunMap } from './lib/runmap.mjs';
-import { outcomeOfCell, reportFindings } from './lib/findings.mjs';
+import { allVoid, outcomeOfCell, reportFindings, voidSpend } from './lib/findings.mjs';
 import { ownSuiteVsReference } from './lib/ownsuite.mjs';
 import { machineScrubber, scrubStrings } from './lib/scrub.mjs';
 import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
@@ -21,7 +21,7 @@ const readJson = file => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,
 
 /** Pure: one cell's record from its parts. */
 export function cellRecord(name, summary, score, cellJson, mapEntry) {
-  return { cell: name, arm: mapEntry?.arm ?? null, armSha: mapEntry?.armSha ?? null, outcome: outcomeOfCell(mapEntry, summary), crash: mapEntry?.crash ?? null, overlay: mapEntry?.private?.overlay ?? cellJson?.overlay ?? null, summary, score };
+  return { cell: name, arm: mapEntry?.arm ?? null, armSha: mapEntry?.armSha ?? null, outcome: outcomeOfCell(mapEntry, summary), attempts: mapEntry?.attempts ?? [], crash: mapEntry?.crash ?? null, overlay: mapEntry?.private?.overlay ?? cellJson?.overlay ?? null, summary, score };
 }
 
 /** Pure (readers injected): the whole report object - cells with their outcome, the series stop, and the findings. */
@@ -36,8 +36,19 @@ export function assembleReport({ story, runMap, root, read = readJson, now = new
   return {
     generatedUtc: now, seed: runMap.seed ?? null, order: runMap.order ?? null, blocks: runMap.blocks ?? null, stop,
     story: { id: story.id, repo: story.repo, pr: story.pr, P: story.P, S: story.S, layout: story.layout }, arms: ARM_SHAS, cells,
+    voidSpendUsd: voidSpend(cells), resumes: runMap.resumes ?? [],
     findings: reportFindings({ cells, stop }),
   };
+}
+
+/**
+ * Where the report goes. A report whose every cell is void is not a result: it never overwrites research/bench/<story>-data.json (the file a
+ * real run produces); it is written into the runs root instead.
+ */
+export function reportTarget({ out, story, report, root }) {
+  if (out) return path.resolve(out);
+  if (allVoid(report.cells)) return path.join(root, 'report-void.json');
+  return path.join(REPO_ROOT, 'research', 'bench', story.id === 'creds-176' ? 'quick-pilot-data.json' : `policy-ab-${story.id}-data.json`);
 }
 
 function main(v) {
@@ -47,7 +58,7 @@ function main(v) {
   const report = assembleReport({ story, runMap, root });
   const cells = report.cells;
   const data = scrubStrings(report, machineScrubber({ runsRoot: root, creds: story.repoClone, label: story.scrubLabel }));
-  const out = v.out ? path.resolve(v.out) : path.join(REPO_ROOT, 'research', 'bench', story.id === 'creds-176' ? 'quick-pilot-data.json' : `policy-ab-${story.id}-data.json`);
+  const out = reportTarget({ out: v.out, story, report, root });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, `${JSON.stringify(data, null, 2)}\n`);
   console.log(`wrote ${out} (${cells.length} cells)`);
