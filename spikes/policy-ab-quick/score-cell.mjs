@@ -6,7 +6,8 @@ import { parseCli, requireValues } from './lib/args.mjs';
 import { ownSuiteTargets, resolveCompile } from './lib/commands.mjs';
 import { git, gitEnv, gitShow, gitlinkAt } from './lib/git.mjs';
 import { compiledTestPath, entryPath, fileStem, holdoutEntries, repoPathOf } from './lib/holdout.mjs';
-import { parseJunit, verdictOf } from './lib/junit.mjs';
+import { assertRunsRoot, removeUnder } from './lib/safe-rm.mjs';
+import { nodeTest } from './lib/suite.mjs';
 import { run } from './lib/proc.mjs';
 import { fileURLToPath } from 'node:url';
 import { shedCell } from './lib/shed.mjs';
@@ -57,8 +58,8 @@ function copyTree(from, to) {
 async function prepareCopy(copy, story, commands, pin) {
   if (story.layout === 'resolver') {
     const mount = mountDirOf(copy, story);
-    if (path.relative(copy, mount).startsWith('..')) throw new Error('refusing: the mount is outside the scoring copy');
-    fs.rmSync(mount, { recursive: true, force: true });
+    removeUnder(mount, copy); // refuses a link or junction at the mount, or one above it that leaves the copy
+
     await extractConventionsInto(copy, story.mount, pin);
   }
   if (commands?.commands?.prepareGenerated) {
@@ -82,12 +83,6 @@ async function compileKeepingOut(webDir, commands) {
 }
 
 const compileInfo = c => ({ ok: c.ok, exitCode: c.exitCode, diagnosticCount: c.diagnostics.length, diagnostics: c.diagnostics.slice(0, MAX_DIAGS), tail: c.diagnostics.length === 0 ? c.tail : '' });
-
-async function nodeTest(webDir, targets, xmlPath) {
-  const r = await run(process.execPath, ['--test', '--test-reporter=junit', `--test-reporter-destination=${xmlPath}`, ...targets], { cwd: webDir, env: process.env });
-  const parsed = fs.existsSync(xmlPath) ? parseJunit(fs.readFileSync(xmlPath, 'utf8')) : parseJunit('');
-  return { verdict: verdictOf(parsed, r.code), exitCode: r.code, tests: parsed.tests, passed: parsed.passed, failed: parsed.failed, skipped: parsed.skipped, failedCases: parsed.cases.filter(c => c.status === 'fail').map(c => c.name), detail: parsed.tests === 0 ? tail(Buffer.concat([r.stdout, r.stderr])) : '' };
-}
 
 /** Pure: the combined verdict. A compile error counts against the hold-out only when it is located in the hold-out file. */
 export function holdoutVerdict({ holdoutDiagnostics, emitted, testVerdict }) {
@@ -130,12 +125,12 @@ async function scoreOwnSuite(treeDir, scoreDir, commands, story, pin) {
 
 function reportShed({ removed, refused }) {
   for (const p of removed) console.log(`shed ${p}`);
-  for (const p of refused) console.log(`shed REFUSED ${p}`);
+  for (const r of refused) console.log(`shed REFUSED ${r.target}: ${r.reason}`);
 }
 
 async function main(v) {
   const story = loadStory(v.story);
-  const root = runsRootOf(v, story);
+  const root = assertRunsRoot(runsRootOf(v, story));
   const cellDir = path.join(root, v.cell);
   const treeDir = v.cell === 'reference' ? await ensureReferenceTree(cellDir, v['skip-npm'], story) : path.join(cellDir, 'tree');
   if (!fs.existsSync(treeDir)) throw new Error(`no tree at ${treeDir}`);

@@ -63,14 +63,23 @@ export function sweepSpans(spans) {
   return { maxConcurrent: max, overlapMs, unionMs };
 }
 
-/** Pure: the children whose time overlaps another child's on the SAME model - their cost cannot be told apart. */
+/**
+ * Pure: the children whose time overlaps another child's on the SAME model - their cost cannot be told apart. A group is a
+ * CONNECTED COMPONENT of the overlap relation: when A overlaps B and B overlaps C (A and C apart), all three are one group,
+ * because B's cost cannot be separated from either neighbour's.
+ */
 export function inseparableGroups(timeline) {
   const model = t => t.resolvedModel ?? t.requestedModel ?? 'unresolved';
-  const spanned = timeline.map(t => ({ t, span: spanOf(t) })).filter(x => x.span);
+  const spanned = timeline.map(t => ({ id: t.id, model: model(t), span: spanOf(t) })).filter(x => x.span);
+  const parent = new Map(spanned.map(s => [s.id, s.id]));
+  const find = id => (parent.get(id) === id ? id : find(parent.get(id)));
+  for (const a of spanned) for (const b of spanned) if (a.id < b.id && a.model === b.model && overlaps(a.span, b.span)) parent.set(find(a.id), find(b.id));
+  const components = Map.groupBy(spanned, s => find(s.id));
   const groups = new Map();
-  for (const a of spanned) {
-    const peers = spanned.filter(b => b.t.id !== a.t.id && model(b.t) === model(a.t) && overlaps(a.span, b.span));
-    if (peers.length > 0) groups.set(a.t.id, [a.t.id, ...peers.map(p => p.t.id)].sort());
+  for (const members of components.values()) {
+    if (members.length < 2) continue;
+    const ids = members.map(m => m.id).sort();
+    for (const id of ids) groups.set(id, ids);
   }
   return groups;
 }

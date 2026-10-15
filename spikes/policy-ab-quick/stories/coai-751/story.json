@@ -14,5 +14,10 @@
   "parallelHint": true,
   "defaultRunsRoot": "D:/rsd/_s2",
   "canarySlug": "D--rsd-dew-flow-connect-other-ais",
-  "scrubLabel": "<repo>"
+  "scrubLabel": "<repo>",
+  "policyFiles": [
+    "common/subagent-models.md",
+    "settings/hooks/subagent-model.mjs",
+    "settings/settings.json"
+  ]
 }

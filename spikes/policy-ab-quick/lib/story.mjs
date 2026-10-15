@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { SPIKE_DIR } from './consts.mjs';
+import { assertRunsRoot } from './safe-rm.mjs';
 
 export const DEFAULT_STORY = 'creds-176';
 export const LAYOUTS = Object.freeze(['native', 'resolver']);
@@ -15,8 +16,9 @@ export function parseStory(id, json, spikeDir = SPIKE_DIR) {
   if (missing.length > 0) throw new Error(`story ${id}: missing ${missing.join(', ')}`);
   if (!LAYOUTS.includes(json.layout)) throw new Error(`story ${id}: layout must be one of ${LAYOUTS.join('|')}, got ${json.layout}`);
   for (const k of ['P', 'S']) if (!SHA.test(json[k])) throw new Error(`story ${id}: ${k} is not a 40-hex sha`);
+  if (json.layout === 'resolver' && !(Array.isArray(json.policyFiles) && json.policyFiles.length > 0)) throw new Error(`story ${id}: the resolver layout declares its policyFiles`);
   const story = {
-    scrubLabel: '<repo>', parallelHint: false, ...json, id,
+    scrubLabel: '<repo>', parallelHint: false, policyFiles: [], ...json, id,
     inputsDir: path.resolve(spikeDir, json.inputs), promptFile: path.resolve(spikeDir, json.prompt),
   };
   return Object.freeze({ ...story, runMapFile: path.join(spikeDir, id === DEFAULT_STORY ? 'run-map.json' : `run-map.${id}.json`) });
@@ -36,4 +38,4 @@ export const STORY_OPTION = Object.freeze({ type: 'string', default: DEFAULT_STO
 export const overlayTarget = (story, rule) => `${story.mount}/${rule}`;
 
 /** The runs root a script uses: --runs-root when given, else the story's own default. */
-export const runsRootOf = (values, story) => path.resolve(values['runs-root'] || story.defaultRunsRoot);
+export const runsRootOf = (values, story) => assertRunsRoot(values['runs-root'] || story.defaultRunsRoot);

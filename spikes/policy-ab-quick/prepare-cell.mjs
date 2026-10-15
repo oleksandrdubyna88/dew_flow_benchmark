@@ -2,10 +2,11 @@
 // Build one cell's tree. Two layouts (stories/<id>/story.json):
 //  - native   (creds): P + the conventions pin archived into .claude/rules/shared + the arm's two overlaid rule files + hooks.
 //             Claude discovers the rules itself, so the mount is trimmed to rule directories.
-//  - resolver (coai):  P + a REAL git checkout of the conventions at the ARM's commit mounted at .agents/conventions (the
-//             story's own `npm run compile` runs the conventions' resolver, which demands a clean checkout whose HEAD equals the
-//             outer gitlink). No file overlay: the arms differ by exactly the policy release. The tree's adapter hooks and the
-//             `hooks` key of its settings are re-synced from that mount, then ours are added beside them. Verified before use.
+//  - resolver (coai):  P + a one-commit git repository mounted at .agents/conventions, built from P's PINNED conventions (the story's
+//             own `npm run compile` runs the conventions' resolver, which demands a clean checkout whose HEAD equals the outer
+//             gitlink). Arm B adds the release's guard files (story.policyFiles) and nothing else; arm A is the pin unchanged; the
+//             delta is asserted. The tree's adapter hooks and the `hooks` key of its settings are re-synced from that mount, then
+//             ours are added beside them. Verified before use; --verify-only also runs P's own suite so the arms can be compared.
 import fs from 'node:fs';
 import path from 'node:path';
 import { hookFilesOf, syncHooksKey, withoutUserGuard } from './lib/adapter.mjs';
@@ -18,7 +19,10 @@ import { applyOverlaySettings, existingHooksPreserved } from './lib/settings.mjs
 import { loadStory, runsRootOf, STORY_OPTION } from './lib/story.mjs';
 import { parseStruck, remainingModels, strikeTargets, withholdModels } from './lib/strike.mjs';
 import { selectRemovals } from './lib/trim.mjs';
-import { assertMountPinned, cloneMountAt, extractBase, installResolver, mountDirOf, npmCi, sha256, stageMountGitlink, writeFileMaking } from './lib/tree.mjs';
+import { ownSuiteTargets } from './lib/commands.mjs';
+import { rerunTargets, settleFailures } from './lib/probe.mjs';
+import { nodeTest } from './lib/suite.mjs';
+import { assertMountPinned, buildArmMount, extractBase, installResolver, mountDirOf, npmCi, sha256, stageMountGitlink, writeFileMaking } from './lib/tree.mjs';
 
 const SPEC = {
   cell: { type: 'string', help: 'neutral cell name: c1..c9 (verify-only: default probe-<arm>)' },
@@ -222,6 +226,19 @@ async function installAndVerify(treeDir, story, resolver) {
   return { sessionStart, verified };
 }
 
+/** Probe only: P's own suite on the prepared tree, as the cell's agent would run it. The failing set must match across arms. */
+async function probeSuite(treeDir, story, cellDir) {
+  const commands = readJsonIf(path.join(story.inputsDir, 'commands.json'));
+  const web = path.join(treeDir, story.srcDir);
+  const first = await nodeTest(web, ownSuiteTargets(commands), path.join(cellDir, 'suite.xml'));
+  // A failure that does not repeat when its file runs alone is load-dependent (a timing test while the whole suite runs): settle it.
+  const rerun = first.failedCases.length === 0 ? { failedCases: [] } : await nodeTest(web, rerunTargets(first.failedCases), path.join(cellDir, 'suite-rerun.xml'));
+  const settled = settleFailures(first.failedCases, rerun.failedCases);
+  const suite = { ...first, failedCases: settled.failedCases, flaky: settled.flaky };
+  fs.writeFileSync(path.join(cellDir, 'suite.json'), `${JSON.stringify({ tests: suite.tests, failedFirstRun: first.failed, failedCases: suite.failedCases, flaky: suite.flaky, verdict: suite.verdict }, null, 2)}\n`);
+  return suite;
+}
+
 async function main(v) {
   const story = loadStory(v.story);
   const probe = Boolean(v['verify-only']);
@@ -233,10 +250,8 @@ async function main(v) {
   if (fs.existsSync(treeDir)) throw new Error(`refusing: ${treeDir} already exists`);
   fs.mkdirSync(cellDir, { recursive: true });
   const resolver = story.layout === 'resolver';
-  const submodulePin = await extractBase(cellDir, story, { mount: !resolver });
-  const cloneConfig = path.join(cellDir, '_empty.gitconfig');
-  fs.writeFileSync(cloneConfig, '');
-  const mountHead = resolver ? await cloneMountAt(treeDir, story, ARM_SHAS[v.arm], cloneConfig) : null;
+  const submodulePin = await extractBase(cellDir, story);
+  const armMount = resolver ? await buildArmMount(treeDir, story, v.arm, submodulePin, ARM_SHAS) : null;
   const plan = strikePlan(treeDir, story);
   const baseTree = await initAndBaseTree(treeDir, story);
   const overlay = resolver ? overlayFromMount(treeDir, story) : await writeOverlay(treeDir, v.arm, story);
@@ -244,8 +259,13 @@ async function main(v) {
   const hooks = resolver ? await writeHooksResolver(treeDir, v.arm, story) : await writeHooks(treeDir, v.arm);
   const committed = await commitTree(treeDir);
   const checks = v['skip-npm'] ? { sessionStart: null, verified: null } : await installAndVerify(treeDir, story, resolver);
-  if (!probe) updateRunMap({ cells: { [v.cell]: { arm: v.arm, armSha: ARM_SHAS[v.arm] } } }, story.runMapFile);
-  const record = { cell: v.cell, story: story.id, layout: story.layout, P: story.P, submodulePin, armSha: ARM_SHAS[v.arm], mountHead, baseTree, ...committed, overlay, treeSha256: sha256(Buffer.from(JSON.stringify(overlay))), ...plan, trimmedMount: trimmed, ...hooks, sessionStartProbe: checks.sessionStart, verified: checks.verified, probe, createdUtc: new Date().toISOString() };
+  // The arm and everything that names it live in the run map, OUTSIDE the runs root - never in cell.json, which sits beside the tree.
+  const suite = probe && !v['skip-npm'] ? await probeSuite(treeDir, story, cellDir) : null;
+  // cell.json sits BESIDE the tree the model can reach: it holds nothing that tells the arms apart. What does (the overlay's shas, the hook
+  // inventory, the adapter diff, the mount commit) goes to the run map outside the runs root, next to the arm.
+  const privateRecord = { overlay, treeSha256: sha256(Buffer.from(JSON.stringify(overlay))), trimmedMount: trimmed, ...hooks, ...(armMount ? { mountHead: armMount.head, policyDelta: armMount.delta } : {}) };
+  if (!probe) updateRunMap({ cells: { [v.cell]: { arm: v.arm, armSha: ARM_SHAS[v.arm], private: privateRecord } } }, story.runMapFile);
+  const record = { cell: v.cell, story: story.id, layout: story.layout, P: story.P, submodulePin, baseTree, ...committed, ...plan, ...(probe ? { private: privateRecord } : {}), sessionStartProbe: checks.sessionStart, verified: checks.verified, probe, suite: suite && { tests: suite.tests, failed: suite.failed }, createdUtc: new Date().toISOString() };
   fs.writeFileSync(path.join(cellDir, 'cell.json'), `${JSON.stringify(record, null, 2)}\n`);
   console.log(`${probe ? 'verified probe' : 'prepared'} ${v.cell} at ${treeDir}`);
 }

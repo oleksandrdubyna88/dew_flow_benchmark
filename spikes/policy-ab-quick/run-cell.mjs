@@ -10,7 +10,7 @@ import { routeDiff } from './lib/diffsplit.mjs';
 import { buildChildEnv, buildClaudeArgs } from './lib/env.mjs';
 import { AUTHOR_ENV, git, gitEnv } from './lib/git.mjs';
 import { findOnPath, killTree } from './lib/proc.mjs';
-import { armOf } from './lib/runmap.mjs';
+import { CostMeter, outcomeOf, splitLines } from './lib/watchdog.mjs';
 import { PINNED_EFFORT } from './lib/settings.mjs';
 import { sha256 } from './lib/tree.mjs';
 
@@ -42,17 +42,31 @@ export async function assertFresh(cellDir, treeDir, root) {
   if (status !== '') throw new Error(`refusing: tree is not clean before launch:\n${status.slice(0, 600)}`);
 }
 
-function launch(exe, args, { cwd, env, prompt, streamPath, stderrPath, wallMs }) {
+/**
+ * Launch and watch. Two kills, both of the process tree of the PID started here (never by image name): the wall limit, and the
+ * cost watchdog - the stream is metered with the fallback rates and the tree is killed at cap x 1.1, because the CLI's own budget
+ * is checked between turns and parallel children can overshoot it.
+ */
+function launch(exe, args, { cwd, env, prompt, streamPath, stderrPath, wallMs, capUsd }) {
   return new Promise((resolve, reject) => {
     const out = fs.createWriteStream(streamPath);
     const err = fs.createWriteStream(stderrPath);
     const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    const meter = new CostMeter();
     let timedOut = false;
+    let overCap = false;
+    let carry = '';
     const timer = setTimeout(() => { timedOut = true; killTree(child.pid); }, wallMs);
     child.stdout.pipe(out);
+    child.stdout.on('data', chunk => {
+      const split = splitLines(carry, chunk.toString('utf8'));
+      carry = split.carry;
+      for (const line of split.lines) meter.feed(line);
+      if (!overCap && meter.overCap(capUsd)) { overCap = true; killTree(child.pid); }
+    });
     child.stderr.pipe(err);
     child.on('error', reject);
-    child.on('close', code => { clearTimeout(timer); resolve({ code, timedOut, pid: child.pid }); });
+    child.on('close', code => { clearTimeout(timer); resolve({ code, timedOut, overCap, meterUsd: meter.usd, pid: child.pid }); });
     child.stdin.on('error', () => {});
     child.stdin.end(prompt);
   });
@@ -77,7 +91,7 @@ async function main(v) {
   const treeDir = path.join(cellDir, 'tree');
   const files = ensureSharedFiles(root);
   await assertFresh(cellDir, treeDir, root);
-  const env = buildChildEnv(process.env, { arm: armOf(v.cell, story.runMapFile), emptyGitConfig: files.gitconfig });
+  const env = buildChildEnv(process.env, { emptyGitConfig: files.gitconfig });
   const args = buildClaudeArgs({ settingsPath: files.settings, mcpPath: files.mcp, cap: v.cap, hookEvents: story.layout === 'resolver' });
   const exe = findOnPath('claude', process.env[Object.keys(process.env).find(k => k.toLowerCase() === 'path')], ['.exe']);
   if (!exe) throw new Error('claude.exe not found on PATH');
@@ -86,14 +100,14 @@ async function main(v) {
   const t0 = Date.now();
   const result = await launch(exe, args, {
     cwd: treeDir, env, prompt: composePrompt(fs.readFileSync(v['prompt-file'] || story.promptFile, 'utf8'), story.parallelHint),
-    streamPath: path.join(cellDir, 'stream.ndjson'), stderrPath: path.join(cellDir, 'stderr.txt'), wallMs: Number(v['wall-min']) * 60_000,
+    streamPath: path.join(cellDir, 'stream.ndjson'), stderrPath: path.join(cellDir, 'stderr.txt'), wallMs: Number(v['wall-min']) * 60_000, capUsd: Number(v.cap),
   });
-  const run = { story: story.id, startedUtc, endedUtc: new Date().toISOString(), wallMs: Date.now() - t0, exitCode: result.code, timedOut: result.timedOut, pid: result.pid, wallMin: Number(v['wall-min']), capUsd: Number(v.cap), pinnedEffortSha256: sha256(fs.readFileSync(files.settings)) };
+  const run = { story: story.id, startedUtc, endedUtc: new Date().toISOString(), wallMs: Date.now() - t0, exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap, outcome: outcomeOf({ exitCode: result.code, timedOut: result.timedOut, overCap: result.overCap }), meterUsdEstimated: result.meterUsd, pid: result.pid, wallMin: Number(v['wall-min']), capUsd: Number(v.cap), pinnedEffortSha256: sha256(fs.readFileSync(files.settings)) };
   const candidate = await collectCandidate(treeDir, cellDir, root, cellJson.baseCommit, story);
   const auditSrc = path.join(treeDir, '.git', 'audit.ndjson');
   if (fs.existsSync(auditSrc)) fs.copyFileSync(auditSrc, path.join(cellDir, 'audit.ndjson'));
   fs.writeFileSync(path.join(cellDir, 'run.json'), `${JSON.stringify({ ...run, ...candidate }, null, 2)}\n`);
-  console.log(`cell ${v.cell}: exit ${run.exitCode}, wall ${run.wallMs} ms${run.timedOut ? ' (WALL TIMEOUT)' : ''}`);
+  console.log(`cell ${v.cell}: ${run.outcome}, exit ${run.exitCode}, wall ${run.wallMs} ms, meter ~$${run.meterUsdEstimated}`);
 }
 
 if (process.argv[1]?.endsWith('run-cell.mjs')) {

@@ -55,7 +55,7 @@ export function auditRecord(payload, nowIso, sha256Of) {
 export function gitDirFor(root, fsApi = fs) {
   const dotGit = path.join(root, '.git');
   if (!fsApi.statSync(dotGit).isFile()) return dotGit;
-  const m = /^gitdir:s*(.+)$/m.exec(fsApi.readFileSync(dotGit, 'utf8'));
+  const m = /^gitdir:\s*(.+)$/m.exec(fsApi.readFileSync(dotGit, 'utf8'));
   return m ? path.resolve(root, m[1].trim()) : dotGit;
 }
 

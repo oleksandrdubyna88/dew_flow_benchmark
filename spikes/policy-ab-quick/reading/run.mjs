@@ -2,13 +2,14 @@ import path from 'path'; import {fileURLToPath} from 'url';
 const HERE=path.dirname(fileURLToPath(import.meta.url));
 const REPO=process.env.BENCH_REPO||path.resolve(HERE,'../../..').split(path.sep).join('/');
 import {loadStory} from '../lib/story.mjs';
+import {readingKeyFile} from '../lib/reader.mjs';
 const STORY=loadStory(process.env.STORY||'creds-176');
 const CREDS=process.env.CREDS_REPO||STORY.repoClone;
 import fs from 'fs'; import {spawnSync} from 'child_process';
 const Q=path.resolve(process.argv[2]||process.env.RUNS_ROOT||'.').split(path.sep).join('/')+'/';const I=STORY.inputsDir.split(path.sep).join('/')+'/';
 const stmt=fs.readFileSync(I+'statement.md','utf8');const cl=JSON.parse(fs.readFileSync(I+'checklist.json','utf8'));
 const hold=JSON.parse(fs.readFileSync(I+'holdout.json','utf8'));
-const key=JSON.parse(fs.readFileSync(Q+'assess-key.json','utf8'));
+const key=JSON.parse(fs.readFileSync(readingKeyFile(STORY.id),'utf8'));
 const prompt=(extra='')=>`You are assessing a candidate implementation against a frozen requirement statement. READ-ONLY. Read ONLY the files candidate.diff and summary.txt in your current directory (do not look elsewhere).
 
 === STATEMENT ===

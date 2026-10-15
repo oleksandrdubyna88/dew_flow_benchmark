@@ -1,5 +1,6 @@
 // Fallback cost when a cell has no result envelope (wall timeout). USD per million tokens.
-// ESTIMATE ONLY — compare against a completed cell's modelUsage before trusting it.
+// ESTIMATE ONLY — these rates can go stale. A cell's reported cost is ALWAYS the CLI envelope's total; this table prices a cell
+// without an envelope (a killed one) and feeds the cost watchdog, and both are marked `estimated` wherever they surface.
 const RATES = { opus: [15, 75, 1.5, 18.75], fable: [15, 75, 1.5, 18.75], sonnet: [3, 15, 0.3, 3.75], haiku: [1, 5, 0.1, 1.25] };
 
 const rateFor = model => RATES[Object.keys(RATES).find(k => model.toLowerCase().includes(k)) ?? 'opus'];

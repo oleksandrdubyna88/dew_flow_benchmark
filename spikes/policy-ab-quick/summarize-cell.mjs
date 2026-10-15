@@ -33,7 +33,8 @@ function main(v) {
   const cellDir = path.join(runsRootOf(v, story), v.cell);
   const read = name => readIf(path.join(cellDir, name));
   const auditText = read('audit.ndjson') || readIf(path.join(cellDir, 'tree', '.git', 'audit.ndjson'));
-  const cellJson = JSON.parse(read('cell.json') || '{}');
+  const mapEntry = readRunMap(story.runMapFile).cells?.[v.cell];
+  const cellJson = { ...JSON.parse(read('cell.json') || '{}'), ...(mapEntry?.private ? { overlay: mapEntry.private.overlay } : {}) };
   const run = JSON.parse(read('run.json') || '{}');
   const reference = JSON.parse(readIf(path.join(story.inputsDir, 'reference-only-tokens.json')) || '{}');
   const summary = summarize({

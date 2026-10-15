@@ -355,7 +355,7 @@ test('own-suite targets come from testAll when it is a node --test; the referenc
   assert.deepEqual(ownSuiteTargets({ commands: { testAll: { exe: 'node', args: ['scripts/run-tests.mjs'] } } }), ['out/test/*.test.js']);
   assert.deepEqual(ownSuiteTargets({}), ['out/test/*.test.js']);
   const ref = { tests: 100, failedCases: ['a', 'b', 'c'] };
-  assert.deepEqual(ownSuiteVsReference({ tests: 100, failedCases: ['a', 'c'] }, ref), { verdict: 'pass', newFailures: [], referenceFailed: 3, referenceTests: 100, candidateTests: 100 });
+  assert.deepEqual(ownSuiteVsReference({ tests: 100, failedCases: ['a', 'c'] }, ref), { verdict: 'pass', newFailures: [], referenceFailed: 3, referenceTests: 100, candidateTests: 100, fewerTestsThanReference: false });
   assert.deepEqual(ownSuiteVsReference({ tests: 101, failedCases: ['a', 'z'] }, ref).newFailures, ['z']);
   assert.equal(ownSuiteVsReference({ tests: 101, failedCases: ['z'] }, ref).verdict, 'fail');
   assert.equal(ownSuiteVsReference({ tests: 0 }, ref).verdict, 'no-report');

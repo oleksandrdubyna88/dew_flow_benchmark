@@ -68,7 +68,7 @@ test('tsc diagnostics are parsed and attributed to the hold-out file only', () =
   assert.equal(attributeDiagnostics(d, 'src/test/zzz.test.ts', []).otherNew.length, 2);
 });
 
-test('child env: deny families, allow back three, arm A adds guard off', () => {
+test('child env: deny families, allow back three; no arm-only variable (the guard opt-out is gone)', () => {
   const parent = { CLAUDE_FOO: 1, CLAUDE_CODE_GIT_BASH_PATH: 'g', CLAUDE_CODE_USE_POWERSHELL_TOOL: '1', CLAUDE_CONFIG_DIR: 'c', ANTHROPIC_BASE_URL: 'u', MCP_TIMEOUT: '1', OTEL_X: '1', TRACEPARENT: 't', AI_AGENT: 'a', GITHUB_TOKEN: 'g', ANTHROPIC_API_KEY: 'k', HOME: 'h' };
   const e = buildChildEnv(parent, { arm: 'B', emptyGitConfig: 'E', hasGh: () => false });
   for (const k of ['CLAUDE_FOO', 'ANTHROPIC_BASE_URL', 'MCP_TIMEOUT', 'OTEL_X', 'TRACEPARENT', 'AI_AGENT', 'GITHUB_TOKEN']) assert.ok(!(k in e), k);
@@ -76,7 +76,7 @@ test('child env: deny families, allow back three, arm A adds guard off', () => {
   assert.ok(!('SUBAGENT_MODEL_GUARD' in e));
   assert.equal(e.CLAUDE_CODE_ENTRYPOINT, 'claude-vscode');
   assert.equal(buildChildEnv({ CLAUDE_CODE_ENTRYPOINT: 'sdk-ts' }, { arm: 'A', emptyGitConfig: 'E', hasGh: () => false }).CLAUDE_CODE_ENTRYPOINT, 'claude-vscode');
-  assert.equal(buildChildEnv(parent, { arm: 'A', emptyGitConfig: 'E', hasGh: () => false }).SUBAGENT_MODEL_GUARD, 'off');
+  assert.ok(!('SUBAGENT_MODEL_GUARD' in buildChildEnv(parent, { arm: 'A', emptyGitConfig: 'E', hasGh: () => false })));
   assert.ok(buildClaudeArgs({ settingsPath: 'S', mcpPath: 'M', cap: 1 }).includes('--forward-subagent-text'));
 });
 

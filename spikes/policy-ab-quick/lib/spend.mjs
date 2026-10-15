@@ -6,12 +6,15 @@ export const costOfSummary = summary => Number(summary?.usd ?? summary?.result?.
 
 export const round2 = n => Math.round(n * 100) / 100;
 
-/** The stop decision before a cell: spent so far strictly above stopAfter stops the series. */
-export function spendDecision(spentUsd, stopAfterUsd) {
-  const stop = spentUsd > stopAfterUsd;
+/**
+ * The stop decision before a cell. `stopAfter` is a CEILING: the next cell may cost up to `cap`, so it is not started when
+ * what is spent plus that cap would pass the ceiling.
+ */
+export function spendDecision(spentUsd, stopAfterUsd, capUsd = 0) {
+  const stop = spentUsd + capUsd > stopAfterUsd;
   return { stop, line: stop
-    ? `STOP: spent $${round2(spentUsd)} so far exceeds --stop-after $${round2(stopAfterUsd)}; no further cell is started`
-    : `spend so far $${round2(spentUsd)} (stop-after $${round2(stopAfterUsd)})` };
+    ? `STOP: spent $${round2(spentUsd)} + cap $${round2(capUsd)} would pass --stop-after $${round2(stopAfterUsd)}; no further cell is started`
+    : `spend so far $${round2(spentUsd)} + cap $${round2(capUsd)} stays within --stop-after $${round2(stopAfterUsd)}` };
 }
 
 /**

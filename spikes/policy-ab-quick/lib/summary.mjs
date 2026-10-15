@@ -167,6 +167,7 @@ export function summarize({ events, audit, cellJson, treeDir, home = os.homedir(
     edits: editsBy(audit, agentTimeline(events)),
     parallel: parallelism(events, { wallMs: result.duration_ms ?? run.wallMs ?? null }),
     wall: { cellMs: result.duration_ms ?? null, launcherMs: run.wallMs ?? null },
+    outcome: run.outcome ?? null,
     ...(story.layout === 'resolver' ? { resolver: resolverRecord(events, all, mount) } : {}),
     leakSuspects: leakSuspects(all, { treeRoot: treeDir, home }),
     canary: scanTokens(sources(['stream', 'audit', 'stderr', 'candidateDiff', 'excludedDiff']), { canary: canaryTokens }),

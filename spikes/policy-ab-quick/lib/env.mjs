@@ -14,8 +14,12 @@ export function filterPath(pathValue, hasGh) {
 
 const dirHasGh = dir => ['gh.exe', 'gh'].some(n => { try { return fs.statSync(path.join(dir, n)).isFile(); } catch { return false; } });
 
-/** Pure (hasGh injected): the child environment of one cell. */
-export function buildChildEnv(parent, { arm, emptyGitConfig, hasGh = dirHasGh }) {
+/**
+ * Pure (hasGh injected): the child environment of one cell. IDENTICAL for both arms (`arm` is accepted and ignored): a variable
+ * present in one arm only would tell the model which arm it is in. The arm A tree wires no guard hook, and `--setting-sources project`
+ * keeps a user-level guard (~/.claude) out, so no opt-out variable is needed.
+ */
+export function buildChildEnv(parent, { emptyGitConfig, hasGh = dirHasGh }) {
   const kept = Object.fromEntries(Object.entries(parent).filter(([k]) => KEEP.has(k) || !DROP.some(re => re.test(k))));
   const pathKey = Object.keys(kept).find(k => k.toLowerCase() === 'path');
   const filtered = pathKey ? { [pathKey]: filterPath(kept[pathKey], hasGh) } : {};
@@ -31,7 +35,6 @@ export function buildChildEnv(parent, { arm, emptyGitConfig, hasGh = dirHasGh })
     GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: 'bench', GIT_AUTHOR_EMAIL: 'bench@invalid',
     GIT_COMMITTER_NAME: 'bench', GIT_COMMITTER_EMAIL: 'bench@invalid',
-    ...(arm === 'A' ? { SUBAGENT_MODEL_GUARD: 'off' } : {}),
   };
 }
 
