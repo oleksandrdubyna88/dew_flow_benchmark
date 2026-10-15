@@ -17,6 +17,8 @@ function resultText(c){const l=fs.readFileSync(Q+c+'/stream.ndjson','utf8').spli
 const cells=['c1','c2','c3','c4','c5','c6','c7','c8','c9'].filter(c=>fs.existsSync(Q+c+'/candidate.diff'));
 const src=Object.fromEntries(cells.map(c=>[c,[fs.readFileSync(Q+c+'/candidate.diff','utf8'),resultText(c)]]));
 src.reference=[refDiff,execSync(`git -C ${CREDS} log -1 --format=%B ${STORY.S}`,{encoding:'utf8'})];
+// Calibration variant (stories with a planted-defect.md): the reference with ONE timing defect - activation awaits the side stamp. Both edits must apply exactly once.
+if(fs.existsSync(STORY.inputsDir+'/planted-defect.md')){let pd=refDiff;const edits=[['+export function activate(context: vscode.ExtensionContext): CoaiExports {','+export async function activate(context: vscode.ExtensionContext): Promise<CoaiExports> {'],['+  void stampThisSide(','+  await stampThisSide(']];for(const [a,b] of edits){if(pd.split(a).length!==2)throw new Error('planted edit does not apply exactly once: '+a);pd=pd.replace(a,()=>b)}src.planted=[pd,src.reference[1]]}
 const names=shuffleSeeded(Object.keys(src).sort(),SEED);
 const key={};
 for(const n of names){const id=readerId(SEED,n);const [d,cd]=scrub(src[n][0],false);const [s,cs]=scrub(src[n][1],true);
