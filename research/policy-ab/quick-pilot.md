@@ -244,6 +244,31 @@ Not interpretable as a policy effect: one day of data; the reviewer set changed 
 main session's model**, so "Opus + Sonnet coders" is indistinguishable from "Opus + Opus coders". A coai plan to record the
 subagent models and the diff size per round is in progress: `dew_flow_connect_other_ais · todo/PLAN_a_round_records_who_wrote_the_code_and_how_much.md`.
 
+## 10a. Beside the pilot: one real working session, two days (context, anonymised)
+
+The operator's own long-running session on a private project (VS Code, Opus main session, the same kind of work both days)
+ran every subagent on Opus on day 1 and Sonnet coders (Opus reviewers/judges, a few Fable) on day 2. Read-only aggregates from
+its transcripts (tokens deduplicated per `message.id`, list prices from `research/scout-calibration/prices.json`) and the
+project's `git log` — no text, no names:
+
+| | day 1 (all Opus) | day 2 (Sonnet coders) |
+|---|---|---|
+| active hours | 12.2 | 12.4 |
+| subagents | 9, all Opus | 48: 23 Sonnet coders, 19 Opus (reviews, judges, planners), 4 Fable, 2 inheriting Opus |
+| summed subagent wall time | 14.7 h | ≈ 80 h (parallel work) |
+| commits / merged PRs | 96 / 20 | 156 / 28 |
+| lines added | +15.3 k | +38.5 k |
+| list-price cost | ≈ $333 | ≈ $522 (Opus $346 + Sonnet $176) |
+| **$ per 1 000 lines added** | **≈ $21.7** | **≈ $13.6 (−37 %)** |
+| $ per merged PR | ≈ $16.7 | ≈ $18.6 |
+
+What it shows: in a long session with **parallel** coders the cheaper tokens pay — cost per hour rose (≈ $27 → $42) but output
+per hour rose more, so cost per line fell by about a third. That is the regime the pilot's single small story, with sequential
+children, could not reach (§6). What it does not show: quality (the project had no gate rounds those days; fix-commit share
+≈ 50 % both days), or why the subscription quota lasted longer (the transcripts carry no quota metering). Confounders: different
+tasks per day, the main session on Opus both days, and Sonnet subagents ran at effort `medium` on that machine (its settings were
+keyed by full model ids; converged to `high` afterwards). Lines added is a crude unit — a reason for the coai plan above.
+
 ## 11. Recommendations for the next measurement
 
 1. **A medium story** — e.g. coai #751 (≈ 900 lines), the plan's second candidate — where the code Sonnet writes is large against
