@@ -315,7 +315,9 @@ parent as a note, not into the mounted copy.
   sweep` and `false`, the folder still prefixed AND claimed.
 - **`LeftoversSweep.Run(tmp, now, minAge, probe, docker) → SweepResult(Removed, Preserved, Errors)`** — E3's S3
   (folders: depth-1 directories of `tmp` matching `Owned.Pattern`; a `.git` FILE at the top ⇒ `other clone`; `young`;
-  unmarked and old ⇒ remove; `unreadable`; `live`; `foreign host`; `unknown`; then old orphan `.owner` files), plus the
+  unmarked and old ⇒ remove; `unreadable`; `live`; `foreign host`; `unknown`; then old orphan `.owner` files, judged
+  by their OWNER and never by age alone — rule §2: `gone` removes the claim, `live` and `unknown` keep it; a
+  suspended claim-first creator is the live case, as E3 S3 states), plus the
   **container pass** (D2, D6), all through `DockerLeftovers`:
 
 ```csharp
@@ -375,7 +377,9 @@ answers from fixture text — never the real daemon, except scenario 16):
     `unknown`, `young`, `.git` file ⇒ `other clone`, unmarked ⇒ removed, dead ⇒ removed — every preserved folder still
     there with exactly its reason); anchored and scoped (`x-testsToDelete-bench-a-abc123`, `testsToDeletebench-a-abc123`,
     `testsToDelete-mcp-a-abc123`, `testsToDelete-benchx-a-abc123`, `bench-gate-tests` untouched and unlisted;
-    `TESTSTODELETE-BENCH-a-xyz123` and `teststodelete_bench_a_xyz123` removed); orphan claims; never fails the run; silence
+    `TESTSTODELETE-BENCH-a-xyz123` and `teststodelete_bench_a_xyz123` removed); orphan claims judged by owner (four
+    equally old folderless claims — this process, a dead pid, `other@<tag>`, `hands off` — only the dead one
+    disappears, the other three preserved with `live`, `foreign host`, `unreadable`); never fails the run; silence
     when there is nothing.
 15. **A killed run's worktree goes with its folder** (the parent's "worktree killed before its finally"): in `tmp`, an
     old dead-claimed `testsToDelete-bench-gitrepo-abc123/` holding `repo/` (a real repository) and `scratch/<guid>/` (a
@@ -389,6 +393,16 @@ answers from fixture text — never the real daemon, except scenario 16):
     `ps`, ONE `inspect` naming all six ids, one `rm`, never `--filter name=`. Then: `ps` answering no ids ⇒ no `inspect`
     at all; `Ran = false` ⇒ one `Errors` entry `no docker binary — containers not swept`, folders still swept; `ps`
     exiting 1 ⇒ one `Errors` entry, no `rm`; an `inspect` line that does not parse ⇒ one `Errors` entry, no `rm`.
+    **An old, prefixed, UNLABELLED, running container** — the state the S5 recipe left before it set the label: the
+    fake holds `/testsToDelete-bench-suitepg-cccccc`, running, created two hours ago, no `testsToDelete.owner` label,
+    and answers `ps` the way the daemon does (the label filter applied, so its id is not in the answer) ⇒ this
+    sweep's decision: never listed, never inspected, never removed, in no list — the label filter is what keeps a
+    container no owner can be read for out of the start-of-run sweep. The JANITOR's decision on the same container is
+    the opposite and is recorded here as the reason S5's recipe labels it: `janitor.sh` lists containers by NAME
+    (`dk ps -a … tolower($2) ~ rx`, `dew_flow_conventions · tools/janitor.sh:146`), so an unlabelled prefixed container
+    older than its window (60 minutes) is **unmarked ⇒ nobody's ⇒ `rm -f -v`**, running or not, while the contract suite
+    still uses it (rule, *The janitor*: "unmarked resources older than the window are nobody's and go"). The scenario
+    asserts the sweep half; the janitor half is asserted by S5's recipe carrying the label (S5 sc. 12).
 17. **The fixture ran before this test, over the real temp root and the real daemon**: a class taking
     `LeftoversSweepFixture` asserts `LastRun` is not null; and, in `[Collection("postgres")]` (the fixture's container is
     up — before S3 it carries no label and is simply not listed), `DockerLeftovers.ListAsync(DockerLeftovers.Real, ct)`
@@ -648,14 +662,37 @@ that fails is ONE warning line, never the verdict.
 **The recipe.** `http/README.md:32-33` becomes
 
 ```bash
+# The owner (rule §3): this shell, as the janitor will see it. Keep THIS terminal open while the suite uses the
+# container — when the shell ends, its owner is gone and a sweep or the janitor may collect the container.
+case "$(uname -s)" in
+  Linux)  OS=linux;   PID=$$ ;;
+  Darwin) OS=macos;   PID=$$ ;;
+  *)      OS=windows; PID="$(cat /proc/$$/winpid)" ;;   # Git for Windows' bash: $$ is the MSYS pid, not the Windows pid tasklist sees
+esac
+OWNER="$(hostname | sed -E 's/[@:[:space:]]+/-/g')@$OS:$PID"   # DNS host name, written as rule §3 says; no start (a shell would spawn to learn it)
 PG="testsToDelete-bench-suitepg-$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-docker run -d --rm --name "$PG" -e POSTGRES_PASSWORD=suite -e POSTGRES_USER=suite \
-  -e POSTGRES_DB=bench -p 55432:5432 postgres:17
+docker run -d --rm --name "$PG" --label "testsToDelete.owner=$OWNER" \
+  -e POSTGRES_PASSWORD=suite -e POSTGRES_USER=suite -e POSTGRES_DB=bench -p 55432:5432 postgres:17
+echo "contract-suite Postgres: $PG (owner $OWNER) — stop it with: docker stop $PG"
 ```
 
-and the block ends with `docker stop "$PG"   # --rm removes the container and its anonymous volume`. No owner label: a
-person's shell is not an owner the janitor can judge (D-note P7); unmarked and prefixed, the janitor collects it after
-its one-hour window.
+and the block ends with the stop line, written so it works from a NEW terminal where `$PG` is not set:
+
+```bash
+# list first — the name is the one the start block printed:
+docker ps --filter label=testsToDelete.owner --format '{{.Names}}  {{.Label "testsToDelete.owner"}}  {{.Status}}'
+docker stop <that exact name>   # --rm removes the container and its anonymous volume
+```
+
+**Why the label (supersedes this document's first version, which set none — D-note P7).** Unlabelled, the
+container is invisible to this repository's own start-of-run sweep (S2's `ps --filter label=testsToDelete.owner`)
+and, to the janitor, an UNMARKED prefixed container: the janitor lists containers by name and removes an unmarked one
+once it is older than its 60-minute window — running or not, while the contract suite still uses it (S2 scenario 16
+records that decision). Labelled with the shell that started it, it is `live` to both while that shell runs and
+`gone` once it ends. The owner is written the rule's way: the DNS host name (`hostname`, the name the janitor
+compares, never `%COMPUTERNAME%`) with each run of `@`, `:` or whitespace as one `-`; the OS tag substituted from
+`uname -s` exactly as `janitor.sh:51` derives its own; on Git for Windows' bash the pid is `/proc/$$/winpid`;
+no start time. The recipe is checked by S5's scenario 12 (below).
 
 **Docs.** `research/module_tests.md` gains a section *Test leftovers*: the helper (`tests/Bench.Tests/Leftovers`,
 `testsToDelete-bench-<what>-<id>`, the sibling `.owner`, everything a helper makes inside one owned folder), the
@@ -726,12 +763,21 @@ migration):
     new N (> 0 is the symptom: a workspace made and never disposed; if N is 0 because no call reached a write, record
     that and keep the disposal anyway). GREEN: the same runs add zero `bench-assess-*` entries; and after a full run
     (sc. 10) zero new `bench-assess-*` entries.
+12. **The recipe's container is owned, and the janitor keeps it while its shell lives.** (a) Pinned in
+    `LeftoversGuardTests`: the `http/README.md` block that starts the container carries `--rm`, a `--name` starting
+    `testsToDelete-bench-`, `--label "testsToDelete.owner=$OWNER"`, the `/proc/$$/winpid` line and a printed stop line —
+    RED on today's README. (b) By hand, recorded in the PR, from Git for Windows' bash and from Linux/WSL: run the start
+    block; `docker inspect -f '{{index .Config.Labels "testsToDelete.owner"}}' <name>` parses with `Owner.Parse` to this
+    DNS host name, the right OS tag, and (Windows) the pid `tasklist` shows for that shell; `JANITOR_MIN_AGE_MINUTES=0
+    bash .claude/rules/shared/tools/janitor.sh --token bench --dry-run` names it as SKIPPED (`live`), never as a
+    removal; the stop line run from a NEW terminal finds and stops it; then the same janitor dry run after closing the
+    starting shell names it as a removal (`gone`).
 
 - **Commands.** As S2, `--filter-class "*LeftoversGuardTests"` (RED, then GREEN), `"*LeftoversAuditTests"`; the whole
   executable alone, Windows and Linux; `dotnet format … --verify-no-changes --no-restore` in Linux or WSL;
   `node .claude/rules/shared/tools/plan-lifecycle.mjs`; `actionlint` passes on the changed `ci.yml` (the `workflows` job).
 - **DoD.** Scenario 1 RED with exactly 59 in 38 files, then GREEN; scenario 2's counts recorded; every break-it observed
-  red; scenario 8's teeth observed and reverted (the evidence in the message); scenarios 10 and 11 recorded; CI green
+  red; scenario 8's teeth observed and reverted (the evidence in the message); scenarios 10 and 11 recorded; scenario 12 (a) RED then GREEN and (b) recorded; CI green
   on all jobs WITH the new `build-test`
   step; `module_tests.md` updated; this document's status becomes `> Status: **E6 shipped, <YYYY-MM-DD>; promotes with
   its parent.**` — never *implemented* while it sits in `todo/` — and its `todo/README.md` row says the same.
@@ -823,7 +869,7 @@ Also reflected from the E1 contract, settled: `janitor.sh --token <t>` exists in
 | P4 | the proofs | no owner label, no start-of-run sweep, no token check — rule §3, §4, §7 require all three of every repository that creates a resource kind | S2, S3, S5 |
 | P5 | (nothing) | `http/README.md:32-33` starts a container by hand with no `--rm`, unprefixed, never stopped — the audit's "0 containers without `--rm`" missed it (markdown) | S5 recipe |
 | P6 | (nothing — a contract defect) | rule §6 (b) prescribes `testsToDelete-exempt: container-scoped — …`, but §7's grammar has no class `container-scoped`, and E1's own guard (`tools/leftovers-check.mjs:46`, `EXEMPTIBLE`) reports it as class `exemption` | E1 needs one sentence (§7 accepts `container-scoped` as a declaration without a class, or §6 (b) uses another marker); E6 accepts it as a declaration meanwhile (D2) |
-| P7 | (nothing — for E1) | a hand recipe cannot write a valid owner from Git for Windows' bash: `$$` there is the MSYS pid, not the Windows pid the janitor's `tasklist` sees | E6 writes no owner label in the recipe; E1 may want a sentence on shell-written owners |
+| P7 | (nothing — for E1) | a hand recipe cannot write a valid owner from Git for Windows' bash: `$$` there is the MSYS pid, not the Windows pid the janitor's `tasklist` sees | **Superseded 2026-10-17:** an unlabelled prefixed container is UNMARKED to the janitor, which removes it after its window while the suite still uses it. The recipe now labels it with the shell's owner — the Windows pid read from `/proc/$$/winpid`, the DNS host name, the OS tag from `uname -s` — and prints a stop line that works from a new terminal (S5 *The recipe*, S2 sc. 16, S5 sc. 12); E1 may still want a sentence on shell-written owners |
 | P8 | (nothing) | `spikes/policy-ab-quick/test/*.test.mjs`: 16 raw temp sites in 7 Node test files, outside the parent's scope | D8: excluded by name; an owner decision whether they get an epic |
 | P9 | "`hosts/AppHost/AppHost.cs` documents its persistent data volume in its header" | it is at `:55-61` (the reason at `:58-60`), not the header — and the AppHost is product, never scanned | no change |
 | P10 | the C# helper "from E3's shape" | E3's guard regex for `--name` (`--name[ =]+`) is wider than E1's (`--name` only inside a `docker` command) and would be red on 19 lines of this repository's own CLI tests; E3's top-level-only link removal is narrower than this repository's measured walk | D2; both reported to E3 as notes |
