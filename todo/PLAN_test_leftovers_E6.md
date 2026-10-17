@@ -456,7 +456,11 @@ observed red on the unchanged builder, with the real symptom recorded in the PR)
    the label's pid is the CHILD's; `Kill(entireProcessTree: true)`, `WaitForExitAsync`; then polls `docker ps -a -q
    --no-trunc --filter id=<id>` every 2 s for at most 120 s ⇒ empty. `finally`: kills the child if still running and,
    if the container still exists, `docker rm -f -v <id>` — the test never leaks what it proves. RED on `main` on the
-   name assertion; the removal itself is already green (Ryuk is on today) — recorded as such.
+   name assertion; the removal itself is already green (Ryuk is on today) — recorded as such. **The out-file poll
+   watches the child too:** every iteration first checks `child.HasExited`; a child that ended before the out file
+   holds its three lines fails the test AT ONCE with `the child ended before it wrote <out file>: exit <ExitCode>`
+   followed by its drained stderr (and stdout) — never a 120-second wait for a file that cannot come. Only a child
+   still running at the ceiling is a timeout, and that message names the child's output so far.
 3. **A per-test database dies with the fixture's container** — the premise of the exemption, a characterization test:
    a SEPARATE `new PostgresFixture()`, `InitializeAsync`, `NewEmptyDatabaseAsync($"lifetime_{Guid.NewGuid():N}")` ⇒ a
    connection string; record `ContainerId`; `DisposeAsync`; then `docker ps -a -q --no-trunc --filter id=<id>` is empty
@@ -551,7 +555,8 @@ only the call shape where a new parameter exists):
   container it claimed is a red run.
 - **Files.** New `tests/Bench.Tests/Leftovers/LeftoversGuard.cs`, `LeftoversGuardTests.cs`, `LeftoversAudit.cs`,
   `LeftoversAuditTests.cs`; `LeftoversSweepFixture.cs` (gains the audit); `Owned.cs` (one exemption line); the 38 files of
-  the migration table; `.github/workflows/ci.yml`; `http/README.md`; `research/module_tests.md`.
+  the migration table's raw-temp rows, plus `FindingAssessorTests.cs`, `CalibImportTests.cs`, `ImportRig.cs` (the
+  assessment-workspace row); `.github/workflows/ci.yml`; `http/README.md`; `research/module_tests.md`.
 
 **The guard.** `LeftoversGuard.Scan(string repoRoot) → GuardReport(int FilesScanned, IReadOnlyList<Finding> Findings)`,
 `Finding(File, Line, Class, Text)`; pure apart from reading files; E3's S4 port with D2's three corrections.
@@ -564,6 +569,14 @@ only the call shape where a new parameter exists):
   **Excluded by name**, pinned to exactly one entry: `tests/Bench.Tests/Leftovers/LeftoversGuardTests.cs`. Zero files ⇒
   `FilesScanned == 0`, reported as `scanned nothing under <root> — discovery broke; the repository is not clean`.
 - **Comments.** A line whose trimmed text starts with `//`, `///` or `#` is skipped for matching and read for exemptions.
+  **Block comments** — `/* … */`, on one line or over many — are stripped from `.cs`, `.mjs`, `.js` and `.cjs` text
+  before matching (each character replaced by a space, newlines kept, so line numbers do not move; code after a closing
+  `*/` is still matched; a `/*` inside a string literal opens nothing), and still read for exemptions — E3's S4 rule.
+  **A string literal that merely NAMES an API is not a comment** and is matched like code: the guard is line-based and
+  does not tell a call from a mention. Such a line takes the rule's inline exemption, which is exactly what it is for —
+  for example
+  `// testsToDelete-exempt: raw-temp — the assertion message names the API, nothing is created here` above
+  `result.Should().NotContain("Path.GetTempPath()", "the generated prompt must not teach the model a raw temp path");`.
 - **Classes:**
   - `raw-temp` — `CreateTempSubdirectory\s*\(`, `GetTempPath2?\s*\(`, `GetTempFileName\s*\(`,
     `GetEnvironmentVariable\(\s*"(TEMP|TMP|TMPDIR)"`, `\bmkdtemp(Sync)?\s*\(`, `\btmpdir\s*\(`,
@@ -578,9 +591,13 @@ only the call shape where a new parameter exists):
     tools/leftovers-check.mjs:231-233`): `--name[ =]+(\S+)`; anywhere: `docker\s+(volume|network)\s+create\s+(\S+)`,
     `WithName\(\s*"([^"]*)"`; the captured name not matching `^teststodelete[-_]` (case-insensitive, quotes stripped).
     A `WithName(Owned.NameFor(…))` carries no literal and is not a finding.
-  - `testcontainers` (this repository's, D2) — from a line matching `new \w+Builder\(` in a file that has
-    `using Testcontainers` to the next `.Build()`: no `.WithName(` ⇒ finding `a Testcontainers container without a
-    testsToDelete name`; any `.WithReuse(` in such a file ⇒ finding `a reused Testcontainers container outlives its run`.
+  - `testcontainers` (this repository's, D2) — in a file that has `using Testcontainers` (any `Testcontainers.*`
+    namespace), a builder chain starts at `new \w*Builder(<[^>]*>)?\(` — which covers a module builder
+    (`new PostgreSqlBuilder(`), the generic `new ContainerBuilder(`, and a builder with type arguments
+    (`new FooBuilder<Bar>(`) — and runs to the `.Build()` of the SAME statement (up to its `;`). No `.WithName(` in
+    the chain ⇒ finding `a Testcontainers container without a testsToDelete name`; any `.WithReuse(` in such a file ⇒
+    finding `a reused Testcontainers container outlives its run`. A `new …Builder(` whose statement ends without
+    `.Build()` (a `StringBuilder`, an options builder) is not a container chain and is not matched.
   - `shared-store` — `dew_flow_conventions · tools/leftovers-check.mjs:131-144`'s four shapes, case-sensitive.
   - `ryuk-off` — `TESTCONTAINERS_RYUK_DISABLED\s*[:=]\s*["']?true` (case-insensitive), never exemptible.
 - **Exemptions — inline only** (rule §7; E3's marker and parse regexes, `isReason` as
@@ -606,15 +623,20 @@ Dispose() => _owned.Dispose();` — xUnit v3 disposes the instance after each te
 | C — never removed | `VettingPassTests.cs:326`, `:339`; `DailyRunFileSinkTests.cs:92`; `FilesystemEngineTests.cs:304`; `QlnEngineTests.cs:287`; `TracePortTests.cs:166`, `:183`, `:268` | `_owned.Dir("empty-tree")`, `_owned.Dir("anchored-tree")`, `_owned.Dir("daily-log")`, `_owned.Dir("fs-engine")`, `_owned.Dir("qln")`, `Path.Combine(_owned.Dir("fixture"), "<file>.json")`; a `private static` factory becomes an instance method |
 | D — the temp root as a path | `AuthoringPassTests.cs:280`, `:292`; `GateAaCommandTests.cs:214`; `GateAssessCommandTests.cs:48`; `GateDriverCommandTests.cs:32`, `:33`; `FilesystemEngineTests.cs:184`; `QlnEngineLiveTests.cs:174`; `QlnEngineTests.cs:301`; `ProductPinReaderTests.cs:72`; `FileSystemGateArtifactStoreTests.cs:237`, `:238`, `:246`; `GitCheckoutLocalSourceTests.cs:93`; `ProcessRunnerCancellationTests.cs:25`; `ProcessRunnerTests.cs:15`, `:26`, `:39`, `:56`, `:75`, `:92`, `:107`, `:138`; `AssessorArgvTests.cs:78`; `CliAgentLiveTests.cs:83`; `AnchorCheckTests.cs:103`, `:110`; `TracePortTests.cs:257` | `Owned.TempRoot()` in place of `Path.GetTempPath()` — meaning unchanged (E3's precedent); `GateDriverCommandTests.cs:33`'s `--artifact-root` too (the verb refuses before writing, `:35-36`) |
 | The helper itself | `Owned.cs` `TempRoot()` | the line above `Path.GetTempPath()`: `// testsToDelete-exempt: raw-temp — the helper is the one place a test learns the temp root` |
+| The product's assessment workspace, reached by three tests that never dispose it (not raw-temp findings: the path is made in product code, `FileSystemGateAssessmentFiles.cs:33`, `bench-assess-<guid>`, removed by its `Dispose`, `:36-50`) | `Gate/Assessment/FindingAssessorTests.cs:44`; `Gate/Import/CalibImportTests.cs:237`; `Gate/Import/ImportRig.cs:68` | each test DISPOSES the instance it makes, so the product's own `Dispose` removes the workspace: `:44` → `using var files = new FileSystemGateAssessmentFiles(root.Path);`; `:237` → `using var files = new FileSystemGateAssessmentFiles(rig.Root);` then `await files.ReadKeyAsync(Ct)`; `ImportRig.Calib` (`:66-68`) keeps every instance it makes in a list that `ImportRig.Dispose` (`:105-108`) disposes before `_root`. No product seam is added — disposal is enough, and the product diff of this epic stays S4's. Verified by sc. 11 |
 
 **The end-of-run audit.** `LeftoversAudit.ClaimedFolders(string tmp, Owner owner)` — every depth-1 folder of `tmp`
 matching `Owned.Pattern` whose claim parses to exactly `owner` (host, pid, start), plus every such orphan claim (E3's);
 `LeftoversAudit.ClaimedContainersAsync(docker, owner, ct)` — every container `DockerLeftovers.ListAsync` returns whose
 label parses to exactly `owner`. `LeftoversSweepFixture.DisposeAsync` (after the last collection, the postgres one
-included, has been disposed) computes both, removes each (`Removal.Quietly`, `DockerLeftovers.RemoveAsync`) so the
-machine is clean either way, and when either list was not empty throws `InvalidOperationException("bench tests: this run
-left <n> folder(s) and <m> container(s) it claimed — <names>; a test made scratch outside a disposed scope")`. A docker
-listing that fails is ONE warning line, never the verdict.
+included, has been disposed) computes both, then — **BEFORE removing anything** — captures the evidence for the
+message: per folder its path and a short listing (at most 10 entries, depth ≤ 2, each with its size, then `… and <k>
+more`); per container its name, id, the owner label and its other labels (from the `inspect` the listing already
+made). Only then it removes each (`Removal.Quietly`, `DockerLeftovers.RemoveAsync`) so the machine is clean either way,
+and when either list was not empty throws `InvalidOperationException("bench tests: this run left <n> folder(s) and <m>
+container(s) it claimed — <evidence>; a test made scratch outside a disposed scope")`, the captured evidence in the
+message — a leak is diagnosable from the failed run alone, after the cleanup has already removed it. A docker listing
+that fails is ONE warning line, never the verdict.
 
 **CI.** `build-test` gains, after checkout and before `Formatted`, the step `plans` already has (`ci.yml:119-120`):
 
@@ -639,7 +661,8 @@ its one-hour window.
 `testsToDelete-bench-<what>-<id>`, the sibling `.owner`, everything a helper makes inside one owned folder), the
 start-of-run sweep (assembly fixture; folders and containers; owner liveness; 10 minutes), the end-of-run audit, the
 fixture's name, label and Ryuk, the §6 (b) declaration, the guard and its classes, the CI step, the excluded `spikes/`,
-and the janitor `bash .claude/rules/shared/tools/janitor.sh --dry-run` (Git for Windows' bash on Windows, never WSL's).
+and the janitor `bash .claude/rules/shared/tools/janitor.sh --token bench --dry-run` (Git for Windows' bash on Windows,
+never WSL's).
 Prose only — `ModuleTestsCatalogTests` parses the tables.
 
 **Hand clean-up**, once per machine, recorded in the PR, not code (D7): list the temp root's `bench-gate-tests/`,
@@ -668,7 +691,15 @@ migration):
    `.WithName(Owned.NameFor("pg"))` ⇒ 0; with `.WithReuse(true)` ⇒ 1; `// testsToDelete-exempt: container-scoped —
    the databases live and dies with the fixture container` beside a named, unreused builder ⇒ 0; the same in a file
    whose builder has no `.WithName(` ⇒ 1 `exemption`; `// testsToDelete-exempt: container-scoped — some fine reason
-   here` ⇒ 1 `exemption`; a file under `spikes/` ⇒ not scanned.
+   here` ⇒ 1 `exemption`; a file under `spikes/` ⇒ not scanned. Builders: `new
+   ContainerBuilder().WithImage("redis:7").Build()` in a file with `using Testcontainers.Containers;` ⇒ 1
+   `testcontainers`; `new FooBuilder<Bar>("x").WithImage("y").Build()` in such a file ⇒ 1, and with
+   `.WithName(Owned.NameFor("foo"))` ⇒ 0; `var sb = new StringBuilder(); sb.Append("x");` in such a file ⇒ 0 (no
+   `.Build()` in its statement). Comments and strings: `/* Path.GetTempPath() */` ⇒ 0; a block over three lines with
+   `Path.GetTempPath()` on the middle one ⇒ 0; `*/ var t = Path.GetTempPath();` closing it ⇒ 1 at its own line;
+   `var glob = "tests/**/*.cs"; var t = Path.GetTempPath();` ⇒ 1; the assertion line of *Comments* naming
+   `"Path.GetTempPath()"` in a string ⇒ 1 without its exemption, 0 with it. RED first: the generic-builder and
+   multi-line-comment cases are written before the code and observed giving 0 and 1 respectively.
 4. **A scan of nothing is red** — an empty tree and a root that does not exist ⇒ `FilesScanned == 0`, no throw.
 5. **The token is registered** — on the real mount, `bench` ⇒ none; E3 S4 scenario 5's break-its with `bench`.
 6. **The exclusion list is exactly one file, and the roots list is exactly the six above** — pinned.
@@ -676,7 +707,8 @@ migration):
    labelled with `Owner.This` ⇒ listed; a dead pid, `other@<tag>`, another token ⇒ not listed.
 8. **The audit has teeth** (by hand, recorded in the PR, then reverted): remove `_owned.Dispose()` from ONE migrated
    class (`TracePortTests`) ⇒ the executable exits non-zero with the audit's message naming its
-   `testsToDelete-bench-fixture-…` folders; restore ⇒ green, none left. Then comment out `PostgresFixture.DisposeAsync`'s
+   `testsToDelete-bench-fixture-…` folders AND their short listings (the `.json` fixture files inside), although the
+   folders are already gone when the message is read; restore ⇒ green, none left. Then comment out `PostgresFixture.DisposeAsync`'s
    body ⇒ the audit names the `testsToDelete-bench-pg-…` container; restore. If xUnit v3 does not fail the run on an
    assembly-fixture cleanup exception, or disposes the assembly fixture before the postgres collection: stop and report
    — never turn the audit into a warning silently.
@@ -684,17 +716,23 @@ migration):
    `file:line`; reverted ⇒ green; `.claude/rules/shared` de-initialised ⇒ red with the submodule sentence.
 10. **No leftover after a full run** (by hand, recorded): before S5 (on the post-S4 `main`), a full run's NEW temp-root
     entries are counted by name; after S5, a full run adds zero entries of any old name, zero `testsToDelete-bench-`
-    entries, no container labelled with its owner, and `bash .claude/rules/shared/tools/janitor.sh --dry-run`, run from
-    this repository, prints no `testsToDelete-bench-` line. A product-named entry that appears (`bench-assess-*`,
-    `bench-scratch/<guid>`) is traced to its test: a missing `using`/`Dispose` in the TEST is fixed here
-    (`FindingAssessorTests.cs:44`, `CalibImportTests.cs:237`, `ImportRig.cs:68` are the known candidates); a product
-    path with no seam is reported to the owner — this story does not change product code.
+    entries, no container labelled with its owner, and `bash .claude/rules/shared/tools/janitor.sh --token bench
+    --dry-run`, run from this repository, prints no `testsToDelete-bench-` line. Any other product-named entry that
+    appears (`bench-scratch/<guid>`) is traced to its test: a missing `using`/`Dispose` in the TEST is fixed here; a
+    product path with no seam is reported to the owner — this story does not change product code.
+11. **No `bench-assess-*` workspace is left by the three tests that make one** (the assessment-workspace row). RED
+    first, on the pre-migration tree: count `bench-assess-*` entries in the temp root, run `--filter-class
+    "*FindingAssessorTests"`, `"*CalibImportTests"` and every class using `ImportRig.Calib`, count again — record the
+    new N (> 0 is the symptom: a workspace made and never disposed; if N is 0 because no call reached a write, record
+    that and keep the disposal anyway). GREEN: the same runs add zero `bench-assess-*` entries; and after a full run
+    (sc. 10) zero new `bench-assess-*` entries.
 
 - **Commands.** As S2, `--filter-class "*LeftoversGuardTests"` (RED, then GREEN), `"*LeftoversAuditTests"`; the whole
   executable alone, Windows and Linux; `dotnet format … --verify-no-changes --no-restore` in Linux or WSL;
   `node .claude/rules/shared/tools/plan-lifecycle.mjs`; `actionlint` passes on the changed `ci.yml` (the `workflows` job).
 - **DoD.** Scenario 1 RED with exactly 59 in 38 files, then GREEN; scenario 2's counts recorded; every break-it observed
-  red; scenario 8's teeth observed and reverted; scenario 10 recorded; CI green on all jobs WITH the new `build-test`
+  red; scenario 8's teeth observed and reverted (the evidence in the message); scenarios 10 and 11 recorded; CI green
+  on all jobs WITH the new `build-test`
   step; `module_tests.md` updated; this document's status becomes `> Status: **E6 shipped, <YYYY-MM-DD>; promotes with
   its parent.**` — never *implemented* while it sits in `todo/` — and its `todo/README.md` row says the same.
 
@@ -750,6 +788,31 @@ migration):
   `ScoutTreesTests.cs:272`). It should be the one `TestRepository.Root()`. **Should the three copies be redone?** — asked
   in S5's summary, not done.
 
+## Plan-gate round 1 (2026-10-17)
+
+The coai plan gate's first round over this document; judged by Opus. Accepted (applied above):
+
+1. The guard skips comment lines AND block comments (multi-line, string literals respected); a string literal that
+   merely names an API takes the rule's inline exemption, with an example — S5 *Comments*, sc. 3.
+2. S5 handles `FindingAssessorTests.cs:44`, `CalibImportTests.cs:237`, `ImportRig.cs:68` (lines verified on
+   20051c8): each disposes the `FileSystemGateAssessmentFiles` it makes, so the product's own `Dispose` removes the
+   workspace (no seam needed); sc. 11 verifies no `bench-assess-*` remains after the run.
+3. `LeftoversSweepFixture.DisposeAsync` captures each leaked folder's path with a short listing, and each container's
+   name, id and labels, into the exception message BEFORE removing it — S5 audit, sc. 8.
+4. S3 sc. 2's poll checks the child's exit on every iteration and fails at once with its exit code and stderr when it
+   ended before writing the out file.
+5. The Testcontainers class matches `new \w*Builder(<[^>]*>)?\(` (so `new ContainerBuilder(` and generic builders)
+   to the `.Build()` of the same statement, in files using Testcontainers; scenarios with a generic builder and a
+   `StringBuilder` — S5 classes, sc. 3.
+
+Rejected:
+
+- A Windows CI job — a repository-wide CI decision outside this epic; the DoD already requires a recorded Windows run.
+- A PR checklist for the one-off hand clean-up — it is done once per machine, recorded in the PR it belongs to; a
+  checklist item would outlive the single use.
+
+Also reflected from the E1 contract, settled: `janitor.sh --token <t>` exists in the release (S5 docs, sc. 10).
+
 ## Notes for the parent (`dew_flow_conventions · todo/PLAN_test_leftovers_rollout.md`, E6 entry)
 
 | # | The entry says | What is so on `origin/main` 20051c8 | Resolution here |
@@ -766,7 +829,7 @@ migration):
 | P10 | the C# helper "from E3's shape" | E3's guard regex for `--name` (`--name[ =]+`) is wider than E1's (`--name` only inside a `docker` command) and would be red on 19 lines of this repository's own CLI tests; E3's top-level-only link removal is narrower than this repository's measured walk | D2; both reported to E3 as notes |
 | P11 | E6 depends on E1 | it also depends on E3's S2 (D1) — the dependency table names E3 only for E2 | Order table |
 | P12 | (nothing) | the release turns `Pin check` red here until the pin moves; `build-test` does not fetch the submodule the token check reads | S1 first; S5 CI step |
-| P13 | (nothing) | product-named temp paths reached by tests (`bench-assess-*`, the solution patch, the scout zip) are outside any guard; three test callers never dispose `FileSystemGateAssessmentFiles` | S5 sc. 10 traces them; product code is not changed |
+| P13 | (nothing) | product-named temp paths reached by tests (`bench-assess-*`, the solution patch, the scout zip) are outside any guard; three test callers never dispose `FileSystemGateAssessmentFiles` | S5's migration table disposes the three (sc. 11 verifies no `bench-assess-*` remains); sc. 10 traces any other; product code is not changed by S5 |
 
 **Sign-off: yes**, on S1–S5 as written. Two judgements are mine and are recorded as deviations for the promotion: the
 worktree seam is a root, not a leaf name (D4), and the guard accepts §6 (b)'s `container-scoped` as a declaration (D2)
