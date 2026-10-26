@@ -50,6 +50,16 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - **Q4's re-judged session** (on the corrected objective file) scored 8, as its superseded verdict had.
 - **Disk:** 0 bad-block events and 0 unexpected shutdowns from 2026-10-25 19:00 UTC to the end of the run.
 
+## 2c. Part 4 (T1–T4)
+
+- **An interim estimate reported too early:** from T1 alone ($8.13) the owner was told T would "probably end near the
+  classic band, about $7–8 per arm". The four arms average $9.73 (T4 $12.01: its split alone cost $5.94). Corrected in the
+  report; the lesson is the one the classic band already taught — one arm is not a scheme.
+- **The judge found a test defect two reviews had passed** (T3: an assertion that can never fail, because a per-async-flow
+  test hook is set in `InitializeAsync`); opened in the code and confirmed.
+- No crash, no harness defect, no conflict when the parallel tasks' commits were carried back; every task list passed the
+  checker at once.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).

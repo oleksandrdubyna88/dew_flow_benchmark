@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/runners/Kimi/KimiConsultant.cs", "line": 65,
+   "summary": "MustCarryNoPlannedFlag refuses a plan with Leading as well as Flags, but no test sets Leading (APlanWithFlags_IsRefusedForKimi sets only Flags = [\"--yolo\"]), so if `plan.Leading.Count +` were deleted every test would stay green.",
+   "fix": "Make APlanWithFlags_IsRefusedForKimi a Theory with a second arm, a plan whose Leading is [\"--search\"] and whose Flags are empty, and expect the same ArgumentException."},
+  {"id": "R2", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1041,
+   "summary": "Item 34 says the S5.6.5 table row called the test green on arrival. The row does not say that: it names a red against a stub that ignores the plan.",
+   "fix": "Write that the table's red was against a stub, and that the real red came from the planner's default arm (Scratch for disk), not from Build."},
+  {"id": "R3", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1049,
+   "summary": "Item 35 says the decorator rewrites config.toml 'before KimiLaunch.VerdictAsync'. It runs inside VerdictAsync, between the first shape check (KimiLaunch.cs:124) and the second one after the version probe (:131).",
+   "fix": "Write: 'during the version probe inside KimiLaunch.VerdictAsync, after the first shape check and before the second'."},
+  {"id": "R4", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1016,
+   "summary": "The heading 'E5.5–E5.6 as built (Opus, 2026-10-26)' names Opus. The commit trailers show Haiku 5.5 for 64e8bf48, 44bea5fe, 26f08710, 53d1bff1 and 00cacd7a, and Sonnet 5.5 for the review fixes fb24643c and ab94c7da. Item 39(a) gives only the Haiku half, and §0 says review fixes are made by the model that built the story.",
+   "fix": "Name the builders in the heading, or say there that it is the plan's attribution. In item 39(a), add that the review fixes were made by Sonnet, not by the model that built the story."}
+ ]}

@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 161,
+   "summary": "`dotnet format --verify-no-changes`, which CI runs at .github/workflows/ci.yml:49, fails on this file with WHITESPACE errors at lines 161-170 and 178-183: the braces of the `case \"answered\"` and `case \"cancelled mid-turn\"` blocks need 4 more spaces of indent. CI will be red.",
+   "fix": "Run `dotnet format dew_flow_connect_other_ais.slnx --include src_mcp/tests/AKimiQuestionRowTests.cs` (or indent the two case blocks), then check that `--verify-no-changes` is clean."},
+  {"id": "R2", "severity": "major", "file": "research/module_tests.md", "line": 4421,
+   "summary": "The test catalogue has no section for E5.5-E5.6. AKimiConsultantCheckTests, AKimiQuestionRowTests and the new Kimi rows in CapabilityMatrixTests, ConfinementPlannerTests, KimiConsultantTests and capabilityAdmission.test.ts are not recorded, which scenario-tests.md point 7 requires. E5.3 and E5.4 each added their own section (lines 4337 and 4421).",
+   "fix": "Add a section 'The Kimi consultant check and question row — E5.5-E5.6' after the E5.4 section. For each test give what it pins and its red, or the mutation it was proved by (deviation 50). State what is NOT covered: a Kimi `none` row through QuestionRowLaunch, the live check and the live rows (RESULTS §31), and M-K17."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 173,
+   "summary": "The S5.6.7 'refused before the launch' arm only checks that the status is not `answered` and that no shim started. It also accepts a coai-vh folder that does not exist (line 186). So the arm still passes if the row is refused for any other reason, even before the one-shot reservation and the copies are made, and then it does not prove the cleanup after a launch-control refusal.",
+   "fix": "Check that the row's status is the refusal outcome and that its reason holds the KimiModels.RefusalFor sentence for `not-a-kimi-model`. In that arm, check that OneShotRoot exists and is empty. Check that the row's scratch (`coai-question-*`) is gone too."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/KimiConsultantTests.cs", "line": 226,
+   "summary": "Deviation 48 also refuses a plan whose `Leading` list is not empty (KimiConsultant.cs:67), but S5.6.6 only tests `Flags` (`--yolo`). If the `|| planned.Plan.Leading.Count > 0` check is removed, no test fails.",
+   "fix": "Add a case to APlanWithFlags_IsRefusedForKimi with a plan whose Leading list has one flag and whose Flags list is empty, and expect the same ArgumentException about the shim."}
+ ]}

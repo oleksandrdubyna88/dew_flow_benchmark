@@ -249,3 +249,15 @@ code, and the lines each Sonnet task review changed.
 Sonnet task sessions each with a cold start, the Opus review); Haiku's cost $0.5–2 per arm; Haiku's code survives better
 than in H (> 80 % of its lines), because Haiku builds and tests itself; the Sonnet task reviews change little (< 30 % of
 Haiku's lines in total); work time 60–90 min; quality inside the classic band.
+- **End of part 4, 2026-10-26 19:10 UTC:** T1–T4 done (T1+T2 15:12–16:52, T3+T4 16:56–18:31), checked, judged. Every split
+  passed `tasks-plan.mjs` at once (no fix round): 5–6 tasks, 3–4 batches, up to 3 tasks in parallel; every parallel task's
+  commits were carried back without a conflict. All four build and pass both suites; T1–T3 12/12 scenarios; **T4 11/12 by
+  exact name** — it delivered S5.6.6 as a Theory named `APlanWithLeadingOrFlags_IsRefusedForKimi` and widened the spec's
+  table without recording it (the judge's major for T4). Cost per arm **$8.13 / $9.39 / $9.40 / $12.01**; elapsed 80–100 min.
+- **Correction of an interim statement:** from T1 alone ($8.13) it was said T would "probably end near the classic band,
+  about $7–8 per arm"; the four arms average $9.73 — T is the most expensive scheme, nearer the pre-run prediction.
+- **Hand checks:** T survival — a kept Haiku line found in T2's final code; T3's largest drop is the E5 plan's status and
+  deviation notes (written by Haiku in the plan task, rewritten by the final fixes) — a real drop. The absolute judge's
+  T3 major opened in the code: `GitScratch.AfterUnlink` is per async flow and T3's test sets it in `InitializeAsync` after
+  an `await`, so the junction-first assertion can never fail — TRUE, and missed by both the Sonnet task review and the
+  final Opus review. T judged with the widened redaction (2 / 0 / 0 / 3 redactions).

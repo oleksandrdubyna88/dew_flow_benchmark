@@ -1,0 +1,88 @@
+{
+  "arm": "T4",
+  "haikuLines": 570,
+  "keptFinal": 0.9701754385964912,
+  "reviewChangedLines": 36,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 132,
+      "keptFinal": 132,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 75,
+      "keptFinal": 73,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "public void APlanWithFlags_IsRefusedForKimi()",
+        "var plan = Plan(\"kimi\", CapabilityGrant.None) with { Flags = [\"--yolo\"] };"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/tests/PlayedKimi.cs"
+      ],
+      "haikuLines": 146,
+      "keptFinal": 146,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 150,
+      "keptFinal": 145,
+      "reviewChangedLines": 28,
+      "droppedFinal": [
+        "private PanelService Service(PlayedKimi played) => new(",
+        "if (ending == Ending.RefusedBeforeTheLaunch)",
+        "// A re-login since coai last wrote the slot: KimiLaunch refuses before any shim starts (D19; the S5.4.16 shape, AKimiConsultationScenarioTests.cs:244).",
+        "File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, \"oauth/kimi-code-env-y\"));",
+        "var asking = async () => reply = await AskAsync(Service(played), caller.Token);"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_tests.md"
+      ],
+      "haikuLines": 67,
+      "keptFinal": 57,
+      "reviewChangedLines": 8,
+      "droppedFinal": [
+        "| `ConfinementPlannerTests`: `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3), `AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5), `APlanWithFlags_IsRefusedForKimi` (S5.6.6), and the matrix-refusal `InlineData` for `kimi`, `web` | the kimi arm: `none` → `Scratch`, `disk` → `Snapshot` with both roots as `SnapshotSources`, no flags; `web` refused by the matrix (\"not been measured\"); a Kimi question launch runs in the row's empty folder (`none`) or its copy (`disk`), `--home` on the row's folder, no `--session`, no inherited environment; a plan with flags is refused with `ArgumentException` | S5.6.3: *Expected disk.Cwd to be CwdKind.Snapshot {value: 2} because Kimi loads AGENTS.md, skills and .mcp.json from its cwd (M-K9), so it reads a copy (D6), but found CwdKind.Scratch {value: 0}.*; S5.6.5 (the disk arm, at `44bea5fe`): *Expected disk.Request.WorkingDirectory to be the same string … they differ at index 10*; S5.6.6: *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* |",
+        "### E5.5–E5.6 as built (Opus, 2026-10-26)",
+        "`:63-70` (`MustCarryNoPlannedFlag`, E5.6 decision 3, t2).",
+        "34. **S5.6.5 was NOT green on arrival.** The table says it was, because `KimiConsultant.Build` took the plan's cwd at `b4e2ea96`. At t2's start, the",
+        "`AKimiQuestionRowTests.cs`, which rewrites the home's `config.toml` while `kimi --version` runs, after the home is made and before",
+        "`KimiLaunch.VerdictAsync`. `Service` now takes `IProcessLauncher` (only the Refused arm wraps it). `PlayedKimi.cs` and the production code were not",
+        "(The contract's \"no seam\" was the reason; a seam was needed, and this one is in the test file.)",
+        "the reds recorded for that row are the two recorder reds in item 33.",
+        "passed. `CapabilityMatrixTests`, `ConfinementPlannerTests`, the `ConfinementPlannerTests` and `CapabilityMatrixTests` facts and the TS test run on every OS (no skip). **No",
+        "header says; the header here keeps the contract's wording. (b) `web` never reaches `ConfinementPlanner.Kimi`: the matrix refuses it, and the"
+      ]
+    }
+  ]
+}

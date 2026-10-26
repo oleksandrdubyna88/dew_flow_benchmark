@@ -47,6 +47,7 @@ p('## 1. Time, cost and tokens per arm');
 p();
 p('Work time excludes every pause and crash (each attempt is timed on its own). Cost is Claude Code\'s own');
 p('`total_cost_usd` per session at list prices; `*` = part of it estimated for an attempt a crash interrupted (tokens');
+p('— and for the T arms "Work min" is the SUM of their steps, whose parallel tasks overlap: their elapsed time is in §4b —');
 p('from its transcript, priced with the unit prices fitted below). The filler is the local model (no API cost) or Haiku.');
 p();
 p('| Arm | Scheme | Work min | Claude $ | of it: filler $ | Sonnet out | Opus out | Cache read | Cache write + input | Filler requests / tokens / GPU or API time |');
@@ -114,6 +115,23 @@ for (const a of ARMS.filter((x) => /^[QH]/.test(x))) {
   if (!s) { p(`| ${a} | not measured yet | | | | | |`); continue; }
   const ft = s.fill.test; const fp = s.fill.prod;
   p(`| ${a} | ${ft?.filled ?? 0} / ${ft?.rejected.length ?? 0} | ${fp?.filled ?? 0} / ${fp?.rejected.length ?? 0} | ${ft?.compileErrors ?? '—'} / ${fp?.compileErrors ?? '—'} | ${pct(s.byKind.test.afterPolish)} → ${pct(s.byKind.test.final)} (${pct(s.byKind.test.strictFinal)}) | ${pct(s.byKind.prod.afterPolish)} → ${pct(s.byKind.prod.final)} (${pct(s.byKind.prod.strictFinal)}) | ${s.diffLines.skeleton} / ${s.diffLines.fill} / ${s.diffLines.polish} / ${s.diffLines.fixes} |`);
+}
+p();
+p('## 4b. The task arms (Opus splits → Haiku codes each task → Sonnet reviews each task)');
+p();
+p('Cost per role from the host (\`metrics.json\`); Haiku survival = Haiku\'s meaningful added lines still present, whitespace-insensitive,');
+p('in any file the arm changed in its final commit (\`t-survival.json\`, from the per-task diffs the harness kept).');
+p();
+p('| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Opus split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |');
+p('|---|---|---|---|---|---|---|---|---|---|---|');
+for (const a of ARMS.filter((x) => x.startsWith('T'))) {
+  const tm = lines(`arms/${a}/timing.jsonl`); const t0 = Date.parse(tm.find((x) => x.kind === 'start')?.start_utc); const t1 = Date.parse(tm.find((x) => x.kind === 'arm-done')?.done_utc);
+  const el = Number.isFinite(t0) && Number.isFinite(t1) ? `${Math.round((t1 - t0) / 60000)} min` : 'n/a';
+  const b = read(`arms/${a}/tasks/batches.json`); const ts = read(`arms/${a}/t-survival.json`); const rv = read(`arms/${a}/${a}-review.json`);
+  const st = report[a].steps; const g = (re) => Object.entries(st).filter(([kk]) => re.test(kk)).flatMap(([, x]) => x).reduce((q, x) => q + (x.cost ?? x.costEst ?? 0), 0);
+  const par = b ? Math.max(...b.batches.map((x) => x.length)) : 0;
+  const maj = (rv?.findings ?? []).filter((x) => x.severity !== 'minor').length;
+  p(`| ${a} | ${el} | ${b ? Object.keys(b.tasks).length : '?'} / ${b ? b.batches.length : '?'} (${par}) | ${usd(g(/split/))} | ${usd(g(/-code$/))} | ${usd(g(/^3-t/))} | ${usd(g(/^4-review/))} | ${usd(g(/^5-fix/))} | ${ts ? `${ts.haikuLines} → ${pct(ts.keptFinal)}` : 'n/a'} | ${ts ? ts.reviewChangedLines : 'n/a'} | ${rv ? `${(rv.findings ?? []).length} (${maj})` : 'n/a'} |`);
 }
 p();
 p('## 5. Filler requests');

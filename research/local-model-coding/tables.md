@@ -7,6 +7,7 @@
 
 Work time excludes every pause and crash (each attempt is timed on its own). Cost is Claude Code's own
 `total_cost_usd` per session at list prices; `*` = part of it estimated for an attempt a crash interrupted (tokens
+— and for the T arms "Work min" is the SUM of their steps, whose parallel tasks overlap: their elapsed time is in §4b —
 from its transcript, priced with the unit prices fitted below). The filler is the local model (no API cost) or Haiku.
 
 | Arm | Scheme | Work min | Claude $ | of it: filler $ | Sonnet out | Opus out | Cache read | Cache write + input | Filler requests / tokens / GPU or API time |
@@ -25,6 +26,10 @@ from its transcript, priced with the unit prices fitted below). The filler is th
 | H2 | skeleton + Haiku fill | 72 | $7.52 | $0.06 | 116.4k | 22.2k | 24.7M | 761.0k | 20 / 208.0k / 1 min |
 | H3 | skeleton + Haiku fill | 70 | $9.27 | $0.07 | 132.9k | 28.3k | 32.7M | 813.6k | 16 / 222.8k / 1 min |
 | H4 | skeleton + Haiku fill | 73 | $7.38 | $0.05 | 130.2k | 18.6k | 24.3M | 703.0k | 14 / 159.6k / 1 min |
+| T1 | Opus tasks → Haiku codes → Sonnet per task | 95 | $8.13 | — | 60.6k | 68.2k | 27.7M | 994.4k | — |
+| T2 | Opus tasks → Haiku codes → Sonnet per task | 133 | $9.39 | — | 61.0k | 81.0k | 30.0M | 932.7k | — |
+| T3 | Opus tasks → Haiku codes → Sonnet per task | 106 | $9.40 | — | 71.3k | 68.3k | 32.1M | 1045.0k | — |
+| T4 | Opus tasks → Haiku codes → Sonnet per task | 114 | $12.01 | — | 63.5k | 118.6k | 38.0M | 1245.9k | — |
 
 **Classic band** (C, C2, C3, C4 — one configuration run four times; min / mean / max): work 44 min / 53 min / 62 min;
 cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8M / 27.7M / 32.4M.
@@ -33,9 +38,9 @@ cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8
 
 | Model | Output $/Mtok | Cache read $/Mtok | Cache write + input $/Mtok | Fitted on | Max error on those sessions |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 37 | 0.0 % |
-| claude-haiku-5-5 | 1.11 | -0.013 | 0.10 | 47 | 1.8 % |
-| claude-opus-5-5 | 20.00 | 0.200 | 8.00 | 14 | 0.0 % |
+| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 62 | 0.0 % |
+| claude-haiku-5-5 | 5.50 | 0.017 | -0.95 | 101 | 942.6 % |
+| claude-opus-5-5 | 14.72 | 0.199 | 8.83 | 22 | 5.9 % |
 
 
 The Haiku row comes only from Claude Code's own small internal Haiku calls; its near-zero cache coefficient is noise
@@ -59,6 +64,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | H2 | 1-skeleton a1: 13 min $2.55 · 2a-fill a1: 2 min $0.06 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 20 min $1.02 · 4-review a1: 17 min $2.65 · 5-fix a1: 17 min $1.24 |
 | H3 | 1-skeleton a1: 25 min $2.97 · 2a-fill a1: 2 min $0.07 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 18 min $1.64 · 4-review a1: 11 min $3.76 · 5-fix a1: 12 min $0.83 |
 | H4 | 1-skeleton a1: 12 min $2.12 · 2a-fill a1: 2 min $0.05 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 25 min $1.73 · 4-review a1: 15 min $2.38 · 5-fix a1: 17 min $1.10 |
+| T1 | 1-split a1: 8 min $2.76 · 2-t3-code a1: 6 min $0.02 · 2-t4-code a1: 8 min $0.03 · 2-t1-code a1: 11 min $0.06 · 3-t3-review a1: 3 min $0.22 · 3-t4-review a1: 3 min $0.24 · 3-t1-review a1: 4 min $0.26 · 2-t2-code a1: 3 min $0.02 · 3-t2-review a1: 3 min $0.17 · 2-t5-code a1: 10 min $0.04 · 3-t5-review a1: 1 min $0.24 · 2-t6-code a1: 1 min $0.03 · 3-t6-review a1: 1 min $0.34 · 4-review a1: 16 min $2.00 · 5-fix a1: 19 min $1.68 |
+| T2 | 1-split a1: 9 min $3.53 · 2-t3-code a1: 12 min $0.04 · 2-t1-code a1: 16 min $0.06 · 2-t2-code a1: 11 min $0.02 · 3-t2-review a1: 16 min $0.27 · 3-t3-review a1: 3 min $0.30 · 3-t1-review a1: 12 min $0.37 · 2-t4-code a1: 19 min $0.04 · 3-t4-review a1: 3 min $0.25 · 2-t5-code a1: 1 min $0.02 · 3-t5-review a1: 1 min $0.26 · 4-review a1: 12 min $2.65 · 5-fix a1: 19 min $1.56 |
+| T3 | 1-split a1: 5 min $2.13 · 2-t1-code a1: 18 min $0.08 · 2-t3-code a1: 11 min $0.14 · 3-t3-review a1: 3 min $0.36 · 3-t1-review a1: 5 min $0.34 · 2-t2-code a1: 12 min $0.04 · 3-t2-review a1: 3 min $0.34 · 2-t4-code a1: 11 min $0.13 · 3-t4-review a1: 2 min $0.40 · 2-t5-code a1: 2 min $0.03 · 3-t5-review a1: 1 min $0.35 · 4-review a1: 11 min $3.72 · 5-fix a1: 21 min $1.33 |
+| T4 | 1-split a1: 7 min $5.94 · 2-t3-code a1: 17 min $0.08 · 2-t1-code a1: 16 min $0.05 · 3-t1-review a1: 5 min $0.26 · 3-t3-review a1: 4 min $0.32 · 2-t2-code a1: 16 min $0.06 · 3-t2-review a1: 3 min $0.31 · 2-t4-code a1: 13 min $0.30 · 3-t4-review a1: 5 min $0.56 · 2-t5-code a1: 3 min $0.15 · 3-t5-review a1: 4 min $0.71 · 4-review a1: 9 min $2.55 · 5-fix a1: 13 min $0.73 |
 
 ## 3. Objective gate (on each arm's final commit)
 
@@ -78,6 +87,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | H2 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 15 files changed, 725 insertions(+), 13 deletions(-) |
 | H3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 15 files changed, 785 insertions(+), 9 deletions(-) |
 | H4 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 738 insertions(+), 7 deletions(-) |
+| T1 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 17 files changed, 786 insertions(+), 12 deletions(-) |
+| T2 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 732 insertions(+), 9 deletions(-) |
+| T3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 720 insertions(+), 13 deletions(-) |
+| T4 | ok | 0 | 0 | 0 | ok | ok | 11/12 | 0 / 0 | 14 files changed, 804 insertions(+), 13 deletions(-) |
 
 ## 3b. The step-2 review (Opus, before the fixes)
 
@@ -97,6 +110,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | H2 | 5 | 0 / 3 / 2 | fix-then-ready |
 | H3 | 4 | 0 / 1 / 3 | fix-then-ready |
 | H4 | 4 | 0 / 1 / 3 | fix-then-ready |
+| T1 | 9 | 0 / 3 / 6 | fix-then-ready |
+| T2 | 4 | 0 / 2 / 2 | fix-then-ready |
+| T3 | 8 | 1 / 1 / 6 | not-ready |
+| T4 | 4 | 0 / 0 / 4 | fix-then-ready |
 
 ## 4. The fill and its survival (skeleton arms)
 
@@ -114,6 +131,18 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | H2 | 18 / 0 | 2 / 0 | 1 / 1 | 100 % → 95 % (95 %) | 83 % → 83 % (83 %) | 553 / 488 / 63 / 70 |
 | H3 | 16 / 0 | 0 / 0 | 4 / 4 | 96 % → 94 % (94 %) | n/a → n/a (n/a) | 451 / 409 / 77 / 43 |
 | H4 | 13 / 0 | 1 / 0 | 4 / 4 | 77 % → 69 % (69 %) | 100 % → 100 % (100 %) | 583 / 419 / 171 / 76 |
+
+## 4b. The task arms (Opus splits → Haiku codes each task → Sonnet reviews each task)
+
+Cost per role from the host (`metrics.json`); Haiku survival = Haiku's meaningful added lines still present, whitespace-insensitive,
+in any file the arm changed in its final commit (`t-survival.json`, from the per-task diffs the harness kept).
+
+| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Opus split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| T1 | 80 min | 6 / 4 (3) | $2.76 | $0.21 | $1.48 | $2.00 | $1.68 | 514 → 97 % | 16 | 9 (3) |
+| T2 | 100 min | 5 / 3 (3) | $3.53 | $0.18 | $1.46 | $2.65 | $1.56 | 492 → 98 % | 3 | 4 (2) |
+| T3 | 94 min | 5 / 4 (2) | $2.13 | $0.42 | $1.79 | $3.72 | $1.33 | 487 → 90 % | 25 | 8 (2) |
+| T4 | 95 min | 5 / 4 (2) | $5.94 | $0.63 | $2.16 | $2.55 | $0.73 | 570 → 97 % | 36 | 4 (0) |
 
 ## 5. Filler requests
 
@@ -148,6 +177,10 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | H2 | **7.5** (8 / 7) | 9 / 9 | 7 / 7 | 7 / 7 | 8 / 8 | mmmmmm / Mmmmmm |
 | H3 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 8 / 8 | Mmmmmm / mmmmm |
 | H4 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 8 / 8 | mmmmmmm / mmmmmm |
+| T1 | **8.0** (8 / 8) | 8 / 9 | 8 / 8 | 7 / 7 | 8 / 8 | mmmmm / mmmmm |
+| T2 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 9 | 8 / 8 | mmmmm / mmmm |
+| T3 | **7.5** (7 / 8) | 9 / 9 | 6 / 8 | 7 / 7 | 8 / 8 | Mmmmmmm / mmmmm |
+| T4 | **7.5** (7 / 8) | 8 / 9 | 8 / 8 | 6 / 7 | 7 / 8 | Mmmmmm / mmmmm |
 
 ## 7. Quality — the earlier GROUP judges (one session ranks V, C, C2, VT together; 2 runs, labels permuted)
 

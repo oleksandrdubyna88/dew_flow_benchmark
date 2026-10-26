@@ -1,6 +1,6 @@
 # Results — can a cheaper model write the code a Sonnet coder would? (2026-10-25/26)
 
-> Status: **complete — 14 arms, all checked and judged (run ended 2026-10-26 14:25 UTC).**
+> Status: **complete — 18 arms in four parts, all checked and judged (part 4 ended 2026-10-26 19:10 UTC).**
 > Every number below is in [tables.md](tables.md), generated from [data/](data/). How it was measured:
 > [harness.md](harness.md). What went wrong and what was corrected: [incidents.md](incidents.md). The pre-registered
 > protocol and its change log: [protocol.md](protocol.md).
@@ -8,8 +8,8 @@
 ## 1. The question and the arms
 
 One real story pair of the coai project — **E5.5 + E5.6** of `dew_flow_connect_other_ais ·
-todo/PLAN_vibe_and_kimi_runtimes_E5.md` (12 scenarios, Opus-written spec), from commit `b4e2ea96` — implemented 14 times
-by four schemes, every arm ending in the same Opus review and Sonnet fixes:
+todo/PLAN_vibe_and_kimi_runtimes_E5.md` (12 scenarios, Opus-written spec), from commit `b4e2ea96` — implemented 18 times
+by five schemes, every arm ending in the same Opus review and Sonnet fixes:
 
 | Scheme | Arms | What writes the code |
 |---|---|---|
@@ -17,14 +17,16 @@ by four schemes, every arm ending in the same Opus review and Sonnet fixes:
 | **vLLM drafts** | V (thinking off), VT (thinking on) | the local model (Qwen3.6-35B-A3B on vLLM) drafts each method; Sonnet integrates and fixes |
 | **Skeleton + Qwen** (the owner's scheme) | Q1–Q4 | Sonnet writes signatures, types, data and per-region instructions + context packs; a script has Qwen fill every body ≥ 4 lines between markers; Sonnet polishes |
 | **Skeleton + Haiku** | H1–H4 | the same, with Haiku filling |
+| **Opus tasks → Haiku → Sonnet per task** | T1–T4 | Opus splits the stories into 4–6 tasks with exact contracts; Haiku implements each task as a full agent; Sonnet reviews and fixes each task; tasks run in parallel where their files do not overlap |
 
 The four classic arms are ONE configuration run four times: their spread is the **noise** every other arm is read
 against. All models at effort `high`, named by alias; the hardware and timing are in [harness.md](harness.md).
 
 ## 2. What the run shows (with its conditions)
 
-1. **Quality was the same everywhere.** All 14 arms build, pass both suites and deliver 12/12 scenarios. The absolute
-   blind judge (one Opus session per diff, anchored rubric, 2 runs) scored 11 arms 8/10, H2 8 and 7, and C and Q2 7/10.
+1. **Quality was the same everywhere.** All 18 arms build and pass both suites; 17 deliver 12/12 scenarios by exact name
+   (T4 delivered S5.6.6 under another test name). The absolute blind judge (one Opus session per diff, anchored rubric, 2
+   runs) scored 13 arms 8/10, H2, T3 and T4 8 and 7, and C and Q2 7/10.
    The two runs never differed by more than one point on any criterion; the classic arms themselves span 7–8.
 2. **The classic arms vary a lot**: 44–62 min of work, **$6.53–7.85**, 79–93k Sonnet output tokens. A difference
    smaller than this band is not a result of the scheme.
@@ -44,9 +46,14 @@ against. All models at effort `high`, named by alias; the hardware and timing ar
    were the first suspect; per step they do not explain it: the skeleton step wrote 53–85k output tokens whether its
    packs were small or large — about what a whole classic coding step writes (51–67k). The skeleton is not a cheap
    step, and the scheme adds a polish on top of it.
-7. **Where the money goes in every scheme:** Sonnet reading the repository (cache reads, 20–39 M tokens per arm) and the
+7. **Opus tasks → Haiku → Sonnet per task (T1–T4): the most expensive scheme, same quality.** **$8.13–12.01** (mean
+   $9.73). Haiku did nearly all the writing for **$0.18–0.63 per arm**, and 90–98 % of its code is in the final code; the
+   per-task Sonnet reviews were cheap ($0.17–0.71 each: they read only the task's files) and changed little (3–36 lines
+   per arm). But the Opus split cost $2.1–5.9 — Opus wrote 50–100k tokens of task documents, much of the code inside them
+   — and the final Opus review still found 4–9 issues per arm (0–3 major), some of which the task reviews had passed (§6).
+8. **Where the money goes in every scheme:** Sonnet reading the repository (cache reads, 20–39 M tokens per arm) and the
    Opus review ($2.1–3.8 per arm, 25–47 % of an arm). Moving code WRITING to a cheaper model cannot move either.
-8. **A defect the skeleton scheme adds:** the skeleton step writes its deviation notes into the plan, and they go stale
+9. **A defect the skeleton scheme adds:** the skeleton step writes its deviation notes into the plan, and they go stale
    after the fill and the polish; the judge found such false notes in Q2 and H3 (checked by hand: both true findings).
 
 **This run does not settle:** other tasks (this one is mostly tests: E5.5 is only tests, E5.6 mostly), smaller or more
@@ -102,7 +109,27 @@ made cheaper (for example by a cheaper model), or V/VT at more than one run each
   kept, a small polish), at a negligible price — but the scheme around it (a full skeleton step, a polish, the review)
   keeps the total at or above the classic arms.
 
-## 6. Predictions against observations
+## 6. Part 4 — Opus tasks, Haiku coder, Sonnet per task (T1–T4)
+
+- **The split** ([tables.md](tables.md) §4b): every Opus task list passed the checker at once (5–6 tasks, 3–4 batches, up
+  to 3 tasks in parallel); every task document carried exact contracts (full signatures with file and line, JSON rows
+  verbatim). Its cost: $2.13–5.94 (T4: 101k Opus output tokens) — with the final review, the largest item of a T arm.
+- **Haiku**: up to 19 minutes of agent work per task, **$0.02–0.30 per task**, 487–570 meaningful lines per arm, and
+  **90–98 % of them in the final code**. Every parallel task's commits came back to the arm branch without a conflict.
+- **Sonnet per task**: $0.17–0.71 per task, about 0.6 M cache-read tokens per review (a classic coder reads 10–30 M). It
+  changed 0 lines in most tasks (3–36 per arm in all) — either Haiku was right, or the review was lenient. The final Opus
+  review then found 4–9 issues per arm, 0–3 major. Opened in the code: T1's new test folders break the project's
+  test-leftovers naming; T3's junction-first test can never fail (`GitScratch.AfterUnlink` is per async flow and is set in
+  `InitializeAsync` after an `await`, so it never reaches the test method — passed by the task review AND the final review,
+  found by the judge); T4 renamed S5.6.6's test and widened its table row without recording it.
+- **Totals**: $8.13 / $9.39 / $9.40 / $12.01; elapsed 80–100 min (two arms at a time, each with parallel worktree builds).
+- **Quality**: 8 / 8 / 7.5 / 7.5 — inside the classic band. T was judged with a WIDER redaction list than Q and H (the
+  scheme's own words removed), so it was judged blinder.
+- **Reading**: exactly specified tasks make a cheap coder work — Haiku wrote almost everything, and almost all of it stayed.
+  But the split is itself an Opus writing job, the cheap per-task reviews do not replace the final review, and the total
+  lands above every other scheme.
+
+## 7. Predictions against observations
 
 | Recorded before the run | Observed | |
 |---|---|---|
@@ -126,10 +153,19 @@ made cheaper (for example by a cheaper model), or V/VT at more than one run each
 | H: Haiku fill < $0.50 per arm | $0.05–0.07 | holds |
 | H: total Claude cost ≈ Q's ($8–9) | $7.38–9.33 (Q: $8.47–9.94) | roughly holds (a little lower) |
 | H: quality inside the classic band | 7–8 | holds |
+| T: cost above the classic band, $10–14 per arm | $8.13–12.01 (mean $9.73) — above the band, lower than predicted | partly holds |
+| (interim, from T1 alone: "probably near the band, $7–8") | the four average $9.73 | **wrong** — corrected |
+| T: Haiku $0.5–2 per arm | $0.18–0.63 | **wrong** (cheaper) |
+| T: Haiku's code survives better than in H (> 80 %) | 90–98 % | holds |
+| T: the Sonnet task reviews change < 30 % of Haiku's lines | 3–36 of 487–570 lines (< 7 %) | holds |
+| T: work time 60–90 min | elapsed 80–100 min | roughly holds (a little above, under parallel load) |
+| T: quality inside the classic band | 7.5–8 | holds |
 
-## 7. Limits
+## 8. Limits
 
-- **n = 1 per arm** for V and VT; n = 4 for classic, Q and H. One task, mostly tests, in one repository.
+- **n = 1 per arm** for V and VT; n = 4 for classic, Q, H and T. One task, mostly tests, in one repository.
+- **The T arms' task reviews may be lenient by design**: a 15-minute Sonnet session reading only the task's files. Their
+  few changes do not prove the code right — the final review and the judge found defects they had passed.
 - **Three Windows crashes** interrupted step 1 of V, C and C2; V and C2 re-ran their test suite after resuming; C got an
   extra attempt through a harness defect ([incidents.md](incidents.md)).
 - **Load**: up to 6 arms ran at once in parts 2–3; H's work times include heavy CPU contention. VT ran later, alone on the GPU.

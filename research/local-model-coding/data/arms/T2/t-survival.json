@@ -1,0 +1,78 @@
+{
+  "arm": "T2",
+  "haikuLines": 492,
+  "keptFinal": 0.9817073170731707,
+  "reviewChangedLines": 3,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 150,
+      "keptFinal": 150,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/KimiConsultantTests.cs"
+      ],
+      "haikuLines": 60,
+      "keptFinal": 55,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// <summary>S5.6.6 (E5.6 decision 3): a plan with a flag was not made for kimi — refused by name, never spliced.</summary>",
+        "[InlineData(Capability.None)]",
+        "[InlineData(Capability.Disk)]",
+        "public void APlanWithFlags_IsRefusedForKimi(Capability capability)",
+        "var build = () => Consultant().Build(Question(KimiPlan(grant, \"--yolo\")));"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 133,
+      "keptFinal": 133,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 125,
+      "keptFinal": 124,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "TheRow(reply).GetProperty(\"status\").GetString().Should().NotBe(RowOutcomes.Answered, reply.ToString());"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 24,
+      "keptFinal": 21,
+      "reviewChangedLines": 3,
+      "droppedFinal": [
+        "> five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green. E5.5 (the consultant check) and E5.6 (the question consultant's Kimi row) built from five tasks; deviations 47–53, *E5.5–E5.6 as built*.",
+        "the one refusal reachable before the shim with a played Kimi. No home is made in that arm, so its recorder assertion is",
+        "trivially true; the junction-first proof is in the answered and cancelled arms."
+      ]
+    }
+  ]
+}
