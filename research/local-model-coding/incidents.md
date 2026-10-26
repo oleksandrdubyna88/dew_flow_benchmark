@@ -22,6 +22,10 @@ was read (it needs admin; `Get-StorageReliabilityCounter` returned empty error f
 cause is proven. The "Harddisk1 controller errors" in the same log are the 31 MB storage of a USB keyboard, unrelated.
 The NVMe's "TemperatureMax 77" is its operating LIMIT (the drive's 0–77 °C range), not a reading.
 
+**Later (2026-10-26):** the owner ran the SMART check of the system NVMe and reports it as fine. Together with 0 new
+bad-block events from the end of the crashes to the end of part 4, the disk's role in the crashes stays open (not proven
+either way).
+
 **What was done to the experiment because of it:** the harness was made resumable (session ids fixed before the first
 attempt, `--resume` with the remaining budget); arms ran detached; later batches ran two at a time on the owner's choice
 (except H1–H4, run in parallel on the owner's request, up to 6 arms at once); a keep-awake process (no power-setting

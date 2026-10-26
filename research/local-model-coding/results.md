@@ -34,7 +34,9 @@ hardware and timing are in [harness.md](harness.md).
    7 and 8. It separates "clean" from "has a major finding", and cannot show finer differences.
 2. **The classic arms vary a lot**: 44–62 min of work, **$6.53–7.85**, 79–93k Sonnet output tokens. A difference inside
    this range cannot be attributed to the scheme from these runs — which is not proof that there is none.
-3. **vLLM drafts (V, VT): no gain.** Inside or at the edge of the classic band on time, cost and quality. The local model
+3. **vLLM drafts (V, VT): no gain from the drafts.** V sits inside the classic band ($7.00, 62 min — the band's upper
+   edge in time). VT is $5.95, BELOW the band, and 68 min, ABOVE it; its lower cost comes from a cheaper review and fixes
+   (only minor review findings), not from its drafts (§3), and it is one run. The local model
    did little of the work (6 requests each, all early); its drafts guessed existing API names and were fixed heavily or
    rewritten. Sonnet's output did not fall (93–94k, the top of the band). Thinking on (VT) made step 1 slower (43 min; 22
    min of GPU for 6 requests) without better drafts.
@@ -57,7 +59,8 @@ hardware and timing are in [harness.md](harness.md).
    themselves are only 3.9–10.1k words (35–90 KB; corrected 2026-10-26 — it first said "50–100k tokens of task
    documents"); the rest is reasoning and tool use, not attributed further — and the final Opus review still found 4–9
    issues per arm (0–3 major), some of which the task reviews had passed (§6). Split + Haiku + final review alone come to
-   $4.97 / $6.36 / $6.27 / $9.12 before any fix.
+   $4.97 / $6.36 / $6.27 / $9.12; the rest of each total is the Sonnet task reviews ($1.48 / $1.46 / $1.79 / $2.16) and
+   the final Sonnet fixes ($1.68 / $1.56 / $1.33 / $0.73) — [tables.md](tables.md) §4b.
 8. **Where the money goes in every scheme:** cache reads (the context re-sent on every turn of a session: 20–39 M tokens
    per arm — a measure of session length × context, NOT of how much unique repository was read) and the Opus review
    ($2.0–3.8 per arm, 25–47 % of an arm). Moving code WRITING to a cheaper model moved neither.
@@ -160,7 +163,7 @@ made cheaper (for example by a cheaper model), or V/VT at more than one run each
 | H: higher survival than Q, both kinds | tests 69–95 % vs 50–56 %; production 83–100 % (few lines) | holds |
 | H: a smaller polish diff than Q | 63–171 vs 278–455 lines | holds |
 | H: Haiku fill < $0.50 per arm | $0.05–0.07 | holds |
-| H: total Claude cost ≈ Q's ($8–9) | $7.38–9.33 (Q: $8.47–9.94) | roughly holds (a little lower) |
+| H: total Claude cost ≈ Q's ($8–9) | $7.38–9.33 (mean $8.37; Q: $8.47–9.94, all above the band) — but H2 and H4 ($7.52, $7.38) are INSIDE the classic band, which no Q arm reached | partly holds — H is cheaper than Q |
 | H: quality inside the classic band | 7–8 | holds |
 | T: cost above the classic band, $10–14 per arm | $8.13–12.01 (mean $9.73) — above the band, lower than predicted | partly holds |
 | (interim, from T1 alone: "probably near the band, $7–8") | the four average $9.73 | **wrong** — corrected |
