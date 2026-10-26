@@ -23,8 +23,9 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and Sonnet fixes, an
 
 ## The answer (details and conditions in [results.md](results.md))
 
-- **Quality was the same in every scheme**: every arm builds and passes the suites, 17 of 18 deliver 12/12 scenarios by
-  exact name, and all score 7–8 of 10 with an absolute blind Opus judge — the same range as the four classic runs.
+- **No quality difference was resolved**: every arm builds and passes the suites, 17 of 18 deliver 12/12 scenarios by
+  exact name, and all score 7–8 of 10 with an absolute blind Opus judge — a judge that compresses scores (a test proven
+  unable to fail still scored 7–8), so this is not proof of equal quality — the same range as the four classic runs.
 - **The classic scheme's own noise is wide**: $6.53–7.85 and 44–62 min across four identical runs.
 - **vLLM drafts gave nothing measurable**: inside the classic band; the drafts guessed existing API names and were mostly
   rewritten.
