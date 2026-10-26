@@ -21,7 +21,8 @@ case $ARM in V) BRANCH=exp/kimi-e56-vllm; PARA=$E/briefs/arm-V.md ;;
              C4) BRANCH=exp/kimi-e56-classic-4; PARA=$E/briefs/arm-C.md ;;
              Q1|Q2|Q3|Q4) BRANCH=exp/kimi-e56-skeleton-${ARM#Q}; PARA=$E/briefs/arm-C.md ;;  # PARA unused: the Q briefs are whole
              H1|H2|H3|H4) BRANCH=exp/kimi-e56-skeleton-haiku-${ARM#H}; PARA=$E/briefs/arm-C.md ;;  # the Q scheme, Haiku as the filler
-             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4" >&2; exit 1 ;; esac
+             T1|T2|T3|T4) BRANCH=exp/kimi-e56-tasks-${ARM#T}; PARA=$E/briefs/arm-C.md ;;  # Opus splits into tasks; Haiku codes; Sonnet reviews each
+             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4" >&2; exit 1 ;; esac
 OUT=$E/results/$ARM; NOTES=$E/notes; WORK=$E/vllm/work/$ARM
 mkdir -p "$OUT" "$NOTES" "$WORK"
 export COAI_EXP_VLLM_LOG=$E/vllm/requests-$ARM.jsonl
@@ -45,7 +46,8 @@ fill() { # template deadline notes -> filled brief on stdout
     let s=fs.readFileSync(tpl,"utf8");
     s=s.replaceAll("{{ARM_PARAGRAPH}}",fs.readFileSync(para,"utf8").trim()).replaceAll("{{BRANCH}}",branch)
        .replaceAll("{{DEADLINE}}",deadline).replaceAll("{{NOTES}}",notes).replaceAll("{{REVIEW}}",review)
-       .replaceAll("{{CODE_NOTES}}",codeNotes).replaceAll("{{ARM}}",arm);
+       .replaceAll("{{CODE_NOTES}}",codeNotes).replaceAll("{{ARM}}",arm)
+       .replace(/{{([A-Z_]+)}}/g,(m,k)=>process.env["TPL_"+k]??m);
     process.stdout.write(s);' "$1" "$PARA" "$BRANCH" "$2" "$3" "$NOTES/$ARM-review.json" "$NOTES/$ARM-code.md" "$ARM"
 }
 
@@ -143,6 +145,9 @@ review_json() { # the review's final message is the JSON; keep it where the fixe
 }
 
 case $ARM in
+  T*)
+    source "$E/t-lib.sh"; run_t_arm
+    ;;
   Q*|H*)
     step 1-skeleton sonnet 30 "$E/briefs/q1-skeleton.template.md" "$NOTES/$ARM-code.md" write no
     fill_step 2a-fill test 20

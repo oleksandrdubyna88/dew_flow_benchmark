@@ -1,6 +1,6 @@
 # Harness — how the experiment ran, and how to run it again
 
-> The scripts in [harness/](harness/) are the ones that ran, copied as they were at the end (with the fixes listed in §8).
+> The scripts in [harness/](harness/) (indexed in [harness/README.md](harness/README.md)) are the ones that ran, copied as they were at the end (with the fixes listed in §8).
 > They expect the layout of the machine that ran them (`/home/jinx/git/coai-exp`, WSL2 on Windows 11, vLLM in `wslc`);
 > the paths are constants at the top of each script. [make-tables.mjs](harness/make-tables.mjs) is the exception: it
 > reads only [data/](data/) and runs anywhere.
