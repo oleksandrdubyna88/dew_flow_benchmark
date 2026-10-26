@@ -139,6 +139,11 @@ Read with `bench gate report --gate feature --scope a797c446cdb4 --rubric strict
 **Measured tasks.** The seeds, high-value and overstated columns are over VALID cells. "Valid %" counts every settled
 cell, including the `TurnFailed` cells that the Claude Max window ended.
 
+"Findings / run" is the report's mean over every SETTLED cell, `TurnFailed` ones included, which count as 0 findings
+(`ReviewerRow.Of` in `src/Bench.Domain/Gate/GateReport.cs`). So it is not comparable with the 12.1 and 8.2 in
+*What was known before the assessment*, which are over valid cells on all seven tasks. Over the valid measured cells
+the same counts give about 11.5 for Fable (4.93 × 28 / 12) and 8.1 for Opus (4.04 × 26 / 13).
+
 | reviewer | settled | valid % | seeds hit / run (of 2) | high-value / run | overstated % | findings / run | cost / run | s p50 |
 |---|---|---|---|---|---|---|---|---|
 | **Fable 5.1** | 28 | 42.9 | **1.83** | **2.08** | 4.2 | 4.93 | $13.05 (notional) | 1 044 † |
