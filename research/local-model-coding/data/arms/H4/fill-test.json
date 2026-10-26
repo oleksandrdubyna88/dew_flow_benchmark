@@ -1,0 +1,123 @@
+{
+  "arm": "H4",
+  "kind": "test",
+  "started_utc": "2026-10-26T12:27:03.497Z",
+  "regions": [
+    {
+      "id": "s55-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s551-copy",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 30,
+      "rejected": null
+    },
+    {
+      "id": "s552-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 25,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancel",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 36,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 29,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-copies",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 72,
+      "rejected": null
+    },
+    {
+      "id": "s561-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 18,
+      "rejected": null
+    },
+    {
+      "id": "s564-admit",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s563-planner",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s565-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 24,
+      "rejected": null
+    },
+    {
+      "id": "s566-flags",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 7,
+      "rejected": null
+    },
+    {
+      "id": "s568-kimi-admit",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 16,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 4,
+    "errors": [
+      "error CS4032: The 'await' operator can only be used within an async method. Consider marking this method with the 'async' modifier and changing its return type to 'Task<Task<(int Code, JsonElement Said, string Err)>>'. ",
+      "error CS0029: Cannot implicitly convert type '(int code, System.Text.Json.JsonElement, string stderr)' to 'System.Threading.Tasks.Task<(int Code, System.Text.Json.JsonElement Said, string Err)>' ",
+      "error CS8852: Init-only property or indexer 'PlayedKimi.During' can only be assigned in an object initializer, or on 'this' or 'base' in an instance constructor or an 'init' accessor. ",
+      "error CS1061: 'StringCollectionAssertions' does not contain a definition for 'Be' and no accessible extension method 'Be' accepting a first argument of type 'StringCollectionAssertions' could be found (are you missing a using directive or an assembly reference?) "
+    ]
+  },
+  "head": "2220b402",
+  "ended_utc": "2026-10-26T12:29:22.282Z"
+}

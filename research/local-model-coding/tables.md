@@ -21,10 +21,10 @@ from its transcript, priced with the unit prices fitted below). The filler is th
 | Q2 | skeleton + Qwen fill | 63 | $8.68 | — | 149.8k | 16.5k | 33.5M | 659.7k | 19 / 107.8k / 2 min |
 | Q3 | skeleton + Qwen fill | 62 | $9.94 | — | 155.1k | 22.3k | 39.0M | 699.4k | 13 / 115.0k / 2 min |
 | Q4 | skeleton + Qwen fill | 59 | $8.56 | — | 134.8k | 20.5k | 33.5M | 606.9k | 19 / 113.0k / 3 min |
-| H1 | skeleton + Haiku fill | 47 | $8.02* | $0.07 | 106.5k | 25.6k | 27.9M | 767.6k | 17 / 235.7k / 1 min |
-| H2 | skeleton + Haiku fill | 55 | $6.49* | $0.06 | 91.7k | 22.2k | 19.6M | 693.4k | 20 / 208.0k / 1 min |
-| H3 | skeleton + Haiku fill | 47 | $8.26* | $0.07 | 114.6k | 26.2k | 29.0M | 723.8k | 16 / 222.8k / 1 min |
-| H4 | skeleton + Haiku fill | 41 | $6.12* | $0.05 | 99.0k | 15.9k | 19.8M | 600.3k | 14 / 159.6k / 1 min |
+| H1 | skeleton + Haiku fill | 91 | $9.33 | $0.07 | 125.4k | 29.4k | 32.7M | 865.1k | 17 / 235.7k / 1 min |
+| H2 | skeleton + Haiku fill | 72 | $7.52 | $0.06 | 116.4k | 22.2k | 24.7M | 761.0k | 20 / 208.0k / 1 min |
+| H3 | skeleton + Haiku fill | 70 | $9.27 | $0.07 | 132.9k | 28.3k | 32.7M | 813.6k | 16 / 222.8k / 1 min |
+| H4 | skeleton + Haiku fill | 73 | $7.38 | $0.05 | 130.2k | 18.6k | 24.3M | 703.0k | 14 / 159.6k / 1 min |
 
 **Classic band** (C, C2, C3, C4 — one configuration run four times; min / mean / max): work 44 min / 53 min / 62 min;
 cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8M / 27.7M / 32.4M.
@@ -33,9 +33,9 @@ cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8
 
 | Model | Output $/Mtok | Cache read $/Mtok | Cache write + input $/Mtok | Fitted on | Max error on those sessions |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 33 | 0.0 % |
-| claude-haiku-5-5 | 1.14 | -0.013 | 0.10 | 40 | 1.8 % |
-| claude-opus-5-5 | 19.99 | 0.200 | 8.00 | 11 | 0.0 % |
+| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 37 | 0.0 % |
+| claude-haiku-5-5 | 1.11 | -0.013 | 0.10 | 47 | 1.8 % |
+| claude-opus-5-5 | 20.00 | 0.200 | 8.00 | 14 | 0.0 % |
 
 
 The Haiku row comes only from Claude Code's own small internal Haiku calls; its near-zero cache coefficient is noise
@@ -55,10 +55,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | Q2 | 1-skeleton a1: 12 min $2.93 · 2a-fill a1: 3 min $0.00 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 19 min $2.50 · 4-review a1: 10 min $2.13 · 5-fix a1: 19 min $1.12 |
 | Q3 | 1-skeleton a1: 11 min $1.99 · 2a-fill a1: 3 min $0.00 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 26 min $3.40 · 4-review a1: 9 min $3.00 · 5-fix a1: 11 min $1.55 |
 | Q4 | 1-skeleton a1: 12 min $2.00 · 2a-fill a1: 4 min $0.00 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 20 min $3.33 · 4-review a1: 12 min $2.56 · 5-fix a1: 9 min $0.67 |
-| H1 | 1-skeleton a1: 16 min $2.70 · 2a-fill a1: 3 min $0.07 · 2b-fill a1: 1 min $0.01 · 3-polish a1: 27 min $2.00 · 4-review a1: ? min $3.25* |
-| H2 | 1-skeleton a1: 13 min $2.55 · 2a-fill a1: 2 min $0.06 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 20 min $1.02 · 4-review a1: 17 min $2.65 · 5-fix a1: ? min $0.22* |
-| H3 | 1-skeleton a1: 25 min $2.97 · 2a-fill a1: 2 min $0.07 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 18 min $1.64 · 4-review a1: ? min $3.58* |
-| H4 | 1-skeleton a1: 12 min $2.12 · 2a-fill a1: 2 min $0.05 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 25 min $1.73 · 4-review a1: ? min $2.22* |
+| H1 | 1-skeleton a1: 16 min $2.70 · 2a-fill a1: 3 min $0.07 · 2b-fill a1: 1 min $0.01 · 3-polish a1: 27 min $2.00 · 4-review a1: 30 min $3.71 · 5-fix a1: 14 min $0.86 |
+| H2 | 1-skeleton a1: 13 min $2.55 · 2a-fill a1: 2 min $0.06 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 20 min $1.02 · 4-review a1: 17 min $2.65 · 5-fix a1: 17 min $1.24 |
+| H3 | 1-skeleton a1: 25 min $2.97 · 2a-fill a1: 2 min $0.07 · 2b-fill a1: 1 min $0.00 · 3-polish a1: 18 min $1.64 · 4-review a1: 11 min $3.76 · 5-fix a1: 12 min $0.83 |
+| H4 | 1-skeleton a1: 12 min $2.12 · 2a-fill a1: 2 min $0.05 · 2b-fill a1: 2 min $0.00 · 3-polish a1: 25 min $1.73 · 4-review a1: 15 min $2.38 · 5-fix a1: 17 min $1.10 |
 
 ## 3. Objective gate (on each arm's final commit)
 
@@ -74,10 +74,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | Q2 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 15 files changed, 733 insertions(+), 31 deletions(-) |
 | Q3 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 16 files changed, 697 insertions(+), 17 deletions(-) |
 | Q4 | ok | 0 | 2 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 629 insertions(+), 8 deletions(-) |
-| H1 | not run | | | | | | | | |
-| H2 | not run | | | | | | | | |
-| H3 | not run | | | | | | | | |
-| H4 | not run | | | | | | | | |
+| H1 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 734 insertions(+), 19 deletions(-) |
+| H2 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 15 files changed, 725 insertions(+), 13 deletions(-) |
+| H3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 15 files changed, 785 insertions(+), 9 deletions(-) |
+| H4 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 738 insertions(+), 7 deletions(-) |
 
 ## 3b. The step-2 review (Opus, before the fixes)
 
@@ -93,10 +93,10 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | Q2 | 2 | 0 / 0 / 2 | ready |
 | Q3 | 6 | 0 / 1 / 5 | fix-then-ready |
 | Q4 | 5 | 0 / 0 / 5 | fix-then-ready |
-| H1 | not reviewed yet | | |
-| H2 | not reviewed yet | | |
-| H3 | not reviewed yet | | |
-| H4 | not reviewed yet | | |
+| H1 | 5 | 0 / 0 / 5 | fix-then-ready |
+| H2 | 5 | 0 / 3 / 2 | fix-then-ready |
+| H3 | 4 | 0 / 1 / 3 | fix-then-ready |
+| H4 | 4 | 0 / 1 / 3 | fix-then-ready |
 
 ## 4. The fill and its survival (skeleton arms)
 
@@ -110,10 +110,10 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | Q2 | 18 / 0 | 1 / 0 | 2 / 2 | 53 % → 50 % (43 %) | 100 % → 100 % (100 %) | 537 / 492 / 455 / 158 |
 | Q3 | 13 / 0 | 0 / 0 | 3 / 3 | 54 % → 52 % (51 %) | n/a → n/a (n/a) | 557 / 341 / 294 / 90 |
 | Q4 | 16 / 0 | 2 / 0 | 6 / 6 | 55 % → 55 % (55 %) | 100 % → 100 % (100 %) | 543 / 385 / 278 / 65 |
-| H1 | not measured yet | | | | | |
-| H2 | not measured yet | | | | | |
-| H3 | not measured yet | | | | | |
-| H4 | not measured yet | | | | | |
+| H1 | 14 / 0 | 2 / 0 | 2 / 2 | 93 % → 90 % (90 %) | 83 % → 83 % (83 %) | 576 / 394 / 122 / 39 |
+| H2 | 18 / 0 | 2 / 0 | 1 / 1 | 100 % → 95 % (95 %) | 83 % → 83 % (83 %) | 553 / 488 / 63 / 70 |
+| H3 | 16 / 0 | 0 / 0 | 4 / 4 | 96 % → 94 % (94 %) | n/a → n/a (n/a) | 451 / 409 / 77 / 43 |
+| H4 | 13 / 0 | 1 / 0 | 4 / 4 | 77 % → 69 % (69 %) | 100 % → 100 % (100 %) | 583 / 419 / 171 / 76 |
 
 ## 5. Filler requests
 
@@ -125,6 +125,10 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | Q2 | 19 | 103.1k | 4.7k | false: 19 | stop: 19 | 6 min | $0 (local) |
 | Q3 | 13 | 111.8k | 3.2k | false: 13 | stop: 13 | 7 min | $0 (local) |
 | Q4 | 19 | 108.0k | 5.1k | false: 19 | stop: 19 | 8 min | $0 (local) |
+| H1 | 17 | 208.9k | 26.8k | null: 17 | stop: 17 | 3 min | $0.07 |
+| H2 | 20 | 182.4k | 25.5k | null: 20 | stop: 20 | 3 min | $0.06 |
+| H3 | 16 | 193.2k | 29.6k | null: 16 | stop: 16 | 3 min | $0.07 |
+| H4 | 14 | 137.2k | 22.4k | null: 14 | stop: 14 | 2 min | $0.05 |
 
 ## 6. Quality — the absolute blind judge (one Opus session per diff, anchored rubric, 2 runs)
 
@@ -139,11 +143,11 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | Q1 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 9 / 9 | mmmmmm / Mmmmmm |
 | Q2 | **7.0** (7 / 7) | 9 / 9 | 7 / 7 | 6 / 7 | 8 / 8 | MMmmmm / Mmmmmmmm |
 | Q3 | **8.0** (8 / 8) | 9 / 8 | 8 / 8 | 7 / 7 | 8 / 9 | mmmm / mmmmmm |
-| Q4 | **8.0** (8) | 9 | 8 | 7 | 8 | mmmmmmmm |
-| H1 | not judged yet | | | | | |
-| H2 | not judged yet | | | | | |
-| H3 | not judged yet | | | | | |
-| H4 | not judged yet | | | | | |
+| Q4 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 8 | 8 / 9 | mmmmmmmm / mmmmmm |
+| H1 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 7 | 8 / 9 | mmmm / mmmmmm |
+| H2 | **7.5** (8 / 7) | 9 / 9 | 7 / 7 | 7 / 7 | 8 / 8 | mmmmmm / Mmmmmm |
+| H3 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 8 / 8 | Mmmmmm / mmmmm |
+| H4 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 8 / 8 | mmmmmmm / mmmmmm |
 
 ## 7. Quality — the earlier GROUP judges (one session ranks V, C, C2, VT together; 2 runs, labels permuted)
 

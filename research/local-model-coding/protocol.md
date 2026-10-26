@@ -210,3 +210,14 @@ context packs and the polish dominate); quality inside the classic band.
 - **Q4's one new MCP failure (12:38 UTC)** was the deadline test `SecuritySourcesCharacterizationTests.The_collection_deadline_…`, in code Q4 did not touch, during a saturated full run (load ~22). Re-run at lowered and normal priority, in Q4 and at the start commit: 7/7 each time → the machine, not a defect (local-cpu-budget.md); moved to `failedEnvironment`, raw file kept.
 - **Q4's judge sessions:** the absolute judge had copied Q4's UNcorrected objective file at 12:38. D-f5516a (run 1) had not started — its copy was corrected before it ran. D-70adc8 (run 2) had finished with the old copy: its verdict is kept as `verdict.v1.json` and it is re-judged on the corrected copy in the H chain's (incremental) judge run.
 - **Survival metric hand-checked on 10 regions (12:55 UTC) and corrected before any report:** the first version counted a line kept only if it stayed EXACTLY in the SAME file; the polish had moved a filled helper class (Q2 `s567-standin`) unchanged to another file (0/8 → in fact 6/8). Main measure now: whitespace-insensitive, in any file the arm changed; the strict same-file measure is kept as the lower bound. Inlined or edited lines still count as dropped (checked: Q1 `s552` 4/17 is a real rewrite). Q1–Q4 final survival: test regions 50–56 % (strict 43–55 %); production regions only 0–5 lines per arm, too few to read.
+- **End of the run, 2026-10-26 14:25 UTC:** H1–H4 done, checked (all pass, 12/12), survival measured, the absolute judge run
+  for H and for Q4's re-judged session (Q4: 8 / 8 on the corrected file; its superseded run-2 verdict was 8 as well).
+- **Hand checks before the final report:** H survival on 4 regions (a kept line found in the final file; a dropped call —
+  3 times after the fill, 0 in the final code — really gone, replaced by a fixture setup); 3 of the absolute judge's major
+  findings opened in the code — C's rewritten shared caveat, Q2's deviation 53 ("not wired into `Build` yet", false: the
+  final code calls it; names a region that no longer exists), H3's "the bodies are placeholders" (0 left) — all three TRUE.
+  The two skeleton majors share a cause: the skeleton step's deviation notes go stale after the fill and the polish.
+- **Blinding leak found:** the Q and H diffs contain the word "skeleton" 2–5 times (in those plan deviation notes); the
+  classic diffs 0. The absolute judge could tell a skeleton arm; the redaction list did not cover the word. Reported as a
+  limit; not re-run.
+- **Disk:** 0 bad-block events and 0 unexpected shutdowns from 2026-10-25 19:00 UTC to the end of the run.

@@ -1,7 +1,6 @@
 # Cheaper code writers under a Sonnet coder — local model, Haiku (2026-10-25/26)
 
-> Status: **parts 1 and 2 complete; part 3 (Haiku as the filler) running when first committed — completed in this folder
-> when it ends.** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
+> Status: **complete — 14 arms, all checked and judged (2026-10-26 14:25 UTC).** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
 > `dew_flow_conventions`; recorded here because this repository is where the family keeps its measurements.
 
 ## The question
@@ -21,7 +20,7 @@ measure its noise:
 Task: stories E5.5 + E5.6 of `dew_flow_connect_other_ais · todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 12 scenarios, from
 commit `b4e2ea96`. Every arm ends with the same Opus review and Sonnet fixes, and is a branch `exp/kimi-e56-*` there.
 
-## The answer so far (details and conditions in [results.md](results.md))
+## The answer (details and conditions in [results.md](results.md))
 
 - **Quality was the same in every scheme**: every arm builds, passes the suites, delivers 12/12 scenarios, and scores 7–8
   of 10 with an absolute blind Opus judge — the same range as the four classic runs.
@@ -30,6 +29,8 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and Sonnet fixes, an
   rewritten.
 - **Skeleton + Qwen cost more** ($8.47–9.94): the fill took minutes and $0, but never compiled, so the polish was a second
   full writing pass. About half of Qwen's test lines survived.
+- **Skeleton + Haiku: a far better filler, still no saving** ($7.38–9.33): Haiku's fill cost $0.05–0.07, 69–95 % of its
+  test lines survived and the polish shrank to a third of Q's — but the skeleton step ($2.1–3.0) and the review remain.
 - **The money is in reading and reviewing**, not writing: Sonnet's cache reads (tens of millions of tokens per arm) and the
   Opus review (25–47 % of an arm). A cheaper writer cannot move those.
 

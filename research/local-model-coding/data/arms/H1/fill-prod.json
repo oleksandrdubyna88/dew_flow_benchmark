@@ -1,0 +1,33 @@
+{
+  "arm": "H1",
+  "kind": "prod",
+  "started_utc": "2026-10-26T12:34:03.309Z",
+  "regions": [
+    {
+      "id": "s56-planner-kimi",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 6,
+      "rejected": null
+    },
+    {
+      "id": "s56-kimi-noflags",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 2,
+    "errors": [
+      "error CS0103: The name 'VibeHomes' does not exist in the current context ",
+      "error CS0246: The type or namespace name 'Scopes' could not be found (are you missing a using directive or an assembly reference?) "
+    ]
+  },
+  "head": "a3eac9e5",
+  "ended_utc": "2026-10-26T12:35:32.368Z"
+}

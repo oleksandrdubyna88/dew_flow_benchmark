@@ -1,0 +1,144 @@
+{
+  "filled": {
+    "s55-settings": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 12,
+      "rounds": 1,
+      "code": "        return new PanelSettings\n        {\n            Providers = [],\n            DataDir = _dir.At(\"data\"),\n            ReviewerTimeout = TimeSpan.FromSeconds(60),\n            ConsultEnabled = true,\n            ConsultantHomesRoot = homesRoot,\n            Consultants = new Dictionary<string, ConsultantChoice>\n            {\n                [CallerIdentity.Claude] = new(\"my-kimi\", Runtime: \"kimi\"),\n            },\n        };"
+    },
+    "s55-played": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 9,
+      "rounds": 1,
+      "code": "        return new PlayedKimi(new ProcessLauncher())\n        {\n            Turn = (_, request) =>\n            {\n                var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, \"CHECK.md\")).Trim().Split(' ')[^1].TrimEnd('.');\n                var answer = $\"marker: {marker}{Environment.NewLine}canary: CANNOT\";\n                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, answer);\n            },\n        };"
+    },
+    "s55-check": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 2,
+      "rounds": 1,
+      "code": "var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(settings, [\"--check-consultant\", \"--caller\", \"claude\"], launcher, Temp, _warned.Add, Noticing.None, ct);\nreturn (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default);"
+    },
+    "s551-copy": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 21,
+      "rounds": 1,
+      "code": "        using var stood = AKimiConsultationScenarioTests.StandIn(_person);\n        var played = Played();\n\n        var (code, said) = await CheckAsync(Settings(Homes), played, TestContext.Current.CancellationToken);\n\n        code.Should().Be(0);\n        said.GetProperty(\"state\").GetString().Should().Be(\"answered\", said.ToString());\n        said.GetProperty(\"markerRead\").GetBoolean().Should().BeTrue(\"the copy holds the scratch's CHECK.md\");\n\n        var shim = played.Shims.Should().ContainSingle().Subject.Request;\n        var args = shim.Arguments.ToList();\n\n        var cwd = args[args.IndexOf(\"--cwd\") + 1];\n        cwd.Should().Contain(Path.Combine(\"own\", \"tree\"), \"a copy in the check's own scratch, never the repository\");\n        Path.GetFullPath(cwd).Should().StartWith(Path.GetFullPath(Temp), StringComparison.OrdinalIgnoreCase);\n\n        var home = args[args.IndexOf(\"--home\") + 1];\n        Path.GetFileName(home).Should().MatchRegex(\"^kh-[0-9a-f]{10}$\");\n        Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(Homes, VibeHomes.OneShotFolder));\n\n        Directory.EnumerateDirectories(Temp, \"coai-check-*\").Should().BeEmpty(\"the copy goes with the check's scratch\");"
+    },
+    "s552-gone": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 18,
+      "rounds": 1,
+      "code": "        using var stood = AKimiConsultationScenarioTests.StandIn(_person);\n        var before = _person.Hash();\n        var played = ending == \"passed\"\n            ? Played()\n            : new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.SessionOf(request)) };\n\n        var (_, said) = await CheckAsync(Settings(Homes), played, TestContext.Current.CancellationToken);\n\n        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);\n        (Directory.Exists(oneShot) ? Directory.EnumerateFileSystemEntries(oneShot) : Enumerable.Empty<string>())\n            .Should().BeEmpty(\"coai-vh\\\\<8> is gone; the folder coai-vh itself may exist\");\n        _unlinkedByTheDeleter.Should().BeEmpty(\"the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first\");\n        _person.Hash().Should().Equal(before, \"the person's folder: the same names, bytes and read-only bits as before\");\n\n        if (ending == \"passed\")\n        {\n            said.GetProperty(\"state\").GetString().Should().Be(\"answered\");\n        }"
+    },
+    "s553-cancel": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 39,
+      "rounds": 1,
+      "code": "        using var stood = AKimiConsultationScenarioTests.StandIn(_person);\n        var before = _person.Hash();\n        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);\n        var played = new PlayedKimi(new ProcessLauncher())\n        {\n            During = async (_, ct) =>\n            {\n                await caller.CancelAsync();\n                ct.ThrowIfCancellationRequested();\n            },\n        };\n\n        var said = default(JsonElement);\n        try\n        {\n            (_, said) = await CheckAsync(Settings(Homes), played, caller.Token);\n        }\n        catch (OperationCanceledException)\n        {\n            // The check may throw instead of answering a record. The asserts below still apply.\n        }\n\n        if (said.ValueKind == JsonValueKind.Object && said.TryGetProperty(\"state\", out var state))\n        {\n            state.GetString().Should().NotBe(\"answered\", said.ToString());\n            if (said.TryGetProperty(\"failureKind\", out var kind))\n            {\n                kind.GetString().Should().Be(\"cancelled\", said.ToString());\n            }\n        }\n\n        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);\n        if (Directory.Exists(oneShot))\n        {\n            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty();\n        }\n\n        _unlinkedByTheDeleter.Should().BeEmpty();\n        _person.Hash().Should().Equal(before);"
+    },
+    "s554-rootless": {
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "kind": "test",
+      "lines": 17,
+      "rounds": 1,
+      "code": "using var stood = AKimiConsultationScenarioTests.StandIn(_person);\nvar before = _person.Hash();\nvar played = Played();\n\nvar (_, said) = await CheckAsync(Settings(string.Empty), played, TestContext.Current.CancellationToken);\n\nsaid.GetProperty(\"state\").GetString().Should().Be(\"answered\", said.ToString());\n\nvar shim = played.Shims.Should().ContainSingle().Subject.Request;\nvar args = shim.Arguments;\nvar home = args[args.ToList().IndexOf(\"--home\") + 1];\nPath.GetFileName(home).Should().MatchRegex(\"^kh-[0-9a-f]{10}$\");\nPath.GetFileName(Path.GetDirectoryName(home)).Should().Be(ConsultantCheck.OwnName);\n\nDirectory.EnumerateDirectories(Temp, \"coai-check-*\").Should().BeEmpty(\"the check's scratch goes whole\");\n_unlinkedByTheDeleter.Should().BeEmpty(\"KimiHome unlinks the junction first\");\n_person.Hash().Should().Equal(before, \"the person's folder is whole\");"
+    },
+    "s567-repo": {
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "kind": "test",
+      "lines": 13,
+      "rounds": 1,
+      "code": "Directory.CreateDirectory(at);\nforeach (var (path, text) in files)\n{\n    var full = Path.Combine([at, .. path.Split('/')]);\n    Directory.CreateDirectory(Path.GetDirectoryName(full)!);\n    await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);\n}\n\nforeach (var args in (string[][])[[\"init\", \"-b\", \"main\"], [\"config\", \"user.email\", \"t@example.com\"], [\"config\", \"user.name\", \"t\"], [\"add\", \".\"], [\"commit\", \"-m\", \"base\"]])\n{\n    var result = await _launcher.RunAsync(new ProcessRequest(\"git\", args, at), TestContext.Current.CancellationToken);\n    result.ExitCode.Should().Be(0, string.Join(' ', args) + \": \" + result.StdErr);\n}"
+    },
+    "s567-service": {
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "kind": "test",
+      "lines": 20,
+      "rounds": 1,
+      "code": "        return new PanelService(\n            new PanelSettings\n            {\n                ConsultantHomesRoot = Homes,\n                Providers = [],\n                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),\n                DataDir = _dir.At(\"data\"),\n                ReviewerTimeout = TimeSpan.FromSeconds(30),\n                QuestionConsult = new QuestionConsultSettings\n                {\n                    Rows = [new QuestionRow(\"kimi-disk\", \"moonshot\", \"kimi\", string.Empty, string.Empty, string.Empty, string.Empty, \"question-disk\", Enabled: true)],\n                    Roots = roots,\n                    RowBudget = TimeSpan.FromSeconds(30),\n                },\n            },\n            VaultKeys.None(\"no vault in tests\"),\n            default,\n            kimi,\n            Logger.None,\n            Noticing.None);"
+    },
+    "s567-ask": {
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "kind": "test",
+      "lines": 1,
+      "rounds": 1,
+      "code": "        return JsonDocument.Parse(await service.AskConsultantsAsync(Repo, \"Which helper retries an outbound send?\", \"I tried a fixed wait.\", ct: ct ?? TestContext.Current.CancellationToken)).RootElement;"
+    },
+    "s567-copies": {
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "kind": "test",
+      "lines": 67,
+      "rounds": 1,
+      "code": "        using var stood = AKimiConsultationScenarioTests.StandIn(_person);\n        var before = _person.Hash();\n        var granted = Path.Combine(Repo, \"src\");\n        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);\n\n        var kimi = new PlayedKimi(_launcher);\n        string[] roots = [granted];\n        if (ending == \"refused before the launch\")\n        {\n            var plain = Directory.CreateDirectory(_dir.At(\"plain\")).FullName;\n            await File.WriteAllTextAsync(Path.Combine(plain, \"notes.txt\"), \"not a repository\", TestContext.Current.CancellationToken);\n            roots = [plain];\n        }\n        else if (ending == \"cancelled mid-turn\")\n        {\n            kimi = new PlayedKimi(_launcher)\n            {\n                During = async (_, ct) =>\n                {\n                    await caller.CancelAsync();\n                    ct.ThrowIfCancellationRequested();\n                },\n            };\n        }\n\n        var asking = () => AskAsync(Service(kimi, roots), caller.Token);\n        if (ending == \"cancelled mid-turn\")\n        {\n            await asking.Should().ThrowAsync<OperationCanceledException>();\n        }\n        else\n        {\n            var reply = await asking();\n            var row = reply.GetProperty(\"answers\").EnumerateArray().Single();\n            var status = row.GetProperty(\"status\").GetString();\n            if (ending == \"answered\")\n            {\n                status.Should().Be(RowOutcomes.Answered, reply.ToString());\n                var request = kimi.Shims.Should().ContainSingle().Subject.Request;\n                var cwd = request.Arguments[request.Arguments.ToList().IndexOf(\"--cwd\") + 1];\n                request.StdIn.Should().Contain(cwd, \"the prompt names the copy Kimi can read\");\n                request.StdIn.Should().NotContain(granted, \"never the original, which it cannot read\");\n            }\n            else\n            {\n                status.Should().Be(RowOutcomes.Refused, reply.ToString());\n                row.GetProperty(\"reason\").GetString().Should().Contain(\"not inside a Git work tree\");\n                kimi.Shims.Should().BeEmpty();\n                kimi.Versions.Should().BeEmpty();\n            }\n        }\n\n        foreach (var launch in kimi.Shims)\n        {\n            var args = launch.Request.Arguments.ToList();\n            var home = args[args.IndexOf(\"--home\") + 1];\n            Directory.Exists(Path.GetDirectoryName(home)).Should().BeFalse(\"the row's one-shot folder is gone after the row ends\");\n        }\n\n        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);\n        if (Directory.Exists(oneShot))\n        {\n            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty(\"the row's folder under coai-vh is deleted on every way out\");\n        }\n\n        _unlinkedByTheDeleter.Should().BeEmpty();\n        _person.Hash().Should().Equal(before);"
+    },
+    "s561-rows": {
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "kind": "test",
+      "lines": 24,
+      "rounds": 1,
+      "code": "var none = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None);\nvar disk = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Disk);\nvar web = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Web);\n\nnone.Should().NotBeNull(\"kimi × none must have a row; without it the table has no kimi row\");\ndisk.Should().NotBeNull(\"kimi × disk must have a row\");\nweb.Should().NotBeNull(\"kimi × web must have a row\");\n\nnone!.Standing.Should().Be(CapabilityStanding.Unconfined, \"kimi × none: Grep and Glob read the disk\");\nnone.MeasuredWith.Cells.Should().Contain(\"M-K6\", \"kimi × none stands on the measured cell M-K6\");\n\ndisk!.Standing.Should().Be(CapabilityStanding.Unconfined, \"kimi × disk: Grep and Glob read the disk\");\ndisk.MeasuredWith.Cells.Should().Contain(\"M-K6\", \"kimi × disk stands on the measured cell M-K6\");\ndisk.MeasuredWith.Cells.Should().Contain(\"M-K9\", \"kimi × disk stands on the measured cell M-K9\");\n\nweb!.Standing.Should().Be(CapabilityStanding.Unmeasured, \"kimi × web has not been measured\");\nweb.MeasuredWith.Cells.Should().BeEmpty(\"kimi × web has no measured cells\");\nweb.MeasuredWith.Note.Should().NotBeEmpty(\"kimi × web says why it is unmeasured\");\n\nforeach (var row in new[] { none, disk, web })\n{\n    row!.MeasuredWith.Version.Should().Be(\"2.1.1\", $\"kimi × {row.Capability} was measured with CLI 2.1.1\");\n    row.MeasuredWith.ResultRef.Should().Contain(\"RESULTS_kimi_confinement.md\", $\"kimi × {row.Capability} cites the Kimi record\");\n}"
+    },
+    "s562-vectors": {
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "kind": "test",
+      "lines": 17,
+      "rounds": 1,
+      "code": "        foreach (var capability in new[] { \"none\", \"disk\", \"web\" })\n        {\n            Vectors.Should().ContainSingle(v => v.Runtime == \"kimi\" && v.Capability == capability, $\"kimi × {capability} must have a vector\");\n            var vector = Vectors.Single(v => v.Runtime == \"kimi\" && v.Capability == capability);\n\n            if (capability == \"web\")\n            {\n                vector.Admitted.Should().BeFalse($\"kimi × {capability}: {vector.Why}\");\n                vector.Standing.Should().Be(\"unmeasured\", $\"kimi × {capability}: {vector.Why}\");\n            }\n            else\n            {\n                vector.Admitted.Should().BeTrue($\"kimi × {capability}: {vector.Why}\");\n                vector.Standing.Should().Be(\"unconfined\", $\"kimi × {capability}: {vector.Why}\");\n                vector.Flag.Should().Be(\"unconfined\", $\"kimi × {capability}: {vector.Why}\");\n            }\n        }"
+    },
+    "s564-admit": {
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "kind": "test",
+      "lines": 7,
+      "rounds": 1,
+      "code": "        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])\n        {\n            CapabilityMatrix.Admit(\"kimi\", capability).Should().BeOfType<Admission.Admitted>()\n                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $\"kimi × {capability}\");\n            CapabilityMatrix.Admit(\"kimi\", capability).Should().BeOfType<Admission.Admitted>()\n                .Which.Standing.Should().Be(CapabilityStanding.Unconfined, $\"kimi × {capability}\");\n        }"
+    },
+    "s563-arm": {
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "kind": "test",
+      "lines": 19,
+      "rounds": 1,
+      "code": "var none = Plan(\"kimi\", CapabilityGrant.None);\nnone.Cwd.Should().Be(CwdKind.Scratch, \"a none row stands in an empty folder\");\nnone.Flags.Should().BeEmpty(\"kimi has no sandbox flag; the shim confines it (D15)\");\nnone.Leading.Should().BeEmpty();\nnone.AddDirs.Should().BeEmpty();\nnone.SnapshotSources.Should().BeEmpty();\nnone.Flag.Should().Be(AdmissionFlag.Unconfined);\n\nvar disk = Plan(\"kimi\", CapabilityGrant.Disk(RootA, RootB));\ndisk.Cwd.Should().Be(CwdKind.Snapshot, \"a disk row stands in a snapshot of its roots (D6)\");\ndisk.SnapshotSources.Should().Equal([RootA, RootB], \"the roots it reads through their copies\");\ndisk.Flags.Should().BeEmpty(\"kimi has no sandbox flag; the shim confines it (D15)\");\ndisk.Leading.Should().BeEmpty();\ndisk.AddDirs.Should().BeEmpty(\"AddDirs are launch flags, and kimi is never given --add-dir\");\ndisk.Flag.Should().Be(AdmissionFlag.Unconfined);\n\nConfinementPlanner.Plan(\"kimi\", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()\n    .Which.Reason.Should().Contain(\"not been measured\")\n    .And.Contain(\"RESULTS_kimi_confinement.md\");"
+    },
+    "s565-launch": {
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "kind": "test",
+      "lines": 26,
+      "rounds": 1,
+      "code": "using var person = new KimiFixture();\nvar consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime(\"my-kimi\", Runners.Platform.HostKind.Windows,\n    new Runners.Kimi.KimiSeams(person.PlacesAt, () => (\"coai-mcp\", []))), \"my-kimi\");\n\nvar none = consultant.Build(Planned(\"kimi\", CapabilityGrant.None));\nvar disk = consultant.Build(Planned(\"kimi\", CapabilityGrant.Disk(RootA, RootB)));\n\nnone.Request.WorkingDirectory.Should().Be(Scratch, \"the row's empty folder\");\ndisk.Request.WorkingDirectory.Should().Be(RowTree);\n\nforeach (var invocation in new[] { none, disk })\n{\n    var request = invocation.Request;\n    var args = request.Arguments.ToList();\n\n    request.Arguments.Should().ContainInConsecutiveOrder(\"--ask-acp\", \"--profile\", \"kimi\");\n    request.Arguments.Should().NotContain(\"--session\").And.NotContain(RootA).And.NotContain(RootB);\n\n    args.Should().Contain(\"--home\");\n    var home = args[args.IndexOf(\"--home\") + 1];\n    home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);\n\n    request.InheritsEnvironment.Should().BeFalse();\n    Runners.Kimi.KimiEnvironment.Refusal(request, person.PlacesAt(home)).Should().BeEmpty();\n    invocation.Role.Should().Be(ConsultantRoles.Question);\n}"
+    },
+    "s566-flags": {
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "kind": "test",
+      "lines": 8,
+      "rounds": 1,
+      "code": "using var person = new KimiFixture();\nvar consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime(\"my-kimi\", Runners.Platform.HostKind.Windows,\n    new Runners.Kimi.KimiSeams(person.PlacesAt, () => (\"coai-mcp\", []))), \"my-kimi\");\n\nvar thatPlan = new Confinement.Planned(\"kimi\", CapabilityGrant.None, [], [\"--yolo\"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);\nvar launch = Planned(\"kimi\", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(thatPlan) };\n\nFluentActions.Invoking(() => consultant.Build(launch)).Should().Throw<ArgumentException>().WithMessage(\"*shim*\");"
+    },
+    "s568-kimi": {
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "kind": "test",
+      "lines": 15,
+      "rounds": 1,
+      "code": "  for (const capability of ['none', 'disk']) {\n    const admission = admit('kimi', capability);\n\n    assert.equal(admission.admitted, true, admission.reason);\n    assert.equal(admission.standing, 'unconfined', 'kimi × ' + capability + ' is unconfined');\n    assert.equal(admission.flag, 'unconfined', 'D13: an unconfined pair is flagged');\n    assert.match(admission.caveat, /can read this machine/u);\n  }\n\n  const refused = admit('kimi', 'web');\n\n  assert.equal(refused.admitted, false, 'kimi × web is not admitted until measured');\n  assert.match(refused.reason, /not been measured/u);\n  assert.match(refused.reason, /RESULTS_kimi_confinement\\.md/u);\n  assert.ok(!refused.reason.includes('RESULTS_question_consultant_capabilities.md'), refused.reason);"
+    },
+    "s56-planner-kimi": {
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "kind": "prod",
+      "lines": 6,
+      "rounds": 1,
+      "code": "        return grant.Capability switch\n        {\n            Capability.Disk => new(\"kimi\", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },\n            // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).\n            _ => new(\"kimi\", grant, [], [], CwdKind.Scratch, [], flag),\n        };"
+    },
+    "s56-no-flags": {
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "kind": "prod",
+      "lines": 4,
+      "rounds": 1,
+      "code": "if (plan.Flags.Count > 0 || plan.Leading.Count > 0)\n{\n    throw new ArgumentException(\"a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi\", nameof(plan));\n}"
+    }
+  }
+}

@@ -40,6 +40,16 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 | 2026-10-26 12:55 | The survival metric counted a line kept only if it stayed in the SAME file, exactly. | Q2's moved helper class read 0/8 kept (it is 6/8). | Main measure made whitespace-insensitive across the changed files; strict kept as the lower bound; hand-checked on 10 regions. |
 | 2026-10-26 13:05 | The H arms' Haiku requests entered the unit-price fit (their "input" includes cached tokens), giving a nonsense Haiku fit. | No reported value used it. | Filler requests excluded from the fit (they carry their own host cost). |
 
+## 2b. Found in the final hand checks (2026-10-26 14:25–14:45 UTC)
+
+- **Blinding leak:** the Q and H diffs contain the word "skeleton" 2–5 times (in their plan deviation notes), the classic
+  diffs 0; the judges' redaction did not cover it, so the absolute judge could tell a skeleton arm. Not re-run; reported
+  as a limit.
+- **Stale skeleton notes:** 3 of the absolute judge's major findings were opened in the code and were all true; the two
+  in skeleton arms (Q2, H3) are deviation notes the skeleton step wrote, which became false after the fill and the polish.
+- **Q4's re-judged session** (on the corrected objective file) scored 8, as its superseded verdict had.
+- **Disk:** 0 bad-block events and 0 unexpected shutdowns from 2026-10-25 19:00 UTC to the end of the run.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).

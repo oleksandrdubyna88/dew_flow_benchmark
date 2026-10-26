@@ -1,0 +1,288 @@
+{
+  "arm": "H2",
+  "commits": {
+    "skeleton": "cf4e20d8",
+    "fillTest": "e0b1302f",
+    "fillProd": "f96166f0",
+    "polish": "67475403",
+    "final": "6534098e"
+  },
+  "byKind": {
+    "test": {
+      "regions": 18,
+      "lines": 227,
+      "afterPolish": 0.9955947136563876,
+      "final": 0.9515418502202643,
+      "strictFinal": 0.947136563876652
+    },
+    "prod": {
+      "regions": 2,
+      "lines": 6,
+      "afterPolish": 0.8333333333333334,
+      "final": 0.8333333333333334,
+      "strictFinal": 0.8333333333333334
+    }
+  },
+  "fill": {
+    "test": {
+      "regions": 18,
+      "filled": 18,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 1,
+      "tests": null
+    },
+    "prod": {
+      "regions": 2,
+      "filled": 2,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 1,
+      "tests": null
+    }
+  },
+  "diffLines": {
+    "skeleton": 553,
+    "fill": 488,
+    "polish": 63,
+    "fixes": 70
+  },
+  "regions": [
+    {
+      "id": "s55-settings",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s55-played",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s55-check",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    },
+    {
+      "id": "s551-copy",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 15,
+      "keptAfterPolish": 14,
+      "keptFinal": 14,
+      "strictAfterPolish": 14,
+      "strictFinal": 14,
+      "droppedFinal": [
+        "Path.GetFullPath(cwd).Should().StartWith(Path.GetFullPath(Temp), StringComparison.OrdinalIgnoreCase);"
+      ]
+    },
+    {
+      "id": "s552-gone",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 13,
+      "keptAfterPolish": 13,
+      "keptFinal": 13,
+      "strictAfterPolish": 13,
+      "strictFinal": 13,
+      "droppedFinal": []
+    },
+    {
+      "id": "s553-cancel",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 20,
+      "keptAfterPolish": 20,
+      "keptFinal": 11,
+      "strictAfterPolish": 20,
+      "strictFinal": 10,
+      "droppedFinal": [
+        "var said = default(JsonElement);",
+        "(_, said) = await CheckAsync(Settings(Homes), played, caller.Token);",
+        "catch (OperationCanceledException)",
+        "// The check may throw instead of answering a record. The asserts below still apply.",
+        "if (said.ValueKind == JsonValueKind.Object && said.TryGetProperty(\"state\", out var state))",
+        "state.GetString().Should().NotBe(\"answered\", said.ToString());",
+        "if (said.TryGetProperty(\"failureKind\", out var kind))",
+        "kind.GetString().Should().Be(\"cancelled\", said.ToString());",
+        "Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "s554-rootless",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 13,
+      "keptAfterPolish": 13,
+      "keptFinal": 13,
+      "strictAfterPolish": 13,
+      "strictFinal": 13,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-repo",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-service",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 16,
+      "keptAfterPolish": 16,
+      "keptFinal": 16,
+      "strictAfterPolish": 16,
+      "strictFinal": 16,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-ask",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 1,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-copies",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 42,
+      "keptAfterPolish": 42,
+      "keptFinal": 41,
+      "strictAfterPolish": 42,
+      "strictFinal": 41,
+      "droppedFinal": [
+        "request.StdIn.Should().Contain(cwd, \"the prompt names the copy Kimi can read\");"
+      ]
+    },
+    {
+      "id": "s561-rows",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 17,
+      "keptFinal": 17,
+      "strictAfterPolish": 17,
+      "strictFinal": 17,
+      "droppedFinal": []
+    },
+    {
+      "id": "s562-vectors",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 10,
+      "keptAfterPolish": 10,
+      "keptFinal": 10,
+      "strictAfterPolish": 10,
+      "strictFinal": 10,
+      "droppedFinal": []
+    },
+    {
+      "id": "s564-admit",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s563-arm",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 17,
+      "keptFinal": 17,
+      "strictAfterPolish": 17,
+      "strictFinal": 17,
+      "droppedFinal": []
+    },
+    {
+      "id": "s565-launch",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 18,
+      "keptAfterPolish": 18,
+      "keptFinal": 18,
+      "strictAfterPolish": 18,
+      "strictFinal": 18,
+      "droppedFinal": []
+    },
+    {
+      "id": "s566-flags",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 6,
+      "keptAfterPolish": 6,
+      "keptFinal": 6,
+      "strictAfterPolish": 6,
+      "strictFinal": 6,
+      "droppedFinal": []
+    },
+    {
+      "id": "s568-kimi",
+      "kind": "test",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "lines": 11,
+      "keptAfterPolish": 11,
+      "keptFinal": 11,
+      "strictAfterPolish": 11,
+      "strictFinal": 11,
+      "droppedFinal": []
+    },
+    {
+      "id": "s56-planner-kimi",
+      "kind": "prod",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "lines": 4,
+      "keptAfterPolish": 3,
+      "keptFinal": 3,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": [
+        "return grant.Capability switch"
+      ]
+    },
+    {
+      "id": "s56-no-flags",
+      "kind": "prod",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    }
+  ]
+}

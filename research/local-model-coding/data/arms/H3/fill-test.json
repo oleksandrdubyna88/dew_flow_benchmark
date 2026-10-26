@@ -1,0 +1,147 @@
+{
+  "arm": "H3",
+  "kind": "test",
+  "started_utc": "2026-10-26T12:40:33.758Z",
+  "regions": [
+    {
+      "id": "s55-settings",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 12,
+      "rejected": null
+    },
+    {
+      "id": "s551-copy",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 36,
+      "rejected": null
+    },
+    {
+      "id": "s552-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 40,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancel",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 33,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 39,
+      "rejected": null
+    },
+    {
+      "id": "s567-init",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 20,
+      "rejected": null
+    },
+    {
+      "id": "s567-clean",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 3,
+      "rejected": null
+    },
+    {
+      "id": "s567-row",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 74,
+      "rejected": null
+    },
+    {
+      "id": "s561-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s564-admit",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 7,
+      "rejected": null
+    },
+    {
+      "id": "s563-plan",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 18,
+      "rejected": null
+    },
+    {
+      "id": "s565-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 21,
+      "rejected": null
+    },
+    {
+      "id": "s566-flags",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    },
+    {
+      "id": "s568-ts",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 4,
+    "errors": [
+      "error CS0029: Cannot implicitly convert type 'bool' to 'FluentAssertions.AndConstraint<FluentAssertions.Primitives.BooleanAssertions>' ",
+      "error CS0201: Only assignment, call, increment, decrement, await, and new object expressions can be used as a statement ",
+      "error CS0103: The name 'ConsultFailureKinds' does not exist in the current context ",
+      "error CS0103: The name 'VibeHomes' does not exist in the current context "
+    ]
+  },
+  "head": "6cf9d42f",
+  "ended_utc": "2026-10-26T12:42:56.073Z"
+}

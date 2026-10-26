@@ -1,0 +1,160 @@
+{
+  "arm": "H2",
+  "kind": "test",
+  "started_utc": "2026-10-26T12:28:47.789Z",
+  "regions": [
+    {
+      "id": "s55-settings",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 12,
+      "rejected": null
+    },
+    {
+      "id": "s55-played",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 9,
+      "rejected": null
+    },
+    {
+      "id": "s55-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s551-copy",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 21,
+      "rejected": null
+    },
+    {
+      "id": "s552-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 18,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancel",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 39,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 17,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 20,
+      "rejected": null
+    },
+    {
+      "id": "s567-ask",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 1,
+      "rejected": null
+    },
+    {
+      "id": "s567-copies",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 67,
+      "rejected": null
+    },
+    {
+      "id": "s561-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 24,
+      "rejected": null
+    },
+    {
+      "id": "s562-vectors",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 17,
+      "rejected": null
+    },
+    {
+      "id": "s564-admit",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 7,
+      "rejected": null
+    },
+    {
+      "id": "s563-arm",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 19,
+      "rejected": null
+    },
+    {
+      "id": "s565-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 26,
+      "rejected": null
+    },
+    {
+      "id": "s566-flags",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 8,
+      "rejected": null
+    },
+    {
+      "id": "s568-kimi",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 15,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 1,
+    "errors": [
+      "error CS1503: Argument 2: cannot convert from 'System.StringComparison' to 'string' "
+    ]
+  },
+  "head": "e0b1302f",
+  "ended_utc": "2026-10-26T12:31:09.237Z"
+}

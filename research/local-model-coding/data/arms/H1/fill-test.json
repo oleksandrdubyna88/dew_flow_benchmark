@@ -1,0 +1,129 @@
+{
+  "arm": "H1",
+  "kind": "test",
+  "started_utc": "2026-10-26T12:31:29.311Z",
+  "regions": [
+    {
+      "id": "s55-check-helper",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 8,
+      "rejected": null
+    },
+    {
+      "id": "s55-answer",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s551-copy-oneshot",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 20,
+      "rejected": null
+    },
+    {
+      "id": "s552-home-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 14,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancelled",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 31,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo-helper",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 20,
+      "rejected": null
+    },
+    {
+      "id": "s567-standin",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    },
+    {
+      "id": "s567-disk-row",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 66,
+      "rejected": null
+    },
+    {
+      "id": "s561-kimi-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 18,
+      "rejected": null
+    },
+    {
+      "id": "s563-planner-arm",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 20,
+      "rejected": null
+    },
+    {
+      "id": "s565-kimi-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s568-kimi-admit",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 2,
+      "lines": 20,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 2,
+    "errors": [
+      "error CS0103: The name 'VibeHomes' does not exist in the current context ",
+      "error CS0246: The type or namespace name 'Scopes' could not be found (are you missing a using directive or an assembly reference?) "
+    ]
+  },
+  "head": "2d85c015",
+  "ended_utc": "2026-10-26T12:34:03.178Z"
+}

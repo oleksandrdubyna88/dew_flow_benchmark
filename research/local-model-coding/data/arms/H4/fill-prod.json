@@ -1,0 +1,27 @@
+{
+  "arm": "H4",
+  "kind": "prod",
+  "started_utc": "2026-10-26T12:29:22.383Z",
+  "regions": [
+    {
+      "id": "s566-noflags",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 4,
+    "errors": [
+      "error CS4032: The 'await' operator can only be used within an async method. Consider marking this method with the 'async' modifier and changing its return type to 'Task<Task<(int Code, JsonElement Said, string Err)>>'. ",
+      "error CS0029: Cannot implicitly convert type '(int code, System.Text.Json.JsonElement, string stderr)' to 'System.Threading.Tasks.Task<(int Code, System.Text.Json.JsonElement Said, string Err)>' ",
+      "error CS8852: Init-only property or indexer 'PlayedKimi.During' can only be assigned in an object initializer, or on 'this' or 'base' in an instance constructor or an 'init' accessor. ",
+      "error CS1061: 'StringCollectionAssertions' does not contain a definition for 'Be' and no accessible extension method 'Be' accepting a first argument of type 'StringCollectionAssertions' could be found (are you missing a using directive or an assembly reference?) "
+    ]
+  },
+  "head": "e3bc0f1e",
+  "ended_utc": "2026-10-26T12:31:08.262Z"
+}

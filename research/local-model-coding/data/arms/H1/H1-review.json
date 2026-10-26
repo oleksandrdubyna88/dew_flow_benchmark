@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 347,
+   "summary": "The kimi none and disk rows give the source as 'RESULTS_kimi_confinement.md §17 M-K6', but M-K6 is in §9 of that record. §17 is M-K11 (a), the owned-home sign-in ladder, so a reader who follows the reference finds the wrong measurement. The same text is at line 364 and in the generated runtimeCapabilities.generated.ts at lines 363 and 380.",
+   "fix": "Change '§17 M-K6' to '§9 M-K6' in both rows. You can also cite §21 for M-K9 (e) and §12 for M-K9. Then run generate-runtime-capabilities.mjs again so that the TS table matches."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 170,
+   "summary": "S5.5.3 does not check that the record says 'cancelled', as its table row requires. It also passes when the check throws OperationCanceledException, and otherwise it only looks for the substring 'cancel' in the whole JSON. ConsultantCheck.RunAsync always gives back a record with failureKind 'cancelled' for a caller cancellation, so the catch branch is dead and would hide a regression.",
+   "fix": "Remove the try/catch fallback. Check that state is 'failed' and failureKind is 'cancelled', as ConsultantCheckTests.cs:471 does."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 139,
+   "summary": "S5.5.2 ignores the check's result. The theTurnFails arm never shows that the turn failed, so it would also pass if the played session_lost/exit-70 turn were read as an answer, and then the arm would only repeat the passed arm.",
+   "fix": "Keep the (code, said) result. Check that state is 'answered' when theTurnFails is false and 'failed' when it is true."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 187,
+   "summary": "S5.6.7 says the prompt names the copies' paths, but it only checks that the prompt contains the shim's working directory (<scratch>/tree). The copy is a folder inside that tree, so a prompt that names only the tree would also pass. The Vibe twin checks the copy path itself (AVibeQuestionRowReadsACopyOfItsRootsTests.cs:123-124).",
+   "fix": "Find the copy folder (the only directory under WorkingDirectory) and check that StdIn contains that path. Keep the check that StdIn does not contain the granted root."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1111,
+   "summary": "Deviation 57 gives the mutations that turned S5.5.2, S5.5.3, S5.5.4 and S5.6.7 red, but no mutation is given for S5.5.1. That scenario was never seen red, but the epic's Definition of Done requires every scenario to be seen red first.",
+   "fix": "Make a temporary break that S5.5.1 must catch, for example NeedsASanitisedSnapshot = false or HomesFolder empty on KimiConsultant. Record the red message in deviation 57, then revert the break."}
+ ]}

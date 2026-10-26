@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_core.md", "line": 819,
+   "summary": "The always-loaded rule common.knowledge-base says to update research/module_[name].md after every code change, but no file under research/ is in this diff: module_core.md describes the planner and capability table up to Vibe's arm and never names kimi as the seventh runtime, its two unconfined rows, the unmeasured web row or the no-flags arm, and module_tests.md has no catalogue rows for AKimiConsultantCheckTests and AKimiQuestionRowTests (E5.4 updated module_runners, module_server and module_tests in 11254e76).",
+   "fix": "Add a 'Kimi's arm (E5.6)' paragraph to module_core.md next to Vibe's: none and disk are unconfined on M-K6 (Grep and Glob read the disk), disk stands in a Snapshot with SnapshotSources, no flags, web is unmeasured and refused naming RESULTS_kimi_confinement.md, and KimiConsultant refuses a plan with flags. Add the E5.5 and E5.6 test classes to module_tests.md with what each one covers, what it does not cover, and the reds or pins (deviations 56–58)."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 396,
+   "summary": "In S5.6.5 (AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome), the table's Then includes 'KimiEnvironment.Refusal empty', but the test never asserts it. The planned launch goes through ConsultantLaunches.ForQuestion, which rewrites the environment (Minimal, not inherited), so nothing at the adapter level shows that the launch control admits what the question-row path builds.",
+   "fix": "In the foreach over none and disk, assert KimiEnvironment.Refusal(request, <the places the seam makes for the home>) is empty, as KimiConsultantTests.cs:82 does for the consult launch."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 79,
+   "summary": "S5.5.1's assertions are weaker than the table's Then. `code.Should().Be(0)` proves nothing, because --check-consultant exits 0 for every classified outcome (ConsultantCheckMode.cs:19). The canary reading is never asserted, though the table asks that the canary stay untouched. And --cwd is checked only to contain 'own/tree', not to be under this check's coai-check-* scratch in _temp.",
+   "fix": "Assert said.canary is 'not-attempted', and assert the --cwd value starts with a coai-check-* folder under _temp followed by own/tree. Drop the exit-code assertion, or give it an accurate reason."},
+  {"id": "R4", "severity": "minor", "file": "src_vs_code/src/test/capabilityAdmission.test.ts", "line": 182,
+   "summary": "The assertion message says kimi is admitted 'because the person's own sign-in is flagged unconfined'. That is the wrong reason: the rows are flagged because Grep and Glob read the disk directly (M-K6), not because of the sign-in.",
+   "fix": "Change the message to say the pair is admitted flagged unconfined because Grep and Glob read the disk directly (M-K6)."}
+ ]}
