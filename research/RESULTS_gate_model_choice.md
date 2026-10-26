@@ -36,7 +36,7 @@ valid runs. Cost is the list price; for Fable and Opus it is notional, since the
 
 | reviewer | valid runs | seeds hit / run (of 2) | high-value / run | overstated % | cost / run | cost / seed |
 |---|---|---|---|---|---|---|
-| Fable 5.1 | 12 | **1.83** | **2.08** | **4.2** | $13.05 | $7.71 |
+| Fable 5.1 | 12 | **1.83** | **2.08** | **4.2** | $13.05 | $7.13 |
 | Opus 5.5 | 13 | 1.54 | 1.77 | 8.8 | $3.11 | $2.02 |
 | devstral-2512 | 5 | 0.60 | 0.80 | 71 | $0.13 | $0.21 |
 | codestral-2508 | 5 | 0.20 | 0 | 50 | $0.03 | — |
