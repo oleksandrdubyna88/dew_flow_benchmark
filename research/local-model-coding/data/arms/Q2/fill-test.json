@@ -1,0 +1,161 @@
+{
+  "arm": "Q2",
+  "kind": "test",
+  "started_utc": "2026-10-26T10:01:07.354Z",
+  "regions": [
+    {
+      "id": "s55-standin",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 16,
+      "rejected": null
+    },
+    {
+      "id": "s55-settings",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 12,
+      "rejected": null
+    },
+    {
+      "id": "s55-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s551",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 37,
+      "rejected": null
+    },
+    {
+      "id": "s552",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 35,
+      "rejected": null
+    },
+    {
+      "id": "s553",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s554",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 25,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-standin",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 15,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 15,
+      "rejected": null
+    },
+    {
+      "id": "s567-ask",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 1,
+      "rejected": null
+    },
+    {
+      "id": "s567",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 77,
+      "rejected": null
+    },
+    {
+      "id": "s561",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 24,
+      "rejected": null
+    },
+    {
+      "id": "s564",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s563",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 19,
+      "rejected": null
+    },
+    {
+      "id": "s565",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 26,
+      "rejected": null
+    },
+    {
+      "id": "s566",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 9,
+      "rejected": null
+    },
+    {
+      "id": "s568",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 2,
+    "errors": [
+      "error CS1513: } expected ",
+      "error CS1519: Invalid token '}' in a member declaration "
+    ]
+  },
+  "head": "c74fa9cd",
+  "ended_utc": "2026-10-26T10:03:39.343Z"
+}

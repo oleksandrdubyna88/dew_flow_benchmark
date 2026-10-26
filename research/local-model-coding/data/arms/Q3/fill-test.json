@@ -1,0 +1,122 @@
+{
+  "arm": "Q3",
+  "kind": "test",
+  "started_utc": "2026-10-26T11:06:04.461Z",
+  "regions": [
+    {
+      "id": "s55-played",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s551-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 21,
+      "rejected": null
+    },
+    {
+      "id": "s552-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 9,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancel",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 12,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 14,
+      "rejected": null
+    },
+    {
+      "id": "s567-repo",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 13,
+      "rejected": null
+    },
+    {
+      "id": "s567-row",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 55,
+      "rejected": null
+    },
+    {
+      "id": "s561-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s564-admit",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 8,
+      "rejected": null
+    },
+    {
+      "id": "s563-planner",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 19,
+      "rejected": null
+    },
+    {
+      "id": "s565-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 23,
+      "rejected": null
+    },
+    {
+      "id": "s566-flags",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    },
+    {
+      "id": "s568-ts",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 3,
+    "errors": [
+      "error CS1503: Argument 1: cannot convert from 'target-typed conditional expression' to 'System.Func<CoaiMcp.Runners.Processes.ProcessRequest, CoaiMcp.Runners.Processes.ProcessResult>?' ",
+      "error CS1061: 'ConcurrentQueue<PlayedKimi.Launch>' does not contain a definition for 'Dequeue' and no accessible extension method 'Dequeue' accepting a first argument of type 'ConcurrentQueue<PlayedKimi.Launch>' could be found (are you missing a using directive or an assembly reference?) ",
+      "error CS0103: The name 'AcpWords' does not exist in the current context "
+    ]
+  },
+  "head": "424d7120",
+  "ended_utc": "2026-10-26T11:09:10.968Z"
+}

@@ -1,0 +1,288 @@
+{
+  "arm": "Q3",
+  "commits": {
+    "skeleton": "9a888982",
+    "fillTest": "424d7120",
+    "fillProd": "424d7120",
+    "polish": "6ceb9f2c",
+    "final": "e2c02936"
+  },
+  "byKind": {
+    "test": {
+      "regions": 13,
+      "lines": 170,
+      "afterPolish": 0.5352941176470588,
+      "final": 0.5235294117647059,
+      "strictFinal": 0.5117647058823529
+    },
+    "prod": {
+      "regions": 0,
+      "lines": 0,
+      "afterPolish": null,
+      "final": null,
+      "strictFinal": null
+    }
+  },
+  "fill": {
+    "test": {
+      "regions": 13,
+      "filled": 13,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 3,
+      "tests": null
+    },
+    "prod": {
+      "regions": 0,
+      "filled": 0,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 3,
+      "tests": null
+    }
+  },
+  "diffLines": {
+    "skeleton": 557,
+    "fill": 341,
+    "polish": 294,
+    "fixes": 90
+  },
+  "regions": [
+    {
+      "id": "s55-played",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 4,
+      "keptAfterPolish": 0,
+      "keptFinal": 0,
+      "strictAfterPolish": 0,
+      "strictFinal": 0,
+      "droppedFinal": [
+        "return new PlayedKimi(new ProcessLauncher()) { Turn = turn is null ? (_, request) =>",
+        "var marker = File.ReadAllText(Path.Combine(request.WorkingDirectory, \"CHECK.md\")).Trim().Split(' ')[^1].TrimEnd('.');",
+        "return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31, $\"marker: {marker}{Environment.NewLine}canary: CANNOT\");",
+        "} : (_, request) => turn(request) };"
+      ]
+    },
+    {
+      "id": "s551-check",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 8,
+      "keptFinal": 7,
+      "strictAfterPolish": 8,
+      "strictFinal": 7,
+      "droppedFinal": [
+        "Assert.SkipUnless(OperatingSystem.IsWindows(), \"D18: Kimi is refused on every host but Windows\");",
+        "said.GetProperty(\"markerRead\").GetBoolean().Should().BeTrue();",
+        "var turn = played.Shims.Should().ContainSingle().Subject.Request;",
+        "After(turn, \"--cwd\").Should().Contain(Path.Combine(\"own\", \"tree\"));",
+        "home.Should().StartWith(Path.Combine(_homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar);",
+        "Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(Path.Combine(_homes, VibeHomes.OneShotFolder));",
+        "if (said.TryGetProperty(\"canaryTouched\", out var canaryTouched) && canaryTouched.GetBoolean())",
+        "Assert.Fail(\"Expected the check of my-kimi to pass, but it failed: the vendor 'my-kimi' runs on 'kimi', which cannot hold a consultation in this build.\");",
+        "if (said.TryGetProperty(\"treeChanged\", out var treeChanged) && treeChanged.GetBoolean())",
+        "Assert.Fail(\"Expected the check of my-kimi to pass, but it failed: the vendor 'my-kimi' runs on 'kimi', which cannot hold a consultation in this build.\");"
+      ]
+    },
+    {
+      "id": "s552-gone",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 9,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": [
+        "var played = Played(theTurnFails ? (_, _) => new ProcessResult(70, string.Empty, \"the played shim failed\" + Environment.NewLine, TimedOut: false) : null);",
+        "Assert.SkipUnless(OperatingSystem.IsWindows(), \"D18: Kimi is refused on every host but Windows\");",
+        "await Check(Settings(_homes), played, TestContext.Current.CancellationToken);",
+        "_unlinkedByTheDeleter.Should().BeEmpty(\"the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first\");"
+      ]
+    },
+    {
+      "id": "s553-cancel",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 12,
+      "keptAfterPolish": 11,
+      "keptFinal": 11,
+      "strictAfterPolish": 11,
+      "strictFinal": 11,
+      "droppedFinal": [
+        "Assert.SkipUnless(OperatingSystem.IsWindows(), \"D18: Kimi is refused on every host but Windows\");"
+      ]
+    },
+    {
+      "id": "s554-rootless",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 14,
+      "keptAfterPolish": 10,
+      "keptFinal": 9,
+      "strictAfterPolish": 10,
+      "strictFinal": 9,
+      "droppedFinal": [
+        "Assert.SkipUnless(OperatingSystem.IsWindows(), \"D18: Kimi is refused on every host but Windows\");",
+        "var (code, said, _) = await Check(Settings(string.Empty), played, TestContext.Current.CancellationToken);",
+        "var turn = played.Shims.Should().ContainSingle().Subject.Request;",
+        "home.Should().Contain(Path.Combine(\"own\", \"kh-\"));",
+        "Directory.EnumerateDirectories(_temp, \"coai-check-*\").Should().BeEmpty(\"the scratch is gone\");"
+      ]
+    },
+    {
+      "id": "s567-repo",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-row",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 41,
+      "keptAfterPolish": 13,
+      "keptFinal": 13,
+      "strictAfterPolish": 12,
+      "strictFinal": 12,
+      "droppedFinal": [
+        "Assert.SkipUnless(OperatingSystem.IsWindows(), \"D18: Kimi is refused on every host but Windows\");",
+        "var granted = Path.Combine(Repo, \"src\");",
+        "var plain = _dir.At(\"plain\");",
+        "Directory.CreateDirectory(plain);",
+        "File.WriteAllText(Path.Combine(plain, \"file.txt\"), \"x\");",
+        "granted = Directory.CreateDirectory(plain).FullName;",
+        "During = ending == \"cancelled\"",
+        "? async (_, ct) => { await caller.CancelAsync(); ct.ThrowIfCancellationRequested(); }",
+        ": (_, _) => Task.CompletedTask,",
+        "if (ending == \"answered\")",
+        "TheRow(reply).GetProperty(\"status\").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());",
+        "played.Shims.Should().ContainSingle();",
+        "var shim = played.Shims.Dequeue();",
+        "shim.Request.StdIn.Should().Contain(shim.Request.WorkingDirectory);",
+        "shim.Request.StdIn.Should().NotContain(granted);",
+        "TheRow(reply).GetProperty(\"status\").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());",
+        "played.Shims.Should().BeEmpty();",
+        "var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);",
+        "(Directory.Exists(oneShot) ? Directory.EnumerateFileSystemEntries(oneShot) : Enumerable.Empty<string>()).Should().BeEmpty();",
+        "_unlinkedByTheDeleter.Should().BeEmpty(\"the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first\");",
+        "if (ending == \"answered\" || ending == \"cancelled\")",
+        "var shim = played.Shims.Dequeue();",
+        "var args = shim.Request.Arguments.ToList();",
+        "var homeIdx = args.IndexOf(AcpWords.HomeFlag);",
+        "homeIdx.Should().BeGreaterOrEqualTo(0);",
+        "var home = args[homeIdx + 1];",
+        "Directory.Exists(home).Should().BeFalse();",
+        "Directory.Exists(Path.GetDirectoryName(home)!).Should().BeFalse();"
+      ]
+    },
+    {
+      "id": "s561-rows",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 14,
+      "keptAfterPolish": 4,
+      "keptFinal": 4,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": [
+        "foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])",
+        "row.Should().NotBeNull();",
+        "if (capability == Capability.None)",
+        "row.Standing.Should().Be(CapabilityStanding.Unconfined);",
+        "row.MeasuredWith.Cells.Should().Contain(\"M-K6\");",
+        "else if (capability == Capability.Disk)",
+        "row.Standing.Should().Be(CapabilityStanding.Unconfined);",
+        "row.MeasuredWith.Cells.Should().Contain(\"M-K6\").And.Contain(\"M-K9\");",
+        "row.Standing.Should().Be(CapabilityStanding.Unmeasured);",
+        "row.MeasuredWith.Cells.Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "s564-admit",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": [
+        ".Which.Flag.Should().Be(AdmissionFlag.Unconfined, $\"kimi × {capability}: unconfined\");",
+        "CapabilityMatrix.Admit(\"kimi\", Capability.Web).Should().BeOfType<Admission.Refused>()",
+        ".Which.Reason.Should().Contain(\"not been measured\");"
+      ]
+    },
+    {
+      "id": "s563-planner",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 12,
+      "keptFinal": 12,
+      "strictAfterPolish": 12,
+      "strictFinal": 12,
+      "droppedFinal": [
+        "disk.Cwd.Should().Be(CwdKind.Snapshot);",
+        "disk.SnapshotSources.Should().Equal([RootA, RootB]);",
+        "disk.Flags.Should().BeEmpty();",
+        "web.Should().Contain(\"not been measured\");",
+        "web.Should().Contain(\"RESULTS_kimi_confinement.md\");"
+      ]
+    },
+    {
+      "id": "s565-launch",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 15,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": [
+        "disk.Request.WorkingDirectory.Should().Be(RowTree, \"M-D6: Kimi reads its cwd only — the copy of the roots\");",
+        "request.Arguments.Should().NotContain(\"--session\", \"a first turn continues nothing\");",
+        "request.Arguments.Should().NotContain(RootA).And.NotContain(RootB, \"the roots are read through their copy, never named to Kimi\");",
+        "var homeIndex = request.Arguments.ToList().IndexOf(AcpWords.HomeFlag) + 1;",
+        "request.Arguments[homeIndex].Should().StartWith(RowFolder + Path.DirectorySeparatorChar,",
+        "// KimiConsultantTests builds places via KimiFixture and KimiSeams; we lack a fixture here, so we skip the refusal check.",
+        "// Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, \"persons-bin\"))).Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "s566-flags",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 4,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": [
+        "var plan = Plan(\"kimi\", CapabilityGrant.None) with { Flags = [\"--yolo\"] };",
+        "var launch = Planned(\"kimi\", CapabilityGrant.None) with { Confinement = new LaunchConfinement.Planned(plan) };"
+      ]
+    },
+    {
+      "id": "s568-ts",
+      "kind": "test",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "lines": 10,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": [
+        "assert.equal(admission.standing, 'unconfined');",
+        "assert.match(web.reason, /RESULTS_kimi_confinement\\.md/u);"
+      ]
+    }
+  ]
+}

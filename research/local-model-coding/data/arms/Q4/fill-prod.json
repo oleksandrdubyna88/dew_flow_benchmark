@@ -1,0 +1,37 @@
+{
+  "arm": "Q4",
+  "kind": "prod",
+  "started_utc": "2026-10-26T11:10:56.212Z",
+  "regions": [
+    {
+      "id": "s56-planner",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s56-noflags",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 6,
+    "errors": [
+      "error CS0128: A local variable or function named 'cwd' is already defined in this scope ",
+      "error CS0219: The variable 'cwd' is assigned but its value is never used ",
+      "error CS8321: The local function 'GetCwd' is declared but never used ",
+      "error CS0117: 'ConsultCheckStates' does not contain a definition for 'NotAttempted' ",
+      "error CS0103: The name 'KimiPlaces' does not exist in the current context ",
+      "error CS0103: The name 'It' does not exist in the current context "
+    ]
+  },
+  "head": "011e28ee",
+  "ended_utc": "2026-10-26T11:12:05.486Z"
+}

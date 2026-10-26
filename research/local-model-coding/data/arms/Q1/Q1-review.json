@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 347,
+   "summary": "The kimi none and disk rows cite '§M-K6' in resultRef, but RESULTS_kimi_confinement.md has no such section. M-K6 is §9, M-K3 is §6, M-K4 is §7, M-K9 is §12 and M-K9 (e) is §21. The vibe rows cite '§10 M-V6' (section number and cell). Deviation 49 says 'RESULTS is out of scope', but only reading it is needed, not editing it.",
+   "fix": "Change the references (lines 347 and 364) to '§9 M-K6', '§6 M-K3', '§7 M-K4', '§12 M-K9', '§21 M-K9 (e)', run generate-runtime-capabilities.mjs again, and remove deviation 49 or correct it."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 173,
+   "summary": "In the RefusedBeforeTheLaunch arm of S5.6.7, played.Shims is empty, so the foreach that checks that the row's scratch is gone does not run. The table's Then ('after each ending the row's scratch ... gone') is not asserted for that arm, and a refused copy that leaves its coai-question-* scratch behind stays green.",
+   "fix": "Find the row's scratch without a shim launch (for example, point the scratch or temp root of the row at a testsToDelete- folder of the test and assert it is empty after each arm), or record the gap as a deviation."},
+  {"id": "R3", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 384,
+   "summary": "E5.6 decision 2 says 'Each row's note carries the version (2.1.1)'. The kimi web row's note ('not measured: no Kimi cell fetches or searches the web') does not give the version. Only the none and disk notes do.",
+   "fix": "Add '(kimi 2.1.1)' to the web row's note and run the generator again, or record why the web note does not give it as a deviation."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 404,
+   "summary": "MustCarryNoPlanFlags also refuses a plan with a non-empty Leading (deviation 51), but no test sets Leading. If you remove '|| planned.Plan.Leading.Count > 0', every test stays green.",
+   "fix": "Add a second case to APlanWithFlags_IsRefusedForKimi with Leading = [\"--search\"] and no Flags, and expect the same ArgumentException."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/KimiStandIn.cs", "line": 20,
+   "summary": "KimiStandIn.Of and its nested Scopes class copy AKimiConsultationScenarioTests.StandIn and Scopes line for line (deviations 50 and 58), so the suite now has two copies of the same scope helper. This is against the reuse-first rule.",
+   "fix": "Change AKimiConsultationScenarioTests to use KimiStandIn.Of(person) with its extra CallingAs scope, for example with a params overload, and delete its private copy."}
+ ]}

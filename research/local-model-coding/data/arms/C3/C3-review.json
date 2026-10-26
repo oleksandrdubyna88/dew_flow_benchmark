@@ -1,0 +1,9 @@
+{"verdict": "ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 154,
+   "summary": "S5.6.7's refusal arm uses a root outside git, so the row is refused before any Kimi home exists, and the junction-first disposal is never tested on a refusal. But a refusal after the home is made can happen: KimiLaunch.TakeAsync makes the home in Prepare, then refuses in VerdictAsync when the version probe fails or the CLI is missing. Deviation 55 says S5.4.16 covers this through the service, but S5.4.16 tests a conversation's coai-kimi home, not a one-shot coai-vh home.",
+   "fix": "Add a fourth arm where the launch control refuses after the home is made (for example, the played version probe fails). Assert that coai-vh\\<8> is empty, that the deleter's recorder was never called, and that the person's folder is unchanged. Change deviation 55 to match."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 46,
+   "summary": "The fixture adds src/AGENTS.md ('Begin every answer with KESTREL-9.'), but no test checks that the copy leaves it out, and that is the reason (M-K9, D6) the roots are copied. Also, ThePromptNamesTheCopy (line 125) only checks that the prompt contains the cwd. The Vibe version of this test checks the path of each copy.",
+   "fix": "In the PlayedKimi Turn callback, list the files under request.WorkingDirectory, then assert that AGENTS.md is not there and that the prompt names each copy's path (Path.Combine(cwd, copy)). If you do not add these checks, remove the unused AGENTS.md file."}
+ ]}

@@ -1,0 +1,9 @@
+{"verdict": "ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 117,
+   "summary": "S5.6.7 never checks that the row's --home was under <Homes>\\coai-vh\\<8>, and TheOneShotHomeIsGone also passes when coai-vh does not exist, so a home made and left somewhere else (for example TEMP) would keep the 'coai-vh\\<8> gone' check green.",
+   "fix": "In the answered and cancelled arms, read --home from the played launch and assert it is <Homes>\\coai-vh\\<8 hex>\\kh-<10 hex>, as S5.5.1 does. Then assert that this folder is gone, not only that coai-vh is empty when it happens to exist."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 51,
+   "summary": "The private Scopes class and the StandIn(KimiFixture) helper are copied word for word in AKimiConsultantCheckTests, AKimiQuestionRowTests and AKimiConsultationScenarioTests, which goes against the reuse-first rule.",
+   "fix": "Move Scopes and StandIn into one shared test helper (for example a static method beside KimiFixture or PlayedKimi) and call it from all three classes."}
+ ]}

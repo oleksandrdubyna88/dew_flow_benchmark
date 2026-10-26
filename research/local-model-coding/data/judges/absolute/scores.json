@@ -1,0 +1,775 @@
+{
+  "V": [
+    {
+      "run": "run1",
+      "label": "D-8818c5",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+          "summary": "MustCarryNoFlag puts one `if` with `&&` and two `||` together, so its cyclomatic complexity is 5 by McCabe's count, and the doctrine limit is 4 per method."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+          "summary": "Some doc comments were not updated for the new arm: SandboxVocabulary still says 'the six runtimes' (there are now seven), and CwdKind.Snapshot still describes a CLI 'that reads only its working folder', which is not true for Kimi."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 only checks that `--cwd` contains `own/tree` and does not tie it to the check's scratch; it checks the home's `kh-` name only by its length (no hex check, no check of the `<8>` level); and it checks 'scratch and canary unchanged' only through the `answered` state."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The refused arm of S5.6.7 compares the `coai-question-*` folders in the shared system TEMP before and after, so another test class running at the same time can make it fail (deviation 57 records this)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The `Scopes`/`StandIn` helpers are copied from AKimiConsultationScenarioTests into both new classes (now three copies), and ConfinementPlannerTests' new `Kimi()` helper repeats the construction already in `Adapters()`."
+        }
+      ],
+      "summary": "All the Decisions are in and correct: the planner arm with no flags, the three kimi rows with the cited cells, the vectors, the hand-written Runtimes list, the generated TS table, and the flag refusal in KimiConsultant.Build. All 12 scenarios are present and green, the junction-first tests have a positive check that a home was made, and the deviations 50–58 match the code. The findings are all minor: stale doc comments, one method over the complexity limit, some copied test helpers, and a few Then clauses that the tests check only loosely."
+    },
+    {
+      "run": "run2",
+      "label": "D-c77e37",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The refused arm of S5.6.7 compares every coai-question-* folder in the shared temp root before and after the ask, so a test class running in parallel that makes such a folder can turn it red (deviation 57 records this)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 does not itself check the table's 'scratch repository and its canary unchanged': it relies on state 'answered' meaning no tree change, and it does not check that the home is exactly one <8> folder below coai-vh."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The failing arm of S5.5.2 (session_lost, exit 70) asserts only that the state is not 'answered', not the failure kind the check records."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The Scopes class and the StandIn helper are copied word for word from AKimiConsultationScenarioTests into both new test classes, and ConfinementPlannerTests.Kimi() repeats the kimi entry of Adapters(), so they are copies, not reuse."
+        }
+      ],
+      "summary": "The planner arm, the three kimi rows with their cells, version and web notes, the vectors, the generated table and the hand-written Runtimes list all match E5.6's decisions, and KimiConsultant.Build refuses a plan that carries Flags, Leading or AddDirs with the spec's message; E5.5 correctly changes no production line, and all 12 scenarios pass. The new tests have a positive check that a home was made (KimiHome.AfterUnlink fired), which gives the junction-first checks their teeth, and the deviations 50–58 honestly record the reds that could not be seen; what is left is minor: one arm that can race with other tests, some implicit Then checks, and copied test helpers."
+    }
+  ],
+  "C": [
+    {
+      "run": "run1",
+      "label": "D-a8928d",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 6,
+      "simplicity": 9,
+      "overall": 7,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs",
+          "summary": "The shared Unconfined caveat is rewritten in both halves and in the json header ('a shell is always there' becomes 'its tools reach outside the folder…'), so every Codex row's user-facing text changes too; no story asks for this and deviations 50–57 do not record it, although the old text was false for Kimi."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+          "summary": "After the caveat change, the Unconfined enum doc (:14) still says 'a shell is always there (F2)', so it no longer agrees with the rewritten standing description in shared/runtime-capabilities.json."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 56 calls S5.6.7 'a Theory of three endings', but the test has four (it adds 'launch-refused'), and no deviation records that extra arm or the new PlayedKimi.Version seam."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "E5.6 decision 2 says each Kimi row's note carries the version 2.1.1, but the web row's note leaves it out, and this is not recorded."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1's path checks are loose: --cwd only has to contain 'own/tree', and the home's '<8>' parent segment is never checked for shape."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/PlayedKimi.cs",
+          "summary": "A blank line between two properties is deleted for no reason, which breaks the file's spacing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+          "summary": "The new caveat test calls itself 'R1', a label that clashes with E5.3's R1–R11 security judgement and points to no recorded decision."
+        }
+      ],
+      "summary": "The diff delivers all twelve scenarios with the smallest product change: the kimi planner arm with no flags, the three rows, vectors and generated table, the runtime list, and MustCarryNoFlag in KimiConsultant. The tests assert the scenarios' Then through the real service, and their red runs are recorded. The main problem is an unrecorded change outside the stories to the shared Unconfined caveat, which also changes Codex's text, plus a few small inaccuracies in the deviation list and the notes."
+    },
+    {
+      "run": "run2",
+      "label": "D-04d5fe",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 6,
+      "simplicity": 9,
+      "overall": 7,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs",
+          "summary": "The Unconfined caveat shown for every unconfined row changed from 'a shell is always there…' to new words, in both C# and capabilityAdmission.ts, and the standing's definition in runtime-capabilities.json changed too; this changes user-visible text for codex as well, neither story asks for it, and no E5.5–E5.6 deviation records it (only a test comment cites an unexplained 'R1')."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+          "summary": "The Unconfined doc comment still says 'a shell is always there (F2)', so it no longer agrees with the reworded standing definition in the seed's header."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 56 calls S5.6.7 'a Theory of three endings', but the test has four (answered, refused, launch-refused, cancelled); deviation 57's test count (10555) also does not match the measured run (10557)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 checks only that --cwd contains 'own/tree' and that the home's grandparent is coai-vh; it does not assert that the scratch is the prefix of --cwd or that the middle folder has the <8 hex> shape."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/PlayedKimi.cs",
+          "summary": "A blank line between two properties was removed for no reason, which breaks the file's spacing."
+        }
+      ],
+      "summary": "The planner arm, the flag refusal (which also covers Leading and AddDirs, and is recorded), the three kimi rows with their cells, the vectors, the generated table and all 12 scenarios are there and pass; the teeth runs and the extra launch-refused arm make S5.5 and S5.6.7 prove junction-first disposal honestly. The main problem is an unrecorded change outside the stories: the shared Unconfined caveat and the standing definition were reworded for every runtime, and the plan's deviations are a little wrong in places."
+    }
+  ],
+  "C2": [
+    {
+      "run": "run1",
+      "label": "D-6fd408",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 9,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 52 says S5.6.5 was green on arrival, but its `Planned` helper calls `ConfinementPlanner.Plan`, which the matrix refused for kimi before this change; deviation 50 itself lists S5.6.5 under that red, so the two deviations contradict each other."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line says E5.5–E5.6 are built, reviewed and fixed, but it does not say that both stories' 'Done when' still needs the live check and live rows recorded in RESULTS §31 (J2), which were not run."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "In S5.6.7's two refused arms, only `coai-vh` being empty is checked; the row's own scratch folder is not checked to be gone, although the Then says the row's scratch is gone after each ending."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 checks `--cwd` only with `Contain(\"own/tree\")`, not that it is under the check's own scratch, and it proves 'the scratch repository and its canary unchanged' only through the check's record (`answered`, `canary`), not by a direct before/after look."
+        }
+      ],
+      "summary": "Every decision of E5.5 and E5.6 is delivered with a small change that reuses the existing code: the planner arm with no flags, the refusal of a plan with any flag, three cited kimi rows, the vectors, the hand-written runtimes list and the regenerated TS table. All 12 scenarios exist and pass, with junction-first disposal proved on each ending. The findings are minor: two deviations contradict each other about S5.6.5's red, the status line does not say the live RESULTS §31 records are still owed, and some Then clauses are asserted only partly."
+    },
+    {
+      "run": "run2",
+      "label": "D-0af2d7",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 9,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.4 checks only that the home's parent folder is named `own`, not that it is under the check's own scratch, and S5.5.1 checks `--cwd` only by the substring `own/tree`, not as a path under the check's scratch."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "S5.6.7 checks that the prompt names the copies only by a substring match on the `--cwd` folder, not on each copy's own path."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 56 and the status line put process metadata (the coder model and an experiment branch name, `exp/kimi-e56-classic-2`) into the plan; this cannot be checked from the repository and is outside the stories' scope."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+          "summary": "The remark on the Kimi arm says it 'reads its working folder through Read only, like Vibe', which reads as a confinement claim before the remark corrects it with the Grep/Glob fact (M-K6)."
+        }
+      ],
+      "summary": "The planner arm (Snapshot for disk with SnapshotSources, Scratch for none, no flags), the three kimi rows citing the right cells, the vectors, the hand-written runtimes list, the regenerated TS table and the flag refusal in KimiConsultant.Build all match E5.5/E5.6, and all 12 scenarios exist and pass with no new failures. The tests assert the scenario tables' Then and add an extra launch-control-refusal arm; the deviations recorded are true where they can be checked against the code; only small assertion weaknesses and process metadata in the plan remain."
+    }
+  ],
+  "VT": [
+    {
+      "run": "run1",
+      "label": "D-1c8c0c",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 56 says the S5.5.3 test catches OperationCanceledException and does not assert which ending happened, but the test calls CheckAsync directly and asserts state 'failed' with failureKind 'cancelled', so the recorded deviation is not true."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 says each row's note carries the version 2.1.1, but the kimi × web note ('not measured: no Kimi cell fetches or searches the web') does not."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/KimiQuestionLaunchTests.cs",
+          "summary": "S5.6.5 and S5.6.6 are in a new class, not in ConfinementPlannerTests as the plan says, and the class copies that class's RootA/RootB/RowFolder/RowTree/Plan/Planned fixtures instead of reusing them next to the Vibe twin at :316-337."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The private Scopes class and StandIn helper are copied word for word from AKimiConsultationScenarioTests (and again in AKimiQuestionRowTests), so there are now three copies and no shared helper."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "In the 'refused' arm of S5.6.7, the homes-folder check only runs when the folder exists and there is no scratch check, so that arm cannot fail on disposal (deviation 50 says so)."
+        }
+      ],
+      "summary": "The change delivers both stories: a kimi planner arm with no flags (copy for disk, empty folder for none), all three standings from their own cells, ArgumentException for a plan with Flags or Leading, the rows, vectors, generated table and Runtimes list, and all 12 scenarios present and green with no new failures. The findings are all minor: one recorded deviation is false, the web row's note has no version, and the test fixtures and helpers are copied instead of reused or kept in the class the plan names."
+    },
+    {
+      "run": "run2",
+      "label": "D-67b6b5",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 56 is false: it says the S5.5.3 test catches OperationCanceledException and does not assert how the check ends, but `ACheckCancelledMidTurn_StillDisposesItsHome` has no catch and asserts state Failed with failureKind Cancelled."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The `refused` arm of S5.6.7 checks no disposal: `TheRowsScratchIsGone` returns early and `TheHomesFolderIsEmpty` passes when coai-vh does not exist, so that arm cannot fail for the table's reason (deviation 50 records this)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The private `Scopes` class and `StandIn` helper are copied from AKimiConsultationScenarioTests into both new test classes (three copies now), not shared."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 does not check 'the scratch repository and its canary unchanged' directly: it relies on state 'answered', which the check gives only when the tree and canary did not change, and it does not assert the canary reading."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+          "summary": "The existing refusal test still matches `/claude, codex, antigravity, local, api, vibe/`, which is now only a prefix of the runtimes list, so that check no longer catches a missing `kimi` (deviation 54 records this)."
+        }
+      ],
+      "summary": "D-67b6b5 delivers both stories as specified: the kimi planner arm (Snapshot for disk, Scratch for none, no flags), three unconfined/unconfined/unmeasured rows that cite their M-K cells, the vectors, the generated table and the Runtimes list, and a KimiConsultant refusal of any plan with Flags or Leading; all 12 scenarios are present and pass, and build, format and generator checks are green. The findings are small: one deviation (56) describes its test wrongly, the refused arm of S5.6.7 checks no disposal, and the new test classes copy the existing Kimi stand-in helpers."
+    }
+  ],
+  "C3": [
+    {
+      "run": "run1",
+      "label": "D-593913",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "S5.6.7's answered and cancelled arms check that coai-vh\\<8> is empty only when the folder exists, and never assert that the row's home was in coai-vh, so these arms would still pass if the home were reserved somewhere else."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The 'refused before the launch' and 'refused by the launch control' arms never assert that the row's scratch is gone, although S5.6.7's Then asks for this after every ending; only the arms that reach the shim check it, through ThePromptNamesTheCopy."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The Scopes class and the StandIn helper are copied into both new test classes, which makes a third copy of the ones in AKimiConsultationScenarioTests instead of one shared helper."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "In S5.5.4, the lambda parameter `said` in the warnings filter shadows the outer `said` JSON local, which makes the assertion hard to read."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line names Sonnet as the builder although §0.2 says Opus builds E5.5 and E5.6, and no deviation records this; deviation 55 also cites 'the C3 review's R1', a review that is not in the document and whose name can be confused with Fable's R1."
+        }
+      ],
+      "summary": "The diff delivers both stories as the spec says: a Kimi planner arm with no flags (copy for disk, empty folder for none), unconfined none and disk rows that cite M-K6, M-K9 and the other cells, an unmeasured web row, the vectors, the regenerated table, a Build that refuses a plan with any Leading or Flags entry, and all 12 scenarios present and green with no new failures. The findings are all minor: some vacuous existence guards and missing scratch checks in S5.6.7, copied test helpers, and documentation details in the plan's status line and deviation list."
+    },
+    {
+      "run": "run2",
+      "label": "D-280705",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The 'refused by the launch control' arm's homeWhenProbed checks only that coai-vh is not empty, which the row's reservation already makes true before KimiLaunch builds kh-*, so it does not prove what deviation 55 says (that the home existed when the probe ran)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "S5.6.7's Then says the row's scratch is gone after every ending, but the two refused arms check only coai-vh, the recorder and the person's folder; only the answered and cancelled arms check the scratch."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The Scopes class and the StandIn helper are copied from AKimiConsultationScenarioTests a second and third time (here and in AKimiQuestionRowTests), where one shared helper would do."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+          "summary": "KimiConsultantOn builds a second Kimi adapter beside the existing kimi entry in Adapters() of the same class instead of reusing that entry."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 55 cites 'the C3 review's R1' and '(R2)', and neither of those reviews is recorded anywhere in the plan."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 checks only that the canary state is not 'read' and does not pin the exact state that the played 'CANNOT' answer gives."
+        }
+      ],
+      "summary": "All 12 scenarios are present and pass, with no new failures, and the build, format and generator checks are green. The planner arm, the flagged none and disk rows, the refused web row, the refusal of any Leading or Flags entry, the three vectors, the generated table and the runtime lists match the stories' decisions, and the deviations are recorded. The findings are all minor: some test assertions are weaker than the deviation text says, and some test helpers are copied instead of shared."
+    }
+  ],
+  "C4": [
+    {
+      "run": "run1",
+      "label": "D-960f82",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 asks that each Kimi row's note carry the version (2.1.1), but the version is only in measuredWith.version; deviation 58 records this with a reason, but it still departs from an explicit decision."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The repository fixture seeds src/.kimi-code/config.toml and src/AGENTS.md, but no assertion checks that the copy leaves them out, so the setup suggests a sanitisation check that the test does not make."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The private Scopes class and the StandIn composition are copied from AKimiConsultationScenarioTests into both new test classes (three copies in total) instead of being shared, for example through KimiFixture or PlayedKimi."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+          "summary": "The SandboxVocabulary doc still says 'any of the six runtimes' now that kimi makes seven."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The S5.5 tests read the shim argv with the literals \"--home\" and \"--cwd\", but the S5.6.5 test in KimiConsultantTests uses AcpWords.HomeFlag."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The admitted Kimi rows show the shared unconfined caveat ('a shell is always there, and no flag removes it'), which is false for Kimi because the shim refuses every shell command; this follows the spec and is honestly recorded as deviation 56 and open question 7, but it is left unfixed."
+        }
+      ],
+      "summary": "All twelve scenarios are present and pass, and the build, the format check and the generator check are green. The production change is small and matches the spec: the planner arm (Snapshot for disk, Scratch for none, no flags), the refusal of any Flags or Leading, the three rows and vectors, and the runtimes list. The tests exercise the real check and the real service flow with junction-first recorders, and the recorded deviations are mostly true. The remaining findings are minor: the version is not in the notes, one fixture is never asserted, test helpers are copied, and one doc comment is stale."
+    },
+    {
+      "run": "run2",
+      "label": "D-e9ff05",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 9,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The 'refused before the launch' arm of S5.6.7 is refused at the copy, so no Kimi home or junction is made, and its recorder and person-folder checks prove nothing for that arm; a launch-control refusal after the home is made (the Vibe suite's `ARowTheLaunchControlRefuses_…` shape) would test the junction-first disposal on that path."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The fixture plants `src/AGENTS.md` and `src/.kimi-code/config.toml` in the granted root, but no test checks that the copy leaves them out, so this setup does nothing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The private `Scopes` class and the `StandIn()` composition are copied again from `AKimiConsultationScenarioTests` (three copies now, counting the one in `AKimiQuestionRowTests`), where one shared test helper would do."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 asks that each row's note carry the version 2.1.1, and the notes do not; the version is only in `measuredWith.version` and M-K9 (e) is only in the text, not in `cells`. Deviations 54 and 58 record both choices and are true, but they still differ from the spec."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 does not check directly that the scratch repository and its canary are unchanged; it relies on the check's `answered` state, which the code sets only when `Broken` is empty. This is sound, but it is indirect."
+        }
+      ],
+      "summary": "All 12 scenarios exist and pass, the build, format and generator checks are green, and the production change is small and follows the spec: the planner arm for kimi has no flags, a plan with any `Flags` or `Leading` is refused, kimi is in `Runtimes`, the three rows cite their cells, and the vectors and the generated table are updated. The plan's deviations 50–58 match the code; deviation 59 (which model built the stories) cannot be checked from the code and is not scored. Only minor findings remain: one weak refusal arm in S5.6.7, an unused fixture, test helpers copied a third time, and the version kept out of the notes (recorded as a deviation)."
+    }
+  ],
+  "Q1": [
+    {
+      "run": "run1",
+      "label": "D-cf3d50",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 9,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The 'E5.5–E5.6 skeleton' paragraph is stale and untrue for the delivered state: it says the method bodies are '[redacted] … END' fill regions and that no test was run, but all 12 scenarios are filled in and pass."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line says 'deviations 47–58', but the list goes to 60, and deviation 47's heading ('S5.6.2 and S5.6.4's neighbours are existing tests') contradicts its own text, which says S5.6.4 is a new test."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 59 says ARowRefusedAtItsCopy_GivesItsOneShotFolderBack pins the removal of the row's scratch on a refusal at the copy, but that test only asserts that the coai-vh homes folder is empty."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.2's 'exit 70' arm plays a report with end agent_failed under exit 70 (session_lost's exit), so the fake turn is not self-consistent, although it still covers the failed-turn cleanup."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 checks the --cwd copy only with Contains(\"own/tree\") and checks 'the scratch repository and its canary unchanged' only through the check's own state 'answered', not directly."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/capability-matrix-vectors.json",
+          "summary": "The new kimi 'why' and 'note' strings use ' - ' where the neighbouring vibe rows use an em dash."
+        }
+      ],
+      "summary": "The production change matches the decisions exactly and is small: a planner arm with no flags (Snapshot for disk with SnapshotSources = the roots, Scratch for none), three rows with the right standings and cells, vectors, the regenerated table, Runtimes gaining kimi, and an ArgumentException naming the shim for a plan with any flag. All 12 scenarios exist and pass, and the shared KimiStandIn helper replaces a copy instead of duplicating it. The faults are in the recorded deviations, which contain a stale skeleton paragraph, a wrong deviation range in the status line and one overstated pin, plus a few weak or loosely faked assertions in the check tests."
+    },
+    {
+      "run": "run2",
+      "label": "D-78fa7d",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 9,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The new 'E5.5–E5.6 skeleton' paragraph still says that the method bodies of the new tests and of two production methods are fill regions ('[redacted] … END') and that no test was run; neither is true of the delivered change, so the deviation record is partly false."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line says 'deviations 47–58' and the polish heading says '53–58', but the list goes on to deviations 59 and 60."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 47's heading says 'S5.6.2 and S5.6.4's neighbours are existing tests', but its own text says S5.6.4 is a new test, so the entry contradicts itself."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 only checks that --cwd contains 'own/tree'; it does not anchor the path under the check's scratch as the Then asks, which is weaker than the --home regex next to it."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The fixture plants src/AGENTS.md ('KESTREL-9') and docs/notes.md ('not granted'), but no assertion reads them, so this is setup with no purpose."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+          "summary": "The Records list gains the Kimi record, but its doc comment still names only the question-consultant run and the Vibe probe."
+        }
+      ],
+      "summary": "Every decision of E5.5 and E5.6 is delivered as specified: three kimi rows with the decided standings, cells and resultRef sections (checked against RESULTS), the vectors, the regenerated TS table, the flag-free planner arm, and a refusal for a plan with Flags or Leading. All 12 scenarios exist and pass, with real junction-first and person-hash assertions and a shared KimiStandIn helper that removes a copy. The main finding is in the plan's deviation record: a stale skeleton paragraph still describes unfinished code and untested work, and the deviation numbers in the status line are wrong."
+    }
+  ],
+  "Q2": [
+    {
+      "run": "run1",
+      "label": "D-71de76",
+      "correctness": 9,
+      "tests": 7,
+      "conventions": 6,
+      "simplicity": 8,
+      "overall": 7,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The plan keeps the 'skeleton' deviations 50–57, and some of them are false for the code as delivered: 53 says MustCarryNoFlags is 'not wired into Build yet' and names a region `s566-guard` that does not exist; 56 says the async tests are plain `Task` placeholders and that Theory bodies read their parameter on one line. In addition, the status line cites only 'deviations 58–63'."
+        },
+        {
+          "severity": "major",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "In the 'refused' arm of S5.6.7, nothing is launched, so the per-launch loop does not run and the arm never checks that the reserved coai-vh\\<8> folder or the row's scratch is gone. The Vibe model test (ARowRefusedAtItsCopy_GivesItsOneShotFolderBack) does check that the homes folder is empty, and the table's 'after each ending' asks for it."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+          "summary": "The change adds a new test, TheVectorsCoverKimi, which duplicates the existing every-pair test. The spec names that existing test as S5.6.2."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 and S5.5.4 check --cwd and --home with a substring Contains ('own/tree', 'own/kh-'), so they do not prove that the path is under the check's scratch. The 'scratch and canary unchanged' check depends only on the check's own 'answered' state."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/PlayedKimi.cs",
+          "summary": "When the flag is absent, ArgAfter returns args[0] (IndexOf gives -1) and does not fail, so an assertion can read the wrong argument without an error."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+          "summary": "MustCarryNoFlags is `internal static`, but only Build calls it; it can be private."
+        }
+      ],
+      "summary": "The production change agrees with the spec: the kimi planner arm has no flags (Snapshot with SnapshotSources for disk, Scratch for none), the three rows have the specified standings, cells and version 2.1.1, the vectors, Runtimes and generated table hold kimi, and Build refuses a plan with any Leading or Flags. All 12 scenarios are present and pass. Most tests assert the table's Then; the main weaknesses are the refused arm of S5.6.7, which checks nothing about disposal, and deviation records in the plan that are stale and contradict the delivered code."
+    },
+    {
+      "run": "run2",
+      "label": "D-54f3a2",
+      "correctness": 9,
+      "tests": 7,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 7,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "In S5.6.7, the 'refused' arm launches no shim, so the per-launch loop does not run, and nothing checks that the coai-vh\\<8> folder it reserved (QuestionRowLaunch.cs:101) or the row's scratch is gone. That arm would still pass with Release() removed from finally, although the table's Then asks for this check 'after each ending' (the Vibe twin ARowRefusedAtItsCopy_GivesItsOneShotFolderBack does check it)."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The skeleton's deviations stay in the plan but are false for the delivered code: 53 says MustCarryNoFlags is 'not wired into Build yet' (it is), and 56 says the tests are placeholders 'each region says so' (no regions remain). The status line also cites only deviations 58–63."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 63 says the classes use 'Scopes and StandIn as AKimiConsultationScenarioTests has them', but the change actually moves them into a new shared KimiStandIn.cs and rewrites E5.4's AKimiConsultationScenarioTests to use it. That refactor is not recorded as such."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+          "summary": "TheVectorsCoverKimi is a new test that duplicates the existing every-pair test TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable, which the plan names as S5.6.2 and which already covers the kimi pairs."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "The failing arm of S5.5.2 builds its own exit-70 session_lost ProcessResult instead of reusing the existing PlayedKimi.Lost helper."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/PlayedKimi.cs",
+          "summary": "When the flag is missing, ArgAfter does not fail: IndexOf returns -1 and it silently returns args[0]."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 checks --cwd only by the substring own/tree, not that it is under the check's own scratch root."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 says each row's note carries the version, but the kimi web row's note does not name 2.1.1 (the version is only in measuredWith.version)."
+        }
+      ],
+      "summary": "The data, the planner arm, the flag guard (Leading and Flags), the vectors and the generated table follow E5.5/E5.6, and all 12 scenarios exist and pass with no new failures; the shared KimiStandIn is good reuse. One arm of S5.6.7 checks nothing about the disposal, the plan keeps stale skeleton deviations that are no longer true, and there is a little redundancy in the tests."
+    }
+  ],
+  "Q3": [
+    {
+      "run": "run1",
+      "label": "D-56ed37",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line says 'deviations 50–62, not yet reviewed', but the list runs to 66, and deviations 62–66 record fixes from a review (R2–R6), so the status line is not true."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs",
+          "summary": "The change rewrites the shared `unconfined` caveat that codex rows also show (in both the C# and TS copies), which is outside the stories' decisions; deviation 62 records it, but the table's `unconfined` legend ('a shell is always there') and the RuntimeCapabilities.cs:14 summary still describe the standing that kimi now holds with a shell it does not have."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.1 only checks that `--cwd` contains the substring `own/tree`, not that it is under this check's own scratch, and no test pins E5.5 decision 3 (the confinement recorded on the check is empty)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+          "summary": "Two tests outside the scenario table are added (`TheVectorsCoverKimi`, and the caveat test that asserts on text); deviations 62 and 64 record both, but they make the change bigger than S5.6.2 needs, because the existing test already covers it."
+        }
+      ],
+      "summary": "The planner arm, the no-flag guard (it also refuses `Leading`), the three kimi rows, the vectors, the regenerated table and `Runtimes` all match E5.6's decisions; the 12 scenario tests exist and pass, and they reuse the existing stand-in and `PlayedKimi` with a useful `CredentialsLinked` companion assertion. The findings are small: a status line that disagrees with its own deviation list, and a caveat rewrite outside scope that leaves the standing's legend inconsistent."
+    },
+    {
+      "run": "run2",
+      "label": "D-faa042",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 9,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "The kimi none and disk rows' resultRef cites '§12 M-K6', but M-K6 is §9 of RESULTS_kimi_confinement.md (§12 is M-K9), so the shipped table points to the wrong section."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 says each row's note carries the version 2.1.1, but the kimi web row's note does not name the version."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs",
+          "summary": "The shared 'unconfined' caveat now uses different words for codex too, which is outside the stories, and the standing's definition (the legend in runtime-capabilities.json and the CapabilityStanding.Unconfined doc) still says 'a shell is always there'; deviation 62 wrongly calls that legend codex-only."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The status line says 'deviations 50–62, not yet reviewed', but the list runs to 66 and deviations 62–66 come from a review."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "S5.6.7 checks only that the tree under the row's scratch is gone (answered and cancelled arms) and does not check the row's scratch at all on the refused arm, so 'the row's scratch is gone' is only partly asserted."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Several deviations (50, 54, 55, 57, 61) tell the history of the work instead of a departure from the spec, which makes the list longer without adding information."
+        }
+      ],
+      "summary": "The production change is small and matches the spec: the planner arm with no flags, the guard that refuses Flags and Leading, kimi in Runtimes, three rows, the vectors and the regenerated table, and the 12 scenarios exist and pass, with mutation teeth recorded where no red existed at b4e2ea96. The findings are all minor: a wrong section number in the shipped resultRef, a missing version in the web note, a caveat change for every runtime that leaves the standing's definition inconsistent, and a stale status line."
+    }
+  ],
+  "Q4": [
+    {
+      "run": "run1",
+      "label": "D-f5516a",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "The 'E5.5–E5.6 skeleton' deviation block still says the scenario and production bodies are 'placeholders that throw (fill regions)' and that 'no test has been run red or green yet'; this is false for the delivered code and leaves process noise in the binding deviation list."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+          "summary": "Deviation 50 says Build guards with `if (launch.Confinement is LaunchConfinement.Planned)`, but the code calls MustCarryNoFlag unconditionally and does the Planned test inside it; the effect is the same, the quoted code is not."
+        },
+        {
+          "severity": "minor",
+          "file": "shared/runtime-capabilities.json",
+          "summary": "Decision 2 says each Kimi row's `note` carries the version 2.1.1, but the notes do not contain it (it is only in measuredWith.version, the Vibe shape), and no deviation records this."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The StandIn() and Scopes helpers are verbatim copies of the ones in AKimiConsultationScenarioTests instead of a shared helper."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+          "summary": "The new AKimiConsultant() helper repeats the kimi entry already in Adapters() in the same file instead of Adapters() reusing the helper."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+          "summary": "S5.5.2's exit-70 arm never asserts that the check failed, and both new test classes reset KimiHome.AfterUnlink, which they never set."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+          "summary": "The S5.6.7 theory branches on a string with nested ifs (cyclomatic complexity above the ≤4 rule), opens with a pointless BeOneOf guard, and does not check that the row's scratch is gone in the refused arm."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+          "summary": "The Kimi arm is block-bodied with `return` and spells `new Confinement.Planned(`, where every sibling arm is an expression-bodied switch with target-typed `new(`."
+        }
+      ],
+      "summary": "The production change is small and matches the spec: the kimi planner arm (Snapshot for disk, Scratch for none, no flags), a guard that refuses a plan with any of Flags, Leading or AddDirs, three kimi rows with the right standings and cells, the vectors, Runtimes and the regenerated TS table; all 12 scenarios exist, pass, and assert the table's Then (the check's Answered state carries the scratch and canary invariant). The findings are all minor: stale or imprecise deviation text, a missing version in the notes, duplicated test helpers and some loose test assertions."
+    }
+  ]
+}

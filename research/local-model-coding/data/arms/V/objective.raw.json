@@ -1,0 +1,78 @@
+{
+  "arm": "V",
+  "head": "7bb2572d",
+  "commits": 5,
+  "uncommittedFiles": 0,
+  "build": true,
+  "format": false,
+  "generatorCheck": true,
+  "mcp": {
+    "exit": 2,
+    "total": 10557,
+    "passed": 10471,
+    "skipped": 84,
+    "failedNew": [],
+    "failedBaseline": [
+      "KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed",
+      "KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn"
+    ]
+  },
+  "ts": {
+    "exit": 1,
+    "total": 6290,
+    "failedNew": []
+  },
+  "scenariosPresent": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": true,
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": true,
+    "ACheckCancelledMidTurn_StillDisposesItsHome": true,
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": true,
+    "KimiHasThreeRows_EachCitingItsCells": true,
+    "TheVectorsCoverKimi": false,
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": true,
+    "AdmissionFlagsBothRows": true,
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": true,
+    "APlanWithFlags_IsRefusedForKimi": true,
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": true,
+    "S5.6.8 (TS: kimi rows admit flagged)": false
+  },
+  "scenariosPresentCount": 10,
+  "scenariosPassing": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": "passed",
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": "passed",
+    "ACheckCancelledMidTurn_StillDisposesItsHome": "passed",
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": "passed",
+    "KimiHasThreeRows_EachCitingItsCells": "passed",
+    "TheVectorsCoverKimi": "absent",
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": "passed",
+    "AdmissionFlagsBothRows": "passed",
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": "passed",
+    "APlanWithFlags_IsRefusedForKimi": "passed",
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": "passed"
+  },
+  "diff": {
+    "shortstat": "14 files changed, 761 insertions(+), 8 deletions(-)",
+    "changedLines": {
+      "tests": 569,
+      "src": 79,
+      "shared": 57,
+      "docs": 64
+    },
+    "files": [
+      "research/module_core.md",
+      "research/module_tests.md",
+      "shared/capability-matrix-vectors.json",
+      "shared/runtime-capabilities.json",
+      "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+      "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "src_mcp/tests/CapabilityMatrixTests.cs",
+      "src_mcp/tests/ConfinementPlannerTests.cs",
+      "src_vs_code/src/runtimeCapabilities.generated.ts",
+      "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+    ]
+  }
+}
