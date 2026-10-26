@@ -51,6 +51,7 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and Sonnet fixes, an
 | [data/](data/) | Per arm: `timing.jsonl` (every step attempt), `objective.json` (+ the uncorrected `objective.raw.json`), `survival.json`, `fill-*.json`, `fill-state.json` (the filler's exact code per region), `filler-requests.jsonl`, the coder's and fixer's notes and the step-2 review; `metrics.json` (time/cost/tokens per arm, step, attempt, model); `judges/` (both group judges and the absolute judge: keys, every verdict); `fillers/` (V's and VT's prompts and drafts) |
 | [harness/](harness/) | The scripts and briefs exactly as used |
 
-Not kept here: the session streams and transcripts (large, and they hold the whole coai checkout as read by the agents),
-the vLLM prompts of the skeleton arms (re-creatable: `fill-state.json` holds every answer), the judges' diff copies (the
-branches hold the code).
+| [data/raw/](data/raw/README.md) | **Every raw record**, compressed (41 MB for parts 1–4): every session's full event stream and exact prompt, all session transcripts, the checks' full logs and test reports, every filler prompt and answer, the judges' complete sessions, all notes and logs — with checksums; the owner's email addresses masked, nothing else changed |
+| [data/reviews/](data/reviews/) | The other-vendor reviews of this folder, verbatim: the consultation (codex gpt-6-astra) and the document gate's round on `results.md` (findings, decisions, the reviewers' notes) |
+
+Not kept here: the arms' clones (the branches `exp/kimi-e56-*` in `dew_flow_connect_other_ais` hold every arm's commits).
