@@ -221,3 +221,31 @@ context packs and the polish dominate); quality inside the classic band.
   classic diffs 0. The absolute judge could tell a skeleton arm; the redaction list did not cover the word. Reported as a
   limit; not re-run.
 - **Disk:** 0 bad-block events and 0 unexpected shutdowns from 2026-10-25 19:00 UTC to the end of the run.
+
+## Part 4 — Opus splits into tasks, Haiku codes, Sonnet reviews each task (arms T1–T4), recorded before they run (2026-10-26T15:10:13Z)
+
+**Owner's request:** Fable splits plans into epics and epics into stories; here Opus splits the story pair into TASKS, each
+task goes straight to Haiku to implement, and for each task a Sonnet reviews and fixes; then the result goes to the Opus
+review as in every arm. **Owner's decisions:** Haiku works as a FULL agent in the clone (reads, edits, builds, runs the
+task's tests); 4–6 tasks; the same final tail (Opus review + Sonnet fixes) so totals compare; tasks run IN PARALLEL where
+their files do not overlap; and every task must already state the exact methods, DTOs and contracts.
+**Pipeline (`t-lib.sh`):** 1 split (Opus, 25 min): `tasks.json` + one document per task — goal, scenarios, EXACT contracts
+(full signatures, types, fields, JSON shapes, test names and assertions), the existing code to use with file and line,
+red-first steps, commands, done-when, out-of-bounds; each file owned by exactly one task; dependencies; the E5 plan owned by
+the last task. `tasks-plan.mjs` checks it (one Opus fix round if invalid) and computes batches (ready tasks together, ≤ 4).
+Per task: Haiku codes (20 min), then Sonnet reviews its diff against the document and fixes (15 min), each a headless
+session; a parallel task works in its own git worktree (rules mount from the local checkout, `node_modules` linked, its own
+build) and its commits are cherry-picked back in order; a single task runs in the arm's clone. Then 4 review (Opus, the
+common brief), 5 fixes (Sonnet, the common brief). **Two arms at a time** (T1+T2, then T3+T4). Tested before the run: the
+whole task pipeline in a model-free fake mode (5 tasks, two parallel batches, worktrees, cherry-picks in order, cleanup);
+the checker on a valid and a broken list.
+**Rule deviations, by the owner's request:** Haiku has no role in `subagent-models.md`; a review is an Opus role there,
+here each task is reviewed by Sonnet (the final review stays Opus).
+**Judge:** the absolute judge, incremental; its redaction list is WIDENED for the T arms (skeleton, Haiku, task ids, task
+list/document/split) after the skeleton arms' plan notes gave their scheme away — so T is judged blinder than Q and H were.
+**New metrics:** per task Haiku's and Sonnet's time and cost; `t-survival.mjs`: Haiku's meaningful lines kept in the final
+code, and the lines each Sonnet task review changed.
+**Predictions:** total Claude cost ABOVE the classic band, $10–14 per arm (an Opus split that reads the repository, 4–6
+Sonnet task sessions each with a cold start, the Opus review); Haiku's cost $0.5–2 per arm; Haiku's code survives better
+than in H (> 80 % of its lines), because Haiku builds and tests itself; the Sonnet task reviews change little (< 30 % of
+Haiku's lines in total); work time 60–90 min; quality inside the classic band.
