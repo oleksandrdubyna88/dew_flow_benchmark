@@ -4,6 +4,14 @@
 # the arm branch in order. Then the same Opus review and Sonnet fixes as every arm. Every stage is resumable.
 # Uses run-arm.sh's E, ARM, OUT, WORK, NOTES, log, step, review_json.
 MAIN=$E/arm-$ARM
+# The scheme's knobs (run-arm.sh sets them per arm family; these defaults are the T arms as they ran):
+SPLIT_MODEL=${SPLIT_MODEL:-opus}            # who splits the stories into tasks
+TASK_REVIEW=${TASK_REVIEW:-yes}             # a Sonnet review per task (T) or none (O, S)
+FIX_MODEL=${FIX_MODEL:-sonnet}              # who applies the final Opus review's findings
+SPLIT_TPL=${SPLIT_TPL:-$E/briefs/t1-split.template.md}
+SPLIT_FIX_TPL=${SPLIT_FIX_TPL:-$E/briefs/t1b-split-fix.template.md}
+FIX_TPL=${FIX_TPL:-$E/briefs/3-fix.template.md}
+export TPL_SPLIT_ROLE; TPL_SPLIT_ROLE="JUDGE ($( [ "$SPLIT_MODEL" = opus ] && echo Opus || echo Sonnet ))"
 
 make_worktree() { # id
   local id=$1 wt=$E/wt/$ARM-$1
@@ -64,8 +72,10 @@ run_task() { # id dir — Haiku codes the task, then Sonnet reviews it, in that 
   step "2-$id-code" haiku 20 "$E/briefs/t2-coder.template.md" "$NOTES/$ARM-$id-code.md" write no
   # the diffs are kept here because a parallel task's commits get new ids when they are cherry-picked
   [ -f "$OUT/task-$id-haiku.head" ] || { git -C "$DIR" rev-parse HEAD > "$OUT/task-$id-haiku.head"; git -C "$DIR" diff "$TPL_BEFORE" HEAD > "$OUT/task-$id-haiku.diff"; }
-  step "3-$id-review" sonnet 15 "$E/briefs/t3-task-review.template.md" "$NOTES/$ARM-$id-review.md" write no
-  git -C "$DIR" diff "$(cat "$OUT/task-$id-haiku.head")" HEAD > "$OUT/task-$id-review.diff"
+  if [ "$TASK_REVIEW" = yes ]; then
+    step "3-$id-review" sonnet 15 "$E/briefs/t3-task-review.template.md" "$NOTES/$ARM-$id-review.md" write no
+    git -C "$DIR" diff "$(cat "$OUT/task-$id-haiku.head")" HEAD > "$OUT/task-$id-review.diff"
+  fi
 }
 
 run_batches() {
@@ -91,11 +101,11 @@ run_batches() {
 
 run_t_arm() {
   DIR=$MAIN
-  step 1-split opus 25 "$E/briefs/t1-split.template.md" "$NOTES/$ARM-split.md" write no
+  step 1-split "$SPLIT_MODEL" 25 "$SPLIT_TPL" "$NOTES/$ARM-split.md" write no
   if ! node "$E/tasks-plan.mjs" "$ARM" > "$OUT/tasks-plan.log" 2>&1; then
     export TPL_PROBLEMS; TPL_PROBLEMS=$(cat "$OUT/tasks-plan.log")
     log "the task list has problems — one fix round: $(tr '\n' ' ' < "$OUT/tasks-plan.log")"
-    step 1b-split-fix opus 10 "$E/briefs/t1b-split-fix.template.md" "$NOTES/$ARM-split.md" write no
+    step 1b-split-fix "$SPLIT_MODEL" 10 "$SPLIT_FIX_TPL" "$NOTES/$ARM-split.md" write no
     node "$E/tasks-plan.mjs" "$ARM" > "$OUT/tasks-plan.log" 2>&1 || { log "the task list is still invalid: $(tr '\n' ' ' < "$OUT/tasks-plan.log")"; exit 3; }
   fi
   log "$(cat "$OUT/tasks-plan.log")"
@@ -105,5 +115,5 @@ run_t_arm() {
   [ "${COAI_EXP_FAKE_TASK:-}" = 1 ] && return 0
   step 4-review opus 20 "$E/briefs/2-review.template.md" "-" read no
   review_json 4-review
-  step 5-fix sonnet 30 "$E/briefs/3-fix.template.md" "$NOTES/$ARM-fix.md" write no
+  step 5-fix "$FIX_MODEL" 30 "$FIX_TPL" "$NOTES/$ARM-fix.md" write no
 }

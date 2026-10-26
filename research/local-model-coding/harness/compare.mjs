@@ -9,7 +9,7 @@ const E = '/home/jinx/git/coai-exp';
 const read = (f) => (existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null);
 const { report } = read(`${E}/metrics.json`);
 const scores = read(`${E}/judge-abs/scores.json`) ?? {};
-const ARMS = ['C', 'C2', 'C3', 'C4', 'V', 'VT', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4'].filter((a) => report[a]);
+const ARMS = ['C', 'C2', 'C3', 'C4', 'V', 'VT', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'D1', 'S1', 'O2', 'D2', 'S2', 'O3', 'D3', 'S3', 'O4', 'D4', 'S4'].filter((a) => report[a]);
 const CLASSIC = ['C', 'C2', 'C3', 'C4'];
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 

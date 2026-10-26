@@ -261,3 +261,35 @@ Haiku's lines in total); work time 60–90 min; quality inside the classic band.
   T3 major opened in the code: `GitScratch.AfterUnlink` is per async flow and T3's test sets it in `InitializeAsync` after
   an `await`, so the junction-first assertion can never fail — TRUE, and missed by both the Sonnet task review and the
   final Opus review. T judged with the widened redaction (2 / 0 / 0 / 3 redactions).
+
+## Part 5 — no Sonnet review: Opus or Sonnet splits, Haiku codes and fixes, Opus checks once (O, S, D x4), recorded before they run (2026-10-26T20:01:00Z)
+
+**Owner's request**, after T and a consultation (codex gpt-6-astra, `52ceb2d9`, verified and closed `solved`): three
+schemes, four runs each. **O1–O4:** Opus splits into tasks → Haiku codes each task (no task review) → ONE Opus review of
+the whole stories (the common review brief, fresh session) → Haiku applies its findings (`h-fix`: the common fix brief,
+model named Haiku). **D1–D4:** Haiku codes the stories directly from the classic coder brief (`d-code`, model named
+Haiku) → Opus review → Haiku fixes — the consultant's "largest untested assumption": does Haiku need a split at all.
+**S1–S4:** as O, with SONNET splitting (`x-split`, role "JUDGE (Sonnet)"). **Owner's decisions:** Opus checks the
+stories once, never per task; a fresh Opus session for the check (no reuse of the split session); frozen behavioural
+(mutation) checks for quality, run by script on EVERY arm including the earlier 18. **Order:** four rounds of three, one
+arm of each scheme per round (O_n, D_n, S_n), so the schemes share time of day and machine load; 0 bad-block events since
+the crashes, even with 6 arms at once (H). **Briefs:** `x-split` / `x-split-fix` differ from T's split briefs only in the
+role and the sentence on what happens after the tasks (no task review; one Opus review; the same smaller model fixes);
+T's briefs are untouched. Tested before the run: an O arm end to end in fake mode (5 tasks, 3 batches, carried back in
+order, its branch name). **Rule deviations, by the owner's request:** Haiku codes and fixes (no role in
+`subagent-models.md`); Sonnet splits in S (a judge's job there).
+**Predictions (consultant's decomposition taken into account):** O $6–9 per arm (split $2–6 + Haiku < $1 + review $2–3.7
++ Haiku fix < $0.5), not below the classic band on average; S $4–7 (a Sonnet split is cheaper than Opus's); **D $3.5–6,
+the only scheme likely to come in BELOW the classic band**; Haiku's fixes leave more of the review's findings open than
+Sonnet's did (checked by the mutation checks and the judge); quality: O and S inside the classic band, D the most likely
+to fall below it; mutation checks will show at least one surviving mutant somewhere in the earlier 18 (T3's vacuous test
+is one known case — the instrument must catch it to be trusted).
+- **Mutation checks built and validated (2026-10-26 20:05–20:15 UTC), before any result:** `mutate.mjs` breaks one spec
+  decision at a time in an arm's final code (a clean worktree), rebuilds the test project and re-runs the arm's scenario
+  classes against an unmutated baseline. Six frozen mutants: M1 one-shot homes not disposed junction-first (VibeHomes),
+  M6 the same on the rootless check's path (ConsultCheckScratch), M2 no planner arm for kimi, M3 kimi × disk "confined",
+  M4 kimi × web "confined", M5 a plan with flags accepted. A mutant whose anchor is missing or that does not compile is
+  "not applicable", never "caught". **Validation:** on T3 (the known vacuous test) M1's intended S5.6.7 test MISSED the
+  mutant, as it must; on the classic C2 every intended test caught its mutant. The first version mapped S5.5.4 to M1 and
+  both arms "missed" it — the rootless check disposes through a second call M1 did not touch; M6 was added and M1 narrowed
+  the same evening, before any arm was scored. All 30 arms are checked after the O/D/S arms end (`mut-all.sh`).

@@ -11,7 +11,7 @@ const fs = require('fs'); const { execSync } = require('child_process'); const c
 const [E, J] = process.argv.slice(2);
 // incremental: an arm already in the key keeps its sessions; only arms new since the last run get theirs (scores are absolute)
 const key = fs.existsSync(`${J}/key.json`) ? JSON.parse(fs.readFileSync(`${J}/key.json`, 'utf8')) : { redactions: {}, sessions: {} };
-const arms = ['V', 'C', 'C2', 'VT', 'C3', 'C4', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4']
+const arms = ['V', 'C', 'C2', 'VT', 'C3', 'C4', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'D1', 'S1', 'O2', 'D2', 'S2', 'O3', 'D3', 'S3', 'O4', 'D4', 'S4']
   .filter((a) => fs.existsSync(`${E}/results/${a}/objective.json`) && !(a in key.redactions));
 // widened 2026-10-26 after the skeleton arms' plan notes gave their scheme away; applies to arms judged from then on
 const RE = /\b(vLLM|vllm|local model|Qwen[\w.-]*|ask\.mjs|filling author|[Ss]keleton|Haiku|haiku|task t\d+|tasks? (?:document|list|split))\b|\(t\d+\)|QWEN-FILL-\S*|coai-exp\/vllm\S*/g;

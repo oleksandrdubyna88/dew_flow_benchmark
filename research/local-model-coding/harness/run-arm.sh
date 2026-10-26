@@ -22,7 +22,10 @@ case $ARM in V) BRANCH=exp/kimi-e56-vllm; PARA=$E/briefs/arm-V.md ;;
              Q1|Q2|Q3|Q4) BRANCH=exp/kimi-e56-skeleton-${ARM#Q}; PARA=$E/briefs/arm-C.md ;;  # PARA unused: the Q briefs are whole
              H1|H2|H3|H4) BRANCH=exp/kimi-e56-skeleton-haiku-${ARM#H}; PARA=$E/briefs/arm-C.md ;;  # the Q scheme, Haiku as the filler
              T1|T2|T3|T4) BRANCH=exp/kimi-e56-tasks-${ARM#T}; PARA=$E/briefs/arm-C.md ;;  # Opus splits into tasks; Haiku codes; Sonnet reviews each
-             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4" >&2; exit 1 ;; esac
+             O1|O2|O3|O4) BRANCH=exp/kimi-e56-opus-split-haiku-${ARM#O}; PARA=$E/briefs/arm-C.md ;;  # Opus splits; Haiku codes; Opus checks once; Haiku fixes
+             S1|S2|S3|S4) BRANCH=exp/kimi-e56-sonnet-split-haiku-${ARM#S}; PARA=$E/briefs/arm-C.md ;;  # Sonnet splits; Haiku codes; Opus checks once; Haiku fixes
+             D1|D2|D3|D4) BRANCH=exp/kimi-e56-haiku-direct-${ARM#D}; PARA=$E/briefs/arm-C.md ;;  # Haiku codes the story; Opus checks; Haiku fixes
+             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4|O1..O4|S1..S4|D1..D4" >&2; exit 1 ;; esac
 OUT=$E/results/$ARM; NOTES=$E/notes; WORK=$E/vllm/work/$ARM
 mkdir -p "$OUT" "$NOTES" "$WORK"
 export COAI_EXP_VLLM_LOG=$E/vllm/requests-$ARM.jsonl
@@ -147,6 +150,17 @@ review_json() { # the review's final message is the JSON; keep it where the fixe
 case $ARM in
   T*)
     source "$E/t-lib.sh"; run_t_arm
+    ;;
+  O*|S*)
+    SPLIT_MODEL=$( [ "${ARM:0:1}" = O ] && echo opus || echo sonnet ) TASK_REVIEW=no FIX_MODEL=haiku \
+    SPLIT_TPL="$E/briefs/x-split.template.md" SPLIT_FIX_TPL="$E/briefs/x-split-fix.template.md" FIX_TPL="$E/briefs/h-fix.template.md"
+    source "$E/t-lib.sh"; run_t_arm
+    ;;
+  D*)
+    step 1-code haiku 75 "$E/briefs/d-code.template.md" "$NOTES/$ARM-code.md" write no
+    step 2-review opus 20 "$E/briefs/2-review.template.md" "-" read no
+    review_json 2-review
+    step 3-fix haiku 30 "$E/briefs/h-fix.template.md" "$NOTES/$ARM-fix.md" write no
     ;;
   Q*|H*)
     step 1-skeleton sonnet 30 "$E/briefs/q1-skeleton.template.md" "$NOTES/$ARM-code.md" write no
