@@ -1,8 +1,8 @@
 # Results — can a cheaper model write the code a Sonnet coder would? (2026-10-25/26)
 
 > Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (part 5 ended 2026-10-27 05:30
-> UTC). Part 5b (SR, DR ×4) is INTERIM (§7b): arms, checks, judge and costs done; the mutation checks of some arms and
-> the hand checks still run.**
+> UTC). Part 5b (SR, DR ×4) is INTERIM (§7b): arms, checks, judge, costs and mutation checks done; the hand checks,
+> prediction 5 and the tables are not done yet.**
 > Every number below is in [tables.md](tables.md), generated from [data/](data/). How it was measured:
 > [harness.md](harness.md). What went wrong and what was corrected: [incidents.md](incidents.md). The pre-registered
 > protocol and its change log: [protocol.md](protocol.md).
@@ -216,8 +216,8 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 
 ## 7b. Part 5b — S and D with a fresh Haiku review before Opus (SR, DR ×4) — INTERIM
 
-> Status: **interim, written 2026-10-27 ~20:10 UTC while the chain still runs.** Done: all 8 arms, the objective
-> checks, the absolute judge, the costs. Still running or not done: the mutation checks of SR4 and DR4, prediction 5,
+> Status: **interim, written 2026-10-27 ~20:10 UTC; the chain ended at 20:03 UTC.** Done: all 8 arms, the objective
+> checks, the absolute judge, the costs, the mutation checks. Not done yet: prediction 5,
 > the hand checks of the judge's majors, [tables.md](tables.md) and the raw data. A number here can still change.
 
 - **Design** (the owner's, after part 5; recorded before the run in [protocol.md](protocol.md) "Part 5b"): the S and D
@@ -244,11 +244,13 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 - **Quality** (absolute judge, two runs each): SR 8 / 8 / 8 / 8, DR 7.5 / 7.5 / 7.5 / 7 (S 8 / 7.5 / 8 / 8, D 7.5 / 6 / 8 /
   5.5). Majors named by the judge, both runs added: SR 0 / 0 / 2 / 0, DR 0 / 1 / 1 / 3 (S: 1 in all, D: 12 in all). Not
   yet hand-checked in the code.
-- **Mutation checks** (so far SR1–SR3, DR1–DR3): every arm 6 / 6 mutants killed. Per intended test: **SR1's
+- **Mutation checks** (all 8 arms): 48 of 48 mutants killed. Per intended test: **SR1's
   `AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` is present and does NOT catch M2** (no
-  planner arm for kimi; another test catches it); not yet opened in the code. Missing by exact name (perhaps renamed;
-  not yet checked): `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` in DR1, DR2, SR3, DR3; `AdmissionFlagsBothRows`
-  in SR2, DR3; `APlanWithFlags_IsRefusedForKimi` in DR3.
+  planner arm for kimi; another test catches it); not yet opened in the code. It is the only intended test of
+  the 8 arms that is present and misses. Missing by exact name (perhaps renamed; not yet checked):
+  `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` in DR1–DR4, SR3, SR4; `AdmissionFlagsBothRows` in SR2, DR3,
+  SR4; `APlanWithFlags_IsRefusedForKimi` in DR3; `AfterTheCheck_TheHomeIsGone_JunctionFirst` and
+  `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` in SR4 (SR4 has 9 of 12 scenarios by name).
 - **Independence — a leak found in the transcripts** ([incidents.md](incidents.md) §2e): the notes folder is shared by
   all arms, and the Haiku reviewers of DR3 and DR4 listed it and read the PREVIOUS DR arm's review notes (DR3 read
   DR2's, DR4 read DR3's; DR4's notes say "still open from DR3 H4"). DR3 and DR4 are therefore not independent of DR2
@@ -264,7 +266,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 | 1. The Haiku step costs $0.3–1.0 and 10–30 min; SR $5.5–8.5, DR $4.5–6.5; DR the cheapest scheme and below the classic band; SR's mean inside or below the band | step $0.44–0.72 except DR2 $2.10; 12–24 min. SR $6.23–7.47 (mean $6.67, inside the band). DR $4.80–6.68: DR2 above $6.5 and inside the band; DR's mean $5.55 below the band, but D ($4.55) stays cheaper | partly holds |
 | 2. The Opus review finds fewer blocking+major than in S and D, by at least 1 per arm, most clearly in DR | SR 0 vs S 0.25; DR 2.0 vs D 2.25 per arm | **wrong** |
 | 3. DR at most 1 of 4 arms below 7; SR stays at 7.5–8 | DR 7–7.5 (none below 7); SR 8 | holds |
-| 4. The mutation checks still show at least one of the 8 arms with an intended test that misses its mutant | SR1 (M2), with 6 of 8 arms checked; not yet opened in the code | holds on the instrument |
+| 4. The mutation checks still show at least one of the 8 arms with an intended test that misses its mutant | SR1 (M2), all 8 arms checked; not yet opened in the code | holds on the instrument |
 | 5. In at least 1 arm the Haiku fix changes something the Opus review then flags | not checked yet | open |
 | 6. Wall time DR about 60–95 min, SR about 75–135 min | DR 66–84; SR 99–110, but SR4 66 | holds for DR; SR 3 of 4 |
 

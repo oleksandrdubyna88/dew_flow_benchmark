@@ -81,7 +81,7 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - **The mutation checks found a second vacuous test** (H2, the same defect as T3); opened in the code and confirmed.
 - **Disk:** 0 bad-block events, 0 unexpected shutdowns.
 
-## 2e. Part 5b (SR, DR) — interim (2026-10-27 10:50 UTC – still running)
+## 2e. Part 5b (SR, DR) — interim (2026-10-27 10:50–20:03 UTC)
 
 - **Operator stop, 16:19–16:21 UTC** (the owner asked to pause): SR1–SR3 and DR1–DR3 had finished. SR4 and DR4 were
   stopped with SIGINT to their `timeout` processes; `run-arm.sh` read exit 124 as "stopped at the hard deadline", marked
