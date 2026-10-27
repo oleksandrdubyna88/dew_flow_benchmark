@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 349,
+   "summary": "E5.6 decision 2 says each kimi row's `note` carries the version (2.1.1), but none of the three kimi notes (lines 349, 362, 375) names it; the version is only in `measuredWith.version`, and the web refusal shows the note, not the version.",
+   "fix": "Add 'kimi 2.1.1' to the three kimi `note` strings, then run the generator to remake src_vs_code/src/runtimeCapabilities.generated.ts."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 124,
+   "summary": "S5.6.7 says the row's scratch and coai-vh\\<8> are gone after EACH ending, but the 'refused before the launch' arm never checks the scratch (launched is null), and `if (Directory.Exists(oneShot))` lets the coai-vh check pass with no check at all if no reservation was ever made.",
+   "fix": "Assert that coai-vh exists, because the reservation is always made before the copy (QuestionRowLaunch.cs:101), and then that it is empty. Also find the refused row's scratch, for example from the log or a seam, and assert that it is gone."},
+  {"id": "R3", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 21,
+   "summary": "The header says the kimi rows cite M-K cells '(Windows, 3 of 3, kimi 2.1.1)', but the disk row cites M-K9 (e), whose .mcp.json arm was measured 1 of 1 (RESULTS_kimi_confinement.md §21).",
+   "fix": "Say what was measured, for example '3 of 3 per arm, the .mcp.json arm of M-K9 (e) 1 of 1', or remove the count from the header."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/CapabilityMatrixTests.cs", "line": 211,
+   "summary": "KimiHasThreeRows_EachCitingItsCells checks `Of(\"kimi\", None).Should().NotBeNull()` again, although the loop above already checks it for all three capabilities.",
+   "fix": "Remove the duplicate line."}
+ ]}

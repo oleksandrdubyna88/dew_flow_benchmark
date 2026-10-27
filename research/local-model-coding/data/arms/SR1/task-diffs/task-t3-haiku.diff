@@ -1,0 +1,149 @@
+diff --git a/src_mcp/runners/Kimi/KimiConsultant.cs b/src_mcp/runners/Kimi/KimiConsultant.cs
+index 13a763a9..54fcc483 100644
+--- a/src_mcp/runners/Kimi/KimiConsultant.cs
++++ b/src_mcp/runners/Kimi/KimiConsultant.cs
+@@ -47,6 +47,7 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") :
+     public ReviewerInvocation Build(ConsultantLaunch launch)
+     {
+         ConsultantLaunches.MustBeLaunchable(launch);
++        MustCarryNoFlags(launch);
+         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
+         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
+         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
+@@ -58,6 +59,16 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") :
+     /// <summary>The row's model, or Kimi's default when it names none — resolved here so the shim and the ledger name the same one.</summary>
+     private static string ModelOf(ReviewerSettings settings) => settings.Model.Length > 0 ? settings.Model : KimiModels.Default;
+ 
++    /// <summary>Kimi's confinement is the shim's (D15), not its argv: a plan that carries a flag is not one coai made for it.</summary>
++    private static void MustCarryNoFlags(ConsultantLaunch launch)
++    {
++        if (launch.Confinement is LaunchConfinement.Planned { Plan: { } plan } && plan.Flags.Count + plan.Leading.Count + plan.AddDirs.Count > 0)
++        {
++            throw new ArgumentException(
++                "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi", nameof(launch));
++        }
++    }
++
+     /// <summary>The session a later turn continues — the shim's own flag (E5.2), last on the argv — or nothing for a first turn.</summary>
+     private static string[] SessionOf(ConsultantLaunch launch) =>
+         launch.Handle.Length > 0 ? [AcpWords.SessionFlag, launch.Handle] : [];
+diff --git a/src_mcp/tests/KimiQuestionLaunchTests.cs b/src_mcp/tests/KimiQuestionLaunchTests.cs
+new file mode 100644
+index 00000000..e06e30ab
+--- /dev/null
++++ b/src_mcp/tests/KimiQuestionLaunchTests.cs
+@@ -0,0 +1,114 @@
++using CoaiMcp.Core.QuestionConsult;
++using CoaiMcp.Runners.Acp;
++using CoaiMcp.Runners.Consultation;
++using CoaiMcp.Runners.Kimi;
++using CoaiMcp.Runners.Platform;
++using CoaiMcp.Runners.Reviewers;
++using FluentAssertions;
++using Xunit;
++
++namespace CoaiMcp.Tests;
++
++/// <summary>
++/// What a Kimi QUESTION row's launch is (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>, S5.6.5–S5.6.6): one shot, standing in the
++/// plan's own folder (an empty scratch folder for a <c>none</c> plan, the copy of the roots for a disk plan), on the row's own home, with no
++/// <c>--session</c>, in the minimal child environment — and a plan that carries a flag refused, because Kimi's confinement is the shim's (D15).
++/// </summary>
++/// <remarks>
++/// Pure: <c>Build</c> writes nothing, so the fake person (<see cref="KimiFixture"/>) is only the place the paths are resolved from.
++/// </remarks>
++public sealed class KimiQuestionLaunchTests : IDisposable
++{
++    private readonly KimiFixture _person = new();
++
++    public void Dispose() => _person.Dispose();
++
++    private string RowFolder => Path.Combine(_person.Folder, "coai-question-0123abcd");
++
++    private string EmptyFolder => Path.Combine(RowFolder, "cwd");
++
++    private string RowTree => Path.Combine(RowFolder, "tree");
++
++    private string Answers => Path.Combine(_person.Folder, "data", "coai-answers");
++
++    private const string Repo = "D:/rsd/some-checkout";
++
++    private const string RootA = "D:/projects/alpha";
++
++    private const string RootB = "D:/projects/beta";
++
++    private KimiConsultant Consultant() =>
++        new(new KimiRuntime("my-kimi", HostKind.Windows, new KimiSeams(_person.PlacesAt, () => ("coai-mcp", []))), "my-kimi");
++
++    private ConsultantLaunch Planned(Confinement.Planned plan) =>
++        new(Repo, "the question", string.Empty, Answers, new ReviewerSettings("my-kimi") { OwnedScratch = RowFolder })
++        {
++            Confinement = new LaunchConfinement.Planned(plan),
++            ScratchDir = EmptyFolder,
++            Workdir = RowTree,
++        };
++
++    private static Confinement.Planned PlanOf(CapabilityGrant grant, CwdKind cwd) =>
++        new("kimi", grant, [], [], cwd, [], AdmissionFlag.Unconfined) { SnapshotSources = grant.Roots };
++
++    // ---------- S5.6.5 ----------
++
++    [Fact]
++    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
++    {
++        var none = Consultant().Build(Planned(PlanOf(CapabilityGrant.None, CwdKind.Scratch)));
++        var disk = Consultant().Build(Planned(PlanOf(CapabilityGrant.Disk(RootA, RootB), CwdKind.Snapshot)));
++
++        none.Request.WorkingDirectory.Should().Be(EmptyFolder, "a none row stands in its own empty folder");
++        disk.Request.WorkingDirectory.Should().Be(RowTree, "a disk row stands in the copy of its roots, never a root");
++
++        foreach (var request in new[] { none.Request, disk.Request })
++        {
++            request.Arguments.Should().ContainInConsecutiveOrder("--ask-acp", "--profile", "kimi", "--model", KimiModels.Default, "--cwd", request.WorkingDirectory);
++            var home = request.Arguments[request.Arguments.ToList().IndexOf(AcpWords.HomeFlag) + 1];
++            Path.GetDirectoryName(home).Should().Be(RowFolder, "the home is a child of the row's own folder");
++            Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
++            request.Arguments.Should().NotContain(AcpWords.SessionFlag, "a question row is one shot: no session rides it");
++            request.Arguments.Should().NotContain(RootA, "a root is never named — only its copy");
++            request.Arguments.Should().NotContain(RootB, "a root is never named — only its copy");
++            request.InheritsEnvironment.Should().BeFalse("the minimal child environment (S1 acceptance 6)");
++            request.Passthrough.Should().BeEquivalentTo(Runners.Processes.ProcessEnvironment.Minimal);
++            KimiEnvironment.Refusal(request, _person.PlacesAt(home)).Should().BeEmpty("the one launch control admits exactly what the adapter builds");
++        }
++
++        none.Role.Should().Be(ConsultantRoles.Question);
++        disk.Role.Should().Be(ConsultantRoles.Question);
++    }
++
++    // ---------- S5.6.6 ----------
++
++    [Theory]
++    [InlineData("flags")]
++    [InlineData("leading")]
++    [InlineData("add-dirs")]
++    public void APlanWithFlags_IsRefusedForKimi(string carrying)
++    {
++        var plan = new Confinement.Planned(
++            "kimi",
++            CapabilityGrant.None,
++            carrying == "leading" ? ["--search"] : [],
++            carrying == "flags" ? ["--yolo"] : [],
++            CwdKind.Scratch,
++            carrying == "add-dirs" ? [RootA] : [],
++            AdmissionFlag.Unconfined);
++
++        FluentActions.Invoking(() => Consultant().Build(Planned(plan)))
++            .Should().Throw<ArgumentException>().WithMessage("*the shim*");
++    }
++
++    // ---------- S5.6.5 (one shot) ----------
++
++    [Fact]
++    public void AKimiPlannedLaunch_IsOneShot_SoAHandleIsAContractViolation()
++    {
++        var launch = Planned(PlanOf(CapabilityGrant.None, CwdKind.Scratch)) with { Handle = "0d6a5f2e-1111-2222-3333-444455556666" };
++
++        FluentActions.Invoking(() => Consultant().Build(launch))
++            .Should().Throw<ArgumentException>().WithMessage("*one-shot*");
++    }
++}

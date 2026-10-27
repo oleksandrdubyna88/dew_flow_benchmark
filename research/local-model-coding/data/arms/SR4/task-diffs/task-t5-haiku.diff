@@ -1,0 +1,79 @@
+diff --git a/research/module_core.md b/research/module_core.md
+index 637872f4..d15c4f67 100644
+--- a/research/module_core.md
++++ b/research/module_core.md
+@@ -79,9 +79,9 @@ flowchart LR
+ | `EpicRef` (`None` / `Some` / `Refused`), `CadenceState`, `ClosedEpic`, `RiskItem` | `Cadence/EpicRef.cs`, `Cadence/CadenceState.cs` | where the caller says it is (`plan` + `epic: "k/N"`) — a bad declaration is a sentence, never an exception; what one plan has recorded: the epics through the code gate and the risk answer |
+ | `CadenceFacts`, `CadenceOrders`, `PlanOutline`, `PlanOutlineReader` | `Commands/CadenceOrders.cs`, `Commands/PlanOutline.cs` | the orders a round carries — the group due, the risky pieces due — from facts the server gathered; the plan's own Epic headings, which also size a split `Massive` (`PlanShape.ByEpics`) |
+ | `Capability`, `Capabilities`, `CapabilityGrant` | `QuestionConsult/Capability.cs` | what a question-consultant prompt NEEDS of its runtime (`none` / `disk` / `web`, the file's words, a parse that never guesses) and what a row is GRANTED — the capability plus, for `disk`, the roots (PLAN_question_consultant.md, A3) |
+-| `RuntimeCapabilities`, `RuntimeCapabilityRow`, `MeasuredWith`, `CapabilityStanding` | `QuestionConsult/RuntimeCapabilities.cs` | the embedded `shared/runtime-capabilities.json`: per runtime × capability what was MEASURED (`confined` / `unconfined` / `default-deny` / `unsupported` / `unmeasured`), every row citing its probe cells; refused whole at load when a pair is undecided (D3) |
++| `RuntimeCapabilities`, `RuntimeCapabilityRow`, `MeasuredWith`, `CapabilityStanding` | `QuestionConsult/RuntimeCapabilities.cs` | the embedded `shared/runtime-capabilities.json`: per runtime × capability what was MEASURED (`confined` / `unconfined` / `default-deny` / `unsupported` / `unmeasured`), every row citing its probe cells; refused whole at load when a pair is undecided (D3). Since E5.6 `Runtimes` lists `kimi` last, and its three rows are `none` and `disk` `unconfined` (cells M-K6, M-K3, M-K4; M-K6, M-K9, M-K9 (e), M-K3, M-K4 of `RESULTS_kimi_confinement.md`) and `web` `unmeasured` |
+ | `CapabilityMatrix`, `Admission`, `AdmissionFlag` | `QuestionConsult/CapabilityMatrix.cs` | the one rule a row becomes a decision by: confined admits, unconfined and default-deny admit FLAGGED (D13), the rest refuse by name — the TS `capabilityAdmission.ts` is the same rule over the same file, both held to `shared/capability-matrix-vectors.json` |
+-| `ConfinementPlanner`, `Confinement`, `CwdKind` | `QuestionConsult/ConfinementPlanner.cs` | runtime × grant → argv fragments, a cwd kind (`Scratch`, `Root`, and since S3 of the Vibe plan `Snapshot`) and the roots — the ONE place a question row's sandbox is decided (D4); `--disallowedTools` in no plan (F3, F5); `VibeReadOnly`, D2's pair, spelled once |
++| `ConfinementPlanner`, `Confinement`, `CwdKind` | `QuestionConsult/ConfinementPlanner.cs` | runtime × grant → argv fragments, a cwd kind (`Scratch`, `Root`, and since S3 of the Vibe plan `Snapshot`) and the roots — the ONE place a question row's sandbox is decided (D4); `--disallowedTools` in no plan (F3, F5); `VibeReadOnly`, D2's pair, spelled once. The `kimi` arm (E5.6): `disk` → `Snapshot` with the roots copied in, `none` → `Scratch`, never a flag and never a leading argument (the shim's confinement, D15); `web` is refused by the matrix before it is planned |
+ | `WebQuestionSanitiser`, `WebQuestion`, `WebQuestionContext` | `QuestionConsult/WebQuestionSanitiser.cs` | a web row gets strictly the question (A2): thirteen refusal classes in order (S4b added `invisible` and `scheme`), each naming its cure, nothing ever redacted |
+ | `TextAsRead` | `QuestionConsult/TextAsRead.cs` | the text as a model reads it (S4b): Unicode `Cf` removed, the NFKC compatibility mappings that reach ASCII folded — what the sanitiser and the secret check read |
+ | `SecretCheck`, `SecretCheckResult`, `CheckedContext` | `QuestionConsult/SecretCheck.cs` | the secret half alone for a `none` row on a hosted runtime (A9, D10): refuses through the notice redaction's own passes (`Redaction.FirstSecretClass`), and the cleared text is a TYPE only the check can mint |
+diff --git a/research/module_runners.md b/research/module_runners.md
+index 7405dc6c..a2ea036e 100644
+--- a/research/module_runners.md
++++ b/research/module_runners.md
+@@ -3715,7 +3715,7 @@ scratch driver outside the repository, so it cannot be re-run from the repositor
+ 
+ A `kimi` row answers `consult`. `ConsultantResolution.OnACli` gains `"kimi" => KimiOn(vendor)` — `VibeOn`'s shape: the `KimiRuntime` the row resolves to, else a
+ new one, never another runtime — and `features.consultant` names `kimi`, so `Consulting` and `QuestionResolution.Answering` hold it (a question row on Kimi is
+-still refused by the capability matrix until E5.6).
++admitted since E5.6, the matrix's `kimi` rows; see the planned launch below).
+ 
+ ```mermaid
+ flowchart LR
+@@ -3748,6 +3748,9 @@ flowchart LR
+ - **The limitation rows** (decision 8, `shared/consultant-limitations.json`): Windows `unconfined` — `Read` bounded to coai's copy, `Grep`/`Glob` read any file this user
+   can, every write and shell command refused — `measured` 2026-10-13 on kimi 2.1.1 (M-K6, M-K3, M-K4, M-K5, M-K5b); Linux, WSL and macOS `unmeasured` with a `source`
+   naming D18, as Vibe's rows do.
++- **A planned launch** (a question row, E5.6 decision 3): `MustCarryNoFlags` refuses a plan that carries any `Flags` or `Leading` argument (`ArgumentException`,
++  "a Kimi row's confinement is the shim's"), since Kimi's confinement is the shim's (D15). The cwd is by plan (`ConsultantLaunches.Cwd`: the snapshot for `disk`, the
++  scratch for `none`). A question row carries no handle, so there is no `--session` and the turn is one-shot; `ForQuestion` wraps the request as for any planned launch.
+ 
+ Tests: `KimiConsultantTests` (S5.4.1–S5.4.6 and the declarations), `ConfinementPlannerTests` (S5.4.13), `ConsultantLimitationsTests` (S5.4.11), `FeatureAvailabilityTests`
+ (S5.4.12), `CumulativeUsageTests` (S5.4.14, pure) and the service arms in `AKimiConsultationScenarioTests` — listed in [module_tests.md](module_tests.md).
+diff --git a/research/module_tests.md b/research/module_tests.md
+index 8fc4e65f..2a9efee5 100644
+--- a/research/module_tests.md
++++ b/research/module_tests.md
+@@ -4454,3 +4454,5 @@ saw it).
+ 
+ `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
+ what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
++
++E5.5–E5.6 (2026-10-27): `AKimiConsultantCheckTests` (S5.5.1–S5.5.4, five cases) asserts the check's one turn runs in a copy on a one-shot home, that the home is gone junction-first after an answer, a failed exit 70 or a cancellation, and that a rootless check keeps its home in its scratch; its disposal asserts had teeth by temporary break (a folder left under `coai-vh`, a recorder call, a cancel removed), each red and reverted. `AKimiQuestionRowTests` (S5.6.7, three endings) asserts that a disk row reads only the copies of its roots, that its home is one-shot under the homes root, and that after answered, refused or cancelled no scratch or home remains and the person's folder hash is unchanged; its teeth were a left-behind folder and a recorder call, each red and reverted. `CapabilityMatrixTests` (`KimiHasThreeRows_EachCitingItsCells`, `AdmissionFlagsBothRows_AndRefusesTheWeb_NamingItsRecord`) asserts the kimi none and disk rows are unconfined and admitted flagged, and web refused naming `RESULTS_kimi_confinement.md`. `ConfinementPlannerTests` (S5.6.3, S5.6.5, S5.6.6) asserts a none row in an empty scratch, a disk row in its copy, no flags, the shim's request on the row's home, and a plan with flags refused for Kimi. `capabilityAdmission.test.ts` (S5.6.8) asserts the kimi rows admit flagged and web refuses naming its record.
+diff --git a/todo/PLAN_vibe_and_kimi_runtimes_E5.md b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+index 5d6241d3..62e049be 100644
+--- a/todo/PLAN_vibe_and_kimi_runtimes_E5.md
++++ b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+@@ -1,6 +1,6 @@
+ # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
+ 
+-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
++> Status: **in progress — E5.1–E5.7 implemented — E5.5–E5.6 on 2026-10-27; the live checks of RESULTS §31 and M-K17 are still owed.** E5.1: M-K16 recorded as RESULTS §29
+ > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
+ > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
+ > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+@@ -1056,6 +1056,17 @@ Numbered apart from the list above, so the stories built in parallel do not coll
+   repository. The probe library has the two features it needs (`loadUpdates`, `endLikeTheShim`); the cell itself is owed — before M-K16 is re-run on a new
+   Kimi version, or with the live checks of RESULTS §31.
+ 
++### E5.5–E5.6 as built (2026-10-27)
++
++Numbered from 50, apart from the lists above, so the stories built in parallel do not collide on a number.
++
++50. **E5.5 is tests only, as decision 1 said.** `AKimiConsultantCheckTests` (new) proves the four scenarios (S5.5.2 is a two-arm Theory, so five test cases); no production file of the check changed (commit `73ef212c` adds that one file). S5.5.1–S5.5.4 were GREEN on arrival (E5.4 and E5.3 are in), so each was given teeth by a temporary break, each run red and reverted; the plan's "red before E5.3 g / E5.4" is history, not a state this branch could show. One difference from the table above: S5.5.3's record is `failed` with `failureKind` `cancelled` (`failureWhat`: "the call was cancelled while the consultant (my-kimi) was running"), not a state `cancelled`. `ConsultCheckStates` has no such word, and the check answers with the failed record; it does not throw.
++51. **E5.6's standings were applied as decided** (decision 2): `kimi × none` and `kimi × disk` are `unconfined`, `kimi × web` is `unmeasured` naming `research/RESULTS_kimi_confinement.md`. The rows' cells: none — `M-K6`, `M-K3`, `M-K4`; disk — `M-K6`, `M-K9`, `M-K9 (e)`, `M-K3`, `M-K4`. The table's `why` header gained one sentence about the Kimi rows. `RuntimeCapabilities.Runtimes` and the seed's `runtimes` list gain `kimi` last, and the generated `src_vs_code/src/runtimeCapabilities.generated.ts` was regenerated, not edited.
++52. **`KimiConsultant` changed once, in E5.6.** `MustCarryNoFlags` (decision 3): a planned launch whose plan carries any `Flags` or `Leading` argument is refused with `ArgumentException` ("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi"). Nothing else of the E5.4 adapter changed; a planned launch's cwd, home, missing `--session` and `ForQuestion` were already there.
++53. **Where the E5.6 scenarios live.** S5.6.1, S5.6.2 (the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` in `CapabilityMatrixTests`, body unchanged — it went red by itself with the seed rows in and the vectors out; the table's private `Records` list gained the Kimi record, `RESULTS_kimi_confinement.md`, 2026-10-13, prefix `M-K`, so `EveryRow_CitesTheRecord_…` holds for the new rows), S5.6.4 (`KimiHasThreeRows_EachCitingItsCells`) and the `…NamingWhatIsKnown` sentence in `CapabilityMatrixTests` (`AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown`); S5.6.3 (`Kimi_None_StandsInAnEmptyScratch_…`), S5.6.5 (`AKimiQuestionLaunch_…`), S5.6.6 (`APlanWithFlags_IsRefusedForKimi`) and the `kimi × web` row of the matrix-refusal Theory in `ConfinementPlannerTests`; S5.6.7 in `AKimiQuestionRowTests` (new); S5.6.8 in `capabilityAdmission.test.ts`. The refusal sentence that spells the runtimes now ends `…, api, vibe, kimi` and both halves' tests say so.
++54. **S5.6.7 and S5.5.x run on every OS** through `WindowsStandIn` and `KimiSeams.Using` (E5.4 deviation 23), so they do NOT skip on Linux as the Vibe row tests do. The disposal assertions (`coai-vh` gone, the deleter's recorder never invoked, the person's folder unchanged by its hash) were green on arrival (E5.3 is in); their teeth are the temporary breaks recorded in the task notes `notes/SR4-t3-code.md` and `notes/SR4-t4-code.md`.
++55. **Nothing waits on M-K17 in code.** The `none` and `disk` rows' notes still say `WebSearch` and `FetchURL` are announced and unmeasured; M-K17 decides whether that sentence stays, changes or goes.
++
+ ### E5.7 as built (Opus, 2026-10-16)
+ 
+ Numbered from 40, apart from the lists above, so the stories built in parallel do not collide on a number.

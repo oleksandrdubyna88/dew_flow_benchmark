@@ -81,7 +81,7 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - **The mutation checks found a second vacuous test** (H2, the same defect as T3); opened in the code and confirmed.
 - **Disk:** 0 bad-block events, 0 unexpected shutdowns.
 
-## 2e. Part 5b (SR, DR) — interim (2026-10-27 10:50–20:03 UTC)
+## 2e. Part 5b (SR, DR) (2026-10-27 10:50–20:03 UTC)
 
 - **Operator stop, 16:19–16:21 UTC** (the owner asked to pause): SR1–SR3 and DR1–DR3 had finished. SR4 and DR4 were
   stopped with SIGINT to their `timeout` processes; `run-arm.sh` read exit 124 as "stopped at the hard deadline", marked
@@ -98,9 +98,9 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   reviewers of DR3 and DR4 listed that folder and read the previous DR arm's review notes (DR3: `DR2-hreview.md`; DR4:
   `DR3-hreview.md`, and its notes say "still open from DR3 H4" and "re-checked from DR3"). SR3 and SR4's reviewers
   and SR1's fixer touched other arms' format logs only. Found by a scan of the session transcripts for tool calls that
-  name another arm's note file. The same scan flags Part 5 fixers (O1, O2, O4, S2, S3, S4) touching other arms' note or
-  log files (O2 and S2: D2's fix notes; S2 also O2's); not yet checked one by one, so part 5's independence is now in
-  question too. The harness gave each arm its own file name but not its own folder; a per-arm folder outside every
+  name another arm's note file. The same scan flags Part 5 fixers (O1, O2, O4, S2, S3, S4); checked one by one, they read
+  other arms' tool logs (format, suite and generator output, to learn how to run the tools; O2 also to see whether a
+  failing test failed before), and S2 searched D2's and O2's fix notes for the word "format" — no other arm's findings. The harness gave each arm its own file name but not its own folder; a per-arm folder outside every
   other arm's reach is the fix for any re-run.
 
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)

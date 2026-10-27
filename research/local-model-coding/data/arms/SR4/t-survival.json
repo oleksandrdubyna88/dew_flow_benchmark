@@ -1,0 +1,116 @@
+{
+  "arm": "SR4",
+  "haikuLines": 511,
+  "keptFinal": 0.913894324853229,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 123,
+      "keptFinal": 123,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 73,
+      "keptFinal": 70,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// <summary>A plan that carries a flag is not one coai made for Kimi (decision 3 of E5.6): the consultant refuses it.</summary>",
+        "public void APlanWithFlags_IsRefusedForKimi()",
+        "var flagged = new Confinement.Planned(\"kimi\", CapabilityGrant.None, [], [\"--yolo\"], CwdKind.Scratch, [], AdmissionFlag.Unconfined);"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 146,
+      "keptFinal": 124,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// S5.6.7: a <c>disk</c> Kimi row reads a copy of each granted root and names the copies, keeps its home in a one-shot folder, and after the",
+        "/// ending leaves no scratch, no one-shot folder, no junction unlinked by the deleter, and the person's sign-in folder intact.",
+        "[InlineData(\"answered\")]",
+        "[InlineData(\"refused-before-the-launch\")]",
+        "[InlineData(\"cancelled-mid-turn\")]",
+        "public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)",
+        "var roots = new[] { granted, Other };",
+        "if (ending == \"refused-before-the-launch\")",
+        "roots = [granted, plain];",
+        "During = ending == \"cancelled-mid-turn\"",
+        "? async (_, ct) =>",
+        ": (request, _) =>",
+        "var service = Service(played, homes, roots);",
+        "JsonElement reply = default;",
+        "if (ending == \"cancelled-mid-turn\")",
+        "else",
+        "if (ending == \"answered\")",
+        "else if (ending == \"refused-before-the-launch\")",
+        "else",
+        "var coaiVh = Path.Combine(homes, VibeHomes.OneShotFolder);",
+        "if (Directory.Exists(coaiVh))",
+        "Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty(\"the row's one-shot folder is gone\");"
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 153,
+      "keptFinal": 137,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// <summary>S5.5.2: however the turn ended, the one-shot home is gone — its junction unlinked before the deleter meets it — and the person is intact.</summary>",
+        "[InlineData(\"answered\")]",
+        "[InlineData(\"failed-exit-70\")]",
+        "public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(string arm)",
+        "var kimi = arm == \"answered\"",
+        "? AnsweringKimi()",
+        ": new PlayedKimi(new ProcessLauncher()) { Turn = (_, _) => PlayedKimi.Lost(PlayedKimi.Minted) };",
+        "if (arm == \"answered\")",
+        "else",
+        "said.GetProperty(\"state\").GetString().Should().NotBe(\"answered\", said.ToString());",
+        "var coaiVh = Path.Combine(homes.Path, VibeHomes.OneShotFolder);",
+        "if (Directory.Exists(coaiVh))",
+        "Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty(\"the one-shot folder is gone\");",
+        "var coaiVh = Path.Combine(homes.Path, VibeHomes.OneShotFolder);",
+        "if (Directory.Exists(coaiVh))",
+        "Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty(\"the one-shot folder is gone\");"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_runners.md",
+        "research/module_tests.md"
+      ],
+      "haikuLines": 16,
+      "keptFinal": 13,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "50. **E5.5 is tests only, as decision 1 said.** `AKimiConsultantCheckTests` (new) proves the four scenarios (S5.5.2 is a two-arm Theory, so five test cases); no production file of the check changed (commit `73ef212c` adds that one file). S5.5.1–S5.5.4 were GREEN on arrival (E5.4 and E5.3 are in), so each was given teeth by a temporary break, each run red and reverted; the plan's \"red before E5.3 g / E5.4\" is history, not a state this branch could show. One difference from the table above: S5.5.3's record is `failed` with `failureKind` `cancelled` (`failureWhat`: \"the call was cancelled while the consultant (my-kimi) was running\"), not a state `cancelled`. `ConsultCheckStates` has no such word, and the check answers with the failed record; it does not throw.",
+        "53. **Where the E5.6 scenarios live.** S5.6.1, S5.6.2 (the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` in `CapabilityMatrixTests`, body unchanged — it went red by itself with the seed rows in and the vectors out; the table's private `Records` list gained the Kimi record, `RESULTS_kimi_confinement.md`, 2026-10-13, prefix `M-K`, so `EveryRow_CitesTheRecord_…` holds for the new rows), S5.6.4 (`KimiHasThreeRows_EachCitingItsCells`) and the `…NamingWhatIsKnown` sentence in `CapabilityMatrixTests` (`AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown`); S5.6.3 (`Kimi_None_StandsInAnEmptyScratch_…`), S5.6.5 (`AKimiQuestionLaunch_…`), S5.6.6 (`APlanWithFlags_IsRefusedForKimi`) and the `kimi × web` row of the matrix-refusal Theory in `ConfinementPlannerTests`; S5.6.7 in `AKimiQuestionRowTests` (new); S5.6.8 in `capabilityAdmission.test.ts`. The refusal sentence that spells the runtimes now ends `…, api, vibe, kimi` and both halves' tests say so.",
+        "54. **S5.6.7 and S5.5.x run on every OS** through `WindowsStandIn` and `KimiSeams.Using` (E5.4 deviation 23), so they do NOT skip on Linux as the Vibe row tests do. The disposal assertions (`coai-vh` gone, the deleter's recorder never invoked, the person's folder unchanged by its hash) were green on arrival (E5.3 is in); their teeth are the temporary breaks recorded in the task notes `notes/SR4-t3-code.md` and `notes/SR4-t4-code.md`."
+      ]
+    }
+  ]
+}

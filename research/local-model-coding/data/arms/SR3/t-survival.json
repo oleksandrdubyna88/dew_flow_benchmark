@@ -1,0 +1,76 @@
+{
+  "arm": "SR3",
+  "haikuLines": 602,
+  "keptFinal": 0.9950166112956811,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 123,
+      "keptFinal": 121,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "\"when `note` says why (a standing that holds by construction, or a pair nobody measured).\",",
+        "\"\", \"the kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1, measured 2026-10-13).\""
+      ]
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 74,
+      "keptFinal": 74,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 202,
+      "keptFinal": 202,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 156,
+      "keptFinal": 155,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "(_, said, _) = await Check(Settings(homes), played, TestContext.Current.CancellationToken);"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_runners.md",
+        "research/module_tests.md"
+      ],
+      "haikuLines": 47,
+      "keptFinal": 47,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    }
+  ]
+}

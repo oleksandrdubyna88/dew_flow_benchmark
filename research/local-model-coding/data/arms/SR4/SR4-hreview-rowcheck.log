@@ -1,0 +1,19 @@
+failed CoaiMcp.Tests.AKimiQuestionRowTests.ARefusedKimiDiskRow_StartsNothing_AndLeavesNoOneShotFolder (149ms)
+  Expected Directory.EnumerateFileSystemEntries(homes) to be empty because the refused row's one-shot folder is gone, but found at least one item {"/tmp/testsToDelete-qkimi-MoICxH/homes/coai-vh"}.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Execution.GivenSelector`1.FailWith(String message, Object[] args)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.BeEmpty(String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.AKimiQuestionRowTests.ARefusedKimiDiskRow_StartsNothing_AndLeavesNoOneShotFolder() in /home/jinx/git/coai-exp/arm-SR4/src_mcp/tests/AKimiQuestionRowTests.cs:204
+    --- End of stack trace from previous location ---
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-SR4/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 3
+  failed: 1
+  succeeded: 2
+  skipped: 0
+  duration: 1s 778ms

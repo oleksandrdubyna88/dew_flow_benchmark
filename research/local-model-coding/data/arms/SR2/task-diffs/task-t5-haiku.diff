@@ -1,0 +1,97 @@
+diff --git a/research/module_core.md b/research/module_core.md
+index 637872f4..a2b8cb9f 100644
+--- a/research/module_core.md
++++ b/research/module_core.md
+@@ -866,6 +866,19 @@ adapter goldens, the structural subtraction, the AsShipped argv pinned byte for
+ `SecretCheckTests` (a path and a fence pass, each class refused without quoting the value, the
+ constructor absent).
+ 
++### Kimi rows in the capability table (2026-10-27, E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md`)
++
++The table has three `kimi` rows, in `shared/runtime-capabilities.json` and in the seed's `runtimes` list: `none` and `disk` are `unconfined`, and `web` is `unmeasured`.
++`none` is `unconfined`, not `confined`, because Kimi's `Grep` and `Glob` read files outside the working folder (RESULTS_kimi_confinement.md §9, M-K6), so the
++row is admitted FLAGGED as "Can read this machine". `disk` is `unconfined` for the same reason, and its branch's AGENTS.md, skills, sub-agents and `.mcp.json`
++load from disk (M-K9), so the roots are COPIED into the snapshot and never granted. The `web` row is refused, and its sentence names
++`research/RESULTS_kimi_confinement.md`, because no Kimi cell measures a web tool. The rows' `date` is `2026-10-13` for every cell.
++The planner arm `"kimi" => Kimi(grant, flag)` in `ConfinementPlanner.Fragments` puts NO flag on any capability: Kimi's confinement is the shim's (D15), not its argv.
++`disk` is a snapshot of the roots; `none` is an empty scratch folder; `web` never reaches the arm.
++`RuntimeCapabilities.Runtimes` (`src_mcp/core/QuestionConsult/RuntimeCapabilities.cs`) is a hand-written list, not read from the seed. A row for a runtime outside it
++breaks the file, so adding `kimi` to the seed means adding it there too, and the generated `src_vs_code/src/runtimeCapabilities.generated.ts` is written by its generator.
++`KimiConsultant.Build` refuses any plan that has `Leading`, `Flags` or `AddDirs`, with the sentence "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi".
++
+ ### The rows, the base prompts and the CLI prompt (2026-10-01, PLAN_question_consultant.md S2)
+ 
+ Three more pure units beside the five above, for the fan-out that S2 built in the server:
+diff --git a/research/module_tests.md b/research/module_tests.md
+index 8fc4e65f..064e6c64 100644
+--- a/research/module_tests.md
++++ b/research/module_tests.md
+@@ -4454,3 +4454,27 @@ saw it).
+ 
+ `CumulativeUsageTests.AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative` became `ACountBelowWhatWasBilled_FloorsAtZero_NeverNegative`: its old case (both totals below
+ what was billed) is now a reset by decision 12, so the floor is pinned where it still applies — totals that moved on, cached and reasoning counts that did not.
++
++### The Kimi check and the Kimi question row — E5.5–E5.6 of `todo/PLAN_vibe_and_kimi_runtimes_E5.md` (2026-10-27)
++
++`AKimiConsultantCheckTests` drives the REAL `ConsultantCheck` (the real copy, the real one-shot home with its junction, the real launch control over `KimiFixture`'s fake person,
++through `WindowsStandIn` and `KimiSeams.Using(HostKind.Windows, …)`); only the shim is played (`PlayedKimi`). `AKimiQuestionRowTests` does the same for a question row
++on the `disk` standing (`QuestionRowLaunch`). Both run on every OS, as E5.4 did; Vibe's equivalents are Windows-only (D18). No production code changed for E5.5.
++The "seen red" column is what the coder recorded; "green on arrival" means the case passed before its code existed. Teeth runs were temporary breaks of the deciding
++line, reverted after each. Not recorded: a red for the scenarios marked so.
++
++| Suite (scenario) | What it holds | Seen red as |
++|---|---|---|
++| `AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome` (S5.5.1) | the request's `--cwd` under `<scratch>\own\tree`, `--home` `<root>\coai-vh\<8>\kh-<10 hex>`; the scratch repository and its canary unchanged | green on arrival; teeth, `PlaceAsync` forced to the checkout: *…the checkout is never its working folder (D6)* (record failed before launch; the `--cwd` assertion was not reached) |
++| `…AfterTheCheck_TheHomeIsGone_JunctionFirst` (S5.5.2, Theory: a passing turn; a turn failing with exit 70) | `coai-vh\<8>` gone, the recorder never invoked, the fake person's folder intact | green on arrival; teeth, `OneShotHome.Dispose` replaced by `GitScratch.DeleteEvenIfReadOnly`: *Expected the deleter's unlink recorder not to be invoked …* (3 red, as recorded) |
++| `…ACheckCancelledMidTurn_StillDisposesItsHome` (S5.5.3) | the record says cancelled; `coai-vh\<8>` gone | green on arrival (pins `finally`); teeth, `finally` without `held.Home.Dispose()`: the home folder left under `coai-vh` (3 red, as recorded) |
++| `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | settings built by hand: `--home` under `<scratch>\own\kh-…`; the scratch gone after | green on arrival; teeth, `ConsultCheckScratch.Delete` with `KimiHomesDisposed` replaced by `true`: the recorder invoked for `own/kh-*/home/credentials` (1 red) |
++| `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, Theory: `answered`, `refused before the launch`, `cancelled mid-turn`) | the prompt names the copy; the one-shot home and the copies gone; no `coai-question-*` folder left | green on arrival (all three); teeth, `QuestionRowLaunch.Launch` with `input.Prompt`: *Expected request.StdIn … to contain "…\tree"* (`answered` only); teeth, `QuestionRowLaunch.Release` with the home not disposed: all three red on the one-shot home check (message differs from the story; the recorder assertion not reached) |
++| `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (S5.6.1) | three `kimi` rows, each citing its cells | *Expected none not to be <null>.* |
++| `CapabilityMatrixTests` vectors test over every pair (S5.6.2; the test name was not recorded) | the kimi × none, kimi × disk and kimi × web pairs each have a vector | *the table's kimi × none row must have a vector deciding it* |
++| `CapabilityMatrixTests.AdmissionFlagsBothKimiRows_AndRefusesItsWeb_NamingItsRecord` (S5.6.4) | `none` and `disk` admitted flagged; `web` refused naming `research/RESULTS_kimi_confinement.md` | *Expected type to be …Admitted, but found …Refused.* (the refusal's sentence was not seen red) |
++| `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3) | `disk` a snapshot of the roots; `none` an empty scratch; no flag; `web` refused | *Expected disk.Cwd to be CwdKind.Snapshot …, but found CwdKind.Scratch* |
++| `ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | the shim request in the working folder or its copy, on the row's home, no session, no flag | *Expected disk.Request.WorkingDirectory … but they differ at index 10* |
++| `ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi` (S5.6.6, Theory of three rows: `Leading`, `Flags`, `AddDirs`) | `KimiConsultant.Build` refuses a plan with any flag | *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* (all three rows) |
++| `ConfinementPlannerTests.AnUnknownRuntime_IsRefused_NamingTheOnesItKnows` (edited) | the refusal sentence names `kimi` | expected the sentence to end "… vibe, kimi", actual "… vibe" (before the `Runtimes` edit) |
++| `capabilityAdmission.test.ts` `kimi rows admit flagged, web refuses naming its record` | `none` and `disk` admitted flagged; `web` refused citing the record | *'kimi' is not a runtime the question consultant can launch …* |
+diff --git a/todo/PLAN_vibe_and_kimi_runtimes_E5.md b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+index 5d6241d3..d6e11917 100644
+--- a/todo/PLAN_vibe_and_kimi_runtimes_E5.md
++++ b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+@@ -1,6 +1,6 @@
+ # PLAN — S5's stories: Kimi Code as a consultant and as a question-consultant row
+ 
+-> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 not started.** E5.1: M-K16 recorded as RESULTS §29
++> Status: **in progress — E5.1–E5.7 implemented; the live checks (J2, RESULTS §31) are owed.** E5.1: M-K16 recorded as RESULTS §29
+ > (every fact took the first branch of E5.1's table) and the probe client's `loadUpdates` / `endLikeTheShim`. E5.2: the shim's `--session`
+ > with `session_lost` (exit 70); deviations B1–B11, *E5.1–E5.2 as built*. E5.3 (Fable): the owned homes; deviations 13–20. Opus reviewed
+ > each, and its fixes are in. E5.4 (Opus): `KimiConsultant`, registered and seeded, and the service arms E5.3 owed; deviations 21–30, not yet reviewed. M-K17 (§30) not run. The judge (Opus) wrote the stories; Fable confirmed the split (§0.2) and gave E5.3
+@@ -9,6 +9,7 @@
+ > **E5.7 implemented 2026-10-16 (Opus)**, built on its own branch beside E5.4 and merged into this one: the consultant-runtime gate
+ > (`CONSULTANT_SINCE`, a note, never a withheld entry), the guard over both tables, the homes folder naming both CLIs, and the help in
+ > five languages; deviations 40–46, *E5.7 as built*. With E5.4's seed (`features.consultant` gains `kimi`) merged, S5.7.5 is green.
++> E5.5 and E5.6 (Opus-split, built on a smaller model; deviations 50–56 below) landed 2026-10-27.
+ >
+ > Parent plan: [PLAN_vibe_and_kimi_runtimes.md](PLAN_vibe_and_kimi_runtimes.md), §4 **S5** (decisions D1, D6, D15, D19, D20).
+ > Built on S4, which is merged and released as coai-mcp 0.57.0: [PLAN_vibe_and_kimi_runtimes_E4.md](PLAN_vibe_and_kimi_runtimes_E4.md)
+@@ -1086,6 +1087,20 @@ Numbered from 40, apart from the lists above, so the stories built in parallel d
+     the question-consultant article says only that a Kimi row's launches wait for one another and for a Kimi review on the same sign-in.
+ 46. **`CONSULTANT_SINCE` gates a note, so `consultantsWire.ts` is unchanged.** S5.7.3 was green before any code, as the row said.
+ 
++### E5.5–E5.6 as built (2026-10-27)
++
++Numbered from 50, apart from the lists above. Built in four tasks (t1 to t4), each committed by name; the test names and reds below are the ones in the tree.
++
++50. **E5.5 needed no production code (decision 1).** `AKimiConsultantCheckTests` (commit `40fe2e9c`) holds S5.5.1, S5.5.2 (a theory: a turn that passes, and one that fails with exit 70), S5.5.3 and S5.5.4. All five cases were green on arrival, none skipped, so the check's existing branches already did what the story asked. Teeth, each break temporary and reverted: `ConsultantCheck.PlaceAsync` forced to the checkout (3 red, recorded; the first message was the check's "the checkout is never its working folder (D6)" refusal, not the `--cwd` assertion the story expected); `OneShotHome.Dispose` replaced by `GitScratch.DeleteEvenIfReadOnly` (3 red on the deleter's unlink recorder); `ConsultantCheck.TurnAsync`'s `finally` without `held.Home.Dispose()` (3 red, the home folder left under `coai-vh`); `ConsultCheckScratch.Delete` with `KimiHomesDisposed` replaced by `true` (1 red, S5.5.4, on the recorder). The cancel test (S5.5.3) hung when the shim was never launched; it now waits with `Task.WhenAny(started, check)` and asserts `started` completed. `git diff` shows no change to `ConsultantCheck.cs` or `ConsultCheckScratch.cs`; E5.5 changed no production file.
++51. **E5.6 changed the data.** Three `kimi` rows in `shared/runtime-capabilities.json`: `none` and `disk` `unconfined`, `web` `unmeasured`. Three vectors in `shared/capability-matrix-vectors.json`, `"kimi"` in `runtimes`, and `src_vs_code/src/runtimeCapabilities.generated.ts` written by its generator (21 rows over 7 runtimes × 3 capabilities). Every kimi cell carries `date` `2026-10-13`, including `M-K9 (e)`: the run date of each cell was not recorded. `Grep` and `Glob` read files outside the working folder (M-K6), so `none` is `unconfined`, not `confined`.
++52. **The planner arm carries no flag.** `"kimi" => Kimi(grant, flag)` puts no flag on any capability (D15: the confinement is the shim's, not its argv). `KimiConsultant.Build` refuses a plan that has `Leading`, `Flags` or `AddDirs` (`MustCarryNoFlags`, S5.6.6) with the sentence "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi". `SandboxVocabulary` is unchanged.
++53. **The Kimi tests run on every OS.** S5.6.7 (`AKimiQuestionRowTests`) and S5.5.x run through `WindowsStandIn` and `KimiSeams.Using(HostKind.Windows, …)`, as E5.4 deviation 23. Vibe's question-row tests are Windows-only (D18). Arrival: S5.6.7's three rows (`answered`, `refused before the launch`, `cancelled mid-turn`) were green, none skipped. Teeth: `QuestionRowLaunch.Launch` with `input.Prompt` in place of `input.PromptNaming(...)` made `answered` red (the prompt did not name the copy); the other two rows stayed green. `QuestionRowLaunch.Release` with `reserved.Home.Dispose()` replaced by a plain read made all three red on the one-shot home check. That message differed from the story: the test asserts the `coai-vh\<8>` folder is empty, not `Directory.Exists(...)` is false. The recorder assertion was not reached in that run and was not broken on its own: not recorded.
++54. **The tests that pinned the runtime list name `kimi`.** `CapabilityMatrixTests` (the refusal sentence now ends "… vibe, kimi"), `ConfinementPlannerTests.AnUnknownRuntime_IsRefused_NamingTheOnesItKnows`, and `capabilityAdmission.test.ts` (the `RUNTIMES` list, the refusal regex, and the new test `kimi rows admit flagged, web refuses naming its record`).
++55. **Failures that remain, and are not E5's.** On this Linux host, `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed` (`PathTooLongException`) and `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` still fail, as the stories' briefs say. The extension test `the baseline names no release that was never tagged` still fails on this host (its cause was not investigated). Other full-suite failures were seen once and are not explained: `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` (failed in full runs, passes alone); `AReviewerThatAsksForSourceIsAskedAgainTests` and `QuestionRowOnAgyScenarioTests` (failed only in one full run, pass alone; a shared static recorder is suspected, not proven). `dotnet format --verify-no-changes` over the solution does not finish on this host (IL2026/IL3050 analyzer errors in `src_server` and `src_bugs`); a scoped check of the new test file passed.
++56. **The E5.6 reds that were recorded.** S5.6.1 `KimiHasThreeRows_EachCitingItsCells`: *Expected none not to be <null>.* S5.6.2 (the matrix over every pair): *the table's kimi × none row must have a vector deciding it*. S5.6.3 (planner, disk): *Expected disk.Cwd to be CwdKind.Snapshot …, but found CwdKind.Scratch* (the story said `plan.Cwd`). S5.6.4 `AdmissionFlagsBothKimiRows_AndRefusesItsWeb_NamingItsRecord`: *Expected type to be Admitted…, but found Refused* (the record's name is not printed on a type mismatch, so the story's quoted sentence was not seen). S5.6.5: *Expected disk.Request.WorkingDirectory … but they differ at index 10*. S5.6.6 (three rows): *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* The extension's `kimi rows admit flagged, web refuses naming its record` was red as *'kimi' is not a runtime the question consultant can launch …*. Not recorded: a red for the web sentence naming `research/RESULTS_kimi_confinement.md`, which is asserted and was green once the row existed.
++
++The Definition of Done's "Every scenario of E5.2–E5.7 is a test that was watched red…" line stays unticked: the reds of E5.5 and E5.6 are recorded above, but the reds of E5.2–E5.4 were not re-checked for this section, and some E5.5 cases were green on arrival (item 50).
++
+ ## Plan gate 2026-10-16 — the accepted findings folded, the rejected ones recorded
+ 
+ The coai plan gate on this document passed (verdict `proceed`). Its operator commands: the SPLIT is Fable's judgement (§0.2); a story

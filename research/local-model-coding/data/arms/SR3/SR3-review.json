@@ -1,0 +1,21 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Kimi's none and disk rows now get the shared Unconfined caveat 'can read this machine — a shell is always there, and no flag removes it', and qconsultView.ts:227 shows it beside the row, but for Kimi a shell is never there: every shell command was refused (M-K3, M-K4). Kimi can read the machine only through Grep and Glob (M-K6).",
+   "fix": "Change the caveat so it does not claim a shell, in CapabilityMatrix.cs:33 and in its twin capabilityAdmission.ts:60. For example: 'unconfined: can read this machine — no flag confines it'. Another option is a Kimi-specific reason. Add a test that the Kimi caveat does not say 'shell'."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 92,
+   "summary": "The junction-first assertions only prove a negative: GitScratch.AfterUnlink was never invoked. No test checks that a credentials junction existed during the turn, or that KimiHome unlinked one. So the checks in S5.5.2–S5.5.4 and in S5.6.7 (AKimiQuestionRowTests.cs:193, :260, :305) pass with nothing to check if the launch ever stops making the junction (testing.md, 'A test can only inspect what is PRESENT').",
+   "fix": "Add a positive control. In During, assert that <home>\\credentials is a link to the fake person's folder. Or record KimiHome.AfterUnlink and assert that it ran exactly once, beside the existing check that GitScratch.AfterUnlink stayed empty."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 197,
+   "summary": "S5.6.7's Then says the row's scratch is gone after every ending, but the 'refused before the launch' arm does not check this. The row's scratch is made in the system TEMP by QuestionRowLaunch.MakeScratch as coai-question-*, outside the test's testsToDelete- folder, so a crashed run leaves copies that the leftover sweep does not find.",
+   "fix": "In the refused arm, assert that no coai-question-* folder made by this row is left. If PanelService can pass a MakeScratch seam, point it into _dir with a testsToDelete- name. If it cannot, write in the class remarks that the row's scratch is in TEMP and why."},
+  {"id": "R4", "severity": "minor", "file": "research/module_tests.md", "line": 4466,
+   "summary": "The 'Seen red as' column says 'not in this worktree' or 'the break is not in this worktree' for all 15 rows. Deviations 50 and 53 say the teeth runs are 'in the task summary', but the commit bodies hold no red message either. So the red required by the plan's §0 and its DoD ('watched red with the message in its table') is not recorded anywhere a reader can find it, and 'this worktree' is a session detail, not a lasting fact.",
+   "fix": "Write down the red message seen for each scenario, or the temporary break and its red for each scenario that was green on arrival, in deviations 50 and 53 or in this table. Remove the 'not in this worktree' wording."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "§0.2 says the coder of E5.5 and E5.6 is Opus, as the plan gate ordered. Every commit in the range is co-authored by Claude Haiku 5.5, and the status line says only 'Sonnet-split tasks'. The 'as built' list (50–54) does not record that a different model built the stories.",
+   "fix": "Add a deviation that names which models split and built E5.5 and E5.6, and that the operator approved this."},
+  {"id": "R6", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 22,
+   "summary": "The kimi sentence in the 'why' array is put on the same line as an empty-string element (\"\", \"the kimi rows …\") and starts in lower case. Every other paragraph has one element per line, and the paragraph just above already lists whose cells each runtime's rows cite.",
+   "fix": "Add the kimi clause to the sentence above ('…; the vibe rows cite … vibe 2.26.1; the kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1)'). Then run the generator again; the generated .ts file does not hold 'why', so it does not change."}
+ ]}

@@ -1,0 +1,8 @@
+feat(kimi): the question consultant row on kimi, and the check tests (E5.5, E5.6)
+
+Three kimi rows: none and disk unconfined (flagged), web unmeasured and refused. They cite
+research/RESULTS_kimi_confinement.md (kimi 2.1.1, 2026-10-13). The planner's kimi arm copies the
+granted roots for disk and stands in an empty folder for none, with no flags. A planned Kimi
+launch carrying any flag is refused.
+
+Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>

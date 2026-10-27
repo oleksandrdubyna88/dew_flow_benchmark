@@ -1,0 +1,274 @@
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index fa4610f1..e095e692 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -349,7 +349,7 @@
+           "M-K3",
+           "M-K4"
+         ],
+-        "note": "an EMPTY working folder bounds Read only; Grep and Glob search the disk by absolute path whatever the cwd, so the empty folder confines nothing and the row says so (E5.6 decision 2)"
++        "note": "kimi 2.1.1: an EMPTY working folder bounds Read only; Grep and Glob search the disk by absolute path whatever the cwd, so the empty folder confines nothing and the row says so (E5.6 decision 2). WebSearch and FetchURL are announced by the CLI and unmeasured; M-K17 decides whether this sentence stays"
+       }
+     },
+     {
+@@ -365,9 +365,10 @@
+           "M-K6",
+           "M-K3",
+           "M-K4",
+-          "M-K9"
++          "M-K9",
++          "M-K9 (e)"
+         ],
+-        "note": "Read is bounded by the shim to the copy; Grep and Glob search the disk directly, so the row says it can read this machine (D15)"
++        "note": "kimi 2.1.1: Read is bounded by the shim to the copy; Grep and Glob search the disk directly, so the row says it can read this machine (D15). WebSearch and FetchURL are announced by the CLI and unmeasured; M-K17 decides whether this sentence stays"
+       }
+     },
+     {
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index d7598aa6..c0f6610b 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -1,10 +1,12 @@
+ using System.Text.RegularExpressions;
+ using CoaiMcp.Runners.Acp;
++using CoaiMcp.Runners.Consultation;
++using CoaiMcp.Runners.Files;
+ using CoaiMcp.Runners.Kimi;
+ using CoaiMcp.Runners.Platform;
+ using CoaiMcp.Runners.Processes;
+-using CoaiMcp.Server;
+ using CoaiMcp.Runners.Vibe;
++using CoaiMcp.Server;
+ using FluentAssertions;
+ using Xunit;
+ 
+@@ -28,6 +30,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+     private readonly string _temp;
+     private readonly List<string> _warned = [];
+ 
++    /// <summary>Every entry the deleter unlinks during a check: a junction must be unlinked before the deleter could meet it (E5.3 g).</summary>
++    private readonly List<string> _unlinked = [];
++
+     public AKimiConsultantCheckTests()
+     {
+         _data = Directory.CreateDirectory(_dir.At("data")).FullName;
+@@ -88,11 +93,19 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+ 
+     private async Task<(int Code, System.Text.Json.JsonElement Said)> CheckAsync(PanelSettings settings, PlayedKimi played, CancellationToken ct = default)
+     {
+-        var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
+-            settings, ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None,
+-            ct == default ? TestContext.Current.CancellationToken : ct);
++        GitScratch.AfterUnlink = _unlinked.Add;
++        try
++        {
++            var (code, stdout, _) = await ConsultantCheckMode.AnswerAsync(
++                settings, ["--check-consultant", "--caller", "claude"], played, _temp, _warned.Add, Noticing.None,
++                ct == default ? TestContext.Current.CancellationToken : ct);
+ 
+-        return (code, System.Text.Json.JsonDocument.Parse(stdout).RootElement.Clone());
++            return (code, System.Text.Json.JsonDocument.Parse(stdout).RootElement.Clone());
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
++        }
+     }
+ 
+     private static string Text(System.Text.Json.JsonElement element, string name) => element.GetProperty(name).GetString() ?? string.Empty;
+@@ -140,6 +153,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+ 
+         code.Should().Be(0, said.ToString());
+         OneShotFolders(homes).Should().BeEmpty("coai-vh\\<8> is gone when the check ends");
++        _unlinked.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
+         _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
+     }
+ 
+@@ -173,8 +187,10 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+ 
+         var (_, said) = await CheckAsync(Settings(homes), played, cancel.Token);
+ 
+-        Text(said, "state").Should().NotBe(ConsultCheckStates.Answered, said.ToString());
++        Text(said, "state").Should().Be(ConsultCheckStates.Failed, said.ToString());
++        Text(said, "failureKind").Should().Be(ConsultFailureKinds.Cancelled, "the record says the check was cancelled");
+         OneShotFolders(homes).Should().BeEmpty("the home goes junction-first even when the turn was cancelled");
++        _unlinked.Should().BeEmpty("the junction was unlinked before the deleter met it");
+     }
+ 
+     // ---------- S5.5.4 ----------
+@@ -182,6 +198,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+     [Fact]
+     public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
+     {
++        var before = _person.Hash();
+         using var stood = StandIn();
+         var played = Played();
+ 
+@@ -192,6 +209,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         After(launch.Request.Arguments, AcpWords.HomeFlag).Should().MatchRegex(@"\\own\\kh-[0-9a-f]{10}$|/own/kh-[0-9a-f]{10}$",
+             "with no root the home is one level down from the scratch, in its own folder (E5.3 judgement R6)");
+         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("after it, the scratch is gone");
+-        _person.Hash().Should().NotBeEmpty("the person's folder is still there");
++        _unlinked.Should().BeEmpty("the home's junction was unlinked before the deleter met it");
++        _person.Hash().Should().Equal(before, "the person's folder is intact, bytes and read-only flags");
+     }
+ }
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index cd24e0c2..3ee370b1 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -64,12 +64,14 @@ public sealed class AKimiQuestionRowTests : IDisposable
+         none!.Standing.Should().Be(CapabilityStanding.Unconfined, "Grep and Glob took an outside file by absolute path, whatever the cwd (M-K6)");
+         none.MeasuredWith.Cells.Should().Contain("M-K6");
+         none.MeasuredWith.Version.Should().Be("2.1.1");
++        none.MeasuredWith.Note.Should().Contain("2.1.1").And.Contain("WebSearch", "the announced web tools are named as unmeasured (E5.6 decision 2)");
+ 
+         var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
+         disk.Should().NotBeNull();
+         disk!.Standing.Should().Be(CapabilityStanding.Unconfined, "Read is bounded by the shim, Grep and Glob read the disk directly (D15)");
+-        disk.MeasuredWith.Cells.Should().Contain(new[] { "M-K6", "M-K9" });
++        disk.MeasuredWith.Cells.Should().Contain(new[] { "M-K6", "M-K9", "M-K9 (e)" });
+         disk.MeasuredWith.Version.Should().Be("2.1.1");
++        disk.MeasuredWith.Note.Should().Contain("2.1.1").And.Contain("WebSearch", "the announced web tools are named as unmeasured (E5.6 decision 2)");
+ 
+         var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
+         web.Should().NotBeNull();
+diff --git a/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs b/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
+index 9f0f954f..5f5ed9dc 100644
+--- a/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
+@@ -2,6 +2,7 @@ using System.Text.Json;
+ using CoaiMcp.Core.QuestionConsult;
+ using CoaiMcp.Core.Rounds;
+ using CoaiMcp.Runners.Acp;
++using CoaiMcp.Runners.Files;
+ using CoaiMcp.Runners.Kimi;
+ using CoaiMcp.Runners.Platform;
+ using CoaiMcp.Runners.Processes;
+@@ -30,6 +31,9 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+     private readonly KimiFixture _person = new();
+     private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
+ 
++    /// <summary>Every entry the deleter unlinks while a row runs: a junction must be unlinked before the deleter could meet it (E5.3 g).</summary>
++    private readonly List<string> _unlinked = [];
++
+     private string Repo => _dir.At("repo");
+ 
+     private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
+@@ -47,15 +51,21 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+ 
+     public void Dispose()
+     {
++        GitScratch.AfterUnlink = null;
+         _person.Dispose();
+         _dir.Dispose();
+     }
+ 
+     /// <summary>The person, the host and the lock root the Kimi adapter of this row sees (as <c>AKimiConsultationScenarioTests</c> stands them in).</summary>
+-    private IDisposable StandIn() => new Stood(
+-        WindowsStandIn.Begin(),
+-        KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
+-        KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
++    private IDisposable StandIn()
++    {
++        GitScratch.AfterUnlink = _unlinked.Add;
++
++        return new Stood(
++            WindowsStandIn.Begin(),
++            KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
++            KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
++    }
+ 
+     private sealed class Stood(params IDisposable[] scopes) : IDisposable
+     {
+@@ -68,7 +78,7 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+         }
+     }
+ 
+-    private PanelService Service(PlayedKimi played) => new(
++    private PanelService Service(PlayedKimi played, string root = "") => new(
+         new PanelSettings
+         {
+             ConsultantHomesRoot = Homes,
+@@ -79,7 +89,7 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+             QuestionConsult = new QuestionConsultSettings
+             {
+                 Rows = [new QuestionRow("kimi-disk", "moonshot", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
+-                Roots = [Path.Combine(Repo)],
++                Roots = [root.Length > 0 ? root : Path.Combine(Repo)],
+                 RowBudget = TimeSpan.FromSeconds(30),
+             },
+         },
+@@ -110,6 +120,7 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+     [Fact]
+     public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind_WhenItAnswers()
+     {
++        var before = _person.Hash();
+         using var stood = StandIn();
+         var played = new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 1_000, 10, Advice) };
+ 
+@@ -121,11 +132,14 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+         cwd.Should().NotContain(Repo, "a copy of the granted root, never the root or the checkout (Kimi reads its working folder only)");
+         launch.Request.StdIn.Should().NotContain(Repo, "the prompt never names the original");
+         OneShotLeft().Should().BeEmpty("the row's home is gone once it answered");
++        _unlinked.Should().BeEmpty("the home's junction was unlinked before the deleter met it");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
+     }
+ 
+     [Fact]
+     public async Task AKimiDiskRow_CancelledMidTurn_LeavesNothingBehind()
+     {
++        var before = _person.Hash();
+         using var stood = StandIn();
+         using var cancel = new CancellationTokenSource();
+         var played = new PlayedKimi(new ProcessLauncher())
+@@ -150,5 +164,25 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+ 
+         answered.Should().BeFalse("the row was cancelled mid-turn, so it never answered");
+         OneShotLeft().Should().BeEmpty("a cancelled row's home is gone too");
++        _unlinked.Should().BeEmpty("the home's junction was unlinked before the deleter met it");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
++    }
++
++    [Fact]
++    public async Task AKimiDiskRow_RefusedBeforeTheLaunch_LeavesNothingBehind()
++    {
++        var before = _person.Hash();
++        var notGit = Directory.CreateDirectory(_dir.At("not-git")).FullName;
++        File.WriteAllText(Path.Combine(notGit, "Notes.txt"), "not a repository\n");
++        using var stood = StandIn();
++        var played = new PlayedKimi(new ProcessLauncher());
++
++        var reply = await AskAsync(Service(played, notGit));
++
++        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
++        played.Shims.Should().BeEmpty("the copy was refused, so nothing was launched");
++        OneShotLeft().Should().BeEmpty("a refused row's home is gone too");
++        _unlinked.Should().BeEmpty("nothing was unlinked before the deleter met it");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
+     }
+ }
+diff --git a/src_vs_code/src/runtimeCapabilities.generated.ts b/src_vs_code/src/runtimeCapabilities.generated.ts
+index f74ce970..51ec60b8 100644
+--- a/src_vs_code/src/runtimeCapabilities.generated.ts
++++ b/src_vs_code/src/runtimeCapabilities.generated.ts
+@@ -366,7 +366,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+       ],
+-      note: 'an EMPTY working folder bounds Read only; Grep and Glob search the disk by absolute path whatever the cwd, so the empty folder confines nothing and the row says so (E5.6 decision 2)',
++      note: 'kimi 2.1.1: an EMPTY working folder bounds Read only; Grep and Glob search the disk by absolute path whatever the cwd, so the empty folder confines nothing and the row says so (E5.6 decision 2). WebSearch and FetchURL are announced by the CLI and unmeasured; M-K17 decides whether this sentence stays',
+     },
+   },
+   {
+@@ -383,8 +383,9 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+         'M-K9',
++        'M-K9 (e)',
+       ],
+-      note: 'Read is bounded by the shim to the copy; Grep and Glob search the disk directly, so the row says it can read this machine (D15)',
++      note: 'kimi 2.1.1: Read is bounded by the shim to the copy; Grep and Glob search the disk directly, so the row says it can read this machine (D15). WebSearch and FetchURL are announced by the CLI and unmeasured; M-K17 decides whether this sentence stays',
+     },
+   },
+   {

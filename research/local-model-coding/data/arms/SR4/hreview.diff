@@ -1,0 +1,291 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 001c0fd7..cf214979 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -114,18 +114,35 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
+     }
+ 
+-    /// <summary>S5.5.2: however the turn ended, the one-shot home is gone — its junction unlinked before the deleter meets it — and the person is intact.</summary>
+-    [Theory]
+-    [InlineData("answered")]
+-    [InlineData("failed-exit-70")]
+-    public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(string arm)
++    /// <summary>S5.5.2, the answered arm: the one-shot home is gone after the answer — its junction unlinked before the deleter meets it — and the person is intact.</summary>
++    [Fact]
++    public async Task AnAnsweredCheck_TheHomeIsGone_JunctionFirst() =>
++        await AfterTheCheck(AnsweringKimi().Turn, answered: true);
++
++    /// <summary>S5.5.2, the failed arm: a turn that ends with exit 70 leaves no one-shot home either, and the person is intact.</summary>
++    [Fact]
++    public async Task AFailedCheck_TheHomeIsGone_JunctionFirst() =>
++        await AfterTheCheck((_, _) => PlayedKimi.Lost(PlayedKimi.Minted), answered: false);
++
++    /// <summary>The one-shot home exists while the turn runs, and is gone once the check ends, its junction unlinked first.</summary>
++    private async Task AfterTheCheck(Func<int, ProcessRequest, ProcessResult> turn, bool answered)
+     {
+         using var homes = TempDir.For("testsToDelete-kcheck-homes-");
+         using var stood = StandIn(_person);
+         var before = _person.Hash();
+-        var kimi = arm == "answered"
+-            ? AnsweringKimi()
+-            : new PlayedKimi(new ProcessLauncher()) { Turn = (_, _) => PlayedKimi.Lost(PlayedKimi.Minted) };
++        var home = string.Empty;
++        var existedDuringTheTurn = false;
++        var kimi = new PlayedKimi(new ProcessLauncher())
++        {
++            Turn = turn,
++            During = (request, _) =>
++            {
++                home = After(request.Arguments, AcpWords.HomeFlag);
++                existedDuringTheTurn = Directory.Exists(Path.GetDirectoryName(home));
++
++                return Task.CompletedTask;
++            },
++        };
+         var recorded = new List<string>();
+ 
+         GitScratch.AfterUnlink = recorded.Add;
+@@ -139,21 +156,9 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+             GitScratch.AfterUnlink = null;
+         }
+ 
+-        if (arm == "answered")
+-        {
+-            said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
+-        }
+-        else
+-        {
+-            said.GetProperty("state").GetString().Should().NotBe("answered", said.ToString());
+-        }
+-
+-        var coaiVh = Path.Combine(homes.Path, VibeHomes.OneShotFolder);
+-        if (Directory.Exists(coaiVh))
+-        {
+-            Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty("the one-shot folder is gone");
+-        }
+-
++        (said.GetProperty("state").GetString() == "answered").Should().Be(answered, said.ToString());
++        existedDuringTheTurn.Should().BeTrue("the check makes its one-shot home for the turn");
++        Directory.Exists(Path.GetDirectoryName(home)).Should().BeFalse("the one-shot folder is gone");
+         recorded.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
+         _person.Hash().Should().Equal(before);
+         Directory.EnumerateFileSystemEntries(_person.Credentials).Should().NotBeEmpty();
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index bff816bb..96eea79a 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -120,14 +120,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+     private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
+ 
+     /// <summary>
+-    /// S5.6.7: a <c>disk</c> Kimi row reads a copy of each granted root and names the copies, keeps its home in a one-shot folder, and after the
+-    /// ending leaves no scratch, no one-shot folder, no junction unlinked by the deleter, and the person's sign-in folder intact.
++    /// S5.6.7, answered: a <c>disk</c> Kimi row reads a copy of each granted root and names the copies only, keeps its home in a one-shot folder,
++    /// and once it answered leaves no scratch, no one-shot folder and no junction unlinked by the deleter, with the person's sign-in folder intact.
+     /// </summary>
+-    [Theory]
+-    [InlineData("answered")]
+-    [InlineData("refused-before-the-launch")]
+-    [InlineData("cancelled-mid-turn")]
+-    public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
++    [Fact]
++    public async Task AnAnsweredKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind()
+     {
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
+@@ -135,89 +132,117 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         var recorded = new List<string>();
+         var before = person.Hash();
+         var copies = new List<string>();
+-        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+         var granted = Path.Combine(Repo, "src");
+-        var roots = new[] { granted, Other };
+-        if (ending == "refused-before-the-launch")
+-        {
+-            var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+-            await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
+-            roots = [granted, plain];
+-        }
+-
+         var played = new PlayedKimi(_launcher)
+         {
+-            During = ending == "cancelled-mid-turn"
+-                ? async (_, ct) =>
+-                {
+-                    await caller.CancelAsync();
+-                    ct.ThrowIfCancellationRequested();
+-                }
+-                : (request, _) =>
+-                {
+-                    copies.AddRange(Directory.EnumerateDirectories(request.WorkingDirectory));
+-
+-                    return Task.CompletedTask;
+-                },
++            During = (request, _) =>
++            {
++                copies.AddRange(Directory.EnumerateDirectories(request.WorkingDirectory));
++
++                return Task.CompletedTask;
++            },
+         };
+-        var service = Service(played, homes, roots);
++        var service = Service(played, homes, granted, Other);
+ 
+         GitScratch.AfterUnlink = recorded.Add;
++        JsonElement reply;
+         try
+         {
+-            JsonElement reply = default;
+-            if (ending == "cancelled-mid-turn")
+-            {
+-                var asking = async () => await AskAsync(service, caller.Token);
++            reply = await AskAsync(service);
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
++        }
+ 
+-                await asking.Should().ThrowAsync<OperationCanceledException>();
+-            }
+-            else
+-            {
+-                reply = await AskAsync(service);
+-            }
++        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
++        var shim = played.Shims.Should().ContainSingle().Subject.Request;
++        copies.Should().HaveCount(2, "one copy per granted root, in the row's snapshot");
++        foreach (var copy in copies)
++        {
++            shim.StdIn.Should().Contain(copy, "the prompt names the copies Kimi can read");
++        }
+ 
+-            if (ending == "answered")
+-            {
+-                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+-                var shim = played.Shims.Should().ContainSingle().Subject.Request;
+-                copies.Should().HaveCount(2, "one copy per granted root, in the row's snapshot");
+-                foreach (var copy in copies)
+-                {
+-                    shim.StdIn.Should().Contain(copy, "the prompt names the copies Kimi can read");
+-                }
+-
+-                shim.StdIn.Should().NotContain(granted, "never the original of a granted root");
+-                shim.StdIn.Should().NotContain(Other, "never the original of a granted root");
+-                shim.Arguments.Should().NotContain(AcpWords.SessionFlag, "a row's copy is one-shot: a first turn, never a continuation");
+-                var home = After(shim.Arguments, AcpWords.HomeFlag);
+-                home.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "the home is kept in a one-shot folder under the homes root");
+-                Directory.Exists(Path.GetDirectoryName(home)).Should().BeFalse("the row's one-shot folder is gone once it answered");
+-                Directory.Exists(shim.WorkingDirectory).Should().BeFalse("the row's scratch and its copies are gone once it answered");
+-            }
+-            else if (ending == "refused-before-the-launch")
+-            {
+-                TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
+-                played.Shims.Should().BeEmpty("nothing of Kimi's starts for a row whose copy was refused");
+-            }
+-            else
+-            {
+-                var shim = played.Shims.Should().ContainSingle().Subject.Request;
+-                Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("the row's one-shot folder is gone once it was cancelled");
+-                Directory.Exists(shim.WorkingDirectory).Should().BeFalse("the row's scratch and its copies are gone once it was cancelled");
+-            }
++        shim.StdIn.Should().NotContain(granted, "never the original of a granted root");
++        shim.StdIn.Should().NotContain(Other, "never the original of a granted root");
++        shim.Arguments.Should().NotContain(AcpWords.SessionFlag, "a row's copy is one-shot: a first turn, never a continuation");
++        var home = After(shim.Arguments, AcpWords.HomeFlag);
++        home.Should().StartWith(Path.Combine(homes, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, "the home is kept in a one-shot folder under the homes root");
++        Directory.Exists(Path.GetDirectoryName(home)).Should().BeFalse("the row's one-shot folder is gone once it answered");
++        Directory.Exists(shim.WorkingDirectory).Should().BeFalse("the row's scratch and its copies are gone once it answered");
++        recorded.Should().BeEmpty("the home's junction was unlinked first, so the deleter never met it");
++        person.Hash().Should().Equal(before, "the person's sign-in folder is intact");
++    }
++
++    /// <summary>S5.6.7, refused: a row whose copy is refused before the launch starts nothing of Kimi's and leaves no one-shot folder behind.</summary>
++    [Fact]
++    public async Task ARefusedKimiDiskRow_StartsNothing_AndLeavesNoOneShotFolder()
++    {
++        using var person = new KimiFixture();
++        using var stood = StandIn(person);
++        var homes = Directory.CreateDirectory(_dir.At("homes")).FullName;
++        var recorded = new List<string>();
++        var before = person.Hash();
++        var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
++        await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
++        var played = new PlayedKimi(_launcher);
++        var service = Service(played, homes, Path.Combine(Repo, "src"), plain);
++
++        GitScratch.AfterUnlink = recorded.Add;
++        JsonElement reply;
++        try
++        {
++            reply = await AskAsync(service);
+         }
+         finally
+         {
+             GitScratch.AfterUnlink = null;
+         }
+ 
+-        var coaiVh = Path.Combine(homes, VibeHomes.OneShotFolder);
+-        if (Directory.Exists(coaiVh))
++        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
++        played.Shims.Should().BeEmpty("nothing of Kimi's starts for a row whose copy was refused");
++        var oneShot = Path.Combine(homes, VibeHomes.OneShotFolder);
++        (Directory.Exists(oneShot) ? Directory.GetFileSystemEntries(oneShot) : Array.Empty<string>())
++            .Should().BeEmpty("the refused row's one-shot folder is gone");
++        recorded.Should().BeEmpty("nothing was disposed by the deleter");
++        person.Hash().Should().Equal(before, "the person's sign-in folder is intact");
++    }
++
++    /// <summary>S5.6.7, cancelled: a row cancelled mid-turn leaves no scratch and no one-shot folder, with the person's sign-in folder intact.</summary>
++    [Fact]
++    public async Task ACancelledKimiDiskRow_LeavesNothingBehind()
++    {
++        using var person = new KimiFixture();
++        using var stood = StandIn(person);
++        var homes = Directory.CreateDirectory(_dir.At("homes")).FullName;
++        var recorded = new List<string>();
++        var before = person.Hash();
++        using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
++        var played = new PlayedKimi(_launcher)
++        {
++            During = async (_, ct) =>
++            {
++                await caller.CancelAsync();
++                ct.ThrowIfCancellationRequested();
++            },
++        };
++        var service = Service(played, homes, Path.Combine(Repo, "src"), Other);
++
++        GitScratch.AfterUnlink = recorded.Add;
++        try
+         {
+-            Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty("the row's one-shot folder is gone");
++            var asking = async () => await AskAsync(service, caller.Token);
++
++            await asking.Should().ThrowAsync<OperationCanceledException>();
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
+         }
+ 
++        var shim = played.Shims.Should().ContainSingle().Subject.Request;
++        Directory.Exists(Path.GetDirectoryName(After(shim.Arguments, AcpWords.HomeFlag))).Should().BeFalse("the row's one-shot folder is gone once it was cancelled");
++        Directory.Exists(shim.WorkingDirectory).Should().BeFalse("the row's scratch and its copies are gone once it was cancelled");
+         recorded.Should().BeEmpty("the home's junction was unlinked first, so the deleter never met it");
+         person.Hash().Should().Equal(before, "the person's sign-in folder is intact");
+     }
+diff --git a/todo/PLAN_vibe_and_kimi_runtimes_E5.md b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+index 62e049be..e236a4cf 100644
+--- a/todo/PLAN_vibe_and_kimi_runtimes_E5.md
++++ b/todo/PLAN_vibe_and_kimi_runtimes_E5.md
+@@ -1063,7 +1063,7 @@ Numbered from 50, apart from the lists above, so the stories built in parallel d
+ 50. **E5.5 is tests only, as decision 1 said.** `AKimiConsultantCheckTests` (new) proves the four scenarios (S5.5.2 is a two-arm Theory, so five test cases); no production file of the check changed (commit `73ef212c` adds that one file). S5.5.1–S5.5.4 were GREEN on arrival (E5.4 and E5.3 are in), so each was given teeth by a temporary break, each run red and reverted; the plan's "red before E5.3 g / E5.4" is history, not a state this branch could show. One difference from the table above: S5.5.3's record is `failed` with `failureKind` `cancelled` (`failureWhat`: "the call was cancelled while the consultant (my-kimi) was running"), not a state `cancelled`. `ConsultCheckStates` has no such word, and the check answers with the failed record; it does not throw.
+ 51. **E5.6's standings were applied as decided** (decision 2): `kimi × none` and `kimi × disk` are `unconfined`, `kimi × web` is `unmeasured` naming `research/RESULTS_kimi_confinement.md`. The rows' cells: none — `M-K6`, `M-K3`, `M-K4`; disk — `M-K6`, `M-K9`, `M-K9 (e)`, `M-K3`, `M-K4`. The table's `why` header gained one sentence about the Kimi rows. `RuntimeCapabilities.Runtimes` and the seed's `runtimes` list gain `kimi` last, and the generated `src_vs_code/src/runtimeCapabilities.generated.ts` was regenerated, not edited.
+ 52. **`KimiConsultant` changed once, in E5.6.** `MustCarryNoFlags` (decision 3): a planned launch whose plan carries any `Flags` or `Leading` argument is refused with `ArgumentException` ("a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi"). Nothing else of the E5.4 adapter changed; a planned launch's cwd, home, missing `--session` and `ForQuestion` were already there.
+-53. **Where the E5.6 scenarios live.** S5.6.1, S5.6.2 (the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` in `CapabilityMatrixTests`, body unchanged — it went red by itself with the seed rows in and the vectors out; the table's private `Records` list gained the Kimi record, `RESULTS_kimi_confinement.md`, 2026-10-13, prefix `M-K`, so `EveryRow_CitesTheRecord_…` holds for the new rows), S5.6.4 (`KimiHasThreeRows_EachCitingItsCells`) and the `…NamingWhatIsKnown` sentence in `CapabilityMatrixTests` (`AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown`); S5.6.3 (`Kimi_None_StandsInAnEmptyScratch_…`), S5.6.5 (`AKimiQuestionLaunch_…`), S5.6.6 (`APlanWithFlags_IsRefusedForKimi`) and the `kimi × web` row of the matrix-refusal Theory in `ConfinementPlannerTests`; S5.6.7 in `AKimiQuestionRowTests` (new); S5.6.8 in `capabilityAdmission.test.ts`. The refusal sentence that spells the runtimes now ends `…, api, vibe, kimi` and both halves' tests say so.
++53. **Where the E5.6 scenarios live.** S5.6.1 (`KimiHasThreeRows_EachCitingItsCells`), S5.6.2 (the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` in `CapabilityMatrixTests`, body unchanged — it went red by itself with the seed rows in and the vectors out; the table's private `Records` list gained the Kimi record, `RESULTS_kimi_confinement.md`, 2026-10-13, prefix `M-K`, so `EveryRow_CitesTheRecord_…` holds for the new rows), S5.6.4 (`AdmissionFlagsBothRows_AndRefusesTheWeb_NamingItsRecord`) and the `…NamingWhatIsKnown` sentence in `CapabilityMatrixTests` (`AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown`); S5.6.3 (`Kimi_None_StandsInAnEmptyScratch_…`), S5.6.5 (`AKimiQuestionLaunch_…`), S5.6.6 (`APlanWithFlags_IsRefusedForKimi`) and the `kimi × web` row of the matrix-refusal Theory in `ConfinementPlannerTests`; S5.6.7 in `AKimiQuestionRowTests` (new); S5.6.8 in `capabilityAdmission.test.ts`. The refusal sentence that spells the runtimes now ends `…, api, vibe, kimi` and both halves' tests say so.
+ 54. **S5.6.7 and S5.5.x run on every OS** through `WindowsStandIn` and `KimiSeams.Using` (E5.4 deviation 23), so they do NOT skip on Linux as the Vibe row tests do. The disposal assertions (`coai-vh` gone, the deleter's recorder never invoked, the person's folder unchanged by its hash) were green on arrival (E5.3 is in); their teeth are the temporary breaks recorded in the task notes `notes/SR4-t3-code.md` and `notes/SR4-t4-code.md`.
+ 55. **Nothing waits on M-K17 in code.** The `none` and `disk` rows' notes still say `WebSearch` and `FetchURL` are announced and unmeasured; M-K17 decides whether that sentence stays, changes or goes.
+ 

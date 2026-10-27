@@ -1,6 +1,6 @@
 # Cheaper code writers under a Sonnet coder — local model, Haiku (2026-10-25/27)
 
-> Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (2026-10-27 05:30 UTC). Part 5b (8 arms) is interim — see [results.md](results.md) §7b.** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
+> Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (2026-10-27 05:30 UTC). Part 5b (8 more arms) complete at 20:03 UTC — [results.md](results.md) §7b.** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
 > `dew_flow_conventions`; recorded here because this repository is where the family keeps its measurements.
 
 ## The question
@@ -47,7 +47,7 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
   fixer left half the review's findings open.
 - **Mutation checks on all 30 arms** (six frozen mutants each): every mutant is caught by some test, but five arms have
   a scenario test that cannot catch its mutant — one of them (H2) passed the review, the fixer and the judge.
-- **Part 5b (interim) — S and D with a fresh Haiku review before Opus**: the step costs about $0.5–0.7 and 12–24 min
+- **Part 5b — S and D with a fresh Haiku review before Opus**: the step costs about $0.5–0.7 and 12–24 min
   per arm. It lifted D's quality (no DR arm below 7; the judge's majors 12 → 5) at $4.80–6.68 per arm, but the Opus
   review still found majors in every DR arm. SR stays at 8, $6.23–7.47. DR3 and DR4 are not independent: their Haiku
   reviewers read the previous arm's notes ([incidents.md](incidents.md) §2e).

@@ -1,0 +1,76 @@
+diff --git a/src_mcp/core/QuestionConsult/ConfinementPlanner.cs b/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+index 3e7532a8..4eee05d6 100644
+--- a/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
++++ b/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+@@ -154,6 +154,7 @@ public static class ConfinementPlanner
+         "codex" => Codex(grant, flag),
+         "antigravity" => Antigravity(grant, flag),
+         "vibe" => Vibe(grant, flag),
++        "kimi" => Kimi(grant, flag),
+         // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
+         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
+     };
+@@ -201,6 +202,18 @@ public static class ConfinementPlanner
+         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
+     };
+ 
++    /// <remarks>
++    /// No flag, ever: Kimi's confinement is the SHIM's (D15 of todo/PLAN_vibe_and_kimi_runtimes.md), not its argv, so the plan carries none and
++    /// <see cref="SandboxVocabulary"/> gains nothing. A disk row stands in the COPY of its roots (D6: a branch's AGENTS.md, skills, sub-agents and
++    /// .mcp.json load from disk, M-K9) and a none row in an empty folder. Both rows are flagged unconfined by the matrix (Grep and Glob read the disk, M-K6).
++    /// </remarks>
++    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
++    {
++        Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
++        // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
++        _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
++    };
++
+     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
+         roots.SelectMany(root => (string[])[flag, root]);
+ }
+diff --git a/src_mcp/tests/ConfinementPlannerTests.cs b/src_mcp/tests/ConfinementPlannerTests.cs
+index b0e8bb59..fe0eaf8b 100644
+--- a/src_mcp/tests/ConfinementPlannerTests.cs
++++ b/src_mcp/tests/ConfinementPlannerTests.cs
+@@ -143,12 +143,40 @@ public sealed class ConfinementPlannerTests
+         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
+     }
+ 
++    /// <summary>
++    /// Kimi (S5.6.3 of todo/PLAN_vibe_and_kimi_runtimes.md): NO flag, ever — its confinement is the shim's, not its argv (D15). A none row
++    /// stands in an EMPTY scratch folder; a disk row stands in the COPY of its roots (D6), because its AGENTS.md, skills and .mcp.json load from disk (M-K9).
++    /// </summary>
++    [Fact]
++    public void Kimi_None_StandsInAnEmptyFolder_Disk_InTheCopyOfItsRoots_NoFlagEver_AndWebIsRefused()
++    {
++        var none = Plan("kimi", CapabilityGrant.None);
++        none.Flags.Should().BeEmpty();
++        none.Leading.Should().BeEmpty();
++        none.Cwd.Should().Be(CwdKind.Scratch);
++        none.AddDirs.Should().BeEmpty();
++        none.SnapshotSources.Should().BeEmpty();
++        none.Flag.Should().Be(AdmissionFlag.Unconfined);
++
++        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
++        disk.Flags.Should().BeEmpty("Kimi's confinement is the shim's (D15), so the plan carries no flag");
++        disk.Leading.Should().BeEmpty();
++        disk.Cwd.Should().Be(CwdKind.Snapshot, "D6: Kimi's AGENTS.md, skills and .mcp.json load from disk, so it stands in the copy of its roots (M-K9)");
++        disk.AddDirs.Should().BeEmpty("AddDirs are launch flags, and Kimi is never given one");
++        disk.SnapshotSources.Should().Equal([RootA, RootB], "the roots it reads through their copies");
++        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
++
++        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
++            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
++    }
++
+     // ---------- refusals ----------
+ 
+     [Theory]
+     [InlineData("antigravity", Capability.Web, "cannot fetch a page headless")]
+     [InlineData("api", Capability.Disk, "cannot do 'disk'")]
+     [InlineData("api", Capability.Web, "not been measured")]
++    [InlineData("kimi", Capability.Web, "not been measured")]
+     [InlineData("local", Capability.Disk, "cannot do 'disk'")]
+     [InlineData("local", Capability.Web, "cannot do 'web'")]
+     [InlineData("vibe", Capability.Web, "not been measured")]
