@@ -1,0 +1,33 @@
+failed CoaiMcp.Tests.CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells (60ms)
+  Expected none not to be <null>.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.NotBeNull(String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/CapabilityMatrixTests.cs:205
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed CoaiMcp.Tests.CapabilityMatrixTests.KimiNoneAndDisk_AreAdmittedFlaggedUnconfined (1ms)
+  Expected type to be CoaiMcp.Core.QuestionConsult.Admission+Admitted, but found CoaiMcp.Core.QuestionConsult.Admission+Refused.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Types.TypeAssertions.Be(Type expected, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType(Type expectedType, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType[T](String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.CapabilityMatrixTests.KimiNoneAndDisk_AreAdmittedFlaggedUnconfined() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/CapabilityMatrixTests.cs:227
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 36
+  failed: 2
+  succeeded: 34
+  skipped: 0
+  duration: 1s 599ms

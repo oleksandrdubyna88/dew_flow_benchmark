@@ -30,6 +30,18 @@ from its transcript, priced with the unit prices fitted below). The filler is th
 | T2 | Opus tasks → Haiku codes → Sonnet per task | 133 | $9.39 | — | 61.0k | 81.0k | 30.0M | 932.7k | — |
 | T3 | Opus tasks → Haiku codes → Sonnet per task | 106 | $9.40 | — | 71.3k | 68.3k | 32.1M | 1045.0k | — |
 | T4 | Opus tasks → Haiku codes → Sonnet per task | 114 | $12.01 | — | 63.5k | 118.6k | 38.0M | 1245.9k | — |
+| O1 | Opus tasks → Haiku codes → Opus checks → Haiku fixes | 97 | $5.48 | — | 0.0k | 58.3k | 24.1M | 724.3k | — |
+| O2 | Opus tasks → Haiku codes → Opus checks → Haiku fixes | 85 | $6.69 | — | 0.0k | 79.0k | 24.3M | 744.0k | — |
+| O3 | Opus tasks → Haiku codes → Opus checks → Haiku fixes | 94 | $6.78 | — | 0.0k | 67.1k | 34.0M | 837.8k | — |
+| O4 | Opus tasks → Haiku codes → Opus checks → Haiku fixes | 112 | $7.90 | — | 0.0k | 89.3k | 31.2M | 815.5k | — |
+| S1 | Sonnet tasks → Haiku codes → Opus checks → Haiku fixes | 66 | $6.30 | — | 58.7k | 22.4k | 37.7M | 842.3k | — |
+| S2 | Sonnet tasks → Haiku codes → Opus checks → Haiku fixes | 103 | $6.04 | — | 55.8k | 21.1k | 41.9M | 941.4k | — |
+| S3 | Sonnet tasks → Haiku codes → Opus checks → Haiku fixes | 69 | $5.03 | — | 49.4k | 17.4k | 27.2M | 806.8k | — |
+| S4 | Sonnet tasks → Haiku codes → Opus checks → Haiku fixes | 122 | $7.49 | — | 54.7k | 22.1k | 68.2M | 1019.3k | — |
+| D1 | Haiku codes the story → Opus checks → Haiku fixes | 47 | $4.02 | — | 0.0k | 24.0k | 22.7M | 472.9k | — |
+| D2 | Haiku codes the story → Opus checks → Haiku fixes | 61 | $4.61 | — | 0.0k | 17.9k | 41.6M | 560.0k | — |
+| D3 | Haiku codes the story → Opus checks → Haiku fixes | 61 | $4.13 | — | 0.0k | 21.4k | 32.5M | 465.8k | — |
+| D4 | Haiku codes the story → Opus checks → Haiku fixes | 64 | $5.44 | — | 0.0k | 25.4k | 49.6M | 575.9k | — |
 
 **Classic band** (C, C2, C3, C4 — one configuration run four times; min / mean / max): work 44 min / 53 min / 62 min;
 cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8M / 27.7M / 32.4M.
@@ -38,9 +50,9 @@ cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8
 
 | Model | Output $/Mtok | Cache read $/Mtok | Cache write + input $/Mtok | Fitted on | Max error on those sessions |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 62 | 0.0 % |
-| claude-haiku-5-5 | 5.50 | 0.017 | -0.95 | 101 | 942.6 % |
-| claude-opus-5-5 | 14.72 | 0.199 | 8.83 | 22 | 5.9 % |
+| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 66 | 0.0 % |
+| claude-haiku-5-5 | 0.82 | 0.062 | -0.59 | 178 | 635.8 % |
+| claude-opus-5-5 | 16.70 | 0.198 | 8.56 | 38 | 6.4 % |
 
 
 The Haiku row comes only from Claude Code's own small internal Haiku calls; its near-zero cache coefficient is noise
@@ -68,6 +80,18 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | T2 | 1-split a1: 9 min $3.53 · 2-t3-code a1: 12 min $0.04 · 2-t1-code a1: 16 min $0.06 · 2-t2-code a1: 11 min $0.02 · 3-t2-review a1: 16 min $0.27 · 3-t3-review a1: 3 min $0.30 · 3-t1-review a1: 12 min $0.37 · 2-t4-code a1: 19 min $0.04 · 3-t4-review a1: 3 min $0.25 · 2-t5-code a1: 1 min $0.02 · 3-t5-review a1: 1 min $0.26 · 4-review a1: 12 min $2.65 · 5-fix a1: 19 min $1.56 |
 | T3 | 1-split a1: 5 min $2.13 · 2-t1-code a1: 18 min $0.08 · 2-t3-code a1: 11 min $0.14 · 3-t3-review a1: 3 min $0.36 · 3-t1-review a1: 5 min $0.34 · 2-t2-code a1: 12 min $0.04 · 3-t2-review a1: 3 min $0.34 · 2-t4-code a1: 11 min $0.13 · 3-t4-review a1: 2 min $0.40 · 2-t5-code a1: 2 min $0.03 · 3-t5-review a1: 1 min $0.35 · 4-review a1: 11 min $3.72 · 5-fix a1: 21 min $1.33 |
 | T4 | 1-split a1: 7 min $5.94 · 2-t3-code a1: 17 min $0.08 · 2-t1-code a1: 16 min $0.05 · 3-t1-review a1: 5 min $0.26 · 3-t3-review a1: 4 min $0.32 · 2-t2-code a1: 16 min $0.06 · 3-t2-review a1: 3 min $0.31 · 2-t4-code a1: 13 min $0.30 · 3-t4-review a1: 5 min $0.56 · 2-t5-code a1: 3 min $0.15 · 3-t5-review a1: 4 min $0.71 · 4-review a1: 9 min $2.55 · 5-fix a1: 13 min $0.73 |
+| O1 | 1-split a1: 5 min $2.09 · 2-t1-code a1: 13 min $0.05 · 2-t3-code a1: 14 min $0.13 · 2-t2-code a1: 28 min $0.03 · 2-t4-code a1: 11 min $0.26 · 2-t5-code a1: 1 min $0.02 · 4-review a1: 11 min $2.61 · 5-fix a1: 13 min $0.29 |
+| O2 | 1-split a1: 9 min $3.20 · 2-t1-code a1: 19 min $0.06 · 2-t3-code a1: 10 min $0.04 · 2-t2-code a1: 12 min $0.04 · 2-t4-code a1: 12 min $0.13 · 2-t5-code a1: 1 min $0.03 · 4-review a1: 12 min $2.95 · 5-fix a1: 10 min $0.24 |
+| O3 | 1-split a1: 8 min $3.16 · 2-t3-code a1: 16 min $0.35 · 2-t1-code a1: 15 min $0.04 · 2-t2-code a1: 15 min $0.18 · 2-t4-code a1: 9 min $0.19 · 2-t5-code a1: 2 min $0.09 · 4-review a1: 11 min $2.29 · 5-fix a1: 17 min $0.49 |
+| O4 | 1-split a1: 9 min $3.44 · 2-t4-code a1: 20 min $0.05 · 2-t1-code a1: 17 min $0.07 · 2-t2-code a1: 22 min $0.04 · 2-t3-code a1: 16 min $0.14 · 2-t5-code a1: 2 min $0.15 · 4-review a1: 11 min $3.88 · 5-fix a1: 15 min $0.14 |
+| S1 | 1-split a1: 7 min $2.05 · 2-t1-code a1: 11 min $0.13 · 2-t3-code a1: 8 min $0.08 · 2-t2-code a1: 13 min $0.38 · 2-t4-code a1: 2 min $0.09 · 4-review a1: 11 min $2.96 · 5-fix a1: 14 min $0.61 |
+| S2 | 1-split a1: 7 min $2.31 · 2-t1-code a1: 2 min $0.03 · 2-t5-code a1: 22 min $0.61 · 2-t3-code a1: 14 min $0.05 · 2-t2-code a1: 4 min $0.04 · 2-t4-code a1: 19 min $0.19 · 2-t6-code a1: 10 min $0.06 · 4-review a1: 12 min $2.59 · 5-fix a1: 13 min $0.15 |
+| S3 | 1-split a1: 6 min $2.18 · 2-t4-code a1: 6 min $0.11 · 2-t1-code a1: 10 min $0.08 · 2-t2-code a1: 4 min $0.04 · 2-t3-code a1: 5 min $0.08 · 2-t5-code a1: 1 min $0.03 · 4-review a1: 9 min $2.35 · 5-fix a1: 28 min $0.17 |
+| S4 | 1-split a1: 6 min $1.95 · 2-t5-code a1: 16 min $0.05 · 2-t1-code a1: 30 min $0.29 · 2-t2-code a1: 5 min $0.03 · 2-t3-code a1: 14 min $0.04 · 2-t4-code a1: 13 min $0.07 · 2-t6-code a1: 2 min $0.04 · 4-review a1: 20 min $2.91 · 5-fix a1: 16 min $2.11 |
+| D1 | 1-code a1: 21 min $0.94 · 2-review a1: 14 min $2.74 · 3-fix a1: 12 min $0.34 |
+| D2 | 1-code a1: 23 min $1.98 · 2-review a1: 15 min $2.32 · 3-fix a1: 23 min $0.31 |
+| D3 | 1-code a1: 36 min $1.50 · 2-review a1: 12 min $2.46 · 3-fix a1: 13 min $0.17 |
+| D4 | 1-code a1: 30 min $2.36 · 2-review a1: 12 min $2.72 · 3-fix a1: 22 min $0.36 |
 
 ## 3. Objective gate (on each arm's final commit)
 
@@ -91,6 +115,18 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | T2 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 732 insertions(+), 9 deletions(-) |
 | T3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 720 insertions(+), 13 deletions(-) |
 | T4 | ok | 0 | 0 | 0 | ok | ok | 11/12 | 0 / 0 | 14 files changed, 804 insertions(+), 13 deletions(-) |
+| O1 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 836 insertions(+), 10 deletions(-) |
+| O2 | ok | 0 | 0 | 0 | ok | ok | 11/12 | 0 / 0 | 14 files changed, 722 insertions(+), 13 deletions(-) |
+| O3 | ok | 0 | 0 | 0 | ok | ok | 11/12 | 0 / 0 | 12 files changed, 673 insertions(+), 13 deletions(-) |
+| O4 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 681 insertions(+), 15 deletions(-) |
+| S1 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 760 insertions(+), 13 deletions(-) |
+| S2 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 16 files changed, 743 insertions(+), 17 deletions(-) |
+| S3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 697 insertions(+), 12 deletions(-) |
+| S4 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 723 insertions(+), 14 deletions(-) |
+| D1 | ok | 0 | 1 | 0 | ok | ok | 11/12 | 0 / 0 | 12 files changed, 708 insertions(+), 9 deletions(-) |
+| D2 | ok | 0 | 1 | 0 | ok | ok | 10/12 | 0 / 0 | 12 files changed, 655 insertions(+), 6 deletions(-) |
+| D3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 13 files changed, 734 insertions(+), 8 deletions(-) |
+| D4 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 13 files changed, 588 insertions(+), 8 deletions(-) |
 
 ## 3b. The step-2 review (Opus, before the fixes)
 
@@ -114,6 +150,18 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | T2 | 4 | 0 / 2 / 2 | fix-then-ready |
 | T3 | 8 | 1 / 1 / 6 | not-ready |
 | T4 | 4 | 0 / 0 / 4 | fix-then-ready |
+| O1 | 6 | 0 / 2 / 4 | fix-then-ready |
+| O2 | 7 | 0 / 2 / 5 | fix-then-ready |
+| O3 | 2 | 1 / 0 / 1 | fix-then-ready |
+| O4 | 3 | 0 / 1 / 2 | fix-then-ready |
+| S1 | 4 | 0 / 0 / 4 | fix-then-ready |
+| S2 | 6 | 0 / 0 / 6 | fix-then-ready |
+| S3 | 5 | 0 / 0 / 5 | fix-then-ready |
+| S4 | 4 | 0 / 1 / 3 | fix-then-ready |
+| D1 | 7 | 0 / 2 / 5 | fix-then-ready |
+| D2 | 8 | 1 / 2 / 5 | not-ready |
+| D3 | 7 | 0 / 0 / 7 | fix-then-ready |
+| D4 | 12 | 0 / 4 / 8 | fix-then-ready |
 
 ## 4. The fill and its survival (skeleton arms)
 
@@ -132,17 +180,25 @@ the exact trimmed line (lower bound). Compile errors after a fill are a LOWER bo
 | H3 | 16 / 0 | 0 / 0 | 4 / 4 | 96 % → 94 % (94 %) | n/a → n/a (n/a) | 451 / 409 / 77 / 43 |
 | H4 | 13 / 0 | 1 / 0 | 4 / 4 | 77 % → 69 % (69 %) | 100 % → 100 % (100 %) | 583 / 419 / 171 / 76 |
 
-## 4b. The task arms (Opus splits → Haiku codes each task → Sonnet reviews each task)
+## 4b. The task arms (T: Opus splits, Sonnet reviews each task; O: Opus splits, no task review; S: Sonnet splits, no task review — Haiku codes every task)
 
 Cost per role from the host (`metrics.json`); Haiku survival = Haiku's meaningful added lines still present, whitespace-insensitive,
 in any file the arm changed in its final commit (`t-survival.json`, from the per-task diffs the harness kept).
 
-| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Opus split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |
+| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |
 |---|---|---|---|---|---|---|---|---|---|---|
 | T1 | 80 min | 6 / 4 (3) | $2.76 | $0.21 | $1.48 | $2.00 | $1.68 | 514 → 97 % | 16 | 9 (3) |
 | T2 | 100 min | 5 / 3 (3) | $3.53 | $0.18 | $1.46 | $2.65 | $1.56 | 492 → 98 % | 3 | 4 (2) |
 | T3 | 94 min | 5 / 4 (2) | $2.13 | $0.42 | $1.79 | $3.72 | $1.33 | 487 → 90 % | 25 | 8 (2) |
 | T4 | 95 min | 5 / 4 (2) | $5.94 | $0.63 | $2.16 | $2.55 | $0.73 | 570 → 97 % | 36 | 4 (0) |
+| O1 | 87 min | 5 / 4 (2) | $2.09 | $0.49 | $0.00 | $2.61 | $0.29 | 542 → 99 % | — (no task review) | 6 (2) |
+| O2 | 78 min | 5 / 4 (2) | $3.20 | $0.30 | $0.00 | $2.95 | $0.24 | 518 → 98 % | — (no task review) | 7 (2) |
+| O3 | 82 min | 5 / 4 (2) | $3.16 | $0.85 | $0.00 | $2.29 | $0.49 | 478 → 99 % | — (no task review) | 2 (1) |
+| O4 | 99 min | 5 / 4 (2) | $3.44 | $0.45 | $0.00 | $3.88 | $0.14 | 474 → 100 % | — (no task review) | 3 (1) |
+| S1 | 62 min | 4 / 3 (2) | $2.05 | $0.68 | $0.00 | $2.96 | $0.61 | 514 → 99 % | — (no task review) | 4 (0) |
+| S2 | 101 min | 6 / 4 (2) | $2.31 | $0.99 | $0.00 | $2.59 | $0.15 | 524 → 98 % | — (no task review) | 6 (0) |
+| S3 | 66 min | 5 / 4 (2) | $2.18 | $0.33 | $0.00 | $2.35 | $0.17 | 480 → 99 % | — (no task review) | 5 (0) |
+| S4 | 107 min | 6 / 4 (2) | $1.95 | $0.52 | $0.00 | $2.91 | $2.11 | 511 → 99 % | — (no task review) | 4 (1) |
 
 ## 5. Filler requests
 
@@ -181,6 +237,18 @@ in any file the arm changed in its final commit (`t-survival.json`, from the per
 | T2 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 9 | 8 / 8 | mmmmm / mmmm |
 | T3 | **7.5** (7 / 8) | 9 / 9 | 6 / 8 | 7 / 7 | 8 / 8 | Mmmmmmm / mmmmm |
 | T4 | **7.5** (7 / 8) | 8 / 9 | 8 / 8 | 6 / 7 | 7 / 8 | Mmmmmm / mmmmm |
+| O1 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 8 | 7 / 7 | mmmmm / mmmmmm |
+| O2 | **7.0** (7 / 7) | 9 / 9 | 7 / 8 | 6 / 6 | 8 / 9 | MMmmmm / Mmmmmm |
+| O3 | **7.0** (7 / 7) | 9 / 9 | 8 / 8 | 6 / 6 | 8 / 8 | Mmmmmmm / Mmmmmm |
+| O4 | **7.5** (8 / 7) | 9 / 8 | 8 / 8 | 7 / 6 | 8 / 8 | Mmmmm / Mmmmmm |
+| S1 | **8.0** (8 / 8) | 9 / 9 | 7 / 7 | 8 / 8 | 8 / 8 | mmmmmmm / mmmmmm |
+| S2 | **7.5** (7 / 8) | 9 / 9 | 7 / 7 | 7 / 7 | 9 / 9 | Mmmmmmm / mmmmmm |
+| S3 | **8.0** (8 / 8) | 9 / 8 | 8 / 7 | 8 / 8 | 8 / 7 | mmmmmm / mmmmmmm |
+| S4 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 7 / 7 | 8 / 9 | mmmmmm / mmmmmmm |
+| D1 | **7.5** (7 / 8) | 8 / 9 | 7 / 8 | 6 / 7 | 8 / 9 | Mmmmmmm / mmmmm |
+| D2 | **6.0** (6 / 6) | 7 / 8 | 6 / 6 | 5 / 5 | 7 / 7 | MMmmmmmm / MMmmmmmmm |
+| D3 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 8 | 9 / 8 | mmmmmm / mmmmmmm |
+| D4 | **5.5** (6 / 5) | 8 / 7 | 5 / 5 | 5 / 5 | 7 / 7 | MMMmmmm / MMMMmmmmm |
 
 ## 7. Quality — the earlier GROUP judges (one session ranks V, C, C2, VT together; 2 runs, labels permuted)
 
@@ -201,3 +269,92 @@ in any file the arm changed in its final commit (`t-survival.json`, from the per
 | V | 8 | 7 | 2 | 2 |
 | C | 7 | 6 | 3 | 3 |
 | VT | 6 | 5 | 4 | 4 |
+
+## 8. Behaviour — the frozen mutation checks (data/arms/<arm>/mutation.json, harness/mutate.mjs)
+
+Each mutant breaks one spec decision in the arm's final code; the arm's scenario classes are re-run against it. **Killed** = some test
+failed. Per intended scenario test: **+** it failed (caught), **−** it exists by its exact name but still PASSED (missed), **r** no test has the
+exact name and a renamed test caught it (from `killedBy`).
+
+| Arm | Killed | M1 junction-first (S5.5.2, S5.6.7) | M6 rootless (S5.5.4) | M2 no planner arm (S5.6.4, S5.6.5) | M3 disk confined (S5.6.1, S5.6.8) | M4 web confined (S5.6.1, S5.6.4) | M5 flags accepted (S5.6.6) |
+|---|---|---|---|---|---|---|---|
+| C | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| C2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| C3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| C4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| V | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| VT | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| Q1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| Q2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| Q3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| Q4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| H1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| H2 | 6/6 | killed (+ **−**) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| H3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| H4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| T1 | 6/6 | killed (+ +) | killed (+) | killed (+ **−**) | killed (+ +) | killed (+ +) | killed (+) |
+| T2 | 6/6 | killed (+ +) | killed (+) | killed (+ **−**) | killed (+ +) | killed (+ +) | killed (+) |
+| T3 | 6/6 | killed (+ **−**) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| T4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (r) |
+| O1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| O2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (r) |
+| O3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (r) |
+| O4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| S1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| S2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| S3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| S4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ r) | killed (+ +) | killed (+) |
+| D1 | 6/6 | killed (+ r) | killed (+) | killed (+ +) | killed (+ r) | killed (+ +) | killed (+) |
+| D2 | 6/6 | killed (+ +) | killed (+) | killed (r +) | killed (+ r) | killed (+ r) | killed (r) |
+| D3 | 6/6 | killed (+ +) | killed (+) | killed (+ **−**) | killed (+ +) | killed (+ +) | killed (+) |
+| D4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+
+## 9. What the fixers did with the review's findings (data/fix-outcomes.json)
+
+Classified per finding from the fixer's own note only (one Opus session, then hand-checked on D4 and O2): fixed / partly / not fixed /
+rejected. The fixer is Sonnet in C, V, VT, Q, H and T, Haiku in O, D and S.
+
+| Arm | Fixer | Findings (major) | Fixed | Partly | Not fixed | Rejected | Left open (partly + not), majors open |
+|---|---|---|---|---|---|---|---|
+| C | Sonnet | 4 (1) | 3 | 1 | 0 | 0 | 1, 0 |
+| C2 | Sonnet | 5 (2) | 5 | 0 | 0 | 0 | 0, 0 |
+| C3 | Sonnet | 2 (0) | 2 | 0 | 0 | 0 | 0, 0 |
+| C4 | Sonnet | 4 (0) | 2 | 1 | 1 | 0 | 2, 0 |
+| V | Sonnet | 8 (3) | 8 | 0 | 0 | 0 | 0, 0 |
+| VT | Sonnet | 5 (0) | 5 | 0 | 0 | 0 | 0, 0 |
+| Q1 | Sonnet | 5 (0) | 4 | 0 | 1 | 0 | 1, 0 |
+| Q2 | Sonnet | 2 (0) | 2 | 0 | 0 | 0 | 0, 0 |
+| Q3 | Sonnet | 6 (1) | 4 | 1 | 1 | 0 | 2, 1 |
+| Q4 | Sonnet | 5 (0) | 5 | 0 | 0 | 0 | 0, 0 |
+| H1 | Sonnet | 5 (0) | 5 | 0 | 0 | 0 | 0, 0 |
+| H2 | Sonnet | 5 (3) | 5 | 0 | 0 | 0 | 0, 0 |
+| H3 | Sonnet | 4 (1) | 4 | 0 | 0 | 0 | 0, 0 |
+| H4 | Sonnet | 4 (1) | 3 | 1 | 0 | 0 | 1, 0 |
+| T1 | Sonnet | 9 (3) | 7 | 2 | 0 | 0 | 2, 1 |
+| T2 | Sonnet | 4 (2) | 3 | 1 | 0 | 0 | 1, 0 |
+| T3 | Sonnet | 8 (2) | 6 | 2 | 0 | 0 | 2, 1 |
+| T4 | Sonnet | 4 (0) | 4 | 0 | 0 | 0 | 0, 0 |
+| O1 | Haiku | 6 (2) | 4 | 0 | 2 | 0 | 2, 0 |
+| O2 | Haiku | 7 (2) | 7 | 0 | 0 | 0 | 0, 0 |
+| O3 | Haiku | 2 (1) | 2 | 0 | 0 | 0 | 0, 0 |
+| O4 | Haiku | 3 (1) | 2 | 1 | 0 | 0 | 1, 1 |
+| S1 | Haiku | 4 (0) | 2 | 1 | 1 | 0 | 2, 0 |
+| S2 | Haiku | 6 (0) | 4 | 1 | 1 | 0 | 2, 0 |
+| S3 | Haiku | 5 (0) | 4 | 0 | 1 | 0 | 1, 0 |
+| S4 | Haiku | 4 (1) | 3 | 0 | 1 | 0 | 1, 0 |
+| D1 | Haiku | 7 (2) | 5 | 1 | 1 | 0 | 2, 1 |
+| D2 | Haiku | 8 (3) | 3 | 4 | 1 | 0 | 5, 2 |
+| D3 | Haiku | 7 (0) | 4 | 3 | 0 | 0 | 3, 0 |
+| D4 | Haiku | 12 (4) | 4 | 5 | 3 | 0 | 8, 3 |
+
+| Scheme | Findings (major) | Left open | Majors left open |
+|---|---|---|---|
+| classic | 15 (3) | 3 (20 %) | 0 of 3 |
+| vLLM drafts, thinking off | 8 (3) | 0 (0 %) | 0 of 3 |
+| vLLM drafts, thinking on | 5 (0) | 0 (0 %) | 0 of 0 |
+| skeleton + Qwen fill | 18 (1) | 3 (17 %) | 1 of 1 |
+| skeleton + Haiku fill | 18 (5) | 1 (6 %) | 0 of 5 |
+| Opus tasks → Haiku codes → Sonnet per task | 25 (7) | 5 (20 %) | 2 of 7 |
+| Opus tasks → Haiku codes → Opus checks → Haiku fixes | 18 (6) | 3 (17 %) | 1 of 6 |
+| Sonnet tasks → Haiku codes → Opus checks → Haiku fixes | 19 (1) | 6 (32 %) | 0 of 1 |
+| Haiku codes the story → Opus checks → Haiku fixes | 34 (9) | 18 (53 %) | 6 of 9 |

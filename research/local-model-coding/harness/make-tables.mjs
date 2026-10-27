@@ -131,7 +131,7 @@ for (const a of ARMS.filter((x) => /^[TOS]/.test(x))) {
   const st = report[a].steps; const g = (re) => Object.entries(st).filter(([kk]) => re.test(kk)).flatMap(([, x]) => x).reduce((q, x) => q + (x.cost ?? x.costEst ?? 0), 0);
   const par = b ? Math.max(...b.batches.map((x) => x.length)) : 0;
   const maj = (rv?.findings ?? []).filter((x) => x.severity !== 'minor').length;
-  p(`| ${a} | ${el} | ${b ? Object.keys(b.tasks).length : '?'} / ${b ? b.batches.length : '?'} (${par}) | ${usd(g(/split/))} | ${usd(g(/-code$/))} | ${usd(g(/^3-t/))} | ${usd(g(/^4-review/))} | ${usd(g(/^5-fix/))} | ${ts ? `${ts.haikuLines} → ${pct(ts.keptFinal)}` : 'n/a'} | ${ts ? ts.reviewChangedLines : 'n/a'} | ${rv ? `${(rv.findings ?? []).length} (${maj})` : 'n/a'} |`);
+  p(`| ${a} | ${el} | ${b ? Object.keys(b.tasks).length : '?'} / ${b ? b.batches.length : '?'} (${par}) | ${usd(g(/split/))} | ${usd(g(/-code$/))} | ${usd(g(/^3-t/))} | ${usd(g(/^4-review/))} | ${usd(g(/^5-fix/))} | ${ts ? `${ts.haikuLines} → ${pct(ts.keptFinal)}` : 'n/a'} | ${ts ? (ts.reviewChangedLines ?? '— (no task review)') : 'n/a'} | ${rv ? `${(rv.findings ?? []).length} (${maj})` : 'n/a'} |`);
 }
 p();
 p('## 5. Filler requests');
@@ -175,5 +175,49 @@ for (const [name, dir] of [['v1 — read the uncorrected objective files (supers
   }
   p();
 }
+p('## 8. Behaviour — the frozen mutation checks (data/arms/<arm>/mutation.json, harness/mutate.mjs)');
+p();
+p('Each mutant breaks one spec decision in the arm\'s final code; the arm\'s scenario classes are re-run against it. **Killed** = some test');
+p('failed. Per intended scenario test: **+** it failed (caught), **−** it exists by its exact name but still PASSED (missed), **r** no test has the');
+p('exact name and a renamed test caught it (from `killedBy`).');
+p();
+p('| Arm | Killed | M1 junction-first (S5.5.2, S5.6.7) | M6 rootless (S5.5.4) | M2 no planner arm (S5.6.4, S5.6.5) | M3 disk confined (S5.6.1, S5.6.8) | M4 web confined (S5.6.1, S5.6.4) | M5 flags accepted (S5.6.6) |');
+p('|---|---|---|---|---|---|---|---|');
+for (const a of ARMS) {
+  const m = read(`arms/${a}/mutation.json`);
+  if (!m) { p(`| ${a} | not run | | | | | | |`); continue; }
+  const by = Object.fromEntries(m.mutants.map((x) => [x.id.split('-')[0], x]));
+  const cell = (id) => { const x = by[id]; if (!x) return 'n/a'; const it = x.intended ?? [];
+    const marks = it.map((i) => (i.present ? (i.caught ? '+' : '**−**') : 'r')).join(' ');
+    return `${x.verdict === 'killed' ? 'killed' : `**${x.verdict}**`}${marks ? ` (${marks})` : ''}`; };
+  const killed = m.mutants.filter((x) => x.verdict === 'killed').length;
+  p(`| ${a} | ${killed}/${m.mutants.length} | ${['M1', 'M6', 'M2', 'M3', 'M4', 'M5'].map(cell).join(' | ')} |`);
+}
+p();
+p('## 9. What the fixers did with the review\'s findings (data/fix-outcomes.json)');
+p();
+p('Classified per finding from the fixer\'s own note only (one Opus session, then hand-checked on D4 and O2): fixed / partly / not fixed /');
+p('rejected. The fixer is Sonnet in C, V, VT, Q, H and T, Haiku in O, D and S.');
+p();
+const fo = read('fix-outcomes.json') ?? {};
+p('| Arm | Fixer | Findings (major) | Fixed | Partly | Not fixed | Rejected | Left open (partly + not), majors open |');
+p('|---|---|---|---|---|---|---|---|');
+const tally = {};
+for (const a of ARMS) {
+  const x = fo[a]; if (!x) continue;
+  const n = (o) => x.findings.filter((y) => y.outcome === o).length;
+  const maj = x.findings.filter((y) => y.severity !== 'minor');
+  const open = x.findings.filter((y) => y.outcome === 'partly' || y.outcome === 'not-fixed');
+  const majOpen = open.filter((y) => y.severity !== 'minor').length;
+  const fixer = /^[ODS]/.test(a) ? 'Haiku' : 'Sonnet';
+  const g = group(a); tally[g] ??= { n: 0, open: 0, maj: 0, majOpen: 0 };
+  tally[g].n += x.findings.length; tally[g].open += open.length; tally[g].maj += maj.length; tally[g].majOpen += majOpen;
+  p(`| ${a} | ${fixer} | ${x.findings.length} (${maj.length}) | ${n('fixed')} | ${n('partly')} | ${n('not-fixed')} | ${n('rejected')} | ${open.length}, ${majOpen} |`);
+}
+p();
+p('| Scheme | Findings (major) | Left open | Majors left open |');
+p('|---|---|---|---|');
+for (const [g, t] of Object.entries(tally)) p(`| ${g} | ${t.n} (${t.maj}) | ${t.open} (${pct(t.n ? t.open / t.n : null)}) | ${t.majOpen} of ${t.maj} |`);
+p();
 writeFileSync(join(ROOT, 'tables.md'), out.join('\n'));
 console.log(`tables.md written: ${ARMS.length} arms`);

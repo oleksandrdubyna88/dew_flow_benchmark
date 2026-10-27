@@ -1,0 +1,80 @@
+{
+  "arm": "O1",
+  "haikuLines": 542,
+  "keptFinal": 0.985239852398524,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_vs_code/src/test/capabilityAdmission.test.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs"
+      ],
+      "haikuLines": 122,
+      "keptFinal": 120,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "\"the kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1).\",",
+        "\"`cells` may be empty only\","
+      ]
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 60,
+      "keptFinal": 58,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// <summary>A Kimi row's confinement is the shim's (D15), never its argv: a plan with flags is not one coai made for kimi (E5.6 decision 3).</summary>",
+        "if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Leading.Count > 0 || plan.Flags.Count > 0))"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 198,
+      "keptFinal": 195,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "private readonly string _data = Directory.CreateTempSubdirectory(\"coai-checktest-data-\").FullName;",
+        "private readonly string _temp = Directory.CreateTempSubdirectory(\"coai-checktest-temp-\").FullName;",
+        "private readonly string _record = Directory.CreateTempSubdirectory(\"coai-checktest-argv-\").FullName;"
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 147,
+      "keptFinal": 146,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "private readonly TempDir _dir = TempDir.For(\"coai-qkimi-\");"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 15,
+      "keptFinal": 15,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+failed CoaiMcp.Tests.CapabilityMatrixTests.EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone (65ms)
+  Expected cited to contain a single item because kimi × none: a row cites exactly one record, but the collection is empty.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.ContainSingle(String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.CapabilityMatrixTests.EveryRow_CitesTheRecord_AndACellOrSaysWhyThereIsNone() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/CapabilityMatrixTests.cs:170
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 39
+  failed: 1
+  succeeded: 38
+  skipped: 0
+  duration: 1s 636ms

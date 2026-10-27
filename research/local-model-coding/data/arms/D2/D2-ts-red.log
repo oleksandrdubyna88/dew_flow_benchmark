@@ -1,0 +1,253 @@
+✖ the vectors and the seed actually loaded (2.174463ms)
+✖ the generated table is the seed, row for row and field for field (9.251274ms)
+✔ claude × none: admitted — F3: `--tools ""` offers nothing (0.65399ms)
+✔ claude × disk: admitted — F4: `--restricted --add-dir` is a real boundary (0.297524ms)
+✔ claude × web: admitted — F6: `--tools WebSearch,WebFetch` offers only the two client web tools (0.297704ms)
+✔ codex × none: admitted — F2: a shell is always there — allowed, flagged (D13) (0.232741ms)
+✔ codex × disk: admitted — F2: reads anywhere, `--add-dir` adds nothing (0.119075ms)
+✔ codex × web: admitted — F1/F2: searches, and can read the disk on its own — the operator's own example row (D13) (0.089811ms)
+✔ antigravity × none: admitted — F7: held only by the headless permission default (0.364431ms)
+✔ antigravity × disk: admitted — F7: `--add-dir` grants, the default denies the rest (0.352187ms)
+✔ antigravity × web: refused — F7: it cannot fetch a page headless (0.306261ms)
+✔ local × none: admitted — a completion with no tools, by construction (0.30596ms)
+✔ local × disk: refused — no file tool to grant a root to (0.095471ms)
+✔ local × web: refused — no web tool (0.115449ms)
+✔ api × none: admitted — F8: one completion, no process, no tools (0.159222ms)
+✔ api × disk: refused — F8: a hosted completion reads no disk (0.127141ms)
+✔ api × web: refused — §6: vendor web search was not measured — an unmeasured pair is refused (D3) (0.262528ms)
+✔ vibe × none: admitted — M-V11/M-V1: read_file alone, in an empty folder, reads nothing outside it 6 of 6 (0.358329ms)
+✔ vibe × disk: admitted — M-V6: it reads its working folder only — a snapshot of the granted roots (D6) (0.110419ms)
+✔ vibe × web: refused — no Vibe cell exercises the web — an unmeasured pair is refused (D3) (0.085882ms)
+✖ kimi × none: admitted — M-K6: an empty folder bounds Read only, Grep and Glob read the disk — allowed, flagged (D13) (0.285462ms)
+✖ kimi × disk: admitted — M-K6: Read is bounded to the copy, Grep and Glob read the disk — allowed, flagged (D13) (0.274761ms)
+✖ kimi × web: refused — no Kimi cell exercises the web — an unmeasured pair is refused (D3) (0.152709ms)
+✔ gemini × none: refused — not a runtime in the table (retired 2026-08-31): refused by name, never defaulted (0.068309ms)
+✔ remote × none: refused — a Team server row runs on another box; the question consultant is machine-only (Team server out of scope) (0.059303ms)
+✔ claude × shell: refused — not a capability: refused naming the three (0.028324ms)
+✖ the words are the file’s words, and a word outside them is refused rather than defaulted (0.840093ms)
+✔ an unmeasured pair names the record its row cites: the Vibe probe for vibe, the first run for the rest, unchanged (0.313264ms)
+✔ a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one (0.389578ms)
+✖ kimi rows admit flagged, and web refuses naming its record (E5.6 S5.6.8) (0.224195ms)
+✔ a flagged admission carries the caveat a person must acknowledge (D13) (0.08433ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 24
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 100.739335
+
+✖ failing tests:
+
+test at out/test/capabilityAdmission.test.js:62:22
+✖ the vectors and the seed actually loaded (2.174463ms)
+  AssertionError [ERR_ASSERTION]: one row per runtime × capability
+  
+  21 !== 18
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:65:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 21,
+    expected: 18,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:67:22
+✖ the generated table is the seed, row for row and field for field (9.251274ms)
+  AssertionError [ERR_ASSERTION]: run `node src_vs_code/scripts/generate-runtime-capabilities.mjs` — the generated file is behind the seed
+  + actual - expected
+  ... Skipped lines
+  
+    [
+      {
+        capability: 'none',
+        measuredWith: {
+          cells: [
+  ...
+      },
+  -   {
+  -     capability: 'none',
+  -     measuredWith: {
+  -       cells: [
+  -         'M-K6',
+  -         'M-K3',
+  -         'M-K4'
+  -       ],
+  -       cli: 'kimi',
+  -       date: '2026-10-13',
+  -       note: 'mechanism: the working folder is an EMPTY folder, which bounds Read only; Grep and Glob take an absolute path outside it, so the folder confines nothing and the row says Can read this machine. WebSearch and FetchURL are announced (RESULTS §7) and unmeasured (§14): the web sentence stays until M-K17 is recorded',
+  -       resultRef: 'research/RESULTS_kimi_confinement.md §9 M-K6 — Read bounded to the working folder 3 of 3, Grep and Glob read a file outside it by absolute path 3 of 3; §6 M-K3 and §7 M-K4 — writes refused, 0 of 9 and 0 of 6',
+  -       version: '2.1.1'
+  -     },
+  -     runtime: 'kimi',
+  -     standing: 'unconfined'
+  -   },
+  -   {
+  -     capability: 'disk',
+  -     measuredWith: {
+  -       cells: [
+  -         'M-K6',
+  -         'M-K3',
+  -         'M-K4',
+  -         'M-K9',
+  -         'M-K9 (e)'
+  -       ],
+  -       cli: 'kimi',
+  -       date: '2026-10-13',
+  -       note: 'mechanism: a coai-made sanitised SNAPSHOT of the granted roots is the working folder (D6), so Read reads the copy; Grep and Glob read the disk directly, so the copy bounds Read only and the row says Can read this machine. WebSearch and FetchURL are announced (RESULTS §7) and unmeasured (§14): the web sentence stays until M-K17 is recorded',
+  -       resultRef: "research/RESULTS_kimi_confinement.md §9 M-K6 — Read bounded to the working folder 3 of 3, Grep and Glob read outside it 3 of 3; §6 M-K3 and §7 M-K4 — writes refused; §12 M-K9 and §21 M-K9 (e) — why the roots are COPIED and not granted: a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk",
+  -       version: '2.1.1'
+  -     },
+  -     runtime: 'kimi',
+  -     standing: 'unconfined'
+  -   },
+  -   {
+  -     capability: 'web',
+  -     measuredWith: {
+  -       cells: [],
+  -       cli: 'kimi',
+  -       date: '2026-10-13',
+  -       note: 'not measured: no Kimi cell fetches or searches the web; M-K17 decides whether the announcement is a tool the shim is asked for, and it does not admit web',
+  -       resultRef: 'research/RESULTS_kimi_confinement.md §7 and §14 — WebSearch and FetchURL are announced and no cell exercised them',
+  -       version: '2.1.1'
+  -     },
+  -     runtime: 'kimi',
+  -     standing: 'unmeasured'
+  -   }
+    ]
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:68:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { runtime: 'claude', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'claude', capability: 'disk', standing: 'confined', measuredWith: [Object] }, { runtime: 'claude', capability: 'web', standing: 'confined', measuredWith: [Object] }, { runtime: 'codex', capability: 'none', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'codex', capability: 'disk', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'codex', capability: 'web', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'none', standing: 'default-deny', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'disk', standing: 'default-deny', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'web', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'local', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'local', capability: 'disk', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'local', capability: 'web', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'api', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'api', capability: 'disk', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'api', capability: 'web', standing: 'unmeasured', measuredWith: [Object] }, { runtime: 'vibe', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'vibe', capability: 'disk', standing: 'confined', measuredWith: [Object] }, { runtime: 'vibe', capability: 'web', standing: 'unmeasured', measuredWith: [Object] } ],
+    expected: [ { runtime: 'claude', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'claude', capability: 'disk', standing: 'confined', measuredWith: [Object] }, { runtime: 'claude', capability: 'web', standing: 'confined', measuredWith: [Object] }, { runtime: 'codex', capability: 'none', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'codex', capability: 'disk', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'codex', capability: 'web', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'none', standing: 'default-deny', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'disk', standing: 'default-deny', measuredWith: [Object] }, { runtime: 'antigravity', capability: 'web', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'local', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'local', capability: 'disk', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'local', capability: 'web', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'api', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'api', capability: 'disk', standing: 'unsupported', measuredWith: [Object] }, { runtime: 'api', capability: 'web', standing: 'unmeasured', measuredWith: [Object] }, { runtime: 'vibe', capability: 'none', standing: 'confined', measuredWith: [Object] }, { runtime: 'vibe', capability: 'disk', standing: 'confined', measuredWith: [Object] }, { runtime: 'vibe', capability: 'web', standing: 'unmeasured', measuredWith: [Object] }, { runtime: 'kimi', capability: 'none', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'kimi', capability: 'disk', standing: 'unconfined', measuredWith: [Object] }, { runtime: 'kimi', capability: 'web', standing: 'unmeasured', measuredWith: [Object] } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:71:26
+✖ kimi × none: admitted — M-K6: an empty folder bounds Read only, Grep and Glob read the disk — allowed, flagged (D13) (0.285462ms)
+  AssertionError [ERR_ASSERTION]: 'kimi' is not a runtime the question consultant can launch for 'none' — it launches on: claude, codex, antigravity, local, api, vibe
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:73:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:71:26
+✖ kimi × disk: admitted — M-K6: Read is bounded to the copy, Grep and Glob read the disk — allowed, flagged (D13) (0.274761ms)
+  AssertionError [ERR_ASSERTION]: 'kimi' is not a runtime the question consultant can launch for 'disk' — it launches on: claude, codex, antigravity, local, api, vibe
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:73:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:71:26
+✖ kimi × web: refused — no Kimi cell exercises the web — an unmeasured pair is refused (D3) (0.152709ms)
+  AssertionError [ERR_ASSERTION]: the row the decision was made from
+  
+  '' !== 'unmeasured'
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:74:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: 'unmeasured',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:81:22
+✖ the words are the file’s words, and a word outside them is refused rather than defaulted (0.840093ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'claude',
+      'codex',
+      'antigravity',
+      'local',
+      'api',
+      'vibe',
+  -   'kimi'
+    ]
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:84:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'claude', 'codex', 'antigravity', 'local', 'api', 'vibe' ],
+    expected: [ 'claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at out/test/capabilityAdmission.test.js:108:22
+✖ kimi rows admit flagged, and web refuses naming its record (E5.6 S5.6.8) (0.224195ms)
+  AssertionError [ERR_ASSERTION]: 'kimi' is not a runtime the question consultant can launch for 'none' — it launches on: claude, codex, antigravity, local, api, vibe
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/arm-D2/src_vs_code/out/test/capabilityAdmission.test.js:111:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

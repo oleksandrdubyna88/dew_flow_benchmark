@@ -1,0 +1,62 @@
+{
+  "arm": "S1",
+  "haikuLines": 514,
+  "keptFinal": 0.9922178988326849,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 148,
+      "keptFinal": 148,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 202,
+      "keptFinal": 200,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Leading.Count > 0 || plan.Flags.Count > 0 || plan.AddDirs.Count > 0))",
+        ": new PlayedKimi(_launcher);"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 147,
+      "keptFinal": 147,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 17,
+      "keptFinal": 15,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "57. **The TypeScript mirror is regenerated, and it was not in the split's list.** `src_vs_code/src/runtimeCapabilities.generated.ts` carries the three `kimi` rows and the widened `runtimes` list, as `generate-runtime-capabilities.mjs` writes them from the shared table.",
+        "58. **`MustCarryNoFlagsOfAPlan` is above the complexity rule.** Its cyclomatic complexity is 5 (one `if`, one `&&`, two `||`, plus the base 1), where every story's rule is ≤ 4 (line 89). It is written as item 54 gives it; the code was not reshaped, so this stays open for the Opus review."
+      ]
+    }
+  ]
+}

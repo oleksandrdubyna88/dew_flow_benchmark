@@ -1,0 +1,81 @@
+{
+  "arm": "S4",
+  "haikuLines": 511,
+  "keptFinal": 0.9941291585127201,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/tests/CapabilityMatrixTests.cs"
+      ],
+      "haikuLines": 73,
+      "keptFinal": 73,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 54,
+      "keptFinal": 54,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 70,
+      "keptFinal": 70,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 136,
+      "keptFinal": 135,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "turn.StdIn.Should().Contain(cwd, \"the prompt names the copy Kimi can read\");"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 138,
+      "keptFinal": 138,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t6",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_tests.md"
+      ],
+      "haikuLines": 40,
+      "keptFinal": 38,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "58. **S5.6.1 and S5.6.4 went red with other messages than their tables.** S5.6.1 reads `Expected none not to be <null>.`, because FluentAssertions names the local variable. S5.6.4 reads `Expected type to be Admitted … but found Refused`, not the `not a runtime` message. (t1)",
+        "- [x] Every scenario of E5.2–E5.7 is a test that was watched red with the message in its table, then green; both suites green;"
+      ]
+    }
+  ]
+}

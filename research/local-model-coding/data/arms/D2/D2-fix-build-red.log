@@ -1,0 +1,5 @@
+/home/jinx/git/coai-exp/arm-D2/src_mcp/tests/AKimiConsultantCheckTests.cs(167,13): error CS0103: The name 'GitScratch' does not exist in the current context [/home/jinx/git/coai-exp/arm-D2/src_mcp/tests/CoaiMcp.Tests.csproj]
+    0 Warning(s)
+    4 Error(s)
+
+Time Elapsed 00:00:13.37

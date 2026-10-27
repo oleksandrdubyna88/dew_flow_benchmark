@@ -64,6 +64,23 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - No crash, no harness defect, no conflict when the parallel tasks' commits were carried back; every task list passed the
   checker at once.
 
+## 2d. Part 5 (O, S, D) and the mutation checks (2026-10-26 20:05 – 2026-10-27 05:30 UTC)
+
+- **No crash, no interrupted step**: all 12 arms ran each step once; every cost is the host's own number.
+- **A wrong log message (no number touched):** `t-survival.mjs` printed "the Sonnet task reviews changed 0 lines" for O
+  and S, which have no task review. Fixed to say "no task review ran"; the JSON now holds `null` there, and
+  [tables.md](tables.md) §4b says "no task review". T's numbers are unchanged.
+- **Keep-awake gap:** the O/D/S chain stopped keep-awake when it ended, but the mutation chain started after it ran
+  without one for about 40 s, until `mut-awake.sh` (added to [harness/](harness/)) guarded it. No sleep occurred.
+- **The Haiku price fit is bad** (max error 636 % — the fit now includes many tiny Haiku calls inside other sessions). It
+  is used only to estimate interrupted attempts, and no Haiku attempt was interrupted, so no reported cost depends on it.
+- **"Missing" scenarios that were renamed:** the detector looks for exact test names and reported 10–11 of 12 for O2, O3,
+  D1, D2; each renamed test was found by hand, and the mutation checks confirm each catches its mutant.
+- **The fix outcomes were classified by one model** (Opus, from the fixers' notes only) and hand-checked on D4 and O2;
+  it flagged its own ambiguous cases (notes that call a finding "fixed" and list a part as not done → `partly`).
+- **The mutation checks found a second vacuous test** (H2, the same defect as T3); opened in the code and confirmed.
+- **Disk:** 0 bad-block events, 0 unexpected shutdowns.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).
@@ -73,5 +90,9 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   at a time, an absolute judge for all arms.
 - H1–H4: the skeleton scheme with Haiku as the filler, run in parallel.
 - A Claude Code restart on 2026-10-26 09:17 (not Windows): C3/C4 paused by SIGKILL and resumed; pause time not counted.
+- T1–T4 (Opus split, Haiku per task, Sonnet per task) — 4–6 tasks with exact methods, DTOs and contracts, parallel where
+  files do not overlap.
+- Part 5 (after a consultation): O, S and D, four each, in rounds of three; one fresh Opus review per arm, never per task;
+  Haiku fixes; mutation checks frozen before any result and run on all 30 arms.
 - The coai review gate was NOT inserted into any arm: the arms are measurement branches that never merge, and all arms
   had to run one pipeline. It applies when an implementation of E5.5/E5.6 goes into the real branch.

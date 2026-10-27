@@ -1,0 +1,71 @@
+{
+  "arm": "O4",
+  "haikuLines": 474,
+  "keptFinal": 0.9957805907172996,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 126,
+      "keptFinal": 124,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "\"resultRef\": \"research/RESULTS_kimi_confinement.md M-K6 — in an EMPTY coai-owned working folder the shim bounds Read, but Grep and Glob took a marker from a file outside it by absolute path 3 of 3, and the working folder plays no part in that; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes\",",
+        "resultRef: 'research/RESULTS_kimi_confinement.md M-K6 — in an EMPTY coai-owned working folder the shim bounds Read, but Grep and Glob took a marker from a file outside it by absolute path 3 of 3, and the working folder plays no part in that; M-K3 and M-K4 — 0 of 9 and 0 of 6 writes',"
+      ]
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 68,
+      "keptFinal": 68,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 118,
+      "keptFinal": 118,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 121,
+      "keptFinal": 121,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 41,
+      "keptFinal": 41,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+✔ the vectors and the seed actually loaded (1.030093ms)
+✔ the generated table is the seed, row for row and field for field (0.824483ms)
+✔ claude × none: admitted — F3: `--tools ""` offers nothing (0.329995ms)
+✔ claude × disk: admitted — F4: `--restricted --add-dir` is a real boundary (0.197915ms)
+✔ claude × web: admitted — F6: `--tools WebSearch,WebFetch` offers only the two client web tools (0.124666ms)
+✔ codex × none: admitted — F2: a shell is always there — allowed, flagged (D13) (0.130527ms)
+✔ codex × disk: admitted — F2: reads anywhere, `--add-dir` adds nothing (0.252489ms)
+✔ codex × web: admitted — F1/F2: searches, and can read the disk on its own — the operator's own example row (D13) (0.232521ms)
+✔ antigravity × none: admitted — F7: held only by the headless permission default (0.584919ms)
+✔ antigravity × disk: admitted — F7: `--add-dir` grants, the default denies the rest (0.300019ms)
+✔ antigravity × web: refused — F7: it cannot fetch a page headless (0.30052ms)
+✔ local × none: admitted — a completion with no tools, by construction (0.096162ms)
+✔ local × disk: refused — no file tool to grant a root to (0.12131ms)
+✔ local × web: refused — no web tool (0.061948ms)
+✔ api × none: admitted — F8: one completion, no process, no tools (0.035447ms)
+✔ api × disk: refused — F8: a hosted completion reads no disk (0.176184ms)
+✔ api × web: refused — §6: vendor web search was not measured — an unmeasured pair is refused (D3) (0.227271ms)
+✔ vibe × none: admitted — M-V11/M-V1: read_file alone, in an empty folder, reads nothing outside it 6 of 6 (0.048572ms)
+✔ vibe × disk: admitted — M-V6: it reads its working folder only — a snapshot of the granted roots (D6) (0.094429ms)
+✔ vibe × web: refused — no Vibe cell exercises the web — an unmeasured pair is refused (D3) (0.05768ms)
+✔ kimi × none: admitted — M-K6: an empty folder bounds Read only, Grep and Glob read the disk — allowed, flagged (D13) (0.029005ms)
+✔ kimi × disk: admitted — M-K6: Read is bounded to the copy, Grep and Glob read the disk — allowed, flagged (D13) (0.022152ms)
+✔ kimi × web: refused — no Kimi cell exercises the web — an unmeasured pair is refused (D3) (0.095781ms)
+✔ gemini × none: refused — not a runtime in the table (retired 2026-08-31): refused by name, never defaulted (0.051087ms)
+✔ remote × none: refused — a Team server row runs on another box; the question consultant is machine-only (Team server out of scope) (0.028333ms)
+✔ claude × shell: refused — not a capability: refused naming the three (0.022443ms)
+✔ the words are the file’s words, and a word outside them is refused rather than defaulted (0.211461ms)
+✔ an unmeasured pair names the record its row cites: the Vibe probe for vibe, the first run for the rest, unchanged (0.12119ms)
+✔ a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one (0.162047ms)
+✔ kimi rows admit flagged, and web refuses naming its record (E5.6 S5.6.8) (0.080834ms)
+✔ a flagged admission carries the caveat a person must acknowledge (D13) (0.045045ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.983155

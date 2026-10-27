@@ -28,9 +28,11 @@ const rows = Object.keys(tasks).map((id) => {
   return { id, files: tasks[id].files, haikuLines: lines.length, keptFinal: kept, reviewChangedLines: changed(r),
     droppedFinal: lines.filter((l) => !final.has(norm(l))).map((l) => l.trim()) };
 });
+const reviewed = rows.some((x) => existsSync(`${OUT}/task-${x.id}-review.diff`));
 const n = rows.reduce((s, x) => s + x.haikuLines, 0);
 const out = { arm, haikuLines: n, keptFinal: n ? rows.reduce((s, x) => s + x.keptFinal, 0) / n : null,
-  reviewChangedLines: rows.reduce((s, x) => s + x.reviewChangedLines, 0), tasks: rows };
+  reviewChangedLines: reviewed ? rows.reduce((s, x) => s + x.reviewChangedLines, 0) : null, tasks: rows };
 writeFileSync(`${OUT}/t-survival.json`, JSON.stringify(out, null, 2));
 console.log(`${arm}: Haiku wrote ${n} meaningful lines in ${rows.length} tasks; ${out.keptFinal == null ? 'n/a' : Math.round(out.keptFinal * 100) + ' %'} kept in the final code; ` +
-  `the Sonnet task reviews changed ${out.reviewChangedLines} lines (${rows.map((x) => `${x.id} ${x.reviewChangedLines}`).join(', ')})`);
+  (reviewed ? `the Sonnet task reviews changed ${out.reviewChangedLines} lines (${rows.map((x) => `${x.id} ${x.reviewChangedLines}`).join(', ')})`
+    : 'no task review ran (only the story review)'));

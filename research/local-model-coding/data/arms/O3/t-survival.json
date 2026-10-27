@@ -1,0 +1,75 @@
+{
+  "arm": "O3",
+  "haikuLines": 478,
+  "keptFinal": 0.9895397489539749,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 118,
+      "keptFinal": 118,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 67,
+      "keptFinal": 63,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "/// <summary>E5.6 decision 3: a plan that carries a flag was not made for Kimi, so the adapter refuses it rather than launch it.</summary>",
+        "public void APlanWithFlags_IsRefusedForKimi()",
+        "var launch = Planned(\"kimi\", CapabilityGrant.None) with",
+        "Confinement = new LaunchConfinement.Planned(new Confinement.Planned(\"kimi\", CapabilityGrant.None, [], [\"--yolo\"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 122,
+      "keptFinal": 122,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 121,
+      "keptFinal": 120,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "File.WriteAllText(person.PersonsConfig, KimiFixture.OwnerConfig().Replace(KimiFixture.SlotKey, \"oauth/kimi-code-env-y\"));"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 50,
+      "keptFinal": 50,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    }
+  ]
+}

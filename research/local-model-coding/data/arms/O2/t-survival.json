@@ -1,0 +1,80 @@
+{
+  "arm": "O2",
+  "haikuLines": 518,
+  "keptFinal": 0.9787644787644788,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 125,
+      "keptFinal": 125,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 79,
+      "keptFinal": 76,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Flags.Count > 0 || plan.Leading.Count > 0 || plan.AddDirs.Count > 0))",
+        "public void APlanWithFlags_IsRefusedForKimi()",
+        "new Confinement.Planned(\"kimi\", CapabilityGrant.None, [], [\"--yolo\"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 141,
+      "keptFinal": 135,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "private readonly string _data = Directory.CreateTempSubdirectory(\"coai-kcheck-data-\").FullName;",
+        "private readonly string _temp = Directory.CreateTempSubdirectory(\"coai-kcheck-temp-\").FullName;",
+        "foreach (var dir in (string[])[_data, _temp])",
+        "Directory.Delete(dir, recursive: true);",
+        "catch (Exception e) when (e is IOException or UnauthorizedAccessException)",
+        "// A leftover temp directory is not a failing test."
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 130,
+      "keptFinal": 129,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "kimi.Shims.Should().ContainSingle(\"the shim was started, then the caller cancelled mid-turn\");"
+      ]
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 43,
+      "keptFinal": 42,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "> Status: **implemented — E5.1–E5.7 in; E5.4–E5.6 not yet reviewed; the live checks (J2, RESULTS §31) and M-K17 not run.** E5.1: M-K16 recorded as RESULTS §29"
+      ]
+    }
+  ]
+}

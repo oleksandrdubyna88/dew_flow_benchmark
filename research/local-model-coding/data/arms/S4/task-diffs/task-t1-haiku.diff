@@ -1,0 +1,173 @@
+diff --git a/shared/capability-matrix-vectors.json b/shared/capability-matrix-vectors.json
+index b2d1ed19..3bfbdddc 100644
+--- a/shared/capability-matrix-vectors.json
++++ b/shared/capability-matrix-vectors.json
+@@ -30,6 +30,9 @@
+     { "runtime": "vibe", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "M-V11/M-V1: read_file alone, in an empty folder, reads nothing outside it 6 of 6" },
+     { "runtime": "vibe", "capability": "disk", "admitted": true, "standing": "confined", "flag": "", "why": "M-V6: it reads its working folder only — a snapshot of the granted roots (D6)" },
+     { "runtime": "vibe", "capability": "web", "admitted": false, "standing": "unmeasured", "flag": "", "why": "no Vibe cell exercises the web — an unmeasured pair is refused (D3)" },
++    { "runtime": "kimi", "capability": "none", "admitted": true, "standing": "unconfined", "flag": "unconfined", "why": "M-K6: Grep and Glob read the disk by absolute path whatever the cwd - allowed, flagged (D13)" },
++    { "runtime": "kimi", "capability": "disk", "admitted": true, "standing": "unconfined", "flag": "unconfined", "why": "M-K6/M-K9: Read is bounded to the copy of the roots, Grep and Glob are not - allowed, flagged (D13)" },
++    { "runtime": "kimi", "capability": "web", "admitted": false, "standing": "unmeasured", "flag": "", "why": "no Kimi cell exercises WebSearch or FetchURL - an unmeasured pair is refused (D3)" },
+     { "runtime": "gemini", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "not a runtime in the table (retired 2026-08-31): refused by name, never defaulted" },
+     { "runtime": "remote", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "a Team server row runs on another box; the question consultant is machine-only (Team server out of scope)" },
+     { "runtime": "claude", "capability": "shell", "admitted": false, "standing": "", "flag": "", "why": "not a capability: refused naming the three" }
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index 4d6eeb27..72da2785 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -17,10 +17,11 @@
+     "",
+     "Every cell id of the first five runtimes is from run 01a0f8c7-18db-739b-8b83-3165e82cd42c (105 cells,",
+     "2026-10-01), recorded in research/RESULTS_question_consultant_capabilities.md; the vibe rows cite the M-V",
+-    "cells of research/RESULTS_vibe_confinement.md (Windows, 3 of 3, vibe 2.26.1). `cells` may be empty only",
++    "cells of research/RESULTS_vibe_confinement.md (Windows, 3 of 3, vibe 2.26.1), and the kimi rows cite the M-K",
++    "cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1). `cells` may be empty only",
+     "when `note` says why (a standing that holds by construction, or a pair nobody measured)."
+   ],
+-  "runtimes": ["claude", "codex", "antigravity", "local", "api", "vibe"],
++  "runtimes": ["claude", "codex", "antigravity", "local", "api", "vibe", "kimi"],
+   "capabilities": ["none", "disk", "web"],
+   "rows": [
+     {
+@@ -334,6 +335,55 @@
+         "cells": [],
+         "note": "not measured: no Vibe cell fetches or searches the web"
+       }
++    },
++    {
++      "runtime": "kimi",
++      "capability": "none",
++      "standing": "unconfined",
++      "measuredWith": {
++        "cli": "kimi",
++        "version": "2.1.1",
++        "date": "2026-10-13",
++        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — an EMPTY coai-owned working folder bounds `Read` (an outside path refused 3 of 3) but `Grep` and `Glob` took an OUTSIDE file's marker by absolute path 3 of 3; §6 M-K3 — every write arm refused, 0 of 9 wrote; §7 M-K4 — a shell command and a sub-agent ask for permission, which the shim refuses",
++        "cells": [
++          "M-K6",
++          "M-K3",
++          "M-K4"
++        ],
++        "note": "mechanism: the shim refuses every permission request and bounds `Read` to the working folder, but `Grep` and `Glob` run ripgrep on the disk, so an empty folder confines nothing - this row can read this machine (kimi 2.1.1); `WebSearch` and `FetchURL` are announced (RESULTS §7) and no cell exercised them"
++      }
++    },
++    {
++      "runtime": "kimi",
++      "capability": "disk",
++      "standing": "unconfined",
++      "measuredWith": {
++        "cli": "kimi",
++        "version": "2.1.1",
++        "date": "2026-10-13",
++        "resultRef": "research/RESULTS_kimi_confinement.md §9 M-K6 — `Read` of a file inside the working folder served 3 of 3 and outside refused 3 of 3, but `Grep` and `Glob` read outside it 3 of 3; §12 and §21 M-K9 and M-K9 (e) — a branch's AGENTS.md, skills, sub-agents and `.mcp.json` load from disk, so the roots are COPIED; §6 M-K3 — 0 of 9 writes; §7 M-K4 — shell and sub-agent ask for permission",
++        "cells": [
++          "M-K6",
++          "M-K9",
++          "M-K9e",
++          "M-K3",
++          "M-K4"
++        ],
++        "note": "mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots and the shim bounds `Read` to it, but `Grep` and `Glob` search the disk directly, so this row can read this machine (kimi 2.1.1); every write and shell command is refused; `WebSearch` and `FetchURL` are announced (RESULTS §7) and no cell exercised them"
++      }
++    },
++    {
++      "runtime": "kimi",
++      "capability": "web",
++      "standing": "unmeasured",
++      "measuredWith": {
++        "cli": "kimi",
++        "version": "2.1.1",
++        "date": "2026-10-13",
++        "resultRef": "research/RESULTS_kimi_confinement.md §7 and §14 — Kimi announces `WebSearch` and `FetchURL` and no cell of the probe exercises either",
++        "cells": [],
++        "note": "not measured: no Kimi cell fetches or searches the web"
++      }
+     }
+   ]
+ }
+diff --git a/src_mcp/core/QuestionConsult/RuntimeCapabilities.cs b/src_mcp/core/QuestionConsult/RuntimeCapabilities.cs
+index ede8e428..306de86b 100644
+--- a/src_mcp/core/QuestionConsult/RuntimeCapabilities.cs
++++ b/src_mcp/core/QuestionConsult/RuntimeCapabilities.cs
+@@ -81,7 +81,7 @@ public sealed record RuntimeCapabilities
+     internal const string SeedResource = "CoaiMcp.Core.runtime-capabilities.json";
+ 
+     /// <summary>The runtimes the question consultant can launch, in the file's order — the one list a refusal spells.</summary>
+-    public static IReadOnlyList<string> Runtimes { get; } = ["claude", "codex", "antigravity", "local", "api", "vibe"];
++    public static IReadOnlyList<string> Runtimes { get; } = ["claude", "codex", "antigravity", "local", "api", "vibe", "kimi"];
+ 
+     /// <summary>The table, read once from this assembly's manifest resource. Depends on nothing on disk.</summary>
+     public static RuntimeCapabilities Builtin { get; } = LoadBuiltin();
+diff --git a/src_mcp/tests/CapabilityMatrixTests.cs b/src_mcp/tests/CapabilityMatrixTests.cs
+index 108e9aa0..63898268 100644
+--- a/src_mcp/tests/CapabilityMatrixTests.cs
++++ b/src_mcp/tests/CapabilityMatrixTests.cs
+@@ -151,13 +151,15 @@ public sealed class CapabilityMatrixTests
+ 
+     /// <summary>
+     /// The records a row may cite, each with the day it was measured and the shape of its cell ids: the question
+-    /// consultant's full run for the first five runtimes, and the Vibe probe for vibe (S3 of
+-    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered.
++    /// consultant's full run for the first five runtimes, the Vibe probe for vibe (S3 of
++    /// todo/PLAN_vibe_and_kimi_runtimes.md) — whose cells are named <c>M-V…</c>, not numbered — and the Kimi
++    /// probe for kimi, whose cells are named <c>M-K…</c>.
+     /// </summary>
+     private static readonly IReadOnlyList<(string Record, string Date, string CellPrefix)> Records =
+     [
+         ("RESULTS_question_consultant_capabilities.md", "2026-10-01", "01a0f8c7-18e4-"),
+         ("RESULTS_vibe_confinement.md", "2026-10-12", "M-V"),
++        ("RESULTS_kimi_confinement.md", "2026-10-13", "M-K"),
+     ];
+ 
+     [Fact]
+@@ -197,6 +199,40 @@ public sealed class CapabilityMatrixTests
+             .Which.Reason.Should().Contain("not been measured", "no Vibe cell exercises the web");
+     }
+ 
++    [Fact]
++    public void KimiHasThreeRows_EachCitingItsCells()
++    {
++        var none = RuntimeCapabilities.Builtin.Of("kimi", Capability.None);
++        none.Should().NotBeNull();
++        none!.Standing.Should().Be(CapabilityStanding.Unconfined);
++        none.MeasuredWith.Cells.Should().Contain("M-K6");
++        none.MeasuredWith.Version.Should().Be("2.1.1");
++
++        var disk = RuntimeCapabilities.Builtin.Of("kimi", Capability.Disk);
++        disk.Should().NotBeNull();
++        disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
++        disk.MeasuredWith.Cells.Should().Contain("M-K6").And.Contain("M-K9");
++        disk.MeasuredWith.Version.Should().Be("2.1.1");
++
++        var web = RuntimeCapabilities.Builtin.Of("kimi", Capability.Web);
++        web.Should().NotBeNull();
++        web!.Standing.Should().Be(CapabilityStanding.Unmeasured);
++        web.MeasuredWith.Cells.Should().BeEmpty();
++    }
++
++    [Fact]
++    public void AdmissionFlagsBothRows_AndWebIsRefusedNamingItsRecord()
++    {
++        foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
++        {
++            CapabilityMatrix.Admit("kimi", capability).Should().BeOfType<Admission.Admitted>()
++                .Which.Flag.Should().Be(AdmissionFlag.Unconfined, $"kimi × {capability}: Grep and Glob read the disk (M-K6)");
++        }
++
++        CapabilityMatrix.Admit("kimi", Capability.Web).Should().BeOfType<Admission.Refused>()
++            .Which.Reason.Should().Contain("not been measured").And.Contain("research/RESULTS_kimi_confinement.md");
++    }
++
+     /// <summary>D13's two refusals kept apart: the flags are what the data says, never what a runtime name suggests.</summary>
+     [Fact]
+     public void TheFlags_AreD13s_CodexUnconfinedEverywhere_AgyDefaultDeny_NothingElseFlagged()
+@@ -270,7 +306,7 @@ public sealed class CapabilityMatrixTests
+     public void AnUnknownRuntimeOrCapability_IsRefused_NamingWhatIsKnown()
+     {
+         var runtime = CapabilityMatrix.Admit("gemini", "none").Should().BeOfType<Admission.Refused>().Which;
+-        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe",
++        runtime.Reason.Should().Contain("gemini").And.Contain("claude, codex, antigravity, local, api, vibe, kimi",
+             "an unknown name fails naming the legal values");
+ 
+         var capability = CapabilityMatrix.Admit("claude", "shell").Should().BeOfType<Admission.Refused>().Which;

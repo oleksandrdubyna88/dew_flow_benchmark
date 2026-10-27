@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 151,
+   "summary": "The plan names scenario S5.6.3 `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb`, but the test is named `KimiPlannerArm_…`, so no test has the name the plan gives.",
+   "fix": "Rename the test to `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb`, or record the new name as a deviation in 'E5.5–E5.6 as built'."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 373,
+   "summary": "The S5.6.5 'Then' requires an empty `KimiEnvironment.Refusal`, and the test does not assert it. Deviation 54/t2 says this needs a `KimiFixture`, but that is false: `Refusal(request, places)` is a pure function of the request and a `KimiPlaces` record (`KimiRuntimeTests.cs:31,71` call it with no fixture), and this test already builds `KimiPlaces.ForShim(root, <RowFolder>/persons-bin)` for its seams.",
+   "fix": "For each request, add `KimiEnvironment.Refusal(request, KimiPlaces.ForShim(KimiEnvironment.FlagOf(request, AcpWords.HomeFlag), Path.Combine(RowFolder, \"persons-bin\"))).Should().BeEmpty()`, and correct deviation 54/t2."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 226,
+   "summary": "The S5.6.7 'Then' says the row's scratch is gone after EVERY ending. The 'refused' arm checks only `coai-vh` and skips the scratch check, because no shim request exists from which to find the `coai-question-*` folder.",
+   "fix": "In the refused arm, assert that no `coai-question-*` folder is left in the place where the row makes its scratch (for example, enumerate that temp root before and after the call), or record why this arm cannot be checked."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 34,
+   "summary": "The private property `Other` is never used. It is dead code copied from the Vibe test, and the coder also said so (deviation 54/t3).",
+   "fix": "Remove the `Other` property."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 402,
+   "summary": "The two new tests repeat the full `new KimiConsultant(new KimiRuntime(\"kimi\", HostKind.Windows, new KimiSeams(...ForShim(root, RowFolder/persons-bin)..., () => (\"coai-mcp\", []))))` expression, which already exists at line 538. Now the same expression is in three places.",
+   "fix": "Move it into one private static helper (for example `KimiAt()`) and use the helper in all three places."}
+ ]}

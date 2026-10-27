@@ -23,6 +23,9 @@
 | V (vLLM drafts, thinking off by the coder's choice), VT (thinking forced on) | the same, but in step 1 every new method is first drafted by the local model through [ask.mjs](harness/ask.mjs) |
 | Q1–Q4 (skeleton + Qwen fill) | 1 skeleton: Sonnet, 30 min → 2a fill tests: script + Qwen, 20 min → 2b fill production: script + Qwen, 20 min → 3 polish: Sonnet, 40 min → 4 review: Opus, 20 min → 5 fixes: Sonnet, 30 min |
 | H1–H4 (skeleton + Haiku fill) | the Q pipeline, with Haiku as the filler through [ask-haiku.mjs](harness/ask-haiku.mjs) |
+| T1–T4 (Opus tasks, Sonnet per task) | 1 split: Opus, 25 min (+ 1b one fix round of the task list: 10 min, if the checker refuses it) → per task, in batches of up to 4 parallel worktrees: 2 code: Haiku, 20 min → 3 task review: Sonnet, 15 min → cherry-picked back → 4 review: Opus, 20 min → 5 fixes: Sonnet, 30 min ([t-lib.sh](harness/t-lib.sh)) |
+| O1–O4, S1–S4 (part 5) | the T pipeline with no step 3, and Haiku in step 5 (`h-fix`); the split by Opus (O) or Sonnet (S) from `x-split` / `x-split-fix` |
+| D1–D4 (part 5) | 1 code: Haiku, 75 min (`d-code`, the classic coder brief naming Haiku) → 2 review: Opus, 20 min → 3 fixes: Haiku, 30 min (`h-fix`) |
 
 The briefs are in [harness/briefs/](harness/briefs/). The step-1 briefs of the classic and vLLM arms differ by one
 paragraph (`arm-C.md` / `arm-V.md` / `arm-VT.md`, read back and diffed before the start). The skeleton and polish briefs
@@ -101,6 +104,9 @@ request's host cost is logged.
 | [compare.mjs](harness/compare.mjs) | The classic band (C, C2, C3, C4: min / mean / max) and every arm against it. |
 | [judge.sh](harness/judge.sh) | The GROUP judge of part 1: one Opus session sees V, C, C2 and VT together under random labels, scores 0–10 on correctness, test honesty, conventions, simplicity, ranks them; 2 runs, every arm on a different label in run 2. |
 | [judge-abs.sh](harness/judge-abs.sh) | The ABSOLUTE judge: each diff scored ALONE by its own Opus session against an anchored rubric (10 = nothing a careful reviewer would flag · 8–9 minor only · 6–7 one major or many minor · 4–5 several major or one blocking · 0–3 not delivered), 2 runs per arm with fresh opaque labels, `research/module_*.md` declared out of scope. Incremental: new arms get sessions, old ones keep theirs. |
+| [t-survival.mjs](harness/t-survival.mjs) | The task arms: Haiku's meaningful added lines per task (from the per-task diffs) still present in the final commit, whitespace-insensitive, in any changed file; and how many lines the Sonnet task review changed (T only). |
+| [mutate.mjs](harness/mutate.mjs) | The mutation checks (part 5, every arm): six frozen mutants, each breaking one spec decision in a clean worktree of the arm's final commit; the test project rebuilt per mutant; the arm's scenario classes run against an unmutated baseline. A mutant is killed if any test turns red; per intended scenario test, caught or missed; an anchor not found or a build failure is "not applicable", never "caught". Validated on T3 (a known vacuous test, reported) and C2 before any part 5 result. |
+| `fix-outcomes.json` (post hoc) | Per review finding, what the fixer did, from the fixer's note only — one Opus session, hand-checked on two arms. |
 | [make-tables.mjs](harness/make-tables.mjs) | [tables.md](tables.md), from [data/](data/) only. |
 
 ## 7. Re-running
@@ -110,7 +116,8 @@ request's host cost is logged.
 ./prep-base.sh                         # build + test the start commit once (the baseline failures)
 ./run-all.sh V C C2                    # detached; again after any crash — it resumes
 ./after-three.sh                       # VT, the checks, the group judge, the metrics
-./after-c34.sh; ./after-q.sh; ./after-h.sh
+./after-c34.sh; ./after-q.sh; ./after-h.sh; ./after-t.sh; ./after-x.sh   # x = part 5, rounds of O, D, S
+./mut-all.sh & ./mut-awake.sh &        # the mutation checks on every arm (skips an arm already checked)
 node metrics.mjs --json > metrics.json; node compare.mjs
 # anywhere, from this folder:
 node harness/make-tables.mjs

@@ -1,9 +1,4 @@
-# Protocol — local model and Haiku as code fillers (verbatim record)
-
-> This is the experiment's protocol exactly as it was kept during the run (`coai-exp/PROTOCOL.md` on the machine that
-> ran it): the design and the predictions written BEFORE each part ran, and every later change appended with its time,
-> never edited in place. Read it as the log; the summary is [README.md](README.md), the numbers [results.md](results.md).
-
+# Experiment — Sonnet coders with a local vLLM vs Sonnet coders alone (classic scheme)
 
 Written 2026-10-25, BEFORE any arm ran. Changes after the start are added at the end, with the time, and never edited in place.
 
@@ -293,3 +288,11 @@ is one known case — the instrument must catch it to be trusted).
   mutant, as it must; on the classic C2 every intended test caught its mutant. The first version mapped S5.5.4 to M1 and
   both arms "missed" it — the rootless check disposes through a second call M1 did not touch; M6 was added and M1 narrowed
   the same evening, before any arm was scored. All 30 arms are checked after the O/D/S arms end (`mut-all.sh`).
+- **After the run (2026-10-27 04:35–06:30 UTC), recorded as changes, not as design:**
+  - `mut-awake.sh` added to keep Windows awake during the mutation checks (the O/D/S chain had stopped keep-awake).
+  - `t-survival.mjs` now says "no task review ran" for O and S (it printed "changed 0 lines"); T's numbers unchanged.
+  - **Post-hoc measure:** what each fixer did with each review finding (fixed / partly / not fixed / rejected), from the
+    fixers' notes, classified by one Opus session and hand-checked on D4 and O2 (`fix-outcomes.json`). It was added
+    after the results were seen, to read the prediction "Haiku's fixes leave more findings open" — whose registered test
+    was the mutation checks and the judge. It is reported as post hoc.
+  - "Renamed" scenario tests (O2, O3, D1, D2) found by hand; the mutation checks' `killedBy` lists confirm them.

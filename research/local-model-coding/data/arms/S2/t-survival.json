@@ -1,0 +1,91 @@
+{
+  "arm": "S2",
+  "haikuLines": 524,
+  "keptFinal": 0.9790076335877863,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs"
+      ],
+      "haikuLines": 113,
+      "keptFinal": 113,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 14,
+      "keptFinal": 14,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs",
+        "src_mcp/tests/KimiConsultantTests.cs"
+      ],
+      "haikuLines": 67,
+      "keptFinal": 64,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "public void KimiPlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()",
+        "none.Flags.Should().BeEmpty(); none.Leading.Should().BeEmpty(); none.AddDirs.Should().BeEmpty(); none.SnapshotSources.Should().BeEmpty();",
+        "disk.Flags.Should().BeEmpty(); disk.Leading.Should().BeEmpty(); disk.AddDirs.Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 147,
+      "keptFinal": 147,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t5",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 147,
+      "keptFinal": 147,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t6",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_tests.md",
+        "research/module_runners.md"
+      ],
+      "haikuLines": 36,
+      "keptFinal": 28,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "and a question row on Kimi is admitted by the capability matrix since E5.6).",
+        "| `AKimiConsultantCheckTests` (S5.5.1–S5.5.4) | `--check-consultant` on a Kimi row runs in a copy of the checkout, uses one one-shot home, and disposes it junction-first on pass, fail, cancel and a root-less checkout | `covered` — green on arrival, teeth by temporary breaks (task report). Proves the check's own path with the fake person. Does not prove a real `kimi`, no paid turn; the live runs are RESULTS §31 |",
+        "| `AKimiQuestionRowTests` (S5.6.7, a Theory: answered, refused, cancelled) | a disk question row reads copies of its roots and leaves nothing behind; the row's scratch is made in the system TEMP, as for Vibe | `covered` — green on arrival, teeth by temporary breaks. Does not prove a real `kimi`, no paid turn; the live runs are RESULTS §31 |",
+        "| `CapabilityMatrixTests` (the Kimi record, cell prefix `M-K`; three pins moved) | every Kimi row cites `RESULTS_kimi_confinement.md` (2026-10-13) and its cells; `none` and `disk` unconfined, `web` unmeasured | `covered` |",
+        "> Status: **in progress — E5.1–E5.4 and E5.7 implemented 2026-10-16; E5.5–E5.6 code in 2026-10-26 (see \"E5.5–E5.6 as built\"); NOT yet green: the MCP run has one red beyond the known three (`AnUnknownCommit_IsGitFailed_NeverAThrow`).** E5.1: M-K16 recorded as RESULTS §29",
+        "50. **S5.5.1–S5.5.4 are one new class, `AKimiConsultantCheckTests`, and no production change.** The check already copies, reserves a one-shot home and disposes junction-first; the rows were green on arrival, so each got teeth by a temporary break (recorded in the task report).",
+        "55. **S5.6.7 is `AKimiQuestionRowTests`** (a Theory: answered, refused, cancelled); green on arrival, teeth by temporary breaks. The row's scratch is made in the system TEMP as for Vibe.",
+        "- `CoaiMcp.Tests`: on Linux the built test assembly is `CoaiMcp.Tests.dll`, and the named `.exe` does not exist (`ENOENT`), so it was run as `dotnet test --project src_mcp/tests/CoaiMcp.Tests.csproj --no-build -c Debug`. Result: 10470 succeeded, 84 skipped, 3 failed: `KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn` and `KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed` (both known), and `TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow` (NOT in the known list; the assertion is an empty-numstat check)."
+      ]
+    }
+  ]
+}

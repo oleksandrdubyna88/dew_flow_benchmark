@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1153,
+   "summary": "The Definition-of-Done line is now ticked [x], but the coder's own deviations show it is not met. S5.5.1-S5.5.4 and S5.6.7 were not watched red with their tables' messages (items 55, 56): their teeth were made by changing the tests, such as \"own\" to \"mine\" in the assertion. S5.4.15's red was never produced (item 26). Both suites are not green (item 59). `dotnet format --verify-no-changes` is not clean (items 60, 61).",
+   "fix": "Clear the tick. Or split the line so that it ticks only what is true, and name what is still owed: the format check, and the scenarios that were green on arrival and got their teeth from test-side breaks."},
+  {"id": "R2", "severity": "minor", "file": "research/module_runners.md", "line": 3718,
+   "summary": "The KimiConsultant section still says \"a question row on Kimi is still refused by the capability matrix until E5.6\". It does not record the new refusal of a plan that has flags or leading arguments (`MustCarryNoFlag`). `module_extension.md` has no note on the three generated Kimi capability rows. Item 62 says that both module files need this content, but the coder did not add it.",
+   "fix": "Remove the stale sentence. Add a line on the planned launch: the cwd comes from the plan, no `--session`, and a plan with flags or leading arguments gives an ArgumentException that names the shim. Add a short note on the Kimi rows of `runtimeCapabilities.generated.ts` to module_extension.md."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 190,
+   "summary": "The Then of S5.6.7 says the prompt names the copies' paths. The test only checks that StdIn contains `cwd`, the snapshot root, so a prompt that names only the working folder and none of the copies also passes. In the cancelled arm (line 195) the test checks the argv instead of the prompt for the root.",
+   "fix": "Check that StdIn contains the copy's own path (the snapshot sub-folder of the granted `src` root). In the cancelled arm too, check that StdIn does not contain the root."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/CapabilityMatrixTests.cs", "line": 224,
+   "summary": "The table gives S5.6.4 the name `AdmissionFlagsBothRows`. The test is named `AdmissionFlagsBothRows_AndWebIsRefusedNamingItsRecord`, and no deviation records the rename (item 58 records only the red message).",
+   "fix": "Add the rename to deviation 58, or use the table's name and move the web assertion into its own test."}
+ ]}

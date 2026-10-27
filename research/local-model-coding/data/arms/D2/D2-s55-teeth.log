@@ -1,0 +1,29 @@
+failed CoaiMcp.Tests.AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome (553ms)
+  Expected home to start with "/tmp/testsToDelete-kimicheck-homes-Xa72LG/coai-vh/" because E5.3 g: the one-shot home is under the homes root, never under TEMP, but "/tmp/testsToDelete-kimicheck-temp-suw6lF/coai-check-d339dcda83c044e195ff018e5f3aca3d/own/kh-dd693ddaf6" differs near "tem" (index 29).
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Primitives.StringStartStrategy.ValidateAgainstMismatch(IAssertionScope assertion, String subject, String expected)
+    at FluentAssertions.Primitives.StringValidator.Validate(String subject, String expected)
+    at FluentAssertions.Primitives.StringAssertions`1.StartWith(String expected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.AKimiConsultantCheckTests.AKimiCheck_RunsInACopy_OnAOneShotHome() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/AKimiConsultantCheckTests.cs:111
+    --- End of stack trace from previous location ---
+failed CoaiMcp.Tests.AKimiConsultantCheckTests.AfterTheCheck_TheOneShotHomeIsGone_AndThePersonsFolderIsIntact (108ms)
+  Xunit.MicrosoftTestingPlatform.XunitException: System.IO.DirectoryNotFoundException : Could not find a part of the path '/tmp/testsToDelete-kimicheck-gone-mAtmwX/coai-vh'.
+    at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+    at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+    at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized, String expression)
+    at System.IO.Enumeration.FileSystemEnumerableFactory.UserEntries(String directory, String expression, EnumerationOptions options)
+    at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions enumerationOptions)
+    at CoaiMcp.Tests.AKimiConsultantCheckTests.AfterTheCheck_TheOneShotHomeIsGone_AndThePersonsFolderIsIntact() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/AKimiConsultantCheckTests.cs:129
+    --- End of stack trace from previous location ---
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 3
+  failed: 2
+  succeeded: 1
+  skipped: 0
+  duration: 2s 394ms

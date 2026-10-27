@@ -1,0 +1,87 @@
+✖ the words are the file’s words, and a word outside them is refused rather than defaulted (4.691195ms)
+✖ a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one (0.941064ms)
+✖ kimi rows admit flagged, web refuses naming its record (2.038971ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 142.134088
+
+✖ failing tests:
+
+test at src_vs_code/out/test/capabilityAdmission.test.js:81:22
+✖ the words are the file’s words, and a word outside them is refused rather than defaulted (4.691195ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'claude',
+      'codex',
+      'antigravity',
+      'local',
+      'api',
+      'vibe',
+  -   'kimi'
+    ]
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/wt/S4-t2/src_vs_code/out/test/capabilityAdmission.test.js:84:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'claude', 'codex', 'antigravity', 'local', 'api', 'vibe' ],
+    expected: [ 'claude', 'codex', 'antigravity', 'local', 'api', 'vibe', 'kimi' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src_vs_code/out/test/capabilityAdmission.test.js:100:22
+✖ a refusal says what cures it: a measurement for an unmeasured pair, another prompt for an unsupported one (0.941064ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /claude, codex, antigravity, local, api, vibe, kimi/u. Input:
+  
+  "'gemini' is not a runtime the question consultant can launch for 'none' — it launches on: claude, codex, antigravity, local, api, vibe"
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/wt/S4-t2/src_vs_code/out/test/capabilityAdmission.test.js:104:22)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at node:internal/test_runner/test:1305:31
+      at node:internal/process/task_queues:158:7
+      at AsyncResource.runInAsyncScope (node:async_hooks:226:14)
+      at AsyncResource.runMicrotask (node:internal/process/task_queues:155:8) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "'gemini' is not a runtime the question consultant can launch for 'none' — it launches on: claude, codex, antigravity, local, api, vibe",
+    expected: /claude, codex, antigravity, local, api, vibe, kimi/u,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at src_vs_code/out/test/capabilityAdmission.test.js:114:22
+✖ kimi rows admit flagged, web refuses naming its record (2.038971ms)
+  AssertionError [ERR_ASSERTION]: 'kimi' is not a runtime the question consultant can launch for 'none' — it launches on: claude, codex, antigravity, local, api, vibe
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/home/jinx/git/coai-exp/wt/S4-t2/src_vs_code/out/test/capabilityAdmission.test.js:117:26)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at node:internal/test_runner/test:1305:31
+      at node:internal/process/task_queues:158:7
+      at AsyncResource.runInAsyncScope (node:async_hooks:226:14)
+      at AsyncResource.runMicrotask (node:internal/process/task_queues:155:8) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
