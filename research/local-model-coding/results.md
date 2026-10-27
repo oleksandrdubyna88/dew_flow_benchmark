@@ -38,7 +38,7 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
    judge is one model and compresses scores near 8: T3, whose junction-first test was confirmed to be unable to fail,
    still scored 7 and 8 — and so did H2, whose test has the same defect (found by the mutation checks, item 12). It
    separates "clean" from "has a major finding", and cannot show finer differences. **Part 5 is the first to show a
-   difference** (item 10).
+   difference** — in two of the four D arms (item 10).
 2. **The classic arms vary a lot**: 44–62 min of work, **$6.53–7.85**, 79–93k Sonnet output tokens. A difference inside
    this range cannot be attributed to the scheme from these runs — which is not proof that there is none.
 3. **vLLM drafts (V, VT): no gain from the drafts.** V sits inside the classic band ($7.00, 62 min — the band's upper
@@ -75,18 +75,20 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
    only the split), and the cost fell; its Opus review ($2.29–3.88) is then 34–68 % of an arm.
 9. **A defect the skeleton scheme adds:** the skeleton step writes its deviation notes into the plan, and they go stale
    after the fill and the polish; the judge found such false notes in Q2 and H3 (checked by hand: both true findings).
-10. **Haiku without a split (D1–D4) is the cheapest scheme and the only one that lost quality.** **$4.02–5.44** (mean
+10. **Haiku without a split (D1–D4) is the cheapest scheme, and two of its four arms lost quality.** **$4.02–5.44** (mean
     $4.55, 37 % below the classic mean of $7.21), 47–64 min. But D2 scored 6 and 6 and D4 6 and 5 — the only scores
     below 7 in 30 arms — with 2–4 major findings each, checked in the code (D4's S5.6.7 is one `[Fact]` where the spec
     asks for a three-arm Theory; D2's S5.5.2 has no exit-70 arm; both plans' status lines say tests are missing that the
     diff adds). The Opus review found 7–12 issues per D arm, and the Haiku fixer left **53 % of them open** (18 of 34; 6
-    of 9 majors) — D4's fixer wrote that time ran out. D1 and D3 scored 7–8.
+    of 9 majors) — D4's fixer wrote that time ran out. D1 and D3 scored 7.5 and 8, inside the classic range: D's
+    result is split, not uniform, and four runs cannot say how often a D arm fails.
 11. **Removing the Sonnet task reviews brings the task split into the classic band, and a Sonnet split under it.**
     O (Opus splits): **$5.48–7.90** (mean $6.71; T was $8.13–12.01); S (Sonnet splits): **$5.03–7.49** (mean $6.22;
     three of four below every classic arm). Quality 7–8 in both, like the classic arms. Haiku did nearly all the
     writing again (474–542 meaningful lines, 98–100 % kept), and the Haiku fixer left 17 % (O) and 32 % (S) of the
     review's findings open (Sonnet fixers in parts 1–4: 13 %, 12 of 89). The price is time: 62–107 min elapsed (classic 44–62),
-    because the batches run one after another, each with its builds. The split is cheaper from Sonnet ($1.95–2.31) than
+    because the batches run one after another, each with its builds: the split takes 5–9 min, the review 9–20 and the
+    fixes 10–28; the task batches take the rest, 23–69 min. The split is cheaper from Sonnet ($1.95–2.31) than
     from Opus ($2.09–3.44). Two O arms lost a point the same way: the review asked to correct the shared "unconfined"
     caveat for Kimi, and the Haiku fixer rewrote it for every runtime (O2, O4) — a finding applied wider than the
     stories allow.
@@ -199,8 +201,11 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   runs). The majors in O2 and O4 are one pattern: the review asked to correct the shared "unconfined" caveat for Kimi,
   and the Haiku fixer rewrote it for every runtime, in C# and TypeScript; O3's is a false deviation note. D2's and D4's
   are scenario arms that are not written and status lines that are false (checked in the code, §2 item 10).
-- **Scenarios by exact name**: 8 of 12 arms 12/12; O2, O3 (S5.6.6), D1 (S5.6.7) and D2 (S5.6.4, S5.6.8) renamed tests
-  — each renamed test exists and catches its mutant (§8), so all 12 arms deliver every scenario under some name.
+- **Scenarios by exact name**: 8 of 12 arms 12/12; O2, O3 (S5.6.6), D1 (S5.6.7) and D2 (S5.6.4, S5.6.8) renamed tests.
+  S4 and D1 also lengthened S5.6.8's name (`AdmissionFlagsBothRows_And…`): the scenario detector accepts a name that
+  CONTAINS the spec's, the mutation check only the exact name — so these count as present in [tables.md](tables.md) §3
+  and as renamed in §8. Each renamed test exists and catches its mutant (§8), so all 12 arms deliver every scenario
+  under some name.
 - **Reading**: on this task, an exact split lets Haiku do the writing, and one Opus review is enough to keep the quality
   at the classic level; a Sonnet split is cheaper than an Opus one and no worse here. Without a split, Haiku's code is
   incomplete in ways the review finds but the Haiku fixer does not finish. The saving of O and S comes from removing
@@ -254,7 +259,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 | T: the Sonnet task reviews change < 30 % of Haiku's lines | 3–36 of 487–570 lines (< 7 %) | holds |
 | T: work time 60–90 min | elapsed 80–100 min | roughly holds (a little above, under parallel load) |
 | T: quality inside the classic band | 7.5–8 | holds |
-| O: $6–9 per arm, not below the classic band on average | $5.48–7.90, mean $6.71 (band mean $7.21); O1 below $6 | partly holds (cheaper than predicted) |
+| O: $6–9 per arm, not below the classic band on average | $5.48–7.90; the mean $6.71 is not below the band's lower bound ($6.53), but below its mean ($7.21); O1 is below $6 | the average part holds (read against the lower bound); the range partly (O1) |
 | S: $4–7 per arm | $5.03–7.49; S4 above $7 | holds for 3 of 4 |
 | D: $3.5–6, the only scheme likely BELOW the classic band | $4.02–5.44, all four below the band; but O1 ($5.48) and S1–S3 are below it too | partly holds — D is the only scheme with every arm below |
 | Haiku's fixes leave more findings open than Sonnet's | open: O 17 %, S 32 %, D 53 %; Sonnet fixers 13 % | holds (confounded in D: Haiku also wrote the code) |

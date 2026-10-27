@@ -42,9 +42,9 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
   final review remain, and the cheap per-task reviews passed defects the final review and the judge found.
 - **Part 5 — the cheapest schemes.** Without the per-task reviews, the task split reaches the classic band: **O (Opus
   splits) $5.48–7.90, S (Sonnet splits) $5.03–7.49** — three S arms below every classic arm — at the classic quality
-  (7–8), but slower (62–107 min). **Haiku with no split (D) is the cheapest, $4.02–5.44, and the only scheme that lost
-  quality**: two of four arms scored 6 and 5.5, with scenario arms not written, and its Haiku fixer left half the
-  review's findings open.
+  (7–8), but slower (62–107 min). **Haiku with no split (D) is the cheapest, $4.02–5.44, and the only scheme with arms that
+  lost quality**: two of four scored 6 and 5.5, with scenario arms not written (the other two 7.5 and 8), and its Haiku
+  fixer left half the review's findings open.
 - **Mutation checks on all 30 arms** (six frozen mutants each): every mutant is caught by some test, but five arms have
   a scenario test that cannot catch its mutant — one of them (H2) passed the review, the fixer and the judge.
 - **The money is in reading and reviewing**, not writing: Sonnet's cache reads (tens of millions of tokens per arm) and the
@@ -63,6 +63,6 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
 | [data/](data/) | Per arm: `timing.jsonl` (every step attempt), `objective.json` (+ the uncorrected `objective.raw.json`), `survival.json`, `fill-*.json`, `fill-state.json` (the filler's exact code per region), `filler-requests.jsonl`, the coder's and fixer's notes and the step-2 review; `mutation.json` (part 5's mutation checks, every arm); the task arms' task lists and per-task diffs; `metrics.json` (time/cost/tokens per arm, step, attempt, model); `fix-outcomes.json` (what each fixer did with each review finding); `judges/` (both group judges and the absolute judge: keys, every verdict); `fillers/` (V's and VT's prompts and drafts) |
 | [harness/](harness/) | The scripts and briefs exactly as used |
 | [data/raw/](data/raw/README.md) | **Every raw record**, compressed (41 MB for parts 1–4, 23 MB for part 5): every session's full event stream and exact prompt, all session transcripts, the checks' full logs and test reports, every filler prompt and answer, the judges' complete sessions, all notes and logs — with checksums; the owner's email addresses masked, nothing else changed |
-| [data/reviews/](data/reviews/) | The other-vendor reviews of this folder, verbatim: the consultation (codex gpt-6-astra) and the document gate's round on `results.md` (findings, decisions, the reviewers' notes) |
+| [data/reviews/](data/reviews/) | The other-vendor reviews of this folder, verbatim: the consultation (codex gpt-6-astra) and the document gate's two rounds on `results.md` (findings, decisions, the reviewers' notes) |
 
 Not kept here: the arms' clones (the branches `exp/kimi-e56-*` in `dew_flow_connect_other_ais` hold every arm's commits).
