@@ -9,7 +9,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const E = '/home/jinx/git/coai-exp';
-const ARMS = ['V', 'C', 'C2', 'VT', 'C3', 'C4', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'D1', 'S1', 'O2', 'D2', 'S2', 'O3', 'D3', 'S3', 'O4', 'D4', 'S4'].filter((a) => existsSync(`${E}/results/${a}/timing.jsonl`));
+const ARMS = ['V', 'C', 'C2', 'VT', 'C3', 'C4', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'D1', 'S1', 'O2', 'D2', 'S2', 'O3', 'D3', 'S3', 'O4', 'D4', 'S4', 'SR1', 'DR1', 'SR2', 'DR2', 'SR3', 'DR3', 'SR4', 'DR4'].filter((a) => existsSync(`${E}/results/${a}/timing.jsonl`));
 // each arm's steps, in the order they first started (classic: code, review, fix; Q: skeleton, fills, polish, review, fixes)
 const stepsOf = (timing) => [...new Set(timing.filter((t) => t.kind === 'start').map((t) => t.step))];
 const lines = (f) => existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).flatMap((l) => {
