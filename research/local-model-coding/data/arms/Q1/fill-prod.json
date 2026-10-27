@@ -1,0 +1,42 @@
+{
+  "arm": "Q1",
+  "kind": "prod",
+  "started_utc": "2026-10-26T10:01:55.645Z",
+  "regions": [
+    {
+      "id": "s56-planner-arm",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s566-noflags",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 11,
+    "errors": [
+      "error CS1513: } expected ",
+      "error CS1519: Invalid token 'return' in a member declaration ",
+      "error CS1001: Identifier expected ",
+      "error CS1003: Syntax error, ',' expected ",
+      "error CS8124: Tuple must contain at least two elements. ",
+      "error CS1026: ) expected ",
+      "error CS1031: Type expected ",
+      "error CS1002: ; expected ",
+      "error CS1519: Invalid token ')' in a member declaration ",
+      "error CS1519: Invalid token '(' in a member declaration ",
+      "error CS1022: Type or namespace definition, or end-of-file expected "
+    ]
+  },
+  "head": "3e447710",
+  "ended_utc": "2026-10-26T10:03:04.276Z"
+}

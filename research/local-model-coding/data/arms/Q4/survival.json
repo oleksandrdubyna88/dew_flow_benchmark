@@ -1,0 +1,345 @@
+{
+  "arm": "Q4",
+  "commits": {
+    "skeleton": "e2a70c69",
+    "fillTest": "7fa5d579",
+    "fillProd": "011e28ee",
+    "polish": "2f29e066",
+    "final": "3d60ea0f"
+  },
+  "byKind": {
+    "test": {
+      "regions": 16,
+      "lines": 190,
+      "afterPolish": 0.5473684210526316,
+      "final": 0.5526315789473685,
+      "strictFinal": 0.5473684210526316
+    },
+    "prod": {
+      "regions": 2,
+      "lines": 5,
+      "afterPolish": 1,
+      "final": 1,
+      "strictFinal": 1
+    }
+  },
+  "fill": {
+    "test": {
+      "regions": 16,
+      "filled": 16,
+      "rejected": [],
+      "secondRound": 1,
+      "compileErrors": 6,
+      "tests": null
+    },
+    "prod": {
+      "regions": 2,
+      "filled": 2,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 6,
+      "tests": null
+    }
+  },
+  "diffLines": {
+    "skeleton": 543,
+    "fill": 385,
+    "polish": 278,
+    "fixes": 65
+  },
+  "regions": [
+    {
+      "id": "s555-settings",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 1,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": []
+    },
+    {
+      "id": "s555-check",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s555-played",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 24,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": [
+        "var cwd = After(new ProcessRequest(\"\", [], \"\"), \"--cwd\"); // placeholder to get the index logic right, but we need to capture it in the lambda",
+        "// Actually, we need to extract cwd from the request passed to Turn.",
+        "// The instruction says: `word` is the LAST space-separated word of CHECK.md in the folder after \"--cwd\" in request.Arguments",
+        "// File.ReadAllText(Path.Combine(cwd, \"CHECK.md\")).Trim().Split(' ')[^1].TrimEnd('.')",
+        "// We need to find the cwd from the request arguments.",
+        "// request.Arguments contains \"--cwd\", <path>.",
+        "string GetCwd(ProcessRequest req) {",
+        "var args = req.Arguments.ToList();",
+        "var idx = args.IndexOf(\"--cwd\");",
+        "if (idx >= 0 && idx + 1 < args.Count) return args[idx + 1];",
+        "return \"\";",
+        "string cwd = \"\"; // Will be set in the lambda closure if needed, but we can just compute it inside.",
+        "// However, the lambda captures variables. We can just compute `word` inside the lambda.",
+        "var args = request.Arguments.ToList();",
+        "var cwdIndex = args.IndexOf(\"--cwd\");",
+        "string cwdPath = cwdIndex >= 0 && cwdIndex + 1 < args.Count ? args[cwdIndex + 1] : \"\";",
+        "string checkMdPath = Path.Combine(cwdPath, \"CHECK.md\");",
+        "string content = File.ReadAllText(checkMdPath).Trim();",
+        "string[] words = content.Split(' ');",
+        "string word = words[^1].TrimEnd('.');",
+        "string answer = $\"marker: {word}{Environment.NewLine}canary: CANNOT\";",
+        "return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 100, 10, answer);"
+      ]
+    },
+    {
+      "id": "s551-copy",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 15,
+      "keptAfterPolish": 14,
+      "keptFinal": 14,
+      "strictAfterPolish": 14,
+      "strictFinal": 14,
+      "droppedFinal": [
+        "said.GetProperty(\"canary\").GetString().Should().Be(ConsultCheckStates.NotAttempted);"
+      ]
+    },
+    {
+      "id": "s552-gone",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 7,
+      "keptAfterPolish": 6,
+      "keptFinal": 6,
+      "strictAfterPolish": 6,
+      "strictFinal": 6,
+      "droppedFinal": [
+        "foreach (var played in new[] { PlayedThatReadsTheMarker(), new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.Minted) } })"
+      ]
+    },
+    {
+      "id": "s553-cancel",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 7,
+      "keptAfterPolish": 6,
+      "keptFinal": 6,
+      "strictAfterPolish": 6,
+      "strictFinal": 6,
+      "droppedFinal": [
+        "said.GetProperty(\"state\").GetString().Should().Be(ConsultCheckStates.Unavailable);"
+      ]
+    },
+    {
+      "id": "s554-rootless",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 10,
+      "keptAfterPolish": 10,
+      "keptFinal": 10,
+      "strictAfterPolish": 10,
+      "strictFinal": 10,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-init",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": [
+        "var files = new (string Path, string Text)[]",
+        "(@\"src\\Mailer.cs\", \"void Send() { }\\n\"),",
+        "(@\"docs\\notes.md\", \"\"),",
+        "foreach (var (path, text) in files)",
+        "var full = Path.Combine(Repo, path);",
+        "Directory.CreateDirectory(Path.GetDirectoryName(full)!);",
+        "await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);",
+        "var args = new string[][]",
+        "new[] { \"init\", \"-b\", \"main\" },",
+        "new[] { \"config\", \"user.email\", \"t@example.com\" },",
+        "new[] { \"config\", \"user.name\", \"t\" },",
+        "new[] { \"add\", \".\" },",
+        "new[] { \"commit\", \"-m\", \"base\" },",
+        "foreach (var a in args)",
+        "var result = await _launcher.RunAsync(new ProcessRequest(\"git\", a, Repo), TestContext.Current.CancellationToken);",
+        "result.ExitCode.Should().Be(0, string.Join(' ', a) + \": \" + result.StdErr);"
+      ]
+    },
+    {
+      "id": "s567-service",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 11,
+      "keptAfterPolish": 9,
+      "keptFinal": 9,
+      "strictAfterPolish": 9,
+      "strictFinal": 9,
+      "droppedFinal": [
+        "var settings = new PanelSettings",
+        "return new PanelService(settings, VaultKeys.None(\"no vault in tests\"), default, played, Logger.None, Noticing.None);"
+      ]
+    },
+    {
+      "id": "s561-rows",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 12,
+      "keptAfterPolish": 7,
+      "keptFinal": 7,
+      "strictAfterPolish": 7,
+      "strictFinal": 7,
+      "droppedFinal": [
+        "foreach (var capability in (Capability[])[Capability.None, Capability.Disk, Capability.Web])",
+        "var row = RuntimeCapabilities.Builtin.Of(\"kimi\", capability)!;",
+        "var none = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None)!;",
+        "var disk = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Disk)!;",
+        "var web = RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.Web)!;"
+      ]
+    },
+    {
+      "id": "s564-admit",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 3,
+      "keptAfterPolish": 3,
+      "keptFinal": 3,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": []
+    },
+    {
+      "id": "s563-planner",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 14,
+      "keptAfterPolish": 14,
+      "keptFinal": 14,
+      "strictAfterPolish": 14,
+      "strictFinal": 14,
+      "droppedFinal": []
+    },
+    {
+      "id": "s565-launch",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 7,
+      "keptFinal": 7,
+      "strictAfterPolish": 7,
+      "strictFinal": 7,
+      "droppedFinal": [
+        "none.Request.WorkingDirectory.Should().Be(Scratch);",
+        "none.Request.Arguments.Should().NotContain(\"--session\").And.NotContain(RootA).And.NotContain(RootB);",
+        "none.Request.InheritsEnvironment.Should().BeFalse();",
+        "Runners.Kimi.KimiEnvironment.Refusal(none.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, \"persons-bin\"))).Should().BeEmpty();",
+        "disk.Request.WorkingDirectory.Should().Be(RowTree);",
+        "disk.Request.Arguments.Should().NotContain(\"--session\").And.NotContain(RootA).And.NotContain(RootB);",
+        "disk.Request.InheritsEnvironment.Should().BeFalse();",
+        "Runners.Kimi.KimiEnvironment.Refusal(disk.Request, KimiPlaces.ForShim(RowFolder, Path.Combine(RowFolder, \"persons-bin\"))).Should().BeEmpty();",
+        "request.Arguments.Should().ContainInConsecutiveOrder(\"--home\", It.IsAny<string>())",
+        ".Which.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);"
+      ]
+    },
+    {
+      "id": "s566-flags",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s568-ts",
+      "kind": "test",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "lines": 10,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": [
+        "const caps = ['none', 'disk', 'web'] as const;",
+        "for (const cap of caps) {"
+      ]
+    },
+    {
+      "id": "s567-row",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 32,
+      "keptAfterPolish": 6,
+      "keptFinal": 7,
+      "strictAfterPolish": 5,
+      "strictFinal": 6,
+      "droppedFinal": [
+        "using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);",
+        "var played = ending == \"cancelled\"",
+        "? new PlayedKimi(_launcher) { During = async (_, ct) => { cts.Cancel(); await Task.Delay(Timeout.Infinite, ct); } }",
+        ": new PlayedKimi(_launcher) { Turn = (_, _) => PlayedKimi.Answered(PlayedKimi.Minted, 100, 10, Advice) };",
+        "Directory.Delete(_person.Credentials, true);",
+        "var reply = await AskAsync(Service(played, Path.Combine(Repo, \"src\")), cts.Token);",
+        "reply.TryGetProperty(\"answers\", out var answers).Should().BeTrue();",
+        "var row = answers.EnumerateArray().Should().ContainSingle().Subject;",
+        "row.GetProperty(\"status\").GetString().Should().Be(RowOutcomes.Answered);",
+        "var shim = played.Shims.Should().ContainSingle().Subject;",
+        "var request = shim.Request;",
+        "var prompt = string.Join(\"\\n\", request.Arguments) + request.StdIn;",
+        "var copyPath = Path.Combine(Repo, \"src\");",
+        "prompt.Should().Contain(copyPath);",
+        "prompt.Should().NotContain(Path.Combine(Repo, \"src\"));",
+        "// Check no --session argument",
+        "var hasSession = request.Arguments.Any(a => a == \"--session\");",
+        "hasSession.Should().BeFalse();",
+        "row.GetProperty(\"status\").GetString().Should().NotBe(RowOutcomes.Answered);",
+        "// Common assertions for every ending",
+        "var oneShotFolder = Path.Combine(Homes, VibeHomes.OneShotFolder);",
+        "Directory.Exists(oneShotFolder).Should().BeFalse();",
+        "var tempPath = Path.GetTempPath();",
+        "var beforeScratches = Directory.EnumerateDirectories(tempPath, \"coai-question-*\").ToList();",
+        "_person.Hash().Should().Equal(before);"
+      ]
+    },
+    {
+      "id": "s56-planner",
+      "kind": "prod",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "lines": 3,
+      "keptAfterPolish": 3,
+      "keptFinal": 3,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": []
+    },
+    {
+      "id": "s56-noflags",
+      "kind": "prod",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    }
+  ]
+}

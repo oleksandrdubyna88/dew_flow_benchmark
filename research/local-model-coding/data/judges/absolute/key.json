@@ -1,0 +1,276 @@
+{
+  "redactions": {
+    "V": 0,
+    "C": 0,
+    "C2": 0,
+    "VT": 0,
+    "C3": 0,
+    "C4": 0,
+    "Q1": 1,
+    "Q2": 0,
+    "Q3": 0,
+    "Q4": 0,
+    "H1": 0,
+    "H2": 0,
+    "H3": 0,
+    "H4": 0,
+    "T1": 2,
+    "T2": 0,
+    "T3": 0,
+    "T4": 3,
+    "O1": 1,
+    "D1": 2,
+    "S1": 0,
+    "O2": 0,
+    "D2": 2,
+    "S2": 1,
+    "O3": 2,
+    "D3": 2,
+    "S3": 0,
+    "O4": 0,
+    "D4": 2,
+    "S4": 9
+  },
+  "sessions": {
+    "D-8818c5": {
+      "arm": "V",
+      "run": "run1"
+    },
+    "D-c77e37": {
+      "arm": "V",
+      "run": "run2"
+    },
+    "D-a8928d": {
+      "arm": "C",
+      "run": "run1"
+    },
+    "D-04d5fe": {
+      "arm": "C",
+      "run": "run2"
+    },
+    "D-6fd408": {
+      "arm": "C2",
+      "run": "run1"
+    },
+    "D-0af2d7": {
+      "arm": "C2",
+      "run": "run2"
+    },
+    "D-1c8c0c": {
+      "arm": "VT",
+      "run": "run1"
+    },
+    "D-67b6b5": {
+      "arm": "VT",
+      "run": "run2"
+    },
+    "D-593913": {
+      "arm": "C3",
+      "run": "run1"
+    },
+    "D-280705": {
+      "arm": "C3",
+      "run": "run2"
+    },
+    "D-960f82": {
+      "arm": "C4",
+      "run": "run1"
+    },
+    "D-e9ff05": {
+      "arm": "C4",
+      "run": "run2"
+    },
+    "D-cf3d50": {
+      "arm": "Q1",
+      "run": "run1"
+    },
+    "D-78fa7d": {
+      "arm": "Q1",
+      "run": "run2"
+    },
+    "D-71de76": {
+      "arm": "Q2",
+      "run": "run1"
+    },
+    "D-54f3a2": {
+      "arm": "Q2",
+      "run": "run2"
+    },
+    "D-56ed37": {
+      "arm": "Q3",
+      "run": "run1"
+    },
+    "D-faa042": {
+      "arm": "Q3",
+      "run": "run2"
+    },
+    "D-f5516a": {
+      "arm": "Q4",
+      "run": "run1"
+    },
+    "D-70adc8": {
+      "arm": "Q4",
+      "run": "run2"
+    },
+    "D-d72d83": {
+      "arm": "H1",
+      "run": "run1"
+    },
+    "D-4e9bed": {
+      "arm": "H1",
+      "run": "run2"
+    },
+    "D-d6b15d": {
+      "arm": "H2",
+      "run": "run1"
+    },
+    "D-ce5677": {
+      "arm": "H2",
+      "run": "run2"
+    },
+    "D-a8bdcf": {
+      "arm": "H3",
+      "run": "run1"
+    },
+    "D-5c07f4": {
+      "arm": "H3",
+      "run": "run2"
+    },
+    "D-219c46": {
+      "arm": "H4",
+      "run": "run1"
+    },
+    "D-235383": {
+      "arm": "H4",
+      "run": "run2"
+    },
+    "D-48e114": {
+      "arm": "T1",
+      "run": "run1"
+    },
+    "D-93dc9d": {
+      "arm": "T1",
+      "run": "run2"
+    },
+    "D-06c685": {
+      "arm": "T2",
+      "run": "run1"
+    },
+    "D-800304": {
+      "arm": "T2",
+      "run": "run2"
+    },
+    "D-02a44d": {
+      "arm": "T3",
+      "run": "run1"
+    },
+    "D-2e039e": {
+      "arm": "T3",
+      "run": "run2"
+    },
+    "D-b54e31": {
+      "arm": "T4",
+      "run": "run1"
+    },
+    "D-dd1b79": {
+      "arm": "T4",
+      "run": "run2"
+    },
+    "D-9834b1": {
+      "arm": "O1",
+      "run": "run1"
+    },
+    "D-fb4311": {
+      "arm": "O1",
+      "run": "run2"
+    },
+    "D-6651a0": {
+      "arm": "D1",
+      "run": "run1"
+    },
+    "D-8a8545": {
+      "arm": "D1",
+      "run": "run2"
+    },
+    "D-99c50d": {
+      "arm": "S1",
+      "run": "run1"
+    },
+    "D-717495": {
+      "arm": "S1",
+      "run": "run2"
+    },
+    "D-fec3a0": {
+      "arm": "O2",
+      "run": "run1"
+    },
+    "D-9b7a93": {
+      "arm": "O2",
+      "run": "run2"
+    },
+    "D-0277f2": {
+      "arm": "D2",
+      "run": "run1"
+    },
+    "D-c04158": {
+      "arm": "D2",
+      "run": "run2"
+    },
+    "D-4bd691": {
+      "arm": "S2",
+      "run": "run1"
+    },
+    "D-d1dcbe": {
+      "arm": "S2",
+      "run": "run2"
+    },
+    "D-64aea0": {
+      "arm": "O3",
+      "run": "run1"
+    },
+    "D-097f51": {
+      "arm": "O3",
+      "run": "run2"
+    },
+    "D-0d48da": {
+      "arm": "D3",
+      "run": "run1"
+    },
+    "D-9b6976": {
+      "arm": "D3",
+      "run": "run2"
+    },
+    "D-4dcc5b": {
+      "arm": "S3",
+      "run": "run1"
+    },
+    "D-6519a0": {
+      "arm": "S3",
+      "run": "run2"
+    },
+    "D-a54dba": {
+      "arm": "O4",
+      "run": "run1"
+    },
+    "D-5776b1": {
+      "arm": "O4",
+      "run": "run2"
+    },
+    "D-4689b2": {
+      "arm": "D4",
+      "run": "run1"
+    },
+    "D-cb6da2": {
+      "arm": "D4",
+      "run": "run2"
+    },
+    "D-819307": {
+      "arm": "S4",
+      "run": "run1"
+    },
+    "D-c5d8d6": {
+      "arm": "S4",
+      "run": "run2"
+    }
+  }
+}

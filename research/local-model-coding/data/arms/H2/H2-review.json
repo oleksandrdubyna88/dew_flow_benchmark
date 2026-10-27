@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 156,
+   "summary": "S5.5.3 does not enforce its Then ('the record says cancelled'): the test accepts a thrown OperationCanceledException with no record printed, and checks `state` and `failureKind` only when they are present, so a check that stops writing its record on a cancellation still passes.",
+   "fix": "Remove the try/catch and the `if` guards. Assert that `code` and the printed JSON exist, that `state` is the failed state, and that `failureKind` is `cancelled` (ConsultantCheck.RunAsync already catches the caller's cancellation and returns a record). Also assert `played.Shims` holds one launch, so the test proves a home with its junction was made before the cancel."},
+  {"id": "R2", "severity": "major", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1099,
+   "summary": "No one has ever seen the four E5.5 tests fail, and S5.6.6 has never failed with its own message. Deviation 52 says the table's reds cannot be reproduced and stops there, while E5.4 (deviation 26) gave its 'green on arrival' rows teeth with a temporary break of the deciding line.",
+   "fix": "Give each E5.5 test teeth with a temporary break, for example: replace the one-shot disposal with the bare deleter (recorder red), skip `held.Home.Dispose()` in ConsultantCheck.TurnAsync's `finally` (coai-vh red), and remove `MustCarryNoFlags` for S5.6.6 ('no exception was thrown'). Revert each break and record the red messages in the deviation. In the same pass, make the S5.5.2 'exit 70' arm assert that `played.Shims` is not empty, so the disposal assertions cannot pass when no home was made."},
+  {"id": "R3", "severity": "major", "file": "research/module_tests.md", "line": 3944,
+   "summary": "The two new Kimi flows (the question row and `--check-consultant`) and their classes AKimiQuestionRowTests and AKimiConsultantCheckTests are not in the flow catalogue. research/module_core.md:783 still says '18 rows (6 runtimes × 3)', and no bullet for the Kimi planner arm stands beside the Vibe one (:819). E5.4 catalogued its scenarios (21 S5.4.* entries); E5.5–E5.6 have none.",
+   "fix": "Add catalogue rows for S5.5.1–S5.5.4 and S5.6.1–S5.6.8 with their red evidence (scenario-tests.md point 7). Update module_core.md to 21 rows over 7 runtimes and add a Kimi-arm bullet (no flags, Scratch/Snapshot, unconfined for none and disk, web unmeasured)."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 151,
+   "summary": "S5.6.7 says 'the prompt names the copies' paths', but the test only checks that the prompt contains the `--cwd` folder. That folder is a prefix of the copy, so a prompt that names only the working folder and not the copy still passes. The Vibe test it copies asserts the copy's own path.",
+   "fix": "Assert that StdIn contains the copy's path (for example Path.Combine(cwd, \"src\"), or the root that `place.Roots` names), as AVibeQuestionRowReadsACopyOfItsRootsTests.cs:123-124 does."},
+  {"id": "R5", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 385,
+   "summary": "E5.6 decision 2 says each row's `note` carries the version (2.1.1), but the kimi × web note ('not measured: no Kimi cell searches or fetches the web') does not name it.",
+   "fix": "Prefix the note with 'kimi 2.1.1: ' as the none and disk rows do, and regenerate runtimeCapabilities.generated.ts with its generator."}
+ ]}

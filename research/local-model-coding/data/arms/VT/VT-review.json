@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 185,
+   "summary": "S5.6.7's Then says that after each ending the row's scratch AND coai-vh/<8> are gone, but the test checks only the coai-vh folder; the row's coai-question-* scratch, where the copies are made, is never checked.",
+   "fix": "Record the scratch path while the shim is alive (the `During` hook already finds the copy under --cwd), then assert that the folder does not exist after the row ends, for the answered and cancelled arms."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 172,
+   "summary": "S5.5.3's Then says the record says cancelled, but the test catches OperationCanceledException and asserts nothing about the outcome, so a check that ignored the cancellation and recorded 'answered' would also pass (deviation 56 admits this).",
+   "fix": "Pin the one ending that really happens: either assert that ThrowAsync<OperationCanceledException> occurs, or assert that the returned state is the cancelled state. Do not accept both."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/KimiQuestionLaunchTests.cs", "line": 50,
+   "summary": "S5.6.5's Then includes `KimiEnvironment.Refusal` empty, but the test does not assert it; the `none` planned request (after ForQuestion's Minimal passthrough) goes through the launch control's environment check in no test.",
+   "fix": "In the foreach loop, assert that KimiEnvironment.Refusal(request, <the fake places for that home>) is empty, as KimiConsultantTests.cs:82 does for the consult launch."},
+  {"id": "R4", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 18,
+   "summary": "The file's `why` header still says whose cells the rows cite (the first five runtimes from run 01a0f8c7, the vibe rows from the M-V cells), but it does not name the new kimi rows, which cite the M-K cells of research/RESULTS_kimi_confinement.md. The E5.6 anchor `:19-20` names this text.",
+   "fix": "Add a clause such as 'the kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1)'. Then run generate-runtime-capabilities.mjs again if the header goes into the generated file."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 147,
+   "summary": "S5.5.2's two arms (the check passed; the turn failed with exit 70) do not check the check's result, so nothing shows that the failing arm really ended as a failed turn and not some other way.",
+   "fix": "Keep the (code, said) result and assert that state is 'answered' for the passing arm and the failed state for the exit-70 arm."}
+ ]}

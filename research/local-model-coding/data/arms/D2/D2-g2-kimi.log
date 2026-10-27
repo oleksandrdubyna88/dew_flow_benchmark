@@ -1,0 +1,69 @@
+skipped CoaiMcp.Tests.KimiCanaryTests.NothingOfTheSignIn_EverAppearsInWhatCoaiWrites (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+skipped CoaiMcp.Tests.KimiCanaryTests.TheDetector_SeesAServedCanary_WhenOneIsServed (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiCanaryTests.TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiLaunchChecksTests.OnWindows_TheOsHomeIsSplitIntoDriveAndPath (0ms)
+  a drive letter is a Windows path shape
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheTreeHold_OutlivesItsOpener_WhileAChildLives (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ALockFolderThatCannotBeUsed_Exits65 (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.AHomeWithNoCredentialsJunction_Exits65_NamingIt_AndHoldsNothing (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheShimReadsNoEnvironment_InAChildWithARedirectedProfile (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheAgentGetsTheBuiltEnvironment_NotTheParents (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenBeforeTheStart_AndFreeAfterANormalTurn (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ATreeHoldThatIsBusyPastTheDeadline_Exits69WithTheSentence (0ms)
+  Kimi runs on Windows hosts only (D18)
+failed CoaiMcp.Tests.KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn (130ms)
+  Expected turn.Refusal "/tmp/testsToDelete-kimi-runtime-djITQV/persons/.kimi-code cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)" to contain "not signed in to Kimi Code" because the person's config.toml is the first thing the control reads after the host, the tools, the model and the environment pass.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Primitives.StringAssertions`1.Contain(String expected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiRuntimeTests.cs:283
+    --- End of stack trace from previous location ---
+skipped CoaiMcp.Tests.ForeignKimiTests.TheHostsOwnListing_NamesThisProcess_WithItsParent (0ms)
+  the host listing is Windows' toolhelp snapshot; other hosts never run Kimi (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnUnmeasuredKimi_WarnsOnTheLine_WithTheSentenceTheCardShows (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.ARefusedLaunch_NeverStartsTheShim_AndSaysWhy (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnAnsweredReview_IsReadFromTheShimsReport_ThroughTheLaunchControl (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.TheRealArgv_ParsesInTheRealShim_ThatStartsItsAgentInTheBuiltEnvironment (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AHomeTheRunLeftSomethingForbiddenIn_IsRefusedBeforeTheRepairStarts (0ms)
+  Kimi runs on Windows hosts only (D18)
+failed CoaiMcp.Tests.KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed (4ms)
+  Xunit.MicrosoftTestingPlatform.XunitException: System.IO.PathTooLongException : The path '/tmp/testsToDelete-kimi-iuT6uX/owned/kh-x/home/sessions/wd_wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww_0123456789ab' is too long, or a component of the specified path is too long.
+    at System.IO.FileSystem.CreateParentsAndDirectory(String fullPath, UnixFileMode unixCreateMode)
+    at System.IO.FileSystem.CreateDirectory(String fullPath, UnixFileMode unixCreateMode)
+    at System.IO.Directory.CreateDirectory(String path)
+    at CoaiMcp.Tests.KimiHomeTests.Write(String path, String text) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiHomeTests.cs:44
+    at CoaiMcp.Tests.KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiHomeTests.cs:526
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheGateAlone_DoesNotOutliveItsOpener_SoItIsNotWhatKeepsTheTreeSafe (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheLockKey_IsTheFoldersIdentity_NotItsSpelling(row: "upper") (0ms)
+  a case-sensitive file system keeps FOLDER and folder apart — they are two folders there
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 309
+  failed: 2
+  succeeded: 286
+  skipped: 21
+  duration: 14s 237ms

@@ -1,0 +1,17 @@
+{
+  "arm": "Q3",
+  "kind": "prod",
+  "started_utc": "2026-10-26T11:09:11.365Z",
+  "regions": [],
+  "build": {
+    "ok": false,
+    "compileErrors": 3,
+    "errors": [
+      "error CS1503: Argument 1: cannot convert from 'target-typed conditional expression' to 'System.Func<CoaiMcp.Runners.Processes.ProcessRequest, CoaiMcp.Runners.Processes.ProcessResult>?' ",
+      "error CS1061: 'ConcurrentQueue<PlayedKimi.Launch>' does not contain a definition for 'Dequeue' and no accessible extension method 'Dequeue' accepting a first argument of type 'ConcurrentQueue<PlayedKimi.Launch>' could be found (are you missing a using directive or an assembly reference?) ",
+      "error CS0103: The name 'AcpWords' does not exist in the current context "
+    ]
+  },
+  "head": "424d7120",
+  "ended_utc": "2026-10-26T11:10:22.671Z"
+}

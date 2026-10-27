@@ -1,0 +1,244 @@
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+[coai-mcp] --security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.
+skipped CoaiMcp.Tests.KimiLaunchChecksTests.OnWindows_TheOsHomeIsSplitIntoDriveAndPath (0ms)
+  a drive letter is a Windows path shape
+failed CoaiMcp.Tests.KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn (13ms)
+  Expected turn.Refusal "/tmp/testsToDelete-kimi-runtime-HCkKmT/persons/.kimi-code cannot be named by its handle on this host, so coai cannot tell where the Kimi sign-in really is — refused (D19)" to contain "not signed in to Kimi Code" because the person's config.toml is the first thing the control reads after the host, the tools, the model and the environment pass.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Primitives.StringAssertions`1.Contain(String expected, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiRuntimeTests.cs:283
+    --- End of stack trace from previous location ---
+skipped CoaiMcp.Tests.PrivateFolderTests.ARootThatIsNotAFullLocalPath_IsRefused(root: "\\\\?\\C:\\homes") (0ms)
+  Windows paths
+skipped CoaiMcp.Tests.PrivateFolderTests.ARootThatIsNotAFullLocalPath_IsRefused(root: "relative\\homes") (0ms)
+  Windows paths
+skipped CoaiMcp.Tests.PrivateFolderTests.ARootThatIsNotAFullLocalPath_IsRefused(root: "\\\\server\\share\\homes") (0ms)
+  Windows paths
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.AShimThatMeetsADisposalsProbe_WaitsItOut_AndTakesItsHold (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheTreeHold_OutlivesItsOpener_WhileAChildLives (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+[coai-mcp] 'gemini/pro' is not a local model: it runs on 'gemini'. A finding's title, why and fix are not anonymised — the normaliser runs later and only on source — so the ranking pass reads them on this machine or not at all. Allowed runtimes: local.
+[coai-mcp] --ask-local needs --prompt-file and --out
+[coai-mcp] --normalize needs --in <requests.json> and --out <answers.json>
+skipped CoaiMcp.Tests.AskAcpShimScenarioTests.TheKimiExclusionsHoldThroughTheRealBinary (0ms)
+  Kimi runs on Windows hosts only (D18); the shim refuses elsewhere
+skipped CoaiMcp.Tests.AskAcpShimScenarioTests.ThePromptGoesIn_AndTheAnswerComesOut_ThroughTheRealBinary (0ms)
+  Kimi runs on Windows hosts only (D18); the shim refuses elsewhere
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheGateAlone_DoesNotOutliveItsOpener_SoItIsNotWhatKeepsTheTreeSafe (0ms)
+  the child process names the sign-in folder by the kernel's handle, which a test's stand-in cannot reach (D18)
+skipped CoaiMcp.Tests.JunctionsTests.ATargetThatExistsButOverflowsTheReparseBuffer_IsRefusedBeforeAnythingIsMade (0ms)
+  a 5 000-character folder cannot be made off Windows (PATH_MAX); the arithmetic is pinned by ATargetOverTheReparseBound_IsRefusedByItsLength_OnEveryHost
+skipped CoaiMcp.Tests.JunctionsTests.TheProductsJunction_IsWhatMklinkMakes (0ms)
+  the oracle is mklink's junction, which only Windows has
+skipped CoaiMcp.Tests.JunctionsTests.AMappedNetworkDrive_IsNotALocalDrive (0ms)
+  a drive letter is a Windows spelling; ADrivePath_IsLocalWhenItIsRootedOnAFixedOrRemovableDrive asks the same on every host
+skipped CoaiMcp.Tests.JunctionsTests.TheProductsJunction_HasMklinksRawReparseBytes (0ms)
+  the oracle is fsutil's dump of mklink's reparse point; the layout itself is pinned by TheReparseBuffer_IsTheMountPointLayout_ByteForByte
+skipped CoaiMcp.Tests.ReviewSnapshotHardeningTests.AnAlternateDataStream_IsNotCopied_AndCannotPassTheByteCeiling (0ms)
+  alternate data streams are NTFS's
+skipped CoaiMcp.Tests.SecurityLaneAuditTests.Each_module_reviews_the_committed_change_on_Windows_Ollama (0ms)
+  Not run (due to explicit test filtering)
+[measurement] outline of /home/jinx/git/coai-exp/arm-D2 at d98dfe01: 3122 file(s) changed against the empty tree, 74 outlined, 170441 bytes of section, built in 8373 ms
+skipped CoaiMcp.Tests.KimiCanaryTests.NothingOfTheSignIn_EverAppearsInWhatCoaiWrites (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiCanaryTests.TheDetector_SeesAServedCanary_WhenOneIsServed (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiCanaryTests.TheDetector_SeesVendorTextRelayedIntoTheRoundsRecords (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.KimiCredentialsLockTests.TheLockKey_IsTheFoldersIdentity_NotItsSpelling(row: "upper") (0ms)
+  a case-sensitive file system keeps FOLDER and folder apart — they are two folders there
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowTheLaunchControlRefuses_LeavesNoHomeAndNoCopy (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowTheLaunchControlRefuses_LeavesNoFolderUnderCoaiVh (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowsHome_IsUnderTheHomesRootsCoaiVh_ShortEnough_AndGoneAfterTheAnswer (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.TwoRoots_BothArrive_EachInItsOwnCopy (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.SecurityLaneCalibrationTests.Three_product_rounds_record_the_operator_prompts_and_local_model (0ms)
+  Not run (due to explicit test filtering)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ALockFolderThatCannotBeUsed_Exits65 (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.AHomeWithNoCredentialsJunction_Exits65_NamingIt_AndHoldsNothing (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowCancelledInFlight_LeavesNoFolderUnderCoaiVh (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheShimReadsNoEnvironment_InAChildWithARedirectedProfile (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheAgentGetsTheBuiltEnvironment_NotTheParents (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenBeforeTheStart_AndFreeAfterANormalTurn (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ATreeHoldThatIsBusyPastTheDeadline_Exits69WithTheSentence (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.OverlappingGrants_StandInCopiesOfAuthorisedBytes_AndThePromptNamesOnlyTheCopies (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowWithNoModel_IsLedgeredOnTheDefaultItRanOn (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.WithNoHomesRoot_TheRowKeepsItsHomeInItsOwnScratch (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowCancelledInFlight_LeavesNoHomeAndNoCopy (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowThatHitsTheTurnCap_FailsWithCoaisSentence_AndItsUsageIsRead (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ARowWhoseScratchFolderCannotBeMade_LeavesNoFolderUnderCoaiVh (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeQuestionRowReadsACopyOfItsRootsTests.ASubFolderGrant_CopiesOnlyThatSubFolder_WithoutTheBranchsConfiguration_AndThePromptNamesTheCopy (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AConversationPlaceTests.ACancellationWhileTheFoldersTurnIsWaitedFor_GivesTheHomesFoldersHandleBack (0ms)
+  the pinned handle is Windows'
+skipped CoaiMcp.Tests.AcpReadBoundaryTests.AnEightDotThreeSpellingOfAnExcludedName_IsRefused (0ms)
+  8.3 short names exist only on Windows volumes
+skipped CoaiMcp.Tests.ReviewSnapshotTests.AFileHeldOpenForWritingByAnother_IsCopied_NotRefused (0ms)
+  share modes are enforced on Windows only
+skipped CoaiMcp.Tests.ForeignKimiTests.TheHostsOwnListing_NamesThisProcess_WithItsParent (0ms)
+  the host listing is Windows' toolhelp snapshot; other hosts never run Kimi (D18)
+[coai-mcp] --ask-local needs a finding schema and none was at '/tmp/coai-schematest-f71LZv/a-file-that-is-not-there.json', so no request was sent: an unconstrained request is answered with an invented shape after a full generation has been paid for.
+[coai-mcp] --ask-local needs a finding schema and none was at '', so no request was sent: an unconstrained request is answered with an invented shape after a full generation has been paid for.
+skipped CoaiMcp.Tests.VibeHomesTests.WhenMakingTheHomeFolderThrows_TheRealHandleIsLetGo_SoCoaiVhCanBeRenamed (0ms)
+  only Windows keeps a folder from being renamed while a handle is held
+skipped CoaiMcp.Tests.SecurityLaneEffortMeasurementTests.One_effort_arm_records_every_cell_and_every_cell_carried_the_arm (0ms)
+  Not run (due to explicit test filtering)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnUnmeasuredKimi_WarnsOnTheLine_WithTheSentenceTheCardShows (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.ARefusedLaunch_NeverStartsTheShim_AndSaysWhy (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnAnsweredReview_IsReadFromTheShimsReport_ThroughTheLaunchControl (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.TheRealArgv_ParsesInTheRealShim_ThatStartsItsAgentInTheBuiltEnvironment (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AHomeTheRunLeftSomethingForbiddenIn_IsRefusedBeforeTheRepairStarts (0ms)
+  Kimi runs on Windows hosts only (D18)
+[coai-mcp] --normalize needs --in <requests.json> and --out <answers.json>
+[coai-mcp] --normalize could not read the request at '/tmp/absent-994ca1ceb27a420d87bf5d9f86b75dab.json': Could not find file '/tmp/absent-994ca1ceb27a420d87bf5d9f86b75dab.json'.
+skipped CoaiMcp.Tests.TheRealCredsCliSpeaksTheVaultsMarkerLiveTests.A_real_creds_CLI_names_the_marker_in_its_help (0ms)
+  COAI_LIVE_CREDS_CLI names no creds CLI to check against — set it to a released creds binary
+skipped CoaiMcp.Tests.TheRealCredsCliSpeaksTheVaultsMarkerLiveTests.A_real_creds_CLI_refuses_the_argument_form_without_echoing_it (0ms)
+  COAI_LIVE_CREDS_CLI names no creds CLI to check against — set it to a released creds binary
+failed CoaiMcp.Tests.KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed (11ms)
+  Xunit.MicrosoftTestingPlatform.XunitException: System.IO.PathTooLongException : The path '/tmp/testsToDelete-kimi-swb02M/owned/kh-x/home/sessions/wd_wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww_0123456789ab' is too long, or a component of the specified path is too long.
+    at System.IO.FileSystem.CreateParentsAndDirectory(String fullPath, UnixFileMode unixCreateMode)
+    at System.IO.Directory.CreateDirectory(String path)
+    at CoaiMcp.Tests.KimiHomeTests.Write(String path, String text) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiHomeTests.cs:44
+    at CoaiMcp.Tests.KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/KimiHomeTests.cs:526
+    at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+skipped CoaiMcp.Tests.AcpClientTests.APrematureEofIsAProtocolEnd_AndTheGrandchildIsGoneToo (0ms)
+  known limit on Linux and macOS: an agent that exits before the teardown loses its children to reparenting, and the tree kill finds none — owning the tree is a condition in todo/PLAN_vibe_and_kimi_runtimes.md §4 before Kimi is launched on any host but Windows
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] --real-method needs --id <findingId>, a whole number
+[coai-mcp] no pair is carrying a refusal
+[coai-mcp] --findings-many: there is no rounds database to read, so nothing is known about these rounds
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many: every key needs a sessionId, a stage and a number of its own
+[coai-mcp] --findings-many takes at most 1000 rounds; it was given 1001
+[coai-mcp] --findings-many needs --keys-file <path> holding a JSON array of {session, stage, number}
+[coai-mcp] --findings-many was given no rounds to read
+[coai-mcp] --findings-many could not read its keys file: Could not find a part of the path '/tmp/coai-many-82b70ef7/not-there.json'.
+[coai-mcp] --findings-many could not read its keys file: Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. Path: $[0].sessionId | LineNumber: 0 | BytePositionInLine: 14.
+[coai-mcp] the rounds database could not be read: SQLite Error 14: 'unable to open database file'.
+[coai-mcp] --check-security reads one JSON object on stdin — {"text": …, "lane": …}: The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.
+[coai-mcp] --findings-many: there is no rounds database to read, so nothing is known about these rounds
+[coai-mcp] the rounds database could not be opened; no corpus can be read from it
+[coai-mcp] the rounds database could not be opened; no pair can be read from it
+[coai-mcp] the rounds database could not be opened; no pair can be read from it
+[coai-mcp] no session for /tmp/coai-reader-m1FjFZ on main — nothing has been through the gate there
+[coai-mcp] --pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)
+[coai-mcp] --pairs-keep needs --in <decisions.json>
+[coai-mcp] --pairs-keep: every decision must be -1 (undecided), 0 (dropped) or 1 (kept)
+[coai-mcp] --pairs-keep needs --in <decisions.json>
+[coai-mcp] --pairs-keep: the document has no `items` list
+[coai-mcp] --pairs-keep could not read /tmp/coai-pairmode-52636f31/decisions.json: 't' is an invalid start of a property name. Expected a '"'. Path: $ | LineNumber: 0 | BytePositionInLine: 2.
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+[coai-mcp] --file-at needs --id <findingId>, a whole number
+skipped CoaiMcp.Tests.AVibeReviewerRunsThroughAFakeVibeTests.ACodeRound_StartsTheVibeReviewerInTheSnapshot_AndTheSnapshotIsGoneWithTheRound (0ms)
+  D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal
+skipped CoaiMcp.Tests.AVibeReviewerRunsThroughAFakeVibeTests.APlanRoundOnAnUnmeasuredVibe_RunsTheReviewer_AndItsStateCarriesTheWarning (0ms)
+  D18: Vibe is refused on every host but Windows — VibeLaunchRulesTests pins that refusal
+[coai-mcp] the log could not be flushed: the log's disk is full
+running... 10151 completed, 2 failed | active: CoaiMcp.Tests.AFeatureIsReviewedEndToEndTests.WhenEveryReviewerFails_TheRetryAsksEveryone_ThenAPersonIsCalled_AndTheQuestionIsFiledUnderTheFeatureSession
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.AHomeTheLaunchControlRefuses_IsLaunchRefused_AndTheAnswerQuotesTheWholeCure (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.ASecondTurn_StartsOnTheHomeTheFirstLeft_WhenTurnOneMadeVibesTwoEmptyFolders (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.TwoTurns_StandInOneSnapshot_RefreshedInPlace_OnOneHome_AndTheCloseTakesTheFolder (0ms)
+  D18: Vibe is refused on every host but Windows — the launch control's tests pin that refusal
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.AVibeRowWithNoModel_IsLedgeredOnTheDefaultItRanOn (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.AHomeThatWouldPassTheWindowsPathLimit_IsLaunchRefused_BeforeAnythingStarts (0ms)
+  the path budget is Windows' (D2); off Windows there is none
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.ATurnStampsItsFolderWithItsStore_HoldsItsLockWhileItRuns_AndEndsTheStamp (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.AVibeConsultationKeepsOneSnapshotTests.ATurnThatHitsTheTurnCap_IsAnExitWithCoaisSentence (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.ConsultantCheckTests.AVibeCheck_ReadsTheMarkerInACopyOfTheScratch_NeverTheScratchItself (0ms)
+  D18: Vibe is refused on every host but Windows
+skipped CoaiMcp.Tests.ConsultantCheckTests.AVibeCheckOfARowWithNoModel_IsLedgeredOnTheDefaultItRanOn (0ms)
+  D18: Vibe is refused on every host but Windows
+running... 10511 completed, 2 failed | active: CoaiMcp.Tests.EndToEndTests.CodeRound_WithEveryReviewerFailing_CallsAHuman_NeverProceeds
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E5_AFolderOwnedBySomeoneElse_IsRefused_NamingTheOwnerAndTheSetting (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E10c_AFolderSomebodyElseHoldsOpenForDeletion_IsRefused (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E3d_AJunctionInsideTheFolder_IsNeverFollowed_ItsTargetsSecurityIsUnchanged (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E10b_TheHandleHeldAfterAReAcl_IsTheOneThatWasVerified_SoTheFolderCannotBeRenamed (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E3b_AnExplicitEntryOnAChild_AndAProtectedChild_AreMadePrivateToo (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.TheNativeShell_ReadsARealFoldersAclAsFacts_AndNamesASid (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E7_AFolderWhoseHandleIsHeld_CannotBeRenamed (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E4_AFolderThatIsAJunctionToAPrivateOne_IsRefused_AndNothingIsMadeThroughIt (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E6_AConversationAndItsSweep_AreRefused_OnARootWhoseCoaiVibeIsAJunction (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E2_AFolderWithAnExtraAce_IsMadePrivate_AndTheLogNamesWhoCouldReadIt (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.AReAclOfCoaiKimi_NeverCrossesTheJunction_IntoTheSignIn (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E10_AFolderRenamedAndReplacedWhileItIsBeingMadePrivate_IsNeverHandedBack (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.ThePrivilegeHelper_EnablesAPrivilegeTheTokenHolds_AndPutsItBack (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.TheWantedFacts_RoundTripThroughTheSystem_AsExactlyOurs (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E3e_ASecondOpenOfAnAlreadyPrivateParent_DoesNotWalkItsChildren (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E5b_AChildOwnedBySomeoneElse_RefusesTheFolder_NamingTheChild (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E3_AnExistingTreeInTheLocalAppDataShape_IsMigrated_ItsChildFileIncluded (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E1_AFreshFolder_IsMadeWithAProtectedDaclOfExactlyThePersonSystemAndAdministrators (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E2b_ADenyAce_IsGone_AfterTheFolderIsMadePrivate (0ms)
+  Windows ACLs: the Unix leg is E9
+skipped CoaiMcp.Tests.PrivateFolderWindowsTests.E3c_AnInheritableEntryOnTheParent_IsGoneFromTheChildAfterwards (0ms)
+  Windows ACLs: the Unix leg is E9
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 10549
+  failed: 2
+  succeeded: 10463
+  skipped: 84
+  duration: 7m 54s 231ms
+suite exit=2

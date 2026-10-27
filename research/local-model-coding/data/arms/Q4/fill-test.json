@@ -1,0 +1,149 @@
+{
+  "arm": "Q4",
+  "kind": "test",
+  "started_utc": "2026-10-26T11:07:02.524Z",
+  "regions": [
+    {
+      "id": "s555-settings",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 1,
+      "rejected": null
+    },
+    {
+      "id": "s555-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s555-played",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 36,
+      "rejected": null
+    },
+    {
+      "id": "s551-copy",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 15,
+      "rejected": null
+    },
+    {
+      "id": "s552-gone",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    },
+    {
+      "id": "s553-cancel",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 7,
+      "rejected": null
+    },
+    {
+      "id": "s554-rootless",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 12,
+      "rejected": null
+    },
+    {
+      "id": "s567-init",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 25,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 15,
+      "rejected": null
+    },
+    {
+      "id": "s567-row",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 2,
+      "lines": 47,
+      "rejected": null
+    },
+    {
+      "id": "s561-rows",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 17,
+      "rejected": null
+    },
+    {
+      "id": "s564-admit",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s563-planner",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 16,
+      "rejected": null
+    },
+    {
+      "id": "s565-launch",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s566-flags",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s568-ts",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 6,
+    "errors": [
+      "error CS0128: A local variable or function named 'cwd' is already defined in this scope ",
+      "error CS0219: The variable 'cwd' is assigned but its value is never used ",
+      "error CS8321: The local function 'GetCwd' is declared but never used ",
+      "error CS0117: 'ConsultCheckStates' does not contain a definition for 'NotAttempted' ",
+      "error CS0103: The name 'KimiPlaces' does not exist in the current context ",
+      "error CS0103: The name 'It' does not exist in the current context "
+    ]
+  },
+  "head": "7fa5d579",
+  "ended_utc": "2026-10-26T11:10:55.845Z"
+}

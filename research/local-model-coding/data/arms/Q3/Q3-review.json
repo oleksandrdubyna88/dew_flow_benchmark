@@ -1,0 +1,21 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_tests.md", "line": 3944,
+   "summary": "E5.5–E5.6 added two new flows (a Kimi `--check-consultant` and a Kimi question row) and a seventh planner arm, but they changed no research/module_*.md file; E5.4 updated module_tests, module_runners and module_server in its own story, and module_core.md:819 still describes vibe as the newest runtime of the table and the planner, with no Kimi arm.",
+   "fix": "Add catalogue rows to module_tests.md for AKimiConsultantCheckTests (S5.5.1–S5.5.4), AKimiQuestionRowTests (S5.6.7) and the Kimi rows of CapabilityMatrixTests and ConfinementPlannerTests, each with its observed red or mutation red. Add a 'Kimi's arm' paragraph to module_core.md beside the Vibe one: no flags, none = Scratch, disk = Snapshot, both unconfined (M-K6), web unmeasured. Name the Kimi check and the Kimi row in module_server.md."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Every admitted kimi row now shows the D13 caveat 'a shell is always there, and no flag removes it' (server Caveat and capabilityAdmission.ts:60, shown by qconsultView.ts:227), but for Kimi every shell command is refused (M-K3, M-K4). Deviation 62 records this and hands it to E5.7, which is already built, so nobody owns the fix.",
+   "fix": "Use a caveat wording that is true for both codex and kimi (for example, 'unconfined: can read this machine — no flag bounds what it reads'), change it in both twins, and update the tests that pin the old sentence. Or record an owner and a date in the plan's open questions."},
+  {"id": "R3", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1109,
+   "summary": "No red is recorded for S5.6.1, S5.6.2, S5.6.4 and S5.6.8. Deviation 50 says they were 'born green', and deviation 60 gives reds only for S5.6.3, S5.6.5, S5.6.6 and S5.6.7. The DoD asks that every scenario be watched red with its message.",
+   "fix": "Take out the kimi rows, Runtimes entry and vectors, run the four tests, and record each red message in deviation 60. A one-line note is enough if the 'all S5.6 production out' run already showed them."},
+  {"id": "R4", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 34,
+   "summary": "§0 and §0.2 assign E5.5 and E5.6 to Opus, but the status line, the skeleton and the as-built headings say Sonnet (the commit is co-authored by Sonnet), and no deviation records why the coder model changed.",
+   "fix": "Add a deviation that names the model that built E5.5–E5.6 and the authority for the change. Or have the stories confirmed per subagent-models.md."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 114,
+   "summary": "The junction-first assertions in S5.5.2, S5.5.3, S5.5.4 and S5.6.7 (`_unlinkedByTheDeleter` empty) are all negative. No assertion shows that the home's credentials link existed during the turn, so if the launch control stopped making a link these tests would stay green. Teeth were shown once by mutation (deviations 58 and 60), but the suite does not keep that proof.",
+   "fix": "In each test's PlayedKimi.During, record that `<--home>/credentials` (or the KimiHome entry) is a reparse point or link, and assert that it was seen. This is the positive companion that testing.md asks for."},
+  {"id": "R6", "severity": "minor", "file": "src_mcp/tests/CapabilityMatrixTests.cs", "line": 80,
+   "summary": "The table names S5.6.2 `TheVectorsCoverKimi`, but no test has that name. Only the existing TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable covers it, and no deviation records this (S5.4.13 used the same pattern but said so).",
+   "fix": "Add one line to the as-built deviations: 'S5.6.2 is the existing TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable', with its red. Or add a named test that asserts the three kimi vectors."}
+ ]}

@@ -1,0 +1,9 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "blocking", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 145,
+   "summary": "The 'refused' arm of S5.6.7 is committed red. I ran the whole MCP suite: 10556 tests, 3 failed — the two known Kimi failures and AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(ending: \"refused\"), where the row answers ('answered') instead of failing. The cause: changing the sign-in slot key does not refuse a fresh one-shot home, because KimiHome.Config checks config.toml only against an existing home (deviation 52). So the suite is not green, against the epic's Done-when and DoD.",
+   "fix": "Make the arm refuse a fresh row before the launch by a refusal that applies to a new home, for example the fake person's credentials folder removed or not signed in, so the launch control answers 'run kimi login'. Keep its assertions: no shim launched, row status failed, coai-vh empty, recorder never invoked, person's folder whole. Or, if the owner decides so, drop the arm and record that decision in the plan. Do not keep a known-red test on the branch."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 401,
+   "summary": "S5.6.6 sets only Flags (['--yolo']). KimiConsultant.MustCarryNoFlags (KimiConsultant.cs:62) also refuses a non-empty Leading, and no test covers that half (the coder records this in deviation 50).",
+   "fix": "Make S5.6.6 a Theory with two arms: one plan with Leading only and one with Flags only. Each must throw ArgumentException matching '*shim*'."}
+ ]}

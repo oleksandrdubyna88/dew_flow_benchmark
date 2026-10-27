@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_vs_code/src/capabilityAdmission.ts", "line": 60,
+   "summary": "Kimi none and disk rows are admitted with the shared unconfined caveat, which says 'a shell is always there, and no flag removes it' (the C# twin is CapabilityMatrix.cs:33), but M-K4 and the Kimi rows' own notes say the shim refuses every shell command, so a Kimi row tells the person something false. Deviation 56 records this and leaves it to the owner, but the plan's Open questions section does not list it.",
+   "fix": "Add an entry under '## Open questions' (todo/PLAN_vibe_and_kimi_runtimes_E5.md:1146) so the owner decides: either split the caveat per runtime, or reword it to 'can read this machine' alone. Change both the TS and C# sentences together."},
+  {"id": "R2", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 353,
+   "summary": "E5.6 decision 2 says each row's note carries the version (2.1.1), but the kimi none and disk notes (lines 353 and 371) do not name it. The version is only in measuredWith.version, and no numbered deviation records this.",
+   "fix": "Add 'kimi 2.1.1' to the two notes and run generate-runtime-capabilities.mjs again, or record a deviation that says the version lives only in measuredWith.version, as the Vibe rows do."},
+  {"id": "R3", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1089,
+   "summary": "The record says E5.5 and E5.6 were built on Sonnet. §0 and §0.2 of the plan route both stories to Opus (the plan gate's command), and no numbered deviation records or justifies the change of model.",
+   "fix": "Record the change of coder model as a numbered deviation with the operator's reason, or get the operator to confirm it. Under §0, review fixes go to the same model that built the story."},
+  {"id": "R4", "severity": "minor", "file": "research/module_tests.md", "line": 3927,
+   "summary": "The Kimi question-consultant row and the Kimi consultant check are new flows (AKimiQuestionRowTests, AKimiConsultantCheckTests). They have no entry in research/module_tests.md, but the Vibe consultant and question row have one (line 3927). The scenario-tests rule requires a new flow to be catalogued in the same task, with what it does NOT prove (the real kimi, the live J2 checks).",
+   "fix": "Add a Kimi section like the Vibe one: the two classes, the S5.5 and S5.6 rows and their teeth, and NOT covered: the real kimi, the live question rows and the live --check-consultant owed to RESULTS §31, and hosts other than Windows (D18)."}
+ ]}

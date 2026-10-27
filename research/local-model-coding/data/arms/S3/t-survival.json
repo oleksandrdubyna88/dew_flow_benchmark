@@ -1,0 +1,74 @@
+{
+  "arm": "S3",
+  "haikuLines": 480,
+  "keptFinal": 0.9875,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 121,
+      "keptFinal": 121,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 66,
+      "keptFinal": 63,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "public void KimiPlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()",
+        "var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime(\"kimi\", Runners.Platform.HostKind.Windows,",
+        "var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime(\"kimi\", Runners.Platform.HostKind.Windows,"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "haikuLines": 149,
+      "keptFinal": 148,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "private string Other => _dir.At(\"other\");"
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "haikuLines": 132,
+      "keptFinal": 132,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+      ],
+      "haikuLines": 12,
+      "keptFinal": 10,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "- t2: the S5.6.5 optional `KimiEnvironment.Refusal` assertion is NOT added (it needs a `KimiFixture`, which the planner tests do not use). The line ~167 test (`AnUnknownRuntime…`) was already green when its expected text gained `, kimi`, because t1 had landed first.",
+        "- t3: the test's `Other` property is unused (dead code), kept for contract fidelity; a reviewer may ask for its removal."
+      ]
+    }
+  ]
+}

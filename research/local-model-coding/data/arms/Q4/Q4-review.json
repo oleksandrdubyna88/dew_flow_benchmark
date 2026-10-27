@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 345,
+   "summary": "All three kimi rows give measuredWith.date as 2026-10-16, and CapabilityMatrixTests.Records pins this date for RESULTS_kimi_confinement.md (CapabilityMatrixTests.cs:162). That test's message calls it 'the day the record was measured', but the cited cells M-K3, M-K4, M-K6, M-K9 and M-K9 (e) were measured on 2026-10-13. The RESULTS header (§3 and §16, the D19 run) gives that date, and the kimi rows of shared/consultant-limitations.json give it too (E5.4 decision 8). 2026-10-16 is the M-K16 date, and no row cites M-K16. Deviation 47 calls 2026-10-16 'the day of the plan's evidence', which is not what the field means.",
+   "fix": "Change the date to 2026-10-13 in the three rows (lines 345, 362, 381) and in the Records tuple at CapabilityMatrixTests.cs:162. Regenerate runtimeCapabilities.generated.ts with its generator. Correct deviation 47."},
+  {"id": "R2", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 352,
+   "summary": "The none and disk notes, and the web row's resultRef (line 382), cite 'RESULTS §14, §25' for the fact that WebSearch and FetchURL are announced. §25 does not name these tools. §7 (M-K4, RESULTS lines 226-231) lists them as announced, and §14 (line 360) names them. Deviation 47 says the plan's '§7' citation is wrong because '§7 is M-K4', but §7 is the section that records the announcement.",
+   "fix": "Cite §7 and §14 (not §14 and §25) in the two notes and in the web row's resultRef. Regenerate the TS table. Correct the reasoning in deviation 47."},
+  {"id": "R3", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 19,
+   "summary": "The file's 'why' header still says which record each runtime's rows cite (the first five runtimes, then the vibe M-V cells) and does not mention the kimi rows. The plan lists this header (:19-20) as an anchor of E5.6.",
+   "fix": "Add one clause: 'the kimi rows cite the M-K cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1)'. Regenerate if the generator copies the header."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 169,
+   "summary": "S5.6.7's Then says that after EACH ending the row's scratch is gone. Only the answered arm checks this, through the copy's --cwd. The cancelled arm launched a shim (played.Shims has one entry) but does not check that its --cwd copy was removed.",
+   "fix": "Move the Directory.Exists(--cwd of played.Shims' single request).Should().BeFalse() assertion so that it runs for the cancelled arm as well as the answered arm."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/runners/Kimi/KimiConsultant.cs", "line": 50,
+   "summary": "Build tests 'launch.Confinement is LaunchConfinement.Planned' and then calls MustCarryNoFlag, which does the same pattern match again. MustCarryNoFlag also uses an if with no braces. This is the only braceless if in runners/Kimi, and the rest of the file uses braces.",
+   "fix": "Keep one check. Either call MustCarryNoFlag(launch) with no guard (its own pattern already lets a consult launch through), or pass it the plan from the outer match. Put braces on its if."}
+ ]}

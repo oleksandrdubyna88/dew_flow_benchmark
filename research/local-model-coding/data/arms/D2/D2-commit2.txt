@@ -1,0 +1,14 @@
+test(kimi): the consultant check on a Kimi row — a copy, a one-shot home, gone after (E5.5, S5.5.1, S5.5.2, S5.5.4)
+
+AKimiConsultantCheckTests drives --check-consultant through ConsultantCheckMode with the played Kimi shim and
+the fake person. S5.5.1: the turn runs in the check's copy (own\tree) on a home under coai-vh\<8>\kh-*.
+S5.5.2: afterwards the one-shot home is gone and the person's sign-in is byte-identical. S5.5.4: with no
+homes root the home stays in the check's own scratch, and the scratch is gone after.
+
+Red column: the E5.5 table named the state before E5.4 (no Kimi adapter); with the adapter in place these
+arms are green on arrival. Teeth: HomesFolder broken to empty made S5.5.1 and S5.5.2 red (home not under
+coai-vh); the rootless arm stayed green, as it should. The break was reverted before this commit.
+
+Not written in this commit: S5.5.3 (cancelled mid-turn) and the GitScratch.AfterUnlink recorder of S5.5.2.
+
+Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>

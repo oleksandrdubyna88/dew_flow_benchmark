@@ -1,0 +1,25 @@
+{
+  "arm": "Q2",
+  "kind": "prod",
+  "started_utc": "2026-10-26T10:03:39.805Z",
+  "regions": [
+    {
+      "id": "s566-guard",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 2,
+    "errors": [
+      "error CS1513: } expected ",
+      "error CS1519: Invalid token '}' in a member declaration "
+    ]
+  },
+  "head": "4defa1ea",
+  "ended_utc": "2026-10-26T10:04:42.207Z"
+}

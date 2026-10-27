@@ -1,0 +1,15 @@
+feat(kimi): the question consultant's Kimi rows — the table, the planner arm, the refusal of flags (E5.6)
+
+- shared/runtime-capabilities.json: kimi × none unconfined (M-K6, M-K3, M-K4), kimi × disk unconfined
+  (+ M-K9, M-K9 (e)), kimi × web unmeasured; the runtimes list gains kimi.
+- shared/capability-matrix-vectors.json: the three kimi pairs (none and disk admitted and flagged; web refused).
+- RuntimeCapabilities.Runtimes and ConfinementPlanner gain kimi: none stands in an empty folder, disk in the
+  snapshot of its roots, no flags (the shim's confinement, D15).
+- KimiConsultant refuses a planned launch that carries any flag (E5.6 decision 3).
+- CapabilityMatrixTests: a kimi record is registered for the citation rule.
+- Generated TypeScript table regenerated; capabilityAdmission.test.ts covers kimi (S5.6.8).
+
+Red seen first: the planner refused kimi by name, and the kimi admission was refused as not a runtime.
+Green: CapabilityMatrixTests, ConfinementPlannerTests, capabilityAdmission.test.js, generator --check.
+
+Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>

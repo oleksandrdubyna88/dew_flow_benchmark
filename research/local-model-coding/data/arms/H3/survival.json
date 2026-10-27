@@ -1,0 +1,249 @@
+{
+  "arm": "H3",
+  "commits": {
+    "skeleton": "b9f8b3f8",
+    "fillTest": "6cf9d42f",
+    "fillProd": "6cf9d42f",
+    "polish": "bbc51f4e",
+    "final": "9bae38c0"
+  },
+  "byKind": {
+    "test": {
+      "regions": 16,
+      "lines": 252,
+      "afterPolish": 0.9563492063492064,
+      "final": 0.9404761904761905,
+      "strictFinal": 0.9404761904761905
+    },
+    "prod": {
+      "regions": 0,
+      "lines": 0,
+      "afterPolish": null,
+      "final": null,
+      "strictFinal": null
+    }
+  },
+  "fill": {
+    "test": {
+      "regions": 16,
+      "filled": 16,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 4,
+      "tests": null
+    },
+    "prod": {
+      "regions": 0,
+      "filled": 0,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 4,
+      "tests": null
+    }
+  },
+  "diffLines": {
+    "skeleton": 451,
+    "fill": 409,
+    "polish": 77,
+    "fixes": 43
+  },
+  "regions": [
+    {
+      "id": "s55-settings",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s551-copy",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 26,
+      "keptAfterPolish": 25,
+      "keptFinal": 22,
+      "strictAfterPolish": 25,
+      "strictFinal": 22,
+      "droppedFinal": [
+        "var (code, said) = await CheckAsync(settings, played);",
+        "code.Should().Be(0, \"the check of my-kimi must pass on a Kimi row that runs in a copy\");",
+        "cwdValue.Should().Contain(Path.Combine(\"own\", \"tree\"), \"the consultant stands in a copy in the check's own scratch, never the repository\");",
+        "var oneShotRoot = Path.Combine(_homes.Path, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar;"
+      ]
+    },
+    {
+      "id": "s552-gone",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 26,
+      "keptAfterPolish": 25,
+      "keptFinal": 25,
+      "strictAfterPolish": 25,
+      "strictFinal": 25,
+      "droppedFinal": [
+        "var oneShot = Path.Combine(_homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder);"
+      ]
+    },
+    {
+      "id": "s553-cancel",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 22,
+      "keptAfterPolish": 22,
+      "keptFinal": 22,
+      "strictAfterPolish": 22,
+      "strictFinal": 22,
+      "droppedFinal": []
+    },
+    {
+      "id": "s554-rootless",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 26,
+      "keptAfterPolish": 26,
+      "keptFinal": 26,
+      "strictAfterPolish": 26,
+      "strictFinal": 26,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-init",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-repo",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-service",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 16,
+      "keptAfterPolish": 16,
+      "keptFinal": 16,
+      "strictAfterPolish": 16,
+      "strictFinal": 16,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567-clean",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 3,
+      "keptAfterPolish": 0,
+      "keptFinal": 0,
+      "strictAfterPolish": 0,
+      "strictFinal": 0,
+      "droppedFinal": [
+        "Directory.Exists(Path.Combine(Homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeTrue() is false",
+        "? Directory.EnumerateFileSystemEntries(Path.Combine(Homes, CoaiMcp.Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty(\"the row's one-shot home folder is gone on every way out\")",
+        ": Assert.True(true);"
+      ]
+    },
+    {
+      "id": "s567-row",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 46,
+      "keptAfterPolish": 46,
+      "keptFinal": 46,
+      "strictAfterPolish": 46,
+      "strictFinal": 46,
+      "droppedFinal": []
+    },
+    {
+      "id": "s561-rows",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 15,
+      "keptAfterPolish": 11,
+      "keptFinal": 11,
+      "strictAfterPolish": 11,
+      "strictFinal": 11,
+      "droppedFinal": [
+        "none.Should().NotBeNull(\"Expected RuntimeCapabilities.Builtin.Of(\\\"kimi\\\", Capability.None) not to be null.\");",
+        "disk.Should().NotBeNull(\"Expected RuntimeCapabilities.Builtin.Of(\\\"kimi\\\", Capability.Disk) not to be null.\");",
+        "web.Should().NotBeNull(\"Expected RuntimeCapabilities.Builtin.Of(\\\"kimi\\\", Capability.Web) not to be null.\");",
+        "disk.MeasuredWith.Cells.Should().Contain(\"M-K9\", \"kimi × disk rests on the write cell M-K9\");"
+      ]
+    },
+    {
+      "id": "s564-admit",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s563-plan",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 16,
+      "keptAfterPolish": 14,
+      "keptFinal": 14,
+      "strictAfterPolish": 14,
+      "strictFinal": 14,
+      "droppedFinal": [
+        "none.Flag.Should().Be(AdmissionFlag.Unconfined, \"F2-style: Kimi's confinement is the shim's (D15)\");",
+        "disk.Flag.Should().Be(AdmissionFlag.Unconfined, \"F2-style: Kimi's confinement is the shim's (D15)\");"
+      ]
+    },
+    {
+      "id": "s565-launch",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 15,
+      "keptAfterPolish": 15,
+      "keptFinal": 15,
+      "strictAfterPolish": 15,
+      "strictFinal": 15,
+      "droppedFinal": []
+    },
+    {
+      "id": "s566-flags",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 9,
+      "keptAfterPolish": 9,
+      "keptFinal": 9,
+      "strictAfterPolish": 9,
+      "strictFinal": 9,
+      "droppedFinal": []
+    },
+    {
+      "id": "s568-ts",
+      "kind": "test",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "lines": 9,
+      "keptAfterPolish": 9,
+      "keptFinal": 8,
+      "strictAfterPolish": 9,
+      "strictFinal": 8,
+      "droppedFinal": [
+        "assert.equal(admission.admitted, true, `kimi × ${capability} is admitted, because the person's own sign-in is flagged unconfined`);"
+      ]
+    }
+  ]
+}

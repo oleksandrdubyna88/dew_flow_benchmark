@@ -1,0 +1,178 @@
+{
+  "arm": "Q1",
+  "kind": "test",
+  "started_utc": "2026-10-26T09:59:26.734Z",
+  "regions": [
+    {
+      "id": "s55-settings",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 3,
+      "rejected": null
+    },
+    {
+      "id": "s55-check",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s55-played",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 14,
+      "rejected": null
+    },
+    {
+      "id": "s55-arg",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 2,
+      "rejected": null
+    },
+    {
+      "id": "s551",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 14,
+      "rejected": null
+    },
+    {
+      "id": "s552",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 22,
+      "rejected": null
+    },
+    {
+      "id": "s553",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    },
+    {
+      "id": "s554",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 11,
+      "rejected": null
+    },
+    {
+      "id": "s567-init",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 10,
+      "rejected": null
+    },
+    {
+      "id": "s567-service",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 14,
+      "rejected": null
+    },
+    {
+      "id": "s567-ask",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 1,
+      "rejected": null
+    },
+    {
+      "id": "s567",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 93,
+      "rejected": null
+    },
+    {
+      "id": "s561",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 17,
+      "rejected": null
+    },
+    {
+      "id": "s564",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 5,
+      "rejected": null
+    },
+    {
+      "id": "s563",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 18,
+      "rejected": null
+    },
+    {
+      "id": "s565",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 24,
+      "rejected": null
+    },
+    {
+      "id": "s566",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 6,
+      "rejected": null
+    },
+    {
+      "id": "s56-standin",
+      "file": "src_mcp/tests/KimiStandIn.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 16,
+      "rejected": null
+    },
+    {
+      "id": "s568",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "filled": true,
+      "rounds": 1,
+      "lines": 10,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 11,
+    "errors": [
+      "error CS1513: } expected ",
+      "error CS1519: Invalid token 'return' in a member declaration ",
+      "error CS1001: Identifier expected ",
+      "error CS1003: Syntax error, ',' expected ",
+      "error CS8124: Tuple must contain at least two elements. ",
+      "error CS1026: ) expected ",
+      "error CS1031: Type expected ",
+      "error CS1002: ; expected ",
+      "error CS1519: Invalid token ')' in a member declaration ",
+      "error CS1519: Invalid token '(' in a member declaration ",
+      "error CS1022: Type or namespace definition, or end-of-file expected "
+    ]
+  },
+  "head": "ee34604c",
+  "ended_utc": "2026-10-26T10:01:55.265Z"
+}

@@ -1,0 +1,20 @@
+{"tasks": [
+ {"id": "t1", "title": "Kimi capability table: three rows, vectors, Runtimes list, regenerated TS, C# matrix tests", "scenarios": ["S5.6.1", "S5.6.2", "S5.6.4"],
+  "files": ["shared/runtime-capabilities.json", "shared/capability-matrix-vectors.json", "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs", "src_vs_code/src/runtimeCapabilities.generated.ts", "src_mcp/tests/CapabilityMatrixTests.cs"],
+  "depends": [], "brief": "t1.md"},
+ {"id": "t2", "title": "Extension: capabilityAdmission test admits kimi flagged and refuses kimi web naming its record", "scenarios": ["S5.6.8"],
+  "files": ["src_vs_code/src/test/capabilityAdmission.test.ts"],
+  "depends": ["t1"], "brief": "t2.md"},
+ {"id": "t3", "title": "Planner arm for kimi, KimiConsultant refuses a plan with flags, adapter tests", "scenarios": ["S5.6.3", "S5.6.5", "S5.6.6"],
+  "files": ["src_mcp/core/QuestionConsult/ConfinementPlanner.cs", "src_mcp/runners/Kimi/KimiConsultant.cs", "src_mcp/tests/ConfinementPlannerTests.cs", "src_mcp/tests/KimiConsultantTests.cs"],
+  "depends": ["t1"], "brief": "t3.md"},
+ {"id": "t4", "title": "A Kimi disk question row through the service: copies, one-shot home, junction-first disposal on three endings", "scenarios": ["S5.6.7"],
+  "files": ["src_mcp/tests/AKimiQuestionRowTests.cs"],
+  "depends": ["t3"], "brief": "t4.md"},
+ {"id": "t5", "title": "The Kimi consultant check: copy, one-shot home, junction-first disposal, cancel, root-less", "scenarios": ["S5.5.1", "S5.5.2", "S5.5.3", "S5.5.4"],
+  "files": ["src_mcp/tests/AKimiConsultantCheckTests.cs"],
+  "depends": [], "brief": "t5.md"},
+ {"id": "t6", "title": "Record E5.5-E5.6 in the E5 plan and the module docs", "scenarios": [],
+  "files": ["todo/PLAN_vibe_and_kimi_runtimes_E5.md", "research/module_core.md", "research/module_tests.md", "research/module_runners.md"],
+  "depends": ["t1", "t2", "t3", "t4", "t5"], "brief": "t6.md"}
+]}

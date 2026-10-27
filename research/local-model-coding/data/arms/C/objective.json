@@ -1,0 +1,85 @@
+{
+  "arm": "C",
+  "head": "88f652bb",
+  "commits": 7,
+  "uncommittedFiles": 0,
+  "build": true,
+  "format": true,
+  "generatorCheck": true,
+  "mcp": {
+    "exit": 2,
+    "total": 10557,
+    "passed": 10470,
+    "skipped": 84,
+    "failedNew": [],
+    "failedBaseline": [
+      "KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed",
+      "KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn"
+    ],
+    "failedEnvironment": [
+      "TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow"
+    ],
+    "environmentNote": "TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow is flaky on this host: it also fails at the start commit when re-run (2026-10-25 21:2x UTC)."
+  },
+  "ts": {
+    "exit": 1,
+    "total": 6290,
+    "failedNew": []
+  },
+  "scenariosPresent": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": true,
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": true,
+    "ACheckCancelledMidTurn_StillDisposesItsHome": true,
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": true,
+    "KimiHasThreeRows_EachCitingItsCells": true,
+    "TheVectorsCoverKimi": true,
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": true,
+    "AdmissionFlagsBothRows": true,
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": true,
+    "APlanWithFlags_IsRefusedForKimi": true,
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": true,
+    "S5.6.8 (TS: kimi rows admit flagged)": true
+  },
+  "scenariosPresentCount": 12,
+  "scenariosPassing": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": "passed",
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": "passed",
+    "ACheckCancelledMidTurn_StillDisposesItsHome": "passed",
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": "passed",
+    "KimiHasThreeRows_EachCitingItsCells": "passed",
+    "TheVectorsCoverKimi": "passed (existing test)",
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": "passed",
+    "AdmissionFlagsBothRows": "passed",
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": "passed",
+    "APlanWithFlags_IsRefusedForKimi": "passed",
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": "passed"
+  },
+  "diff": {
+    "shortstat": "15 files changed, 643 insertions(+), 15 deletions(-)",
+    "changedLines": {
+      "tests": 485,
+      "src": 84,
+      "shared": 59,
+      "docs": 30
+    },
+    "files": [
+      "shared/capability-matrix-vectors.json",
+      "shared/runtime-capabilities.json",
+      "src_mcp/core/QuestionConsult/CapabilityMatrix.cs",
+      "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+      "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "src_mcp/tests/CapabilityMatrixTests.cs",
+      "src_mcp/tests/ConfinementPlannerTests.cs",
+      "src_mcp/tests/PlayedKimi.cs",
+      "src_vs_code/src/capabilityAdmission.ts",
+      "src_vs_code/src/runtimeCapabilities.generated.ts",
+      "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+    ]
+  },
+  "formatNote": "dotnet format (whitespace + style) on the C# files this change touched: clean. The whole-solution run fails on IL2026/IL3050 analyzer errors in src_bugs, which no change touched (environment).",
+  "scenariosNote": "S5.6.2 is the existing test TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable (the plan names it; it covers kimi once the table holds kimi). S5.6.8 is the TS test \"kimi rows admit flagged, web refuses naming its record\"; the TS suite has no new failure."
+}

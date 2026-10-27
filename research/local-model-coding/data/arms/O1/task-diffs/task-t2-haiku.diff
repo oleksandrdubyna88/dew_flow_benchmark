@@ -1,0 +1,141 @@
+diff --git a/src_mcp/core/QuestionConsult/ConfinementPlanner.cs b/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+index 3e7532a8..9266ebb0 100644
+--- a/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
++++ b/src_mcp/core/QuestionConsult/ConfinementPlanner.cs
+@@ -154,6 +154,7 @@ public static class ConfinementPlanner
+         "codex" => Codex(grant, flag),
+         "antigravity" => Antigravity(grant, flag),
+         "vibe" => Vibe(grant, flag),
++        "kimi" => Kimi(grant, flag),
+         // A completion has no tools, so it has no sandbox flag: the question alone, from nowhere.
+         _ => new Confinement.Planned(runtime, grant, [], [], CwdKind.Scratch, [], flag),
+     };
+@@ -201,6 +202,18 @@ public static class ConfinementPlanner
+         _ => new("vibe", grant, [], VibeReadOnly, CwdKind.Scratch, [], flag),
+     };
+ 
++    /// <remarks>
++    /// D15: the shim confines Kimi, so no flag ever, on any capability. A disk row's roots are COPIED into the snapshot
++    /// it stands in (D6, M-K9), because a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk; a none
++    /// row stands in an empty folder.
++    /// </remarks>
++    private static Confinement.Planned Kimi(CapabilityGrant grant, AdmissionFlag flag) => grant.Capability switch
++    {
++        Capability.Disk => new("kimi", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },
++        // `web` never reaches here: the matrix refuses it (no Kimi cell exercises the web).
++        _ => new("kimi", grant, [], [], CwdKind.Scratch, [], flag),
++    };
++
+     private static IEnumerable<string> AddDirs(string flag, IReadOnlyList<string> roots) =>
+         roots.SelectMany(root => (string[])[flag, root]);
+ }
+diff --git a/src_mcp/runners/Kimi/KimiConsultant.cs b/src_mcp/runners/Kimi/KimiConsultant.cs
+index 13a763a9..e455aaf2 100644
+--- a/src_mcp/runners/Kimi/KimiConsultant.cs
++++ b/src_mcp/runners/Kimi/KimiConsultant.cs
+@@ -47,6 +47,7 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") :
+     public ReviewerInvocation Build(ConsultantLaunch launch)
+     {
+         ConsultantLaunches.MustBeLaunchable(launch);
++        MustCarryNoFlags(launch);
+         var settings = launch.Settings with { OwnedScratch = OwnedFolder(launch), Model = ModelOf(launch.Settings) };
+         var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, Cwd(launch), string.Empty, launch.OutputDir, settings);
+         var request = built.Request with { Arguments = [.. built.Request.Arguments, .. SessionOf(launch)] };
+@@ -80,6 +81,17 @@ public sealed class KimiConsultant(KimiRuntime inner, string vendor = "kimi") :
+                 "a Kimi consultant keeps its home in a coai-owned folder of the conversation or the row (OwnedScratch), and none was given — never TEMP or the answers folder (D19)",
+                 nameof(launch));
+ 
++    /// <summary>A Kimi row's confinement is the shim's (D15), never its argv: a plan with flags is not one coai made for kimi (E5.6 decision 3).</summary>
++    private static void MustCarryNoFlags(ConsultantLaunch launch)
++    {
++        if (launch.Confinement is LaunchConfinement.Planned { Plan: var plan } && (plan.Leading.Count > 0 || plan.Flags.Count > 0))
++        {
++            throw new ArgumentException(
++                "a Kimi row's confinement is the shim's; a plan with flags is not one coai made for kimi",
++                nameof(launch));
++        }
++    }
++
+     /// <summary>The report's <c>sessionId</c> when it is a well-formed handle — the shim names it on every exit that prints a report — or empty.</summary>
+     public string ReadHandle(ProcessResult result) =>
+         KimiReport.Parse(result.StdOut).SessionId is var id && ConsultantHandle.IsWellFormed(id) ? id : string.Empty;
+diff --git a/src_mcp/tests/ConfinementPlannerTests.cs b/src_mcp/tests/ConfinementPlannerTests.cs
+index b0e8bb59..a17777b9 100644
+--- a/src_mcp/tests/ConfinementPlannerTests.cs
++++ b/src_mcp/tests/ConfinementPlannerTests.cs
+@@ -143,6 +143,29 @@ public sealed class ConfinementPlannerTests
+         ConfinementPlanner.VibeReadOnly.Should().Equal(disk.Flags, "the reviewer and the planner spell D2 once");
+     }
+ 
++    // ---------- S5.6.3 ----------
++    [Fact]
++    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
++    {
++        var none = Plan("kimi", CapabilityGrant.None);
++        none.Cwd.Should().Be(CwdKind.Scratch);
++        none.Flags.Should().BeEmpty("D15: the shim confines Kimi, so no flag ever");
++        none.Leading.Should().BeEmpty();
++        none.AddDirs.Should().BeEmpty();
++        none.Flag.Should().Be(AdmissionFlag.Unconfined);
++
++        var disk = Plan("kimi", CapabilityGrant.Disk(RootA, RootB));
++        disk.Cwd.Should().Be(CwdKind.Snapshot, "M-K9: the roots are copied, never granted");
++        disk.SnapshotSources.Should().Equal(RootA, RootB);
++        disk.Flags.Should().BeEmpty();
++        disk.Leading.Should().BeEmpty();
++        disk.AddDirs.Should().BeEmpty();
++        disk.Flag.Should().Be(AdmissionFlag.Unconfined);
++
++        ConfinementPlanner.Plan("kimi", CapabilityGrant.Web).Should().BeOfType<Confinement.Refused>()
++            .Which.Reason.Should().Contain("not been measured").And.Contain("RESULTS_kimi_confinement.md");
++    }
++
+     // ---------- refusals ----------
+ 
+     [Theory]
+@@ -340,6 +363,45 @@ public sealed class ConfinementPlannerTests
+         }
+     }
+ 
++    // ---------- S5.6.5 ----------
++    /// <summary>A Kimi question row (E5.6): the shim's request, a none row in its EMPTY scratch and a disk row in the copy of its roots, on the row's own home.</summary>
++    [Fact]
++    public void AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome()
++    {
++        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
++            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
++
++        var none = consultant.Build(Planned("kimi", CapabilityGrant.None));
++        none.Request.WorkingDirectory.Should().Be(Scratch, "a none row stands in an empty folder of its own");
++
++        var disk = consultant.Build(Planned("kimi", CapabilityGrant.Disk(RootA, RootB)));
++        disk.Request.WorkingDirectory.Should().Be(RowTree, "a disk row stands in the copy of its roots (D6)");
++
++        foreach (var request in (Runners.Processes.ProcessRequest[])[none.Request, disk.Request])
++        {
++            var home = request.Arguments.ToList()[request.Arguments.ToList().IndexOf("--home") + 1];
++            home.Should().StartWith(RowFolder + Path.DirectorySeparatorChar);
++            request.Arguments.Should().NotContain(Runners.Acp.AcpWords.SessionFlag, "a question row is one shot");
++            request.Arguments.Should().NotContain(a => a.Contains(RootA) || a.Contains(RootB), "the roots are copied, never named");
++            request.InheritsEnvironment.Should().BeFalse();
++            Runners.Kimi.KimiEnvironment.Refusal(request, Runners.Kimi.KimiPlaces.ForShim(home, Path.Combine(RowFolder, "persons-bin"))).Should().BeEmpty();
++        }
++    }
++
++    // ---------- S5.6.6 ----------
++    [Fact]
++    public void APlanWithFlags_IsRefusedForKimi()
++    {
++        var consultant = new Runners.Kimi.KimiConsultant(new Runners.Kimi.KimiRuntime("kimi", Runners.Platform.HostKind.Windows,
++            new Runners.Kimi.KimiSeams(root => Runners.Kimi.KimiPlaces.ForShim(root, Path.Combine(RowFolder, "persons-bin")), () => ("coai-mcp", []))));
++        var launch = Planned("kimi", CapabilityGrant.None) with
++        {
++            Confinement = new LaunchConfinement.Planned(new Confinement.Planned("kimi", CapabilityGrant.None, [], ["--yolo"], CwdKind.Scratch, [], AdmissionFlag.Unconfined)),
++        };
++
++        FluentActions.Invoking(() => consultant.Build(launch)).Should().Throw<ArgumentException>().WithMessage("*shim*");
++    }
++
+     /// <summary>No Vibe launch carries <c>--add-dir</c>, whatever the grant (D3: <c>--add-dir</c> trusts its folder).</summary>
+     [Fact]
+     public void NoVibeLaunch_CarriesAddDir_WhateverTheGrant()

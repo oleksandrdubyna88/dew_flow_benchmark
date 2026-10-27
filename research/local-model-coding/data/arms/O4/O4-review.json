@@ -1,0 +1,12 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 34,
+   "summary": "S5.6.7's check 'the recorder is never invoked' (line 182) can never fail: `GitScratch.AfterUnlink` is AsyncLocal ('per async flow', GitScratch.cs:12-18), and the test sets it in the async `InitializeAsync` after an `await`, so the value does not reach the test body. I proved this with a scratch xunit.v3 4.0.1 probe: a value set there is null in the test body, and the same value set in a constructor is seen. Deviation 32's only teeth mutation (`Release(homes)`) does not touch this check.",
+   "fix": "Install the recorder synchronously in the test's own flow: in the constructor, as AKimiConsultantCheckTests.cs:26 does, or at the start of the test body. Then prove it has teeth. For example, make the one-shot disposal skip the junction-first unlink, watch all three arms go red on the recorder, restore the code, and record this in deviation 32."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Kimi's none and disk rows now carry `AdmissionFlag.Unconfined`. So the D13 caveat shown beside every Kimi answer says 'a shell is always there, and no flag removes it' (the same text is in capabilityAdmission.ts:60 and the legend at runtime-capabilities.json:11). But Kimi's own row notes say every shell command was refused (M-K3, M-K4). The person sees a sentence that is false for this runtime.",
+   "fix": "Make the unconfined caveat and the legend true for every unconfined runtime, for example 'unconfined: can read this machine, and no flag removes it'. Change it in both the C# and TS copies and in the tests that pin it. If changing the wording is out of scope, record it as a deviation or an open question."},
+  {"id": "R3", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 347,
+   "summary": "The kimi `none` row's resultRef says M-K6 ran 'in an EMPTY coai-owned working folder'. M-K6 did not: its arm read `inside.txt` from its working folder (RESULTS_kimi_confinement.md §9). The 'empty folder confines nothing' result is the plan's inference from M-K6 (E5.6 decision 2), not a condition the cell measured.",
+   "fix": "Change the resultRef so it says only what M-K6 measured: Read was bounded to the working folder, and Grep/Glob read a file outside it by absolute path, 3 of 3. Keep the empty-folder inference in `note`. Then regenerate runtimeCapabilities.generated.ts with the generator."}
+ ]}

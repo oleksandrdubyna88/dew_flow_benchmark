@@ -1,0 +1,1112 @@
+{
+  "C": {
+    "fixNote": "C-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 (major) — FIXED"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 (minor) — FIXED"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R3 (minor) — PARTLY FIXED ... NOT fixed: the scratch's absence in the two arms that never launch the shim"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — FIXED"
+      }
+    ]
+  },
+  "C2": {
+    "fixNote": "C2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **fixed**"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 | major | **fixed**"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | minor | **fixed** ... No teeth run for the new arm (time)."
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | **fixed** | The test is renamed to `AdmissionFlagsBothRows`"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | minor | **fixed** | Deviation 56: E5.5–E5.6 were built on Sonnet, not Opus"
+      }
+    ]
+  },
+  "C3": {
+    "fixNote": "C3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "S5.6.7 never tests a refusal AFTER the one-shot home is made — FIXED"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "the AGENTS.md fixture is never asserted, and the prompt check only looks for the cwd — FIXED"
+      }
+    ]
+  },
+  "C4": {
+    "fixNote": "C4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "**fixed** | Added Open question 7 to the plan: the `unconfined` caveat is false for Kimi"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "**fixed, the second way the finding allows** | Deviation 58: the version stays in `measuredWith.version`"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "**partly fixed — the operator must answer** ... The reason is not in the brief I had, so I wrote none"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "**not fixed — out of scope** | `research/module_tests.md` is under `research/`, which the brief puts out of scope"
+      }
+    ]
+  },
+  "V": {
+    "fixNote": "V-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **Fixed.** `research/module_core.md`: a Kimi-arm bullet"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 | major | **Fixed.** S5.6.7: answered and cancelled arms take the `coai-question-*` ancestor"
+      },
+      {
+        "id": "R3",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R3 | major | **Fixed.** Teeth run ... Honest limit: the `_unlinked` assertion was not seen red on its own"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | **Fixed.** S5.5.3 awaits the check without a catch and asserts `failed` / `cancelled`"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | minor | **Fixed.** `TempDir.For(\"testsToDelete-kcheck-data-\")`"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 | minor | **Fixed.** `MustCarryNoFlag` also refuses `AddDirs`"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 | minor | **Fixed.** One clause added to the seed `why`"
+      },
+      {
+        "id": "R8",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R8 | minor | **Fixed, with a limit.** ... The repository does not record who decided it"
+      }
+    ]
+  },
+  "VT": {
+    "fixNote": "VT-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 (minor) — fixed. ... asserts the folder name starts with `coai-question-`"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 (minor) — fixed. ... asserts the returned state is `failed` and `failureKind` is `cancelled`"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 (minor) — fixed. `KimiEnvironment.Refusal(request, Places(home))` must be empty"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — fixed. `shared/runtime-capabilities.json`: the `why` clause now names the kimi rows"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 (minor) — fixed. ... state is `answered` for the passing arm and `failed` for the exit-70 arm"
+      }
+    ]
+  },
+  "Q1": {
+    "fixNote": "Q1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 | **fixed** | ... The `none` and `disk` rows now cite `§9 M-K6`"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R2 | **not fixed** (gap recorded) ... Recorded as plan deviation 59"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | **fixed** | The web row's note now ends `(kimi 2.1.1)`"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | **fixed** | New test `ConfinementPlannerTests.APlanWithLeadingArguments_IsRefusedForKimi`"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | **fixed** | ... its private `Scopes` copy is deleted"
+      }
+    ]
+  },
+  "Q2": {
+    "fixNote": "Q2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "the one-shot home's place was never checked — FIXED"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "`Scopes` and `StandIn` copied in three test classes — FIXED (one small correction to the finding)"
+      }
+    ]
+  },
+  "Q3": {
+    "fixNote": "Q3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "not-fixed",
+        "quote": "**NOT FIXED — out of scope by the task's own rule.**"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 | minor | **FIXED.** The `unconfined` caveat is now ... in both twins"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "**FIXED (note).** Deviation 63 records the reds of S5.6.1, S5.6.4 and S5.6.8"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "**PARTLY — recorded, authority OPEN.** Deviation 65 states that E5.5–E5.6 were built on Sonnet"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | minor | **FIXED.** `PlayedKimi.Launch` has a new field `CredentialsLinked`"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 | minor | **FIXED.** Added `TheVectorsCoverKimi` ... and deviation 64"
+      }
+    ]
+  },
+  "Q4": {
+    "fixNote": "Q4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 | **fixed** | ... I changed the three rows (`measuredWith.date`)"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 | **fixed** | ... I cited \"§7, §14\" in the `none` and `disk` notes"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | **fixed** | One clause added to the `why` header"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | **fixed** | ... the \"copy is gone\" assertion now runs for `answered` and `cancelled`"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | **fixed** | `Build` now calls `MustCarryNoFlag(launch)` with no outer guard ... braces on its `if`"
+      }
+    ]
+  },
+  "H1": {
+    "fixNote": "H1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 | **fixed** (62a7d157) | ... Both rows now say `§9 M-K6`"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 | **fixed** (05744668) | ... S5.5.3 now has no try/catch"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | **fixed** (05744668) | S5.5.2 keeps the check's result and asserts `state`"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | **fixed, with a change to the proposed fix** (05744668)"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | **fixed** (plan commit) | Mutation ... S5.5.1 red ... recorded in deviation 57"
+      }
+    ]
+  },
+  "H2": {
+    "fixNote": "H2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **Fixed.** `ACheckCancelledMidTurn_StillDisposesItsHome` has no try/catch and no `if` guards now"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 | major | **Fixed.** Each deciding line was broken, run, and reverted"
+      },
+      {
+        "id": "R3",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R3 | major | **Fixed.** `research/module_tests.md`: new section with rows for S5.5.1–S5.5.4 and S5.6.1–S5.6.8"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | **Fixed, but not as the review wrote it.** ... matches `<cwd>/snapshot-<hex>` with a regex"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | minor | **Fixed.** The `kimi × web` note now starts with \"kimi 2.1.1: \""
+      }
+    ]
+  },
+  "H3": {
+    "fixNote": "H3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | FIXED. `research/module_core.md`: new paragraph \"Kimi's arm (E5.6, 2026-10-26)\""
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 | minor | FIXED. ... asserts `KimiEnvironment.Refusal(...)` is empty for `none` and `disk`"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | minor | FIXED. ... removed `code.Should().Be(0)` ... added `canary == CanaryReadings.NotAttempted`"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | FIXED. `capabilityAdmission.test.ts`: the message now says ... Grep and Glob read the disk"
+      }
+    ]
+  },
+  "H4": {
+    "fixNote": "H4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **Fixed.** ... **Teeth run done**"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R2 | minor | **Fixed, one part not.** ... **Not fixed:** \"the row's scratch is gone in the refused arm\""
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | minor | **Fixed.** S5.5.1 asserts the one-shot folder name matches `^[0-9a-f]{8}$`"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | **Fixed.** ... asserts `Mailer.cs` is in the copy and no `AGENTS.md` is"
+      }
+    ]
+  },
+  "T1": {
+    "fixNote": "T1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 (major) — fixed (recorded, not rebuilt)."
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R2 (major) — partly fixed. ... Not done (time): a bare delete in `OneShotHome` ..."
+      },
+      {
+        "id": "R3",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R3 (major) — fixed. ... folders are `TempDir.For(\"testsToDelete-kimi-check-data-\" / \"-temp-\")`"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — fixed. `dotnet format` on the four test files"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R5 (minor) — partly fixed. ... Not done: \"no `coai-question-*` scratch left for this row\""
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 (minor) — fixed. S5.6.6 is a Theory with two cases"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 (minor) — fixed. The caveat is \"unconfined: can read this machine, and no flag removes it\""
+      },
+      {
+        "id": "R8",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R8 (minor) — fixed. The doc comment says S5.6.4."
+      },
+      {
+        "id": "R9",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R9 (minor) — fixed. `research/module_core.md` has the kimi arm"
+      }
+    ]
+  },
+  "T2": {
+    "fixNote": "T2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 (major) — fixed. ... the check on both files is now clean"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 (major) — fixed. `research/module_tests.md` has a new last section"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R3 (minor) — partly fixed. ... Not done: \"the row's scratch (`coai-question-*`) is gone\""
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — fixed. `APlanWithFlags_IsRefusedForKimi` is now a Theory ... Teeth run"
+      }
+    ]
+  },
+  "T3": {
+    "fixNote": "T3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "blocking",
+        "outcome": "fixed",
+        "quote": "R1 (blocking) — fixed. The finding was right"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R2 (major) — fixed. ... Not done: the red for each S5.5 case ... and a run on real Windows"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R3 (minor) — fixed. ... The refused ending launches no shim ...; not checked there [fix asked: every ending]"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — fixed. S5.5.2 now checks the result state ... Red not seen"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 (minor) — fixed. ... The `Leading` case went red with the check removed"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 (minor) — fixed. Status line now says: tests green on the Linux stand-in"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 (minor) — fixed. Deviations 31–45 are now 47–61 (free range)"
+      },
+      {
+        "id": "R8",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R8 (minor) — fixed. The because-text of `TheOneShotFolderIsEmpty` is now the reason"
+      }
+    ]
+  },
+  "T4": {
+    "fixNote": "T4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 (minor) — fixed. ... The Leading arm failed ... I reverted the break"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 (minor) — fixed. Item 34 now says the table's red was against a stub"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 (minor) — fixed. Item 35 now says the decorator rewrites `config.toml` \"during the version probe\""
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — fixed. The heading now names the plan's attribution (Opus), the builder (Haiku 5.5)"
+      }
+    ]
+  },
+  "O1": {
+    "fixNote": "O1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **fixed** | ... Red-watch done"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 | major | **fixed** | Folders renamed to the `testsToDelete-` prefix"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R3 | minor | **not fixed** | ... no time was left for a red-first cycle"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | **fixed** | `KimiConsultant.MustCarryNoFlags` also refuses ... `AddDirs` or `CwdKind.Root`"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 | minor | **fixed** | ... the kimi sentence is one sentence, starts with a capital"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "**not fixed (operator's ruling)** | ... I did not edit the plan's heading or add a deviation"
+      }
+    ]
+  },
+  "O2": {
+    "fixNote": "O2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 (major) — FIXED. Plan status line said `implemented` ... Now `in progress`"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R2 (major) — FIXED. Whitespace error at AKimiQuestionRowTests.cs:145"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 (minor) — FIXED. Shared caveat text \"a shell is always there\" is false for Kimi. Replaced"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — FIXED. MustBeTheShimsConfinement: the three-way test moved into predicate CarriesArgv"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 (minor) — FIXED. S5.6.6 is now a Theory with three arms: Flags, Leading, AddDirs"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 (minor) — FIXED. (a) ... (b) ... (c) refused arm asserts no new coai-question-* folder"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 (minor) — FIXED. _data and _temp ... use TempDir.For with testsToDelete- prefixes"
+      }
+    ]
+  },
+  "O3": {
+    "fixNote": "O3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "blocking",
+        "outcome": "fixed",
+        "quote": "R1 — blocking — FIXED ... the arm now removes the fake person's credentials folder"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 — minor — FIXED (cheap)"
+      }
+    ]
+  },
+  "O4": {
+    "fixNote": "O4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R1 (major) — FIXED ... Teeth run ... The plan was not edited by this fix [fix asked: record in deviation 32]"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 (minor) — FIXED. Caveat wording changed in ... CapabilityMatrix.cs:33 and capabilityAdmission.ts:60"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 (minor) — FIXED. ... `resultRef`: now says only what M-K6 measured"
+      }
+    ]
+  },
+  "D1": {
+    "fixNote": "D1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | fixed | Folder is now `TempDir.For(\"testsToDelete-kimi-question-\")`"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R2 | major | fixed | ... The S5.6.7 scratch-gone check on the cancel and refused arms is NOT added"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 | minor | fixed | S5.5.3 try/catch removed"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | fixed | `KimiHome.AfterUnlink` recorder added in S5.5.2 (both arms), S5.5.4 and the S5.6.7 answered arm"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R5 | minor | NOT fixed | Test names still differ from the scenario tables ... Not done for time"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 | minor | fixed | Disk and web rows assert `MeasuredWith.Version == \"2.1.1\"`"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 | minor | fixed | Seed `why` text: kimi rows cite the M-K cells"
+      }
+    ]
+  },
+  "D2": {
+    "fixNote": "D2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "blocking",
+        "outcome": "partly",
+        "quote": "R1 | blocking | FIXED | ... S5.6.7 is written ... NOT watched red first [review fix asked: watch it red]"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R2 | major | PARTLY FIXED | ... NOT done: the exit-70 arm of S5.5.2, and the ReadOnly attribute check"
+      },
+      {
+        "id": "R3",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R3 | major | FIXED | ... S5.5.3 (ACheckCancelledMidTurn_StillDisposesItsHome) is written"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 | minor | FIXED | ... KimiConsultant refuses Plan.Flags, Plan.Leading or Plan.AddDirs"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R5 | minor | PARTLY FIXED | ... NOT done: the KimiEnvironment.Refusal(request, places) assertion"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R6 | minor | PARTLY FIXED | ... NOT done: the renames of S5.6.3, S5.6.4, S5.6.6 and S5.6.8"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R7 | minor | FIXED | ... The D13 summary sits on TheFlags_AreD13s_… again"
+      },
+      {
+        "id": "R8",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R8 | minor | NOT FIXED (out of scope) | research/ is out of scope for this brief"
+      }
+    ]
+  },
+  "D3": {
+    "fixNote": "D3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 ... **Fixed.** Set `GitScratch.AfterUnlink` recorder; assert state `failed`, `failureKind` `cancelled`"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R2 ... **Partly fixed.** ... **Not fixed:** the refusal arm that makes the home and then refuses"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 ... **Fixed.** Added `KimiEnvironment.Refusal(request, _person.PlacesAt(home))` empty"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R4 ... **Partly fixed.** ... **Not fixed:** the scratch repository's own bytes are not checked"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 ... **Fixed.** Renamed to `AdmissionFlagsBothRows`"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 ... **Fixed.** One clause added to `shared/runtime-capabilities.json` `why`"
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R7 ... **Partly fixed.** Teeth run for E5.5 ... **Not done:** the S5.6.8 red against the old table"
+      }
+    ]
+  },
+  "D4": {
+    "fixNote": "D4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 | major | **fixed** | ... `GitScratch.AfterUnlink` recorder set ... **Teeth not run** (see R4)"
+      },
+      {
+        "id": "R2",
+        "severity": "major",
+        "outcome": "partly",
+        "quote": "R2 | major | **partly fixed** | S5.5.3 added ... **Not fixed:** the exit-70 arm of S5.5.2"
+      },
+      {
+        "id": "R3",
+        "severity": "major",
+        "outcome": "not-fixed",
+        "quote": "R3 | major | **not fixed** | S5.6.7 is still a Fact with the answered arm only ... Time ran out"
+      },
+      {
+        "id": "R4",
+        "severity": "major",
+        "outcome": "not-fixed",
+        "quote": "R4 | major | **not fixed** | No teeth check was run"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R5 | minor | **fixed** | ... **Not added:** the `KimiEnvironment.Refusal` check"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 | minor | **fixed** | ... resultRef now reads \"§12 M-K9 and §21 M-K9 (e)\""
+      },
+      {
+        "id": "R7",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "AMBIGUOUS: table says \"**fixed** ... Commit `b664648b`\", but \"Not done\" list repeats \"R7: seed `why` sentence\""
+      },
+      {
+        "id": "R8",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R8 | minor | **fixed** | ... renamed to `testsToDelete-…` prefixes"
+      },
+      {
+        "id": "R9",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "AMBIGUOUS: labelled \"**partly fixed**\" but says \"**Not renamed:** none left in the list\""
+      },
+      {
+        "id": "R10",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R10 | minor | **not fixed** | Plan file not changed ... need an operator decision"
+      },
+      {
+        "id": "R11",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R11 | minor | **fixed** | Vendor on the Kimi question row is now `my-kimi`"
+      },
+      {
+        "id": "R12",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R12 | minor | **partly fixed** | ... **Not fixed:** `research/module_tests.md` rows"
+      }
+    ]
+  },
+  "S1": {
+    "fixNote": "S1-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 (minor), MustCarryNoFlagsOfAPlan complexity 5 — FIXED."
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R2 (minor) ... — NOT FIXED. ... Recorded as deviation 58 in the plan"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R3 (minor), S5.6.7 prompt and guidance files — PARTLY WRONG, PARTLY FIXED."
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor), deviation 57 says the TypeScript mirror was not in the split's list — FIXED."
+      }
+    ]
+  },
+  "S2": {
+    "fixNote": "S2-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 (minor) — FIXED. Status line ... now says E5.5–E5.6 are implemented"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 — FIXED (commit `2c133b05`). The \"Verified by\" block names the MTP executable run"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "partly",
+        "quote": "R3 (minor) — PARTLY FIXED (honest correction). ... I did NOT run the temporary breaks"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — FIXED. `research/module_runners.md` line ~3717: the broken sentence is now one sentence"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R5 (minor) — NOT FIXED (open item). ... Recorded as an open item in `research/module_tests.md`"
+      },
+      {
+        "id": "R6",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R6 (minor) — FIXED. The planner test is renamed ... each assertion is on its own line"
+      }
+    ]
+  },
+  "S3": {
+    "fixNote": "S3-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R1 (minor) — FIXED. Renamed the S5.6.3 test"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R2 (minor) — FIXED. Added `KimiEnvironment.Refusal(...)` must be empty"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R3 (minor) — NOT FIXED (reason). The refused arm has no shim request ... deviation 54/t3 now records this"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 (minor) — FIXED. Removed the unused `Other` property"
+      },
+      {
+        "id": "R5",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R5 (minor) — FIXED. Added `private static Runners.Kimi.KimiConsultant KimiAt()`"
+      }
+    ]
+  },
+  "S4": {
+    "fixNote": "S4-fix.md",
+    "findings": [
+      {
+        "id": "R1",
+        "severity": "major",
+        "outcome": "fixed",
+        "quote": "R1 — major — DoD line ticked too early: FIXED"
+      },
+      {
+        "id": "R2",
+        "severity": "minor",
+        "outcome": "not-fixed",
+        "quote": "R2 — minor — ...: NOT FIXED ... `research/` is out of scope for this task"
+      },
+      {
+        "id": "R3",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R3 — minor — disk-row test checks the wrong thing: FIXED (test-side)"
+      },
+      {
+        "id": "R4",
+        "severity": "minor",
+        "outcome": "fixed",
+        "quote": "R4 — minor — test name not recorded: FIXED"
+      }
+    ]
+  }
+}

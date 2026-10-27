@@ -1,0 +1,32 @@
+{
+  "arm": "H2",
+  "kind": "prod",
+  "started_utc": "2026-10-26T12:31:09.354Z",
+  "regions": [
+    {
+      "id": "s56-planner-kimi",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 6,
+      "rejected": null
+    },
+    {
+      "id": "s56-no-flags",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "filled": true,
+      "rounds": 1,
+      "lines": 4,
+      "rejected": null
+    }
+  ],
+  "build": {
+    "ok": false,
+    "compileErrors": 1,
+    "errors": [
+      "error CS1503: Argument 2: cannot convert from 'System.StringComparison' to 'string' "
+    ]
+  },
+  "head": "f96166f0",
+  "ended_utc": "2026-10-26T12:33:08.418Z"
+}

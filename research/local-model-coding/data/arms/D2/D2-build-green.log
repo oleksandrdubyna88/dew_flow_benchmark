@@ -1,0 +1,24 @@
+
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  CoaiBench -> /home/jinx/git/coai-exp/arm-D2/src_bench/CoaiBench/bin/Debug/net10.0/coai-bench.dll
+  CoaiMcp.Core -> /home/jinx/git/coai-exp/arm-D2/src_mcp/core/bin/Debug/net10.0/CoaiMcp.Core.dll
+  CoaiMcp.ServiceDefaults -> /home/jinx/git/coai-exp/arm-D2/src_mcp/service_defaults/bin/Debug/net10.0/CoaiMcp.ServiceDefaults.dll
+  CoaiMcp.Storage -> /home/jinx/git/coai-exp/arm-D2/src_mcp/storage/bin/Debug/net10.0/CoaiMcp.Storage.dll
+  NoticeTool -> /home/jinx/git/coai-exp/arm-D2/src_mcp/tests_notices/bin/Debug/net10.0/NoticeTool.dll
+  CoaiBench.Tests -> /home/jinx/git/coai-exp/arm-D2/src_bench/CoaiBench.Tests/bin/Debug/net10.0/CoaiBench.Tests.dll
+  CoaiMcp.Normalizer -> /home/jinx/git/coai-exp/arm-D2/src_mcp/normalizer/bin/Debug/net10.0/CoaiMcp.Normalizer.dll
+  CoaiMcp.Runners -> /home/jinx/git/coai-exp/arm-D2/src_mcp/runners/bin/Debug/net10.0/CoaiMcp.Runners.dll
+  CoaiBugs -> /home/jinx/git/coai-exp/arm-D2/src_bugs/src/bin/Debug/net10.0/coai-bugs.dll
+  CoaiMcp -> /home/jinx/git/coai-exp/arm-D2/src_mcp/src/bin/Debug/net10.0/coai-mcp.dll
+  FakeCli -> /home/jinx/git/coai-exp/arm-D2/src_mcp/tests_fakecli/bin/Debug/net10.0/FakeCli.dll
+  CoaiServer -> /home/jinx/git/coai-exp/arm-D2/src_server/src/bin/Debug/net10.0/coai-server.dll
+  CoaiBugs.Tests -> /home/jinx/git/coai-exp/arm-D2/src_bugs/tests/bin/Debug/net10.0/CoaiBugs.Tests.dll
+  CoaiServer.Tests -> /home/jinx/git/coai-exp/arm-D2/src_server/tests/bin/Debug/net10.0/CoaiServer.Tests.dll
+  CoaiMcp.Tests -> /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:34.90

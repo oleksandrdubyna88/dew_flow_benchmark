@@ -1,0 +1,801 @@
+{
+  "status": "resolved",
+  "advisory": true,
+  "repo": "/home/jinx/git/coai-exp/arm-D1",
+  "version": {
+    "mode": "pinned submodule",
+    "actual": "e29883f8e0b1e9319a821a7ef2ac738d21ed9230",
+    "indexPin": "e29883f8e0b1e9319a821a7ef2ac738d21ed9230",
+    "headPin": "e29883f8e0b1e9319a821a7ef2ac738d21ed9230",
+    "staged": false
+  },
+  "tasks": [
+    "implement",
+    "test"
+  ],
+  "files": [
+    "src_mcp/tests/AKimiQuestionRowTests.cs",
+    "src_mcp/tests/AKimiConsultantCheckTests.cs",
+    "src_mcp/tests/CapabilityMatrixTests.cs",
+    "shared/runtime-capabilities.json"
+  ],
+  "instructions": [
+    {
+      "path": "AGENTS.md",
+      "hash": "482fb2ea4c3bc93e2ac76a42d628c5ec938c600bb4b4d051af4ea1505c3e8dd9",
+      "bytes": 540
+    },
+    {
+      "path": "CLAUDE.md",
+      "hash": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "bytes": 11
+    },
+    {
+      "path": ".agents/conventions/ENTRY.md",
+      "hash": "990c7edb43eecc2349f49e2564ae044df198a2543f3ef130c39c289f1147fcec",
+      "bytes": 4816
+    },
+    {
+      "path": ".agents/PROJECT.md",
+      "hash": "912bbc3b10818e7f946f412eb1cc86aeb7bb039489b25bc08085e52c8c884f1d",
+      "bytes": 10381
+    },
+    {
+      "path": "README.md",
+      "hash": "2e616886a5e71019a430e02c6237487515095494bebc5ca4482249196848ecc6",
+      "bytes": 11214
+    },
+    {
+      "path": "research/architecture.md",
+      "hash": "7c12c422e11c8d79b631a241867db145baeb71866f9ad8e69a46b9df244d4aa1",
+      "bytes": 125669
+    }
+  ],
+  "rules": [
+    {
+      "id": "common.automated-checks",
+      "source": ".agents/conventions/common/automated-checks.md",
+      "hash": "a8a48ec322dc1a98a88af7d70376c2a74032a8dbdb1ba9d37226899e531ef509",
+      "bytes": 5241,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "audit",
+        "test",
+        "pr",
+        "release",
+        "policy"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-caller-model",
+      "source": ".agents/conventions/common/coai-caller-model.md",
+      "hash": "c0b4e91a2087c4326f70dc5235c0099a33305f3411bc5ef33db1bfac35f54d9b",
+      "bytes": 3441,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-consultant",
+      "source": ".agents/conventions/common/coai-consultant.md",
+      "hash": "daee119a70c933c8ac0a55c7485d9812669c2372efc3c3c29b87b75b1616f29e",
+      "bytes": 9664,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-document-gate",
+      "source": ".agents/conventions/common/coai-document-gate.md",
+      "hash": "d99fd1459e8fe312879fbcb0b0a8e76fd1faa2284d47fff4a2bfde1419648876",
+      "bytes": 6626,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-feature-gate",
+      "source": ".agents/conventions/common/coai-feature-gate.md",
+      "hash": "6cf0e3817e52578bcd5cd1280439118dffdd95f205761abe6e676b09be019c3b",
+      "bytes": 6853,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-question-consultant",
+      "source": ".agents/conventions/common/coai-question-consultant.md",
+      "hash": "147929c5ee92c838e2a7886e97d93c4a7ca8aaba73df6aa03b0f23452c5ced9d",
+      "bytes": 6796,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coai-review-gate",
+      "source": ".agents/conventions/common/coai-review-gate.md",
+      "hash": "c29dee8fa799d33bb1ebae446e1356366dc0e5fd5e75b9138f07b7ba0e236c2a",
+      "bytes": 7833,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.coding-style",
+      "source": ".agents/conventions/common/coding-style.md",
+      "hash": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7",
+      "bytes": 2889,
+      "load": "always",
+      "paths": [],
+      "tasks": [],
+      "depends": [],
+      "reasons": [
+        "always"
+      ]
+    },
+    {
+      "id": "common.reuse-first",
+      "source": ".agents/conventions/common/reuse-first.md",
+      "hash": "cca5a18852128ca7a48ac7d70cad2cdfc029d56efe4869542436e68a223814ec",
+      "bytes": 7786,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "dependency:common.development-workflow",
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.development-workflow",
+      "source": ".agents/conventions/common/development-workflow.md",
+      "hash": "da129ea177acce51a72c57146ad3099f0e01c375733a479e7272908875f38ca2",
+      "bytes": 14210,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [
+        "common.reuse-first"
+      ],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.durable-status",
+      "source": ".agents/conventions/common/durable-status.md",
+      "hash": "d81661f7466fa8ff5d180f305dfc173eef5c367948b4a4cbf6e54ffa7931783c",
+      "bytes": 2213,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "ui",
+        "audit"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement"
+      ]
+    },
+    {
+      "id": "common.generated-code-tests",
+      "source": ".agents/conventions/common/generated-code-tests.md",
+      "hash": "34b9f90371423cc02d30a7c4db56458128cc71da23e1e372e3be378c52f410b2",
+      "bytes": 6847,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "test",
+        "audit"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.git-workflow",
+      "source": ".agents/conventions/common/git-workflow.md",
+      "hash": "4af9e6232514e4f9396110db7d331de99fcff4f749ecc4f479a9269d8c6e9bd3",
+      "bytes": 21910,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.testing",
+      "source": ".agents/conventions/common/testing.md",
+      "hash": "bbb3577addbf9ba4652a50dc734c28d6242cc403250361f180fbd4b784a6f879",
+      "bytes": 24699,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "test",
+        "audit",
+        "policy",
+        "release"
+      ],
+      "depends": [],
+      "reasons": [
+        "dependency:common.http-contracts",
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.http-contracts",
+      "source": ".agents/conventions/common/http-contracts.md",
+      "hash": "c19e1e22a62a1ed639170a464f4c9c3048704983ee399da13c8005c2803c5efd",
+      "bytes": 11219,
+      "load": "conditional",
+      "paths": [
+        "**/*.http"
+      ],
+      "tasks": [
+        "http",
+        "release",
+        "implement",
+        "audit"
+      ],
+      "depends": [
+        "common.testing"
+      ],
+      "reasons": [
+        "task:implement"
+      ]
+    },
+    {
+      "id": "common.knowledge-base",
+      "source": ".agents/conventions/common/knowledge-base.md",
+      "hash": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68",
+      "bytes": 3564,
+      "load": "always",
+      "paths": [],
+      "tasks": [],
+      "depends": [],
+      "reasons": [
+        "always"
+      ]
+    },
+    {
+      "id": "common.local-cpu-budget",
+      "source": ".agents/conventions/common/local-cpu-budget.md",
+      "hash": "d8c7a807566fca0197f026c8b57c1e15a260b3a4b0504f0a6f264a5137962930",
+      "bytes": 11202,
+      "load": "conditional",
+      "paths": [
+        "**/package.json",
+        "**/vitest.config.*",
+        "**/jest.config.*",
+        "**/playwright.config.*",
+        "**/xunit.runner.json",
+        "**/Cargo.toml",
+        "**/.cargo/config.toml",
+        "**/pyproject.toml",
+        "**/pytest.ini",
+        "**/*.slnx",
+        "**/*.sln"
+      ],
+      "tasks": [
+        "test",
+        "benchmark"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.logging-serilog",
+      "source": ".agents/conventions/common/logging-serilog.md",
+      "hash": "e7c43d5c52ec64437a6ad95ebb5229af3246ac66928bb6805fd4944984ad3265",
+      "bytes": 12157,
+      "load": "conditional",
+      "paths": [
+        "**/Program.cs",
+        "**/main.rs"
+      ],
+      "tasks": [
+        "logging",
+        "implement",
+        "audit"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement"
+      ]
+    },
+    {
+      "id": "common.measurement",
+      "source": ".agents/conventions/common/measurement.md",
+      "hash": "4074874477301e9816f8ac821465bb453beac4142c393b72b3ed615417f939c7",
+      "bytes": 6913,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "audit",
+        "test",
+        "benchmark"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.planning-docs",
+      "source": ".agents/conventions/common/planning-docs.md",
+      "hash": "478f339110013fcd167f47cb6d3d5c59688994def8e59a06c88f9a902a3dcde1",
+      "bytes": 14405,
+      "load": "conditional",
+      "paths": [
+        "todo/**",
+        "research/**"
+      ],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.platform-limits",
+      "source": ".agents/conventions/common/platform-limits.md",
+      "hash": "6bac305005b8a6e0322be4822759ce551164a1540668f92ebd24efc5fb4a2bbb",
+      "bytes": 10749,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "audit",
+        "test",
+        "release",
+        "deploy"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.post-deploy-checks",
+      "source": ".agents/conventions/common/post-deploy-checks.md",
+      "hash": "56b55fe32c43aef8965ff2d88e844992b6b4331c25ac92d050c7b6a3a9b9511e",
+      "bytes": 10059,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.reliability",
+      "source": ".agents/conventions/common/reliability.md",
+      "hash": "52c78e222f9d7d55dd127a1d01837753d6c9926237445f6ecce33d20a53c0b90",
+      "bytes": 16622,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "audit",
+        "test",
+        "deploy",
+        "benchmark"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.scenario-tests",
+      "source": ".agents/conventions/common/scenario-tests.md",
+      "hash": "b769c0734d49d607bba1ef7ccdbc6774b6357439d474718b50c4b3e98e704a7f",
+      "bytes": 9390,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "test",
+        "audit",
+        "policy"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.security",
+      "source": ".agents/conventions/common/security.md",
+      "hash": "47bbde205659cfc62a2fe57340d808483dd18b50762e13ce6af4d13a246c20a5",
+      "bytes": 8602,
+      "load": "always",
+      "paths": [],
+      "tasks": [],
+      "depends": [],
+      "reasons": [
+        "always"
+      ]
+    },
+    {
+      "id": "common.subagent-models",
+      "source": ".agents/conventions/common/subagent-models.md",
+      "hash": "7a38a3b3d0446a98f3bb2ce4cd9c07cb5d1ad7afc9974e72cd115137ad673836",
+      "bytes": 10843,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "audit",
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies",
+        "http",
+        "benchmark",
+        "logging"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.task-lifecycle",
+      "source": ".agents/conventions/common/task-lifecycle.md",
+      "hash": "2769609f1163c9ab7f32e7ee89f3834b3a4cb2c92a01d95867ea0ae26967c4bc",
+      "bytes": 9152,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "inspect",
+        "audit",
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies",
+        "http",
+        "gpu",
+        "benchmark",
+        "logging",
+        "storage",
+        "ui"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.test-leftovers",
+      "source": ".agents/conventions/common/test-leftovers.md",
+      "hash": "5fe7a141d7052887f7c38b252dd91e321e15b7ef1e8c1a0bef243ba14c92a7bf",
+      "bytes": 4736,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "implement",
+        "test",
+        "audit",
+        "policy",
+        "release"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "common.utc-timestamps",
+      "source": ".agents/conventions/common/utc-timestamps.md",
+      "hash": "eee558bf77b709778f45f1187db8d232cb2f011e878cffcf206b0b79a641ee77",
+      "bytes": 5199,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "storage",
+        "implement",
+        "audit"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement"
+      ]
+    },
+    {
+      "id": "csharp.doctrine",
+      "source": ".agents/conventions/csharp/doctrine.md",
+      "hash": "b8ecae510e0fc421761418d3c19d2d4bf6996854b291c6e17fc8141c3bcd6c5a",
+      "bytes": 4613,
+      "load": "conditional",
+      "paths": [
+        "**/*.cs",
+        "**/*.razor",
+        "**/*.csproj"
+      ],
+      "tasks": [],
+      "depends": [],
+      "reasons": [
+        "path:src_mcp/tests/AKimiQuestionRowTests.cs (**/*.cs)",
+        "path:src_mcp/tests/AKimiConsultantCheckTests.cs (**/*.cs)",
+        "path:src_mcp/tests/CapabilityMatrixTests.cs (**/*.cs)"
+      ]
+    },
+    {
+      "id": "local.common.review-gate",
+      "source": ".agents/rules/common/review-gate.md",
+      "hash": "5a8567d94f0b2090c8e4b0946b195cf4ebb0795bedbc747966519f539591adc7",
+      "bytes": 4371,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "inspect",
+        "audit",
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies",
+        "http",
+        "gpu",
+        "benchmark",
+        "logging",
+        "storage",
+        "ui"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    },
+    {
+      "id": "local.common.vendor-routing",
+      "source": ".agents/rules/common/vendor-routing.md",
+      "hash": "c3d885655ab354725129b9a9f3a034e05a362db0168bca82fb740b6ccce9e486",
+      "bytes": 2664,
+      "load": "conditional",
+      "paths": [],
+      "tasks": [
+        "inspect",
+        "audit",
+        "plan",
+        "implement",
+        "docs",
+        "policy",
+        "test",
+        "git",
+        "pr",
+        "release",
+        "deploy",
+        "dependencies",
+        "http",
+        "gpu",
+        "benchmark",
+        "logging",
+        "storage",
+        "ui"
+      ],
+      "depends": [],
+      "reasons": [
+        "task:implement",
+        "task:test"
+      ]
+    }
+  ],
+  "bytes": 283468,
+  "remaining": [],
+  "taskVocabulary": {
+    "inspect": "Read or explain the product without changing it",
+    "audit": "Review correctness, security, or performance",
+    "plan": "Design a change or write a plan",
+    "implement": "Create, modify, refactor, or fix code",
+    "docs": "Edit documentation",
+    "policy": "Change instructions or their delivery",
+    "test": "Write or run tests",
+    "git": "Branch, stage, commit, rebase, or change submodules",
+    "pr": "Open or handle a pull request",
+    "release": "Package or publish a release",
+    "deploy": "Deploy or verify an installation",
+    "dependencies": "Add, update, or evaluate packages",
+    "http": "Change an HTTP interface",
+    "gpu": "Use GPU compute",
+    "benchmark": "Run or interpret measurements",
+    "logging": "Change hosts or logging",
+    "storage": "Change persistence, dates, or migrations",
+    "ui": "Change user interactions or status displays"
+  }
+}

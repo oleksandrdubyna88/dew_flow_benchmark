@@ -1,0 +1,392 @@
+{
+  "arm": "Q1",
+  "commits": {
+    "skeleton": "8a683844",
+    "fillTest": "ee34604c",
+    "fillProd": "3e447710",
+    "polish": "3639c5eb",
+    "final": "2c6fb9ea"
+  },
+  "byKind": {
+    "test": {
+      "regions": 19,
+      "lines": 212,
+      "afterPolish": 0.5566037735849056,
+      "final": 0.5613207547169812,
+      "strictFinal": 0.5424528301886793
+    },
+    "prod": {
+      "regions": 2,
+      "lines": 5,
+      "afterPolish": 0.4,
+      "final": 0.4,
+      "strictFinal": 0.4
+    }
+  },
+  "fill": {
+    "test": {
+      "regions": 19,
+      "filled": 19,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 11,
+      "tests": null
+    },
+    "prod": {
+      "regions": 2,
+      "filled": 2,
+      "rejected": [],
+      "secondRound": 0,
+      "compileErrors": 11,
+      "tests": null
+    }
+  },
+  "diffLines": {
+    "skeleton": 521,
+    "fill": 417,
+    "polish": 363,
+    "fixes": 71
+  },
+  "regions": [
+    {
+      "id": "s55-settings",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 3,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": [
+        "return new PanelSettings { Providers = [], DataDir = _data.Path, ReviewerTimeout = TimeSpan.FromSeconds(60), ConsultEnabled = true,",
+        "Consultants = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new(\"my-kimi\", Runtime: \"kimi\") } };"
+      ]
+    },
+    {
+      "id": "s55-check",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 2,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": [
+        "var (code, stdout, stderr) = await ConsultantCheckMode.AnanswerAsync(settings, [\"--check-consultant\", \"--caller\", \"claude\"], played, _temp.Path, _warned.Add, Noticing.None, ct);"
+      ]
+    },
+    {
+      "id": "s55-played",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 8,
+      "keptAfterPolish": 4,
+      "keptFinal": 4,
+      "strictAfterPolish": 4,
+      "strictFinal": 4,
+      "droppedFinal": [
+        "var played = new PlayedKimi(inner)",
+        "var content = File.ReadAllText(Path.Combine(request.WorkingDirectory, \"CHECK.md\"));",
+        "var marker = content.Trim().Split(' ')[^1].TrimEnd('.');",
+        "return played;"
+      ]
+    },
+    {
+      "id": "s55-arg",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    },
+    {
+      "id": "s551",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 14,
+      "keptAfterPolish": 3,
+      "keptFinal": 3,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": [
+        "var settings = Settings(_homes.Path);",
+        "var (code, said, _) = await CheckAsync(settings, played, TestContext.Current.CancellationToken);",
+        "said.GetProperty(\"state\").GetString().Should().Be(\"answered\");",
+        "said.GetProperty(\"markerRead\").GetBoolean().Should().BeTrue();",
+        "ArgumentAfter(played, \"--cwd\").Should().Contain(Path.Combine(\"own\", \"tree\"));",
+        "var homeArg = ArgumentAfter(played, \"--home\");",
+        "var escapedRoot = Regex.Escape(_homes.Path);",
+        "homeArg.Should().MatchRegex($\"^{escapedRoot}[/\\\\\\\\]coai-vh[/\\\\\\\\][0-9a-f]{{8}}[/\\\\\\\\]kh-[0-9a-f]{{10}}$\");",
+        "Directory.EnumerateDirectories(_temp.Path, \"coai-check-*\").Should().BeEmpty();",
+        "var canary = said.GetProperty(\"canary\").GetString();",
+        "canary.Should().NotBe(\"read\");"
+      ]
+    },
+    {
+      "id": "s552",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 17,
+      "keptAfterPolish": 4,
+      "keptFinal": 4,
+      "strictAfterPolish": 4,
+      "strictFinal": 4,
+      "droppedFinal": [
+        "var settings = Settings(_homes.Path);",
+        "await CheckAsync(settings, played, TestContext.Current.CancellationToken);",
+        "var homeArg = ArgumentAfter(played, \"--home\");",
+        "var homeParent = Path.GetDirectoryName(homeArg);",
+        "var eightHex = Path.GetFileName(homeParent);",
+        "var oneShotPath = Path.Combine(_homes.Path, VibeHomes.OneShotFolder, eightHex);",
+        "oneShotPath.Should().NotBeNullOrEmpty();",
+        "Directory.Exists(oneShotPath).Should().BeFalse();",
+        "var coaiVhPath = Path.Combine(_homes.Path, VibeHomes.OneShotFolder);",
+        "if (Directory.Exists(coaiVhPath))",
+        "Directory.EnumerateFileSystemEntries(coaiVhPath).Should().BeEmpty();",
+        "_unlinkedByTheDeleter.Should().BeEmpty();",
+        "_person.Hash().Should().Equal(before);"
+      ]
+    },
+    {
+      "id": "s553",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 9,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": [
+        "// Arrange: using var stood = KimiStandIn.Of(_person); using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);",
+        "var played = new PlayedKimi(new ProcessLauncher()) { During = async (_, ct) => { await cts.CancelAsync(); ct.ThrowIfCancellationRequested(); } };",
+        "// Act: CheckAsync throws OperationCanceledException when cancelled mid-turn (ConsultantCheckMode's catch block rethrows).",
+        "var running = () => CheckAsync(Settings(_homes.Path), played, cts.Token);",
+        "await running.Should().ThrowAsync<OperationCanceledException>();",
+        "// Assert: the one-shot folder is gone junction-first, and the deleter met no link.",
+        "Directory.EnumerateFileSystemEntries(Path.Combine(_homes.Path, VibeHomes.OneShotFolder)).Should().BeEmpty();",
+        "_unlinkedByTheDeleter.Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "s554",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "lines": 11,
+      "keptAfterPolish": 4,
+      "keptFinal": 4,
+      "strictAfterPolish": 4,
+      "strictFinal": 4,
+      "droppedFinal": [
+        "var settings = Settings(string.Empty);",
+        "await CheckAsync(settings, played, TestContext.Current.CancellationToken);",
+        "ArgumentAfter(played, \"--home\").Should().Contain(Path.Combine(\"own\", \"kh-\"));",
+        "Directory.EnumerateDirectories(_temp.Path, \"coai-check-*\").Should().BeEmpty();",
+        "Directory.Exists(ArgumentAfter(played, \"--home\")).Should().BeFalse();",
+        "_unlinkedByTheDeleter.Should().BeEmpty();",
+        "_person.Hash().Should().Equal(before);"
+      ]
+    },
+    {
+      "id": "s567-init",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 7,
+      "keptAfterPolish": 6,
+      "keptFinal": 6,
+      "strictAfterPolish": 6,
+      "strictFinal": 6,
+      "droppedFinal": [
+        "Directory.CreateDirectory(Repo);"
+      ]
+    },
+    {
+      "id": "s567-service",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 11,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": [
+        "return new PanelService(new PanelSettings",
+        "Rows = [new QuestionRow(\"kimi-disk\", \"my-kimi\", \"kimi\", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, \"question-disk\", Enabled: true)],",
+        "}, VaultKeys.None(\"no vault in tests\"), default, played, Logger.None, Noticing.None);"
+      ]
+    },
+    {
+      "id": "s567-ask",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 1,
+      "keptAfterPolish": 1,
+      "keptFinal": 1,
+      "strictAfterPolish": 1,
+      "strictFinal": 1,
+      "droppedFinal": []
+    },
+    {
+      "id": "s567",
+      "kind": "test",
+      "file": "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "lines": 59,
+      "keptAfterPolish": 18,
+      "keptFinal": 19,
+      "strictAfterPolish": 15,
+      "strictFinal": 15,
+      "droppedFinal": [
+        "PlayedKimi played;",
+        "switch (ending)",
+        "case Ending.Answered:",
+        "played = new PlayedKimi(_launcher);",
+        "case Ending.CancelledMidTurn:",
+        "played = new PlayedKimi(_launcher)",
+        "case Ending.RefusedBeforeTheLaunch:",
+        "var plain = Directory.CreateDirectory(_dir.At(\"plain\")).FullName;",
+        "await File.WriteAllTextAsync(Path.Combine(plain, \"notes.txt\"), \"not a repository\", TestContext.Current.CancellationToken);",
+        "played = new PlayedKimi(_launcher);",
+        "granted = plain;",
+        "default:",
+        "throw new InvalidOperationException($\"Unknown ending: {ending}\");",
+        "var service = Service(played, granted);",
+        "var asking = () => AskAsync(service, caller.Token);",
+        "var reply = await AskAsync(service, TestContext.Current.CancellationToken);",
+        "row.GetProperty(\"status\").GetString().Should().Be(RowOutcomes.Answered);",
+        "var shim = played.Shims.Single();",
+        "var cwdIndex = Array.FindIndex(shim.Request.Arguments.ToArray(), a => a == \"--cwd\");",
+        "var cwd = shim.Request.Arguments[cwdIndex + 1];",
+        "shim.Request.StdIn.Should().Contain(cwd);",
+        "shim.Request.StdIn.Should().NotContain(Repo);",
+        "shim.Request.StdIn.Should().NotContain(granted);",
+        "else if (ending == Ending.RefusedBeforeTheLaunch)",
+        "row.GetProperty(\"status\").GetString().Should().Be(RowOutcomes.Refused);",
+        "played.Shims.Should().BeEmpty();",
+        "Directory.Exists(Path.Combine(Homes, VibeHomes.OneShotFolder)).Should().BeFalse();",
+        "if (shims.Length > 0)",
+        "var cwdIndex = Array.FindIndex(shims[0].Request.Arguments.ToArray(), a => a == \"--cwd\");",
+        "if (cwdIndex >= 0 && cwdIndex + 1 < shims[0].Request.Arguments.Count)",
+        "var cwd = shims[0].Request.Arguments[cwdIndex + 1];",
+        "var parent = Directory.GetParent(cwd);",
+        "if (parent != null)",
+        "Directory.Exists(parent.FullName).Should().BeFalse();",
+        "var tempDirs = Directory.GetDirectories(Path.GetTempPath(), \"coai-question-*\");",
+        "foreach (var dir in tempDirs)",
+        "Directory.Exists(dir).Should().BeFalse();",
+        "_unlinkedByTheDeleter.Should().BeEmpty();",
+        "_person.Hash().Should().Equal(before);",
+        "played.Shims.Should().HaveCount(1);"
+      ]
+    },
+    {
+      "id": "s561",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 12,
+      "keptAfterPolish": 11,
+      "keptFinal": 11,
+      "strictAfterPolish": 11,
+      "strictFinal": 11,
+      "droppedFinal": [
+        "webRow.MeasuredWith.Cells.Should().BeEmpty();"
+      ]
+    },
+    {
+      "id": "s564",
+      "kind": "test",
+      "file": "src_mcp/tests/CapabilityMatrixTests.cs",
+      "lines": 3,
+      "keptAfterPolish": 3,
+      "keptFinal": 3,
+      "strictAfterPolish": 3,
+      "strictFinal": 3,
+      "droppedFinal": []
+    },
+    {
+      "id": "s563",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 16,
+      "keptAfterPolish": 16,
+      "keptFinal": 16,
+      "strictAfterPolish": 16,
+      "strictFinal": 16,
+      "droppedFinal": []
+    },
+    {
+      "id": "s565",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 16,
+      "keptAfterPolish": 16,
+      "keptFinal": 16,
+      "strictAfterPolish": 16,
+      "strictFinal": 16,
+      "droppedFinal": []
+    },
+    {
+      "id": "s566",
+      "kind": "test",
+      "file": "src_mcp/tests/ConfinementPlannerTests.cs",
+      "lines": 5,
+      "keptAfterPolish": 5,
+      "keptFinal": 5,
+      "strictAfterPolish": 5,
+      "strictFinal": 5,
+      "droppedFinal": []
+    },
+    {
+      "id": "s56-standin",
+      "kind": "test",
+      "file": "src_mcp/tests/KimiStandIn.cs",
+      "lines": 8,
+      "keptAfterPolish": 6,
+      "keptFinal": 6,
+      "strictAfterPolish": 6,
+      "strictFinal": 6,
+      "droppedFinal": [
+        "return new Scopes(",
+        "KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, [])))"
+      ]
+    },
+    {
+      "id": "s568",
+      "kind": "test",
+      "file": "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "lines": 8,
+      "keptAfterPolish": 8,
+      "keptFinal": 8,
+      "strictAfterPolish": 8,
+      "strictFinal": 8,
+      "droppedFinal": []
+    },
+    {
+      "id": "s56-planner-arm",
+      "kind": "prod",
+      "file": "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "lines": 3,
+      "keptAfterPolish": 0,
+      "keptFinal": 0,
+      "strictAfterPolish": 0,
+      "strictFinal": 0,
+      "droppedFinal": [
+        "return grant.Capability switch",
+        "Capability.Disk => new Confinement.Planned(\"kimi\", grant, [], [], CwdKind.Snapshot, [], flag) { SnapshotSources = grant.Roots },",
+        "_ => new Confinement.Planned(\"kimi\", grant, [], [], CwdKind.Scratch, [], flag),"
+      ]
+    },
+    {
+      "id": "s566-noflags",
+      "kind": "prod",
+      "file": "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "lines": 2,
+      "keptAfterPolish": 2,
+      "keptFinal": 2,
+      "strictAfterPolish": 2,
+      "strictFinal": 2,
+      "droppedFinal": []
+    }
+  ]
+}

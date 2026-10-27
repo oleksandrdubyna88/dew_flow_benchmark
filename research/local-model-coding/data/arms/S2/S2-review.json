@@ -1,0 +1,21 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "The status line says the branch is 'NOT yet green' because of `AnUnknownCommit_IsGitFailed_NeverAThrow`. That test is in a file this change does not touch, it uses a one-millisecond timeout, and it passed in my full run of the MCP executable (10557 tests: only the two known Kimi failures). The words 'the known three' are also wrong, because two of the known failures are MCP failures and one is an extension failure.",
+   "fix": "Change the status to 'E5.5–E5.6 implemented'. Name only the two known MCP failures and the known extension failure. If you keep a note about AnUnknownCommit, say that it is a timing-dependent test that this change does not touch."},
+  {"id": "R2", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1103,
+   "summary": "The 'Verified by' entry says the suite was run with `dotnet test --project …` because the `.exe` 'does not exist'. PROJECT.md says NEVER `dotnet test`, and the MTP executable `src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests` (no `.exe` on Linux) is there and runs.",
+   "fix": "Run the suite again through `low-priority.mjs ./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests` and record that command and its result (on this host: 10471 passed, 84 skipped, 2 known failures)."},
+  {"id": "R3", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1098,
+   "summary": "Deviations 50 and 55 say the S5.5.1–S5.5.4 and S5.6.7 rows were 'green on arrival, teeth by temporary breaks (recorded in the task report)'. But no break and no red message is recorded in the repository or in a commit message. §0 says the red message goes into the summary, and deviation 26 for E5.4 shows the expected form.",
+   "fix": "For each of those rows, list the line that was temporarily broken and the red assertion message it gave, in the form of deviation 26."},
+  {"id": "R4", "severity": "minor", "file": "research/module_runners.md", "line": 3717,
+   "summary": "The edit made a broken sentence: '…hold it (a question row on Kimi is\\nand a question row on Kimi is admitted by the capability matrix since E5.6).'",
+   "fix": "Change it to: '…hold it, and since E5.6 the capability matrix admits a Kimi question row (none and disk, flagged unconfined; web refused).'"},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 82,
+   "summary": "S5.6.7 goes through PanelService, so the row's scratch and the copies of the roots are made by `QuestionRowLaunch.MakeScratch` as `coai-question-*` in the system TEMP, not under the test's own `testsToDelete-` folder. This goes against test-leftovers.md and §0 of the plan ('anything a test makes outside its process is named testsToDelete-…'). If a run crashes, those folders are not found by the sweep. Deviation 55 records this but does not justify it beyond 'as for Vibe'.",
+   "fix": "Let the test choose where the row's scratch goes. For example, pass the scratch root through PanelSettings or a seam that the service hands to QuestionRowLaunch, and point it at `_dir`. If that is out of scope, record this as an open item in module_tests.md under what the suite does not prove, not only as a deviation."},
+  {"id": "R6", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 147,
+   "summary": "S5.6.3 is named `KimiPlannerArm_IsACopyForDisk_…`, but the table names it `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb`. Lines 151 and 157 put four assertions on one line, which no other code in the file does. module_tests.md also does not tie S5.6.1, S5.6.2 and S5.6.4 to their tests.",
+   "fix": "Use the scenario's name, or record the rename as a deviation. Put one assertion statement on each line. Add S5.6.1, S5.6.2 (the existing `TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable`) and S5.6.4 to the CapabilityMatrixTests row in module_tests.md."}
+ ]}

@@ -1,0 +1,82 @@
+{
+  "markersLeft": [],
+  "placeholdersLeft": [],
+  "arm": "D3",
+  "head": "0ecd72c4",
+  "commits": 6,
+  "uncommittedFiles": 0,
+  "build": true,
+  "format": true,
+  "generatorCheck": true,
+  "mcp": {
+    "exit": 2,
+    "total": 10556,
+    "passed": 10469,
+    "skipped": 84,
+    "failedNew": [],
+    "failedBaseline": [
+      "KimiRuntimeTests.ALaunchThatNamesItsHome_GoesThroughTheLaunchControl_WhichReadsThePersonsSignIn",
+      "KimiHomeTests.AHomeWhoseDataPathPasses260_IsCheckedAndDisposed"
+    ],
+    "failedEnvironment": [
+      "TheRoundsNumstatsAreCountedTests.AnUnknownCommit_IsGitFailed_NeverAThrow"
+    ]
+  },
+  "ts": {
+    "exit": 1,
+    "total": 6290,
+    "failedNew": []
+  },
+  "scenariosPresent": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": true,
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": true,
+    "ACheckCancelledMidTurn_StillDisposesItsHome": true,
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": true,
+    "KimiHasThreeRows_EachCitingItsCells": true,
+    "TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable": true,
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": true,
+    "AdmissionFlagsBothRows": true,
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": true,
+    "APlanWithFlags_IsRefusedForKimi": true,
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": true,
+    "S5.6.8 (TS: kimi rows admit flagged)": true
+  },
+  "scenariosPresentCount": 12,
+  "scenariosPassing": {
+    "AKimiCheck_RunsInACopy_OnAOneShotHome": "passed",
+    "AfterTheCheck_TheHomeIsGone_JunctionFirst": "passed",
+    "ACheckCancelledMidTurn_StillDisposesItsHome": "passed",
+    "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst": "passed",
+    "KimiHasThreeRows_EachCitingItsCells": "passed",
+    "TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable": "passed",
+    "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb": "passed",
+    "AdmissionFlagsBothRows": "passed",
+    "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome": "passed",
+    "APlanWithFlags_IsRefusedForKimi": "passed",
+    "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind": "passed"
+  },
+  "diff": {
+    "shortstat": "13 files changed, 734 insertions(+), 8 deletions(-)",
+    "changedLines": {
+      "tests": 574,
+      "src": 78,
+      "shared": 57,
+      "docs": 33
+    },
+    "files": [
+      "shared/capability-matrix-vectors.json",
+      "shared/runtime-capabilities.json",
+      "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+      "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+      "src_mcp/runners/Kimi/KimiConsultant.cs",
+      "src_mcp/tests/AKimiConsultantCheckTests.cs",
+      "src_mcp/tests/AKimiQuestionRowScenarioTests.cs",
+      "src_mcp/tests/AKimiQuestionRowTests.cs",
+      "src_mcp/tests/CapabilityMatrixTests.cs",
+      "src_mcp/tests/ConfinementPlannerTests.cs",
+      "src_vs_code/src/runtimeCapabilities.generated.ts",
+      "src_vs_code/src/test/capabilityAdmission.test.ts",
+      "todo/PLAN_vibe_and_kimi_runtimes_E5.md"
+    ]
+  }
+}

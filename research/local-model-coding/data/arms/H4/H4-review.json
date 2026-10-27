@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 45,
+   "summary": "The junction-first claims of S5.5.2, S5.5.3, S5.5.4 and S5.6.7 (also AKimiQuestionRowTests.cs:200) rest only on a negative check, that GitScratch.AfterUnlink was never called. No test shows that a Kimi home with a credentials junction existed in coai-vh\\<8> or that KimiHome unlinked it. Deviation 60 says no mutation was tried. So if the home was never made, or was made without a junction, these tests stay green (testing.md: 'A test can only inspect what is PRESENT').",
+   "fix": "Record KimiHome.AfterUnlink as the E5.3 tests do (AOneShotKimiHomeIsDisposedJunctionFirstTests) and assert it saw exactly <home>\\credentials. Or, in PlayedKimi.During, assert that <home>\\credentials is a link. Then do one teeth run: remove KimiHome.DisposeAllUnder from VibeHomes.EmptiedUnderItsLock and from ConsultCheckScratch.KimiHomesDisposed, watch the recorder assertion go red, revert, and write the red message in the plan."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 166,
+   "summary": "S5.6.7 is loose on two arms. (1) The refused arm checks only that the status is not 'answered'; it does not check that the row was refused for its root ('not inside a Git work tree'), and rowFolder stays null, so it never checks that the row's scratch is gone. (2) The cancelled arm accepts either a row status or OperationCanceledException, but its Vibe sibling (AVibeQuestionRowReadsACopyOfItsRootsTests:217) pins the exception.",
+   "fix": "In the refused arm, assert status == RowOutcomes.Refused and that the reason contains 'not inside a Git work tree'. Assert that the row's scratch is gone in every arm. Pin the one cancellation outcome the service really gives, as the Vibe test does."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 128,
+   "summary": "The home's shape is checked only in part. S5.5.1 checks the grandparent of --home but not that the one-shot folder is <8 hex>. S5.5.4 (line 200) checks only that the parent folder is named 'own', not that it is <scratch>\\own under the check's coai-check-* scratch.",
+   "fix": "Assert that the one-shot folder name matches ^[0-9a-f]{8}$. In S5.5.4, assert that the parent of the parent of --home is a coai-check-* folder under the test's temp folder."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 41,
+   "summary": "The fixture puts src/AGENTS.md ('KESTREL-9') in the granted root, but no assertion uses it. The Kimi copy is never shown to leave out the AGENTS.md that M-K9 is the reason for copying, and the Vibe sibling does check this (line 121).",
+   "fix": "In PlayedKimi.During, assert that the copy under the row's tree has no AGENTS.md. Or remove the dead fixture file."}
+ ]}

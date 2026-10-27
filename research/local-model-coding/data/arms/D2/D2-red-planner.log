@@ -1,0 +1,53 @@
+failed CoaiMcp.Tests.ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome (54ms)
+  Expected type to be CoaiMcp.Core.QuestionConsult.Confinement+Planned, but found CoaiMcp.Core.QuestionConsult.Confinement+Refused.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Types.TypeAssertions.Be(Type expected, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType(Type expectedType, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType[T](String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.ConfinementPlannerTests.Plan(String runtime, CapabilityGrant grant) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:28
+    at CoaiMcp.Tests.ConfinementPlannerTests.Planned(String runtime, CapabilityGrant grant, String model) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:242
+    at CoaiMcp.Tests.ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:367
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed CoaiMcp.Tests.ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi_NamingTheShim (1ms)
+  Expected type to be CoaiMcp.Core.QuestionConsult.Confinement+Planned, but found CoaiMcp.Core.QuestionConsult.Confinement+Refused.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Types.TypeAssertions.Be(Type expected, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType(Type expectedType, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType[T](String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.ConfinementPlannerTests.Plan(String runtime, CapabilityGrant grant) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:28
+    at CoaiMcp.Tests.ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi_NamingTheShim() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:388
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+failed CoaiMcp.Tests.ConfinementPlannerTests.ThePlannerArm_ForKimi_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb (1ms)
+  Expected type to be CoaiMcp.Core.QuestionConsult.Confinement+Planned, but found CoaiMcp.Core.QuestionConsult.Confinement+Refused.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message)
+    at FluentAssertions.Types.TypeAssertions.Be(Type expected, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType(Type expectedType, String because, Object[] becauseArgs)
+    at FluentAssertions.Primitives.ReferenceTypeAssertions`2.BeOfType[T](String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.ConfinementPlannerTests.Plan(String runtime, CapabilityGrant grant) in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:28
+    at CoaiMcp.Tests.ConfinementPlannerTests.ThePlannerArm_ForKimi_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb() in /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/ConfinementPlannerTests.cs:149
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/arm-D2/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 34
+  failed: 3
+  succeeded: 31
+  skipped: 0
+  duration: 1s 632ms

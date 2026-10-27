@@ -1,0 +1,12 @@
+
+> connect-other-ais@0.77.0 pretypecheck
+> npm run prepare:gate
+
+
+> connect-other-ais@0.77.0 prepare:gate
+> node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs
+
+
+> connect-other-ais@0.77.0 typecheck
+> tsc -p ./ --noEmit
+
