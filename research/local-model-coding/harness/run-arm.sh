@@ -25,7 +25,9 @@ case $ARM in V) BRANCH=exp/kimi-e56-vllm; PARA=$E/briefs/arm-V.md ;;
              O1|O2|O3|O4) BRANCH=exp/kimi-e56-opus-split-haiku-${ARM#O}; PARA=$E/briefs/arm-C.md ;;  # Opus splits; Haiku codes; Opus checks once; Haiku fixes
              S1|S2|S3|S4) BRANCH=exp/kimi-e56-sonnet-split-haiku-${ARM#S}; PARA=$E/briefs/arm-C.md ;;  # Sonnet splits; Haiku codes; Opus checks once; Haiku fixes
              D1|D2|D3|D4) BRANCH=exp/kimi-e56-haiku-direct-${ARM#D}; PARA=$E/briefs/arm-C.md ;;  # Haiku codes the story; Opus checks; Haiku fixes
-             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4|O1..O4|S1..S4|D1..D4" >&2; exit 1 ;; esac
+             SR1|SR2|SR3|SR4) BRANCH=exp/kimi-e56-sonnet-split-haiku-review-${ARM#SR}; PARA=$E/briefs/arm-C.md ;;  # S + a fresh Haiku review-and-fix before Opus
+             DR1|DR2|DR3|DR4) BRANCH=exp/kimi-e56-haiku-direct-review-${ARM#DR}; PARA=$E/briefs/arm-C.md ;;  # D + a fresh Haiku review-and-fix before Opus
+             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4|O1..O4|S1..S4|D1..D4|SR1..SR4|DR1..DR4" >&2; exit 1 ;; esac
 OUT=$E/results/$ARM; NOTES=$E/notes; WORK=$E/vllm/work/$ARM
 mkdir -p "$OUT" "$NOTES" "$WORK"
 export COAI_EXP_VLLM_LOG=$E/vllm/requests-$ARM.jsonl
@@ -147,7 +149,26 @@ review_json() { # the review's final message is the JSON; keep it where the fixe
     fs.writeFileSync(process.argv[2], m?m[0]:JSON.stringify({verdict:"unparsed",raw:text}));' "$OUT/$1.done" "$NOTES/$ARM-review.json"
 }
 
+hreview_step() { # name — a FRESH Haiku session reviews the whole stories and fixes what it found (Part 5b); its diff is kept
+  local name=$1
+  [ -f "$OUT/$name.before" ] || git -C "$DIR" rev-parse HEAD > "$OUT/$name.before"
+  step "$name" haiku 30 "$E/briefs/hr-review-fix.template.md" "$NOTES/$ARM-hreview.md" write no
+  [ -f "$OUT/$name.diff" ] || git -C "$DIR" diff "$(cat "$OUT/$name.before")" HEAD > "$OUT/$name.diff"
+}
+
 case $ARM in
+  SR*)
+    SPLIT_MODEL=sonnet TASK_REVIEW=no FIX_MODEL=haiku HAIKU_REVIEW=yes \
+    SPLIT_TPL="$E/briefs/x-split.template.md" SPLIT_FIX_TPL="$E/briefs/x-split-fix.template.md" FIX_TPL="$E/briefs/h-fix.template.md"
+    source "$E/t-lib.sh"; run_t_arm
+    ;;
+  DR*)
+    step 1-code haiku 75 "$E/briefs/d-code.template.md" "$NOTES/$ARM-code.md" write no
+    hreview_step 2-hreview
+    step 3-review opus 20 "$E/briefs/2-review.template.md" "-" read no
+    review_json 3-review
+    step 4-fix haiku 30 "$E/briefs/h-fix.template.md" "$NOTES/$ARM-fix.md" write no
+    ;;
   T*)
     source "$E/t-lib.sh"; run_t_arm
     ;;

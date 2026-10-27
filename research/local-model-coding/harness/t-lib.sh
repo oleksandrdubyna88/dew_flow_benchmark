@@ -113,6 +113,7 @@ run_t_arm() {
   run_batches
   DIR=$MAIN
   [ "${COAI_EXP_FAKE_TASK:-}" = 1 ] && return 0
+  [ "${HAIKU_REVIEW:-no}" = yes ] && hreview_step 3-hreview   # Part 5b: a fresh Haiku reviews and fixes before Opus
   step 4-review opus 20 "$E/briefs/2-review.template.md" "-" read no
   review_json 4-review
   step 5-fix "$FIX_MODEL" 30 "$FIX_TPL" "$NOTES/$ARM-fix.md" write no

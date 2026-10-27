@@ -81,6 +81,28 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - **The mutation checks found a second vacuous test** (H2, the same defect as T3); opened in the code and confirmed.
 - **Disk:** 0 bad-block events, 0 unexpected shutdowns.
 
+## 2e. Part 5b (SR, DR) — interim (2026-10-27 10:50 UTC – still running)
+
+- **Operator stop, 16:19–16:21 UTC** (the owner asked to pause): SR1–SR3 and DR1–DR3 had finished. SR4 and DR4 were
+  stopped with SIGINT to their `timeout` processes; `run-arm.sh` read exit 124 as "stopped at the hard deadline", marked
+  the steps done and started the next ones (DR4's Haiku review edited two test files for about 2 min). Both arms were
+  killed, archived (not deleted) and **re-run from scratch** from 16:35 UTC; no number from the aborted runs is used.
+  Lesson: to pause an arm, SIGKILL its whole process group (no end line is written, so the step resumes). Recorded in
+  [protocol.md](protocol.md) before any SR4/DR4 result.
+- **The chain hung for 53 min (19:02–19:55 UTC)** in the mutation step: a bare `wait` also waited for the keep-awake
+  guard, which never ends. Fixed in [harness/after-y.sh](harness/after-y.sh) (it waits for the pair's own jobs) and
+  restarted from its markers; nothing re-ran, no number touched.
+- **DR1's Opus review stopped at its hard deadline** (30 min, exit 124) after it had written its review JSON; the review
+  is used as written.
+- **Arms read each other's notes (independence leak).** All arms write their notes to one shared folder. The Haiku
+  reviewers of DR3 and DR4 listed that folder and read the previous DR arm's review notes (DR3: `DR2-hreview.md`; DR4:
+  `DR3-hreview.md`, and its notes say "still open from DR3 H4" and "re-checked from DR3"). SR3 and SR4's reviewers
+  and SR1's fixer touched other arms' format logs only. Found by a scan of the session transcripts for tool calls that
+  name another arm's note file. The same scan flags Part 5 fixers (O1, O2, O4, S2, S3, S4) touching other arms' note or
+  log files (O2 and S2: D2's fix notes; S2 also O2's); not yet checked one by one, so part 5's independence is now in
+  question too. The harness gave each arm its own file name but not its own folder; a per-arm folder outside every
+  other arm's reach is the fix for any re-run.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).
