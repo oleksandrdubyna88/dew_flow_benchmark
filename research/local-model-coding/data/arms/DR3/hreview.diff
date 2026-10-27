@@ -1,0 +1,138 @@
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index 0ffbfb65..f80c52fb 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -350,7 +350,7 @@
+           "M-K3",
+           "M-K4"
+         ],
+-        "note": "the empty working folder bounds Read, and Grep and Glob read the disk whatever the cwd; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14) — the row says so; M-K17 decides whether that sentence stays"
++        "note": "kimi 2.1.1: the empty working folder bounds Read, and Grep and Glob read the disk whatever the cwd; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14) — the row says so; M-K17 decides whether that sentence stays"
+       }
+     },
+     {
+@@ -366,9 +366,10 @@
+           "M-K6",
+           "M-K3",
+           "M-K4",
+-          "M-K9"
++          "M-K9",
++          "M-K9 (e)"
+         ],
+-        "note": "the roots are copied into the row's snapshot and Read is bounded to it, but Grep and Glob read the disk directly; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14)"
++        "note": "kimi 2.1.1: the roots are copied into the row's snapshot and Read is bounded to it, but Grep and Glob read the disk directly; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14)"
+       }
+     },
+     {
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 01f6358b..d17ad039 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -171,6 +171,8 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
+         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
++        var unlinked = new List<string>();
++        GitScratch.AfterUnlink = unlinked.Add;
+         var played = new PlayedKimi(_launcher)
+         {
+             During = async (_, ct) =>
+@@ -185,6 +187,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         Text(said, "state").Should().Be("failed", said.ToString());
+         Text(said, "failureKind").Should().Be("cancelled", "the record says the call was cancelled");
+         TheOneShotFolderIsGone(Homes);
++        unlinked.Should().BeEmpty("the home's junction goes first, by its own name, even when the check was cancelled");
+     }
+ 
+     // ---------- S5.5.4 ----------
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index e51798aa..52143c66 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -183,6 +183,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         using var stood = StandIn();
+         var unlinked = new List<string>();
+         GitScratch.AfterUnlink = unlinked.Add;
++        var before = _person.Hash();
+         var kimi = new PlayedKimi(_launcher);
+ 
+         var reply = await AskAsync(Service(kimi, Homes, Granted));
+@@ -190,9 +191,11 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         var row = reply.GetProperty("answers").EnumerateArray().Should().ContainSingle().Subject;
+         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+         var request = kimi.Shims.Should().ContainSingle().Subject.Request;
++        request.StdIn.Should().Contain("Which helper retries an outbound send?", "the question reached the shim");
+         request.StdIn.Should().NotContain(Granted, "the prompt names the copy, never the granted root");
+         TheHomesFolderIsEmpty(Homes);
+         unlinked.Should().BeEmpty("the home's junction goes by its own name first, the recorder never invoked");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in keeps its names and its bytes");
+     }
+ 
+     /// <summary>A row refused before any launch (a folder outside a Git work tree) reserves nothing and leaves nothing.</summary>
+@@ -203,6 +206,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         using var stood = StandIn();
+         var plain = Directory.CreateDirectory(_dir.At("plain")).FullName;
+         await File.WriteAllTextAsync(Path.Combine(plain, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
++        var before = _person.Hash();
+         var kimi = new PlayedKimi(_launcher);
+ 
+         var reply = await AskAsync(Service(kimi, Homes, plain));
+@@ -211,6 +215,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
+         kimi.Shims.Should().BeEmpty("nothing of Kimi's starts for a refused row");
+         TheHomesFolderIsEmpty(Homes);
++        _person.Hash().Should().Equal(before, "the fake person's sign-in keeps its names and its bytes");
+     }
+ 
+     /// <summary>A row cancelled in flight: its one-shot folder is gone junction-first, whatever ended it.</summary>
+@@ -222,6 +227,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+         var unlinked = new List<string>();
+         GitScratch.AfterUnlink = unlinked.Add;
++        var before = _person.Hash();
+         var kimi = new PlayedKimi(_launcher)
+         {
+             During = async (_, ct) =>
+@@ -236,5 +242,6 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         await asking.Should().ThrowAsync<OperationCanceledException>();
+         TheHomesFolderIsEmpty(Homes);
+         unlinked.Should().BeEmpty("the junction goes first, by its own name");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in keeps its names and its bytes");
+     }
+ }
+diff --git a/src_mcp/tests/CapabilityMatrixTests.cs b/src_mcp/tests/CapabilityMatrixTests.cs
+index 0c8dc69e..1c249535 100644
+--- a/src_mcp/tests/CapabilityMatrixTests.cs
++++ b/src_mcp/tests/CapabilityMatrixTests.cs
+@@ -209,6 +209,7 @@ public sealed class CapabilityMatrixTests
+         none.Should().NotBeNull();
+         none!.Standing.Should().Be(CapabilityStanding.Unconfined);
+         none.MeasuredWith.Cells.Should().Contain("M-K6", "Grep and Glob took an outside file by absolute path, 3 of 3");
++        disk.Should().NotBeNull();
+         disk!.Standing.Should().Be(CapabilityStanding.Unconfined);
+         disk.MeasuredWith.Cells.Should().Contain(["M-K6", "M-K9"], "Read is bounded, and the roots are copied because M-K9 loads disk paths");
+         web.Should().NotBeNull();
+diff --git a/src_vs_code/src/runtimeCapabilities.generated.ts b/src_vs_code/src/runtimeCapabilities.generated.ts
+index f028f52b..8f9ead4e 100644
+--- a/src_vs_code/src/runtimeCapabilities.generated.ts
++++ b/src_vs_code/src/runtimeCapabilities.generated.ts
+@@ -366,7 +366,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+       ],
+-      note: 'the empty working folder bounds Read, and Grep and Glob read the disk whatever the cwd; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14) — the row says so; M-K17 decides whether that sentence stays',
++      note: 'kimi 2.1.1: the empty working folder bounds Read, and Grep and Glob read the disk whatever the cwd; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14) — the row says so; M-K17 decides whether that sentence stays',
+     },
+   },
+   {
+@@ -383,8 +383,9 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+         'M-K9',
++        'M-K9 (e)',
+       ],
+-      note: "the roots are copied into the row's snapshot and Read is bounded to it, but Grep and Glob read the disk directly; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14)",
++      note: "kimi 2.1.1: the roots are copied into the row's snapshot and Read is bounded to it, but Grep and Glob read the disk directly; WebSearch and FetchURL are announced and unmeasured (RESULTS §7, §14)",
+     },
+   },
+   {

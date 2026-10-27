@@ -13,11 +13,11 @@ const D = join(ROOT, 'data');
 const read = (f) => (existsSync(join(D, f)) ? JSON.parse(readFileSync(join(D, f), 'utf8')) : null);
 const lines = (f) => (existsSync(join(D, f)) ? readFileSync(join(D, f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const { prices, report } = read('metrics.json');
-const ORDER = ['C', 'C2', 'C3', 'C4', 'V', 'VT', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'O2', 'O3', 'O4', 'S1', 'S2', 'S3', 'S4', 'D1', 'D2', 'D3', 'D4'];
+const ORDER = ['C', 'C2', 'C3', 'C4', 'V', 'VT', 'Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'H3', 'H4', 'T1', 'T2', 'T3', 'T4', 'O1', 'O2', 'O3', 'O4', 'S1', 'S2', 'S3', 'S4', 'D1', 'D2', 'D3', 'D4', 'SR1', 'SR2', 'SR3', 'SR4', 'DR1', 'DR2', 'DR3', 'DR4'];
 const ARMS = ORDER.filter((a) => report[a]);
 const CLASSIC = ['C', 'C2', 'C3', 'C4'];
 const GROUP = { C: 'classic', C2: 'classic', C3: 'classic', C4: 'classic', V: 'vLLM drafts, thinking off', VT: 'vLLM drafts, thinking on' };
-const group = (a) => GROUP[a] ?? (a.startsWith('Q') ? 'skeleton + Qwen fill' : a.startsWith('H') ? 'skeleton + Haiku fill' : a.startsWith('T') ? 'Opus tasks → Haiku codes → Sonnet per task' : a.startsWith('O') ? 'Opus tasks → Haiku codes → Opus checks → Haiku fixes' : a.startsWith('S') ? 'Sonnet tasks → Haiku codes → Opus checks → Haiku fixes' : 'Haiku codes the story → Opus checks → Haiku fixes');
+const group = (a) => GROUP[a] ?? (a.startsWith('Q') ? 'skeleton + Qwen fill' : a.startsWith('H') ? 'skeleton + Haiku fill' : a.startsWith('T') ? 'Opus tasks → Haiku codes → Sonnet per task' : a.startsWith('SR') ? 'Sonnet tasks → Haiku codes → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes' : a.startsWith('DR') ? 'Haiku codes the story → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes' : a.startsWith('O') ? 'Opus tasks → Haiku codes → Opus checks → Haiku fixes' : a.startsWith('S') ? 'Sonnet tasks → Haiku codes → Opus checks → Haiku fixes' : 'Haiku codes the story → Opus checks → Haiku fixes');
 const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 const f = (v, d = 1) => (v == null || Number.isNaN(v) ? 'n/a' : Number(v).toFixed(d));
 const usd = (v) => (v == null || Number.isNaN(v) ? 'n/a' : `$${v.toFixed(2)}`);
@@ -117,13 +117,13 @@ for (const a of ARMS.filter((x) => /^[QH]/.test(x))) {
   p(`| ${a} | ${ft?.filled ?? 0} / ${ft?.rejected.length ?? 0} | ${fp?.filled ?? 0} / ${fp?.rejected.length ?? 0} | ${ft?.compileErrors ?? '—'} / ${fp?.compileErrors ?? '—'} | ${pct(s.byKind.test.afterPolish)} → ${pct(s.byKind.test.final)} (${pct(s.byKind.test.strictFinal)}) | ${pct(s.byKind.prod.afterPolish)} → ${pct(s.byKind.prod.final)} (${pct(s.byKind.prod.strictFinal)}) | ${s.diffLines.skeleton} / ${s.diffLines.fill} / ${s.diffLines.polish} / ${s.diffLines.fixes} |`);
 }
 p();
-p('## 4b. The task arms (T: Opus splits, Sonnet reviews each task; O: Opus splits, no task review; S: Sonnet splits, no task review — Haiku codes every task)');
+p('## 4b. The task arms (T: Opus splits, Sonnet reviews each task; O: Opus splits, no task review; S: Sonnet splits, no task review; SR: S + a fresh Haiku review of the whole stories before Opus — Haiku codes every task)');
 p();
 p('Cost per role from the host (\`metrics.json\`); Haiku survival = Haiku\'s meaningful added lines still present, whitespace-insensitive,');
 p('in any file the arm changed in its final commit (\`t-survival.json\`, from the per-task diffs the harness kept).');
 p();
-p('| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |');
-p('|---|---|---|---|---|---|---|---|---|---|---|');
+p('| Arm | Elapsed (start → done) | Tasks / batches (parallel at most) | Split $ | Haiku $ (all tasks) | Sonnet task reviews $ | Fresh Haiku review $ | Final Opus review $ | Final fixes $ | Haiku lines → kept | Lines the task reviews changed | Final review: findings (major) |');
+p('|---|---|---|---|---|---|---|---|---|---|---|---|');
 for (const a of ARMS.filter((x) => /^[TOS]/.test(x))) {
   const tm = lines(`arms/${a}/timing.jsonl`); const t0 = Date.parse(tm.find((x) => x.kind === 'start')?.start_utc); const t1 = Date.parse(tm.find((x) => x.kind === 'arm-done')?.done_utc);
   const el = Number.isFinite(t0) && Number.isFinite(t1) ? `${Math.round((t1 - t0) / 60000)} min` : 'n/a';
@@ -131,7 +131,7 @@ for (const a of ARMS.filter((x) => /^[TOS]/.test(x))) {
   const st = report[a].steps; const g = (re) => Object.entries(st).filter(([kk]) => re.test(kk)).flatMap(([, x]) => x).reduce((q, x) => q + (x.cost ?? x.costEst ?? 0), 0);
   const par = b ? Math.max(...b.batches.map((x) => x.length)) : 0;
   const maj = (rv?.findings ?? []).filter((x) => x.severity !== 'minor').length;
-  p(`| ${a} | ${el} | ${b ? Object.keys(b.tasks).length : '?'} / ${b ? b.batches.length : '?'} (${par}) | ${usd(g(/split/))} | ${usd(g(/-code$/))} | ${usd(g(/^3-t/))} | ${usd(g(/^4-review/))} | ${usd(g(/^5-fix/))} | ${ts ? `${ts.haikuLines} → ${pct(ts.keptFinal)}` : 'n/a'} | ${ts ? (ts.reviewChangedLines ?? '— (no task review)') : 'n/a'} | ${rv ? `${(rv.findings ?? []).length} (${maj})` : 'n/a'} |`);
+  p(`| ${a} | ${el} | ${b ? Object.keys(b.tasks).length : '?'} / ${b ? b.batches.length : '?'} (${par}) | ${usd(g(/split/))} | ${usd(g(/-code$/))} | ${usd(g(/^3-t/))} | ${a.startsWith('SR') ? usd(g(/hreview/)) : '—'} | ${usd(g(/^4-review/))} | ${usd(g(/^5-fix/))} | ${ts ? `${ts.haikuLines} → ${pct(ts.keptFinal)}` : 'n/a'} | ${ts ? (ts.reviewChangedLines ?? '— (no task review)') : 'n/a'} | ${rv ? `${(rv.findings ?? []).length} (${maj})` : 'n/a'} |`);
 }
 p();
 p('## 5. Filler requests');

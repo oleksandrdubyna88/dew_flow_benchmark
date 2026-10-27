@@ -1,0 +1,76 @@
+{
+  "arm": "SR2",
+  "haikuLines": 511,
+  "keptFinal": 0.9921722113502935,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 117,
+      "keptFinal": 117,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 74,
+      "keptFinal": 74,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 134,
+      "keptFinal": 132,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "ArgumentOf(shim, \"--cwd\").Should().Contain(Path.Combine(\"own\", \"tree\"), \"a copy in the check's own scratch, never the repository\");",
+        "home.Should().StartWith(Path.Combine(_homes.Path, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar, \"the one-shot home sits under the homes root\");"
+      ]
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 142,
+      "keptFinal": 142,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t5",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_tests.md"
+      ],
+      "haikuLines": 44,
+      "keptFinal": 42,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "| `CapabilityMatrixTests` vectors test over every pair (S5.6.2; the test name was not recorded) | the kimi × none, kimi × disk and kimi × web pairs each have a vector | *the table's kimi × none row must have a vector deciding it* |",
+        "56. **The E5.6 reds that were recorded.** S5.6.1 `KimiHasThreeRows_EachCitingItsCells`: *Expected none not to be <null>.* S5.6.2 (the matrix over every pair): *the table's kimi × none row must have a vector deciding it*. S5.6.3 (planner, disk): *Expected disk.Cwd to be CwdKind.Snapshot …, but found CwdKind.Scratch* (the story said `plan.Cwd`). S5.6.4 `AdmissionFlagsBothKimiRows_AndRefusesItsWeb_NamingItsRecord`: *Expected type to be Admitted…, but found Refused* (the record's name is not printed on a type mismatch, so the story's quoted sentence was not seen). S5.6.5: *Expected disk.Request.WorkingDirectory … but they differ at index 10*. S5.6.6 (three rows): *Expected a <System.ArgumentException> to be thrown, but no exception was thrown.* The extension's `kimi rows admit flagged, web refuses naming its record` was red as *'kimi' is not a runtime the question consultant can launch …*. Not recorded: a red for the web sentence naming `research/RESULTS_kimi_confinement.md`, which is asserted and was green once the row existed."
+      ]
+    }
+  ]
+}

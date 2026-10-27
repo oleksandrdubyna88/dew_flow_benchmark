@@ -1,0 +1,6 @@
+test(kimi): name the planner and admission rows as the plan names them (E5.6, S5.6.3, S5.6.4)
+
+Review H1 and H2: the two test names did not match the scenario names in
+todo/PLAN_vibe_and_kimi_runtimes_E5.md. The bodies are unchanged.
+
+Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>

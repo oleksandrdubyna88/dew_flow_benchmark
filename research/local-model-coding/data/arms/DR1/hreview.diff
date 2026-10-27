@@ -1,0 +1,250 @@
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index af78e44d..fc5c2c4d 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -343,7 +343,7 @@
+         "cli": "kimi",
+         "version": "2.1.1",
+         "date": "2026-10-13",
+-        "resultRef": "research/RESULTS_kimi_confinement.md §5/§11 — M-K6: an EMPTY coai-owned working folder still let Grep and Glob take an outside file's marker by absolute path (3 of 3); M-K3 and M-K4: every write refused (0 of 9 and 0 of 6)",
++        "resultRef": "research/RESULTS_kimi_confinement.md §9 (M-K6), §6 (M-K3), §7 (M-K4) — M-K6: an EMPTY coai-owned working folder still let Grep and Glob take an outside file's marker by absolute path (3 of 3); M-K3 and M-K4: every write refused (0 of 9 and 0 of 6)",
+         "cells": [
+           "M-K6",
+           "M-K3",
+@@ -360,7 +360,7 @@
+         "cli": "kimi",
+         "version": "2.1.1",
+         "date": "2026-10-13",
+-        "resultRef": "research/RESULTS_kimi_confinement.md §5/§11/§19 — M-K6: Read bounded to the copy, Grep and Glob outside it (3 of 3); M-K9 and M-K9 (e): why the roots are COPIED, not granted (a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk); M-K3 and M-K4: every write refused",
++        "resultRef": "research/RESULTS_kimi_confinement.md §9 (M-K6), §12 and §21 (M-K9, M-K9 (e)), §6 and §7 (M-K3, M-K4) — M-K6: Read bounded to the copy, Grep and Glob outside it (3 of 3); M-K9 and M-K9 (e): why the roots are COPIED, not granted (a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk); M-K3 and M-K4: every write refused",
+         "cells": [
+           "M-K6",
+           "M-K9",
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 4769c904..f22194c8 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -15,6 +15,7 @@ namespace CoaiMcp.Tests;
+ /// makes it — in a COPY of the check's scratch repository, on a ONE-SHOT owned home, disposed junction-first whatever ended the check. The
+ /// person is a fake one (<see cref="KimiFixture"/>); every folder a test makes is its own <c>testsToDelete-</c> folder.
+ /// </summary>
++[Collection("kimi-deleter-hook")]
+ public sealed class AKimiConsultantCheckTests : IDisposable
+ {
+     private readonly TempDir _data = TempDir.For("testsToDelete-kimi-check-data-");
+@@ -33,6 +34,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         using var homes = TempDir.For("testsToDelete-kimi-check-homes-");
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        var before = person.Hash();
+         var played = Played();
+ 
+         var (code, said) = await Check(Settings(homes.Path), played);
+@@ -47,7 +49,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+             "a one-shot home under the short homes root, never under TEMP (D19)");
+         Path.GetFileName(home).Should().StartWith("kh-");
+         Remaining(Path.Combine(homes.Path, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home goes when the check ends");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder is never touched by a check");
++        person.Hash().Should().Equal(before, "the fake person's folder is never touched by a check: its entries, attributes and bytes are unchanged");
+     }
+ 
+     /// <summary>S5.5.2: after the check the home is gone junction-first (no unlink through the junction), whatever the turn ended with.</summary>
+@@ -59,6 +61,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         using var homes = TempDir.For("testsToDelete-kimi-check-homes-");
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        var before = person.Hash();
+         var played = answered ? Played() : new PlayedKimi(new ProcessLauncher()) { Turn = (_, request) => PlayedKimi.Lost(PlayedKimi.SessionOf(request)) };
+         var unlinked = new List<string>();
+         GitScratch.AfterUnlink = link => unlinked.Add(link);
+@@ -84,7 +87,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+ 
+         Remaining(Path.Combine(homes.Path, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the one-shot home is gone");
+         unlinked.Should().BeEmpty("the junction is unlinked before any folder is walked, and the recorder never sees a walk through it");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder stays whole");
++        person.Hash().Should().Equal(before, "the fake person's folder stays whole: its entries, attributes and bytes are unchanged");
+     }
+ 
+     /// <summary>S5.5.4: a check whose settings name no homes root keeps its home in its own scratch, and disposes it junction-first.</summary>
+@@ -93,6 +96,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+     {
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        var before = person.Hash();
+         var played = Played();
+         var unlinked = new List<string>();
+         GitScratch.AfterUnlink = link => unlinked.Add(link);
+@@ -114,7 +118,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         }
+ 
+         unlinked.Should().BeEmpty("the recorder never sees the walk through the home's junction");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder stays whole");
++        person.Hash().Should().Equal(before, "the fake person's folder stays whole: its entries, attributes and bytes are unchanged");
+     }
+ 
+     /// <summary>S5.5.3: a check cancelled while its shim is running still disposes its home junction-first, and answers nothing.</summary>
+@@ -124,6 +128,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         using var homes = TempDir.For("testsToDelete-kimi-check-homes-");
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        var before = person.Hash();
+         using var stop = new CancellationTokenSource();
+         var played = new PlayedKimi(new ProcessLauncher())
+         {
+@@ -151,7 +156,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+ 
+         Remaining(Path.Combine(homes.Path, Runners.Vibe.VibeHomes.OneShotFolder)).Should().BeEmpty("the home is gone whatever ended the check");
+         unlinked.Should().BeEmpty("the junction goes first, and no walk ever reaches the person's folder");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder stays whole");
++        person.Hash().Should().Equal(before, "the fake person's folder stays whole: its entries, attributes and bytes are unchanged");
+     }
+ 
+     /// <summary>A played Kimi shim whose answer names the marker the check wrote into the copy's <c>CHECK.md</c>, and no canary.</summary>
+diff --git a/src_mcp/tests/AKimiDiskQuestionRowTests.cs b/src_mcp/tests/AKimiDiskQuestionRowTests.cs
+index 68238304..2c813c12 100644
+--- a/src_mcp/tests/AKimiDiskQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiDiskQuestionRowTests.cs
+@@ -1,6 +1,7 @@
+ using System.Text.Json;
+ using CoaiMcp.Core.QuestionConsult;
+ using CoaiMcp.Core.Rounds;
++using CoaiMcp.Runners.Files;
+ using CoaiMcp.Runners.Kimi;
+ using CoaiMcp.Runners.Platform;
+ using CoaiMcp.Runners.Processes;
+@@ -18,6 +19,7 @@ namespace CoaiMcp.Tests;
+ /// once the row ends — on an answer, a refusal or a cancellation — the row's folder and its one-shot home are gone, and nothing of the person's
+ /// was walked.
+ /// </summary>
++[Collection("kimi-deleter-hook")]
+ public sealed class AKimiDiskQuestionRowTests : IAsyncLifetime
+ {
+     private const string Advice = "Retry with a jittered backoff, three attempts.";
+@@ -120,6 +122,8 @@ public sealed class AKimiDiskQuestionRowTests : IAsyncLifetime
+     {
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        using var unhooked = RecordingUnlinks(out var unlinked);
++        var before = person.Hash();
+         var copiedFile = string.Empty;
+         var played = new PlayedKimi(_launcher)
+         {
+@@ -142,7 +146,8 @@ public sealed class AKimiDiskQuestionRowTests : IAsyncLifetime
+         turn.Request.StdIn.Should().NotContain(granted, "never the original root");
+         Directory.Exists(RowFolderOf(turn.Request)).Should().BeFalse("the row's folder goes once it answered");
+         OneShotIsEmpty().Should().BeTrue("the one-shot home goes with the row, junction-first (E5.3 g)");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder is never touched by a row");
++        unlinked.Should().BeEmpty("the junction is unlinked first: the recorder never sees a walk through it");
++        person.Hash().Should().Equal(before, "the fake person's folder is never touched by a row: its entries, attributes and bytes are unchanged");
+     }
+ 
+     /// <summary>S5.6.7 (refused): a root outside any work tree is refused before anything is launched, and the row gives back its folder and home.</summary>
+@@ -168,6 +173,8 @@ public sealed class AKimiDiskQuestionRowTests : IAsyncLifetime
+     {
+         using var person = new KimiFixture();
+         using var stood = StandIn(person);
++        using var unhooked = RecordingUnlinks(out var unlinked);
++        var before = person.Hash();
+         using var stop = new CancellationTokenSource();
+         var played = new PlayedKimi(_launcher)
+         {
+@@ -184,7 +191,23 @@ public sealed class AKimiDiskQuestionRowTests : IAsyncLifetime
+ 
+         played.Shims.Should().ContainSingle("the row's shim was started and then cancelled");
+         OneShotIsEmpty().Should().BeTrue("the one-shot home goes whatever ended the row");
+-        Directory.Exists(person.Folder).Should().BeTrue("the fake person's folder stays whole");
++        unlinked.Should().BeEmpty("the junction goes first, and no walk ever reaches the person's folder");
++        person.Hash().Should().Equal(before, "the fake person's folder stays whole: its entries, attributes and bytes are unchanged");
++    }
++
++    /// <summary>Records every link the deleter unlinks, until the returned scope is disposed.</summary>
++    private static IDisposable RecordingUnlinks(out List<string> unlinked)
++    {
++        var recorded = new List<string>();
++        unlinked = recorded;
++        GitScratch.AfterUnlink = recorded.Add;
++
++        return new Unhook();
++    }
++
++    private sealed class Unhook : IDisposable
++    {
++        public void Dispose() => GitScratch.AfterUnlink = null;
+     }
+ 
+     private static IDisposable StandIn(KimiFixture person) => new Stood(
+diff --git a/src_mcp/tests/AOneShotKimiHomeIsDisposedJunctionFirstTests.cs b/src_mcp/tests/AOneShotKimiHomeIsDisposedJunctionFirstTests.cs
+index 8f004dd5..a6e395ed 100644
+--- a/src_mcp/tests/AOneShotKimiHomeIsDisposedJunctionFirstTests.cs
++++ b/src_mcp/tests/AOneShotKimiHomeIsDisposedJunctionFirstTests.cs
+@@ -19,6 +19,7 @@ namespace CoaiMcp.Tests;
+ /// one-shot root being deleted (a past CI failure: a person's folder inside the swept tree is deleted by enumeration order). The
+ /// tree hold is a plain non-inheriting <c>HeldFile.Take</c> in the test host; no test ever runs a real <c>kimi</c>.
+ /// </remarks>
++[Collection("kimi-deleter-hook")]
+ public sealed class AOneShotKimiHomeIsDisposedJunctionFirstTests : IDisposable
+ {
+     private readonly KimiFixture _person = new();
+diff --git a/src_mcp/tests/JunctionsTests.cs b/src_mcp/tests/JunctionsTests.cs
+index 924d01e2..9058e17c 100644
+--- a/src_mcp/tests/JunctionsTests.cs
++++ b/src_mcp/tests/JunctionsTests.cs
+@@ -20,6 +20,7 @@ namespace CoaiMcp.Tests;
+ /// <para>The tests' own maker (<see cref="DirectoryLink"/>, <c>mklink /J</c>) stays the INDEPENDENT oracle: it does not delegate to
+ /// the product's.</para>
+ /// </remarks>
++[Collection("kimi-deleter-hook")]
+ public sealed class JunctionsTests : IDisposable
+ {
+     private static readonly byte[] Token = Encoding.UTF8.GetBytes("""{"refresh_token":"not-a-real-one"}""");
+diff --git a/src_mcp/tests/KimiCanaryTests.cs b/src_mcp/tests/KimiCanaryTests.cs
+index daf09698..55be513d 100644
+--- a/src_mcp/tests/KimiCanaryTests.cs
++++ b/src_mcp/tests/KimiCanaryTests.cs
+@@ -28,6 +28,7 @@ namespace CoaiMcp.Tests;
+ /// <para>E4.2's runners classes log nothing (no <c>ILogger</c> or Serilog under <c>src_mcp/runners/Kimi</c>, <c>Files</c> or <c>Acp</c>): they
+ /// answer strings and call <c>warn</c>/<c>note</c> callbacks, which are collected here. The Serilog surface is the server's and E4.4's.</para>
+ /// </remarks>
++[Collection("kimi-deleter-hook")]
+ public sealed class KimiCanaryTests : IDisposable
+ {
+     private readonly KimiFixture _person = new();
+diff --git a/src_mcp/tests/KimiDeleterHookCollection.cs b/src_mcp/tests/KimiDeleterHookCollection.cs
+new file mode 100644
+index 00000000..0bcb1f1a
+--- /dev/null
++++ b/src_mcp/tests/KimiDeleterHookCollection.cs
+@@ -0,0 +1,11 @@
++using Xunit;
++
++namespace CoaiMcp.Tests;
++
++/// <summary>
++/// The classes that set <c>GitScratch.AfterUnlink</c> or <c>KimiHome.AfterUnlink</c>. Both hooks are process-wide statics, and xUnit runs
++/// classes in parallel, so a recorder set by one class fires inside another class's deleter. Every class that sets one joins this collection,
++/// which runs them one at a time (DR1 H4).
++/// </summary>
++[CollectionDefinition("kimi-deleter-hook", DisableParallelization = true)]
++public sealed class KimiDeleterHookCollection;
+diff --git a/src_vs_code/src/runtimeCapabilities.generated.ts b/src_vs_code/src/runtimeCapabilities.generated.ts
+index 89513797..846ab99f 100644
+--- a/src_vs_code/src/runtimeCapabilities.generated.ts
++++ b/src_vs_code/src/runtimeCapabilities.generated.ts
+@@ -360,7 +360,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+       cli: 'kimi',
+       version: '2.1.1',
+       date: '2026-10-13',
+-      resultRef: "research/RESULTS_kimi_confinement.md §5/§11 — M-K6: an EMPTY coai-owned working folder still let Grep and Glob take an outside file's marker by absolute path (3 of 3); M-K3 and M-K4: every write refused (0 of 9 and 0 of 6)",
++      resultRef: "research/RESULTS_kimi_confinement.md §9 (M-K6), §6 (M-K3), §7 (M-K4) — M-K6: an EMPTY coai-owned working folder still let Grep and Glob take an outside file's marker by absolute path (3 of 3); M-K3 and M-K4: every write refused (0 of 9 and 0 of 6)",
+       cells: [
+         'M-K6',
+         'M-K3',
+@@ -377,7 +377,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+       cli: 'kimi',
+       version: '2.1.1',
+       date: '2026-10-13',
+-      resultRef: "research/RESULTS_kimi_confinement.md §5/§11/§19 — M-K6: Read bounded to the copy, Grep and Glob outside it (3 of 3); M-K9 and M-K9 (e): why the roots are COPIED, not granted (a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk); M-K3 and M-K4: every write refused",
++      resultRef: "research/RESULTS_kimi_confinement.md §9 (M-K6), §12 and §21 (M-K9, M-K9 (e)), §6 and §7 (M-K3, M-K4) — M-K6: Read bounded to the copy, Grep and Glob outside it (3 of 3); M-K9 and M-K9 (e): why the roots are COPIED, not granted (a branch's AGENTS.md, skills, sub-agents and .mcp.json load from disk); M-K3 and M-K4: every write refused",
+       cells: [
+         'M-K6',
+         'M-K9',

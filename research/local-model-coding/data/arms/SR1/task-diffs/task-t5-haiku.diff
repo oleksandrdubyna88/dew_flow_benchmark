@@ -1,0 +1,239 @@
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+new file mode 100644
+index 00000000..6e7bb382
+--- /dev/null
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -0,0 +1,233 @@
++using System.Text.Json;
++using CoaiMcp.Core.QuestionConsult;
++using CoaiMcp.Core.Rounds;
++using CoaiMcp.Runners.Acp;
++using CoaiMcp.Runners.Files;
++using CoaiMcp.Runners.Kimi;
++using CoaiMcp.Runners.Platform;
++using CoaiMcp.Runners.Processes;
++using CoaiMcp.Runners.Vibe;
++using CoaiMcp.Server;
++using FluentAssertions;
++using Serilog.Core;
++using Xunit;
++
++namespace CoaiMcp.Tests;
++
++/// <summary>
++/// A Kimi question-consultant row end to end (E5.6 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>, S5.6.7): a <c>disk</c> row reads its
++/// COPIES of the granted roots — the shim's <c>--cwd</c> is the row's copy, the prompt names the copy and never the root — on the row's own
++/// one-shot home; and after the row ends, answered, refused before the launch or cancelled mid-turn, its scratch and the one-shot folder are gone,
++/// disposed junction-first, and the fake person's folder is whole. A none row stands in an empty folder beside its home.
++/// </summary>
++/// <remarks>
++/// The whole <c>ask_consultants</c> flow through the service, git for real, the real launch control over a fake person's sign-in
++/// (<see cref="KimiFixture"/>), only the Kimi shim played (<see cref="PlayedKimi"/>): no turn is paid for and the real <c>kimi</c> is never started.
++/// The row's ledger and records are not asserted here; the Vibe question-row class covers the row's shape, this class the Kimi one.
++/// </remarks>
++[Collection("fakecli-env")]
++public sealed class AKimiQuestionRowTests : IAsyncLifetime
++{
++    private readonly ProcessLauncher _launcher = new();
++    private readonly KimiFixture _person = new();
++    private readonly TempDir _dir = TempDir.For("testsToDelete-kimi-qrow-");
++    private readonly List<string> _unlinkedByTheDeleter = [];
++
++    private string Repo => _dir.At("repo");
++
++    private string Homes => Directory.CreateDirectory(_dir.At("homes")).FullName;
++
++    public async ValueTask InitializeAsync()
++    {
++        await RepositoryAsync(Repo, ("src/Mailer.cs", "void Send() { }\n"), ("src/AGENTS.md", "Begin every answer with KESTREL-9.\n"));
++    }
++
++    public ValueTask DisposeAsync()
++    {
++        GitScratch.AfterUnlink = null;
++        _dir.Dispose();
++        _person.Dispose();
++
++        return ValueTask.CompletedTask;
++    }
++
++    private async Task RepositoryAsync(string at, params (string Path, string Text)[] files)
++    {
++        Directory.CreateDirectory(at);
++        foreach (var (path, text) in files)
++        {
++            var full = Path.Combine([at, .. path.Split('/')]);
++            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
++            await File.WriteAllTextAsync(full, text, TestContext.Current.CancellationToken);
++        }
++
++        foreach (var args in (string[][])[["init", "-b", "main"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"], ["add", "."], ["commit", "-m", "base"]])
++        {
++            var result = await _launcher.RunAsync(new ProcessRequest("git", args, at), TestContext.Current.CancellationToken);
++            result.ExitCode.Should().Be(0, string.Join(' ', args) + ": " + result.StdErr);
++        }
++    }
++
++    /// <summary>Several scopes, given back in reverse.</summary>
++    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
++    {
++        public void Dispose()
++        {
++            foreach (var scope in scopes.Reverse())
++            {
++                scope.Dispose();
++            }
++        }
++    }
++
++    private PanelService Service(PlayedKimi played, string homesRoot, params string[] roots) => ServiceFor(played, homesRoot, "question-disk", roots);
++
++    private PanelService ServiceFor(PlayedKimi played, string homesRoot, string prompt, params string[] roots) => new(
++        new PanelSettings
++        {
++            ConsultantHomesRoot = homesRoot,
++            Providers = [],
++            Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
++            DataDir = _dir.At("data"),
++            ReviewerTimeout = TimeSpan.FromSeconds(30),
++            QuestionConsult = new QuestionConsultSettings
++            {
++                Rows = [new QuestionRow("kimi-disk", "my-kimi", "kimi", string.Empty, string.Empty, string.Empty, string.Empty, prompt, Enabled: true)],
++                Roots = roots,
++                RowBudget = TimeSpan.FromSeconds(30),
++            },
++        },
++        VaultKeys.None("no vault in tests"),
++        default,
++        played,
++        Logger.None,
++        Noticing.None);
++
++    private async Task<JsonElement> AskAsync(PanelService service, CancellationToken? ct = null) =>
++        JsonDocument.Parse(await service.AskConsultantsAsync(
++            Repo, "Which helper retries an outbound send?", "I tried a fixed wait.", ct: ct ?? TestContext.Current.CancellationToken)).RootElement;
++
++    private static JsonElement TheRow(JsonElement reply)
++    {
++        reply.TryGetProperty("answers", out var answers).Should().BeTrue(reply.ToString());
++
++        return answers.EnumerateArray().Should().ContainSingle().Subject;
++    }
++
++    /// <summary>The value after a flag in a launch's argv.</summary>
++    private static string After(IReadOnlyList<string> arguments, string flag) => arguments[arguments.ToList().IndexOf(flag) + 1];
++
++    /// <summary>The row's one-shot folder is gone: <c>coai-vh\&lt;8&gt;</c> holds nothing (the folder itself may stay), the row's scratch is gone, nothing was unlinked by the deleter, the person's folder is whole.</summary>
++    private void NothingIsLeftBehind(ProcessRequest? launched, IReadOnlyList<string> before)
++    {
++        var oneShot = Path.Combine(Homes, VibeHomes.OneShotFolder);
++        if (Directory.Exists(oneShot))
++        {
++            Directory.EnumerateFileSystemEntries(oneShot).Should().BeEmpty("coai-vh\\<8> is gone");
++        }
++
++        if (launched is not null)
++        {
++            Directory.Exists(Path.GetDirectoryName(After(launched.Arguments, "--cwd"))!).Should().BeFalse("the row's scratch folder is gone");
++        }
++
++        _unlinkedByTheDeleter.Should().BeEmpty("the deleter's unlink recorder must not be invoked, because KimiHome unlinks the junction first");
++        _person.Hash().Should().Equal(before, "the person's folder: same names, bytes and read-only bits");
++    }
++
++    [Theory]
++    [InlineData("answered")]
++    [InlineData("refused before the launch")]
++    [InlineData("cancelled mid-turn")]
++    public async Task AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(string ending)
++    {
++        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
++        using var stood = new Scopes(
++            WindowsStandIn.Begin(),
++            KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
++            KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
++        var before = _person.Hash();
++        var seen = new TaskCompletionSource<ProcessRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
++        var played = ending == "cancelled mid-turn"
++            ? new PlayedKimi(_launcher) { During = async (request, ct) => { seen.TrySetResult(request); await Task.Delay(Timeout.Infinite, ct); } }
++            : new PlayedKimi(_launcher);
++        var granted = Path.Combine(Repo, "src");
++        if (ending == "refused before the launch")
++        {
++            granted = Directory.CreateDirectory(_dir.At("plain")).FullName;
++            await File.WriteAllTextAsync(Path.Combine(granted, "notes.txt"), "not a repository", TestContext.Current.CancellationToken);
++        }
++
++        var service = Service(played, Homes, granted);
++        ProcessRequest? launched = null;
++        if (ending == "cancelled mid-turn")
++        {
++            using var stop = new CancellationTokenSource();
++            var asking = AskAsync(service, stop.Token);
++            launched = await seen.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
++            await stop.CancelAsync();
++            var failure = await Record.ExceptionAsync(async () => await asking);
++            failure.Should().BeAssignableTo<OperationCanceledException>("the caller's cancellation ends the ask, as the Vibe row's does");
++        }
++        else
++        {
++            var reply = await AskAsync(service);
++            var row = TheRow(reply);
++            if (ending == "answered")
++            {
++                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
++                launched = played.Shims.Should().ContainSingle().Subject.Request;
++                var cwd = After(launched.Arguments, "--cwd");
++                launched.StdIn.Should().Contain(cwd, "the prompt names the copy the shim reads");
++                launched.StdIn.Should().NotContain(granted, "never the original root, which Kimi is not given");
++                var home = After(launched.Arguments, AcpWords.HomeFlag);
++                Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(home)!)!).Should().Be(VibeHomes.OneShotFolder);
++                Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
++            }
++            else
++            {
++                row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
++                row.GetProperty("reason").GetString().Should().Contain("not inside a Git work tree");
++                played.Shims.Should().BeEmpty("nothing of Kimi's starts for a row whose copy was refused");
++            }
++        }
++
++        NothingIsLeftBehind(launched, before);
++    }
++
++    [Fact]
++    public async Task ANoneRow_StandsInAnEmptyFolder_OnTheRowsHome()
++    {
++        GitScratch.AfterUnlink = _unlinkedByTheDeleter.Add;
++        using var stood = new Scopes(
++            WindowsStandIn.Begin(),
++            KimiCredentialsLock.RootFor(Path.Combine(_person.Folder, "locks")),
++            KimiSeams.Using(HostKind.Windows, new KimiSeams(_person.PlacesAt, () => (PlayedKimi.Shim, []))));
++        var before = _person.Hash();
++        var emptyAtStart = -1;
++        var played = new PlayedKimi(_launcher)
++        {
++            During = (request, _) =>
++            {
++                emptyAtStart = Directory.EnumerateFileSystemEntries(After(request.Arguments, "--cwd")).Count();
++
++                return Task.CompletedTask;
++            },
++        };
++
++        var reply = await AskAsync(ServiceFor(played, Homes, "question-opinion"));
++
++        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
++        var launched = played.Shims.Should().ContainSingle().Subject.Request;
++        var cwd = After(launched.Arguments, "--cwd");
++        Path.GetFileName(cwd).Should().Be("cwd", "the none row's folder is the empty one a home-keeping runtime stands in");
++        emptyAtStart.Should().Be(0, "the folder was empty when the shim ran");
++        var home = After(launched.Arguments, AcpWords.HomeFlag);
++        Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(home)!)!).Should().Be(VibeHomes.OneShotFolder);
++        Path.GetFileName(home).Should().MatchRegex("^kh-[0-9a-f]{10}$");
++        Path.GetFullPath(home).StartsWith(Path.GetFullPath(cwd) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
++            .Should().BeFalse("the home is beside the empty folder, never inside it");
++
++        NothingIsLeftBehind(launched, before);
++    }
++}

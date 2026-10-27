@@ -1,0 +1,45 @@
+diff --git a/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs b/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
+index d87883f8..5f5ed9dc 100644
+--- a/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowThroughTheServiceTests.cs
+@@ -78,7 +78,7 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+         }
+     }
+ 
+-    private PanelService Service(PlayedKimi played) => new(
++    private PanelService Service(PlayedKimi played, string root = "") => new(
+         new PanelSettings
+         {
+             ConsultantHomesRoot = Homes,
+@@ -89,7 +89,7 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+             QuestionConsult = new QuestionConsultSettings
+             {
+                 Rows = [new QuestionRow("kimi-disk", "moonshot", "kimi", string.Empty, string.Empty, PlayedKimi.Shim, string.Empty, "question-disk", Enabled: true)],
+-                Roots = [Path.Combine(Repo)],
++                Roots = [root.Length > 0 ? root : Path.Combine(Repo)],
+                 RowBudget = TimeSpan.FromSeconds(30),
+             },
+         },
+@@ -167,4 +167,22 @@ public sealed class AKimiQuestionRowThroughTheServiceTests : IDisposable
+         _unlinked.Should().BeEmpty("the home's junction was unlinked before the deleter met it");
+         _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
+     }
++
++    [Fact]
++    public async Task AKimiDiskRow_RefusedBeforeTheLaunch_LeavesNothingBehind()
++    {
++        var before = _person.Hash();
++        var notGit = Directory.CreateDirectory(_dir.At("not-git")).FullName;
++        File.WriteAllText(Path.Combine(notGit, "Notes.txt"), "not a repository\n");
++        using var stood = StandIn();
++        var played = new PlayedKimi(new ProcessLauncher());
++
++        var reply = await AskAsync(Service(played, notGit));
++
++        TheRow(reply).GetProperty("status").GetString().Should().Be(RowOutcomes.Refused, reply.ToString());
++        played.Shims.Should().BeEmpty("the copy was refused, so nothing was launched");
++        OneShotLeft().Should().BeEmpty("a refused row's home is gone too");
++        _unlinked.Should().BeEmpty("nothing was unlinked before the deleter met it");
++        _person.Hash().Should().Equal(before, "the fake person's sign-in is intact, bytes and read-only flags");
++    }
+ }

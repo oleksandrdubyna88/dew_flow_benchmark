@@ -1,0 +1,7 @@
+
+Test run summary: Passed! - /home/jinx/git/coai-exp/arm-SR4/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 3
+  failed: 0
+  succeeded: 3
+  skipped: 0
+  duration: 1s 744ms

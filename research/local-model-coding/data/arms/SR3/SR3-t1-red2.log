@@ -1,0 +1,132 @@
+failed CoaiMcp.Tests.CapabilityMatrixTests.TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable (396ms)
+  Expected Vectors CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "none",
+          Flag = "",
+          Runtime = "claude",
+          Standing = "confined",
+          Why = "F3: `--tools ""` offers nothing"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "disk",
+          Flag = "",
+          Runtime = "claude",
+          Standing = "confined",
+          Why = "F4: `--restricted --add-dir` is a real boundary"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "web",
+          Flag = "",
+          Runtime = "claude",
+          Standing = "confined",
+          Why = "F6: `--tools WebSearch,WebFetch` offers only the two client web tools"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "none",
+          Flag = "unconfined",
+          Runtime = "codex",
+          Standing = "unconfined",
+          Why = "F2: a shell is always there — allowed, flagged (D13)"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "disk",
+          Flag = "unconfined",
+          Runtime = "codex",
+          Standing = "unconfined",
+          Why = "F2: reads anywhere, `--add-dir` adds nothing"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "web",
+          Flag = "unconfined",
+          Runtime = "codex",
+          Standing = "unconfined",
+          Why = "F1/F2: searches, and can read the disk on its own — the operator's own example row (D13)"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "none",
+          Flag = "default-deny",
+          Runtime = "antigravity",
+          Standing = "default-deny",
+          Why = "F7: held only by the headless permission default"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "disk",
+          Flag = "default-deny",
+          Runtime = "antigravity",
+          Standing = "default-deny",
+          Why = "F7: `--add-dir` grants, the default denies the rest"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = False,
+          Capability = "web",
+          Flag = "",
+          Runtime = "antigravity",
+          Standing = "unsupported",
+          Why = "F7: it cannot fetch a page headless"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "none",
+          Flag = "",
+          Runtime = "local",
+          Standing = "confined",
+          Why = "a completion with no tools, by construction"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = False,
+          Capability = "disk",
+          Flag = "",
+          Runtime = "local",
+          Standing = "unsupported",
+          Why = "no file tool to grant a root to"
+      },
+      CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = False,
+          Capability = "web",
+          Flag = "",
+          Runtime = "local",
+          Standing = "unsupported",
+          Why = "no web tool"
+      }CoaiMcp.Tests.CapabilityMatrixTests+Vector
+      {
+          Admitted = True,
+          Capability = "none",
+  
+  (Output has exceeded the maximum of 100 lines. Increase FormattingOptions.MaxLines on AssertionScope or AssertionOptions to include more lines.)
+          Flag = "",  to have an item matching ((v.Runtime == value(CoaiMcp.Tests.CapabilityMatrixTests+<>c__DisplayClass8_0).row.Runtime) AndAlso (v.Capability == value(CoaiMcp.Tests.CapabilityMatrixTests+<>c__DisplayClass8_0).row.Capability)) because the table's kimi × none row must have a vector deciding it.
+    at FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)
+    at FluentAssertions.Execution.TestFrameworkProvider.Throw(String message)
+    at FluentAssertions.Execution.DefaultAssertionStrategy.HandleFailure(String message)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(Func`1 failReasonFunc)
+    at FluentAssertions.Execution.AssertionScope.FailWith(String message, Object[] args)
+    at FluentAssertions.Collections.GenericCollectionAssertions`3.Contain(Expression`1 predicate, String because, Object[] becauseArgs)
+    at CoaiMcp.Tests.CapabilityMatrixTests.TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable() in /home/jinx/git/coai-exp/wt/SR3-t1/src_mcp/tests/CapabilityMatrixTests.cs:86
+    at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+    at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Test run summary: Failed! - /home/jinx/git/coai-exp/wt/SR3-t1/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 36
+  failed: 1
+  succeeded: 35
+  skipped: 0
+  duration: 4s 860ms
