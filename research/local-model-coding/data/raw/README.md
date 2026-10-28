@@ -3,7 +3,7 @@
 > Everything the experiment wrote, beside the summaries in `../arms/`, `../judges/` and `../metrics.json`, so that any
 > number in [../../tables.md](../../tables.md) can be traced to the session that produced it. `raw-*.tar.xz`: parts 1–4
 > (the 18 arms V, C, C2, C3, C4, VT, Q1–Q4, H1–H4, T1–T4); `raw-part5-*.tar.xz`: part 5 (O1–O4, S1–S4, D1–D4) and the
-> mutation checks of all 30 arms; `raw-part5b-*.tar.xz`: part 5b (SR1–SR4, DR1–DR4) with their mutation checks. Check the files with `sha256sum -c SHA256SUMS`; unpack one with `tar -xJf <file>`.
+> mutation checks of all 30 arms; `raw-part5b-*.tar.xz`: part 5b (SR1–SR4, DR1–DR4) with their mutation checks. `raw-part5c-*.tar.xz`: part 5c (CR1–CR4, CH1–CH4) with their mutation checks. Check the files with `sha256sum -c SHA256SUMS`; unpack one with `tar -xJf <file>`.
 
 | Archive | Unpacked | What is in it |
 |---|---|---|
@@ -25,6 +25,11 @@
 | `raw-part5b-notes.tar.xz` | ~7 MB | Every note of the part 5b coders, Haiku reviewers, Opus reviewers' JSON and fixers, with their saved logs |
 | `raw-part5b-logs.tar.xz` | ~5 MB | `chain-y.log`, the chain script as it ran, the judge's summary, the metrics output, keep-awake, the warm builds; `aborted-2026-10-27-1621/`: the results, notes and markers of the SR4 and DR4 runs stopped at the operator's pause (their clones, 6 GB, not kept here) |
 | `raw-part5b-fillers.tar.xz` | < 1 MB | `vllm/work/<SR arm>/`: the task lists and task documents |
+| `raw-part5c-results.tar.xz` | ~114 MB | `results/<CR, CH arm>/`: each step's prompt, event stream and stderr, timing, the Haiku review diff and its `before` commit, the objective checks (CR2's rebuild included), the mutation results |
+| `raw-part5c-transcripts.tar.xz` | ~60 MB | The session transcripts of the 8 part 5c arms — the source of the no-leak scan ([../../incidents.md](../../incidents.md) §2f) |
+| `raw-part5c-judges.tar.xz` | ~9 MB | The absolute judge's sessions of the 8 part 5c arms; the key and all 46 arms' scores |
+| `raw-part5c-notes.tar.xz` | ~2 MB | `notes/<arm>/` of the 8 arms: coder, Haiku reviewer, Opus review JSON, fixer, with their saved logs |
+| `raw-part5c-logs.tar.xz` | < 1 MB | `chain-z.log`, the chain script as it ran, the judge's summary, the metrics output, keep-awake, the warm builds, the lock and unlock scripts with the saved modes |
 
 **Changed before archiving — two things, nothing else:**
 
@@ -38,6 +43,9 @@
   sources (`xoxb-abcdefghijklmnop`, two `ghp_0123…` values, `sk-live-0123456789abcdefghijklmnop`, `sk-abcdefghijklmnop`,
   an RSA private-key header from `SecretCheckTests.cs`) and the two synthetic values above; other `sk-` hits are parts of
   words (`task-…`) and random ids.
+- Part 5c: the same two addresses masked (0 remain). The secret scan found the same coai test strings as part 5b
+  (plus `ghp_abcdefghijklmnop` and `sk-abcdefghijkl…`, both in coai's test sources) and the two synthetic values; the
+  `sk-notification` hits are parts of `task-notification`. No fillers archive: the CR/CH work folders are empty.
 
 **Not here:** the arms' clones and worktrees (the branches `exp/kimi-e56-*` in `dew_flow_connect_other_ais` hold every
 arm's commits).

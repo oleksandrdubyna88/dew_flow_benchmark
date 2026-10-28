@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_runners.md", "line": 3637,
+   "summary": "The knowledge base was not updated for E5.5–E5.6 (deviation 59 defers it), so it now says things that are no longer true: module_runners.md:3637 says Kimi is 'NOT in `runtime-capabilities.json`', module_core.md:783 says the seed has '18 rows (6 runtimes × 3)' (it now has 21 rows over 7 runtimes), and module_tests.md has no E5.5–E5.6 section, although every earlier story (E5.1–E5.4) added one.",
+   "fix": "In the same change, as common.knowledge-base requires: correct module_runners.md:3637 and the module_core.md diagram (783) and its text (863, 'eighteen since S3'). Add the Kimi planner arm and rows to the module_core planner section. Add a module_tests.md section for E5.5–E5.6: AKimiConsultantCheckTests, AKimiQuestionRowTests, the new CapabilityMatrixTests and ConfinementPlannerTests rows and the TS test, each with the red or teeth run of deviations 50–51, and what is NOT covered (the live check, the live rows, M-K17, the `none` row through QuestionRowLaunch)."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 187,
+   "summary": "S5.5.3 checks 'the record says cancelled' by searching the whole serialised record for the substring \"cancelled\". That is a pattern matched against a whole composite (generated-code-tests §2), not the field. ConsultantCheckTests.cs:471 already reads the field.",
+   "fix": "Assert `Text(said, \"failureKind\").Should().Be(\"cancelled\")`, as ConsultantCheckTests does."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 159,
+   "summary": "S5.6.7's answered arm grants `Repo/src`, a folder that has no .git, AGENTS.md or .kimi-code. The assertion 'the copy holds the granted root's file, and no .git' (line 166) is therefore vacuous, and the copy's sanitising is never tested for a Kimi row. The table's Given says 'a disk row on a git root'.",
+   "fix": "Grant the repository root, with an AGENTS.md (and a .kimi-code or .mcp.json) committed in it. Assert that the files the shim sees while it runs include src/Mailer.cs and none of .git, AGENTS.md, .kimi-code or .mcp.json."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 183,
+   "summary": "In S5.6.7's 'refused before the launch' arm, the row's scratch is returned as null, so NothingIsLeftBehind never checks it. The table's Then says the row's scratch is gone after EACH ending. Here the scratch is made (QuestionRowLaunch.cs MakeScratch inside the try) and removed only in finally.",
+   "fix": "List the row-scratch folders (`coai-question-*` in the folder MakeScratch uses) before and after the call, and assert that the refused row added none."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "E5.5 and E5.6 were built on Sonnet. The plan's binding coder assignment (lines 8 and 30–35, §0.2: 'every other story on Opus') says Opus, and the as-built section does not record this as a deviation or name who approved it.",
+   "fix": "Add a deviation entry (60) with the operator's decision to build on Sonnet. If there was no such decision, get one before the stories are promoted."}
+ ]}

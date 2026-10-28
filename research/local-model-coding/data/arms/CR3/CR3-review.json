@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_tests.md", "line": 4421,
+   "summary": "The new scenario classes AKimiConsultantCheckTests (S5.5.1–S5.5.4) and AKimiQuestionRowTests (S5.6.7), and the new rows in CapabilityMatrixTests, ConfinementPlannerTests and capabilityAdmission.test.ts, are not recorded in research/module_tests.md, although E5.1–E5.2 and E5.4 each added a section there; the coder states that `research/` is untouched (deviation header, plan line 1091), so testing.md's Definition of Done ('research/module_tests.md names it') and scenario-tests.md point 7 are not met.",
+   "fix": "Add a section 'The Kimi consultant check and question row — E5.5–E5.6' after the E5.4 section. For each suite, give its scenario, what it holds, and the red it was seen in (deviations 50–57, including the reds from the temporary breaks). Also say what it does NOT cover: the live check and question rows (J2), M-K17, the web row, and that the shim is played."},
+  {"id": "R2", "severity": "minor", "file": "src_vs_code/src/runtimeCapabilities.generated.ts", "line": 1,
+   "summary": "Commit 62ee29de adds the kimi rows to shared/runtime-capabilities.json and capability-matrix-vectors.json, but the generated TypeScript table is regenerated only in the next commit c0e26084. At 62ee29de, `generate-runtime-capabilities.mjs --check` fails, and the extension's vector loop (capabilityAdmission.test.ts) is red. E5.4 decision 9 sets the convention: seed and generated file go in the SAME commit.",
+   "fix": "Squash c0e26084's regeneration into 62ee29de, so that every commit keeps the seed and the generated table equal."},
+  {"id": "R3", "severity": "minor", "file": "shared/runtime-capabilities.json", "line": 385,
+   "summary": "E5.6 decision 2 says 'Each row's note carries the version (2.1.1)', but the kimi × web note reads only 'not measured: no Kimi cell fetches or searches the web', without the version (the none and disk notes have it).",
+   "fix": "Write the web note as 'kimi 2.1.1: not measured — WebSearch and FetchURL are announced and no Kimi cell fetches or searches the web', run the generator again, and commit both files together."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 43,
+   "summary": "The fixture commits src/AGENTS.md ('Begin every answer with KESTREL-9'), and the class summary cites M-K9 as the reason the roots are copied, but no assertion uses it. The test does not show that the copy the row stands in leaves out the root's AGENTS.md; the fixture line is dead.",
+   "fix": "In the played shim's During/Turn (while the copy exists), assert that File.Exists(Path.Combine(request.WorkingDirectory, \"AGENTS.md\")) is false and that src/Mailer.cs is present. Or remove the AGENTS.md entry and the M-K9 claim from the summary."},
+  {"id": "R5", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1089,
+   "summary": "§0.2's table (the plan gate's operator command) says E5.5 and E5.6 are built on Opus. They were built on Sonnet (the commit trailers and 'as built (Sonnet, 2026-10-28)'), and the plan records no operator decision that allows this.",
+   "fix": "Record in the plan the operator's decision that allowed Sonnet for E5.5–E5.6 (with its date), or have the story rebuilt or confirmed on the model the gate names. Make the fixes after this review on the model the operator confirms."}
+ ]}

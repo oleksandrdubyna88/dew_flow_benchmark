@@ -103,6 +103,29 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   failing test failed before), and S2 searched D2's and O2's fix notes for the word "format" — no other arm's findings. The harness gave each arm its own file name but not its own folder; a per-arm folder outside every
   other arm's reach is the fix for any re-run.
 
+## 2f. Part 5c (CR, CH) (2026-10-28 11:00–17:27 UTC)
+
+- **A leak not found before: T2 (part 4) read T1's fix notes.** The owner asked, while CR1 and CH1 ran, whether an arm
+  could read other runs' work and do better. A scan of every earlier arm's tool calls for paths into another arm's
+  notes, clone, results or worktrees found, beyond §2e: **T2's fixer ran `cat notes/T1-fix.md | head -40`** — T1's
+  per-finding notes (what the review found and how T1 fixed it); C's fixer, T1's fixer, O1, O4, S3 and S4 read other
+  arms' tool logs only (format, suite, TS and generator output). No arm read another arm's clone, branch or transcript.
+  T2 is therefore not fully independent of T1; its numbers are kept and read with that condition.
+- **The fix for part 5c: a lock, not only a folder.** Each CR/CH arm had its own notes folder from the start. On the
+  owner's choice, from 11:31 UTC (CR1 and CH1 in step 1, neither had read anything outside its own folders)
+  `harness/lock-others.sh` set mode 000 on 620 paths holding other arms' work (old clones, notes, results, worktrees,
+  judge and mutation folders, RESULTS.md, PROTOCOL.md, fix-outcomes.json, mutate.mjs, the old arms' Claude transcripts)
+  and mode 300 on the folders above them. The arms run as the same user; `chmod` is not in their allowed tools. A
+  watcher ran `unlock-others.sh` once all 8 arms were done (15:59 UTC), before the checks, the judge and the mutation
+  checks. Not locked: the owner's own repositories (`dew_flow_connect_other_ais`, `dew_flow_benchmark`). The final scan:
+  no CR/CH tool call names another arm's data or those repositories, and none was refused by the lock.
+- **CR2's build check: a runtime crash, not the code.** The chain's build ended with "Internal CLR error.
+  (0x80131506)" and no compiler error; the same commit built alone: succeeded, 0 warnings, 0 errors. `build` set to
+  `true` in `objective.json` before the judge read it; the original and the reason are in `data/arms/CR2/`.
+- **A false "chain is gone"** (11:34 UTC): the PID file held `setsid`'s parent, not the chain. No break in the run.
+- **Seen in a Haiku review's own test run** (CH2): 17 rounds-database tests failed in its whole-suite run (the coder
+  had seen 18). The objective checks on the final commits show 0 new failures in all 8 arms; not investigated further.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).

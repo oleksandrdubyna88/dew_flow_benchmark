@@ -1,0 +1,27 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 9dc22261..244ea948 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -125,7 +125,12 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
+         Text(said, "canary").Should().Be("not-attempted", "the check's own invariant: the canary outside the scratch is untouched");
+         var request = kimi.Shims.Should().ContainSingle().Subject.Request;
+-        After(request, "--cwd").Should().StartWith(_temp.Path).And.Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
++        var copy = After(request, "--cwd");
++        copy.Should().StartWith(_temp.Path, "the check's own scratch, never the repository");
++        var tree = Path.GetDirectoryName(copy);
++        Path.GetFileName(tree).Should().Be("tree", "<scratch>\\own\\tree\\<copy>: the copy is under the tree folder");
++        Path.GetFileName(Path.GetDirectoryName(tree)).Should().Be(ConsultantCheck.OwnName);
++        Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(tree))).Should().StartWith("coai-check-");
+         var home = After(request, AcpWords.HomeFlag);
+         Path.GetDirectoryName(Path.GetDirectoryName(home)).Should().Be(OneShotFolder, "J3: <root>\\coai-vh\\<8>\\kh-<10 hex>");
+         Path.GetFileName(Path.GetDirectoryName(home)).Should().MatchRegex("^[0-9a-f]{8}$");
+@@ -179,7 +184,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         var (_, said) = await checking;
+ 
+         Text(said, "state").Should().Be("failed", said.ToString());
+-        said.ToString().Should().Contain("cancelled", "the record says who stopped it");
++        said.ToString().Should().Contain("\"cancelled\"", "the record says who stopped it, as a value and not as prose");
+         NothingIsLeftBehind(before);
+     }
+ 

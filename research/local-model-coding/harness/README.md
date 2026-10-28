@@ -9,11 +9,12 @@
 | File | Role |
 |---|---|
 | `prep-base.sh` | Builds and tests the start commit once (the baseline failures) |
-| `run-arm.sh` | One arm, resumable: the classic pipeline (C, V, VT), the skeleton pipeline (Q, H), the task pipeline (T, O, S, through `t-lib.sh`), Haiku directly (D) |
+| `run-arm.sh` | One arm, resumable: the classic pipeline (C, V, VT), the skeleton pipeline (Q, H), the task pipeline (T, O, S, through `t-lib.sh`), Haiku directly (D); with a fresh Haiku review-and-fix before Opus: SR, DR (part 5b), CR, CH (part 5c, each arm its own notes folder) |
 | `t-lib.sh` | The task arms: a split (Opus in T and O, Sonnet in S) → per task Haiku codes (+ a Sonnet review in T only) → batches in parallel worktrees, cherry-picked back → one Opus review → fixes (Sonnet in T, Haiku in O and S) |
 | `tasks-plan.mjs` | Checks Opus's task list (4–6 tasks, one owner per file, no cycles, the plan last, 12 scenarios) and computes the batches |
 | `run-all.sh` | Starts or resumes arms detached (`setsid`) |
-| `after-three.sh`, `after-c34.sh`, `after-q.sh`, `after-h.sh`, `after-t.sh`, `after-x.sh`, `after-y.sh` | The chains of each phase: make arms, start them, run the checks, the judge, the metrics — marker per stage, re-runnable |
+| `after-three.sh`, `after-c34.sh`, `after-q.sh`, `after-h.sh`, `after-t.sh`, `after-x.sh`, `after-y.sh`, `after-z.sh` | The chains of each phase: make arms, start them, run the checks, the judge, the metrics — marker per stage, re-runnable |
+| `lock-others.sh`, `unlock-others.sh` | Part 5c: lock every other arm's data (mode 000, folders 300) while the CR/CH arms run, saving the modes; restore them after the last arm |
 | `mut-all.sh`, `mut-awake.sh` | The mutation checks on all 30 arms, two at a time, after part 5; the keep-awake guard while they run |
 | `watch.sh` | An early watcher of part 1 |
 
