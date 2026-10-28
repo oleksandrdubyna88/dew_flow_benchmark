@@ -1,0 +1,118 @@
+diff --git a/shared/runtime-capabilities.json b/shared/runtime-capabilities.json
+index d9d42d1e..d5011fd6 100644
+--- a/shared/runtime-capabilities.json
++++ b/shared/runtime-capabilities.json
+@@ -350,7 +350,7 @@
+           "M-K3",
+           "M-K4"
+         ],
+-        "note": "mechanism: the shim refuses every write and every shell command and serves `Read` inside the working folder only (D15), but Grep and Glob read the disk directly, so an empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced on this plan and unmeasured"
++        "note": "kimi 2.1.1 — mechanism: the shim refuses every write and every shell command and serves `Read` inside the working folder only (D15), but Grep and Glob read the disk directly, so an empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced on this plan and unmeasured"
+       }
+     },
+     {
+@@ -369,7 +369,7 @@
+           "M-K9",
+           "M-K9 (e)"
+         ],
+-        "note": "mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but Grep and Glob read the disk directly (D15) - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced on this plan and unmeasured"
++        "note": "kimi 2.1.1 — mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but Grep and Glob read the disk directly (D15) - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced on this plan and unmeasured"
+       }
+     },
+     {
+@@ -382,7 +382,7 @@
+         "date": "2026-10-13",
+         "resultRef": "research/RESULTS_kimi_confinement.md §14 — WebSearch and FetchURL are announced (§7) and no cell exercises them",
+         "cells": [],
+-        "note": "not measured: no Kimi cell searches or fetches the web"
++        "note": "kimi 2.1.1 — not measured: no Kimi cell searches or fetches the web"
+       }
+     }
+   ]
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 64d1f7bf..ac3bbf4b 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -21,6 +21,7 @@ namespace CoaiMcp.Tests;
+ /// (<see cref="PlayedKimi"/>) — so no turn is paid for and the real <c>kimi</c> is never started. Every folder a test makes is its own
+ /// <c>testsToDelete-</c> folder; the person's folder lives outside the homes root the disposal deletes.
+ /// </remarks>
++[Collection("unlink-hooks")] // GitScratch.AfterUnlink and KimiHome.AfterUnlink are process-wide
+ public sealed class AKimiConsultantCheckTests : IDisposable
+ {
+     private readonly KimiFixture _person = new();
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index 6358ba00..f14110c1 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -24,6 +24,7 @@ namespace CoaiMcp.Tests;
+ /// played (<see cref="PlayedKimi"/>) — no turn is paid for and the real <c>kimi</c> is never started. Nothing is new in <see cref="QuestionRowLaunch"/>: its
+ /// reservation, place and <c>finally</c> are generic, and the disposal is E5.3 decision g's.
+ /// </remarks>
++[Collection("unlink-hooks")] // GitScratch.AfterUnlink and KimiHome.AfterUnlink are process-wide
+ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+ {
+     private const string Advice = "Retry with a jittered backoff, three attempts.";
+@@ -151,6 +152,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+         {
+             var asking = async () => await AskAsync(Service(played, granted), caller.Token);
+             await asking.Should().ThrowAsync<OperationCanceledException>();
++            played.Shims.Should().ContainSingle("the turn had started, so the cancellation landed mid-turn");
+         }
+         else
+         {
+diff --git a/src_mcp/tests/JunctionsTests.cs b/src_mcp/tests/JunctionsTests.cs
+index 924d01e2..685310b1 100644
+--- a/src_mcp/tests/JunctionsTests.cs
++++ b/src_mcp/tests/JunctionsTests.cs
+@@ -20,6 +20,7 @@ namespace CoaiMcp.Tests;
+ /// <para>The tests' own maker (<see cref="DirectoryLink"/>, <c>mklink /J</c>) stays the INDEPENDENT oracle: it does not delegate to
+ /// the product's.</para>
+ /// </remarks>
++[Collection("unlink-hooks")] // GitScratch.AfterUnlink is process-wide
+ public sealed class JunctionsTests : IDisposable
+ {
+     private static readonly byte[] Token = Encoding.UTF8.GetBytes("""{"refresh_token":"not-a-real-one"}""");
+diff --git a/src_mcp/tests/KimiCanaryTests.cs b/src_mcp/tests/KimiCanaryTests.cs
+index daf09698..2d40d88a 100644
+--- a/src_mcp/tests/KimiCanaryTests.cs
++++ b/src_mcp/tests/KimiCanaryTests.cs
+@@ -28,6 +28,7 @@ namespace CoaiMcp.Tests;
+ /// <para>E4.2's runners classes log nothing (no <c>ILogger</c> or Serilog under <c>src_mcp/runners/Kimi</c>, <c>Files</c> or <c>Acp</c>): they
+ /// answer strings and call <c>warn</c>/<c>note</c> callbacks, which are collected here. The Serilog surface is the server's and E4.4's.</para>
+ /// </remarks>
++[Collection("unlink-hooks")] // GitScratch.AfterUnlink and KimiHome.AfterUnlink are process-wide
+ public sealed class KimiCanaryTests : IDisposable
+ {
+     private readonly KimiFixture _person = new();
+diff --git a/src_vs_code/src/runtimeCapabilities.generated.ts b/src_vs_code/src/runtimeCapabilities.generated.ts
+index e7649468..8ef5a31b 100644
+--- a/src_vs_code/src/runtimeCapabilities.generated.ts
++++ b/src_vs_code/src/runtimeCapabilities.generated.ts
+@@ -366,7 +366,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K3',
+         'M-K4',
+       ],
+-      note: 'mechanism: the shim refuses every write and every shell command and serves `Read` inside the working folder only (D15), but Grep and Glob read the disk directly, so an empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced on this plan and unmeasured',
++      note: 'kimi 2.1.1 — mechanism: the shim refuses every write and every shell command and serves `Read` inside the working folder only (D15), but Grep and Glob read the disk directly, so an empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced on this plan and unmeasured',
+     },
+   },
+   {
+@@ -385,7 +385,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+         'M-K9',
+         'M-K9 (e)',
+       ],
+-      note: 'mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but Grep and Glob read the disk directly (D15) - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced on this plan and unmeasured',
++      note: 'kimi 2.1.1 — mechanism: the working folder is a coai-made sanitised SNAPSHOT of the granted roots (D6) and the shim bounds `Read` to it, but Grep and Glob read the disk directly (D15) - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced on this plan and unmeasured',
+     },
+   },
+   {
+@@ -398,7 +398,7 @@ export const RUNTIME_CAPABILITIES: readonly RuntimeCapabilityRow[] = [
+       date: '2026-10-13',
+       resultRef: 'research/RESULTS_kimi_confinement.md §14 — WebSearch and FetchURL are announced (§7) and no cell exercises them',
+       cells: [],
+-      note: 'not measured: no Kimi cell searches or fetches the web',
++      note: 'kimi 2.1.1 — not measured: no Kimi cell searches or fetches the web',
+     },
+   },
+ ];

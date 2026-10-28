@@ -1,0 +1,15 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "research/module_runners.md", "line": 3637,
+   "summary": "The module docs still describe the code before E5.6: module_runners.md says Kimi is 'NOT in runtime-capabilities.json', and the module_core.md diagram (line 783) says '18 rows (6 runtimes × 3)'. The table now has 21 rows over 7 runtimes, and this change edits no file in research/ (knowledge-base rule, 'After every code change').",
+   "fix": "In module_runners.md, say that Kimi has three rows in runtime-capabilities.json and a ConfinementPlanner arm with no flags. In module_core.md, change the diagram to '21 rows (7 runtimes × 3)', and say that kimi none and kimi disk are unconfined and kimi web is unmeasured."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Kimi rows are now admitted as Unconfined, so the settings, the sidebar and the log show the shared caveat 'can read this machine — a shell is always there, and no flag removes it'. For Kimi this is false: the shim refuses every shell request (M-K3, M-K4). Kimi is unconfined because Grep and Glob read the disk (M-K6). The same words are in capabilityAdmission.ts:60 and in the legend of shared/runtime-capabilities.json:11.",
+   "fix": "Change the Unconfined caveat, in C# and in TS, and the legend so they do not say there is always a shell. For example: 'unconfined: can read this machine — its tools reach past what it is given, and no flag removes it'. Then update the tests that hold the old sentence."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 95,
+   "summary": "S5.5.1 says '--cwd is under <scratch>\\own\\tree', but the test only checks that the path contains 'own/tree'. It does not check that the path is under the check's scratch root. Also, line 101 (`_scratchRoot.Path.Should().NotBe(...)`) can never fail, because line 100 already showed that the parent is the coai-vh folder under the homes root.",
+   "fix": "Check that --cwd starts with `_scratchRoot.Path` and ends with `Path.Combine(ConsultantCheck.OwnName, \"tree\")`. Remove the assertion that can never fail."},
+  {"id": "R4", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1089,
+   "summary": "§0 and §0.2 say that, by the plan gate's command, the coder for E5.5 and E5.6 is Opus. The status line (line 3) and the 'as built' heading say Sonnet built them, and no operator ruling or reason is recorded for this change (subagent-models rule).",
+   "fix": "Record the operator's decision that let Sonnet build E5.5–E5.6 and the reason, or have an Opus coder re-check the stories, as the plan requires."}
+ ]}

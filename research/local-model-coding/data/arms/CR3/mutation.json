@@ -1,0 +1,141 @@
+{
+  "arm": "CR3",
+  "head": "08ca9218fc6aeff65aa5d1b3801358cb909c6c02",
+  "classes": [
+    "AKimiConsultantCheckTests",
+    "AKimiQuestionRowTests",
+    "CapabilityMatrixTests",
+    "ConfinementPlannerTests"
+  ],
+  "started_utc": "2026-10-28T17:21:54.478Z",
+  "mutants": [
+    {
+      "id": "M1-no-junction-first",
+      "breaks": "one-shot Kimi homes are no longer disposed junction-first (base code)",
+      "verdict": "killed",
+      "killedBy": [
+        "AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(how: \"answered\")",
+        "AKimiConsultantCheckTests.ACheckCancelledMidTurn_StillDisposesItsHome",
+        "AKimiConsultantCheckTests.AfterTheCheck_TheHomeIsGone_JunctionFirst(theTurnFails: True)",
+        "AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(how: \"cancelled mid-turn\")",
+        "AKimiConsultantCheckTests.AfterTheCheck_TheHomeIsGone_JunctionFirst(theTurnFails: False)"
+      ],
+      "intended": [
+        {
+          "test": "AfterTheCheck_TheHomeIsGone_JunctionFirst",
+          "present": true,
+          "caught": true
+        },
+        {
+          "test": "AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind",
+          "present": true,
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "M6-no-junction-first-rootless",
+      "breaks": "a rootless check's Kimi homes are no longer disposed junction-first (base code, ConsultCheckScratch)",
+      "verdict": "killed",
+      "killedBy": [
+        "AKimiConsultantCheckTests.ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst"
+      ],
+      "intended": [
+        {
+          "test": "ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst",
+          "present": true,
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "M2-no-planner-arm",
+      "breaks": "the planner has no kimi arm (the default arm: no confinement)",
+      "verdict": "killed",
+      "killedBy": [
+        "AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(how: \"answered\")",
+        "AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(how: \"cancelled mid-turn\")",
+        "ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb",
+        "ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome",
+        "AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind(how: \"refused before the launch\")"
+      ],
+      "intended": [
+        {
+          "test": "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb",
+          "present": true,
+          "caught": true
+        },
+        {
+          "test": "AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome",
+          "present": true,
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "M3-disk-confined",
+      "breaks": "kimi × disk stands \"confined\" instead of \"unconfined\"",
+      "verdict": "killed",
+      "killedBy": [
+        "CapabilityMatrixTests.EveryVector_IsAdmittedOrRefused_AsMeasured(index: 19)",
+        "CapabilityMatrixTests.AdmissionFlagsBothRows",
+        "CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells"
+      ],
+      "intended": [
+        {
+          "test": "KimiHasThreeRows_EachCitingItsCells",
+          "present": true,
+          "caught": true
+        },
+        {
+          "test": "AdmissionFlagsBothRows",
+          "present": true,
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "M4-web-confined",
+      "breaks": "kimi × web stands \"confined\" instead of \"unmeasured\"",
+      "verdict": "killed",
+      "killedBy": [
+        "CapabilityMatrixTests.EveryVector_IsAdmittedOrRefused_AsMeasured(index: 20)",
+        "ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb",
+        "CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells"
+      ],
+      "intended": [
+        {
+          "test": "KimiHasThreeRows_EachCitingItsCells",
+          "present": true,
+          "caught": true
+        },
+        {
+          "test": "ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb",
+          "present": true,
+          "caught": true
+        }
+      ]
+    },
+    {
+      "id": "M5-flags-accepted",
+      "breaks": "a kimi plan with flags is no longer refused",
+      "verdict": "killed",
+      "killedBy": [
+        "ConfinementPlannerTests.APlanWithFlags_IsRefusedForKimi"
+      ],
+      "intended": [
+        {
+          "test": "APlanWithFlags_IsRefusedForKimi",
+          "present": true,
+          "caught": true
+        }
+      ]
+    }
+  ],
+  "baseline": {
+    "tests": 82,
+    "passed": 82,
+    "failed": []
+  },
+  "ended_utc": "2026-10-28T17:24:38.870Z"
+}

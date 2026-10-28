@@ -27,8 +27,11 @@ case $ARM in V) BRANCH=exp/kimi-e56-vllm; PARA=$E/briefs/arm-V.md ;;
              D1|D2|D3|D4) BRANCH=exp/kimi-e56-haiku-direct-${ARM#D}; PARA=$E/briefs/arm-C.md ;;  # Haiku codes the story; Opus checks; Haiku fixes
              SR1|SR2|SR3|SR4) BRANCH=exp/kimi-e56-sonnet-split-haiku-review-${ARM#SR}; PARA=$E/briefs/arm-C.md ;;  # S + a fresh Haiku review-and-fix before Opus
              DR1|DR2|DR3|DR4) BRANCH=exp/kimi-e56-haiku-direct-review-${ARM#DR}; PARA=$E/briefs/arm-C.md ;;  # D + a fresh Haiku review-and-fix before Opus
-             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4|O1..O4|S1..S4|D1..D4|SR1..SR4|DR1..DR4" >&2; exit 1 ;; esac
+             CR1|CR2|CR3|CR4) BRANCH=exp/kimi-e56-classic-haiku-review-${ARM#CR}; PARA=$E/briefs/arm-C.md ;;  # classic + a fresh Haiku review-and-fix before Opus
+             CH1|CH2|CH3|CH4) BRANCH=exp/kimi-e56-classic-haiku-review-haiku-fix-${ARM#CH}; PARA=$E/briefs/arm-C.md ;;  # CR, but Haiku applies Opus's review
+             *) echo "usage: run-arm.sh V|C|C2|VT|C3|C4|Q1..Q4|H1..H4|T1..T4|O1..O4|S1..S4|D1..D4|SR1..SR4|DR1..DR4|CR1..CR4|CH1..CH4" >&2; exit 1 ;; esac
 OUT=$E/results/$ARM; NOTES=$E/notes; WORK=$E/vllm/work/$ARM
+case $ARM in CR*|CH*) NOTES=$E/notes/$ARM ;; esac   # Part 5c: each arm its own notes folder (the Part 5b leak, incidents §2e)
 mkdir -p "$OUT" "$NOTES" "$WORK"
 export COAI_EXP_VLLM_LOG=$E/vllm/requests-$ARM.jsonl
 [ "$ARM" = VT ] && export COAI_EXP_FORCE_THINK=1
@@ -168,6 +171,14 @@ case $ARM in
     step 3-review opus 20 "$E/briefs/2-review.template.md" "-" read no
     review_json 3-review
     step 4-fix haiku 30 "$E/briefs/h-fix.template.md" "$NOTES/$ARM-fix.md" write no
+    ;;
+  CR*|CH*)   # CR and CH differ ONLY in step 4's model and brief (the two briefs differ only in the model's name)
+    step 1-code sonnet 75 "$E/briefs/1-code.template.md" "$NOTES/$ARM-code.md" write no
+    hreview_step 2-hreview
+    step 3-review opus 20 "$E/briefs/2-review.template.md" "-" read no
+    review_json 3-review
+    if [ "${ARM:0:2}" = CH ]; then step 4-fix haiku 30 "$E/briefs/h-fix.template.md" "$NOTES/$ARM-fix.md" write no
+    else step 4-fix sonnet 30 "$E/briefs/3-fix.template.md" "$NOTES/$ARM-fix.md" write no; fi
     ;;
   T*)
     source "$E/t-lib.sh"; run_t_arm

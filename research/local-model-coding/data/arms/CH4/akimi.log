@@ -1,0 +1,31 @@
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnAnsweredReview_IsReadFromTheShimsReport_ThroughTheLaunchControl (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenBeforeTheStart_AndFreeAfterANormalTurn (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheTreeHold_IsTakenForALoadTurnToo (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.TheRealArgv_ParsesInTheRealShim_ThatStartsItsAgentInTheBuiltEnvironment (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheAgentGetsTheBuiltEnvironment_NotTheParents (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AnUnmeasuredKimi_WarnsOnTheLine_WithTheSentenceTheCardShows (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.AHomeTheRunLeftSomethingForbiddenIn_IsRefusedBeforeTheRepairStarts (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.AHomeWithNoCredentialsJunction_Exits65_NamingIt_AndHoldsNothing (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiReviewerRunsThroughTheShimTests.ARefusedLaunch_NeverStartsTheShim_AndSaysWhy (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ATreeHoldThatIsBusyPastTheDeadline_Exits69WithTheSentence (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.TheShimReadsNoEnvironment_InAChildWithARedirectedProfile (0ms)
+  Kimi runs on Windows hosts only (D18)
+skipped CoaiMcp.Tests.AKimiShimScenarioTests.ALockFolderThatCannotBeUsed_Exits65 (0ms)
+  Kimi runs on Windows hosts only (D18)
+
+Test run summary: Passed! - /home/jinx/git/coai-exp/arm-CH4/src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll (net10.0|x64)
+  total: 37
+  failed: 0
+  succeeded: 25
+  skipped: 12
+  duration: 5s 100ms

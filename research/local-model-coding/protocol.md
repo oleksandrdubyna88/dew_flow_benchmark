@@ -343,3 +343,54 @@ To restart: `setsid nohup ./after-y.sh >> chain-y.log 2>&1 < /dev/null &` — it
 also waits for the keep-awake guard, which never ends, so the chain stopped after SR1 and DR1. Fixed in the script (it
 waits only for the pair's own jobs) and restarted from its markers at 19:55 UTC; SR1's and DR1's mutation results were
 kept, nothing else re-ran. No arm, check or judge result was affected.
+
+## Part 5c — the classic scheme with a fresh Haiku review-and-fix before Opus (CR, CH x4), recorded before they run (2026-10-28T10:58:52Z)
+
+- **Design (the owner's, 2026-10-28):** the classic arm C unchanged (Sonnet codes, 75 min, brief `1-code` with `arm-C.md`),
+  plus ONE step after Sonnet's code — the same fresh Haiku review-and-fix as Part 5b (`hr-review-fix`, 30 min). Then the
+  Opus review (`2-review`, 20 min, read-only; not told that a Haiku review ran), then the fixes (30 min):
+  - **CR1–CR4:** Sonnet fixes (`3-fix`, as in C).
+  - **CH1–CH4:** Haiku fixes (`h-fix`; it differs from `3-fix` only in the model's name). The owner's second variant.
+- **One change in the harness, for every CR and CH arm:** each arm has its own notes folder, `notes/<arm>/`, so a Haiku
+  reviewer can no longer read another arm's notes (the Part 5b leak, incidents §2e). C had the shared folder; C's coder and
+  fixer never read another arm's notes, so this does not move the baseline.
+- **Order:** four rounds of two (CR_n with CH_n), `after-z.sh`; the same base `b4e2ea96`, the same checks, the absolute judge
+  (only the new arms), the frozen mutation checks.
+- **Baseline (C, C2, C3, C4):** cost $6.53–7.85 (mean $7.21); per step: code $2.6–3.6, review $2.3–3.6, fix $0.9–2.0; work
+  44–62 min; judge 7.75 (7–8); Opus blocking+major 0.75 per arm; the judge's majors 2 in all; 0 weak tests.
+
+| # | Prediction |
+|---|---|
+| 1 | The Haiku step costs $0.3–1.0 and 10–30 min per arm. CR costs $7.5–9.0 (mean above the classic band). CH costs $6.0–8.0 (mean inside the band, about $1 below CR). |
+| 2 | Wall time: CR and CH 60–100 min each (C + the Haiku step). |
+| 3 | The Opus review finds at most 1 blocking+major per arm on average in CR and in CH (C: 0.75); no clear fall from C, as in Part 5b. |
+| 4 | Judge: CR 7.5–8 in all 4 arms. CH: no arm below 7, and CH's mean at most 0.5 below CR's. |
+| 5 | In at least 1 of the 8 arms the Haiku review-and-fix changes something that the Opus review then flags. |
+| 6 | All 48 mutants killed; at most 1 of the 8 arms has an intended test that misses its mutant. |
+
+### Part 5c — other arms' data locked during the run (2026-10-28T11:31Z, CR1 and CH1 in step 1)
+
+- The owner asked whether an arm can read other runs' work and do better. A scan of all 40 earlier arms' tool calls found:
+  most cross-arm reads were tool logs (which format command was used); real reads of another arm's findings were DR3 and
+  DR4 (incidents §2e) and, not recorded before, **T2's fixer read the first 40 lines of `notes/T1-fix.md`** (T1's review
+  findings and fixes); O2 and S2 grepped other arms' fix notes for "generator" / "format". No arm read another arm's
+  clone, branch or transcript. CR1 and CH1 had read nothing outside their own folders up to the lock.
+- On the owner's choice, `lock-others.sh` set mode 000 on everything holding another arm's work (620 paths: the old arm
+  clones, old notes, results, worktrees, judge and mutation folders, RESULTS.md, PROTOCOL.md, fix-outcomes.json,
+  mutate.mjs, the old arms' Claude transcripts) and mode 300 on the folders above them (no listing). The arms run as the
+  same user and `chmod` is not in their allowed tools. Modes saved in `locked-modes.txt`; a watcher runs
+  `unlock-others.sh` once all 8 arms are done, before the objective checks, the judge, the mutation checks and the metrics.
+- Not covered by the lock: the owner's own repositories (`dew_flow_connect_other_ais` with the old arms' remote branches,
+  `dew_flow_benchmark` with the published data). The CR/CH transcripts will be scanned for any read of them.
+
+### Part 5c — after the run (2026-10-28, recorded with the results)
+
+- **The CR2 build check**: the chain's build of CR2's final commit ended with "Fatal error. Internal CLR error.
+  (0x80131506)" and no compiler error. Built again alone with the same command: succeeded, 0 warnings, 0 errors.
+  `objective.json`'s `build` was set to `true` before the judge read it; the chain's original is kept
+  (`data/arms/CR2/objective.json.orig`, `BUILD-RERUN.md`).
+- **The lock held**: a scan of all 8 arms' tool calls found no read of another arm's notes, clone, results or
+  transcripts, nor of the owner's repositories; no tool call was refused by the lock. The unlock ran at 15:59 UTC
+  (625 paths restored) before the objective checks.
+- **A false alarm**: the unlock watcher first reported "chain is gone" at 11:34 UTC. `chain-z.pid` held the PID of
+  `setsid`'s parent, not of the chain; the chain ran without a break. The PID was corrected and the watcher restarted.

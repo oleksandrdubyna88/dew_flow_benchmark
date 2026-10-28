@@ -1,0 +1,12 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Kimi's none and disk rows are now admitted with AdmissionFlag.Unconfined, so the settings, the sidebar and the log show the caveat 'a shell is always there, and no flag removes it' (and the same text in src_vs_code/src/capabilityAdmission.ts:60). For Kimi this is false: M-K4 (RESULTS §7) and the row's own note say the shim refuses every shell request, and the row reads the machine through Grep and Glob.",
+   "fix": "Make the unconfined caveat true for every unconfined runtime, for example 'unconfined: can read this machine, and no setting confines it', and change the C# and TS texts in the same commit. Or give each row its own reason. Then add a Kimi assertion that the caveat does not claim a shell."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 119,
+   "summary": "The private helper TheRowsOneShotFolder is never called. After the review-H2 commit, nothing in the class uses it.",
+   "fix": "Delete the helper, or use it in TheShimsSeen to assert that the row's coai-vh\\<8> folder is the one that is gone."},
+  {"id": "R3", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1089,
+   "summary": "§0.2 assigns E5.5 and E5.6 to Opus, and says the review fixes go to the model that built the story. The commit trailers show the stories were built on Sonnet and the review-H2 fix (0767f419) was made on Haiku. subagent-models.md §'Fable unavailable → Opus; Haiku is not used' says Haiku has no role. The as-built section names Sonnet but does not record either change as a deviation.",
+   "fix": "Add a numbered deviation that records the coder model (Sonnet, against §0.2's command) and the Haiku fix commit, and get the owner's acceptance. Or have the fix redone by the model that built the story."}
+ ]}

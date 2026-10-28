@@ -50,6 +50,14 @@ from its transcript, priced with the unit prices fitted below). The filler is th
 | DR2 | Haiku codes the story → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 66 | $6.68 | — | 0.0k | 21.5k | 71.0M | 763.5k | — |
 | DR3 | Haiku codes the story → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 74 | $5.54 | — | 0.0k | 28.0k | 42.9M | 688.6k | — |
 | DR4 | Haiku codes the story → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 67 | $4.80 | — | 0.0k | 19.3k | 39.0M | 656.1k | — |
+| CR1 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Sonnet fixes | 78 | $7.39 | — | 88.3k | 19.5k | 42.4M | 621.5k | — |
+| CR2 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Sonnet fixes | 66 | $8.64 | — | 105.9k | 23.7k | 39.3M | 682.6k | — |
+| CR3 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Sonnet fixes | 70 | $8.66 | — | 101.5k | 24.7k | 40.0M | 647.9k | — |
+| CR4 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Sonnet fixes | 60 | $7.70 | — | 89.0k | 29.1k | 32.7M | 624.8k | — |
+| CH1 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 84 | $7.04 | — | 74.7k | 14.2k | 45.0M | 656.1k | — |
+| CH2 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 58 | $7.09 | — | 69.3k | 21.2k | 36.8M | 634.6k | — |
+| CH3 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 65 | $6.97 | — | 65.6k | 24.3k | 37.7M | 656.8k | — |
+| CH4 | Sonnet codes → a fresh Haiku reviews + fixes → Opus checks → Haiku fixes | 69 | $7.33 | — | 63.9k | 29.3k | 34.9M | 629.2k | — |
 
 **Classic band** (C, C2, C3, C4 — one configuration run four times; min / mean / max): work 44 min / 53 min / 62 min;
 cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8M / 27.7M / 32.4M.
@@ -58,9 +66,9 @@ cost $6.53 / $7.21 / $7.85; Sonnet output 78.8k / 85.4k / 92.7k; cache read 23.8
 
 | Model | Output $/Mtok | Cache read $/Mtok | Cache write + input $/Mtok | Fitted on | Max error on those sessions |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 70 | 0.0 % |
-| claude-haiku-5-5 | 1.24 | 0.063 | -0.52 | 231 | 573.6 % |
-| claude-opus-5-5 | 16.72 | 0.200 | 8.51 | 46 | 6.5 % |
+| claude-sonnet-5-5 | 10.00 | 0.100 | 4.00 | 82 | 0.0 % |
+| claude-haiku-5-5 | 0.47 | 0.062 | -0.22 | 263 | 299.0 % |
+| claude-opus-5-5 | 16.77 | 0.201 | 8.45 | 54 | 6.5 % |
 
 
 The Haiku row comes only from Claude Code's own small internal Haiku calls; its near-zero cache coefficient is noise
@@ -108,6 +116,14 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | DR2 | 1-code a1: 21 min $1.69 · 2-hreview a1: 16 min $2.10 · 3-review a1: 15 min $2.59 · 4-fix a1: 14 min $0.30 |
 | DR3 | 1-code a1: 32 min $1.75 · 2-hreview a1: 15 min $0.44 · 3-review a1: 12 min $3.13 · 4-fix a1: 15 min $0.21 |
 | DR4 | 1-code a1: 27 min $1.59 · 2-hreview a1: 13 min $0.48 · 3-review a1: 11 min $2.50 · 4-fix a1: 16 min $0.22 |
+| CR1 | 1-code a1: 41 min $2.93 · 2-hreview a1: 17 min $1.18 · 3-review a1: 6 min $2.11 · 4-fix a1: 14 min $1.17 |
+| CR2 | 1-code a1: 31 min $3.88 · 2-hreview a1: 12 min $0.54 · 3-review a1: 12 min $3.07 · 4-fix a1: 12 min $1.15 |
+| CR3 | 1-code a1: 31 min $4.35 · 2-hreview a1: 13 min $0.37 · 3-review a1: 14 min $3.06 · 4-fix a1: 11 min $0.88 |
+| CR4 | 1-code a1: 22 min $3.06 · 2-hreview a1: 11 min $0.46 · 3-review a1: 15 min $2.98 · 4-fix a1: 12 min $1.19 |
+| CH1 | 1-code a1: 47 min $4.18 · 2-hreview a1: 20 min $0.97 · 3-review a1: 5 min $1.82 · 4-fix a1: 13 min $0.07 |
+| CH2 | 1-code a1: 25 min $3.67 · 2-hreview a1: 11 min $0.39 · 3-review a1: 9 min $2.64 · 4-fix a1: 13 min $0.40 |
+| CH3 | 1-code a1: 27 min $3.14 · 2-hreview a1: 14 min $0.70 · 3-review a1: 14 min $2.87 · 4-fix a1: 10 min $0.26 |
+| CH4 | 1-code a1: 32 min $3.04 · 2-hreview a1: 10 min $0.41 · 3-review a1: 17 min $3.51 · 4-fix a1: 11 min $0.37 |
 
 ## 3. Objective gate (on each arm's final commit)
 
@@ -151,6 +167,14 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | DR2 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 718 insertions(+), 8 deletions(-) |
 | DR3 | ok | 0 | 1 | 0 | ok | ok | 11/12 | 0 / 0 | 12 files changed, 722 insertions(+), 7 deletions(-) |
 | DR4 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 13 files changed, 700 insertions(+), 10 deletions(-) |
+| CR1 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 702 insertions(+), 9 deletions(-) |
+| CR2 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 731 insertions(+), 10 deletions(-) |
+| CR3 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 718 insertions(+), 8 deletions(-) |
+| CR4 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 707 insertions(+), 12 deletions(-) |
+| CH1 | ok | 0 | 0 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 724 insertions(+), 10 deletions(-) |
+| CH2 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 17 files changed, 703 insertions(+), 19 deletions(-) |
+| CH3 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 12 files changed, 679 insertions(+), 7 deletions(-) |
+| CH4 | ok | 0 | 1 | 0 | ok | ok | 12/12 | 0 / 0 | 14 files changed, 721 insertions(+), 12 deletions(-) |
 
 ## 3b. The step-2 review (Opus, before the fixes)
 
@@ -194,6 +218,14 @@ and no reported value uses it. The H arms' filler cost is NOT fitted: each Haiku
 | DR2 | 6 | 0 / 3 / 3 | fix-then-ready |
 | DR3 | 7 | 0 / 2 / 5 | fix-then-ready |
 | DR4 | 9 | 0 / 2 / 7 | fix-then-ready |
+| CR1 | 6 | 0 / 0 / 6 | ready |
+| CR2 | 5 | 0 / 1 / 4 | fix-then-ready |
+| CR3 | 5 | 0 / 1 / 4 | fix-then-ready |
+| CR4 | 6 | 0 / 0 / 6 | fix-then-ready |
+| CH1 | 3 | 0 / 0 / 3 | fix-then-ready |
+| CH2 | 4 | 0 / 1 / 3 | fix-then-ready |
+| CH3 | 5 | 0 / 1 / 4 | fix-then-ready |
+| CH4 | 5 | 0 / 1 / 4 | fix-then-ready |
 
 ## 4. The fill and its survival (skeleton arms)
 
@@ -293,6 +325,14 @@ in any file the arm changed in its final commit (`t-survival.json`, from the per
 | DR2 | **7.5** (7 / 8) | 7 / 9 | 8 / 8 | 8 / 8 | 8 / 9 | Mmmmmm / mmmmmmmm |
 | DR3 | **7.5** (7 / 8) | 9 / 9 | 6 / 8 | 8 / 8 | 8 / 8 | Mmmmmm / mmmmmm |
 | DR4 | **7.0** (7 / 7) | 9 / 8 | 7 / 6 | 7 / 6 | 8 / 8 | Mmmmmmm / MMmmmmm |
+| CR1 | **8.0** (8 / 8) | 9 / 8 | 8 / 8 | 8 / 7 | 8 / 9 | mmmmmm / mmmmm |
+| CR2 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 8 | 8 / 8 | mmmmm / mmmm |
+| CR3 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 8 | 8 / 8 | mmmmmm / mmmm |
+| CR4 | **8.0** (8 / 8) | 8 / 9 | 8 / 8 | 7 / 8 | 8 / 8 | mmmmmm / mmmm |
+| CH1 | **7.5** (7 / 8) | 8 / 9 | 8 / 8 | 6 / 7 | 8 / 8 | Mmmmmm / mmmmmm |
+| CH2 | **7.0** (7 / 7) | 9 / 9 | 8 / 8 | 6 / 6 | 8 / 7 | Mmmmmmm / Mmmmmm |
+| CH3 | **8.0** (8 / 8) | 9 / 9 | 8 / 8 | 8 / 8 | 8 / 8 | mmmmm / mmmmmm |
+| CH4 | **8.0** (8 / 8) | 9 / 8 | 8 / 8 | 7 / 7 | 8 / 8 | Mmmmmmm / mmmmmmm |
 
 ## 7. Quality — the earlier GROUP judges (one session ranks V, C, C2, VT together; 2 runs, labels permuted)
 
@@ -360,6 +400,14 @@ exact name and a renamed test caught it (from `killedBy`).
 | DR2 | 6/6 | killed (+ r) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
 | DR3 | 6/6 | killed (+ r) | killed (+) | killed (+ +) | killed (+ r) | killed (+ +) | killed (r) |
 | DR4 | 6/6 | killed (+ r) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CR1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CR2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CR3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CR4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CH1 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CH2 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CH3 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
+| CH4 | 6/6 | killed (+ +) | killed (+) | killed (+ +) | killed (+ +) | killed (+ +) | killed (+) |
 
 ## 9. What the fixers did with the review's findings (data/fix-outcomes.json)
 
