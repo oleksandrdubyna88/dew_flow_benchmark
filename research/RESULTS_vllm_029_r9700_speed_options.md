@@ -49,6 +49,7 @@ runs through the RAM guard.
 | Quality (round 1 only) | GSM8K-200 (greedy, temperature 0 sent explicitly — the server's `repetition_penalty 1.05` still applies) and 20 fixed greedy prompts compared token by token with `base` |
 | Order | arms alternate inside a round: base, mtp1, mtp3, mnbt8k, tattn, fp8kv |
 | Ship test (written before the run) | median better than `base` by more than `base`'s spread at c=1 or c=4; the other concurrency not worse by more than that spread; GSM8K within 2 × stderr; for `mnbt8k` also 32k TTFT lower by more than the spread; `fp8kv` kept only as a switch unless it passes on speed |
+| "Spread" (as computed here) | the **range** (max − min) of `base`'s values for that metric over all its valid reps — 6 values (2 rounds × 3 reps). Output tok/s: c=1 75.46 … 78.81 → 3.35 tok/s; c=4 178.25 … 183.66 → 5.41 tok/s. 32k median TTFT: 15.77 … 16.13 s → 0.35 s. An arm's difference is its 6-value median minus `base`'s 6-value median (c=1 76.53, c=4 180.54, 32k 16.03 s) |
 | Guards | disk gate (Windows System log, providers disk/stornvme) before every start — no new event in the whole series; RAM guard: stop all test containers when Windows "Available MBytes" < 4096 (from 2026-10-28 10:30: < 2048, operator decision); any stop restarts the production server |
 
 Predictions were written into the plan before the first start (see § 5).
@@ -146,9 +147,9 @@ and `mnbt8k` (lowest in both rounds) are clear**; the other differences are with
 
 | Option | Ship test | Read |
 |---|---|---|
-| `mtp3` | c=1 +5.3 tok/s > spread 3.4 ✓; c=4 +5.6 > 5.4 ✓ (just); GSM8K ✓ | **Keep candidate.** Gains on both loads, TPOT −8 %, acceptance 0.90 / 0.83 / 0.74 |
-| `tattn` | c=1 +2.7 < 3.4 ✗; c=4 +9.7 > 5.4 ✓; c=1 not worse ✓; GSM8K ✓ | **Keep candidate.** The log confirms `Using TRITON_ATTN backend (selected via --attention-backend)` and the absence of `Fused multi-step draft decode is not supported` — the fused draft steps are on |
-| `mnbt8k` | decode not better ✗ (rule 1); c=4 −6.5 tok/s > spread ✗ (rule 2); 32k TTFT −3.9 s ✓ | **Operator's choice.** Long prompts 24–30 % faster for ~4 % decode and the smallest KV cache. Worth it for code / document prompts |
+| `mtp3` | c=1 81.84 − 76.53 = +5.31 > 3.35 ✓; c=4 186.16 − 180.54 = +5.62 > 5.41 ✓ (just); GSM8K ✓ | **Keep candidate.** Gains on both loads, TPOT −8 %, acceptance 0.90 / 0.83 / 0.74 |
+| `tattn` | c=1 79.20 − 76.53 = +2.67 < 3.35 ✗; c=4 190.23 − 180.54 = +9.69 > 5.41 ✓; c=1 not worse ✓; GSM8K ✓ | **Keep candidate.** The log confirms `Using TRITON_ATTN backend (selected via --attention-backend)` and the absence of `Fused multi-step draft decode is not supported` — the fused draft steps are on |
+| `mnbt8k` | decode not better ✗ (rule 1); c=4 174.05 − 180.54 = −6.49, worse by more than 5.41 ✗ (rule 2); 32k TTFT 12.15 − 16.03 = −3.88 s, more than 0.35 s ✓ | **Operator's choice.** Long prompts 24–30 % faster for ~4 % decode and the smallest KV cache. Worth it for code / document prompts |
 | `mtp1` | worse everywhere | Drop |
 | `fp8kv` | worse on speed | Keep only as a switch for very long context or more parallel requests (`-ExtraArgs "--kv-cache-dtype","fp8"`) |
 
@@ -185,18 +186,25 @@ Decode itself is equal (TPOT even slightly lower in the tests). Checked equal be
 the sampling defaults (both logs: `{'repetition_penalty': 1.05, 'temperature': 0.3, 'top_k': 20, 'top_p': 0.9}`),
 `--max-model-len`, `--max-num-seqs`. Not equal: production adds `--reasoning-parser qwen3`,
 `--default-chat-template-kwargs.reasoning_effort medium` and `-p 8000:8000`; the test sets
-`PYTHONPYCACHEPREFIX=/tmp/pyc-fresh`. **Next step:** run `bench.sh` against the production container now —
+`PYTHONPYCACHEPREFIX=/tmp/pyc-fresh`. **Next step:** run `bench.sh` against the production container now
+(`harness/bench.sh vllm prodcheck` — the script takes the container name and a tag, runs `vllm bench serve`
+inside that container against `http://127.0.0.1:8000`, so no port or host change is needed; it loads the
+server for ~3 minutes, so do it when nobody else uses it) —
 if it also stalls, something changed on the host since 2026-10-27 12:17 (the RAM behaviour of § 6.5 is a
 candidate: a trimmed container VM must page memory back in); if it does not, bisect the three flags. Adding
 `--percentile-metrics ttft --metric-percentiles 50,99` to the bench shows the stalled request directly. Until
 then, compare arms only with each other and prefer TPOT and median TTFT.
 
-### 6.2 Sampling defaults change MTP speed by ~25 %
+### 6.2 Sampling defaults probably change MTP speed — not isolated
 
 The first try (2026-10-27 15:31) started test servers without `--generation-config`, so the model's own
-defaults applied (temperature 1.0, top_p 0.95). `base` gave 75.9 tok/s at c=1 against ~101 in production with
-temperature 0.3. Any MTP benchmark must use the production sampling defaults; `vllm bench serve` sends no
-temperature, so the server's defaults decide. Data: `discarded/temp1.0_bench.txt`.
+defaults applied (temperature 1.0, top_p 0.95). `base` gave 75.9 tok/s at c=1 (mean TTFT 0.31 s, TPOT 12.59 ms)
+against 101.5 in production with temperature 0.3 (TPOT 8.9–9.5 ms). The TPOT gap of ~30 % is a decode effect
+and fits lower MTP acceptance at temperature 1.0, but this is a **hypothesis**: it compares a test server with
+production on different hours, and SnagitEditor was very likely already using the R9700 then (§ 6.3). A
+same-environment A/B that changes only `--generation-config` was not run. The rule that follows either way:
+an MTP benchmark must use the production sampling defaults, because `vllm bench serve` sends no temperature
+and the server's defaults decide. Data: `discarded/temp1.0_bench.txt`.
 
 ### 6.3 A 3D app on the R9700 slows vLLM several times
 
@@ -294,7 +302,7 @@ went through.
 
 ## 9. Next steps (not started)
 
-1. Run `harness/bench.sh` against the production container to explain § 6.1.
+1. Run `harness/bench.sh vllm prodcheck` against the production container to explain § 6.1 (see there).
 2. Final A/B on a quiet PC, 3 rounds, GSM8K and prompts in round 1: `base` vs `mtp3 + tattn` vs
    `mtp3 + tattn + mnbt8k`.
 3. If a combination passes: add it to `start-vllm.ps1` (`-MtpTokens 3`, `-ExtraArgs "--attention-backend","TRITON_ATTN"`
@@ -309,7 +317,7 @@ went through.
 |---|---|
 | `raw/bench.txt` | Every valid `vllm bench serve` line (throughput, mean TTFT, mean TPOT; prefill median TTFT), tagged `<arm>-<round> c=<n>\|prefill<len> r=<rep>` |
 | `raw/spec_metrics.txt` | `vllm:spec_decode_*` counters per arm-round |
-| `raw/cpuload_round1.txt` | WSL load average every 30 s, 2026-10-27 16:05–17:25 (the discarded run of § 6.3; the name is historical) |
+| `raw/cpuload_round1.txt` | WSL load average every 30 s, 2026-10-27 16:05–17:25 — **the discarded run of § 6.3, not the kept round 1** (the name is historical). No load log exists for the kept round 1 (20:58–00:27); the ~11 at its start in § 6.4 is a single reading from the session record |
 | `server_logs/` | Full server log per arm-round (`server_fp8kv-2_PARTIAL_stopped.log`: start only) |
 | `quality/gsm8k_<arm>.json`, `quality/prompts_<arm>.json` | GSM8K-200 answers and the 20 greedy prompts with token ids and logprobs (round 1) |
 | `harness/` | The scripts as run: `speed_A.sh` (series), `serve.sh`, `bench.sh`, `harness.py` (prompts, GSM8K, compare), `disk_gate.sh`, `ram_guard_all.sh`, `restore_server.sh`, `wait_quiet.sh`, `resume_AC.sh`; not run: `speed_CB.sh`, `tune_chunk.sh`, `linear_bench.py` |
