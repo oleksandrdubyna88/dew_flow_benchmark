@@ -405,3 +405,4 @@ PR <https://github.com/vllm-project/vllm/pull/49539>, PR <https://github.com/vll
 | An upstream PR with the tuned MoE file (needs the operator's approval of the text) | operator decides |
 | An upstream report of the Ray 2.59 / `ROCR_VISIBLE_DEVICES` problem in `benchmark_moe.py` | operator decides |
 | Remove the backports when a new image contains #52637 and #49539 | operator, at the next image upgrade |
+| Seven more speed options (MTP 1/3 drafts, batched tokens, FP8 KV, `TRITON_ATTN`, linear kernel at M 6–16, BF16 draft MoE file, int4 keys 24–128): partly measured 2026-10-27/28 — `mtp3` and `TRITON_ATTN` pass, the combination is not tested. See [RESULTS_vllm_029_r9700_speed_options.md](RESULTS_vllm_029_r9700_speed_options.md) | operator decides on the final A/B |
