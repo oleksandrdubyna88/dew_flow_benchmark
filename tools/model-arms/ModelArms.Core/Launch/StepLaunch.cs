@@ -38,6 +38,8 @@ public sealed record StepLaunchRequest(
 /// the runner sets them (E2.S4) with <c>with</c>, because a sink is a file and Core opens none.</summary>
 public static class StepLaunch
 {
+    private const string PwdVariable = "PWD";
+
     /// <summary>The options of a step: stream-json events, MCP servers off and the arm's notes and work folders granted, whatever the mode;
     /// then the session; then the mode's permission mode, permission list, deny list and MCP config.</summary>
     public static AgentAskOptions Options(StepMode mode, ToolSets tools, ArmPaths paths, StepSession session) =>
@@ -48,8 +50,23 @@ public static class StepLaunch
         new(ModelRuntimeKind.CliClaude, request.ClaudeExecutable, request.Prompt, request.WorkingDirectory, request.Wall, request.Spec.Model)
         {
             Options = Options(request.Spec.Mode, request.Tools, request.Paths, request.Session),
-            Environment = AgentEnvironment.Only(ArmChildEnvironment.Of(request.ParentEnvironment, request.Paths)),
+            Environment = AgentEnvironment.Only(ChildVariables(request)),
         };
+
+    /// <summary><see cref="ArmChildEnvironment.Of"/> plus the one thing only a launch knows: <c>PWD</c> is the working directory. The shell ran
+    /// claude as <c>(cd "$DIR" &amp;&amp; … claude …)</c>, so its child saw its own folder as <c>PWD</c> and no <c>OLDPWD</c>; a process started
+    /// with a working directory does not update the variable, so the runner's own <c>PWD</c> and <c>OLDPWD</c> would otherwise ride along
+    /// and show where the experiment was started from. This is the single named exception to "nothing else is added".</summary>
+    private static IReadOnlyDictionary<string, string> ChildVariables(StepLaunchRequest request) =>
+        new Dictionary<string, string>(
+            ArmChildEnvironment.Of(request.ParentEnvironment, request.Paths).Where(variable => !IsShellsFolderTracking(variable.Key)),
+            StringComparer.Ordinal)
+        {
+            [PwdVariable] = request.WorkingDirectory,
+        };
+
+    private static bool IsShellsFolderTracking(string name) =>
+        name.Equals(PwdVariable, StringComparison.OrdinalIgnoreCase) || name.Equals("OLDPWD", StringComparison.OrdinalIgnoreCase);
 
     private static AgentAskOptions ForMode(StepMode mode, ToolSets tools, ArmPaths paths)
     {
