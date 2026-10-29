@@ -18,8 +18,8 @@ builds the three instruments and proves each on fixtures and on one real capture
 | Instrument | Question it answers | Entry |
 |---|---|---|
 | **Scorer** with its **held-out suite** | Did the cell's `minigit` do what the SPEC says, measured on a pristine copy by tests the agent never saw, one defect counted once | `score-session.mjs`, `heldout-tool.mjs`, `adjudicate.mjs` |
-| **Counters** | What the session cost at published prices, cross-checked three ways, never double-billing a cache and never priced from a fitted rate | pure libraries (`lib/`), no command |
-| **Time partition** and the **coai ledger reader** | Where the wall went, in categories that sum to the wall; what the review models consumed, in tokens | pure libraries (`lib/`), no command |
+| **Counters** | What the session cost at published prices, cross-checked three ways, never double-billing a cache and never priced from a fitted rate | libraries (`lib/`), no command |
+| **Time partition** and the **coai ledger reader** | Where the wall went, in categories that sum to the wall; what the review models consumed, in tokens | libraries (`lib/`), no command (the rounds reader opens `coai.db`) |
 
 Everything is plain ESM `.mjs` on Node 26 with no dependency and no `package.json`. A value that could not be measured is
 `{ known: false, why }` and renders `unknown`, never `0`. CI does not run the spike; the required environment is Linux with
@@ -81,7 +81,8 @@ flowchart LR
     ALIAS["aliasRecord / checkAliases"]
     SPANS["spansFrom: OTel, audit hook,<br/>hook pairs, coai rounds"]
     PART["partition of the wall<br/>work first, then waits"]
-    LEDGER["coai usage.jsonl + coai.db<br/>readLedger, ledgerSummary, roundsSpans"]
+    ROUNDS["coai.db rounds<br/>roundsSpans"]
+    LEDGER["coai usage.jsonl<br/>readLedger, ledgerSummary"]
     E --> CHECKS
     O --> CHECKS
     T --> CHECKS
@@ -90,7 +91,7 @@ flowchart LR
     T --> COST
     E --> ALIAS
     O --> SPANS
-    LEDGER --> SPANS
+    ROUNDS --> SPANS
     SPANS --> PART
   end
 
@@ -102,7 +103,7 @@ flowchart LR
   CAPTURE["capture-session.mjs<br/>one paid session, sanitised fixture"] -.->|"decided the decoder's names"| COUNTERS
 ```
 
-Solid arrows are data the code moves today. Dotted arrows are use: calibration scores its subjects through the scorer, and
+Solid arrows are data the code moves today. Only the `coai.db` rounds feed the spans; `usage.jsonl` is summarised in tokens and never becomes a span. Dotted arrows are use: calibration scores its subjects through the scorer, and
 the one real capture is the evidence the counters' decoder and policy were built on.
 
 ## The three instruments
@@ -169,8 +170,9 @@ The suite is **sealed at rest and calibrated before any cell**.
 
 ### 3. The counters, the time partition and the coai ledger reader
 
-All pure over records; I/O is only in `lib/otel-receiver.mjs` and `capture/*`. There is no command that runs them on a
-session yet (a runner is E3).
+Pure over records, except at four I/O edges: `lib/otel-receiver.mjs` (the live receiver), `capture/*` (the capture run, its file
+sink and the reading and writing of capture directories), `lib/coai-usage.mjs` (`roundsSpans` opens a copy of `coai.db` read-only through
+`node:sqlite`) and the scorer's own files. There is no command that runs the counters on a session yet (a runner is E3).
 
 **Three views of one session** (all from the same CLI, so cross-checks of the reading, not independent billing):
 
@@ -253,9 +255,9 @@ argv or in the environment.
 | `… adjudicate.mjs reveal --series <dir>` | after every packet has a verdict, maps blind ids to case, cell, arm, stack and code path | 0 · 1 refused (a verdict is missing) · 4 · 5 |
 | `… adjudicate.mjs class --series <dir> --blind <id> --class product\|harness --reason <text>` | records a step-2 class | 0 · 1 refused · 4 · 5 |
 | `… adjudicate.mjs revised --series <dir>` | the revised score beside the primary | 0 · 1 refused · 4 · 5 |
-| `node spikes/minigit-bench/capture/capture-session.mjs run --out <dir outside every git tree> [--dry-run]` | **spends money** (≤ $1.50): one tiny session on an unrelated task with OTel pointed at a raw file sink. Needs `CLAUDE_CODE_OAUTH_TOKEN` in the shell, never on argv | 0 done · 3 environment (no token, `claude` missing, bad out dir) · 4 usage · 5 the capture failed |
-| `… capture-session.mjs sanitise --from <dir> --to <fixture dir>` | copies the capture through the sanitiser; a leak scan failure leaves nothing in the fixture directory | same |
-| `… capture-session.mjs verdicts --fixture <fixture dir>` | computes the assumption table into `CAPTURE.md`; nothing typed by hand | same |
+| `node spikes/minigit-bench/capture/capture-session.mjs run --out <dir outside every git tree> [--dry-run]` | **spends money** (≤ $1.50): one tiny session on an unrelated task with OTel pointed at a raw file sink. The subscription token (from `claude setup-token`) is read ONLY from `~/.config/minigit-bench/claude-oauth-token` (a regular file of mode 600 in a directory of mode 700); an environment variable has no mode to check, so `CLAUDE_CODE_OAUTH_TOKEN` in the shell is ignored. Prints a start line (the out dir and its `capture.log`) before the wait and a final `capture status:` line | 0 done · 3 environment (no token file, a wrong mode, `claude` missing, bad out dir) · 4 usage · 5 the capture failed |
+| `… capture-session.mjs sanitise --from <dir> --to <fixture dir>` | copies the capture through the sanitiser into a sibling staging directory and renames it into place after every write; a leak finding or a failed write leaves nothing in the fixture directory | same |
+| `… capture-session.mjs verdicts --fixture <fixture dir>` | computes the assumption table into `CAPTURE.md` and prints the decisions (`join`, `t3OutputSource`, `OTEL_STAMP_MARKS`, `HOOK_TIME_SOURCE`); nothing typed by hand | same |
 
 The counters, the partition and the ledger reader are libraries; their public functions are `sessionCost`, `crosscheck`,
 `aliasRecord`, `checkAliases`, `startReceiver`, `spansFrom`, `partition`, `readLedger`, `ledgerSummary` and `roundsSpans`.
@@ -299,7 +301,7 @@ assumption became a dated amendment in `todo/PLAN_minigit_stack_bench_E1.md` bef
 | A-O2 | an `api_request` record's time marks the **end** of the request | holds (7 of 7), so `OTEL_STAMP_MARKS = end` |
 | A-O3, A-O4 | O summed over all sources equals E per model and kind; Σ O `cost_usd` equals `total_cost_usd` | hold (gap 0) |
 | A-O5 | child requests carry `agent_id` and `parent_agent_id` | **refuted as worded**: `agent_id` on 4 of 4, `parent_agent_id` on 0 of 4 at depth one; `agent_id` alone attributes per child |
-| A-H1, A-H2 | hook events carry a `hook_id` and no timestamp; with tool details on, `tool_result` records carry `tool_use_id` and `duration_ms` | hold, so hook spans use the runner's arrival stamp |
+| A-H1, A-H2 | hook events carry a `hook_id` and no timestamp; with tool details on, `tool_result` records carry `tool_use_id` and `duration_ms` | hold, so `HOOK_TIME_SOURCE = arrival` (pinned to the verdict in `capture-real.test.mjs`) and hook spans use the runner's arrival stamp |
 | A-M1 | model ids are exact and the alias record can be built | holds; the subagent tool is reported as **`Task`** while `--tools Agent` is accepted, so the guard accepts both |
 | A-P1 | the CLI bills at published rates, except an observed cache-read rate for that CLI version | holds once re-worded: Sonnet cache reads are billed at the published $0.10 on 2.1.310; the $0.20 belonged to 2.1.289 |
 
@@ -354,20 +356,28 @@ machine.
 | The A/A and P1 pilots that decide whether **T3 becomes a stop** (`policy.t3` is `investigate` today; the pre-registered fallback is `fallback-t2` with `t2 = stop`), the day-1 price re-read, the draw | E3 (S4) |
 | A **real coai ledger**: the reader's fixtures are synthetic | E3 (S3–S4) |
 | The twelve-cell series, the block-1 by-hand read-back, the blind hand classing of failing held-out cases, the ≥ 20-verdict compliance hand check | E4 (S1–S2) |
-| `report.mjs` (the per-session, per-stack × arm and pair-ratio tables, the series report in this folder), credential teardown, archive and `retire.mjs`, publishing the suite's case list beside the report, promotion of the plans | E4 (S3) |
+| `report.mjs` (the per-session, per-stack × arm and pair-ratio tables, the series report beside this file), credential teardown, archive and `retire.mjs`, publishing the suite's case list beside the report, promotion of the plans | E4 (S3) |
 
-Until E3 has run, nothing in this folder is a measurement of either stack: E1 only shows that the instruments are right.
+Until E3 has run, nothing in `spikes/minigit-bench/` is a measurement of either stack: E1 only shows that the instruments are right.
 
 ## Verifying this document
 
 ```bash
-BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs     # must report 0 skipped
+BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs     # 0 failed; read the skips against the list below
 node spikes/minigit-bench/heldout-tool.mjs counts                    # needs the key; the archive agrees with the manifest
 node spikes/minigit-bench/capture/capture-session.mjs verdicts --fixture spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture   # regenerates the A-* table
 ```
 
-At the epic's completion (2026-10-29) the run had 443 tests passing and 0 skipped; the command, not that figure, is the
-current truth.
+The command, not a figure written here, is the current truth. `BENCH_REQUIRE_SANDBOX=1` turns a skip for a missing `bwrap`, `python3`
+or held-out key into a failure, so those can never hide behind a skip. It does **not** cover the skips that depend on the host, which are
+reported by their reasons and are the only skips a complete run may show:
+
+| Skip | When | What is checked instead |
+|---|---|---|
+| the coai source checks (`The_rounds_columns_…`, `The_ledger_fields_…`) | there is no sibling `dew_flow_connect_other_ais` checkout beside the repository (or beside the main checkout of a worktree) and no `COAI_SRC` | the reader against its own copied DDL and field list |
+| the user runtime directory check (`The_box_cannot_see_the_users_runtime_dir_…`) | the host has no `/run/user/<uid>` | nothing: the box still hides `/run` |
+| the user manager escape check (`The_box_cannot_start_a_unit_on_the_hosts_user_manager`) | the host has no working `systemd-run --user` | nothing: with no manager there is nothing to escape to |
+| the open-descriptor check of the file sink | no `/proc/self/fdinfo` | the sink's other tests |
 
 ## Where to read further
 
