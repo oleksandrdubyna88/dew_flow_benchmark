@@ -28,9 +28,9 @@ public static class ExecutableResolution
         Func<string, Outcome<string>> realPath,
         bool windows)
     {
-        if (forbiddenRoots.FirstOrDefault(ExecutableRule.HoldsNul) is { } nulRoot)
+        if (NulRootRefusal(forbiddenRoots) is { Length: > 0 } nulRoot)
         {
-            return Outcome<string>.Failure($"the forbidden root '{ExecutableRule.Printable(nulRoot)}' holds a NUL character — a path never does; refused (D17)");
+            return Outcome<string>.Failure(nulRoot);
         }
 
         var roots = AsWrittenAndReal(forbiddenRoots, realPath);
@@ -45,6 +45,55 @@ public static class ExecutableResolution
             : OnPath(executable, pathDirectories, isExecutableFile, windows);
         return found.Match(path => Judge(path, roots, realPath), Outcome<string>.Failure);
     }
+
+    /// <summary>Why this entry of a PATH list is refused, or the empty string. The programs the harness starts look their own tools up in the PATH they
+    /// inherit — a shebang interpreter (<c>#!/usr/bin/env node</c>), <c>dotnet</c> starting <c>git</c> — so an entry an arm could write to is as dangerous as a
+    /// configured executable there (observed: an outside tool's <c>#!/usr/bin/env mynode</c> ran the target's <c>mynode</c>). Refused: an empty entry (the current
+    /// directory), a relative one (resolved against wherever the child runs), one under a forbidden root as written, and one that really is under one — the
+    /// kernel's answer for the entry, or for its nearest existing ancestor when it does not exist yet. An entry that does not exist and is outside every root is
+    /// fine: every shell skips it.</summary>
+    public static string PathEntryRefusal(string entry, IReadOnlyList<string> forbiddenRoots, Func<string, Outcome<string>> realPath)
+    {
+        var shape = EntryShape(entry);
+        if (shape.Length > 0)
+        {
+            return shape;
+        }
+
+        var nulRoot = NulRootRefusal(forbiddenRoots);
+        return nulRoot.Length > 0 ? nulRoot : UnderARoot(entry, AsWrittenAndReal(forbiddenRoots, realPath), realPath);
+    }
+
+    private static string EntryShape(string entry) =>
+        entry switch
+        {
+            _ when ExecutableRule.HoldsNul(entry) => $"PATH holds an entry '{ExecutableRule.Printable(entry)}' with a NUL character — a path never does; refused (D17)",
+            "" => "PATH holds an empty entry — it means the current directory, where an arm could write a file; remove it (D17)",
+            _ when !Path.IsPathFullyQualified(entry) =>
+                $"PATH entry '{entry}' is a relative path, resolved against whatever directory a program runs in — use an absolute path (D17)",
+            _ => string.Empty,
+        };
+
+    private static string UnderARoot(string entry, IReadOnlyList<string> roots, Func<string, Outcome<string>> realPath)
+    {
+        var written = roots.FirstOrDefault(root => PathScope.IsEqualOrUnder(entry, root));
+        if (written is not null)
+        {
+            return $"PATH entry '{entry}' is under '{ExecutableRule.Printable(written)}' — {Reach}";
+        }
+
+        var real = NearestExisting(entry, realPath);
+        var really = roots.FirstOrDefault(root => PathScope.IsEqualOrUnder(real, root));
+        return really is null ? string.Empty : $"PATH entry '{entry}' is really '{real}', which is under '{ExecutableRule.Printable(really)}' — {Reach}";
+    }
+
+    private const string Reach =
+        "every program the harness starts looks its own tools up in PATH, and an arm could write a file there; remove it from PATH (D17)";
+
+    private static string NulRootRefusal(IReadOnlyList<string> forbiddenRoots) =>
+        forbiddenRoots.FirstOrDefault(ExecutableRule.HoldsNul) is { } nulRoot
+            ? $"the forbidden root '{ExecutableRule.Printable(nulRoot)}' holds a NUL character — a path never does; refused (D17)"
+            : string.Empty;
 
     /// <summary>A spelled executable: the operator named this file, so one the kernel cannot resolve is refused naming the reason — "not on PATH" would be a lie.</summary>
     private static Outcome<string> Existing(string executable, Func<string, bool> isExecutableFile, Func<string, Outcome<string>> realPath) =>
