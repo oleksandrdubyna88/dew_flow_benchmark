@@ -19,10 +19,13 @@ namespace ModelArms.Core.Experiment;
 /// </para></summary>
 public static class ExecutableResolution
 {
+    /// <summary>What a refused folder is called in a sentence, and why it matters.</summary>
+    private sealed record Subject(string Label, string Reach);
+
     private const string Assumed = "refused rather than assumed safe (D17)";
 
-    private const string Reach =
-        "every program the harness starts looks its own tools up in PATH, and an arm could write a file there; remove it from PATH (D17)";
+    private static readonly Subject PathEntry = new(
+        "PATH entry", "every program the harness starts looks its own tools up in PATH, and an arm could write a file there; remove it from PATH (D17)");
 
     /// <summary>The REAL path to run, or why there is none. A PATH candidate that cannot be resolved is skipped, as <c>execvp</c> does. An executable the
     /// operator SPELLED is <see cref="ExecutableAnswer.Absent"/> when there is no directory entry by that name, and <see cref="ExecutableAnswer.Refused"/> when
@@ -46,17 +49,23 @@ public static class ExecutableResolution
     /// Refused: an empty entry (the current directory), a relative one (resolved against wherever the child runs), one under a forbidden root as written, one
     /// that really is under one, and one whose existing component the kernel cannot resolve. An entry that does not exist and is outside every root is fine:
     /// every shell skips it.</summary>
-    public static string PathEntryRefusal(string entry, IReadOnlyList<string> forbiddenRoots, HostPaths host)
-    {
-        var shape = EntryShape(entry);
-        if (shape.Length > 0)
-        {
-            return shape;
-        }
+    public static string PathEntryRefusal(string entry, IReadOnlyList<string> forbiddenRoots, HostPaths host) =>
+        Refusal(PathEntry, entry, EntryShape(entry), forbiddenRoots, host);
 
-        var nulRoot = NulRootRefusal(forbiddenRoots);
-        return nulRoot.Length > 0 ? nulRoot : RealRoots(forbiddenRoots, host).Match(roots => UnderARoot(entry, roots, host), reason => reason);
-    }
+    /// <summary>Why this folder named by an environment variable (<c>HOME</c>, <c>XDG_CONFIG_HOME</c>) is refused, or the empty string. Git reads its GLOBAL config from
+    /// there, and a config can name a program, a file git appends its trace events to, or a <c>safe.directory</c> that lets git trust a repository it should not (observed:
+    /// git appended trace2 events to a file the target chose) — so a folder an arm could write to is refused like a PATH entry: under a forbidden root as written or as it
+    /// really is, relative (resolved against the source git runs in), or with an existing component the kernel cannot resolve. An unset or empty variable is fine: git
+    /// falls back.</summary>
+    public static string ConfigFolderRefusal(string variable, string value, IReadOnlyList<string> forbiddenRoots, HostPaths host) =>
+        value.Length == 0
+            ? string.Empty
+            : Refusal(
+                new Subject(variable, "git reads its global config from there, and an arm could write a file there; unset it or point it outside the target and the experiment root (D17)"),
+                value,
+                FolderShape(variable, value),
+                forbiddenRoots,
+                host);
 
     private static ExecutableAnswer Located(
         string executable, IReadOnlyList<string> pathDirectories, IReadOnlyList<string> roots, HostPaths host, bool windows) =>
@@ -71,10 +80,13 @@ public static class ExecutableResolution
         {
             Outcome<bool>.Ok { Value: false } => new ExecutableAnswer.Absent($"{executable} does not exist"),
             Outcome<bool>.Fail fail => new ExecutableAnswer.Refused(Unresolved(executable, fail.Reason)),
-            _ => host.RealPath(executable).Match(
-                _ => host.IsExecutableFile(executable) ? Judge(executable, roots, host) : new ExecutableAnswer.Refused(NotExecutable(executable)),
-                reason => new ExecutableAnswer.Refused(Unresolved(executable, reason))),
+            _ => Existing(executable, roots, host),
         };
+
+    private static ExecutableAnswer Existing(string executable, IReadOnlyList<string> roots, HostPaths host) =>
+        host.RealPath(executable).Match(
+            _ => host.IsExecutableFile(executable) ? Judge(executable, roots, host) : new ExecutableAnswer.Refused(NotExecutable(executable)),
+            reason => new ExecutableAnswer.Refused(Unresolved(executable, reason)));
 
     private static string? OnPath(string name, IReadOnlyList<string> pathDirectories, HostPaths host, bool windows)
     {
@@ -113,17 +125,39 @@ public static class ExecutableResolution
             _ => string.Empty,
         };
 
-    private static string UnderARoot(string entry, IReadOnlyList<string> roots, HostPaths host)
+    private static string FolderShape(string variable, string value) =>
+        value switch
+        {
+            _ when ExecutableRule.HoldsNul(value) => $"{variable} holds '{ExecutableRule.Printable(value)}' with a NUL character — a path never does; refused (D17)",
+            _ when !Path.IsPathFullyQualified(value) =>
+                $"{variable} '{value}' is a relative path, resolved against the source git runs in — use an absolute path (D17)",
+            _ => string.Empty,
+        };
+
+    /// <summary>The shape refusal if the text has one, else the refusal by roots: a root that cannot be compared, a root that cannot be resolved, the folder under a root as
+    /// written, or really under one.</summary>
+    private static string Refusal(Subject subject, string value, string shape, IReadOnlyList<string> forbiddenRoots, HostPaths host)
     {
-        var written = roots.FirstOrDefault(root => PathScope.IsEqualOrUnder(entry, root));
-        return written is not null
-            ? $"PATH entry '{entry}' is under '{ExecutableRule.Printable(written)}' — {Reach}"
-            : Climb(entry, host).Match(real => UnderRealRoot(entry, real, roots), reason => $"PATH entry '{entry}' cannot be resolved: {reason} — {Assumed}");
+        if (shape.Length > 0)
+        {
+            return shape;
+        }
+
+        var nulRoot = NulRootRefusal(forbiddenRoots);
+        return nulRoot.Length > 0 ? nulRoot : RealRoots(forbiddenRoots, host).Match(roots => UnderARoot(subject, value, roots, host), reason => reason);
     }
 
-    private static string UnderRealRoot(string entry, string real, IReadOnlyList<string> roots) =>
+    private static string UnderARoot(Subject subject, string value, IReadOnlyList<string> roots, HostPaths host)
+    {
+        var written = roots.FirstOrDefault(root => PathScope.IsEqualOrUnder(value, root));
+        return written is not null
+            ? $"{subject.Label} '{value}' is under '{ExecutableRule.Printable(written)}' — {subject.Reach}"
+            : Climb(value, host).Match(real => UnderRealRoot(subject, value, real, roots), reason => $"{subject.Label} '{value}' cannot be resolved: {reason} — {Assumed}");
+    }
+
+    private static string UnderRealRoot(Subject subject, string value, string real, IReadOnlyList<string> roots) =>
         roots.FirstOrDefault(root => PathScope.IsEqualOrUnder(real, root)) is { } really
-            ? $"PATH entry '{entry}' is really '{real}', which is under '{ExecutableRule.Printable(really)}' — {Reach}"
+            ? $"{subject.Label} '{value}' is really '{real}', which is under '{ExecutableRule.Printable(really)}' — {subject.Reach}"
             : string.Empty;
 
     private static string NulRootRefusal(IReadOnlyList<string> forbiddenRoots) =>
@@ -150,13 +184,18 @@ public static class ExecutableResolution
     private static Outcome<string> ClimbFrom(string ancestor, string path, HostPaths host) =>
         host.RealPath(ancestor).Match(
             real => Outcome<string>.Success(ancestor == path ? real : Path.Combine(real, Path.GetRelativePath(ancestor, path))),
-            reason => host.Present(ancestor) switch
-            {
-                Outcome<bool>.Ok { Value: false } => Path.GetDirectoryName(ancestor) is { } parent
-                    ? ClimbFrom(parent, path, host)
-                    : Outcome<string>.Failure($"no ancestor of '{path}' can be resolved"),
-                Outcome<bool>.Ok => Outcome<string>.Failure($"'{ancestor}' exists but its real path cannot be resolved: {reason}"),
-                Outcome<bool>.Fail fail => Outcome<string>.Failure($"'{ancestor}': {fail.Reason}"),
-                _ => throw new InvalidOperationException("unreachable"),
-            });
+            reason => Step(ancestor, path, reason, host));
+
+    /// <summary>The real path of <paramref name="ancestor"/> failed with <paramref name="reason"/>: an ABSENT component is passed over to the one above; one that exists,
+    /// or that the kernel cannot say anything about, fails the climb.</summary>
+    private static Outcome<string> Step(string ancestor, string path, string reason, HostPaths host) =>
+        host.Present(ancestor) switch
+        {
+            Outcome<bool>.Ok { Value: false } => Up(ancestor, path, host),
+            Outcome<bool>.Fail fail => Outcome<string>.Failure($"'{ancestor}': {fail.Reason}"),
+            _ => Outcome<string>.Failure($"'{ancestor}' exists but its real path cannot be resolved: {reason}"),
+        };
+
+    private static Outcome<string> Up(string ancestor, string path, HostPaths host) =>
+        Path.GetDirectoryName(ancestor) is { } parent ? ClimbFrom(parent, path, host) : Outcome<string>.Failure($"no ancestor of '{path}' can be resolved");
 }

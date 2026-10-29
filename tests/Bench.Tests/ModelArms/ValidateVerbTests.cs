@@ -462,6 +462,53 @@ public sealed class ValidateVerbTests
         root.Markers().Should().NotContain("git", "git looks its helpers up in PATH, so it is not started while PATH is refused");
     }
 
+    [Theory]
+    [InlineData("HOME", "h/.gitconfig", "HOME")]
+    [InlineData("XDG_CONFIG_HOME", "x/git/config", "XDG_CONFIG_HOME")]
+    public async Task A_home_the_target_could_write_is_refused_and_git_is_not_asked_there(string variable, string configFile, string named)
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var git = Path.Combine(Bin(root), "git");
+        File.Delete(git);
+        root.Shim(git, "git", thenRealGit: true);
+        var trace = root.MarkerFile("trace2");
+        var config = Path.Combine(root.Temp, "example", "target", configFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+        File.WriteAllText(config, $"[trace2]\n\teventTarget = {trace}\n");
+        root.WithVariables((variable, Path.Combine(root.Temp, "example", "target", configFile.Split('/')[0])));
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain($"{named} '").And.Contain("D17").And.Contain($"the source was not checked: {named} is refused");
+        File.Exists(trace).Should().BeFalse("git reads its global config from there — here it would append trace2 events to a file the target chose");
+        root.Markers().Should().NotContain("git");
+    }
+
+    [Fact]
+    public async Task A_refused_PATH_is_named_before_a_refused_home()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.UsePath(Join(Bin(root), "relative"));
+        root.WithVariables(("HOME", Path.Combine(root.Temp, "example", "target", "h")));
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain("the source was not checked: PATH is refused").And.Contain("HOME '").And.NotContain("HOME is refused");
+    }
+
+    [Fact]
+    public void A_refused_environment_folder_is_a_finding_of_the_configuration()
+    {
+        var experiment = Example(top => { });
+        var facts = Good(experiment, HostKind.OtherPosix) with { EnvironmentRefusals = ["HOME '/t/h' is under '/t' — … (D17)"] };
+
+        HostChecks.Decide(experiment, facts).Should().ContainSingle().Which.Should().Be(new HostProblem("HOME '/t/h' is under '/t' — … (D17)", Environment: false));
+    }
+
     [Fact]
     public async Task A_source_that_is_a_plain_folder_inside_a_checkout_is_not_a_git_repository()
     {
@@ -718,6 +765,7 @@ public sealed class ValidateVerbTests
         {
             Source = new SourceAnswer.Asked(true, true, true, true),
             PathRefusals = [],
+            EnvironmentRefusals = [],
             Templates = new Dictionary<StepKind, Outcome<string>>(),
         };
 }

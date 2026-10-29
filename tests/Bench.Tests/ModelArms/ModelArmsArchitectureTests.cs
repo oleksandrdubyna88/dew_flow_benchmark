@@ -149,10 +149,35 @@ public sealed class ModelArmsArchitectureTests
             "ExperimentRoot.cs", "the pattern must still match the one known bare launch — it builds the fixture and is not the subject — or the scan above passes forever");
     }
 
+    /// <summary>Every shape a process is started by that a literal name can ride on: the module's git helper, the shared launcher given a literal, <c>Process.Start</c> and
+    /// a <c>ProcessStartInfo</c> built or initialised in place.</summary>
+    private static readonly System.Text.RegularExpressions.Regex LaunchByName = new(
+        "GitCommand\\.|ProcessRunner\\.\\w+\\(\\s*\"[A-Za-z]|Process\\.Start\\(|new\\s+ProcessStartInfo\\b|ProcessStartInfo\\s*\\{",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
+    [Theory]
+    [InlineData("var git = GitCommand.RunAsync(dir, budget, ct, \"rev-parse\");")]
+    [InlineData("var attempt = ProcessRunner.RunAsync(\n    \"git\", args, dir);")]
+    [InlineData("using var process = System.Diagnostics.Process.Start(start)!;")]
+    [InlineData("var start = new ProcessStartInfo(\"ln\");")]
+    [InlineData("var start = new  ProcessStartInfo { FileName = \"ln\" };")]
+    [InlineData("var start = new() { };\nProcessStartInfo{ }")]
+    public void The_bare_name_pattern_still_matches_each_launch_shape(string fixture)
+    {
+        LaunchByName.IsMatch(fixture).Should().BeTrue("a pattern that stops matching one of its shapes passes forever for that shape");
+    }
+
+    [Fact]
+    public void The_bare_name_pattern_does_not_match_a_launch_by_a_resolved_path()
+    {
+        LaunchByName.IsMatch("ProcessRunner.RunAsync(git, arguments, source, Budget, string.Empty, environment, ct)").Should().BeFalse();
+    }
+
     private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>
         [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
-            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(path), "GitCommand\\.|ProcessRunner\\.\\w+\\(\\s*\"[A-Za-z]"))
+            .Where(path => LaunchByName.IsMatch(File.ReadAllText(path)))
             .Select(Path.GetFileName)
             .Cast<string>()
             .Order(StringComparer.Ordinal)];
