@@ -14,6 +14,9 @@ export const INPUTS_BRANCH = 'inputs';
 /** The commit of the fork's `inputs` branch this repository's hashes.txt describes. Also written in inputs/UPSTREAM.md. */
 export const PINNED_INPUTS_SHA = 'df00cac8dae3f7bdc64a8cd5a5b7f777fec055c3';
 export const HASHES_PATH = fileURLToPath(new URL('../inputs/hashes.txt', import.meta.url));
+/** Entries under `heldout/` are this repository's own (the sealed suite), not the fork's: they are checked against the spike folder. */
+const LOCAL_PREFIX = 'heldout/';
+export const SPIKE_DIR = fileURLToPath(new URL('..', import.meta.url));
 export const defaultCacheDir = () => path.join(os.homedir(), '.cache', 'minigit-bench', 'inputs');
 
 const GIT_TIMEOUT_MS = 180_000;
@@ -47,22 +50,34 @@ async function cloneAt(repoUrl, sha, scratch) {
 }
 
 /**
- * `fetchInputs({ sha, cacheDir, repoUrl, hashesText })` -> ok({ root, sha, entries }) | fail(reason). A cache hit is verified and used;
- * a mismatch is a failure naming the file, never a silent re-fetch.
+ * `fetchInputs({ sha, cacheDir, repoUrl, hashesText, localRoot })` -> ok({ root, sha, entries, local }) | fail(reason). `entries` are the
+ * fork's files (under `root`); `local` are this repository's own (`heldout/suite.enc`), checked under `localRoot`. A cache hit is
+ * verified and used; a mismatch is a failure naming the file, never a silent re-fetch.
  */
-export async function fetchInputs({ sha = PINNED_INPUTS_SHA, cacheDir = defaultCacheDir(), repoUrl = FORK_URL, hashesText } = {}) {
+export async function fetchInputs({ sha = PINNED_INPUTS_SHA, cacheDir = defaultCacheDir(), repoUrl = FORK_URL, hashesText, localRoot = SPIKE_DIR } = {}) {
   if (!/^[0-9a-f]{40}$/.test(sha)) return fail(`not a 40-hex commit sha: ${sha}`);
   const parsed = parseHashes(hashesText ?? readFileSync(HASHES_PATH, 'utf8'));
   if (!parsed.ok) return parsed;
+  const local = parsed.value.filter(e => e.path.startsWith(LOCAL_PREFIX));
+  const fetched = await fetchForkFiles({ sha, cacheDir, repoUrl, entries: parsed.value.filter(e => !e.path.startsWith(LOCAL_PREFIX)) });
+  if (!fetched.ok) return fetched;
+  const bad = verifyFiles(localRoot, local, readFileOrNull).filter(r => !r.ok);
+  if (bad.length > 0) {
+    return fail(`files of this repository do not match hashes.txt: ${bad.map(r => `${r.path} (${r.actual === null ? 'missing' : 'sha256 differs'})`).join(', ')}`, { mismatches: bad.map(r => r.path) });
+  }
+  return ok({ ...fetched.value, local });
+}
+
+async function fetchForkFiles({ sha, cacheDir, repoUrl, entries }) {
   const target = path.join(cacheDir, sha);
-  if (existsSync(target)) return verifyTree(target, sha, parsed.value);
+  if (existsSync(target)) return verifyTree(target, sha, entries);
 
   mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
   const scratch = path.join(cacheDir, `.fetch-${sha.slice(0, 8)}-${randomBytes(4).toString('hex')}`);
   try {
     const cloned = await cloneAt(repoUrl, sha, scratch);
     if (!cloned.ok) return cloned;
-    const verified = verifyTree(scratch, sha, parsed.value);
+    const verified = verifyTree(scratch, sha, entries);
     if (!verified.ok) return verified;
     try {
       renameSync(scratch, target);
@@ -70,7 +85,7 @@ export async function fetchInputs({ sha = PINNED_INPUTS_SHA, cacheDir = defaultC
       if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e;
       // another process finished first: its tree is checked below like any cache hit
     }
-    return verifyTree(target, sha, parsed.value);
+    return verifyTree(target, sha, entries);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

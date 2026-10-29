@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -25,11 +26,32 @@ test('Every_pinned_input_matches_hashes_txt', async () => {
   assert.deepEqual(edited.filter(r => !r.ok).map(r => r.path), ['upstream/SPEC-v1.txt']);
 });
 
-test('The_committed_hashes_file_parses_and_lists_the_six_files', () => {
+test('The_committed_hashes_file_parses_and_lists_the_six_fork_files_and_at_most_the_sealed_suite', () => {
   const parsed = parseHashes(hashesText);
   assert.equal(parsed.ok, true);
-  assert.deepEqual(parsed.value.map(e => e.path).sort(), [
+  const paths = parsed.value.map(e => e.path).sort();
+  assert.deepEqual(paths.filter(p => p !== 'heldout/suite.enc'), [
     'test-v1.sh', 'test-v2.sh', 'upstream/SPEC-v1.txt', 'upstream/SPEC-v2.txt', 'upstream/test-v1.sh', 'upstream/test-v2.sh']);
+  assert.ok(paths.length - 6 <= 1, 'the only line that is not a fork file is heldout/suite.enc');
+});
+
+test('A_heldout_line_in_hashes_txt_is_checked_against_this_repository_not_the_fork', async () => {
+  const sha256 = text => createHash('sha256').update(text).digest('hex');
+  const localRoot = tmpDir('local-root');
+  mkdirSync(path.join(localRoot, 'heldout'));
+  writeFileSync(path.join(localRoot, 'heldout', 'suite.enc'), 'sealed bytes');
+  const forkLines = hashesText.split('\n').filter(l => l.trim() !== '' && !l.endsWith('heldout/suite.enc')).join('\n');
+  const withLine = hash => fetchInputs({ hashesText: `${forkLines}\n${hash}  heldout/suite.enc\n`, localRoot });
+  const good = await withLine(sha256('sealed bytes'));
+  assert.equal(good.ok, true, good.reason);
+  assert.equal(good.value.entries.length, 6, 'entries stays the fork files: the cache root does not hold the suite');
+  assert.deepEqual(good.value.local.map(e => e.path), ['heldout/suite.enc']);
+  const wrong = await withLine(sha256('other bytes'));
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.reason, /heldout\/suite\.enc \(sha256 differs\)/);
+  rmSync(path.join(localRoot, 'heldout', 'suite.enc'));
+  const gone = await withLine(sha256('sealed bytes'));
+  assert.match(gone.reason, /heldout\/suite\.enc \(missing\)/);
 });
 
 test('A_hashes_file_with_a_malformed_or_duplicate_line_is_refused_naming_it', () => {

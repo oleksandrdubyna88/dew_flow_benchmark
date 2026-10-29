@@ -46,11 +46,11 @@ test('One_command_scores_a_session_and_writes_score_json', async t => {
   assert.equal(r.code, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /^build: ok/m);
   assert.match(r.stdout, /^visible: test-v1\.sh \d+\/11/m);
-  assert.match(r.stdout, /^heldout: unknown/m);
+  assert.match(r.stdout, /^heldout: (unknown|primary100=false)/m, 'the slot is wired: no key reads unknown, a silent binary reads primary100=false');
   const score = JSON.parse(readFileSync(path.join(session, 'score', 'score.json'), 'utf8'));
   assert.equal(score.format, 1);
   assert.deepEqual(score.accepted, { known: true, value: false }, 'a silent binary fails the visible tests');
-  assert.equal(score.heldout.known, false);
+  assert.ok(score.heldout.known === false || score.heldout.primary100 === false, 'a silent binary is never held-out 100 %');
   assert.equal(existsSync(path.join(session, 'score', 'copy')), false);
 });
 

@@ -1,0 +1,144 @@
+{
+  "format": 1,
+  "n1": 29,
+  "n2": 29,
+  "m": 14,
+  "references": {
+    "a": {
+      "v1": {
+        "heldout100": true,
+        "visible100": true
+      },
+      "v2": {
+        "heldout100": true,
+        "visible100": true
+      }
+    },
+    "b": {
+      "v1": {
+        "heldout100": true,
+        "visible100": true
+      },
+      "v2": {
+        "heldout100": true,
+        "visible100": true
+      }
+    }
+  },
+  "mutants": {
+    "M01": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M02": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M03": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M04": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M05": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M06": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M07": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M08": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M09": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M10": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M11": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M12": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M13": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    },
+    "M14": {
+      "v1": {
+        "exact": true
+      },
+      "v2": {
+        "exact": true
+      }
+    }
+  },
+  "ok": true,
+  "plaintextSha256": "f1a830c731feca78af556324c2d76de2134dc68e2dfa85c950a75dbe38144f80"
+}

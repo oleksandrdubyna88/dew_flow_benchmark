@@ -2,6 +2,7 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { assertRemovable } from '../../policy-ab-quick/lib/safe-rm.mjs';
+import { makeHeldoutDep } from './heldout-run.mjs';
 import { readFileOrNull, readRegularFile } from './inputs.mjs';
 import { runBounded } from './run.mjs';
 
@@ -43,9 +44,7 @@ export const nodeFs = Object.freeze({
   removeFile: p => rmSync(p, { force: true }),
 });
 
-const heldoutNotWired = async () => ({ known: false, why: 'the held-out suite is not wired in yet (E1.S2)' });
-
 /** `inputs` is the result of fetchInputs; `delivered` stays undefined until E3 can say (accepted then reads unknown, never false). */
-export function defaultDeps({ inputs, toolchainDirs = [], heldout = heldoutNotWired, delivered } = {}) {
+export function defaultDeps({ inputs, toolchainDirs = [], heldout = makeHeldoutDep(), delivered } = {}) {
   return { run: runBounded, fs: nodeFs, now: Date.now, inputs, box: { toolchainDirs }, heldout, delivered };
 }

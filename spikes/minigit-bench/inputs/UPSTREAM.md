@@ -18,7 +18,7 @@ fetches and verifies them (`lib/fetch-inputs.mjs`).
   scorer runs. Each fixed script begins with a header naming the upstream commit, the upstream file's sha256 and its edits.
 - Removed from the branch: the upstream benchmark harness, plot and report scripts, results, figures and `CLAUDE.md`.
 
-`hashes.txt` lists six files: the four under `upstream/`, and the two fixed scripts. The specifications at the root are byte copies
+`hashes.txt` lists six fork files: the four under `upstream/`, and the two fixed scripts; and one file of this repository, `heldout/suite.enc` (the sealed held-out suite), which `fetchInputs` checks against the spike folder rather than against the fork. The specifications at the root are byte copies
 of the ones under `upstream/`, so the scorer compares a session's `SPEC-v*.txt` against the `upstream/` hash.
 
 ## The three edits to the visible scripts, in words

@@ -50,10 +50,13 @@ export async function stepScripts(ctx, scripts, built) {
   return records;
 }
 
-/** Step 5. The held-out slot: E1.S2 supplies `deps.heldout`; before it lands the answer is `{ known: false }`, never a pass. */
+/**
+ * Step 5. The held-out slot: `deps.heldout({ binary, phase, box, casesDir, scoreDir })` (heldout-run.mjs `makeHeldoutDep`) answers
+ * `{ known: true, primary100, ... }` or `{ known: false, why }` (no key, no suite, a failed runner), never a pass by default.
+ */
 export async function stepHeldout(ctx, built) {
   const { plan, deps } = ctx;
   if (!built) return { known: true, primary100: false, reason: 'build failed' };
   const box = boxFor(ctx, plan.copyDir, { cwd: false, cases: true });
-  return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box });
+  return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box, casesDir: plan.casesDir, scoreDir: plan.scoreDir });
 }
