@@ -90,17 +90,19 @@ repository**, see E2.S1):
 
 | file, line | what it is |
 |---|---|
-| `3-fix.a1.jsonl:8` (1420 bytes with its newline, sha256 `895d7980445470e7ad4588cbdea7a0b7878b47582544b58b82d008c59df52a52`) | THE limited result, verbatim: `"is_error":true`, `"subtype":"success"`, `"api_error_status":429`, `"api_error_origin":"first_party"`, `"api_error":"usage_limit_reached"`, `"result":"You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 1:20am (Europe/Paris)"`, `"terminal_reason":"api_error"` — **and `"type":"result"` is the 47th key of the object, near the end of the line**: a reader that matches a line by its prefix never sees it |
+| `3-fix.a1.jsonl:8` (1420 bytes with its newline, sha256 `895d7980445470e7ad4588cbdea7a0b7878b47582544b58b82d008c59df52a52`) | THE limited result, verbatim: `"is_error":true`, `"subtype":"success"`, `"api_error_status":429`, `"api_error_origin":"first_party"`, `"api_error":"usage_limit_reached"`, `"result":"You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 1:20am (Europe/Paris)"`, `"terminal_reason":"api_error"` — **and `"type":"result"` is the 20th of the object's 25 top-level keys (the 56th of its 61 key tokens, nested ones counted), starting at character 1264 of 1418**: a reader that matches a line by its prefix never sees it (counted by Fable, §8 item 17) |
 | `3-fix.a1.jsonl:6` | `{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour",…}}` — a structured limit signal BEFORE the result; D6 does not read it |
-| `3-fix.a1.jsonl:7` | an `assistant` line from `"model":"<synthetic>"` whose text is the limit sentence |
-| `2-review.a1.jsonl:310`, `:317`, `:323` (sha256 `6438bc7d…b058`, `20d59284…51dd8`, `30879256…d494`) | **three result lines in ONE stream**: `:310` `is_error` false, `"result":"I'm waiting for the full MCP suite. When it finishes I will send the verdict."`, `"terminal_reason":"completed"`; `:317` and `:323` the 429 above. The FIRST result is a success; only the LAST says what the attempt was. `:310` carries `permission_denials` whose paths hold the arm's token |
+| `3-fix.a1.jsonl:7` (1414 bytes, sha256 `5a2a200b22b52aadb7f8658eeb5e33ca6ad9e472cc024836e66a463213677395`) | an `assistant` line from `"model":"<synthetic>"` whose text is the limit sentence — **and whose TOP level carries `"api_error_status":429` and `"api_error":"usage_limit_reached"` too**: a reader keyed on those fields instead of on `"type":"result"` is decoyed by a line that is not a result (§8 item 22) |
+| `3-fix.a1.jsonl:6` (536 bytes, sha256 `1ce54cee01e1ad8e934fbb02d38409e4b31b1d8ea1a5a87eed295b1f8e61c03e`) and `:5` (7376 bytes) | the `rate_limit_event` above, and the `init` line: the operator's plugin inventory, skills, a messaging socket path, memory paths, startup timings — 7.4 KB of the machine, nothing the classifier reads, the token seven times (§8 item 21) |
+| `2-review.a1.jsonl:310`, `:317`, `:323` (7723, 2158, 2158 bytes; sha256 `6438bc7d22c7c1996ecb010b841e21ab61f08fd29a6cea8fc0844b418207b058`, `20d59284b73beaba53c2127b6dba5e18738813edace799f290a7b8c522551dd8`, `3087925f6188b168051cda9f95d59d14160b7e5f2c3262524bf870fec715d494`) | **three result lines in ONE stream** (the only three: `grep -c '"type":"result"'` is 3): `:310` `is_error` false, `"result":"I'm waiting for the full MCP suite. When it finishes I will send the verdict."`, `"terminal_reason":"completed"`, **and `"api_error_status":null`** — a JSON null on a success result (§8 item 22); `:317` and `:323` the 429 above (the same fields; they differ only in `runId`, `duration_ms` and `uuid`). The FIRST result is a success; only the LAST says what the attempt was. `:310` carries `permission_denials` whose paths hold the arm's token (five times); `:317` and `:323` hold it nowhere |
 | `2-review.a1.err`, `3-fix.a1.err` (one line each) | `Ignoring 5 permissions.allow entries from .claude/settings.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects["<arm>/arm"].hasTrustDialogAccepted: true in /home/jinx/.claude.json.` — a real stderr that is NOT a limit |
 | `timing.jsonl`, the two `2-review` lines | the 429 attempt recorded as `"wall_s":888,"exit":1,"result":true,"limited":false` — the day's detector at work — and the resume budgeted `1512` = 2400 − 888 |
 | `2-review.done` | `{"attempts":2,"exit":0,"stream":"<arm>/out/2-review.a2.jsonl"}` — the shell's marker; `review_json` reads its `stream` |
 
 **The product's two envelope fixtures** (`dew_flow_connect_other_ais · src_mcp/tests/AClaudeReasonInItsEnvelopeTests.cs`, at `80b829ef`):
 `:23` the monthly spend limit (2.1.284, `"api_error_status":429`, `"subtype":"success"`); `:27` an old CLI refusing a newer model (2.1.258,
-`"api_error_status":400`, `"error":null`); `:87` `"api_error_status":"429"` as a STRING; and `:93-102` the shapes that must be neither a reason
+`"api_error_status":400`, `"error":null`); `:87` `"api_error_status":"429"` as a STRING; `:72` a SUCCESS envelope whose text holds the words
+`a spend limit is not handled`; and `:95-104` (the `InlineData` rows of the theory at `:94-111`) the shapes that must be neither a reason
 nor an exception (`"is_error":"true"`, `"result":42`, a JSON array, a truncated object, plain text, empty).
 
 **The vault key** (`dew_flow_connect_other_ais · src_mcp/src/Server/KeyVault.cs`, at `80b829ef`): the coai server's one key is
@@ -172,6 +174,7 @@ public abstract record StepEnd
 public sealed record AttemptFacts(string NotStartedReason, bool WallKilled, bool StoppedByOperator)
 {
     public static AttemptFacts Ran { get; }   // ("", false, false): what recovery assumes of a stream read back from disk
+    public bool Started => NotStartedReason.Length == 0;   // added by the E2.S1 spec (§8 item 20): criterion 2.1 reads it; no constructor changes
 }
 public static class StepClassifier
 {
@@ -301,18 +304,23 @@ wait, TextWriter log) { public Task<StepOutcome> RunAsync(StepContext context, C
 
 ### E2.S1 — `ClaudeResultEnvelope` and `StepEnd`: the step's end, structured first (CORNERSTONE)
 
-**Cornerstone — spec by Fable** (`model: fable`). Area: the step's state machine (parent `## Epics`, E2). Every later decision of this
+**Cornerstone — spec by Fable** (`model: fable`, written 2026-10-29 at `5e808e1`, every citation below re-opened — the recorded streams
+by exact path, the shell, the product's test file at `80b829ef`). Area: the step's state machine (parent `## Epics`, E2). Every later decision of this
 module — done or not, wait or stop, resume or recover — is a function of this one, and the defect it exists to prevent has
 happened: nine steps marked done in seconds because a limit was read by its words. The goal, the binding contract (C5), the
 acceptance criteria and the verified facts are the judge's; **the scenarios (Given/When/Then and the expected red of each), the red
 stubs and the brief are Fable's**, written into this section before the coder starts.
 
 - **Coder:** sonnet · **Spec:** fable · **Review:** Opus. **Depends on:** E1.S2 (the projects; landed). **Parallel with:** E2.S3.
-- **Owns:** D6 (the classifier and its words), the fixtures of the parent's §7, the E2 markers and headings of §3. **Size:** ≈ 500
-  changed lines (≈ 180 code, 270 tests, the fixtures).
+- **Owns:** D6 (the classifier and its words), the fixtures of the parent's §7, the E2 markers and headings of §3. **Size:** ≈ 650
+  changed lines (≈ 200 code, 400 tests, the fixtures) — the spec's count; the judge's estimate was 500.
 - **Files.** `tools/model-arms/ModelArms.Core/Launch/ClaudeResultEnvelope.cs` · `tools/model-arms/ModelArms.Core/Steps/StepEnd.cs` (`StepEnd`,
-  `AttemptFacts`, `StepClassifier`, `LimitWords`) · `tests/Bench.Tests/ModelArms/ClaudeResultEnvelopeTests.cs` ·
-  `tests/Bench.Tests/ModelArms/StepEndTests.cs` · the fixtures below · `ModelArmsArchitectureTests.cs` (the eight markers; under `// E2.S1`:
+  `AttemptFacts`) · `tools/model-arms/ModelArms.Core/Steps/StepClassifier.cs` (`StepClassifier`, `LimitWords` — two files, not one: the
+  decision and its vocabulary are two responsibilities, each under 120 lines) · `tests/Bench.Tests/ModelArms/ClaudeResultEnvelopeTests.cs` ·
+  `tests/Bench.Tests/ModelArms/StepEndTests.cs` · `tests/Bench.Tests/ModelArms/ModelArmsFixtures.cs` (`internal static class`, two members:
+  `Path(name)` = `Path.Combine(AppContext.BaseDirectory, "Fixtures", "model-arms", name)` and `Read(name)` = `File.ReadAllText(Path(name))`
+  — the shape of `ProbeVerdictsTests.Fixture` (`ProbeVerdictsTests.cs:354`), shared so S4's `StepBench.Replay` calls it) · the fixtures
+  below · `ModelArmsArchitectureTests.cs` (the eight markers; under `// E2.S1`:
   `typeof(StepClassifier), typeof(LimitWords),`) · `research/module_model_arms.md` (the eight headings; *The result envelope and the
   step's end*: the precedence table and the words, with the incident).
 - **Fixtures** (`tests/Bench.Tests/Fixtures/model-arms/`):
@@ -321,7 +329,7 @@ stubs and the brief are Fable's**, written into this section before the coder st
 |---|---|
 | `result-429-usage-limit-reached.jsonl` | `3-fix.a1.jsonl:8` of the part-6 C1 arm, byte for byte (sha256 above; the line holds no token) |
 | `stream-2026-10-28-review-three-results.jsonl` | `2-review.a1.jsonl:310`, `:317`, `:323` of the same arm, in that order, each with its newline, the token replaced as §3 says |
-| `stream-2026-10-28-fix-limited-head.jsonl` | `3-fix.a1.jsonl:5-8` — the `init`, the `rate_limit_event`, the synthetic assistant line, the result — the token replaced (the `init` line's `cwd` carries it) |
+| `stream-2026-10-28-fix-limited-head.jsonl` | four lines: ONE synthetic `init` — `{"type":"system","subtype":"init","cwd":"/home/op/git/exp/r/0123456789ab/arm","session_id":"725e2688-256f-43ee-a24e-d2137ace7cee","model":"claude-sonnet-5-5","permissionMode":"acceptEdits"}` — then `3-fix.a1.jsonl:6`, `:7`, `:8` byte for byte (the `rate_limit_event`, the synthetic assistant line, the result; none holds the token; sha256 above). Not `:5`: the recorded `init` is 7.4 KB of the operator's machine (§8 item 21) |
 | `err-2026-10-28-untrusted-workspace.txt` | the one line of `3-fix.a1.err`, the token replaced |
 | `result-429-monthly-spend-limit.jsonl` | `AClaudeReasonInItsEnvelopeTests.cs:23`'s JSON, verbatim, one line |
 | `result-429-string-status.jsonl` | `AClaudeReasonInItsEnvelopeTests.cs:87`'s JSON, verbatim |
@@ -335,11 +343,12 @@ Each fixture file's first use cites its source in the test's doc; the sha256 of 
   how an attempt ended, in the precedence below, pinned on every recorded line this experiment and the product hold.
 - **Acceptance criteria.**
   1. C5 exactly. `ClaudeResultEnvelope.LastOf` parses EVERY line that holds a JSON object whose `type` is the string `result`,
-     wherever the key sits (the recorded line has it 47th), and returns the LAST such line; a line that is not JSON, is truncated, is
+     wherever the key sits (the recorded line has it 20th of 25, at character 1264 of 1418), and returns the LAST such line; a line that is not JSON, is truncated, is
      a JSON array, or is an object of another `type` is skipped and never throws (`InvalidOperationException` from a wrong-kind
-     `GetString` included — the product's lesson, `AClaudeReasonInItsEnvelopeTests.cs:93-102`). `IsError` is true only for the JSON
+     `GetString` included — the product's lesson, `AClaudeReasonInItsEnvelopeTests.cs:95-104`). `IsError` is true only for the JSON
      literal `true`. `ApiErrorStatus` is captured from an integral JSON number or a string of ASCII digits, else `Unavailable` with the
-     reason. `ApiError`, `Result` are the strings or `""`; `Errors` the string items of `errors`; `Subtype` is kept and decides nothing.
+     reason — a JSON `null` (the recorded `:310`), an absent key, a fraction, an empty or non-digit string each read as `Unavailable`,
+     never as 0 and never as a throw. `ApiError`, `Result` are the strings or `""`; `Errors` the string items of `errors`; `Subtype` is kept and decides nothing.
   2. `StepClassifier.Classify` decides in this order, first match wins:
      1. `!attempt.Started` → `NotStarted(attempt.NotStartedReason)`.
      2. A last result exists and `IsError` and (`ApiErrorStatus` ∈ {429, 529} OR `LimitWords.FirstIn(ApiError)` non-empty OR
@@ -376,22 +385,250 @@ Each fixture file's first use cites its source in the test's doc; the sha256 of 
     (one `InlineData` per alternative of `RX`) · `A_stop_by_the_operator_without_a_result_is_interrupted`.
 - **Facts for the spec** (verified above, §2): the recorded lines and their hashes; the shell's `RX`, its last-result rule and its
   stderr-tail rule `run-arm.sh:54-63`; `errored` `:64-66`; done on `rc` 124/137 `:120`; the product's fixtures `:23`, `:27`, `:87`,
-  `:93-102`; `CapturedCount` `LegTrace.cs:21`; `Outcome<T>` `src/Bench.Domain/Outcome.cs:6-25`; `ProbeJson` is internal
+  `:95-104`; `CapturedCount` `LegTrace.cs:21`; `Outcome<T>` `src/Bench.Domain/Outcome.cs:6-25`; `ProbeJson` is internal
   (`ProbeJson.cs:10`), so the line reading is this type's own; `ClaudeEnvelope` reads the `json` output's FIRST recognisable object
   (`ClaudeEnvelope.cs:41`) — the opposite of what a stream needs, which is why it is not reused (reuse-first: widening it would
   change a reader the authoring callers depend on).
 
-#### Scenarios — to be written by Fable
+#### The binding shape (C5, made exact) — Fable
 
-#### Brief — to be written by Fable
+Nothing in C5 is renamed. What follows fixes the bytes a test can assert: the reading rules, the words of every reason, the stub each
+type starts life with, and the private shape that keeps every method under complexity 4.
 
-**Commands.** `--filter-class "*ClaudeResultEnvelopeTests"`, `"*StepEndTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+**`ClaudeResultEnvelope.LastOf(string stream)`** — `tools/model-arms/ModelArms.Core/Launch/ClaudeResultEnvelope.cs`, namespace
+`ModelArms.Core.Launch`, `using Bench.Domain; using Bench.Domain.Trace; using System.Text.Json;`:
 
-**Done when.** Every scenario of Fable's section green, each seen red first on an assertion (the messages in the summary); the
-fixtures' sources cited; the eight markers and the eight headings in place; the precedence table in the module doc equals criterion 2.
+- Split `stream` on `'\n'`, drop one trailing `'\r'` per line, number the lines from 1. A line that is blank, or whose first non-space
+  character is not `{`, is skipped without parsing. Every other line is parsed with `JsonDocument.Parse(line, Tolerant)` where
+  `Tolerant = new JsonDocumentOptions { AllowDuplicateProperties = true, AllowTrailingCommas = true }` — the same options as
+  `ProbeJson.cs:12`, for the same measured reason (a duplicated key in a real stream must skip a line, never fault the step) — inside
+  `try { … } catch (JsonException) { continue; }`. The document is a `using` local.
+- A line is a result object when the root's `ValueKind` is `Object` and it has a property `type` whose `ValueKind` is `String` and whose
+  value is exactly `result` (`TryGetProperty` + `ValueKind` + `ValueEquals("result")`). **The LAST such line wins**; `LineNumber` is its
+  1-based line. No `GetString()`, `GetBoolean()` or `GetInt32()` is ever called before the element's `ValueKind` was checked.
+- Fields of the winning object: `IsError` = `is_error` present and `ValueKind == JsonValueKind.True` (the literal; `"true"` the string
+  is false); `ApiErrorStatus` by `api_error_status`'s kind — absent → `CapturedCount.Unavailable("no api_error_status")`; `Null` →
+  `Unavailable("api_error_status is null")`; `Number` with `TryGetInt64` → `Number(n)`, else `Unavailable("api_error_status <raw> is not an integer")`;
+  `String` that is non-empty, at most 18 characters and all ASCII digits → `Number(long.Parse(…, CultureInfo.InvariantCulture))`, else
+  `Unavailable("api_error_status '<text>' is not a number")`; any other kind → `Unavailable("api_error_status is a <kind>, not a number")`.
+  `ApiError`, `Result`, `Subtype` = the property's string when `ValueKind == String`, else `""`. `Errors` = the `String` items of
+  `errors` when it is an `Array`, else `[]`.
+- No result object → `Outcome<ClaudeResultEnvelope>.Failure("no line of the stream is a result object")`.
+- Private shape: `LastResultOf(string stream)` (the loop, returns `(JsonDocument? Document, int Line)`), `IsResult(JsonElement root)`,
+  `Read(JsonElement root, int line)`, `Status(JsonElement root)`, `StatusOfString(string text)`, `Text(JsonElement root, string name)`,
+  `Strings(JsonElement root, string name)` — each ≤ 4 branches.
+- **Stub (red first):** `LastOf` returns
+  `Outcome<ClaudeResultEnvelope>.Success(new(false, CapturedCount.Unavailable("stub — not read yet"), "", "", [], "", 0))` — a
+  success with the wrong fields, so every envelope test fails on an ASSERTION (a `Failure` stub would let
+  `A_stream_without_a_result_reads_as_none` pass unearned).
 
-**Out of bounds.** Reading files (the runner reads the stream and the `.err` and hands the text in); the timing line and `.done`
-(E2.S2); `ReviewAnswer` (E2.S5); a change to `ClaudeEnvelope`, `ClaudeStream` or `ReviewerAccountOut`.
+**`StepEnd`, `AttemptFacts`** — `tools/model-arms/ModelArms.Core/Steps/StepEnd.cs`, namespace `ModelArms.Core.Steps`. `Word` is
+`public string Word => this switch { Finished => "finished", HardDeadline => "hard-deadline", Limited => "limited", Errored => "errored",
+Interrupted => "interrupted", NotStarted => "not-started", _ => throw new InvalidOperationException("unreachable") }` (the same
+`unreachable` arm `Outcome<T>.Match` uses, `Outcome.cs:23`). `AttemptFacts.Ran = new("", false, false)`; `Started => NotStartedReason.Length == 0`.
+**Stub:** `Word => ""`.
+
+**`StepClassifier`, `LimitWords`** — `tools/model-arms/ModelArms.Core/Steps/StepClassifier.cs`. The words of every answer, exact
+(`<text>` below is `Head(envelope.Result)` — the result when it is 200 characters or fewer, else its first 200 followed by `…` — or
+`an error result with no text` when the result is empty or whitespace; the same shape as `ClaudeEnvelope.Head`, `ClaudeEnvelope.cs:101`,
+which is private in Infrastructure and therefore copied, one line):
+
+| order | answer | the exact string |
+|---|---|---|
+| 1 | `NotStarted` | `attempt.NotStartedReason`, untouched |
+| 2a | `Limited` | `api_error_status 429 — <text>` (or `529`) |
+| 2b | `Limited` | `api_error '<the api_error field>' — <text>` |
+| 2c | `Limited` | `the words '<what LimitWords.FirstIn matched>' in the result — <text>` (the search text is `Result + "\n" + string.Join("\n", Errors)`; "in the result" covers the `errors` items too) |
+| 3 | `Errored` | `<text>` |
+| 4 | `Finished` | — |
+| 5 | `Limited` | `the words '<match>' on stderr` (the match is over the last `StderrTailCharacters` of `stderr`; no tail is quoted) |
+| 6 | `HardDeadline` | — |
+| 7 | `Interrupted` | `stopped by the operator` |
+| 8 | `Interrupted` | `no result line and no limit — the process ended without saying how` |
+
+Private shape, each ≤ 4 branches: `Classify` (not started → 1; `lastResult is Outcome<…>.Ok` → `FromResult`; else `WithoutResult`);
+`FromResult(envelope)` (`!IsError` → `Finished`; `LimitReason(envelope)` non-empty → `Limited`; else `Errored(Text(envelope))`);
+`LimitReason(envelope)` (the three ternaries of 2a–2c, `""` when none); `IsLimitStatus(CapturedCount)` = `WasCaptured && Value is 429 or 529`;
+`WithoutResult(stderr, attempt)` (5 → 6 → 7 → 8); `Tail(stderr)` = `stderr.Length <= StderrTailCharacters ? stderr : stderr[^StderrTailCharacters..]`;
+`Text(envelope)`, `Head(string)`. **Stub:** `Classify` returns `new StepEnd.Interrupted("stub — not classified yet")` — chosen because
+`Finished` would let three tests pass unearned and `Interrupted` with another `Why` fails every test that expects an `Interrupted` on
+its exact reason.
+
+`LimitWords` is `public static partial class LimitWords` (partial only because `[GeneratedRegex]` requires it — not a split to duck a size
+limit): `FirstIn(string text) => Shell().Match(text) is { Success: true } m ? m.Value : string.Empty;` over
+`[GeneratedRegex(@"usage.?limit|spend limit|session limit|rate.?limit|hit your (\w+ )*limit|limit reached|limit will reset|resets? at|overloaded|\b529\b|\b429\b|too many requests", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)] private static partial Regex Shell();`
+— the shell's `RX` (`run-arm.sh:56`) character for character; the one documented difference is that .NET's `\w` and `\b` are Unicode
+where node's are ASCII (a superset: nothing the shell matched is missed). The timeout is the ceiling every wait has
+(`common.reliability`); it is not caught — on a ≤ 4000-character tail or a result text it cannot fire, and if it ever does the step
+runner sees an exception rather than a silent `Errored`. `.NET`'s leftmost-match rule decides which alternative is reported when
+several could: in `You've hit your individual spend limit …` the match is `hit your individual spend limit` (it starts at character 7,
+`spend limit` at 23); in `API Error: 529 Overloaded` it is `529`. **Stub:** `FirstIn` returns `""`.
+
+#### Scenarios — `ClaudeResultEnvelopeTests` (`tests/Bench.Tests/ModelArms/`, namespace `Bench.Tests.ModelArms`)
+
+`using System.Security.Cryptography; using System.Text; using System.Text.Json.Nodes; using Bench.Domain.Trace; using FluentAssertions;
+using ModelArms.Core.Launch; using ModelArms.Core.Steps; using Xunit;`. Class doc: the reader of a `stream-json` attempt, pinned on the
+recorded lines of 2026-10-28 (cited by file and line, the token replaced by `0123456789ab` as §3 says; the sha256 of every verbatim line in
+a comment) and on the product's envelope fixtures; *what this does NOT prove*: that claude 2.1.x still prints these shapes (the lines
+are a record, not a contract), and anything about a stream's non-result lines. Helpers: `Read(name)` / `Path(name)` from
+`ModelArmsFixtures`; `Success = Read("result-success.jsonl").Split('\n')[2]` (the one result line of that fixture);
+`Sha(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes))`; `Line(string file, int n)` = the n-th line of the fixture's BYTES with
+its `\n` (split on `0x0A`, re-append) — for the verbatim guards.
+
+| Test | Given / When / Then | Red against the stub (an assertion message) |
+|---|---|---|
+| `The_last_result_line_is_read_whatever_lines_precede_it` | **Given** `stream-2026-10-28-review-three-results.jsonl`; **when** `LastOf`; **then** `Ok()` with `LineNumber == 3`, `IsError == true`, `ApiErrorStatus == CapturedCount.Number(429)`, `ApiError == "usage_limit_reached"`, `Result` starts with `You've hit your individual spend limit`, `Subtype == "success"`, `Errors` empty; **and** `LastOf(line 1 alone)` is `Ok()` with `LineNumber == 1`, `IsError == false`, `Result == "I'm waiting for the full MCP suite. When it finishes I will send the verdict."`, `ApiErrorStatus.WasCaptured == false` (the recorded success line carries `"api_error_status":null`); **and the bytes are the record**: `Sha(Line(file, 2)) == "20d59284b73beaba53c2127b6dba5e18738813edace799f290a7b8c522551dd8"`, `Sha(Line(file, 3)) == "3087925f6188b168051cda9f95d59d14160b7e5f2c3262524bf870fec715d494"` (lines 2 and 3 hold no token and are committed byte for byte), and line 1 contains `/r/0123456789ab/arm` (the substitution happened and the line still parses) | `Expected envelope.LineNumber to be 3, but found 0.` |
+| `Api_error_status_reads_as_a_number_and_as_a_string` | **Given** `result-429-monthly-spend-limit.jsonl` (`:23`, a number), `result-429-string-status.jsonl` (`:87`, the string `"429"`), `result-400-model-unsupported.jsonl` (`:27`); **then** `ApiErrorStatus` is `Number(429)`, `Number(429)`, `Number(400)`; **and** each of `"api_error_status":"4a9"`, `429.5`, `null`, `""`, `true`, absent (synthetic one-line results) reads `WasCaptured == false` with a non-empty `Reason` naming `api_error_status` — never `0` captured, never a throw | `Expected envelope.ApiErrorStatus.WasCaptured to be true because the product's 2.1.284 envelope carries the status as a number, but found False.` |
+| `Subtype_success_on_an_error_result_is_ignored` | **Given** the 429 line and the 400 line; **then** each reads `Subtype == "success"` AND `IsError == true`; **and** `StepClassifier.Classify(LastOf(line), "", AttemptFacts.Ran)` is `Limited` for the first and `Errored` for the second — never `Finished`: `subtype` is kept and decides nothing (the product's lesson, `AClaudeReasonInItsEnvelopeTests.cs:17-18`) | `Expected envelope.IsError to be true because subtype "success" sits beside is_error true on a real 429, but found False.` |
+| `A_stream_without_a_result_reads_as_none` | **Given** `stream-no-result.jsonl`, `""`, `"\n\n"`, and `result-success.jsonl` with its third line deleted; **then** each `LastOf` has `Failed() == true` and `Reason() == "no line of the stream is a result object"` | `Expected failed to be true because a stream with no result line has no result to read, but found False.` |
+| `A_result_whose_type_key_comes_last_is_still_read` | **Given** `result-429-usage-limit-reached.jsonl` (its text has `"type":"result"` at index ≥ 1200 of ≈ 1418 — assert `IndexOf("\"type\":\"result\"") > 1000` so the fixture keeps the property the test needs); **then** `LastOf` is `Ok()` with `LineNumber == 1`, `IsError == true`, `ApiError == "usage_limit_reached"`; **and** a synthetic `{"is_error":false,"result":"ok","type":"result"}` (the key literally last) reads `Ok()`; **and** `Sha(File.ReadAllBytes(Path(fixture))) == "895d7980445470e7ad4588cbdea7a0b7878b47582544b58b82d008c59df52a52"` — the line is the record, byte for byte | `Expected envelope.LineNumber to be 1, but found 0.` |
+| `Every_shape_that_is_not_a_result_object_is_skipped_and_nothing_throws` | `[Theory]` over the shapes `["is_error",true]` · `{"type":"result","is_error":true,"resu` (truncated) · `Error: something went wrong before any JSON` · `{"type":"assistant","message":{}}` · `{"type":42}` · `{"type":null}` · `{"is_error":true,"result":"no type"}` · `{"type":"result_x","result":"a decoy"}` · `` (empty) · `   `; **for each**: `LastOf(shape + "\n" + Success)` → `Ok()`, `LineNumber == 2`, `Result == "Reviewed.\n{\"verdict\":\"ready\",\"findings\":[]}"`; `LastOf(Success + "\n" + shape)` → `Ok()`, `LineNumber == 1` (a bad LAST line never hides the real last result); `LastOf(shape)` → `Failed()`; every call wrapped as `var act = () => …; act.Should().NotThrow()` | `Expected envelope.LineNumber to be 2, but found 0.` |
+| `An_odd_field_in_a_result_object_reads_as_its_safe_default_and_nothing_throws` (added) | `[Theory]`: `{"type":"result","is_error":true}` → `IsError` true, `Result == ""`, `ApiError == ""`, `Subtype == ""`, `Errors` empty, `ApiErrorStatus.WasCaptured` false; `{"type":"result","is_error":true,"result":42}` → `Result == ""`; `{"type":"result","is_error":"true","result":"a string that says true is not a boolean"}` → `IsError == false`; `{"type":"result","result":"no is_error at all"}` → `IsError == false`; `{"type":"result","is_error":true,"errors":["rate limit exceeded",7,null,{"a":1}]}` → `Errors` equals `["rate limit exceeded"]` and `Classify(…, "", Ran)` is `Limited("the words 'rate limit' in the result — an error result with no text")` (the `errors` items join the words); `{"type":"result","errors":"x","api_error":5}` → `Errors` empty, `ApiError == ""`; each under `NotThrow()` | `Expected envelope.IsError to be true, but found False.` |
+
+#### Scenarios — `StepEndTests` (`tests/Bench.Tests/ModelArms/`, namespace `Bench.Tests.ModelArms`)
+
+Same usings plus `using Bench.Domain;`. Class doc: the one decision of how an attempt ended, in criterion 2's order, pinned on the
+2026-10-28 lines (the incident: `repair-limit-2026-10-28.sh:2-5`), the product's fixtures and the shell's `RX` (`run-arm.sh:56`); *what
+this does NOT prove*: that claude prints a result before the wall kills it, or what a real 529 looks like (the 529 line is synthetic and
+says so). Helpers, private static: `End(string stream, string stderr = "", AttemptFacts? attempt = null) =>
+StepClassifier.Classify(ClaudeResultEnvelope.LastOf(stream), stderr, attempt ?? AttemptFacts.Ran)`; `Edited(string line, Action<JsonObject> edit)`
+= `JsonNode.Parse(line)!.AsObject()`, the edit applied, `.ToJsonString()` (the verbatim line with a field changed or removed — the
+only way to vary ONE fact of a recorded line); `Limit429 = Read("result-429-usage-limit-reached.jsonl")`; `NoResult = Read("stream-no-result.jsonl")`;
+`Untrusted = Read("err-2026-10-28-untrusted-workspace.txt")`; `Killed = new AttemptFacts("", true, false)`; `Stopped = new AttemptFacts("", false, true)`;
+`LimitText = "You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 1:20am (Europe/Paris)"`
+(146 characters: the whole text is the reason's tail). Every expectation is a whole record — `end.Should().Be(new StepEnd.Limited("…"))` —
+so a red names the reason that differed, not only the type.
+
+| Test | Given / When / Then | Red against the stub (an assertion message) |
+|---|---|---|
+| `The_2026_10_28_line_is_limited_by_its_structured_fields_whatever_the_words_say` | **Given** the verbatim line and four edits of it; **then**, in this order: (a) verbatim → `Limited("api_error_status 429 — " + LimitText)`; (b) `result` = `"Request failed."`, `api_error` removed → `Limited("api_error_status 429 — Request failed.")`; (c) `api_error_status` removed, `result` = `"Request failed."`, `api_error` kept → `Limited("api_error 'usage_limit_reached' — Request failed.")`; (d) `api_error_status` and `api_error` removed, the verbatim result → `Limited("the words 'hit your individual spend limit' in the result — " + LimitText)`; (e) both removed and `result` = `"Request failed."` → `Errored("Request failed.")` — the floor: nothing structured and no words is not a limit. (a)'s reason is also asserted with `StartWith("api_error_status 429")` under a `because` naming the order | `Expected end to be Limited { Reason = api_error_status 429 — You've hit your individual spend limit … }, but found Interrupted { Why = stub — not classified yet }.` |
+| `A_monthly_spend_limit_429_is_limited` | `result-429-monthly-spend-limit.jsonl` (`:23`) → `Limited("api_error_status 429 — You've hit your monthly spend limit. Switch to another model to continue.")`; `IsDone == false` | `Expected end to be Limited { … }, but found Interrupted { … }.` |
+| `A_string_429_is_limited` | `result-429-string-status.jsonl` (`:87`) → `Limited("api_error_status 429 — You've hit your monthly spend limit.")`; **and** the same line with `result` = `"Request failed."` → `Limited("api_error_status 429 — Request failed.")` — the STRING status alone decides, the words are not needed (the product leaves the HTTP suffix off a string status, `:85-89`; this module reads it: a limit is what the runner must wait for) | as above |
+| `A_529_overload_is_limited` | **synthetic, said so in the doc**: the 429 line with `api_error_status` = `529`, `api_error` removed, `result` = `"API Error: 529 Overloaded"` → `Limited("api_error_status 529 — API Error: 529 Overloaded")`; the same with `api_error_status` removed → `Limited("the words '529' in the result — API Error: 529 Overloaded")` (leftmost match) | as above |
+| `An_error_result_that_is_not_a_limit_is_errored_never_finished` | `result-400-model-unsupported.jsonl` (`:27`) → `Errored("API Error: 400 Claude Code 2.1.258 does not support this model; version 2.1.280 or newer is required. Run 'claude update', or update the Claude desktop app, then try again.")` (172 characters — whole); `IsDone == false`; `end.Should().NotBeOfType<StepEnd.Finished>("an error result is never done — the repair script's rule, repair-limit-2026-10-28.sh:4")` | `Expected end to be Errored { Text = API Error: 400 … }, but found Interrupted { … }.` |
+| `Limit_words_on_stderr_without_a_result_are_limited` | **Given** `NoResult` and stderr `"Claude AI usage limit reached. Your limit will reset at 1am (Europe/Paris).\n"` (claude's own stderr marker, `ReviewerAccountOut.cs:43-47`); **then** `Limited("the words 'usage limit' on stderr")` (leftmost); **and** with stderr `"API Error: 529 Overloaded"` → `Limited("the words '529' on stderr")` | `Expected end to be Limited { Reason = the words 'usage limit' on stderr }, but found Interrupted { … }.` |
+| `The_stderr_tail_is_the_last_4000_characters` (added) | `StepClassifier.StderrTailCharacters == 4000`; `NoResult` with stderr `"rate limit\n" + new string('x', 4000)` → `Interrupted("no result line and no limit — the process ended without saying how")` (the words sit before the tail — the shell's `slice(-4000)`, `run-arm.sh:62`); with stderr `new string('x', 4000) + "\nrate limit"` → `Limited("the words 'rate limit' on stderr")` | `Expected end to be Interrupted { Why = no result line and no limit — … }, but found Interrupted { Why = stub — not classified yet }.` |
+| `A_success_result_is_finished` | `[Theory]`: `result-success.jsonl`; and the product's success envelope `{"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[{\"title\":\"a spend limit is not handled\"}]}"}` (`:72` — limit words in a SUCCESS text) → each `Finished`, `IsDone == true`, `Word == "finished"` | `Expected end to be Finished { }, but found Interrupted { … }.` |
+| `A_killed_tree_is_the_hard_deadline` | `NoResult`, `""`, `Killed` → `HardDeadline`, `IsDone == true`, `Word == "hard-deadline"` | `Expected end to be HardDeadline { }, but found Interrupted { … }.` |
+| `No_result_and_no_limit_is_interrupted` | `NoResult`, stderr `Untrusted`, `Ran` → `Interrupted("no result line and no limit — the process ended without saying how")`; `IsDone == false` | `Expected end to be Interrupted { Why = no result line and no limit — … }, but found Interrupted { Why = stub — … }.` |
+| `A_launch_the_executable_refused_is_not_started` | `Failure("the executable /x/bin/claude does not exist")` as the last result, `""`, `new AttemptFacts("the executable /x/bin/claude does not exist", false, false)` → `NotStarted("the executable /x/bin/claude does not exist")`, `Word == "not-started"`; the same facts with `WallKilled` true → still `NotStarted` (order 1 wins); `AttemptFacts.Ran.Started == true`, the refused facts' `Started == false` | `Expected end to be NotStarted { Reason = the executable … }, but found Interrupted { … }.` |
+| `A_result_printed_before_the_wall_killed_the_tree_is_finished` | `result-success.jsonl` + `Killed` → `Finished`; the 429 line + `Killed` → `Limited("api_error_status 429 — " + LimitText)` (not `HardDeadline`); the 400 line + `Stopped` → `Errored(…)` (not `Interrupted`) — a session that printed its own end has ended (D8's measured case: C2's review wrote its verdict and then hit its deadline) | `Expected end to be Finished { }, but found Interrupted { … }.` |
+| `A_success_result_is_finished_whatever_stderr_says` | `result-success.jsonl` with stderr `"Claude AI usage limit reached"` → `Finished`; the 400 line with the same stderr → `Errored(…)` — stderr is read only when there is no result (`run-arm.sh:60-62`) | `Expected end to be Finished { }, but found Interrupted { … }.` |
+| `The_real_untrusted_workspace_warning_on_stderr_is_not_a_limit` | `LimitWords.FirstIn(Untrusted) == ""`; `NoResult` + `Untrusted` + `Ran` → `Interrupted("no result line …")`; + `Killed` → `HardDeadline`; the fixture contains `projects["/home/jinx/git/coai-exp2/r/0123456789ab/arm"]` (the substitution happened) | `Expected end to be Interrupted { Why = no result line … }, but found Interrupted { Why = stub … }.` |
+| `Every_word_of_the_shells_limit_pattern_is_a_limit_and_a_plain_error_is_not` | `[Theory]` `(text, match)`: `("usage limit reached for this org", "usage limit")` · `("usage_limit_reached", "usage_limit")` · `("You've hit your monthly spend limit.", "hit your monthly spend limit")` · `("session limit resets 1:20am", "session limit")` · `("rate limit exceeded", "rate limit")` · `("rate_limit", "rate_limit")` · `("hit your individual spend limit", "hit your individual spend limit")` · `("limit reached", "limit reached")` · `("Your limit will reset at 3pm", "limit will reset")` · `("resets at 1:20am", "resets at")` · `("reset at 1:20am", "reset at")` · `("API Error: 529 Overloaded", "529")` · `("Overloaded", "Overloaded")` · `("HTTP 429", "429")` · `("Too Many Requests", "Too Many Requests")` — one row per alternative of `RX`, the `?`/`s?` forms both — and the negatives `("API Error: 400 Claude Code 2.1.258 does not support this model; …", "")` · `("Authentication failed. Run claude login and retry.", "")` · `("error 4290 of 5290", "")` (the `\b`) · `("an unlimited retry", "")` · `("", "")`; **then** `LimitWords.FirstIn(text) == match` (the matched text in its ORIGINAL case) and `End("{\"type\":\"result\",\"is_error\":true,\"result\":" + JsonSerializer.Serialize(text) + "}")` is `Limited("the words '" + match + "' in the result — " + text)` when `match` is non-empty, else `Errored(text)` (`Errored("an error result with no text")` for the empty text) | `Expected first to be "usage limit", but found "" (the stub).` then, once `FirstIn` is real, each row's classifier red as above |
+| `A_stop_by_the_operator_without_a_result_is_interrupted` | `NoResult`, `""`, `Stopped` → `Interrupted("stopped by the operator")`; `new AttemptFacts("", true, true)` → `HardDeadline` (order 6 before 7: a tree the wall killed is on its deadline whoever also pressed Ctrl+C) | `Expected end to be Interrupted { Why = stopped by the operator }, but found Interrupted { Why = stub … }.` |
+| `The_2026_10_28_review_attempt_is_limited_by_its_last_result_never_finished_by_its_first` (added — the epic's DoD line) | **Given** `stream-2026-10-28-review-three-results.jsonl`; **then** `End(stream)` is `Limited("api_error_status 429 — " + LimitText)`, `IsDone == false`; **and** `End(line 1 alone)` is `Finished` — what the day's detector saw, and what `timing.jsonl` recorded as `"result":true,"limited":false` (§2): the first result would have marked the step done | `Expected end to be Limited { … }, but found Interrupted { … }.` |
+| `The_limited_fix_stream_is_read_from_its_result_line_and_never_from_the_rate_limit_event` (added — criterion 4) | **Given** `stream-2026-10-28-fix-limited-head.jsonl` (four lines; `Sha(Line(f, 2)) == "1ce54cee…c03e"`, `Sha(Line(f, 3)) == "5a2a200b…7395"`, `Sha(Line(f, 4)) == "895d7980…52"`); **then** `LastOf` has `LineNumber == 4` and `End(stream)` is `Limited("api_error_status 429 — " + LimitText)`; the same text with line 2 (the `rate_limit_event`) removed → the same answer; the same text with line 4 removed (the `init`, the event and the synthetic assistant line — which carries `api_error_status` 429 at ITS top level) → `LastOf` `Failed()` and `End(…)` is `Interrupted("no result line and no limit — the process ended without saying how")`, not `Limited`: the event and the assistant line are facts for the record, not inputs | `Expected end to be Limited { … }, but found Interrupted { … }.` |
+| `Every_end_has_its_word_and_only_finished_and_hard_deadline_are_done` (added) | `[Theory]` over the six: `(new Finished(), "finished", true)`, `(new HardDeadline(), "hard-deadline", true)`, `(new Limited("x"), "limited", false)`, `(new Errored("x"), "errored", false)`, `(new Interrupted("x"), "interrupted", false)`, `(new NotStarted("x"), "not-started", false)` → `Word` and `IsDone`; and the six words are distinct (`Distinct().Count() == 6`) — the spelling S2 writes into `.done` and the end line | `Expected end.Word to be "finished", but found "".` |
+| `An_errored_ends_text_is_the_results_first_200_characters_or_says_there_is_none` (added) | `{"type":"result","is_error":true,"result":"<300 × a>"}` → `Errored` whose `Text` is 200 × `a` + `…` (length 201); `{"type":"result","is_error":true}` → `Errored("an error result with no text")`; `"result":"   "` → the same; `"result":42` → the same; the 429 line with `result` = `"<300 × a>"` → `Limited("api_error_status 429 — " + 200 × a + "…")` — the same head on a limit's reason | `Expected end to be Errored { Text = aaaa… }, but found Interrupted { … }.` |
+
+The reds above are written in FluentAssertions 7.2.2's shape (`Expected <subject> to be <expected>, but found <actual>.` — a record prints as
+`Name { Prop = value }`); the coder records the runner's exact text, not these.
+
+#### Brief — the order of work
+
+1. **Fixtures first, by exact path, the token never typed** (`tests/Bench.Tests/Fixtures/model-arms/` is new; `Bench.Tests.csproj:20`
+   already copies `Fixtures\**`):
+
+   ```bash
+   E=/home/jinx/git/coai-exp2; T=$(node -e 'console.log(require(process.argv[1]).C1)' "$E/.map-904c78af.json"); O=$E/r/$T/out
+   F=tests/Bench.Tests/Fixtures/model-arms; mkdir -p "$F"
+   sed -n 8p "$O/3-fix.a1.jsonl" > "$F/result-429-usage-limit-reached.jsonl"
+   sed -n '310p;317p;323p' "$O/2-review.a1.jsonl" | sed "s/$T/0123456789ab/g" > "$F/stream-2026-10-28-review-three-results.jsonl"
+   { echo '{"type":"system","subtype":"init","cwd":"/home/op/git/exp/r/0123456789ab/arm","session_id":"725e2688-256f-43ee-a24e-d2137ace7cee","model":"claude-sonnet-5-5","permissionMode":"acceptEdits"}'; sed -n 6,8p "$O/3-fix.a1.jsonl"; } > "$F/stream-2026-10-28-fix-limited-head.jsonl"
+   sed "s/$T/0123456789ab/g" "$O/3-fix.a1.err" > "$F/err-2026-10-28-untrusted-workspace.txt"
+   # the three product lines: copy :23, :27 and :87 of AClaudeReasonInItsEnvelopeTests.cs (at 80b829ef) by hand, one line each, trailing newline
+   # result-success.jsonl and stream-no-result.jsonl: the synthetic lines of the fixtures table, verbatim
+   sha256sum "$F/result-429-usage-limit-reached.jsonl"            # 895d7980…52
+   sed -n 2p "$F/stream-2026-10-28-review-three-results.jsonl" | sha256sum   # 20d59284…1dd8
+   sed -n 3p "$F/stream-2026-10-28-review-three-results.jsonl" | sha256sum   # 3087925f…d494
+   sed -n 2p "$F/stream-2026-10-28-fix-limited-head.jsonl" | sha256sum       # 1ce54cee…c03e
+   grep -c "$T" "$F"/* ; grep -rc "$T" tests/Bench.Tests/ModelArms/        # every count 0 — the token is in no committed file
+   grep -c 0123456789ab "$F/stream-2026-10-28-review-three-results.jsonl" "$F/err-2026-10-28-untrusted-workspace.txt"   # 1 and 1
+   ```
+
+   The four `sha256sum` values and the two `grep -c` lines go into the summary. Session ids and message uuids stay: the E2 document
+   replaces the token only, and the hashes the tests assert depend on every other byte.
+2. **Stubs, with their final signatures** (E1 §3: a compile error is not a red): `ClaudeResultEnvelope.cs` (the record, `LastOf` as the
+   stub above), `StepEnd.cs` (`StepEnd` with `Word => ""`, `AttemptFacts` with `Ran` and `Started` real), `StepClassifier.cs`
+   (`StderrTailCharacters`, `Classify` → `Interrupted("stub — not classified yet")`, `LimitWords.FirstIn` → `""`). Doc comments final
+   from the first write. `ModelArmsArchitectureTests.cs:42`: the single `// E2` becomes eight markers `// E2.S1` … `// E2.S8`, each on
+   its own line with a blank line between (as `// E1.S8` … `// E1.S11` are); under `// E2.S1`: `typeof(StepClassifier), typeof(LimitWords),`
+   with `using ModelArms.Core.Steps;` beside `using ModelArms.Core.Launch;` (`:4`). `Every_core_decider_is_named_in_the_pure_list` is
+   green from this step on and stays green — it is the guard, not a red-first test.
+3. `ModelArmsFixtures.cs`; `ClaudeResultEnvelopeTests` (7) and `StepEndTests` (20) as specified, names verbatim, every fixture of the
+   table used at least once (the table above uses all nine). Build; run the three classes; **record the 27 failing assertion messages**
+   in the summary. Any test that is GREEN here is a test with no teeth — fix the test, not the stub.
+4. **Implement** `LastOf`, `Word`, `Classify` and its private shape, `LimitWords` — exactly the shape above. Build (0 warnings); the two
+   classes green; `--filter-class "*ModelArmsArchitectureTests"` green; `--filter-namespace "Bench.Tests.ModelArms"`; `dotnet format
+   --verify-no-changes`; the whole suite (Docker up).
+5. **Break-its, each planted in the finished code, observed red on the named test, then restored** — the ten below; the summary quotes
+   each red:
+   - (a) **the FIRST result line instead of the last** (`LastResultOf` keeps the first match) →
+     `The_last_result_line_is_read_whatever_lines_precede_it`: `Expected envelope.LineNumber to be 3, but found 1.`; and
+     `The_2026_10_28_review_attempt_is_limited_by_its_last_result_never_finished_by_its_first`: `Expected end to be Limited { … }, but found Finished { }.`
+     — the shape of the incident, in the suite.
+   - (b) **the words before the structured fields** (`LimitReason` tests 2c first) →
+     `The_2026_10_28_line_is_limited_by_its_structured_fields_whatever_the_words_say` (a): `Expected reason to start with "api_error_status 429" because the structured fields decide before the words, but "the words 'hit your individual spend limit' in the result — You've hit …" differs near "the" (index 0).`
+   - (c) **`api_error_status` accepted only as a number** (the `String` arm of `Status` removed) →
+     `Api_error_status_reads_as_a_number_and_as_a_string`: `Expected envelope.ApiErrorStatus.WasCaptured to be true …, but found False.` (the `:87` line);
+     `A_string_429_is_limited` (the `Request failed.` variant): `Expected end to be Limited { Reason = api_error_status 429 — Request failed. }, but found Errored { Text = Request failed. }.`
+   - (d) **any `is_error` treated as `Finished`** (`FromResult` returns `Finished` first) →
+     `An_error_result_that_is_not_a_limit_is_errored_never_finished`: `Expected end to be Errored { … }, but found Finished { }.`; the four
+     limit tests the same way — nine steps marked done in seconds, in one assertion.
+   - (e) **stderr read although a result exists** (`Classify` tests the stderr tail before `FromResult`) →
+     `A_success_result_is_finished_whatever_stderr_says`: `Expected end to be Finished { }, but found Limited { Reason = the words 'usage limit' on stderr }.`
+   - (f) **the whole stderr instead of its tail** (`Tail` returns `stderr`) →
+     `The_stderr_tail_is_the_last_4000_characters`: `Expected end to be Interrupted { … }, but found Limited { Reason = the words 'rate limit' on stderr }.`
+   - (g) **a prefix reader** (`IsResult` replaced by `line.StartsWith("{\"type\":\"result\"")`) →
+     `A_result_whose_type_key_comes_last_is_still_read`: `Expected failed to be false …` / the `Ok()` helper's `expected success, got failure: no line of the stream is a result object`
+     — and the three recorded-stream tests of `StepEndTests` all read `Interrupted`.
+   - (h) **the `rate_limit_event` read as a limit** (a line whose `type` is `rate_limit_event` answers `Limited`) →
+     `The_limited_fix_stream_is_read_from_its_result_line_and_never_from_the_rate_limit_event` (the result-less variant): `Expected end to be Interrupted { … }, but found Limited { … }.`
+   - (i) **`GetString()` unguarded on `result`** (`Text` calls it without the `ValueKind` check) →
+     `An_odd_field_in_a_result_object_reads_as_its_safe_default_and_nothing_throws` (`"result":42`): `Did not expect any exception, but found System.InvalidOperationException: The requested operation requires an element of type 'String', but the target element has type 'Number'.`
+     — the product's codex lesson, in this reader.
+   - (j) **`"is_error":"true"` read as true** (`IsError` = the text equals `true`, whatever the kind) → the same test: `Expected envelope.IsError to be false because only the JSON literal true is an error, but found True.`
+6. **Docs.** `research/module_model_arms.md`: after *The first run: init and validate (E1.S11)* (`:301`) the eight E2 headings of §3, empty
+   but the first; under *The result envelope and the step's end (E2.S1)*: what `LastOf` reads and skips (the last result line, found by its
+   `type` wherever the key sits, never by a prefix; the tolerant options; a bad last line never hides the real one); the precedence table
+   **equal to criterion 2** with the exact reason strings; the words (`RX` quoted, the leftmost-match rule, the `\w` note); the incident
+   (`repair-limit-2026-10-28.sh:2-5`, the recorded three-results stream, the day's `timing.jsonl` line) and why `ReviewerAccountOut` and
+   `ClaudeEnvelope` are not reused; the fixture table with sources and hashes; *what this does NOT prove* (as the test docs say it).
+7. **Commit by path** — `git add` the seventeen files by name (`ClaudeResultEnvelope.cs`, `StepEnd.cs`, `StepClassifier.cs`, the two test
+   classes, `ModelArmsFixtures.cs`, `ModelArmsArchitectureTests.cs`, the nine fixtures, `research/module_model_arms.md`); `git diff --staged
+   --stat` read against ≈ 550 lines plus the fixtures; `git status --short` read for anything else, left alone:
+   `feat(model-arms): ClaudeResultEnvelope reads a stream's last result line and StepClassifier decides the step's end, structured fields first (E2.S1)`,
+   the body carrying the runner's numbers for the three classes and the suite, the 27 reds of step 3 and the ten of step 5 as the
+   runner printed them, the four hashes and the zero token counts of step 1. Then, as §6 says, land on `feat/model-arms` (rebase, one
+   at a time).
+
+**Commands** (WSL, no `.exe`; never `dotnet test`; always through the lowering wrapper; the test runner is the MTP executable):
+
+```bash
+node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ClaudeResultEnvelopeTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*StepEndTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ModelArmsArchitectureTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-namespace "Bench.Tests.ModelArms"
+node .agents/conventions/tools/low-priority.mjs dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests   # the whole suite, Docker up
+node .agents/conventions/tools/plan-lifecycle.mjs
+```
+
+**Done when.** The 27 tests green (7 + 20), each seen red first on an assertion and the 27 messages in the summary; the ten break-its of
+step 5 each observed red and restored, their messages in the summary; the four `sha256sum` values of step 1 equal the ones in §2 and the
+tests assert them; the token's count over the fixtures and the test folder is 0 (the two `grep -c` lines quoted); the eight markers and
+the eight headings in place, `Every_core_decider_is_named_in_the_pure_list` green; the module doc's precedence table equals criterion 2
+and its reason strings equal the table of *The binding shape*; the build has 0 warnings, `dotnet format` is clean, the whole suite green;
+the commit of step 7 carries only the seventeen files.
+
+**Out of bounds.** Reading files (the runner reads the stream and the `.err` and hands the text in — `LastOf` takes a string); the
+timing line and `.done` (E2.S2); `ReviewAnswer` (E2.S5); a change to `ClaudeEnvelope`, `ClaudeStream`, `ProbeJson` or
+`ReviewerAccountOut` (reuse-first: each was weighed — `ClaudeEnvelope` reads the FIRST object, `ProbeJson` is `internal` to the domain,
+`ReviewerAccountOut` refuses a 429 on purpose; widening any of them changes a reader its callers depend on, so this is the one case
+where a separate implementation is right, and the summary says so); reading the `rate_limit_event` or the synthetic assistant line's
+fields; any C5 name; a fixture beyond the nine; `3-fix.a1.jsonl:5` (the recorded `init`) in any form.
 
 ### E2.S2 — `TimingLine`, `DoneMarker`, `StepBudget`, `ResumeNotice`, `SessionTranscripts`, `StepRecovery`, `StepOutputs`
 
@@ -994,6 +1231,30 @@ nothing here starts the real server — the pilot's gate step is the observation
 15. **The `Interrupted` state carries its reason** (`Interrupted(string Why)`); the parent's D6 lists it bare. The log and the `stopped` line
     need to say whether the operator stopped it or the process ended without a result.
 16. **E1.S8–E1.S11 have not landed** (`Program.cs:6-8` is the stub): E2.S6 waits for E1.S9, E2.S8 for E1.S8 and E1.S9; S1–S5 and S7 do not.
+
+Found by the E2.S1 spec (Fable, 2026-10-29 at `5e808e1`, every line re-opened):
+
+17. **"The 47th key" was a miscount.** `"type":"result"` is the 20th of the 2026-10-28 line's 25 top-level keys, the 56th of its 61 key
+    tokens with nested objects counted, at character 1264 of 1418. The fact that matters — it sits near the end, where a prefix reader
+    never looks — stands; §2 and criterion 1 now carry the counted numbers, and `A_result_whose_type_key_comes_last_is_still_read`
+    asserts the position so the fixture keeps the property the test needs.
+18. **The sha256 of `2-review.a1.jsonl:323` was mis-abbreviated** (`30879256…` for `3087925f…`); §2 now carries all three hashes in full,
+    with the three lines' byte counts, and the tests assert the two token-free lines' hashes.
+19. **The product's shape cases are at `:95-104`** (the `InlineData` rows), not `:93-102`; §2 and the facts line are corrected.
+20. **`AttemptFacts.Started`**: criterion 2.1 reads a member C5 did not declare. Added to C5 as a computed property
+    (`NotStartedReason.Length == 0`); no constructor changes, so S4's `new AttemptFacts(reason, false, false)` stands as written.
+21. **The limited stream's head fixture does not carry the recorded `init` line.** `3-fix.a1.jsonl:5` is 7.4 KB of the operator's machine
+    — the plugin inventory and cache paths, skills, a messaging socket path, memory paths, startup timings — and holds the token seven
+    times; the classifier reads none of it. The fixture is a one-line synthetic `init` (said so in its test) followed by `:6`–`:8` byte
+    for byte, which hold no token; their hashes are in §2 and asserted. The judge's table said `:5-8`.
+22. **Two decoys the recorded lines hold, now criteria.** `2-review.a1.jsonl:310` — a SUCCESS result — carries `"api_error_status":null`,
+    so a reader that calls `GetInt32` on the field throws on the one line that must read as finished (criterion 1: a null reads as
+    `Unavailable`). And `3-fix.a1.jsonl:7`, the synthetic `assistant` line, carries `api_error_status` 429 and `api_error` at its TOP
+    level: a reader keyed on the fields rather than on `"type":"result"` classifies a stream with no result as limited
+    (`The_limited_fix_stream_is_read_from_its_result_line_and_never_from_the_rate_limit_event`, the result-less variant).
+23. **`StepEnd.cs` is two files**: `StepEnd.cs` (`StepEnd`, `AttemptFacts`) and `StepClassifier.cs` (`StepClassifier`, `LimitWords`) —
+    the decision and the state are two responsibilities; the judge's Files line named one file. `ModelArmsFixtures.cs` is added so
+    S4's `StepBench.Replay` reads the same folder through the same helper.
 
 ## 9. Growth
 
