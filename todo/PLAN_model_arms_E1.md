@@ -365,7 +365,7 @@ collected; `Read` returns `Success` only with zero problems, else `Failure(strin
     "gate": ["mcp__coai__providers", "mcp__coai__open", "mcp__coai__review_plan", "mcp__coai__review_code", "mcp__coai__resolve", "mcp__coai__status"],
     "deny": ["Read(//example/home/.claude/**)", "Read(//example/home/.codex/**)", "Read(//example/home/.gemini/**)", "Read(//example/home/.antigravity/**)", "Read(//example/home/.vibe/**)", "Read(//proc/**)", "Read(//example/old-experiment/**)", "Read(//example/vault/**)"]
   },
-  "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/coai/settings.json", "side": "wsl-ubuntu" },
+  "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/vault/connectOtherAis/wsl-ubuntu/settings.json", "side": "wsl-ubuntu" },
   // Closed (000) and unlisted (300) while the arms run; <root> and ~ are expanded.
   "isolation": { "closed": ["/example/old-experiment"], "unlisted": ["<root>", "<root>/r", "<root>/pids", "~/.claude/projects", "~/.claude/file-history", "~/.claude/session-env", "~/.claude/shell-snapshots"] },
   "awake": "auto"
@@ -873,6 +873,10 @@ contain "{{"`; `Expected … Failed() to be true`.
 
 - **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E1.S3, E1.S4. **Parallel with:** E1.S6, E1.S7.
 - **Owns:** D17 (a) and the pure half of (b), D18 (`RootRequirements`), D24 (`BaselineFile`), the scenarios file. **Size:** ≈ 600 lines.
+- **Carried from the E1.S3 review (R6, R7):** `ExecutableResolution` checks the FINAL target of a symbolic link (the console adapter
+  resolves it with `File.ResolveLinkTarget(path, returnFinalTarget: true)`) against the forbidden roots as well as the path as written —
+  `/usr/local/bin/t -> <target>/bin/t` is refused; and the forbidden roots are `target.source` and the experiment ROOT itself (D17 as
+  amended), compared case-insensitively. A test for each (the link case skipped where links cannot be made, with the reason).
 
 **Files.** Core `…/Experiment/RootRequirements.cs`, `RootTrust.cs`, `ExecutableResolution.cs`, `ScenariosFile.cs`, `BaselineFile.cs`;
 console `tools/model-arms/ModelArms/Adapters/RootFacts.cs`; tests `RootRequirementsTests.cs`, `RootTrustTests.cs`,
