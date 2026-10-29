@@ -264,7 +264,13 @@ stack files differ only between `# --- stack:begin/end ---` markers; its output 
 ## 7. Isolation and contamination
 
 1. **Sandbox (D10).** `bwrap` with `/` read-only, `/home/jinx` **and `/mnt`** replaced by tmpfs (on WSL2 `/mnt/c` holds
-   the Windows user's `.codex/auth.json` and `.claude/`, verified visible through a home-only tmpfs), `/run/WSL` masked,
+   the Windows user's `.codex/auth.json` and `.claude/`, verified visible through a home-only tmpfs), **`/run/user`, `/tmp`
+   and `/var/tmp` replaced by tmpfs too** — verified 2026-10-29: through a home-only box, the user bus at
+   `/run/user/1000/bus` let `systemd-run --user` run a command OUTSIDE the box that read `/home/jinx/git`, with network
+   (E1.S1 review B1); `/run/user` also holds the ssh and gpg agents. With those hidden the bus connect fails. The agent
+   box shares the network namespace, so ABSTRACT unix sockets stay reachable whatever is mounted: `preflight.mjs`
+   lists them (`ss -xl`, names starting `@`) and refuses to start unless the list equals an allow-list recorded on the
+   series' first day (on 2026-10-29 one unconnected datagram socket of another user), `/run/WSL` masked,
    `WSL_INTEROP` unset and `/mnt/*` entries stripped from PATH (the WSL interop handler otherwise starts `cmd.exe` from
    inside, and any Windows process can read `\\wsl.localhost\…\home\jinx`); `/usr/bin/gh` masked in the bare arm. Then
    binds: the session directory (rw) laid out as `<session>/repo` (the clone) and `<session>/wt` (where the agent's
