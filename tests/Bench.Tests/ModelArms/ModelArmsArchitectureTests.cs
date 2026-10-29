@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using ModelArms.Core.Experiment;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -21,6 +22,7 @@ public sealed class ModelArmsArchitectureTests
     private static readonly Type[] PureDeciders =
     [
         // E1.S3
+        typeof(ExperimentFile), typeof(ArmNames), typeof(ExecutableRule), typeof(StepKinds),
 
         // E1.S6
 
@@ -73,6 +75,9 @@ public sealed class ModelArmsArchitectureTests
 
         var assemblies = ProductionAssemblies();
         assemblies.Should().Contain("Bench.Domain.dll", "the assembly scan must still see a known product assembly");
+        ArchitectureTests.Referenced("Bench.Tests.dll").Should().Contain(
+            r => r.Name == "ModelArms.Core",
+            "the assembly scan must still find the one assembly that references the module on purpose — a scan that matches nothing passes forever");
 
         foreach (var assembly in assemblies)
         {
