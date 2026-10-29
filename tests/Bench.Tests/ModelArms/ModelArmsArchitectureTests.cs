@@ -97,6 +97,7 @@ public sealed class ModelArmsArchitectureTests
         var unnamed = CorePublicStaticClasses().Except(PureDeciders).Select(t => t.FullName).ToList();
 
         unnamed.Should().BeEmpty("every public static class in ModelArms.Core is a decider and must be named in PureDeciders");
+        CorePublicStaticClasses().Should().Contain(typeof(ExperimentFile), "a structural scan that matches nothing passes forever");
     }
 
     private static IReadOnlyList<Type> CorePublicStaticClasses() =>

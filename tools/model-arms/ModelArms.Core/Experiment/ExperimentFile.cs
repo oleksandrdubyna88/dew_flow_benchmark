@@ -34,10 +34,13 @@ public static class ExperimentFile
         }
 
         var experiment = Parse(json, reader) is { } root ? Walk(reader, root, location) : null;
-        return experiment is not null && reader.Problems.Count == 0
+        return Verdict(reader, experiment);
+    }
+
+    private static Outcome<Experiment> Verdict(StrictJson reader, Experiment? experiment) =>
+        experiment is not null && reader.Problems.Count == 0
             ? Outcome<Experiment>.Success(experiment)
             : Outcome<Experiment>.Failure(string.Join('\n', reader.Problems));
-    }
 
     /// <summary>D4's two root refusals: a root lives outside this repository and outside every git checkout, or the arms' clones would nest in it.</summary>
     public static IReadOnlyList<string> Placement(ExperimentLocation location)
@@ -69,10 +72,10 @@ public static class ExperimentFile
 
             return node as JsonObject;
         }
-        catch (Exception ex) when (ex is JsonException or ArgumentException)
+        catch (JsonException ex)
         {
-            // JsonNode.Parse reports a malformed text as JsonException and a member written twice as ArgumentException; both are the
-            // operator's file being wrong, an expected answer rather than a crash.
+            // A malformed text, and a member written twice at any depth (AllowDuplicateProperties = false), both arrive as JsonException:
+            // the operator's file being wrong is an expected answer, not a crash.
             reader.Add($"experiment.json is not JSON: {ex.Message}");
             return null;
         }
@@ -112,7 +115,7 @@ public static class ExperimentFile
 
     private static Limits Limits(StrictJson json, JsonObject top)
     {
-        var limits = json.Object(top["limits"], "limits", LimitMembers, LimitMembers);
+        var limits = json.ObjectMember(top, string.Empty, "limits", LimitMembers, LimitMembers);
         return new Limits(
             json.Positive(limits, "limits", "waitSeconds"),
             json.Positive(limits, "limits", "tries"),
@@ -129,7 +132,7 @@ public static class ExperimentFile
             return TaskLimits.Shell;
         }
 
-        var tasks = json.Object(top["tasks"], "tasks", TaskMembers, TaskMembers);
+        var tasks = json.ObjectMember(top, string.Empty, "tasks", TaskMembers, TaskMembers);
         var limits = new TaskLimits(json.Positive(tasks, "tasks", "min"), json.Positive(tasks, "tasks", "max"), json.Positive(tasks, "tasks", "maxParallel"));
         if (limits.Min > limits.Max && limits.Max > 0)
         {
@@ -141,7 +144,7 @@ public static class ExperimentFile
 
     private static ToolSets Tools(StrictJson json, JsonObject top)
     {
-        var tools = json.Object(top["tools"], "tools", ToolMembers, ToolMembers);
+        var tools = json.ObjectMember(top, string.Empty, "tools", ToolMembers, ToolMembers);
         return new ToolSets(
             json.Texts(tools, "tools", "write"),
             json.Texts(tools, "tools", "read"),
@@ -156,7 +159,7 @@ public static class ExperimentFile
             return CoaiFacts.None;
         }
 
-        var coai = json.Object(top["coai"], "coai", CoaiMembers, CoaiMembers);
+        var coai = json.ObjectMember(top, string.Empty, "coai", CoaiMembers, CoaiMembers);
         return new CoaiFacts(
             PathFields.Absolute(json, coai, "coai", "binary"),
             PathFields.Absolute(json, coai, "coai", "settings"),
@@ -181,7 +184,7 @@ public static class ExperimentFile
             return IsolationFacts.None;
         }
 
-        var isolation = json.Object(top["isolation"], "isolation", IsolationMembers, IsolationMembers);
+        var isolation = json.ObjectMember(top, string.Empty, "isolation", IsolationMembers, IsolationMembers);
         return new IsolationFacts(
             Expanded(json, isolation, "closed", location),
             Expanded(json, isolation, "unlisted", location));

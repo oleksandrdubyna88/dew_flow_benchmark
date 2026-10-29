@@ -5,21 +5,22 @@ namespace ModelArms.Core.Experiment;
 /// argument of an executable resolved elsewhere, which is why the suite runs as <c>dotnet &lt;tests&gt;.dll</c>.</summary>
 public static class ExecutableRule
 {
-    /// <summary>Why this executable is refused, or the empty string when it is fine.</summary>
-    public static string Refusal(string executable, IReadOnlyList<string> forbiddenRoots)
-    {
-        if (executable.Trim().Length == 0)
-        {
-            return "the executable is empty — name an executable from PATH or an absolute path outside the target (D17)";
-        }
+    private static readonly char[] PathMarks = ['/', '\\', ':'];
 
-        if (!executable.Contains('/') && !executable.Contains('\\'))
+    /// <summary>Why this executable is refused, or the empty string when it is fine. A name holding a separator or a colon is a PATH:
+    /// <c>C:x.exe</c> is drive-relative on Windows, so it is never a bare name.
+    /// <para>
+    /// This is a static, textual rule. It does not follow symbolic links: a link outside every forbidden root that points inside one
+    /// passes here, and E1.S8's executable resolution is what resolves the final target and checks it against the same roots.
+    /// </para></summary>
+    public static string Refusal(string executable, IReadOnlyList<string> forbiddenRoots) =>
+        executable switch
         {
-            return string.Empty;
-        }
-
-        return Path.IsPathFullyQualified(executable) ? UnderForbiddenRoot(executable, forbiddenRoots) : Relative(executable);
-    }
+            _ when executable.Trim().Length == 0 => "the executable is empty — name an executable from PATH or an absolute path outside the target (D17)",
+            _ when executable.IndexOfAny(PathMarks) < 0 => string.Empty,
+            _ when !Path.IsPathFullyQualified(executable) => Relative(executable),
+            _ => UnderForbiddenRoot(executable, forbiddenRoots),
+        };
 
     private static string Relative(string executable) =>
         $"the executable '{executable}' is a relative path, resolved against the target — use a name from PATH or an absolute path outside the target (D17)";
