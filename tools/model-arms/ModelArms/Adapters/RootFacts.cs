@@ -46,21 +46,26 @@ public static class RootFacts
     /// the raw path and the mode from .NET's reading of the normalised one, and a <c>..</c> after a symbolic link climbs from the link's TARGET in the kernel's
     /// order but from the link's folder in .NET's, so the two could be two different files. A symbolic link at the path is refused; the facts of the file
     /// itself are what is judged. The path in the answer is the normalised one.</summary>
-    public static async Task<Outcome<FileFacts>> FileFactsAsync(string path, CancellationToken ct)
+    public static async Task<Outcome<FileFacts>> FileFactsAsync(string path, CancellationToken ct) =>
+        (await ReadFactsAsync(path, ct)).ToOutcome();
+
+    /// <summary><see cref="FileFactsAsync"/> with the cause of a failure kept: a path the check refuses to judge (a link, a NUL) is
+    /// <see cref="FactsRead.Refused"/>, a <c>stat</c> that could not say is <see cref="FactsRead.Unread"/>. The console exits 4 for the first and 3 for the second.</summary>
+    public static async Task<FactsRead> ReadFactsAsync(string path, CancellationToken ct)
     {
         if (OperatingSystem.IsWindows())
         {
-            return Outcome<FileFacts>.Failure($"the owner and mode of {path} are POSIX facts; RootTrust declares the check not performed on Windows");
+            return new FactsRead.Unread($"the owner and mode of {path} are POSIX facts; RootTrust declares the check not performed on Windows");
         }
 
         if (ExecutableRule.HoldsNul(path))
         {
-            return Outcome<FileFacts>.Failure($"the trust path '{ExecutableRule.Printable(path)}' holds a NUL character — refused (D17)");
+            return new FactsRead.Refused($"the trust path '{ExecutableRule.Printable(path)}' holds a NUL character — refused (D17)");
         }
 
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var said = await Said("stat", StatArguments(full), ct);
-        return said.Match(text => Judge(full, text), reason => Outcome<FileFacts>.Failure($"the owner of {full} cannot be read: {reason}"));
+        return said.Match(text => Judge(full, text), reason => new FactsRead.Unread($"the owner of {full} cannot be read: {reason}"));
     }
 
     /// <summary>GNU <c>stat -c '%u %f'</c> (owner, the raw mode in hex); BSD and macOS <c>stat -f '%u %p'</c> (owner, the raw mode in octal). The raw mode carries the
@@ -70,15 +75,17 @@ public static class RootFacts
 
     /// <summary>The facts in one line of <c>stat</c> output, or why the line cannot be used. A symbolic link is refused, naming where it points: the trust check
     /// judges the file itself, not a link that can be re-pointed. Public so the parser can be tested over the raw outputs of both <c>stat</c> flavours.</summary>
-    public static Outcome<FileFacts> FactsOfStat(string full, string text, bool bsd) =>
+    public static Outcome<FileFacts> FactsOfStat(string full, string text, bool bsd) => ReadStat(full, text, bsd).ToOutcome();
+
+    private static FactsRead ReadStat(string full, string text, bool bsd) =>
         StatLine.Read(text, bsd).Match(
             line => line.IsLink
-                ? Outcome<FileFacts>.Failure(
+                ? new FactsRead.Refused(
                     $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
-                : Outcome<FileFacts>.Success(new FileFacts(full, line.Uid, line.Permissions)),
-            reason => Outcome<FileFacts>.Failure($"stat answered '{text}' for {full}: {reason}"));
+                : new FactsRead.Read(new FileFacts(full, line.Uid, line.Permissions)),
+            reason => (FactsRead)new FactsRead.Unread($"stat answered '{text}' for {full}: {reason}"));
 
-    private static Outcome<FileFacts> Judge(string full, string text) => FactsOfStat(full, text, OperatingSystem.IsMacOS());
+    private static FactsRead Judge(string full, string text) => ReadStat(full, text, OperatingSystem.IsMacOS());
 
     /// <summary>One line of <c>stat</c>: <c>uid rawmode</c>. The raw mode is S_IFMT (<c>0xF000</c>) type bits over the permission bits (<c>0xFFF</c>, which includes set-id and sticky).</summary>
     private sealed record StatLine(int Uid, int RawMode)
