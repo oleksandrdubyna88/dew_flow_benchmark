@@ -31,7 +31,8 @@ public sealed class BriefFillerTests
     private static readonly BriefLeakGuard Guard = new(
         ArmMap.Read($"{{\"C1\":\"{Own}\",\"CR1\":\"{Other}\"}}").Match(map => map, reason => throw new InvalidOperationException(reason)),
         "C1",
-        Schemes);
+        Schemes,
+        Root);
 
     private static readonly BriefFacts Facts = new(
         Plan: "/e/base/todo/PLAN_x.md",
@@ -113,6 +114,113 @@ public sealed class BriefFillerTests
     }
 
     [Fact]
+    public void A_native_windows_root_does_not_make_its_drive_letter_a_scheme_name()
+    {
+        const string WindowsRoot = @"C:\e";
+        var guard = Guard with { Root = WindowsRoot };
+        var paths = new ArmPaths(WindowsRoot, Own);
+        var facts = Facts with { Plan = WindowsRoot + @"\base\todo\PLAN_x.md" };
+
+        var text = TextOf(BriefFiller.Fill(ShippedTemplate(StepKind.Code), BriefFields.For(StepKind.Code, paths, facts), guard));
+
+        text.Should().Contain(paths.CodeNotes, "every path field begins with the root, and the root is the operator's own");
+        var known = new Dictionary<string, string>(BriefFields.For(StepKind.Code, paths, facts)) { ["KNOWN"] = "see C:" };
+        ReasonOf(BriefFiller.Fill("{{KNOWN}}", known, guard)).Should().Contain("'C'", "only the exact root prefix is exempt, not the letter");
+    }
+
+    [Fact]
+    public void A_value_carrying_a_placeholder_never_reaches_the_brief_and_is_never_expanded()
+    {
+        var reason = ReasonOf(BriefFiller.Fill("note: {{KNOWN}}", With("KNOWN", "see {{PLAN}} and {{NOPE}}"), Guard));
+
+        reason.Should().Contain("{{PLAN}}").And.Contain("{{NOPE}}", "the result still holds placeholders, whichever field carried them");
+    }
+
+    [Fact]
+    public void A_template_naming_a_scheme_is_refused_naming_the_template()
+    {
+        var reason = ReasonOf(BriefFiller.Fill("compare with the CR scheme: {{PLAN}}", BriefFields.For(StepKind.Code, Paths, Facts), Guard, "2-review.template.md"));
+
+        reason.Should().Contain("2-review.template.md").And.Contain("'CR'");
+        TextOf(BriefFiller.Fill("plain text {{PLAN}}", BriefFields.For(StepKind.Code, Paths, Facts), Guard, "x.template.md")).Should().Contain(Facts.Plan);
+    }
+
+    [Fact]
+    public void An_override_that_exists_but_cannot_be_read_is_a_refusal_naming_it_never_the_shipped_file()
+    {
+        var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
+        try
+        {
+            var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "shipped")).FullName;
+            var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "overrides")).FullName;
+            File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
+            var broken = System.IO.Path.Combine(overrides, "1-code.template.md");
+            File.WriteAllBytes(broken, [0x41, 0xFF, 0xFE, 0x42]);
+
+            var reason = ReasonOf(new BriefTemplateFiles(shipped, overrides).Read(StepKind.Code));
+
+            reason.Should().Contain(broken).And.Contain("UTF-8");
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void An_override_with_no_permission_to_read_it_is_a_refusal_naming_it()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("file modes are a POSIX notion");
+            return;
+        }
+
+        var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
+        try
+        {
+            var shipped = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "shipped")).FullName;
+            var overrides = Directory.CreateDirectory(System.IO.Path.Combine(folder.FullName, "overrides")).FullName;
+            File.WriteAllText(System.IO.Path.Combine(shipped, "1-code.template.md"), "shipped text");
+            var locked = System.IO.Path.Combine(overrides, "1-code.template.md");
+            File.WriteAllText(locked, "operator text");
+            File.SetUnixFileMode(locked, UnixFileMode.None);
+            if (CanRead(locked))
+            {
+                Assert.Skip("this account reads files whatever their mode (root), so the permission failure cannot be provoked");
+            }
+
+            ReasonOf(new BriefTemplateFiles(shipped, overrides).Read(StepKind.Code)).Should().Contain(locked);
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void The_templates_are_exempt_from_line_ending_conversion_because_their_bytes_are_pinned()
+    {
+        var attributes = System.IO.Path.Combine(Cli.Repository.Root, ".gitattributes");
+
+        File.Exists(attributes).Should().BeTrue("a checkout with autocrlf would otherwise change the bytes the hashes pin");
+        File.ReadAllLines(attributes).Should().Contain(line => line.Trim() == "tools/model-arms/briefs/*.template.md -text");
+    }
+
+    private static bool CanRead(string path)
+    {
+        try
+        {
+            File.ReadAllBytes(path);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    [Fact]
     public void An_experiment_root_overrides_a_template_by_name()
     {
         var folder = Directory.CreateTempSubdirectory("testsToDelete-briefs-");
@@ -125,9 +233,9 @@ public sealed class BriefFillerTests
             File.WriteAllText(System.IO.Path.Combine(shipped, "2-review.template.md"), "only shipped — é");
             var files = new BriefTemplateFiles(shipped, overrides);
 
-            TextOf(files.Read("1-code.template.md")).Should().Be("B");
-            TextOf(files.Read("2-review.template.md")).Should().Be("only shipped — é");
-            ReasonOf(files.Read("gate.template.md")).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
+            TextOf(files.Read(StepKind.Code)).Should().Be("B");
+            TextOf(files.Read(StepKind.Review)).Should().Be("only shipped — é");
+            ReasonOf(files.Read(StepKind.Gate)).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
         }
         finally
         {

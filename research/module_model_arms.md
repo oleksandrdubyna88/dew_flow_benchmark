@@ -210,15 +210,23 @@ thirteen fields (`PLAN BASE BRANCH SCEN_COUNT DEADLINE KNOWN REVIEW CODE_NOTES H
 `SCEN_COUNT` is printed invariant) and adds the task or the problems for the kinds above. `HREVIEW_NOTES` and `BEFORE` appear in no template; they are provided as
 the shell provided them, and a field a template does not use is never an error.
 
-**`BriefFiller.Fill(template, fields, guard)`** replaces every placeholder whose name is a field, in one pass, then refuses in this order:
+**`BriefFiller.Fill(template, fields, guard, templateName = "")`** replaces every placeholder whose name is a field, in one pass (a value is never expanded again), and refuses in this order:
 
 1. a placeholder left without a field: `the brief has unfilled fields: {{A}} {{B}}` (each name once, in order of appearance);
-2. a substituted value in which `ArmMap.Leaks` finds an arm name, a scheme name or another arm's token: `the field NOTES would carry 'C1' into a brief — no brief
-   names an arm, a scheme or another arm's token (D15)`. The arm's OWN token is allowed: it is in every path field, and the arm's working directory shows it anyway
-   (plan E1 section 8, item 2). A field the template never uses is not checked.
+2. a template that itself holds an arm name, a scheme name or another arm's token (an experiment root's override is the operator's text):
+   `the template '<name>' would carry 'CR' into a brief — …`;
+3. a substituted value in which `ArmMap.Leaks` finds one of those: `the field NOTES would carry 'C1' into a brief — no brief names an arm, a scheme or another
+   arm's token (D15)`. The arm's OWN token is allowed: it is in every path field, and the arm's working directory shows it anyway (plan E1 section 8, item 2).
+   A value that begins with `guard.Root` is checked without that exact prefix, so a native Windows root such as `C:\exp` does not make its drive letter a scheme named `C`;
+4. a result that still holds a placeholder, which only a value can have carried: `the filled brief still holds {{PLAN}} — …`.
 
-`BriefTemplateFiles(shipped, overrides).Read(name)` (console, `ModelArms.Adapters`) returns the experiment root's own copy by name when it exists, else the shipped one,
-else `no brief template '<name>' in <overrides> or <shipped>`; UTF-8.
+A field the template never uses is not checked. `ArmMap.Leaks` matches an arm name and a scheme of several letters as a whole word in any case ("as c1 did", "the srs arm");
+a one-letter scheme only in its own case, so the `/mnt/c/` of a WSL path is not a leak.
+
+`BriefTemplateFiles(shipped, overrides).Read(kind)` (console, `ModelArms.Adapters`) takes a step kind, never a file name, and resolves `BriefTemplates.NameOf` inside, so no
+operator text can reach outside the two folders. It returns the experiment root's own copy when it exists, else the shipped one, else
+`no brief template '<name>' in <overrides> or <shipped>`. The text is read as strict UTF-8; an override that exists but cannot be read (permissions, invalid UTF-8) is a refusal naming it,
+never a fall back to the shipped file. A root `.gitattributes` line marks the templates `-text`, so a checkout never converts the bytes the SHA-256 values pin.
 
 What this does NOT prove: that a brief reads well to a model; that the deadline string has the format the launcher prints (E2.S4 owns it); that the resume notice,
 the prompt file or its path are right (E2); or that a template edited in an experiment root still carries every field it needs: such a copy is checked by `Fill`
