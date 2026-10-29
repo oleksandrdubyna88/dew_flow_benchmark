@@ -58,3 +58,22 @@
 
 `keep-awake.ps1` (holds Windows out of Modern Standby with `SetThreadExecutionState`, no power settings changed),
 `stop-keep-awake.ps1`, `check-keep-awake.ps1`.
+
+## part6/ — Part 6, the second task (it ran in `/home/jinx/git/coai-exp2`; see [../harness.md](../harness.md) §9)
+
+| File | Role |
+|---|---|
+| `PROTOCOL.md` | The design and the six predictions, as written before the run |
+| `exp.env`, `scenarios.json`, `baseline.json` | The experiment's fixed facts (base commit, plan path, branch, scenario count), the 43 scenarios with their test names, the failures known at the base (none) |
+| `prep-base.sh` | Builds and tests the base once |
+| `after6.sh` | The chain: makes the nine arms, locks, runs the rounds of three, unlocks, runs the objective checks (markers per stage) |
+| `run-arm.sh`, `run-all.sh` | One arm, resumable: C, CR, SRS with the coai gate step; the starter (detached). The copy here has the fixed limit detector |
+| `t-lib.sh`, `tasks-plan.mjs` | The SRS arms: the Sonnet split, the check of its task list, the batches in parallel worktrees, the carry-back |
+| `lock.sh` | Closes the old experiment and unlists the folders that would name another arm, while arms run; restores the modes |
+| `repair-limit-2026-10-28.sh` | The one-off repair after the overnight spend limit ([../incidents.md](../incidents.md) §2g), kept as the record |
+| `objective-checks.sh` | The objective gate of one arm, with the 43 scenarios |
+| `metrics6.mjs` | Cost (Claude only), active time, attempts, span per arm and step |
+| `judge-abs.sh`, `coai-findings.mjs`, `judge-coai.sh` | The absolute blind judge; the coai findings of every gate step; the blind judge of those findings |
+| `mutate6.mjs` | The eight frozen mutants, with the prediction written in its header |
+| `make-tables6.mjs` | [../tables.md](../tables.md) §10, from [../data/part6/](../data/part6/) only (called by `../make-tables.mjs`) |
+| `briefs/` | `1-code`, `2-review`, `3-fix`, `hr-review-fix`, `x-split`, `x-split-fix`, `t2-coder`, `gate`, `5-judge-abs`, `judge-coai` |
