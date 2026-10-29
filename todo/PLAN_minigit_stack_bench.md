@@ -177,6 +177,11 @@ each count as that case failed, never as "not run".
   runs of one read-only command) — the runtime start-up cost, measured apart from agent time.
 - N1, N2, M (the mutant count) and the suite's sha256 are committed before the pilot (§11).
 
+**Two held-out measures, pre-registered (amended 2026-10-29 after the S2 review):** `percent` = cases passed / N, with a
+blocked case counted as not passed — the primary score; and `defects` = the number of distinct failed CORE cases or SPEC
+clauses, so one broken command counts once (cores exist for every v1 command and for v2's checkout, reset and rm). Every
+comparison "in cases" below uses `defects`; every percentage uses `percent`.
+
 A session is **accepted** when: clean build, visible 100 %, held-out primary 100 % (blocked cases count against it), and
 (process) **delivered** = merged into its base. An undelivered process session is scored on its PR head and marked so.
 
@@ -496,8 +501,9 @@ claimed as findings.)*
 3. Process cost: $30–70 per cell; process/bare 15–40×; C#/TS 1.05–1.35× — the fixed overhead dilutes the language effect,
    so the interaction (C#/TS process ÷ C#/TS bare) is below 1.
 4. Process wall: 2–5 h per cell; C#/TS 1.1–1.4× on active time; more red CI runs in C#.
-5. Quality: every bare session passes the visible tests; bare held-out median ≥90 % in both stacks with at least one bare
-   failure; no process cell fails more held-out cases than the worst bare cell of its stack; no stack difference > 1 case.
+5. Quality: every bare session passes the visible tests; bare held-out median `percent` ≥ 90 % in both stacks with at least
+   one bare failure; no process cell has more held-out `defects` than the worst bare cell of its stack; no stack difference
+   > 1 `defect`.
 6. Delivery: ≥5 of 6 process cells deliver both phases; ≤1 session capped or on call_human; compliance median ≥14/18,
    most often missed: test-first order, `sleep 300`, worktree-first.
 7. Surprises named in advance: TS costing ≥ C# in ≥2 bare pairs; process scoring below bare on held-out; any process session
