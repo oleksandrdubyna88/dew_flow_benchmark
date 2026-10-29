@@ -5,7 +5,7 @@ export const DROP = Object.freeze([/^CLAUDE/i, /^ANTHROPIC_/i, /^MCP_/i, /^OTEL_
   /^GH_TOKEN$/i, /^GITHUB_TOKEN$/i, /^GH_ENTERPRISE_TOKEN$/i]);
 // Allowed back when present. ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN are authentication, not model selection:
 // dropping them would break an API-key login, so they are the one deviation from the ^ANTHROPIC_ deny.
-export const KEEP = new Set(['CLAUDE_CODE_GIT_BASH_PATH', 'CLAUDE_CODE_USE_POWERSHELL_TOOL', 'CLAUDE_CONFIG_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN']);
+export const KEEP = Object.freeze(['CLAUDE_CODE_GIT_BASH_PATH', 'CLAUDE_CODE_USE_POWERSHELL_TOOL', 'CLAUDE_CONFIG_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN']);
 
 /** The git identity and prompts every child gets, fixed and never inherited. `GIT_CONFIG_GLOBAL` stays a parameter of the caller. */
 export const FIXED_GIT = Object.freeze({
@@ -16,7 +16,7 @@ export const FIXED_GIT = Object.freeze({
 });
 
 /** Pure: a copy of `parent` without session, model-selection, telemetry and token variables (`KEEP` is allowed back). */
-export const scrubEnv = parent => Object.fromEntries(Object.entries(parent).filter(([k]) => KEEP.has(k) || !DROP.some(re => re.test(k))));
+export const scrubEnv = parent => Object.fromEntries(Object.entries(parent).filter(([k]) => KEEP.includes(k) || !DROP.some(re => re.test(k))));
 
 /** Pure: PATH value without directories that `hasGh(dir)` flags. */
 export function filterPath(pathValue, hasGh) {

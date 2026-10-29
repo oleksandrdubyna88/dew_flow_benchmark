@@ -8,7 +8,7 @@ const parent = { PATH: '/usr/bin:/bin', HOME: '/home/u', CLAUDECODE: '1', ANTHRO
 test('The_env_export_changes_no_child_env', () => {
   // The literal block buildChildEnv carried before the exports existed: the composed result must equal it.
   const before = {
-    ...Object.fromEntries(Object.entries(parent).filter(([k]) => KEEP.has(k) || !DROP.some(re => re.test(k)))),
+    ...Object.fromEntries(Object.entries(parent).filter(([k]) => KEEP.includes(k) || !DROP.some(re => re.test(k)))),
     PATH: '/usr/bin:/bin',
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
     CLAUDE_CODE_ENTRYPOINT: 'claude-vscode',
@@ -27,7 +27,10 @@ test('The_env_export_changes_no_child_env', () => {
 test('The_exports_are_the_pieces_the_new_spike_composes_and_cannot_be_changed', () => {
   const scrubbed = scrubEnv(parent);
   assert.deepEqual(Object.keys(scrubbed).sort(), ['ANTHROPIC_API_KEY', 'CLAUDE_CONFIG_DIR', 'GIT_AUTHOR_NAME', 'GIT_TERMINAL_PROMPT', 'HOME', 'PATH']);
-  assert.ok(Object.isFrozen(FIXED_GIT) && Object.isFrozen(DROP));
+  assert.ok(Object.isFrozen(FIXED_GIT) && Object.isFrozen(DROP) && Object.isFrozen(KEEP));
+  assert.throws(() => KEEP.push('GH_TOKEN'), TypeError, 'KEEP cannot be extended');
+  assert.throws(() => DROP.push(/x/), TypeError);
+  assert.equal(scrubEnv({ GH_TOKEN: 't' }).GH_TOKEN, undefined, 'and a token still cannot be let back in');
   assert.equal('GIT_CONFIG_GLOBAL' in FIXED_GIT, false, 'GIT_CONFIG_GLOBAL stays a parameter');
   assert.equal(parent.CLAUDECODE, '1', 'the input is not mutated');
 });
