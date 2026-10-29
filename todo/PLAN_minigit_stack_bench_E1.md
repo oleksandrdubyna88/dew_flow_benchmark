@@ -681,6 +681,17 @@ test/otel.test.mjs test/crosscheck.test.mjs test/aliases.test.mjs test/session-c
 - **Permissions.** Headless `-p` needs an explicit allow-list for every tool the prompt uses; the capture's is
   `Bash(ls)`, `Bash(ls:*)`, `Bash(echo capture-ok)`, `Read`, `Glob`, `Agent`.
 
+### Amendment 2026-10-29 (2) — the S3 review: an unmatched O record is incompleteness, not a footnote
+
+The spec said `join.unmatchedO` is "reported". The Opus review showed what that allowed. On the real capture with every
+subagent transcript dropped, T3 and T4 still passed (`unmatchedO: {subagent: 4}`). A child whose file was lost moved
+16 % of its cost onto another model's line, still marked `exact`. Amended:
+- any unmatched O record whose role is `main`, `subagent` or unknown makes T3 and T4 **unchecked**, with the count named;
+- two T messages sharing one `request_id` make them unchecked too;
+- a model's 5m/1h split is exact only when the T cache writes of that model add up to E's; otherwise it is an interval;
+- a killed session whose O carries no complete record is `known: false`, never $0;
+- any lower bound makes the figure inexact.
+
 ## E1.S4 — the coai usage ledger and the exclusive work-before-wait time partition (T-A6, T-T1–T-T3)
 
 **Model:** scenarios + brief Opus (this text) · code Sonnet · review Opus. Not marked: the area's one mark is on E1.S3; this
