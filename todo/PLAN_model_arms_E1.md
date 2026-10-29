@@ -1336,6 +1336,13 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
     D6/F8), `run.log`; per chain `chain/` markers and `executables.txt`; their owner and retention are the experiment root's (kept as the
     result, parent §4.11). A verb's own sentences go to stdout/stderr with the exit code (D16). E1.S9 implements exactly this and says so in
     `research/module_model_arms.md`; a host-level Serilog sink is not added.
+15. **Follow-ups from the E1.S5 review (verdict ready), owned by E2:** (R1) `ProcessRunner`'s core awaits the two readers in sequence
+    (`ProcessRunner.cs:293`, `:297`) — harmless while only stdout had a sink, but with both sinks a throwing stdout sink leaves the stderr
+    pump unobserved, so its sink can run after `RunAsync` has thrown and its catch can cancel a disposed budget (common.reliability: no
+    unobserved task). E1.S5 kept the core byte for byte, as its spec said; E2.S3/E2.S4, where both sinks get real writers, observe both
+    readers before returning or rethrowing (`Task.WhenAll` in a try that rethrows the first fault) and pin it with a test where both sinks
+    throw. (R2) Acceptance criterion 4's encoding half (UTF-8 only when a sink is given) is not pinned: on Linux the default is UTF-8, so
+    only a Windows run could observe it; `Every_existing_launch_without_a_stderr_sink_is_unchanged` says so in its doc when E2 touches it.
 
 ## 9. Definition of Done — epic E1
 
