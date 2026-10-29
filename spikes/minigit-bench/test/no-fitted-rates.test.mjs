@@ -9,7 +9,7 @@ import { spikeDir, tmpDir } from './helpers.mjs';
 
 const FORBIDDEN = ['costFromMessages', 'CostMeter', 'summarize', 'parallelism', 'childCosts', 'OUTPUT_FLOOR_PER_MESSAGE'];
 // the spec's list, plus initInfo (pure, aliases.mjs) and assertRemovable (safe-rm's guard, beside removeUnder)
-const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder', 'assertRemovable'];
+const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder', 'assertRemovable', 'killTree', 'canaryTargets', 'findOutsideAccesses', 'FIXED_GIT'];
 const rel = f => path.relative(spikeDir, f).split(path.sep).join('/');
 const production = () => sourceFiles(spikeDir, ['test', 'node_modules']);
 const policyLib = file => path.resolve(spikeDir, '..', 'policy-ab-quick', 'lib', file);
