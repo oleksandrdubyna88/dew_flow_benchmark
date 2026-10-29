@@ -82,6 +82,7 @@ pass names validated upstream. A file name the operator configured goes through 
 | `ArmsDone` | `chain/arms-done` |
 | `Executables` | `chain/executables.txt` |
 | `GateLock` · `LockedModes` | `.gate.lock` · `.locked-modes` |
+| `LockedModesRestored(stamp)` | `.locked-modes.restored-<UTC stamp>` (where `unlock` moves `.locked-modes` to) |
 | `LockLog` · `KeepAwakeLog` | `lock.log` · `keep-awake.log` |
 | `Of(relative)` | `<relative>`, refused when it leaves the root |
 | `Arm(token)` | an `ArmPaths` |
@@ -105,6 +106,7 @@ pass names validated upstream. A file name the operator configured goes through 
 | `CoderHead(id)` · `CoderDiff(id)` | `out/task-<id>-coder.head` · `out/task-<id>-coder.diff` (the shell named these after a model; no path of the module names one) |
 | `Picked(id)` · `PickRecord(id)` · `PickLog(id)` | `out/picked-<id>` · `out/pick-<id>.json` · `out/pick-<id>.log` |
 | `WorktreeBuildLog(id)` | `out/wt-build-<id>.log` |
+| `PrepBuildLog` · `ObjectiveLog` | `out/prep-build.log` (make's warm build) · `out/objective.out` |
 | `CodeNotes` · `HReviewNotes` · `FixNotes` · `GateNotes` · `SplitNotes` | `notes/code.md` · `hreview.md` · `fix.md` · `gate.md` · `split.md` |
 | `ReviewJson` · `GateJson` | `notes/review.json` · `notes/gate.json` |
 | `TaskNotes(id)` | `notes/<id>-code.md` |
@@ -112,8 +114,8 @@ pass names validated upstream. A file name the operator configured goes through 
 | `TaskBrief(id)` | `work/<id>.md` |
 
 `ArmPathsTests` holds one hand-written spelling per row and compares the rows with the members the two types really have, so a path added
-without a spelling fails the class. The parent plan's section 4.3 missed six files the shell wrote (`notes/split.md`, `out/tasks-plan.log`,
-`out/batch-<i>.done`, `out/task-<id>.before`, `out/pick-<id>.log`, `out/wt-build-<id>.log`); they are spelled here. The member for the
+without a spelling fails the class. The parent plan's section 4.3 missed nine files the shell wrote (`notes/split.md`, `out/tasks-plan.log`,
+`out/batch-<i>.done`, `out/task-<id>.before`, `out/pick-<id>.log`, `out/wt-build-<id>.log`, `out/prep-build.log`, `out/objective.out`, `.locked-modes.restored-<stamp>`); they are spelled here. The member for the
 clone folder is `CloneFolder`, not `Clone`: C# reserves `Clone` in a record (CS8859).
 
 **The arm map** (`ArmMap`, `arms.map.json`) holds arm name to a random 16-hex token (8 bytes), the folder name of the arm so that no arm can
@@ -121,8 +123,8 @@ guess another's. The shell's tokens were 12 hex; `ArmMap.Read` refuses such a ma
 
 | Operation | Behaviour |
 |---|---|
-| `Read(json)` | an object of strings; every arm that is wrong is named, one sentence per line: a token that is not 16 lower-case hex, two arms with one token, an arm name not matching letters-then-digits, an arm twice, a value that is not a string |
-| `ToJson()` | indented, `\n` newlines, insertion order: the shell's shape |
+| `Read(json)` | an object of strings; every arm that is wrong is named, one sentence per line: a token that is not 16 lower-case hex, two arms with one token, an arm name not matching letters-then-digits, an arm twice, a value that is not a string; all of them in one read, not only the first |
+| `ToJson()` | an indented JSON object of strings in insertion order, `\n` newlines, like the shell's map — not byte-identical (tokens, indent and file name differ) |
 | `Extend(existing, arms, eightRandomBytes)` | every existing entry unchanged, then a fresh token for each arm not yet present; a draw that collides with a token already in the map is drawn again. Arms absent from `arms` are kept. A random source that does not give 8 bytes, or collides 64 times in a row, and an `arms` entry that is not an arm name throw (programming errors). The source is a parameter, so the type stays pure; the console passes `RandomNumberGenerator` |
 | `TokenOf(arm)` | the token, or a refusal naming the known arms |
 | `Leaks(text, ownArm, schemes)` | what the text would reveal to `ownArm`: every arm name of the map (its own too) and every scheme name found as a whole word (not touching an ASCII letter or digit, case-sensitive), and every token other than its own found anywhere. Its own token is allowed: it is the arm's working directory and is in every path field of a brief. Empty means clean |
