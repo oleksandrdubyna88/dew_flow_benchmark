@@ -1164,7 +1164,7 @@ Windows`; `Awake == Wsl` off `Wsl`, `Awake == Windows` off `Windows` → `awake 
 
 **`HostFactsReader.ReadAsync(Experiment, RootPaths, IReadOnlyDictionary<string,string> environment, CancellationToken)`** — host kind from
 `OperatingSystem.IsWindows()`, `environment["WSL_DISTRO_NAME"]`, `/proc/version` (read when it exists); PATH = `environment["PATH"]`
-split on `Path.PathSeparator`; forbidden roots `[Target.Source, root/base, root/r]`; each needed executable through
+split on `Path.PathSeparator`; forbidden roots `ExecutableRule.ForbiddenRoots(Target.Source, root)` (D17 as amended: the target and the whole root); each needed executable through
 `ExecutableResolution.Resolve` with the console's `isExecutableFile` (E1.S8); `SourceExists` = `Directory.Exists`; `SourceIsGit` =
 `GitCommand.RunAsync(source, 30 s, ct, "rev-parse", "--git-dir")` succeeded; `PlanBranchExists` = `GitCommand.AskAsync(source, …,
 "rev-parse", "--verify", "--quiet", "refs/heads/" + planBranch)`; `BaseExists` = `AskAsync(…, "rev-parse", "--verify", "--quiet", base +
