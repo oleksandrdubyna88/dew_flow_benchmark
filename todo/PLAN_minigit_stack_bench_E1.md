@@ -663,6 +663,24 @@ test/otel.test.mjs test/crosscheck.test.mjs test/aliases.test.mjs test/session-c
 
 ---
 
+### Amendment 2026-10-29 — what the step 0 capture decided (CLI 2.1.310, $0.181, fixture `test/fixtures/real/claude-2.1.310-capture/`)
+
+13 of 15 assumptions held as written; the policy file and `OTEL_STAMP_MARKS` already carried the capture's three decisions
+(`join = request_id`, `t3OutputSource = transcript`, `OTEL_STAMP_MARKS = end`). What the capture changed:
+
+- **query_source spellings (A-O5, A-J1).** Headless `-p` reports main requests as `sdk` and child requests as
+  `agent:builtin:general-purpose`, not the documented `main` / `subagent`. `roleOf` in `otel-decode.mjs` maps them; an
+  absent source is unknown, never auxiliary.
+- **A-O5, refuted as worded.** Child requests carry `agent_id` (4 of 4, equal to the Agent results' `agentId`) but no
+  `parent_agent_id` (0 of 4) at depth one. `agent_id` alone attributes per child; `REQUIRED_FOR_SUBAGENT = ['agent_id']`.
+- **A-P1, decided.** CLI 2.1.310 bills Sonnet 5.5 cache reads at the published $0.10; the $0.20 belonged to 2.1.289.
+  `cliRates` entries name their CLI version and apply only to it.
+- **A-M1.** The init event reports the subagent tool as `Task` while `--tools Agent` is accepted; the guard accepts both.
+- **A-O1.** `api_request` also carries `cache_creation_5m_tokens`, `cache_creation_1h_tokens` and `cost_usd_micros`;
+  `duration_ms` is an integer on `api_request` and a string on some other events.
+- **Permissions.** Headless `-p` needs an explicit allow-list for every tool the prompt uses; the capture's is
+  `Bash(ls)`, `Bash(ls:*)`, `Bash(echo capture-ok)`, `Read`, `Glob`, `Agent`.
+
 ## E1.S4 — the coai usage ledger and the exclusive work-before-wait time partition (T-A6, T-T1–T-T3)
 
 **Model:** scenarios + brief Opus (this text) · code Sonnet · review Opus. Not marked: the area's one mark is on E1.S3; this
