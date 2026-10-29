@@ -91,6 +91,28 @@ names a flow that no longer exists, or when a row marked `covered` names a test 
 | `bench scouts key` | covered | `ScoutsPrivateTaskTests` | `key init` refused inside a checkout and a second time at the same path; a later verb refusing a missing key (4) and creating nothing; the placement rules alone in `ScoutCampaignKeyTests` |
 | `bench scouts hygiene` | covered | `ScoutsHygieneCommandTests` | a staged blob and a staged file name carrying a deny-list entry, a home path or an e-mail refused by rule (1); a staged BINARY blob carrying an entry in its bytes — as UTF-8 in another case, as UTF-16LE — refused by index and encoding (1), a clean binary passing (E2 code round); a staged rename scanned under its new name; every blob announced `scanning [i/n]` off the one `cat-file --batch`; a commit range read at its end; no deny-list named (4), one that does not load (4), not a repository (3). The byte scan alone in `BinaryScanTests`; the batch reader, its listings and the no-deadlock property in `GitBlobBatchTests` |
 
+### CLI — `model-arms <verb>`
+
+The module under `tools/model-arms` is its own console (`model-arms`), driven here as a process by `ModelArmsScenarioTests` and in-process through the real parser by `ModelArmsProgramTests`. The list is derived from
+`ModelArmsCommandLine.Verbs`, and `ModelArmsScenarioTests.The_catalogue_names_every_verb_the_command_line_accepts` fails when a verb has no row. (`ModuleTestsCatalogTests` reads the `bench` rows only; E5.S3 widens it.)
+
+| flow | status | test | reason |
+|---|---|---|---|
+| `model-arms validate` | covered | `ModelArmsScenarioTests` | the binary started inside the target and with a target PATH entry runs nothing the target placed; `ValidateVerbTests` holds every finding |
+| `model-arms prep-base` | covered | `ModelArmsScenarioTests` | the guard only (the same checks, then refused until E4.S4); the baseline measurement is not built |
+| `model-arms version` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
+| `model-arms help` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
+| `model-arms init` | not covered | — | not built yet, story E1.S11 |
+| `model-arms make` | not covered | — | not built yet, story E4.S4 |
+| `model-arms lock` | not covered | — | not built yet, story E4.S1 |
+| `model-arms unlock` | not covered | — | not built yet, story E4.S1 |
+| `model-arms run-arm` | not covered | — | not built yet, story E2.S7 |
+| `model-arms run-all` | not covered | — | not built yet, story E4.S3 |
+| `model-arms chain` | not covered | — | not built yet, story E4.S5 |
+| `model-arms checks` | not covered | — | not built yet, story E5.S2 |
+| `model-arms status` | not covered | — | not built yet, story E4.S4 |
+| `model-arms gate-lock` | not covered | — | not built yet, story E2.S6 |
+
 ### API — `bench-api` and `bench-collector` routes (`src/Bench.Api`)
 
 | flow | status | test | reason |
@@ -151,6 +173,9 @@ key refused (4) with nothing created; an edited statement, a wrong key and the p
 - **That the recall matcher agrees with a person** — §3.7's 19-of-20 hand-check, E2 S5.
 - **The read API and the console** for the scouts (E3 S8), and the routes above marked `not covered`.
 - **Concurrency of two harnesses on one run**: every scenario runs one campaign at a time, as the design does.
+- **The `model-arms` harness drives `validate` and `prep-base` only.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
+  ran for those two verbs; a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
+  as unprobed and were never run; the product's own bare `git` launches in `src` are outside it. The fixture's `claude`, `dotnet`, `node` and `npm` are empty files.
 - **Linux and macOS paths for the scouts**: the scenario runs where the suite runs; CI is ubuntu, local runs are Windows.
 
 ## Definition of Done for a new flow
