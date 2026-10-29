@@ -17,7 +17,7 @@ configuration the records say it ran under? So the code stories come first and a
 run the finished verbs once each, read their verdicts from records (never from the model's prose), and hand their streams to E2
 as fixtures.
 
-**Roles** ([subagent-models.md](../.claude/rules/shared/common/subagent-models.md) § *The pipeline*). E3 is **not** a cornerstone
+**Roles** ([subagent-models.md](../.agents/conventions/common/subagent-models.md) § *The pipeline*). E3 is **not** a cornerstone
 area: the parent's ledger names the leak boundary (E2) and the hold-out gate (E4); this epic's two areas — *rule reached* and *the
 child-model and effort audit* — are, in the parent's words, "measured mechanisms, each with a live break-it and a hard go criterion —
 Opus-spec stories". So every **code** story runs: scenarios + brief **Opus** → code + tests **Sonnet** → review **Opus** → fixes
