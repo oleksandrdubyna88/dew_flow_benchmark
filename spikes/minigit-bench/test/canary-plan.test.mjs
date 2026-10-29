@@ -25,7 +25,19 @@ test('Session_canaries_cover_the_operator_projects_and_the_partner', () => {
     ...l.projects, ...l.projects.map(d => path.join(d, 'memory')), path.join(l.partnerConfigDir, 'projects')].sort());
   for (const t of targets) assert.equal(t.status, 'pending');
   assert.equal(new Set(targets.map(t => t.token)).size, 5, 'one token per canary');
-  assert.equal(targets.some(t => t.path.startsWith(l.sessionBox)), false, 'none under the session\'s own box');
+});
+
+test('A_canary_is_never_planted_under_the_sessions_own_box', () => {
+  const l = layout();
+  const inBox = path.join(l.sessionBox, 'home', '.claude', 'projects', '-box');
+  mkdirSync(path.join(inBox, 'memory'), { recursive: true });
+  const base = { operatorHome: l.operatorHome, partnerConfigDir: l.partnerConfigDir, ...fixed };
+  const without = sessionCanaryTargets({ ...base, existingProjectDirs: [...l.projects, inBox] });
+  assert.equal(without.some(t => t.dir.startsWith(l.sessionBox)), true, 'control: with no exclusion the box folder is a target');
+  const targets = sessionCanaryTargets({ ...base, existingProjectDirs: [...l.projects, inBox], excludeUnder: [l.sessionBox] });
+  assert.equal(targets.length, 5);
+  assert.equal(targets.some(t => t.path.startsWith(l.sessionBox)), false);
+  assert.equal(sessionCanaryTargets({ ...base, partnerConfigDir: path.join(l.sessionBox, 'cfg'), existingProjectDirs: [], excludeUnder: [l.sessionBox] }).length, 0, 'the partner folder is excluded too');
 });
 
 test('A_target_list_is_a_value_and_no_input_is_changed', () => {
