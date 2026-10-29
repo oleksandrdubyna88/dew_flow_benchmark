@@ -34,7 +34,9 @@ public static class BaselineFile
     /// <summary>The baseline of two completed runs, or every reason one cannot be made, one per line. The instant is kept as the same instant in UTC.</summary>
     public static Outcome<Baseline> Compose(CommitSha @base, DateTimeOffset measuredAt, string host, SuiteRun suite, SuiteRun extension, string note)
     {
-        var problems = new[] { Incomplete("main", suite), Incomplete("extension", extension), Unnamed(host), NegativeTotal(suite, extension) }
+        var problems = new[] { Unnamed(host), NegativeTotal(suite, extension) }
+            .Concat(RunProblems("main", suite))
+            .Concat(RunProblems("extension", extension))
             .Where(problem => problem.Length > 0)
             .ToList();
         return problems.Count > 0
@@ -110,10 +112,29 @@ public static class BaselineFile
             ? Outcome<DateTimeOffset>.Success(new DateTimeOffset(instant, TimeSpan.Zero))
             : Outcome<DateTimeOffset>.Failure($"measuredAt is '{text}' — it must be an ISO-8601 instant in UTC ending in Z, like 2026-10-29T12:30:15.0000000Z");
 
-    private static string Incomplete(string which, SuiteRun run) =>
+    /// <summary>What is wrong with one run. A run that did not complete has no failure list at all; a run that did must still say something a baseline can
+    /// stand on: an exit code that agrees with its names, a count above zero, and no more failures than tests. A completed exit 0 with failures
+    /// named is NOT refused: the exit code is the runner's opinion, the names are the measurement.</summary>
+    private static IEnumerable<string> RunProblems(string which, SuiteRun run) =>
         run.Completed
-            ? string.Empty
-            : $"the {which} suite did not run to completion — a baseline with an empty failure list would claim it passed (absent is not zero)";
+            ? [ExitedWithoutNames(which, run), ZeroTotal(which, run), MoreFailuresThanTests(which, run)]
+            : [Incomplete(which)];
+
+    private static string Incomplete(string which) =>
+        $"the {which} suite did not run to completion — a baseline with an empty failure list would claim it passed (absent is not zero)";
+
+    private static string ExitedWithoutNames(string which, SuiteRun run) =>
+        run.ExitCode != 0 && run.Failed.Count == 0
+            ? $"the {which} suite exited {run.ExitCode.ToString(CultureInfo.InvariantCulture)} and named no failing test — a baseline with an empty failure list would claim it passed (absent is not zero)"
+            : string.Empty;
+
+    private static string ZeroTotal(string which, SuiteRun run) =>
+        run.Total == 0 ? $"the {which} suite counted 0 tests — a run that ran nothing proves nothing about the target" : string.Empty;
+
+    private static string MoreFailuresThanTests(string which, SuiteRun run) =>
+        run.Failed.Count > run.Total
+            ? $"the {which} suite named {run.Failed.Count.ToString(CultureInfo.InvariantCulture)} failing tests of {run.Total.ToString(CultureInfo.InvariantCulture)} — more failures than tests"
+            : string.Empty;
 
     private static string Unnamed(string host) =>
         host.Trim().Length == 0 ? "the host is empty — a baseline names the machine it was measured on" : string.Empty;

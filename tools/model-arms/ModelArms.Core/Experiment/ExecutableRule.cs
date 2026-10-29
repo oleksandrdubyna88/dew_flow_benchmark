@@ -7,20 +7,36 @@ public static class ExecutableRule
 {
     private static readonly char[] PathMarks = ['/', '\\', ':'];
 
+    /// <summary>The verbatim and device spellings of a Windows path. <c>\\?\C:\target\x.exe</c> is the same file as <c>C:\target\x.exe</c> but a text
+    /// comparison sees another path, so they are refused as a SPELLING, on every platform (a textual rule, testable anywhere).</summary>
+    private static readonly string[] DevicePrefixes = [@"\\?\", @"\\.\", "//?/", "//./"];
+
     /// <summary>Why this executable is refused, or the empty string when it is fine. A name holding a separator or a colon is a PATH:
     /// <c>C:x.exe</c> is drive-relative on Windows, so it is never a bare name.
     /// <para>
     /// This is a static, textual rule. It does not follow symbolic links: a link outside every forbidden root that points inside one
-    /// passes here, and E1.S8's executable resolution is what resolves the final target and checks it against the same roots.
+    /// passes here, and <see cref="ExecutableResolution"/> is what asks the kernel for the real path and checks that against the same roots.
     /// </para></summary>
     public static string Refusal(string executable, IReadOnlyList<string> forbiddenRoots) =>
         executable switch
         {
             _ when executable.Trim().Length == 0 => "the executable is empty — name an executable from PATH or an absolute path outside the target (D17)",
+            _ when DevicePrefixes.Any(prefix => executable.StartsWith(prefix, StringComparison.Ordinal)) =>
+                $"the executable '{executable}' uses a verbatim or device prefix — spell the path plainly (D17)",
             _ when executable.IndexOfAny(PathMarks) < 0 => string.Empty,
             _ when !Path.IsPathFullyQualified(executable) => Relative(executable),
             _ => UnderForbiddenRoot(executable, forbiddenRoots),
         };
+
+    /// <summary>Why the file this executable REALLY is (the path the kernel opens, every link and every <c>..</c> applied) is refused, or the empty string.
+    /// <paramref name="written"/> is what the operator spelled, so the sentence names both.</summary>
+    public static string RealRefusal(string written, string real, IReadOnlyList<string> forbiddenRoots)
+    {
+        var root = forbiddenRoots.FirstOrDefault(r => PathScope.IsEqualOrUnder(real, r));
+        return root is null
+            ? string.Empty
+            : $"the executable '{written}' is really '{real}', which is under '{root}' — a harness never runs a file an arm could write; pass it as an argument of an executable resolved outside (D17)";
+    }
 
     /// <summary>The roots no executable may sit under: the target, and the experiment root itself, which holds the base clone, the arms'
     /// clones and everything else an arm could write. Forbidding the root, not just <c>base</c> and <c>r</c>, fails closed. A root that was not

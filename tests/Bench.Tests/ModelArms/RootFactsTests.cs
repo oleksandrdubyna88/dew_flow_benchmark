@@ -27,18 +27,6 @@ public sealed class RootFactsTests
         return false;
     }
 
-    private static void CanMakeLinks(string at)
-    {
-        try
-        {
-            File.CreateSymbolicLink(System.IO.Path.Combine(at, "probe-link"), at);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Assert.Skip($"symbolic links cannot be made here: {ex.Message}");
-        }
-    }
-
     [Fact]
     public void The_git_top_of_a_path_is_its_nearest_ancestor_holding_a_git_folder_or_file_even_when_the_path_does_not_exist_yet()
     {
@@ -103,50 +91,98 @@ public sealed class RootFactsTests
         RootFacts.IsExecutableFile(temp.Combine("absent")).Should().BeFalse();
     }
 
-    [Fact]
-    public void A_path_that_is_no_link_is_its_own_final_target()
-    {
-        using var temp = new TempFolder();
-        var file = temp.File("x", "a", "b.txt");
-
-        RootFacts.FinalTargetOf(file).Ok().Should().Be(file);
-        RootFacts.FinalTargetOf(temp.Combine("not", "there")).Ok().Should().Be(temp.Combine("not", "there"));
-    }
+    private const string NoLinks = "symbolic links need a privilege on Windows; the Windows spellings are their own tests";
 
     [Fact]
-    public void A_chain_of_links_ends_at_the_real_file_whether_the_links_are_absolute_or_relative()
+    public void The_real_path_of_a_path_is_the_kernels_answer()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip(NoLinks);
+            return;
+        }
+
         using var temp = new TempFolder();
-        CanMakeLinks(temp.Folder("probe"));
-        var real = temp.File("x", "real", "tool");
+        temp.RequireLinks();
+        var real = temp.File("x", "real", "bin", "tool");
         File.CreateSymbolicLink(temp.Combine("one"), real);
         File.CreateSymbolicLink(temp.Combine("two"), "one");
-        Directory.CreateDirectory(temp.Combine("deeper"));
+        temp.Folder("deeper");
         File.CreateSymbolicLink(temp.Combine("deeper", "three"), System.IO.Path.Combine("..", "two"));
+        Directory.CreateSymbolicLink(temp.Combine("shortcut"), temp.Combine("real"));
+        var claude = temp.File("x", "target", "bin", "claude");
+        temp.Folder("target", "x");
+        temp.Folder("home", "c");
+        Directory.CreateSymbolicLink(temp.Combine("home", "c", "sub"), temp.Combine("target", "x"));
+        File.CreateSymbolicLink(temp.Combine("home", "c", "claude"), "sub/../bin/claude");
+        temp.File("decoy", "home", "c", "bin", "claude");
+        File.CreateSymbolicLink(temp.Combine("dangling"), "nowhere");
+        File.CreateSymbolicLink(temp.Combine("a"), "b");
+        File.CreateSymbolicLink(temp.Combine("b"), "a");
 
-        RootFacts.FinalTargetOf(temp.Combine("deeper", "three")).Ok().Should().Be(real);
+        RootFacts.RealPathOf(real).Ok().Should().Be(real, "a real file is its own real path");
+        RootFacts.RealPathOf(temp.Combine("deeper", "three")).Ok().Should().Be(real, "a chain of absolute and relative links ends at the file");
+        RootFacts.RealPathOf(temp.Combine("shortcut", "bin", "tool")).Ok().Should().Be(real, "a link in a folder of the path is followed too");
+        RootFacts.RealPathOf(temp.Combine("home", "c", "claude")).Ok().Should().Be(claude, "'..' after a linked folder is applied to the folder the link points to, not to the text");
+        RootFacts.RealPathOf(temp.Combine("dangling")).Reason().Should().Contain("No such file");
+        RootFacts.RealPathOf(temp.Combine("a")).Reason().Should().Contain("Too many levels");
+        RootFacts.RealPathOf(temp.Combine("absent")).Failed().Should().BeTrue("a path that does not exist has no real path");
     }
 
     [Fact]
-    public void A_link_in_a_folder_of_the_path_is_followed_too()
+    public void IsExecutableFile_answers_false_for_a_dangling_link_a_loop_and_a_folder_instead_of_throwing()
     {
-        using var temp = new TempFolder();
-        CanMakeLinks(temp.Folder("probe"));
-        var real = temp.File("x", "real", "bin", "tool");
-        File.CreateSymbolicLink(temp.Combine("shortcut"), temp.Combine("real"));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip(NoLinks);
+            return;
+        }
 
-        RootFacts.FinalTargetOf(temp.Combine("shortcut", "bin", "tool")).Ok().Should().Be(real, "a PATH entry that is a link to a folder reaches the same file");
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var tool = temp.Executable("real", "tool");
+        File.CreateSymbolicLink(temp.Combine("dangling"), "nowhere");
+        File.CreateSymbolicLink(temp.Combine("a"), "b");
+        File.CreateSymbolicLink(temp.Combine("b"), "a");
+        File.CreateSymbolicLink(temp.Combine("tool-link"), tool);
+
+        RootFacts.IsExecutableFile(temp.Combine("dangling")).Should().BeFalse();
+        RootFacts.IsExecutableFile(temp.Combine("a")).Should().BeFalse();
+        RootFacts.IsExecutableFile(temp.Path).Should().BeFalse();
+        RootFacts.IsExecutableFile(temp.Combine("tool-link")).Should().BeTrue("a real executable file behind a link is executable");
     }
 
     [Fact]
-    public void A_link_that_loops_is_a_refusal_not_a_hang_or_a_pass()
+    public async Task A_trust_path_that_is_a_symbolic_link_is_refused_naming_where_it_points()
     {
-        using var temp = new TempFolder();
-        CanMakeLinks(temp.Folder("probe"));
-        File.CreateSymbolicLink(temp.Combine("a"), temp.Combine("b"));
-        File.CreateSymbolicLink(temp.Combine("b"), temp.Combine("a"));
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("links, owners and modes are read on Linux here");
+            return;
+        }
 
-        RootFacts.FinalTargetOf(temp.Combine("a")).Failed().Should().BeTrue();
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var other = temp.File("{}", "other", "experiment.json");
+        File.SetUnixFileMode(other, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        temp.Folder("root");
+        File.CreateSymbolicLink(temp.Combine("experiment.json"), other);
+        Directory.CreateSymbolicLink(temp.Combine("rootlink"), temp.Combine("root"));
+        File.CreateSymbolicLink(temp.Combine("dangling.json"), temp.Combine("nowhere"));
+
+        foreach (var (link, target) in new[]
+        {
+            (temp.Combine("experiment.json"), other),
+            (temp.Combine("rootlink"), temp.Combine("root")),
+            (temp.Combine("rootlink") + System.IO.Path.DirectorySeparatorChar, temp.Combine("root")),
+            (temp.Combine("dangling.json"), temp.Combine("nowhere")),
+        })
+        {
+            var reason = (await RootFacts.FileFactsAsync(link, CancellationToken.None)).Reason();
+            reason.Should().Contain("symbolic link", link).And.Contain(target, link).And.Contain("D17", link);
+        }
+
+        (await RootFacts.FileFactsAsync(other, CancellationToken.None)).Ok().Path.Should().Be(other, "the file itself is judged");
     }
 
     [Fact]

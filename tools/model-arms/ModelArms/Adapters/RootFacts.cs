@@ -11,7 +11,6 @@ namespace ModelArms.Adapters;
 public static class RootFacts
 {
     private const string SolutionFile = "dew_flow_benchmark.slnx";
-    private const int MaxLinkRounds = 40;
     private const UnixFileMode AnyExecute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
     private static readonly TimeSpan Ask = TimeSpan.FromSeconds(10);
@@ -25,31 +24,15 @@ public static class RootFacts
     public static string ThisRepository(string baseDirectory) =>
         AncestorsOrSelf(baseDirectory).FirstOrDefault(folder => File.Exists(Path.Combine(folder, SolutionFile))) ?? string.Empty;
 
-    /// <summary>A file that exists and, off Windows, has an execute bit for someone: the question the PATH search asks of each candidate.</summary>
-    public static bool IsExecutableFile(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return false;
-        }
+    /// <summary>A file the kernel can resolve, that exists and, off Windows, has an execute bit for someone: the question the PATH search asks of each
+    /// candidate. A dangling link, a loop, a folder and a file that vanishes mid-question all answer false — a predicate answers for every input and
+    /// never throws what the library below it validates.</summary>
+    public static bool IsExecutableFile(string path) => RealPathOf(path).Match(IsRunnable, _ => false);
 
-        return OperatingSystem.IsWindows() || (File.GetUnixFileMode(path) & AnyExecute) != 0;
-    }
-
-    /// <summary>Where <paramref name="path"/> really ends once every symbolic link in it is followed — the link itself and every folder above it — or
-    /// why that cannot be settled (a loop, an unreadable link). A path with no link is its own final target. Nothing here is a pass by default: the
-    /// caller refuses what this could not resolve.</summary>
-    public static Outcome<string> FinalTargetOf(string path)
-    {
-        try
-        {
-            return Settle(Path.GetFullPath(path));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Outcome<string>.Failure($"'{path}' cannot be resolved: {ex.Message}");
-        }
-    }
+    /// <summary>The path the kernel would open for <paramref name="path"/>, every link and every <c>..</c> applied in the kernel's own order (see
+    /// <c>RealPath</c>), or the operating system's reason it cannot say: a missing component, a dangling link, a loop, a platform no resolver was probed on.
+    /// Nothing is a pass by default: the caller refuses what this could not resolve.</summary>
+    public static Outcome<string> RealPathOf(string path) => RealPath.Of(path);
 
     /// <summary>The uid this process runs as, from <c>id -u</c>.</summary>
     public static async Task<Outcome<int>> CurrentUidAsync(CancellationToken ct) =>
@@ -63,7 +46,13 @@ public static class RootFacts
             return Outcome<FileFacts>.Failure($"the owner and mode of {path} are POSIX facts; RootTrust declares the check not performed on Windows");
         }
 
-        var owner = (await Said("stat", OperatingSystem.IsMacOS() ? ["-f", "%u", path] : ["-c", "%u", path], ct)).Match(text => Uid(text, "stat"), Outcome<int>.Failure);
+        if (LinkTargetOf(path) is { } target)
+        {
+            return Outcome<FileFacts>.Failure(
+                $"{path} is a symbolic link to '{target}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)");
+        }
+
+        var owner = (await Said("stat", StatOwnerArguments(path), ct)).Match(text => Uid(text, "stat"), Outcome<int>.Failure);
         return owner switch
         {
             Outcome<int>.Ok ok => Outcome<FileFacts>.Success(new FileFacts(path, ok.Value, File.GetUnixFileMode(path))),
@@ -71,6 +60,9 @@ public static class RootFacts
             _ => throw new InvalidOperationException("unreachable"),
         };
     }
+
+    /// <summary>GNU <c>stat -c %u</c>; the BSD spelling on macOS.</summary>
+    private static string[] StatOwnerArguments(string path) => OperatingSystem.IsMacOS() ? ["-f", "%u", path] : ["-c", "%u", path];
 
     private static Outcome<int> Uid(string text, string tool) =>
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var uid)
@@ -85,39 +77,21 @@ public static class RootFacts
         }
     }
 
-    /// <summary>One link is followed per round, the first met from the root down, until a round meets none. Bounded, so a loop ends in a refusal.</summary>
-    private static Outcome<string> Settle(string full)
+    private static bool IsRunnable(string real)
     {
-        var current = full;
-        for (var round = 0; round < MaxLinkRounds; round++)
+        try
         {
-            var next = FollowFirstLink(current);
-            if (string.Equals(next, current, StringComparison.Ordinal))
-            {
-                return Outcome<string>.Success(current);
-            }
-
-            current = next;
+            return File.Exists(real) && (OperatingSystem.IsWindows() || (File.GetUnixFileMode(real) & AnyExecute) != 0);
         }
-
-        return Outcome<string>.Failure($"'{full}' passes through more than {MaxLinkRounds} symbolic links — a loop is assumed");
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
-    private static string FollowFirstLink(string full)
-    {
-        var prefix = Path.GetPathRoot(full) ?? string.Empty;
-        foreach (var segment in full[prefix.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
-        {
-            prefix = Path.Combine(prefix, segment);
-            var info = new FileInfo(prefix);
-            if (info.LinkTarget is not null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target)
-            {
-                return Path.GetFullPath(Path.TrimEndingDirectorySeparator(target.FullName) + full[prefix.Length..]);
-            }
-        }
-
-        return full;
-    }
+    /// <summary>Where a trust path points when it is itself a symbolic link (the trailing separator trimmed: <c>readlink("link/")</c> follows the link and
+    /// reports none), or null for a path that is not one. An ancestor may be a link; the last segment may not.</summary>
+    private static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(path)).LinkTarget;
 
     /// <summary>What a short-lived tool printed on stdout, or why it could not be asked.</summary>
     private static async Task<Outcome<string>> Said(string tool, IReadOnlyList<string> arguments, CancellationToken ct)
