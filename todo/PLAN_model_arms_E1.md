@@ -991,6 +991,204 @@ to {…}, but found empty`; `Expected TrustAnswer to be of type Refused, but fou
 
 **Out of bounds.** Where these are called (E1.S9's gate, E1.S10's validate, E4.S4's prep-base); writing `baseline.json` (E4.S4).
 
+#### Fix after the Opus review (not-ready) — spec by Fable (security judgement: D17 is a trust boundary)
+
+- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Fixes on:** `feat/model-arms-e1s8` at `390a476`. **Findings:** R1, R2 (blocking), R3–R7
+  (major), R9 (minor); R8 landed in the plan at `d8d3057`. **Size:** ≈ 450 lines, most of them tests.
+
+**What was found.** D17's executable rule is a trust boundary: an executable named by `experiment.json` runs with the operator's rights, and
+must never be a file an arm could write — nothing under `target.source` or the experiment root. At `390a476` the rule is applied to the TEXT of
+a path and only to the executable's side of it. Re-measured on this WSL host (Linux 6.18, glibc, .NET 10.0.113) on 2026-10-29, with real links:
+
+| # | Fact (measured, not reasoned) | Where it breaks `390a476` |
+|---|---|---|
+| R1 | `home/c/claude -> sub/../bin/claude` with `home/c/sub -> <target>/x`: the kernel runs `<target>/bin/claude` (`..` is applied to the folder `sub` really points to). `FileInfo.ResolveLinkTarget(returnFinalTarget: true)` answers `home/c/bin/claude` — it joins the link text and collapses `..` as text. `home/l/../bin/claude` with `home/l -> <target>/x` and a decoy at `home/bin/claude`: the kernel runs the target's file; `Path.GetFullPath` answers the decoy. The same through a PATH entry `home/l/../bin`. | `RootFacts.cs:46` (`GetFullPath` before any link is read), `:115` (the textual re-join), `:113` (.NET's own join) |
+| R2 | A forbidden root spelled through a link (`~/git -> /mnt/d/git`, the usual WSL shape) is compared as written; a PATH link to the real file under `/mnt/d/git/...` passes. | `ExecutableResolution.cs:57` — only the executable is resolved |
+| R3 | `File.Exists` is **true** for a dangling link; `File.GetUnixFileMode` follows it and throws `FileNotFoundException`; a loop throws `IOException: Too many levels of symbolic links`. One stale link on PATH crashes resolution instead of the search moving on. | `RootFacts.cs:36`, `:69` |
+| R4 | `stat -c %u` reads the link's own owner; `GetUnixFileMode` reads the followed file's mode — a trust file that is a link to another user's file reads as the operator's own. | `RootFacts.cs:66` |
+| R5 | `Compose` ignores `ExitCode` and `Total`: a completed run that exited non-zero naming no failure, a `Total` of 0, or more failures than tests become a baseline with an empty failure list. | `BaselineFile.cs:35` |
+| R6 | `CanMakeLinks` makes `probe/probe-link -> probe` (a link to its own parent); `EnumerateFileSystemInfos(AllDirectories)` follows it and throws in some runs (1 of 5 here, 3 of 7 for the reviewer); `Dispose` then never deletes. Every `testsToDelete-modelarms-*` left on this host holds `probe/`. | `TempFolder.cs:30`, `RootFactsTests.cs:34` |
+| R7 | (Windows, reasoned) `\\?\C:\target\x.exe`, `\\.\C:\…` and an 8.3 short name (`C:\TARGET~1\…`) are other spellings of a path under the target; `PathScope` compares them as text and they pass. | `ExecutableRule.cs:18`, `PathScope.cs:16` |
+| realpath(3) | glibc `realpath` answers `<target>/bin/claude` for both R1 probes, `ENOENT` for a dangling link and a missing component, `ELOOP` for a loop; P/Invoked from .NET it answers the same (`DllImport("libc")` loads on this host). | — the fix |
+
+**Decisions, with reasons.**
+
+1. **The real path is the kernel's answer, asked of the kernel — `realpath(3)` on Unix, `GetFinalPathNameByHandle` on Windows — never a
+   managed re-implementation.** The two managed walks this repository already holds (`RootFacts.FinalTargetOf` and the scouts'
+   `FileSystemLinkTargets.Resolve`, `src/Bench.Infrastructure/Scouts/FileSystemLinkTargets.cs:37`) both join a link's text with
+   `Path.Combine`/`GetFullPath` and both are wrong in the same way, because .NET's `ResolveLinkTarget` is. A segment-by-segment walk done
+   right (read the link, join its target to the REAL parent, re-split, restart) is forty lines that re-implement `realpath` and have to be
+   proven against it; the P/Invoke is twelve lines and IS it. The platforms are mapped explicitly and an unmapped one fails closed
+   (common.platform-limits): Windows → `kernel32!GetFinalPathNameByHandleW` on a handle opened by path (the kernel resolves `\\?\`, 8.3
+   names, junctions and links to open it); Linux, macOS, FreeBSD → `libc!realpath`; anything else → `Failure("no real-path resolver is probed
+   for this platform — refused (D17)")`. A failure carries the OS's own message (`Marshal.GetLastPInvokeErrorMessage()`); no decision is taken
+   on an errno number or a message substring — the only decision is ok/fail.
+2. **`Resolve` returns the real path, and that is what the harness launches and prints (D17 c).** Judging the real path and launching the
+   written one leaves the link between the check and the `exec` for an arm to re-point; launching the real path closes that for free. The
+   cost is `argv[0]`: on this host `claude` is a link to an ELF, `npm` a link to `npm-cli.js` with a `#!/usr/bin/env node` shebang,
+   `dotnet` a link to `/usr/lib/dotnet/dotnet`, `node` and `git` real files — every one runs the same under its real name (`execve`
+   honours the shebang; the dotnet muxer locates itself through `/proc/self/exe`). A program that behaves by `argv[0]` (a busybox-style
+   multi-call binary) is not one this experiment runs; the module doc says so under *what this does NOT prove*.
+3. **The forbidden roots go through the same seam, inside `Resolve`, so a caller cannot forget (common.security: the measure on the one road
+   in).** A root that does not exist yet (`init`'s root; a `target.source` not cloned) is resolved through its nearest existing ancestor — the
+   first ancestor `realPath` answers — with the remaining segments appended; `/` always answers, so this ends. Both spellings are then judged
+   against both sets: `{written, real}` × `{roots as written ∪ roots real}`. The written side stays because a link INSIDE the target that
+   points out of it (`<target>/sub -> /usr/bin`) must still refuse `<target>/sub/git` — D17 forbids the spelling, not only the bytes.
+4. **Refusal versus skip.** A PATH candidate that is a dangling link or a loop is **skipped and the search moves on** — that is what
+   `execvp(3)` does (`ENOENT` continues to the next entry), and a stale `~/bin/claude` in front of the real one is the ordinary shape. The
+   predicate `IsExecutableFile` answers `false` for every input (common.platform-limits: a predicate never throws the library's validation).
+   A **spelled** absolute executable that cannot be resolved is a **refusal** naming the OS reason (`the symbolic links of '<p>' cannot be
+   followed: No such file or directory — refused rather than assumed safe (D17)`): the operator named that file, and "not on PATH" would be
+   a lie about it. A name found nowhere keeps `<name> is not on PATH on this host`.
+5. **A trust path that is itself a symbolic link is refused** — the root folder, `experiment.json`, `scenarios.json` (the LAST segment; an
+   ancestor may be a link, `~/git -> /mnt/d/git` is every WSL home). `stat -L` would read the followed file, but a link at a trust path makes
+   the subject of the check "whatever the link points to at that instant", and the harness reads `experiment.json` through the link again
+   later. One sentence closes both: `<path> is a symbolic link to '<target>' — the trust check judges the file itself, not a link that can be
+   re-pointed; put the real file here or pass its real path (D17)`. The trailing separator is trimmed before the check (`readlink("link/")`
+   follows the link and reports no link). With links refused, owner and mode are read of one inode.
+6. **Three more baseline refusals, one sentence each, all problems at once:** a completed run that exited non-zero and named no failing
+   test (`the <which> suite exited <code> and named no failing test — a baseline with an empty failure list would claim it passed (absent is
+   not zero)`); a total of zero (`the <which> suite counted 0 tests — a run that ran nothing proves nothing about the target`); more failures
+   than tests (`the <which> suite named <n> failing tests of <total> — more failures than tests`). A completed exit 0 with failures named is
+   NOT refused: the runner's exit code is the runner's opinion, the names are the measurement.
+7. **Test cleanup.** The probe link points at a FILE (`probe-link -> probe-file`), never at its own parent; the mode-fixing walk skips reparse
+   points (`EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }` — measured clean 5 of 5
+   where the `SearchOption` walk threw 1 of 5) and fixes the folder's own mode first; the delete sits in `finally`. `Directory.Delete(recursive)`
+   unlinks a directory link without entering it, so a loop cannot reach the delete.
+8. **Windows.** The verbatim and device prefixes — `\\?\`, `\\.\`, `//?/`, `//./` — are refused as a SPELLING in `ExecutableRule.Refusal`, on
+   every platform (a textual rule, testable here); 8.3 short names are closed by decision 1 (the handle opens the real file; its final path is
+   the long one, under the real target). The 8.3 test runs only on Windows and skips here with its reason; the coder on this host records it
+   as *not observed*, and the operator's Windows run is where it goes red then green. A Windows Store app-execution alias (`python.exe`
+   under `WindowsApps`) cannot be opened as a file; it is refused with the OS message — fail closed, named in the doc.
+9. **Hard links are a stated gap, not a check.** A hard link is a second NAME for the same inode, and a path check — any path check — sees
+   only names. The only check is to compare device+inode of the resolved file with every file under both roots: a full walk of a checkout
+   per executable, racing against arms that write, and blind to a link made after the check. It is not done; the module doc's *does NOT
+   prove* names it (R9), with the kernel's `..` rule beside it. The premise holds: making that hard link means an arm writing OUTSIDE its
+   arm, which D17 never claimed to prevent.
+10. **The class, not the instance (common.security).** Swept by `grep -rn "ResolveLinkTarget\|LinkTarget" --include=*.cs src tools tests`:
+    two sites — `RootFacts.cs:113` (this fix) and `FileSystemLinkTargets.cs:37` (the scouts' path audit, same textual join). The second is
+    named here and left: it audits paths for a report, runs nothing, and is its own story; this fix must not touch it. A structural test keeps
+    the count (S21).
+
+**Contracts** (changes only; everything else as in E1.S8 above).
+
+```csharp
+namespace ModelArms.Core.Experiment;
+public static class ExecutableResolution
+{
+    /// realPath: the path the kernel would open — every link and every `..` applied in the kernel's order — or a failure carrying the OS's
+    /// reason when a component is missing, a link dangles or loops, or the platform has no probed resolver. The result is the REAL path.
+    public static Outcome<string> Resolve(string executable, IReadOnlyList<string> pathDirectories, IReadOnlyList<string> forbiddenRoots,
+        Func<string, bool> isExecutableFile, Func<string, Outcome<string>> realPath, bool windows);
+    // inside: RealRoots(forbiddenRoots, realPath) — nearest existing ancestor + remainder; Judge({written, real} × {asWritten ∪ real})
+}
+public static class ExecutableRule
+{
+    // new first case after the empty check: a verbatim/device prefix (`\\?\`, `\\.\`, `//?/`, `//./`) →
+    // "the executable '<p>' uses a verbatim or device prefix — spell the path plainly (D17)"
+    // UnderForbiddenRoot gains the "is really" form: "the executable '<written>' is really '<real>', which is under '<root>' — …(D17)"
+}
+public static class BaselineFile { /* Compose adds ExitedWithoutNames, ZeroTotal, MoreFailuresThanTests — one sentence each */ }
+
+namespace ModelArms.Adapters;
+public static class RootFacts
+{
+    public static Outcome<string> RealPathOf(string path);        // replaces FinalTargetOf: libc realpath / kernel32 GetFinalPathNameByHandleW
+    public static bool IsExecutableFile(string path);             // RealPathOf ok && File.Exists(real) && (Windows || mode has an execute bit); never throws
+    public static Task<Outcome<FileFacts>> FileFactsAsync(string path, CancellationToken ct);  // a link at the path (trailing separator trimmed) → Failure
+}
+```
+
+`RealPathOf`, Unix: `[DllImport("libc", SetLastError = true)] static extern IntPtr realpath(string path, IntPtr resolved)` with `resolved =
+IntPtr.Zero` (glibc and libSystem allocate), `Marshal.PtrToStringUTF8`, `free`. Windows: `File.OpenHandle(path, FileMode.Open, FileAccess.Read,
+FileShare.ReadWrite | FileShare.Delete)`, `GetFinalPathNameByHandleW(handle, buffer, length, 0 /* FILE_NAME_NORMALIZED | VOLUME_NAME_DOS */)`,
+the `\\?\` prefix stripped (`\\?\UNC\` → `\\`). Both: `try/finally` on the handle and the buffer; every exception the open can throw
+(`FileNotFound`, `DirectoryNotFound`, `UnauthorizedAccess`, `IOException`) becomes a `Failure` with its message, named in the `when` clause.
+`IsExecutableFile` reads the mode of the REAL path inside the same guard (the file can vanish between the two reads).
+
+**Scenarios.** Real links on Linux; each real-link test skips on Windows with `symbolic links need a privilege on Windows; the Windows
+spellings are their own tests`, and skips where `CreateSymbolicLink` throws, naming the exception. `Forbidden` built with
+`ExecutableRule.ForbiddenRoots`. The RED column is the assertion message on `390a476` — the reviewer's probes re-run here, except S10.
+
+| # | Test | Given / When / Then | RED on `390a476` |
+|---|---|---|---|
+| S1 | `ExecutableResolutionTests.A_link_whose_target_climbs_through_a_linked_folder_is_judged_where_the_kernel_lands` | temp: `target/bin/claude` (+x), folder `target/x`, `home/c/sub -> <temp>/target/x`, `home/c/claude -> sub/../bin/claude` (relative text), decoy `home/c/bin/claude` (+x); forbidden `(temp/target, temp/root)`; `Resolve("claude", [home/c], …, RootFacts.IsExecutableFile, RootFacts.RealPathOf, false)` → `Reason()` contains `D17`, `is really`, `<temp>/target/bin/claude` | `InvalidOperationException: expected a failure, got success` (`FinalTargetOf` answers the decoy) |
+| S2 | `…A_dot_dot_after_a_linked_folder_is_applied_to_the_folder_the_link_points_to` | `home/l -> <temp>/target/x`, decoy `home/bin/claude`; (a) PATH `[<temp>/home/l/../bin]`, name `claude`; (b) spelled `<temp>/home/l/../bin/claude` → both refused naming `<temp>/target/bin/claude` | `expected a failure, got success`, twice (`GetFullPath` drops `l/..` as text) |
+| S3 | `…A_forbidden_root_spelled_through_a_link_is_compared_by_its_real_path` | `mnt/git/proj/bin/t` (+x), `home/git -> <temp>/mnt/git`, `home/bin/t -> <temp>/mnt/git/proj/bin/t`, `home/bin/honest` (+x); forbidden `(<temp>/home/git/proj, <temp>/root)`; `Resolve("t", [home/bin])` → refused naming `<temp>/mnt/git/proj`; `Resolve("honest", …)` → `Ok() == <temp>/home/bin/honest` | `expected a failure, got success` (the root is compared as written) |
+| S4 | `…A_dangling_link_on_path_is_skipped_and_the_search_moves_on` | `bin1/claude -> nowhere`, `bin2/claude` (+x); PATH `[bin1, bin2]` → `Ok() == <temp>/bin2/claude` | `System.IO.FileNotFoundException: Could not find file '<temp>/bin1/claude'` (from `IsExecutableFile`) |
+| S5 | `…A_spelled_executable_that_is_a_dangling_link_is_refused_naming_the_reason` | `Resolve("<temp>/bin1/claude", …)` → `Reason()` contains `cannot be followed`, `No such file`, `D17` | `FileNotFoundException` thrown |
+| S6 | `…A_looping_link_on_path_is_skipped_too` | `bin0/claude -> other`, `bin0/other -> claude`; PATH `[bin0, bin2]` → `Ok() == <temp>/bin2/claude` | `System.IO.IOException: Too many levels of symbolic links` thrown |
+| S7 | `…The_result_is_the_real_path_the_kernel_would_open` (replaces `A_link_to_a_safe_place_resolves_to_the_path_as_written`) | pure: `Link(p) => p == "/usr/bin/git" ? "/opt/real/git" : p` → `Ok() == "/opt/real/git"`; real: `outside/git -> <temp>/opt/real/git` → `Ok() == <temp>/opt/real/git` | `Expected resolved.Ok() to be "/opt/real/git", but "/usr/bin/git" differs near …` |
+| S8 | `…A_root_that_does_not_exist_yet_is_resolved_through_its_nearest_existing_ancestor` | pure: `realPath("/mnt/d/exp/new")` → `Failure("No such file or directory")`, `realPath("/mnt/d/exp")` → `"/real/exp"`, identity otherwise; forbidden `["/mnt/d/exp/new"]`; `Resolve("/real/exp/new/bin/t", [], …)` → refused naming `/real/exp/new` | `expected a failure, got success` |
+| S9 | `…A_verbatim_or_device_prefix_is_refused_as_a_spelling_on_every_platform` | `ExecutableRule.Refusal` of `\\?\C:\t\x.exe`, `\\.\C:\t\x.exe`, `//?/C:/t/x.exe`, `//./C:/t/x.exe` with roots `[C:\t]` → each contains `verbatim or device prefix` and `D17` | Linux: `Expected string "the executable '\\?\C:\t\x.exe' is a relative path, …" to contain "verbatim or device prefix"`; Windows: `Expected "" to contain …` |
+| S10 | `…An_8_3_short_name_spelling_of_the_target_is_refused` — `Assert.SkipUnless(OperatingSystem.IsWindows(), "8.3 short names exist only on Windows")` | temp `target-with-a-long-name\x.exe` (a copy of `cmd.exe`); its short name via `GetShortPathNameW` (equal to the long one → `Assert.Skip("8.3 names are disabled on this volume")`); `Resolve(short + "\\x.exe", …)` → refused naming the long real path | reasoned, not observed here: `expected a failure, got success` |
+| S11 | `RootFactsTests.The_real_path_of_a_path_is_the_kernels_answer` (replaces the three `FinalTargetOf` tests) | the chain of relative/absolute links → the real file; `shortcut/bin/tool` → the real file; the R1 `sub/..` shape → the target's file; a dangling link → `Failed()`, reason contains `No such file`; a loop → `Failed()`, reason contains `Too many levels` | against the delegating stub (brief, step 4): the `sub/..` case `Expected … to be "<temp>/target/bin/claude", but "<temp>/home/c/bin/claude" differs`; the dangling case `expected a failure, got success` |
+| S12 | `…IsExecutableFile_answers_false_for_a_dangling_link_a_loop_and_a_folder_instead_of_throwing` | the three inputs → `false`; a real `+x` file behind a link → `true` | `FileNotFoundException` thrown on the first |
+| S13 | `…A_trust_path_that_is_a_symbolic_link_is_refused_naming_where_it_points` (Linux) | `other/experiment.json` (the user's own, `600`), `experiment.json -> other/experiment.json`; `rootlink -> root`; `dangling.json -> nowhere`; `FileFactsAsync` of the link, of `rootlink`, of `rootlink/` (trailing separator), of the dangling one → each `Failed()`, reason contains `symbolic link`, the target, `D17`; `FileFactsAsync("other/experiment.json")` → `Ok()` | the file link: `expected a failure, got success` (owner reads as the operator's — R4); the dangling one: `FileNotFoundException` thrown |
+| S14 | `BaselineFileTests.A_completed_run_with_a_non_zero_exit_and_no_named_failure_is_refused` | `Compose(…, new SuiteRun(true, 2, [], 1200), Ran(1), …)` → `Reason()` contains `exited 2`, `named no failing test`, `absent is not zero` | `expected a failure, got success` |
+| S15 | `…A_suite_that_counted_zero_tests_is_refused` | `new SuiteRun(true, 0, [], 0)` → contains `counted 0 tests` | `expected a failure, got success` |
+| S16 | `…More_named_failures_than_tests_is_refused` | `new SuiteRun(true, 1, ["a", "b"], 1)` → contains `2 failing tests of 1` | `expected a failure, got success` |
+| S17 | `…Every_composition_problem_comes_back_at_once` | main `(true, 2, [], 1200)`, extension `(true, 0, [], 0)` → two lines, one `main`, one `extension`; and `(true, 0, [], 1200)` with `Ran(300)` → `Ok()` (exit 0, no failures, a count: the green baseline) | `expected a failure, got success` |
+| S18 | `TempFolderTests.Dispose_removes_a_folder_holding_a_link_to_its_own_parent_and_a_folder_closed_to_its_owner` (new file, Linux) | ten times: a `TempFolder` with `probe/probe-link -> probe` and `low/` at `500` holding a file; `Dispose()`; `Directory.Exists(path)` false; no exception | `IOException: Too many levels of symbolic links` in at least one of the ten (1 of 5 measured; the reviewer 3 of 7) |
+| S19 | `RootFactsTests` — `CanMakeLinks` links `probe-link -> probe-file` | every real-link test still runs (not skipped) on this host | — (a helper change; S18 is its test) |
+| S20 | `ExecutableResolutionTests.A_real_symbolic_link_into_the_target_is_refused_and_a_real_file_beside_it_is_not` (kept) | `control.Ok()` becomes `<temp>/outside/honest` — the real path of a real file is itself | green before and after; a break-it of decision 2 does not touch it (S7 does) |
+| S21 | `ModelArmsArchitectureTests.The_module_reads_links_only_through_RootFacts_RealPathOf` + companion `…and_the_scan_still_finds_the_scouts_link_audit` | a scan of `tools/model-arms/**/*.cs` across lines for `ResolveLinkTarget(` and `.LinkTarget` → only `RootFacts.cs`; the same scan over `src/**/*.cs` finds `FileSystemLinkTargets.cs` (the known instance, so the pattern is alive) | green on `390a476` (the module's one site is already in `RootFacts.cs`) — a guard, not a bug test; the companion is what has teeth: break the pattern and it goes red (`Expected the scan to find FileSystemLinkTargets.cs, but found nothing`) |
+
+**Red first (common.testing).** The reds above are the messages to watch, in this order, on the built runner: S18 (then every later run stops
+leaving folders), S14–S17, S9, S4–S6 and S12–S13, then S11, S1–S3, S7–S8. `FinalTargetOf` is renamed, so the tests that name `RealPathOf`
+cannot compile against `390a476`: step 4 of the brief adds `RealPathOf` as a stub DELEGATING to `FinalTargetOf`, rewires the seam, and watches
+S1–S3, S7, S11 red against that stub (the messages in the table are against that stub); then the implementation lands and they go green.
+
+**Break-its** (each watched red, then restored; the summary names each with its message):
+
+- B1 `RealPathOf` → `Path.GetFullPath` + the old `Settle` walk: S1, S2, S11 red.
+- B2 `RealRoots` returns the roots as given: S3, S8 red.
+- B3 `Resolve` returns the written path: S7 red.
+- B4 `IsExecutableFile` back to `File.Exists` + `GetUnixFileMode` of the written path: S4, S6, S12 red (the exception).
+- B5 the link check removed from `FileFactsAsync`: S13 red; the trailing-separator trim removed alone: S13's `rootlink/` case red.
+- B6 each of the three baseline sentences deleted in turn: S14, S15, S16 red one at a time; S17 red for any.
+- B7 `AttributesToSkip` back to the default in `TempFolder`: S18 red in at least one of ten (run the class three times; report the count).
+- B8 the prefix case removed from `ExecutableRule.Refusal`: S9 red.
+- B9 the `{written}` side dropped from the judgement (real only): `A_fully_qualified_executable_under_the_target_is_refused_even_when_it_exists`
+  stays green (its fake `realPath` is identity) — so the test that has teeth for it is a real one: `<temp>/target/sub -> <temp>/outside`,
+  `outside/git` (+x), `Resolve("<temp>/target/sub/git")` → refused as written (add it to S1's file as `A_link_inside_the_target_that_points_out_of_it_is_still_refused_by_its_spelling`; RED on `390a476`: green — the written check exists today; it is a guard against B9, say so in its comment).
+- The `finally` in `TempFolder.Dispose` has no red of its own (after decision 7 the walk no longer throws); it stays because
+  common.test-leftovers requires the run to remove what it created whatever happened in between, and the comment says so.
+
+**Brief — the order of work** (worktree `/home/jinx/git/dew_flow_benchmark-wt/ma-e1s8`, branch `feat/model-arms-e1s8`; run every command
+through `node .agents/conventions/tools/low-priority.mjs`; build with `dotnet build dew_flow_benchmark.slnx -c Release -m:4
+--disable-build-servers`; run the MTP executable `./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests` — never `dotnet test`):
+
+1. `tests/Bench.Tests/ModelArms/TempFolder.cs` (decision 7) and `TempFolderTests.cs` (S18); `RootFactsTests.CanMakeLinks` → a file link (S19).
+   `ls -d /tmp/testsToDelete-modelarms-* | wc -l` before and after three runs of `--filter-class "*RootFactsTests"`: the count must not grow.
+2. `BaselineFile.cs` (decision 6) and S14–S17.
+3. `ExecutableRule.cs` (decision 8's prefix case; the `is really` sentence) and S9.
+4. `RootFacts.cs`: add `RealPathOf` delegating to `FinalTargetOf`; `IsExecutableFile` and `FileFactsAsync` as in the contracts; S4–S6,
+   S12–S13 red then green; S11 red against the stub. Then the P/Invoke implementation (decision 1), `FinalTargetOf`, `Settle`, `FollowFirstLink`
+   and `MaxLinkRounds` deleted; S11 green.
+5. `ExecutableResolution.cs` (decisions 2–4): the seam renamed `realPath`, `RealRoots`, the two-sided judgement; S1–S3, S7, S8 red then
+   green; S20 updated; B9's test added.
+6. `ModelArmsArchitectureTests.cs`: S21 and its companion.
+7. `research/module_model_arms.md`, *The root, trust and the host*: `FinalTargetOf` → `RealPathOf` (the kernel's answer, the two platform
+   calls, the unmapped platform refused); the result is the REAL path and why; the PATH skip rule; the trust-path link refusal; the three
+   baseline sentences; and *What the tests do NOT prove* gains: hard links (decision 9, with the reason the check is not done), the kernel's
+   `..` rule as the thing a textual check cannot see, `argv[0]`-sensitive programs, Windows app-execution aliases (refused, not resolved),
+   and that the 8.3 test was not observed on this host.
+8. `--filter-namespace "Bench.Tests.ModelArms"` (every class), then the whole suite; the break-its; the summary carries every red message,
+   every green count, the three-run leftover count, and the Windows tests as *skipped here, not observed*.
+
+**Commands.** `--filter-class "*ExecutableResolutionTests"`, `"*RootFactsTests"`, `"*BaselineFileTests"`, `"*RootTrustTests"`,
+`"*TempFolderTests"`, `"*ModelArmsArchitectureTests"`; `--filter-namespace "Bench.Tests.ModelArms"`; the whole suite.
+
+**Done when.** S1–S9, S11–S21 green on this WSL host with the real-link tests RUN (not skipped) and their reds recorded; S10 written, skipped
+here with its reason; the nine break-its watched red; three runs of `RootFactsTests` leave no new `testsToDelete-modelarms-*`; the module
+doc says what decision 9 says; `grep -rn "FinalTargetOf\|ResolveLinkTarget" tools/model-arms` finds nothing; the whole suite shows no
+failure that is not the Docker-backed set `390a476` already reported; the architecture guard is green.
+
+**Out of bounds.** `FileSystemLinkTargets.Resolve` (decision 10 — named, not touched); where `Resolve`'s real path is launched and printed
+(E1.S9, E1.S10: they take what `Resolve` returns); `RootPaths` spelling the root by its real path at entry (a later story, if the operator
+wants links at the root to be accepted rather than refused); a hard-link check (decision 9); the Windows observation of S10.
+
 ### E1.S9 — `ModelArmsCommandLine` and `Program.cs`: parse, the one road in, the dispatch
 
 - **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E1.S3, E1.S8 (and E1.S2's project). **Parallel with:** E1.S6
