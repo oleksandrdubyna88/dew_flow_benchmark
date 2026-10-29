@@ -1,0 +1,87 @@
+{
+  "redactions": {
+    "C1": 5,
+    "CR1": 3,
+    "SRS1": 9,
+    "C2": 8,
+    "CR2": 9,
+    "SRS2": 11,
+    "C3": 4,
+    "CR3": 5,
+    "SRS3": 13
+  },
+  "sessions": {
+    "D-e304c9": {
+      "arm": "C1",
+      "run": "run1"
+    },
+    "D-1ff9e9": {
+      "arm": "C1",
+      "run": "run2"
+    },
+    "D-a93f00": {
+      "arm": "CR1",
+      "run": "run1"
+    },
+    "D-ae628e": {
+      "arm": "CR1",
+      "run": "run2"
+    },
+    "D-7119e8": {
+      "arm": "SRS1",
+      "run": "run1"
+    },
+    "D-ad440a": {
+      "arm": "SRS1",
+      "run": "run2"
+    },
+    "D-86888e": {
+      "arm": "C2",
+      "run": "run1"
+    },
+    "D-a5b37e": {
+      "arm": "C2",
+      "run": "run2"
+    },
+    "D-6d665c": {
+      "arm": "CR2",
+      "run": "run1"
+    },
+    "D-e935fd": {
+      "arm": "CR2",
+      "run": "run2"
+    },
+    "D-6a5188": {
+      "arm": "SRS2",
+      "run": "run1"
+    },
+    "D-047ec9": {
+      "arm": "SRS2",
+      "run": "run2"
+    },
+    "D-22425b": {
+      "arm": "C3",
+      "run": "run1"
+    },
+    "D-1b5088": {
+      "arm": "C3",
+      "run": "run2"
+    },
+    "D-4d4dee": {
+      "arm": "CR3",
+      "run": "run1"
+    },
+    "D-855317": {
+      "arm": "CR3",
+      "run": "run2"
+    },
+    "D-61b066": {
+      "arm": "SRS3",
+      "run": "run1"
+    },
+    "D-a3e63b": {
+      "arm": "SRS3",
+      "run": "run2"
+    }
+  }
+}

@@ -1,0 +1,452 @@
+{
+  "arm": "SRS2",
+  "token": "b2fa80b416bf",
+  "head": "b45d1ea2b0da30effd3a11875fd3e9d6148e8541",
+  "base": "6786582e30d3e771549d05ed719478396f8099cd",
+  "frozen": "2026-10-29",
+  "harness": "/home/jinx/git/coai-exp2/mutate6.mjs",
+  "started_utc": "2026-10-29T20:22:15.580Z",
+  "complete": true,
+  "mutants": [
+    {
+      "id": "M1-ladder-ignores-spent",
+      "decision": "D1",
+      "breaks": "the ladder's Hopeless reads only the words again: the structured Spent field no longer outranks the word scan",
+      "intendedScenarios": [
+        "S1",
+        "S2"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/BoundedScheduler.cs",
+          "find": "(limited.Spent ?? RateLimit.Hopeless(limited.Reason))",
+          "replace": "(RateLimit.Hopeless(limited.Reason))"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 14,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "AStructuredVerdictOutranksTheWordScanTests.ASpentVerdict_IsHopeless_WhateverTheWordsSay",
+        "AStructuredVerdictOutranksTheWordScanTests.ATransientVerdict_ClimbsTheLadder_EvenWhenTheTextSaysExhausted"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S1",
+          "test": "ASpentVerdict_IsHopeless_WhateverTheWordsSay",
+          "present": true,
+          "matched": [
+            "AStructuredVerdictOutranksTheWordScanTests.ASpentVerdict_IsHopeless_WhateverTheWordsSay"
+          ],
+          "caught": true
+        },
+        {
+          "scenario": "S2",
+          "test": "ATransientVerdict_ClimbsTheLadder_EvenWhenTheTextSaysExhausted",
+          "present": true,
+          "matched": [
+            "AStructuredVerdictOutranksTheWordScanTests.ATransientVerdict_ClimbsTheLadder_EvenWhenTheTextSaysExhausted"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 19
+      },
+      "seconds": 36
+    },
+    {
+      "id": "M2-exhausted-alone-is-spent",
+      "decision": "D2",
+      "breaks": "agy: a RESOURCE_EXHAUSTED is classified Spent == true without the sentence 'Individual quota reached' (keyed on the status alone)",
+      "intendedScenarios": [
+        "S6"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/AgyError.cs",
+          "find": "Message.Contains(IndividualQuotaSentence, StringComparison.Ordinal)",
+          "replace": "(Message.Contains(IndividualQuotaSentence, StringComparison.Ordinal) || DateTime.UtcNow.Year > 0)"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 11,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "AnAgyQuotaIsReadFromItsStructuredErrorTests.WithoutTheQuotaSentence_NothingIsSpent"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S6",
+          "test": "WithoutTheQuotaSentence_NothingIsSpent",
+          "present": true,
+          "matched": [
+            "AnAgyQuotaIsReadFromItsStructuredErrorTests.WithoutTheQuotaSentence_NothingIsSpent"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 19
+      },
+      "seconds": 33
+    },
+    {
+      "id": "M3-argon-keyed-as-gemini",
+      "decision": "D3",
+      "breaks": "the agy table maps the gemini-4-argon family to antigravity/gemini (the prefix-rule defect); the bucket ids per key are unchanged",
+      "intendedScenarios": [
+        "S14",
+        "S34"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+          "find": "[\"gemini-4-argon\"] = Argon,",
+          "replace": "[\"gemini-4-argon\"] = Gemini,"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 12,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "TheAgyQuotaReportPicksTheResetTests.AnUnknownModel_HasNoGroup",
+        "TheRoundParksAndLiftsTheQuotaTests.ArgonSpent_ThroughAfterRound_ParksOnlyArgon",
+        "AnAgyQuotaIsReadFromItsStructuredErrorTests.TheKeyFollowsTheTable_AndAnEmptyModelIsTheDefaultOne"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S14",
+          "test": "AnUnknownModel_HasNoGroup",
+          "present": true,
+          "matched": [
+            "TheAgyQuotaReportPicksTheResetTests.AnUnknownModel_HasNoGroup"
+          ],
+          "caught": true
+        },
+        {
+          "scenario": "S34",
+          "test": "ArgonSpent_WithOrdinaryGeminiAvailable_ParksOnlyArgon",
+          "present": true,
+          "matched": [
+            "TheAgyQuotaReportPicksTheResetTests.ArgonSpent_WithOrdinaryGeminiAvailable_ParksOnlyArgon"
+          ],
+          "caught": false
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 19
+      },
+      "seconds": 34
+    },
+    {
+      "id": "M4-torn-file-throws",
+      "decision": "D4",
+      "breaks": "a torn / unparseable quota-cooldowns.json no longer reads as \"no cooldown\": Standing throws (fail closed instead of fail open)",
+      "intendedScenarios": [
+        "S19"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "find": "    public QuotaCooldownEntry? Standing(string key, DateTimeOffset now) =>\n        Live(Read(), now).Find(entry => entry.Key == key);",
+          "replace": "    public QuotaCooldownEntry? Standing(string key, DateTimeOffset now) => MutantStrictRead() ? null :\n        Live(Read(), now).Find(entry => entry.Key == key);\n\n    private bool MutantStrictRead()\n    {\n        if (System.IO.File.Exists(FilePath))\n        {\n            System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(FilePath)).Dispose();\n        }\n\n        return false;\n    }"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 37,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "ASpentQuotaIsRememberedUntilItsResetTests.ATornFile_ParksNobody_AndSaysSoOnce"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S19",
+          "test": "ATornFile_ParksNobody_AndSaysSoOnce",
+          "present": true,
+          "matched": [
+            "ASpentQuotaIsRememberedUntilItsResetTests.ATornFile_ParksNobody_AndSaysSoOnce"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 19
+      },
+      "seconds": 58
+    },
+    {
+      "id": "M5-ok-does-not-lift",
+      "decision": "D4/D5",
+      "breaks": "after a round, a key whose launch ended Ok is no longer lifted (every lift-on-Ok of the round decision is disabled; Lift() itself is untouched)",
+      "intendedScenarios": [
+        "S25"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs",
+          "find": "if (rows.Any(row => row.Outcome is ReviewerOutcome.Ok))",
+          "replace": "if (rows.Any(row => row.Outcome is ReviewerOutcome.Ok) && DateTime.UtcNow.Year < 0)"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 39,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "TheRoundParksAndLiftsTheQuotaTests.ACodexSpentAllowance_IsParkedOnItsStatedDate_AndAnAnswerLiftsIt"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S25",
+          "test": "ACodexSpentAllowance_IsParkedOnItsStatedDate_AndAnAnswerLiftsIt",
+          "present": true,
+          "matched": [
+            "TheRoundParksAndLiftsTheQuotaTests.ACodexSpentAllowance_IsParkedOnItsStatedDate_AndAnAnswerLiftsIt"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 23
+      },
+      "seconds": 68
+    },
+    {
+      "id": "M6-ok-beats-spent",
+      "decision": "D5",
+      "breaks": "per key, a sibling Ok wins over a qualifying spent refusal: a key with any Ok outcome is never parked (it is lifted instead)",
+      "intendedScenarios": [
+        "S41"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs",
+          "find": "if (asking.Count == 0)",
+          "replace": "if (asking.Count == 0 || rows.Any(row => row.Outcome is ReviewerOutcome.Ok))"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 37,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "TheRoundParksAndLiftsTheQuotaTests.ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge(okFirst: False)",
+        "TheRoundParksAndLiftsTheQuotaTests.ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge(okFirst: True)"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S41",
+          "test": "ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge",
+          "present": true,
+          "matched": [
+            "TheRoundParksAndLiftsTheQuotaTests.ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 22
+      },
+      "seconds": 61
+    },
+    {
+      "id": "M7-earlier-reset-wins",
+      "decision": "D6",
+      "breaks": "/quota: when both active buckets of a group are spent, the EARLIER reset is taken instead of the later (a single bucket is unaffected)",
+      "intendedScenarios": [
+        "S12"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+          "find": "usable.Max(bucket => bucket.ResetTime!.Value)",
+          "replace": "usable.Min(bucket => bucket.ResetTime!.Value)"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 41,
+        "errors": []
+      },
+      "assemblies": [
+        "CoaiMcp.Runners.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "TheAgyQuotaReportPicksTheResetTests.BothActiveBucketsSpent_TheLaterResetWins_AndBothAreNamed"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S12",
+          "test": "BothActiveBucketsSpent_TheLaterResetWins_AndBothAreNamed",
+          "present": true,
+          "matched": [
+            "TheAgyQuotaReportPicksTheResetTests.BothActiveBucketsSpent_TheLaterResetWins_AndBothAreNamed"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 18
+      },
+      "seconds": 61
+    },
+    {
+      "id": "M8-cooling-row-still-runs",
+      "decision": "D9",
+      "breaks": "PanelService.CanRun's cooldown term is always true: a parked row is dealt work and is not excluded",
+      "intendedScenarios": [
+        "S26"
+      ],
+      "edits": [
+        {
+          "file": "src_mcp/src/Server/PanelService.cs",
+          "find": "RowRefusal(provider).Length == 0 && !IsCooling(provider);",
+          "replace": "RowRefusal(provider).Length == 0 && (!IsCooling(provider) || DateTime.UtcNow.Year > 0);"
+        }
+      ],
+      "build": {
+        "ok": true,
+        "seconds": 20,
+        "errors": []
+      },
+      "assemblies": [
+        "coai-mcp.dll"
+      ],
+      "applicable": true,
+      "verdict": "KILLED",
+      "killedBy": [
+        "ACoolingRowStaysOutOfTheRoundTests.ACoolingAgyRow_IsExcluded_WithThisSidesSentence",
+        "ACoolingRowStaysOutOfTheRoundTests.AnotherGroupOnTheSameCli_StillRuns",
+        "ARoundThatEndsOnASpentQuotaParksItTests.ARoundThatEndsSpent_ParksTheQuota_AndTheNextRoundLeavesTheRowOut"
+      ],
+      "flaky": [],
+      "intended": [
+        {
+          "scenario": "S26",
+          "test": "ACoolingAgyRow_IsExcluded_WithThisSidesSentence",
+          "present": true,
+          "matched": [
+            "ACoolingRowStaysOutOfTheRoundTests.ACoolingAgyRow_IsExcluded_WithThisSidesSentence"
+          ],
+          "caught": true
+        }
+      ],
+      "run": {
+        "tests": 441,
+        "seconds": 18
+      },
+      "seconds": 41
+    }
+  ],
+  "classes": [
+    "AClaudeReasonInItsEnvelopeTests",
+    "AClaudeSpendLimitIsASpentQuotaTests",
+    "ACoolingRowStaysOutOfTheRoundTests",
+    "AMonthlyKimiQuotaReadsAsAQuotaTests",
+    "ARoundThatEndsOnASpentQuotaParksItTests",
+    "ASpentKimiQuotaReadsAsAQuotaTests",
+    "ASpentQuotaIsRememberedUntilItsResetTests",
+    "AStatedResetIsNeverWaitedOutTests",
+    "AStatedResetIsWrittenLocallyTests",
+    "AStructuredVerdictOutranksTheWordScanTests",
+    "AnAgyQuotaIsReadFromItsStructuredErrorTests",
+    "AntigravityOnLinuxTests",
+    "AntigravityReadOnlyTests",
+    "AntigravityStreamContinueTests",
+    "BoundedSchedulerTests",
+    "ConsultAntigravityDenialScenarioTests",
+    "CooldownParserTests",
+    "EveryBudgetInAClockedClassReadsItsClockTests",
+    "GateReportingTests",
+    "KimiMonthlyQuotaTests",
+    "KimiQuotaIsNotASignInTests",
+    "QuestionRowOnAgyScenarioTests",
+    "RetryLadderSettingsTests",
+    "RetryLadderTests",
+    "RoundNamesTheExcludedTests",
+    "SecurityRosterCharacterizationTests",
+    "TheAgyQuotaReportPicksTheResetTests",
+    "TheLadderReadsWritesFirstTests",
+    "TheRefusalRoadsAreCountedTests",
+    "TheRefusalsAreWrittenDownTests",
+    "TheReviewerFailuresAreWrittenDownTests",
+    "TheRoundParksAndLiftsTheQuotaTests",
+    "TheRuntimesNameTheirQuotaTests"
+  ],
+  "testThreads": 4,
+  "baseline": {
+    "build": {
+      "ok": true,
+      "seconds": 59,
+      "errors": []
+    },
+    "tests": 441,
+    "passed": 441,
+    "skipped": 0,
+    "failed": [],
+    "seconds": 20
+  },
+  "ended_utc": "2026-10-29T20:30:08.213Z",
+  "summary": {
+    "killed": 8,
+    "applicable": 8,
+    "notApplicable": []
+  }
+}
