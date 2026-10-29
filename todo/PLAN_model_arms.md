@@ -565,7 +565,7 @@ Docker must be up for the whole suite (the durability tests); the module's own t
 
 ## Epics
 
-Cornerstones: 0 of 2 — (none marked yet; the areas are E1's launch boundary and E2's step state machine)
+Cornerstones: 1 of 2 — E1.S5 (the launch boundary; spec by Fable) — the area left: E2's step state machine
 
 Stories documents (`todo/PLAN_model_arms_E<n>.md`) are written when each epic starts, by the judge role, from the story maps below
 and §7's scenarios; the ledger line above is updated by the commit that marks a cornerstone story. Sizes are changed lines, tests
@@ -579,6 +579,9 @@ streamed to disk, and every brief fills completely. Nothing launches a model yet
 **Scope.** D1–D5, D9 (the options), D15, D17–D20, D23, D24, §4.1–§4.4, §4.10, §4.12. **Depends on.** Nothing. **Done when.** E1's tests of §7 are green;
 `CommandLineTests`, `ProbeArgvTests` and `ScoutArgvTests` unedited; the solution builds with 0 warnings; `research/module_model_arms.md`
 exists with the layout.
+**Stories:** [PLAN_model_arms_E1.md](PLAN_model_arms_E1.md) — E1.S1–E1.S11 (the map's E1.S8 split into S8, S10 and S11 there, the example
+moved to S3); cornerstone **E1.S5** (spec by Fable). Its §8 lists thirteen points where this plan and the code disagree, each settled there —
+D19's secret-name rule (claude's own `CLAUDE_*`/`ANTHROPIC_*` login passes) and D15's own-token allowance among them.
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
