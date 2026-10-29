@@ -1,3 +1,4 @@
+using Bench.Cli;
 using Bench.Domain;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
@@ -10,30 +11,43 @@ namespace ModelArms;
 /// that could not say (a <c>stat</c> or <c>id</c> that failed, a file that could not be read).
 /// <para>
 /// The root is normalised once (<c>GetFullPath</c>, the trailing separator trimmed) and that text is what the trust check stats; the facts it returns
-/// carry the normalised path whose owner and mode were read, and <c>experiment.json</c> is read from that path — never from the operator's spelling again.
+/// carry the normalised path whose owner, mode and inode were read, and <c>experiment.json</c> is read from that path — never from the operator's
+/// spelling again. The root must be a folder and the two files regular files: a FIFO would block the read and a folder would fail it.
+/// </para>
+/// <para>
+/// <b>The residual race.</b> Reading a file by path cannot be tied to the <c>stat</c> before it, so the file is stat-ed AGAIN after the read and
+/// refused (exit 4) when its device, inode, type, owner or mode are not what was judged. That closes a swap in the window between the first
+/// <c>stat</c> and the read — measured before this check: 18 of 1500 passes read a link's target swapped in with <c>mv -T</c>. It does not close
+/// a swap AFTER the second <c>stat</c>, nor a swap and a swap back inside the window, and it judges nothing above the root: whoever can write the
+/// root (only the operator, by D17) or ANY ANCESTOR of it (ancestors are not judged) can still change what the harness reads. The gate reads
+/// <c>experiment.json</c> only; <c>scenarios.json</c> is judged here and read by the verb, which must look at it again as this does.
 /// </para></summary>
 public static class ExperimentGate
 {
     private const string RootVariable = "MODEL_ARMS_EXPERIMENT";
-    private const int Environment = 3;
-    private const int Configuration = 4;
 
-    /// <summary>What step 3 leaves for step 4: the root, and the path of <c>experiment.json</c> exactly as the trust check read it.</summary>
-    private sealed record Judged(string Root, string ExperimentFile);
+    /// <summary>A path and the kind of file it must be.</summary>
+    private sealed record Wanted(string Path, FileKind Kind);
 
-    public static async Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb)
+    /// <summary>What step 3 leaves for step 4: the root, and <c>experiment.json</c> exactly as the trust check read it (its path and its facts).</summary>
+    private sealed record Judged(string Root, FileFacts Experiment);
+
+    public static Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb) => RunAsync(input, verb, GateSeams.Real);
+
+    /// <summary>The same with the host's reads handed in; the one caller outside the tests is the overload above.</summary>
+    public static async Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb, GateSeams seams)
     {
-        var admitted = await Admit(input);
+        var admitted = await Admit(input, seams);
         return await admitted.Match(verb, stop => Report(input, stop));
     }
 
-    private static Task<Passage<ExperimentInput>> Admit(VerbInput input) =>
+    private static Task<Passage<ExperimentInput>> Admit(VerbInput input, GateSeams seams) =>
         Task.FromResult(NamedRoot(input))
             .Then(root => Present(input, root))
-            .ThenAsync(root => TrustedRoot(input, root))
-            .ThenAsync(judged => ReadExperiment(input, judged))
+            .ThenAsync(root => TrustedRoot(input, root, seams))
+            .ThenAsync(judged => ReadExperiment(input, judged, seams))
             .Then(admitted => Needed(admitted))
-            .ThenAsync(admitted => TrustedScenarios(admitted));
+            .ThenAsync(admitted => TrustedScenarios(admitted, seams));
 
     private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop)
     {
@@ -52,8 +66,8 @@ public static class ExperimentGate
         var named = flag.Length > 0 ? flag : input.Environment.GetValueOrDefault(RootVariable, string.Empty);
         return named switch
         {
-            "" => Passage<string>.Stop(Configuration, $"model-arms {input.Verb}: no experiment root — pass --experiment <root> or set {RootVariable}"),
-            _ when ExecutableRule.HoldsNul(named) => Passage<string>.Stop(Configuration, $"model-arms {input.Verb}: the experiment root '{ExecutableRule.Printable(named)}' holds a NUL character"),
+            "" => Passage<string>.Stop(ExitCodes.Configuration, $"model-arms {input.Verb}: no experiment root — pass --experiment <root> or set {RootVariable}"),
+            _ when ExecutableRule.HoldsNul(named) => Passage<string>.Stop(ExitCodes.Configuration, $"model-arms {input.Verb}: the experiment root '{ExecutableRule.Printable(named)}' holds a NUL character"),
             _ => new Passage<string>.Through(Path.TrimEndingDirectorySeparator(Path.GetFullPath(named))),
         };
     }
@@ -63,20 +77,22 @@ public static class ExperimentGate
         Unmet(input, RootRequirements.ToRead, root, root);
 
     /// <summary>Step 3: the root and <c>experiment.json</c> are the operator's own and closed to group and others.</summary>
-    private static async Task<Passage<Judged>> TrustedRoot(VerbInput input, string root)
+    private static async Task<Passage<Judged>> TrustedRoot(VerbInput input, string root, GateSeams seams)
     {
         var experiment = new RootPaths(root).ExperimentFile;
-        var judged = await Judge(input, root, [root, experiment]);
-        return judged.Map(paths => new Judged(root, paths[1]));
+        var judged = await Judge(input, root, [new(root, FileKind.Directory), new(experiment, FileKind.Regular)], seams);
+        return judged.Map(facts => new Judged(root, facts[1]));
     }
 
-    /// <summary>Step 4: <c>experiment.json</c>, read from the path the trust check judged, through every refusal of D4.</summary>
-    private static async Task<Passage<ExperimentInput>> ReadExperiment(VerbInput input, Judged judged)
+    /// <summary>Step 4: <c>experiment.json</c>, read from the path the trust check judged, looked at again after the read, then through every refusal of D4.</summary>
+    private static async Task<Passage<ExperimentInput>> ReadExperiment(VerbInput input, Judged judged, GateSeams seams)
     {
-        var text = await TextOf(judged.ExperimentFile);
+        var text = await TextOf(judged.Experiment.Path, input.Stopping);
+        await seams.AfterRead(judged.Experiment.Path);
+        var same = await StillTheSame(input, judged.Experiment, seams);
         return text.Match(
-            json => Parsed(input, judged.Root, json),
-            reason => Passage<ExperimentInput>.Stop(Environment, $"model-arms {input.Verb}: {reason}"));
+            json => same.Bind(_ => Parsed(input, judged.Root, json)),
+            reason => Passage<ExperimentInput>.Stop(ExitCodes.Environment, $"model-arms {input.Verb}: {reason}"));
     }
 
     /// <summary>Step 5: the files the verb's stage needs, scenarios and baseline by the names the experiment configured.</summary>
@@ -88,23 +104,23 @@ public static class ExperimentGate
     }
 
     /// <summary>Step 6: <c>scenarios.json</c>, when the root has one, is trusted as the root is. Verbs that do not need it do not require it.</summary>
-    private static async Task<Passage<ExperimentInput>> TrustedScenarios(ExperimentInput admitted)
+    private static async Task<Passage<ExperimentInput>> TrustedScenarios(ExperimentInput admitted, GateSeams seams)
     {
         var scenarios = admitted.Root.Of(admitted.Experiment.ScenariosFile);
         return await scenarios.Match(
-            path => PathExists(path) ? TrustedFile(admitted, path) : Task.FromResult<Passage<ExperimentInput>>(new Passage<ExperimentInput>.Through(admitted)),
-            reason => Task.FromResult(Passage<ExperimentInput>.Stop(Configuration, $"model-arms {admitted.Verb.Verb}: {reason}")));
+            path => PathExists(path) ? TrustedFile(admitted, path, seams) : Task.FromResult<Passage<ExperimentInput>>(new Passage<ExperimentInput>.Through(admitted)),
+            reason => Task.FromResult(Passage<ExperimentInput>.Stop(ExitCodes.Configuration, $"model-arms {admitted.Verb.Verb}: {reason}")));
     }
 
-    private static async Task<Passage<ExperimentInput>> TrustedFile(ExperimentInput admitted, string path) =>
-        (await Judge(admitted.Verb, admitted.Root.Root, [path])).Map(_ => admitted);
+    private static async Task<Passage<ExperimentInput>> TrustedFile(ExperimentInput admitted, string path, GateSeams seams) =>
+        (await Judge(admitted.Verb, admitted.Root.Root, [new(path, FileKind.Regular)], seams)).Map(_ => admitted);
 
     private static Passage<T> Unmet<T>(VerbInput input, IReadOnlyList<RootRequirement> requirements, string root, T carried)
     {
         var sentence = RootRequirements.FirstUnmet(requirements, root, PathExists);
         return sentence.Length == 0
             ? new Passage<T>.Through(carried)
-            : Passage<T>.Stop(Configuration, $"model-arms {input.Verb}: {sentence}");
+            : Passage<T>.Stop(ExitCodes.Configuration, $"model-arms {input.Verb}: {sentence}");
     }
 
     private static IReadOnlyList<string> ArmsOf(VerbInput input) =>
@@ -118,19 +134,19 @@ public static class ExperimentGate
         return ExperimentFile.Read(json, location).Match(
             experiment => new Passage<ExperimentInput>.Through(new ExperimentInput(input, new RootPaths(root), experiment)),
             reason => Passage<ExperimentInput>.Stop(
-                Configuration,
+                ExitCodes.Configuration,
                 [$"model-arms {input.Verb}: experiment.json is refused:", .. reason.Split('\n').Select(problem => $"  {problem}")]));
     }
 
     private static string Home(IReadOnlyDictionary<string, string> environment) =>
         environment.GetValueOrDefault("HOME", string.Empty) is { Length: > 0 } home ? home : environment.GetValueOrDefault("USERPROFILE", string.Empty);
 
-    /// <summary>The file's text, or why the host could not give it.</summary>
-    private static async Task<Outcome<string>> TextOf(string path)
+    /// <summary>The file's text, or why the host could not give it. A stop the operator asked for cancels the read.</summary>
+    private static async Task<Outcome<string>> TextOf(string path, CancellationToken ct)
     {
         try
         {
-            return Outcome<string>.Success(await File.ReadAllTextAsync(path));
+            return Outcome<string>.Success(await File.ReadAllTextAsync(path, ct));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -138,29 +154,57 @@ public static class ExperimentGate
         }
     }
 
+    /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Off POSIX nothing was judged, so nothing is compared.</summary>
+    private static async Task<Passage<FileFacts>> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new Passage<FileFacts>.Through(judged);
+        }
+
+        var again = await seams.ReadFacts(judged.Path, FileKind.Regular, input.Stopping);
+        return again switch
+        {
+            FactsRead.Read read => Compared(input, judged, read.Facts),
+            FactsRead.Refused refused => Passage<FileFacts>.Stop(ExitCodes.Configuration, $"model-arms {input.Verb}: {refused.Reason}"),
+            FactsRead.Unread unread => Passage<FileFacts>.Stop(ExitCodes.Environment, $"model-arms {input.Verb}: {unread.Reason}"),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+    }
+
+    private static Passage<FileFacts> Compared(VerbInput input, FileFacts judged, FileFacts now)
+    {
+        var changes = RootTrust.Changes(judged, now);
+        return changes.Count == 0
+            ? new Passage<FileFacts>.Through(now)
+            : Passage<FileFacts>.Stop(
+                ExitCodes.Configuration,
+                $"model-arms {input.Verb}: {System.IO.Path.GetFileName(judged.Path)} changed between its trust check and its read ({string.Join(", ", changes)}) — refused (D17)");
+    }
+
     /// <summary>D17 a over <paramref name="files"/>: off POSIX the printed line says the check was not performed and the walk goes on; on POSIX the
-    /// facts are read (a <c>stat</c> or <c>id</c> that fails stops with exit 3), a link is refused, and the owner and mode are judged (exit 4, every
-    /// problem printed). The answer is the normalised paths whose facts were read, in the order given.</summary>
-    private static async Task<Passage<IReadOnlyList<string>>> Judge(VerbInput input, string root, IReadOnlyList<string> files)
+    /// facts are read (a <c>stat</c> or <c>id</c> that fails stops with exit 3), a link or a file of the wrong kind is refused, and the owner and mode
+    /// are judged (exit 4, every problem printed). The answer is the facts that were read, in the order given.</summary>
+    private static async Task<Passage<IReadOnlyList<FileFacts>>> Judge(VerbInput input, string root, IReadOnlyList<Wanted> files, GateSeams seams)
     {
         if (OperatingSystem.IsWindows())
         {
             input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(false, 0, [], root)).Line);
-            return new Passage<IReadOnlyList<string>>.Through(files);
+            return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, -1, UnixFileMode.None))]);
         }
 
         var uid = await RootFacts.CurrentUidAsync(input.Stopping);
         return await uid.Match(
-            id => JudgeFacts(input, root, files, id),
-            reason => Task.FromResult(Passage<IReadOnlyList<string>>.Stop(Environment, $"model-arms {input.Verb}: {reason}")));
+            id => JudgeFacts(input, root, files, id, seams),
+            reason => Task.FromResult(Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, $"model-arms {input.Verb}: {reason}")));
     }
 
-    private static async Task<Passage<IReadOnlyList<string>>> JudgeFacts(VerbInput input, string root, IReadOnlyList<string> files, int uid)
+    private static async Task<Passage<IReadOnlyList<FileFacts>>> JudgeFacts(VerbInput input, string root, IReadOnlyList<Wanted> files, int uid, GateSeams seams)
     {
         var reads = new List<FactsRead>();
         foreach (var file in files)
         {
-            reads.Add(await RootFacts.ReadFactsAsync(file, input.Stopping));
+            reads.Add(await seams.ReadFacts(file.Path, file.Kind, input.Stopping));
         }
 
         var unread = reads.OfType<FactsRead.Unread>().Select(read => read.Reason).ToList();
@@ -168,12 +212,12 @@ public static class ExperimentGate
         IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(true, uid, facts, root))];
         if (unread.Count > 0)
         {
-            return Passage<IReadOnlyList<string>>.Stop(Environment, [.. unread.Select(reason => $"model-arms {input.Verb}: {reason}")]);
+            return Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, [.. unread.Concat(refusals).Select(reason => $"model-arms {input.Verb}: {reason}")]);
         }
 
         return refusals.Count > 0
-            ? Passage<IReadOnlyList<string>>.Stop(Configuration, [.. refusals.Select(reason => $"model-arms {input.Verb}: {reason}")])
-            : new Passage<IReadOnlyList<string>>.Through([.. facts.Select(fact => fact.Path)]);
+            ? Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Configuration, [.. refusals.Select(reason => $"model-arms {input.Verb}: {reason}")])
+            : new Passage<IReadOnlyList<FileFacts>>.Through(facts);
     }
 
     private static IReadOnlyList<string> ProblemsOf(TrustAnswer answer) =>

@@ -1,7 +1,21 @@
 namespace ModelArms.Core.Experiment;
 
-/// <summary>What the console learned about one file or folder: where it is, which user owns it, and its mode.</summary>
-public sealed record FileFacts(string Path, int OwnerUid, UnixFileMode Mode);
+/// <summary>What kind of file the type bits of a mode name. <see cref="Unknown"/> is "not captured", a different fact from any kind.</summary>
+public enum FileKind { Unknown, Regular, Directory, Link, Fifo, Socket, CharacterDevice, BlockDevice }
+
+/// <summary>Which inode a path reached when it was read: the device and inode numbers and the kind of file. Two reads of one path that disagree
+/// reached two different files.</summary>
+public sealed record FileIdentity(ulong Device, ulong Inode, FileKind Kind)
+{
+    /// <summary>No identity was captured (a fact built by hand, or a platform that reads none).</summary>
+    public static FileIdentity Unknown { get; } = new(0, 0, FileKind.Unknown);
+}
+
+/// <summary>What the console learned about one file or folder: where it is, which user owns it, its mode and which inode that was.</summary>
+public sealed record FileFacts(string Path, int OwnerUid, UnixFileMode Mode)
+{
+    public FileIdentity Identity { get; init; } = FileIdentity.Unknown;
+}
 
 /// <summary>The answer of the trust check. Three states, never two: a check that was <b>not performed</b> is not a check that passed.</summary>
 public abstract record TrustAnswer
@@ -35,6 +49,20 @@ public static class RootTrust
         IReadOnlyList<string> problems = [.. files.SelectMany(file => Problems(file, currentUid))];
         return problems.Count == 0 ? new TrustAnswer.Trusted() : new TrustAnswer.Refused(problems);
     }
+
+    /// <summary>What differs between two reads of one path: the names of the facts (device, inode, type, owner, mode) that are not the same, empty when
+    /// nothing is. A path that reaches another file between its trust check and its read is the swap D17 exists to refuse.</summary>
+    public static IReadOnlyList<string> Changes(FileFacts before, FileFacts after) =>
+    [
+        .. new (string Fact, bool Differs)[]
+        {
+            ("device", before.Identity.Device != after.Identity.Device),
+            ("inode", before.Identity.Inode != after.Identity.Inode),
+            ("type", before.Identity.Kind != after.Identity.Kind),
+            ("owner", before.OwnerUid != after.OwnerUid),
+            ("mode", before.Mode != after.Mode),
+        }.Where(change => change.Differs).Select(change => change.Fact),
+    ];
 
     private static IEnumerable<string> Problems(FileFacts file, int currentUid)
     {

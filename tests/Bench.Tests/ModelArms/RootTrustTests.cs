@@ -113,4 +113,39 @@ public sealed class RootTrustTests
         line.Should().Contain("not performed").And.Contain("/r").And.Contain("POSIX only");
         answer.Should().NotBeOfType<TrustAnswer.Trusted>();
     }
+
+    private static FileFacts Facts(ulong device = 1, ulong inode = 2, FileKind kind = FileKind.Regular, int owner = 1000, UnixFileMode mode = Own) =>
+        new("/r/experiment.json", owner, mode) { Identity = new FileIdentity(device, inode, kind) };
+
+    [Fact]
+    public void Two_reads_of_one_file_that_agree_on_everything_have_no_changes()
+    {
+        RootTrust.Changes(Facts(), Facts()).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("device")]
+    [InlineData("inode")]
+    [InlineData("type")]
+    [InlineData("owner")]
+    [InlineData("mode")]
+    public void Each_fact_that_differs_between_two_reads_is_named(string fact)
+    {
+        var after = fact switch
+        {
+            "device" => Facts(device: 2),
+            "inode" => Facts(inode: 3),
+            "type" => Facts(kind: FileKind.Fifo),
+            "owner" => Facts(owner: 0),
+            _ => Facts(mode: Own | UnixFileMode.GroupWrite),
+        };
+
+        RootTrust.Changes(Facts(), after).Should().Equal(fact);
+    }
+
+    [Fact]
+    public void Every_fact_that_differs_is_named_not_only_the_first()
+    {
+        RootTrust.Changes(Facts(), Facts(device: 2, inode: 3, owner: 0)).Should().Equal("device", "inode", "owner");
+    }
 }
