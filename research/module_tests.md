@@ -102,7 +102,7 @@ The module under `tools/model-arms` is its own console (`model-arms`), driven he
 | `model-arms prep-base` | covered | `ModelArmsScenarioTests` | the guard only (the same checks, then refused until E4.S4); the baseline measurement is not built |
 | `model-arms version` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
 | `model-arms help` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
-| `model-arms init` | covered | `ModelArmsScenarioTests` | the binary as a process: `init` makes a root, `validate` reads it and refuses the unfilled template (4) without a trust refusal, a second `init` is refused (4); `InitVerbTests` holds every refusal (existing root, link root, link parent, git checkout, this repository, missing parent, exit 3), the owner-only modes read back, and `init` then `validate` over a filled experiment (0); the template against the example in `ExampleExperimentTests` |
+| `model-arms init` | covered | `ModelArmsScenarioTests` | the binary as a process: `init` makes a root, `validate` reads it and refuses the unfilled template (4) without a trust refusal, a second `init` is refused (4); a second scenario runs it under `umask 0277` (modes still owner-only); `InitVerbTests` holds every refusal (existing root, link root, link parent, git checkout, this repository, missing parent, exit 3), the owner-only modes read back, and `init` then `validate` over a filled experiment (0); the template against the example in `ExampleExperimentTests` |
 | `model-arms make` | not covered | — | not built yet, story E4.S4 |
 | `model-arms lock` | not covered | — | not built yet, story E4.S1 |
 | `model-arms unlock` | not covered | — | not built yet, story E4.S1 |

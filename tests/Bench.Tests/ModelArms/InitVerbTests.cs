@@ -2,7 +2,6 @@ using FluentAssertions;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using Xunit;
-using Bench.Tests.Infrastructure;
 using ArmsProgram = ModelArms.Program;
 using ModelArmsApp = ModelArms;
 
@@ -55,7 +54,7 @@ public sealed class InitVerbTests
 
     [Fact]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
-    public async Task Init_makes_the_root_and_its_files_owner_only_whatever_the_umask()
+    public async Task Init_makes_the_root_and_its_files_owner_only_under_this_processs_umask()
     {
         Posix();
         using var temp = new TempFolder();
@@ -97,7 +96,8 @@ public sealed class InitVerbTests
         code.Should().Be(4);
         error.Should().Contain("experiment.json is refused").And.Contain("<fill me>");
         error.Split('\n').Should().NotContain(line => line.Contains("is missing", StringComparison.Ordinal), "every member is present; only its value is unfilled");
-        error.Should().NotContain("trust", "a root init made passes the trust check");
+        error.Split('\n')[0].Should().Be("model-arms validate: experiment.json is refused:", "the first thing the gate says is the content's refusal, not a trust one");
+        error.Should().NotContain("writable by group or others").And.NotContain("not by you", "a root init made passes the trust check");
     }
 
     [Fact]
@@ -120,8 +120,10 @@ public sealed class InitVerbTests
     [Fact]
     public async Task Init_refuses_a_root_inside_a_git_checkout()
     {
-        using var repository = await TempGitRepo.CreateAsync();
-        var root = Path.Combine(repository.Path, "exp");
+        using var temp = new TempFolder();
+        var checkout = temp.Folder("checkout");
+        Directory.CreateDirectory(Path.Combine(checkout, ".git"));
+        var root = Path.Combine(checkout, "exp");
 
         var (code, _, error) = await InitAsync(root);
 
@@ -235,5 +237,106 @@ public sealed class InitVerbTests
 
         code.Should().Be(4);
         error.Should().Contain("model-arms init").And.Contain("empty");
+    }
+
+    [Fact]
+    public async Task Init_refuses_a_parent_that_is_a_dangling_link_naming_the_link()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var dangling = temp.Combine("dangling-parent");
+        File.CreateSymbolicLink(dangling, temp.Combine("nowhere"));
+
+        var (code, _, error) = await InitAsync(Path.Combine(dangling, "fresh"));
+
+        code.Should().Be(4);
+        error.Should().Contain($"{dangling} is a symbolic link");
+        Directory.Exists(temp.Combine("nowhere")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Init_refuses_a_root_reached_through_a_link_into_a_git_checkout()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var checkout = temp.Folder("checkout");
+        Directory.CreateDirectory(Path.Combine(checkout, ".git"));
+        Directory.CreateDirectory(Path.Combine(checkout, "a", "b"));
+        var link = temp.Combine("L");
+        File.CreateSymbolicLink(link, Path.Combine(checkout, "a"));
+
+        var (code, _, error) = await InitAsync(Path.Combine(link, "b", "exp"));
+
+        code.Should().Be(4);
+        error.Should().Contain("inside the git checkout", "the textual path has no checkout above it; the kernel's path does");
+        Directory.EnumerateFileSystemEntries(Path.Combine(checkout, "a", "b")).Should().BeEmpty("nothing was made through the link");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Validate_refuses_a_root_reached_through_a_link_into_a_git_checkout()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var checkout = temp.Folder("checkout");
+        Directory.CreateDirectory(Path.Combine(checkout, ".git"));
+        var real = Path.Combine(checkout, "a", "b", "exp");
+        Directory.CreateDirectory(real);
+        File.SetUnixFileMode(real, OwnerOnlyFolder);
+        File.WriteAllText(Path.Combine(real, "experiment.json"), "{}");
+        File.SetUnixFileMode(Path.Combine(real, "experiment.json"), OwnerOnlyFile);
+        var link = temp.Combine("L");
+        File.CreateSymbolicLink(link, Path.Combine(checkout, "a"));
+
+        var (code, _, error) = await RunAsync(["validate", "--experiment", Path.Combine(link, "b", "exp")]);
+
+        code.Should().Be(4);
+        error.Should().Contain("inside the git checkout", "the gate asks the same placement question init does, of the kernel's path");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Init_never_adopts_a_folder_that_appears_at_the_root_after_the_existence_check()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        var root = temp.Combine("raced");
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var input = new ModelArmsApp.VerbInput(
+            "init", [root], Bench.Cli.CommandLine.Parse(["init"]), output, error, NoEnvironment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
+
+        var code = await ModelArmsApp.Verbs.InitVerb.RunAsync(
+            input,
+            path =>
+            {
+                Directory.CreateDirectory(path);
+                File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("777", 8));
+                return KernelFacts.MakeFolder(path);
+            });
+
+        code.Should().Be(4);
+        error.ToString().Should().Contain($"{root} already exists");
+        File.GetUnixFileMode(root).Should().HaveFlag(UnixFileMode.OtherWrite, "a folder someone else made is left as it was and never chmodded or written into");
+        Directory.EnumerateFileSystemEntries(root).Should().BeEmpty();
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void The_kernels_mkdir_makes_a_new_folder_and_says_so_for_an_existing_one_without_touching_it()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        var fresh = temp.Combine("fresh");
+        var existing = temp.Folder("existing");
+        File.SetUnixFileMode(existing, (UnixFileMode)Convert.ToInt32("777", 8));
+
+        KernelFacts.MakeFolder(fresh).Should().BeOfType<FolderMade.Made>();
+        KernelFacts.MakeFolder(existing).Should().BeOfType<FolderMade.AlreadyThere>();
+        KernelFacts.MakeFolder(Path.Combine(temp.Path, "no", "parent")).Should().BeOfType<FolderMade.Failed>("an absent parent is the operating system's refusal, not an existing folder");
+        File.GetUnixFileMode(existing).Should().Be((UnixFileMode)Convert.ToInt32("777", 8));
     }
 }

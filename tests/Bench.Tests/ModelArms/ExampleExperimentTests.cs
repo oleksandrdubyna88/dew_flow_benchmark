@@ -76,10 +76,34 @@ public sealed partial class ExampleExperimentTests
     {
         var template = ExperimentTemplate.From(File.ReadAllText(SourceExample));
 
-        var read = ExperimentFile.Read(template, new ExperimentLocation(Path.GetFullPath("/example/root"), string.Empty, string.Empty, string.Empty));
+        var reason = Refusal(template);
 
-        read.Match(_ => string.Empty, reason => reason).Split('\n').Should().NotContain(line => line.Contains("is missing", StringComparison.Ordinal));
+        reason.Should().Contain("steps.code.mode is '<fill me>'", "a positive: the reader parsed the template (comments and all) and walked into its members");
+        reason.Should().NotContain("is not JSON");
+        reason.Split('\n').Should().NotContain(line => line.Contains("is missing", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Every_value_the_template_leaves_unfilled_is_named_by_the_reader()
+    {
+        var template = ExperimentTemplate.From(File.ReadAllText(SourceExample));
+        using var document = JsonDocument.Parse(template, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
+        var unfilled = Nodes(document.RootElement, string.Empty)
+            .Where(node => node.Element.ValueKind == JsonValueKind.String && node.Element.GetString() == ExperimentTemplate.Blank && !KeptMembers.Contains(node.Path))
+            .Select(node => node.Path)
+            .ToList();
+        var lines = Refusal(template).Split('\n');
+
+        unfilled.Should().Contain(["known", "target.planBranch", "steps.code.model", "coai.side"], "the scan must still reach the fields no other rule rejects");
+        unfilled.Where(path => !lines.Any(line => Names(line, path))).Should().BeEmpty("a <fill me> the reader lets through is a template that validates as filled");
+    }
+
+    private static string Refusal(string json) =>
+        ExperimentFile.Read(json, new ExperimentLocation(Path.GetFullPath("/example/root"), string.Empty, string.Empty, string.Empty)).Match(_ => string.Empty, reason => reason);
+
+    /// <summary>Whether a problem line is about <paramref name="path"/>: it starts with the path, then a space or a colon.</summary>
+    private static bool Names(string line, string path) =>
+        line.StartsWith(path, StringComparison.Ordinal) && line.Length > path.Length && line[path.Length] is ' ' or ':';
 
     /// <summary>One line per node of the document: its path, its kind and, for an array, its length. Comments are skipped.</summary>
     private static IReadOnlyList<string> Shape(string json)

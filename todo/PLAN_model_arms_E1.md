@@ -1,6 +1,6 @@
 # PLAN — E1 stories: facts, layout and the launch boundary of the model-arms module
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Epic E1 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D1–D5, D9,
+> Status: **E1.S1–E1.S11 implemented on `feat/model-arms`, 2026-10-29; the document promotes to `research/` with its parent plan.** Epic E1 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D1–D5, D9,
 > D15, D17–D20, D23, D24; §4.1–§4.4, §4.10, §4.12; §7's E1 tests).
 >
 > Scope: a new `src/Bench.Hosting` (three files moved out of `hosts/Cli`), the two projects under `tools/model-arms/`, the launcher

@@ -107,9 +107,31 @@ public sealed class ModelArmsScenarioTests
         init.Output.Should().Contain($"Next: model-arms validate --experiment {fresh}");
         validate.Code.Should().Be(4, "the template is a shape, not an experiment");
         validate.Error.Should().Contain("experiment.json is refused").And.Contain("<fill me>");
-        validate.Error.Should().NotContain("trust", "a root init made is the operator's own and closed to group and others");
+        validate.Error.Split('\n')[0].Should().Be("model-arms validate: experiment.json is refused:");
+        validate.Error.Should().NotContain("writable by group or others").And.NotContain("not by you", "a root init made is the operator's own and closed to group and others");
         again.Code.Should().Be(4);
         again.Error.Should().Contain("already exists");
+    }
+
+    /// <summary>The umask is the child's own: a shell sets it and runs the binary, so no state of the test process (shared with parallel tests) is touched.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task Init_through_the_binary_makes_the_modes_owner_only_under_a_umask_that_would_leave_the_owner_nothing()
+    {
+        Posix();
+        using var fixture = new ExperimentRoot();
+        var fresh = Path.Combine(fixture.Temp, "umask-fresh");
+        var environment = fixture.Environment.ToDictionary(variable => variable.Key, variable => variable.Value);
+
+        var attempt = await ProcessRunner.RunAsync(
+            "/bin/sh", ["-c", "umask 0277; exec \"$0\" init \"$1\"", ExperimentRoot.ConsoleBinary, fresh], fixture.Temp, TimeSpan.FromSeconds(60), string.Empty, environment, TestContext.Current.CancellationToken);
+        var done = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+
+        done.ExitCode.Should().Be(0, done.StandardError);
+        File.GetUnixFileMode(fresh).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.GetUnixFileMode(Path.Combine(fresh, "briefs")).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.GetUnixFileMode(Path.Combine(fresh, "experiment.json")).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        File.GetUnixFileMode(Path.Combine(fresh, "scenarios.json")).Should().Be(UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 
     [Fact]

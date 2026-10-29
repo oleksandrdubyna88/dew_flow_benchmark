@@ -7,22 +7,28 @@ namespace ModelArms.Verbs;
 
 /// <summary><c>init &lt;root&gt;</c> (D18): the first verb of a run. It creates ONE new folder — never writes into an existing one — and in it the template
 /// <c>experiment.json</c> (the shipped example with its values blanked, <see cref="ExperimentTemplate"/>), an empty <c>scenarios.json</c> and an empty
-/// <c>briefs/</c>. It does not go through <see cref="ExperimentGate"/>: there is no experiment yet to read, and the root it is asked about does not exist.
+/// <c>briefs/</c>. It does not go through <see cref="ExperimentGate"/>: there is no experiment yet to read and the root it is asked about does not exist.
 /// <para>
 /// The root is made where the module would later accept it, by the module's own rules and not a second set: the existence check is
-/// <see cref="RootRequirements"/>'s, the placement (outside this repository and every git checkout) is <see cref="ExperimentFile.Placement"/>'s, and every
-/// question about a link or a kind of file goes through <see cref="RootFacts"/>. The folders are made <c>0700</c> and the files <c>0600</c> off Windows, so the
-/// gate's trust check (the operator's own, closed to group and others) passes on the first <c>validate</c>. A symbolic link is never followed: a root that
-/// already is one exists and is refused, a parent folder that is one is refused, and the root is judged again right after it is made.
+/// <see cref="RootRequirements"/>'s, the placement (outside this repository and every git checkout, asked of where the root REALLY is) is
+/// <see cref="ExperimentFile.Placement"/>'s, and every question about a link or a kind of file goes through <see cref="RootFacts"/>. The root is made EXCLUSIVELY
+/// (<c>mkdir(2)</c> through <see cref="KernelFacts"/>: anything already at the name is exit 4 and is left as it was), then its modes are SET — <c>0700</c> for the folders,
+/// <c>0600</c> for the files, whatever the umask — so the gate's trust check (the operator's own, closed to group and others) passes on the first <c>validate</c>.
 /// </para>
 /// <para>
-/// Exit 0 created; 4 a refusal of the configuration (the root exists, its parent does not, it is inside a checkout, a link is in the way); 3 the host could
-/// not do it (a folder it may not write in, a file that cannot be made, the example missing). A stop signal is honoured once, before anything is made: a root
-/// half-made by a stop would be refused as existing by the same command run again.
+/// Links. A root that already is a symbolic link exists and is refused; the parent folder is refused when it is one; the root is judged again right after it is
+/// made; the files are created with <c>CreateNew</c>. What is NOT closed: <c>mkdir</c> follows the links ABOVE the root, so whoever can write an ancestor of the parent can
+/// swap the parent for a link between its judgement and the <c>mkdir</c> and redirect where the root is made (the gate's own ancestor residual: it does not judge ancestors
+/// either). The second judgement then sees a real folder at the redirected place. Only the operator's own folders should be named as the parent.
 /// </para>
 /// <para>
-/// What it does NOT close: the root is checked absent and then made — two calls, so two <c>init</c> processes racing for one name can both pass the check; the files
-/// are created with <c>CreateNew</c>, so neither overwrites the other. An ANCESTOR above the parent folder may be a link (the gate allows one too: a WSL home usually is).
+/// Exit 0 created; 4 a refusal of the configuration (the root exists, its parent does not, it is inside a checkout, a link is in the way); 3 the host could not do it (a
+/// folder it may not write in, a file that cannot be made, the example missing, a platform whose <c>mkdir</c> is not probed). A stop signal is honoured once, before anything
+/// is made: a root half-made by a stop would be refused as existing by the same command run again.
+/// </para>
+/// <para>
+/// What it does NOT close: the root is checked absent and then made — two calls — but the <c>mkdir</c> is exclusive, so two <c>init</c> processes racing for one name cannot
+/// both make it; the loser is exit 4.
 /// </para></summary>
 public static class InitVerb
 {
@@ -36,10 +42,13 @@ public static class InitVerb
     /// <summary>The root and the template text, once every refusal has been passed.</summary>
     private sealed record Plan(string Root, string Template);
 
-    public static Task<int> RunAsync(VerbInput input)
+    public static Task<int> RunAsync(VerbInput input) => RunAsync(input, MakeRootFolder);
+
+    /// <summary>The same with the making of the root handed in: the only way a test can put a folder at the name between the existence check and the <c>mkdir</c>.</summary>
+    internal static Task<int> RunAsync(VerbInput input, Func<string, FolderMade> makeRoot)
     {
         input.Stopping.ThrowIfCancellationRequested();
-        var made = Decided(input).Bind(root => Templated(input, root)).Bind(plan => Made(input, plan));
+        var made = Decided(input).Bind(root => Templated(input, root)).Bind(plan => Made(input, plan, makeRoot));
         return Task.FromResult(made.Match(plan => Created(input, plan), stop => Stopped(input, stop)));
     }
 
@@ -49,7 +58,7 @@ public static class InitVerb
             .Bind(root => Absent(input, root))
             .Bind(root => ParentExists(root))
             .Bind(root => Placed(input, root))
-            .Bind(root => Judged(input, ParentOf(root)).Map(_ => root));
+            .Bind(root => Judged(ParentOf(root)).Map(_ => root));
 
     private static Passage<string> NamedRoot(VerbInput input)
     {
@@ -74,10 +83,11 @@ public static class InitVerb
         return sentence.Length == 0 ? new Passage<string>.Through(root) : Passage<string>.Stop(ExitCodes.Configuration, $"{Name} init: {sentence}");
     }
 
+    /// <summary>The parent must be there: a directory entry, a dangling link included — <see cref="Judged"/> then names a link, which "does not exist" would hide.</summary>
     private static Passage<string> ParentExists(string root) =>
-        Directory.Exists(ParentOf(root))
-            ? new Passage<string>.Through(root)
-            : Passage<string>.Stop(ExitCodes.Configuration, $"{Name} init: {ParentOf(root)} does not exist — init creates one folder, not a path");
+        RootFacts.Host.Present(ParentOf(root)).Match(
+            present => present ? new Passage<string>.Through(root) : Passage<string>.Stop(ExitCodes.Configuration, $"{Name} init: {ParentOf(root)} does not exist — init creates one folder, not a path"),
+            reason => Passage<string>.Stop(ExitCodes.Environment, $"{Name} init: {reason}"));
 
     private static Passage<string> Placed(VerbInput input, string root)
     {
@@ -89,21 +99,17 @@ public static class InitVerb
     private static string ParentOf(string root) => Path.GetDirectoryName(root) ?? string.Empty;
 
     /// <summary>The folder is a real directory — not a symbolic link, not another kind of file — judged by the kernel's own answer. Off Windows only: there the check is declared not performed.</summary>
-    private static Passage<string> Judged(VerbInput input, string folder)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return new Passage<string>.Through(folder);
-        }
+    private static Passage<string> Judged(string folder) =>
+        OperatingSystem.IsWindows() ? new Passage<string>.Through(folder) : JudgedByTheKernel(folder);
 
-        return RootFacts.ReadFacts(folder, FileKind.Directory) switch
+    private static Passage<string> JudgedByTheKernel(string folder) =>
+        RootFacts.ReadFacts(folder, FileKind.Directory) switch
         {
             FactsRead.Read => new Passage<string>.Through(folder),
             FactsRead.Refused refused => Passage<string>.Stop(ExitCodes.Configuration, $"{Name} init: {refused.Reason}"),
             FactsRead.Unread unread => Passage<string>.Stop(ExitCodes.Environment, $"{Name} init: {unread.Reason}"),
             _ => throw new InvalidOperationException("unreachable"),
         };
-    }
 
     /// <summary>The template, read before anything is made, so a missing example leaves nothing behind.</summary>
     private static Passage<Plan> Templated(VerbInput input, string root)
@@ -118,14 +124,13 @@ public static class InitVerb
         }
     }
 
-    /// <summary>Makes the root, judges it again (a link swapped in since the existence check is refused before a file is written through it), then fills it. A host that
-    /// will not do any of it is exit 3, and says whether a part-made root is left to remove.</summary>
-    private static Passage<Plan> Made(VerbInput input, Plan plan)
+    /// <summary>Makes the root exclusively, judges it again (a link swapped in since is refused before a file goes through it), sets its mode, then fills it. A name that is taken is
+    /// exit 4 and nothing is touched; a host that will not do any of it is exit 3, saying whether a part-made root is left to remove.</summary>
+    private static Passage<Plan> Made(VerbInput input, Plan plan, Func<string, FolderMade> makeRoot)
     {
         try
         {
-            MakeFolder(plan.Root);
-            return Judged(input, plan.Root).Bind(_ => Filled(plan));
+            return RootMade(input, plan.Root, makeRoot).Bind(root => Judged(root)).Bind(root => OwnerOnly(root, OwnerOnlyFolder)).Bind(_ => Filled(plan));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -133,10 +138,31 @@ public static class InitVerb
         }
     }
 
+    private static Passage<string> RootMade(VerbInput input, string root, Func<string, FolderMade> makeRoot) =>
+        makeRoot(root) switch
+        {
+            FolderMade.Made => new Passage<string>.Through(root),
+            FolderMade.AlreadyThere => Unmet(input, root, present: true),
+            FolderMade.Failed failed => Passage<string>.Stop(ExitCodes.Environment, $"{Name} init: cannot create {root}: {failed.Reason}"),
+            _ => throw new InvalidOperationException("unreachable"),
+        };
+
+    /// <summary>The kernel's exclusive <c>mkdir</c> off Windows; on Windows there are no modes and no probed call, so the folder is made by the runtime (the existence check has just passed).</summary>
+    private static FolderMade MakeRootFolder(string root)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return KernelFacts.MakeFolder(root);
+        }
+
+        Directory.CreateDirectory(root);
+        return new FolderMade.Made();
+    }
+
     private static Passage<Plan> Filled(Plan plan)
     {
         var paths = new RootPaths(plan.Root);
-        MakeFolder(paths.Briefs);
+        MakeSubfolder(paths.Briefs);
         WriteNew(paths.ExperimentFile, plan.Template);
         WriteNew(Path.Combine(plan.Root, ScenariosFile.FileName), EmptyScenarios);
         return new Passage<Plan>.Through(plan);
@@ -145,8 +171,20 @@ public static class InitVerb
     private static string LeftBehind(string root) =>
         Directory.Exists(root) ? $" — init stopped part-way: remove {root} and run init again" : string.Empty;
 
-    /// <summary>One new folder, owner-only off Windows. The mode is asked for at creation, so there is no moment the folder is open to others.</summary>
-    private static void MakeFolder(string path)
+    /// <summary>The mode set explicitly: the mode given at creation is narrowed by the umask, and a umask that took the owner's bits would leave a folder <c>init</c> could not fill.
+    /// Off Windows only.</summary>
+    private static Passage<string> OwnerOnly(string folder, UnixFileMode mode)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(folder, mode);
+        }
+
+        return new Passage<string>.Through(folder);
+    }
+
+    /// <summary>One new folder below the root, owner-only whatever the umask.</summary>
+    private static void MakeSubfolder(string path)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -155,18 +193,20 @@ public static class InitVerb
         }
 
         Directory.CreateDirectory(path, OwnerOnlyFolder);
+        File.SetUnixFileMode(path, OwnerOnlyFolder);
     }
 
-    /// <summary>One new file, owner-only off Windows, created exclusively: an existing file — or a link at that name — is an error and never written through.</summary>
+    /// <summary>One new file, created exclusively: an existing file — or a link at that name — is an error and never written through. Its mode is set on the open handle, before the first byte,
+    /// whatever the umask.</summary>
     private static void WriteNew(string path, string text)
     {
         var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        using var stream = new FileStream(path, options);
         if (!OperatingSystem.IsWindows())
         {
-            options.UnixCreateMode = OwnerOnlyFile;
+            File.SetUnixFileMode(stream.SafeFileHandle, OwnerOnlyFile);
         }
 
-        using var stream = new FileStream(path, options);
         stream.Write(Utf8WithoutBom.GetBytes(text));
     }
 
