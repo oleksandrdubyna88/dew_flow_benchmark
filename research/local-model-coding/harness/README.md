@@ -73,7 +73,7 @@
 | `repair-limit-2026-10-28.sh` | The one-off repair after the overnight spend limit ([../incidents.md](../incidents.md) §2g), kept as the record |
 | `objective-checks.sh` | The objective gate of one arm, with the 43 scenarios |
 | `metrics6.mjs` | Cost (Claude only), active time, attempts, span per arm and step |
-| `judge-abs.sh`, `coai-findings.mjs`, `judge-coai.sh` | The absolute blind judge; the coai findings of every gate step; the blind judge of those findings |
+| `judge-abs.sh`, `coai-findings.mjs`, `coai-cost.mjs`, `judge-coai.sh` | The absolute blind judge; the coai findings of every gate step; the tokens the coai server reported per round; the blind judge of those findings |
 | `mutate6.mjs` | The eight frozen mutants, with the prediction written in its header |
 | `make-tables6.mjs` | [../tables.md](../tables.md) §10, from [../data/part6/](../data/part6/) only (called by `../make-tables.mjs`) |
 | `briefs/` | `1-code`, `2-review`, `3-fix`, `hr-review-fix`, `x-split`, `x-split-fix`, `t2-coder`, `gate`, `5-judge-abs`, `judge-coai` |

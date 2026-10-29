@@ -451,7 +451,7 @@ likely at M4, M5 or M6; 7–8 of 8 killed per arm; no scheme difference beyond o
   SRS1's batch markers and Haiku diffs of t4, t5 and t7). Commits and uncommitted work stayed. Round 2 had no commit and a clean tree, so its out, notes
   and work folders were reset to a fresh start. The detector was changed to read `api_error_status` and `api_error` first, and an error result is
   never "done" (it stops the runner for a person to look). The chain restarted at 08:45 UTC and the round-1 sessions resumed with the time left of their budgets.
-- Effect on the data: no step was lost; costs of the interrupted attempts are counted; active minutes leave the wait out; round-1 elapsed times (779–862 min) contain it.
+- Effect on the data: no step was lost; Claude-only costs of the interrupted attempts are counted (C1's Opus review: $8.75 in two attempts, against $3.98–$4.76 elsewhere, which raises the C mean from $15.16 to $16.63); active minutes leave the wait out; round-1 elapsed times (779–862 min) contain it.
 
 ### Part 6 — after the run (2026-10-29, recorded with the results)
 
@@ -463,8 +463,8 @@ likely at M4, M5 or M6; 7–8 of 8 killed per arm; no scheme difference beyond o
   experiment, the owner's repositories or the vendors' homes. Two things were looked at one by one: SRS1's `readlink /proc/<pid>/cwd` on two process ids (both were its own worktrees), and a
   failed edit of CR3's Haiku reviewer to a path in the experiment root (the file did not exist; nothing was written there).
 - **A test that fails in the arms, not in the checks:** the arms' own whole-suite runs showed one failing test, `RegularFilesTests.A_fifo_a_socket_and_a_device_…` (a Unix-socket path longer
-  than 108 characters under the arm's temp folder). The brief had said nothing is known to fail. Seven of the nine gate notes name this test and call it environmental. In the objective checks, with the
-  normal temp folder, it passed.
+  than 108 characters under the arm's temp folder). The brief had said nothing is known to fail. All nine arms show it (1 failed in each own run): the gate notes of C1, C3, CR2, CR3, SRS1, SRS2 and SRS3 name it, and so do the fix notes of C2 and CR1. In the objective checks, with the
+  normal temp folder, it passed, and the suite counts reported in the tables are those of the objective checks.
 - **The operator's commands in the plan round:** every arm's plan round carried the operator's panel commands (split into epics, a Fable/Opus role split, consultants first, a consult
   cadence). All nine gate agents declined them, with the reason that the plan is frozen and the brief fixes the flow.
 - **C2's Opus review** ran to its hard deadline (50 min, exit 124) after it had written its review. The review is used as written.

@@ -134,8 +134,8 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   in that error was marked done, and the next step started at once and failed in about 4 seconds. 14 attempts ended this way: C1 3, CR1 4, SRS1 7.
   Three of them (C1's Opus review, CR1's Haiku review, SRS1's task t4) had worked 4–22 minutes first. Round 2 (C2, CR2, SRS2) started at 21:48 UTC
   and ended in a minute with no work and no commit. *Effect on the data:* no commit or finished step was lost. The interrupted attempts are in the
-  cost (C1's review $3.46 before the limit and $5.30 after the resume; CR1's Haiku review $0.75 and $1.10; SRS1's t4 $0.21 and $0.75). Active minutes
-  leave the wait out. Round 1's elapsed times (779–862 min) contain 11 hours of waiting. The `limited` field in round 1's `timing.jsonl` reads false
+  Claude-only cost (C1's review $3.46 before the limit and $5.30 after the resume; CR1's Haiku review $0.75 and $1.10; SRS1's t4 $0.21 and $0.75). Active minutes
+  leave the wait out. Round 1's elapsed times (779–862 min) contain 11 hours of waiting. C1's Opus review cost $8.75 in all, against $3.98–$4.76 for a review in one attempt, so the limit raises the C mean: $16.63 as measured, $15.16 with C1's review at the mean of C2's and C3's ($4.35). The `limited` field in round 1's `timing.jsonl` reads false
   for those attempts, because the detector wrote it. *What was changed:* [harness/part6/repair-limit-2026-10-28.sh](harness/part6/repair-limit-2026-10-28.sh)
   (kept as the record) removed the `.done` marker of every step whose last result is an error, the arm-done line, and what was computed from a bogus
   step (a `review.json` parsed from an error, before/diff snapshots at the wrong commit, SRS1's batch markers and the Haiku diffs of t4, t5 and t7).
@@ -149,16 +149,18 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   *Effect:* of the step's $5.35, Haiku cost $1.57, the Opus subagent $2.84 and the Sonnet subagent $0.94: $3.79 is not Haiku. The step's 12
   findings come from a Haiku session with two stronger helpers. It is the only step of all nine arms with a subagent (`grep -c '"name":"Agent"'`
   on all streams: only this file). *Why it could happen:* `run-arm.sh` allows `Agent` in every step that can write. *What was changed:* nothing in
-  the run. SRS3's Haiku-review result is marked contaminated in [tables.md](tables.md) §10 and [results.md](results.md) §7d, and the SRS mean cost is also
-  given without the two subagents ($15.90). A re-run should take `Agent` out of the write tools.
+  the run. SRS3's Haiku-review result is marked contaminated in [tables.md](tables.md) §10 and [results.md](results.md) §7d, and the measured SRS mean cost ($17.16, the primary figure) is given with
+  "($15.90 if the two subagents are left out)" beside it. A re-run should take `Agent` out of the write tools.
 - **The isolation scan.** Every tool call in the nine arms' streams (6,060) and in the two subagents of SRS3 (158) was read for paths. *Checked:* no arm
   read another arm's folder, clone, notes, results or token; none read the old experiment, the owner's repositories or the vendors' homes; no tool call was
   refused by the mode-000/300 folders. Four `Read` calls were refused by the deny list (C1 1, CR2 1, SRS3 2): each one wanted the arm's own saved tool result under `~/.claude/projects/`. Two things were opened one by one. SRS1's Haiku coder (task t2) ran `readlink /proc/<pid>/cwd` on two process
   ids; the answers were two worktrees of SRS1 itself. CR3's Haiku reviewer tried to edit a path in the experiment root (`…/coai-exp2/notes/hreview.md`); the
   file did not exist, the edit was refused, nothing was written. The scan cannot see a walk of `/proc` that a shell command hides; no such command is in the streams.
 - **A test that fails only under the isolation.** The per-arm temp folder made a Unix-socket path longer than 108 characters, so
-  `RegularFilesTests.A_fifo_a_socket_and_a_device_…` failed in the arms' own whole-suite runs. The brief said that nothing is known to fail. Seven of
-  the nine gate notes name the test and call it environmental. In the objective checks, with the normal temp folder, it passed (0 new failures in all nine arms).
+  `RegularFilesTests.A_fifo_a_socket_and_a_device_…` failed in the arms' own whole-suite runs. The brief said that nothing is known to fail. All nine
+  arms show it in their own whole-suite runs (1 failed in each): the gate notes of C1, C3, CR2, CR3, SRS1, SRS2 and SRS3 name it and call it environmental, and so do the fix notes
+  of C2 and CR1. In the objective checks, with the normal temp folder, it passed (0 new failures in all nine arms). The suite counts in [tables.md](tables.md) §10.3 are those of the objective
+  checks, so they include this test as passed. "All passed" in the Part 6 text means: in the objective checks.
 - **C1's S14 reads "absent" in the pass check.** The test is named `AnUnknownModel_HasNoGroup_AndEveryKnownOneHasItsKey`, a theory with 8 cases
   that all passed. The check looks for the plan's name as a whole word in the report, and a longer name does not match. So C1 shows 42 of 43
   passing. The test exists and passes, and the mutation check found it by the longer name and it caught its mutant. The objective file is unchanged;
