@@ -1,0 +1,180 @@
+{
+ "_label": "SYNTHETIC: hand-built session timeline, offsets in comments below; no real OTel or audit capture exists yet (E1.S3 step 0). Shapes follow E1.S4 spansFrom: OReq (tsMs, durationMs), the audit hook record (ts, event, tool_use_id), stamped stream lines ({t, line}), coai rounds spans, GitHub intervals.",
+ "_offsets": "wall 0-60 s. model_api 2-8 and 20-30 (otel ends 8 and 30). build_test 8-18. Agent container 8-55. Read 18-19. hook 19-19.5. gh pr checks --watch 30-50. coai review_code 50-56, round 51-55. CI 35-45, review 44-49.",
+ "wall": {
+  "startMs": 1793275200000,
+  "endMs": 1793275260000
+ },
+ "otel": {
+  "present": true,
+  "requests": [
+   {
+    "name": "api_request",
+    "tsMs": 1793275208000,
+    "durationMs": 6000,
+    "querySource": "main",
+    "agentId": null,
+    "requestId": "r1",
+    "missing": []
+   },
+   {
+    "name": "api_request",
+    "tsMs": 1793275230000,
+    "durationMs": 10000,
+    "querySource": "main",
+    "agentId": null,
+    "requestId": "r2",
+    "missing": []
+   }
+  ]
+ },
+ "audit": [
+  {
+   "ts": "2026-10-29T12:00:08.000Z",
+   "event": "PreToolUse",
+   "agent_id": "a1",
+   "tool_name": "Agent",
+   "tool_use_id": "t1",
+   "input": {
+    "description": "child"
+   }
+  },
+  {
+   "ts": "2026-10-29T12:00:08.000Z",
+   "event": "PreToolUse",
+   "agent_id": null,
+   "tool_name": "Bash",
+   "tool_use_id": "t2",
+   "input": {
+    "command": "dotnet build -c Release"
+   }
+  },
+  {
+   "ts": "2026-10-29T12:00:18.000Z",
+   "event": "PostToolUse",
+   "agent_id": null,
+   "tool_name": "Bash",
+   "tool_use_id": "t2",
+   "input": {}
+  },
+  {
+   "ts": "2026-10-29T12:00:18.000Z",
+   "event": "PreToolUse",
+   "agent_id": null,
+   "tool_name": "Read",
+   "tool_use_id": "t3",
+   "input": {
+    "file_path": "a.cs"
+   }
+  },
+  {
+   "ts": "2026-10-29T12:00:19.000Z",
+   "event": "PostToolUse",
+   "agent_id": null,
+   "tool_name": "Read",
+   "tool_use_id": "t3",
+   "input": {}
+  },
+  {
+   "ts": "2026-10-29T12:00:30.000Z",
+   "event": "PreToolUse",
+   "agent_id": null,
+   "tool_name": "Bash",
+   "tool_use_id": "t4",
+   "input": {
+    "command": "gh pr checks 3 --watch"
+   }
+  },
+  {
+   "ts": "2026-10-29T12:00:50.000Z",
+   "event": "PostToolUse",
+   "agent_id": null,
+   "tool_name": "Bash",
+   "tool_use_id": "t4",
+   "input": {}
+  },
+  {
+   "ts": "2026-10-29T12:00:50.000Z",
+   "event": "PreToolUse",
+   "agent_id": null,
+   "tool_name": "mcp__coai__review_code",
+   "tool_use_id": "t5",
+   "input": {}
+  },
+  {
+   "ts": "2026-10-29T12:00:56.000Z",
+   "event": "PostToolUse",
+   "agent_id": null,
+   "tool_name": "mcp__coai__review_code",
+   "tool_use_id": "t5",
+   "input": {}
+  },
+  {
+   "ts": "2026-10-29T12:00:55.000Z",
+   "event": "PostToolUse",
+   "agent_id": "a1",
+   "tool_name": "Agent",
+   "tool_use_id": "t1",
+   "input": {}
+  }
+ ],
+ "stamped": [
+  {
+   "t": 1793275219000,
+   "line": {
+    "type": "system",
+    "subtype": "hook_started",
+    "hook_id": "h1",
+    "hook_name": "PreToolUse:Bash"
+   }
+  },
+  {
+   "t": 1793275219500,
+   "line": {
+    "type": "system",
+    "subtype": "hook_response",
+    "hook_id": "h1",
+    "hook_name": "PreToolUse:Bash"
+   }
+  }
+ ],
+ "rounds": {
+  "known": true,
+  "spans": [
+   {
+    "category": "coai_gate",
+    "startMs": 1793275251000,
+    "endMs": 1793275255000,
+    "agentId": "main",
+    "source": "coai.rounds",
+    "label": "code#1 proceed"
+   }
+  ]
+ },
+ "github": {
+  "ciIntervals": [
+   {
+    "startMs": 1793275235000,
+    "endMs": 1793275245000
+   }
+  ],
+  "reviewIntervals": [
+   {
+    "startMs": 1793275244000,
+    "endMs": 1793275249000
+   }
+  ]
+ },
+ "expectedMs": {
+  "model_api": 16000,
+  "build_test": 10000,
+  "other_tool": 1000,
+  "hooks": 500,
+  "coai_gate": 6000,
+  "consultant": 0,
+  "ci_wait": 10000,
+  "coderabbit_wait": 4000,
+  "sleep300": 0,
+  "unattributed": 12500
+ }
+}
