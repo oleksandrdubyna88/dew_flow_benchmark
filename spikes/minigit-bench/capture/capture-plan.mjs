@@ -12,6 +12,8 @@ export const WALL_LIMIT_MS = 10 * 60 * 1000;
 export const MAX_BUDGET_USD = '1.5';
 const TOOLS = 'Agent,Bash,Read,Glob';
 const EFFORT = Object.freeze({ effortLevel: 'high' });
+// Headless `-p` has nobody to answer a permission prompt, so exactly what CAPTURE_PROMPT runs is allowed and nothing broader.
+export const ALLOW = Object.freeze(['Bash(ls)', 'Bash(ls:*)', 'Bash(echo capture-ok)', 'Read', 'Glob', 'Agent']);
 
 const SAFE = /^[A-Za-z0-9_./:@%+=,-]+$/;
 /** A hook command is a shell string run by the CLI, so a path with a space or a quote is single-quoted. */
@@ -25,6 +27,7 @@ export function settingsJson({ spikeDir, out }) {
     effortLevel: EFFORT.effortLevel,
     modelSettings: { opus: { ...EFFORT }, sonnet: { ...EFFORT }, fable: { ...EFFORT } },
     hooks: { PreToolUse: [hook], PostToolUse: [hook] },
+    permissions: { allow: [...ALLOW] },
   };
 }
 

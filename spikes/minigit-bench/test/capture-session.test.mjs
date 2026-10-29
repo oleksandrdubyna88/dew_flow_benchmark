@@ -59,9 +59,18 @@ test('The_settings_file_is_the_one_the_spec_writes_and_its_hooks_call_the_stamp_
   assert.deepEqual(JSON.parse(p.files['settings.json']), {
     effortLevel: 'high', modelSettings: { opus: { effortLevel: 'high' }, sonnet: { effortLevel: 'high' }, fable: { effortLevel: 'high' } },
     hooks: { PreToolUse: [hook], PostToolUse: [hook] },
+    permissions: { allow: ['Bash(ls)', 'Bash(ls:*)', 'Bash(echo capture-ok)', 'Read', 'Glob', 'Agent'] },
   });
   assert.deepEqual(JSON.parse(p.files['mcp.json']), { mcpServers: {} });
   assert.deepEqual(Object.keys(p.files).sort(), ['mcp.json', 'settings.json', 'tree/a.txt', 'tree/b.txt']);
+});
+
+test('The_allow_list_covers_what_the_prompt_runs_and_holds_no_broad_entry', () => {
+  const allow = JSON.parse(plan().files['settings.json']).permissions.allow;
+  assert.ok(!allow.includes('Bash'), 'no bare Bash');
+  assert.ok(allow.every(a => !/^Bash\(\*\)$|^Bash\(\*:\*\)$/.test(a)), 'no Bash(*)');
+  assert.ok(allow.filter(a => a.startsWith('Bash(')).every(a => /^Bash\((ls|ls:\*|echo capture-ok)\)$/.test(a)));
+  assert.ok(CAPTURE_PROMPT.includes('`ls`') && CAPTURE_PROMPT.includes('echo capture-ok'), 'the entries match the prompt');
 });
 
 test('A_path_with_a_space_is_quoted_in_the_hook_command', () => {
