@@ -71,9 +71,12 @@ internal sealed class ExperimentRoot : IDisposable
     /// <summary>The command line <paramref name="args"/> plus <c>--experiment &lt;this root&gt;</c>, through the gate with a verb that only records its calls.</summary>
     public Task<GatePass> PassAsync(params string[] args) => ThroughAsync([.. args, "--experiment", Root], Environment);
 
+    /// <summary>The same with the gate's host reads handed in.</summary>
+    public Task<GatePass> PassAsync(ModelArmsApp.GateSeams seams, params string[] args) => ThroughAsync([.. args, "--experiment", Root], Environment, seams);
+
     /// <summary>Runs <paramref name="args"/> through <see cref="ModelArmsCommandLine.Split"/>, builds the verb's input as the console does and hands
     /// it to the gate with a verb that records its calls and returns 0. A line that does not split is a test error, not a gate answer.</summary>
-    public static async Task<GatePass> ThroughAsync(string[] args, IReadOnlyDictionary<string, string> environment)
+    public static async Task<GatePass> ThroughAsync(string[] args, IReadOnlyDictionary<string, string> environment, ModelArmsApp.GateSeams? seams = null)
     {
         var line = ModelArmsCommandLine.Split(args).Ok();
         var output = new StringWriter();
@@ -82,11 +85,14 @@ internal sealed class ExperimentRoot : IDisposable
         var input = new ModelArmsApp.VerbInput(
             line.Verb, line.Positionals, CommandLine.Parse(line.Rest), output, error, environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), CancellationToken.None);
 
-        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, seen =>
-        {
-            calls.Add(seen);
-            return Task.FromResult(0);
-        });
+        var code = await ModelArmsApp.ExperimentGate.RunAsync(
+            input,
+            seen =>
+            {
+                calls.Add(seen);
+                return Task.FromResult(0);
+            },
+            seams ?? ModelArmsApp.GateSeams.Real);
         return new GatePass(code, output.ToString(), error.ToString(), calls);
     }
 

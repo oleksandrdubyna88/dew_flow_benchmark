@@ -377,6 +377,11 @@ takes the verb and exactly its positional words by a per-verb table, and `Bench.
 | `run-all` | `<arm>...` (one or more) | `gate-lock` | `status` or `hold` |
 | `validate`, `prep-base`, `make`, `lock`, `unlock`, `chain`, `status`, `version`, `help` | none | | |
 
+Each verb names the flags it takes, and any other `--name` is refused naming them (`'--experimnt' is not a flag of validate — validate takes the flags --experiment`), so a misspelt `--experiment` cannot be dropped
+while the root falls back to the environment: `--experiment` for every verb that reads an experiment, `--seconds` for `gate-lock`, `--parse-only` for `checks`, none for `init`, `version` and `help`.
+`run-all` also allows `--seconds`: no spec names a flag for it yet (E4.S3 specifies the verb), and the command line's first scenario passes one; the later epics' flags (E4.S1 `lock`, E4.S4 `prep-base`/`make`/`status`, E4.S5
+`chain`) are added to the table by the story that specifies them.
+
 No arguments is `help`. A first word that is not a verb is refused naming every verb. The words are the consecutive tokens after the verb that do not start with `--`; a count outside the
 verb's shape, or a word outside `status|hold`, is refused (`<verb> takes <shape>: model-arms <usage>`). After the words a `--flag` may be followed by ONE bare token, its value (the shared
 parser's own rule); any other bare token is refused (`'<x>' is not a flag or a value`). `VerbLine.Rest` is the verb and the flag tokens.
@@ -394,19 +399,29 @@ Each step refuses what the one before did not, and a refusal ends the walk:
 1. The root: `--experiment`, else `MODEL_ARMS_EXPERIMENT` (the map the verb was given, never the process's own); none is exit 4. It is made absolute and its trailing separator trimmed ONCE.
 2. `RootRequirements.ToRead`: the root and `experiment.json` exist (exit 4, naming `init`).
 3. Trust (D17 a) of the root and `experiment.json`. On Windows the `NotPerformed` line is printed to the error writer and the walk goes on. Elsewhere `RootFacts.ReadFactsAsync` is asked for the NORMALISED
-   paths and its answer is judged: a `stat` or `id` that fails is exit 3 with its reason (the host could not say); a refusal (a symbolic link, a NUL, a wrong owner, a group- or other-writable mode) is
-   exit 4 with every problem printed. `FileFacts.Path` is the path whose owner and mode were read.
-4. `experiment.json` is read from that judged path, never from the operator's spelling again (a file that cannot be read is exit 3), through `ExperimentFile.Read` with the home directory (`HOME`, else
+   paths and its answer is judged: a `stat` or `id` that fails is exit 3 with its reason (the host could not say); a refusal (a symbolic link, a NUL, a root that is not a folder, a file that is not a regular
+   file — `is a FIFO, not a regular file` — a wrong owner, a group- or other-writable mode) is exit 4 with every problem printed. When one path is unread and another refused, the exit stays 3 and both are
+   printed, the unread lines first. `FileFacts.Path` is the path whose owner, mode and inode were read; the ONE `stat` call also reads the device and the inode (GNU `%d %i`, BSD `%d %i`), and `FileFacts.Identity`
+   carries them with the kind of file from the type bits.
+4. `experiment.json` is read from that judged path, never from the operator's spelling again (a file that cannot be read is exit 3; the read observes the stop token), then stat-ed AGAIN: a device, inode,
+   type, owner or mode that differs from what was judged is exit 4 (`experiment.json changed between its trust check and its read — refused (D17)`, naming the facts that differ; `RootTrust.Changes`). It then goes through `ExperimentFile.Read` with the home directory (`HOME`, else
    `USERPROFILE`), the git checkout enclosing the root and this binary's repository. A refusal prints `experiment.json is refused:` and each problem indented (exit 4).
 5. `RootRequirements.For(verb, arms, scenarios, baseline)` with the arms the verb was given (`run-arm`, `run-all`, `checks`) and none otherwise: the first file missing names the verb that writes it (exit 4).
 6. Trust of `scenarios.json` when the root has one, as in 3.
 7. The verb, with `ExperimentInput(input, RootPaths(root), experiment)`.
 
-`RootFacts.ReadFactsAsync` is `FileFactsAsync` with the cause kept (`FactsRead.Read`, `.Refused`, `.Unread`): the gate needs the difference between a file the operator must fix (4) and a host that could not be
+`RootFacts.ReadFactsAsync` (with an expected `FileKind`: the gate asks for a directory and regular files) is `FileFactsAsync` with the cause kept (`FactsRead.Read`, `.Refused`, `.Unread`): the gate needs the difference between a file the operator must fix (4) and a host that could not be
 asked (3), and `FileFactsAsync` is now its two-state view.
 
-What the tests do NOT prove: the exit-3 path of a failing `stat` or `id` (no test can make a host tool fail; the unreadable `experiment.json` stands in for the host that could not say, and `FactsRead.Unread` is
-mapped to 3 by the same branch); the trust steps on Windows (declared not performed, never run); that the process-level `Main` maps Ctrl+C to exit 5 (the seam under it is tested with a token cancelled
-by hand, `ShutdownSignal` has its own tests); that a verb reads `scenarios.json` from the path the gate judged (the gate judges `RootPaths.Of(scenarios)` and passes the root on; the verb that reads the file, E1.S10, reads that same path and is the next reader of it).
+**The residual race (D17).** A file read by path cannot be tied to the `stat` before it. Before the second look, 18 of 1500 gate passes read a link's target swapped in with an `mv -T` loop between the first
+`stat` and the read (measured by the E1.S9 review). The second `stat` refuses a swap that is still visible after the read. It does not close: a swap AFTER the second `stat`; a swap and a swap back inside the
+window; and anything above the root — whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can change what is read, because ancestors are not judged. The gate reads `experiment.json` only;
+`scenarios.json` is judged by the gate and read by the verb (E1.S10), which must look at it again after reading it, with the same `RootTrust.Changes`.
+
+What the tests do NOT prove: the race itself (the swap test stands inside the window through `GateSeams.AfterRead`, deterministically; no test races a real writer against the gate); the trust steps on Windows
+(declared not performed, never run); that `FactsRead.Unread` is produced by a real `stat` that fails (the seam test feeds it, and the unreadable `experiment.json` stands in for the real host); BSD and macOS `stat`
+(the parser is tested over raw BSD lines, never run on a BSD); that the process-level `Main` maps Ctrl+C to exit 5 (the seam under it is tested with a token cancelled by hand, `ShutdownSignal` has its own
+tests); that a verb reads `scenarios.json` from the path the gate judged (the gate judges `RootPaths.Of(scenarios)` and passes the root on; the verb that reads the file, E1.S10, reads that same path and is the
+next reader of it).
 
 ## The first run: init and validate (E1.S11)

@@ -86,8 +86,52 @@ public sealed class ModelArmsCommandLineTests
     [Fact]
     public void A_flag_takes_one_bare_value_and_a_second_bare_word_is_refused_naming_it()
     {
-        ModelArmsCommandLine.Split(["status", "--parse-only", "--experiment", "/r"]).Ok().Rest.Should().Equal("status", "--parse-only", "--experiment", "/r");
+        ModelArmsCommandLine.Split(["checks", "C1", "--parse-only", "--experiment", "/r"]).Ok().Rest.Should().Equal("checks", "--parse-only", "--experiment", "/r");
 
         ModelArmsCommandLine.Split(["status", "--experiment", "/r", "extra"]).Reason().Should().Contain("'extra' is not a flag or a value");
+    }
+
+    [Fact]
+    public void A_misspelt_flag_is_refused_naming_it_and_the_flags_the_verb_takes()
+    {
+        var refused = ModelArmsCommandLine.Split(["validate", "--experimnt", "/x"]).Reason();
+
+        refused.Should().Contain("'--experimnt' is not a flag of validate").And.Contain("--experiment");
+        ModelArmsCommandLine.Split(["init", "/r", "--experiment", "/x"]).Reason().Should().Contain("'--experiment' is not a flag of init").And.Contain("no flags");
+        ModelArmsCommandLine.Split(["version", "--seconds", "3"]).Failed().Should().BeTrue("version takes no flags");
+    }
+
+    public static TheoryData<string[]> LegalLines() => new()
+    {
+        { ["validate", "--experiment", "/r"] },
+        { ["gate-lock", "hold", "--seconds", "3", "--experiment", "/r"] },
+        { ["checks", "C1", "--parse-only", "--experiment", "/r"] },
+        { ["run-all", "C1", "--seconds", "5", "--experiment", "/r"] },
+        { ["init", "/r"] },
+        { ["help"] },
+    };
+
+    [Theory]
+    [MemberData(nameof(LegalLines))]
+    public void The_flags_the_specs_name_are_accepted_for_the_verbs_that_take_them(string[] args)
+    {
+        ModelArmsCommandLine.Split(args).Failed().Should().BeFalse();
+    }
+
+    [Fact]
+    public void Every_verb_that_reads_an_experiment_takes_the_experiment_flag()
+    {
+        foreach (var verb in ModelArmsCommandLine.Verbs.Except(["init", "version", "help"]))
+        {
+            var args = verb switch
+            {
+                "run-arm" or "checks" => new[] { verb, "C1", "--experiment", "/r" },
+                "run-all" => [verb, "C1", "--experiment", "/r"],
+                "gate-lock" => [verb, "status", "--experiment", "/r"],
+                _ => [verb, "--experiment", "/r"],
+            };
+
+            ModelArmsCommandLine.Split(args).Failed().Should().BeFalse($"{verb} reads an experiment and takes --experiment");
+        }
     }
 }

@@ -10,22 +10,29 @@ public sealed record VerbLine(string Verb, IReadOnlyList<string> Positionals, st
 /// <c>bench</c> verb's parse is tested as.</summary>
 public static class ModelArmsCommandLine
 {
-    private sealed record Shape(string Verb, int Min, int Max, string Usage, string Takes, IReadOnlyList<string> Legal);
+    private const string ExperimentFlag = "--experiment";
 
+    private sealed record Shape(string Verb, int Min, int Max, string Usage, string Takes, IReadOnlyList<string> Legal, IReadOnlyList<string> Flags);
+
+    /// <summary>Each verb names the flags it takes (the parent plan's §4.1 table and the E2 spec): <c>--experiment</c> for every verb that reads an
+    /// experiment, <c>--seconds</c> for <c>gate-lock hold</c>, <c>--parse-only</c> for <c>checks</c>. Any other flag is refused, so a misspelt
+    /// <c>--experimnt</c> is not silently dropped while the root falls back to the environment.</summary>
     private static readonly Shape[] Table =
     [
         Fixed("init", 1, "init <root>", "exactly one argument, the root folder"),
-        Fixed("validate", 0, "validate", "no positional argument"),
-        Fixed("prep-base", 0, "prep-base", "no positional argument"),
-        Fixed("make", 0, "make", "no positional argument"),
-        Fixed("lock", 0, "lock", "no positional argument"),
-        Fixed("unlock", 0, "unlock", "no positional argument"),
-        Fixed("run-arm", 1, "run-arm <arm>", "exactly one argument, the arm"),
-        new("run-all", 1, int.MaxValue, "run-all <arm>...", "one or more arms", []),
-        Fixed("chain", 0, "chain", "no positional argument"),
-        Fixed("checks", 1, "checks <arm>", "exactly one argument, the arm"),
-        Fixed("status", 0, "status", "no positional argument"),
-        new("gate-lock", 1, 1, "gate-lock status|hold", "exactly one argument, status or hold", ["status", "hold"]),
+        Fixed("validate", 0, "validate", "no positional argument", ExperimentFlag),
+        Fixed("prep-base", 0, "prep-base", "no positional argument", ExperimentFlag),
+        Fixed("make", 0, "make", "no positional argument", ExperimentFlag),
+        Fixed("lock", 0, "lock", "no positional argument", ExperimentFlag),
+        Fixed("unlock", 0, "unlock", "no positional argument", ExperimentFlag),
+        Fixed("run-arm", 1, "run-arm <arm>", "exactly one argument, the arm", ExperimentFlag),
+
+        // --seconds: not named for run-all by any spec yet (E4.S3 specifies the verb); allowed because the command line's own first scenario passes it.
+        new("run-all", 1, int.MaxValue, "run-all <arm>...", "one or more arms", [], [ExperimentFlag, "--seconds"]),
+        Fixed("chain", 0, "chain", "no positional argument", ExperimentFlag),
+        Fixed("checks", 1, "checks <arm>", "exactly one argument, the arm", ExperimentFlag, "--parse-only"),
+        Fixed("status", 0, "status", "no positional argument", ExperimentFlag),
+        new("gate-lock", 1, 1, "gate-lock status|hold", "exactly one argument, status or hold", ["status", "hold"], [ExperimentFlag, "--seconds"]),
         Fixed("version", 0, "version", "no positional argument"),
         Fixed("help", 0, "help", "no positional argument"),
     ];
@@ -59,12 +66,27 @@ public static class ModelArmsCommandLine
         }
 
         var flags = args[(1 + positionals.Count)..];
-        return StrayAt(flags, 0) switch
+        var refusal = FlagsProblem(shape, flags);
+        return refusal.Length == 0
+            ? Outcome<VerbLine>.Success(new VerbLine(shape.Verb, positionals, [shape.Verb, .. flags]))
+            : Outcome<VerbLine>.Failure(refusal);
+    }
+
+    /// <summary>The refusal of the tokens after the words, or the empty string: a bare token that is no flag's value, then a flag the verb does not take.</summary>
+    private static string FlagsProblem(Shape shape, string[] flags)
+    {
+        var stray = StrayAt(flags, 0);
+        var unknown = flags.FirstOrDefault(flag => IsFlag(flag) && !shape.Flags.Contains(flag));
+        return (stray, unknown) switch
         {
-            < 0 => Outcome<VerbLine>.Success(new VerbLine(shape.Verb, positionals, [shape.Verb, .. flags])),
-            var stray => Outcome<VerbLine>.Failure($"'{flags[stray]}' is not a flag or a value — {Refusal(shape)}"),
+            ( >= 0, _) => $"'{flags[stray]}' is not a flag or a value — {Refusal(shape)}",
+            (_, { }) => $"'{unknown}' is not a flag of {shape.Verb} — {shape.Verb} takes {FlagsText(shape)}: model-arms {shape.Usage}",
+            _ => string.Empty,
         };
     }
+
+    private static string FlagsText(Shape shape) =>
+        shape.Flags.Count == 0 ? "no flags" : $"the flags {string.Join(", ", shape.Flags)}";
 
     /// <summary>The refusal of the words themselves, or the empty string: how many there are, and for a verb with a closed set of words, which one.</summary>
     private static string WordsProblem(Shape shape, IReadOnlyList<string> positionals) =>
@@ -85,10 +107,15 @@ public static class ModelArmsCommandLine
         {
             _ when index >= flags.Length => -1,
             _ when !IsFlag(flags[index]) => index,
-            _ => StrayAt(flags, index + (index + 1 < flags.Length && !IsFlag(flags[index + 1]) ? 2 : 1)),
+            _ => StrayAt(flags, index + Step(flags, index)),
         };
+
+    /// <summary>How many tokens the flag at <paramref name="index"/> takes: itself, and the bare token after it as its value.</summary>
+    private static int Step(string[] flags, int index) =>
+        index + 1 < flags.Length && !IsFlag(flags[index + 1]) ? 2 : 1;
 
     private static bool IsFlag(string token) => token.StartsWith("--", StringComparison.Ordinal);
 
-    private static Shape Fixed(string verb, int count, string usage, string takes) => new(verb, count, count, usage, takes, []);
+    private static Shape Fixed(string verb, int count, string usage, string takes, params string[] flags) =>
+        new(verb, count, count, usage, takes, [], flags);
 }

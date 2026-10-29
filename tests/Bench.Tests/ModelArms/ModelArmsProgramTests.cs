@@ -3,6 +3,8 @@ using FluentAssertions;
 using ModelArms.Core.Experiment;
 using Xunit;
 using ArmsProgram = ModelArms.Program;
+using FactsRead = ModelArms.Adapters.FactsRead;
+using GateSeams = ModelArms.GateSeams;
 using VerbInput = ModelArms.VerbInput;
 
 namespace Bench.Tests.ModelArms;
@@ -109,6 +111,26 @@ public sealed partial class ModelArmsProgramTests
     }
 
     [Fact]
+    public async Task A_file_that_is_both_untrusted_and_invalid_is_refused_for_its_trust_and_its_content_is_never_read()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("file modes are POSIX");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        root.Edit(top => top["colour"] = 1);
+        File.SetUnixFileMode(Path.Combine(root.Root, "experiment.json"), (UnixFileMode)Convert.ToInt32("664", 8));
+
+        var passed = await root.PassAsync("status");
+
+        passed.ExitCode.Should().Be(4);
+        passed.Error.Should().Contain("664");
+        passed.Error.Should().NotContain("colour", "trust (step 3) comes before the content is read (step 4)");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_valid_root_reaches_the_verb_once_with_the_experiment_it_read()
     {
         using var root = new ExperimentRoot();
@@ -137,10 +159,10 @@ public sealed partial class ModelArmsProgramTests
     [Fact]
     public async Task A_flag_the_verb_cannot_read_exits_4_naming_the_flag()
     {
-        var (code, _, error) = await RunWithAsync(["version", "--seconds", "soon"], input => Task.FromResult(input.Flags.Int("seconds", 0)));
+        var (code, _, error) = await RunWithAsync(["gate-lock", "hold", "--seconds", "soon"], input => Task.FromResult(input.Flags.Int("seconds", 0)));
 
         code.Should().Be(4);
-        error.Should().Contain("model-arms version:").And.Contain("--seconds").And.Contain("soon");
+        error.Should().Contain("model-arms gate-lock:").And.Contain("--seconds").And.Contain("soon");
     }
 
     [Fact]
@@ -291,6 +313,157 @@ public sealed partial class ModelArmsProgramTests
         {
             return false;
         }
+    }
+
+    [Fact]
+    public async Task An_experiment_file_swapped_for_another_file_between_its_trust_check_and_its_read_is_refused()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("inodes are read with GNU stat here");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        var seams = GateSeams.Real with
+        {
+            AfterRead = _ =>
+            {
+                var other = root.Write("other.json", File.ReadAllText(path));
+                File.Move(other, path, overwrite: true);
+                return Task.CompletedTask;
+            },
+        };
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(4, passed.Error);
+        passed.Error.Should().Contain("experiment.json changed between its trust check and its read").And.Contain("inode").And.Contain("D17");
+        passed.Calls.Should().BeEmpty("what was read is not what was judged");
+    }
+
+    [Fact]
+    public async Task An_experiment_file_that_becomes_a_link_after_the_read_is_refused_as_a_link()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("links are read with GNU stat here");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        var seams = GateSeams.Real with
+        {
+            AfterRead = _ =>
+            {
+                File.Move(path, Path.Combine(root.Temp, "moved.json"));
+                File.CreateSymbolicLink(path, Path.Combine(root.Temp, "moved.json"));
+                return Task.CompletedTask;
+            },
+        };
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(4);
+        passed.Error.Should().Contain("symbolic link");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_file_that_does_not_change_passes_the_second_look_and_the_hook_sees_the_judged_path()
+    {
+        using var root = new ExperimentRoot();
+        var seen = new List<string>();
+        var seams = GateSeams.Real with { AfterRead = path => { seen.Add(path); return Task.CompletedTask; } };
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(0, passed.Error);
+        seen.Should().Equal(Path.Combine(root.Root, "experiment.json"));
+    }
+
+    [Fact]
+    public async Task An_experiment_file_that_is_a_folder_is_refused_with_exit_4_naming_what_it_is()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("file kinds are read with GNU stat here");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        File.Delete(path);
+        Directory.CreateDirectory(path);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var passed = await root.PassAsync("status");
+
+        passed.ExitCode.Should().Be(4, passed.Error);
+        passed.Error.Should().Contain("is a directory, not a regular file").And.Contain("experiment.json");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_experiment_file_that_is_a_fifo_is_refused_without_blocking_the_gate()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("a FIFO is made with mkfifo here");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        File.Delete(path);
+        await MakeFifoAsync(path);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        var pass = root.PassAsync("status");
+        var finished = await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        if (finished != pass)
+        {
+            await using var release = new FileStream(path, FileMode.Open, FileAccess.Write);
+        }
+
+        finished.Should().BeSameAs(pass, "a FIFO read as a file blocks until somebody writes to it");
+        var passed = await pass;
+        passed.ExitCode.Should().Be(4, passed.Error);
+        passed.Error.Should().Contain("is a FIFO, not a regular file");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_file_the_host_could_not_read_and_a_file_that_is_refused_are_both_printed_and_the_exit_is_3()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("the trust check reads POSIX facts");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var seams = GateSeams.Real with
+        {
+            ReadFacts = (path, _, _) => Task.FromResult<FactsRead>(path == root.Root
+                ? new FactsRead.Unread("stat -c: no such tool")
+                : new FactsRead.Refused($"{path} is a symbolic link to 'elsewhere'")),
+        };
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(3, "the host could not say about one path, so the walk is environment");
+        var lines = passed.Error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        lines.Should().HaveCount(2);
+        lines[0].Should().Contain("stat -c: no such tool");
+        lines[1].Should().Contain("symbolic link").And.Contain("experiment.json");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    private static async Task MakeFifoAsync(string path)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("mkfifo") { UseShellExecute = false };
+        start.ArgumentList.Add(path);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        process.ExitCode.Should().Be(0, "mkfifo makes the FIFO the test needs");
     }
 
     [GeneratedRegex("""\"(?<verb>[a-z][a-z-]*)" =>""")]

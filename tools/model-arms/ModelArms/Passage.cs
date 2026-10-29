@@ -20,6 +20,9 @@ internal abstract record Passage<T>
             _ => throw new InvalidOperationException("unreachable"),
         };
 
+    public Passage<TNext> Bind<TNext>(Func<T, Passage<TNext>> next) =>
+        Match(next, stop => new Passage<TNext>.Stopped(stop.ExitCode, stop.Lines));
+
     public Passage<TNext> Map<TNext>(Func<T, TNext> next) =>
         Match<Passage<TNext>>(value => new Passage<TNext>.Through(next(value)), stop => new Passage<TNext>.Stopped(stop.ExitCode, stop.Lines));
 }
