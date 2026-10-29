@@ -1,8 +1,8 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
 > Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: a new spike `spikes/minigit-bench/` in this repository
-> (reusing `spikes/policy-ab-quick/`), two new public repositories `oleksandrdubyna88/minigit-bench-csharp` and
-> `oleksandrdubyna88/minigit-bench-node`, two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
+> (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
+> `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.
 
 ## 1. The question, before any solution
@@ -44,21 +44,22 @@ first unit test (§12, T-A1).
 |---|---|---|
 | D1 | Two arms: **PROCESS** (full family process) and **BARE** (Claude Code alone, upstream prompt) | operator: bare arm yes |
 | D2 | 3 runs per stack per arm = 12 cells, each cell two sessions (v1, then v2 from that cell's v1 result) | operator: 3 runs |
-| D3 | Process arm works in two **public** GitHub repos with the real PR → CI → `sleep 300` → CodeRabbit → merge cycle | operator: "2 public GitHub repos" |
+| D3 | Process arm works in **one public GitHub fork**, `oleksandrdubyna88/minigit-bench`, with the real PR → CI → `sleep 300` → CodeRabbit → merge cycle. Four template branches, one per arm × stack: `template/process-csharp`, `template/process-node`, `template/bare-csharp`, `template/bare-node`. Every session runs on its own base `run/<rid>/main`. One fork and not two: GitHub allows one fork of a repository per account (verified 2026-10-29: a second `gh repo fork --fork-name` renamed the first). Consultants (consult `5dd114fe`) preferred one repository anyway: configuration is symmetric by construction, and public read exposure is the same either way. What is lost is the per-repo write boundary between the stacks, which the audit covers | operator: "2 public repos", then "forks", then "4 branches, one per arm" |
 | D4 | TypeScript **7.0.2**, run by Node 26's native type stripping, `tsc --noEmit` as the type gate. ESLint cannot parse `.ts` through TS 7: `typescript@7.0.2` exports only `./lib/version.cjs` and `./unstable/*`, no classic compiler API (checked: `npm view typescript@7.0.2 exports`), and `typescript-eslint` accepts only `typescript <6.1.0`. So the lint parser gets a **private nested typescript 6.0.3 through npm `overrides`**, used for parsing only, without type information; `tsc`, the type gate and the runtime stay on 7.0.2. Recorded deviation (V12) | operator (TS 7.0.2); the lint shape verified 2026-10-29 |
 | D5 | Fully autonomous: nobody answers; `COAI_ON_EXHAUSTED=good_enough`; decisions recorded by the agent | operator |
 | D6 | Spend ceiling **$500** for everything — data, void, pilot (the operator chose $400 and pre-authorised a raise to $500 for the case where $400 cannot cover three process pairs; the ceiling is set at $500 from the start so no mid-series stop is needed) | operator, 2026-10-29 |
 | D7 | C# and TS run **concurrently as pairs**; bare pairs too; the two arms never overlap | operator (pairs); bare pairs: this plan, so contention matches across arms |
-| D8 | Repo names `minigit-bench-csharp`, `minigit-bench-node` | operator |
+| D8 | Repo name `minigit-bench` (the fork, renamed from the first attempt's name) | operator, 2026-10-29 |
 | D9 | The conventions pin follows a **snapshot branch** `bench/minigit-2026-11` cut from `release`, not `release` itself. `pin-check` compares against the branch named in `.gitmodules` (`tools/pin-check.mjs:9-12`), so the pin stays green without freezing `release` for the family. The harness checks the snapshot's tip before AND after every session and stops the series if it moved | consultants (codex-2, antigravity-2, consult `cb169f07`) + verified in `pin-check.mjs`; **needs the operator's go** (an action in another repo) |
 | D10 | Prevention, not only detection: each session runs in a **bubblewrap** sandbox (`/usr/bin/bwrap`, user namespaces verified) that hides `/home/jinx` except the cell's own directories; coai runs OUTSIDE the sandbox as the operator, reached through a stdio↔socket bridge, so vendor sign-ins never enter it | consultants; `bwrap` + `unshare -Ur` verified |
 | D11 | No `bypassPermissions` / `--dangerously-skip-permissions`: permissions come from an allow-list (the template's `.claude/settings.json` in the process arm, a harness settings file in the bare arm) | this plan: the process arm must run as the family runs, and an agent holding a push token in a public repo gets the narrowest grant |
 | D12 | No model pin through `ANTHROPIC_DEFAULT_*_MODEL` (the subagent-model rule forbids freezing an alias). Instead the harness records, per alias, the id it resolved to in the first session (opus, sonnet, fable, and the CLI's internal line), and every later session's `modelUsage` must resolve each alias it USED to the same id — sessions may differ in which aliases they used. A new id for an alias stops the series; a `model_refusal_fallback` is flagged, not stopped (§11.1) | `common.subagent-models` § *Name the model*; consult `9bf40917` |
 | D13 | Visible tests = upstream with O3, O4, O7 fixed; every cell is ALSO scored with the unmodified upstream scripts, as a reference-only third score | this plan (§5.2) |
 | D14 | Question consultants' **disk-reading rows are off** for the series, and `COAI_QCONSULT_ROOTS` is not set: a row that reads "projects on this disk" could hand a cell another cell's code or the held-out suite as advice (observed live: the `codex-2` row is `unconfined` and read `/home/jinx/git`) | consult `cb169f07` reply, flags read from it |
-| D15 | The held-out suite is stored **encrypted at rest** (key in the harness's environment only) and decrypted into a scoring temp dir after a session ends: an unconfined vendor CLI reading the disk cannot leak it | this plan |
+| D15 | The held-out suite is stored **encrypted at rest** (AES-256-GCM; the key is a mode-600 file `~/.config/minigit-bench/heldout.key`, never an environment variable a sandboxed process could inherit) and decrypted only into a scoring directory under the operator's home after a session ends — never under `/tmp`, which the agent sandbox does not hide: an unconfined vendor CLI reading the disk cannot leak it | this plan; E1 review |
 | D16 | Claude authentication for every session is **one** method, chosen by the operator before P0: a subscription OAuth token from `claude setup-token` passed as `CLAUDE_CODE_OAUTH_TOKEN`, or an API key. **Decided: the operator's own current Claude subscription**, through a `claude setup-token` token passed as `CLAUDE_CODE_OAUTH_TOKEN`. It is the only credential in the sandbox besides the PAT; the token scan (§7.6) covers its shape (`sk-ant-…`). So every cost is a list-price API-equivalent estimate (§9), and a rate-limit void means the subscription's usage window, not a spend limit | judge review M1; operator, 2026-10-29 |
 | D17 | Effort `high` is pinned in the session's own `--settings` file (`effortLevel` and `modelSettings.{opus,sonnet,fable}.effortLevel`), because `--setting-sources project` and the fresh `CLAUDE_CONFIG_DIR` exclude the user settings where `high` lives today; children's effort is read back from the audit | judge review M2, verified in `~/.claude/settings.json` |
+| D18 | **The task inputs have no licence.** SPEC-v1/v2 and test-v1/v2 were written by Yusuke Endoh (`mame/ai-coding-lang-bench`), banteg's fork is byte-identical, and neither repository carries a licence (checked by `gh api …/license`, the clones and their history). The operator's decision: the files live **only inside the GitHub fork**, relying on GitHub ToS D.5 (public repositories may be viewed and forked on GitHub). Our three test fixes live there too, on a branch `inputs`. `dew_flow_benchmark`, which is not a fork, holds only their hashes and `UPSTREAM.md`; the harness fetches the files from the fork at a pinned sha into a local cache and verifies them. The ToS grants viewing and forking; the fixes inside the fork are the operator's call, recorded here | operator, 2026-10-29; consult `31e740fc` |
 
 ## 4. Design
 
@@ -135,8 +136,9 @@ commands.
 
 ### 5.1 Pinned inputs
 
-`SPEC-v1.txt`, `SPEC-v2.txt` verbatim from `banteg@83644e0`; sha256 of all four inputs and of the original test scripts in
-`spikes/minigit-bench/inputs/hashes.txt`.
+`SPEC-v1.txt`, `SPEC-v2.txt`, `test-v1.sh`, `test-v2.sh` byte for byte from `mame/ai-coding-lang-bench@7f6ffdc` (identical to
+`banteg@83644e0`), held only in the fork (D18); their sha256 and the fixed visible tests' sha256 in
+`spikes/minigit-bench/inputs/hashes.txt`, the files themselves fetched from the fork at a pinned sha.
 
 **This repository is public, and sessions have network.** So this plan, and everything committed in clear, names only the
 held-out suite's shape, counts and hashes — never its cases, its references or its mutants. Those live only inside the
@@ -146,7 +148,7 @@ encrypted suite (D15); its case list is published after the series, beside the r
 
 Upstream with three edits and a header naming the upstream sha and the edits: the build block fails loudly
 (`make -s || { echo "BUILD FAILED"; echo "PASSED: 0"; echo "FAILED: 1"; exit 1; }`, same for `build.sh`, stderr shown);
-`test-v2.sh:322-323` and `:383-384` call `fail` with the expected parent; `set -e` replaced by per-test guards so a crash
+`test-v2.sh:323` and `:384` call `fail` with the expected parent; `set -e` replaced by per-test guards so a crash
 counts as failures. Reason: the visible test is what the agent optimises against; one that rewards a wrong parent teaches
 the wrong target, and both arms get the same file.
 
@@ -277,20 +279,22 @@ stack files differ only between `# --- stack:begin/end ---` markers; its output 
    reviewers "read anywhere and no flag removes the shell" (`dew_flow_connect_other_ais ·
    src_mcp/tests/ConfinementPlannerTests.cs:69-90`), and two of the five live providers are codex; unconfined, a TS
    cell's reviewer could read the concurrent C# partner's tree. The held-out key is never in coai-mcp's environment (the
-   harness passes it to the scorer only, over a pipe). `COAI_DATA_DIR=<session>/coai`, the series' settings snapshot with
+   key is a mode-600 file the scorer alone reads, D15). `COAI_DATA_DIR=<session>/coai`, the series' settings snapshot with
    `COAI_QCONSULT_ROOTS` explicitly unset (the operator's file currently holds `/home/git`, flagged by `providers`); the sandboxed `claude` reaches it through a small Node stdio↔unix-socket bridge (no
    dependency). The server runs with the operator's full disk access, so **the bridge is the boundary**: it parses each
    JSON-RPC `tools/call` and refuses any `repoPath` (and any path-shaped argument such as `committedPlan`,
    `suspectedFiles`) that does not resolve inside the session directory, answering a JSON-RPC error that names the rule.
    Verified in P0 before any paid cell, including a refused `consult` with `repoPath` set to this repository.
-3. **Single-branch clones** with a restricted fetch refspec and `--no-tags`; the PAT cannot write to the partner repo.
-   **This does not prevent reading:** both repos are public, so any process with network can fetch another run's branch
+3. **Single-branch clones** with a restricted fetch refspec and `--no-tags`. Both stacks share the one fork (D3), so the
+   PAT can write to the partner stack's branches; rulesets stop it touching any `run/*/main` or `template/*`, and the
+   audit flags any push or PR outside the session's own `run/<rid>/` namespace. **This does not prevent reading:** the
+   fork is public, so any process with network can fetch another run's branch
    anonymously. For other runs' code the protection is therefore **audited, not prevented**, and the report says exactly
    that; only the held-out suite (D15 + sandbox) and the operator's files (sandbox) are prevented.
 4. **Audit** (`hooks/audit.mjs` extended): every tool call with `agent_id`, `tool_use_id`, `duration_ms`; the scan matches
    foreign `run/` namespaces, PR numbers the cell did not create, other `RUN_ID`s, `github.com/.*minigit`,
-   `raw.githubusercontent.com`, the names `dew_flow_benchmark` and `minigit-bench` outside the cell's own repo, the partner
-   repo name, the partner session's and the harness's paths — in tool inputs AND in MCP results (a reviewer's or
+   `raw.githubusercontent.com`, the name `dew_flow_benchmark`, any `minigit-bench` ref outside the session's own
+   `run/<rid>/` namespace, `template/*` refs of the other stack, the partner session's and the harness's paths — in tool inputs AND in MCP results (a reviewer's or
    consultant's answer can carry them) — and any web fetch. `lib/leak.mjs` today resolves with `path.win32` (`leak.mjs:4`); the new spike gets a POSIX
    resolver. High-severity hit → `void: contaminated`. Every hit is read by hand.
 5. **Canaries** in the operator's `~/.claude/projects/*`, in memory files, and in each sibling cell's config dir.
@@ -350,8 +354,8 @@ the `global.json` SDK (10.0.113, `rollForward: disable`) and `node --version` is
 **Read-back before the first paid turn counts:** init event (model, tools, `mcp_servers[].status`: coai connected in the
 process arm, none in bare, permission mode), `argv.json`, settings/mcp hashes, `coai-mcp --providers` with the exact env
 (5 vendors, versions), after the first round the session's `state.config` checked with a port of
-`dew_flow_connect_other_ais · src_bench/CoaiBench/Running/SettingsApplied.cs:34-77`, effort `high` for every agent, the
-partner-repo 403, the clone's refspec, the canary manifest. One cell per arm and stack is read back by hand in block 1.
+`dew_flow_connect_other_ais · src_bench/CoaiBench/Running/SettingsApplied.cs:34-77`, effort `high` for every agent, a
+refused push to a foreign `run/*/main` with the session's PAT, the clone's refspec, the canary manifest. One cell per arm and stack is read back by hand in block 1.
 
 **Model smoke before P1 (≈ $0.10):** one headless process-arm session whose only prompt is to call coai `providers` through
 the bridge — proves permissions, deferred-schema loading and the bridge before $35 is at stake.
@@ -376,7 +380,9 @@ asserting duplicates agree on input/cache fields, reading `usage.cache_creation.
 - **Headline USD** = Σ over models of `(in·Pin + out·Pout + cr·Pcr + w5·P5m + w1·P1h)/1e6` with tokens from
   E.`modelUsage` and the 5m/1h split ratio per model from T; a model with no message-level split (the CLI's internal Haiku
   line) is priced at 5m with 1h as the upper bound — an interval, never a guess. Prices: a dated copy of
-  `research/scout-calibration/prices.json`, re-read from the pricing page on the series' first day.
+  `research/scout-calibration/prices.json`, re-read from the pricing page on the series' first day, with the row it lacks
+  added from that page: **Fable 5.1** (read 2026-10-29: $10 in / $50 out / $12.50 5m write / $20 1h write / $0.25 read) —
+  without it every Fable child would price as unknown.
 - **Beside it:** the CLI's own `total_cost_usd`; per model main / children / internal; tokens per model from `modelUsage`.
 - **Checks:** T1 Σ`costUSD` = `total_cost_usd` ± $0.01; T2 O against E per model and kind ≤ max(0.5 %, 100 tokens), cost
   ≤ 1 % (breach → `otel incomplete`, cell kept); **T3** T re-priced at CLI rates (`prices.json` `cliRates`: Sonnet cache
@@ -512,7 +518,8 @@ value of the process on real work, or any mechanism.
 
 Expected: model smoke ≈ $0.10, A/A ≈ $4, P1 ≤ $39, bare 6 × $2–4 ≈ $20, process 6 × $30–50 ≈ $240 → ≈ $300. Caps: $35 per
 process session, $6 per bare session. Because parallel children overshoot a cap between turns
-(`spikes/policy-ab-quick/lib/watchdog.mjs:1-12`, reused by the new spike as its in-session meter), a pair-phase starts
+(`spikes/policy-ab-quick/lib/watchdog.mjs:1-12`; its `CostMeter` calls the fitted `costFromMessages` at `watchdog.mjs:27`,
+so the new spike does NOT reuse it — E1.S3 builds a stream meter at published prices), a pair-phase starts
 only if data + void + pilot spend + the live O sum of running sessions + **1.1 ×** Σ caps of the sessions about to start
 ≤ **$500** (`spendDecision` extended to several caps). Three bases, stated: the in-session kill reads the live OTel sum
 (fast, provisional); the stop rule reads settled figures, each the larger of the CLI's total and the published recompute
@@ -526,7 +533,7 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
 |---|---|---|
 | Raw session dirs (stream, transcripts, OTel, audit, CPU, coai dir, gh JSON, config) | ≈ 300 MB peak per process cell, ≈ 30 MB per bare cell; ≈ 2.5 GB peak for the series, on ext4 outside git (`/home/jinx/rsd/minigit/<series>/`) | Trees (`bin/ obj/ node_modules/`) shed after scoring; the rest compressed to ≈ 200 MB archive; `retire.mjs` (safe-rm scoped to the runs root) after the report is promoted |
 | `research/minigit/<series>-data.json` | a few hundred KB, committed | kept |
-| Public PRs and `run/*` branches | per repo: 6 session bases + smoke + pilot + re-runs ≈ 10, and ≈ 6–20 PRs | kept permanently: the audit trail |
+| Public PRs and `run/*` branches in the fork | 12 process session bases + smoke + pilot + re-runs ≈ 20, and ≈ 12–40 PRs; four `template/*` branches and `inputs` | kept permanently: the audit trail |
 | coai session dirs per session | ≤ 20 MB each, inside the session dir | with the session dir |
 | Vendor CLI stores (`~/.codex` …) | a few MB per session | not pruned by this plan — a decision: they are the operator's stores, written by the operator's own tools; their growth per session is measured and named in the report |
 | Credentials: two fine-grained PATs, two deploy keys (the rulesets' only bypass actors), CodeRabbit app access | live for the series only | **teardown** after the last cell is scored and archived: revoke both PATs, delete both deploy keys, remove the bypass actor from every ruleset, record the completion with dates in the report; the rulesets themselves stay, now with no bypass |
@@ -544,12 +551,12 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
    including T-A1 (banteg re-priced) — before any session exists.
 4. **`proc.mjs` group kill** (RED first), audit hook extension, env export.
 5. **Sandbox + coai bridge** (P0 proves vendor auth stays outside and reviews still run).
-6. **Templates** (one source tree, `template-diff`), the two repos, rulesets, CodeRabbit, deploy key, PATs, tag; then the
+6. **Templates** (one source tree, `template-diff`) on the fork's four `template/*` branches, rulesets, CodeRabbit, deploy key, PATs, tag; then the
    **session runner and series driver** (`series.mjs`, `prepare-/run-/collect-/summarize-/score-session.mjs`, the
    compliance checker of §5.4) — all before step 8.
 7. **Pre-register the analysis** (§11 first paragraph): statement, analysis contract, void rules, checklist, held-out hash,
    prediction — committed before any paid session.
-8. **P0 smoke (no model):** a harness-authored PR per repo to `run/smoke-*/main` — base creation by deploy key, a direct
+8. **P0 smoke (no model):** a harness-authored PR per process template to `run/smoke-*/main` — base creation by deploy key, a direct
    push with the agent's PAT refused, CI on a non-default base, a planted lint/analyzer violation red, CodeRabbit reviews,
    merge blocked until threads resolve **and a CodeRabbit thread resolved with the agent's own PAT** (GraphQL
    `resolveReviewThread`) unblocks it — the agent must be able to do what the rule obliges it to do — push CI green;
@@ -582,7 +589,7 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
 | T-T2 | the command classifier, including the literal `sleep 300` and `gh pr checks --watch` |
 | T-T3 | OTLP/HTTP JSON decoding |
 | T-P1 | `killTree` ends a grandchild on Linux — RED on `proc.mjs:35` as it stands, then green |
-| T-P2 | contamination scan: a foreign `run/` ref, another `RUN_ID`, a partner-repo call each flagged; POSIX paths resolved |
+| T-P2 | contamination scan: a foreign `run/` ref, another `RUN_ID`, the other stack's `template/*`, a push outside the session's namespace each flagged; POSIX paths resolved |
 | T-S1 | scorer: a failing build fails the session, test scripts are restored from pinned hashes, the fixed `test-v2` lines fail on a wrong parent |
 | T-S2 | held-out calibration: both references 100 %, each mutant fails exactly its registered cases |
 | T-G1 | spend decision with several caps, the 1.1 × overshoot factor and a live running sum |
@@ -628,9 +635,12 @@ would exceed Q goes to the operator. Template symmetry (E2) gets a strict spec w
 conventions rows and branch, GitHub provisioning, env export and report rendering are ordinary work. Nothing here or in
 a stories document names a held-out case, reference or mutant in clear (§5.1).
 
-Cornerstones: 0 of 2 — none marked yet (marked per epic when its stories document is written)
+Cornerstones: 1 of 2 — E1.S3
 
 ### E1 — Measurement instruments: held-out suite and scorer, counters and the time partition (§15 steps 2–3 · 4 stories)
+
+- **Stories:** [PLAN_minigit_stack_bench_E1.md](PLAN_minigit_stack_bench_E1.md) — E1.S1–E1.S4; cornerstone **E1.S3**
+  (`model: fable`, the Claude counters and T1–T4; spec by Fable, the document holds an Opus draft).
 
 - **Goal:** correctness, cost and time instruments calibrated before any model touches the task (§2 O1–O5, O7; V5, V14).
 - **Scope:** §5.1–5.3 — `hashes.txt`, the visible-test edits, the scorer, the held-out suite by shape (state built by the
@@ -655,7 +665,7 @@ Cornerstones: 0 of 2 — none marked yet (marked per epic when its stories docum
   D10, D14; §15 step 1 (D9); §6 templates, `template-diff`, `treatment.md`, CI split, lint gate, tag, GitHub, rulesets.
 - **Depends on:** E1's OTel receiver (cost and stall watchdogs); the operator's go for the snapshot branch (another repo).
 - **Done when:** T-P1 red on `proc.mjs:35` then green; T-P2, T-B1 green; the bridge refuses a `consult` on this repository
-  while a review runs with sign-ins outside; `pin-check` green on the snapshot tip; both repos tagged; `template-diff`
+  while a review runs with sign-ins outside; `pin-check` green on the snapshot tip; all four template branches tagged; `template-diff`
   clean; a planted violation red under `npm run lint` on typescript 7.0.2; `treatment.md` names each stack's strictness.
 - S1 — `policy-ab-quick` fixes and the contamination scan: group kill, audit hook, env export, POSIX paths (T-P1, T-P2).
 - S2 — the agent sandbox and launch: bwrap binds, argv and settings files, credentials, watchdogs, janitor, the read-back.
@@ -671,11 +681,11 @@ Cornerstones: 0 of 2 — none marked yet (marked per epic when its stories docum
   `voids.mjs`; §13 `spendDecision`; §14 `--resume`; snapshot-tip check; §11 pre-registration; §15 steps 8–10; §8 smoke.
 - **Depends on:** E1 and E2 complete; the $500 ceiling counts the pilot (§13).
 - **Done when:** T-G1, T-V1, T-R1 green; a dry cell on a stub directory emits every §11 field or "not captured"; the
-  pre-registration is committed before the first paid session; P0 passes every step-8 check in both repos; the smoke lists
+  pre-registration is committed before the first paid session; P0 passes every step-8 check on both process templates; the smoke lists
   5 vendors through the bridge; A/A and P1 meet every step-9 condition; dated instrument-only amendments; the draw.
 - S1 — series driver and session verbs: blocks, barrier, draw, masks, voids, re-runs, resume, spend (T-G1, T-V1, T-R1).
 - S2 — the compliance checker over GitHub, `coai.db` and the stream, with the stratified hand-check protocol (§5.4).
-- S3 — pre-registration committed; P0 (no model) in both repos; the ≈ $0.10 model smoke through the bridge.
+- S3 — pre-registration committed; P0 (no model) on both process templates; the ≈ $0.10 model smoke through the bridge.
 - S4 — A/A, P1 (process Node v1), the pilot v2 base, the bare Node v1; dated amendments; `seed.txt`; the draw.
 - **Cornerstone areas:** the go/no-go criteria of P0, the smoke, the A/A and P1 — what each must show, what a miss
   means, what is amended and what stops (the no-stack-tuning rule). Running them, the driver and the checker are ordinary.
