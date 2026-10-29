@@ -1,11 +1,10 @@
 // Where each time span comes from (E1.S4 step 4). A span is { category, startMs, endMs, agentId, source, ... } in epoch ms.
 //
-// Two facts here are ASSUMED until E1.S3's step 0 produces a real capture; each is a named constant with a test that pins it,
-// so the capture's answer is a one-line change:
-//   OTEL_STAMP_MARKS  an OTel `api_request` record's time is the END of the request ('end'), so the span is [ts - duration, ts].
-//                     'start' -> [ts, ts + duration]; 'unknown' -> model_api is "not captured" (E1.S3 plan A-O2). When S3's
-//                     otel-decode.mjs lands, import its OTEL_STAMP_MARKS in place of this constant.
-//   HOOK_TIME_SOURCE  hook_started/hook_response lines carry NO timestamp (verified on the two-children fixture: hook_id only),
+// Two facts here were decided by E1.S3's step 0 capture (CLI 2.1.310, 2026-10-29); each is a named constant with a test pin:
+//   OTEL_STAMP_MARKS  an OTel `api_request` record's time is the END of the request ('end'; A-O2 held: 7 of 7 matched as
+//                     end), so the span is [ts - duration, ts]. ONE definition, owned by otel-decode.mjs and re-exported
+//                     here, so a later capture that flips it cannot leave this module building the old spans.
+//   HOOK_TIME_SOURCE  hook_started/hook_response lines carry NO timestamp (A-H1 held: 20 hook events, 0 with a timestamp),
 //                     so the runner's ARRIVAL stamp of each line is the time ('arrival'); 'event' reads line.timestamp instead.
 // Assumed shapes, not yet produced by their writers: the audit hook record { ts, event, tool_use_id, tool_name, agent_id, input }
 // (E2.S1 extends hooks/audit.mjs), the OReq of E1.S3 { tsMs, durationMs, agentId }, the stamped line { t (epoch ms), line },
@@ -13,8 +12,9 @@
 import { BACKGROUND, CI_WAIT, CODERABBIT_WAIT, HOOKS, MODEL_API, WAIT } from './categories.mjs';
 import { classifyTool } from './classify.mjs';
 import { intersectMerged, lengthOf, mergeIntervals } from './intervals.mjs';
+import { OTEL_STAMP_MARKS } from './otel-decode.mjs';
 
-export const OTEL_STAMP_MARKS = 'end';
+export { OTEL_STAMP_MARKS };
 export const HOOK_TIME_SOURCE = 'arrival';
 export const AUDIT_TIME_FIELD = 'ts';
 const STAMP_MARKS = ['end', 'start', 'unknown'];
