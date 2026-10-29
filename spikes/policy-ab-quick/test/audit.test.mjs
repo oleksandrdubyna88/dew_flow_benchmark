@@ -38,17 +38,41 @@ test('An_absent_duration_or_flag_is_null_never_zero', () => {
   assert.equal(odd.input.run_in_background, null);
 });
 
+/** A tree shaped like a cell: `<dir>/.git/` and the hook at `<dir>/.claude/hooks/audit.mjs`, so the hook's own fallback log is `<dir>/.git/audit.ndjson`. */
+function cellTree(dir) {
+  fs.mkdirSync(path.join(dir, '.git'));
+  fs.mkdirSync(path.join(dir, '.claude', 'hooks'), { recursive: true });
+  const copy = path.join(dir, '.claude', 'hooks', 'audit.mjs');
+  fs.copyFileSync(hook, copy);
+  return { copy, fallback: path.join(dir, '.git', 'audit.ndjson') };
+}
+
 test('The_audit_writes_where_it_is_told', () => {
   const dir = tmp();
   try {
+    const { copy, fallback } = cellTree(dir);
     const out = path.join(dir, 'a.ndjson');
-    const r = runHook(['--out', out], JSON.stringify(bash('PreToolUse')));
+    const r = spawnSync(process.execPath, [copy, '--out', out], { input: JSON.stringify(bash('PreToolUse')), cwd: os.tmpdir() });
     assert.equal(r.status, 0);
     assert.equal(r.stdout.length, 0);
     const lines = fs.readFileSync(out, 'utf8').trim().split('\n');
     assert.equal(lines.length, 1);
     assert.equal(JSON.parse(lines[0]).tool_use_id, 'toolu_01');
-    assert.equal(fs.existsSync(path.join(dir, '.git')), false, 'nothing is written under any .git');
+    assert.equal(fs.existsSync(fallback), false, 'the hook\'s own fallback log, which exists as a path here, is untouched');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('A_relative_out_is_refused_and_writes_nothing_anywhere', () => {
+  const dir = tmp();
+  try {
+    const { copy, fallback } = cellTree(dir);
+    const r = spawnSync(process.execPath, [copy, '--out', 'rel/a.ndjson'], { input: JSON.stringify(bash('PreToolUse')), cwd: dir });
+    assert.equal(r.status, 0, 'still observe-only');
+    assert.match(r.stderr.toString(), /absolute/);
+    assert.equal(fs.existsSync(path.join(dir, 'rel')), false);
+    assert.equal(fs.existsSync(fallback), false, 'a refused --out does not fall back silently to another log');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

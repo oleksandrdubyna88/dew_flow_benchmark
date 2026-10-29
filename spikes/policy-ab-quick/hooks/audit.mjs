@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-/** Observe-only tool log. Appends one JSON line per event; prints nothing, exits 0, never blocks. */
+/**
+ * Observe-only tool log. Appends one JSON line per event to the log, exits 0, never blocks. Prints nothing on stdout; when a record
+ * could not be written it says why in one line on stderr.
+ */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -84,10 +87,12 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-/** Pure: the log file, from `--out <file>` (strict: an unknown option throws) or the tree's own git dir when absent. */
+/** Pure: the log file, from `--out <absolute file>` (strict: an unknown option or a relative path throws) or the tree's own git dir when absent. */
 export function logPathFor(argv, fallbackDir) {
   const { values } = parseArgs({ args: argv, options: { out: { type: 'string' } }, strict: true, allowPositionals: false });
-  return values.out ?? path.join(fallbackDir(), 'audit.ndjson');
+  if (values.out === undefined) return path.join(fallbackDir(), 'audit.ndjson');
+  if (!path.isAbsolute(values.out)) throw new Error(`--out must be an absolute path, got '${values.out}'`); // a relative one would depend on the hook's cwd
+  return values.out;
 }
 
 if (process.argv[1]?.endsWith('audit.mjs')) {
