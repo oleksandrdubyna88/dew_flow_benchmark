@@ -25,8 +25,6 @@ internal sealed class TempFolder : IDisposable
         return path;
     }
 
-    /// <summary>Removes the folder with everything in it. The delete is in <c>finally</c>: a run removes what it created whatever happened on the way
-    /// (common.test-leftovers). A directory link is unlinked by the delete without being entered, so a loop cannot reach it.</summary>
     /// <summary>An executable file inside this one (mode 700), its folder created. Returns its path.</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public string Executable(params string[] parts)
@@ -51,6 +49,8 @@ internal sealed class TempFolder : IDisposable
         }
     }
 
+    /// <summary>Removes the folder with everything in it. The delete is in <c>finally</c>: a run removes what it created whatever happened on the way
+    /// (common.test-leftovers). A directory link is unlinked by the delete without being entered, so a loop cannot reach it.</summary>
     public void Dispose()
     {
         try

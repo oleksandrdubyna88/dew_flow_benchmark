@@ -9,7 +9,7 @@ public static class ExecutableRule
 
     /// <summary>The verbatim and device spellings of a Windows path. <c>\\?\C:\target\x.exe</c> is the same file as <c>C:\target\x.exe</c> but a text
     /// comparison sees another path, so they are refused as a SPELLING, on every platform (a textual rule, testable anywhere).</summary>
-    private static readonly string[] DevicePrefixes = [@"\\?\", @"\\.\", "//?/", "//./"];
+    private static readonly string[] DevicePrefixes = [@"\\?\", @"\\.\", @"\??\", "//?/", "//./", "/??/"];
 
     /// <summary>Why this executable is refused, or the empty string when it is fine. A name holding a separator or a colon is a PATH:
     /// <c>C:x.exe</c> is drive-relative on Windows, so it is never a bare name.
@@ -20,6 +20,7 @@ public static class ExecutableRule
     public static string Refusal(string executable, IReadOnlyList<string> forbiddenRoots) =>
         executable switch
         {
+            _ when HoldsNul(executable) => $"the executable '{executable.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — a path never does; refused (D17)",
             _ when executable.Trim().Length == 0 => "the executable is empty — name an executable from PATH or an absolute path outside the target (D17)",
             _ when DevicePrefixes.Any(prefix => executable.StartsWith(prefix, StringComparison.Ordinal)) =>
                 $"the executable '{executable}' uses a verbatim or device prefix — spell the path plainly (D17)",
@@ -27,6 +28,10 @@ public static class ExecutableRule
             _ when !Path.IsPathFullyQualified(executable) => Relative(executable),
             _ => UnderForbiddenRoot(executable, forbiddenRoots),
         };
+
+    /// <summary>True when the text holds a NUL character. The first thing every comparison asks: <c>Path.GetFullPath</c> throws on one, and a thrown
+    /// <c>ArgumentException</c> is a crash where a refusal belongs.</summary>
+    public static bool HoldsNul(string text) => text.Contains('\0', StringComparison.Ordinal);
 
     /// <summary>Why the file this executable REALLY is (the path the kernel opens, every link and every <c>..</c> applied) is refused, or the empty string.
     /// <paramref name="written"/> is what the operator spelled, so the sentence names both.</summary>

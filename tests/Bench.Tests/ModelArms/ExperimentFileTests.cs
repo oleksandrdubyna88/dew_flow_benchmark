@@ -150,6 +150,18 @@ public sealed class ExperimentFileTests
     }
 
     [Fact]
+    public void A_nul_character_in_a_path_field_or_an_executable_is_refused_naming_the_field_never_thrown()
+    {
+        PosixPaths();
+
+        Refused(root => root["target"]!["build"] = new JsonArray("/usr/bin/dotnet\u0000x")).Should().Contain("D17").And.Contain("NUL");
+        Refused(root => root["target"]!["source"] = "/example/target\u0000x").Should().Contain("target.source").And.Contain("NUL");
+        Refused(root => root["target"]!["plan"] = "todo/PLAN\u0000.md").Should().Contain("target.plan").And.Contain("NUL");
+        Refused(root => root["coai"]!["binary"] = "/example/coai\u0000/coai-mcp").Should().Contain("coai.binary").And.Contain("NUL");
+        Refused(root => root["isolation"]!["closed"] = new JsonArray("<root>/a\u0000b")).Should().Contain("isolation.closed[0]").And.Contain("NUL");
+    }
+
+    [Fact]
     public void The_suite_runs_as_dotnet_with_the_test_assembly_as_an_argument()
     {
         PosixPaths();
