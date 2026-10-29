@@ -141,11 +141,14 @@ test('A_P1_compares_with_the_cli_billed_view_of_the_captures_own_cli_version', (
 
 test('The_decisions_follow_the_rows', () => {
   const rows = rowsOf(derivedCapture());
-  assert.deepEqual(decisionsOf(rows), { join: 'request_id', t3OutputSource: 'otel', stampMarks: 'end' });
+  assert.deepEqual(decisionsOf(rows), { join: 'request_id', t3OutputSource: 'otel', stampMarks: 'end', hookTimeSource: 'arrival' });
   const flip = (id, verdict) => rows.map(r => (r.id === id ? { ...r, verdict } : r));
   assert.equal(decisionsOf(flip('A-J1', 'refuted')).join, 'query_source');
   assert.equal(decisionsOf(flip('A-T2', 'holds')).t3OutputSource, 'transcript');
   assert.equal(decisionsOf(flip('A-T2', 'not exercised')).t3OutputSource, null);
+  const decided = (id, decision) => rows.map(r => (r.id === id ? { ...r, decision } : r));
+  assert.equal(decisionsOf(decided('A-H1', 'event')).hookTimeSource, 'event');
+  assert.equal(decisionsOf(decided('A-H1', undefined)).hookTimeSource, 'unknown', 'a capture that did not decide it is unknown, never assumed');
 });
 
 test('The_rendered_table_has_a_row_per_assumption_escapes_pipes_and_round_trips_through_the_markers', () => {
