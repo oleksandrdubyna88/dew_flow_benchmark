@@ -3,17 +3,19 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const STDIN_LIMIT = 1024 * 1024;
 const STDIN_DEADLINE_MS = 2000;
+const str = v => (typeof v === 'string' ? v : null);
 const countLines = text => (typeof text === 'string' && text !== '' ? text.split('\n').length : 0);
 
 /** Pure: the tool-input summary for one payload. */
 export function inputSummary(toolName, input) {
   const i = input && typeof input === 'object' ? input : {};
   switch (toolName) {
-    case 'Bash':
+    case 'Bash': return { command: i.command ?? '', run_in_background: typeof i.run_in_background === 'boolean' ? i.run_in_background : null };
     case 'PowerShell': return { command: i.command ?? '' };
     case 'NotebookEdit': return { file_path: i.notebook_path ?? '', added: countLines(i.new_source), removed: 0 };
     case 'Read': return { file_path: i.file_path ?? '' };
@@ -37,6 +39,9 @@ export function auditRecord(payload, nowIso, sha256Of) {
   const record = {
     ts: nowIso,
     event,
+    tool_use_id: str(payload.tool_use_id),
+    session_id: str(payload.session_id),
+    duration_ms: Number.isFinite(payload.duration_ms) ? payload.duration_ms : null,
     agent_id: payload.agent_id ?? null,
     agent_type: payload.agent_type ?? null,
     tool_name: payload.tool_name ?? null,
@@ -79,12 +84,21 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** Pure: the log file, from `--out <file>` (strict: an unknown option throws) or the tree's own git dir when absent. */
+export function logPathFor(argv, fallbackDir) {
+  const { values } = parseArgs({ args: argv, options: { out: { type: 'string' } }, strict: true, allowPositionals: false });
+  return values.out ?? path.join(fallbackDir(), 'audit.ndjson');
+}
+
 if (process.argv[1]?.endsWith('audit.mjs')) {
   try {
     const payload = JSON.parse(await readStdin());
     const root = fileURLToPath(new URL('../../', import.meta.url));
-    const logPath = path.join(gitDirFor(root), 'audit.ndjson');
+    const logPath = logPathFor(process.argv.slice(2), () => gitDirFor(root));
     fs.appendFileSync(logPath, `${JSON.stringify(auditRecord(payload, new Date().toISOString(), sha256File))}\n`);
-  } catch { /* observe-only: never fail the tool call */ }
+  } catch (e) {
+    // observe-only: never fail the tool call, but say why this event left no line
+    process.stderr.write(`audit: no record written: ${e.message}\n`);
+  }
   process.exit(0);
 }
