@@ -13,7 +13,8 @@ import { aliasRecord } from '../lib/aliases.mjs';
 import { envelopeView, headlineUsd, transcriptView } from '../lib/claude-usage.mjs';
 import { crosscheck } from '../lib/crosscheck.mjs';
 import { sessionCost } from '../lib/session-cost.mjs';
-import { OTEL_STAMP_MARKS } from '../lib/otel-decode.mjs';
+import { OTEL_STAMP_MARKS, apiRequests, decodeOtlpLogs, otelView, toolResults } from '../lib/otel-decode.mjs';
+import { HOOK_TIME_SOURCE, crossCheckTools, partition, spansFrom } from '../lib/timeline.mjs';
 import { startReceiver } from '../lib/otel-receiver.mjs';
 import { asTheCliBills, priceFor } from '../lib/prices.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
@@ -42,6 +43,40 @@ test('The_stamp_verdict_is_a_named_constant_and_matches_the_capture', t => {
   if (!captureGate(t)) return;
   const { capture, table, policy } = loaded();
   assert.equal(decisionsOf(computeVerdicts(capture, { table, policy })).stampMarks, OTEL_STAMP_MARKS);
+});
+
+test('The_hook_time_source_is_a_named_constant_and_matches_the_capture', t => {
+  if (!captureGate(t)) return;
+  const { capture, table, policy } = loaded();
+  assert.equal(decisionsOf(computeVerdicts(capture, { table, policy })).hookTimeSource, HOOK_TIME_SOURCE);
+});
+
+test('The_real_capture_replays_through_the_span_pipeline_with_the_decoders_own_field_names', t => {
+  if (!captureGate(t)) return;
+  const { capture } = loaded();
+  const records = capture.sink.filter(l => l.path === '/v1/logs').flatMap(l => {
+    const decoded = decodeOtlpLogs(l.body);
+    assert.equal(decoded.ok, true, decoded.reason);
+    return decoded.value;
+  });
+  const otel = otelView(apiRequests(records), { toolResults: toolResults(records) });
+  // the hook lines the capture's stamp hook wrote ({ t, hook_event_name, ... }) in the audit shape the span source reads ({ ts, event, ... })
+  const audit = capture.hooks.map(h => ({ ...h, ts: h.t, event: h.hook_event_name }));
+  const built = spansFrom({ otel, audit });
+  assert.deepEqual(built.unpaired, []);
+  const modelApi = built.spans.filter(s => s.category === 'model_api');
+  assert.equal(modelApi.length, 7, 'one model_api span per api_request record');
+  assert.equal(modelApi.length, otel.requests.length);
+  const tools = built.spans.filter(s => s.source === 'audit' && s.toolUseId);
+  const crossed = crossCheckTools(tools, otel.toolResults);
+  assert.equal(crossed.known, true, crossed.why);
+  assert.equal(crossed.compared, 5, '5 tools are on both sides');
+  assert.deepEqual(crossed.mismatches, []);
+  const wall = { startMs: Math.min(...built.spans.map(s => s.startMs)), endMs: Math.max(...built.spans.map(s => s.endMs)) };
+  const p = partition(wall, built.spans);
+  assert.equal(p.known, true, p.why);
+  assert.equal(Object.values(p.categories).reduce((a, b) => a + b, 0), p.wallMs, 'the categories sum to the wall to the millisecond');
+  assert.equal(p.wallMs, wall.endMs - wall.startMs);
 });
 
 test('The_policy_file_carries_what_the_capture_decided', t => {

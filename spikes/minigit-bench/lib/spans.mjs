@@ -29,7 +29,8 @@ const instantOf = v => (typeof v === 'number' ? finite(v) : finite(Date.parse(v 
 
 // ---- OTel api_request -> model_api -----------------------------------------------------------------------------------
 
-const durationOf = r => [r.durationMs, r.duration_ms, r.attrs?.duration_ms].find(Number.isFinite) ?? null;
+// the decoder's own field (`OReq.durationMs`) and no other: an alias would hide a rename in the decoder behind a silent fallback
+const durationOf = r => (Number.isFinite(r.durationMs) ? r.durationMs : null);
 
 function modelApiSpan(r, marks) {
   const ts = finite(r.tsMs);

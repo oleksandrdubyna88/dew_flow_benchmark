@@ -92,7 +92,7 @@ function verdicts({ values, io }) {
   writeFileSync(path.join(dir, 'CAPTURE.md'), md);
   const d = decisionsOf(rows);
   say(io.out, `wrote ${path.join(dir, 'CAPTURE.md')}: ${rows.map(r => `${r.id} ${r.verdict}`).join(', ')}`);
-  say(io.out, `decisions: join=${d.join} t3OutputSource=${d.t3OutputSource ?? 'undecided'} OTEL_STAMP_MARKS=${d.stampMarks}`);
+  say(io.out, `decisions: join=${d.join} t3OutputSource=${d.t3OutputSource ?? 'undecided'} OTEL_STAMP_MARKS=${d.stampMarks} HOOK_TIME_SOURCE=${d.hookTimeSource}`);
   const policy = inputs.value.policy;
   if (policy.join !== d.join || policy.t3OutputSource !== d.t3OutputSource) say(io.out, 'the policy file differs from these decisions: change inputs/crosscheck-policy.json in a dated commit');
   return OK;

@@ -1,7 +1,8 @@
 // The exclusive work-before-wait time partition and its span sources (E1.S4, T-T1, T-T3 S4 half).
-// Every fixture is SYNTHETIC: no real OTel, audit or stream capture exists yet (E1.S3 step 0 produces one). The tests that pin
-// an assumption the capture will settle say so in their names and read the named constants, so the capture's answer is a
-// one-line change (OTEL_STAMP_MARKS, HOOK_TIME_SOURCE) plus the flipped pin.
+// Most fixtures are SYNTHETIC. The real capture (claude 2.1.310, test/fixtures/real/claude-2.1.310-capture) settled the two
+// assumptions the span sources rest on: OTEL_STAMP_MARKS and HOOK_TIME_SOURCE are pinned against it in capture-real.test.mjs, and
+// The_real_capture_replays_through_the_span_pipeline_with_the_decoders_own_field_names (also there) runs that capture through
+// decode -> views -> spans -> cross-check, so a field renamed in one stage and not the next fails there.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -221,9 +222,15 @@ test('A_request_without_a_duration_is_listed_not_given_a_zero_length', () => {
   assert.match(r.notes.join('\n'), /1 api_request.*duration/);
 });
 
-test('Snake_case_attributes_from_a_raw_decoded_record_are_read_too', () => {
-  const r = spansFrom({ otel: [{ name: 'api_request', tsMs: 5000, attrs: { duration_ms: 1000 } }] });
-  assert.deepEqual(r.spans.map(s => [s.startMs, s.endMs]), [[4000, 5000]]);
+test('Only_the_decoders_duration_field_makes_a_span_so_a_renamed_field_fails_loudly', () => {
+  // otel-decode.mjs names the field `durationMs` (OReq). A record carrying the duration under any other name is not silently read:
+  // it is listed as lacking one, and the contract test below (the real capture replayed) would see the span count fall.
+  for (const record of [{ name: 'api_request', tsMs: 5000, attrs: { duration_ms: 1000 } }, { tsMs: 5000, duration_ms: 1000 }]) {
+    const r = spansFrom({ otel: [record] });
+    assert.deepEqual(r.spans, []);
+    assert.match(r.notes.join('\n'), /1 api_request.*lack a timestamp or duration_ms/);
+  }
+  assert.deepEqual(spansFrom({ otel: [{ tsMs: 5000, durationMs: 1000 }] }).spans.map(s => [s.startMs, s.endMs]), [[4000, 5000]]);
 });
 
 test('Hook_spans_use_arrival_stamps', () => {

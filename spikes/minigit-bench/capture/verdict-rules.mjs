@@ -113,7 +113,9 @@ export const RULES = Object.freeze({
     const hookIds = [...new Set(v.hooks.map(h => h.tool_use_id).filter(Boolean))];
     const stray = hookIds.filter(id => !toolIds.has(id));
     const ok = hookEvents.every(e => e.hook_id) && stamped === 0 && stray.length === 0 && hookIds.length > 0;
-    return verdictOf(ok, `${hookEvents.length} hook event(s), ${stamped} with a timestamp; ${hookIds.length} hook tool_use_id(s), ${stray.length} not in the stream`);
+    // what HOOK_TIME_SOURCE must say: the runner's 'arrival' stamp when no hook event carries a timestamp, 'event' when every one does
+    const decision = stamped === 0 ? 'arrival' : stamped === hookEvents.length ? 'event' : 'unknown';
+    return { ...verdictOf(ok, `${hookEvents.length} hook event(s), ${stamped} with a timestamp; ${hookIds.length} hook tool_use_id(s), ${stray.length} not in the stream`), decision };
   },
   'A-H2': v => {
     const tr = v.O.toolResults;

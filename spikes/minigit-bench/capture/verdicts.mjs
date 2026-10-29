@@ -37,7 +37,7 @@ export function renderVerdicts(rows) {
   return [BEGIN, '| Id | Assumption | Verdict | Observed |', '|---|---|---|---|', ...body, END].join('\n');
 }
 
-/** The three values the capture decides, for the policy file and the stamp constant. `null` = the capture did not decide it. */
+/** The values the capture decides, for the policy file and the OTEL_STAMP_MARKS / HOOK_TIME_SOURCE constants. `null` = the capture did not decide it. */
 export function decisionsOf(rows) {
   const row = id => rows.find(r => r.id === id);
   const t2 = row('A-T2').verdict;
@@ -45,6 +45,7 @@ export function decisionsOf(rows) {
     join: row('A-J1').verdict === 'holds' ? 'request_id' : 'query_source',
     t3OutputSource: t2 === 'holds' ? 'transcript' : t2 === 'refuted' ? 'otel' : null,
     stampMarks: row('A-O2').decision ?? 'unknown',
+    hookTimeSource: row('A-H1').decision ?? 'unknown',
   };
 }
 
