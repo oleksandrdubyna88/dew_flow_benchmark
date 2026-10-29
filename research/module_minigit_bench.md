@@ -235,6 +235,31 @@ sum plus "N unknown", and no field of the summary can be added to Claude's dolla
 tokens a lower bound. `roundsSpans` reads the gate rounds from `coai.db` through `node:sqlite`. Its fixtures are
 synthetic: no real ledger has been captured yet.
 
+### 4. The detection half (E2.S1)
+
+Pure over records; the writers are `policy-ab-quick`'s hook and process launcher.
+
+- **`lib/egress-hosts.mjs`** — `EGRESS_HOSTS` per arm (bare: the npm and NuGet registries; process: plus `github.com`,
+  `api.github.com`, `codeload.github.com`) and `KNOWN_REFUSED`. One list for the egress proxy (E2.S2) and the contamination
+  scan's `web` rule. `api.anthropic.com` is in no arm's list: the API leaves through the credential broker (D23).
+- **`lib/contamination.mjs`** — `contaminationHits({ calls, mcpResults, ctx })`, nine named rules in `CONTAMINATION_RULES`
+  (`foreign-run-ref`, `other-run-id`, `foreign-pr`, `other-stack-template`, `upstream-solutions`, `minigit-elsewhere`,
+  `harness-name`, `outside-path`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
+  with a 120-character excerpt in which credentials are masked. An edit or write is judged by its path, never its content; an
+  `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`.
+- **`lib/token-scan.mjs`** — `tokenHits(texts, ownSecrets)`: GitHub and Anthropic credential shapes plus the session's own
+  secrets (8 characters or more). A hit is `{ source, kind, offset }`, never the text or a prefix of it; `maskTokens` is the
+  same scan as a replacement.
+- **`lib/canary-plan.mjs`** — `sessionCanaryTargets`: one canary in each existing operator project folder and its `memory/`,
+  and one in the partner's `CLAUDE_CONFIG_DIR/projects/`. Planting stays `policy-ab-quick/lib/canaries.mjs` (`plantTargets`,
+  manifest first; `unplant` takes extra roots).
+- **The audit record** (`policy-ab-quick/hooks/audit.mjs`) now carries `tool_use_id`, `session_id`, `duration_ms` (null when
+  absent, never 0) and a Bash call's `run_in_background`; `--out <file>` names the log. `test/audit-contract.test.mjs` feeds
+  its records to `spansFrom`.
+- **One kill.** `killTree(pid, { kill, log })` in `policy-ab-quick/lib/proc.mjs` signals the process group, then the pid; the
+  launcher, `run-cell.mjs`, `lib/run.mjs` and the capture all go through it. No spike module reaches a shell interpreter
+  (`test/no-shell.test.mjs` scans both spikes).
+
 ## Entry points
 
 Run from the repository root. `write` goes to stdout; the exit code is the contract. No command takes the held-out key on
@@ -347,7 +372,7 @@ machine.
 | Missing | Epic |
 |---|---|
 | The **session sandbox** for the agent (`sandbox.mjs`: its bind list and credentials; the box primitives of `lib/bwrap.mjs` are the ones it will compose), coai in its own bwrap and the stdio↔socket bridge, the argv and settings files, the watchdogs and janitor, the read-back before the first paid turn | E2 (S2, S3) |
-| The `policy-ab-quick` fixes: killing the process group instead of one pid, the audit hook's `--out`, `PostToolUse` `duration_ms`, the spend cap list. `spansFrom` assumes the audit record shape that fix will write | E2 (S1) |
+| Whether CLI 2.1.310's `PostToolUse` payload carries `duration_ms` (the audit records it as null when absent) | E2 (S2 smoke) |
 | The treatment itself: the conventions snapshot branch, the one-source templates, the four template branches, the lint gate | E2 (S4) |
 | Wiring the OTel receiver to a live session (the cost and stall watchdogs read its running sum) | E2 (S2) |
 | A **runner**: blocks, barrier, seeded order, voids, re-runs, resume and the spend ceiling; no command yet runs the counters or the partition on a session | E3 (S1) |
