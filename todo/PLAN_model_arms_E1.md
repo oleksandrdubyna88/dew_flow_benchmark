@@ -1931,7 +1931,8 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
     **E2.S0, the step contract** (parent D25, D27; schema v2), forward on this code — never a rewrite of E1's history. E1.S8's
     security findings (kernel real paths, no bare-name launches, `HOME`/`XDG_CONFIG_HOME` and PATH entries under a forbidden root
     refused, `<fill me>` refused everywhere, the exclusive `mkdir`, the ctime re-check) are the parent's D26 — constraints every
-    later epic inherits by name.
+    later epic inherits by name. The as-built note in E1.S9's *Out of bounds* ("the leftover-snapshot restore on entry (E4.S1 adds it
+    as step 2½ of the gate)") is VOID under the rewritten D11: no verb restores a snapshot on entry; only `lock` and `unlock` touch modes (E5.S1).
 
 ## 9. Definition of Done — epic E1
 
