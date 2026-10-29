@@ -190,6 +190,40 @@ What the tests do not prove: that the randomness is unpredictable (the tests cou
 
 ## Briefs (E1.S7)
 
+A brief is a template with `{{NAME}}` placeholders, filled once per step from facts the module already holds. The eight templates are the part-6
+harness's files, copied byte for byte (`tools/model-arms/briefs/*.template.md`, shipped beside the binary under `briefs/` by the console's content
+glob); `The_eight_shipped_templates_are_the_shells_byte_for_byte` holds their SHA-256 values, typed out once in the test, so an edited copy fails there.
+
+| Step kind | Template | `NOTES` is | Extra fields |
+|---|---|---|---|
+| Code | `1-code.template.md` | `notes/code.md` | none |
+| Review | `2-review.template.md` | `-` (the shell passed a dash; the review step writes `notes/review.json`, the `REVIEW` field) | none |
+| Fix | `3-fix.template.md` | `notes/fix.md` | none |
+| HReview | `hr-review-fix.template.md` | `notes/hreview.md` | none |
+| Gate | `gate.template.md` | `notes/gate.md` | none |
+| Split | `x-split.template.md` | `notes/split.md` | none |
+| SplitFix | `x-split-fix.template.md` | `notes/split.md` | `PROBLEMS` |
+| TaskCode | `t2-coder.template.md` | `notes/<task>-code.md` | `TASK`, `TASK_BRIEF`, `TASK_FILES`, `BEFORE` |
+
+`BriefTemplates.NameOf(kind)` is the one spelling of the file names; `All` is derived from the kinds. `BriefFields.For(kind, paths, facts)` gives every kind the same
+thirteen fields (`PLAN BASE BRANCH SCEN_COUNT DEADLINE KNOWN REVIEW CODE_NOTES HREVIEW_NOTES FIX_NOTES WORK GATE_JSON NOTES`; the path ones are `ArmPaths` members,
+`SCEN_COUNT` is printed invariant) and adds the task or the problems for the kinds above. `HREVIEW_NOTES` and `BEFORE` appear in no template; they are provided as
+the shell provided them, and a field a template does not use is never an error.
+
+**`BriefFiller.Fill(template, fields, guard)`** replaces every placeholder whose name is a field, in one pass, then refuses in this order:
+
+1. a placeholder left without a field: `the brief has unfilled fields: {{A}} {{B}}` (each name once, in order of appearance);
+2. a substituted value in which `ArmMap.Leaks` finds an arm name, a scheme name or another arm's token: `the field NOTES would carry 'C1' into a brief — no brief
+   names an arm, a scheme or another arm's token (D15)`. The arm's OWN token is allowed: it is in every path field, and the arm's working directory shows it anyway
+   (plan E1 section 8, item 2). A field the template never uses is not checked.
+
+`BriefTemplateFiles(shipped, overrides).Read(name)` (console, `ModelArms.Adapters`) returns the experiment root's own copy by name when it exists, else the shipped one,
+else `no brief template '<name>' in <overrides> or <shipped>`; UTF-8.
+
+What this does NOT prove: that a brief reads well to a model; that the deadline string has the format the launcher prints (E2.S4 owns it); that the resume notice,
+the prompt file or its path are right (E2); or that a template edited in an experiment root still carries every field it needs: such a copy is checked by `Fill`
+at run time, not here.
+
 ## The root, trust and the host (E1.S8, E1.S10)
 
 ## The command line (E1.S9)

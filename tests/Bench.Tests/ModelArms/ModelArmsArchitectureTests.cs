@@ -27,6 +27,7 @@ public sealed class ModelArmsArchitectureTests
         // E1.S6
 
         // E1.S7
+        typeof(global::ModelArms.Core.Briefs.BriefTemplates), typeof(global::ModelArms.Core.Briefs.BriefFields), typeof(global::ModelArms.Core.Briefs.BriefFiller),
 
         // E1.S8
 
