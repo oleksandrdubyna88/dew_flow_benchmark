@@ -22,7 +22,11 @@ const must = p => {
   assert.equal(p.known, true, p.why);
   return p;
 };
-/** No output key may name a sum of spans. */
+/**
+ * A key-name scan is a WEAK guard: a field called anything else could still hold a span sum. What really proves no output is a
+ * sum of spans is the per-millisecond oracle in Categories_sum_to_the_wall_exactly (exclusive buckets) and the union-versus-volume
+ * assertions in Inclusive_unions_and_the_overlap_matrix_are_not_sums; this scan only catches a regression in naming.
+ */
 function keysOf(value, found = []) {
   if (value !== null && typeof value === 'object') for (const [k, v] of Object.entries(value)) { found.push(k); keysOf(v, found); }
   return found;
@@ -402,4 +406,41 @@ test('A_clock_without_an_exit_mapping_has_unknown_skew_not_zero', () => {
   assert.equal(c.known, true);
   assert.equal(c.skew.known, false);
   assert.equal(mapClock({ epochAtSpawn: 5 }).known, false);
+});
+
+// ---- review fixes: M5, m5, m6 --------------------------------------------------------------------------------------------------
+
+test('A_background_bash_launch_is_excluded_and_reported_as_unmeasured', () => {
+  const r = spansFrom({
+    audit: [
+      rec('PreToolUse', '2026-10-29T12:00:00.000Z', 'bg', 'Bash', { command: 'dotnet build', run_in_background: true }),
+      rec('PostToolUse', '2026-10-29T12:00:00.050Z', 'bg', 'Bash', { command: 'dotnet build', run_in_background: true }),
+    ],
+  });
+  assert.equal(r.spans[0].category, 'background');
+  assert.match(r.notes.join('\n'), /1 background Bash launch.*unmeasured/);
+  const p = must(partition({ startMs: Date.parse('2026-10-29T12:00:00Z'), endMs: Date.parse('2026-10-29T12:00:10Z') }, r.spans));
+  assert.equal(p.categories.build_test, 0);
+  assert.equal(p.excluded.background, 1);
+  assert.equal(p.categories.unattributed, 10_000);
+});
+
+test('An_otel_tool_result_without_a_duration_is_listed_not_dropped', () => {
+  const r = crossCheckTools([toolSpan('a', 1), toolSpan('b', 1)], [{ toolUseId: 'a', durationMs: 1000 }, { toolUseId: 'b', durationMs: null }, { toolUseId: 'c' }]);
+  assert.deepEqual(r.otelNoDuration, ['b', 'c']);
+  assert.deepEqual(r.otelOnly, []);
+  assert.equal(r.compared, 1);
+});
+
+test('An_unknown_hook_time_source_produces_no_spans_and_names_the_legal_values', () => {
+  const stamped = [{ t: 1, line: { type: 'system', subtype: 'hook_started', hook_id: 'h' } }, { t: 2, line: { type: 'system', subtype: 'hook_response', hook_id: 'h' } }];
+  const r = spansFrom({ stamped, hookTimeSource: 'wall' });
+  assert.deepEqual(r.spans, []);
+  assert.match(r.notes.join('\n'), /hookTimeSource 'wall'.*arrival.*event/);
+});
+
+test('An_unknown_otel_stamp_mark_names_the_legal_values', () => {
+  const r = spansFrom({ otel: [{ tsMs: 5, durationMs: 1 }], otelStampMarks: 'middle' });
+  assert.deepEqual(r.spans, []);
+  assert.match(r.notes.join('\n'), /'middle'.*end.*start.*unknown/);
 });

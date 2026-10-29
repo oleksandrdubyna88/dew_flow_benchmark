@@ -10,13 +10,21 @@
 // a number or unknown). Fixtures for this reader are SYNTHETIC until E1.S3's step 0 captures a real ledger.
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { COAI_GATE } from './categories.mjs';
 
 export const UNKNOWN_SUBSCRIPTION = 'unknown (subscription)';
 export const USAGE_NOT_CAPTURED = 'usage not captured';
-const GATE_CATEGORY = 'coai_gate';
 const CACHED_ABOVE_INPUT = 'cached exceeds input';
 const DEFAULT_KIND = 'review';
 const GROUP_KEYS = ['provider', 'model', 'kind', 'role', 'stage'];
+/** The UsageEntry fields (camelCase) this reader reads; a test holds them against UsageLedger.cs. */
+export const READER_FIELDS = Object.freeze([
+  'utc', 'provider', 'model', 'role', 'stage', 'seconds', 'tokensIn', 'tokensOut', 'costUsd', 'kind', 'tokensCached', 'costNote',
+  'tokensReasoning', 'usageNote',
+]);
+/** Providers known to report cached input. For any other, a cached 0 may mean "did not say" (UsageLedger.cs:108), so it is a lower bound. */
+const REPORTS_CACHED = new Set(['claude', 'codex']);
+export const SECONDS_LABEL = 'seconds are summed launch seconds (work volume across parallel reviewers), not elapsed time';
 
 const unknown = why => ({ known: false, why });
 const isCount = v => Number.isFinite(v) && v >= 0;
@@ -36,7 +44,8 @@ function costOf(obj) {
 }
 
 function requiredFailure(obj) {
-  for (const f of ['provider', 'model']) if (typeof obj[f] !== 'string' || obj[f] === '') return `${f} is missing`;
+  // The model may be empty: a CLI on its own default names none (UsageLedger.cs:376-378). The provider may not.
+  if (typeof obj.provider !== 'string' || obj.provider === '') return 'provider is missing';
   for (const f of ['tokensIn', 'tokensOut']) if (!isCount(obj[f])) return `${f} is not a token count`;
   return isCount(obj.seconds) ? null : 'seconds is not a number';
 }
@@ -59,7 +68,7 @@ function toRow(obj, line) {
   return {
     ok: true,
     value: Object.freeze({
-      line, utc: obj.utc ?? '', provider: obj.provider, model: obj.model, kind: obj.kind || DEFAULT_KIND, role: obj.role ?? '',
+      line, utc: obj.utc ?? '', provider: obj.provider, model: typeof obj.model === 'string' ? obj.model : '', kind: obj.kind || DEFAULT_KIND, role: obj.role ?? '',
       stage: obj.stage ?? '', seconds: obj.seconds, tokensIn: obj.tokensIn, tokensOut: obj.tokensOut, costUsd: cost.value,
       costNote: obj.costNote ?? '', cached: cached.value, uncached: uncachedOf(obj.tokensIn, cached.value), reasoning: reasoning.value,
       notCaptured: obj.usageNote === USAGE_NOT_CAPTURED, flags: Object.freeze(flags),
@@ -88,12 +97,21 @@ export function readLedger(text) {
 
 // ---- summary --------------------------------------------------------------------------------------------------------
 
-/** Σ of a per-row token field that may be unknown: the total over the known rows, and how many rows could not say. */
-function tokenTotal(rows, pick) {
+/**
+ * Σ of a per-row token field that may be unknown: the total over the known rows, how many rows could not say, and how many
+ * rows are only a bound (`boundKey`: lowerBoundRows for cached, upperBoundRows for uncached). Exact only when none of either.
+ */
+function tokenTotal(rows, pick, boundKey = null) {
   const values = rows.map(pick);
   const unknownRows = values.filter(v => typeof v !== 'number').length;
-  return { total: values.filter(v => typeof v === 'number').reduce((a, b) => a + b, 0), unknownRows, exact: unknownRows === 0 };
+  const total = values.filter(v => typeof v === 'number').reduce((a, b) => a + b, 0);
+  if (boundKey === null) return { total, unknownRows, exact: unknownRows === 0 };
+  const bound = rows.filter(r => typeof pick(r) === 'number' && !REPORTS_CACHED.has(r.provider)).length;
+  return { total, unknownRows, [boundKey]: bound, exact: unknownRows === 0 && bound === 0 };
 }
+
+/** The cached value as the summary counts it: a flagged one (cached > in) is unknown, not a number to add. */
+const cachedForTotal = r => (r.flags.length > 0 ? unknown(CACHED_ABOVE_INPUT) : r.cached);
 
 /** All null: the unknown string. Otherwise the known dollars and the count that could not be priced. Never a 0 for a null. */
 function usdOf(rows) {
@@ -116,8 +134,8 @@ function groupOf(rows) {
     tokens: {
       in: rows.reduce((a, r) => a + r.tokensIn, 0),
       out: rows.reduce((a, r) => a + r.tokensOut, 0),
-      cached: tokenTotal(rows, r => r.cached),
-      uncached: tokenTotal(rows, r => r.uncached),
+      cached: tokenTotal(rows, cachedForTotal, 'lowerBoundRows'),
+      uncached: tokenTotal(rows, r => r.uncached, 'upperBoundRows'),
       reasoning: tokenTotal(rows, r => r.reasoning),
     },
     usd: usdOf(rows),
@@ -130,11 +148,11 @@ function groupOf(rows) {
 const flaggedOf = rows => rows.filter(r => r.flags.length > 0)
   .map(r => ({ line: r.line, provider: r.provider, model: r.model, role: r.role, stage: r.stage, flags: r.flags }));
 
-/** Pure: per provider, model, kind, role, stage. No field here is a number of dollars: USD is a string or { knownUsd, unknownCount }. */
-export function ledgerSummary(rows) {
+/** Pure: per provider, model, kind, role, stage. `findings` (readLedger's) are rows that could not be read: their tokens are missing, so the summary is inexact. No field here is a number of dollars: USD is a string or { knownUsd, unknownCount }. */
+export function ledgerSummary(rows, findings = []) {
   const keyOf = r => JSON.stringify(GROUP_KEYS.map(k => r[k]));
   const groups = [...Map.groupBy(rows, keyOf).entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, g]) => groupOf(g));
-  return { rows: rows.length, groups, flaggedRows: flaggedOf(rows), notCaptured: notCapturedOf(rows) };
+  return { rows: rows.length, findings: findings.length, exact: findings.length === 0, secondsLabel: SECONDS_LABEL, groups, flaggedRows: flaggedOf(rows), notCaptured: notCapturedOf(rows) };
 }
 
 // ---- coai.db rounds -> coai_gate spans -----------------------------------------------------------------------------
@@ -160,7 +178,7 @@ function gateSpan(r) {
   const startMs = Date.parse(r.started_utc);
   const endMs = Date.parse(r.completed_utc);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return { ok: false, reason: `${label}: unreadable or inverted instants` };
-  return { ok: true, value: { category: GATE_CATEGORY, startMs, endMs, agentId: 'main', source: 'coai.rounds', label } };
+  return { ok: true, value: { category: COAI_GATE, startMs, endMs, agentId: 'main', source: 'coai.rounds', label } };
 }
 
 /**

@@ -10,13 +10,15 @@
 // Assumed shapes, not yet produced by their writers: the audit hook record { ts, event, tool_use_id, tool_name, agent_id, input }
 // (E2.S1 extends hooks/audit.mjs), the OReq of E1.S3 { tsMs, durationMs, agentId }, the stamped line { t (epoch ms), line },
 // and GitHub's intervals { ciIntervals, reviewIntervals } of [{ startMs, endMs }] (E3's github.mjs).
-import { CI_WAIT, CODERABBIT_WAIT, HOOKS, MODEL_API, WAIT } from './categories.mjs';
+import { BACKGROUND, CI_WAIT, CODERABBIT_WAIT, HOOKS, MODEL_API, WAIT } from './categories.mjs';
 import { classifyTool } from './classify.mjs';
 import { intersectMerged, lengthOf, mergeIntervals } from './intervals.mjs';
 
 export const OTEL_STAMP_MARKS = 'end';
 export const HOOK_TIME_SOURCE = 'arrival';
 export const AUDIT_TIME_FIELD = 'ts';
+const STAMP_MARKS = ['end', 'start', 'unknown'];
+const HOOK_TIME_SOURCES = ['arrival', 'event'];
 
 const MAIN = 'main';
 const PRE = 'PreToolUse';
@@ -40,7 +42,8 @@ function modelApiSpan(r, marks) {
 function otelPart(otel, marks) {
   const requests = Array.isArray(otel) ? otel : otel?.requests;
   if (!Array.isArray(requests) || otel?.present === false) return part([], ['otel: none provided; model_api spans are not captured']);
-  if (marks !== 'end' && marks !== 'start') return part([], [`otel: OTEL_STAMP_MARKS is '${marks}', so model_api spans are not captured`]);
+  if (!STAMP_MARKS.includes(marks)) return part([], [`otel: otelStampMarks '${marks}' is not one of ${STAMP_MARKS.join(', ')}, so model_api spans are not captured`]);
+  if (marks === 'unknown') return part([], ["otel: OTEL_STAMP_MARKS is 'unknown', so model_api spans are not captured"]);
   const built = requests.map(r => modelApiSpan(r, marks));
   const missing = built.filter(b => b === null).length;
   const notes = missing > 0 ? [`otel: ${missing} api_request record(s) lack a timestamp or duration_ms and are not model_api spans`] : [];
@@ -80,7 +83,9 @@ function auditPart(audit) {
       if (built.span) spans.push(built.span); else unpaired.push(built.unpaired);
     }
   }
-  return part(spans, [], unpaired);
+  const background = spans.filter(s => s.category === BACKGROUND).length;
+  const notes = background > 0 ? [`audit: ${background} background Bash launch(es); the audit span closes at launch, so their run time is unmeasured`] : [];
+  return part(spans, notes, unpaired);
 }
 
 // ---- stream hook_started/hook_response -> hooks -----------------------------------------------------------------------
@@ -109,6 +114,7 @@ function hookSpan(id, start, end, source) {
 
 function hooksPart(stamped, source) {
   if (!Array.isArray(stamped)) return part([], ['stamped: none provided; hooks spans are not captured']);
+  if (!HOOK_TIME_SOURCES.includes(source)) return part([], [`stamped: hookTimeSource '${source}' is not one of ${HOOK_TIME_SOURCES.join(', ')}, so hooks spans are not captured`]);
   const { events, broken } = parseStamped(stamped);
   const starts = new Map(events.filter(e => e.line.subtype === 'hook_started').map(e => [e.line.hook_id, e]));
   const ends = new Map(events.filter(e => e.line.subtype === 'hook_response').map(e => [e.line.hook_id, e]));

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { ledgerSummary, readLedger, roundsSpans, UNKNOWN_SUBSCRIPTION } from '../lib/coai-usage.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
+import { READER_FIELDS } from '../lib/coai-usage.mjs';
 
 const fixture = name => readFileSync(path.join(spikeDir, 'test', 'fixtures', name), 'utf8');
 const line = o => JSON.stringify({ utc: '2026-10-29T10:00:00Z', provider: 'p', model: 'm', role: 'r', stage: 's', seconds: 1, tokensIn: 0, tokensOut: 0, costUsd: null, outcome: 'ok', ...o });
@@ -17,13 +18,13 @@ const only = summary => {
 };
 
 test('Codex_shaped_rows_never_count_cached_input_twice', () => {
-  const { rows } = readLedger(line({ tokensIn: 173658, tokensCached: 168320 }));
+  const { rows } = readLedger(line({ provider: 'codex', tokensIn: 173658, tokensCached: 168320 }));
   assert.equal(rows[0].uncached, 5338);
   const g = only(ledgerSummary(rows));
   assert.equal(g.tokens.in, 173658);
   assert.notEqual(g.tokens.in, 341978);
-  assert.deepEqual(g.tokens.cached, { total: 168320, unknownRows: 0, exact: true });
-  assert.deepEqual(g.tokens.uncached, { total: 5338, unknownRows: 0, exact: true });
+  assert.deepEqual(g.tokens.cached, { total: 168320, unknownRows: 0, lowerBoundRows: 0, exact: true });
+  assert.deepEqual(g.tokens.uncached, { total: 5338, unknownRows: 0, upperBoundRows: 0, exact: true });
 });
 
 test('A_null_cost_reads_unknown_never_zero', () => {
@@ -76,6 +77,51 @@ test('Cached_above_input_is_flagged', () => {
   assert.equal(only(s).tokens.uncached.exact, false);
 });
 
+test('A_flagged_cached_value_counts_as_unknown_in_the_cached_total', () => {
+  const g = only(summaryOf([{ provider: 'codex', tokensIn: 10, tokensCached: 20 }, { provider: 'codex', tokensIn: 100, tokensCached: 60 }]));
+  assert.deepEqual(g.tokens.cached, { total: 60, unknownRows: 1, lowerBoundRows: 0, exact: false });
+});
+
+test('Cached_from_a_provider_that_may_not_say_is_a_lower_bound', () => {
+  // UsageLedger.cs:108: TokensCached is "zero when it did not say". Only claude and codex are known to report it.
+  for (const provider of ['claude', 'codex']) {
+    assert.equal(only(summaryOf([{ provider, tokensIn: 100, tokensCached: 0 }])).tokens.cached.exact, true, provider);
+  }
+  const g = only(summaryOf([{ provider: 'gemini', tokensIn: 100, tokensCached: 0 }]));
+  assert.deepEqual(g.tokens.cached, { total: 0, unknownRows: 0, lowerBoundRows: 1, exact: false });
+  assert.deepEqual(g.tokens.uncached, { total: 100, unknownRows: 0, upperBoundRows: 1, exact: false });
+});
+
+test('A_line_with_an_empty_model_is_kept_and_grouped_under_the_empty_model', () => {
+  // UsageLedger.cs:376-378: a CLI on its own default names no model. Its tokens must not vanish.
+  const r = readLedger(line({ model: '', tokensIn: 500 }));
+  assert.deepEqual(r.findings, []);
+  const g = only(ledgerSummary(r.rows));
+  assert.equal(g.model, '');
+  assert.equal(g.tokens.in, 500);
+});
+
+test('A_line_with_no_provider_is_still_a_finding', () => {
+  assert.equal(readLedger(line({ provider: '' })).findings.length, 1);
+});
+
+test('Findings_make_the_summary_inexact', () => {
+  const r = readLedger(`${line({})}\n{broken`);
+  const s = ledgerSummary(r.rows, r.findings);
+  assert.equal(s.findings, 1);
+  assert.equal(s.exact, false);
+  const clean = ledgerSummary(readLedger(line({})).rows, []);
+  assert.equal(clean.findings, 0);
+  assert.equal(clean.exact, true);
+  assert.equal(ledgerSummary(readLedger(line({})).rows).exact, true);
+});
+
+test('Ledger_seconds_are_labelled_as_summed_launch_seconds', () => {
+  const s = ledgerSummary(readLedger(line({ seconds: 5 })).rows);
+  assert.match(s.secondsLabel, /summed launch seconds/);
+  assert.match(s.secondsLabel, /not elapsed/);
+});
+
 test('Cached_equal_to_input_is_not_flagged', () => {
   const { rows } = readLedger(line({ tokensIn: 10, tokensCached: 10 }));
   assert.deepEqual(rows[0].flags, []);
@@ -88,7 +134,7 @@ test('An_old_line_without_tokensCached_is_unknown_not_zero', () => {
   assert.equal(rows[0].uncached.known, false);
   assert.equal(rows[0].reasoning.known, false);
   const g = only(ledgerSummary(rows));
-  assert.deepEqual(g.tokens.cached, { total: 0, unknownRows: 1, exact: false });
+  assert.deepEqual(g.tokens.cached, { total: 0, unknownRows: 1, lowerBoundRows: 0, exact: false });
 });
 
 test('An_old_line_without_kind_is_read_as_a_review', () => {
@@ -142,12 +188,14 @@ test('The_mixed_fixture_summarises_per_group_with_every_trap_visible', () => {
 
 test('A_ledger_summary_cannot_be_added_to_claude_dollars', () => {
   const s = ledgerSummary(readLedger(fixture('coai-usage-mixed.jsonl')).rows);
-  const numericUsd = o => Object.entries(o).filter(([k, v]) => /usd|cost/i.test(k) && typeof v === 'number');
-  assert.deepEqual(numericUsd(s), []);
-  for (const g of s.groups) {
-    assert.deepEqual(numericUsd(g), []);
-    assert.notEqual(typeof g.usd, 'number');
-  }
+  // Nested keys count too: group.usd.knownUsd is the one place a dollar figure may sit, and it is not a Claude-comparable field.
+  const numericMoney = (o, trail = '') => Object.entries(o ?? {}).flatMap(([k, v]) => {
+    if (v !== null && typeof v === 'object') return numericMoney(v, `${trail}${k}.`);
+    return /usd|cost/i.test(k) && typeof v === 'number' ? [`${trail}${k}`] : [];
+  });
+  assert.equal(numericMoney(s).every(p => p.endsWith('usd.knownUsd')), true);
+  for (const g of s.groups) assert.notEqual(typeof g.usd, 'number');
+  assert.deepEqual(Object.keys(s).filter(k => /usd|cost/i.test(k)), []);
 });
 
 test('Summarising_does_not_change_its_input_rows', () => {
@@ -229,4 +277,19 @@ test('The_rounds_columns_the_reader_selects_exist_in_coais_own_schema', t => {
   }
   const table = /CREATE TABLE IF NOT EXISTS rounds \(([\s\S]*?)\n\s*\);/.exec(text)?.[1] ?? '';
   for (const column of ['stage', 'number', 'verdict', 'started_utc', 'completed_utc']) assert.match(table, new RegExp(`\\b${column}\\b`));
+});
+
+test('The_ledger_fields_the_reader_uses_exist_in_coais_own_UsageEntry', t => {
+  const file = path.join(process.env.COAI_SRC ?? '/home/jinx/git/dew_flow_connect_other_ais', 'src_mcp/runners/Reviewers/UsageLedger.cs');
+  let text;
+  try { text = readFileSync(file, 'utf8'); } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+    t.skip(`${file} is not checked out here, so the ledger field names are checked against the reader's own list only`);
+    return;
+  }
+  const record = /public sealed record UsageEntry\(([\s\S]*?^ {4}\S[^\n]*\)\s*$)/m.exec(text)?.[1] ?? '';
+  assert.notEqual(record, '', 'UsageEntry record not found');
+  const camel = name => name[0].toLowerCase() + name.slice(1);
+  const declared = new Set([...record.matchAll(/^\s{4}(?:string|long|double\??|long\?|bool|int)\s+(\w+)/gm)].map(m => camel(m[1])));
+  for (const field of READER_FIELDS) assert.equal(declared.has(field), true, `${field} is not a UsageEntry field`);
 });

@@ -137,7 +137,8 @@ export function crossCheckTools(toolSpans, otelToolResults) {
   const otel = new Map(otelToolResults.filter(r => toolIdOf(r)).map(r => [toolIdOf(r), toolMsOf(r)]));
   if (otel.size === 0) return unknown('otel tool_result has no tool_use_id');
   const audit = new Map(toolSpans.filter(s => s.toolUseId).map(s => [s.toolUseId, s.endMs - s.startMs]));
-  const both = [...audit.keys()].filter(id => otel.get(id) !== undefined && otel.get(id) !== null);
+  const timed = [...otel.keys()].filter(id => otel.get(id) !== null);
+  const both = [...audit.keys()].filter(id => timed.includes(id));
   const mismatches = both.map(id => ({ toolUseId: id, auditMs: audit.get(id), otelMs: otel.get(id), deltaMs: audit.get(id) - otel.get(id), allowedMs: allowedMs(otel.get(id)) }))
     .filter(m => Math.abs(m.deltaMs) > m.allowedMs);
   return {
@@ -145,7 +146,8 @@ export function crossCheckTools(toolSpans, otelToolResults) {
     compared: both.length,
     mismatches,
     auditOnly: [...audit.keys()].filter(id => !otel.has(id)),
-    otelOnly: [...otel.keys()].filter(id => !audit.has(id)),
+    otelOnly: timed.filter(id => !audit.has(id)),
+    otelNoDuration: [...otel.keys()].filter(id => otel.get(id) === null),
   };
 }
 

@@ -108,3 +108,61 @@ test('A_Bash_tool_is_classified_by_its_command', () => {
   assert.equal(classifyTool('Bash', {}), 'other_tool');
   assert.equal(classifyTool('Bash', undefined), 'other_tool');
 });
+
+// ---- review fixes: B1, M1, M2, M5, m1, m2 -----------------------------------------------------------------------------------
+
+test('Every_template_test_entry_point_of_either_stack_is_build_test', () => {
+  // The C# template runs scripts/run-tests.sh, the TS template scripts/run-tests.mjs (parent §5, template sections): a stack
+  // whose runner reads as other_tool would bias its build_test down and its active time with it.
+  const csharp = ['bash scripts/run-tests.sh', './scripts/run-tests.sh', 'sh scripts/run-tests.sh', 'dotnet build -c Release', 'dotnet test', 'bash test-v1.sh'];
+  const typescript = ['node scripts/run-tests.mjs', 'npm test', 'npm run typecheck', 'node --test', 'tsc --noEmit', 'bash test-v1.sh'];
+  all(csharp, 'build_test');
+  all(typescript, 'build_test');
+  const launcher = 'node .claude/rules/shared/tools/low-priority.mjs';
+  all([...csharp, ...typescript].filter(c => !c.startsWith('node ')).map(c => `${launcher} ${c}`), 'build_test');
+  assert.equal(classifyCommand('cat scripts/run-tests.sh'), 'other_tool');
+});
+
+test('A_shell_run_with_option_flags_still_finds_its_script', () => {
+  all(['bash -e test-v1.sh', 'bash -x ./test-v2.sh', 'bash -eu -o pipefail scripts/run-tests.sh', 'sh -x scripts/run-tests.sh'], 'build_test');
+});
+
+test('A_shell_c_argument_is_unwrapped_and_classified_recursively', () => {
+  all(['bash -lc "dotnet test"', "bash -c 'npm run typecheck'", 'sh -c "make"', 'bash -e -c "node --test"', 'bash -lc "cd x && dotnet build"'], 'build_test');
+  assert.equal(classifyCommand('bash -lc "sleep 300"'), 'sleep300');
+  assert.equal(classifyCommand('bash -c "gh run watch 1"'), 'wait');
+  assert.equal(classifyCommand('bash -c "ls"'), 'other_tool');
+  assert.equal(classifyCommand('bash -c "echo hi" && bash -c "dotnet build"'), 'build_test');
+});
+
+test('ask_human_blocks_so_it_is_a_gate_wait', () => {
+  assert.equal(classifyTool('mcp__coai__ask_human', {}), 'coai_gate');
+});
+
+test('A_background_bash_launch_is_its_own_unmeasured_category', () => {
+  assert.equal(classifyTool('Bash', { command: 'dotnet build', run_in_background: true }), 'background');
+  assert.equal(classifyTool('Bash', { command: 'dotnet build', run_in_background: false }), 'build_test');
+  assert.equal(classifyTool('Agent', { run_in_background: true }), 'container');
+});
+
+test('Timeout_and_its_option_values_are_peeled', () => {
+  all(['timeout -k 5 600 dotnet test', 'timeout -s KILL 600 dotnet build', 'timeout --kill-after=5 600 make', 'timeout --foreground 60 npm ci'], 'build_test');
+});
+
+test('More_keywords_wrappers_and_separators_are_understood', () => {
+  all([
+    'if dotnet test; then echo ok; fi',
+    'while dotnet build; do echo again; done',
+    'until npm test; do :; done',
+    'echo start & dotnet build',
+    'ionice -c 3 dotnet build',
+    'ionice -c2 -n 7 make',
+    'env -i PATH=/bin dotnet test',
+    'time -p dotnet build',
+  ], 'build_test');
+  all(['gh pr checks 12 --watch=true', 'watch -n 30 gh pr checks 12'], 'wait');
+  assert.equal(classifyCommand('gh pr checks 12 --watch=false'), 'other_tool');
+  assert.equal(classifyCommand('dotnet build 2>&1 | tail -5'), 'build_test');
+  assert.equal(classifyCommand('echo a >&2'), 'other_tool');
+  assert.equal(classifyCommand('ls &> /dev/null'), 'other_tool');
+});

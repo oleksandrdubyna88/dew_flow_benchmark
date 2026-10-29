@@ -14,6 +14,8 @@ export const UNATTRIBUTED = 'unattributed';
 /** Not partition categories: a generic wait awaiting GitHub's intervals, and an Agent/Task launch whose time is its children's. */
 export const WAIT = 'wait';
 export const CONTAINER = 'container';
+/** A background Bash launch: its audit span closes at launch, so its run time is unmeasured. Excluded like a container. */
+export const BACKGROUND = 'background';
 
 export const WORK = Object.freeze([BUILD_TEST, MODEL_API, OTHER_TOOL, HOOKS]);
 export const WAITS = Object.freeze([COAI_GATE, CONSULTANT, CI_WAIT, CODERABBIT_WAIT, SLEEP_300]);
