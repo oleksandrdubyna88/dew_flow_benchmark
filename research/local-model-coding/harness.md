@@ -139,3 +139,80 @@ node harness/make-tables.mjs
 | Judge | The group judge read uncorrected objective files (v1); its brief did not put `research/module_*.md` out of scope | v2 on corrected files; the absolute judge's brief declares the scope |
 | Judge | Q4's absolute sessions had copied its objective file before a correction | the unstarted one corrected; the finished one re-judged (old verdict kept as `verdict.v1.json`) |
 | Polish brief | Told the polish to check red against a placeholder (whose `NotImplementedException` is not the tables' reason) | check red against `b4e2ea96` |
+
+## 9. Part 6 — what differs (a second task; scripts in [harness/part6/](harness/part6/))
+
+Part 6 ran in its own folder, `/home/jinx/git/coai-exp2` (the constant `E` at the top of each script), with its own copies of the scripts. They are in
+[harness/part6/](harness/part6/), as they ended; absolute home paths are left as they were. The fixed facts of the experiment (base commit, plan path,
+branch name, scenario count, the known-failures sentence) are in `exp.env`; the 43 scenarios with their test names are in `scenarios.json`; the failures
+known at the base (none) are in `baseline.json`. The design as written before the run is [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md).
+
+### 9.1 The pipelines
+
+| Scheme | Steps (model, budget) — `run-arm.sh`, with `t-lib.sh` for SRS |
+|---|---|
+| C1–C3 | `1-code` Sonnet 180 min → `2-review` Opus 40 (read-only) → `3-fix` Sonnet 60 → `4-gate` Sonnet 150 |
+| CR1–CR3 | `1-code` Sonnet 180 → `2-hreview` Haiku 60 → `3-review` Opus 40 → `4-fix` Sonnet 60 → `5-gate` Sonnet 150 |
+| SRS1–SRS3 | `1-split` Sonnet 40 (+ `1b-split-fix` 15 min, once, if `tasks-plan.mjs` refuses the list; no SRS arm needed it) → `2-tN-code` Haiku 45 each (batches of up to 4 tasks in parallel git worktrees; their commits are cherry-picked back; a conflict stops the arm) → `3-hreview` Haiku 60 → `4-review` Opus 40 → `5-fix` Sonnet 60 → `6-gate` Sonnet 150 |
+
+`tasks-plan.mjs` checks the Sonnet split: 4 to 7 tasks, one owner for each file, no cycles in the dependencies, the task that owns the plan file depends on all the others (it comes last), every
+scenario assigned to a task; it computes the batches (every task whose dependencies are done, at most 4 at a time). The briefs are in
+[harness/part6/briefs/](harness/part6/briefs/): `1-code`, `2-review`, `3-fix`, `hr-review-fix` (the Haiku review-and-fix), `x-split` and `x-split-fix`, `t2-coder`,
+`gate`, and the two judges. A brief is filled from a template with the deadline, the notes path, the plan and the base; no arm id and no scheme name
+ever reaches a brief (a field that stays unfilled stops the runner).
+
+### 9.2 Isolation (different from parts 5b–5c)
+
+- **A random folder per arm.** `r/<token>/` holds the clone (`arm/`), `notes/`, `work/`, `out/` (streams, prompts, timing), `tmp/` (the arm's own `TMPDIR`, so Claude
+  Code's temp folder under `/tmp` does not name another arm), the arm's coai data folder, and the SRS worktrees (`wt/`). The token-to-arm map is
+  [data/part6/arm-tokens.json](data/part6/arm-tokens.json). Every arm uses the same branch name, `feat/quota-cooldown`.
+- **Other work is closed while arms run** (`lock.sh`): the old experiment mode 000; the experiment root, `r/`, `pids/` and the four Claude Code state folders
+  (`projects`, `file-history`, `session-env`, `shell-snapshots`) mode 300, which lets the owner enter by name but not list. The modes are saved and restored by `lock.sh unlock`.
+  The arms run as the same user, and `chmod` is not in their tools.
+- **A deny list** on every step: `Read` of `~/.claude`, `~/.codex`, `~/.gemini`, `~/.antigravity`, `~/.vibe`, `/proc`, the old experiment and `/mnt/v`.
+- **`--strict-mcp-config`** on every step: the coder steps get an empty MCP list; the gate step gets only the arm's own coai server, with its own data folder (a copy of the
+  operator's `settings.json`: the same providers and switches). The gate step may call `providers`, `open`, `review_plan`, `review_code`, `resolve` and `status` only
+  (not `consult`, not `ask_*`: a question row can read every repository).
+- **The gate runs one arm at a time** (`flock` on `.gate.lock`), to spare the providers' quotas. The wait for the lock is not counted against the step's budget.
+- **After the run** every stream is scanned for paths of another arm ([incidents.md](incidents.md) §2g).
+
+### 9.3 Resume, limits and the detector
+
+As in §4, with these changes. A step whose last result is an **error is never "done"**: the runner stops and a person looks. A **limit** is read from the structured fields first
+(`api_error_status` 429 or 529, `api_error`), then from the words; a limited step waits 15 minutes and resumes its own session (up to 40 times), and the wait is not counted. A gate step
+that writes `"status": "blocked"` in `gate.json` waits 30 minutes and resumes (up to 8 times). The first version of the detector read only words and missed the
+wording of 2026-10-28 ([incidents.md](incidents.md) §2g); `repair-limit-2026-10-28.sh` undid what it caused. The copy of `run-arm.sh` here is the fixed one.
+Each attempt is timed alone (`timing.jsonl`), so waits are not work. The step command is `timeout -s INT -k 60 <time left + 10 min>`: a step may run 10 minutes past its budget.
+
+### 9.4 The measures
+
+| Script | What it computes |
+|---|---|
+| [objective-checks.sh](harness/part6/objective-checks.sh) | On the final commit: the build; the whole MCP suite (CTRF report); the extension suite; `dotnet format` whitespace and style on the changed C# files; which of the 43 scenarios exist (the test name occurs in the sources) and pass (a test of that name, as a whole word, passed in the report); failures against `baseline.json` (none known); the diff by kind. Writes `objective.json`. |
+| [metrics6.mjs](harness/part6/metrics6.mjs) | Per arm and step: cost from the `result` event of each attempt (one process per attempt, so the totals are cumulative within it), by model; active time = the sum of the attempts' wall time from `timing.jsonl` (waits between attempts not counted); attempts; the arm's span (first start to arm-done, waits included). A model other than the step's own shows as a subagent. **Not counted:** the cost of the coai providers (other vendors). |
+| [judge-abs.sh](harness/part6/judge-abs.sh) | The absolute judge: one Opus session per diff and run (2 per arm), random labels, the diff redacted for words that name a scheme or a model (counted in `key.json`), 4 sessions at a time; four criteria and an overall score, anchored (10 nothing to flag · 8–9 minor only · 6–7 one major or many minor · 4–5 several major or one blocking · 0–3 not delivered). `research/module_*.md` and `RESULTS_*.md` are out of scope. |
+| [coai-findings.mjs](harness/part6/coai-findings.mjs) | Every coai finding of each arm's gate step, from the gate session's own stream: the `review_plan` and `review_code` replies joined with the agent's `resolve` decisions. Writes `coai-findings.json`. |
+| [judge-coai.sh](harness/part6/judge-coai.sh) | One Opus session per arm judges every code finding (real, partly, not real; severity; usefulness) by opening the code at the commit that round reviewed, and scores the set 1–10 and names what it missed. The gate agent's decisions and the providers are not shown. The session works in the arm's clone (not redacted). 3 at a time. |
+| [mutate6.mjs](harness/part6/mutate6.mjs) | Eight frozen mutants, each one edit in the arm's final code (the anchors per arm are in the file); a shared clone of the arm's head; the test project built and the arm's test classes run (the classes the arm changed, the classes with a scenario test, and the classes of the area) against an unmutated baseline and then against each mutant. Killed = a test that passed in the baseline fails and fails again on a re-run; a mutant that does not apply or does not build is "not applicable", never "killed". 4 test threads per arm, two arms at a time. |
+| [make-tables6.mjs](harness/part6/make-tables6.mjs) | [tables.md](tables.md) §10, from [data/part6/](data/part6/) only (called by `make-tables.mjs`). |
+
+### 9.5 Re-running
+
+```bash
+# on the machine (WSL2): a prepared base clone and the arms' coai binary and settings (exp.env)
+./prep-base.sh                 # build + test the base once (baseline.json)
+./after6.sh                    # makes the arms, locks, runs the rounds of three, unlocks, runs the objective checks (markers in chain/)
+./judge-abs.sh; node coai-findings.mjs; ./judge-coai.sh; node metrics6.mjs <map.json>; node mutate6.mjs all
+# anywhere, from the repository root:
+node research/local-model-coding/harness/make-tables.mjs
+```
+
+### 9.6 Harness defects found in Part 6
+
+| Found | Defect | Handling |
+|---|---|---|
+| 2026-10-29 (after 2026-10-28 21:45 UTC) | The limit detector read words only and missed "You've hit your individual spend limit … session limit resets …" (`api_error_status` 429); steps that ended in it were marked done | Structured fields first; an error result is never done; the damage repaired by `repair-limit-2026-10-28.sh` |
+| 2026-10-29 | `Agent` was in the tool list of every step that can write, so a Haiku step could start subagents on other models (SRS3's review-and-fix did) | Not changed during the run; the result is marked contaminated. A re-run should remove `Agent` from the write tools |
+| 2026-10-29 | The per-arm `TMPDIR` made a Unix-socket path longer than 108 characters, so one suite test failed inside the arms (not in the objective checks) | Reported by the arms as environmental; no change |
+| 2026-10-29 | The scenario pass check matches the exact name as a whole word, so a theory whose method name is longer (C1's S14) reads "absent" though it passed | Not changed; the mutation check found the test by its longer name; reported in [results.md](results.md) §7d |
+| 2026-10-29 | The `limited` field of `timing.jsonl` for the 14 attempts of round 1 reads false (written by the old detector) | Not changed; the repair script does not use it |

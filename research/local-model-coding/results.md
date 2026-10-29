@@ -2,7 +2,8 @@
 
 > Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (part 5 ended 2026-10-27 05:30
 > UTC). Part 5b (SR, DR ×4) is complete (§7b, ended 2026-10-27 20:03 UTC). Part 5c (CR, CH ×4) is complete (§7c, ended
-> 2026-10-28 17:27 UTC).**
+> 2026-10-28 17:27 UTC). Part 6 — a second task, 9 arms (C, CR, SRS × 3), each ending in the coai code gate — is complete
+> (§7d, arms ended 2026-10-29 17:47 UTC, mutation checks 20:37 UTC).**
 > Every number below is in [tables.md](tables.md), generated from [data/](data/). How it was measured:
 > [harness.md](harness.md). What went wrong and what was corrected: [incidents.md](incidents.md). The pre-registered
 > protocol and its change log: [protocol.md](protocol.md).
@@ -11,7 +12,7 @@
 
 One real story pair of the coai project — **E5.5 + E5.6** of `dew_flow_connect_other_ais ·
 todo/PLAN_vibe_and_kimi_runtimes_E5.md` (12 scenarios, Opus-written spec), from commit `b4e2ea96` — implemented 30 times
-by eight schemes (plus 8 arms of two more schemes in part 5b, §7b, and 8 in part 5c, §7c), every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5):
+by eight schemes (plus 8 arms of two more schemes in part 5b, §7b, and 8 in part 5c, §7c), every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5). Part 6 (§7d) is a different task with its own arms and tables:
 
 | Scheme | Arms | What writes the code |
 |---|---|---|
@@ -105,6 +106,17 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
     Given names, so it cannot see a missing planner arm (S5.6.4 still catches it). H2's defect passed the Opus review,
     the fixer and the judge (8 and 7). No classic, O or S arm has such a miss. The checks do not separate the D arms:
     their defects are missing scenario arms and false notes, which the six frozen mutants do not cover.
+
+13. **Part 6 — a second, larger task, with the coai code gate at the end of every arm (§7d).** Three schemes, three runs each: C (Sonnet
+    codes, Opus reviews, Sonnet fixes), CR (C plus a fresh Haiku review-and-fix before Opus) and SRS (Sonnet splits into 7 tasks, Haiku codes
+    each, the same Haiku review-and-fix, then as C). All 9 arms build, pass both suites with 0 new failures, deliver 43 of 43 scenarios,
+    and every one of 72 mutants was killed. The schemes cost the same on average: **$16.63 (C), $16.55 (CR), $17.16 (SRS)** (Claude only;
+    the coai providers' cost is not counted); the spread inside C ($14.88–$19.92) is larger than the spread between schemes. The absolute judge
+    gave C 7.67, CR 8.50 (no major finding in any arm) and SRS 8.00; C1 alone (6.5, two real majors) makes the difference to C. The Opus
+    review still found 1–2 majors in every arm. The coai gate gave 146 code findings: 10 real, 26 partly real, 110 not real (judge's score
+    2–4 of 10 per arm); the gate agent accepted 9 and fixed them (8 real, 1 partly real). The mutation checks did not separate the schemes.
+    The overnight spend limit stopped round 1 (repaired, [incidents.md](incidents.md) §2g), and SRS3's Haiku review-and-fix started two
+    subagents on other models, so that step is contaminated. n = 3 per scheme: a direction, not a measured size.
 
 **This run does not settle:** other tasks (this one is mostly tests: E5.5 is only tests, E5.6 mostly), smaller or more
 self-contained pieces, a filler given the repository (here it saw only its prompt), other local models, a skeleton step
@@ -338,7 +350,165 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 | 5. In at least 1 of 8 arms the Haiku review-and-fix changes something the Opus review then flags | CR4 R2 (a false "process-wide" comment), CH1 R2 (a helper left unused); both minor | holds |
 | 6. All 48 mutants killed; at most 1 of 8 arms with an intended test that misses its mutant | 48 / 48; none | holds |
 
+## 7d. Part 6 — a second task: C, CR and SRS, each ending in the coai code gate (3 × 3 arms)
+
+> Complete: all 9 arms checked, judged, mutation-checked and hand-checked (2026-10-29: the arms ended 17:47 UTC, the checks 19:27, the
+> mutation checks 20:37). Every number is in [tables.md](tables.md) §10, generated from [data/part6/](data/part6/). This part is a NEW task.
+> Its numbers are not mixed into the tables of parts 1–5c, and a number here is not comparable with a number there (other task, a
+> larger plan, a coai gate at the end of every arm).
+
+- **Question.** On a real, larger task, does a cheaper first step change the cost, the time or the quality when the arm ends in the
+  project's own review gate? The gate is coai: models of other vendors review the code, and a Sonnet agent decides what to fix.
+- **Task.** Issue #878 (a model whose quota is spent is still launched and runs into its timeout) and the quota part of issue #765 of
+  `dew_flow_connect_other_ais`: agy's structured quota error, the `/quota` reset times, a remembered cooldown, and the card's countdown.
+  The plan `todo/PLAN_a_spent_quota_cools_the_model_down.md` was written by Fable from a Sonnet code map. It passed two coai plan gates
+  and a consultation before the run, and it is frozen at commit `6786582e`. It has 43 scenarios (39 in C#, 4 in node), four stories and
+  12 decisions. The arms wrote 2,553–3,143 changed lines each (the plan estimated 1,300–1,500). Half or more of them are tests.
+  Before any change, the whole MCP suite (13,807 tests) and the extension tests passed on the host.
+- **Arms** (3 runs each; rounds of three at the same time: C_n, CR_n and SRS_n):
+
+| Scheme | Arms | Steps (model, time limit) |
+|---|---|---|
+| **C** | C1–C3 | Sonnet codes (180 min) → Opus reviews, read-only (40) → Sonnet fixes (60) → coai gate (Sonnet, 150) |
+| **CR** | CR1–CR3 | as C, with a fresh Haiku review-and-fix (60) before the Opus review |
+| **SRS** | SRS1–SRS3 | Sonnet splits the plan into 4–7 tasks (40) → Haiku codes each task (45 each; in parallel worktrees where the files do not overlap) → fresh Haiku review-and-fix (60) → Opus reviews → Sonnet fixes → coai gate. All three splits had 7 tasks |
+
+- **The gate step.** The Sonnet agent runs a plan round on the frozen plan (it only unlocks the code gate; every plan finding is rejected as
+  "frozen"), then code rounds over the whole branch until the verdict is `proceed` or `good_enough`. It accepts a finding and fixes it
+  (red test first), or rejects it with a reason. Two providers answered every round (antigravity and codex); a code round asks 8 reviewers.
+  The arms ran in rounds of three, but the gate steps ran one at a time (a lock), to spare the providers' quotas.
+- **Isolation** (details in [harness.md](harness.md) §9): each arm in a folder with a random name, other work closed (mode 000/300),
+  its own temp folder and its own coai data folder; no brief names the scheme. The scan of the nine arms' tool calls found no
+  read of another arm, of `/proc` outside the arm, or of the real repository ([incidents.md](incidents.md) §2g).
+- **Interruption and contamination** ([incidents.md](incidents.md) §2g). The spend limit stopped round 1 (C1, CR1, SRS1) on the night of
+  28 October. 14 attempts ended in the limit error (C1 3, CR1 4, SRS1 7) and were marked done by mistake. They were repaired and resumed
+  11 hours later.
+  Round 1's elapsed times include that wait; its costs include the interrupted attempts. **SRS3's Haiku review-and-fix started two
+  subagents** (Opus and Sonnet): $3.79 of that step's $5.35 is not Haiku. That step is marked contaminated in every table.
+- **Objective checks.** All 9 arms build, pass the format check, and have 0 new failures in the MCP suite (13,878–13,916 tests) and in the
+  TypeScript suite (6,539–6,540). All 43 scenarios are present in all arms. 8 arms show 43 of 43 passing by name. C1 shows 42: its S14
+  test is named `AnUnknownModel_HasNoGroup_AndEveryKnownOneHasItsKey`, a theory with 8 cases that all passed. The check looks for the
+  exact name as a whole word, so a longer name does not count. It is a naming artefact, not a failure: the mutation check
+  of C1 found that test and it caught its mutant. The Opus judge was told that a longer name is a rename, not an absence.
+- **Cost and time** ([tables.md](tables.md) §10.1, §10.2; Claude only — the cost of the coai providers is NOT counted):
+
+| Arm | Claude $ | Active min | Elapsed min | Attempts |
+|---|---|---|---|---|
+| C1 | $19.92 | 125 | 796 † | 7 |
+| C2 | $14.88 | 157 | 157 | 4 |
+| C3 | $15.08 | 142 | 142 | 4 |
+| **C mean** | **$16.63** | **141** | 142–157 (round 2 and 3 arms) | 5.0 |
+| CR1 | $16.27 | 119 | 779 † | 9 |
+| CR2 | $15.88 | 124 | 124 | 5 |
+| CR3 | $17.49 | 166 | 169 | 5 |
+| **CR mean** | **$16.55** | **136** | 124–169 (round 2 and 3 arms) | 6.3 |
+| SRS1 | $14.85 | 235 | 862 † | 19 |
+| SRS2 | $17.53 | 231 | 190 | 12 |
+| SRS3 | $19.11 ‡ | 248 | 228 | 12 |
+| **SRS mean** | **$17.16** | **238** | 190–228 (round 2 and 3 arms) | 14.3 |
+
+  ‡ SRS3's cost includes $3.79 of subagent cost (Opus and Sonnet) in its Haiku review-and-fix step.
+  † Round 1 waited out the overnight spend limit; its elapsed time is not a work time. Active minutes leave the waits out. In SRS the Haiku
+  tasks of one batch ran at the same time, so SRS active minutes are a sum of work, and the elapsed time is shorter.
+  - The three schemes cost the same on average: $16.55–$17.16. The spread inside one scheme ($14.88–$19.92 in C) is larger than the
+    spread between the schemes. C1 costs the most mainly because its Opus review cost $8.75 in two attempts: $3.46 before the limit
+    stopped it and $5.30 after the resume. The other arms' reviews, in one attempt, cost $3.98–$4.76.
+  - Mean cost by role (C / CR / SRS): Sonnet code or split $8.35 / $9.10 / $3.36; Haiku task coding — / — / $3.57; Haiku review-and-fix
+    — / $1.31 / $2.92 ($1.66 if SRS3's two subagents are left out); Opus review $5.82 / $3.89 / $4.04; Sonnet fix $1.25 / $1.27 / $1.62; coai
+    gate $1.20 / $0.98 / $1.64. Writing is still the largest item in C and CR (42–60 % of an arm). In SRS the split and the Haiku tasks
+    cost $6.93 on average, $1.42 less than Sonnet's coding step in C. The Haiku review, the fixes and the gate then take that saving back.
+  - Time: C and CR needed 119–166 active minutes; SRS needed 231–248 (the sum of its sessions). Of the six arms of rounds 2 and 3, the elapsed
+    time is 124–169 min for C and CR and 190–228 min for SRS. The gate step took 15–37 min of the agent's time (the wait for the lock is not
+    counted). C2's Opus review ran to its hard deadline (50 min, exit 124) after it had written its review; the review is used as written.
+- **The Opus review** ([tables.md](tables.md) §10.4; verified from each arm's `review.json` and the final result of its review stream):
+  blocking + major findings per arm C 1 / 1 / 2, CR 1 / 2 / 2, SRS 2 / 2 / 1 (means 1.33, 1.67, 1.67); no arm had a blocking finding.
+  All findings per arm: C 6 / 3 / 5, CR 3 / 6 / 5, SRS 7 / 7 / 6. Every verdict was "fix-then-ready". The Haiku review-and-fix before it did not
+  lower the number of majors the Opus review found. Its own notes show what it did find: 5 / 8 / 8 findings in CR1–CR3 (1 / 3 / 2 major) and
+  7 / 8 / 12 in SRS1–SRS3 (3 / 4 / 3 major or blocking, by its own severity). One example: C1 shipped a real defect (DeepSeek's quota key
+  was "codex", so a DeepSeek refusal parked every Codex row). In CR2 and SRS1 the Haiku review-and-fix found and fixed that defect first; in CR1 the Opus
+  review found it.
+- **Quality — the absolute blind judge** (one Opus session per diff, anchored rubric, 2 runs, scheme words redacted; [tables.md](tables.md) §10.5):
+
+| Arm | Judge overall (run 1 / run 2) | Correctness | Tests | Conventions | Simplicity | Opus review: blocking + major | Judge majors: named / after the hand check | coai findings | Real / partly / not real | coai judge score | Accepted by the gate agent (real) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| C1 | **6.5** (7 / 6) | 7.0 | 7.5 | 8.0 | 7.5 | 1 | 3 / 2 | 11 | 0 / 1 / 10 | 2 | 0 (0) |
+| C2 | **8.5** (8 / 9) | 8.5 | 8.5 | 8.5 | 8.0 | 1 | 0 / 0 | 11 | 1 / 2 / 8 | 3 | 1 (1) |
+| C3 | **8.0** (8 / 8) | 8.5 | 8.0 | 8.0 | 8.0 | 2 | 0 / 0 | 17 | 3 / 3 / 11 | 4 | 3 (3) |
+| **C mean** | **7.67** (7.67 / 7.67) | 8.00 | 8.00 | 8.17 | 7.83 | 1.33 | 3 / 2 (total) | 39 | 4 / 6 / 29 | 3.00 | 4 (4) |
+| CR1 | **8.5** (9 / 8) | 9.0 | 9.0 | 8.0 | 8.0 | 1 | 0 / 0 | 16 | 0 / 3 / 13 | 2 | 0 (0) |
+| CR2 | **9.0** (9 / 9) | 9.0 | 8.5 | 8.0 | 8.0 | 2 | 0 / 0 | 16 | 1 / 3 / 12 | 3 | 1 (1) |
+| CR3 | **8.0** (8 / 8) | 8.0 | 8.0 | 8.0 | 8.0 | 2 | 0 / 0 | 15 | 0 / 4 / 11 | 2 | 0 (0) |
+| **CR mean** | **8.50** (8.67 / 8.33) | 8.67 | 8.50 | 8.00 | 8.00 | 1.67 | 0 / 0 (total) | 47 | 1 / 10 / 36 | 2.33 | 1 (1) |
+| SRS1 | **8.0** (8 / 8) | 9.0 | 8.0 | 7.0 | 8.0 | 2 | 2 / 0 | 15 | 2 / 2 / 11 | 3 | 0 (0) |
+| SRS2 | **8.0** (8 / 8) | 8.5 | 8.5 | 8.0 | 8.0 | 2 | 1 / 1 | 18 | 1 / 5 / 12 | 3 | 1 (1) |
+| SRS3 | **8.0** (8 / 8) | 8.5 | 8.0 | 7.0 | 7.5 | 1 | 0 / 0 | 27 | 2 / 3 / 22 | 3 | 3 (2) |
+| **SRS mean** | **8.00** (8.00 / 8.00) | 8.67 | 8.17 | 7.33 | 7.83 | 1.67 | 3 / 1 (total) | 60 | 5 / 10 / 45 | 3.00 | 4 (3) |
+
+  - The two runs of one arm never differ by more than one point in the overall score. The criteria columns are the mean of the two runs.
+  - **Hand check of the judge's four majors** (opened in the arm code, [tables.md](tables.md) §10.5): **C1 — DeepSeek's quota key**
+    (`DeepseekRuntime` inherits `CodexRuntime.QuotaKeyOf = "codex"`; real, major; both runs). **C1 — the time-zone test**
+    (`AnAgyResetWithoutAnOffsetIsReadAsUtcTests` sets `TZ` and checks a +9 h offset with no OS guard; `ci.yml` has a Windows job that runs
+    the suite, and .NET on Windows ignores `TZ`; real, major; run 2). **SRS1 — a false plan note** (the plan says `QuotaCooldowns` is a partial
+    class in two files; the code has one 409-line file; real but minor: a false record and 9 lines over the size rule, no behaviour defect).
+    **SRS2 — `FirstOf`** (it asks for the reset from the first refusal with `Spent == true`, else from `asking[0]`, so a hopeless refusal
+    that follows a transient one is not read; real, a major edge case; run 2). After the check, the distinct majors are C 2 (both in C1),
+    CR 0, SRS 1.
+  - **SRS1's false note has a cause in the gate step.** The coai plan round named the partial class; the gate agent agreed that it was a
+    code defect and merged the two files (`c768433a`). It was told not to change the plan file, so the plan's deviation note stayed false.
+    The judge saw the final code and the final note.
+  - **CR scored highest and had no major at all** (8.50 against C 7.67 and SRS 8.00). The difference to C comes from C1 (6.5, two real
+    majors); C2 (8.5) and C3 (8.0) sit inside the CR range (8.0–9.0). With three arms per scheme, this is a direction and not a
+    measured size. In part 5c, CR also had 0 majors in 4 of 4 arms and 8 in every arm: of the 7 CR arms on two tasks, none had a major.
+    SRS has the lowest conventions score (7.33).
+- **The coai gate** ([tables.md](tables.md) §10.6; 146 code findings in 11 code rounds; the plan rounds' 49 findings were all rejected as frozen):
+  - Every first code round gave 6–18 findings (so ≥ 3 in every arm); two arms had a second round (C3, SRS3). C3 and SRS3 are the arms where
+    the gate agent accepted 3 findings and fixed them; C2, CR2 and SRS2 accepted 1 each; C1, CR1, CR3, SRS1 accepted none. Every code round
+    ended `proceed` except SRS1's, which ended `good_enough`.
+  - The blind judge of the findings (one Opus session per arm, each finding settled in the code at its commit; the gate agent's decisions were
+    not shown to it): **10 real, 26 partly, 110 not real**. By scheme: C 4 / 6 / 29, CR 1 / 10 / 36, SRS 5 / 10 / 45. The set score is 2–4 of 10 (mean 2.78).
+    In the judge's summaries, the "not real" findings of every arm either ask for something that the frozen plan decided against
+    (for example a cache, a size cap, or a different key) or misread the code. The judge also named 6 important defects that the
+    review missed (CR1 1, SRS2 3, SRS3 2).
+  - The gate agent **accepted 9 of the 146 findings: 8 were real and 1 was partly real; none was "not real"**. Of the 10 real findings, it
+    accepted 8; the two it rejected are SRS1's minor performance remarks. The 10 real findings are mostly small: by the judge's severity, 2 are major (C2
+    — a `null` entry in the cooldown file escapes the fail-open read; SRS2 — an exception in `Task.Run(Apply)` escapes the round) and 8 are
+    minor (a docs gap, a `partial` class, serial `/quota` probes, and similar). The Opus review had **not** named any of the 10 as such: for
+    C3 it had named the cancellation case of one of them (R4), and SRS2's came from the fix of Opus's own R4.
+  - Gate cost: $0.84–$2.00 of Sonnet per arm, 15–37 min; the providers' cost is not counted.
+- **Mutation checks** ([tables.md](tables.md) §10.7; eight mutants frozen on 2026-10-29 before any ran): **72 of 72 killed**, 0 not
+  applicable. Each mutant breaks one decision of the plan in an arm's final code (the ladder reads the words not the verdict, agy
+  `RESOURCE_EXHAUSTED` alone is "spent", the agy table keys Argon as Gemini, a torn file throws, an `Ok` does not lift, an `Ok` beats
+  a spent refusal, the earlier reset wins, a cooling row still runs). Notes: (1) in **SRS2 and SRS3, the test with S34's name does
+  not catch M3** — it checks the report by group, not the model-to-key table; M3 was killed by three other tests with other names, so
+  those arms hold the guard under another name. (2) In **C1, the S14 test has a longer name** (the naming artefact above); it caught
+  M3. (3) For M5, **CR1, CR2, CR3 and SRS1 were killed by two tests**: S25's test and a source-scan test (`EveryBudgetInAClockedClass…`)
+  that fails when the mutant adds a clock read in a clocked class. That second kill is not a behavioural one; S25's test also failed, so the kill stands.
+  The mutants did not separate the schemes.
+- **What this shows.** On this task, all three schemes deliver the plan (build, format, both suites, 43 of 43 scenarios, 72 of 72 mutants).
+  Their costs are the same within the spread of one scheme. The CR scheme has the best judged quality and the smallest cost spread. SRS needs the most time
+  (190–228 min elapsed against 124–169 for C and CR) and has the highest mean cost by a small margin ($0.5–0.6), with no quality gain. The Haiku review-and-fix did not lower the Opus review's major findings, but it found
+  real defects (DeepSeek's key in CR2 and SRS1). The coai gate adds about $1 of Sonnet cost per arm and found a few small real defects
+  (8 accepted and fixed) among many findings that are wrong or against the plan (110 of 146).
+- **What it does not show.** n = 3 per scheme: the ranges overlap, and C1 alone moves the C mean. One task, one repository. One judge model
+  (Opus, 2 runs): it compresses scores near 8, and it scored 8 or 9 for arms with 4–9 minor findings. One judge of the coai findings, which worked in each arm's clone
+  (commit messages and plan notes were visible; the scheme words were not redacted there as in the diffs of the quality judge). The cost
+  leaves out the coai providers. Round 1's costs include a limit interruption; SRS3's Haiku review is contaminated (its cost and its 12
+  findings are not a clean Haiku review; without the two subagents the SRS mean cost would be $15.90). The arms ran three at a time on
+  one host, so times carry load.
+
+| Prediction (recorded before the run, [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md)) | Observed | |
+|---|---|---|
+| P1. Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's | C $14.88–19.92 (only C1 in range), CR $15.88–17.49 (all below), SRS $14.85–19.11 (SRS2 and SRS3 in range). CR's mean $16.55 against C's $16.63: $0.08 below | **wrong** (the costs are lower than predicted; CR is not above C) |
+| P2. Elapsed per arm, gate included, 3–6 h; the gate step 30–120 min | Elapsed (rounds 2 and 3): C 142–157 min, CR 124–169, SRS 190–228: 2 of 6 arms in 3–6 h (SRS2, SRS3). Round 1 cannot be read (overnight wait; active time 119–235 min). Gate step 15–37 min: 1 of 9 arms at 30 min or more (C3) | **wrong** (shorter than predicted) |
+| P3. Opus review's blocking + major per arm: C 1–3; CR at most C's; SRS at least C's | C 1 / 1 / 2 (in range), CR mean 1.67 against C's 1.33, SRS 1.67 | C holds, SRS holds, **CR wrong** (CR is above C) |
+| P4. The coai gate's first code round gives ≥ 3 findings in every arm; the judge rates at least half of all coai findings real; in at least 2 of the 3 schemes coai finds a real defect the Opus review did not name | First rounds: 6–18 findings. Real: 10 of 146 (7 %); real or partly: 36 of 146 (25 %); the best arm (C3) 6 of 17. A real finding the Opus review did not name: in C (C2, C3), CR (CR2) and SRS (SRS1, SRS2, SRS3) | parts 1 and 3 hold, **part 2 wrong** |
+| P5. Judge: C and CR 7–8 in every arm; SRS 6.5–8 | C 6.5 / 8.5 / 8.0, CR 8.5 / 9.0 / 8.0, SRS 8.0 / 8.0 / 8.0 | SRS holds; C and CR: 4 of 6 arms outside 7–8 (C1 below; C2, CR1, CR2 above) — **wrong** |
+| P6. Scenarios by exact name: C and CR ≥ 40 of 43 in every arm; SRS ≥ 38 | 43 present in all 9; 43 passing in 8, 42 in C1 (a naming artefact) | holds |
+| Mutation checks (written in `mutate6.mjs` before the run): M1, M2, M3, M7, M8 killed in all 9 arms; survivors most likely at M4–M6; 7–8 of 8 killed per arm; no scheme difference beyond one mutant; at most 2 not applicable | 8 of 8 killed in all 9 arms; no survivor; 0 not applicable; no scheme difference | the kills hold; **the expected survivors at M4–M6 did not appear** |
+
 ## 8. Behaviour — the mutation checks on all 30 arms
+
+> Part 6 has its own frozen mutants (8, on another task): §7d, [tables.md](tables.md) §10.7.
 
 - **The instrument** ([harness/mutate.mjs](harness/mutate.mjs), [tables.md](tables.md) §8): six mutants frozen before any
   part 5 result, each breaking one decision of the spec in an arm's final code (M1 one-shot homes not disposed
@@ -356,6 +526,8 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   scenario arm that was never written — which is where D failed.
 
 ## 9. Predictions against observations
+
+> The predictions of parts 5b, 5c and 6 are in §7b, §7c and §7d, beside their results.
 
 | Recorded before the run | Observed | |
 |---|---|---|
@@ -425,5 +597,12 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   (documents, reasoning, exploration) the tokens went to; that would need transcript attribution.
 - **Concurrency was capped per arm, not per machine**: two T arms with up to three tasks each meant up to six parallel
   builds; the disk's causal role in the crashes stays unproven (one crash came with no experiment load).
+- **Part 6** (§7d): n = 3 per scheme, one task, one repository. The cost leaves out the coai providers (other vendors). Round 1 was
+  interrupted by the overnight spend limit: its elapsed times contain the wait, and its costs contain the interrupted attempts. SRS3's Haiku
+  review-and-fix started two subagents (Opus and Sonnet; $3.79 of its $5.35): it is not a Haiku review. One judge model scored the code
+  (2 runs, compressed near 8), and one judge model rated the coai findings from inside each arm's clone, where the scheme was not redacted.
+  The three arms of a round ran at the same time on one host; the gate steps ran one at a time. The mutants cover 8 decisions of 12.
+  The arms' own whole-suite run showed one failing test (a Unix-socket path longer than 108 characters under the per-arm temp folder, an effect
+  of the isolation). The objective checks ran with the normal temp folder, and that test passed there.
 - **Survival** counts verbatim (whitespace-free) lines: an edited line counts as dropped, so it measures code kept as
   written, not ideas kept.

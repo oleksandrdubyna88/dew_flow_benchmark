@@ -1,6 +1,6 @@
 # Cheaper code writers under a Sonnet coder — local model, Haiku (2026-10-25/27)
 
-> Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (2026-10-27 05:30 UTC). Part 5b (8 more arms) complete at 20:03 UTC — [results.md](results.md) §7b. Part 5c (8 more arms) complete 2026-10-28 17:27 UTC — §7c.** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
+> Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (2026-10-27 05:30 UTC). Part 5b (8 more arms) complete at 20:03 UTC — [results.md](results.md) §7b. Part 5c (8 more arms) complete 2026-10-28 17:27 UTC — §7c. Part 6 (a second task, 9 arms, each ending in the coai code gate) complete 2026-10-29 17:47 UTC — §7d.** Owner-requested experiment, run in `dew_flow_connect_other_ais` (coai) from a session in
 > `dew_flow_conventions`; recorded here because this repository is where the family keeps its measurements.
 
 ## The question
@@ -24,6 +24,16 @@ measure its noise:
 Task: stories E5.5 + E5.6 of `dew_flow_connect_other_ais · todo/PLAN_vibe_and_kimi_runtimes_E5.md`, 12 scenarios, from
 commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonnet; Haiku in O, S, D), and is a branch
 `exp/kimi-e56-*` there. Haiku has no role in the project's model rules; its use is the owner's recorded deviation.
+
+**Part 6 is a different task and has its own arms.** The coai issues #878 and the quota part of #765, as a frozen plan with 43 scenarios
+(`todo/PLAN_a_spent_quota_cools_the_model_down.md` at `6786582e`). Three schemes, three runs each, and every arm ends in the coai code gate
+(models of other vendors review the code, a Sonnet agent decides what to fix):
+
+| Scheme | Arms | Who does what |
+|---|---|---|
+| C | C1–C3 | Sonnet codes, Opus reviews, Sonnet fixes, then the coai gate |
+| CR | CR1–CR3 | as C, with a fresh Haiku review-and-fix before the Opus review |
+| SRS | SRS1–SRS3 | Sonnet splits the plan into 7 tasks, Haiku codes each task, the same fresh Haiku review-and-fix, then as C |
 
 ## The answer (details and conditions in [results.md](results.md))
 
@@ -56,6 +66,13 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
   $7.11, C's level) and 7–8, its Haiku fixer again rewriting the shared caveat without a deviation. The Haiku review
   found 3–5 issues per arm on Sonnet's code. Other arms' data was locked during the run; an older leak (T2 read T1's
   fix notes) was found by the same scan ([incidents.md](incidents.md) §2f).
+- **Part 6 — a second, larger task with the coai code gate** (9 arms; [results.md](results.md) §7d): all 9 arms build, pass both suites, deliver
+  43 of 43 scenarios, and every one of 72 mutants is killed. The schemes cost the same on average, **$16.63 (C), $16.55 (CR), $17.16 (SRS)** (Claude
+  only; the coai providers' cost is not counted), and the spread inside one scheme is larger than the spread between them. The absolute judge gave
+  C 7.67, CR 8.50 (no major finding in any CR arm) and SRS 8.00; one C arm (6.5, two real majors) makes the difference. The Opus review still
+  found 1–2 majors in every arm. The coai gate gave 146 code findings, of which a blind judge rated 10 real, 26 partly real and 110 not real; the
+  gate agent accepted and fixed 9 (8 real). An overnight spend limit stopped round 1 (repaired, [incidents.md](incidents.md) §2g), and SRS3's Haiku
+  review-and-fix started two subagents on other models, so that step is marked contaminated. n = 3 per scheme: a direction, not a measured size.
 - **The money is in reading and reviewing**, not writing: Sonnet's cache reads (tens of millions of tokens per arm) and the
   Opus review (25–47 % of an arm in parts 1–4). A cheaper writer did not move those while a Sonnet session still wrote or
   polished the code; part 5 removed that session, and its cost fell — the Opus review is then 34–68 % of an arm.
@@ -69,9 +86,9 @@ commit `b4e2ea96`. Every arm ends with the same Opus review and a fix step (Sonn
 | [protocol.md](protocol.md) | The protocol as kept during the run: design and predictions written before each part, every change appended with its time |
 | [incidents.md](incidents.md) | Three Windows crashes and a disk logging bad blocks; every harness defect that touched a number, and its correction |
 | [harness.md](harness.md) | How it ran: isolation, the pipelines, resume after a crash, the fillers, how each metric is computed, the judges, how to re-run |
-| [data/](data/) | Per arm: `timing.jsonl` (every step attempt), `objective.json` (+ the uncorrected `objective.raw.json`), `survival.json`, `fill-*.json`, `fill-state.json` (the filler's exact code per region), `filler-requests.jsonl`, the coder's and fixer's notes and the step-2 review; `mutation.json` (part 5's mutation checks, every arm); the task arms' task lists and per-task diffs; `metrics.json` (time/cost/tokens per arm, step, attempt, model); `fix-outcomes.json` (what each fixer did with each review finding); `judges/` (both group judges and the absolute judge: keys, every verdict); `fillers/` (V's and VT's prompts and drafts) |
-| [harness/](harness/) | The scripts and briefs exactly as used |
-| [data/raw/](data/raw/README.md) | **Every raw record**, compressed (41 MB for parts 1–4, 23 MB for part 5): every session's full event stream and exact prompt, all session transcripts, the checks' full logs and test reports, every filler prompt and answer, the judges' complete sessions, all notes and logs — with checksums; the owner's email addresses masked, nothing else changed |
+| [data/](data/) | Per arm: `timing.jsonl` (every step attempt), `objective.json` (+ the uncorrected `objective.raw.json`), `survival.json`, `fill-*.json`, `fill-state.json` (the filler's exact code per region), `filler-requests.jsonl`, the coder's and fixer's notes and the step-2 review; `mutation.json` (part 5's mutation checks, every arm); the task arms' task lists and per-task diffs; `metrics.json` (time/cost/tokens per arm, step, attempt, model); `fix-outcomes.json` (what each fixer did with each review finding); `judges/` (both group judges and the absolute judge: keys, every verdict); `fillers/` (V's and VT's prompts and drafts); **`part6/`** (Part 6: `metrics6.json`, the absolute judge's scores, key, hand check and verdicts, the coai findings and the judge of them, and per arm the objective checks, the Opus review, the gate summary and the mutation checks) |
+| [harness/](harness/) | The scripts and briefs exactly as used; [harness/part6/](harness/part6/) holds Part 6's own (it ran in another folder) |
+| [data/raw/](data/raw/README.md) | **Every raw record**, compressed (41 MB for parts 1–4, 23 MB for part 5, 25 MB for Part 6): every session's full event stream and exact prompt, all session transcripts, the checks' full logs and test reports, every filler prompt and answer, the judges' complete sessions, all notes and logs — with checksums; the owner's email addresses masked, nothing else changed |
 | [data/reviews/](data/reviews/) | The other-vendor reviews of this folder, verbatim: the consultation (codex gpt-6-astra) and the document gate's two rounds on `results.md` (findings, decisions, the reviewers' notes) |
 
 Not kept here: the arms' clones (the branches `exp/kimi-e56-*` in `dew_flow_connect_other_ais` hold every arm's commits).

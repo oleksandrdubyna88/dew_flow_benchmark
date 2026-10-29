@@ -126,6 +126,52 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
 - **Seen in a Haiku review's own test run** (CH2): 17 rounds-database tests failed in its whole-suite run (the coder
   had seen 18). The objective checks on the final commits show 0 new failures in all 8 arms; not investigated further.
 
+## 2g. Part 6 (C, CR, SRS × 3, a second task) (2026-10-28 20:26 – 2026-10-29 20:37 UTC)
+
+- **The overnight spend limit (2026-10-28 21:45–21:47 UTC).** *What happened:* round 1 (C1, CR1, SRS1) had run for 80 minutes when the Claude CLI
+  answered "You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 1:20am
+  (Europe/Paris)", with `api_error_status` 429. The limit detector in `run-arm.sh` looked for other words and missed this one. A step that ended
+  in that error was marked done, and the next step started at once and failed in about 4 seconds. 14 attempts ended this way: C1 3, CR1 4, SRS1 7.
+  Three of them (C1's Opus review, CR1's Haiku review, SRS1's task t4) had worked 4–22 minutes first. Round 2 (C2, CR2, SRS2) started at 21:48 UTC
+  and ended in a minute with no work and no commit. *Effect on the data:* no commit or finished step was lost. The interrupted attempts are in the
+  cost (C1's review $3.46 before the limit and $5.30 after the resume; CR1's Haiku review $0.75 and $1.10; SRS1's t4 $0.21 and $0.75). Active minutes
+  leave the wait out. Round 1's elapsed times (779–862 min) contain 11 hours of waiting. The `limited` field in round 1's `timing.jsonl` reads false
+  for those attempts, because the detector wrote it. *What was changed:* [harness/part6/repair-limit-2026-10-28.sh](harness/part6/repair-limit-2026-10-28.sh)
+  (kept as the record) removed the `.done` marker of every step whose last result is an error, the arm-done line, and what was computed from a bogus
+  step (a `review.json` parsed from an error, before/diff snapshots at the wrong commit, SRS1's batch markers and the Haiku diffs of t4, t5 and t7).
+  Round 2 was reset to a fresh start (its bogus attempts are therefore not in the archives; `chain.log` has their times). The detector now reads
+  `api_error_status` and `api_error` first, then the words, and a step whose last result is an error is never marked done: the runner stops for a
+  person. The chain restarted at 08:45 UTC and the sessions of round 1 resumed with the time left of their budgets. The run-arm comment says "nine
+  steps"; the streams show 14 attempts.
+- **SRS3's "Haiku" review step started two subagents.** *What happened:* in `3-hreview` the Haiku session called the `Agent` tool four times. The
+  project's hook refused the first two (no model named; the rule `subagent-models.md` accepts `sonnet`, `opus` or `fable` only). The next two named
+  `sonnet` (an audit of the 43 scenarios against the tests) and `opus` (a check of the diff against the rules). Both ran in the background.
+  *Effect:* of the step's $5.35, Haiku cost $1.57, the Opus subagent $2.84 and the Sonnet subagent $0.94: $3.79 is not Haiku. The step's 12
+  findings come from a Haiku session with two stronger helpers. It is the only step of all nine arms with a subagent (`grep -c '"name":"Agent"'`
+  on all streams: only this file). *Why it could happen:* `run-arm.sh` allows `Agent` in every step that can write. *What was changed:* nothing in
+  the run. SRS3's Haiku-review result is marked contaminated in [tables.md](tables.md) §10 and [results.md](results.md) §7d, and the SRS mean cost is also
+  given without the two subagents ($15.90). A re-run should take `Agent` out of the write tools.
+- **The isolation scan.** Every tool call in the nine arms' streams (6,060) and in the two subagents of SRS3 (158) was read for paths. *Checked:* no arm
+  read another arm's folder, clone, notes, results or token; none read the old experiment, the owner's repositories or the vendors' homes; no tool call was
+  refused by the mode-000/300 folders. Four `Read` calls were refused by the deny list (C1 1, CR2 1, SRS3 2): each one wanted the arm's own saved tool result under `~/.claude/projects/`. Two things were opened one by one. SRS1's Haiku coder (task t2) ran `readlink /proc/<pid>/cwd` on two process
+  ids; the answers were two worktrees of SRS1 itself. CR3's Haiku reviewer tried to edit a path in the experiment root (`…/coai-exp2/notes/hreview.md`); the
+  file did not exist, the edit was refused, nothing was written. The scan cannot see a walk of `/proc` that a shell command hides; no such command is in the streams.
+- **A test that fails only under the isolation.** The per-arm temp folder made a Unix-socket path longer than 108 characters, so
+  `RegularFilesTests.A_fifo_a_socket_and_a_device_…` failed in the arms' own whole-suite runs. The brief said that nothing is known to fail. Seven of
+  the nine gate notes name the test and call it environmental. In the objective checks, with the normal temp folder, it passed (0 new failures in all nine arms).
+- **C1's S14 reads "absent" in the pass check.** The test is named `AnUnknownModel_HasNoGroup_AndEveryKnownOneHasItsKey`, a theory with 8 cases
+  that all passed. The check looks for the plan's name as a whole word in the report, and a longer name does not match. So C1 shows 42 of 43
+  passing. The test exists and passes, and the mutation check found it by the longer name and it caught its mutant. The objective file is unchanged;
+  the absolute judge was told that a longer name is a rename, not an absence.
+- **The gate agent left a false note in SRS1.** The coai plan round named the partial class `QuotaCooldowns`. The gate agent saw a code defect and merged the two
+  files (`c768433a`), but its brief said not to change the plan file, so the plan's deviation note about the partial class stayed false. The judge found
+  that note (two runs; major) and the hand check lowered it to minor. It is an effect of the gate step's brief, not of the coder.
+- **Hard deadline.** C2's Opus review ran to its limit (50 minutes, exit 124) after it had written its review; the review is used as written.
+- **The operator's commands.** The plan round of every arm returned the operator's panel commands (split into epics, a Fable/Opus role split,
+  consultants first, a cadence). All gate agents declined them with the reason that the plan is frozen and the brief fixes the flow.
+- **The judge of the coai findings was not blind to the scheme.** It worked in each arm's clone, where the commit messages and the plan's notes were
+  visible and not redacted; the label was random and the gate agent's decisions were not shown. The absolute judge saw a redacted diff only.
+
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 
 - C2 added as an A/A control (before the start).
@@ -141,3 +187,7 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   Haiku fixes; mutation checks frozen before any result and run on all 30 arms.
 - The coai review gate was NOT inserted into any arm: the arms are measurement branches that never merge, and all arms
   had to run one pipeline. It applies when an implementation of E5.5/E5.6 goes into the real branch.
+- Part 6 (owner, 2026-10-28): a second, larger task (coai #878 and the quota part of #765, frozen plan `6786582e`, 43 scenarios), three
+  schemes × three runs (C, CR, and SRS = Sonnet splits, Haiku codes each task, the same fresh Haiku review-and-fix), every arm ending in the
+  coai code gate; per-arm random folders, closed other work, and an own coai data folder per arm; the mutation mutants frozen after the run
+  on the final code and before they were applied.
