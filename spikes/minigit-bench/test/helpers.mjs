@@ -4,11 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchInputs } from '../lib/fetch-inputs.mjs';
+import { findOnPath } from '../lib/find-on-path.mjs';
 import { defaultKeyPath, readKey } from '../lib/heldout-crypto.mjs';
+import { PYTHON } from '../lib/heldout-run.mjs';
 
 export const spikeDir = fileURLToPath(new URL('..', import.meta.url));
 export const stubTrees = path.join(spikeDir, 'test', 'fixtures', 'stub-trees');
-export const BWRAP = '/usr/bin/bwrap';
 
 let fetched;
 /**
@@ -44,14 +45,12 @@ export const tmpDir = prefix => track(mkdtempSync(path.join(os.tmpdir(), `testsT
  * which turns the skip into a failure so a host without bwrap cannot report the epic done. Returns whether to go on.
  */
 export function sandboxGate(t) {
-  if (existsSync(BWRAP)) return true;
-  const why = `${BWRAP} is missing: the scoring box cannot run here`;
+  if (findOnPath('bwrap') !== null) return true;
+  const why = 'bwrap is not on PATH: the scoring box cannot run here';
   if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
   t.skip(why);
   return false;
 }
-
-export const PYTHON = '/usr/bin/python3';
 
 /** A test that needs python3 calls this first; it skips with its reason, or fails under BENCH_REQUIRE_SANDBOX=1 (like sandboxGate). */
 export function pythonGate(t) {

@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { fail, ok } from '../lib/result.mjs';
 import { crosscheckPolicyFrom } from './policy-input.mjs';
 import { capturePlan } from './capture-plan.mjs';
 import { outProblems, readToken, tokenStatus } from './capture-env.mjs';
@@ -28,9 +29,9 @@ const say = (stream, text) => stream.write(`${text}\n`);
 
 function parse(argv, options) {
   try {
-    return { ok: true, values: parseArgs({ args: argv, options, strict: true, allowPositionals: false }).values };
+    return ok(parseArgs({ args: argv, options, strict: true, allowPositionals: false }).values);
   } catch (e) {
-    return { ok: false, reason: e.message };
+    return fail(e.message);
   }
 }
 
@@ -110,9 +111,9 @@ export async function main(argv, { env = process.env, io = { out: process.stdout
   if (!spec) { say(io.err, `usage: capture-session.mjs ${Object.keys(VERBS).join('|')} ...`); return USAGE; }
   const parsed = parse(rest, spec.options);
   if (!parsed.ok) { say(io.err, parsed.reason); return USAGE; }
-  const missing = spec.need.filter(k => !parsed.values[k]);
+  const missing = spec.need.filter(k => !parsed.value[k]);
   if (missing.length > 0) { say(io.err, `${verb} needs ${missing.map(k => `--${k}`).join(' ')}`); return USAGE; }
-  return spec.fn({ values: parsed.values, env, io });
+  return spec.fn({ values: parsed.value, env, io });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = await main(process.argv.slice(2));

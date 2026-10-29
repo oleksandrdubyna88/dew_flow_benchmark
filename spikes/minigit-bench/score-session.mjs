@@ -12,8 +12,9 @@ import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { findOnPath } from './lib/bwrap.mjs';
+import { findOnPath } from './lib/find-on-path.mjs';
 import { fetchInputs } from './lib/fetch-inputs.mjs';
+import { fail, ok } from './lib/result.mjs';
 import { defaultDeps } from './lib/score-deps.mjs';
 import { runScoring, scoringPlan } from './lib/score-pipeline.mjs';
 
@@ -28,14 +29,14 @@ export function parseCli(argv) {
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: false }).values;
   } catch (e) {
-    if (e.code?.startsWith('ERR_PARSE_ARGS')) return { ok: false, reason: e.message };
+    if (e.code?.startsWith('ERR_PARSE_ARGS')) return fail(e.message);
     throw e;
   }
   const missing = ['session', 'source', 'arm', 'stack', 'phase'].filter(k => !parsed[k]);
-  if (missing.length > 0) return { ok: false, reason: `missing --${missing.join(', --')}` };
-  if (!parsed.toolchain?.length) return { ok: false, reason: 'at least one --toolchain <dir> is required' };
+  if (missing.length > 0) return fail(`missing --${missing.join(', --')}`);
+  if (!parsed.toolchain?.length) return fail('at least one --toolchain <dir> is required');
   const resolve = p => (p ? path.resolve(p) : undefined);
-  return { ok: true, value: { ...parsed, toolchain: parsed.toolchain.map(p => path.resolve(p)), 'nuget-cache': resolve(parsed['nuget-cache']), 'npm-cache': resolve(parsed['npm-cache']) } };
+  return ok({ ...parsed, toolchain: parsed.toolchain.map(p => path.resolve(p)), 'nuget-cache': resolve(parsed['nuget-cache']), 'npm-cache': resolve(parsed['npm-cache']) });
 }
 
 const EXIT = Object.freeze({ environment: 3, configuration: 4 });

@@ -1,6 +1,7 @@
 // One external process, exe + argv (never a shell), always with a timeout that kills the whole process group.
-// Expected failures come back as values: { ok: true, value } | { ok: false, reason }.
+// Expected failures come back as values (result.mjs): ok(value) | fail(reason).
 import { spawn } from 'node:child_process';
+import { fail, ok } from './result.mjs';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const GRACE_MS = 2000;
@@ -35,7 +36,7 @@ function killGroup(child) {
  * { ok: false, reason }. `timeoutMs` is required: nothing here runs unbounded.
  */
 export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTES } = {}) {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve({ ok: false, reason: 'runBounded needs a positive timeoutMs' });
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(fail('runBounded needs a positive timeoutMs'));
   return new Promise(resolve => {
     const started = Date.now();
     const out = collector(maxBytes);
@@ -49,7 +50,7 @@ export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTE
       clearTimeout(timer);
       child.stdout.destroy();
       child.stderr.destroy();
-      resolve({ ok: true, value: { code, signal, stdout: out.text(), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started } });
+      resolve(ok({ code, signal, stdout: out.text(), stderr: err.text(), timedOut, truncated: out.truncated() || err.truncated(), ms: Date.now() - started }));
     };
     const timer = setTimeout(() => {
       timedOut = true;
@@ -62,7 +63,7 @@ export function runBounded(exe, args, { cwd, env, timeoutMs, maxBytes = MAX_BYTE
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ ok: false, reason: `could not start ${exe}: ${e.message}` });
+      resolve(fail(`could not start ${exe}: ${e.message}`));
     });
     child.on('close', (code, signal) => finish(code, signal));
   });

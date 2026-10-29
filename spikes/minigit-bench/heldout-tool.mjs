@@ -13,7 +13,7 @@
 // only: the key is a file, never an environment variable. Exit codes: 0 ok | 1 a check failed (a mismatch, a leak, a refusal) |
 // 3 environment (no key, no suite, no bwrap, inputs unreachable) | 4 usage | 5 the tool itself failed.
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,8 @@ import { assertWorkRoot, defaultWorkRoot, makeHeldoutDep, sweepLeftovers, withCl
 import { HELDOUT_DIR, countsOf, readSealedFiles, sealSuite, sha256Hex } from './lib/heldout-seal.mjs';
 import { fetchInputs } from './lib/fetch-inputs.mjs';
 import { readFileOrNull } from './lib/inputs.mjs';
+import { findOnPath } from './lib/find-on-path.mjs';
+import { fail, ok } from './lib/result.mjs';
 import { runBounded } from './lib/run.mjs';
 
 const OPTIONS = {
@@ -33,14 +35,13 @@ const OPTIONS = {
   repo: { type: 'string' }, range: { type: 'string' }, direct: { type: 'boolean' }, 'max-age-hours': { type: 'string' }, 'inputs-repo': { type: 'string' },
 };
 const EXIT = Object.freeze({ ok: 0, check: 1, env: 3, usage: 4, broke: 5 });
-const BWRAP_PATH = '/usr/bin/bwrap';
 
 function parseCli(argv) {
   try {
     const { values, positionals } = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
-    return positionals.length === 1 ? { ok: true, command: positionals[0], o: values } : { ok: false, reason: 'exactly one command is expected' };
+    return positionals.length === 1 ? { ...ok(values), command: positionals[0] } : fail('exactly one command is expected');
   } catch (e) {
-    if (e.code?.startsWith('ERR_PARSE_ARGS')) return { ok: false, reason: e.message };
+    if (e.code?.startsWith('ERR_PARSE_ARGS')) return fail(e.message);
     throw e;
   }
 }
@@ -52,11 +53,10 @@ const settings = o => ({
 });
 
 async function repoRoot(o) {
-  if (o.repo) return ok0(path.resolve(o.repo));
+  if (o.repo) return ok(path.resolve(o.repo));
   const r = await runBounded('git', ['rev-parse', '--show-toplevel'], { cwd: path.dirname(fileURLToPath(import.meta.url)), timeoutMs: 20_000 });
-  return r.ok && r.value.code === 0 ? ok0(r.value.stdout.trim()) : { ok: false, reason: 'could not find this repository with git rev-parse --show-toplevel' };
+  return r.ok && r.value.code === 0 ? ok(r.value.stdout.trim()) : fail('could not find this repository with git rev-parse --show-toplevel');
 }
-const ok0 = value => ({ ok: true, value });
 
 function cmdKeygen(o, write) {
   const made = generateKey(settings(o).keyFile);
@@ -113,11 +113,11 @@ function cmdSweep(o, write) {
 
 /** Scores the subjects with the real pipeline (build, visible scripts, held-out, upstream) or, for tests, with the bare runner. */
 async function makeScorer(o, { suiteDir, base, dep }) {
-  if (o.direct) return ok0({ scoreSubject: directScorer({ suiteDir, workRoot: path.join(base, 'direct'), timeoutS: 10 }), requireVisible: false });
-  if (!existsSync(BWRAP_PATH)) return { ok: false, reason: `${BWRAP_PATH} is missing: the scoring box cannot run here` };
+  if (o.direct) return ok({ scoreSubject: directScorer({ suiteDir, workRoot: path.join(base, 'direct') }), requireVisible: false });
+  if (findOnPath('bwrap') === null) return fail('bwrap is not on PATH: the scoring box cannot run here');
   const fetched = await fetchInputs({ repoUrl: o['inputs-repo'] });
-  if (!fetched.ok) return { ok: false, reason: fetched.reason };
-  return ok0({ scoreSubject: pipelineScorer({ inputs: fetched.value, heldout: dep, sessionRoot: path.join(base, 'sessions') }), requireVisible: true });
+  if (!fetched.ok) return fetched;
+  return ok({ scoreSubject: pipelineScorer({ inputs: fetched.value, heldout: dep, sessionRoot: path.join(base, 'sessions') }), requireVisible: true });
 }
 
 const reportLines = (r, write) => {
@@ -137,7 +137,7 @@ async function calibrateIn({ o, suiteDir, dep, workRoot }) {
     if (!scorer.ok) return scorer;
     const trees = path.join(base, 'trees');
     mkdirSync(trees, { mode: 0o700 });
-    return ok0(await calibrate({ suiteDir, workRoot: trees, ...scorer.value }));
+    return ok(await calibrate({ suiteDir, workRoot: trees, ...scorer.value }));
   } finally {
     removeUnder(base, scratchBase);
   }
@@ -191,7 +191,7 @@ export async function main(argv, write = line => process.stdout.write(`${line}\n
   const run = COMMANDS[cli.command];
   if (!run) { write(`usage error: unknown command ${JSON.stringify(cli.command)}; one of ${Object.keys(COMMANDS).join(', ')}`); return EXIT.usage; }
   try {
-    return await run(cli.o, write);
+    return await run(cli.value, write);
   } catch (e) {
     write(`heldout-tool failed: ${e.message}`);
     return EXIT.broke;

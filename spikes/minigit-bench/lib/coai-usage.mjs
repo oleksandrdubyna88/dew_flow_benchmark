@@ -11,6 +11,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { COAI_GATE } from './categories.mjs';
+import { fail, ok } from './result.mjs';
 
 export const UNKNOWN_SUBSCRIPTION = 'unknown (subscription)';
 export const USAGE_NOT_CAPTURED = 'usage not captured';
@@ -33,14 +34,14 @@ const isRecord = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** An optional token field: absent is unknown (an old line), present must be a count. */
 function optionalCount(obj, field) {
-  if (obj[field] === undefined) return { ok: true, value: unknown(`line has no ${field}`) };
-  return isCount(obj[field]) ? { ok: true, value: obj[field] } : { ok: false, reason: `${field} is not a token count` };
+  if (obj[field] === undefined) return ok(unknown(`line has no ${field}`));
+  return isCount(obj[field]) ? ok(obj[field]) : fail(`${field} is not a token count`);
 }
 
 /** The money field: absent or null is "no cost reported" (null), a number is a price, anything else is a finding. */
 function costOf(obj) {
-  if (obj.costUsd === undefined || obj.costUsd === null) return { ok: true, value: null };
-  return isCount(obj.costUsd) ? { ok: true, value: obj.costUsd } : { ok: false, reason: 'costUsd is neither null nor a non-negative number' };
+  if (obj.costUsd === undefined || obj.costUsd === null) return ok(null);
+  return isCount(obj.costUsd) ? ok(obj.costUsd) : fail('costUsd is neither null nor a non-negative number');
 }
 
 function requiredFailure(obj) {
@@ -58,28 +59,27 @@ const uncachedOf = (tokensIn, cached) => {
 /** One parsed object to a row, or a failure naming the field. Pure. */
 function toRow(obj, line) {
   const bad = requiredFailure(obj);
-  if (bad) return { ok: false, reason: bad };
+  if (bad) return fail(bad);
   const cached = optionalCount(obj, 'tokensCached');
   const reasoning = optionalCount(obj, 'tokensReasoning');
   const cost = costOf(obj);
   const failed = [cached, reasoning, cost].find(r => !r.ok);
   if (failed) return failed;
   const flags = typeof cached.value === 'number' && cached.value > obj.tokensIn ? [CACHED_ABOVE_INPUT] : [];
-  return {
-    ok: true,
-    value: Object.freeze({
+  return ok(
+    Object.freeze({
       line, utc: obj.utc ?? '', provider: obj.provider, model: typeof obj.model === 'string' ? obj.model : '', kind: obj.kind || DEFAULT_KIND, role: obj.role ?? '',
       stage: obj.stage ?? '', seconds: obj.seconds, tokensIn: obj.tokensIn, tokensOut: obj.tokensOut, costUsd: cost.value,
       costNote: obj.costNote ?? '', cached: cached.value, uncached: uncachedOf(obj.tokensIn, cached.value), reasoning: reasoning.value,
       notCaptured: obj.usageNote === USAGE_NOT_CAPTURED, flags: Object.freeze(flags),
     }),
-  };
+  );
 }
 
 function parseLine(text, line) {
   let obj;
-  try { obj = JSON.parse(text); } catch (e) { return { ok: false, reason: `not valid JSON: ${e.message}` }; }
-  return isRecord(obj) ? toRow(obj, line) : { ok: false, reason: 'not a JSON object' };
+  try { obj = JSON.parse(text); } catch (e) { return fail(`not valid JSON: ${e.message}`); }
+  return isRecord(obj) ? toRow(obj, line) : fail('not a JSON object');
 }
 
 /** Pure: { rows, findings }. Blank lines are skipped; an unreadable line is a finding with its line number, never dropped. */
@@ -161,13 +161,13 @@ const ROUNDS_SQL = 'SELECT stage, number, verdict, started_utc, completed_utc FR
 
 /** Open read-only and read the rows, or say why not. The one I/O edge of this module. */
 function readRounds(dbPath) {
-  if (!existsSync(dbPath)) return { ok: false, reason: `coai db ${dbPath} does not exist` };
+  if (!existsSync(dbPath)) return fail(`coai db ${dbPath} does not exist`);
   let db;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
-    return { ok: true, value: db.prepare(ROUNDS_SQL).all() };
+    return ok(db.prepare(ROUNDS_SQL).all());
   } catch (e) {
-    return { ok: false, reason: `cannot read the rounds table of ${dbPath}: ${e.message}` };
+    return fail(`cannot read the rounds table of ${dbPath}: ${e.message}`);
   } finally {
     db?.close();
   }
@@ -177,8 +177,8 @@ function gateSpan(r) {
   const label = `${r.stage}#${r.number} ${r.verdict}`;
   const startMs = Date.parse(r.started_utc);
   const endMs = Date.parse(r.completed_utc);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return { ok: false, reason: `${label}: unreadable or inverted instants` };
-  return { ok: true, value: { category: COAI_GATE, startMs, endMs, agentId: 'main', source: 'coai.rounds', label } };
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return fail(`${label}: unreadable or inverted instants`);
+  return ok({ category: COAI_GATE, startMs, endMs, agentId: 'main', source: 'coai.rounds', label });
 }
 
 /**

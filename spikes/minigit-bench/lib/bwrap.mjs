@@ -64,12 +64,3 @@ export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [],
     '--',
   ]);
 }
-
-/** Resolve an executable on PATH the way spawn does, or null. */
-export function findOnPath(name, pathValue = process.env.PATH ?? '') {
-  for (const dir of pathValue.split(path.delimiter).filter(Boolean)) {
-    const candidate = path.join(dir, name);
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
