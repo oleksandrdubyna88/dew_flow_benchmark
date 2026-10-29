@@ -566,7 +566,7 @@ Docker must be up for the whole suite (the durability tests); the module's own t
 
 ## Epics
 
-Cornerstones: 1 of 2 — E1.S5 (the launch boundary; spec by Fable) — the area left: E2's step state machine
+Cornerstones: 2 of 2 — E1.S5 (the launch boundary; spec by Fable), E2.S1 (the step's state machine: the result envelope and the classifier; spec by Fable)
 
 Stories documents (`todo/PLAN_model_arms_E<n>.md`) are written when each epic starts, by the judge role, from the story maps below
 and §7's scenarios; the ledger line above is updated by the commit that marks a cornerstone story. Sizes are changed lines, tests
@@ -602,6 +602,11 @@ D19's secret-name rule (claude's own `CLAUDE_*`/`ANTHROPIC_*` login passes) and 
 envelope's structured fields, the gate step under a real lock; `run-arm` for C and CR. **Scope.** D6–D10, D16, §4.5. **Depends on.**
 E1. **Done when.** E2's tests of §7 green, including the two-process lock test and the verbatim 2026-10-28 line; the break-its of
 `StepRunnerTests` watched red.
+**Stories:** [PLAN_model_arms_E2.md](PLAN_model_arms_E2.md) — E2.S1–E2.S8 (the map's E2.S6 split into S6, the lock, verb, status and
+MCP configs, and S7, the gate step; the map's E2.S7 is S8 there; E1 §8 item 15's launcher fix joined E2.S3); cornerstone **E2.S1** (spec
+by Fable). Its §8 lists sixteen points where this plan, E1 and the code or the recorded streams disagree, each settled there — among
+them that a recorded stream holds several result lines with `"type":"result"` far from the line's start, that D21 overrides D8 for a
+review killed before its result, and how the coai vault key reaches the server (`mcp-coai.json`'s `env`, E1 §8 item 16).
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|

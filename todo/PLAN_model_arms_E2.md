@@ -1,0 +1,1021 @@
+# PLAN — E2 stories: the step of the model-arms module — classify, recover, run, gate
+
+> Status: **plan only, nothing implemented yet, 2026-10-29.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16,
+> D21; §4.5; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 have landed and E1.S8–E1.S11 have not.
+>
+> Scope: the step's state machine in `tools/model-arms/ModelArms.Core/Steps/` and `…/Launch/` (the result envelope, the classifier,
+> timing, budget, recovery, the reconciliation of derived outputs, the review's answer, the gate's status, the two MCP configs); its
+> runner, files, git, transcripts and gate lock in `tools/model-arms/ModelArms/Adapters/`; the `gate-lock` and `run-arm` verbs (C and
+> CR); one widening of `tests/FakeCli` (`stdoutByCall`); one fix in the shared launcher (`ProcessRunner` observes both readers, E1 §8
+> item 15); tests under `tests/Bench.Tests/ModelArms/` (plus two in `tests/Bench.Tests/Infrastructure/`); recorded fixtures under
+> `tests/Bench.Tests/Fixtures/model-arms/`; `research/module_model_arms.md`. Eight stories, E2.S1–E2.S8 (the parent's map named seven;
+> §8 records the split). Cornerstone area of this epic: **the step's state machine**, marked on **E2.S1** (`model: fable`). The
+> parent's ledger now reads `Cornerstones: 2 of 2 — E1.S5, E2.S1`.
+
+## 1. Goal, before any solution
+
+The parent (§1) ports the owner's bash harness. E1 built the facts, the paths and a launch the shared launcher can express. E2 makes
+**one step** run end to end the way `run-arm.sh` ran it, with the one thing the shell got wrong fixed by construction: on 2026-10-28
+at ~21:45 UTC the session limit came back as an error result whose words the detector of the day did not know, nine steps were
+marked done in seconds, and the next round burned the same way (`/home/jinx/git/coai-exp2/repair-limit-2026-10-28.sh:2-5`). So:
+
+- a step's **end is decided from the result envelope's structured fields first** (`is_error`, `api_error_status`, `api_error`), the
+  words second, and only `Finished` and `HardDeadline` are done (D6, D8);
+- a step is **resumable from its files alone** — skipped, recovered as done, started fresh or resumed under its own session with the
+  time left of its budget — and is never declared done with a derived output missing (D7, D21);
+- a limit **waits and resumes the same session without spending the budget**; an error that is not a limit stops for a person (D6,
+  D16);
+- the **gate step** runs one arm at a time under a lock observed between two real processes, waits out a `blocked` gate, and gets its
+  provider keys without widening the arm's environment (D10; E1 §8 item 16);
+- `run-arm` runs the C and CR schemes against the fake CLI, every exit code the parent's (D16).
+
+A classifier that reads one envelope wrong marks a whole round done; a recovery that resumes a finished session buys a finished
+agent extra time (the previous generation's arm C, `research/local-model-coding/incidents.md:39`). Those two are why this epic's
+cornerstone is the classifier and why every recovery is a pure function with a test.
+
+## 2. What exists — verified at `a208d75`, 2026-10-29
+
+Every line below was opened in this worktree or, for the shell and the product, by exact path the same day.
+
+| Fact | Where |
+|---|---|
+| The transcripts port: `Task<Outcome<AgentTranscript>> TranscriptAsync(AgentAsk ask, CancellationToken)`; a refusal is only what stopped the LAUNCH | `src/Bench.Application/CliAgent.cs:304-307` |
+| `AgentTranscript(CapturedCount ExitCode, bool TimedOut, string Stdout, string Stderr, TimeSpan Elapsed)` with `Argv` | `src/Bench.Application/CliAgent.cs:293-298` |
+| `AgentAsk(…)` with `Output` and `ErrorOutput` (`AgentOutputSink`, `None` by default); `AgentOutputSink.Lines(Action<string>)` | `src/Bench.Application/CliAgent.cs:21`, `:39`, `:44`, `:59` |
+| The runtime: `TranscriptAsync` maps `ProcessAttempt.NotFound` to a Failure, `TimedOut` to `TimedOut: true` with no exit code, `Completed` to its exit code; an empty prompt and an argv refusal are Failures too | `src/Bench.Infrastructure/Models/CliAgentRuntime.cs:297-300`, `Transcript` `:352-365`, `LaunchAsync` `:306-347` (both sinks passed `:342-343`) |
+| `ProcessAttempt` = `Completed(ProcessResult)` · `TimedOut(Budget, Output, StandardOutput, StandardError)` · `NotFound(Executable)` | `src/Bench.Infrastructure/Process/ProcessRunner.cs:23-32` |
+| The launcher's core: both readers started `:271-272`; on cancellation the tree is killed `:285` and **the caller's cancellation rethrown without awaiting either reader** `:287-291`; the timeout path awaits stdout THEN stderr `:293`; the completed path the same `:297`; `budget` is a `using` local, disposed when the method leaves; `PumpAsync`'s catch cancels the budget `:339` and rethrows `:340` | `src/Bench.Infrastructure/Process/ProcessRunner.cs:261-300`, `:324-344`; `Reader` `:256-257` |
+| E1 §8 item 15 (owned by E2): with both sinks real, a throwing stdout sink leaves the stderr pump unobserved; its sink can run after `RunAsync` has thrown and its catch can cancel a disposed budget | `todo/PLAN_model_arms_E1.md` §8 item 15 |
+| E1.S5's stderr-sink suite (its own new file; this epic appends two tests) | `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs:18`, `:80` (`Every_existing_launch_without_a_stderr_sink_is_unchanged`) |
+| A line writer that flushes every line: `ScoutStreamWriter(FileStream file)`, `Line(string)` | `src/Bench.Infrastructure/Scouts/ScoutArtifacts.cs:255`, `:259` |
+| Stage → flush → rename, never overwrite: `ArtifactCommit.CommitAsync(string full, ReadOnlyMemory<byte> bytes, ArtifactProbe probe, CancellationToken)`; the synchronous `Stage(string full, byte[] bytes)`; a test's crash seam `ArtifactProbe.None` / `virtual Reached(ArtifactStep)` | `src/Bench.Infrastructure/Gate/ArtifactCommit.cs:23`, `:69`; `src/Bench.Infrastructure/Gate/ArtifactProbe.cs:29-33` |
+| One git command as a value: `GitCommand.ReadAsync(string workingDirectory, TimeSpan timeout, CancellationToken, params string[] arguments)` (stdout alone), `RunAsync` (merged), `AskAsync` (exit 1 = no) | `src/Bench.Infrastructure/Git/GitHistory.cs:14`, `:35`, `:50` |
+| `CapturedCount(bool WasCaptured, long Value, string Reason)`, `Number`, `Unavailable` — *absent is not zero* as a type | `src/Bench.Domain/Trace/LegTrace.cs:21-26` |
+| The existing envelope reader of the `json` output (not the stream) knows `is_error`, `result`, `subtype`, cost, usage — NOT `api_error_status`/`api_error`; it reads the FIRST recognisable `{…}` | `src/Bench.Infrastructure/Models/ClaudeEnvelope.cs:39-61`, `EnvelopeWire` `:103-108` |
+| The stream reader of the probes: `ClaudeStream.OwnVoice` takes the LAST `"type":"result"` line through `ProbeJson`, which is `internal` to `Bench.Domain` — not reachable from the module | `src/Bench.Domain/Probes/ClaudeStream.cs:40-55`; `src/Bench.Domain/Probes/ProbeJson.cs:10` |
+| The account-out words refuse a plain 429 on purpose (a different question: here a 429 is what to wait for) | `src/Bench.Domain/Gate/ReviewerAccountOut.cs:47-60` |
+| The exit codes `Pass 0 · Regression 1 · Environment 3 · Configuration 4 · NoReport 5` | `src/Bench.Hosting/ExitCodes.cs:15-28` |
+| The flag parser: `Value(name, fallback)`, `Int(name, fallback)`, `Has(name)` | `src/Bench.Hosting/CommandLine.cs:30-38` |
+| `ArmPaths` — `CloneFolder` `:86`, `Tmp` `:95`, `CoaiSettings(side)` `:101`, `McpNone` `:103`, `McpCoai` `:105`, `Session(step)` `:107`, `Stream(step, n)` `:109`, `Stderr(step, n)` `:111`, `Prompt(step, n)` `:113`, `Done(step)` `:115`, `Before(step)` `:117`, `Diff(step)` `:119`, `Timing` `:121`, `ReviewJson` `:162`, `GateJson` `:164`; `RootPaths.GateLock` `:46`. **No member names the folder `coai-data` itself** | `tools/model-arms/ModelArms.Core/Experiment/ArmPaths.cs` |
+| `Experiment(…, Limits Limits, …, ToolSets Tools, CoaiFacts Coai, …)`; `Limits(WaitSeconds, Tries, GateWaitSeconds, GateTries, MinimumRemainingSeconds, KillGraceSeconds)`; `CoaiFacts(Binary, Settings, Side)` with `Configured` | `tools/model-arms/ModelArms.Core/Experiment/ExperimentFacts.cs:41`, `:52-57`, `:70-84` |
+| `StepKind`, `StepMode`, `StepSpec(StepKind Kind, string Model, int Minutes, StepMode Mode)`, `StepKinds.Key` | `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs:7-13`, `:31` |
+| `SchemeEntry.Step(string Name, StepKind Kind)` / `SchemeEntry.Tasks`; `Scheme(Name, Entries)`; `ArmNames.IsArmName`, `ArmNames.SchemeOf(arm) → Outcome<string>` | `tools/model-arms/ModelArms.Core/Experiment/Scheme.cs:7-19`, `:25`, `:28` |
+| `ArmMap.TokenOf(arm) → Outcome<string>`, `Leaks(text, ownArm, schemes)`, `Scrub(line)` (every token → `<token>`) | `tools/model-arms/ModelArms.Core/Experiment/ArmMap.cs:75`, `:84`, `:93` |
+| `StepSession.Fresh(Guid)` / `Resume(Guid)`; `StepLaunchRequest(ClaudeExecutable, Spec, Tools, Paths, Session, WorkingDirectory, Prompt, Wall, ParentEnvironment)`; `StepLaunch.Ask(request)` → an ask with `AgentEnvironment.Only(ArmChildEnvironment.Of(…) + PWD)` and both sinks `None` ("the runner sets them with `with`") | `tools/model-arms/ModelArms.Core/Launch/StepLaunch.cs:9-19`, `:25-34`, `:49-54`, `:60-66` |
+| `ArmChildEnvironment.Of(parent, paths)` — strips `BENCH_*`, `ConnectionStrings__*`, `COAI_*`, every secret-named variable except `CLAUDE_*`/`ANTHROPIC_*`, both scout flags; sets `TMPDIR = paths.Tmp` | `tools/model-arms/ModelArms.Core/Experiment/ArmChildEnvironment.cs:22-46` |
+| `BriefFacts(Plan, Base, Branch, ScenarioCount, Deadline, Known, TaskFacts Task, Problems)`, `TaskFacts.None`, `BriefFields.For(kind, paths, facts)` | `tools/model-arms/ModelArms.Core/Briefs/BriefFields.cs:8-24` |
+| `BriefLeakGuard(ArmMap Map, string OwnArm, IReadOnlyCollection<string> Schemes, string Root = "")`; `BriefFiller.Fill(template, fields, guard, templateName = "") → Outcome<string>` | `tools/model-arms/ModelArms.Core/Briefs/BriefFiller.cs:12`, `:25` |
+| `BriefTemplates.NameOf(kind)`; `BriefTemplateFiles(shippedDirectory, overridesDirectory).Read(StepKind) → Outcome<string>` (by KIND — E1's contract said a name; the landed code takes the kind) | `tools/model-arms/ModelArms.Core/Briefs/BriefTemplates.cs:11`; `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs:14`, `:18` |
+| The console is still E1.S2's stub (E1.S9's dispatch, `ExperimentGate`, `VerbInput`, `ExperimentRoot` have not landed); `ScenariosFile`, `ExecutableResolution`, `RootRequirements`, `RootFacts` (E1.S8) have not landed | `tools/model-arms/ModelArms/Program.cs:6-8`; `todo/PLAN_model_arms_E1.md` C4, E1.S8, E1.S9 |
+| The pure list holds ONE marker for this epic | `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:23-49` (`// E2` at `:42`) |
+| The fake CLI: `Behaviour(Script script, string[] args, string prompt, int call)`; `Run` `:179`; `Answer` chooses a replay by prompt hash, then substring, then `stdoutFile` `:218-226` (`StdoutFor` `:118-121`); `Replay` `:254-290`; `holdAfterLine` `:134`; `stderrBeforeLines` `:139`; the call number is the count of this MODEL's logged calls + 1 `:585`; the home is `FAKE_CLI_HOME` when set, else `Path.GetTempPath()/bench-fake-cli/<model>` `:566-571` — **`GetTempPath` honours `TMPDIR`, which the arm's environment sets to the arm's `tmp/`** | `tests/FakeCli/Program.cs` |
+| The fake's test handle: `new FakeCli(script)` (fresh model id, `Home`), `Executable`, `Rewrite`, `Calls()` (argv, cwd, prompt, pid, env NAMES, `SubagentModelGuard`) | `tests/Bench.Tests/Probes/Driver/FakeCli.cs:10-82` |
+| Test helpers: `TempGitRepo.CreateAsync()`, `Path`, `HeadAsync()`; `Cli.Repository.Root`; `ManualClock : TimeProvider` (`Advance`) | `tests/Bench.Tests/Infrastructure/GitCheckoutTests.cs:147-181`; `tests/Bench.Tests/Cli/AppHostLaunchProfileTests.cs:95-97`; `tests/Bench.Tests/Ui/ManualClock.cs:6-56` |
+| The catalogue test reads only `bench …` and HTTP rows (`CatalogueRow` regex) — a `model-arms …` row is invisible to it until E5.S3 | `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs:99-100` |
+
+**The shell, the behaviour to port** (`/home/jinx/git/coai-exp2/run-arm.sh`, read 2026-10-29): `has_result` `:52`; `limited` `:54-63` — the
+words `RX` `:56` (`usage.?limit|spend limit|session limit|rate.?limit|hit your (\w+ )*limit|limit reached|limit will reset|resets? at|overloaded|\b529\b|\b429\b|too many requests`, case-insensitive), the LAST result decides when there is one `:60-61`, the last 4000 characters of stderr only when there is none `:62`;
+`errored` `:64-66`; `transcript_of` (`$HOME/.claude/projects/<cwd with every [^A-Za-z0-9] → ->/<sid>.jsonl`, by name) `:67`; `used_seconds`
+(Σ `wall_s` of `end` lines with `limited` false) `:68-74`; the attempt number `:81`; budget and its 300 s floor `:84`; the deadline
+`"%H:%M UTC (%H:%M %Z)"` `:85`; the session choice `:91-102` and the resume notice `:93-97`; the start line `:104`; the launch under
+`timeout -s INT -k 60 $((remaining + 600))` `:106-108`; the end line `:111`; the limit wait `:112-116`; the errored stop `:117-119`; done on
+a result or `rc` 124/137 `:120-123` with `{"attempts":N,"exit":rc,"stream":…}` `:121`; `review_json` (greedy `/\{[\s\S]*\}/` over the last
+result's text, else `{"verdict":"unparsed","raw":…}`, read through `.done`'s `stream`) `:128-135`; `hreview_step` (`.before` before, `.diff`
+after) `:137-142`; `gate_step` (lock, step, unlock, `blocked` → `rm .done`, wait, loop while `tries < GATE_TRIES`, else diff and return
+0 — **even when still blocked**) `:144-162`; the schemes and `arm-done` `:164-187`. `mcp-coai.json` = `{"mcpServers":{"coai":{"type":"stdio","command":bin,"args":[],"env":{"COAI_DATA_DIR":<arm>/coai-data,"COAI_DATA_SIDE":"wsl-ubuntu"}}}}` and `mcp-none.json` = `{"mcpServers":{}}` (`/home/jinx/git/coai-exp2/after6.sh:33-35`); the settings copied into `coai-data/<side>/` `:32`.
+
+**The recorded streams of 2026-10-28** (arm C1 of part 6; its folder is `r/<token>/out/` with the token from
+`/home/jinx/git/coai-exp2/.map-904c78af.json` — opened by name, the parent folder cannot be listed; **the token is not written into this
+repository**, see E2.S1):
+
+| file, line | what it is |
+|---|---|
+| `3-fix.a1.jsonl:8` (1420 bytes with its newline, sha256 `895d7980445470e7ad4588cbdea7a0b7878b47582544b58b82d008c59df52a52`) | THE limited result, verbatim: `"is_error":true`, `"subtype":"success"`, `"api_error_status":429`, `"api_error_origin":"first_party"`, `"api_error":"usage_limit_reached"`, `"result":"You've hit your individual spend limit · run /usage-credits to ask your admin for a higher limit · your session limit resets 1:20am (Europe/Paris)"`, `"terminal_reason":"api_error"` — **and `"type":"result"` is the 47th key of the object, near the end of the line**: a reader that matches a line by its prefix never sees it |
+| `3-fix.a1.jsonl:6` | `{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour",…}}` — a structured limit signal BEFORE the result; D6 does not read it |
+| `3-fix.a1.jsonl:7` | an `assistant` line from `"model":"<synthetic>"` whose text is the limit sentence |
+| `2-review.a1.jsonl:310`, `:317`, `:323` (sha256 `6438bc7d…b058`, `20d59284…51dd8`, `30879256…d494`) | **three result lines in ONE stream**: `:310` `is_error` false, `"result":"I'm waiting for the full MCP suite. When it finishes I will send the verdict."`, `"terminal_reason":"completed"`; `:317` and `:323` the 429 above. The FIRST result is a success; only the LAST says what the attempt was. `:310` carries `permission_denials` whose paths hold the arm's token |
+| `2-review.a1.err`, `3-fix.a1.err` (one line each) | `Ignoring 5 permissions.allow entries from .claude/settings.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog, or set projects["<arm>/arm"].hasTrustDialogAccepted: true in /home/jinx/.claude.json.` — a real stderr that is NOT a limit |
+| `timing.jsonl`, the two `2-review` lines | the 429 attempt recorded as `"wall_s":888,"exit":1,"result":true,"limited":false` — the day's detector at work — and the resume budgeted `1512` = 2400 − 888 |
+| `2-review.done` | `{"attempts":2,"exit":0,"stream":"<arm>/out/2-review.a2.jsonl"}` — the shell's marker; `review_json` reads its `stream` |
+
+**The product's two envelope fixtures** (`dew_flow_connect_other_ais · src_mcp/tests/AClaudeReasonInItsEnvelopeTests.cs`, at `80b829ef`):
+`:23` the monthly spend limit (2.1.284, `"api_error_status":429`, `"subtype":"success"`); `:27` an old CLI refusing a newer model (2.1.258,
+`"api_error_status":400`, `"error":null`); `:87` `"api_error_status":"429"` as a STRING; and `:93-102` the shapes that must be neither a reason
+nor an exception (`"is_error":"true"`, `"result":42`, a JSON array, a truncated object, plain text, empty).
+
+**The vault key** (`dew_flow_connect_other_ais · src_mcp/src/Server/KeyVault.cs`, at `80b829ef`): the coai server's one key is
+`COAI_CREDS_KEY` (`:35`), read from the LAYERED configuration — the settings file the panel writes it into, with the client's
+environment outranking it key by key (`:76-95`). Part 6 copied that settings file into each arm's `coai-data/<side>/`
+(`after6.sh:32`).
+
+## 3. Conventions every story follows
+
+E1's §3 holds unchanged (namespaces, *pure means pure*, refusals as values, red first on an ASSERTION, docs per story, commands). For E2:
+
+- **The pure list.** E2.S1 replaces the single `// E2` marker (`ModelArmsArchitectureTests.cs:42`) with eight, `// E2.S1` … `// E2.S8`,
+  each on its own line with a blank line between; every later story writes only under its own. A story that adds a `public static
+  class` to Core adds it there in the same commit.
+- **The module doc.** E2.S1 adds eight empty headings to `research/module_model_arms.md`, after *The first run: init and validate
+  (E1.S11)*: *The result envelope and the step's end (E2.S1)*, *Timing, budget and recovery (E2.S2)*, *The launcher's follow-ups (E2.S3)*,
+  *The step runner (E2.S4)*, *The review's answer (E2.S5)*, *The gate lock and the MCP configs (E2.S6)*, *The gate step (E2.S7)*, *run-arm
+  (E2.S8)*. Each story writes only under its own.
+- **Fixtures** live in `tests/Bench.Tests/Fixtures/model-arms/` (copied to the output by the test project's `Fixtures\**` item) and are
+  read with `Path.Combine(AppContext.BaseDirectory, "Fixtures", "model-arms", name)`.
+- **The fake CLI as `claude`.** Every launch of a step goes through `ArmChildEnvironment`, which sets `TMPDIR` to the arm's `tmp/` — and
+  the fake finds its script and its call log under `Path.GetTempPath()`, which honours `TMPDIR`. So every test that launches the fake
+  through a step puts **`FAKE_CLI_HOME = fake.Home`** in the PARENT environment it hands the runner (the name is neither this
+  repository's nor secret-named, so `ArmChildEnvironment` passes it), and gives every step kind the fake's model id
+  (`fake.Model`) so the per-model call numbers are one sequence. Forgetting it reads as "the fake answered with its composed default".
+- **Time.** The runner reads the clock and the local zone through `TimeProvider` (`GetUtcNow`, `LocalTimeZone`) and waits through an
+  injected `Func<TimeSpan, CancellationToken, Task>` (tests: a recording delegate that returns at once, or cancels); no test sleeps
+  through a limit wait. `ManualClock` (`tests/Bench.Tests/Ui/ManualClock.cs:6`) is `sealed` and keeps the machine's zone, so E2.S4's
+  `StepBench` carries its own small `BenchClock : TimeProvider` (a settable now and a given zone).
+- **No tokens in this repository.** A recorded line that carries an arm's token is committed with the token replaced by
+  `0123456789ab` (the same length, the JSON still valid); the test says so in its doc.
+- **Commands** (WSL — no `.exe`; never `dotnet test`; always through the lowering wrapper). "Green" means E1 §3's definition: 0 warnings,
+  the story's classes pass, `dotnet format` clean, the whole suite passes (Docker up).
+
+```bash
+node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*<Class>"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-namespace "Bench.Tests.ModelArms"
+node .agents/conventions/tools/low-priority.mjs dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests   # the whole suite, once per story, Docker up
+node .agents/conventions/tools/plan-lifecycle.mjs
+```
+
+## 4. Shared contracts (fixed here so stories can run in parallel)
+
+**C5 — the envelope and the step's end** (E2.S1, the cornerstone; read by S2, S4, S5). Binding names and types — Fable's spec may
+change them only by changing every story section below that uses them, in the same commit.
+
+```csharp
+namespace ModelArms.Core.Launch;
+public sealed record ClaudeResultEnvelope(bool IsError, CapturedCount ApiErrorStatus, string ApiError, string Result,
+    IReadOnlyList<string> Errors, string Subtype, int LineNumber)
+{
+    public static Outcome<ClaudeResultEnvelope> LastOf(string stream);   // Failure = no line of the stream is a result object
+}
+namespace ModelArms.Core.Steps;
+public abstract record StepEnd
+{
+    private StepEnd() { }
+    public sealed record Finished : StepEnd;
+    public sealed record HardDeadline : StepEnd;
+    public sealed record Limited(string Reason) : StepEnd;
+    public sealed record Errored(string Text) : StepEnd;
+    public sealed record Interrupted(string Why) : StepEnd;
+    public sealed record NotStarted(string Reason) : StepEnd;
+    public bool IsDone => this is Finished or HardDeadline;
+    public string Word { get; }   // finished · hard-deadline · limited · errored · interrupted · not-started — the spelling of .done and the end line
+}
+public sealed record AttemptFacts(string NotStartedReason, bool WallKilled, bool StoppedByOperator)
+{
+    public static AttemptFacts Ran { get; }   // ("", false, false): what recovery assumes of a stream read back from disk
+}
+public static class StepClassifier
+{
+    public const int StderrTailCharacters = 4000;
+    public static StepEnd Classify(Outcome<ClaudeResultEnvelope> lastResult, string stderr, AttemptFacts attempt);
+}
+public static class LimitWords { public static string FirstIn(string text); }   // the matched text, "" when none
+```
+
+**C6 — timing, budget, recovery, derived outputs** (E2.S2; read by S4, S7, S8 and E3). In `ModelArms.Core.Steps`:
+
+```csharp
+public abstract record TimingLine
+{
+    private TimingLine() { }
+    public sealed record Start(string Arm, string Step, int Attempt, string How, string Session, string Model, DateTimeOffset StartUtc,
+        int BudgetSeconds, string Deadline, string Head, string Stream) : TimingLine;
+    public sealed record End(string Arm, string Step, int Attempt, DateTimeOffset EndUtc, CapturedCount WallSeconds, CapturedCount Exit,
+        bool Result, bool Limited, string Head, string State, bool Recovered) : TimingLine;   // State "" = a shell line that carried none
+    public sealed record ArmDone(string Arm, DateTimeOffset DoneUtc) : TimingLine;
+    public sealed record Stopped(string Arm, string Step, int Exit, string Why, DateTimeOffset AtUtc) : TimingLine;
+    public sealed record Other(string Raw) : TimingLine;   // a line this build does not read — kept, never dropped
+}
+public static class TimingLines { public static IReadOnlyList<TimingLine> Read(string text); public static string Write(TimingLine line); }
+public sealed record DoneMarker(int Attempts, CapturedCount Exit, string Stream, string State, bool Recovered);
+public static class DoneMarkers { public static string Write(DoneMarker marker); public static Outcome<DoneMarker> Read(string json); }
+public static class StepBudget
+{
+    public static int UsedSeconds(IReadOnlyList<TimingLine> timing, string step);
+    public static int RemainingSeconds(int minutes, IReadOnlyList<TimingLine> timing, string step, int floorSeconds);
+    public static TimeSpan Wall(int remainingSeconds, int killGraceSeconds);
+    public static string Deadline(DateTimeOffset startUtc, int remainingSeconds, TimeZoneInfo local);
+}
+public static class ResumeNotice { public static string For(string baseSha, string deadline); }
+public static class SessionTranscripts
+{
+    public static string ClaudeHome(IReadOnlyDictionary<string, string> environment);
+    public static string PathOf(string claudeHome, string workingDirectory, Guid session);
+}
+public sealed record RecoveryFacts(bool DoneMarker, Outcome<Guid> Session, bool TranscriptExists, int LastAttempt, StepEnd LastEnd,
+    IReadOnlyList<TimingLine> Timing);
+public abstract record StepEntry
+{
+    private StepEntry() { }
+    public sealed record Skip : StepEntry;
+    public sealed record RecoveredDone(StepEnd End, int Attempt) : StepEntry;
+    public sealed record Fresh(int Attempt, int BudgetSeconds) : StepEntry;
+    public sealed record Resume(Guid Session, int Attempt, int BudgetSeconds) : StepEntry;
+}
+public static class StepRecovery { public static StepEntry Decide(string step, RecoveryFacts facts, StepSpec spec, Limits limits); }
+public enum DerivedOutput { ReviewJson, StepDiff, CoderHead, CoderDiff }
+public sealed record OutputFacts(IReadOnlySet<DerivedOutput> Present, bool BeforeExists, bool TaskBeforeExists,
+    Outcome<ClaudeResultEnvelope> FinalResult);
+public abstract record OutputAnswer
+{
+    private OutputAnswer() { }
+    public sealed record Complete : OutputAnswer;
+    public sealed record Regenerate(IReadOnlyList<DerivedOutput> Outputs) : OutputAnswer;
+    public sealed record Resumable(string Reason) : OutputAnswer;
+}
+public static class StepOutputs
+{
+    public static IReadOnlyList<DerivedOutput> Of(StepKind kind);   // Review → [ReviewJson]; HReview, Gate → [StepDiff]; TaskCode → [CoderHead, CoderDiff]; else []
+    public static bool NeedsBefore(StepKind kind);                   // HReview, Gate
+    public static OutputAnswer Reconcile(StepKind kind, OutputFacts facts);
+}
+```
+
+**C7 — ports** (E2.S2 declares them; adapters in S4 and S6). In `ModelArms.Core.Ports` (excluded from the pure scan by namespace):
+
+```csharp
+public interface ISessionTranscripts { bool Exists(string workingDirectory, Guid session); }
+public interface IGateLock
+{
+    IDisposable? TryAcquire(string path);                                         // null = another holder has it
+    Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken); // waits; cancellation throws and holds nothing
+}
+```
+
+No `IArmFiles` port (the parent's §4.1 lists one): the runner's tests run over real temp folders — the same files the analysis
+reads — and a port would only let a test agree with itself (§8 item 9).
+
+**C8 — the runner** (E2.S4; read by S7, S8 and E3.S3). In namespace `ModelArms.Adapters`:
+
+```csharp
+public sealed record StepContext(string Arm, ArmPaths Paths, SchemeEntry.Step Step, Experiment Experiment, string ClaudeExecutable,
+    string WorkingDirectory, IReadOnlyDictionary<string, string> ParentEnvironment, BriefTemplateFiles Templates, BriefLeakGuard Guard,
+    int ScenarioCount, TaskFacts Task, string Problems, bool DeriveOutputs = true);
+public abstract record StepOutcome
+{
+    private StepOutcome() { }
+    public sealed record Done(StepEnd End, bool Skipped, bool Recovered) : StepOutcome;
+    public sealed record Stopped(int ExitCode, string Why) : StepOutcome;
+}
+public enum StepPoint { SessionWritten, Launched, Classified, OutputsDerived }
+public class StepProbe { public static StepProbe None { get; } = new(); public virtual void Reached(StepPoint point) { } }
+public sealed class StepRunner(ICliAgentTranscripts cli, ISessionTranscripts transcripts, TimeProvider clock,
+    Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, StepProbe probe)
+{
+    public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping);
+}
+```
+
+**C9 — the gate** (E2.S6, E2.S7). `ModelArms.Core.Launch`: `public sealed record GateReading(string Status, string Why) { public bool
+IsBlocked => Status == "blocked"; }`, `public static class GateStatus { public static GateReading Read(Outcome<string> gateJson); public
+static bool WaitAgain(GateReading reading, int waitsSoFar, int gateTries); }`, `public static class McpConfig { public const string
+VaultKeyVariable = "COAI_CREDS_KEY"; public static string None(); public static string Coai(CoaiFacts coai, ArmPaths paths,
+IReadOnlyDictionary<string, string> harnessEnvironment); }`. `ModelArms.Adapters`: `public sealed class FileGateLock(TimeProvider clock,
+TimeSpan poll) : IGateLock`, `public sealed class GateStep(StepRunner runner, IGateLock gateLock, Func<TimeSpan, CancellationToken, Task>
+wait, TextWriter log) { public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping); }`. `ArmPaths` gains
+`public string CoaiData => Under("coai-data");`.
+
+**The exit and timing contract of a step** (D16; every story that stops writes it the same way):
+
+| the step | `.done` | the end line's `end` | the last timing line | `StepOutcome` | the verb's exit |
+|---|---|---|---|---|---|
+| `Finished` / `HardDeadline`, outputs complete or regenerated | written, `"end"` = the state | the state | the end line | `Done` | continues |
+| done, a derived output's INPUT missing (D21) | not written | the state | `stopped`, exit 5, the reason | `Stopped(5)` | 5 |
+| `Limited`, waits left | — | `limited` (`"limited":true`) | the end line; the wait follows | (loops) | — |
+| `Limited`, `limits.tries` waits spent | — | `limited` | `stopped`, exit 3 | `Stopped(3)` | 3 |
+| `Errored` / `Interrupted` | — | the state | `stopped`, exit 5 | `Stopped(5)` | 5 |
+| `NotStarted` (no executable, argv refused) | — | `not-started` | `stopped`, exit 3 | `Stopped(3)` | 3 |
+| the brief refused (unfilled field, a leak) — before any launch | — | — (no start line) | `stopped`, exit 4 | `Stopped(4)` | 4 |
+| the operator's Ctrl+C during an attempt or a wait | — | the classified state, `StoppedByOperator` | `stopped`, exit 5 | `Stopped(5)` | 5 |
+
+## 5. Stories
+
+### E2.S1 — `ClaudeResultEnvelope` and `StepEnd`: the step's end, structured first (CORNERSTONE)
+
+**Cornerstone — spec by Fable** (`model: fable`). Area: the step's state machine (parent `## Epics`, E2). Every later decision of this
+module — done or not, wait or stop, resume or recover — is a function of this one, and the defect it exists to prevent has
+happened: nine steps marked done in seconds because a limit was read by its words. The goal, the binding contract (C5), the
+acceptance criteria and the verified facts are the judge's; **the scenarios (Given/When/Then and the expected red of each), the red
+stubs and the brief are Fable's**, written into this section before the coder starts.
+
+- **Coder:** sonnet · **Spec:** fable · **Review:** Opus. **Depends on:** E1.S2 (the projects; landed). **Parallel with:** E2.S3.
+- **Owns:** D6 (the classifier and its words), the fixtures of the parent's §7, the E2 markers and headings of §3. **Size:** ≈ 500
+  changed lines (≈ 180 code, 270 tests, the fixtures).
+- **Files.** `tools/model-arms/ModelArms.Core/Launch/ClaudeResultEnvelope.cs` · `tools/model-arms/ModelArms.Core/Steps/StepEnd.cs` (`StepEnd`,
+  `AttemptFacts`, `StepClassifier`, `LimitWords`) · `tests/Bench.Tests/ModelArms/ClaudeResultEnvelopeTests.cs` ·
+  `tests/Bench.Tests/ModelArms/StepEndTests.cs` · the fixtures below · `ModelArmsArchitectureTests.cs` (the eight markers; under `// E2.S1`:
+  `typeof(StepClassifier), typeof(LimitWords),`) · `research/module_model_arms.md` (the eight headings; *The result envelope and the
+  step's end*: the precedence table and the words, with the incident).
+- **Fixtures** (`tests/Bench.Tests/Fixtures/model-arms/`):
+
+| file | content |
+|---|---|
+| `result-429-usage-limit-reached.jsonl` | `3-fix.a1.jsonl:8` of the part-6 C1 arm, byte for byte (sha256 above; the line holds no token) |
+| `stream-2026-10-28-review-three-results.jsonl` | `2-review.a1.jsonl:310`, `:317`, `:323` of the same arm, in that order, each with its newline, the token replaced as §3 says |
+| `stream-2026-10-28-fix-limited-head.jsonl` | `3-fix.a1.jsonl:5-8` — the `init`, the `rate_limit_event`, the synthetic assistant line, the result — the token replaced (the `init` line's `cwd` carries it) |
+| `err-2026-10-28-untrusted-workspace.txt` | the one line of `3-fix.a1.err`, the token replaced |
+| `result-429-monthly-spend-limit.jsonl` | `AClaudeReasonInItsEnvelopeTests.cs:23`'s JSON, verbatim, one line |
+| `result-429-string-status.jsonl` | `AClaudeReasonInItsEnvelopeTests.cs:87`'s JSON, verbatim |
+| `result-400-model-unsupported.jsonl` | `AClaudeReasonInItsEnvelopeTests.cs:27`'s JSON, verbatim |
+| `result-success.jsonl` | three synthetic lines: `{"type":"system","subtype":"init","cwd":"__CWD__","tools":["Read"]}`, `{"type":"assistant","message":{"content":[{"type":"text","text":"Reviewed."}]}}`, `{"type":"result","subtype":"success","is_error":false,"result":"Reviewed.\n{\"verdict\":\"ready\",\"findings\":[]}","terminal_reason":"completed"}` (also the fake's success replay in S4–S8; `__CWD__` is the fake's own substitution, `FakeCli/Program.cs:254-256`) |
+| `stream-no-result.jsonl` | the first two lines of `result-success.jsonl` alone |
+
+Each fixture file's first use cites its source in the test's doc; the sha256 of the two part-6 originals is in the test as a comment.
+
+- **Goal.** One pure reading of a stream's last result line that never throws and never trusts a prefix, and one pure decision of
+  how an attempt ended, in the precedence below, pinned on every recorded line this experiment and the product hold.
+- **Acceptance criteria.**
+  1. C5 exactly. `ClaudeResultEnvelope.LastOf` parses EVERY line that holds a JSON object whose `type` is the string `result`,
+     wherever the key sits (the recorded line has it 47th), and returns the LAST such line; a line that is not JSON, is truncated, is
+     a JSON array, or is an object of another `type` is skipped and never throws (`InvalidOperationException` from a wrong-kind
+     `GetString` included — the product's lesson, `AClaudeReasonInItsEnvelopeTests.cs:93-102`). `IsError` is true only for the JSON
+     literal `true`. `ApiErrorStatus` is captured from an integral JSON number or a string of ASCII digits, else `Unavailable` with the
+     reason. `ApiError`, `Result` are the strings or `""`; `Errors` the string items of `errors`; `Subtype` is kept and decides nothing.
+  2. `StepClassifier.Classify` decides in this order, first match wins:
+     1. `!attempt.Started` → `NotStarted(attempt.NotStartedReason)`.
+     2. A last result exists and `IsError` and (`ApiErrorStatus` ∈ {429, 529} OR `LimitWords.FirstIn(ApiError)` non-empty OR
+        `LimitWords.FirstIn(Result + "\n" + string.Join("\n", Errors))` non-empty) → `Limited(reason)`; the reason names WHAT decided
+        it first, in that order (`api_error_status 429`, `api_error 'usage_limit_reached'`, `the words 'spend limit' in the result`) and
+        ends with the result's first 200 characters.
+     3. A last result exists and `IsError` → `Errored(the result's first 200 characters, or "an error result with no text")`.
+     4. A last result exists → `Finished` — **also when the wall then killed the tree or the operator stopped it**: a session that
+        printed its own end has ended.
+     5. No result and `LimitWords.FirstIn(the last StderrTailCharacters of stderr)` non-empty → `Limited("the words '…' on stderr")`.
+     6. No result and `attempt.WallKilled` → `HardDeadline`.
+     7. No result and `attempt.StoppedByOperator` → `Interrupted("stopped by the operator")`.
+     8. Otherwise → `Interrupted("no result line and no limit — the process ended without saying how")`.
+     Stderr is read ONLY when there is no result (the shell's rule, `run-arm.sh:60-62`): a success result with limit words on stderr is
+     `Finished`, an error result with them is decided by its own fields.
+  3. `LimitWords.FirstIn` is the shell's `RX` (`run-arm.sh:56`) as a .NET regex, `IgnoreCase | CultureInvariant`, with a match timeout;
+     it returns the matched text. It is this module's own list (D6), not `ReviewerAccountOut` (which refuses a plain 429 on purpose).
+  4. The classifier reads nothing but its three inputs — in particular no `rate_limit_event` line (D6 reads the result and stderr;
+     the recorded event is a fact for the record, not an input).
+  5. No method of either type exceeds cyclomatic complexity 4; no file exceeds 400 lines.
+- **The scenarios required** (names from the parent's §7, plus the added ones in the same style; Fable writes each Given/When/Then,
+  its input — every recorded fixture above is used at least once — and its expected red as an assertion message):
+  - `ClaudeResultEnvelopeTests` — `The_last_result_line_is_read_whatever_lines_precede_it` (the three-results stream: the third, never
+    the first success) · `Api_error_status_reads_as_a_number_and_as_a_string` · `Subtype_success_on_an_error_result_is_ignored` ·
+    `A_stream_without_a_result_reads_as_none` · added: `A_result_whose_type_key_comes_last_is_still_read` · `Every_shape_that_is_not_a_result_object_is_skipped_and_nothing_throws`.
+  - `StepEndTests` — `The_2026_10_28_line_is_limited_by_its_structured_fields_whatever_the_words_say` (the verbatim line, and the
+    same line with `result` replaced by neutral words and `api_error` removed: still `Limited` on `api_error_status 429`) ·
+    `A_monthly_spend_limit_429_is_limited` · `A_string_429_is_limited` · `A_529_overload_is_limited` (synthetic — the 429 line with
+    `529` and `"result":"API Error: 529 Overloaded"`, said so in its doc) · `An_error_result_that_is_not_a_limit_is_errored_never_finished`
+    (the 400 line) · `Limit_words_on_stderr_without_a_result_are_limited` · `A_success_result_is_finished` · `A_killed_tree_is_the_hard_deadline`
+    · `No_result_and_no_limit_is_interrupted` · `A_launch_the_executable_refused_is_not_started` · added:
+    `A_result_printed_before_the_wall_killed_the_tree_is_finished` · `A_success_result_is_finished_whatever_stderr_says` ·
+    `The_real_untrusted_workspace_warning_on_stderr_is_not_a_limit` · `Every_word_of_the_shells_limit_pattern_is_a_limit_and_a_plain_error_is_not`
+    (one `InlineData` per alternative of `RX`) · `A_stop_by_the_operator_without_a_result_is_interrupted`.
+- **Facts for the spec** (verified above, §2): the recorded lines and their hashes; the shell's `RX`, its last-result rule and its
+  stderr-tail rule `run-arm.sh:54-63`; `errored` `:64-66`; done on `rc` 124/137 `:120`; the product's fixtures `:23`, `:27`, `:87`,
+  `:93-102`; `CapturedCount` `LegTrace.cs:21`; `Outcome<T>` `src/Bench.Domain/Outcome.cs:6-25`; `ProbeJson` is internal
+  (`ProbeJson.cs:10`), so the line reading is this type's own; `ClaudeEnvelope` reads the `json` output's FIRST recognisable object
+  (`ClaudeEnvelope.cs:41`) — the opposite of what a stream needs, which is why it is not reused (reuse-first: widening it would
+  change a reader the authoring callers depend on).
+
+#### Scenarios — to be written by Fable
+
+#### Brief — to be written by Fable
+
+**Commands.** `--filter-class "*ClaudeResultEnvelopeTests"`, `"*StepEndTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** Every scenario of Fable's section green, each seen red first on an assertion (the messages in the summary); the
+fixtures' sources cited; the eight markers and the eight headings in place; the precedence table in the module doc equals criterion 2.
+
+**Out of bounds.** Reading files (the runner reads the stream and the `.err` and hands the text in); the timing line and `.done`
+(E2.S2); `ReviewAnswer` (E2.S5); a change to `ClaudeEnvelope`, `ClaudeStream` or `ReviewerAccountOut`.
+
+### E2.S2 — `TimingLine`, `DoneMarker`, `StepBudget`, `ResumeNotice`, `SessionTranscripts`, `StepRecovery`, `StepOutputs`
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S1 (C5). **Parallel with:** E2.S5, E2.S6.
+- **Owns:** D7, D21 (the decision), the timing and marker formats (D6's "the marker and the timing line carry the state"), C6, C7.
+  **Size:** ≈ 750 lines (≈ 380 code, 370 tests).
+
+**Files.** `tools/model-arms/ModelArms.Core/Steps/TimingLine.cs` (`TimingLine`, `TimingLines`), `…/Steps/DoneMarker.cs` (`DoneMarker`,
+`DoneMarkers`), `…/Steps/StepBudget.cs` (`StepBudget`, `ResumeNotice`), `…/Steps/SessionTranscripts.cs`, `…/Steps/StepRecovery.cs`
+(`RecoveryFacts`, `StepEntry`, `StepRecovery`), `…/Steps/StepOutputs.cs` (`DerivedOutput`, `OutputFacts`, `OutputAnswer`, `StepOutputs`),
+`tools/model-arms/ModelArms.Core/Ports/ISessionTranscripts.cs`, `…/Ports/IGateLock.cs`; tests `StepRecoveryTests.cs`, `StepOutputsTests.cs`,
+`TimingLineTests.cs` (added class); fixture `timing-arm-C.jsonl` (a byte copy of `research/local-model-coding/data/arms/C/timing.jsonl`);
+under `// E2.S2` `typeof(TimingLines), typeof(DoneMarkers), typeof(StepBudget), typeof(ResumeNotice), typeof(SessionTranscripts),
+typeof(StepRecovery), typeof(StepOutputs),`; the module doc's *Timing, budget and recovery* (the formats, the recovery table, the
+outputs table).
+
+**Uses.** C5 (`StepEnd`, `ClaudeResultEnvelope`); `StepSpec` `StepSpec.cs:13`; `Limits` `ExperimentFacts.cs:41`; `StepKind`
+`StepSpec.cs:10`; `CapturedCount` `LegTrace.cs:21`; `Outcome<T>`.
+
+**Formats (no design left).**
+
+- `TimingLines.Write` — one line of compact JSON, no newline, the shell's key order (`run-arm.sh:104`, `:111`, `:186`), UTC as
+  `yyyy-MM-ddTHH:mm:ssZ`: **start** `kind, arm, step, attempt, how, session, model, start_utc, budget_s, deadline, head, stream`; **end**
+  `kind, arm, step, attempt, end_utc, wall_s, exit, result, limited, head, end` and then `"recovered":true` only when recovered; an
+  uncaptured `wall_s` or `exit` is JSON `null` (*absent is not zero* — the previous generation's recovered line, `research/local-model-coding/harness/run-arm.sh:92`,
+  wrote `null` the same way); **arm-done** `kind, arm, done_utc`; **stopped** `kind, arm, step, exit, why, at_utc`.
+- `TimingLines.Read` — one `TimingLine` per non-empty line; a line that is not a JSON object, or whose `kind` is unknown, is `Other(raw)`;
+  a missing `limited` reads `false`, a missing `end` reads `State = ""`, a missing or `null` `wall_s`/`exit` reads `Unavailable` (the
+  shell's and the previous generation's lines both read).
+- `DoneMarkers.Write` — `{"attempts":N,"exit":rc|null,"stream":"<path>","end":"finished|hard-deadline"}` plus `"recovered":true` when
+  recovered: the shell's three keys first (`run-arm.sh:121` — `review_json` and the repair script read `stream`), then `end`. `Read`
+  takes the shell's marker (no `end` → `State = ""`) and refuses a non-object, naming it.
+- `StepBudget.UsedSeconds` — Σ of `End.WallSeconds.Value` over `End` lines of `step` whose `Limited` is false and whose wall was captured;
+  `RemainingSeconds` = `max(minutes·60 − used, floorSeconds)` (`run-arm.sh:84`); `Wall(r, g)` = `TimeSpan.FromSeconds(r + g)` (D8);
+  `Deadline(start, r, local)` = `"HH:mm UTC (HH:mm <local.Id>)"` of `start + r` (§8 item 6: the zone's id, not its abbreviation).
+- `ResumeNotice.For(base, deadline)` — the shell's text (`run-arm.sh:93-97`) with `$BASE` and `$deadline` substituted, its line breaks
+  kept, ending with a newline.
+- `SessionTranscripts.ClaudeHome(env)` — `CLAUDE_CONFIG_DIR` when non-empty (claude's own relocation of `~/.claude`; the child receives
+  it untouched, D19), else `<HOME>/.claude`, else `""`. `PathOf(home, cwd, id)` — `<home>/projects/<slug>/<id:D>.jsonl` with `slug` = `cwd`
+  with every character outside `[A-Za-z0-9]` replaced by `-` (`run-arm.sh:67`; observed: the transcript folder of the C1 arm's clone is
+  `-home-jinx-git-coai-exp2-r-<token>-arm`, a path recorded in `2-review.a1.jsonl:310`).
+
+**`StepRecovery.Decide(step, facts, spec, limits)`** — in this order (D7):
+
+| facts | entry |
+|---|---|
+| `DoneMarker` | `Skip` |
+| `LastAttempt > 0` and `LastEnd is Finished` | `RecoveredDone(Finished, LastAttempt)` — never resumed (the previous generation's arm C) |
+| `LastAttempt > 0` and the `End` line of that attempt in `Timing` has `State == "hard-deadline"` | `RecoveredDone(HardDeadline, LastAttempt)` — the runner died between the end line and `.done` |
+| `Session` failed, or `!TranscriptExists` | `Fresh(LastAttempt + 1, remaining)` — the runner mints a new id |
+| otherwise | `Resume(session, LastAttempt + 1, remaining)` — an error result of any kind, a limit, an interruption |
+
+`remaining` = `StepBudget.RemainingSeconds(spec.Minutes, facts.Timing, step, limits.MinimumRemainingSeconds)` for both launches (the
+shell budgets a fresh launch the same way, `:84`).
+
+**`StepOutputs.Reconcile(kind, facts)`** — `missing` = `Of(kind)` minus `facts.Present`, in `Of`'s order. None → `Complete`. Else every
+missing output's input is checked, and the FIRST missing input answers `Resumable(reason)`: `ReviewJson` needs `FinalResult` Ok, not
+`IsError`, and a non-blank `Result` (`"the review's final stream has no result text — no verdict to read; the step stays resumable"`);
+`StepDiff` needs `BeforeExists` (`"<step>.before is missing — the step's diff has no base; the step stays resumable"`); `CoderHead` and
+`CoderDiff` need `TaskBeforeExists`. All inputs present → `Regenerate(missing)`. (D21. A `HardDeadline` review with no result is
+therefore resumable, not done — §8 item 3.)
+
+**Scenarios** (`StepRecoveryTests` and `StepOutputsTests` — every name from the parent's §7; `TimingLineTests` added).
+
+| Test | Given / When / Then | Red (stub below) |
+|---|---|---|
+| `StepRecoveryTests.A_done_marker_skips` | **Given** `DoneMarker: true` and every other fact saying "resume"; **when** `Decide`; **then** `Skip` | `Expected entry to be of type StepEntry+Skip, but found StepEntry+Fresh.` |
+| `StepRecoveryTests.A_last_stream_that_finished_without_a_marker_is_recovered_as_done_never_resumed` | **Given** no marker, a session, its transcript, `LastAttempt: 2`, `LastEnd: Finished`; **then** `RecoveredDone(Finished, 2)` | `… of type StepEntry+RecoveredDone, but found StepEntry+Fresh.` |
+| `StepRecoveryTests.A_last_stream_whose_result_is_an_error_resumes` | `[Theory]` over `Errored("x")`, `Limited("y")`, `Interrupted("z")`; a session `g`, its transcript, `LastAttempt: 1`, timing with one unlimited end of 600 s, `spec.Minutes = 40`, floor 300; **then** `Resume(g, 2, 1800)` | `Expected entry to be Resume { Session = g, Attempt = 2, BudgetSeconds = 1800 }, but found Fresh …` |
+| `StepRecoveryTests.A_session_without_a_transcript_starts_fresh_with_a_new_id` | a session `g`, `TranscriptExists: false`, `LastAttempt: 1`, `LastEnd: Limited` → `Fresh(2, …)`; and an unreadable session (`Failure`) → `Fresh` | `… of type StepEntry+Fresh, but found StepEntry+Skip.` |
+| `StepRecoveryTests.The_remaining_budget_excludes_limited_attempts_and_floors_at_the_minimum` | timing for `2-review`: end 888 s limited, end 600 s unlimited, an end of ANOTHER step 999 s, a start without an end; `minutes 40` → `RemainingSeconds == 1800`; the same with an unlimited end of 2300 s → `300` (the floor); `UsedSeconds` of the real 2026-10-28 pair (888 s, recorded `"limited":false`) is 888 — the day's arithmetic, kept as evidence | `Expected 2400 to be 1800.` |
+| `StepRecoveryTests.Timing_of_a_real_arm_reads_back_every_line` | **Given** `timing-arm-C.jsonl` (8 lines, part 5's generation: no `limited`, no `end`); **when** `TimingLines.Read`; **then** 8 lines: 4 `Start`, 3 `End`, 1 `ArmDone`, no `Other`; `1-code` attempt 1 has a start and NO end; every `End` has `Limited == false`, `State == ""`, `Recovered == false`; `UsedSeconds(timing, "1-code") == 852`; the `2-review` start's `Deadline == "19:45 UTC (20:45 CET)"` (read as text, never re-spelled). The byte round trip is `TimingLineTests`' — on lines this build writes | `Expected lines to contain 8 item(s), but found 0.` |
+| `StepRecoveryTests.A_last_attempt_whose_end_line_says_hard_deadline_is_recovered_as_done` (added) | `LastEnd: Interrupted("no result…")` (the stream read back alone cannot see the wall), `LastAttempt: 1`, timing's end of attempt 1 `State: "hard-deadline"` → `RecoveredDone(HardDeadline, 1)` | `… of type StepEntry+RecoveredDone, but found StepEntry+Resume.` |
+| `StepOutputsTests.A_review_step_with_a_result_and_no_review_json_is_regenerated` | `Review`, nothing present, `FinalResult` = `result-success.jsonl`'s → `Regenerate([ReviewJson])` | `Expected answer to be of type OutputAnswer+Regenerate, but found OutputAnswer+Complete.` |
+| `StepOutputsTests.An_hreview_or_gate_step_with_a_before_snapshot_and_no_diff_is_regenerated` | `[Theory]` HReview, Gate; `BeforeExists`, nothing present → `Regenerate([StepDiff])` | as above |
+| `StepOutputsTests.A_derived_output_whose_input_is_missing_leaves_the_step_resumable_naming_the_input` | HReview without `.before` → `Resumable` containing `.before is missing`; Review whose `FinalResult` is the 400 line → `Resumable` containing `no result text`; Review with `FinalResult` a Failure → the same | `… of type OutputAnswer+Resumable, but found OutputAnswer+Complete.` |
+| `StepOutputsTests.A_complete_step_needs_nothing` | `[Theory]` over every `StepKind` with all of `Of(kind)` present → `Complete`; `Of(Code)`, `Of(Fix)`, `Of(Split)`, `Of(SplitFix)` are empty | passes on the stub for kinds with no output — its red is the plant: make `Of(Code)` return `[StepDiff]` → `Expected answer to be of type Complete, but found Resumable.` |
+| `StepOutputsTests.Regeneration_is_the_same_function_the_first_run_used` | `Reconcile` is the only road: for Review the regenerate list is exactly `[ReviewJson]` whether nothing was ever written (a first run) or the file was deleted afterwards (a re-entry) — the two `OutputFacts` differ only in history the type cannot see, and the answers are equal. (The bytes are compared in E2.S4's `A_runner_killed_between_the_result_line_and_review_json_writes_the_review_on_the_next_entry`.) | the stub's `Complete` → `Expected … Regenerate …` |
+| `StepOutputsTests.A_review_that_ended_on_its_deadline_without_a_result_is_resumable_not_done_with_a_hole` (added) | Review, `FinalResult` Failure ("no result line") → `Resumable` (D21 over D8 for this one case — §8 item 3) | as above |
+| `TimingLineTests.Every_line_kind_round_trips_in_the_shells_key_order` (added) | one value of each kind (an `End` with `Recovered`, one without, one with an `Unavailable` exit) → `Write` produces exactly the expected literal (keys in the order above, `null` for the uncaptured) and `Read(Write(x))` equals `x` | `Expected string to be "{\"kind\":\"start\",…", but "" …` |
+| `TimingLineTests.A_shell_end_line_reads_without_an_end_state` (added) | the two recorded 2026-10-28 `2-review` lines (start and end, quoted in the test; they carry `limited` and no `end`) → `End.Limited == false` (as recorded), `State == ""`, `WallSeconds.Value == 888`, `Exit.Value == 1` | `Expected … to be of type End, but found Other.` |
+| `TimingLineTests.A_done_marker_round_trips_and_the_shells_marker_reads` (added) | `Write` of `(2, Number(0), "/e/out/2-review.a2.jsonl", "finished", false)` is `{"attempts":2,"exit":0,"stream":"/e/out/2-review.a2.jsonl","end":"finished"}`; the recorded shell marker reads with `State == ""`; `"[]"` is refused | `Expected string to be "{\"attempts\":2,…", but "".` |
+| `TimingLineTests.The_deadline_is_spelled_in_utc_and_in_the_local_zone` (added) | `Deadline(2026-10-28T21:32:38Z, 2400, Europe/Paris)` = `"22:12 UTC (23:12 Europe/Paris)"` — the recorded line's minutes (`"22:12 UTC (23:12 CET)"`), the zone by id | `Expected "" to be "22:12 UTC (23:12 Europe/Paris)".` |
+| `TimingLineTests.The_resume_notice_is_the_shells_text_with_the_base_and_the_deadline` (added) | `For("6786582e…", "09:10 UTC (10:10 Europe/Paris)")` equals the shell's four lines with both substituted (the literal in the test) | `Expected "" to be "This session was interrupted …".` |
+| `TimingLineTests.The_transcript_path_is_the_working_directory_slug_under_the_claude_home` (added) | `PathOf("/h/.claude", "/home/op/git/coai_exp/r/abc/arm", g)` = `/h/.claude/projects/-home-op-git-coai-exp-r-abc-arm/<g:D>.jsonl`; `ClaudeHome({HOME:/h})` = `/h/.claude`; `ClaudeHome({HOME:/h, CLAUDE_CONFIG_DIR:/c})` = `/c`; neither → `""` | `Expected "" to be "/h/.claude/projects/…".` |
+
+**Red stub.** `Decide` → `new StepEntry.Fresh(1, 0)`; `Reconcile` → `Complete`; `Of` → `[]`; `Read` → `[]`; `Write`/`DoneMarkers.Write` →
+`""`; `RemainingSeconds` → `minutes * 60`; `Deadline` / `For` / `PathOf` / `ClaudeHome` → `""`.
+
+**Commands.** `--filter-class "*StepRecoveryTests"`, `"*StepOutputsTests"`, `"*TimingLineTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The nineteen green, each seen red first (the `A_complete_step_needs_nothing` plant observed and removed); `timing-arm-C.jsonl`
+is a byte copy (`cmp` in the summary); the module doc's tables equal the two above.
+
+**Out of bounds.** Writing anything to disk; git; minting a session id; `ReviewAnswer` (E2.S5); TaskCode's use of `CoderHead`/`CoderDiff`
+(E3.S3 wires them; the table here is complete so E3 adds no kind).
+
+### E2.S3 — The launcher's follow-ups: `stdoutByCall` in the fake, both readers observed in `ProcessRunner`
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** nothing in E2 (E1.S5 landed). **Parallel with:** E2.S1, E2.S2.
+- **Owns:** the parent's E2.S3 (`stdoutByCall`, D9's test means), E1 §8 item 15 (R1 and R2). **Size:** ≈ 230 lines.
+
+**Files.** `tests/FakeCli/Program.cs`; `src/Bench.Infrastructure/Process/ProcessRunner.cs`;
+`tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs` (two tests appended, one doc sentence); `tests/Bench.Tests/ModelArms/FakeCliByCallTests.cs`
+(new); `research/module_scouts.md` (one sentence appended to E1.S5's *The stderr sink* paragraph); the module doc's *The launcher's follow-ups*.
+
+**Uses.** `Behaviour(Script script, string[] args, string prompt, int call)` and `Answer()` `FakeCli/Program.cs:175`, `:218-226`;
+`StdoutFor(prompt)` `:118-121`; `Replay(file)` `:254`; the core `AwaitAsync` `ProcessRunner.cs:261-300`; `PumpAsync` `:324-344`; the test
+helpers of `ProcessRunnerStderrSinkTests` (`Replay`, `Warns`, `Argv`, `ChildAlive`).
+
+**The fake, additive.** In `Script`, after `StdoutFor` (`:118-121`):
+
+```csharp
+/// <summary>The replay file for THIS call of the model — <c>stdoutByCall.&lt;n&gt;</c>, n being the call number the log gave this launch
+/// (per model, 1-based) — so one test scripts a step's attempts in order: a limited attempt, then its resume (model arms E2.S3). Chosen
+/// before every other replay; a call with no entry falls through to them, exactly as before.</summary>
+public string StdoutForCall(int call) =>
+    (Node("stdoutByCall") as JsonObject)?[call.ToString(CultureInfo.InvariantCulture)]?.GetValue<string>() ?? string.Empty;
+```
+
+In `Answer()` (`:218`), after the assessor branch and before `StdoutFor(prompt)`: `if (script.StdoutForCall(call) is { Length: > 0 }
+byCall) { return Replay(byCall); }`. Nothing else in the fake changes; every existing script omits the field.
+
+**The launcher, exact (E1 §8 item 15, R1).** The core `AwaitAsync` (`:261-300`) keeps its wait, its wall, its kill and its two result
+shapes; what changes is that **no path out of it leaves a reader running**:
+
+1. On every path — completed, timed out, the caller's cancellation, a sink's fault — BOTH reader tasks are awaited to their end
+   before the method returns or throws; their faults are observed there.
+2. The caller's cancellation still surfaces as the caller's `OperationCanceledException` (as today, `:287-291`), after both readers ended.
+3. Otherwise, when a reader faulted, the exception thrown is the STDOUT reader's if it faulted, else the stderr reader's (task order —
+   deterministic, never "whichever happened first"), rethrown with its stack (`ExceptionDispatchInfo.Throw`); the other is observed and
+   dropped.
+4. The `budget` source is disposed only after both readers ended — `PumpAsync`'s catch (`:339`) can no longer cancel a disposed source.
+
+One private helper (`BothAsync(Task<string> stdout, Task<string> stderr, CancellationToken caller)` returning the pair) carries 1–3 and is
+called from both the timeout path (`:293`) and the completed path (`:297`), and from the cancellation branch before its rethrow. Its
+complexity stays ≤ 4 by switch expressions; `PumpAsync`, `Reader`, `Utf8`, `Merge`, `Kill` are untouched.
+
+**R2.** `Every_existing_launch_without_a_stderr_sink_is_unchanged`'s doc gains: *"The encoding half of E1.S5's criterion 4 (UTF-8 only
+when a sink is given) is not observable here: on Linux the default encoding is already UTF-8, so only a Windows run could see it go
+wrong."*
+
+**Scenarios.**
+
+| Test | Given / When / Then | Red (an assertion message) |
+|---|---|---|
+| `FakeCliByCallTests.Each_call_replays_its_own_file_and_an_unlisted_call_falls_back` | **Given** a `FakeCli` whose script is `{ stdoutByCall: { "1": a, "3": c }, stdoutFile: f }` (three files with distinct one-line contents); **when** the fake is launched four times through `ProcessRunner.RunAsync(FakeCli.Executable, ["-p","--model",fake.Model], cwd, 1 min, "prompt", ct)`; **then** the four stdouts are `a`, `f`, `c`, `f` and `fake.Calls()` numbers them 1–4 | the field is unread: `Expected stdouts to be equal to {"a", "f", "c", "f"}, but {"f", "f", "f", "f"} differs at index 0.` |
+| `ProcessRunnerStderrSinkTests.A_launch_never_returns_while_a_sink_is_still_running` (added) | **Given** `Replay(fake, 20, { lineDelayMs: 50, holdAfterLine: 10 })` (stderr line i is written before stdout line i); a stdout sink that throws `InvalidOperationException("stdout refused <guid>")` on its first line; a stderr sink that, on its FIRST call, sets `entered` and blocks on `release` (at most 20 s), then returns; **when** the launch is started as a task, the test waits for `entered` (≤ 10 s), waits 1 s more, records `releasedAt = Stopwatch` and sets `release`, then awaits the launch; **then** it throws the stdout sink's exception and `threwAt >= releasedAt` | today the core rethrows from `await stdout` while the stderr sink is blocked: `Expected threwAt to be greater than or equal to <releasedAt> because a launch never returns while a sink it started is still running, but found <earlier>.` |
+| `ProcessRunnerStderrSinkTests.When_both_sinks_throw_the_stdout_readers_fault_surfaces_and_the_other_is_observed` (added) | **Given** the same replay; both sinks throw on their first line (`"stdout refused <guid>"`, `"stderr refused <guid>"`); `TaskScheduler.UnobservedTaskException` recorded (filtered by `<guid>`, or an `ObjectDisposedException` whose stack holds `PumpAsync`); **when** the launch is awaited, then `GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();`; **then** the exception is the stdout's, and nothing was recorded | `Expected unobserved to be empty because a reader's fault is observed before the launch returns, but found {System.InvalidOperationException: stderr refused …}` — finalizer-driven, so if 5 runs in a row do not show it red, the red is a plant (await only stdout in `BothAsync`) and the summary says which |
+
+**Commands.** `--filter-class "*FakeCliByCallTests"`, `"*ProcessRunnerStderrSinkTests"`, `"*ProcessRunner*"`, `"*ScoutLaunchProcessTests"`,
+`"*CliAgentRuntimeTests"`; `--filter-namespace "Bench.Tests.Probes"`, `"Bench.Tests.Scouts"`; the whole suite.
+
+**Done when.** The three green, each seen red; `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests` and the
+probes' and scouts' suites unedited and green (`git diff --stat` on them empty).
+
+**Out of bounds.** Any other script field of the fake; the order of the fake's replay fallbacks after `stdoutByCall`; `PumpAsync`'s
+behaviour; the `StreamAsync` byte reader beyond what the shared core does for it.
+
+### E2.S4 — `StepRunner`, `ArmFiles`, `ArmGit`, `ClaudeSessionTranscripts`: one step, end to end
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S1, E2.S2, E2.S3, E2.S5 (the review's derived output).
+  **Parallel with:** E2.S6.
+- **Owns:** D8, D9 (the runner's half), D16 (a step's exits), D21 (the runner's half), §4.5's flow, E1 §8 items 1, 2 and 14 (the
+  environment, the brief's own token, the log). **Size:** ≈ 950 lines (≈ 450 code, 500 tests).
+
+**Files.** `tools/model-arms/ModelArms/Adapters/StepRunner.cs` (`StepRunner`, `StepContext`, `StepOutcome`, `StepPoint`, `StepProbe`),
+`…/Adapters/ArmFiles.cs`, `…/Adapters/ArmGit.cs`, `…/Adapters/DerivedOutputs.cs`, `…/Adapters/ClaudeSessionTranscripts.cs`;
+`tests/Bench.Tests/ModelArms/StepRunnerTests.cs`, `tests/Bench.Tests/ModelArms/StepBench.cs` (test helper); the module doc's *The step
+runner* (the flow as a sequence diagram, the exit table of §4, the log format). Split `StepRunner.cs` by responsibility if it passes
+400 lines (the launch of one attempt is the natural unit) — never a `partial`.
+
+**Uses.** `ICliAgentTranscripts.TranscriptAsync` `CliAgent.cs:306`; `AgentTranscript` `:293`; `AgentOutputSink.Lines` `:59`; `StepLaunch.Ask`
+`StepLaunch.cs:49`; `StepLaunchRequest` `:25`; `BriefTemplateFiles.Read(StepKind)` `BriefTemplateFiles.cs:18`; `BriefFields.For`
+`BriefFields.cs:24`; `BriefFiller.Fill` `BriefFiller.cs:25`; `ArmMap.Scrub` `ArmMap.cs:93`; `ArmPaths` members (§2); `ScoutStreamWriter`
+`ScoutArtifacts.cs:255`; `ArtifactCommit.Stage` `ArtifactCommit.cs:69`; `GitCommand.ReadAsync` `GitHistory.cs:35`; `ExitCodes` `ExitCodes.cs:15-28`;
+C5, C6, C7, `ReviewAnswer.Extract` (C10, E2.S5).
+
+**Adapters (exact).**
+
+- `ArmFiles(ArmPaths paths)` — `bool Exists(string path)`; `int NextAttempt(string step)` = the smallest n ≥ 1 whose `Stream(step, n)` does
+  not exist, **probed by name** (no folder is enumerated, D11); `int LastAttempt(string step)` = that minus 1; `Outcome<Guid> ReadSession(step)`;
+  `void ReplaceSession(step, Guid)` (stage, flush, rename over — the one file rewritten, when a fresh id replaces a lost transcript's);
+  `ScoutStreamWriter Open(string path)` (`FileMode.CreateNew`, `FileShare.Read`); `void WriteOnce(string path, string text)` (through
+  `ArtifactCommit.Stage` — the prompt, `.before`, `.done`, `review.json`, `.diff`); `void Delete(string path)`; `void AppendTiming(TimingLine)`
+  (append one line + `\n`, `Flush(flushToDisk: true)`); `IReadOnlyList<TimingLine> ReadTiming()`; `Outcome<string> ReadText(string path)`;
+  `string Tail(string path, int characters)` (`""` when absent). Every directory it writes under (`out`, `notes`, `work`, `tmp`) is created
+  on first use.
+- `ArmGit` (static, console) — `HeadAsync(dir, ct)` (`rev-parse HEAD`), `HeadShortAsync(dir, ct)` (`rev-parse --short HEAD`), `DiffAsync(dir,
+  from, ct)` (`diff <from> HEAD`, stdout only) through `GitCommand.ReadAsync`, 60 s each. A failed `head` is written as `""` and logged; a
+  failed diff is a `Resumable`-equivalent stop (exit 5, the reason).
+- `DerivedOutputs.WriteAsync(StepContext, IReadOnlyList<DerivedOutput>, ArmFiles, ct)` — the ONE writer of derived outputs, used by the
+  first run and by every re-entry: `ReviewJson` ← `ReviewAnswer.Extract(ClaudeResultEnvelope.LastOf(final stream))` (C10); `StepDiff` ←
+  `ArmGit.DiffAsync(cwd, <step>.before)`; `CoderHead`/`CoderDiff` refused here with *"task outputs are written by the task pipeline
+  (E3.S3)"* (the kinds reach the runner only in E3).
+- `ClaudeSessionTranscripts(string claudeHome) : ISessionTranscripts` — `File.Exists(SessionTranscripts.PathOf(claudeHome, cwd, id))`; an
+  empty home answers false.
+
+**`StepRunner.RunAsync(context, stopping)` — the flow (D6–D9, D21; `run-arm.sh:76-126`).** `step` = `context.Step.Name`, `kind` =
+`context.Step.Kind`, `spec` = `context.Experiment.Steps[kind]`, `files` = `new ArmFiles(context.Paths)`. Every log line is
+`<utc yyyy-MM-ddTHH:mm:ssZ> [<arm>] <text>` passed through `map.Scrub` before it is written (E1 §8 item 14: the runner's log is the
+verb's output — `pids/<arm>.log` once detached, D13 — there is no `run.log`, §8 item 1). Then, in a loop (`waits` = 0):
+
+1. **Recover.** Facts: `.done` exists; `ReadSession`; `TranscriptExists` (asked only when the session read); `LastAttempt`; `LastEnd` =
+   `StepClassifier.Classify(LastOf(stream text), Tail(.err, 4000), AttemptFacts.Ran)` (when `LastAttempt > 0`); `ReadTiming()` →
+   `StepRecovery.Decide`.
+   - `Skip` → **reconcile** (step 7) without writing `.done` again → `Done(…, Skipped: true)`; log `<step> already done — skipped`.
+   - `RecoveredDone(end, n)` → append an `End` line for attempt `n` if `Timing` has none (`WallSeconds`/`Exit` `Unavailable`, `Result` true
+     for `Finished`, `Recovered: true`, `State` = `end.Word`) → reconcile → `.done` (`Recovered: true`) → `Done(end, false, true)`; log
+     `<step> had finished before its runner died — marked done, not resumed`.
+2. **Before.** If `StepOutputs.NeedsBefore(kind)` and `.before` is absent: write `ArmGit.HeadAsync(cwd)` + `\n` to it (BEFORE the first
+   attempt, `run-arm.sh:139`, `:147`).
+3. **Prompt.** `Fresh(n, budget)`: `id = Guid.NewGuid()`; `ReplaceSession(step, id)`; `probe.Reached(SessionWritten)`; the prompt is the
+   brief — `context.Templates.Read(kind)` → `BriefFields.For(kind, paths, new BriefFacts(Target.Plan, Target.Base.Value, Target.Branch,
+   ScenarioCount, deadline, Known, context.Task, context.Problems))` → `BriefFiller.Fill(template, fields, context.Guard,
+   BriefTemplates.NameOf(kind))`; a refusal → `Stopped` line with exit 4 and the reason → `Stopped(4)` (no start line, no launch).
+   `Resume(id, n, budget)`: the prompt is `ResumeNotice.For(Target.Base.Value, deadline)`. `deadline` = `StepBudget.Deadline(now, budget,
+   clock.LocalTimeZone)`. Write the prompt to `Prompt(step, n)`.
+4. **Start line** — `Start(arm, step, n, "fresh"|"resume", id:D, spec.Model, now, budget, deadline, HeadShort, Stream(step, n))`.
+5. **Launch.** `ask = StepLaunch.Ask(new StepLaunchRequest(context.ClaudeExecutable, spec, Experiment.Tools, paths, Fresh|Resume(id),
+   context.WorkingDirectory, prompt, StepBudget.Wall(budget, Limits.KillGraceSeconds), context.ParentEnvironment)) with { Output =
+   Lines(stream.Line), ErrorOutput = Lines(err.Line) }` over two writers opened on `Stream(step, n)` and `Stderr(step, n)` (disposed when
+   the launch ends, whatever happened); `probe.Reached(Launched)`; `cli.TranscriptAsync(ask, stopping)`. Facts: a `Failure` →
+   `new AttemptFacts(reason, false, false)`; a transcript → `new AttemptFacts("", transcript.TimedOut, false)`; an
+   `OperationCanceledException` while `stopping.IsCancellationRequested` → `new AttemptFacts("", false, true)`; any other exception
+   propagates (an unexpected infrastructure failure, which E1.S9's `RunAsync` maps to 3).
+6. **Classify and record.** `end = Classify(LastOf(File stream text), Tail(.err, 4000), facts)` — **read back from the files**, the same
+   bytes recovery will read (D6: the stderr tail from the `.err` FILE); append `End(arm, step, n, now, wall, exit, result: LastOf is Ok,
+   limited: end is Limited, HeadShort, end.Word, false)` where `wall` = the launch's elapsed whole seconds (`Unavailable` when not
+   started) and `exit` = the transcript's `ExitCode` (`Unavailable` when the wall killed it, it never started, or the operator stopped
+   it — §8 item 5); `probe.Reached(Classified)`. Then by `end` (the table of §4):
+   - operator stop → `Stopped` line (exit 5, `"stopped by the operator — run the same command again to resume"`) → `Stopped(5)`.
+   - `Limited`: `waits + 1 > Limits.Tries` → `Stopped` line (exit 3, `"still limited after <tries> waits — run me again later"`) →
+     `Stopped(3)`; else `waits++`, log `<step> LIMITED (<reason>) — waiting <s>s, then resuming the same session (wait <k>)`, `await
+     wait(TimeSpan.FromSeconds(Limits.WaitSeconds), stopping)` (an `OperationCanceledException` → the operator-stop branch), loop to 1.
+   - `Errored` → `Stopped` line (exit 5, `"<step> ended in an ERROR result that is not a limit (<text>) — stopping; run me again to resume it"`) → `Stopped(5)`.
+   - `Interrupted` → `Stopped` line (exit 5, `"<step> INTERRUPTED (<why>) — run me again to resume it"`) → `Stopped(5)`.
+   - `NotStarted` → `Stopped` line (exit 3, the reason) → `Stopped(3)`.
+   - `Finished` / `HardDeadline` → step 7, then `.done` = `DoneMarker(n, exit, Stream(step, n), end.Word, false)` → `Done(end, false,
+     false)`; log `<step> done (<word>)`.
+7. **Reconcile (D21)** — only when `context.DeriveOutputs`: `StepOutputs.Reconcile(kind, facts of the files + LastOf(the final stream))`;
+   `Regenerate(list)` → `DerivedOutputs.WriteAsync` → `probe.Reached(OutputsDerived)`; `Resumable(reason)` → `Stopped` line (exit 5, the
+   reason), NO `.done` → `Stopped(5)`; `Complete` → nothing.
+
+The `Stopped` line and the end line of an operator stop are written with `CancellationToken.None`: a stop must leave its record.
+
+**`StepBench`** (test helper, `IDisposable`): a temp root `<GetTempPath>/model-arms-step-<guid>`; an `ArmPaths(root, "tok0000000000000")`
+whose `CloneFolder` is a git repository with one commit (`git init`, `git commit --allow-empty`, through `GitCommand.RunAsync`);
+`Experiment` = the worked example read by `ExperimentFile.Read` at `new ExperimentLocation(root, "/x/home", "", "/x/repo")` after a
+`JsonNode` edit: every `steps.*.model` = the bench's `FakeCli.Model`, `steps.*.minutes` = 1, `limits` = `{waitSeconds: 900, tries: 2,
+gateWaitSeconds: 1800, gateTries: 2, minimumRemainingSeconds: 1, killGraceSeconds: 1}`; `Fake` (a `FakeCli`); `Parent` = `{HOME: <root>/home,
+PATH: <process PATH>, FAKE_CLI_HOME: Fake.Home, BENCH_DB: x, SUBAGENT_MODEL_GUARD: off, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: 1}`;
+`Transcripts` (a settable fake `ISessionTranscripts`, `true` by default); `Clock` (`BenchClock`, at `2026-10-28T21:32:38Z`, zone
+Europe/Paris); `Waits` (a recording wait delegate
+returning `Task.CompletedTask`, or one that cancels); `Log` (`StringWriter`); `Runner(probe?)`; `Context(stepName, kind)` with
+`ClaudeExecutable = FakeCli.Executable`, `WorkingDirectory = CloneFolder`, `Templates` over the shipped `briefs/` and an empty override
+folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], root)`, `ScenarioCount = 1`, `Task = TaskFacts.None`,
+`Problems = ""`; `Replay(name)` = the fixture's path; `Script(JsonObject)` rewrites the fake's script.
+
+**Scenarios** (`StepRunnerTests` — every name from the parent's §7; each starts from a fresh `StepBench`).
+
+| Test | Given / When / Then | Red (stub: `RunAsync` returns `Done(new Finished(), false, false)` having done nothing) |
+|---|---|---|
+| `A_limited_attempt_waits_then_resumes_the_same_session_and_the_wait_is_not_counted` | **Given** `stdoutByCall: {1: result-429-usage-limit-reached.jsonl, 2: result-success.jsonl}`, step `1-code`; **when** run; **then** `Done(Finished)`; 2 calls; call 1's argv has `--session-id <g>`, call 2's has `--resume <g>` (the same `g`, equal to `.session`'s content) and no `--session-id`; call 2's prompt is the resume notice; `Waits` recorded exactly `[900 s]`; timing: start 1 `budget_s` 60, end 1 `"limited":true`, start 2 `budget_s` 60 (the limited wall not counted), end 2 `"end":"finished"` | `Expected calls to contain 2 item(s), but found 0.` |
+| `An_errored_attempt_stops_the_arm_with_exit_5_and_no_done_marker` | `stdoutFile: result-400-model-unsupported.jsonl` → `Stopped(5)`; no `.done`; last timing line `stopped` with exit 5 and `ERROR result that is not a limit`; 1 call | `Expected outcome to be of type Stopped, but found Done.` |
+| `A_finished_attempt_writes_done_the_stream_the_stderr_the_prompt_and_both_timing_lines` | `stdoutFile: result-success.jsonl`, `stderrBeforeLines: ["warn 1"]` → `Done(Finished)`; `1-code.a1.jsonl` equals the replay (with `__CWD__` substituted); `1-code.a1.err` is `warn 1\n`; `1-code.a1.prompt.md` is the filled code brief (contains `PLAN`'s value, no `{{`); `.session` holds the id of call 1's `--session-id`; timing = start then end, the end with `"result":true,"limited":false,"end":"finished"`; `.done` = `{"attempts":1,"exit":0,"stream":"…/1-code.a1.jsonl","end":"finished"}` | `Expected File.Exists(".../1-code.done") to be true …` |
+| `The_wall_kills_the_tree_and_marks_the_hard_deadline_done` | timing pre-written with an unlimited end of 59 s for `1-code` (so the budget is the 1 s floor and the wall 2 s); `stdoutFile: stream-no-result.jsonl`, `holdAfterLine: 1` → `Done(HardDeadline)` within 30 s; the fake's pid (from `Calls()`) is gone; `.done`'s `end` is `hard-deadline`, its `exit` `null`; the end line's `exit` `null` | `Expected outcome.End to be of type StepEnd+HardDeadline, but found StepEnd+Finished.` |
+| `The_done_marker_and_the_end_line_carry_the_classifiers_state_finished_or_hard_deadline` | `[Theory]` the two set-ups above → `.done`'s `end` and the last `End` line's `end` are the same word, `finished` / `hard-deadline` | `Expected "" to be "finished".` |
+| `Stderr_is_on_disk_before_the_process_ends` | `stdoutFile: stream-no-result.jsonl`, `stderrBeforeLines: ["warn 1","warn 2"]`, `holdAfterLine: 2`, timing pre-written with an unlimited end of 55 s (budget 5 s, wall 6 s); the run is started as a task; the test polls `1-code.a1.err` until it holds `warn 2` WHILE `held-<pid>` exists in `Fake.Home` and the pid is alive; then awaits the run | `Expected the .err file to hold "warn 2" while the CLI runs, but it was empty until the process ended.` |
+| `Still_limited_after_every_wait_exits_3` | `stdoutFile: result-429-usage-limit-reached.jsonl`, `tries: 2` → `Stopped(3)`; 3 calls; `Waits` = `[900 s, 900 s]`; last line `stopped` exit 3 `still limited after 2 waits` | `Expected outcome to be of type Stopped, but found Done.` |
+| `Ctrl_c_during_the_wait_exits_5_resumable` | `stdoutFile: …429…`; `Waits` cancels a `CancellationTokenSource` linked as `stopping` and throws `OperationCanceledException` → `Stopped(5)`; no `.done`; `.session` intact; last line `stopped` exit 5 `stopped by the operator`; a second runner over the same bench with `stdoutFile: result-success.jsonl` resumes `--resume <same id>` and ends `Done(Finished)` | `Expected outcome to be of type Stopped …` |
+| `The_resume_notice_names_the_new_deadline_and_the_base_commit` | the limited-then-success set-up with the bench's clock (`2026-10-28T21:32:38Z`, Europe/Paris, not advanced) → call 2's prompt equals `ResumeNotice.For(<example base>, "21:33 UTC (22:33 Europe/Paris)")` (budget 60 s) | `Expected prompt to be "This session was interrupted …", but "" …` |
+| `The_session_file_is_written_before_the_launch` | a `StepProbe` that, at `Launched`, records whether `.session` exists and equals the `--session-id` the fake will see → recorded true. Break-it: move `ReplaceSession` after the launch → red | `Expected sessionBeforeLaunch to be True, but found False.` |
+| `A_runner_killed_between_the_result_line_and_review_json_writes_the_review_on_the_next_entry` | step `2-review` (kind Review), `stdoutFile: result-success.jsonl`; runner 1 with a probe that throws `IOException("killed")` at `Classified` → the exception propagates; `review.json` and `.done` absent; runner 2 (no probe), same bench → `Done(Finished, false, Recovered: true)`, NO new call (`Calls()` still 1), `review.json` equals the bytes a clean run writes in a second bench (`{"verdict":"ready","findings":[]}`), `.done` has `"recovered":true` | `Expected File.Exists(".../notes/review.json") to be true …` |
+| `Every_launch_carries_the_arms_environment_and_no_scout_flag` | the finished set-up → the call's `EnvironmentNames` contain `TMPDIR`, `HOME`, `PATH`, `FAKE_CLI_HOME`, `PWD`; contain none of `BENCH_DB`, `SUBAGENT_MODEL_GUARD`, `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`, `OLDPWD`; `SubagentModelGuard == ""` | `Expected names to contain "TMPDIR".` |
+| `A_rerun_after_done_launches_nothing` (added) | a finished step, run again → `Done(Finished, Skipped: true)`, still 1 call, timing unchanged | `Expected calls to contain 1 item(s), but found 2.` |
+| `An_unfilled_brief_stops_with_exit_4_before_any_launch` (added) | an override template `1-code.template.md` = `"{{NOPE}}"` → `Stopped(4)` naming `{{NOPE}}`; 0 calls; no start line; last line `stopped` exit 4 | `Expected outcome to be of type Stopped …` |
+| `A_missing_claude_is_not_started_and_exits_3` (added) | `ClaudeExecutable` = `<root>/no-such-claude` → `Stopped(3)`; the end line's `end` is `not-started`; no `.done` | as above |
+| `Log_lines_carry_no_token` (added) | after the finished set-up, `Log` contains `[C1]` and `1-code done (finished)` and does not contain `tok0000000000000`; `<token>` stands in its place | `Expected log not to contain "tok0000000000000".` |
+
+**Commands.** `--filter-class "*StepRunnerTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The sixteen green on this WSL host (none skipped), each seen red; the break-it of `The_session_file_is_written_before_the_launch`
+observed; `StepRunnerTests` runs in under 60 s (the only real wall is the 2 s one); the module doc's *The step runner* has the sequence
+diagram and the exit table.
+
+**Out of bounds.** The gate's lock and loop (E2.S7 — `DeriveOutputs: false` is its switch); scheme order and `arm-done` (E2.S8); task
+steps (E3); keep-awake; anything under `src/`.
+
+### E2.S5 — `ReviewAnswer`: the review step's verdict, from the last result only
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S1 (C5). **Parallel with:** E2.S2, E2.S6.
+- **Owns:** §4.5's `ReviewAnswer` (`run-arm.sh:128-135`). **Size:** ≈ 160 lines.
+
+**Files.** `tools/model-arms/ModelArms.Core/Steps/ReviewAnswer.cs`; `tests/Bench.Tests/ModelArms/ReviewAnswerTests.cs`; under `// E2.S5`
+`typeof(ReviewAnswer),`; the module doc's *The review's answer*.
+
+**C10.** `public static class ReviewAnswer { public static Outcome<string> Extract(Outcome<ClaudeResultEnvelope> lastResult); }` — the
+TEXT of `notes/review.json`:
+
+- no result, or an `IsError` result → `Failure("the review's last result is an error or absent — no review.json is written")` (the
+  repair script's finding, `repair-limit-2026-10-28.sh:27-29`);
+- else take the shell's span — from the FIRST `{` to the LAST `}` of `Result` (`/\{[\s\S]*\}/`, greedy, `run-arm.sh:133`); when that span
+  parses as a JSON OBJECT (`JsonDocument.Parse`, comments refused), the span itself, byte for byte, is the answer;
+- otherwise (no span, or a span that is not a JSON object) → `{"verdict":"unparsed","raw":<Result as a JSON string>}` (§8 item 7: the shell
+  wrote an invalid span as it was; a reader that then crashes on it is worse than an honest `unparsed`).
+
+**Scenarios.**
+
+| Test | Given / When / Then | Red (stub: `Success("")`) |
+|---|---|---|
+| `The_json_block_of_the_last_result_is_the_review` | `result-success.jsonl` → `{"verdict":"ready","findings":[]}`; and a result `"Here it is:\n{\"verdict\":\"fix-then-ready\",\"findings\":[{\"id\":\"R1\"}]}\nDone."` → the object, byte for byte | `Expected "" to be "{\"verdict\":\"ready\",\"findings\":[]}".` |
+| `No_block_is_unparsed_with_the_raw_text` | `"I'm waiting for the full MCP suite. When it finishes I will send the verdict."` (the recorded `:310` text) → `{"verdict":"unparsed","raw":"I'm waiting …"}` | `Expected "" to be "{\"verdict\":\"unparsed\",…".` |
+| `An_error_result_produces_no_review_file` | the 2026-10-28 line → `Failed()`; `stream-no-result.jsonl`'s `LastOf` → `Failed()` | `Expected Failed() to be True, but found False.` |
+| `A_span_that_is_not_json_is_unparsed_with_the_raw_text` (added) | `"{a} and {b}"` → unparsed with that raw text (the greedy span `{a} and {b}` is not JSON) | as above |
+
+**Commands.** `--filter-class "*ReviewAnswerTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The four green, each seen red.
+
+**Out of bounds.** Writing the file (E2.S4's `DerivedOutputs`); validating the review's schema (`findings`, `severity`) — the fixer and the
+analysis read it.
+
+### E2.S6 — `FileGateLock`, the `gate-lock` verb, `GateStatus`, `McpConfig`
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E1.S9 (dispatch, `ExperimentGate`, `ExperimentRoot`), E2.S2 (C7).
+  **Parallel with:** E2.S4, E2.S5.
+- **Owns:** D10 (the lock and its two-process proof), E1 §8 item 16 (how a provider key reaches the coai server), C9's pure half.
+  **Size:** ≈ 600 lines.
+
+**Files.** `tools/model-arms/ModelArms.Core/Launch/GateStatus.cs` (`GateReading`, `GateStatus`); `…/Launch/McpConfig.cs`;
+`tools/model-arms/ModelArms.Core/Experiment/ArmPaths.cs` (`CoaiData`, one line); `tools/model-arms/ModelArms/Adapters/FileGateLock.cs`;
+`tools/model-arms/ModelArms/Verbs/GateLock.cs` (`GateLockVerb`); `tools/model-arms/ModelArms/Program.cs` (the `gate-lock` arm only:
+`"gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync),`); tests `FileGateLockTests.cs`, `GateStatusTests.cs` (added class),
+`McpConfigTests.cs` (added class), `ModelArmsBinary.cs` (test helper), one assertion in `ArmPathsTests.Every_path_of_an_arm_is_spelled_as_the_shell_spelled_it`
+(`CoaiData` → `/e/r/abc/coai-data`); under `// E2.S6` `typeof(GateStatus), typeof(McpConfig),`; the module doc's *The gate lock and the MCP configs*;
+`research/module_tests.md` (a `model-arms gate-lock` row, `covered`, `FileGateLockTests` — invisible to the catalogue test until E5.S3, §2).
+
+**Uses.** `RootPaths.GateLock` `ArmPaths.cs:46`; `CoaiFacts` `ExperimentFacts.cs:52`; `ArmChildEnvironment.Of` `ArmChildEnvironment.cs:32`;
+`CommandLine.Int`/`Has` `CommandLine.cs:30-38`; `ExitCodes`; E1.S9's `ExperimentGate.RunAsync(VerbInput, Func<ExperimentInput, Task<int>>)`,
+`ExperimentInput`, `VerbInput` (C4 of E1) and `ExperimentRoot` (its test helper); `ProcessRunner.RunAsync(…, stdoutLine, …)` (the 8-parameter
+overload, `ProcessRunner.cs:106`); `WorkerLiveness.ProcessIsAlive` `WorkerLiveness.cs:25`.
+
+**`FileGateLock(clock, poll)`** — `TryAcquire(path)`: `new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)`;
+an `IOException` that is a sharing violation → `null`; the stream is the held lock, released by `Dispose`. `AcquireAsync(path, ct)`: loop
+`TryAcquire`, else `await Task.Delay(poll, clock, ct)` — cancellation throws `OperationCanceledException` and holds nothing. The file is
+created once and never deleted (one empty file per root, §9). Construction refuses a runtime whose file locking is switched off
+(`DOTNET_SYSTEM_IO_DISABLEFILELOCKING` truthy in the harness's environment, or the `System.IO.DisableFileLocking` switch set) with
+*"file locking is disabled in this runtime — the gate lock would be inert"*; **the coder confirms the switch's name against the .NET
+runtime's documentation before writing the refusal and quotes the source in the summary** (a measure not observed working is a
+comment — `common.security`).
+
+**`gate-lock` verb** (`GateLockVerb.RunAsync(ExperimentInput)`) — the lock path is `RootPaths.GateLock`. `status`: `TryAcquire` → print
+`model-arms gate-lock: free` (released at once) or `model-arms gate-lock: held` → 0. `hold`: `--seconds N` required (absent or < 1 → 4,
+`gate-lock hold takes --seconds N`); `AcquireAsync` (waiting); print `model-arms gate-lock: held <path>` and flush; `Task.Delay(N s,
+stopping)`; release; print `model-arms gate-lock: released` → 0; a Ctrl+C while holding releases and maps as every verb (5).
+
+**`GateStatus.Read(gateJson)`** — a `Failure` (no file), text that is not a JSON object, or no string `status` → `GateReading("missing",
+"")`; else `(status, why as a string or "")` (`run-arm.sh:153`, `:156`). `WaitAgain(reading, waitsSoFar, gateTries)` = `reading.IsBlocked &&
+waitsSoFar < gateTries` (`:154`).
+
+**`McpConfig` (E1 §8 item 16, decided here).** `None()` = `{"mcpServers":{}}` (`after6.sh:33`). `Coai(coai, paths, harnessEnvironment)` =
+the shell's object (`after6.sh:34`), indented by one space like `JSON.stringify(…, null, 1)`: `{"mcpServers":{"coai":{"type":"stdio",
+"command":<coai.Binary>,"args":[],"env":{"COAI_DATA_DIR":<paths.CoaiData>,"COAI_DATA_SIDE":<coai.Side>}}}}` — and, **when the harness's
+own environment holds a non-empty `COAI_CREDS_KEY`, that one variable is added to `env`**. Why this and nothing wider: the coai server
+reads its one vault key from its layered configuration, the copied settings file first and its own environment over it
+(`KeyVault.cs:35`, `:76-95`); under the shell, claude inherited the harness's whole environment and handed it to the server, so an
+exported key reached it; under D19 the arm's claude never sees `COAI_*` or a secret-named variable, so the key must travel in the one
+place the server's environment is written — `mcp-coai.json`'s `env` — and never by widening the arm's environment. Providers that sign
+in through their own CLI homes (codex, agy, vibe in part 6) need nothing. **The consequence, stated:** when the key is exported, it is
+written into `r/<token>/mcp-coai.json`, which `make` (E4.S4) writes with mode `0600` — the same exposure as the copied settings file the
+panel already writes the key into (`after6.sh:32`), and like it, a file the experiment's published record must never carry (E5.S5
+excludes `mcp-coai.json` and `coai-data/`). Rejected: forwarding every `*_KEY` (a provider list nobody wrote down), and `${VAR}` expansion
+in the config (claude expands from its own environment, which D19 stripped).
+
+**`ModelArmsBinary`** (test helper) — `Dll` = `<Repository.Root>/tools/model-arms/ModelArms/bin/<configuration>/<framework>/model-arms.dll`,
+the configuration and framework read off `AppContext.BaseDirectory` as `FakeCli.Executable` does (`FakeCli.cs:31-43`); launched as
+`ProcessRunner` exe `dotnet` with `[Dll, …args]`.
+
+**Scenarios.**
+
+| Test | Given / When / Then | Red |
+|---|---|---|
+| `FileGateLockTests.A_second_process_holding_the_lock_makes_the_first_wait` | **Given** an `ExperimentRoot` (E1.S9); a child `dotnet model-arms.dll gate-lock hold --seconds 4 --experiment <root>` started as a task with a stdout line sink, the test waiting for `held` (≤ 30 s); **when** `TryAcquire(root/.gate.lock)` → **then** `null`; **and when** `AcquireAsync` is awaited with a 30 s token → **then** it completes after the child printed `released` (the child's pid is gone or exiting; `acquiredAt >= releasedAt`) and the returned handle makes a second child's `gate-lock status` print `held` | stub `TryAcquire` → a handle always: `Expected held to be <null>, but found …` |
+| `FileGateLockTests.Cancellation_while_waiting_releases_nothing_and_surfaces_as_cancelled` | the child holds for 20 s; `AcquireAsync` with a token cancelled after 1 s → `OperationCanceledException`; a `gate-lock status` child then prints `held` (the holder still has it, nothing was taken or broken); the first child is killed at the end | stub `AcquireAsync` → returns at once: `Expected a <System.OperationCanceledException> to be thrown, but no exception was thrown.` |
+| `FileGateLockTests.A_child_launched_while_the_lock_is_held_does_not_keep_it` (added — D10's warning: an inherited handle once made a shared lock) | in-process `AcquireAsync`; while held, `FakeCli` in `hang` mode is started (`ProcessRunner`, 30 s wall, as a task); the handle is disposed while the fake is alive; **then** a `gate-lock status` child prints `free`; the fake is killed | `Expected "model-arms gate-lock: held" to be "model-arms gate-lock: free"` (an inherited descriptor keeps a flock) |
+| `FileGateLockTests.Gate_lock_hold_needs_its_seconds` (added) | `ArmsProgram.RunAsync(["gate-lock","hold","--experiment",root])` → 4, error contains `--seconds` | `Expected 0 to be 4.` |
+| `GateStatusTests.A_blocked_status_and_its_reason_are_read` (added) | `{"status":"blocked","why":"every provider rate-limited"}` → `("blocked", "every provider rate-limited")`, `IsBlocked`; `WaitAgain(r, 7, 8)` true, `WaitAgain(r, 8, 8)` false; `{"status":"proceed"}` → not blocked, `WaitAgain` false | stub `("missing","")`: `Expected "missing" to be "blocked".` |
+| `GateStatusTests.A_missing_unreadable_or_statusless_file_reads_as_missing` (added) | `Failure("no file")`, `"not json"`, `"[]"`, `{"status":3}`, `{}` → each `("missing", "")` | passes on the stub — the plant: read `status` with `GetString()` unguarded → `InvalidOperationException` on `{"status":3}` |
+| `McpConfigTests.The_coai_server_receives_the_vault_key_through_mcp_coai_json_and_the_arm_never_sees_it` (added — E1 §8 item 16) | harness env `{COAI_CREDS_KEY: k, HOME: /h}`; `Coai(new CoaiFacts("/c/coai-mcp", "/v/settings.json", "wsl-ubuntu"), ArmPaths("/e","tok"), env)` parsed → `mcpServers.coai.env` = `{COAI_DATA_DIR: /e/r/tok/coai-data, COAI_DATA_SIDE: wsl-ubuntu, COAI_CREDS_KEY: k}`; **and** `ArmChildEnvironment.Of(env, paths)` has no `COAI_CREDS_KEY`; without the key in `env` → exactly the two names | stub `None()` text: `Expected node["mcpServers"]["coai"] not to be <null>.` |
+| `McpConfigTests.Mcp_coai_json_is_the_shells_shape` (added) | the parsed object equals the shell's (`type: stdio`, `command`, `args: []`, the env) and the text is indented one space | as above |
+| `McpConfigTests.Mcp_none_is_an_empty_server_list` (added) | `None()` = `{"mcpServers":{}}` | `Expected "" to be "{\"mcpServers\":{}}".` |
+
+**Commands.** `--filter-class "*FileGateLockTests"`, `"*GateStatusTests"`, `"*McpConfigTests"`, `"*ArmPathsTests"`, `"*ModelArmsProgramTests"`,
+`"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The nine green on this WSL host and on CI's Linux runner (the two-process tests are not skipped); every red seen;
+`Every_verb_the_command_line_accepts_has_a_dispatch_arm` (E1.S9) still green.
+
+**Out of bounds.** Writing `mcp-*.json` into an arm (E4.S4's `make` calls `McpConfig`; the run-arm tests' fixture calls it too); the gate
+step's loop (E2.S7); a lock against a non-.NET holder (`flock(1)` — parent §9).
+
+### E2.S7 — The gate step: lock, step, read `gate.json`, wait out `blocked`, the diff once
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S4, E2.S6. **Parallel with:** nothing.
+- **Owns:** D10 (the step), §4.5 *The gate step*. **Size:** ≈ 420 lines.
+
+**Files.** `tools/model-arms/ModelArms/Adapters/GateStep.cs`; `tests/Bench.Tests/ModelArms/GateStepTests.cs`; the module doc's *The gate step*.
+
+**Uses.** C8 (`StepRunner.RunAsync`, `StepContext` with `DeriveOutputs`), C9, `DerivedOutputs.WriteAsync`, `ArmFiles`, `StepOutputs.Reconcile`,
+`RootPaths.GateLock` (via `context.Paths.Root`), `StepBench` (E2.S4).
+
+**`GateStep.RunAsync(context, stopping)`** (`run-arm.sh:144-162`), `waits` = 0:
+
+1. `.done` exists → reconcile the `.diff` (as E2.S4 step 7: missing and `.before` present → write it) → `Done(…, Skipped: true)`.
+2. Log `<step>: waiting for the gate lock`; `using (await gateLock.AcquireAsync(new RootPaths(context.Paths.Root).GateLock, stopping))`:
+   log `<step>: gate lock taken`; `outcome = await runner.RunAsync(context with { DeriveOutputs = false }, stopping)`. The lock is
+   released when the step returns, whatever it returned — before any wait (`:151`).
+3. `Stopped` → return it.
+4. `reading = GateStatus.Read(files.ReadText(paths.GateJson))`; `GateStatus.WaitAgain(reading, waits, Limits.GateTries)` → `waits++`;
+   delete `.done`; log `<step>: the gate was blocked (<why>) — waiting <s>s, then resuming (wait <k>)`; `await wait(GateWaitSeconds,
+   stopping)` (cancellation → a `stopped` line, exit 5 → `Stopped(5)`); loop to 2 — the runner then RESUMES the same session (D7: its
+   `.done` is gone, its session and transcript exist).
+5. Otherwise reconcile `.diff` (write it from `.before..HEAD` through `DerivedOutputs`; a missing `.before` → `Stopped(5)`); log `<step>:
+   gate status <status>` — **also when still `blocked` after `gateTries` waits** (the shell's fall-through, `:159-160`; §8 item 10) →
+   `Done(end, false, false)`.
+
+**Scenarios** (`GateStepTests`, over `StepBench` with step `4-gate` kind Gate, a recording `IGateLock` that logs `acquire`/`release` in
+order with every launch and wait, and `gate.json` written by the test — the fake cannot write it).
+
+| Test | Given / When / Then | Red (stub: `GateStep.RunAsync` = one `runner.RunAsync`) |
+|---|---|---|
+| `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` | `stdoutFile: result-success.jsonl`; `gate.json` = blocked before the run; `gateTries: 2`; the wait delegate asserts `.done` is ABSENT when called and, on its 2nd call, rewrites `gate.json` to `{"status":"proceed"}` → `Done`; 3 calls (fresh, resume, resume — all one session id); waits `[1800 s, 1800 s]`; `.done` present at the end; log ends `gate status proceed` | `Expected calls to contain 3 item(s), but found 1.` |
+| `The_lock_is_released_during_the_wait` | the same; the recording lock's event list is `acquire, launch, release, wait, acquire, launch, release, wait, acquire, launch, release` | `Expected events to be equal to {"acquire", "launch", "release", "wait", …}, but {"launch"} …` |
+| `The_before_snapshot_is_taken_before_the_first_attempt_and_the_diff_only_from_a_finished_step` | call 1 replays the 429 line, call 2 success; the first limit wait (the runner's) commits a file `g.txt` in the clone and asserts `4-gate.diff` does not exist; → `4-gate.before` holds the commit before the run; `4-gate.diff` exists after and contains `g.txt`; an hreview variant (`2-hreview`, kind HReview, through `StepRunner` directly) has `.before` from before call 1 and `.diff` only once done | `Expected File.Exists(".../4-gate.before") to be true …` |
+| `Still_blocked_after_every_wait_finishes_the_step_with_its_status` (added) | `gate.json` stays blocked, `gateTries: 2` → `Done`; 3 calls; 2 waits; `.done` present; `.diff` written; log ends `gate status blocked` | `Expected outcome to be Done …` / `Expected calls … 3` |
+| `A_gate_step_that_is_done_regenerates_a_missing_diff_and_launches_nothing` (added) | a finished gate; `4-gate.diff` deleted → second run: `Done(Skipped)`, no new call, `.diff` back | `Expected File.Exists(".../4-gate.diff") to be true …` |
+| `A_blocked_round_leaves_no_diff_behind` (added) | gate blocked once then proceed; the wait delegate asserts `4-gate.diff` is ABSENT at each wait | `Expected File.Exists(".../4-gate.diff") to be false …` (a runner that derived the gate's diff inside the loop) |
+
+**Commands.** `--filter-class "*GateStepTests"`, `"*StepRunnerTests"`; the whole suite.
+
+**Done when.** The six green, each seen red.
+
+**Out of bounds.** The real `FileGateLock` (E2.S6 proves it; the gate step's tests record the order); `gate.json`'s schema beyond `status`
+and `why`.
+
+### E2.S8 — `run-arm` for C and CR: the scheme in order, the exits, `arm-done`
+
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S4, E2.S5, E2.S6, E2.S7; E1.S8 (`ScenariosFile`,
+  `ExecutableResolution`, `RootRequirements`), E1.S9 (dispatch, `ExperimentGate`, `ExperimentRoot`).
+- **Owns:** D16 for the verb, D17(c) for `run-arm` (the resolved executables printed before the first launch), §4.1's `run-arm` row, the
+  parent's E2.S7. **Size:** ≈ 520 lines.
+
+**Files.** `tools/model-arms/ModelArms/Verbs/RunArm.cs` (`RunArmVerb`); `tools/model-arms/ModelArms/Program.cs` (the `run-arm` arm only:
+`"run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),`); `tests/Bench.Tests/ModelArms/RunArmSchemeTests.cs`; `ExperimentRoot.cs`
+(the extension below); `research/module_tests.md` (a `model-arms run-arm` row, `covered`, `RunArmSchemeTests`); the module doc's *run-arm*.
+
+**Uses.** `ArmNames.SchemeOf` `Scheme.cs:28`; `ArmMap.Read`, `TokenOf` `ArmMap.cs:34`, `:75`; `RootPaths.Arm` `ArmPaths.cs:64`;
+`ScenariosFile.Read` and `ExecutableResolution.Resolve` (E1.S8 contracts); `ExperimentInput` (E1 C4); `BriefTemplateFiles`; `GateStep`,
+`StepRunner`, `ClaudeSessionTranscripts`, `SessionTranscripts.ClaudeHome`, `CliAgentRuntime` (`new CliAgentRuntime(NullLogger<…>.Instance)`,
+`CliAgentRuntime.cs:271`), `McpConfig` (the fixture), `TimingLines`.
+
+**`RunArmVerb.RunAsync(ExperimentInput input)`**:
+
+1. `arm = Positionals[0]`; `ArmNames.SchemeOf(arm)` → the scheme must be among `Experiment.Schemes` (else 4: `"<arm> belongs to scheme
+   <s>, which is not among the schemes (C, CR, SRS)"`); a scheme holding a `SchemeEntry.Tasks` → 4: `"<arm>'s scheme runs the task
+   pipeline — not built yet, story E3.S3 of todo/PLAN_model_arms.md"`.
+2. `map = ArmMap.Read(arms.map.json)` → `TokenOf(arm)` (refusal → 4); `paths = root.Arm(token)`.
+3. Resolve `claude` and `git` through `ExecutableResolution.Resolve` over `input.Verb.Environment["PATH"]`, forbidden roots
+   `[Target.Source, root]`; a failure → 3 naming it; print `resolved executables:` and `  <name> → <path>` for both (D17 c) BEFORE the
+   first launch.
+4. `scenarios = ScenariosFile.Read(<root>/<ScenariosFile>)` → its count (refusal → 4).
+5. Build one `StepRunner` (`CliAgentRuntime`, `ClaudeSessionTranscripts(SessionTranscripts.ClaudeHome(env))`, `TimeProvider.System`,
+   `wait = (d, ct) => Task.Delay(d, ct)`, `Output`, `map`, `StepProbe.None`) and one `GateStep(runner, new FileGateLock(TimeProvider.System,
+   2 s), wait, Output)`; the `StepContext` per entry: `Templates = new BriefTemplateFiles(input.Verb.Module.ShippedBriefs,
+   root.Briefs)`, `Guard = new BriefLeakGuard(map, arm, [scheme names], root.Root)`, `WorkingDirectory = paths.CloneFolder`,
+   `ParentEnvironment = input.Verb.Environment`.
+6. For each `SchemeEntry.Step` in order: kind `Gate` → `GateStep`, else `StepRunner`; `Stopped(code, why)` → print `model-arms run-arm
+   <arm>: <why>` and return `code`.
+7. All done → append `ArmDone(arm, now)` **unless the timing's last line already is one for this arm** (a re-run of a finished arm adds
+   nothing; the shell appended one per run); log `arm done` → 0.
+
+**`ExperimentRoot` extension** — `MakeArmAsync(string arm, FakeCli fake)`: writes `arms.map.json` (`ArmMap.Extend` with a counter byte
+source), `chain/made-<arm>`, a `baseline.json` (`BaselineFile.Write` of a completed fixture baseline — `run-arm` requires it, E1.S8's
+table), creates `r/<token>/arm` as a git repository with one commit, writes `mcp-none.json` / `mcp-coai.json` through `McpConfig`; rewrites
+every `steps.*.model` to `fake.Model` and `minutes` to 1; puts `<temp>/bin/claude` as a symbolic link to `FakeCli.Executable` (the
+apphost resolves its own real path), `git` as a link to the process's `git`, `Environment["PATH"] = <temp>/bin` and
+`Environment["FAKE_CLI_HOME"] = fake.Home`. Linux only (`Assert.SkipWhen(OperatingSystem.IsWindows(), "the run-arm scenarios link
+claude to the fake; links and POSIX paths")`).
+
+**Scenarios** (`RunArmSchemeTests`; through `ArmsProgram.RunAsync(["run-arm", arm, "--experiment", root.Root], out, err, root.Environment, ct)`).
+
+| Test | Given / When / Then | Red (stub: the `run-arm` arm still `NotBuilt`) |
+|---|---|---|
+| `Scheme_C_runs_its_four_steps_in_order_against_the_fake` | `MakeArmAsync("C1", fake)`; `stdoutFile: result-success.jsonl` → 0; 4 calls, in order the `1-code`, `2-review`, `3-fix`, `4-gate` briefs (each prompt's first line equals its template's); the review's argv has `--permission-mode default` and `--disallowedTools Edit Write NotebookEdit …`, the gate's has `--mcp-config <…/mcp-coai.json>`; `.done` for all four; `notes/review.json` = `{"verdict":"ready","findings":[]}`; `4-gate.before` and `4-gate.diff` exist; timing's last line `{"kind":"arm-done","arm":"C1",…}` | `Expected 4 to be 0.` (the `NotBuilt` refusal) |
+| `Scheme_CR_inserts_the_fresh_review_and_fix` | `MakeArmAsync("CR1", fake)` → 0; 5 calls, `1-code`, `2-hreview`, `3-review`, `4-fix`, `5-gate`; `2-hreview.before`/`.diff` exist; `review.json` from `3-review` | as above |
+| `An_unknown_arm_is_refused_with_exit_4` | `run-arm XY1` → 4 naming `XY` and `C, CR, SRS`; `run-arm C9` (scheme exists, never made) → 4 naming `made-C9` (the gate's requirement) or the map; 0 calls | `Expected … to contain "XY"` |
+| `A_finished_arm_run_again_launches_nothing_and_writes_one_arm_done` (added) | C1 run twice → both 0; still 4 calls; exactly one `arm-done` line | `Expected arm-done lines to contain 1 item(s), but found 2.` |
+| `An_srs_arm_is_refused_until_the_task_pipeline_exists` (added) | `MakeArmAsync("SRS1", fake)` → 4 naming `E3.S3`; 0 calls | `Expected … "E3.S3"` |
+| `Run_arm_prints_the_resolved_claude_and_git_before_the_first_launch` (added) | the C1 run's output contains `claude → <temp>/bin/claude` and `git → …`, and that line comes before the first log line of `1-code` | `Expected output to contain "claude → …"` |
+| `A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes` (added) | `stdoutByCall: {2: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1` → 0; 5 calls; the review resumed `--resume <its id>`; `review.json` from call 3's success | `Expected 4 to be 0.` |
+
+**Commands.** `--filter-class "*RunArmSchemeTests"`, `"*ModelArmsProgramTests"`, `"*ModuleTestsCatalogTests"`; the whole suite. By hand once,
+on a scratch root with the fake as `claude`: `./tools/model-arms/ModelArms/bin/Release/net10.0/model-arms run-arm C1 --experiment <root>`,
+quoted in the module doc.
+
+**Done when.** The seven green on this host (not skipped), each seen red; `Every_verb_the_command_line_accepts_has_a_dispatch_arm` and the
+catalogue test green; the module doc walks one C arm's files after a run.
+
+**Out of bounds.** SRS (E3.S3); `make`, `run-all`, detaching, pid files (E4); the objective checks (E5); keep-awake.
+
+## 6. Order and parallel groups
+
+```mermaid
+flowchart LR
+    S1[E2.S1 envelope + StepEnd — Fable spec first] --> S2[E2.S2 timing, budget, recovery, outputs]
+    S1 --> S5[E2.S5 ReviewAnswer]
+    S3[E2.S3 fake stdoutByCall + both readers] --> S4
+    S2 --> S4[E2.S4 StepRunner]
+    S5 --> S4
+    S2 --> S6[E2.S6 gate lock, verb, status, MCP configs]
+    E19[E1.S9 dispatch + gate] --> S6
+    S4 --> S7[E2.S7 gate step]
+    S6 --> S7
+    S7 --> S8[E2.S8 run-arm C, CR]
+    E18[E1.S8 scenarios, resolution] --> S8
+    E19 --> S8
+```
+
+| Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
+|---|---|---|
+| A | **E2.S1** (after Fable commits its spec here), **E2.S3** | none — disjoint (S1 alone adds the markers and headings) |
+| B | **E2.S2**, **E2.S5**, **E2.S6** (S6 once E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
+| C | **E2.S4** | the module doc (own heading) |
+| D | **E2.S7** | — |
+| E | **E2.S8** (needs E1.S8 and E1.S9) | `Program.cs` (its own arm line); `research/module_tests.md` (its own row) |
+
+Parallel coders work in separate worktrees branched from `feat/model-arms` and land one at a time (rebase). E2.S6 and E2.S8 each
+replace exactly one `NotBuilt` arm of E1.S9's `Dispatch`, so they never edit the same line. If E1.S9 has not landed when wave B starts,
+E2.S6 waits and wave B is S2 ∥ S5; nothing else in E2 needs E1.S8–S11 before E2.S8.
+
+## 7. Test plan (maps to the parent's §7, E2)
+
+Every class and method of the parent's E2 list is here under its exact name. Added, in the same style: `ClaudeResultEnvelopeTests` (2) and
+`StepEndTests` (5) — E2.S1, for Fable to specify; `StepRecoveryTests` (1), `StepOutputsTests` (1), `TimingLineTests` (6, a new class) — E2.S2;
+`FakeCliByCallTests` (1, new) and two in `ProcessRunnerStderrSinkTests` — E2.S3; `StepRunnerTests` (4) — E2.S4; `ReviewAnswerTests` (1) —
+E2.S5; `FileGateLockTests` (2), `GateStatusTests` (2, new), `McpConfigTests` (3, new) — E2.S6; `GateStepTests` (3) — E2.S7;
+`RunArmSchemeTests` (4) — E2.S8. Fixtures: the nine of E2.S1 and `timing-arm-C.jsonl` (E2.S2) — the parent's list less
+`objective-arm-C.json` and the log heads (E5's), plus the recorded three-results stream, the limited stream's head and the stderr line.
+The break-its: `The_session_file_is_written_before_the_launch` (E2.S4), `A_complete_step_needs_nothing` (E2.S2), the finalizer red of E2.S3
+if it will not show by itself, and the plant of `A_missing_unreadable_or_statusless_file_reads_as_missing` (E2.S6).
+
+What E2's suite does not prove: that claude 2.1.x honours `--resume` after a 429 the way the shell observed (the pilot, parent build order
+step 6); that `CLAUDE_CONFIG_DIR` relocates the projects folder (read, not measured — part 6 ran without it); a lock against `flock(1)`;
+the coai server reading `COAI_CREDS_KEY` from `mcp-coai.json`'s `env` (the product's code says it layers the environment over the file;
+nothing here starts the real server — the pilot's gate step is the observation).
+
+## 8. Deviations from the parent, and contradictions found in the code
+
+1. **E1 §8 item 14 names a per-arm `run.log`** — no such file exists in `ArmPaths` (`ArmPaths.cs:79-195`) or in the shell, whose `log`
+   wrote to stdout (`run-arm.sh:23`) and `run-all.sh` appended that to `pids/<arm>.log`. **Settled (E2.S4):** the runner's log is the
+   verb's output, scrubbed of tokens; detached, it lands in `pids/<arm>.log` (D13). No new file.
+2. **§4.5 "a `.diff` is written only from a `Finished` step"** vs **D8 "`HardDeadline` is DONE"**: a step cut by its deadline changed the
+   clone too, and the next step works on what it left. **Settled:** derived outputs are written for every DONE step (`Finished` or
+   `HardDeadline`), never for a limited, errored or interrupted attempt — the repair script's lesson was about bogus steps, not deadlines.
+   The parent's test name `…the_diff_only_from_a_finished_step` is kept; its scenario says "done".
+3. **D21 vs D8 for a review.** D21: "a result with no text leaves the step without `.done` and resumable"; D8: a `HardDeadline` step is
+   done. A review killed at its wall before its result has no verdict to read. **Settled (E2.S2):** for the one case where a derived
+   output's input is missing, D21 wins — the step stays resumable (exit 5, the reason in the `stopped` line); the operator re-runs and the
+   resume gets the floor of 300 s. Every other `HardDeadline` step is done.
+4. **The recorded streams contradict a prefix reader.** `"type":"result"` is the 47th key of the 2026-10-28 line (`3-fix.a1.jsonl:8`), and
+   one attempt's stream holds THREE result lines, the first a success (`2-review.a1.jsonl:310`, `:317`, `:323`). The parent's §7 named the
+   fixture "the 2026-10-28 line verbatim" without either fact; both are now criteria of E2.S1.
+5. **`exit` of a killed attempt.** The shell wrote `timeout`'s 124/137 (`run-arm.sh:120`); the port writes `null` in the end line and the
+   marker whenever the process returned no code (wall, not started, stopped by the operator), and the `end` field says why
+   (*absent is not zero*; `research/local-model-coding/harness/metrics.mjs:100` passes `exit` through and reads `null` already).
+6. **The deadline's zone.** The shell printed `%Z` (`CET`); .NET has no portable abbreviation, so the brief and the start line say the zone's
+   id (`23:12 Europe/Paris`). The minutes are the shell's.
+7. **`ReviewAnswer`'s span.** The parent says "the first `{…}` block"; the shell takes the greedy first-`{`-to-last-`}` span
+   (`run-arm.sh:133`) and wrote it whether or not it was JSON. **Settled (E2.S5):** the shell's span, written only when it parses as a JSON
+   object, else `unparsed` with the raw text.
+8. **D6's stderr rule** reads as "structured first, then the stderr tail" for every attempt; the shell reads stderr ONLY when the stream has
+   no result (`run-arm.sh:60-62`). Settled as the shell's (E2.S1 criterion 2): a result decides by itself.
+9. **No `IArmFiles` port** (parent §4.1): the runner's tests use real temp folders, which are the evidence the analysis reads; a port would
+   only let a test agree with itself.
+10. **The gate after `gateTries` blocked rounds.** D10 says "at most `gateTries`" and not what then; the shell finished the step as done
+    with the status still `blocked` and exit 0 (`run-arm.sh:154-160`). Kept, logged as `gate status blocked`, so the record shows it.
+11. **`ArmPaths` has no member for `coai-data/`** — the folder `COAI_DATA_DIR` names (`after6.sh:34`); E2.S6 adds `CoaiData`.
+12. **The code that landed for E1 differs from E1's contracts in two places E2 uses:** `BriefTemplateFiles.Read` takes a `StepKind`, not a
+    template name (`BriefTemplateFiles.cs:18`), and `BriefFiller.Fill` takes a `templateName` while `BriefLeakGuard` carries the root
+    (`BriefFiller.cs:12`, `:25`). E2 calls the landed signatures.
+13. **The map named seven stories; this document has eight.** The parent's E2.S6 (lock, verb, status, gate step) is split into E2.S6 (the
+    lock, the verb, the status, the MCP configs — parallel with the runner) and E2.S7 (the gate step — needs the runner); the parent's
+    E2.S7 (`run-arm`) is E2.S8 here. The parent's E2.S3 also carries E1 §8 item 15 (the launcher's both-readers fix), which E1 assigned to
+    "E2.S3/E2.S4".
+14. **Vault key on disk.** E1 §8 item 16 asked for the key to reach the server through `mcp-coai.json`'s `env`. That puts an exported
+    `COAI_CREDS_KEY` into a file under the arm's folder; E2.S6 states the consequence (mode `0600` by `make`, never in the published record)
+    and binds E4.S4 and E5.S5 to it. If the owner's key lives only in the panel's settings file (the product's normal place, `KeyVault.cs:76-95`),
+    nothing is written.
+15. **The `Interrupted` state carries its reason** (`Interrupted(string Why)`); the parent's D6 lists it bare. The log and the `stopped` line
+    need to say whether the operator stopped it or the process ended without a result.
+16. **E1.S8–E1.S11 have not landed** (`Program.cs:6-8` is the stub): E2.S6 waits for E1.S9, E2.S8 for E1.S8 and E1.S9; S1–S5 and S7 do not.
+
+## 9. Growth
+
+Nothing here adds a table, a database or a process that outlives its verb. What E2 writes is the parent's §4.11 rows (streams, `.err`,
+prompts, timing, markers — kept with the experiment root) plus: `<root>/.gate.lock` — one empty file, created once, never deleted (deleting
+a lock file another process holds open would split the lock); `out/<step>.session` — 37 bytes per step, rewritten only when a lost
+transcript forces a new id. Tests: each `StepBench`/`ExperimentRoot` deletes its temp folder on dispose; each `FakeCli` deletes its home.
+A run interrupted at any point leaves only files the next entry reads (§4's table) — there is no in-flight state without its own
+recovery: a `.session` without a stream starts fresh or resumes, a stream without an end line is classified from disk, an end line without
+`.done` is recovered (D7), a `.done` without its derived output regenerates it (D21).
+
+## 10. Definition of Done — epic E2
+
+- [ ] E2.S1–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
+- [ ] E2.S1's scenarios and brief were written by Fable into its section before its coder started; the parent's ledger reads `2 of 2`.
+- [ ] `ClaudeResultEnvelopeTests` and `StepEndTests` pass on the verbatim 2026-10-28 line and the three-results stream; the 2026-10-28
+      attempt classifies as `Limited`, never `Finished` or `Errored`.
+- [ ] The two-process `FileGateLockTests` green on Linux, not skipped; `GateStepTests` show the lock released during every wait.
+- [ ] `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests`, `ProbeArgvTests`, `ScoutArgvTests` unedited and
+      green; `ProcessRunnerStderrSinkTests` holds E1 §8 item 15's two tests.
+- [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
+- [ ] `ModelArmsArchitectureTests` green; `PureDeciders` names every public static class of Core, each under its story's marker.
+- [ ] `research/module_model_arms.md` describes E2 as built (the precedence, the formats, the recovery and outputs tables, the runner's
+      flow, the gate, `run-arm` walked once by hand with the fake); `research/module_tests.md` has the two `model-arms` rows.
+- [ ] `node .agents/conventions/tools/plan-lifecycle.mjs` green.
