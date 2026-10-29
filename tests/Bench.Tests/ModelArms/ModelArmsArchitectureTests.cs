@@ -35,6 +35,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(RootRequirements), typeof(RootTrust), typeof(ExecutableResolution), typeof(ScenariosFile), typeof(BaselineFile),
 
         // E1.S9
+        typeof(ModelArmsCommandLine),
 
         // E1.S10
 
