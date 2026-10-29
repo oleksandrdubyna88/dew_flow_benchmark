@@ -36,7 +36,7 @@ public static class Program
 
     /// <summary>The same with the dispatch handed in: the only way to reach the exit-code mapping below (a flag the verb cannot read, a fault, a stop)
     /// before a verb that can fail exists. The one caller outside the tests is the overload above.</summary>
-    public static Task<int> RunAsync(
+    internal static Task<int> RunAsync(
         string[] args,
         TextWriter output,
         TextWriter error,

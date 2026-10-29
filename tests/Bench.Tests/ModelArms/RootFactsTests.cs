@@ -232,8 +232,8 @@ public sealed class RootFactsTests
     }
 
     [Theory]
-    [InlineData("1000 a1ff 2049 131077", false)]
-    [InlineData("1000 120755 16777234 8590138", true)]
+    [InlineData("1000 a1ff 2049 131077 1761768000.123456789", false)]
+    [InlineData("1000 120755 16777234 8590138 1761768000.123456789", true)]
     public void A_symbolic_link_is_recognised_by_the_type_bits_of_the_mode_not_by_a_translated_word(string statOutput, bool bsd)
     {
         var refused = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd);
@@ -242,10 +242,10 @@ public sealed class RootFactsTests
     }
 
     [Theory]
-    [InlineData("1000 81a4 2049 131077", false, "644")]
-    [InlineData("1000 100600 16777234 8590138", true, "600")]
-    [InlineData("0 41ed 2049 12", false, "755")]
-    [InlineData("1000 8fff 2049 131077", false, "7777")]
+    [InlineData("1000 81a4 2049 131077 1761768000.123456789", false, "644")]
+    [InlineData("1000 100600 16777234 8590138 1761768000.123456789", true, "600")]
+    [InlineData("0 41ed 2049 12 1761768000.123456789", false, "755")]
+    [InlineData("1000 8fff 2049 131077 1761768000.123456789", false, "7777")]
     public void The_owner_and_the_permission_bits_come_out_of_the_raw_mode(string statOutput, bool bsd, string octalMode)
     {
         var facts = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd).Ok();
@@ -260,43 +260,88 @@ public sealed class RootFactsTests
     [InlineData("1000", false)]
     [InlineData("x a1ff 2049 131077", false)]
     [InlineData("1000 zzzz 2049 131077", false)]
-    [InlineData("1000 189 2049 131077", true)]
+    [InlineData("1000 189 2049 131077 1761768000.123456789", true)]
     [InlineData("1000 81a4", false)]
     [InlineData("1000 81a4 2049", false)]
-    [InlineData("1000 81a4 dev 131077", false)]
-    [InlineData("1000 81a4 2049 inode", false)]
-    [InlineData("1000 81a4 2049 131077 9", false)]
-    public void Output_that_is_not_an_owner_a_mode_a_device_and_an_inode_is_refused(string statOutput, bool bsd)
+    [InlineData("1000 81a4 dev 131077 1761768000.123456789", false)]
+    [InlineData("1000 81a4 2049 inode 1761768000.123456789", false)]
+    [InlineData("1000 81a4 2049 131077", false)]
+    [InlineData("1000 81a4 2049 131077 soon", false)]
+    [InlineData("1000 81a4 2049 131077 -1761768000.5", false)]
+    [InlineData("1000 81a4 2049 131077 1e9", false)]
+    [InlineData("1000 81a4 2049 131077 1761768000,5", false)]
+    [InlineData("1000 81a4 2049 131077 1761768000.123456789 9", false)]
+    public void Output_that_is_not_an_owner_a_mode_a_device_an_inode_and_a_change_time_is_refused(string statOutput, bool bsd)
     {
         RootFacts.FactsOfStat("/r/x", statOutput, bsd).Failed().Should().BeTrue();
     }
 
     [Theory]
-    [InlineData("1000 81a4 2049 131077", false, 2049UL, 131077UL, FileKind.Regular)]
-    [InlineData("1000 100644 16777234 8590138", true, 16777234UL, 8590138UL, FileKind.Regular)]
-    [InlineData("1000 41ed 64769 2", false, 64769UL, 2UL, FileKind.Directory)]
-    [InlineData("1000 40755 16777234 1", true, 16777234UL, 1UL, FileKind.Directory)]
-    [InlineData("1000 11a4 21 9", false, 21UL, 9UL, FileKind.Fifo)]
-    [InlineData("1000 10644 21 9", true, 21UL, 9UL, FileKind.Fifo)]
-    [InlineData("1000 c1ed 21 9", false, 21UL, 9UL, FileKind.Socket)]
-    [InlineData("1000 21b6 21 9", false, 21UL, 9UL, FileKind.CharacterDevice)]
-    [InlineData("1000 61b0 21 9", false, 21UL, 9UL, FileKind.BlockDevice)]
-    [InlineData("1000 81a4 18446744073709551615 18446744073709551615", false, ulong.MaxValue, ulong.MaxValue, FileKind.Regular)]
+    [InlineData("1000 81a4 2049 131077 1761768000.123456789", false, 2049UL, 131077UL, FileKind.Regular)]
+    [InlineData("1000 100644 16777234 8590138 1761768000.123456789", true, 16777234UL, 8590138UL, FileKind.Regular)]
+    [InlineData("1000 41ed 64769 2 1761768000.123456789", false, 64769UL, 2UL, FileKind.Directory)]
+    [InlineData("1000 40755 16777234 1 1761768000.123456789", true, 16777234UL, 1UL, FileKind.Directory)]
+    [InlineData("1000 11a4 21 9 1761768000.123456789", false, 21UL, 9UL, FileKind.Fifo)]
+    [InlineData("1000 10644 21 9 1761768000.123456789", true, 21UL, 9UL, FileKind.Fifo)]
+    [InlineData("1000 c1ed 21 9 1761768000.123456789", false, 21UL, 9UL, FileKind.Socket)]
+    [InlineData("1000 21b6 21 9 1761768000.123456789", false, 21UL, 9UL, FileKind.CharacterDevice)]
+    [InlineData("1000 61b0 21 9 1761768000.123456789", false, 21UL, 9UL, FileKind.BlockDevice)]
+    [InlineData("1000 81a4 18446744073709551615 18446744073709551615 1761768000.123456789", false, ulong.MaxValue, ulong.MaxValue, FileKind.Regular)]
     public void The_device_the_inode_and_the_kind_come_out_of_the_one_stat_line(string statOutput, bool bsd, ulong device, ulong inode, FileKind kind)
     {
         var facts = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd).Ok();
 
-        facts.Identity.Should().Be(new FileIdentity(device, inode, kind));
+        facts.Identity.Should().Be(new FileIdentity(device, inode, kind, 1761768000.123456789m));
     }
 
     [Fact]
     public void Two_stat_lines_that_name_two_inodes_are_two_files()
     {
-        var judged = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077", false).Ok();
-        var swapped = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131078", false).Ok();
+        var judged = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077 1761768000.123456789", false).Ok();
+        var swapped = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131078 1761768000.123456789", false).Ok();
 
         RootTrust.Changes(judged, swapped).Should().Equal("inode");
-        RootTrust.Changes(judged, RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077", false).Ok()).Should().BeEmpty();
+        RootTrust.Changes(judged, RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077 1761768000.123456789", false).Ok()).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("1000 81a4 2049 131077 1761768000.123456789", false, "1761768000.123456789")]
+    [InlineData("1000 100644 16777234 8590138 1761768000.000000001", true, "1761768000.000000001")]
+    [InlineData("1000 81a4 2049 131077 1761768000", false, "1761768000")]
+    public void The_change_time_comes_out_of_the_same_stat_line_with_its_nanoseconds(string statOutput, bool bsd, string expected)
+    {
+        var facts = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd).Ok();
+
+        facts.Identity.Ctime.Should().Be(decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void Two_stat_lines_that_differ_only_in_the_change_time_are_one_inode_changed_in_between()
+    {
+        var judged = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077 1761768000.123456789", false).Ok();
+        var touched = RootFacts.FactsOfStat("/r/experiment.json", "1000 81a4 2049 131077 1761768000.123456790", false).Ok();
+
+        RootTrust.Changes(judged, touched).Should().Equal("ctime");
+    }
+
+    [Fact]
+    public async Task A_link_made_and_removed_again_moves_the_change_time_of_a_real_file_though_its_inode_stays()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("change times are read with GNU stat here");
+            return;
+        }
+        using var temp = new TempFolder();
+        var file = temp.File("{}", "experiment.json");
+        var before = (await RootFacts.FileFactsAsync(file, CancellationToken.None)).Ok();
+        var keep = temp.Combine(".keep");
+        await ExperimentRoot.HardLinkAsync(file, keep);
+        File.Delete(keep);
+        var after = (await RootFacts.FileFactsAsync(file, CancellationToken.None)).Ok();
+
+        after.Identity.Inode.Should().Be(before.Identity.Inode, "the swap and swap back leaves the same inode under the name");
+        RootTrust.Changes(before, after).Should().Equal("ctime");
     }
 
     [Fact]

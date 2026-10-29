@@ -72,10 +72,10 @@ public static class RootFacts
         return said.Match(text => Judge(full, text), reason => new FactsRead.Unread($"the owner of {full} cannot be read: {reason}"));
     }
 
-    /// <summary>GNU <c>stat -c '%u %f %d %i'</c> (owner, the raw mode in hex, the device, the inode); BSD and macOS <c>stat -f '%u %p %d %i'</c> (owner, the raw mode in octal, the device, the inode). The raw mode carries the
+    /// <summary>GNU <c>stat -c '%u %f %d %i %.9Z'</c> (owner, the raw mode in hex, the device, the inode, the change time in seconds with nine decimals); BSD and macOS <c>stat -f '%u %p %d %i %Fc'</c> (the same, the mode in octal). The raw mode carries the
     /// file type in its high bits, so the type is decided on bits and never on a word <c>stat</c> prints in the user's language. Without <c>-L</c>: the file itself.</summary>
     private static string[] StatArguments(string full) =>
-        OperatingSystem.IsMacOS() ? ["-f", "%u %p %d %i", full] : ["-c", "%u %f %d %i", full];
+        OperatingSystem.IsMacOS() ? ["-f", "%u %p %d %i %Fc", full] : ["-c", "%u %f %d %i %.9Z", full];
 
     /// <summary>The facts in one line of <c>stat</c> output, or why the line cannot be used. A symbolic link is refused, naming where it points: the trust check
     /// judges the file itself, not a link that can be re-pointed. Public so the parser can be tested over the raw outputs of both <c>stat</c> flavours.</summary>
@@ -86,13 +86,13 @@ public static class RootFacts
             line => line.IsLink
                 ? new FactsRead.Refused(
                     $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
-                : new FactsRead.Read(new FileFacts(full, line.Uid, line.Permissions) { Identity = new FileIdentity(line.Device, line.Inode, line.Kind) }),
+                : new FactsRead.Read(new FileFacts(full, line.Uid, line.Permissions) { Identity = new FileIdentity(line.Device, line.Inode, line.Kind, line.Ctime) }),
             reason => (FactsRead)new FactsRead.Unread($"stat answered '{text}' for {full}: {reason}"));
 
     private static FactsRead Judge(string full, string text) => ReadStat(full, text, OperatingSystem.IsMacOS());
 
-    /// <summary>One line of <c>stat</c>: <c>uid rawmode device inode</c>. The raw mode is S_IFMT (<c>0xF000</c>) type bits over the permission bits (<c>0xFFF</c>, which includes set-id and sticky).</summary>
-    private sealed record StatLine(int Uid, int RawMode, ulong Device, ulong Inode)
+    /// <summary>One line of <c>stat</c>: <c>uid rawmode device inode ctime</c>. The raw mode is S_IFMT (<c>0xF000</c>) type bits over the permission bits (<c>0xFFF</c>, which includes set-id and sticky).</summary>
+    private sealed record StatLine(int Uid, int RawMode, ulong Device, ulong Inode, decimal Ctime)
     {
         private const int TypeMask = 0xF000;
         private const int PermissionMask = 0xFFF;
@@ -117,9 +117,9 @@ public static class RootFacts
         public static Outcome<StatLine> Read(string text, bool bsd)
         {
             var parts = text.Split(' ');
-            return parts.Length == 4 && TryOwnerAndMode(parts[0], parts[1], bsd, out var uid, out var raw) && TryIdentity(parts[2], parts[3], out var device, out var inode)
-                ? Outcome<StatLine>.Success(new StatLine(uid, raw, device, inode))
-                : Outcome<StatLine>.Failure("expected an owner, a raw mode, a device and an inode");
+            return parts.Length == 5 && TryOwnerAndMode(parts[0], parts[1], bsd, out var uid, out var raw) && TryIdentity(parts[2], parts[3], parts[4], out var device, out var inode, out var ctime)
+                ? Outcome<StatLine>.Success(new StatLine(uid, raw, device, inode, ctime))
+                : Outcome<StatLine>.Failure("expected an owner, a raw mode, a device, an inode and a change time");
         }
 
         private static bool TryOwnerAndMode(string owner, string mode, bool bsd, out int uid, out int raw)
@@ -128,11 +128,13 @@ public static class RootFacts
             return int.TryParse(owner, NumberStyles.None, CultureInfo.InvariantCulture, out uid) && TryRaw(mode, bsd, out raw);
         }
 
-        private static bool TryIdentity(string device, string inode, out ulong deviceNumber, out ulong inodeNumber)
+        private static bool TryIdentity(string device, string inode, string changed, out ulong deviceNumber, out ulong inodeNumber, out decimal ctime)
         {
             inodeNumber = 0;
+            ctime = 0m;
             return ulong.TryParse(device, NumberStyles.None, CultureInfo.InvariantCulture, out deviceNumber)
-                && ulong.TryParse(inode, NumberStyles.None, CultureInfo.InvariantCulture, out inodeNumber);
+                && ulong.TryParse(inode, NumberStyles.None, CultureInfo.InvariantCulture, out inodeNumber)
+                && decimal.TryParse(changed, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out ctime);
         }
 
         private static bool TryRaw(string digits, bool octal, out int raw)

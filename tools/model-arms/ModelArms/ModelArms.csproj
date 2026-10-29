@@ -11,6 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The tests stand inside the gate's race window and inside the dispatch through two seams that production code must not be able to build: a
+         GateSeams that reads other facts than the host's would skip the trust check. They are internal; only the test assembly sees them. -->
+    <InternalsVisibleTo Include="Bench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ModelArms.Core\ModelArms.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\Bench.Hosting\Bench.Hosting.csproj" />
