@@ -1355,6 +1355,11 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
     readers before returning or rethrowing (`Task.WhenAll` in a try that rethrows the first fault) and pin it with a test where both sinks
     throw. (R2) Acceptance criterion 4's encoding half (UTF-8 only when a sink is given) is not pinned: on Linux the default is UTF-8, so
     only a Windows run could observe it; `Every_existing_launch_without_a_stderr_sink_is_unchanged` says so in its doc when E2 touches it.
+16. **The arm's child environment differs from the shell child's on purpose (E1.S6 review R2, R4):** `COAI_*`, every non-claude
+    secret-named variable and the shell's exported `TPL_*` are not passed (D19); `PWD` is set to the step's working directory and `OLDPWD`
+    dropped, as the shell's `(cd "$DIR" && …)` did. **Owner of the gap:** the E2 gate step (E2.S6) decides how a coai provider's
+    key reaches the coai server — through `mcp-coai.json`'s `env`, never by widening the arm's environment — and pins it with a test;
+    providers that sign in through their own CLI homes (part 6's codex, agy, vibe) are unaffected.
 
 ## 9. Definition of Done — epic E1
 
