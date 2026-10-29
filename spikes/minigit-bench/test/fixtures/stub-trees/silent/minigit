@@ -1,0 +1,3 @@
+#!/bin/sh
+# STUB: a binary that prints nothing and succeeds.
+exit 0

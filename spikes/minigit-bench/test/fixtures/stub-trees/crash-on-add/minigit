@@ -1,0 +1,4 @@
+#!/bin/sh
+# STUB: a binary that crashes (exit 139, a SIGSEGV) on add and does nothing else.
+[ "$1" = add ] && exit 139
+exit 0
