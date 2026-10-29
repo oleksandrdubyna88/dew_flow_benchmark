@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: git submodule update --init --depth 1 .claude/rules/shared
+      - run: git submodule update --init --depth 1 .agents/conventions
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -96,16 +96,16 @@ jobs:
             curl -fsS -o /dev/null http://127.0.0.1:5411/api/bench/health && break
             sleep 2
           done
-          node .claude/rules/shared/tools/http-run.mjs --env local --target http://127.0.0.1:5411
+          node .agents/conventions/tools/http-run.mjs --env local --target http://127.0.0.1:5411
 
       - name: Every route has a request
-        run: node .claude/rules/shared/tools/http-coverage.mjs --source src --source hosts
+        run: node .agents/conventions/tools/http-coverage.mjs --source src --source hosts
 
       - name: The post-deploy checklist is still well formed
-        run: node .claude/rules/shared/tools/post-deploy-check.mjs
+        run: node .agents/conventions/tools/post-deploy-check.mjs
 
   # The plan lifecycle, enforced from the shared rules repository rather than four times over — the check
-  # reads markdown, not code, so one implementation serves every consumer (see .claude/rules/shared/README.md).
+  # reads markdown, not code, so one implementation serves every consumer (see .agents/conventions/README.md).
   # Only that ONE submodule is fetched: `submodules: true` would drag every other one in for a markdown walk.
   # Node is preinstalled on the runner, so a Rust repository pays no toolchain for this.
   plans:
@@ -117,10 +117,10 @@ jobs:
           persist-credentials: false
 
       - name: Fetch the shared rules
-        run: git submodule update --init --depth 1 .claude/rules/shared
+        run: git submodule update --init --depth 1 .agents/conventions
 
       - name: Plan lifecycle
-        run: node .claude/rules/shared/tools/plan-lifecycle.mjs
+        run: node .agents/conventions/tools/plan-lifecycle.mjs
       # The protection `main` is supposed to have is a FILE now — `.github/branch-protection.json` —
       # because branch protection is the one part of a repository's CI that is not IN the repository.
       # Nothing makes GitHub read it; what it buys is that the intent is reviewed, and that the drift
@@ -133,21 +133,21 @@ jobs:
         run: node .github/scripts/branch-protection.mjs --selftest
 
       # Every submodule pin must equal its remote's tip — "a rule change and the pin bumps are one
-      # task" is a check now, not a habit (see .claude/rules/shared/README.md, Editing discipline).
+      # task" is a check now, not a habit (see .agents/conventions/README.md, Editing discipline).
       - name: Pin check
-        run: node .claude/rules/shared/tools/pin-check.mjs
+        run: node .agents/conventions/tools/pin-check.mjs
 
       # The review-gate block is a shared rule; a copy of it in this repository is the drift the
       # rule exists to prevent. The panel can only see a repo somebody opened in VS Code.
       - name: Gate snippet
-        run: node .claude/rules/shared/tools/gate-snippet-check.mjs
+        run: node .agents/conventions/tools/gate-snippet-check.mjs
 
       # The root Directory.Build.rsp is really there and really says -nr:false. Measured on this
       # family's machine: five sessions building at once held 72 MSBuild workers and 10.7 GB,
       # because a worker busy in one build cannot be reused by another
-      # (see .claude/rules/shared/csharp/dotnet-build.md). A repository with no C# passes without an opinion.
+      # (see .agents/conventions/csharp/dotnet-build.md). A repository with no C# passes without an opinion.
       - name: Build flags
-        run: node .claude/rules/shared/tools/build-flags-check.mjs
+        run: node .agents/conventions/tools/build-flags-check.mjs
 
 
   # ---------------------------------------------------------------------------
