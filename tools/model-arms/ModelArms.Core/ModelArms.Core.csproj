@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The model-arms module's decisions (todo/PLAN_model_arms.md D1): PURE BY CONSTRUCTION. A type here opens no
+       file, starts no process, reads no clock and no environment; the facts it needs arrive as parameters. That is
+       why it references the domain and the application layer's ports and nothing that does IO — no Infrastructure,
+       no EF Core, no Npgsql, no packages at all. ModelArmsArchitectureTests holds it there. The console project
+       (../ModelArms) is the only place the module touches the world. -->
+
+  <PropertyGroup>
+    <RootNamespace>ModelArms.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Bench.Domain\Bench.Domain.csproj" />
+    <ProjectReference Include="..\..\..\src\Bench.Application\Bench.Application.csproj" />
+  </ItemGroup>
+
+</Project>
