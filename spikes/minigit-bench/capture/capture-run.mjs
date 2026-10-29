@@ -17,8 +17,8 @@ const failed = reason => fail(reason, { exit: EXIT_CAPTURE_FAILED });
  * Kill the child's whole process group (and the child): the spikes' one kill implementation, `killTree` of policy-ab-quick/lib/proc.mjs.
  * Called from timers and stream callbacks, so it NEVER throws; a failure other than a gone group is reported through `log`.
  */
-export function killTree(child, { kill = process.kill.bind(process), log = () => {} } = {}) {
-  killProcessTree(child.pid, { kill, log });
+export function killTree(child, opts = {}) {
+  killProcessTree(child.pid, opts);
 }
 
 /** Copy the CLI's transcripts into `transcripts/` (the shared copy of lib/transcripts.mjs): ok(relative paths), or a failure naming every refused entry. */
