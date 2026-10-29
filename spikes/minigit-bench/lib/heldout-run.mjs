@@ -17,7 +17,9 @@ import { runBounded } from './run.mjs';
 
 export const PYTHON = '/usr/bin/python3';
 export const SUITE_ENC = fileURLToPath(new URL('../heldout/suite.enc', import.meta.url));
-export const defaultWorkRoot = () => path.join(os.homedir(), 'rsd', 'minigit');
+export const defaultWorkRoot = (home = os.homedir()) => path.join(home, 'rsd', 'minigit');
+/** Where the clear held-out sources live while they are authored (outside every repository). */
+export const heldoutSrcDir = (home = os.homedir()) => path.join(defaultWorkRoot(home), 'heldout-src');
 const RUNNER_ENV = Object.freeze({ PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' });
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -28,7 +30,7 @@ const inside = (child, root) => {
 const sameOrInside = (child, root) => child === root || inside(child, root);
 
 /** realpath of the longest existing prefix, then the rest appended: a link anywhere on the way is resolved before the check. */
-function realpathDeep(p) {
+export function realpathDeep(p) {
   const rest = [];
   let cur = path.resolve(p);
   while (!existsSync(cur) && path.dirname(cur) !== cur) {

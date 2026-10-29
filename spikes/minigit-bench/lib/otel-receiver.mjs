@@ -4,7 +4,7 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { isJson, readBody } from './http-body.mjs';
+import { isJson, rawBodyLine, readBody } from './http-body.mjs';
 import { apiRequests, decodeOtlpLogs } from './otel-decode.mjs';
 
 const PATHS = Object.freeze(['/v1/logs', '/v1/metrics']);
@@ -45,7 +45,7 @@ function makeHandler({ append, counters, store }) {
 
   function accept(req, res, text) {
     const receivedAt = Date.now();
-    append('otel-raw.ndjson', { receivedAt, path: req.url, contentType: req.headers['content-type'], body: text });
+    append('otel-raw.ndjson', rawBodyLine(req, text, receivedAt));
     if (req.url === '/v1/logs') {
       const decoded = decodeOtlpLogs(text);
       if (!decoded.ok) {
@@ -70,7 +70,7 @@ function makeHandler({ append, counters, store }) {
     }
     const body = await readBody(req);
     if (!body.ok) return refuse(res, body.reason === 'too large' ? 413 : 400, req, body.reason);
-    return accept(req, res, body.buffer.toString('utf8'));
+    return accept(req, res, body.value.toString('utf8'));
   };
 }
 

@@ -1,6 +1,6 @@
 // Reading and writing capture directories (I/O at the edge): load one for the verdicts, sanitise one into a fixture directory.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from '../lib/result.mjs';
 import { buildMap, collectAttrSecrets, leakScan, localContext, sanitisePath, sanitiseText } from './sanitise.mjs';
@@ -46,9 +46,11 @@ export function loadCapture(dir) {
 
 /**
  * Copy a raw capture into a public fixture directory through the sanitiser. Everything is sanitised and scanned IN MEMORY first; only a
- * clean result is written, so a failed sanitise leaves nothing behind. `to` must not exist or be empty.
+ * clean result is written, and it is written into a sibling staging directory that is renamed to `to` after EVERY write succeeded.
+ * A failed write removes the staging directory, so a failed sanitise leaves nothing behind and a retry is not blocked.
+ * `to` must not exist or be empty; `write(file, text)` is the one write seam.
  */
-export function sanitiseCapture({ from, to, token = null, ctx = localContext() }) {
+export function sanitiseCapture({ from, to, token = null, ctx = localContext(), write = writeFileSync }) {
   if (existsSync(to) && readdirSync(to).length > 0) return fail(`${to} is not empty: a fixture is never overwritten`);
   const raw = path.resolve(from);
   const files = readCaptureFiles(raw);
@@ -59,11 +61,25 @@ export function sanitiseCapture({ from, to, token = null, ctx = localContext() }
   const clean = files.value.map(f => ({ relPath: sanitisePath(f.relPath, map), text: sanitiseText(f.text, map) }));
   const findings = leakScan(clean, { ...ctx, out: raw, token });
   if (findings.length > 0) return fail(`the sanitised copy still holds ${findings.length} leak(s); nothing was written`, { findings });
-  for (const f of clean) {
-    mkdirSync(path.dirname(path.join(to, f.relPath)), { recursive: true });
-    writeFileSync(path.join(to, f.relPath), f.text);
+  return stageThenPlace({ to, files: clean, write });
+}
+
+/** Write `files` ({ relPath, text }) under a fresh sibling of `to`, then rename it onto `to`; any failure removes the staging directory. */
+function stageThenPlace({ to, files, write }) {
+  mkdirSync(path.dirname(to), { recursive: true });
+  const staging = mkdtempSync(path.join(path.dirname(to), `.${path.basename(to)}.staging-`));
+  try {
+    chmodSync(staging, 0o777 & ~process.umask()); // mkdtemp makes it 0700; a fixture is an ordinary directory
+    for (const f of files) {
+      mkdirSync(path.dirname(path.join(staging, f.relPath)), { recursive: true });
+      write(path.join(staging, f.relPath), f.text);
+    }
+    renameSync(staging, to);
+  } catch (e) {
+    rmSync(staging, { recursive: true, force: true });
+    return fail(`the fixture could not be written (${e.code ?? e.name}: ${e.message}); nothing was left behind in ${path.dirname(to)}`);
   }
-  return ok({ files: clean.map(f => f.relPath) });
+  return ok({ files: files.map(f => f.relPath) });
 }
 
 /** sha256 of a file's bytes (the sanitiser's, recorded in CAPTURE.md). */

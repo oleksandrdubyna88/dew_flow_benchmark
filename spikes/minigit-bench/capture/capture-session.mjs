@@ -11,7 +11,8 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { crosscheckPolicyFrom } from './policy-input.mjs';
 import { capturePlan } from './capture-plan.mjs';
-import { findOnPath, outProblems, readToken, tokenStatus } from './capture-env.mjs';
+import { outProblems, readToken, tokenStatus } from './capture-env.mjs';
+import { findOnPath } from '../lib/find-on-path.mjs';
 import { loadCapture, sanitiseCapture, sha256File } from './capture-files.mjs';
 import { runCapture } from './capture-run.mjs';
 import { computeVerdicts, decisionsOf, renderCapture } from './verdicts.mjs';
@@ -34,7 +35,7 @@ function parse(argv, options) {
 }
 
 function dryRun({ out, env, home, io }) {
-  const token = tokenStatus({ env, home });
+  const token = tokenStatus({ home });
   const planned = capturePlan({ out, spikeDir: SPIKE, port: DRY_RUN_PORT, token: '<not read in a dry run>', env });
   if (!planned.ok) { say(io.err, planned.reason); return ENVIRONMENT; }
   const plan = planned.value;
@@ -51,20 +52,26 @@ async function run({ values, env, io }) {
   const home = os.homedir();
   const out = path.resolve(values.out);
   if (values['dry-run']) return dryRun({ out, env, home, io });
-  const token = readToken({ env, home });
+  const token = readToken({ home });
   if (!token.ok) { say(io.err, token.reason); return ENVIRONMENT; }
   const claude = findOnPath('claude', env.PATH);
   if (!claude) { say(io.err, 'the claude executable is not on PATH'); return ENVIRONMENT; }
   const problems = outProblems(out, { home });
   if (problems.length > 0) { problems.forEach(p => say(io.err, p)); return ENVIRONMENT; }
+  say(io.out, `capturing into ${out} (progress: ${path.join(out, 'capture.log')}); this is the one paid session and can take minutes`);
   const result = await runCapture({ out, spikeDir: SPIKE, exe: claude, token: token.value, env });
-  if (!result.ok) { say(io.err, `capture failed: ${result.reason} (artefacts, if any, are in ${out})`); return FAILED; }
+  if (!result.ok) {
+    say(io.err, `capture failed: ${result.reason} (artefacts, if any, are in ${out})`);
+    say(io.out, `capture status: failed (exit ${FAILED}); see ${path.join(out, 'capture.log')}`);
+    return FAILED;
+  }
   say(io.out, `captured into ${out}: claude ${result.value.meta.cliVersion}, cost $${result.value.costUsd} (count it as pilot spend), ${result.value.transcripts.length} transcript file(s)`);
+  say(io.out, `capture status: ok (exit ${OK})`);
   return OK;
 }
 
 function sanitise({ values, env, io }) {
-  const token = readToken({ env, home: os.homedir() });
+  const token = readToken({ home: os.homedir() });
   const result = sanitiseCapture({ from: path.resolve(values.from), to: path.resolve(values.to), token: token.ok ? token.value : null });
   if (result.ok) { say(io.out, `sanitised ${result.value.files.length} file(s) into ${values.to}`); return OK; }
   say(io.err, result.reason);
