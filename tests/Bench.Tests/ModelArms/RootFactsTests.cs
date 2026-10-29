@@ -44,6 +44,20 @@ public sealed class RootFactsTests
     }
 
     [Fact]
+    public void The_git_top_of_a_path_spelled_through_a_link_is_asked_of_where_the_kernel_puts_it()
+    {
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var checkout = temp.Folder("checkout");
+        Directory.CreateDirectory(System.IO.Path.Combine(checkout, ".git"));
+        Directory.CreateDirectory(System.IO.Path.Combine(checkout, "a"));
+        var link = temp.Combine("L");
+        File.CreateSymbolicLink(link, System.IO.Path.Combine(checkout, "a"));
+
+        RootFacts.GitTopOf(System.IO.Path.Combine(link, "not", "yet", "made")).Should().Be(RootFacts.RealPathOf(checkout).Ok(), "the text has no checkout above it; the kernel's path does");
+    }
+
+    [Fact]
     public void A_path_with_no_git_ancestor_has_no_git_top()
     {
         using var temp = new TempFolder();

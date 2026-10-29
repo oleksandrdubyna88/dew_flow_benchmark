@@ -32,8 +32,20 @@ public static class ExperimentFile
             reader.Add(problem);
         }
 
-        var experiment = reader.ParseObject(json, "experiment.json") is { } root ? Walk(reader, root, location) : null;
-        return Verdict(reader, experiment);
+        return Verdict(reader, Examined(reader, reader.ParseObject(json, "experiment.json"), location));
+    }
+
+    /// <summary>The walk over a file that parsed, then the one rule that holds for every string at any path: it is not still the template's placeholder.</summary>
+    private static Experiment? Examined(StrictJson reader, JsonObject? root, ExperimentLocation location)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        var experiment = Walk(reader, root, location);
+        UnfilledValues.Refuse(reader, root);
+        return experiment;
     }
 
     private static Outcome<Experiment> Verdict(StrictJson reader, Experiment? experiment) =>

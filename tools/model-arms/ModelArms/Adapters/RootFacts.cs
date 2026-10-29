@@ -12,9 +12,17 @@ public static class RootFacts
     private const UnixFileMode AnyExecute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
     /// <summary>The nearest ancestor-or-self of <paramref name="path"/> holding a <c>.git</c> file (a worktree) or folder (a clone); the empty string
-    /// when there is none. The path need not exist yet: <c>init</c> asks about a root it has not made.</summary>
+    /// when there is none. The path need not exist yet: <c>init</c> asks about a root it has not made. The question is asked of where the path REALLY is — the kernel's
+    /// answer for its nearest existing ancestor, with the absent segments appended (<c>ExecutableResolution.RealPathClimbing</c>) — because a root spelled through a link
+    /// into a checkout has no checkout above its text; the spelling is asked second, for a path the kernel could not place, so a refusal is never lost.</summary>
     public static string GitTopOf(string path) =>
-        AncestorsOrSelf(path).FirstOrDefault(folder => Path.Exists(Path.Combine(folder, ".git"))) ?? string.Empty;
+        TopOf(RealAncestry(path)) is { Length: > 0 } real ? real : TopOf(AncestorsOrSelf(path));
+
+    private static string TopOf(IEnumerable<string> folders) =>
+        folders.FirstOrDefault(folder => Path.Exists(Path.Combine(folder, ".git"))) ?? string.Empty;
+
+    private static IEnumerable<string> RealAncestry(string path) =>
+        ExecutableResolution.RealPathClimbing(Path.GetFullPath(path), Host).Match<IEnumerable<string>>(AncestorsOrSelf, _ => []);
 
     /// <summary>The nearest ancestor-or-self of the binary's folder that holds the benchmark solution file; the empty string for a binary installed elsewhere.</summary>
     public static string ThisRepository(string baseDirectory) =>

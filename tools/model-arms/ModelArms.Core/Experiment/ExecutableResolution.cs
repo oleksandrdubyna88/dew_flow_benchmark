@@ -177,6 +177,9 @@ public static class ExecutableResolution
     private static Outcome<string> RealRoot(string root, HostPaths host) =>
         Path.IsPathFullyQualified(root) ? Climb(root, host) : Outcome<string>.Success(root);
 
+    /// <summary>Where <paramref name="path"/> will really be once it is made: <see cref="Climb"/> over the host's answers. A root <c>init</c> has not made yet is placed by its nearest existing ancestor.</summary>
+    public static Outcome<string> RealPathClimbing(string path, HostPaths host) => Climb(path, host);
+
     /// <summary>Where a path really is: its own real path, else its nearest ancestor's with the remaining segments appended — climbing over ABSENT components only.
     /// A component that exists and cannot be resolved, or that the kernel cannot say anything about, is a failure carrying why.</summary>
     private static Outcome<string> Climb(string path, HostPaths host) => ClimbFrom(path, path, host);

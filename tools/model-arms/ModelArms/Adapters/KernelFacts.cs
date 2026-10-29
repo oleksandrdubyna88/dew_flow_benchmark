@@ -30,6 +30,8 @@ internal static class KernelFacts
     // The two errno POSIX defines as "no such entry along the path"; the same on every Linux architecture (asm-generic/errno-base.h). The one place the module reads an errno number.
     private const int NoSuchEntry = 2;
     private const int NotADirectory = 20;
+    private const int AlreadyExists = 17;
+    private const uint OwnerOnlyFolder = 0x1C0; // 0700
 
     public static int EffectiveUid() => IsUnixLike() ? (int)Geteuid() : -1;
 
@@ -70,6 +72,29 @@ internal static class KernelFacts
             return Outcome<bool>.Failure($"'{path}': statx is not available in this libc ({ex.Message})");
         }
     }
+
+    /// <summary>Makes ONE new folder, exclusively: <c>mkdir(2)</c> answers <c>EEXIST</c> for anything at the name — a folder, a file, a link live or dangling — and the answer is
+    /// <see cref="FolderMade.AlreadyThere"/>, so a folder someone else made between the caller's existence check and this call is never adopted (<c>Directory.CreateDirectory</c> adopts it
+    /// silently). The mode asked for is <c>0700</c>, which the umask may narrow: the caller sets the mode explicitly afterwards. Linux only; any other platform is refused as unprobed.</summary>
+    public static FolderMade MakeFolder(string path)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return new FolderMade.Failed("no probed kernel mkdir on this platform — refused rather than assumed (D17)");
+        }
+
+        try
+        {
+            return MkdirCall(path, OwnerOnlyFolder) == 0 ? new FolderMade.Made() : Refused(path, Marshal.GetLastPInvokeError());
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return new FolderMade.Failed($"mkdir is not available in this libc ({ex.Message}) — refused rather than assumed (D17)");
+        }
+    }
+
+    private static FolderMade Refused(string path, int errno) =>
+        errno == AlreadyExists ? new FolderMade.AlreadyThere() : new FolderMade.Failed($"'{path}': {Marshal.GetPInvokeErrorMessage(errno)}");
 
     /// <summary>Pure over the seven fields: the mask check, the permission and type bits of the mode, the device as one comparison key (<c>major &lt;&lt; 32 | minor</c> — not
     /// <c>makedev</c>'s encoding), the change time to the nanosecond.</summary>
@@ -128,6 +153,9 @@ internal static class KernelFacts
 
     [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
     private static extern int StatxCall(int dirfd, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags, uint mask, out StatxBuffer buffer);
+
+    [DllImport("libc", EntryPoint = "mkdir", SetLastError = true)]
+    private static extern int MkdirCall([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
 
     [DllImport("libc", EntryPoint = "geteuid")]
     private static extern uint Geteuid();
