@@ -19,6 +19,13 @@ export const chdir = p => ['--chdir', p];
 export const setenvAll = env => ['--clearenv', ...Object.keys(env).sort().flatMap(k => ['--setenv', k, String(env[k])])];
 
 /**
+ * The paths both boxes replace with an empty tmpfs: the operator's home (always), /mnt, /run, /tmp and /var/tmp (when the host has them;
+ * a directory the host lacks cannot be mounted over on a read-only root). One list, so the scoring box and the agent box cannot drift.
+ */
+export const hiddenPaths = ({ operatorHome, exists = existsSync }) =>
+  Object.freeze([operatorHome, '/mnt', '/run', '/tmp', '/var/tmp'].filter(p => p === operatorHome || exists(p)));
+
+/**
  * The scoring environment: a fixed allow-list, never the operator's. `nugetCache` / `npmCache` are the per-scoring copies of the
  * seeded offline caches; with none given each cache lives inside `home`.
  */
@@ -49,7 +56,7 @@ export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache }
  * namespace, an environment of the allow-list only. A directory the host lacks is not mounted over (bwrap cannot create it on a ro root).
  */
 export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, operatorHome = os.homedir(), exists = existsSync }) {
-  const hidden = [operatorHome, '/mnt', '/run', '/tmp', '/var/tmp'].filter(p => p === operatorHome || exists(p));
+  const hidden = hiddenPaths({ operatorHome, exists });
   return Object.freeze([
     'bwrap',
     ...roRoot(),
