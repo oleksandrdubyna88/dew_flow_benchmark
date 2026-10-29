@@ -40,6 +40,16 @@ public sealed class ArchitectureTests
     }
 
     [Fact]
+    public void Hosting_references_nothing_beyond_the_runtime()
+    {
+        // The CLI hosts' shared plumbing (flag parser, exit codes, shutdown signal): a leaf, so a host that
+        // takes it takes no layer along. Two exes share it and neither may reference the other.
+        Referenced("Bench.Hosting.dll").Should().OnlyContain(
+            r => IsRuntime(r),
+            "the hosting plumbing is a leaf: a host that needs a parser must not inherit a layer with it");
+    }
+
+    [Fact]
     public void Nothing_but_the_Application_layer_may_reference_the_Delivered_module()
     {
         // The module owns every RULE and the stage owns the IO. A surface reaching past the stage into the
