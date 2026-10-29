@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
+using ModelArms.Core.Launch;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -25,6 +26,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(ExperimentFile), typeof(ArmNames), typeof(ExecutableRule), typeof(StepKinds),
 
         // E1.S6
+        typeof(StepLaunch), typeof(ArmChildEnvironment),
 
         // E1.S7
 
