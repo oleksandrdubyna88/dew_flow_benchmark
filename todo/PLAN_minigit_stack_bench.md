@@ -1,6 +1,6 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: a new spike `spikes/minigit-bench/` in this repository
+> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2–E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
 > (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
 > `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.
@@ -672,7 +672,7 @@ Cornerstones: 1 of 2 — E1.S3
 ### E1 — Measurement instruments: held-out suite and scorer, counters and the time partition (§15 steps 2–3 · 4 stories)
 
 - **Stories:** [PLAN_minigit_stack_bench_E1.md](PLAN_minigit_stack_bench_E1.md) — E1.S1–E1.S4; cornerstone **E1.S3**
-  (`model: fable`, the Claude counters and T1–T4; spec by Fable, the document holds an Opus draft).
+  (`model: fable`, the Claude counters and T1–T4; spec by Fable, which replaced Opus's draft).
 
 - **Goal:** correctness, cost and time instruments calibrated before any model touches the task (§2 O1–O5, O7; V5, V14).
 - **Scope:** §5.1–5.3 — `hashes.txt`, the visible-test edits, the scorer, the held-out suite by shape (state built by the

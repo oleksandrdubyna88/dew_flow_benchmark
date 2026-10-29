@@ -1,6 +1,7 @@
 # PLAN — E1 stories: the measurement instruments of the minigit stack bench (held-out suite and scorer, counters, the time partition)
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: epic E1 of
+> Status: **E1 implemented 2026-10-29 on `feat/minigit-bench-e1`; stays in todo/ until the parent plan is promoted (stories
+> documents promote with their parent).** Deviations: the dated amendments at the end of E1.S3 and E1.S4. Scope: epic E1 of
 > [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md) (§15 steps 2–3) — a new spike folder `spikes/minigit-bench/`
 > (inputs, scorer, held-out tooling, counters, partition, its own test runner) reusing `spikes/policy-ab-quick/lib` read-only.
 > Nothing in `policy-ab-quick` changes in this epic (its fixes are E2.S1), only E1.S3's step 0 launches `claude` and spends money — one capture session, ≤ $1.50, counted as pilot spend.
@@ -203,7 +204,7 @@ SPECs' first lines and finds none).
 **Model:** scenarios + brief Opus (this text and the outside brief) · code Sonnet · review Opus.
 
 **Goal.** A held-out suite written from the SPEC before any cell, stored in git ONLY as ciphertext, decrypted only into a
-scoring directory the session sandboxes cannot see, calibrated on two reference readings and planted mutants, and an
+scoring directory the session sandboxes cannot see, calibrated on reference readings (three after the S2 review: a, b and an independent b2) and planted mutants, and an
 adjudication tool that classes failures blind before it reveals the code.
 
 **The suite, by shape** (parent §5.3; the case list, the two references and the mutants are specified in
@@ -320,6 +321,23 @@ test/repo-scan.test.mjs`; `node spikes/minigit-bench/heldout-tool.mjs calibrate`
 in the clear dir and its count in the PR; no clear source, reference or mutant in any commit.
 
 ---
+
+### Amendment 2026-10-29 — what the S2 review changed (shape only; the case texts stay sealed)
+
+- **A third, independent reference, b2,** was written by an agent that saw only SPEC-v1/v2 and the visible scripts. It
+  scored 100 % of the scored cases in both phases on its first run, with no case changed. Its SPEC-open choices differ from
+  A and B on purpose (messages on stderr, usage errors exit 2, no trailing newline in stored files, no blank line between
+  log entries). B is kept, and the notes say it is a scripted variant of A, not an independent reading.
+- **Cores for v2's checkout, reset and rm,** so one broken command counts once. `heldoutScore` reports `percent` and
+  `defects`; the parent pre-registers which comparison uses which (§5.3, §11).
+- **SPEC-open details are tolerated in both directions** wherever a case had decided one: a trailing newline, an exit code
+  the SPEC does not state, an informational line on an empty diff.
+- **The host-side runner reads cell state defensively:** no symlink, FIFO or oversize read; output is bounded; every
+  exception fails one case; the runner's stderr never reaches a reason or the trace.
+- **The leak check** matches case-insensitive literals and 6-word shingles of every case row and mutant clause. It scans
+  commit messages and the branch's patches too. A paraphrase stays undetectable by design.
+- **Adjudication packets** replace runtime output whole and normalise abnormal exit codes, and the id map sits apart from
+  the packets, so step 1 cannot see the stack.
 
 ## E1.S3 — Claude counters: E/O/T views, dated prices, OTel receiver, T1–T4, the alias record (T-A1–T-A5, T-M1, T-C1)
 
