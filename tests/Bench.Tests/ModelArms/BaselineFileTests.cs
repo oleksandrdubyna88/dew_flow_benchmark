@@ -87,6 +87,43 @@ public sealed class BaselineFileTests
     }
 
     [Fact]
+    public void A_completed_run_with_a_non_zero_exit_and_no_named_failure_is_refused()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 2, [], 1200), Ran(1), string.Empty).Reason();
+
+        reason.Should().Contain("exited 2").And.Contain("named no failing test").And.Contain("absent is not zero");
+    }
+
+    [Fact]
+    public void A_suite_that_counted_zero_tests_is_refused()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 0, [], 0), Ran(1), string.Empty).Reason();
+
+        reason.Should().Contain("counted 0 tests");
+    }
+
+    [Fact]
+    public void More_named_failures_than_tests_is_refused()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 1, ["a", "b"], 1), Ran(1), string.Empty).Reason();
+
+        reason.Should().Contain("2 failing tests of 1");
+    }
+
+    [Fact]
+    public void Every_composition_problem_comes_back_at_once_and_a_green_run_is_accepted()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 2, [], 1200), new SuiteRun(true, 0, [], 0), string.Empty).Reason();
+
+        var lines = reason.Split('\n');
+        lines.Should().HaveCount(2);
+        lines.Should().ContainSingle(l => l.Contains("the main suite", StringComparison.Ordinal));
+        lines.Should().ContainSingle(l => l.Contains("the extension suite", StringComparison.Ordinal));
+        BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 0, [], 1200), Ran(300), string.Empty).Ok().SuiteTotal.Should().Be(1200, "exit 0, no failures and a count is the green baseline");
+        BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 1, ["Mcp.A"], 1200), Ran(300), string.Empty).Failed().Should().BeFalse("the names are the measurement, the exit code is the runner's opinion");
+    }
+
+    [Fact]
     public void A_negative_total_or_a_blank_host_is_refused_at_composition()
     {
         BaselineFile.Compose(BaseSha(), At, "h", Ran(-1), Ran(1), string.Empty).Reason().Should().Contain("total");

@@ -321,26 +321,45 @@ first requirement the host does not meet, as a sentence naming the path and the 
 **`RootTrust.Decide(posix, currentUid, files, root)`** (D17 a) judges facts the console read. Off POSIX the answer is `NotPerformed` with the line
 `the ownership and mode check of <root> was not performed — POSIX only (D17)`: a check that was not performed is not a check that passed. On POSIX each file whose owner is not the
 current user, and each whose mode has a group-write or other-write bit, is a problem of its own naming the path (the mode as three octal digits, with the
-`chmod go-w` to run); none is `Trusted`. The caller passes the root folder, `experiment.json` and `scenarios.json`.
+`chmod go-w` to run); none is `Trusted`. The caller passes the root folder, `experiment.json` and `scenarios.json`. A trust path that is itself a symbolic link is refused by
+`RootFacts.FileFactsAsync` before any fact is read (`<path> is a symbolic link to '<target>' — the trust check judges the file itself, not a link that can be re-pointed`): the last segment may not
+be a link, an ancestor may (`~/git` to `/mnt/d/git` is every WSL home), and a trailing separator is trimmed first because `readlink("link/")` follows the link and reports none.
 
-**`ExecutableResolution.Resolve`** (D17 b) turns a command's executable into the path to run: a bare name is searched in the PATH directories (on Windows also with `.exe`,
-empty entries skipped), an absolute path must exist and be executable; a relative path is refused. The path found goes through `ExecutableRule` (a PATH entry under the target is
-refused like a spelled path), and then its FINAL symbolic-link target does too (the end of the link, and of every folder above it). The result is the path as written, because that is the
-name the harness will run. The forbidden roots are `ExecutableRule.ForbiddenRoots(target.source, root)`: the target and the experiment root itself, compared ignoring case. A link that cannot be
-followed (a loop) is a refusal, never a pass.
+**`ExecutableResolution.Resolve`** (D17 b) turns a command's executable into the path to run, and the path it returns is the REAL path: the one the kernel opens, every link and every `..` applied in the
+kernel's own order. The harness launches and prints that path (not the one written), because judging the real path and launching the written one would leave the link between check and launch for an arm to
+re-point. A bare name is searched in the PATH directories (on Windows also with `.exe`, empty entries skipped); a PATH candidate that is a dangling link or a loop is skipped and the search moves on, as `execvp`
+does; a name found nowhere is `<name> is not on PATH on this host`. A spelled absolute path must exist and be executable, and one the kernel cannot resolve is refused naming the operating system's reason; a relative path
+is refused; the verbatim and device prefixes (`\\?\`, `\\.\`, `//?/`, `//./`) are refused as a spelling on every platform. Both the executable as written and as it really is are judged against both the roots as written and
+the roots as they really are (`{written, real} x {roots, real roots}`): a link inside the target that points out of it is refused by its spelling, and a root spelled through a link is compared by where it
+really is. A root that does not exist yet (the root `init` is about to make) is resolved through its nearest existing ancestor with the remaining segments appended. The forbidden roots are
+`ExecutableRule.ForbiddenRoots(target.source, root)`, compared ignoring case.
 
 **`ScenariosFile.Read`** reads `scenarios.json` (`[{"id","kind","name"}]`, kind `cs` or `node`) with the same strict walk as the experiment file: unknown and missing members named, a repeated id named,
 an empty list refused, every problem in one answer. **`BaselineFile`** (D24) is `{"schema":"model-arms/baseline-v1","base","measuredAt","host","mcpFailed","tsFailed","suiteTotal","extensionTotal","note"}`
-(the shell's failure keys kept: `mcpFailed` is the main suite's, `tsFailed` the extension's). `Compose` refuses a run that did not complete (`absent is not zero`), a blank host and a negative total; the
-instant is written in UTC ending in `Z`. `Read` refuses unknown members, another schema, a missing member (the note may be empty, not absent), a sha that is not 40 hex and an instant that is not UTC.
+(the shell's failure keys kept: `mcpFailed` is the main suite's, `tsFailed` the extension's). `Compose` refuses, all problems at once and one sentence each: a run that did not complete (`absent is not zero`);
+a completed run that exited non-zero and named no failing test (`the <which> suite exited <code> and named no failing test`); a total of zero (`counted 0 tests`); more failures than tests
+(`named <n> failing tests of <total>`); a blank host and a negative total. A completed run that exited 0 with failures named is NOT refused: the exit code is the runner's opinion, the names are the measurement.
+The instant is written in UTC ending in `Z`. `Read` refuses unknown members, another schema, a missing member (the note may be empty, not absent), a sha that is not 40 hex and an instant that is not UTC.
 
 **`RootFacts`** (console) reads what the deciders judge: `GitTopOf(path)` (nearest ancestor-or-self holding `.git`, a path that does not exist yet included), `ThisRepository(baseDirectory)` (nearest ancestor holding
-`dew_flow_benchmark.slnx`), `IsExecutableFile` (exists and, off Windows, any execute bit), `FinalTargetOf` (follows one link per round from the root down, bounded at 40, so a link in a folder of the path is
-followed too), `CurrentUidAsync` (`id -u`) and `FileFactsAsync` (`stat` for the owner, `File.GetUnixFileMode` for the mode; macOS `stat -f`).
+`dew_flow_benchmark.slnx`), `RealPathOf` (the kernel's answer, below), `IsExecutableFile` (the real path resolves, exists and, off Windows, has any execute bit; false, never an exception, for a dangling link, a loop or a
+folder), `CurrentUidAsync` (`id -u`) and `FileFactsAsync` (`stat` for the owner, `File.GetUnixFileMode` for the mode; macOS `stat -f`; a trust path that is a link is refused).
+`RealPathOf` asks the kernel and never re-implements it: libc `realpath(3)` on Linux, macOS and FreeBSD; on Windows a handle opened on the path with backup semantics (so folders open too) and
+`GetFinalPathNameByHandleW`, with the `\\?\` prefix stripped. A platform not on that list is refused (`no real-path resolver is probed for this platform`), not given another platform's answer. A failure carries the
+operating system's own words and no decision is taken on an errno number or a message. The module reads links nowhere else (`ModelArmsArchitectureTests.The_module_reads_links_only_through_RootFacts_RealPathOf`):
+.NET's own link resolution joins a link's text with its folder and collapses `..` as text, so for `home/c/claude -> sub/../bin/claude` with `sub` linked to `<target>/x` it answers `home/c/bin/claude` where the kernel runs
+`<target>/bin/claude` (measured on Linux, 2026-10-29). The scouts' path audit in `src` has the same textual join (it runs nothing and reports; it is named here, not changed).
 
-What the tests do NOT prove: that a link is still what it was when it was checked (a race between `validate` and a launch; the resolved paths are printed before the first launch so the operator sees what was seen); that a
-file outside the forbidden roots is safe to run; ownership on a file system that reports no Unix owner; any of the facts on Windows, where the trust check is declared not performed and links need a privilege (those tests skip, saying why).
-The live trust and owner tests run on Linux only (they read `/proc`); the real-link tests skip where links cannot be made.
+What the tests do NOT prove: that a link is still what it was when it was checked (the real path is returned and launched, which closes the gap between check and launch for the executable, not for a folder an arm
+re-links later); that a file outside the forbidden roots is safe to run; ownership on a file system that reports no Unix owner; any of the facts on Windows, where the trust check is declared not performed and links
+need a privilege (those tests skip, saying why). The live trust and owner tests run on Linux only (they read `/proc`); the real-link tests skip where links cannot be made.
+Stated gaps, not checks:
+- **Hard links.** A hard link is a second NAME for the same file, and a path check sees only names. The only check is to compare device and inode of the resolved file with every file under both roots: a full walk of a
+  checkout per executable, racing against arms that write, and blind to a link made after the check. It is not done. The premise holds: making that hard link means an arm writing outside its own arm, which D17 never claimed to prevent.
+- **The kernel's `..` rule.** A textual check cannot see that `..` is applied to the folder a link points to; only the kernel's answer can, which is why the real path is asked of the kernel and `ExecutableRule` stays a textual first line.
+- **`argv[0]`-sensitive programs.** The real path is what is launched, so a program that behaves by the name it was started under (a multi-call binary) runs under its real name. `claude`, `npm`, `dotnet`, `node` and `git` do not.
+- **Windows app-execution aliases** (`python.exe` under `WindowsApps`) cannot be opened as a file; they are refused with the operating system's message, not resolved.
+- **Not observed on this host:** the Windows paths, including the 8.3 short-name test (`An_8_3_short_name_spelling_of_the_target_is_refused`, which skips here). They are written to the handle-based design and go red then green on the operator's Windows run.
 
 ## The command line (E1.S9)
 

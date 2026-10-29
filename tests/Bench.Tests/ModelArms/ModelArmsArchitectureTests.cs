@@ -104,6 +104,34 @@ public sealed class ModelArmsArchitectureTests
         CorePublicStaticClasses().Should().Contain(typeof(ExperimentFile), "a structural scan that matches nothing passes forever");
     }
 
+    /// <summary>D17's real path is the kernel's answer, asked in one place. .NET's own link resolution joins a link's text with its folder and collapses
+    /// <c>..</c> as text, so a second site that read links itself would be a second, wrong, answer. The scan reads whole files, across lines.
+    /// <para>
+    /// What this does NOT prove: that no other API reads a link (<c>Directory.ResolveLinkTarget</c> is matched; a P/Invoke of <c>readlink</c> is not).
+    /// </para></summary>
+    [Fact]
+    public void The_module_reads_links_only_through_RootFacts_RealPathOf()
+    {
+        var sites = FilesReadingLinks(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
+
+        sites.Should().BeSubsetOf(["RootFacts.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect");
+    }
+
+    [Fact]
+    public void The_link_scan_still_finds_the_scouts_link_audit()
+    {
+        FilesReadingLinks(Path.Combine(Cli.Repository.Root, "src")).Should().Contain(
+            "FileSystemLinkTargets.cs", "the pattern must still match the one known instance outside the module — a scan that matches nothing passes forever");
+    }
+
+    private static IReadOnlyList<string> FilesReadingLinks(string folder) =>
+        [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(path), @"ResolveLinkTarget\s*\(|\.LinkTarget\b"))
+            .Select(Path.GetFileName)
+            .Cast<string>()
+            .Order(StringComparer.Ordinal)];
+
     private static IReadOnlyList<Type> CorePublicStaticClasses() =>
         [.. Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, Core)).GetTypes()
             .Where(t => t is { IsAbstract: true, IsSealed: true, IsPublic: true } && !(t.Namespace ?? string.Empty).EndsWith(".Ports", StringComparison.Ordinal))];
