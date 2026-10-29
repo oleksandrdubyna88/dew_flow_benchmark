@@ -225,3 +225,19 @@ test('A_series_inside_a_git_worktree_is_refused', async () => {
   }
   assert.equal(existsSync(path.join(series, 'adjudication-packets')), false, 'nothing was written');
 });
+
+test('A_series_given_as_a_relative_or_unnormalised_path_is_normalised_once_and_messages_name_the_absolute_one', () => {
+  const series = toySeries();
+  const relative = path.relative(process.cwd(), series);
+  assert.equal(path.isAbsolute(relative), false);
+  const made = packetsFor({ series: relative });
+  assert.equal(made.ok, true, made.reason);
+  const again = packetsFor({ series: `${series}${path.sep}.${path.sep}` });
+  assert.equal(again.ok, false);
+  assert.ok(again.reason.startsWith(`${path.join(series, 'adjudication', 'map.json')} already exists`), `the refusal names the absolute map path: ${again.reason}`);
+  const unknown = classifyAmbiguity({ series: relative, blindId: 'deadbeef', verdict: 'not-ambiguous', reason: 'x' });
+  assert.equal(unknown.ok, false);
+  const bare = tmpDir('bare-series');
+  const empty = revealFor({ series: path.relative(process.cwd(), bare) });
+  assert.ok(empty.reason.startsWith(`no packets yet under ${bare}:`), `no-packets refusal names the absolute series: ${empty.reason}`);
+});

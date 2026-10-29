@@ -20,7 +20,7 @@ const needs = (o, names) => names.filter(n => !o[n]);
 
 const COMMANDS = Object.freeze({
   packets: { need: ['series'], run: (o, write) => {
-    const r = packetsFor({ series: path.resolve(o.series) });
+    const r = packetsFor({ series: o.series });
     if (!r.ok) return r;
     write('masking rules applied to every packet:');
     r.value.rules.forEach(rule => write(`  ${rule.name} -> ${rule.replacement}`));
@@ -31,15 +31,15 @@ const COMMANDS = Object.freeze({
     r.value.skipped.forEach(s => write(`skipped cell ${s.cell}: ${s.why}`));
     return r;
   } },
-  classify: { need: ['series', 'blind', 'verdict', 'reason'], run: o => classifyAmbiguity({ series: path.resolve(o.series), blindId: o.blind, verdict: o.verdict, reason: o.reason }) },
+  classify: { need: ['series', 'blind', 'verdict', 'reason'], run: o => classifyAmbiguity({ series: o.series, blindId: o.blind, verdict: o.verdict, reason: o.reason }) },
   reveal: { need: ['series'], run: (o, write) => {
-    const r = revealFor({ series: path.resolve(o.series) });
+    const r = revealFor({ series: o.series });
     if (r.ok) r.value.forEach(e => write(`${e.blindId}  ${e.caseId}  ${e.cell}  arm ${e.arm}  stack ${e.stack}  code ${e.codePath}`));
     return r;
   } },
-  class: { need: ['series', 'blind', 'class', 'reason'], run: o => classifyOrigin({ series: path.resolve(o.series), blindId: o.blind, klass: o.class, reason: o.reason }) },
+  class: { need: ['series', 'blind', 'class', 'reason'], run: o => classifyOrigin({ series: o.series, blindId: o.blind, klass: o.class, reason: o.reason }) },
   revised: { need: ['series'], run: (o, write) => {
-    const r = revisedFor({ series: path.resolve(o.series) });
+    const r = revisedFor({ series: o.series });
     if (r.ok) {
       write(`dropped cases (ambiguous in any cell): ${r.value.droppedCases.join(', ') || 'none'}`);
       r.value.cells.forEach(c => write(`${c.cell}: ${c.known ? JSON.stringify(c.totals) : 'unknown'} primary100=${c.primary100}`));
@@ -60,10 +60,11 @@ export async function main(argv, write = line => process.stdout.write(`${line}\n
   }
   const command = COMMANDS[parsed.positionals[0]];
   if (parsed.positionals.length !== 1 || !command) { write(`usage error: one command of ${Object.keys(COMMANDS).join(', ')}`); return EXIT.usage; }
-  const missing = needs(parsed.values, command.need);
+  const values = parsed.values.series ? { ...parsed.values, series: path.resolve(parsed.values.series) } : parsed.values; // normalised once, for every command
+  const missing = needs(values, command.need);
   if (missing.length > 0) { write(`usage error: ${parsed.positionals[0]} needs --${missing.join(', --')}`); return EXIT.usage; }
   try {
-    const r = command.run(parsed.values, write);
+    const r = command.run(values, write);
     if (!r.ok) write(r.reason);
     else if (parsed.positionals[0] !== 'packets' && parsed.positionals[0] !== 'reveal' && parsed.positionals[0] !== 'revised') write('recorded');
     return r.ok ? EXIT.ok : EXIT.refused;

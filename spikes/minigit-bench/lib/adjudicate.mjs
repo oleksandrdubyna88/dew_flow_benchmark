@@ -17,7 +17,11 @@ const PACKETS = 'adjudication-packets';
 const STEP1 = Object.freeze(['spec-ambiguity', 'not-ambiguous']);
 const STEP2 = Object.freeze(['product', 'harness']);
 
-const adjPath = (series, ...rest) => path.join(series, ADJ, ...rest);
+/** Every path under a series directory is built here, from the NORMALISED (absolute) series: a relative or unclean one never reaches a message or a join. */
+const inSeries = (series, ...rest) => path.join(path.resolve(series), ...rest);
+const adjPath = (series, ...rest) => inSeries(series, ADJ, ...rest);
+const packetPath = (series, blindId) => inSeries(series, PACKETS, `${blindId}.json`);
+const cellPath = (series, cell, ...rest) => inSeries(series, cell, ...rest);
 
 function readJson(file) {
   const bytes = readFileOrNull(file);
@@ -35,11 +39,12 @@ const writeJson = (file, doc) => {
 };
 
 /** The scored cells of a series: `<series>/<cell>/score/{score.json,heldout-<phase>.json}`; a cell without them is listed in `skipped`. */
-export function readCells(series) {
+export function readCells(given) {
+  const series = path.resolve(given);
   const cells = [];
   const skipped = [];
   for (const name of readdirSync(series, { withFileTypes: true }).filter(e => e.isDirectory() && e.name !== ADJ && e.name !== PACKETS).map(e => e.name).sort()) {
-    const dir = path.join(series, name);
+    const dir = cellPath(series, name);
     const score = readJson(path.join(dir, 'score', 'score.json'));
     const result = score ? readJson(path.join(dir, 'score', `heldout-${score.phase}.json`)) : null;
     if (!score || !result) {
@@ -76,14 +81,15 @@ export function buildPackets(cells) {
 }
 
 /** Writes `<series>/adjudication-packets/<blindId>.json` (the only directory the blind judge reads) and `<series>/adjudication/map.json`. Refuses to overwrite an earlier set (the blind ids would change). */
-export function packetsFor({ series }) {
+export function packetsFor({ series: given }) {
+  const series = path.resolve(given);
   const outside = refuseInsideWorktree(series, 'series directory');
   if (!outside.ok) return outside;
   if (existsSync(adjPath(series, 'map.json'))) return fail(`${adjPath(series, 'map.json')} already exists: packets and blind ids already exist for this series`);
   const { cells, skipped } = readCells(series);
   if (cells.length === 0) return fail(`no scored cell with a held-out result under ${series}`);
   const { packets, entries } = buildPackets(cells);
-  for (const p of packets) writeJson(path.join(series, PACKETS, `${p.blindId}.json`), p);
+  for (const p of packets) writeJson(packetPath(series, p.blindId), p);
   writeJson(adjPath(series, 'map.json'), { format: 1, entries });
   return ok({ blindIds: packets.map(p => p.blindId), rules: maskRules.map(({ name, replacement }) => ({ name, replacement })), skipped });
 }
@@ -108,7 +114,8 @@ function checkVerdict(series, blindId, verdict, allowed, reason) {
 }
 
 /** Step 1, from the packet alone. Frozen once the cells are revealed: a blind verdict is not revised after the reveal. */
-export function classifyAmbiguity({ series, blindId, verdict, reason }) {
+export function classifyAmbiguity({ series: given, blindId, verdict, reason }) {
+  const series = path.resolve(given);
   const checked = checkVerdict(series, blindId, verdict, STEP1, reason);
   if (!checked.ok) return checked;
   if (existsSync(adjPath(series, 'reveal.json'))) return fail('the cells are already revealed: step-1 verdicts are frozen');
@@ -119,7 +126,8 @@ export function classifyAmbiguity({ series, blindId, verdict, reason }) {
 const unclassified = (map, step1) => Object.keys(map.entries).filter(id => !step1[id]).sort();
 
 /** Refuses until every packet has a step-1 verdict (the message names each missing blindId); then adds the cell's code path. */
-export function revealFor({ series }) {
+export function revealFor({ series: given }) {
+  const series = path.resolve(given);
   const outside = refuseInsideWorktree(series, 'series directory');
   if (!outside.ok) return outside;
   const map = mapOf(series);
@@ -132,7 +140,8 @@ export function revealFor({ series }) {
 }
 
 /** Step 2, after the reveal: is the failure the product's or the harness's. */
-export function classifyOrigin({ series, blindId, klass, reason }) {
+export function classifyOrigin({ series: given, blindId, klass, reason }) {
+  const series = path.resolve(given);
   const checked = checkVerdict(series, blindId, klass, STEP2, reason);
   if (!checked.ok) return checked;
   if (!existsSync(adjPath(series, 'reveal.json'))) return fail('step 2 needs the reveal first: run "reveal" once every packet has its step-1 verdict');
@@ -141,7 +150,8 @@ export function classifyOrigin({ series, blindId, klass, reason }) {
 }
 
 /** Drop every case classed ambiguous in any cell from all cells; write each revised score beside its primary and a series summary. */
-export function revisedFor({ series }) {
+export function revisedFor({ series: given }) {
+  const series = path.resolve(given);
   const outside = refuseInsideWorktree(series, 'series directory');
   if (!outside.ok) return outside;
   const map = mapOf(series);
@@ -154,7 +164,7 @@ export function revisedFor({ series }) {
   const out = cells.map(c => {
     const score = heldoutScore({ ...c.result, cases: c.result.cases.filter(k => !droppedCases.includes(k.id)) });
     const blockedByDropped = c.result.cases.filter(k => k.status === 'blocked' && droppedCases.includes(k.blockedBy)).map(k => k.id);
-    writeJson(path.join(series, c.cell, 'score', `heldout-revised-${c.phase}.json`), { format: 1, droppedCases, blockedByDropped, score });
+    writeJson(cellPath(series, c.cell, 'score', `heldout-revised-${c.phase}.json`), { format: 1, droppedCases, blockedByDropped, score });
     return { cell: c.cell, phase: c.phase, known: score.known, totals: score.totals, groups: score.groups, primary100: score.primary100, blockedByDropped };
   });
   const summary = { format: 1, droppedCases, cells: out };
