@@ -15,7 +15,7 @@ internal static partial class FlowSection
     public static IReadOnlyDictionary<StepKind, StepSpec> Steps(StrictJson json, JsonObject top)
     {
         var steps = new Dictionary<StepKind, StepSpec>();
-        foreach (var (key, node) in json.Map(top["steps"], "steps"))
+        foreach (var (key, node) in json.MapMember(top, string.Empty, "steps"))
         {
             switch (StepKinds.Parse(key))
             {
@@ -32,7 +32,7 @@ internal static partial class FlowSection
     }
 
     public static IReadOnlyList<Scheme> Schemes(StrictJson json, JsonObject top, IReadOnlyDictionary<StepKind, StepSpec> steps) =>
-        [.. json.Map(top["schemes"], "schemes").Select(member => Scheme(json, member.Key, member.Value, steps))];
+        [.. json.MapMember(top, string.Empty, "schemes").Select(member => Scheme(json, member.Key, member.Value, steps))];
 
     public static IReadOnlyList<IReadOnlyList<string>> Rounds(StrictJson json, JsonObject top, IReadOnlyList<Scheme> schemes)
     {
@@ -44,6 +44,11 @@ internal static partial class FlowSection
             }
 
             return [];
+        }
+
+        if (rounds.Count == 0)
+        {
+            json.Add("rounds must name at least one round");
         }
 
         return [.. rounds.Select((round, index) => Round(json, round, $"rounds[{index}]", schemes))];
@@ -100,21 +105,17 @@ internal static partial class FlowSection
         return kind is null ? null : new SchemeEntry.Step(match.Groups["name"].Value, kind.Value);
     }
 
-    private static StepKind? KindOf(StrictJson json, string key, string where, IReadOnlyDictionary<StepKind, StepSpec> steps)
+    private static StepKind? KindOf(StrictJson json, string key, string where, IReadOnlyDictionary<StepKind, StepSpec> steps) =>
+        StepKinds.Parse(key).Match(
+            kind => steps.ContainsKey(kind)
+                ? kind
+                : Refuse(json, $"{where} — step kind '{key}' is not defined under steps (defined: {string.Join(", ", steps.Keys.Select(StepKinds.Key))})"),
+            reason => Refuse(json, $"{where} — {reason}"));
+
+    private static StepKind? Refuse(StrictJson json, string problem)
     {
-        switch (StepKinds.Parse(key))
-        {
-            case Outcome<StepKind>.Fail fail:
-                json.Add($"{where} — {fail.Reason}");
-                return null;
-            case Outcome<StepKind>.Ok ok when !steps.ContainsKey(ok.Value):
-                json.Add($"{where} — step kind '{key}' is not defined under steps (defined: {string.Join(", ", steps.Keys.Select(StepKinds.Key))})");
-                return null;
-            case Outcome<StepKind>.Ok ok:
-                return ok.Value;
-            default:
-                return null;
-        }
+        json.Add(problem);
+        return null;
     }
 
     private static IReadOnlyList<string> Round(StrictJson json, JsonNode? node, string where, IReadOnlyList<Scheme> schemes)

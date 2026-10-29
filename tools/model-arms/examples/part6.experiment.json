@@ -50,7 +50,7 @@
     "gate": ["mcp__coai__providers", "mcp__coai__open", "mcp__coai__review_plan", "mcp__coai__review_code", "mcp__coai__resolve", "mcp__coai__status"],
     "deny": ["Read(//example/home/.claude/**)", "Read(//example/home/.codex/**)", "Read(//example/home/.gemini/**)", "Read(//example/home/.antigravity/**)", "Read(//example/home/.vibe/**)", "Read(//proc/**)", "Read(//example/old-experiment/**)", "Read(//example/vault/**)"]
   },
-  "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/coai/settings.json", "side": "wsl-ubuntu" },
+  "coai": { "binary": "/example/coai/coai-mcp", "settings": "/example/vault/connectOtherAis/wsl-ubuntu/settings.json", "side": "wsl-ubuntu" },
   // Closed (000) and unlisted (300) while the arms run; <root> and ~ are expanded.
   "isolation": { "closed": ["/example/old-experiment"], "unlisted": ["<root>", "<root>/r", "<root>/pids", "~/.claude/projects", "~/.claude/file-history", "~/.claude/session-env", "~/.claude/shell-snapshots"] },
   "awake": "auto"

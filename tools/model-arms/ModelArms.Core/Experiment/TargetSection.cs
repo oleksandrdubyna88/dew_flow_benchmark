@@ -20,7 +20,7 @@ internal static class TargetSection
 
     public static TargetFacts Read(StrictJson json, JsonObject top, ExperimentLocation location)
     {
-        var target = json.Object(top["target"], "target", Members, Members);
+        var target = json.ObjectMember(top, string.Empty, "target", Members, Members);
         var source = PathFields.Absolute(json, target, "target", "source");
         var forbidden = ForbiddenRoots(source, location);
 
@@ -53,9 +53,10 @@ internal static class TargetSection
         return argv;
     }
 
-    /// <summary>The roots no executable may sit under: the target, and the base clone and the arms' clones inside the experiment root.</summary>
+    /// <summary>The roots no executable may sit under: the target, and the experiment root itself, which holds the base clone, the arms'
+    /// clones and everything else an arm could write. Forbidding the root, not just <c>base</c> and <c>r</c>, fails closed.</summary>
     private static IReadOnlyList<string> ForbiddenRoots(string source, ExperimentLocation location) =>
-        [.. new[] { source, Path.Combine(location.Root, "base"), Path.Combine(location.Root, "r") }.Where(root => root.Length > 0)];
+        [.. new[] { source, location.Root }.Where(root => root.Length > 0)];
 
     private static CommitSha Base(StrictJson json, JsonObject target)
     {
@@ -76,7 +77,7 @@ internal static class TargetSection
 
     private static SuiteFacts Suite(StrictJson json, JsonObject target, IReadOnlyList<string> forbidden)
     {
-        var suite = json.Object(target["suite"], "target.suite", SuiteMembers, SuiteMembers);
+        var suite = json.ObjectMember(target, "target", "suite", SuiteMembers, SuiteMembers);
         return new SuiteFacts(
             Command(json, suite, "target.suite", "command", forbidden),
             json.Text(suite, "target.suite", "ctrfFile"),
@@ -85,7 +86,7 @@ internal static class TargetSection
 
     private static FormatFacts Format(StrictJson json, JsonObject target)
     {
-        var format = json.Object(target["format"], "target.format", FormatMembers, FormatMembers);
+        var format = json.ObjectMember(target, "target", "format", FormatMembers, FormatMembers);
         return new FormatFacts(
             PathFields.Relative(json, format, "target.format", "solution", "the target"),
             json.Texts(format, "target.format", "verbs"));
@@ -93,7 +94,7 @@ internal static class TargetSection
 
     private static ExtensionFacts Extension(StrictJson json, JsonObject target, IReadOnlyList<string> forbidden)
     {
-        var extension = json.Object(target["extension"], "target.extension", ExtensionMembers, ExtensionMembers);
+        var extension = json.ObjectMember(target, "target", "extension", ExtensionMembers, ExtensionMembers);
         return new ExtensionFacts(
             PathFields.Relative(json, extension, "target.extension", "directory", "the target"),
             Command(json, extension, "target.extension", "command", forbidden));

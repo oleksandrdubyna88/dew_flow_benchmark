@@ -50,9 +50,10 @@ assemblies are in the test output on purpose, not by accident.
 | `Every_core_decider_is_named_in_the_pure_list` | every public static class of `ModelArms.Core` is named in `PureDeciders`, one marker line per story, and everything named lives in `ModelArms.Core` |
 
 What the guard does not prove: that a Core type is pure inside its body. A list of referenced assemblies cannot see `File.ReadAllText`, because the
-runtime is always allowed. The pure list only makes each decider named on purpose, and the first decider's story adds the companion
-that asserts the scan still finds something. Until then the fourth test's second half has nothing to scan, and its teeth were shown by planting a
-public static class.
+runtime is always allowed. The pure list only makes each decider named on purpose. The first decider's story (E1.S3) added the two
+companions that keep the scans alive: `CorePublicStaticClasses()` must contain `ExperimentFile` (the public-static-class scan still finds a known
+instance; shown red by making the scan's predicate match nothing), and `Referenced("Bench.Tests.dll")` must contain `ModelArms.Core` (the
+assembly half's known positive).
 
 Separately, `Bench.Hosting` (the parser, the exit codes, the shutdown signal) is held a leaf by `ArchitectureTests`, beside the Domain, Contracts and Delivered leaves.
 
@@ -64,7 +65,7 @@ one answer, one sentence per line (`Outcome<Experiment>`, the reason is the line
 The worked example `tools/model-arms/examples/part6.experiment.json` is the one source the tests and, later, the `init` template are derived from.
 
 **Reading.** `JsonNode.Parse` with comments skipped (the example carries `//` comments), trailing commas refused and a member written twice
-refused (`AllowDuplicateProperties = false`: otherwise the parse throws `ArgumentException` on first access). A malformed text, or one whose
+refused at any depth (`AllowDuplicateProperties = false`; it arrives as a `JsonException`, whereas the default would throw `ArgumentException` on later access, outside any catch). A malformed text, or one whose
 root is not an object, is a single problem. The walk is `StrictJson`, a reader that records a sentence per problem instead of stopping at the
 first; this is why the catalog's `UnmappedMemberHandling.Disallow` is not used (it names one unknown member and quits). A file that leaves any
 problem builds no `Experiment`.
@@ -84,10 +85,17 @@ than ignored`. A missing one: `target.base is missing`. Then the value rules:
   `rulesSubmodule`, `format.solution`, `extension.directory`, each element of `nodeModules` and `testGlobs`, and `scenarios` / `baseline` (names inside the root).
   `target.base` is `CommitSha.Parse`, its reason quoted. Every other text is non-empty.
 - Every command (`lowPriority`, `build`, `suite.command`, `extension.command`) is a non-empty array whose first element passes
-  `ExecutableRule.Refusal` against `[target.source, <root>/base, <root>/r]` (D17, the static half): a bare name is fine; a relative path
+  `ExecutableRule.Refusal` against `[target.source, <root>]` (D17, the static half): a bare name is fine; a relative path
   (`./x`) is refused because it resolves against the target; an absolute path equal to or under a forbidden root is refused (normalised, ordinal,
   with a trailing separator, so a sibling that shares a prefix is not "under"). A file under the target may only be an ARGUMENT, which is why
-  the suite runs as `dotnet <tests>.dll`. Resolving an executable on a host is E1.S8's, not this file's.
+  the suite runs as `dotnet <tests>.dll`. The forbidden roots are the target and the experiment root itself (which holds `base`, `r` and
+  everything else an arm could write). "Under" is compared ignoring case, so it fails closed on a case-insensitive host, and a name containing
+  `:` is a path (`C:x.exe` is drive-relative on Windows), never a bare name. **Symbolic links are not followed by this static rule**: a link
+  outside every forbidden root that points inside one passes it. Resolving an executable on a host, following the link to its final target
+  and checking that against the same roots is E1.S8's `ExecutableResolution`.
+- **A JSON `null` where an object belongs** (`"limits": null`, `steps.code: null`, `target.suite: null`, ...) is refused with
+  `<path> must be a JSON object`: an object-valued member is read through one accessor that takes the parent and the member name, so a
+  present-but-null member is never mistaken for an absent one. `steps`, `schemes` and `rounds` must not be empty.
 - `steps`: keys are step kinds (`code review fix hreview gate split splitFix taskCode`; `steps.lint is not a step kind (…)`), each value
   `{model, minutes > 0, mode ∈ write|read|gate}`. `schemes`: names are letters; each entry is exactly `tasks` or `<file name>:<step kind>`
   (`^[0-9]+[a-z]?-[A-Za-z0-9-]+:[A-Za-z]+$`) whose kind is defined under `steps`. `rounds`: non-empty arrays of arm names whose scheme (`ArmNames.SchemeOf`:

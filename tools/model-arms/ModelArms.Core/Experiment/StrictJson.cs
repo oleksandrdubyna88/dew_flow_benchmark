@@ -7,7 +7,7 @@ namespace ModelArms.Core.Experiment;
 /// answer. Each accessor returns a harmless value after recording, so the walk goes on; the caller builds nothing from a file
 /// that left a problem.
 /// <para>
-/// A required member that is absent is reported once, by <see cref="Object"/>; the accessors stay silent about an absent member so
+/// A required member that is absent is reported once, by <see cref="Object"/> or <see cref="ObjectMember"/>; the accessors stay silent about an absent member so
 /// the same fact is never said twice.
 /// </para></summary>
 internal sealed class StrictJson
@@ -21,40 +21,55 @@ internal sealed class StrictJson
     /// <summary>A dotted path: <c>Join("target", "base")</c> is <c>target.base</c>, and a member of the top level is its bare name.</summary>
     public static string Join(string path, string name) => path.Length == 0 ? name : $"{path}.{name}";
 
-    /// <summary>The node as an object whose keys the caller judges itself. An absent node is the parent's business (it already said so)
-    /// and yields an empty object; any other node that is not an object is recorded.</summary>
-    public JsonObject Map(JsonNode? node, string path)
+    /// <summary>The member of <paramref name="parent"/> as an object whose keys the caller judges itself, and that has at least one. An
+    /// absent member is the parent's business (a required one is reported by <see cref="Object"/>) and yields an empty object; a member
+    /// that is present but is not an object, JSON <c>null</c> included, is recorded.</summary>
+    public JsonObject MapMember(JsonObject parent, string path, string name)
+    {
+        if (!parent.ContainsKey(name))
+        {
+            return new JsonObject();
+        }
+
+        var where = Join(path, name);
+        var map = Map(parent[name], where);
+        if (parent[name] is JsonObject && map.Count == 0)
+        {
+            Add($"{where} is empty — it needs at least one member");
+        }
+
+        return map;
+    }
+
+    /// <summary>The member of <paramref name="parent"/> as an object after <see cref="Object"/>'s checks. Absent: empty and silent.</summary>
+    public JsonObject ObjectMember(JsonObject parent, string path, string name, string[] known, string[] required) =>
+        parent.ContainsKey(name) ? Object(parent[name], Join(path, name), known, required) : new JsonObject();
+
+    /// <summary>The node as an object whose keys the caller judges itself. Anything else, JSON <c>null</c> included, is recorded
+    /// and yields an empty object so the walk goes on.</summary>
+    public JsonObject Map(JsonNode? node, string where)
     {
         if (node is JsonObject obj)
         {
             return obj;
         }
 
-        if (node is not null)
-        {
-            Add($"{path} must be a JSON object");
-        }
-
+        Add($"{where} must be a JSON object");
         return new JsonObject();
     }
 
     /// <summary>The node as an object, after recording every member it has that this build does not know and every required member it lacks.</summary>
-    public JsonObject Object(JsonNode? node, string path, string[] known, string[] required)
+    public JsonObject Object(JsonNode? node, string where, string[] known, string[] required)
     {
-        var obj = Map(node, path);
-        if (node is not JsonObject)
-        {
-            return obj;
-        }
-
+        var obj = Map(node, where);
         foreach (var name in obj.Select(member => member.Key).Where(key => !known.Contains(key, StringComparer.Ordinal)))
         {
-            Add($"{Join(path, name)} is not a member this build knows (known: {string.Join(", ", known)}) — refused rather than ignored");
+            Add($"{Join(where, name)} is not a member this build knows (known: {string.Join(", ", known)}) — refused rather than ignored");
         }
 
-        foreach (var name in required.Where(r => !obj.ContainsKey(r)))
+        foreach (var name in required.Where(r => node is JsonObject && !obj.ContainsKey(r)))
         {
-            Add($"{Join(path, name)} is missing");
+            Add($"{Join(where, name)} is missing");
         }
 
         return obj;
