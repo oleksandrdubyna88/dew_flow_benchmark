@@ -293,7 +293,7 @@ code + tests: Sonnet · review: Opus · fixes: Sonnet.
 
 **Scope.** `hosts/Cli/Program.cs:113` (the verb switch, beside `"scouts"`); the `policy` dispatcher (`hosts/Cli/PolicyCommand.cs` —
 E1.S11's, or E3.S3's if it lands first) with a new `hosts/Cli/PolicyScoreCommand.cs` shaped on
-`hosts/Cli/ScoutsAssessCommand.cs:23-81`; `hosts/Cli/ExitCodes.cs:15-28`. New `src/Bench.Domain/Policy/PolicyScore.cs` and
+`hosts/Cli/ScoutsAssessCommand.cs:23-81`; `src/Bench.Hosting/ExitCodes.cs:15-28`. New `src/Bench.Domain/Policy/PolicyScore.cs` and
 `src/Bench.Infrastructure/Policy/PolicyScorer.cs` (Infrastructure, because `SolutionSignals` is).
 
 **Brief.**

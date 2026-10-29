@@ -64,13 +64,17 @@ public static class CliArgv
     /// agy and gemini refuse each BY NAME. E2 S5 (measured 2026-10-13): <c>--setting-sources &lt;list&gt;</c> (an EMPTY argument for none —
     /// what drops the user settings' directory grant), <c>--settings &lt;file&gt;</c> and <c>--plugin-dir &lt;dir&gt;</c> (repeatable, placed
     /// last) — claude only, refused by name elsewhere.
+    /// </para>
+    /// <para>
+    /// <b>Model arms E1.S5</b>, claude only and refused by name elsewhere: <c>--session-id &lt;guid&gt;</c> and <c>--resume &lt;guid&gt;</c> (right
+    /// after the model; asked together they are refused), <c>--permission-mode default|acceptEdits|plan</c> (after the sandbox's own; refused
+    /// beside a read-only sandbox, which spells <c>plan</c> already) and <c>--allowedTools &lt;pattern&gt;…</c> (after <c>--tools</c>; the
+    /// permission list, distinct from the built-in set).
     /// </para></summary>
     public static Outcome<IReadOnlyList<string>> For(
         ModelRuntimeKind runtime, string modelId, AgentAskOptions options, IReadOnlyList<string> codexMcpServers)
     {
-        var refusal = options.MaxBudgetUsd < 0m
-            ? $"a budget cap of ${options.MaxBudgetUsd} is not a cap — zero asks for none, a positive amount caps the session"
-            : Unsupported(runtime, options);
+        var refusal = FirstRefusal(runtime, options);
 
         if (refusal.Length > 0)
         {
@@ -87,6 +91,35 @@ public static class CliArgv
                 _ => Plain(runtime, modelId),
             };
     }
+
+    /// <summary>The first sentence that stops a launch, in order: the budget, a conflict between two options (refused on every CLI, before any
+    /// "no flag for" sentence), then an option the CLI has no flag for. Empty when the launch may go ahead.</summary>
+    private static string FirstRefusal(ModelRuntimeKind runtime, AgentAskOptions options) =>
+        new[] { Budget(options), Conflict(options), Unsupported(runtime, options) }.FirstOrDefault(r => r.Length > 0) ?? string.Empty;
+
+    private static string Budget(AgentAskOptions options) =>
+        options.MaxBudgetUsd < 0m
+            ? $"a budget cap of ${options.MaxBudgetUsd} is not a cap — zero asks for none, a positive amount caps the session"
+            : string.Empty;
+
+    /// <summary>Two options that cannot both be spelled: a launch starts a session or resumes one, and the read-only sandbox already spells
+    /// <c>--permission-mode plan</c> — two spellings of one thing is the ambiguity the refusal exists to stop.</summary>
+    private static string Conflict(AgentAskOptions o) =>
+        (o.SessionId != Guid.Empty && o.ResumeSessionId != Guid.Empty, o.PermissionMode != AgentPermissionMode.NotAsked && o.Sandbox == AgentSandbox.ReadOnly) switch
+        {
+            (true, _) => $"a session id ({o.SessionId:D}) and a session to resume ({o.ResumeSessionId:D}) were both asked — a launch starts a session or resumes one, never both",
+            (_, true) => $"a permission mode ({Spelled(o.PermissionMode)}) was asked beside a read-only sandbox — the read-only sandbox already spells --permission-mode plan; ask for one or the other",
+            _ => string.Empty,
+        };
+
+    private static string Spelled(AgentPermissionMode mode) =>
+        mode switch
+        {
+            AgentPermissionMode.Default => "default",
+            AgentPermissionMode.AcceptEdits => "acceptEdits",
+            AgentPermissionMode.Plan => "plan",
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "not a permission mode this build spells"),
+        };
 
     private static IReadOnlyList<string> Codex(string modelId, AgentAskOptions options, IReadOnlyList<string> servers) =>
     [
@@ -111,11 +144,17 @@ public static class CliArgv
     private static IReadOnlyList<string> Claude(string modelId, AgentAskOptions options) =>
     [
         "-p", "--model", modelId,
+        // Model arms E1.S5: the session pair sits right after the model, before every other flag; the permission mode follows the sandbox's slot,
+        // and the permission allow-list (`--allowedTools`, distinct from the built-in `--tools`) follows `--tools`.
+        .. options.SessionId != Guid.Empty ? ["--session-id", options.SessionId.ToString("D")] : Array.Empty<string>(),
+        .. options.ResumeSessionId != Guid.Empty ? ["--resume", options.ResumeSessionId.ToString("D")] : Array.Empty<string>(),
         .. options.JsonEvents ? ["--output-format", "stream-json", "--verbose"] : Array.Empty<string>(),
         .. options.Sandbox == AgentSandbox.ReadOnly ? ["--permission-mode", "plan"] : Array.Empty<string>(),
+        .. options.PermissionMode != AgentPermissionMode.NotAsked ? ["--permission-mode", Spelled(options.PermissionMode)] : Array.Empty<string>(),
         .. options.Restricted ? ["--restricted"] : Array.Empty<string>(),
         .. Grants(options),
         .. options.AllowedTools.Asked ? ["--tools", .. options.AllowedTools.Names.Count == 0 ? [string.Empty] : options.AllowedTools.Names] : Array.Empty<string>(),
+        .. options.PermittedTools.Count > 0 ? ["--allowedTools", .. options.PermittedTools] : Array.Empty<string>(),
         .. ClaudeDenied(options) is { Count: > 0 } denied ? ["--disallowedTools", .. denied] : Array.Empty<string>(),
         .. options.MaxTurns > 0 ? ["--max-turns", options.MaxTurns.ToString(System.Globalization.CultureInfo.InvariantCulture)] : Array.Empty<string>(),
         .. options.McpServersOff ? ["--strict-mcp-config"] : Array.Empty<string>(),
@@ -175,6 +214,10 @@ public static class CliArgv
             (o.SettingSources.Asked, "setting sources", [ModelRuntimeKind.CliClaude]),
             (o.SettingsFile.Length > 0, "a settings file", [ModelRuntimeKind.CliClaude]),
             (o.PluginDirectories.Count > 0, "plugin directories", [ModelRuntimeKind.CliClaude]),
+            (o.SessionId != Guid.Empty, "a session id", [ModelRuntimeKind.CliClaude]),
+            (o.ResumeSessionId != Guid.Empty, "a session to resume", [ModelRuntimeKind.CliClaude]),
+            (o.PermissionMode != AgentPermissionMode.NotAsked, "a permission mode", [ModelRuntimeKind.CliClaude]),
+            (o.PermittedTools.Count > 0, "a permission allow-list", [ModelRuntimeKind.CliClaude]),
         };
 
         var unhonoured = asked.Where(a => a.Asked && !a.Honoured.Contains(runtime)).Select(a => a.Name).ToList();
@@ -297,6 +340,7 @@ public sealed class CliAgentRuntime(ILogger<CliAgentRuntime> logger) : ICliAgent
             ask.Runtime == ModelRuntimeKind.CliAntigravity ? AntigravityStdin.UserMessage(ask.Prompt) : ask.Prompt,
             ask.Environment.IsReplaced ? ask.Environment.Variables : null,
             ask.Output.IsNone ? null : ask.Output.Line,
+            ask.ErrorOutput.IsNone ? null : ask.ErrorOutput.Line,
             cancellationToken);
 
         return Outcome<Launched>.Success(new Launched(attempt, clock.Elapsed, arguments));
