@@ -252,5 +252,4 @@ test('The_toolchain_is_probed_inside_the_box_node_and_a_box_dir_is_writable_wher
   assert.match(r.out, /net=[1-9]/, 'net/ is read-only');
   assert.equal(readFileSync(path.join(layout.work, 'w'), 'utf8'), 'a\n');
   assert.equal(readFileSync(path.join(layout.tmp, 'w'), 'utf8'), 'c\n');
-  mkdirSync(path.join(tmpDir('unused'), 'x'));
 });

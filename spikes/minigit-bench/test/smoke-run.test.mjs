@@ -84,7 +84,6 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   const md = renderSmoke({ meta: smoke.value.meta, rows, command: 'x' });
   assert.equal(verdictBlockOf(md), renderVerdicts(rows));
   assert.equal(md.includes(real) || md.includes(plan.dummy), false);
-  mkdirSync(path.join(os.tmpdir(), 'unused-never'), { recursive: true, mode: 0o700 }); // keeps the import of os honest
 });
 
 test('Smoke_inputs_refuse_a_missing_token_and_a_missing_claude_without_echoing_either', () => {

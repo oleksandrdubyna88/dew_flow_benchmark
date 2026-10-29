@@ -36,7 +36,7 @@ function fakeProc(table, denied = []) {
 test('The_marker_is_matched_exactly_and_inner_drops_the_outer_bwrap_and_unreadable_entries_are_counted', () => {
   const proc = fakeProc({
     10: { environ: ['BENCH_CELL=abc'], argv: ['bwrap', '--unshare-net', '--', 'node', 'x'] },
-    11: { environ: ['BENCH_CELL=abc'], argv: ['/usr/bin/bwrap', '--', 'x'] },
+    11: { environ: ['BENCH_CELL=abc'], argv: ['/opt/tools/bwrap', '--', 'x'] },
     12: { environ: ['PATH=/x', 'BENCH_CELL=abc'], argv: ['node', 'box-init.mjs'] },
     13: { environ: ['BENCH_CELL=abcd'], argv: ['node', 'other'] },
     14: { environ: ['XBENCH_CELL=abc'], argv: ['node', 'other'] },
@@ -207,6 +207,5 @@ test('The_CLI_stopped_mid_request_exits_itself_within_the_grace', async t => {
     hang.close();
     hang.closeAllConnections();
     await rx.close();
-    mkdirSync(path.join(layout.dir, 'x'), { recursive: true });
   }
 }, { timeout: 120_000 });
