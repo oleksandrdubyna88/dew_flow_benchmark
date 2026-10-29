@@ -1,0 +1,20 @@
+{
+  "tokenTxt": {
+    "present": true,
+    "equalsDummy": false,
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dummySha256": "0bb8d6608664896f82e746e1da1b0f89ef1ddf1235376849a189f421ea34ffe7"
+  },
+  "realTokenScan": {
+    "scanned": 32,
+    "hits": [],
+    "tooLarge": []
+  },
+  "survivors": 0,
+  "statePhase": "closed",
+  "socketsLeft": 0,
+  "contamination": [],
+  "tokenHits": [],
+  "outcome": "ok"
+}

@@ -1,0 +1,46 @@
+{
+  "rid": "20261029T233033Z",
+  "cell": "smoke-7vc8fiej",
+  "startedAt": "2026-10-29T23:30:33.733Z",
+  "endedAt": "2026-10-29T23:30:51.108Z",
+  "wallMs": 17375,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stopped": null,
+  "outcome": {
+    "ok": true,
+    "label": "ok",
+    "detail": ""
+  },
+  "cliVersion": "2.1.310",
+  "sessionId": "eded342a-9aab-4cb4-90b5-30b3098ea22c",
+  "envelopeCostUsd": 0.11484459999999999,
+  "samplers": {
+    "samples": 14,
+    "realInCmdline": 0,
+    "realInEnviron": 0,
+    "dummyInCmdline": 0,
+    "dummyInEnviron": 56,
+    "unreadable": 459
+  },
+  "janitorEnded": 0,
+  "transcripts": 2,
+  "transcriptsProblem": null,
+  "broker": {
+    "spentUsd": 0.1148446,
+    "upstreamRequests": 5,
+    "refused": 0,
+    "overCap": false,
+    "overshootUsd": 0
+  },
+  "receiver": {
+    "usd": 0.11484459999999999,
+    "requests": 5,
+    "misconfigured": 0,
+    "undecodable": 0
+  },
+  "errors": [],
+  "cleanup": []
+}

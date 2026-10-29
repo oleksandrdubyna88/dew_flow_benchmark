@@ -1,0 +1,7 @@
+{
+  "allowed": {},
+  "refused": {
+    "api.anthropic.com": 14
+  },
+  "nonConnect": 0
+}

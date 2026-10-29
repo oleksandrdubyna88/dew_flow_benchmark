@@ -21,7 +21,7 @@ export const SMOKE_ASSUMPTIONS = Object.freeze([
   ['B-N1', 'every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report'],
   ['B-N2', 'the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box\'s own loopback'],
   ['B-S2', 'every API call went through the broker: broker.ndjson holds every api_request O saw, and api.anthropic.com was never allowed'],
-  ['B-S3', 'the box held only the dummy: the real token was counted 0 times in cmdline and environ over at least 5 samples, token.txt equals the dummy, no file of the out dir holds the real token'],
+  ['B-S3', 'the box held only the dummy: the real token was counted 0 times in cmdline and environ over at least 5 samples, token.txt holds the dummy or nothing, no file of the out dir holds the real token'],
   ['B-$1', 'B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O\'s usd'],
   ['B-O1', 'OTel records reached the receiver through the socket; T2 passes'],
   ['B-T1', 'box/config/projects holds main and one subagent transcript; T3 and T4 pass under crosscheck-policy.json'],
@@ -44,7 +44,7 @@ const names = list => [...new Set(list)].join(', ') || 'none';
 
 /** Everything the rules read, computed once. */
 export function smokeViews(smoke, ctx) {
-  const v = viewsOf({ events: smoke.events, sink: smoke.sink, hooks: smoke.hooks, transcripts: smoke.transcripts, meta: smoke.meta, argv: smoke.argv }, ctx);
+  const v = viewsOf({ events: smoke.events, sink: smoke.sink, hooks: smoke.audit, transcripts: smoke.transcripts, meta: smoke.meta, argv: smoke.argv }, ctx);
   const B = brokerView(smoke.brokerLines);
   const c = crosscheck({ E: v.E, O: v.O, T: v.T, B, table: ctx.table, policy: ctx.policy, cliVersion: v.cliVersion });
   const built = spansFrom({ otel: v.O, audit: smoke.audit, stamped: smoke.stamped });
@@ -76,11 +76,19 @@ const ruleS2 = v => {
   return verdictOf(o > 0 && v.B.forwarded >= o && !apiAllowed, `O saw ${o} api_request record(s); the broker forwarded ${v.B.forwarded} and settled ${v.B.settled.length}; api.anthropic.com allowed at the proxy: ${apiAllowed}`);
 };
 
+/**
+ * What the session's own `printenv CLAUDE_CODE_OAUTH_TOKEN > token.txt` may have left: the dummy (the spec's prediction), or NOTHING. Corrected
+ * 2026-10-30 from the smoke itself: CLI 2.1.310's Bash tool does not pass the credential variable to its subprocesses, so `printenv` exits 1
+ * and the file is empty. Empty is safe; anything else, the real token included, is not.
+ */
+const tokenTxtIsSafe = t => t?.present === true && (t.equalsDummy === true || t.bytes === 0);
+const tokenTxtWord = t => (!t?.present ? 'absent' : t.equalsDummy ? 'holds the dummy' : t.bytes === 0 ? 'is empty (the CLI\'s Bash tool scrubs the variable: printenv found nothing to write)' : `holds ${t.bytes} byte(s) that are not the dummy`);
+
 const ruleS3 = v => {
   const s = v.smoke.meta.samplers;
   const k = v.smoke.checks;
-  const ok = s.samples >= 5 && s.realInCmdline === 0 && s.realInEnviron === 0 && k.tokenTxt?.equalsDummy === true && (k.realTokenScan?.hits ?? ['unknown']).length === 0;
-  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; dummy in environ ${s.dummyInEnviron}; token.txt equals the dummy: ${k.tokenTxt?.equalsDummy}; real-token hits over ${k.realTokenScan?.scanned} file(s): ${k.realTokenScan?.hits?.length}`);
+  const ok = s.samples >= 5 && s.realInCmdline === 0 && s.realInEnviron === 0 && tokenTxtIsSafe(k.tokenTxt) && (k.realTokenScan?.hits ?? ['unknown']).length === 0;
+  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; dummy in environ ${s.dummyInEnviron}; token.txt ${tokenTxtWord(k.tokenTxt)}; real-token hits over ${k.realTokenScan?.scanned} file(s): ${k.realTokenScan?.hits?.length}`);
 };
 
 const rule$1 = v => {
