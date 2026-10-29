@@ -131,7 +131,7 @@ internal sealed class StrictJson
         var obj = Map(node, where);
         foreach (var name in obj.Select(member => member.Key).Where(key => !known.Contains(key, StringComparer.Ordinal)))
         {
-            Add($"{Join(where, name)} is not a member this build knows (known: {string.Join(", ", known)}) — refused rather than ignored");
+            Add($"{ExecutableRule.Printable(Join(where, name))} is not a member this build knows (known: {string.Join(", ", known)}) — refused rather than ignored");
         }
 
         foreach (var name in required.Where(r => node is JsonObject && !obj.ContainsKey(r)))

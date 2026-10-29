@@ -30,7 +30,7 @@ public static class ExecutableResolution
     {
         if (forbiddenRoots.FirstOrDefault(ExecutableRule.HoldsNul) is { } nulRoot)
         {
-            return Outcome<string>.Failure($"the forbidden root '{nulRoot.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — a path never does; refused (D17)");
+            return Outcome<string>.Failure($"the forbidden root '{ExecutableRule.Printable(nulRoot)}' holds a NUL character — a path never does; refused (D17)");
         }
 
         var roots = AsWrittenAndReal(forbiddenRoots, realPath);
