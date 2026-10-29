@@ -27,8 +27,9 @@ namespace ModelArms.Verbs;
 /// is made: a root half-made by a stop would be refused as existing by the same command run again.
 /// </para>
 /// <para>
-/// What it does NOT close: the root is checked absent and then made — two calls — but the <c>mkdir</c> is exclusive, so two <c>init</c> processes racing for one name cannot
-/// both make it; the loser is exit 4.
+/// What it does NOT close: the root is checked absent and then made — two calls. Off Windows the <c>mkdir</c> is exclusive, so two <c>init</c> processes racing for one name cannot
+/// both make it and the loser is exit 4; on Windows the runtime makes the folder and a folder made at the name between the check and the creation is adopted silently (Windows already
+/// declares the link and mode checks not performed).
 /// </para></summary>
 public static class InitVerb
 {

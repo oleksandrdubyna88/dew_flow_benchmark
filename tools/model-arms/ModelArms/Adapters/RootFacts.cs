@@ -14,7 +14,8 @@ public static class RootFacts
     /// <summary>The nearest ancestor-or-self of <paramref name="path"/> holding a <c>.git</c> file (a worktree) or folder (a clone); the empty string
     /// when there is none. The path need not exist yet: <c>init</c> asks about a root it has not made. The question is asked of where the path REALLY is — the kernel's
     /// answer for its nearest existing ancestor, with the absent segments appended (<c>ExecutableResolution.RealPathClimbing</c>) — because a root spelled through a link
-    /// into a checkout has no checkout above its text; the spelling is asked second, for a path the kernel could not place, so a refusal is never lost.</summary>
+    /// into a checkout has no checkout above its text. The spelling is asked second, and the fallback cannot hide a checkout: on POSIX a path the kernel cannot place is stopped earlier with exit 3
+    /// (<c>init</c> at <c>Present(root)</c>, <c>validate</c> at the trust <c>stat</c>), so the fallback only adds refusals; a platform without a resolver keeps the textual check that ran before.</summary>
     public static string GitTopOf(string path) =>
         TopOf(RealAncestry(path)) is { Length: > 0 } real ? real : TopOf(AncestorsOrSelf(path));
 

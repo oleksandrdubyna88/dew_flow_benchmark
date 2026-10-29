@@ -13,9 +13,11 @@ internal static class UnfilledValues
         {
             JsonObject members => members.SelectMany(member => Paths(member.Value, StrictJson.Join(path, member.Key))),
             JsonArray items => items.SelectMany((item, index) => Paths(item, $"{path}[{index}]")),
-            JsonValue value when value.TryGetValue(out string? text) && text == ExperimentTemplate.Blank => [path],
+            JsonValue value when IsBlank(value) => [path],
             _ => [],
         };
+
+    private static bool IsBlank(JsonValue value) => value.TryGetValue(out string? text) && text == ExperimentTemplate.Blank;
 
     /// <summary>Records a problem for each unfilled value that no earlier problem already names: a line about the path starts with it, then a space or a colon.</summary>
     public static void Refuse(StrictJson reader, JsonNode root)
