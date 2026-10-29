@@ -103,6 +103,24 @@ public static class ProcessRunner
     /// checkpoint) ends the launch the same way — the child is killed, never left spending with nobody reading it — and the sink's
     /// exception is what the caller sees.
     /// </para></summary>
+    public static Task<ProcessAttempt> RunAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        string input,
+        IReadOnlyDictionary<string, string>? environment,
+        Action<string>? stdoutLine,
+        CancellationToken cancellationToken) =>
+        RunAsync(executable, arguments, workingDirectory, timeout, input, environment, stdoutLine, stderrLine: null, cancellationToken);
+
+    /// <summary>The same launch with stderr ALSO handed to <paramref name="stderrLine"/> LINE BY LINE AS IT ARRIVES, beside stdout's sink (model
+    /// arms E1.S5): a step that is paid for while it runs keeps the CLI's warnings on disk the moment they are printed. The whole stderr is
+    /// still returned in <see cref="ProcessResult.StandardError"/> and <see cref="ProcessResult.Output"/>. Either sink may be null.
+    /// <para>
+    /// <b>The wall and the tree kill are unchanged</b>, and a stderr sink that THROWS ends the launch exactly as a stdout sink does: the
+    /// child's tree is killed and the sink's exception is what the caller sees.
+    /// </para></summary>
     public static async Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,
@@ -111,11 +129,12 @@ public static class ProcessRunner
         string input,
         IReadOnlyDictionary<string, string>? environment,
         Action<string>? stdoutLine,
+        Action<string>? stderrLine,
         CancellationToken cancellationToken)
     {
         var start = StartInfo(executable, arguments, workingDirectory, input, environment);
 
-        if (stdoutLine is not null)
+        if (stdoutLine is not null || stderrLine is not null)
         {
             Utf8(start);
         }
@@ -132,7 +151,7 @@ public static class ProcessRunner
             await WriteAsync(process, input, cancellationToken);
         }
 
-        return await AwaitAsync(process, timeout, stdoutLine, cancellationToken);
+        return await AwaitAsync(process, timeout, stdoutLine, stderrLine, cancellationToken);
     }
 
     /// <summary>The same launch with stdout handed to <paramref name="readStdout"/> as a raw byte STREAM, and stdin written WHILE it is read
@@ -159,7 +178,8 @@ public static class ProcessRunner
         }
 
         var writing = input.Length > 0 ? WriteAsync(process, input, cancellationToken) : Task.CompletedTask;
-        var attempt = await AwaitAsync(process, timeout, budget => ReadAsync(process.StandardOutput.BaseStream, readStdout, budget), cancellationToken);
+        var attempt = await AwaitAsync(
+            process, timeout, budget => ReadAsync(process.StandardOutput.BaseStream, readStdout, budget), Reader(process.StandardError, line: null), cancellationToken);
         await writing;
 
         return attempt;
@@ -226,26 +246,30 @@ public static class ProcessRunner
     }
 
     private static Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, CancellationToken cancellationToken) =>
-        AwaitAsync(
-            process, timeout,
-            // None, deliberately, and this is the reason rather than an omission: on a timeout the child is
-            // killed and its output is still MERGED into the report below. A cancelled read would throw
-            // exactly then — leaving the one diagnosis anybody wants ("what did it print before it hung?")
-            // unavailable at the only moment it matters. The reads end on their own when the pipes close.
-            budget => stdoutLine is null ? process.StandardOutput.ReadToEndAsync(CancellationToken.None) : PumpAsync(process.StandardOutput, stdoutLine, budget),
-            cancellationToken);
+        System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, Action<string>? stderrLine, CancellationToken cancellationToken) =>
+        AwaitAsync(process, timeout, Reader(process.StandardOutput, stdoutLine), Reader(process.StandardError, stderrLine), cancellationToken);
 
-    /// <summary>The wait, the wall and the tree kill, over whichever stdout reader the launch chose: buffered text, a line pump, or a byte
-    /// reader (<see cref="StreamAsync"/>) — one copy of the part that must never differ between them.</summary>
+    /// <summary>Buffered to the end when no sink is given — None as the token, deliberately, and this is the reason rather than an omission: on a
+    /// timeout the child is killed and its output is still MERGED into the report below. A cancelled read would throw exactly then — leaving
+    /// the one diagnosis anybody wants ("what did it print before it hung?") unavailable at the only moment it matters. The reads end on their
+    /// own when the pipes close — or pumped line by line into the sink, under the wait's budget.</summary>
+    private static Func<CancellationTokenSource, Task<string>> Reader(StreamReader pipe, Action<string>? line) =>
+        budget => line is null ? pipe.ReadToEndAsync(CancellationToken.None) : PumpAsync(pipe, line, budget);
+
+    /// <summary>The wait, the wall and the tree kill, over whichever readers the launch chose for the two pipes: buffered text, a line pump, or
+    /// (stdout only) a byte reader (<see cref="StreamAsync"/>) — one copy of the part that must never differ between them.</summary>
     private static async Task<ProcessAttempt> AwaitAsync(
-        System.Diagnostics.Process process, TimeSpan timeout, Func<CancellationTokenSource, Task<string>> readStdout, CancellationToken cancellationToken)
+        System.Diagnostics.Process process,
+        TimeSpan timeout,
+        Func<CancellationTokenSource, Task<string>> readStdout,
+        Func<CancellationTokenSource, Task<string>> readStderr,
+        CancellationToken cancellationToken)
     {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeout);
 
         var stdout = readStdout(budget);
-        var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        var stderr = readStderr(budget);
 
         try
         {
@@ -295,18 +319,18 @@ public static class ProcessRunner
         }
     }
 
-    /// <summary>Stdout read line by line, each line handed to the sink the moment it is read, and the whole text kept. A sink that throws
+    /// <summary>A pipe read line by line, each line handed to the sink the moment it is read, and the whole text kept. A sink that throws
     /// cancels the wait's budget — which kills the child's tree in <see cref="AwaitAsync"/> — and its exception travels out of the read.</summary>
-    private static async Task<string> PumpAsync(StreamReader reader, Action<string> stdoutLine, CancellationTokenSource budget)
+    private static async Task<string> PumpAsync(StreamReader reader, Action<string> line, CancellationTokenSource budget)
     {
         var text = new System.Text.StringBuilder();
 
         try
         {
-            while (await reader.ReadLineAsync(CancellationToken.None) is { } line)
+            while (await reader.ReadLineAsync(CancellationToken.None) is { } read)
             {
-                text.Append(line).Append('\n');
-                stdoutLine(line);
+                text.Append(read).Append('\n');
+                line(read);
             }
         }
         catch (Exception)
