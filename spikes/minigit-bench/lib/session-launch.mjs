@@ -70,6 +70,7 @@ function installHarness(plan) {
 async function startServers(plan, d, stack, rec) {
   const { layout } = plan;
   const append = file => line => appendFileSync(file, jsonLine(line));
+  [layout.files.egressLog, layout.files.brokerLog, layout.files.watchdog, layout.files.stream, layout.files.streamStamped, layout.files.stderr, path.join(layout.otel, 'otel-raw.ndjson'), path.join(layout.otel, 'otel.ndjson')].forEach(f => appendFileSync(f, '')); // an empty log is a fact; a missing one is a gap
   rec.receiver = await d.startReceiver({ dir: layout.otel, port: 0, socketPath: layout.sockets.otel });
   stack.push('receiver', () => rec.receiver.close());
   const brokerLog = append(layout.files.brokerLog);

@@ -14,10 +14,10 @@ const walk = dir => (existsSync(dir) ? readdirSync(dir).flatMap(name => {
 }) : []);
 
 /** The files a sanitised copy holds: `[{ relPath, text }]`, or a failure naming the missing required file. */
-export function readCaptureFiles(from) {
+export function readCaptureFiles(from, { optional = OPTIONAL } = {}) {
   const missing = REQUIRED.filter(f => !existsSync(path.join(from, f)));
   if (missing.length > 0) return fail(`${from} lacks ${missing.join(', ')}: is it a capture directory?`);
-  const named = [...REQUIRED, ...OPTIONAL].filter(f => existsSync(path.join(from, f)));
+  const named = [...new Set([...REQUIRED, ...optional])].filter(f => existsSync(path.join(from, f)));
   const transcripts = walk(path.join(from, 'transcripts')).map(f => path.relative(from, f));
   return ok([...named, ...transcripts].map(relPath => ({ relPath, text: readFileSync(path.join(from, relPath), 'utf8') })));
 }
@@ -50,10 +50,10 @@ export function loadCapture(dir) {
  * A failed write removes the staging directory, so a failed sanitise leaves nothing behind and a retry is not blocked.
  * `to` must not exist or be empty; `write(file, text)` is the one write seam.
  */
-export function sanitiseCapture({ from, to, token = null, ctx = localContext(), write = writeFileSync }) {
+export function sanitiseCapture({ from, to, token = null, ctx = localContext(), write = writeFileSync, optional = OPTIONAL }) {
   if (existsSync(to) && readdirSync(to).length > 0) return fail(`${to} is not empty: a fixture is never overwritten`);
   const raw = path.resolve(from);
-  const files = readCaptureFiles(raw);
+  const files = readCaptureFiles(raw, { optional });
   if (!files.ok) return files;
   const sink = files.value.find(f => f.relPath === 'otlp-raw.ndjson').text;
   const secrets = collectAttrSecrets(sink);
