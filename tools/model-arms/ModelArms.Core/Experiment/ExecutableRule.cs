@@ -20,10 +20,10 @@ public static class ExecutableRule
     public static string Refusal(string executable, IReadOnlyList<string> forbiddenRoots) =>
         executable switch
         {
-            _ when HoldsNul(executable) => $"the executable '{executable.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — a path never does; refused (D17)",
+            _ when HoldsNul(executable) => $"the executable '{Printable(executable)}' holds a NUL character — a path never does; refused (D17)",
             _ when executable.Trim().Length == 0 => "the executable is empty — name an executable from PATH or an absolute path outside the target (D17)",
             _ when DevicePrefixes.Any(prefix => executable.StartsWith(prefix, StringComparison.Ordinal)) =>
-                $"the executable '{executable}' uses a verbatim or device prefix — spell the path plainly (D17)",
+                $"the executable '{Printable(executable)}' uses a verbatim or device prefix — spell the path plainly (D17)",
             _ when executable.IndexOfAny(PathMarks) < 0 => string.Empty,
             _ when !Path.IsPathFullyQualified(executable) => Relative(executable),
             _ => UnderForbiddenRoot(executable, forbiddenRoots),
@@ -40,7 +40,7 @@ public static class ExecutableRule
         var root = forbiddenRoots.FirstOrDefault(r => PathScope.IsEqualOrUnder(real, r));
         return root is null
             ? string.Empty
-            : $"the executable '{written}' is really '{real}', which is under '{root}' — a harness never runs a file an arm could write; pass it as an argument of an executable resolved outside (D17)";
+            : $"the executable '{Printable(written)}' is really '{Printable(real)}', which is under {Under(root)} — a harness never runs a file an arm could write; pass it as an argument of an executable resolved outside (D17)";
     }
 
     /// <summary>The roots no executable may sit under: the target, and the experiment root itself, which holds the base clone, the arms'
@@ -49,14 +49,25 @@ public static class ExecutableRule
     public static IReadOnlyList<string> ForbiddenRoots(string source, string root) =>
         [.. new[] { source, root }.Where(candidate => candidate.Length > 0)];
 
+    /// <summary>The text with every NUL character written as the two characters <c>\0</c>: a raw NUL in a sentence ends the line in many terminals and logs.
+    /// Every sentence that echoes input the operator typed goes through this.</summary>
+    public static string Printable(string text) => text.Replace("\0", "\\0", StringComparison.Ordinal);
+
+    /// <summary>A forbidden root as a sentence names it. A root holding a NUL cannot be compared, so it counts as containing the executable (fail closed)
+    /// and the sentence says that, rather than printing a root that looks ordinary.</summary>
+    private static string Under(string root) =>
+        HoldsNul(root)
+            ? $"'{Printable(root)}', which holds a NUL character and cannot be compared (treated as containing it)"
+            : $"'{root}'";
+
     private static string Relative(string executable) =>
-        $"the executable '{executable}' is a relative path, resolved against the target — use a name from PATH or an absolute path outside the target (D17)";
+        $"the executable '{Printable(executable)}' is a relative path, resolved against the target — use a name from PATH or an absolute path outside the target (D17)";
 
     private static string UnderForbiddenRoot(string executable, IReadOnlyList<string> forbiddenRoots)
     {
         var root = forbiddenRoots.FirstOrDefault(r => PathScope.IsEqualOrUnder(executable, r));
         return root is null
             ? string.Empty
-            : $"the executable '{executable}' is under '{root}' — a harness never runs a file an arm could write; pass it as an argument of an executable resolved outside (D17)";
+            : $"the executable '{Printable(executable)}' is under {Under(root)} — a harness never runs a file an arm could write; pass it as an argument of an executable resolved outside (D17)";
     }
 }

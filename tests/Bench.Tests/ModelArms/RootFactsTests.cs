@@ -198,23 +198,23 @@ public sealed class RootFactsTests
             return;
         }
 
+        // The whole shape lives inside the temporary folder, so it means the same at any TMPDIR depth. 'W/dl2/../x/f.json' is W/x/f.json to .NET
+        // (the '..' cancels 'dl2' as text) and W/K/a/b/c/x/f.json to the kernel (the '..' climbs from the folder 'dl2' points to).
         using var temp = new TempFolder();
         temp.RequireLinks();
-        var own = temp.File("x", "W", "K", "etc", "passwd");
-        File.SetUnixFileMode(own, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        temp.Folder("W", "K", "a", "b", "c", "e");
+        var decoy = temp.File("decoy", "W", "K", "a", "b", "c", "x", "f.json");
+        File.SetUnixFileMode(decoy, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var textual = temp.File("textual", "W", "x", "f.json");
+        File.SetUnixFileMode(textual, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
         Directory.CreateSymbolicLink(temp.Combine("W", "dl2"), temp.Combine("W", "K", "a", "b", "c", "e"));
-        var climbing = temp.Combine("W", "dl2", "..", "..", "..", "..", "etc", "passwd");
-        var full = System.IO.Path.GetFullPath(climbing);
+        temp.Folder("W", "K", "a", "b", "c", "e");
+        var climbing = temp.Combine("W", "dl2", "..", "x", "f.json");
 
-        var outcome = await RootFacts.FileFactsAsync(climbing, CancellationToken.None);
+        var facts = (await RootFacts.FileFactsAsync(climbing, CancellationToken.None)).Ok();
 
-        if (outcome is Outcome<FileFacts>.Ok ok)
-        {
-            ok.Value.Path.Should().Be(full, "the facts are of the one normalised path");
-            ok.Value.Mode.Should().Be(File.GetUnixFileMode(full), "the mode is of the file the owner is of");
-            ok.Value.OwnerUid.Should().Be(await OwnerOf(full), "the owner is of the file the mode is of — never the operator's file reached in the kernel's order");
-        }
+        facts.Path.Should().Be(textual, "the facts are of the one normalised path");
+        facts.Mode.Should().Be(File.GetUnixFileMode(textual), "the mode is of the textual file (644), not of the decoy the kernel's reading of '..' reaches (600)");
+        File.ReadAllText(facts.Path).Should().Be("textual");
     }
 
     [Fact]
@@ -231,12 +231,39 @@ public sealed class RootFactsTests
         outcome.Reason().Should().Contain("NUL");
     }
 
-    private static async Task<int> OwnerOf(string path)
+    [Theory]
+    [InlineData("1000 a1ff", false)]
+    [InlineData("1000 120755", true)]
+    public void A_symbolic_link_is_recognised_by_the_type_bits_of_the_mode_not_by_a_translated_word(string statOutput, bool bsd)
     {
-        using var stat = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("stat", ["-c", "%u", path]) { RedirectStandardOutput = true })!;
-        var text = await stat.StandardOutput.ReadToEndAsync();
-        await stat.WaitForExitAsync();
-        return int.Parse(text.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        var refused = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd);
+
+        refused.Reason().Should().Contain("symbolic link").And.Contain("D17");
+    }
+
+    [Theory]
+    [InlineData("1000 81a4", false, "644")]
+    [InlineData("1000 100600", true, "600")]
+    [InlineData("0 41ed", false, "755")]
+    [InlineData("1000 8fff", false, "7777")]
+    public void The_owner_and_the_permission_bits_come_out_of_the_raw_mode(string statOutput, bool bsd, string octalMode)
+    {
+        var facts = RootFacts.FactsOfStat("/r/experiment.json", statOutput, bsd).Ok();
+
+        facts.OwnerUid.Should().Be(int.Parse(statOutput.Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture));
+        ((int)facts.Mode).Should().Be(Convert.ToInt32(octalMode, 8), "the type bits are not part of the mode");
+        facts.Path.Should().Be("/r/experiment.json");
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("1000", false)]
+    [InlineData("x a1ff", false)]
+    [InlineData("1000 zzzz", false)]
+    [InlineData("1000 189", true)]
+    public void Output_that_is_not_an_owner_and_a_mode_is_refused(string statOutput, bool bsd)
+    {
+        RootFacts.FactsOfStat("/r/x", statOutput, bsd).Failed().Should().BeTrue();
     }
 
     [Fact]

@@ -15,6 +15,9 @@ public static class RootFacts
 
     private static readonly TimeSpan Ask = TimeSpan.FromSeconds(10);
 
+    /// <summary>The child's whole environment: the C locale, so nothing it prints is translated. The answers are numbers and bits, so this is belt and braces.</summary>
+    private static readonly IReadOnlyDictionary<string, string> NeutralLocale = new Dictionary<string, string> { ["LC_ALL"] = "C" };
+
     /// <summary>The nearest ancestor-or-self of <paramref name="path"/> holding a <c>.git</c> file (a worktree) or folder (a clone); the empty string
     /// when there is none. The path need not exist yet: <c>init</c> asks about a root it has not made.</summary>
     public static string GitTopOf(string path) =>
@@ -52,7 +55,7 @@ public static class RootFacts
 
         if (ExecutableRule.HoldsNul(path))
         {
-            return Outcome<FileFacts>.Failure($"the trust path '{path.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — refused (D17)");
+            return Outcome<FileFacts>.Failure($"the trust path '{ExecutableRule.Printable(path)}' holds a NUL character — refused (D17)");
         }
 
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
@@ -60,38 +63,49 @@ public static class RootFacts
         return said.Match(text => Judge(full, text), reason => Outcome<FileFacts>.Failure($"the owner of {full} cannot be read: {reason}"));
     }
 
-    /// <summary>GNU <c>stat -c '%u %a %F'</c> (owner, access rights in octal, file type); the BSD spelling on macOS. Without <c>-L</c>: the file itself, never what a link points to.</summary>
+    /// <summary>GNU <c>stat -c '%u %f'</c> (owner, the raw mode in hex); BSD and macOS <c>stat -f '%u %p'</c> (owner, the raw mode in octal). The raw mode carries the
+    /// file type in its high bits, so the type is decided on bits and never on a word <c>stat</c> prints in the user's language. Without <c>-L</c>: the file itself.</summary>
     private static string[] StatArguments(string full) =>
-        OperatingSystem.IsMacOS() ? ["-f", "%u %Lp %HT", full] : ["-c", "%u %a %F", full];
+        OperatingSystem.IsMacOS() ? ["-f", "%u %p", full] : ["-c", "%u %f", full];
 
-    private static Outcome<FileFacts> Judge(string full, string text) =>
-        StatLine.Read(text).Match(
+    /// <summary>The facts in one line of <c>stat</c> output, or why the line cannot be used. A symbolic link is refused, naming where it points: the trust check
+    /// judges the file itself, not a link that can be re-pointed. Public so the parser can be tested over the raw outputs of both <c>stat</c> flavours.</summary>
+    public static Outcome<FileFacts> FactsOfStat(string full, string text, bool bsd) =>
+        StatLine.Read(text, bsd).Match(
             line => line.IsLink
                 ? Outcome<FileFacts>.Failure(
                     $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
-                : Outcome<FileFacts>.Success(new FileFacts(full, line.Uid, line.Mode)),
+                : Outcome<FileFacts>.Success(new FileFacts(full, line.Uid, line.Permissions)),
             reason => Outcome<FileFacts>.Failure($"stat answered '{text}' for {full}: {reason}"));
 
-    /// <summary>One line of <c>stat</c>: <c>uid mode type</c>, the type being words (<c>regular file</c>, <c>symbolic link</c>).</summary>
-    private sealed record StatLine(int Uid, UnixFileMode Mode, string Type)
-    {
-        public bool IsLink => Type.Equals("symbolic link", StringComparison.OrdinalIgnoreCase);
+    private static Outcome<FileFacts> Judge(string full, string text) => FactsOfStat(full, text, OperatingSystem.IsMacOS());
 
-        public static Outcome<StatLine> Read(string text)
+    /// <summary>One line of <c>stat</c>: <c>uid rawmode</c>. The raw mode is S_IFMT (<c>0xF000</c>) type bits over the permission bits (<c>0xFFF</c>, which includes set-id and sticky).</summary>
+    private sealed record StatLine(int Uid, int RawMode)
+    {
+        private const int TypeMask = 0xF000;
+        private const int SymbolicLink = 0xA000;
+        private const int PermissionMask = 0xFFF;
+
+        public bool IsLink => (RawMode & TypeMask) == SymbolicLink;
+
+        public UnixFileMode Permissions => (UnixFileMode)(RawMode & PermissionMask);
+
+        public static Outcome<StatLine> Read(string text, bool bsd)
         {
-            var parts = text.Split(' ', 3);
-            return parts.Length == 3 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var uid) && TryMode(parts[1], out var mode)
-                ? Outcome<StatLine>.Success(new StatLine(uid, mode, parts[2]))
-                : Outcome<StatLine>.Failure("expected an owner, an octal mode and a file type");
+            var parts = text.Split(' ', 2);
+            return parts.Length == 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var uid) && TryRaw(parts[1], bsd, out var raw)
+                ? Outcome<StatLine>.Success(new StatLine(uid, raw))
+                : Outcome<StatLine>.Failure("expected an owner and a raw mode");
         }
 
-        private static bool TryMode(string octal, out UnixFileMode mode)
+        private static bool TryRaw(string digits, bool octal, out int raw)
         {
-            mode = UnixFileMode.None;
-            var parsed = octal.Length is > 0 and <= 5 && octal.All(c => c is >= '0' and <= '7');
+            raw = 0;
+            var parsed = digits.Length is > 0 and <= 8 && digits.All(c => octal ? c is >= '0' and <= '7' : char.IsAsciiHexDigit(c));
             if (parsed)
             {
-                mode = (UnixFileMode)Convert.ToInt32(octal, 8);
+                raw = Convert.ToInt32(digits, octal ? 8 : 16);
             }
 
             return parsed;
@@ -130,7 +144,7 @@ public static class RootFacts
     /// <summary>What a short-lived tool printed on stdout, or why it could not be asked.</summary>
     private static async Task<Outcome<string>> Said(string tool, IReadOnlyList<string> arguments, CancellationToken ct)
     {
-        var attempt = await ProcessRunner.RunAsync(tool, arguments, Path.GetTempPath(), Ask, ct);
+        var attempt = await ProcessRunner.RunAsync(tool, arguments, Path.GetTempPath(), Ask, string.Empty, NeutralLocale, ct);
         return attempt is ProcessAttempt.Completed { Result.ExitCode: 0 } done
             ? Outcome<string>.Success(done.Result.StandardOutput.Trim())
             : Outcome<string>.Failure($"{tool} {string.Join(' ', arguments)}: {attempt.Describe}");

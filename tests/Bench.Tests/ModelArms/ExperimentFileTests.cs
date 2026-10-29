@@ -181,6 +181,16 @@ public sealed class ExperimentFileTests
     }
 
     [Fact]
+    public void A_nul_in_a_member_name_is_echoed_escaped_never_raw()
+    {
+        PosixPaths();
+        var reason = Refused(root => root["target"]!["sou\u0000rce2"] = "x");
+
+        reason.Should().NotContain("\0", "a raw NUL in a sentence ends the line in many terminals and logs");
+        reason.Should().Contain("sou\\0rce2").And.Contain("not a member this build knows");
+    }
+
+    [Fact]
     public void The_suite_runs_as_dotnet_with_the_test_assembly_as_an_argument()
     {
         PosixPaths();
