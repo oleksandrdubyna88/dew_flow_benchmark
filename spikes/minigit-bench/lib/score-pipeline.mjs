@@ -3,11 +3,12 @@
 // `scoringPlan` is pure; `runScoring(plan, deps)` takes its dependencies (see score-deps.mjs) so tests inject stubs.
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+import { DEFAULT_LIMITS } from './limits.mjs';
 import { fail, ok } from './result.mjs';
 import { stepScripts, stepHeldout } from './score-scripts.mjs';
 import { ScorerEnvironmentError, stepBuild, stepCleanup, stepCopy, stepInputs, stepPreflight, stepSweep } from './score-steps.mjs';
 
-export const DEFAULT_LIMITS = Object.freeze({ buildS: 600, scriptBaseS: 600, perInvocationS: 10, wallS: 7200 });
+export { DEFAULT_LIMITS };
 const ARMS = ['process', 'bare'];
 const STACKS = ['csharp', 'node'];
 const PHASES = ['v1', 'v2'];

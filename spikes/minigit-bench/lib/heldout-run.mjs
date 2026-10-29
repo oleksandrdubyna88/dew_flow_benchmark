@@ -12,6 +12,7 @@ import { refuseInsideWorktree } from './git-guard.mjs';
 import { unpackTo } from './heldout-archive.mjs';
 import { defaultKeyPath, readKey, unseal } from './heldout-crypto.mjs';
 import { readFileOrNull } from './inputs.mjs';
+import { DEFAULT_LIMITS } from './limits.mjs';
 import { fail, ok } from './result.mjs';
 import { runBounded } from './run.mjs';
 
@@ -103,7 +104,7 @@ export function sweepLeftovers({ workRoot = defaultWorkRoot(), olderThanMs = DAY
 }
 
 /** Run the clear suite's runner for one phase. ok(parsed result.json) | fail(reason). */
-export async function runSuite({ suiteDir, binary, phase, box, workDir, outPath, timeoutS = 10, wallS = 1800 }) {
+export async function runSuite({ suiteDir, binary, phase, box, workDir, outPath, timeoutS = DEFAULT_LIMITS.perInvocationS, wallS = 1800 }) {
   mkdirSync(workDir, { recursive: true });
   const args = ['-I', path.join(suiteDir, 'runner.py'), '--phase', phase, '--binary', binary, '--work', workDir,
     '--box', JSON.stringify(box), '--timeout', String(timeoutS), '--out', outPath];
@@ -194,11 +195,11 @@ export function clearCases(casesDir) {
  * The scoring pipeline's `deps.heldout`: decrypt, run, score, clean up. Any trouble before a result exists is `{ known: false, why }`
  * (the verdict then reads unknown, never a pass and never a silent false).
  */
-export function makeHeldoutDep({ suiteEnc = SUITE_ENC, keyFile = defaultKeyPath(), workRoot = defaultWorkRoot(), timeoutS = 10, wallS = 1800, clearDir } = {}) {
-  return async function heldout({ binary, phase, box, casesDir, scoreDir }) {
+export function makeHeldoutDep({ suiteEnc = SUITE_ENC, keyFile = defaultKeyPath(), workRoot = defaultWorkRoot(), timeoutS = DEFAULT_LIMITS.perInvocationS, wallS = 1800, clearDir } = {}) {
+  return async function heldout({ binary, phase, box, casesDir, scoreDir, timeoutS: planS = timeoutS }) {
     const outPath = path.join(scoreDir, `heldout-${phase}.json`);
     mkdirSync(scoreDir, { recursive: true });
-    const run = suiteDir => runSuite({ suiteDir, binary, phase, box, workDir: casesDir, outPath, timeoutS, wallS });
+    const run = suiteDir => runSuite({ suiteDir, binary, phase, box, workDir: casesDir, outPath, timeoutS: planS, wallS });
     const finish = score => ({ ...score, casesCleanup: clearCases(casesDir) });
     // `clearDir` is the authoring mode (calibrate --src): the clear sources are used where they are, nothing is decrypted
     const ran = clearDir ? ok(await run(clearDir)) : await withClearSuite({ suiteEnc, keyFile, workRoot, rid: phase }, run);

@@ -3,13 +3,17 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, 
 import path from 'node:path';
 import { test } from 'node:test';
 import { defaultDeps, excludedDirs } from '../lib/score-deps.mjs';
+import { DEFAULT_LIMITS } from '../lib/limits.mjs';
 import { hundredPercent, runScoring, scoringPlan } from '../lib/score-pipeline.mjs';
-import { inputs, sandboxGate, stubTrees, tmpDir } from './helpers.mjs';
+import { inputs, sandboxGate, spikeDir, stubTrees, tmpDir } from './helpers.mjs';
 
 const MARKER = '.bench-score-owned';
 const markerFile = (sessionDir, name) => path.join(sessionDir, 'score', '.owned', `${name}${MARKER}`);
 
-/** Score a stub tree. `deps` overrides the default (real fs, real bwrap, held-out slot unknown). */
+/** The held-out slot of a test that did not wire one: unknown, and it touches nothing (the real one reads the key and builds case repositories). */
+const unwiredHeldout = async () => ({ known: false, why: 'not wired in this test' });
+
+/** Score a stub tree. `deps` overrides the default (real fs, real bwrap, a held-out slot that answers unknown and touches nothing). */
 async function scoreStub(stub, { arm = 'process', phase = 'v1', stack = 'csharp', deps = {}, limits, prepare, nugetCache, npmCache } = {}) {
   const sessionDir = tmpDir('session');
   const sourceDir = tmpDir('source');
@@ -18,7 +22,7 @@ async function scoreStub(stub, { arm = 'process', phase = 'v1', stack = 'csharp'
   const planned = scoringPlan({ arm, stack, phase, sourceDir, sessionDir, limits, nugetCache, npmCache });
   assert.equal(planned.ok, true, planned.reason);
   const base = defaultDeps({ inputs: await inputs(), toolchainDirs: [] });
-  const result = await runScoring(planned.value, { ...base, ...deps });
+  const result = await runScoring(planned.value, { ...base, heldout: unwiredHeldout, ...deps });
   return { sessionDir, sourceDir, plan: planned.value, result };
 }
 
@@ -186,21 +190,24 @@ test('The_copies_are_removed_at_the_end_and_their_markers_live_where_the_box_can
   assert.deepEqual(done.result.value.cleanup.failed, []);
 });
 
-test('The_copy_leaves_out_build_output_and_dependencies_by_stack', async () => {
-  const mkTree = ({ sourceDir }) => {
+test('The_copy_the_scorer_makes_leaves_out_build_output_and_dependencies_by_stack', async () => {
+  const prepare = ({ sourceDir }) => {
     for (const d of ['bin', 'obj', 'node_modules', 'src/App/bin', 'src/App/obj', 'src/keep']) mkdirSync(path.join(sourceDir, d), { recursive: true });
     for (const d of ['bin', 'obj', 'node_modules', 'src/App/bin', 'src/keep']) writeFileSync(path.join(sourceDir, d, 'f.txt'), 'x');
   };
-  const { fs: depsFs } = defaultDeps({ inputs: await inputs(), toolchainDirs: [] });
-  const src = tmpDir('cp-src');
-  mkTree({ sourceDir: src });
-  const list = dst => readdirSync(dst, { recursive: true }).filter(p => p.endsWith('f.txt')).sort();
-  const cs = path.join(tmpDir('cp-dst'), 'c');
-  depsFs.copyTree(src, cs, excludedDirs('csharp'));
-  assert.deepEqual(list(cs), ['src/keep/f.txt']);
-  const node = path.join(tmpDir('cp-dst'), 'n');
-  depsFs.copyTree(src, node, excludedDirs('node'));
-  assert.deepEqual(list(node), ['bin/f.txt', 'obj/f.txt', 'src/App/bin/f.txt', 'src/keep/f.txt']);
+  // the copy as the PIPELINE made it: listed from inside the first box call (the preflight), before the cleanup removes it
+  const copiedFor = async stack => {
+    let listing;
+    const run = async (exe, args, opts) => {
+      listing ??= readdirSync(args.find(a => a.endsWith(`${path.sep}score${path.sep}copy`)), { recursive: true }).filter(p => p.endsWith('f.txt')).sort();
+      return greenRun([])(exe, args, opts);
+    };
+    await scoreStub('silent', { stack, arm: 'bare', deps: { run }, prepare });
+    return listing;
+  };
+  assert.deepEqual(await copiedFor('csharp'), ['src/keep/f.txt']);
+  assert.deepEqual(await copiedFor('node'), ['bin/f.txt', 'obj/f.txt', 'src/App/bin/f.txt', 'src/keep/f.txt']);
+  assert.deepEqual([excludedDirs('csharp'), excludedDirs('node')], [['bin', 'obj', 'node_modules'], ['node_modules']], 'the one list, exported for the copy step');
 });
 
 test('A_build_that_outlives_its_limit_is_ended_and_reported_as_timed_out', async t => {
@@ -333,4 +340,25 @@ test('A_pinned_input_that_links_to_dev_zero_is_tampered_and_the_scorer_finishes'
   const { result } = await scoreStub('silent', { arm: 'bare', deps: { run: greenRun([]), heldout: greenHeldout }, prepare });
   assert.equal(result.ok, true, result.reason);
   assert.deepEqual(result.value.inputs.inputsTampered, ['SPEC-v1.txt', 'test-v2.sh']);
+});
+
+test('The_copy_step_takes_its_exclusion_list_from_the_one_exported_function', () => {
+  const read = name => readFileSync(path.join(spikeDir, 'lib', name), 'utf8');
+  assert.match(read('score-deps.mjs'), /export const excludedDirs = stack => \(stack === 'csharp' \? \[/, 'the scan still finds the list in its owner');
+  const steps = read('score-steps.mjs');
+  assert.match(steps, /import \{ excludedDirs \} from '\.\/score-deps\.mjs'/);
+  assert.match(steps, /copyTree\(plan\.sourceDir, plan\.copyDir, excludedDirs\(plan\.stack\)\)/);
+  assert.equal(/'node_modules'/.test(steps), false, 'score-steps.mjs keeps no second list');
+});
+
+test('The_held_out_slot_is_handed_the_plans_per_invocation_limit_and_the_number_ten_is_written_once', async () => {
+  const seen = [];
+  const heldout = async args => { seen.push(args.timeoutS); return { known: true, primary100: true }; };
+  await scoreStub('silent', { arm: 'bare', limits: { perInvocationS: 7 }, deps: { run: greenRun([]), heldout } });
+  await scoreStub('silent', { arm: 'bare', deps: { run: greenRun([]), heldout } });
+  assert.deepEqual(seen, [7, DEFAULT_LIMITS.perInvocationS]);
+  // the scan: no other source writes the default as a literal timeout, and the scan still finds the one that owns it
+  const sources = ['lib', '.'].flatMap(d => readdirSync(path.join(spikeDir, d)).filter(f => f.endsWith('.mjs')).map(f => path.join(spikeDir, d, f)));
+  const literal = /\btimeoutS\s*[:=]\s*10\b|perInvocationS\s*:\s*10\b/;
+  assert.deepEqual(sources.filter(f => literal.test(readFileSync(f, 'utf8'))).map(f => path.basename(f)), ['limits.mjs']);
 });

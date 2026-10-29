@@ -4,6 +4,7 @@ import path from 'node:path';
 import { scoreBoxArgv } from './bwrap.mjs';
 import { verifyFiles } from './inputs.mjs';
 import { fail, ok } from './result.mjs';
+import { excludedDirs } from './score-deps.mjs';
 
 export const MARKER_SUFFIX = '.bench-score-owned';
 const FIXED_NAMES = ['copy', 'home', 'tmp', 'cases', 'cache-nuget', 'cache-npm'];
@@ -82,7 +83,7 @@ export function stepCopy(ctx, sweep) {
     return refusal(`${plan.copyDir} already exists: ${why}`, 'environment');
   }
   markOwned(ctx, 'copy');
-  deps.fs.copyTree(plan.sourceDir, plan.copyDir, excludedDirsOf(plan.stack));
+  deps.fs.copyTree(plan.sourceDir, plan.copyDir, excludedDirs(plan.stack));
   for (const [name, source] of [['cache-nuget', plan.nugetCache], ['cache-npm', plan.npmCache]]) {
     if (!source) continue;
     markOwned(ctx, name);
@@ -91,8 +92,6 @@ export function stepCopy(ctx, sweep) {
   for (const [name, dir] of [['home', plan.homeDir], ['tmp', plan.tmpDir], ['cases', plan.casesDir]]) if (deps.fs.stat(dir) === null) markOwned(ctx, name);
   return ok({ copied: plan.copyDir });
 }
-
-const excludedDirsOf = stack => (stack === 'csharp' ? ['bin', 'obj', 'node_modules'] : ['node_modules']);
 
 /** Step 1b. Can the box start at all, with this toolchain and these binds? If not, the host cannot score: an environment failure, never a score. */
 export async function stepPreflight(ctx) {

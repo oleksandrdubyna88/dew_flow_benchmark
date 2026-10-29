@@ -51,7 +51,7 @@ export async function stepScripts(ctx, scripts, built) {
 }
 
 /**
- * Step 5. The held-out slot: `deps.heldout({ binary, phase, box, casesDir, scoreDir })` (heldout-run.mjs `makeHeldoutDep`) answers
+ * Step 5. The held-out slot: `deps.heldout({ binary, phase, box, casesDir, scoreDir, timeoutS })` (`timeoutS` is the plan's per-invocation limit) (heldout-run.mjs `makeHeldoutDep`) answers
  * `{ known: true, primary100, ... }` or `{ known: false, why }` (no key, no suite, a failed runner), never a pass by default.
  */
 export async function stepHeldout(ctx, built) {
@@ -59,5 +59,5 @@ export async function stepHeldout(ctx, built) {
   if (!built) return { known: true, primary100: false, reason: 'build failed' };
   // the cell's directory is read-only here: the held-out cases build their repositories under casesDir, so nothing writes into the copy
   const box = boxFor(ctx, plan.copyDir, { cwd: false, cases: true, roFiles: [plan.copyDir] });
-  return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box, casesDir: plan.casesDir, scoreDir: plan.scoreDir });
+  return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box, casesDir: plan.casesDir, scoreDir: plan.scoreDir, timeoutS: plan.limits.perInvocationS });
 }

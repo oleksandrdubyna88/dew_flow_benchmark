@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { scoreBoxArgv } from '../lib/bwrap.mjs';
 import { packDir } from '../lib/heldout-archive.mjs';
 import { generateKey, readKey, seal } from '../lib/heldout-crypto.mjs';
+import { DEFAULT_LIMITS } from '../lib/limits.mjs';
 import { assertWorkRoot, heldoutScore, makeHeldoutDep, runSuite, sweepLeftovers, withClearSuite } from '../lib/heldout-run.mjs';
 import { homeDir, pythonGate, sandboxGate, tmpDir } from './helpers.mjs';
 import { writeToySuite } from './toy-suite.mjs';
@@ -239,6 +240,20 @@ test('The_scoring_dependency_answers_unknown_when_the_key_is_missing_and_a_score
   const noKey = await makeHeldoutDep({ suiteEnc, keyFile: path.join(root, 'absent.key'), workRoot })({ binary, phase: 'v1', box: [], casesDir: work, scoreDir });
   assert.equal(noKey.known, false);
   assert.match(noKey.why, /absent\.key/);
+});
+
+test('The_per_invocation_limit_the_plan_hands_to_the_held_out_dependency_is_the_one_the_runner_enforces', async t => {
+  if (!pythonGate(t) || !sandboxGate(t)) return;
+  const { suiteEnc, keyFile } = sealedToy();
+  const { dir, binary, work } = copyWith('#!/bin/sh\nsleep 60\n');
+  const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('home'), tmp: tmpDir('tmp') })];
+  const dep = makeHeldoutDep({ suiteEnc, keyFile, workRoot: homeDir('dep-limit') });
+  const started = Date.now();
+  const scored = await dep({ binary, phase: 'v1', box, casesDir: work, scoreDir: tmpDir('score'), timeoutS: 1 });
+  assert.equal(scored.known, true, scored.why);
+  assert.ok(Date.now() - started < DEFAULT_LIMITS.perInvocationS * 1000 - 2000, 'the hanging case ended at the plan\'s limit, not at the default');
+  const first = JSON.parse(readFileSync(scored.resultPath, 'utf8')).cases.find(c => c.id === 'H1-01');
+  assert.deepEqual([first.status, first.reason], ['fail', 'timeout']);
 });
 
 async function toyProgram() {

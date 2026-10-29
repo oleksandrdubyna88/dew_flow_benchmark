@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { readFileOrNull } from './inputs.mjs';
+import { DEFAULT_LIMITS } from './limits.mjs';
 import { runSuite, heldoutScore } from './heldout-run.mjs';
 import { fail, ok } from './result.mjs';
 
@@ -155,7 +156,7 @@ export async function calibrate({ suiteDir, workRoot, scoreSubject, requireVisib
 }
 
 /** The test scorer: runs the suite's runner directly (no box, no visible scripts). */
-export function directScorer({ suiteDir, workRoot, timeoutS = 10 }) {
+export function directScorer({ suiteDir, workRoot, timeoutS = DEFAULT_LIMITS.perInvocationS }) {
   return async function score({ name, phase, treeDir }) {
     const workDir = path.join(workRoot, `${name}-${phase}`);
     const ran = await runSuite({ suiteDir, binary: path.join(treeDir, 'minigit'), phase, box: [], workDir, outPath: path.join(workRoot, `${name}-${phase}.json`), timeoutS });
