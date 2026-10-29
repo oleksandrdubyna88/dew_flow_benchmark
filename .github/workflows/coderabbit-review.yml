@@ -1,0 +1,35 @@
+name: coderabbit · request review
+
+# CodeRabbit's free plan for public repositories reviews automatically only above ten stars; below that it posts a
+# "Trigger review" checkbox and waits. A review that has to be asked for by hand is a review that is not there when the
+# pull request is read — so this asks, once, when a pull request opens, reopens or leaves draft. Pushes to an open pull
+# request are reviewed incrementally by CodeRabbit itself after the first review. Mirrored from wsl_care's copy, which
+# mirrors the family credential-store repository.
+#
+# `pull_request_target` runs THIS file from main with a token that may comment, and it checks out nothing: no code from
+# the pull request runs here. The number reaches the shell through `env:`, never pasted into the script. Not a required
+# check (.github/branch-protection.json, `$decided`): a third-party free tier that runs out must not hold every merge.
+# Nothing happens until the CodeRabbit App is installed for this repository.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+# Nothing at the top: the one job checks out nothing, so it gets only the right to comment, and a job added later
+# starts from no rights rather than inheriting these.
+permissions: {}
+
+jobs:
+  ask:
+    name: ask CodeRabbit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: github.event.pull_request.draft == false
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@coderabbitai review"
