@@ -1,0 +1,9 @@
+{
+  "t1": "stop",
+  "t2": "otel-incomplete",
+  "t3": "investigate",
+  "t3OutputSource": "transcript",
+  "join": "request_id",
+  "decidedOn": "2026-10-29",
+  "reason": "Pre-registered defaults before the step 0 capture exists (E1.S3). t1: the envelope disagreeing with itself is an instrument failure. t2: an O/E gap marks the cell otel-incomplete and keeps it. t3: a breach is investigated until E3 arms it (t3 = stop) after the A/A and P1 show T covering main and subagent with no unmatched transcript message; the pre-registered fallback is t3 = fallback-t2 with t2 = stop. t3OutputSource and join are A-T2 and A-J1: PROVISIONAL, replaced by the capture's verdicts in a dated commit."
+}

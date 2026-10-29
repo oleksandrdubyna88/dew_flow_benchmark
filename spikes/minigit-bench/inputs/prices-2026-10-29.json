@@ -1,0 +1,19 @@
+{
+  "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "readOn": "2026-10-29",
+  "models": [
+    { "modelId": "claude-opus-5-5", "input": 4, "output": 20, "cacheRead": 0.20, "cacheWrite5m": 5, "cacheWrite1h": 8 },
+    { "modelId": "claude-sonnet-5-5", "input": 2, "output": 10, "cacheRead": 0.10, "cacheWrite5m": 2.50, "cacheWrite1h": 4 },
+    { "modelId": "claude-haiku-4-5-20251001", "input": 1, "output": 5, "cacheRead": 0.10, "cacheWrite5m": 1.25, "cacheWrite1h": 2 },
+    { "modelId": "claude-fable-5-1", "input": 10, "output": 50, "cacheRead": 0.25, "cacheWrite5m": 12.50, "cacheWrite1h": 20 }
+  ],
+  "cliRates": [
+    { "modelId": "claude-sonnet-5-5", "cacheRead": 0.20, "observed": "pilot run 01a13812, the B2 cell on the OpenHands pilot task, 2026-10-14: claude 2.1.289 reported Sonnet 5.5 at $1.10243, exactly its tokens with a cache hit at $0.20/M; the pricing page, re-read the same night, says $0.10/M (0.05x input, footnote 2)" }
+  ],
+  "notes": [
+    "The Opus 5.5, Sonnet 5.5 and Haiku 4.5 rows are the rows of research/scout-calibration/prices.json as read on 2026-10-12; they were NOT re-read on 2026-10-29.",
+    "The claude-fable-5-1 row ($10 in / $50 out / $0.25 read / $12.50 5m write / $20 1h write) was read from the pricing page on 2026-10-29 (parent plan section 9).",
+    "cliRates[0] is the observation recorded in research/scout-calibration/prices.json, unchanged; A-P1 of the E1.S3 capture decides whether it still holds on claude 2.1.310.",
+    "E3's day-1 re-read replaces this file with a new dated file; the loader takes a path and nothing hard-codes the date."
+  ]
+}
