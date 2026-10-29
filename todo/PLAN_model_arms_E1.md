@@ -1120,6 +1120,11 @@ gate); a console writer that scrubs tokens (E2.S4).
 
 - **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E1.S9. **Parallel with:** nothing (E1.S11 follows).
 - **Owns:** D23, D17(c) for `validate`, D18 (`prep-base` refused until `validate` passes). **Size:** ≈ 650 lines.
+- **Carried from the E1.S7 review (R4):** `validate` fills every template the schemes' steps use ONCE, with representative facts
+  (a synthetic arm of each scheme, its own token, the configured KNOWN, PLAN, BASE, BRANCH, SCEN_COUNT) through `BriefFiller` and its
+  leak guard, so a KNOWN or an override template that would be refused (a scheme name such as `C` in free text: "C#", "(C)") is
+  caught before the chain starts, never hours into it at a step's launch. Test: a KNOWN carrying a scheme name makes `validate` refuse,
+  naming the field and the template.
 
 **Files.** Core `…/Experiment/HostChecks.cs` (`HostKind`, `HostKinds`, `ResolvedExecutable`, `HostFacts`, `HostProblem`, `HostChecks`);
 console `ModelArms/Adapters/HostFactsReader.cs`, `ModelArms/Verbs/Validate.cs`; `ModelArms/Program.cs` (two arms: `"validate" =>
