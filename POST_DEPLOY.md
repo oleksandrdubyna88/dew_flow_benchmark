@@ -1,6 +1,6 @@
 # Post-deploy checks — dew_flow_benchmark
 
-Per [`.claude/rules/shared/common/post-deploy-checks.md`](.claude/rules/shared/common/post-deploy-checks.md).
+Per [`.agents/conventions/common/post-deploy-checks.md`](.agents/conventions/common/post-deploy-checks.md).
 
 Nothing is deployed anywhere: the API, the collector and the CLI are started on the machine that runs
 a campaign. So "prod" is that machine's installation, and this list runs at every release against it —
@@ -23,12 +23,12 @@ Last verified: 2026-09-03 · http://127.0.0.1:5411 against a throwaway `postgres
 
 Because that route answers `{"status":"ok"}` from a literal and touches nothing. It is a liveness
 probe for an orchestrator, and using it here would be the exact failure
-[`reliability.md`](.claude/rules/shared/common/reliability.md) names: a health endpoint that computes
+[`reliability.md`](.agents/conventions/common/reliability.md) names: a health endpoint that computes
 from a constant tells you the route is mapped and nothing else. `/api/bench/runs` goes to the store,
 so it fails when the store is unreachable — which is the thing this list is for.
 
 ## Running it
 
 ```bash
-node .claude/rules/shared/tools/post-deploy-check.mjs --target http://127.0.0.1:5411
+node .agents/conventions/tools/post-deploy-check.mjs --target http://127.0.0.1:5411
 ```
