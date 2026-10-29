@@ -142,7 +142,8 @@ public static class ExperimentGate
                 [$"model-arms {input.Verb}: experiment.json is refused:", .. reason.Split('\n').Select(problem => $"  {problem}")]));
     }
 
-    private static string Home(IReadOnlyDictionary<string, string> environment) =>
+    /// <summary>The home directory of the map: <c>HOME</c>, else <c>USERPROFILE</c>, else empty. <c>init</c> hands it to the same placement rules.</summary>
+    internal static string Home(IReadOnlyDictionary<string, string> environment) =>
         environment.GetValueOrDefault("HOME", string.Empty) is { Length: > 0 } home ? home : environment.GetValueOrDefault("USERPROFILE", string.Empty);
 
     /// <summary>The file's text, or why the host could not give it. A stop the operator asked for cancels the read.</summary>

@@ -41,6 +41,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(HostKinds), typeof(HostChecks), typeof(global::ModelArms.Core.Briefs.BriefRehearsal), typeof(GitEnvironment),
 
         // E1.S11
+        typeof(ExperimentTemplate),
 
         // E2
 
