@@ -8,7 +8,7 @@ namespace ModelArms;
 /// <summary>The one road in for every verb that reads an experiment (D4 read once, D17 a, D18). A verb is started only after the root is named, has
 /// the files its stage needs, belongs to the operator and is closed to group and others, and its <c>experiment.json</c> is valid; each refusal names
 /// what it refused and ends the walk, so a later check never runs on what an earlier one refused. Exit 4 is a wrong configuration, exit 3 is a host
-/// that could not say (a <c>stat</c> or <c>id</c> that failed, a file that could not be read).
+/// that could not say (a kernel read that failed, a file that could not be read).
 /// <para>
 /// The root is normalised once (<c>GetFullPath</c>, the trailing separator trimmed) and that text is what the trust check stats; the facts it returns
 /// carry the normalised path whose owner, mode and inode were read, and <c>experiment.json</c> is read from that path — never from the operator's
@@ -16,7 +16,7 @@ namespace ModelArms;
 /// </para>
 /// <para>
 /// <b>The residual race.</b> Reading a file by path cannot be tied to the <c>stat</c> before it, so the file is stat-ed AGAIN after the read and
-/// refused (exit 4) when its device, inode, type, owner, mode or change time (ctime, with nanoseconds, read by the same <c>stat</c> call) are not what
+/// refused (exit 4) when its device, inode, type, owner, mode or change time (ctime, with nanoseconds, read by the same <c>statx</c> call) are not what
 /// was judged. That closes a swap in the window between the first <c>stat</c> and the read — measured before this check: 18 of 1500 passes read a
 /// link's target swapped in with <c>mv -T</c> — and, through the ctime, a swap and a swap back (<c>ln -f</c>, <c>mv -T</c> twice) that leaves the same
 /// inode under the name: 101 of 1500 passed with both stats equal before the ctime. It does not close everything: inode numbers can be reused on some
@@ -48,10 +48,10 @@ public static class ExperimentGate
     private static Task<Passage<ExperimentInput>> Admit(VerbInput input, GateSeams seams) =>
         Task.FromResult(NamedRoot(input))
             .Then(root => Present(input, root))
-            .ThenAsync(root => TrustedRoot(input, root, seams))
+            .Then(root => TrustedRoot(input, root, seams))
             .ThenAsync(judged => ReadExperiment(input, judged, seams))
             .Then(admitted => Needed(admitted))
-            .ThenAsync(admitted => TrustedScenarios(admitted, seams));
+            .Then(admitted => TrustedScenarios(admitted, seams));
 
     private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop)
     {
@@ -81,10 +81,10 @@ public static class ExperimentGate
         Unmet(input, RootRequirements.ToRead, root, root);
 
     /// <summary>Step 3: the root and <c>experiment.json</c> are the operator's own and closed to group and others.</summary>
-    private static async Task<Passage<Judged>> TrustedRoot(VerbInput input, string root, GateSeams seams)
+    private static Passage<Judged> TrustedRoot(VerbInput input, string root, GateSeams seams)
     {
         var experiment = new RootPaths(root).ExperimentFile;
-        var judged = await Judge(input, root, [new(root, FileKind.Directory), new(experiment, FileKind.Regular)], seams);
+        var judged = Judge(input, root, [new(root, FileKind.Directory), new(experiment, FileKind.Regular)], seams);
         return judged.Map(facts => new Judged(root, facts[1]));
     }
 
@@ -93,7 +93,7 @@ public static class ExperimentGate
     {
         var text = await TextOf(judged.Experiment.Path, input.Stopping);
         await seams.AfterRead(judged.Experiment.Path);
-        var same = await StillTheSame(input, judged.Experiment, seams);
+        var same = StillTheSame(input, judged.Experiment, seams);
         return text.Match(
             json => same.Bind(_ => Parsed(input, judged.Root, json)),
             reason => Passage<ExperimentInput>.Stop(ExitCodes.Environment, $"model-arms {input.Verb}: {reason}"));
@@ -108,16 +108,16 @@ public static class ExperimentGate
     }
 
     /// <summary>Step 6: <c>scenarios.json</c>, when the root has one, is trusted as the root is. Verbs that do not need it do not require it.</summary>
-    private static async Task<Passage<ExperimentInput>> TrustedScenarios(ExperimentInput admitted, GateSeams seams)
+    private static Passage<ExperimentInput> TrustedScenarios(ExperimentInput admitted, GateSeams seams)
     {
         var scenarios = admitted.Root.Of(admitted.Experiment.ScenariosFile);
-        return await scenarios.Match(
-            path => PathExists(path) ? TrustedFile(admitted, path, seams) : Task.FromResult<Passage<ExperimentInput>>(new Passage<ExperimentInput>.Through(admitted)),
-            reason => Task.FromResult(Passage<ExperimentInput>.Stop(ExitCodes.Configuration, $"model-arms {admitted.Verb.Verb}: {reason}")));
+        return scenarios.Match(
+            path => PathExists(path) ? TrustedFile(admitted, path, seams) : new Passage<ExperimentInput>.Through(admitted),
+            reason => Passage<ExperimentInput>.Stop(ExitCodes.Configuration, $"model-arms {admitted.Verb.Verb}: {reason}"));
     }
 
-    private static async Task<Passage<ExperimentInput>> TrustedFile(ExperimentInput admitted, string path, GateSeams seams) =>
-        (await Judge(admitted.Verb, admitted.Root.Root, [new(path, FileKind.Regular)], seams)).Map(facts => admitted with { JudgedScenarios = [facts[0]] });
+    private static Passage<ExperimentInput> TrustedFile(ExperimentInput admitted, string path, GateSeams seams) =>
+        Judge(admitted.Verb, admitted.Root.Root, [new(path, FileKind.Regular)], seams).Map(facts => admitted with { JudgedScenarios = [facts[0]] });
 
     private static Passage<T> Unmet<T>(VerbInput input, IReadOnlyList<RootRequirement> requirements, string root, T carried)
     {
@@ -159,14 +159,14 @@ public static class ExperimentGate
     }
 
     /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Shared with the verbs that read a file the gate only judged. Off POSIX nothing was judged, so nothing is compared.</summary>
-    internal static async Task<Passage<FileFacts>> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
+    internal static Passage<FileFacts> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
     {
         if (OperatingSystem.IsWindows())
         {
             return new Passage<FileFacts>.Through(judged);
         }
 
-        var again = await seams.ReadFacts(judged.Path, FileKind.Regular, input.Stopping);
+        var again = seams.ReadFacts(judged.Path, FileKind.Regular);
         return again switch
         {
             FactsRead.Read read => Compared(input, judged, read.Facts),
@@ -187,9 +187,9 @@ public static class ExperimentGate
     }
 
     /// <summary>D17 a over <paramref name="files"/>: off POSIX the printed line says the check was not performed and the walk goes on; on POSIX the
-    /// facts are read (a <c>stat</c> or <c>id</c> that fails stops with exit 3), a link or a file of the wrong kind is refused, and the owner and mode
+    /// facts are read (a kernel read that fails stops with exit 3), a link or a file of the wrong kind is refused, and the owner and mode
     /// are judged (exit 4, every problem printed). The answer is the facts that were read, in the order given.</summary>
-    private static async Task<Passage<IReadOnlyList<FileFacts>>> Judge(VerbInput input, string root, IReadOnlyList<Wanted> files, GateSeams seams)
+    private static Passage<IReadOnlyList<FileFacts>> Judge(VerbInput input, string root, IReadOnlyList<Wanted> files, GateSeams seams)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -197,19 +197,12 @@ public static class ExperimentGate
             return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, -1, UnixFileMode.None))]);
         }
 
-        var uid = await RootFacts.CurrentUidAsync(input.Stopping);
-        return await uid.Match(
-            id => JudgeFacts(input, root, files, id, seams),
-            reason => Task.FromResult(Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, $"model-arms {input.Verb}: {reason}")));
+        return JudgeFacts(input, root, files, RootFacts.CurrentUid(), seams);
     }
 
-    private static async Task<Passage<IReadOnlyList<FileFacts>>> JudgeFacts(VerbInput input, string root, IReadOnlyList<Wanted> files, int uid, GateSeams seams)
+    private static Passage<IReadOnlyList<FileFacts>> JudgeFacts(VerbInput input, string root, IReadOnlyList<Wanted> files, int uid, GateSeams seams)
     {
-        var reads = new List<FactsRead>();
-        foreach (var file in files)
-        {
-            reads.Add(await seams.ReadFacts(file.Path, file.Kind, input.Stopping));
-        }
+        var reads = files.Select(file => seams.ReadFacts(file.Path, file.Kind)).ToList();
 
         var unread = reads.OfType<FactsRead.Unread>().Select(read => read.Reason).ToList();
         var facts = reads.OfType<FactsRead.Read>().Select(read => read.Facts).ToList();

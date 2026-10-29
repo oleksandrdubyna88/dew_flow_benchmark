@@ -73,9 +73,9 @@ public static class ValidateVerb
         output.WriteLine("resolved executables:");
         foreach (var executable in facts.Executables)
         {
-            if (executable.Path is Outcome<string>.Ok real)
+            if (executable.Answer is ExecutableAnswer.Found found)
             {
-                output.WriteLine($"  {executable.Name} → {real.Value}");
+                output.WriteLine($"  {executable.Needed.Name} → {found.Real}");
             }
         }
     }
