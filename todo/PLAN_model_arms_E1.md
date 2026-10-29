@@ -1416,6 +1416,364 @@ still green.
 
 **Out of bounds.** `prep-base`'s real work (E4.S4); `chain`'s executables file (E4.S5); `run-arm`'s printing of executables (E2.S7).
 
+#### Fix after the Opus review (blocking) — spec by Fable
+
+- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Fixes on:** `feat/model-arms-e1s10` at `5ea1091` (`f910837`, `5ea1091` on
+  `7b68e69`). **Findings:** R1 (blocking), R2, R3 (major), R4–R8 (minor). **Size:** ≈ 750 lines, half of them tests; `RootFacts` loses
+  more than it gains. **Reaches back** into E1.S8's `RootFacts` / `ExecutableResolution` and E1.S9's `ExperimentGate` / `GateSeams`,
+  because R1 is a property of every launch the module makes, not of `validate`.
+
+**What was found.** D17's trust check and the source's git facts are read by STARTING PROGRAMS BY NAME — `id`, `stat`, `git` — and a
+bare name handed to `Process.Start` is looked up by the runtime, not by the module: as given when rooted, else beside the running binary,
+else in the **current directory**, else along the process's PATH (dotnet/runtime `Process.Unix.cs`, `ResolvePath`; `CreateProcess` has
+the same shape on Windows). The reviewer measured it with marker-writing shims on this host: a PATH entry `<target>/bin` ahead of a clean
+PATH ran the target's `git` four times, `id` twice and `stat` five times before `validate` refused that entry; a clean PATH with the cwd
+at the target root holding `./git` and `./id` exited 0 "valid" and printed `git → /usr/bin/git` while `./git` ran four times and `./id`
+twice. So the facts the trust check is decided on, and the facts about the source, can come from a program the target controls — and the
+check that exists to keep the harness from running an arm's file is itself the first thing that runs one. Re-measured here on 2026-10-29
+(WSL, Linux 6.18, glibc 2.43, x86_64, git 2.53): a plain folder INSIDE a checkout answers `rev-parse --git-dir` with exit 0 and
+`--show-toplevel` with the enclosing checkout, so `SourceIsGit` is also true of a folder that is no repository.
+
+| # | Fact (measured, not reasoned) | Where it breaks `5ea1091` |
+|---|---|---|
+| R1 | `Process.Start("git")`, `("id")`, `("stat")` resolve through the cwd before PATH; the shims ran (above) | `SourceFacts.cs:22,37` (`GitCommand`, bare `git`); `RootFacts.cs:42,72,186` (`Said("id")`, `Said("stat")`, cwd `Path.GetTempPath()` — itself from `TMPDIR`) |
+| R1 | `statx(2)` through libc on this host answers uid 1000, mode `0x81a4`, inode, dev `8:48`, ctime `…176.300465520` for a file — every field equal to `lstat(2)`'s — and `0xa1ff` for a dangling link; `stat -c '%.9Z'` printed `.300465600` for the same file: the tool rounds to microseconds, so the module's ctime has been 1000× coarser than the kernel's | — the fix (decision 3) |
+| R1 | `geteuid()` through libc answers 1000, the number `id -u` prints | — the fix (decision 2) |
+| R2 | `Environment: !reason.Contains("(D17)")` — a decision on message text; `Existing` wraps a plain `ENOENT` in `Unresolved`, which carries `(D17)`, so an absent spelled file exits 4 while the same file present without `x` exits 3 | `HostChecks.cs:107`, `ExecutableResolution.cs:99-105,132` |
+| R3 | `NearestExisting` climbs past any component `realPath` cannot answer — a dangling link (`home/link -> <target>/notyet`) or a loop — and judges the entry by the ancestor above it; once an arm makes `<target>/notyet`, the children's PATH leads into the target | `ExecutableResolution.cs:144-155`, used at `:85` |
+| R4 | a missing coai binary says `the real path of '<p>' cannot be resolved … (D17)` (exit 4); the sentence `coai.binary <p> does not exist` is unreachable, because the binary is in `NeededExecutables` and `Refused()` suppresses it | `HostChecks.cs:130,135` |
+| R5 | `PathRefusals` and `Templates` default to "nothing read" — a caller that forgets them validates a PATH it never looked at | `HostChecks.cs:42,44` |
+| R6 | the scenarios path is recomputed by `Root.Of`, while the second look stats `judged.Path` | `HostFactsReader.cs:90-98` |
+| R7 | the module doc's finding table and its gap note disagree with the code (an absent executable's exit; "the two can differ" where the target's git is RUN) | `research/module_model_arms.md:387,420` |
+| R8 | `research/module_tests.md` has no `model-arms` rows — the catalogue does not know the module's verbs exist | `research/module_tests.md:48-71` |
+
+**Decisions, with reasons.**
+
+1. **Nothing the module starts is looked up by name — ever.** Every launch names an ABSOLUTE path the module itself resolved and judged
+   (`ExecutableAnswer.Found.Real`, decision 6), under a REPLACED environment the module built, from a cwd the module chose. With an
+   absolute `FileName` the runtime's lookup never runs; what remains is what the program itself does with its environment and cwd, and
+   both are the module's. At E1.S10 that leaves ONE launch in the module, git (decision 5); `id` and `stat` are not launched at all
+   (decisions 2–4). A structural test keeps it so (S22).
+2. **The caller's uid: `geteuid(2)` through libc, no process.** `uid_t` is a 32-bit unsigned on Linux, macOS and FreeBSD (`__uid_t` /
+   `__uint32_t` in each libc's headers — a type width, not a layout); POSIX says the call cannot fail; `id -u` prints exactly this
+   number (probed: libc 1000, `id -u` 1000). `CurrentUid()` is synchronous and returns `int`. Residual: none beyond "libc is the
+   system's" — the same trust `RealPath` already places in `realpath(3)`.
+3. **A trust path's facts on Linux: `statx(2)` through libc with `AT_SYMLINK_NOFOLLOW`, no process, no text, no locale.** `struct statx`
+   is defined ONCE for every architecture (`include/uapi/linux/stat.h`: 256 bytes, explicitly padded) — that is the reason `statx` exists
+   over `struct stat`, whose layout differs by architecture and glibc version and whose symbol was `__xstat` before glibc 2.33. The six
+   facts the module uses, by the contract's offsets: `stx_mask` u32 @0, `stx_uid` u32 @20, `stx_mode` u16 @28, `stx_ino` u64 @32,
+   `stx_ctime` {`tv_sec` i64 @96, `tv_nsec` u32 @104}, `stx_dev_major` u32 @136, `stx_dev_minor` u32 @140. Probed on this host (x86_64,
+   glibc 2.43, kernel 6.18) against `lstat(2)` and `stat -c '%u %f %Hd %Ld %i %.9Z'`: equal field for field, the ctime finer than the
+   tool's (table above). The request is `STATX_BASIC_STATS` (`0x7ff`); the answer's `stx_mask` must carry `STATX_TYPE | STATX_MODE |
+   STATX_UID | STATX_INO | STATX_CTIME` (`0x1 | 0x2 | 0x8 | 0x100 | 0x80`), else `FactsRead.Unread("the file system did not report the
+   <names> of <path>")` — not captured is not zero (common.coding-style). `-1` → `Unread("<path>: <strerror>")`, the OS's words, no
+   decision on the errno (the gate's `Present` step already saw the path; a path that vanished is "the host could not say", as a failed
+   `stat` was). `EntryPointNotFoundException` / `DllNotFoundException` (glibc < 2.28, musl < 1.1.24) → `Unread("statx is not available in
+   this libc — refused rather than assumed (D17)")`. The type bits (`0xF000`) and permission bits (`0xFFF`) are decoded exactly as
+   `StatLine` decodes them today — the decoding moves, unchanged, from a hex string to the integer. `FileIdentity.Device` becomes
+   `major << 32 | minor` — a comparison key, not `makedev`'s encoding; its doc says so. The library name is `"libc"`, as `RealPath.cs:105`
+   already loads it on this host.
+4. **macOS and FreeBSD: refused as unprobed (exit 3) — the `stat -f` text reader is deleted, not re-pointed at `/usr/bin/stat`.** It has
+   never run on a Mac: CI is `ubuntu-latest` only (`.github/workflows/ci.yml:14,50,112,175`) and PROJECT.md names this machine as
+   Windows + WSL. By common.platform-limits that branch is an unmeasured platform claiming a measured answer, and by common.security a
+   measure nobody has observed working; keeping it alive at an absolute path would keep a SECOND reader (text, two formats, a process
+   with its own cwd and environment rules) for a platform nobody runs. The honest state is the refusal `the owner and mode of <path>
+   cannot be read on this platform: no probed kernel reader (a Mac needs a probed lstat layout: 144 bytes, 64-bit inode — plain
+   `lstat` on arm64, `lstat$INODE64` on x86_64) — refused rather than assumed (D17)` → `Unread`, exit 3, with the follow-up written in the
+   module doc. Windows stays `NotPerformed` as today; `RealPath` keeps mapping all three Unix platforms (`realpath` has no layout).
+   *This is a judgement the operator may overturn — the alternative is the text reader kept for macOS only, launched as
+   `/usr/bin/stat` by absolute path with cwd `/`; it would stay unobserved either way.*
+5. **The source's git facts: the git `Resolve` FOUND, by its real path, with a replaced environment, cwd = the source — and only while
+   PATH is clean.** `ProcessRunner.RunAsync(found.Real, [...], source, 30 s, "", GitEnvironment.Of(environment), ct)` — the shared
+   launcher's environment overload (it REPLACES, `ProcessRunner.cs:363`); `GitCommand` (bare `git`, `GitHistory.cs:17`) is no longer
+   used by the module. The environment is the verb's map minus every name starting `GIT_` (ordinal, ignoring case): a parent's
+   `GIT_DIR`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES`, `GIT_CONFIG_*`, `GIT_EXEC_PATH`, `GIT_SSH*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`,
+   `GIT_ASKPASS` would redirect the question or name a program; `HOME` and `XDG_CONFIG_HOME` pass (the operator's own global config,
+   where `safe.directory` lives, is theirs as `experiment.json` is), `PATH` passes as judged. **Precondition:** the source is asked ONLY
+   when `git` is `Found` AND `PathRefusals` is empty — git looks its own helpers up in PATH (`git-remote-*`, `git-credential-*`, any
+   `core.*` program), and a refused PATH is exit 4 whatever git says. Otherwise `SourceAnswer.NotAsked(reason)` — `the source was not
+   checked: git is absent` / `…: git is refused` / `…: PATH is refused` — printed as a finding (`Environment: true`; the exit is already
+   3 or 4 from the cause), never a silent `false`. **What `rev-parse` runs:** it is a builtin that reads the config and the object
+   database and runs no configured program — no hook (hooks run on commit, push, checkout…), no `core.fsmonitor` (consulted on index
+   refresh: `status`, `add`, `diff`), no `core.sshCommand` or credential helper (transport), no diff or filter driver, no pager (stdout
+   is a pipe), no editor; `alias.rev-parse` never shadows a builtin; `include.path` pulls in more CONFIG, nothing else. **No `-c
+   core.fsmonitor=false`, no `--no-pager`, no `GIT_CONFIG_NOSYSTEM`:** a flag whose effect nobody observed is a comment
+   (common.security); S16 is the observation — a target `.git/config` naming a marker shim under every key git 2.53 runs a program from,
+   and no marker after `validate` — and a break-it (B10) shows the test sees a program when one runs. `/etc/gitconfig` is root's and
+   may carry the host's `safe.directory`; it stays readable. **The four questions,** each its own launch, stopping at the first "no":
+   (1) `rev-parse --show-toplevel` — exit 0 AND `RealPathOf(stdout.Trim()) == RealPathOf(source)` is `IsGit`; exit 0 with another
+   toplevel is NOT (the folder-inside-a-checkout case measured above); (2) `rev-parse --verify --quiet refs/heads/<branch>`; (3)
+   `… <base>^{commit}`; (4) `… <base>:<plan>` — exit 0 yes, 1 no, anything else (exit 128 "dubious ownership", a timeout, a start that
+   failed) `SourceAnswer.Unanswered("git could not answer about target.source: <first stderr line | attempt.Describe>")`, `Environment:
+   true` (exit 3: the operator adds `safe.directory` to THEIR config, which still passes). **Residual, written in `SourceFacts`'s header
+   and the module doc:** the git that answers is the host's, trusted as the system is; the target's `.git/config` is READ (config, not
+   programs — observed for the keys S16 lists, not for every key git will ever learn); the real path can be re-pointed between
+   `Resolve` and the launch by whoever can write ABOVE the roots — the gate's own residual (E1.S9).
+6. **`ExecutableAnswer` — the typed outcome of `Resolve` (R2); the exit is decided on the TYPE, never on a word.** Three cases, closed:
+   `Found(real)` — launched and printed; `Absent(reason)` — the host lacks it, exit 3 (D16: the CLI is not there): a bare name on no PATH
+   entry (`<name> is not on PATH on this host`), a spelled path with no directory entry (`<path> does not exist`); `Refused(reason)` —
+   the operator's configuration names what the harness will not run, exit 4: every D17 sentence (under a root as written or really; a
+   verbatim prefix; a NUL; a relative path; a root that cannot be compared), a spelled path that EXISTS but the kernel cannot resolve
+   (`the real path of '<p>' cannot be resolved: <OS reason> — refused rather than assumed safe (D17)` — a dangling link, a loop,
+   `EACCES`), a platform with no resolver, and a spelled path that resolves but is not an executable regular file (`<p> is not an
+   executable file — a folder, a FIFO or a file without an execute bit; make it executable or name another (D17)`). The seams become one
+   record, `HostPaths`, with a third function, `Present` — the lstat-level question "is there a directory entry by this name": `Ok(true)`
+   (a dangling link included), `Ok(false)` (nothing there), `Fail(reason)` (the kernel could not say). On Linux it is `statx` with
+   `AT_SYMLINK_NOFOLLOW`: success → true; errno `ENOENT` (2) or `ENOTDIR` (20) → false — the two errno POSIX defines as "no such entry
+   along the path", the same on every Linux architecture (`asm-generic/errno-base.h`), and the ONE place the module reads an errno
+   number, said in its comment; any other → `Fail(strerror)`. Off Linux it is `Ok(Path.Exists(p))` — true for a dangling link, measured
+   in E1.S8's fix (R3) — and never `Fail`, so `EACCES` reads as absent there: a stated gap, with Windows and macOS unobserved anyway.
+7. **The climb (R3): over ABSENT components only.** One function `Climb(path, host) : Outcome<string>` walks the ancestors from the path
+   up: `RealPath(ancestor)` ok → that answer with the remaining segments appended; else `Present(ancestor)`: `Ok(false)` → one up;
+   `Ok(true)` → `Fail("'<ancestor>' exists but its real path cannot be resolved: <reason>")`; `Fail(why)` → `Fail("'<ancestor>':
+   <why>")`. `/` always resolves, so it ends. Used by `PathEntryRefusal` (a `Fail` → `PATH entry '<e>' cannot be resolved: <…> —
+   refused rather than assumed safe (D17)`) and by the roots (a `Fail` → every executable `Refused` and every PATH entry refused with
+   `the forbidden root '<r>' cannot be resolved: <…> (D17)` — fail closed, exactly as a NUL root is). `NearestExisting` is deleted.
+8. **`required` (R5).** `HostFacts.PathRefusals`, `HostFacts.Templates` and the new `HostFacts.Source` are `required` init members. Every
+   construction names them, the fabricated facts of `ValidateVerbTests` included: `PathRefusals = []` is then a statement, not a default.
+9. **The judged path (R6).** `HostFactsReader` reads `scenarios.json` at `judged.Path` — the normalised path whose facts the gate read —
+   and `Root.Of(ScenariosFile)` goes from the reader. No red of its own: a refactor; `The_gate_hands_the_verb_the_facts_it_judged_scenarios_json_by`
+   stays green and is the test that would notice a different path.
+10. **Roles (R4).** `NeededExecutables` returns `NeededExecutable(Role, Name)` — roles `""` for `git`, `claude`, `dotnet`;
+    `target.lowPriority[0]`, `target.build[0]`, `target.suite.command[0]`, `target.extension.command[0]`; `awake` for `pwsh.exe`;
+    `coai.binary` — distinct by name, the first role kept. An `Absent` finding reads `<role> <reason>` with the reason already naming the
+    file (`coai.binary /x/coai-mcp does not exist`, `target.suite.command[0] /opt/no-such-dir/tool does not exist`, `claude is not on
+    PATH on this host`); a `Refused` finding is its sentence unchanged. `HostFacts.CoaiBinaryExists` and `HostChecks.Refused()` go;
+    `CoaiProblems` keeps the settings file and the not-configured case.
+11. **The gate and its seams go synchronous.** `RootFacts.CurrentUid()`, `RootFacts.ReadFacts(path)`, `ReadFacts(path, kind)` and
+    `FileFacts(path)` take no token and return no `Task` — there is no process to wait for. `GateSeams.ReadFacts` becomes
+    `Func<string, FileKind, FactsRead>`; `AfterRead` stays async (a test stands there). `Said`, `Ask`, `NeutralLocale`, `StatArguments`,
+    `StatLine`, `FactsOfStat`, `Uid` and the `using Bench.Infrastructure.Process` leave `RootFacts`; the decoding of a raw mode stays as
+    `RawMode` (an adapter record) with the same tests over integers instead of text.
+12. **The class, not the instance (common.security, method named).** `grep -rn --include=*.cs -E 'ProcessRunner\.(RunAsync|StreamAsync)\(\s*"' src tools hosts`
+    and `grep -rn --include=*.cs 'GitCommand\.' tools/model-arms`: the module's one site is `SourceFacts.cs` (this fix); in `src`,
+    `GitHistory.cs:17,38,53` (`GitCommand` itself) and `ScoutTrees.cs:285` launch a bare `git` — the benchmark's own flows over the
+    operator's clones, named here and left: they are the product's to judge under its own trust model, and this fix must not touch
+    `src`. The enumeration stays behind as S22, whose companion asserts the pattern is alive on the test fixture's own bare `git`
+    (`ExperimentRoot.cs:98`, allowed: it builds the fixture, it is not the subject).
+
+**Contracts** (changes only; everything else as in E1.S8–E1.S10 above).
+
+```csharp
+namespace ModelArms.Core.Experiment;
+
+/// What Resolve answered. Three states, closed: the exit code is decided on the state, never on the words.
+public abstract record ExecutableAnswer
+{
+    private ExecutableAnswer() { }
+    public sealed record Found(string Real) : ExecutableAnswer;      // the REAL path: launched and printed (D17 c)
+    public sealed record Absent(string Reason) : ExecutableAnswer;   // the host lacks it — exit 3 (D16)
+    public sealed record Refused(string Reason) : ExecutableAnswer;  // the configuration names what the harness will not run — exit 4
+}
+
+/// The host's answers about paths, handed in as functions so the decider stays pure.
+public sealed record HostPaths(
+    Func<string, Outcome<string>> RealPath,     // the kernel's real path, or the OS reason
+    Func<string, Outcome<bool>> Present,        // lstat-level: Ok(true) an entry is there (a dangling link too); Ok(false) nothing by that name; Fail — the kernel could not say
+    Func<string, bool> IsExecutableFile);       // follows links: an executable regular file at the end
+
+public static class ExecutableResolution
+{
+    public static ExecutableAnswer Resolve(string executable, IReadOnlyList<string> pathDirectories, IReadOnlyList<string> forbiddenRoots, HostPaths host, bool windows);
+    public static string PathEntryRefusal(string entry, IReadOnlyList<string> forbiddenRoots, HostPaths host);
+    // private: Climb(path, host) : Outcome<string> — decision 7; Existing(spelled, host) — decision 6's cases; RealRoots → every root through Climb, a Fail refuses everything
+}
+
+public sealed record NeededExecutable(string Role, string Name);
+public sealed record ResolvedExecutable(NeededExecutable Needed, ExecutableAnswer Answer);
+
+/// What git said about target.source, or why it was not asked.
+public abstract record SourceAnswer
+{
+    private SourceAnswer() { }
+    public sealed record Missing : SourceAnswer;                                                       // not a folder — exit 4
+    public sealed record Asked(bool IsGit, bool PlanBranch, bool Base, bool PlanAtBase) : SourceAnswer; // every "no" is an answer — exit 4 each
+    public sealed record NotAsked(string Reason) : SourceAnswer;                                       // git absent/refused, PATH refused — printed, Environment: true
+    public sealed record Unanswered(string Reason) : SourceAnswer;                                     // git ran and could not say — exit 3
+}
+
+public sealed record HostFacts(HostKind Host, IReadOnlyList<ResolvedExecutable> Executables, Outcome<IReadOnlyList<Scenario>> Scenarios, bool CoaiSettingsExists)
+{
+    public required SourceAnswer Source { get; init; }
+    public required IReadOnlyList<string> PathRefusals { get; init; }
+    public required IReadOnlyDictionary<StepKind, Outcome<string>> Templates { get; init; }
+}
+
+public static class HostChecks
+{
+    public static IReadOnlyList<NeededExecutable> NeededExecutables(Experiment experiment, HostKind host);
+    public static IReadOnlyList<HostProblem> Decide(Experiment experiment, HostFacts facts);
+    // ExecutableProblems: Absent → new HostProblem($"{role} {reason}".TrimStart(), Environment: true); Refused → (reason, false); no string is inspected
+    // SourceProblems: a switch over the four SourceAnswer cases (≤ 4)
+}
+
+/// The environment git is launched under (decision 5): the verb's map minus every GIT_* name. Pure; in the pure list under `// E1.S10`.
+public static class GitEnvironment { public static IReadOnlyDictionary<string, string> Of(IReadOnlyDictionary<string, string> environment); }
+
+namespace ModelArms.Adapters;
+
+/// The kernel asked directly (decisions 2–4, 6): one P/Invoke file, the platform map explicit, an unmapped platform refused.
+internal static class KernelFacts
+{
+    public static int EffectiveUid();                               // libc geteuid; Linux, macOS, FreeBSD
+    public static FactsRead Read(string full);                      // Linux: statx(AT_FDCWD, full, AT_SYMLINK_NOFOLLOW, STATX_BASIC_STATS, buf256); macOS/FreeBSD: Unread (decision 4); Windows: Unread (POSIX facts)
+    public static Outcome<bool> Present(string path);               // Linux: statx NOFOLLOW → true / ENOENT, ENOTDIR → false / else Fail; elsewhere Ok(Path.Exists)
+    internal static FactsRead Decode(string full, StatxAnswer raw); // pure over the seven fields: the mask check, the link refusal, RawMode → kind and permissions, the device key, the ctime
+    // [StructLayout(LayoutKind.Explicit, Size = 256)] struct Statx { [FieldOffset(0)] uint Mask; [FieldOffset(20)] uint Uid; [FieldOffset(28)] ushort Mode; [FieldOffset(32)] ulong Ino;
+    //   [FieldOffset(96)] long CtimeSec; [FieldOffset(104)] uint CtimeNsec; [FieldOffset(136)] uint DevMajor; [FieldOffset(140)] uint DevMinor; }
+    // [DllImport("libc", EntryPoint = "statx", SetLastError = true)] static extern int Statx(int dirfd, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags, uint mask, out Statx buffer);
+    // [DllImport("libc", EntryPoint = "geteuid")] static extern uint Geteuid();
+    // AT_FDCWD = -100, AT_SYMLINK_NOFOLLOW = 0x100, STATX_BASIC_STATS = 0x7ff, Needed = 0x18b, ENOENT = 2, ENOTDIR = 20 — each a named constant, once
+}
+
+public static class RootFacts
+{
+    public static HostPaths Host { get; }                                   // new(RealPathOf, KernelFacts.Present, IsExecutableFile)
+    public static int CurrentUid();                                         // KernelFacts.EffectiveUid
+    public static FactsRead ReadFacts(string path);                         // NUL → Refused; Windows → Unread; else KernelFacts.Read(normalised); a link → Refused as today
+    public static FactsRead ReadFacts(string path, FileKind expected);      // .MustBe(expected)
+    public static Outcome<FileFacts> FileFacts(string path);                // ReadFacts(path).ToOutcome()
+    internal sealed record RawMode(int Raw) { FileKind Kind; UnixFileMode Permissions; }  // the type and permission bits, as StatLine decoded them
+}
+
+/// What git said about the source. `git` is the REAL path Resolve found; the environment is GitEnvironment.Of(…); cwd is the source.
+internal static class SourceFacts
+{
+    public static Task<SourceAnswer> ReadAsync(TargetFacts target, string git, IReadOnlyDictionary<string, string> environment, Func<string, Outcome<string>> realPath, CancellationToken ct);
+}
+
+internal sealed record GateSeams(Func<string, FileKind, FactsRead> ReadFacts, Func<string, Task> AfterRead) { public static GateSeams Real { get; } }
+```
+
+`HostFactsReader.FactsAsync`, in this order: host kind → PATH entries → roots → executables (`Resolve`, no launch) → `PathRefusals` →
+**then** the source: `Executables` has `git` `Found` and `PathRefusals` is empty → `SourceFacts.ReadAsync(target, found.Real,
+GitEnvironment.Of(environment), RootFacts.RealPathOf, ct)`; `Directory.Exists(source)` false → `Missing` (asked before git, as now); else
+`NotAsked` naming the cause. `ExperimentGate.Judge` calls `RootFacts.CurrentUid()` and `seams.ReadFacts(path, kind)`; `StillTheSame` the
+same; `ValidateVerb.PrintExecutables` prints `Found` only.
+
+**Test fixture** (`ExperimentRoot`): `WithTargetAsync` makes `<temp>/bin/git` a SYMBOLIC LINK to the host's git — `RealGit`, resolved
+once through `ExecutableResolution.Resolve("git", <the test process's PATH entries>, [], RootFacts.Host, windows)` — so `validate`
+launches a git that works and prints `git → <RealGit>` (the existing `Validate_prints_the_resolved_executables_name_to_absolute_path`
+already expects `RealPathOf(<temp>/bin/git)`, so it is unchanged); on Windows `WithTargetAsync` skips with `the fixture's git is a link
+to the host's git; links need a privilege on Windows`. New helpers: `Shim(path, name)` writes a `0755` script `#!/bin/sh` that appends
+one line to `<temp>/markers/<name>` and exits 0 (an optional `exec "<RealGit>" "$@"` tail for a shim that must still answer);
+`Markers()` lists the marker names present; `ConsoleBinary` = `Path.Combine(AppContext.BaseDirectory, "model-arms")` (the apphost the
+test project's reference to the console project already copies — present in `tests/Bench.Tests/bin/Release/net10.0/`).
+
+**Scenarios.** Linux unless said; each real-link or shim test skips on Windows naming the reason. The RED column is the assertion
+message on `5ea1091`; where a new type cannot compile against it, the brief's stub is what the red is measured against (the stub maps
+the old `Outcome` to `Found` / `Refused` for every failure, and `KernelFacts.Read` returns `Unread("not built")`).
+
+| # | Test | Given / When / Then | RED on `5ea1091` |
+|---|---|---|---|
+| S1 | `ModelArmsScenarioTests.Validate_started_inside_the_target_runs_nothing_the_target_placed` (new file; the harness row of R8) | `WithTargetAsync`; shims `git`, `id`, `stat` at `<target>/` (the cwd); `ProcessRunner.RunAsync(ConsoleBinary, ["validate", "--experiment", root.Root], workingDirectory: <target>, 60 s, "", root.Environment, ct)` → exit 0; stdout has `git → <RealGit>`; `Markers()` empty | `Expected exit 0, but found 3 (model-arms validate: id -u answered '', not a user id)`; `Markers() = {id}` — the reviewer's case (b) |
+| S2 | `…Validate_with_a_target_PATH_entry_ahead_refuses_the_entry_and_runs_nothing_from_it` | shims `git`, `id`, `stat` in `<target>/bin`; `Environment["PATH"] = "<target>/bin:<temp>/bin"`; the binary launched with cwd `<temp>` → exit 4; stderr names `PATH entry '<target>/bin'`, `D17`, `the source was not checked: PATH is refused`; `Markers()` empty | `Expected Markers() to be empty, but found {id, stat, git}` — the reviewer's case (a) |
+| S3 | `…Prep_base_through_the_binary_runs_the_same_checks_and_is_refused_until_E4_S4` | the binary, `prep-base --experiment <root>` → exit 4; stdout `resolved executables:`; stderr names `E4.S4` | green (a harness row; its teeth are B12) |
+| S4 | `KernelFactsTests.A_files_facts_come_from_the_kernel_and_equal_the_stat_tools` (new file) | a temp file `chmod 640`, a folder, a dangling link: `Read` → `Read` with uid `== EffectiveUid()`, mode `640` / `755` / kind `Link`; the file's uid, mode, major, minor, inode and whole-second ctime equal `stat -c '%u %f %Hd %Ld %i %Z'` (the test may launch `stat` — it is not the subject), its ctime fraction within 1 µs of `%.9Z` | `Expected Read, but found Unread: not built` |
+| S5 | `…Present_is_true_for_a_dangling_link_false_for_nothing_and_a_file_used_as_a_folder` | `Present(dangling)` `Ok(true)`; `Present(<temp>/absent)` `Ok(false)`; `Present(<file>/x)` `Ok(false)` (ENOTDIR); a folder `0000` holding `x`: `Present(<it>/x)` `Failed()` naming `Permission denied` (skips when running as root, saying so) | `Expected Ok(true), but found Fail: not built` |
+| S6 | `…A_file_system_that_does_not_report_a_fact_is_unread_naming_it` | pure: `Decode(full, raw with Mask = 0x7ff & ~0x80)` → `Unread` naming `ctime`; `Mask = 0` → names `type, mode, owner, inode, ctime` | `Expected Unread naming "ctime", but found Read` (against a stub that ignores the mask) |
+| S7 | `…The_effective_uid_is_the_one_in_proc_self_status` | `EffectiveUid()` equals the second field of the `Uid:` line of `/proc/self/status` (replaces `The_current_uid_is_the_uid_this_process_runs_as`) | `Expected 1000, but found -1` (stub) |
+| S8 | `RootFactsTests.The_type_bits_of_a_raw_mode_name_the_kind_and_the_permission_bits_the_mode` (`[Theory]`, replaces the five text-line tests) | `(0x81a4, Regular, "644")`, `(0xa1ff, Link, "777")`, `(0x41ed, Directory, "755")`, `(0x1180, Fifo, "600")`, `(0xc1ff, Socket, _)`, `(0x21b6, CharacterDevice, _)`, `(0x61b0, BlockDevice, _)`, `(0x0000, Unknown, _)` | green by construction — a guard; B8 is what makes the layout tests red |
+| S9 | `RootFactsTests.A_file_that_does_not_exist_is_unread_naming_the_os_reason` (adapts the existing test) | `ReadFacts(<temp>/absent)` → `Unread`, reason contains `No such file` and the path | `Expected Unread, but found Unread: not built` → named: the reason must carry the OS words |
+| S10 | `RootFactsTests.On_a_platform_without_a_probed_reader_the_facts_are_unread_naming_it` | `Assert.SkipUnless(OperatingSystem.IsMacOS() || IsFreeBSD(), …)`: `ReadFacts(…)` → `Unread` naming `no probed kernel reader` | written, not observed here |
+| S11 | `ExecutableResolutionTests.A_spelled_file_that_is_not_there_is_absent_and_one_that_is_there_but_cannot_be_resolved_is_refused` | pure `HostPaths`: `Present("/opt/no-such-dir/tool")` `Ok(false)`, `RealPath` fails `No such file` → `Absent`, reason `does not exist`; `Present("/opt/dangling")` `Ok(true)`, `RealPath` fails → `Refused`, reason `cannot be resolved`, `D17`; `Present("/opt/locked/t")` `Fail("Permission denied")` → `Refused` naming it | `Expected Absent, but found Refused: the real path of '/opt/no-such-dir/tool' cannot be resolved: No such file … (D17)` |
+| S12 | `…A_bare_name_on_no_entry_is_absent_and_a_spelled_file_that_is_not_executable_is_refused` | `Resolve("claude", ["/a"], …)` → `Absent("claude is not on PATH on this host")`; `/opt/plain` present, resolves, `IsExecutableFile` false → `Refused` naming `not an executable file` | `Expected Absent …` (the stub maps every failure to `Refused`) |
+| S13 | `PathEntryRefusalTests.An_entry_whose_existing_component_cannot_be_resolved_is_refused_not_climbed_past` | pure: entry `/home/u/link/bin`; `Present(/home/u/link/bin)` false, `Present(/home/u/link)` true, `RealPath(/home/u/link)` fails `No such file`, `RealPath(/home/u)` ok → refusal names `/home/u/link`, `cannot be resolved`, `D17`. Real: `<temp>/home/link -> <temp>/target/notyet` (dangling), entry `<temp>/home/link/bin` → refused | `Expected a refusal, but found ""` (climbed to `/home/u`) |
+| S14 | `…A_link_loop_in_an_entry_is_refused_naming_the_os_reason` | real: `<temp>/l1 -> l2`, `l2 -> l1`; entry `<temp>/l1/bin` → refused naming `Too many levels` | `Expected a refusal, but found ""` |
+| S15 | `ExecutableResolutionTests.A_forbidden_root_whose_component_cannot_be_resolved_refuses_every_executable` | pure: roots `["/mnt/loop/target"]`, `Present(/mnt/loop/target)` false, `Present(/mnt/loop)` true, `RealPath(/mnt/loop)` fails → `Resolve("/usr/bin/git", …)` `Refused` naming the root and `cannot be resolved`; `PathEntryRefusal("/usr/bin", …)` the same | `Expected Refused, but found Found: /usr/bin/git` |
+| S16 | `ValidateVerbTests.A_target_config_that_names_programs_is_read_but_none_of_them_runs` | `WithTargetAsync`; a shim `cfg`; `<target>/.git/config` gains, each `= <shim path>`: `core.fsmonitor`, `core.pager`, `core.editor`, `core.sshCommand`, `core.askPass`, `core.alternateRefsCommand`, `core.hooksPath = <target>/hooks` (every sample hook name a shim), `diff.external`, `filter.x.clean`, `filter.x.smudge`, `credential.helper`, `gpg.program`, `sequence.editor`, `merge.tool`, `mergetool.x.cmd`, `difftool.x.cmd`, `uploadpack.packObjectsHook`, `alias.rev-parse = !<shim>`, `pager.rev-parse = <shim>`; validate → 0; `Markers()` empty | green — the OBSERVATION decision 5 rests on; B10 proves it looks |
+| S17 | `…The_source_is_asked_through_the_git_that_resolved_without_the_parents_GIT_variables` | `<temp>/bin/git` = a shim that records `$1` and `env \| grep '^GIT_'` then `exec "<RealGit>" "$@"`; `Environment` gains `GIT_DIR=/nowhere`, `GIT_CEILING_DIRECTORIES=/`, `GIT_CONFIG_GLOBAL=/nowhere`; validate → 0; the marker shows 4 runs, each `rev-parse`, no `GIT_` line; stdout `git → <temp>/bin/git` | `Expected 4 runs of the shim, but found 0` (the process's git ran) |
+| S18 | `…A_git_that_cannot_answer_is_the_environment_naming_its_words` | `<temp>/bin/git` = `#!/bin/sh\necho 'fatal: detected dubious ownership' >&2; exit 128` → 3; stderr has `git could not answer about target.source` and `dubious ownership`; not `is not a git repository` | `Expected 3, but found 0` |
+| S19 | `…An_absent_git_leaves_the_source_unchecked_and_says_so` | `<temp>/bin/git` deleted → 3; stderr has `git is not on PATH` and `the source was not checked: git is absent`; not `is not a git repository` | `Expected stderr to contain "the source was not checked"` |
+| S20 | `…The_source_is_not_asked_while_PATH_is_refused` | the S17 shim; `PATH = "<temp>/bin:relative"` → 4 naming the relative entry and `the source was not checked: PATH is refused`; the marker absent | `Expected stderr to contain "the source was not checked"` |
+| S21 | `…A_source_that_is_a_plain_folder_inside_a_checkout_is_not_a_git_repository` | `target.source = <target>/sub` (a folder, no `.git`) → 4 naming `is not a git repository` | `Expected 4, but found 0` (measured: `--git-dir` answers the enclosing checkout) |
+| S22 | `ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name` + companion `…and_the_scan_still_finds_the_fixtures_bare_git` | a whole-file scan of `tools/model-arms/**/*.cs` for `GitCommand\.` and `ProcessRunner\.\w+Async\(\s*"` → nothing; the companion scans `tests/Bench.Tests/ModelArms/ExperimentRoot.cs` and finds `ProcessRunner.RunAsync("git"` | `Expected no bare-name launch, but found SourceFacts.cs (GitCommand.RunAsync)` |
+| S23 | `ValidateVerbTests.An_absent_executable_is_the_environment_and_a_refused_one_the_configuration_by_its_kind_not_its_words` | `Decide` over fabricated facts: `Absent("x (D17) y")` → `Environment: true`; `Refused("plain words")` → `Environment: false` | `Expected Environment to be true, but found false` (the substring decides) |
+| S24 | `…A_missing_coai_binary_is_named_by_its_field_with_exit_3` (R4) | `coai.binary = <temp>/example/coai/no-such` → 3; stderr has `coai.binary <that path> does not exist`; not `cannot be resolved` | `Expected 3, but found 4` |
+| S25 | `…Every_absent_executable_is_named_by_its_role` | `target.suite.command[0] = /opt/no-such-dir/tool` → 3 naming `target.suite.command[0] /opt/no-such-dir/tool does not exist`; `claude` deleted → `claude is not on PATH on this host` (no role prefix) | `Expected 3, but found 4` |
+| S26 | adapted, same names: `ExecutableResolutionTests` (`Found.Real` / `.Reason` helpers over `ExecutableAnswer`), `PathEntryRefusalTests` (`RootFacts.Host`), `RootFactsTests` and `RootTrustTests` (sync), `ModelArmsProgramTests` (`GateSeams.Real with { ReadFacts = (p, k) => … }`), `ValidateVerbTests.Every_problem_is_returned_at_once_with_the_environment_ones_marked` (typed answers, `required` members named), `A_host_with_every_fact_good_has_no_problem` (`Source = new Asked(true, true, true, true)`) | compile-level changes; each stays green once it compiles |
+
+**Red first (common.testing).** S22 first (it is the list of what to fix). Then the stubs of the brief (steps 2 and 4) and, against them:
+S4–S7, S9, S11–S15, S23. Then the fixture (step 5) and S17–S21, S24–S25; then S1–S2 through the binary. S3, S8, S16 are guards — say so
+in the summary, with their break-its watched.
+
+**Break-its** (each watched red, then restored; the summary names each with its message):
+
+- B1 `SourceFacts` launches `"git"` (bare) again: S17 red (`0 runs`), S1 red (markers).
+- B2 `GitEnvironment.Of` returns the map unchanged: S17 red (`GIT_DIR=/nowhere` → `Unanswered` → exit 3).
+- B3 the PATH-clean precondition removed: S20 red (the marker exists).
+- B4 `ExecutableProblems` back to `Contains("(D17)")`: S23 red.
+- B5 `Climb` back to `NearestExisting`: S13, S14, S15 red.
+- B6 `Present` treats `ENOENT` as "could not say": S11 red (`Absent` expected, got `Refused`), S5 red.
+- B7 `Decode` ignores `stx_mask`: S6 red.
+- B8 `Statx.Mode` at `FieldOffset(30)` (one field off): S4 red (mode `640` expected) — the proof the probe test has teeth for the LAYOUT.
+- B9 the toplevel comparison dropped (exit 0 alone is `IsGit`): S21 red.
+- B10 question 1 replaced by `git status --porcelain`: S16 red (`Markers() = {cfg}` — `core.fsmonitor` ran) — the proof S16 observes.
+- B11 `NotAsked` rendered as `Asked(false, …)`: S19, S20 red.
+- B12 the `"prep-base" =>` arm removed from `Dispatch`: S3 red (and `Every_verb_the_command_line_accepts_has_a_dispatch_arm`).
+
+**What the tests do NOT prove** (written in the module doc, *What the tests do NOT prove*, and in the two headers):
+
+- macOS and FreeBSD: the trust check is REFUSED there (decision 4), and S10 is written, not observed; a Mac run is the follow-up, with the
+  `lstat` layout probe it needs. Windows: `NotPerformed`, and S1–S2 skip (links, `/bin/sh`).
+- That git never runs a program from a key S16 does not list: the list is the keys of git 2.53 known to name one; a key git learns later
+  is not covered. That the host's libc and git are honest: both are root's, trusted as the kernel is.
+- The window between `Resolve` and the launch: whoever can write ABOVE the roots can re-point the real path (E1.S9's residual); a hard
+  link (E1.S8, decision 9).
+- `stx_mask` semantics on every file system: observed on this host's ext4 and the scratch tmpfs (`dev 0:74`); a file system that omits a
+  basic field is refused, not observed.
+- That `claude`, `dotnet`, `node`, `npm` run: still empty files; only git is launched. That E2's launches obey decision 1: the structural
+  test S22 will see them when they land; the scenario harness drives `validate` and `prep-base` only.
+- `EACCES` off Linux reads as absent (decision 6).
+
+**Brief — the order of work** (worktree `/home/jinx/git/dew_flow_benchmark-wt/ma-e1s10`, branch `feat/model-arms-e1s10`; every command
+through `node .agents/conventions/tools/low-priority.mjs`; build `dotnet build dew_flow_benchmark.slnx -c Release -m:4
+--disable-build-servers`; run `./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests` — never `dotnet test`):
+
+1. S22 and its companion in `ModelArmsArchitectureTests.cs`; watch it red naming `SourceFacts.cs`.
+2. Core, red stubs: `ExecutableAnswer`, `HostPaths`, `NeededExecutable`, `SourceAnswer`, `GitEnvironment` (all under `// E1.S10` in the
+   pure list), `HostFacts` with the `required` members; `Resolve` returning `Found` / `Refused` from the old logic; `Decide` over the
+   types. Rewire `HostFactsReader`, `ValidateVerb`, the tests of S26 so everything compiles; S11–S15, S23 red.
+3. Core, the fix: decisions 6, 7, 10 in `ExecutableResolution.cs` and `HostChecks.cs`; `SourceProblems` over `SourceAnswer`; S11–S15,
+   S23–S25 green (S24–S25 need step 5's fixture for the end-to-end part — run them after it).
+4. `Adapters/KernelFacts.cs` as a stub (`Read` → `Unread("not built")`, `EffectiveUid` → `-1`, `Present` → `Fail("not built")`) and
+   `KernelFactsTests.cs`; S4–S7 red. Then the P/Invoke (decisions 2–4, 6); `RootFacts` goes synchronous (decision 11), `RawMode` and S8;
+   `GateSeams`, `ExperimentGate`, `HostFactsReader` adapt; `RootFactsTests`, `RootTrustTests`, `ModelArmsProgramTests` adapt; S4–S9 green;
+   B8 watched.
+5. `ExperimentRoot`: `RealGit`, the link, `Shim`, `Markers`, `ConsoleBinary`; `SourceFacts` by the real path (decision 5), `GitEnvironment`
+   used, the toplevel comparison, the precondition in `HostFactsReader`; S16–S21, S24–S25 green; B1–B3, B9–B11 watched.
+6. `ModelArmsScenarioTests.cs` (S1–S3) through the console apphost; B12 watched.
+7. `HostFactsReader.ScenariosAsync` reads `judged.Path` (decision 9).
+8. Docs (R7, R8): `research/module_model_arms.md` — the trust paragraph (`statx` / `geteuid`, the mask, the device key, the ctime finer
+   than the tool's, macOS refused with the follow-up); the finding table (`<role> <path> does not exist` and `is not on PATH` at 3; a
+   refused, unresolvable or non-executable spelled file at 4; `the source was not checked: …` and `git could not answer …` at 3); the
+   PATH paragraph (the climb over absent components only; a component that exists and cannot be resolved is refused); the source
+   paragraph (git by its real path, the replaced environment, the four questions, the toplevel comparison, what `rev-parse` runs and
+   S16 as its observation); deviation 1 rewritten as settled by `ExecutableAnswer`; the gap note's "the two can differ" replaced by the
+   residuals above; the E1.S9 gate paragraph's "a `stat` or `id` that fails" → "a kernel read that fails". `research/module_tests.md` —
+   a `### CLI — model-arms <verb>` section with one row per verb of `ModelArmsCommandLine.Verbs` (the derived list; E5.S3 widens the
+   catalogue test to it): `validate` covered (S1–S2, `ValidateVerbTests`), `prep-base` covered (S3), `version` / `help` covered
+   (`ModelArmsProgramTests`, in-process through the real parser), every other verb `not covered — not built yet, story <id>`; and the
+   module's *does NOT prove* lines under the harness's.
+9. `--filter-namespace "Bench.Tests.ModelArms"`, then the whole suite; the break-its; the summary carries every red message, every
+   green count, the skipped tests with their reasons, and the three measured numbers (S4's field comparison, S7's uid, S21's toplevel).
+
+**Commands.** `--filter-class "*KernelFactsTests"`, `"*RootFactsTests"`, `"*ExecutableResolutionTests"`, `"*PathEntryRefusalTests"`,
+`"*ValidateVerbTests"`, `"*ModelArmsProgramTests"`, `"*ModelArmsScenarioTests"`, `"*ModelArmsArchitectureTests"`; `--filter-namespace
+"Bench.Tests.ModelArms"`; the whole suite. By hand, the reviewer's two probes re-run against the built binary with the shims (S1, S2
+are those probes; the summary quotes their output).
+
+**Done when.** S1–S9, S11–S26 green on this host with the shim and link tests RUN; S10 written and skipped with its reason; the twelve
+break-its watched red; `grep -rn "GitCommand\|ProcessRunner" tools/model-arms --include=*.cs` finds only `SourceFacts.cs`;
+`grep -rn '"stat"\|"id"' tools/model-arms --include=*.cs` finds nothing; `RootFacts.cs` no longer references
+`Bench.Infrastructure.Process`; every public static class of Core is in the pure list; the module doc and the catalogue say what
+decisions 4, 5 and 12 say; the architecture guard is green.
+
+**Out of bounds.** `GitCommand`, `GitHistory`, `ScoutTrees` in `src` (decision 12 — named, left); a macOS `lstat` reader (decision 4's
+follow-up, needs a Mac); the children's filtered PATH at launch (E2); a hard-link check (E1.S8, decision 9); the parent plan's D17 text
+(a `(d)`: "every launch is by absolute path, replaced environment and chosen cwd" belongs there — the operator's call, noted in the
+summary).
+
 ### E1.S11 — `init`, the template derived from the example, and the example validated
 
 - **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E1.S10. **Size:** ≈ 360 lines.
