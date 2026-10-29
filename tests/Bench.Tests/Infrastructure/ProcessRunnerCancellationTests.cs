@@ -20,15 +20,25 @@ public sealed class ProcessRunnerCancellationTests
         using var cancel = new CancellationTokenSource();
 
         // A process that outlives the test unless somebody kills it. ping with a count is the one
-        // long-running, argument-driven, always-installed executable Windows offers.
+        // long-running, argument-driven, always-installed executable Windows offers. The count flag is
+        // the host's own: `-n` on Windows; on Linux `-n` means numeric output, so `-n 60` named a second
+        // host and iputils exits at once (CI red from the 2026-10-28 runner image on).
+        string[] count = OperatingSystem.IsWindows() ? ["-n", "60"] : ["-c", "60"];
         var launch = ProcessRunner.RunAsync(
-            "ping", ["-n", "60", "127.0.0.1"], Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
+            "ping", [.. count, "127.0.0.1"], Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
 
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-        var before = Process.GetProcessesByName("PING").Concat(Process.GetProcessesByName("ping")).ToArray();
+        // Polled, not one fixed sleep: a loaded runner can take longer than 500 ms to start the child.
+        // A launch that has already ended (a missing binary, a refused flag) stops the wait at once.
+        Process[] before = [];
+        for (var attempt = 0; attempt < 50 && before.Length == 0 && !launch.IsCompleted; attempt++)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            before = Process.GetProcessesByName("PING").Concat(Process.GetProcessesByName("ping")).ToArray();
+        }
+
         before.Should().NotBeEmpty("the child must be running before the cancellation, or this test proves nothing");
 
-        cancel.Cancel();
+        await cancel.CancelAsync();
 
         var observed = async () => await launch;
         await observed.Should().ThrowAsync<OperationCanceledException>(
