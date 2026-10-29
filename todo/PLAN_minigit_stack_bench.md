@@ -384,10 +384,13 @@ asserting duplicates agree on input/cache fields, reading `usage.cache_creation.
   added from that page: **Fable 5.1** (read 2026-10-29: $10 in / $50 out / $12.50 5m write / $20 1h write / $0.25 read) —
   without it every Fable child would price as unknown.
 - **Beside it:** the CLI's own `total_cost_usd`; per model main / children / internal; tokens per model from `modelUsage`.
-- **Checks:** T1 Σ`costUSD` = `total_cost_usd` ± $0.01; T2 O against E per model and kind ≤ max(0.5 %, 100 tokens), cost
+- **Checks:** T1 Σ`costUSD` = `total_cost_usd` ± $0.01 — a breach **stops** the series (the envelope disagreeing with
+  itself is an instrument failure); T2 O against E per model and kind ≤ max(0.5 %, 100 tokens), cost
   ≤ 1 % (breach → `otel incomplete`, cell kept); **T3** T re-priced at CLI rates (`prices.json` `cliRates`: Sonnet cache
-  read observed at $0.20 vs published $0.10) against **O restricted to the same `query_source`s** (`main`, `subagent`)
-  ≤ 2 %, and **T4** T input/cache against that same O ≤ 0.1 %. They are compared with O and not with E, because E's
+  read observed at $0.20 vs published $0.10) against O **joined request by request** — the stream and transcripts carry `request_id`
+  (20 in the two-children fixture), O's `api_request` carries `request_id` — with `query_source ∈ {main, subagent}` as
+  the fallback join if the capture refutes that (E1.S3 step 0, A-J1); ≤ 2 %, and **T4** T input/cache against the same
+  O ≤ 0.1 % — for a small count that is effectively equality, deliberately. They are compared with O and not with E, because E's
   `modelUsage` is aggregated per model and carries no `query_source` (checked: `summary.mjs:46`, and no stream fixture
   holds one), so E cannot be cut down to what T sees. T2 (O against E, all sources) closes the loop. The CLI's internal
   line and compaction calls are `auxiliary` and are checked by O alone. The A/A and P1 must show T covering `main` and
@@ -395,6 +398,9 @@ asserting duplicates agree on input/cache fields, reading `usage.cache_creation.
   if the A/A cannot establish T's coverage, T2 becomes the stop, with O and E reconciled per model within 1 %, before any
   data cell; if O and E cannot be reconciled either, the series does not start until the instrument is repaired. If the smoke shows transcript `output_tokens` are placeholders like the stream's, T3's
   output column switches to O, decided and recorded before any data cell.
+- **Open price question, settled on day 1:** the pricing page read 2026-10-29 gives Sonnet 5.5 cache reads at $0.10
+  (0.05 × input), a cached copy of the claude-api reference says $0.20, and the CLI bills $0.20. The day-1 re-read and the
+  capture (A-P1) decide which is published; the headline uses the published figure and the report names the source.
 - **A killed session without an envelope:** headline from O at published prices, flagged `no envelope`; never a fitted rate.
 - **The cost basis is stated, not assumed:** every figure is list-price API-equivalent; what the account is actually billed
   depends on its auth (subscription or key) and is not this plan's number.
@@ -521,7 +527,7 @@ value of the process on real work, or any mechanism.
 
 ## 13. Budget
 
-Expected: model smoke ≈ $0.10, A/A ≈ $4, P1 ≤ $39, bare 6 × $2–4 ≈ $20, process 6 × $30–50 ≈ $240 → ≈ $300. Caps: $35 per
+Expected: E1.S3's fixture capture ≤ $1.50, model smoke ≈ $0.10, A/A ≈ $4, P1 ≤ $39, bare 6 × $2–4 ≈ $20, process 6 × $30–50 ≈ $240 → ≈ $300. Caps: $35 per
 process session, $6 per bare session. Because parallel children overshoot a cap between turns
 (`spikes/policy-ab-quick/lib/watchdog.mjs:1-12`; its `CostMeter` calls the fitted `costFromMessages` at `watchdog.mjs:27`,
 so the new spike does NOT reuse it — E1.S3 builds a stream meter at published prices), a pair-phase starts
