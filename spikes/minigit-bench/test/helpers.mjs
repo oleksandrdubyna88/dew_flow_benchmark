@@ -1,5 +1,6 @@
 // Shared test plumbing: where the spike lives, the fetched (hash-verified) inputs, and the sandbox gate.
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,4 +80,19 @@ export function keyGate(t) {
   if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
   t.skip(why);
   return false;
+}
+
+/**
+ * A sibling checkout of this repository's family (e.g. `dew_flow_connect_other_ais`), or null: looked for beside the repository root,
+ * and beside the main checkout when this is a git worktree (`commonRoot`). Never a path written down for one machine.
+ */
+export function siblingCheckout(name, { repoRoot = path.resolve(spikeDir, '..', '..'), commonRoot = mainCheckoutOf(repoRoot) } = {}) {
+  const candidates = [repoRoot, commonRoot].filter(Boolean).map(root => path.resolve(root, '..', name));
+  return candidates.find(c => existsSync(c)) ?? null;
+}
+
+/** The main checkout of a git worktree (the parent of the common git dir), or null when the root is not a linked worktree. */
+function mainCheckoutOf(repoRoot) {
+  const r = spawnSync('git', ['-C', repoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', timeout: 20_000 });
+  return r.status === 0 && path.basename(r.stdout.trim()) === '.git' ? path.dirname(r.stdout.trim()) : null;
 }

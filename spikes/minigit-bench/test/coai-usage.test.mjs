@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ledgerSummary, readLedger, roundsSpans, UNKNOWN_SUBSCRIPTION } from '../lib/coai-usage.mjs';
-import { spikeDir, tmpDir } from './helpers.mjs';
+import { siblingCheckout, spikeDir, tmpDir } from './helpers.mjs';
 import { READER_FIELDS } from '../lib/coai-usage.mjs';
 
 const fixture = name => readFileSync(path.join(spikeDir, 'test', 'fixtures', name), 'utf8');
@@ -267,8 +267,13 @@ test('A_round_with_an_unreadable_instant_is_skipped_and_listed', () => {
   assert.match(r.skipped[0], /plan#1/);
 });
 
+/** coai's source: COAI_SRC, else the sibling checkout beside this repository (or beside the main checkout of a worktree), else null. */
+const coaiSource = () => process.env.COAI_SRC ?? siblingCheckout('dew_flow_connect_other_ais');
+
 test('The_rounds_columns_the_reader_selects_exist_in_coais_own_schema', t => {
-  const schema = path.join(process.env.COAI_SRC ?? '/home/jinx/git/dew_flow_connect_other_ais', 'src_mcp/src/Store/Schema.cs');
+  const root = coaiSource();
+  if (root === null) { t.skip('there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the rounds columns are checked against the copied DDL only'); return; }
+  const schema = path.join(root, 'src_mcp/src/Store/Schema.cs');
   let text;
   try { text = readFileSync(schema, 'utf8'); } catch (e) {
     if (e.code !== 'ENOENT') throw e;
@@ -280,7 +285,9 @@ test('The_rounds_columns_the_reader_selects_exist_in_coais_own_schema', t => {
 });
 
 test('The_ledger_fields_the_reader_uses_exist_in_coais_own_UsageEntry', t => {
-  const file = path.join(process.env.COAI_SRC ?? '/home/jinx/git/dew_flow_connect_other_ais', 'src_mcp/runners/Reviewers/UsageLedger.cs');
+  const root = coaiSource();
+  if (root === null) { t.skip('there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the ledger field names are checked against the reader\'s own list only'); return; }
+  const file = path.join(root, 'src_mcp/runners/Reviewers/UsageLedger.cs');
   let text;
   try { text = readFileSync(file, 'utf8'); } catch (e) {
     if (e.code !== 'ENOENT') throw e;

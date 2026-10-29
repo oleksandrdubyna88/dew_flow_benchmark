@@ -20,7 +20,7 @@ async function runHostile(t, body, { phase = 'v1', timeoutS = 5, binaryOverride 
     writeFileSync(binary, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
     chmodSync(binary, 0o755);
   }
-  const work = tmpDir('hostile-cases');
+  const work = homeDir('hostile-cases');
   const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('hostile-home'), tmp: tmpDir('hostile-tmp'), roFiles: [] })];
   const outPath = path.join(tmpDir('hostile-out'), 'result.json');
   const started = Date.now();
@@ -138,7 +138,7 @@ test('An_unexpected_exception_in_one_case_fails_that_case_as_harness_error_and_t
 async function runBrokenCommand(t, command) {
   if (!keyGate(t) || !pythonGate(t) || !sandboxGate(t)) return null;
   const dir = tmpDir('broken-copy');
-  const work = tmpDir('broken-cases');
+  const work = homeDir('broken-cases');
   const box = [...scoreBoxArgv({ copyDir: dir, casesDir: work, home: tmpDir('broken-home'), tmp: tmpDir('broken-tmp') })];
   const binary = path.join(dir, 'minigit');
   const ran = await withClearSuite({ workRoot: homeDir('broken'), rid: 'broken' }, async suiteDir => {

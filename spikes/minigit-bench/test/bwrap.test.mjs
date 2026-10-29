@@ -113,7 +113,7 @@ test('The_score_env_is_the_allow_list_not_the_parents', () => {
 test('The_scoring_box_has_no_network_and_no_operator_home', async t => {
   if (!sandboxGate(t)) return;
   // a decoy "home" holding a decoy key, outside /tmp (which the box hides on its own): the box must hide a directory it is told is the home
-  const fakeHome = mkdtempSync(path.join(os.homedir(), '.mgb-test-home-'));
+  const fakeHome = mkdtempSync(path.join(os.homedir(), 'testsToDelete-mgb-home-'));
   mkdirSync(path.join(fakeHome, '.config', 'minigit-bench'), { recursive: true });
   const key = path.join(fakeHome, '.config', 'minigit-bench', 'heldout.key');
   writeFileSync(key, 'secret-key-bytes\n');
@@ -156,7 +156,7 @@ test('The_box_cannot_see_the_users_runtime_dir_where_the_session_bus_lives', asy
   if (!sandboxGate(t)) return;
   const runDir = `/run/user/${uid}`;
   if (!existsSync(runDir)) { t.skip(`${runDir} does not exist on this host`); return; }
-  const sock = await listenOn(runDir, `mgb-test-${process.pid}.sock`);
+  const sock = await listenOn(runDir, `testsToDelete-mgb-test-${process.pid}.sock`);
   try {
     const command = `test -S ${sock.file} && echo VISIBLE || echo HIDDEN`;
     const opts = boxDirs();
@@ -181,7 +181,7 @@ test('The_box_cannot_start_a_unit_on_the_hosts_user_manager', async t => {
 
 test('The_box_shows_only_its_own_bound_directories_under_tmp_and_var_tmp', async t => {
   if (!sandboxGate(t)) return;
-  const decoys = [path.join(os.tmpdir(), `mgb-decoy-${process.pid}`), `/var/tmp/mgb-decoy-${process.pid}`];
+  const decoys = [path.join(os.tmpdir(), `testsToDelete-mgb-decoy-${process.pid}`), `/var/tmp/mgb-decoy-${process.pid}`];
   decoys.forEach(d => writeFileSync(d, 'x'));
   try {
     const opts = boxDirs();
