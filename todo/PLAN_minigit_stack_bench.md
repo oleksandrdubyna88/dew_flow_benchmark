@@ -18,7 +18,7 @@ The question this plan answers, and nothing wider:
 > On the minigit task (SPEC-v1 then SPEC-v2), with **Claude Code** (Opus team lead, effort `high`), how do **C# 14 /
 > .NET 10** and **TypeScript 7.0.2 on Node 26** compare in **correctly counted** cost, decomposed wall time, and
 > **held-out** correctness — (a) for a bare agent with the upstream prompt, and (b) for the same task done end to end
-> under this family's full process (conventions, coai gates, Sonnet coders, PR, CI, CodeRabbit, merge)?
+> under this family's full process (conventions, coai gates, Sonnet coders, PR, CI, merge; no CodeRabbit, D19)?
 
 It is not a replication of banteg's run (other agent, other model, other date); only ratios are compared with it, with
 that caveat in the same sentence.
@@ -44,7 +44,7 @@ first unit test (§12, T-A1).
 |---|---|---|
 | D1 | Two arms: **PROCESS** (full family process) and **BARE** (Claude Code alone, upstream prompt) | operator: bare arm yes |
 | D2 | 3 runs per stack per arm = 12 cells, each cell two sessions (v1, then v2 from that cell's v1 result) | operator: 3 runs |
-| D3 | Process arm works in **one public GitHub fork**, `oleksandrdubyna88/minigit-bench`, with the real PR → CI → `sleep 300` → CodeRabbit → merge cycle. Four template branches, one per arm × stack: `template/process-csharp`, `template/process-node`, `template/bare-csharp`, `template/bare-node`. Every session runs on its own base `run/<rid>/main`. One fork and not two: GitHub allows one fork of a repository per account (verified 2026-10-29: a second `gh repo fork --fork-name` renamed the first). Consultants (consult `5dd114fe`) preferred one repository anyway: configuration is symmetric by construction, and public read exposure is the same either way. What is lost is the per-repo write boundary between the stacks, which the audit covers | operator: "2 public repos", then "forks", then "4 branches, one per arm" |
+| D3 | Process arm works in **one public GitHub fork**, `oleksandrdubyna88/minigit-bench`, with the real PR → CI → `sleep 300` → merge (no CodeRabbit, D19) cycle. Four template branches, one per arm × stack: `template/process-csharp`, `template/process-node`, `template/bare-csharp`, `template/bare-node`. Every session runs on its own base `run/<rid>/main`. One fork and not two: GitHub allows one fork of a repository per account (verified 2026-10-29: a second `gh repo fork --fork-name` renamed the first). Consultants (consult `5dd114fe`) preferred one repository anyway: configuration is symmetric by construction, and public read exposure is the same either way. What is lost is the per-repo write boundary between the stacks, which the audit covers | operator: "2 public repos", then "forks", then "4 branches, one per arm" |
 | D4 | TypeScript **7.0.2**, run by Node 26's native type stripping, `tsc --noEmit` as the type gate. ESLint cannot parse `.ts` through TS 7: `typescript@7.0.2` exports only `./lib/version.cjs` and `./unstable/*`, no classic compiler API (checked: `npm view typescript@7.0.2 exports`), and `typescript-eslint` accepts only `typescript <6.1.0`. So the lint parser gets a **private nested typescript 6.0.3 through npm `overrides`**, used for parsing only, without type information; `tsc`, the type gate and the runtime stay on 7.0.2. Recorded deviation (V12) | operator (TS 7.0.2); the lint shape verified 2026-10-29 |
 | D5 | Fully autonomous: nobody answers; `COAI_ON_EXHAUSTED=good_enough`; decisions recorded by the agent | operator |
 | D6 | Spend ceiling **$500** for everything — data, void, pilot (the operator chose $400 and pre-authorised a raise to $500 for the case where $400 cannot cover three process pairs; the ceiling is set at $500 from the start so no mid-series stop is needed) | operator, 2026-10-29 |
@@ -60,6 +60,7 @@ first unit test (§12, T-A1).
 | D16 | Claude authentication for every session is **one** method, chosen by the operator before P0: a subscription OAuth token from `claude setup-token` passed as `CLAUDE_CODE_OAUTH_TOKEN`, or an API key. **Decided: the operator's own current Claude subscription**, through a `claude setup-token` token passed as `CLAUDE_CODE_OAUTH_TOKEN`. The token was partly visible in a screenshot in the planning conversation; the operator accepted that risk on 2026-10-29 and kept it (it lives in `~/.config/minigit-bench/claude-oauth-token`, mode 600, directory 700). It is the only credential in the sandbox besides the PAT; the token scan (§7.6) covers its shape (`sk-ant-…`). So every cost is a list-price API-equivalent estimate (§9), and a rate-limit void means the subscription's usage window, not a spend limit | judge review M1; operator, 2026-10-29 |
 | D17 | Effort `high` is pinned in the session's own `--settings` file (`effortLevel` and `modelSettings.{opus,sonnet,fable}.effortLevel`), because `--setting-sources project` and the fresh `CLAUDE_CONFIG_DIR` exclude the user settings where `high` lives today; children's effort is read back from the audit | judge review M2, verified in `~/.claude/settings.json` |
 | D18 | **The task inputs have no licence.** SPEC-v1/v2 and test-v1/v2 were written by Yusuke Endoh (`mame/ai-coding-lang-bench`), banteg's fork is byte-identical, and neither repository carries a licence (checked by `gh api …/license`, the clones and their history). The operator's decision: the files live **only inside the GitHub fork**, relying on GitHub ToS D.5 (public repositories may be viewed and forked on GitHub). Our three test fixes live there too, on a branch `inputs`. `dew_flow_benchmark`, which is not a fork, holds only their hashes and `UPSTREAM.md`; the harness fetches the files from the fork at a pinned sha into a local cache and verifies them. The ToS grants viewing and forking; the fixes inside the fork are the operator's call, recorded here | operator, 2026-10-29; consult `31e740fc` |
+| D19 | **No CodeRabbit in the series** (operator, 2026-10-29: "not needed"). Every CodeRabbit item elsewhere in this plan is void: the process arm's PR cycle is PR → CI → `sleep 300` → read CI → merge; the templates ship no `.coderabbit.yaml` and no `coderabbit-review.yml`; the CodeRabbit review item is dropped and the 300 s item now reads CI (the checklist is k/17); `coderabbit_wait` stays an empty category; P0 and P1 check no CodeRabbit review. The family rule asks for a reviewer bot only "where the repository has one configured", and the fork has none | operator, 2026-10-29 |
 
 ## 4. Design
 
@@ -198,14 +199,13 @@ only then is the code shown, to separate product from harness defects. A case cl
 
 ### 5.4 Process compliance (process arm, read from GitHub, coai.db and the stream — never from the agent's summary)
 
-18 items: plan file with status line; `rules.mjs check/explain/read` before the first edit; worktree before the first
+17 items (one dropped by D19): plan file with status line; `rules.mjs check/explain/read` before the first edit; worktree before the first
 product edit; a `review_plan` round reached `proceed` before any `review_code`; last `review_code` verdict `proceed`;
 every finding resolved, every rejection reasoned; ≥1 Sonnet coder child and ≥1 Opus judge child; a test written before the
 source it covers; unit tests ran in CI; `research/module_tests.md` updated and a scenario test runs the built CLI;
 `research/architecture.md` or README updated; every commit on the base came through a merged PR with no bypass and green
-required checks; push CI green on the base tip; ≥300 s between PR open and the first CodeRabbit read; a CodeRabbit
-review exists, is a substantive review (not a rate-limit, skip or timeout notice — flagged `coderabbit degraded` otherwise),
-and every thread is resolved; inputs unchanged; `.github/` required jobs intact; conventions pin unchanged.
+required checks; push CI green on the base tip; ≥300 s between PR open and the first read of CI (D19: no CodeRabbit);
+inputs unchanged; `.github/` required jobs intact; conventions pin unchanged.
 Recorded, not scored: consultant calls, providers answered per round (<5 flagged `incomplete review`). C#-only items
 (logging, leftovers helper) are excluded from the cross-stack score. **Hand check:** at least 20 verdicts, stratified so
 every item and every process cell appears, plus every "not met" (which can make it more than 20); any disagreement above
@@ -504,7 +504,7 @@ claimed as findings.)*
 5. Quality: every bare session passes the visible tests; bare held-out median `percent` ≥ 90 % in both stacks with at least
    one bare failure; no process cell has more held-out `defects` than the worst bare cell of its stack; no stack difference
    > 1 `defect`.
-6. Delivery: ≥5 of 6 process cells deliver both phases; ≤1 session capped or on call_human; compliance median ≥14/18,
+6. Delivery: ≥5 of 6 process cells deliver both phases; ≤1 session capped or on call_human; compliance median ≥13/17,
    most often missed: test-first order, `sleep 300`, worktree-first.
 7. Surprises named in advance: TS costing ≥ C# in ≥2 bare pairs; process scoring below bare on held-out; any process session
    hitting its cap.
@@ -512,7 +512,7 @@ claimed as findings.)*
 **Reported per session:** arm, stack, block, rid, outcome, cost (headline, CLI, per model), tokens per model and kind,
 first-turn cache read (warmth flag), wall / API / active / each partition category, turns (checked against assistant
 messages), children per model and max concurrent, coai rounds / findings / providers answered, CodeRabbit findings, CI runs
-and red runs, build ok, visible / held-out / upstream-original scores, product and test LOC, latency, compliance k/18,
+and red runs, build ok, visible / held-out / upstream-original scores, product and test LOC, latency, compliance k/17,
 flags (fallback, void, contamination, CPU pressure).
 
 **Per stack × arm:** median and range (n = 3). **Language effect:** the C#/TS ratio within each concurrent pair (three
@@ -535,7 +535,7 @@ value of the process on real work, or any mechanism.
 | V6 | Contamination across runs (public repos, disk, CodeRabbit learnings, memory, consultants) | §7, D14, D15 |
 | V7 | CPU contention in pairs | `taskset` masks 0-5 / 8-13 swapped per block, one core left to the harness, CPU and PSI sampled every 5 s |
 | V8 | Prompt-cache warmth across sessions | No warm-up; simultaneous starts, so both stacks of a pair meet the same cache state; first-turn cache read flagged per session. An idle gap cannot clear it: the CLI's main session writes 1-hour cache entries (`tests/Bench.Tests/Fixtures/probes/claude-2.1.258-*.ndjson`: `ephemeral_1h_input_tokens` 89,541, 5m 0) |
-| V15 | `make` is not installed on the series machine (checked 2026-10-29): a tree that builds through a Makefile scores BUILD FAILED, while `build.sh` works. Both stacks get the same prompt ("include a Makefile or build script") | Install `make` before the series, or record per cell which build path the agent chose; decided in E3's preflight |
+| V15 | **Resolved 2026-10-29: the operator installed GNU Make 4.4.1.** Was: `make` is not installed on the series machine (checked 2026-10-29): a tree that builds through a Makefile scores BUILD FAILED, while `build.sh` works. Both stacks get the same prompt ("include a Makefile or build script") | Install `make` before the series, or record per cell which build path the agent chose; decided in E3's preflight |
 | V16 | The time partition classifies one Bash call as one category: `sleep 300 && dotnet build` counts its 300 s as `build_test` (a build anywhere in a chain wins) | A documented limit of per-call classification; the report shows the count of mixed chains per cell |
 | V9 | dotnet start-up cost inside the agent's own test loops | API vs tool time, per-invocation latency. *"Part of C#'s tool time is runtime start-up."* |
 | V10 | coai vendor variance (near-disjoint findings between identical runs: `dew_flow_connect_other_ais · research/RESULTS_prompt_measurement.md:21-39`) | Pinned coai sha and settings snapshot, empty `commands` list recorded, providers answered per round; vibe 3.0.2 is a version coai has not measured — recorded |
