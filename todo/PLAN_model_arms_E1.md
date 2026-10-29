@@ -469,17 +469,17 @@ anywhere; empty = clean. `Scrub(line)`: every token of the map replaced by `<tok
 
 ### E1.S5 — The launcher's four options and the stderr sink (CORNERSTONE)
 
-**Cornerstone — spec by Fable** (`model: fable`). Area: the launch boundary (parent `## Epics`, E1). Every launch in this repository —
-probes, scouts, authoring, assessors — goes through the two files this story widens, so a regression here is silent everywhere. This
-document fixes the goal, the binding contract (C3), the acceptance criteria, the break-its and the verified facts; **Fable writes the
-scenarios (Given/When/Then, the red stubs) and the brief into this section before the coder starts.**
+**Cornerstone — spec by Fable** (`model: fable`, written 2026-10-29 at `558cbe9`, every citation below re-opened). Area: the launch
+boundary (parent `## Epics`, E1). Every launch in this repository — probes, scouts, authoring, assessors — goes through the two files
+this story widens, so a regression here is silent everywhere. The goal, the binding contract (C3), the acceptance criteria and the
+verified facts are the judge's; the scenarios, the red stubs and the brief are Fable's and follow.
 
 - **Coder:** sonnet · **Spec:** fable · **Review:** Opus. **Depends on:** nothing. **Parallel with:** E1.S1 (and E1.S2–S4 once spec'd).
-- **Owns:** §4.4 (the four options, `ErrorOutput`, the `stderrLine` sink), D9 (the options), F8. **Size:** ≈ 300 changed lines.
+- **Owns:** §4.4 (the four options, `ErrorOutput`, the `stderrLine` sink), D9 (the options), F8. **Size:** ≈ 330 changed lines.
 - **Files.** `src/Bench.Application/CliAgent.cs` · `src/Bench.Infrastructure/Models/CliAgentRuntime.cs` ·
-  `src/Bench.Infrastructure/Process/ProcessRunner.cs` · `tests/Bench.Tests/Models/ClaudeArgvSessionTests.cs` (new) ·
-  `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs` (new) · `tests/FakeCli/Program.cs` **only if** the spec needs a
-  child that writes stderr and stays alive (see the facts) — additive, named here, and E2.S3 then must not re-add it.
+  `src/Bench.Infrastructure/Process/ProcessRunner.cs` · `tests/FakeCli/Program.cs` (one additive script field, `stderrBeforeLines` —
+  needed, see the facts; E2.S3 must not re-add it) · `tests/Bench.Tests/Models/ClaudeArgvSessionTests.cs` (new) ·
+  `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs` (new) · `research/module_scouts.md` (one paragraph beside *The line sink*, `:352-357`).
 - **Goal.** A claude launch can be started under a session id the harness minted, resumed by that id, run under `acceptEdits` /
   `default` / `plan`, and given a permission allow-list with patterns distinct from the built-in `--tools` list; stderr reaches a sink
   line by line while the child runs; and **no existing launch changes by one token or one byte of behaviour**.
@@ -497,27 +497,230 @@ scenarios (Given/When/Then, the red stubs) and the brief into this section befor
   5. `CliAgentRuntime.LaunchAsync` passes `ask.ErrorOutput.IsNone ? null : ask.ErrorOutput.Line`.
   6. Unedited and green: `ProbeArgvTests`, `ScoutArgvTests`, `AssessorArgvTests`, `CliAgentRuntimeTests`, `ProcessRunnerTests`,
      `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests`, the probes' and scouts' suites.
-- **Tests (names binding, from the parent §7).** `ClaudeArgvSessionTests`: `A_fresh_attempt_passes_session_id_and_a_resume_passes_resume`;
-  `Session_id_and_resume_together_are_refused`; `Permission_mode_accept_edits_default_and_plan_are_spelled`;
-  `Permission_mode_beside_the_read_only_sandbox_is_refused`; `Permitted_tool_patterns_are_allowedTools_and_the_builtin_list_stays_tools`;
-  `Codex_gemini_and_antigravity_refuse_the_four_options_by_name`; `IsNone_is_false_for_each_new_option`.
-  `ProcessRunnerStderrSinkTests`: `Stderr_lines_reach_the_sink_as_they_arrive_and_the_whole_text_is_still_returned`;
-  `A_stderr_sink_that_throws_kills_the_tree_like_a_stdout_sink_does`; `Every_existing_launch_without_a_stderr_sink_is_unchanged`.
-- **Break-its** (each red with the real symptom, restored): drop `PermittedTools` from `IsNone` → `IsNone_is_false_for_each_new_option`
-  red; spell `PermittedTools` as `--tools` → `Permitted_tool_patterns_are_allowedTools_and_the_builtin_list_stays_tools` red; remove the
-  budget cancel from the stderr pump's catch → `A_stderr_sink_that_throws_kills_the_tree_like_a_stdout_sink_does` red (the child's pid
-  still alive).
-- **Facts for the spec** (verified, §2): the argv builder `CliAgentRuntime.cs:111-131`, refusal order `:71-78`, the honoured table
-  `:153-186`; the launcher's overload chain `ProcessRunner.cs:54-136`, the stderr read today `:248` (`ReadToEndAsync`), the pump
-  `:300-320`, `Utf8` `:285-296`; the stdout-sink tests to mirror `ScoutLaunchProcessTests.cs:24-66` (`GoneAsync`, `ChildAlive` via
-  `WorkerLiveness.ProcessIsAlive`). `tests/FakeCli` cannot today write stderr AND stay alive: `exit` writes and exits (`Program.cs:200-204`),
-  `answer` writes then answers and exits (`:228-231`), a replay never writes stderr (`:251-279`). The shell's argv the options must be able
-  to express: `run-arm.sh:86-89`, `:106-108`.
-- **Commands.** `--filter-class "*ClaudeArgvSessionTests"`, `"*ProcessRunnerStderrSinkTests"`, `"*ProbeArgvTests"`, `"*ScoutArgvTests"`,
-  `"*AssessorArgvTests"`, `"*ProcessRunner*"`, `"*ScoutLaunchProcessTests"`; the whole suite.
-- **Done when.** The ten tests green, each watched red first; the three break-its observed; criterion 6 holds (`git diff --stat` shows no
-  edit to those test files).
-- **Out of bounds.** `StepLaunch` (E1.S6); `FakeCli`'s `stdoutByCall` (E2.S3); the envelope reader (E2.S1).
+- **Facts for the spec** (verified, §2, re-opened by Fable): the argv builder `CliAgentRuntime.cs:111-131` (`-p --model` first `:113`,
+  JSON events `:114`, the sandbox's `--permission-mode plan` `:115`, `--tools` `:118`, the deny list `:119`); the refusal order in `For`
+  `:71-78` (the budget check, then `Unsupported`); the honoured table `:157-178` and its gemini clause `:182`; `IsNone` `CliAgent.cs:171-177`;
+  `AgentOutputSink` `:44-59` (its doc says "stdout" — it becomes "stdout or stderr"); the launcher's overload chain `ProcessRunner.cs:54-136`
+  (the 8-parameter overload `:106-136`, `Utf8` applied when `stdoutLine is not null` `:118-121`); the wrapper `AwaitAsync` `:228-237`
+  (chooses `ReadToEndAsync` or `PumpAsync` for stdout); the core `AwaitAsync` `:241-277` with the stderr read `:248`
+  (`process.StandardError.ReadToEndAsync(CancellationToken.None)`); `StreamAsync` `:145-166` calls the core directly `:162`; `PumpAsync`
+  `:300-320` (a throwing sink cancels the budget `:315`); `Utf8` `:285-296`; `LaunchAsync`'s call `:292-300` (`ask.Output.IsNone ? null :
+  ask.Output.Line` `:299`). The stdout-sink tests to mirror: `ScoutLaunchProcessTests.cs:24-66` (`ChildAlive` `:116-117`, `GoneAsync`
+  `:119-127`, both private — copied, not extracted, because that file is pinned unedited by criterion 6). The fake CLI: `exit` writes
+  stderr and exits (`tests/FakeCli/Program.cs:200-204`), `answer` writes stderr in one write then answers (`:228-231`), a replay never
+  writes stderr (`Replay` `:249-277`; the one-write fast path `:253-259`, the line loop `:263-274`, the hold `:265-269`, the stdout write `:271`), so **no existing script
+  can write stderr line by line while alive — the one additive field below is needed**. The test-side handle keyed by MODEL id (no
+  environment needed): `tests/Bench.Tests/Probes/Driver/FakeCli.cs:12-18` (`Model`, `Home`), `Executable` `:31-43`, `Rewrite` `:46`,
+  `Calls` `:49-52`; the fake finds that home from `--model` (`Program.cs:13-31`, `FakeHome.For` `:554`). The shell's argv the options
+  must express: `run-arm.sh:86-87` (`--permission-mode acceptEdits|default`, `--disallowedTools …`), `:92` (`--resume <sid>`), `:100`
+  (`--session-id <sid>`), `:106-108` (`claude -p --model … --output-format stream-json --verbose --strict-mcp-config --mcp-config … <session>
+  <extra> --add-dir … --add-dir … --allowedTools <tools…>`, stderr to `<step>.a<N>.err`).
+
+#### The binding shape (C3, made exact)
+
+```csharp
+// src/Bench.Application/CliAgent.cs — after AgentSandbox (:88-95)
+/// <summary>claude <c>--permission-mode</c>: what the CLI does with a tool call that needs permission. <see cref="NotAsked"/> leaves the
+/// CLI's default and spells nothing; <see cref="Plan"/> is the same word <see cref="AgentSandbox.ReadOnly"/> already spells, which is why
+/// the two are refused together.</summary>
+public enum AgentPermissionMode { NotAsked, Default, AcceptEdits, Plan }
+
+// AgentAskOptions — four init-properties after PluginDirectories (:168), before IsNone
+public Guid SessionId { get; init; }                       // claude --session-id <D>; Guid.Empty = none
+public Guid ResumeSessionId { get; init; }                 // claude --resume <D>;     Guid.Empty = none
+public AgentPermissionMode PermissionMode { get; init; } = AgentPermissionMode.NotAsked;
+public IReadOnlyList<string> PermittedTools { get; init; } = [];   // claude --allowedTools <pattern>…, the PERMISSION list ("Bash(git *)"); distinct from AllowedTools (--tools)
+// IsNone gains:  && SessionId == Guid.Empty && ResumeSessionId == Guid.Empty && PermissionMode == AgentPermissionMode.NotAsked && PermittedTools.Count == 0
+
+// AgentAsk — after Output (:39)
+public AgentOutputSink ErrorOutput { get; init; } = AgentOutputSink.None;   // stderr as it arrives; None for every existing caller
+
+// src/Bench.Infrastructure/Process/ProcessRunner.cs — the chain's new end
+public static Task<ProcessAttempt> RunAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout,
+    string input, IReadOnlyDictionary<string, string>? environment, Action<string>? stdoutLine, Action<string>? stderrLine, CancellationToken cancellationToken);
+```
+
+**Claude's argv, token order fixed** (the only places `Claude(…)` `:111-131` changes; every existing token keeps its place):
+
+```csharp
+"-p", "--model", modelId,
+.. options.SessionId != Guid.Empty ? ["--session-id", options.SessionId.ToString("D")] : Array.Empty<string>(),          // NEW
+.. options.ResumeSessionId != Guid.Empty ? ["--resume", options.ResumeSessionId.ToString("D")] : Array.Empty<string>(),  // NEW
+.. options.JsonEvents ? [...] : ...,                                                                                         // as today
+.. options.Sandbox == AgentSandbox.ReadOnly ? ["--permission-mode", "plan"] : ...,                                            // as today
+.. options.PermissionMode != AgentPermissionMode.NotAsked ? ["--permission-mode", Spelled(options.PermissionMode)] : Array.Empty<string>(), // NEW
+.. options.Restricted ..., .. Grants(options), .. options.AllowedTools.Asked ? ["--tools", ...] : ...,                         // as today
+.. options.PermittedTools.Count > 0 ? ["--allowedTools", .. options.PermittedTools] : Array.Empty<string>(),                 // NEW
+.. ClaudeDenied(...) ... // and everything after it, as today
+```
+
+`Spelled(AgentPermissionMode)` is a private static switch expression: `Default => "default"`, `AcceptEdits => "acceptEdits"`, `Plan => "plan"`,
+`_ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "not a permission mode this build spells")` (`NotAsked` never reaches
+it: both call sites test for it first). A `Guid` prints as `"D"` — 36 lower-case characters with hyphens, the form the shell wrote
+(`/proc/sys/kernel/random/uuid`, `run-arm.sh:100`).
+
+**The two refusals, verbatim** (a private static `Conflict(AgentAskOptions o)` returning the sentence or `string.Empty`):
+
+- both ids: `$"a session id ({o.SessionId:D}) and a session to resume ({o.ResumeSessionId:D}) were both asked — a launch starts a session or resumes one, never both"`;
+- a mode beside the sandbox: `$"a permission mode ({Spelled(o.PermissionMode)}) was asked beside a read-only sandbox — the read-only sandbox already spells --permission-mode plan; ask for one or the other"`
+  (also when the mode asked is `Plan`: two spellings of one thing is the ambiguity the refusal exists to stop).
+
+`For` (`:68-89`) evaluates them in this order: the budget check (`:71-72`, as today) → `Conflict` → `Unsupported`. Extract the three into
+`private static string FirstRefusal(ModelRuntimeKind runtime, AgentAskOptions o) => new[] { Budget(o), Conflict(o), Unsupported(runtime, o) }.FirstOrDefault(r => r.Length > 0) ?? string.Empty;`
+so `For` keeps a complexity ≤ 4 (`Budget` is today's ternary moved into a method). A conflict is refused on every CLI, before any
+"no flag for" sentence.
+
+**The four `Unsupported` rows** (appended to the `asked` array `:157-178`, each honoured by `[ModelRuntimeKind.CliClaude]` alone):
+
+| asked | name in the refusal |
+|---|---|
+| `o.SessionId != Guid.Empty` | `a session id` |
+| `o.ResumeSessionId != Guid.Empty` | `a session to resume` |
+| `o.PermissionMode != AgentPermissionMode.NotAsked` | `a permission mode` |
+| `o.PermittedTools.Count > 0` | `a permission allow-list` |
+
+**`ProcessRunner`, exact.** The 8-parameter overload (`:106-136`) becomes an expression body delegating to the new one with
+`stderrLine: null` (its doc comment stays). The new 9-parameter overload is today's body with two changes: `if (stdoutLine is not null ||
+stderrLine is not null) { Utf8(start); }`, and `return await AwaitAsync(process, timeout, stdoutLine, stderrLine, cancellationToken);`.
+The wrapper `AwaitAsync` (`:228-237`) takes `stderrLine` too and calls the core with two readers built by one helper:
+
+```csharp
+private static Task<ProcessAttempt> AwaitAsync(System.Diagnostics.Process process, TimeSpan timeout, Action<string>? stdoutLine, Action<string>? stderrLine, CancellationToken cancellationToken) =>
+    AwaitAsync(process, timeout, Reader(process.StandardOutput, stdoutLine), Reader(process.StandardError, stderrLine), cancellationToken);
+
+/// <summary>Buffered to the end when no sink is given — the reads end on their own when the pipe closes, which is why the token is None
+/// (see the core's comment) — or pumped line by line into the sink, under the wait's budget.</summary>
+private static Func<CancellationTokenSource, Task<string>> Reader(StreamReader pipe, Action<string>? line) =>
+    budget => line is null ? pipe.ReadToEndAsync(CancellationToken.None) : PumpAsync(pipe, line, budget);
+```
+
+The core `AwaitAsync` (`:241-277`) gains a fourth parameter `Func<CancellationTokenSource, Task<string>> readStderr` and line `:248`
+becomes `var stderr = readStderr(budget);` — nothing else in it moves: the linked budget, `WaitForExitAsync`, the kill on any
+cancellation, the rethrow of the caller's own, the `TimedOut` and `Completed` shapes are byte for byte today's. `StreamAsync` (`:162`)
+passes `Reader(process.StandardError, null)` as that reader. `PumpAsync` (`:300-320`) is reused unchanged for both pipes (rename its
+parameter `stdoutLine` → `line`, its summary "stdout" → "a pipe"). `Merge`, `Utf8`, `Replace`, `Kill` untouched. The core's comment at
+`:232-235` (why the buffered read's token is `None`) moves onto `Reader`.
+
+**`CliAgentRuntime.LaunchAsync`** (`:292-300`): one more argument between the stdout sink and the token — `ask.ErrorOutput.IsNone ? null : ask.ErrorOutput.Line`.
+
+**`tests/FakeCli/Program.cs`, additive.** In `Script`, after `HoldAfterLine` (`:134`):
+
+```csharp
+/// <summary>A replay writes these to STDERR, the n-th (flushed) just before its n-th stdout line — a CLI that warns while it streams, for a
+/// test watching stderr arrive beside stdout (model arms E1.S5). Empty, the default, writes no stderr, as before; a replay holding any
+/// leaves the one-write fast path and goes line by line.</summary>
+public IReadOnlyList<string> StderrBeforeLines => [.. (Node("stderrBeforeLines") as JsonArray ?? []).Select(n => n?.GetValue<string>() ?? string.Empty)];
+```
+
+In `Replay` (`:249-277`): the fast-path condition (`:253`) gains `&& script.StderrBeforeLines.Count == 0`; in the loop, read the list
+once before it (`var stderr = script.StderrBeforeLines;`) and, AFTER the hold check (`:265-269`) and BEFORE `Console.Out.Write(lines[i]…)`
+(`:271`): `if (i < stderr.Count) { Console.Error.Write(stderr[i] + "\n"); Console.Error.Flush(); }`. With `holdAfterLine: k` the fake
+therefore writes k stderr lines and k stdout lines, then hangs. Nothing else in the fake changes; every existing script omits the
+field and takes exactly today's path.
+
+#### Scenarios — `ClaudeArgvSessionTests` (`tests/Bench.Tests/Models/`, namespace `Bench.Tests.Models`)
+
+`using Bench.Application; using Bench.Domain.Registry; using Bench.Infrastructure.Models; using FluentAssertions; using Xunit;`. Class
+doc, as the sibling suites say it: *asserting argv proves what is ASKED of the CLI, not that the CLI honours it (`common.testing`,
+delegated options); what this layer guarantees is the spelling and that an option a CLI has no flag for is refused by name, never
+dropped.* Fixed id `private static readonly Guid Id = Guid.Parse("0f3c9a1e-5b7d-4c2a-9e8f-1234567890ab");` so every expected argv is a
+literal. Helper `private static IReadOnlyList<string> Claude(AgentAskOptions o) => CliArgv.For(ModelRuntimeKind.CliClaude, "sonnet", o, []).Ok();`
+and `private static string Refusal(ModelRuntimeKind runtime, AgentAskOptions o) { var refused = CliArgv.For(runtime, "m", o, []); refused.Failed().Should().BeTrue($"{runtime} must refuse, never drop, {o}"); return refused.Reason(); }`
+— the `Failed()` assertion is what goes red on the stub; a bare `.Reason()` would throw `InvalidOperationException`, which is not a red.
+
+| Test | Given / When / Then | Red against the stub (an assertion message) |
+|---|---|---|
+| `A_fresh_attempt_passes_session_id_and_a_resume_passes_resume` | **Given** `{ SessionId = Id }`, `{ ResumeSessionId = Id }` and `{ SessionId = Id, JsonEvents = true }`; **when** spelled for claude; **then** exactly `["-p","--model","sonnet","--session-id","0f3c9a1e-5b7d-4c2a-9e8f-1234567890ab"]`, `["-p","--model","sonnet","--resume","0f3c9a1e-5b7d-4c2a-9e8f-1234567890ab"]` and `["-p","--model","sonnet","--session-id","0f3c9a1e-…","--output-format","stream-json","--verbose"]` (the session pair sits right after the model, before every other flag — the shell's `claude -p --model … <session>` order is a multiset, this pins ONE spelling) | `IsNone` is still true for the stub, so `Plain` answers: `Expected argv to be equal to {"-p", "--model", "sonnet", "--session-id", "0f3c9a1e-5b7d-4c2a-9e8f-1234567890ab"}, but {"-p", "--model", "sonnet"} contains 2 item(s) less.` |
+| `Session_id_and_resume_together_are_refused` | **Given** `{ SessionId = Id, ResumeSessionId = Guid.NewGuid() }`; **when** `CliArgv.For(CliClaude, …)`; **then** `Failed()` is true and the reason contains `starts a session or resumes one, never both` and both ids as `D` strings | `Expected refused.Failed() to be true because CliClaude must refuse, never drop, …, but found False.` |
+| `Permission_mode_accept_edits_default_and_plan_are_spelled` | `[Theory]` `[InlineData(AgentPermissionMode.AcceptEdits, "acceptEdits")]`, `(Default, "default")`, `(Plan, "plan")`; **given** `{ PermissionMode = mode }`; **then** exactly `["-p","--model","sonnet","--permission-mode", word]`; and `{ PermissionMode = mode, JsonEvents = true }` puts the pair AFTER `--verbose` (the sandbox's slot) | `Expected argv to be equal to {"-p", "--model", "sonnet", "--permission-mode", "acceptEdits"}, but {"-p", "--model", "sonnet"} contains 2 item(s) less.` |
+| `Permission_mode_beside_the_read_only_sandbox_is_refused` | **Given** `{ Sandbox = AgentSandbox.ReadOnly, PermissionMode = AgentPermissionMode.AcceptEdits }` and `{ Sandbox = ReadOnly, PermissionMode = Plan }`; **then** each `Failed()` with a reason containing `read-only sandbox already spells --permission-mode plan`; and `{ Sandbox = ReadOnly }` alone still spells `["-p","--model","sonnet","--permission-mode","plan"]` (the assessor's launch, unchanged) | the stub builds `--permission-mode plan` and succeeds: `Expected refused.Failed() to be true …, but found False.` |
+| `Permitted_tool_patterns_are_allowedTools_and_the_builtin_list_stays_tools` | **Given** `{ AllowedTools = AgentToolAllowlist.Only(["Read","Edit"]), PermittedTools = ["Bash(git *)","Read","mcp__coai__open"] }`; **then** exactly `["-p","--model","sonnet","--tools","Read","Edit","--allowedTools","Bash(git *)","Read","mcp__coai__open"]` (each pattern its own token, spaces and parentheses intact, the built-in list first); **and given** `{ PermittedTools = ["Bash(git *)"] }` alone **then** `["-p","--model","sonnet","--allowedTools","Bash(git *)"]` and the argv contains no `--tools` | `Expected argv to be equal to {…, "--tools", "Read", "Edit", "--allowedTools", "Bash(git *)", "Read", "mcp__coai__open"}, but {"-p", "--model", "sonnet", "--tools", "Read", "Edit"} contains 4 item(s) less.` |
+| `Codex_gemini_and_antigravity_refuse_the_four_options_by_name` | `[Theory]` over `CliCodex`, `CliGemini`, `CliAntigravity`; **given** each of `{ SessionId = Id }`, `{ ResumeSessionId = Id }`, `{ PermissionMode = Default }`, `{ PermittedTools = ["Read"] }` alone; **then** `Refusal(runtime, o)` contains, respectively, `a session id`, `a session to resume`, `a permission mode`, `a permission allow-list`, and every reason contains `has no flag for` | the stub's `IsNone` is true → `Plain` succeeds: `Expected refused.Failed() to be true because CliCodex must refuse, never drop, …, but found False.` |
+| `IsNone_is_false_for_each_new_option` | **Then** `new AgentAskOptions { SessionId = Id }.IsNone`, `{ ResumeSessionId = Id }`, `{ PermissionMode = Default }`, `{ PermittedTools = ["Read"] }` are each false (one assertion each, with a `because` naming the option); `new AgentAskOptions().IsNone` and `AgentAskOptions.None.IsNone` are true — the reason every existing caller's argv stays `Plain` | `Expected new AgentAskOptions { SessionId = Id }.IsNone to be false because a session id is a request, but found True.` |
+
+#### Scenarios — `ProcessRunnerStderrSinkTests` (`tests/Bench.Tests/Infrastructure/`, namespace `Bench.Tests.Infrastructure`)
+
+`using System.Diagnostics; using System.Text.Json.Nodes; using Bench.Application; using Bench.Domain.Registry; using Bench.Infrastructure.Models;
+using Bench.Infrastructure.Process; using Bench.Tests.Probes.Driver; using FluentAssertions; using Microsoft.Extensions.Logging.Abstractions; using Xunit;`.
+Every launch goes to `tests/FakeCli` through the model-keyed handle (`FakeCli`, no environment needed: the fake finds its script under
+`%TEMP%/bench-fake-cli/<model>/` from `--model`); nothing paid is called. Helpers, private static: `Ct => TestContext.Current.CancellationToken`;
+`Stream(int lines)` = `{"type":"line","n":i}\n` per line (as `ScoutLaunchProcessTests.cs:21-22`); `Warns(int n)` = `["warn 1", …, "warn n"]`;
+`Argv(FakeCli fake)` = `["-p", "--model", fake.Model]`; `Cwd` = `Path.GetTempPath()`;
+`Replay(FakeCli fake, int lines, JsonObject extra)` writes `Stream(lines)` to `Path.Combine(fake.Home, "stream.ndjson")`, sets
+`extra["stdoutFile"]` to that path and `extra["stderrBeforeLines"]` to `new JsonArray(Warns(lines).Select(w => (JsonNode)w).ToArray())`,
+then `fake.Rewrite(extra)`; `ChildAlive(fake)` and `GoneAsync(pid)` copied from `ScoutLaunchProcessTests.cs:116-127` (that file is
+pinned unedited; say in the summary that the two helpers now exist twice and a later cleanup may extract both). The stderr text the fake
+writes is `string.Join('\n', Warns(n))` once the launcher trims it.
+
+| Test | Given / When / Then | Red (an assertion message) |
+|---|---|---|
+| `Stderr_lines_reach_the_sink_as_they_arrive_and_the_whole_text_is_still_returned` | **Given** `Replay(fake, 4, new JsonObject { ["lineDelayMs"] = 300 })`; `var seen = new List<(string Line, bool ChildAlive)>()`, `var stdoutSeen = new List<string>()`; **when** `ProcessRunner.RunAsync(FakeCli.Executable, Argv(fake), Cwd, TimeSpan.FromMinutes(1), "prompt", environment: null, stdoutLine: stdoutSeen.Add, stderrLine: line => seen.Add((line, ChildAlive(fake))), Ct)`; **then** `seen.Select(s => s.Line)` equals `Warns(4)`; `seen.Take(3)` all `ChildAlive` ("a stderr line reaches the sink as it arrives — not at exit"); the attempt is `Completed` with `Result.ExitCode == 0`, `Result.StandardError == "warn 1\nwarn 2\nwarn 3\nwarn 4"`, `Result.StandardOutput == Stream(4).TrimEnd('\n')`, `Result.Output` contains `"warn 4"` and `"\"n\":4"`; `stdoutSeen` equals `Stream(4).TrimEnd('\n').Split('\n')` (both pumps ran side by side) | the stub drops the sink: `Expected seen.Select(s => s.Line) to be equal to {"warn 1", "warn 2", "warn 3", "warn 4"}, but found empty collection.` |
+| `A_stderr_sink_that_throws_kills_the_tree_like_a_stdout_sink_does` | **Given** `Replay(fake, 50, new JsonObject { ["lineDelayMs"] = 200, ["holdAfterLine"] = 10 })` — the child never exits on its own; `var clock = Stopwatch.StartNew()`; **when** `var launch = () => ProcessRunner.RunAsync(…, TimeSpan.FromSeconds(60), "prompt", null, stdoutLine: null, stderrLine: _ => throw new InvalidOperationException("the .err file refused a line"), Ct)`; **then** `await launch.Should().ThrowAsync<InvalidOperationException>().WithMessage("*refused a line*")`; `clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), "the sink's throw killed the tree — the 60 s wall did not")`; `await GoneAsync(fake.Calls().Single().Pid)` | the stub drops the sink, the fake holds after 10 lines, the wall ends it after 60 s and the launch returns `TimedOut`: `Expected a <System.InvalidOperationException> to be thrown, but no exception was thrown.` (observed after ≈ 60 s) |
+| `Every_existing_launch_without_a_stderr_sink_is_unchanged` | **Given** `Replay(fake, 4, [])` (the field alone takes the line-by-line path; no delay); `var stdoutSeen = new List<string>()`; **when** the same fake is launched through the three existing overloads that take input — `RunAsync(exe, argv, Cwd, 1 min, "prompt", Ct)`, `RunAsync(…, "prompt", environment: null, Ct)`, `RunAsync(…, "prompt", null, stdoutLine: stdoutSeen.Add, Ct)`; **then** each attempt is `Completed`, exit 0, `Result.StandardOutput == Stream(4).TrimEnd('\n')`, `Result.StandardError == string.Join('\n', Warns(4))` (the whole stderr still comes back with no sink), `Result.Output` contains `"warn 4"` and `"\"n\":4"`; `stdoutSeen` equals exactly the 4 stdout lines (no stderr line strayed into the stdout sink); `fake.Calls()` has 3 entries | passes against the stub (the stub already delegates with `null`), so its red is a plant: in the 8-parameter overload pass `stderrLine: stdoutLine` → a `.Should().Equal` failure on `stdoutSeen` whose actual items include `"warn 1"` (eight items where four were expected); restore |
+| `The_runtime_hands_an_asks_ErrorOutput_to_the_launcher_as_its_stderr_sink` (added — criterion 5 had no test) | **Given** `Replay(fake, 4, new JsonObject { ["lineDelayMs"] = 300 })`; `var ask = new AgentAsk(ModelRuntimeKind.CliClaude, FakeCli.Executable, "prompt", Cwd, TimeSpan.FromMinutes(1), fake.Model) { ErrorOutput = AgentOutputSink.Lines(line => seen.Add((line, ChildAlive(fake)))) }` (options `None`, environment `Inherited` — the authoring callers' launch); **when** `(await new CliAgentRuntime(NullLogger<CliAgentRuntime>.Instance).TranscriptAsync(ask, Ct)).Ok()`; **then** `seen.Select(s => s.Line)` equals `Warns(4)`, `seen.Take(3)` all `ChildAlive`, `transcript.TimedOut` false, `transcript.Stderr == string.Join('\n', Warns(4))`, `transcript.Stdout == Stream(4).TrimEnd('\n')`, `transcript.Argv` equals `Argv(fake)` (options `None` → `Plain`) | `LaunchAsync` still passes `null`: `Expected seen.Select(s => s.Line) to be equal to {"warn 1", "warn 2", "warn 3", "warn 4"}, but found empty collection.` |
+
+#### Brief — the order of work
+
+1. **Stubs, so every test compiles and goes red on an assertion** (`common.testing`: a compile error is not a red).
+   `CliAgent.cs`: add `AgentPermissionMode`, the four `AgentAskOptions` properties and `AgentAsk.ErrorOutput` exactly as above; leave
+   `IsNone` (`:171-177`) as it is. `ProcessRunner.cs`: add the 9-parameter overload with its final signature and doc, body
+   `=> RunAsync(executable, arguments, workingDirectory, timeout, input, environment, stdoutLine, cancellationToken)` — `stderrLine`
+   accepted and dropped, for this step only. `CliAgentRuntime.cs`: untouched.
+2. `tests/FakeCli/Program.cs`: `stderrBeforeLines` as above (the fake is rebuilt by the test project's `ReferenceOutputAssembly="false"`
+   reference, `tests/Bench.Tests/Bench.Tests.csproj:37`).
+3. Write `ClaudeArgvSessionTests` (7) and `ProcessRunnerStderrSinkTests` (4) as specified — names verbatim.
+4. Build; run the two classes; **record the ten failing assertion messages** in the summary (the three stderr reds, the seven argv
+   reds; `Every_existing_launch_without_a_stderr_sink_is_unchanged` is green here and gets its red in step 8).
+5. **Implement**: `IsNone` widened; `Claude(…)` with the three new token groups in the places fixed above; `Spelled`, `Conflict`,
+   `Budget`, `FirstRefusal`, the four `Unsupported` rows; `ProcessRunner`'s real chain (`Reader`, the core's `readStderr`, `Utf8` on
+   either sink, `StreamAsync`'s call, `PumpAsync` renamed parameter); `LaunchAsync`'s new argument. Widen `AgentOutputSink`'s summary
+   (`:42-43`) to "a line-by-line sink for one launch's stdout or stderr" and `AgentAsk.Output`'s neighbour `ErrorOutput` gets the doc
+   given in the shape above.
+6. Build (0 warnings); the two classes green; then every class of criterion 6 and `--filter-class "*ProcessRunner*"`; `dotnet format
+   --verify-no-changes`; the whole suite (Docker up).
+7. `research/module_scouts.md`: after *The line sink* (`:352-357`) one paragraph **The stderr sink (model arms E1.S5).** — the
+   9-parameter `RunAsync` and `AgentAsk.ErrorOutput` do for stderr what the line sink does for stdout, the whole stderr still returned,
+   UTF-8 whenever either sink is given, the buffered launch unchanged; and the four claude options (`SessionId` / `ResumeSessionId`,
+   `PermissionMode`, `PermittedTools` = `--allowedTools`, distinct from `--tools`), refused by name elsewhere. One paragraph; the module
+   document of the arms (E1.S6) describes the per-mode use.
+8. **Break-its, each observed red then restored** — (a) drop `PermittedTools.Count == 0` from `IsNone` → `IsNone_is_false_for_each_new_option`:
+   `Expected … IsNone to be false because a permission allow-list is a request, but found True.`; (b) spell `PermittedTools` as `"--tools"`
+   → `Permitted_tool_patterns_are_allowedTools_and_the_builtin_list_stays_tools`: `Expected argv to be equal to {…"--allowedTools"…}, but
+   {…"--tools", "Bash(git *)"…} differs at index 6.`; (c) remove `await budget.CancelAsync()` from `PumpAsync`'s catch (`:315`) →
+   `A_stderr_sink_that_throws_kills_the_tree_like_a_stdout_sink_does`: the exception still arrives, after the wall — `Expected clock.Elapsed
+   to be less than 30s, but found 1m 0.…s.` (the tree lived until the wall, which is the defect); (d) the plant of
+   `Every_existing_launch_without_a_stderr_sink_is_unchanged` (step 4's note). Note that the scouts' sibling test (`ScoutLaunchProcessTests.cs:56-66`)
+   does not catch (c) — its child exits by itself after 10 s — which is why this one holds the child and bounds the time.
+9. Commit by path (`git add` the eight files by name; `git diff --staged --stat` read against ≈ 330 lines):
+   `feat(launcher): session id, resume, permission mode and permitted tools on claude's argv; a stderr line sink beside stdout (model arms E1.S5)`,
+   the body carrying the runner's numbers for the two classes, the suite, and the four reds observed in step 8.
+
+**Commands** (WSL, no `.exe`; never `dotnet test`; always through the lowering wrapper):
+
+```bash
+node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ClaudeArgvSessionTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ProcessRunnerStderrSinkTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ProbeArgvTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ScoutArgvTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*AssessorArgvTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*CliAgentRuntimeTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ProcessRunner*"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-class "*ScoutLaunchProcessTests"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-namespace "Bench.Tests.Probes"
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests --filter-namespace "Bench.Tests.Scouts"
+node .agents/conventions/tools/low-priority.mjs dotnet format dew_flow_benchmark.slnx --verify-no-changes --no-restore
+node .agents/conventions/tools/low-priority.mjs ./tests/Bench.Tests/bin/Release/net10.0/Bench.Tests   # the whole suite, Docker up
+```
+
+**Done when.** The eleven tests green, the ten reds of step 4 and the four of step 8 recorded as assertion messages in the summary;
+criterion 6 holds (`git diff --stat` on those test files is empty); the build has 0 warnings, `dotnet format` is clean, the whole suite
+is green; the paragraph of step 7 is in `research/module_scouts.md`; the commit of step 9 carries only the eight files.
+
+**Out of bounds.** `StepLaunch` and `ArmChildEnvironment` (E1.S6); `FakeCli`'s `stdoutByCall` (E2.S3); the envelope reader (E2.S1);
+`ProcessSession`; extracting `ChildAlive`/`GoneAsync` out of `ScoutLaunchProcessTests` (it is pinned unedited — name the duplication,
+do not resolve it); any change to the order or spelling of an existing token in `Claude(…)`, `Codex(…)` or `Antigravity(…)`; a
+`ToString` on `AgentAskOptions` (§8 item 9: the record's generated one already carries the new properties).
 
 ### E1.S6 — `StepLaunch` and `ArmChildEnvironment`
 
@@ -1081,7 +1284,8 @@ two writers in one tree. E1.S5 lands its options before E1.S6 starts; E1.S9 must
 
 Every class of the parent's E1 list is here with every method under its exact name, except **`PrepBaseTests`**, which the parent's map
 assigns to E4.S4 (its verb is E4's; E1 ships the guard tested by `ValidateVerbTests.Prep_base_is_refused_before_validate_passes_and_when_a_baseline_exists`).
-Added, in the same style: `HostingExtractionTests.The_cli_host_no_longer_carries_its_own_copy`; three in `ExperimentFileTests`; four in
+Added, in the same style: `HostingExtractionTests.The_cli_host_no_longer_carries_its_own_copy`; one in `ProcessRunnerStderrSinkTests`
+(the runtime's hand-off of `ErrorOutput`, E1.S5); three in `ExperimentFileTests`; four in
 `ArmPathsTests`/`ArmMapTests`; two in `StepLaunchTests`; two in `BriefFillerTests`; `ExecutableResolutionTests` (3), `ScenariosFileTests`
 (2), `BaselineFileTests` (3); `ModelArmsProgramTests` (5); one each in `ValidateVerbTests` and `InitVerbTests`. Fixtures: none under
 `Fixtures/model-arms/` in E1 — the example and the shipped templates ARE the fixtures (one source).
