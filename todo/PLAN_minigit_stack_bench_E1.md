@@ -46,7 +46,7 @@ git at `/home/jinx/rsd/minigit/heldout-src/BRIEF_S2.md`, beside the clear source
 | coai ledger line (camelCase): `utc, provider, model, role, stage, seconds, tokensIn, tokensOut, costUsd?, outcome, …, tokensCached, costNote, tokensReasoning, usageNote` | `dew_flow_connect_other_ais · src_mcp/runners/Reviewers/UsageLedger.cs:76-145`, `LedgerJsonContext.cs:15` |
 | coai adds claude's cache tokens INTO `tokensIn` (codex's are already inside), so in the ledger `tokensCached ⊆ tokensIn` for both | `dew_flow_connect_other_ais · src_mcp/runners/Reviewers/ClaudeRuntime.cs:196-235` |
 | coai `rounds(stage, number, verdict, started_utc, completed_utc, …)` | `dew_flow_connect_other_ais · src_mcp/src/Store/Schema.cs:52-77` |
-| The lowering tool and its runner shape: `lowerOwnPriority()`, `testConcurrency = max(1, min(8, threads − 1))`, `exitCodeFor` | `.claude/rules/shared/tools/low-priority.mjs:43-48`, `:94`; `.claude/rules/shared/tools/run-tests.mjs:23-25`, `:36-43`; preload template `.claude/rules/shared/tools/templates/lower-priority-preload.mjs:14-26` |
+| The lowering tool and its runner shape: `lowerOwnPriority()`, `testConcurrency = max(1, min(8, threads − 1))`, `exitCodeFor` | `.agents/conventions/tools/low-priority.mjs:43-48`, `:94`; `.agents/conventions/tools/run-tests.mjs:23-25`, `:36-43`; preload template `.agents/conventions/tools/templates/lower-priority-preload.mjs:14-26` |
 | Toolchain on this machine: dotnet `/usr/lib/dotnet` (SDK 10.0.113), node 26.12.1 under `/home/jinx/.nvm/…`, python 3.14.4 `/usr/bin`, `/usr/bin/bwrap`, `/usr/bin/timeout` | checked 2026-10-29 |
 
 ## 3. Conventions for every story
@@ -83,7 +83,7 @@ agent-written process running in a no-network scoring sandbox that cannot see th
 | Path | Change |
 |---|---|
 | `spikes/minigit-bench/run-tests.mjs` | new — the spike's test runner |
-| `spikes/minigit-bench/lib/lower-priority.mjs` | new — verbatim copy of `.claude/rules/shared/tools/templates/lower-priority-preload.mjs`, only the `MOUNT` line changed to `new URL("../../../.claude/rules/shared/", import.meta.url)` |
+| `spikes/minigit-bench/lib/lower-priority.mjs` | new — verbatim copy of `.agents/conventions/tools/templates/lower-priority-preload.mjs`, only the `MOUNT` line changed to `new URL("../../../.agents/conventions/", import.meta.url)` |
 | fork `oleksandrdubyna88/minigit-bench`, branch **`inputs`** (from `main` = `mame@7f6ffdc`) | new — `upstream/{SPEC-v1.txt,SPEC-v2.txt,test-v1.sh,test-v2.sh}` byte for byte, and at the root the fixed visible `test-v1.sh`, `test-v2.sh` plus the SPECs; the upstream harness, results and `CLAUDE.md` removed. The four `template/*` branches merge it (E2). **Nothing from upstream is committed to `dew_flow_benchmark`** (parent D18) |
 | `spikes/minigit-bench/inputs/hashes.txt` | new — `sha256sum` format: the four upstream files and the two fixed scripts (6 lines; E1.S2 appends the suite's) |
 | `spikes/minigit-bench/inputs/UPSTREAM.md` | new — the fork, the pinned `inputs` sha, the upstream sha, the licence finding and the operator's D18 decision, the three edits in words |
@@ -101,7 +101,7 @@ agent-written process running in a no-network scoring sandbox that cannot see th
    `common.local-cpu-budget` §2), then `spawnSync(process.execPath, ['--test', \`--test-concurrency=${n}\`, ...globs],
    { cwd: <spike dir from import.meta.url>, stdio: 'inherit' })` with `n = max(1, min(8, availableParallelism() − 1))`
    and default glob `test/**/*.test.mjs`; exit with the child's code, or 128 + signal number (the shape of
-   `.claude/rules/shared/tools/run-tests.mjs:36-43`; write it locally, do not import the mount's runner).
+   `.agents/conventions/tools/run-tests.mjs:36-43`; write it locally, do not import the mount's runner).
 2. **Inputs.** In the fork (worktree of branch `inputs`): `upstream/` gets the four files byte for byte from
    `mame@7f6ffdc`; the root gets the SPECs and the fixed scripts (step 3). `UPSTREAM.md` in this repository records the
    licence finding and the operator's decision (parent D18: the files live only in the fork, under GitHub ToS D.5).

@@ -48,7 +48,7 @@ test('Build_and_test_commands_are_work', () => {
 
 test('Build_commands_behind_a_wrapper_or_a_chain_are_still_work', () => {
   all([
-    'node .claude/rules/shared/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4',
+    'node .agents/conventions/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4',
     'cd src && dotnet build',
     'git status && dotnet test | tail -20',
     'FOO=1 nice -n 19 dotnet build',
@@ -118,9 +118,18 @@ test('Every_template_test_entry_point_of_either_stack_is_build_test', () => {
   const typescript = ['node scripts/run-tests.mjs', 'npm test', 'npm run typecheck', 'node --test', 'tsc --noEmit', 'bash test-v1.sh'];
   all(csharp, 'build_test');
   all(typescript, 'build_test');
-  const launcher = 'node .claude/rules/shared/tools/low-priority.mjs';
+  const launcher = 'node .agents/conventions/tools/low-priority.mjs';
   all([...csharp, ...typescript].filter(c => !c.startsWith('node ')).map(c => `${launcher} ${c}`), 'build_test');
   assert.equal(classifyCommand('cat scripts/run-tests.sh'), 'other_tool');
+});
+
+test('The_old_mount_path_of_the_launcher_is_still_peeled_so_old_transcripts_classify', () => {
+  // Transcripts recorded before the mount moved from .claude/rules/shared to .agents/conventions carry the old path.
+  all([
+    'node .claude/rules/shared/tools/low-priority.mjs dotnet build dew_flow_benchmark.slnx -c Release -m:4',
+    'node ./some/other/mount/tools/low-priority.mjs dotnet test',
+  ], 'build_test');
+  assert.equal(classifyCommand('node .claude/rules/shared/tools/low-priority.mjs cat scripts/run-tests.sh'), 'other_tool');
 });
 
 test('A_shell_run_with_option_flags_still_finds_its_script', () => {
