@@ -56,8 +56,15 @@ export function pathsIn(text) {
   return [...new Set([...quoted, ...PATTERNS.flatMap(re => [...rest.matchAll(re)].map(m => m[0]))])];
 }
 
-/** The POSIX counterpart of `pathsIn`. */
-export const posixPathsIn = text => [...new Set(POSIX_PATTERNS.flatMap(re => [...text.matchAll(re)].map(m => m[0])))];
+// a quoted absolute path (it may hold spaces): `/` then a name, never a lone `/` or a quoted substitution such as 's/a/b/'
+const QUOTED_POSIX = /["'](\/[^"'\s/][^"']*)["']/g;
+
+/** The POSIX counterpart of `pathsIn`: quoted absolute paths first (as `QUOTED_DRIVE` does), then the unquoted shapes. */
+export function posixPathsIn(text) {
+  const quoted = [...text.matchAll(QUOTED_POSIX)].map(m => m[1]);
+  const rest = text.replace(QUOTED_POSIX, ' ');
+  return [...new Set([...quoted, ...POSIX_PATTERNS.flatMap(re => [...rest.matchAll(re)].map(m => m[0]))])];
+}
 
 function candidatePaths(tool, input, extract) {
   if (SHELL.has(tool)) return extract(input?.command ?? '');

@@ -45,3 +45,14 @@ test('The_windows_flavour_is_unchanged_and_the_default', () => {
   assert.equal(findOutsideAccesses(bash('cat /c/Users/me/.claude/x'), { ...win, flavour: 'win32' }).length, 1);
   assert.equal(findOutsideAccesses(bash('ls D:\\rsd\\_q1\\c1\\tree\\src'), win).length, 0);
 });
+
+test('Quoted_absolute_paths_are_found_like_unquoted_ones', () => {
+  const hits = outside([
+    call('Bash', { command: 'cat "/home/u/.ssh/id_rsa"' }),
+    call('Bash', { command: "cat '/srv/partner/box/work/a.cs'" }),
+    call('Bash', { command: 'cp "/home/u/my docs/a b.txt" .' }),
+  ]);
+  assert.deepEqual(hits.map(h => h.resolved), ['/home/u/.ssh/id_rsa', '/srv/partner/box/work/a.cs', '/home/u/my docs/a b.txt']);
+  assert.deepEqual(outside([call('Bash', { command: 'cat "/srv/me/box/work/src/a.cs"' })]), [], 'a quoted path inside the tree is fine');
+  assert.deepEqual(outside([call('Bash', { command: "tr '/' '-' < f; sed 's/a/b/' f; echo \"a/b\"" })]), [], 'a lone slash and a substitution are not paths');
+});
