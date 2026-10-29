@@ -1,4 +1,6 @@
+using Bench.Domain;
 using FluentAssertions;
+using ModelArms.Core.Experiment;
 using ModelArms.Adapters;
 using Xunit;
 
@@ -185,6 +187,56 @@ public sealed class RootFactsTests
         }
 
         (await RootFacts.FileFactsAsync(other, CancellationToken.None)).Ok().Path.Should().Be(other, "the file itself is judged");
+    }
+
+    [Fact]
+    public async Task Owner_and_mode_come_from_one_file_even_when_a_dot_dot_climbs_out_of_a_linked_folder()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("links, owners and modes are read on Linux here");
+            return;
+        }
+
+        using var temp = new TempFolder();
+        temp.RequireLinks();
+        var own = temp.File("x", "W", "K", "etc", "passwd");
+        File.SetUnixFileMode(own, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        temp.Folder("W", "K", "a", "b", "c", "e");
+        Directory.CreateSymbolicLink(temp.Combine("W", "dl2"), temp.Combine("W", "K", "a", "b", "c", "e"));
+        var climbing = temp.Combine("W", "dl2", "..", "..", "..", "..", "etc", "passwd");
+        var full = System.IO.Path.GetFullPath(climbing);
+
+        var outcome = await RootFacts.FileFactsAsync(climbing, CancellationToken.None);
+
+        if (outcome is Outcome<FileFacts>.Ok ok)
+        {
+            ok.Value.Path.Should().Be(full, "the facts are of the one normalised path");
+            ok.Value.Mode.Should().Be(File.GetUnixFileMode(full), "the mode is of the file the owner is of");
+            ok.Value.OwnerUid.Should().Be(await OwnerOf(full), "the owner is of the file the mode is of — never the operator's file reached in the kernel's order");
+        }
+    }
+
+    [Fact]
+    public async Task A_nul_in_a_trust_path_is_a_refusal_never_a_throw()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("owners and modes are read on Linux here");
+            return;
+        }
+
+        var outcome = await RootFacts.FileFactsAsync("/tmp/experiment\0.json", CancellationToken.None);
+
+        outcome.Reason().Should().Contain("NUL");
+    }
+
+    private static async Task<int> OwnerOf(string path)
+    {
+        using var stat = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("stat", ["-c", "%u", path]) { RedirectStandardOutput = true })!;
+        var text = await stat.StandardOutput.ReadToEndAsync();
+        await stat.WaitForExitAsync();
+        return int.Parse(text.Trim(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     [Fact]

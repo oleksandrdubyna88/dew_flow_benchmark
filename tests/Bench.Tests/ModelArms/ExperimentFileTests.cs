@@ -154,11 +154,30 @@ public sealed class ExperimentFileTests
     {
         PosixPaths();
 
-        Refused(root => root["target"]!["build"] = new JsonArray("/usr/bin/dotnet\u0000x")).Should().Contain("D17").And.Contain("NUL");
+        Refused(root => root["target"]!["build"] = new JsonArray("/usr/bin/dotnet\u0000x")).Should().Contain("target.build[0]").And.Contain("NUL");
         Refused(root => root["target"]!["source"] = "/example/target\u0000x").Should().Contain("target.source").And.Contain("NUL");
         Refused(root => root["target"]!["plan"] = "todo/PLAN\u0000.md").Should().Contain("target.plan").And.Contain("NUL");
         Refused(root => root["coai"]!["binary"] = "/example/coai\u0000/coai-mcp").Should().Contain("coai.binary").And.Contain("NUL");
         Refused(root => root["isolation"]!["closed"] = new JsonArray("<root>/a\u0000b")).Should().Contain("isolation.closed[0]").And.Contain("NUL");
+    }
+
+    [Fact]
+    public void A_nul_character_in_any_text_is_refused_once_naming_the_field()
+    {
+        PosixPaths();
+        var reason = Refused(root =>
+        {
+            root["target"]!["suite"]!["ctrfFile"] = "ctrf\u0000.json";
+            root["target"]!["planBranch"] = "plan\u0000branch";
+            root["target"]!["build"]!.AsArray()[1] = "build\u0000";
+            root["target"]!["source"] = "/example/target\u0000x";
+        });
+
+        var lines = Lines(reason);
+        foreach (var field in new[] { "target.suite.ctrfFile", "target.planBranch", "target.build[1]", "target.source" })
+        {
+            lines.Count(l => l.Contains(field, StringComparison.Ordinal) && l.Contains("NUL", StringComparison.Ordinal)).Should().Be(1, $"{field} is named once");
+        }
     }
 
     [Fact]

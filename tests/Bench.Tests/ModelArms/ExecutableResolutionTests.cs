@@ -114,6 +114,8 @@ public sealed class ExecutableResolutionTests
         Resolve("git", ["/a"], _ => true, forbidden: ["/tmp\0x"]).Reason().Should().Contain("NUL").And.Contain("D17");
         Resolve("/usr/bin/git", ["/a"], _ => true, forbidden: ["/t", "/tmp\0x"]).Reason().Should().Contain("NUL");
         ExecutableRule.Refusal("/usr/bin/dotnet\0x", ["/t"]).Should().Contain("NUL").And.Contain("D17");
+        ExecutableRule.Refusal("/usr/bin/git", ["/tmp\0x"]).Should().NotBeEmpty("a root holding a NUL fails closed: the executable counts as under it");
+        ExecutableRule.RealRefusal("/a/git", "/b/git", ["/tmp\0x"]).Should().NotBeEmpty();
     }
 
     [Fact]
