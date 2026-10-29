@@ -309,3 +309,28 @@ test('A_policy_that_leaves_no_stop_at_all_is_refused', () => {
   assert.equal(loadPolicy({ ...policyFile, t3: 'fallback-t2', t2: 'stop' }).ok, true);
   assert.equal(loadPolicy({ ...policyFile, t3: 'investigate', t2: 'otel-incomplete' }).ok, true);
 });
+
+// ---- T5: the broker's ledger against the envelope (E2.S2 D-17) -------------------------------------------------------------------
+
+const ledger = (spentUsd, over = {}) => ({ present: true, forwarded: 3, refused: 0, unsettled: 0, spentUsd, settled: [], ...over });
+
+test('T5_passes_when_the_brokers_ledger_equals_the_envelope_within_a_millionth_of_a_dollar', () => {
+  assert.equal(policyFile.t5, 'investigate', 'the committed policy carries the T5 row');
+  const same = run({ B: ledger(E.totalCostUsd + 0.0000005) });
+  assert.equal(same.t5.status, 'pass', same.t5.detail);
+  assert.equal(same.t5.threshold, 0.000001);
+  const off = run({ B: ledger(E.totalCostUsd + 0.00001) });
+  assert.deepEqual([off.t5.status, off.t5.verdict], ['breach', 'investigate']);
+  assert.match(off.t5.detail, /broker/);
+  assert.equal(loadPolicy({ ...policyFile, t5: 'guess' }).ok, false);
+  assert.match(loadPolicy({ ...policyFile, t5: 'guess' }).reason, /t5.*stop, investigate/);
+});
+
+test('T5_is_unchecked_without_a_ledger_without_an_envelope_or_with_an_unsettled_request', () => {
+  assert.match(run({ B: null }).t5.why, /no broker ledger/);
+  assert.match(run({ B: { ...ledger(0), present: false } }).t5.why, /no broker ledger/);
+  assert.match(run({ E: { known: false, why: 'x' }, B: ledger(1) }).t5.why, /no envelope/);
+  const killed = run({ B: ledger(0.31, { unsettled: 1 }) });
+  assert.equal(killed.t5.status, 'unchecked');
+  assert.match(killed.t5.why, /1 request.*never settled.*0\.31/, 'B is then the price of what the session did spend, and says so');
+});
