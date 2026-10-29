@@ -7,6 +7,7 @@
 // masked (token-scan.mjs) before anything else looks at the text. At most one hit per rule per record.
 import { findOutsideAccesses } from '../../policy-ab-quick/lib/leak.mjs';
 import { EGRESS_HOSTS } from './egress-hosts.mjs';
+import { escapeRe, firstMatch, foreignPr, foreignRunRef, isHit, lower, upstreamSolutions } from './contamination-refs.mjs';
 import { maskTokens } from './token-scan.mjs';
 
 const EXCERPT_MAX = 120;
@@ -16,57 +17,16 @@ const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'NotebookEdit']);
 const SEARCH_TOOLS = new Set(['Glob', 'Grep']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const MCP_PREFIX = 'mcp__';
-const UPSTREAM_REPOS = ['mame/ai-coding-lang-bench', 'banteg/minigit-bench'];
-// verbs of `gh pr` that take a pull request number (`list --limit 5` and `create --title "x 3"` do not)
-const PR_VERBS = 'view|checkout|diff|checks|comment|review|merge|close|reopen|edit|ready|lock|unlock|update-branch';
 
-const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const lower = s => String(s ?? '').toLowerCase();
-const globalOf = re => (re.global ? re : new RegExp(re.source, `${re.flags}g`));
-const isHit = found => found !== null && found !== undefined;
 const at = (index, severity) => (severity ? { index, severity } : { index });
-
-/** The first match of `re` in `text` for which `accept(match)` holds, as `{ index }`, or null. */
-function firstMatch(text, re, accept = () => true) {
-  const m = [...text.matchAll(globalOf(re))].find(accept);
-  return m ? at(m.index) : null;
-}
 
 // ---- the text rules (a call's text or an mcp answer) -------------------------------------------------------------------------
 
-// `run/<x>/` as a ref: not inside a longer path (`src/run/helpers/`), unless it follows refs/heads/, origin/ or remotes/<r>/
-const RUN_REF = /(?:(?<![\w/.-])|(?<=\brefs\/heads\/)|(?<=\borigin\/)|(?<=\bremotes\/[\w.-]+\/))run\/([A-Za-z0-9._-]+)\//g;
-
-const foreignRunRef = (text, ctx) => firstMatch(text, RUN_REF, m => m[1] !== ctx.rid);
-
 const otherRunId = (text, ctx) => (ctx.runIdPattern ? firstMatch(text, ctx.runIdPattern, m => m[0] !== ctx.runId) : null);
-
-function foreignPr(text, ctx) {
-  const own = new Set((ctx.ownPrs ?? []).map(Number));
-  const numbered = [
-    /\bpulls?\/(\d+)\b/g,
-    new RegExp(`\\bgh\\s+pr\\s+(?:${PR_VERBS})\\b[^\\n;|&]*?\\s#?(\\d+)(?=\\s|$)`, 'g'),
-  ];
-  const found = numbered.map(re => firstMatch(text, re, m => !own.has(Number(m[1])))).filter(isHit);
-  return found.sort((a, b) => a.index - b.index)[0] ?? null;
-}
 
 const otherStackTemplate = (text, ctx) => (ctx.otherStack
   ? firstMatch(text, new RegExp(`\\btemplate/(?:process|bare)-${escapeRe(ctx.otherStack)}\\b`, 'g'))
   : null);
-
-// the fork's `data` branch (upstream's generated solutions) in a git or URL context
-const DATA_BRANCH = [
-  /\brefs\/(?:heads|remotes\/[\w.-]+)\/data(?![\w./-])/g,
-  /\/tree\/data(?![\w./-])/g,
-  /\bgit\b[^\n;|&]*\b(?:fetch|checkout|switch|ls-remote|clone)\b[^\n;|&]*\s(?:origin\/)?data(?=\s|$|["'`])/g,
-];
-
-function upstreamSolutions(text) {
-  const named = UPSTREAM_REPOS.map(name => firstMatch(text, new RegExp(escapeRe(name), 'gi')));
-  const found = [...named, ...DATA_BRANCH.map(re => firstMatch(text, re))].filter(isHit);
-  return found.sort((a, b) => a.index - b.index)[0] ?? null;
-}
 
 const GITHUB_REPO = /(?:github\.com|raw\.githubusercontent\.com)[/:]([\w.-]+)\/([\w.-]+)([^\s"'`<>)]*)/gi;
 
@@ -81,9 +41,9 @@ function staysHome(m, ctx) {
   return rest === '' || /^\/pull\/\d+/.test(rest) || new RegExp(`^/(?:tree|blob|commits?|compare)/${own}`).test(rest);
 }
 
-// a url `upstream-solutions` already reports (upstream's own repositories, the fork's data branch): one reach, one hit
+// a url another rule already reports (upstream's repositories, the fork's data branch, a foreign run's ref): one reach, one hit
 const minigitElsewhere = (text, ctx) => firstMatch(text, GITHUB_REPO,
-  m => /minigit/i.test(`${m[1]}/${m[2]}`) && !isHit(upstreamSolutions(m[0])) && !staysHome(m, ctx));
+  m => /minigit/i.test(`${m[1]}/${m[2]}`) && !isHit(upstreamSolutions(m[0])) && !isHit(foreignRunRef(m[0], ctx)) && !staysHome(m, ctx));
 
 const harnessName = text => firstMatch(text, /dew_flow_benchmark/g);
 
