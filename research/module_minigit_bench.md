@@ -268,6 +268,100 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   `data:`, `..data`, `?ref=data`, `/tarball/data`, `--branch=data`) and a bare `git fetch` or `--all` / `--mirror` is a low
   reach; another run's ref is found after dots, `=` and `%2F` and as `run/*`, while a relative folder `run/output/` is not a ref.
 
+### 5. The agent box, the egress proxy, the credential broker and the launch (E2.S2)
+
+Spec by Fable (`todo/PLAN_minigit_stack_bench_E2.md`, `## E2.S2`), coded by Sonnet (this story names Opus as its reviewer). One paid session proved the
+whole path on 2026-10-30 (see "The bare-session smoke" below).
+
+- **The box** (`lib/sandbox.mjs`, `lib/bwrap.mjs`). `agentBoxArgv` / `agentBoxPrefix` build the `bwrap` argv: the filesystem read-only, the
+  shared hide list `hiddenPaths()` (home, `/mnt`, `/run`, `/tmp`, `/var/tmp`) as empty tmpfs, then ONLY an explicit bind list (`box/work`,
+  `box/home`, `box/config`, `box/tmp` as `/tmp`, `box/nuget`, `box/npm`, `box/out` read-write; `harness/`, `net/`, the node dir, the
+  toolchains and the `claude` file read-only). The session directory itself is never bound: it also holds the instruments. Its own
+  network, pid and ipc namespaces; the bare arm puts `/dev/null` over `gh`. There is no `--setenv` and no `--clearenv`: the environment
+  travels in the spawn's `env`, so no value is ever on an argv (`--setenv` is in `/proc/<pid>/cmdline`, readable by every user; a test
+  shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`), `PATH` is constructed (no `/mnt`), and the credential in it is a
+  **dummy**; the real token is not a parameter of anything in the box's path. `sessionLayout` claims `<runs root>/<rid>/` with a
+  non-recursive `mkdir` and refuses a socket path over 108 bytes (UTF-8 bytes; 109 refused with `EINVAL` on this kernel).
+- **The supervisor** (`harness/box-init.mjs`, node builtins only, copied into `harness/`). Starts a loopback forwarder per
+  `<port>:<unix socket>` (proxy 3128, API door 8787, OTel 4318 on the box's own loopback), then runs the command and exits with its
+  code (`128 + n` for a signal; the old probe copy mapped every signal to 137). It ignores SIGTERM aimed at itself: the stop signals each
+  inner process by its marker.
+- **Egress** (`lib/egress.mjs`). A CONNECT proxy on `net/proxy.sock`: only `CONNECT <host>:443` for a host named EXACTLY in
+  `EGRESS_HOSTS[arm]` (no suffix, no case folding), `403` otherwise, `405` for any non-CONNECT line (plain HTTP is not proxied), a header
+  block over 64 KiB closes the connection; every request is one log line. `api.anthropic.com` is in no list.
+- **The broker** (`lib/broker.mjs`, `lib/budget.mjs`). On `net/api.sock`: replaces `Authorization` with the real token (read by the harness
+  through `lib/secrets.mjs`), forwards every other request header (an open list: `anthropic-beta` carries the OAuth capability),
+  drops `accept-encoding` so the usage parser reads plain SSE, streams the answer back chunk by chunk, follows no redirect (`502`),
+  and holds the cell's own budget: a reservation per in-flight request, `429` with an API-shaped `rate_limit_error` when spend plus
+  reservations would pass the cap (so a Bash `curl` at the door cannot spend past it), settlement priced from the parsed usage with
+  `asTheCliBills`, the reservation as the charge when nothing parsed, a disconnecting client still charged. The cap is **soft** (D-17a):
+  a session over 1.1 x the cap is flagged. The ledger line names header NAMES, never a value, a body or the token. `brokerView` is the
+  4th cost view and `crosscheck` gains **T5** (`B.spentUsd` = `E.total_cost_usd` within $0.000001; unchecked with an unsettled request,
+  because then `B` is the price of a killed session).
+- **Launch** (`lib/launch.mjs`, `lib/readback.mjs`, `lib/watchdogs.mjs`, `lib/janitor.mjs`, `lib/session-state.mjs`,
+  `lib/session-launch.mjs`). Settings pin effort `high`, allow an explicit list, wire five hook events to the harness copy of the audit
+  hook, and carry no `apiKeyHelper` and no `defaultMode` (`FORBIDDEN_SETTINGS`; the read-back refuses them). The init event is read
+  back before the first paid turn completes; a mismatch stops the session through `endCell` and the outcome is `void: harness`. The
+  outcome of a session is the envelope's (`is_error`, `api_error_status`, `subtype`), never the exit code: a 403 exits 0. Watchdogs
+  (pure `watchdogDecision`: wall, cost from the broker then O then the stream meter, stall) tick every 5 s.
+- **The stop** (D-14, `endCell`). SIGTERM to every INNER process of the cell (a host pid whose `environ` holds `BENCH_CELL=<cell>`
+  exactly, `argv[0]` not `bwrap`), a grace, then `killTree(bwrapPid)`, then the janitor ends any survivor by marker, never by name. A
+  signal to the process GROUP is never step 1: under `--new-session` the group holds only the outer `bwrap`, which dies on it and takes
+  the inside down by SIGKILL.
+- **Cleanup and state** (D-20, D-21, D-21a). A LIFO stack of idempotent disposers runs on every exit path (success, read-back kill,
+  watchdog kill, startup failure, throw, abort); a failing disposer does not skip the next and lands in `meta.json.cleanup`. A dir that
+  holds nothing paid is removed on a startup failure; any other is kept. `state.json` records the owner as `(pid, start time)`
+  (field 22 of `/proc/<pid>/stat`); `retireStale` retires a session only when that exact pair is gone, never by a heartbeat age, ends its
+  survivors by marker, unlinks its sockets and deletes nothing.
+- **Shared pieces extracted** (no copies): `lib/secrets.mjs` (the capture's mode-600 reader, label-aware; `PAT_FILE_PARTS` for E2.S4),
+  `lib/transcripts.mjs`, `hiddenPaths()`, `startReceiver({ socketPath })` (a second listener over the same handler, mode 600, removed on
+  `close()`), `lib/disposers.mjs`, `lib/proc-sampler.mjs` (counts of the real token and the dummy in every cmdline and environ, once a
+  second; counts only, never a value), `lib/stream-tap.mjs` (every stdout line stamped `{ t, line }`), `lib/session-scan.mjs` (every file
+  of a session dir through `tokenHits` with the real token as an own secret).
+- **Preflight** (`lib/preflight.mjs`, `lib/host-checks.mjs`, `inputs/stacks.json`). `bwrap` and user namespaces; the TypeScript toolchain
+  installed read-only when asked and absent (`npm install --prefix`, `chmod -R a-w`); then the pins (`claude` 2.1.310, node 26.12.1, dotnet
+  SDK 10.0.113 and exactly one, `tsc` 7.0.2) probed INSIDE a box with no proxy and no broker; the token file's status.
+
+#### The bare-session smoke (2026-10-30, CLI 2.1.310)
+
+`node spikes/minigit-bench/smoke-session.mjs --out ~/rsd/minigit/smoke/<UTC stamp>`, once, then `sanitise` and `verdicts`. The
+fixture is `test/fixtures/real/claude-2.1.310-bare-smoke/`; `SMOKE.md` there is computed (`lib/smoke-verdicts.mjs`), never typed.
+Observed: envelope **$0.114845**, the broker's ledger $0.1148446 (equal), O equal, 5 requests through the broker and none refused, wall
+17.4 s, outcome `ok`, 14 samples with the real token counted 0 times in any cmdline or environ, 14 refused `CONNECT api.anthropic.com:443`
+at the proxy and nothing else, 8 audit records with `duration_ms` on every `PostToolUse` (B-A2 holds), no timestamp on any hook event
+(B-H1 holds), every API request `effort: high` including the subagent's. B-K2 is `not exercised` (the session ended by itself).
+
+**Two things the smoke taught that the spec did not predict:**
+
+1. **`token.txt` was empty, not the dummy.** CLI 2.1.310's Bash tool does not hand `CLAUDE_CODE_OAUTH_TOKEN` to its subprocesses:
+   `printenv` exited 1 (the model said so). That is stronger than the spec assumed, so B-S3 now reads "`token.txt` holds the dummy or
+   nothing" (dated 2026-10-30, with a test that anything else refutes it). It also means this probe shows only that Bash cannot see the
+   variable; that the dummy is in the CLI's own environment is shown by the samplers (56 environ hits) and by the effect tests, which
+   run `printenv` and read `/proc/*/environ` in the box with a positive control.
+2. **B-H1 read the wrong source.** E1's `A-H1` takes hook tool-use ids from the stamp hook's file; the smoke's equivalent is the audit.
+
+#### Facts verified on this machine (E2.S2 tests; dated 2026-10-29/30)
+
+| Fact | Test |
+|---|---|
+| With `--unshare-net` the box reaches no host loopback listener, no abstract unix socket and no internet address; without it all are reached | `The_agent_box_reaches_no_host_loopback_abstract_socket_or_address` |
+| A unix socket bound into the box through a read-only bind of its directory is connectable across the namespace boundary; without the bind it does not exist | `A_bound_unix_socket_crosses_the_namespace_through_a_read_only_bind` |
+| The box has no DNS and needs none (clients send the host name to the proxy) | `The_box_has_no_dns_and_that_is_the_point` |
+| The proxy lets `api.nuget.org` through and refuses `example.com` and `api.anthropic.com` with 403; plain HTTP gets 405 and `dotnet restore` still succeeds; `npm install` of `typescript@7.0.2` and `dotnet restore` both work through it | `egress-box.test.mjs` (needs the network; skips with its reason) |
+| `printenv`, `/proc/*/environ` and a persisted file hold the dummy and never the real token; with the real token placed in the env by hand the same probes find it | `agent-box-token.test.mjs` |
+| A direct `POST` at the broker with a zero budget is `429`, and the upstream sees 0 requests | `broker.test.mjs`, `egress-box.test.mjs` |
+| No operator home, key or token file, no `/mnt`, no WSL interop, no `gh` (bare), the toolchain read-only; the instruments and the partner are invisible; `harness/` and `net/` are read-only | `agent-box-fs.test.mjs` |
+| A SIGTERM to the process group never reaches inside the box; a SIGTERM to the inner host pid is delivered and its exit code comes out through `box-init` and `bwrap`; the CLI signalled mid-request exits itself with 143 and leaves its transcript; **no OTel record followed the SIGTERM** (10 before, 0 after, reproduced 2026-10-30) | `janitor.test.mjs` |
+| An abort or a startup failure leaves no listener, no socket and no cell process | `session-launch.test.mjs` |
+
+### Entry points of E2.S2 (the box, the broker, the smoke)
+
+| Command | What it does | Exit codes |
+|---|---|---|
+| `node spikes/minigit-bench/smoke-session.mjs --out <dir outside every git tree> [--dry-run]` | **spends money** (cap $0.20, wall 5 min, stall 2 min): preflight (installs the TypeScript toolchain when absent), stale-session retirement, one bare session through the box, the proxy and the broker, then `checks.json` (host-side facts that need the real token). The token is read ONLY from `~/.config/minigit-bench/claude-oauth-token` and goes to the broker only. `--dry-run` shows the plan and spends nothing | 0 ok · 3 environment (no token, preflight failed, bad out dir) · 4 usage · 5 the session failed or ended void · 130/143 cancelled |
+| `… smoke-session.mjs sanitise --from <dir> --to <fixture dir>` | stages the session into the capture-shaped layout and copies it through the sanitiser, fail-closed | 0 · 5 |
+| `… smoke-session.mjs verdicts --fixture <fixture dir>` | computes `SMOKE.md` (the B-* table) from the fixture | 0 · 3 · 5 |
+
 ## Entry points
 
 Run from the repository root. `write` goes to stdout; the exit code is the contract. No command takes the held-out key on
@@ -379,10 +473,10 @@ machine.
 
 | Missing | Epic |
 |---|---|
-| The **session sandbox** for the agent (`sandbox.mjs`: its bind list and credentials; the box primitives of `lib/bwrap.mjs` are the ones it will compose), coai in its own bwrap and the stdio↔socket bridge, the argv and settings files, the watchdogs and janitor, the read-back before the first paid turn | E2 (S2, S3) |
-| Whether CLI 2.1.310's `PostToolUse` payload carries `duration_ms` (the audit records it as null when absent) | E2 (S2 smoke) |
+| coai in its own box and the stdio↔socket bridge (the agent box is built: `extraRo`, `extraRw` and `agentEnv({ extra })` are the slots; coai's vendor sign-ins are credentials in a box that runs vendor code, to be brokered or scanned in S3's spec) | E2 (S3) |
 | The treatment itself: the conventions snapshot branch, the one-source templates, the four template branches, the lint gate | E2 (S4) |
-| Wiring the OTel receiver to a live session (the cost and stall watchdogs read its running sum) | E2 (S2) |
+| A flush of the CLI's last OTel batch on a stop: none arrived after a SIGTERM (B-K2), so the broker's ledger, not O, prices a killed session | E3 (the runner) |
+| `EGRESS_HOSTS.process` settled with evidence, a broker or scan for the GitHub PAT, `settingsFor('process')`'s coai entries | E2 (S4) |
 | A **runner**: blocks, barrier, seeded order, voids, re-runs, resume and the spend ceiling; no command yet runs the counters or the partition on a session | E3 (S1) |
 | The **compliance checker** over GitHub, `coai.db` and the stream, and GitHub's intervals (`ci_wait`, `coderabbit_wait` stay generic `wait` until then); a `delivered` verdict, so a process session's `accepted` reads `unknown` | E3 (S2) |
 | Pre-registration committed before the first paid session, P0 (no model), the model smoke through the bridge | E3 (S3) |
@@ -411,6 +505,10 @@ reported by their reasons and are the only skips a complete run may show:
 | the user runtime directory check (`The_box_cannot_see_the_users_runtime_dir_…`) | the host has no `/run/user/<uid>` | nothing: the box still hides `/run` |
 | the user manager escape check (`The_box_cannot_start_a_unit_on_the_hosts_user_manager`) | the host has no working `systemd-run --user` | nothing: with no manager there is nothing to escape to |
 | the open-descriptor check of the file sink | no `/proc/self/fdinfo` | the sink's other tests |
+| the egress effect tests (`egress-box.test.mjs`) | the host cannot reach `https://api.nuget.org`, or has no `dotnet` / `npm` | the pure proxy tests with a local upstream |
+| the Windows interop check (`The_agent_box_has_no_windows_drive_and_no_interop`, the exe half) | `/mnt/c/Windows/System32/whoami.exe` is absent, or prints no user name even outside the box | `/mnt` empty, `WSL_INTEROP` empty, `/run/WSL` absent |
+| `The_agent_box_has_no_operator_home_…`, `…bare_box_has_no_gh`, the toolchain and dotnet checks | `/usr/bin/gh`, the TypeScript toolchain or `dotnet` is absent | the other halves of each test |
+| the real-token scan of the committed smoke fixture, the preflight test, `The_CLI_stopped_mid_request_…` | no usable token file / no `claude` on PATH | the rest of the fixture tests; the stub-claude launch tests |
 
 ## Where to read further
 
