@@ -25,13 +25,12 @@ public sealed class ProcessRunnerCancellationTests
         // measured 2026-10-29: red on every local WSL run, red once on CI after 8 green main runs. Linux uses `sleep`
         // with a marker duration, so the lookup below finds this test's child and never another `sleep`.
         var launch = ProcessRunner.RunAsync(
-            LongChild.Executable, LongChild.Arguments, Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
+            ChildExecutable, ChildArguments, Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
 
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-        var before = LongChild.Running();
+        var before = await RunningChildrenAsync();
         before.Should().NotBeEmpty("the child must be running before the cancellation, or this test proves nothing");
 
-        cancel.Cancel();
+        await cancel.CancelAsync();
 
         var observed = async () => await launch;
         await observed.Should().ThrowAsync<OperationCanceledException>(
@@ -58,29 +57,40 @@ public sealed class ProcessRunnerCancellationTests
         }
     }
 
-    /// <summary>The long-running child per OS, and how to find exactly it among running processes.</summary>
-    private static class LongChild
+    private const string LinuxMarker = "617.3";
+
+    private static string ChildExecutable => OperatingSystem.IsWindows() ? "ping" : "sleep";
+
+    private static string[] ChildArguments => OperatingSystem.IsWindows() ? ["-n", "60", "127.0.0.1"] : [LinuxMarker];
+
+    /// <summary>Polls up to 5 s for the child to appear: a loaded runner may start it later than any fixed delay.</summary>
+    private static async Task<Process[]> RunningChildrenAsync()
     {
-        private const string LinuxMarker = "617.3";
+        var found = RunningChildren();
 
-        public static string Executable => OperatingSystem.IsWindows() ? "ping" : "sleep";
-
-        public static string[] Arguments => OperatingSystem.IsWindows() ? ["-n", "60", "127.0.0.1"] : [LinuxMarker];
-
-        public static Process[] Running() => OperatingSystem.IsWindows()
-            ? [.. Process.GetProcessesByName("PING"), .. Process.GetProcessesByName("ping")]
-            : Process.GetProcessesByName("sleep").Where(CarriesMarker).ToArray();
-
-        private static bool CarriesMarker(Process process)
+        for (var attempt = 0; attempt < 50 && found.Length == 0; attempt++)
         {
-            try
-            {
-                return File.ReadAllText($"/proc/{process.Id}/cmdline").Contains(LinuxMarker, StringComparison.Ordinal);
-            }
-            catch (IOException)
-            {
-                return false; // it exited between the listing and the read: not a running child
-            }
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+            found = RunningChildren();
+        }
+
+        return found;
+    }
+
+    private static Process[] RunningChildren() => OperatingSystem.IsWindows()
+        ? [.. Process.GetProcessesByName("PING"), .. Process.GetProcessesByName("ping")]
+        : [.. Process.GetProcessesByName("sleep").Where(CarriesMarker)];
+
+    /// <summary>True when the process's argv holds the marker as a whole argument (cmdline is NUL-separated).</summary>
+    private static bool CarriesMarker(Process process)
+    {
+        try
+        {
+            return File.ReadAllText($"/proc/{process.Id}/cmdline").Split('\0').Contains(LinuxMarker, StringComparer.Ordinal);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false; // it exited between the listing and the read, or it is not ours to read: not this child
         }
     }
 }
