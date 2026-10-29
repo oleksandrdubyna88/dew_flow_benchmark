@@ -298,7 +298,7 @@ at run time, not here.
 
 The first half (E1.S8): the root's requirements, its trust, executables on a host, and the two data files beside `experiment.json`. Five pure
 deciders in `ModelArms.Core.Experiment`, one console adapter, `ModelArms.Adapters.RootFacts`. E1.S10 adds `HostChecks` and the `validate` verb
-(the second half); nothing here is called by a verb yet (E1.S9's gate, E1.S10's validate and E4.S4's `prep-base` call it).
+(the second half, below); the gate (E1.S9), `validate` (E1.S10) and `prep-base` (E4.S4) call the first half.
 
 **`RootRequirements`** (D18, parent §4.12) is the table of which files of the root each verb needs, in the order they are checked. The names come
 from `RootPaths` (one spelling of the layout); the scenarios and baseline names are the configured ones. `FirstUnmet(requirements, root, exists)` is the
@@ -365,6 +365,68 @@ Stated gaps, not checks:
   happens to be found there (observed: `#!/usr/bin/env mynode` ran the target's `mynode`). Closing it means handing the children a sanitised `PATH`, which is the launch story's decision (E1.S10 notes), not this one's.
 - **Windows app-execution aliases** (`python.exe` under `WindowsApps`) cannot be opened as a file; they are refused with the operating system's message, not resolved.
 - **Not observed on this host:** the Windows paths, including the 8.3 short-name test (`An_8_3_short_name_spelling_of_the_target_is_refused`, which skips here). They are written to the handle-based design and go red then green on the operator's Windows run.
+
+### The host: `HostChecks`, `validate` and `prep-base`'s guard (E1.S10, D16, D17 c, D18, D23)
+
+`validate` reads the HOST and says, in one answer, everything that stops the experiment running on it; the experiment file itself was read by the gate, so every member the file
+refuses is already named there (`target.bulid`, `colour`, a missing `limits` in one answer, exit 4). Three pieces, the first two pure:
+
+- **`HostChecks`** (Core) — `NeededExecutables(experiment, host)` (`git`, `claude`, `dotnet`, the first word of `lowPriority`, `build`, `suite.command` and `extension.command`, `pwsh.exe` when `awake` is `wsl` or
+  is `auto` on a WSL host, the coai binary when a scheme has a gate step; each once, in that order) and `Decide(experiment, facts)`, one `HostProblem(text, environment)` per finding, all at once. `HostKinds.From`
+  names the machine: Windows; else WSL when `WSL_DISTRO_NAME` is set or `/proc/version` mentions Microsoft (ignoring case); else other POSIX.
+- **`BriefRehearsal`** (Core) — fills every template the schemes use once through `BriefFiller` and its leak guard (E1.S7 review, R4): the arms are the ones the rounds name (an `<scheme>1` for a scheme no round
+  uses), each with a token minted here, the facts are the experiment's own plan, base, branch and KNOWN, and the brief is filled for the first arm of each scheme. A KNOWN or an override template that would be
+  refused at a step's launch (`C#`, `(C)`: a scheme name in free text) is refused now, naming the template and the field: `1-code.template.md: the field KNOWN would carry 'C' into a brief — … (D15)`.
+- **`HostFactsReader`** and **`SourceFacts`** (console) read what `Decide` judges: the host kind, each needed executable through `ExecutableResolution.Resolve` against the PATH of the **environment map the verb was
+  handed** (never the process's) and `ExecutableRule.ForbiddenRoots(target.source, root)`, the entries of that PATH, `scenarios.json`, the brief templates (the root's `briefs` folder first, the shipped one second) and
+  what git says about the source: `rev-parse --git-dir`, then `rev-parse --verify --quiet` for `refs/heads/<planBranch>`, `<base>^{commit}` and `<base>:<plan>` (the plan is asked only of a commit that exists). D23 names
+  `cat-file -e`, but that exits 128 for a missing object where `GitCommand.AskAsync` takes only exit 1 as "no"; `rev-parse --verify --quiet` asks the same question with 1 as the answer.
+
+| Finding (exit) | Sentence |
+|---|---|
+| an executable the host lacks (3) | `claude is not on PATH on this host`, or `<path> does not exist or is not executable` |
+| an executable D17 refuses (4) | `… is really '<real>', which is under '<root>' … (D17)`; a link into the target on PATH is the operator's configuration, not an unready host |
+| the source (4) | `target.source <p> does not exist` · `… is not a git repository` · `the plan branch <b> does not exist in <p>` · `the base commit <sha> is not in <p>` · `the plan <plan> does not exist at <sha>` |
+| `scenarios.json` (4) | the reader's own sentences, one per line: `holds no scenario`, `lists the id 'S1' 2 times` |
+| coai (4) | `a scheme has a gate step and coai is not configured` · `coai.binary <p> does not exist` · `coai.settings <p> does not exist` (the binary is said once when its resolution already refused it) |
+| the host (4) | `isolation by file modes is POSIX only — remove "isolation" on Windows` · `awake "wsl" needs a Wsl host; this host is OtherPosix` |
+| the flow (4) | `scheme SRS has a tasks entry, and steps does not define splitFix` · `arm C1 is named twice in rounds` |
+| the PATH (4) | `PATH holds an empty entry …` · `PATH entry 'bin' is a relative path …` · `PATH entry '<e>' is under '<root>' …` · `PATH entry '<e>' is really '<real>', which is under '<root>' …`, each ending `(D17)` |
+| a template (4) | `<template>: <the filler's refusal>` · `no brief template '<name>' in <overrides> or <shipped>` |
+
+**The exit code** is 4 when any finding is not an environment one, else 3 (D16). The success line is `model-arms validate: <root> is valid on this host (<HostKind>)`, exit 0. The resolved executables are printed first, to
+standard output, each as `  <name> → <real path>`: the path the harness will launch (D17 c), never the configured name. Findings go to standard error under `model-arms validate: <n> problem(s):`.
+**`prep-base`** runs the same checks and prints them the same way; with none it says `validated; the baseline measurement is not built yet — story E4.S4 of todo/PLAN_model_arms.md` and exits 4. A root that already
+has a `baseline.json` never reaches it: the gate refuses (`baseline.json already exists`).
+
+**The PATH (E1.S8 re-review, R5).** A real path for the configured executable is only as safe as the PATH its children inherit: a shebang interpreter (`#!/usr/bin/env node`) and `dotnet` starting `git` look their names up
+there. `ExecutableResolution.PathEntryRefusal` refuses an empty entry, a relative one, one under a forbidden root as written and one that really is under one (the kernel's answer for the entry, or for its nearest existing
+ancestor when it does not exist; the roots are compared as written and as they really are). `validate` refuses the PATH it was given; it does not rewrite it — the children's filtered PATH at launch is E2's.
+
+**`scenarios.json` is read here, not by the gate** (E1.S9: the gate judges it in step 6 and keeps the facts it judged it by, `ExperimentInput.JudgedScenarios`). The reader reads it through `RootPaths.Of(…)` (the path the gate
+judged), then stats it again with the gate's own helper (`ExperimentGate.StillTheSame`, now internal) and refuses with exit 4 when `RootTrust.Changes` is not empty
+(`scenarios.json changed between its trust check and its read (inode, ctime) — refused (D17)`). A verb that was handed no judged facts refuses (exit 3) rather than read the file unjudged.
+
+**Deviations from the story's text**, each because the code's contract differs:
+1. An executable that D17 refuses (every such sentence says `(D17)`) is `Environment: false`, exit 4; the story says every failed `Path` is the environment. A link into the target on PATH is a wrong configuration, and
+   the story's own test (`suite.command[0]` under the target → 4 naming D17) expects it. The distinction is a substring of the reason (`(D17)`), pinned by a test; a typed refusal in `Outcome` would be the clean fix.
+2. `HostFacts` carries two more members, `PathRefusals` and `Templates` (init, defaulting to nothing read), and `HostFactsReader.ReadAsync(ExperimentInput, GateSeams)` returns a `Passage<HostFacts>` — the swap of
+   `scenarios.json` is a stop with its own exit code, not a fact. `ValidateVerb.RunAsync` has an internal overload taking the gate's seams, so a test can stand where the race is.
+3. `ExperimentRoot.WithTargetAsync` writes the coai settings where the example names them (`<temp>/example/vault/connectOtherAis/wsl-ubuntu/settings.json`), not `coai/settings.json`.
+4. Two Core types beyond the story's list: `BriefRehearsal` (R4), and `Scheme.KindsUsed` / `SchemeEntry.Tasks.Kinds` (one reading of which step kinds a scheme runs, used by `Decide` and the rehearsal).
+
+What the tests do NOT prove:
+- **That the fabricated executables run.** The fixture's `git`, `claude`, `dotnet`, `node`, `npm` and `pwsh.exe` are empty files: only their resolution is exercised. The source's facts are read with the real `git` of the
+  PROCESS's PATH (the shared launcher does that), not with the `git` that was resolved — the two can differ. A source git refuses (not owned by the user: exit 128) reads as "no" and `Decide` says "not a git repository" or
+  "not in", which can be a worse sentence than the cause. A source that is a plain folder inside another checkout passes `rev-parse --git-dir`; the plan-branch question then decides.
+- **The PATH beyond one validation.** The check sees the PATH of the map at the moment of `validate`; nothing keeps it so, and the children get the inherited PATH at launch until E2 filters it. A dangling link or a link made
+  after the check is not seen, a hard link not at all (see the first-half gaps), and an entry that does not exist is judged by its nearest existing ancestor, so an entry outside the roots that an arm later creates is not seen.
+- **The rehearsal's stand-ins.** Fields only a run knows (a task's files, the deadline, a split's problem list) are filled with names-free stand-ins, so a name those carry later is not found here. The arms are the rounds' arms
+  with minted tokens, not the `arms.map.json` of `make`.
+- **A gate-side race.** `scenarios.json` is stat-ed again after the read, with the facts the gate judged it by: a swap in the window between that first stat and the read is seen, a swap after the second stat is not, and an
+  inode number reused by a file system is narrowed by the ctime but not closed. The re-stat is a POSIX check; on Windows the trust check is declared not performed and so is this one.
+- **Windows.** The fixture's modes, links and executables are POSIX; the host-kind and `Decide` cases that name Windows run on fabricated facts on every platform, but nothing here has run on a Windows host.
+- **The unrefused.** A configured `claude` or `dotnet` that exists and is executable is not run, versioned or logged in; a coai binary that exists is not started; `isolation` is not applied.
 
 ## The command line (E1.S9)
 

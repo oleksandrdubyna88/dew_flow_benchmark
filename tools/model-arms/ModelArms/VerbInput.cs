@@ -24,4 +24,9 @@ public sealed record VerbInput(
 
 /// <summary>What a verb that reads an experiment is given once <see cref="ExperimentGate"/> has let it in: the verb's input, the root's paths and
 /// the experiment, read once.</summary>
-public sealed record ExperimentInput(VerbInput Verb, RootPaths Root, Experiment Experiment);
+public sealed record ExperimentInput(VerbInput Verb, RootPaths Root, Experiment Experiment)
+{
+    /// <summary>The facts the gate judged <c>scenarios.json</c> by (one entry), or none when the root has no such file. The gate does not read the file; a verb that does
+    /// stats it again afterwards and compares with these, so a swap anywhere after the trust check is seen.</summary>
+    public IReadOnlyList<FileFacts> JudgedScenarios { get; init; } = [];
+}

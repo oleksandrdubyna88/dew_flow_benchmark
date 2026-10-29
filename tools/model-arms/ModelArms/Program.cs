@@ -80,8 +80,8 @@ public static class Program
         return input.Verb switch
         {
             "init" => NotBuilt(input, "E1.S11"),
-            "validate" => NotBuilt(input, "E1.S10"),
-            "prep-base" => NotBuilt(input, "E4.S4"),
+            "validate" => ExperimentGate.RunAsync(input, ValidateVerb.RunAsync),
+            "prep-base" => ExperimentGate.RunAsync(input, ValidateVerb.PrepBaseGuardAsync),
             "make" => NotBuilt(input, "E4.S4"),
             "lock" => NotBuilt(input, "E4.S1"),
             "unlock" => NotBuilt(input, "E4.S1"),
