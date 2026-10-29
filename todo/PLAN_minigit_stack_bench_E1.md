@@ -61,6 +61,10 @@ git at `/home/jinx/rsd/minigit/heldout-src/BRIEF_S2.md`, beside the clear source
 - Every test runs through `node spikes/minigit-bench/run-tests.mjs [glob…]` (created in E1.S1), lowered, capped at
   `max(1, min(8, availableParallelism() − 1))`. A test that needs `bwrap`, `python3` or the held-out key and cannot find it
   SKIPS WITH ITS REASON (`t.skip('…')`); a done-when that names such a test requires a run where it did not skip.
+- **The required environment for every done-when is Linux with `bwrap` and user namespaces** — the series machine, WSL2
+  Ubuntu (verified 2026-10-29: `/usr/bin/bwrap`, `unshare -Ur` succeeds). Windows has no `bwrap`, so the spike is not
+  supported there: `run-tests.mjs` with `BENCH_REQUIRE_SANDBOX=1` (set by the epic's completion run) turns every
+  sandbox-needing skip into a failure, so a host without `bwrap` cannot report the epic done.
 - Bug-fix order where a defect is reproduced: RED first, watched failing for the real symptom, then green; both observations
   in the story's summary (`common.testing`).
 
@@ -138,6 +142,11 @@ agent-written process running in a no-network scoring sandbox that cannot see th
 7. **`lib/score-pipeline.mjs`.** `scoringPlan({ arm, stack, phase, sourceDir, sessionDir })` → the ordered steps; the
    executor takes `deps = { run, copyTree, readFile, now, heldout }` so tests inject stubs. Steps, each recorded, none
    skipped silently:
+   0. *sweep* — before anything else, remove leftovers of an interrupted earlier scoring of THIS session: `<session>/score/copy`
+      and per-script copies that carry the scorer's own marker file `.bench-score-owned` (written first at every copy,
+      holding the session id and a start time) and are older than the scorer's wall limit. A directory without the marker is
+      never touched, and is reported by name. Then the same sweep runs over every session under the runs root at
+      `series.mjs` start (E3), so a host crash between sessions leaves nothing behind.
    1. *copy* — `sourceDir` → `<session>/score/copy` minus `bin/ obj/ node_modules/` (process: E3 passes a fresh clone of
       the base tip; bare: the workspace).
    2. *inputs* — `verifyFiles` over the SPEC/test files the copy carries vs `hashes.txt` → `inputsTampered: [paths]`.
@@ -152,8 +161,10 @@ agent-written process running in a no-network scoring sandbox that cannot see th
       Delivery is E3's (GitHub); until supplied, `accepted: { known: false, missing: ['delivered'] }` — never `false`.
    A failed build short-circuits steps 4–6 to "every case failed, reason build failed" with their expected totals.
 8. **`score-session.mjs`.** `--session <dir> --source <dir> --arm process|bare --stack csharp|node --phase v1|v2
-   --toolchain <dir>… [--cache <dir>…]`; prints one line per step and writes `score.json`. Exit 0 when scored (whatever
-   the score), 2 on a usage error, 3 when the scorer itself failed (named).
+   --toolchain <dir>… [--cache <dir>…]`; prints one line per step and writes `score.json`. Exit codes follow the repository's CLI
+   contract (CLAUDE.md, the `probes` verbs): 0 scored (whatever the score), 3 environment (bwrap missing, the key
+   unreadable, a toolchain absent — resumable), 4 configuration (a usage error, a missing or malformed argument), 5 nothing
+   produced (the scorer itself failed, named).
 
 **Test scenarios (T-S1)** — stub trees are a few lines of bash each, never an implementation of the SPEC.
 
@@ -331,6 +342,16 @@ their shape; `test/{prices,claude-usage,otel,crosscheck,aliases,no-fitted-rates}
 
 **The change (draft).**
 
+0. **One real fixture first** (cadence consult `8228818b`, verified: no OTel or transcript fixture exists in the repo, and
+   `policy-ab-quick` ran with `--no-session-persistence`). Before S3's and S4's parsers are accepted, one tiny paid capture
+   session on an UNRELATED task — `claude -p --model opus` with session persistence on, OTel to a local file exporter,
+   `--include-hook-events`, a prompt that launches one Sonnet child and runs one short shell command, cap $1, counted as
+   pilot spend. It yields the raw OTLP JSON, the main and `subagents/*.jsonl` transcripts, the stream and the audit lines.
+   From them, verify field by field what the parsers assume: `query_source` and `agent_id` values, whether transcript
+   `output_tokens` are final or placeholders, what an `api_request` timestamp marks (start or end), and the
+   `tool_use_id` pairing. The capture is kept as a sanitised replay fixture (credentials and the operator's paths
+   replaced) under `test/fixtures/real/`. Any assumption it refutes is fixed in this document before code.
+
 1. **Prices** — `loadPrices(json)` validates as `ScoutCost.cs:9-15`, `:41-48` (https source, ≥ 1 model, unique ids,
    non-negative) and `cliRates` as `:36-39`; `asTheCliBills(table)` mirrors `:51-52`. Lookup by exact model id; an
    unpriced id → `{ known: false, why: 'no price for <id>; priced: …' }`. `priceOpenAiShaped({ input, cached, output },
@@ -437,7 +458,8 @@ spans.
    elementary interval pick the highest-priority category active in it by
    `build_test > model_api > other_tool > hooks > coai_gate > consultant > ci_wait > coderabbit_wait > sleep300`, else
    `unattributed`; integer milliseconds; Σ categories = `wall.end − wall.start` exactly. `container` spans never enter.
-   `active = wall − (coai_gate + consultant + ci_wait + coderabbit_wait + sleep300)`. `inclusive(spans)` = per category
+   `active = build_test + model_api + other_tool + hooks` — the sum of the WORK categories, so `unattributed` is never
+   counted as work; `unattributed` is reported as its own bucket beside `active` and the waits. `inclusive(spans)` = per category
    `sweepSpans(...).unionMs` (`parallel.mjs:55`); `agentSeconds` = per category Σ over agents of that agent's own union,
    labelled `work volume`; `overlapMatrix` = pairwise intersection of category unions. No output key is a span sum.
 6. **Tool cross-check** — `crossCheckTools(toolSpans, otelToolResults)`: by `tool_use_id`, `|Δ| ≤ max(1000 ms, 2 %)`;
@@ -458,6 +480,7 @@ spans.
 | `The_literal_sleep_300_is_its_own_category` (T-T2) | `sleep 300`; `sleep 300 && gh pr checks 7 --watch`; `sleep 30` | `sleep300`; `wait`; `wait` |
 | `Build_and_test_commands_are_work` (T-T2) | `dotnet build -c Release -m:4`, `./tests/X.Tests/bin/Release/net10.0/X.Tests`, `npm run typecheck`, `node --test`, `bash test-v2.sh`, `make -s` | each `build_test` |
 | `A_watch_on_ci_is_a_wait` (T-T2) | `gh pr checks 12 --watch`, `gh run watch 99` | `wait` |
+| `Active_is_the_sum_of_work_never_wall_minus_waits` (T-T1) | wall 100 s: work spans 40 s, wait spans 50 s, nothing in the remaining 10 s | `active` 40 s, `unattributed` 10 s, waits 50 s; the report renders all three |
 | `Agent_containers_are_excluded` (T-T1) | an Agent span 0–100 s, a child `build_test` 10–40 s | partition has no `container`; 10–40 is `build_test`; the rest of 0–100 is `unattributed` |
 | `One_childs_sleep_cannot_erase_another_childs_build` (T-T1) | child A `sleep300` 0–300 s; child B `build_test` 100–160 s, `model_api` 200–230 s | `build_test` 60 s, `model_api` 30 s, `sleep300` 210 s |
 | `Categories_sum_to_the_wall_exactly` (T-T1) | 200 random overlapping spans of all categories, seeded | Σ = wall to the millisecond, every run |
@@ -496,7 +519,7 @@ box). S3 and S4 are independent of S1/S2 and of each other except that S4's T-T3
 
 | Surface | Size | Retired by / interrupted |
 |---|---|---|
-| `<session>/score/` (copy, per-script copies, case repos, `score.json`, `result.json`) | ≈ 50–150 MB per C# session while scoring (bin/obj), ≈ 5 MB kept after shedding the copies; 24 sessions + pilot | the copies are removed by the scorer at its end through `removeUnder`; the rest rides with the session dir (parent §14) |
+| `<session>/score/` (copy, per-script copies, case repos, `score.json`, `result.json`) | ≈ 50–150 MB per C# session while scoring (bin/obj), ≈ 5 MB kept after shedding the copies; 24 sessions + pilot | the copies are removed by the scorer at its end through `removeUnder`; **interrupted:** step 0's sweep removes marked copies older than the wall limit at the next scoring of that session and at every `series.mjs` start; unmarked directories are never removed; the rest rides with the session dir (parent §14) |
 | `<workRoot>/score-tmp/<rid>-<rand>/` (the clear suite) | < 1 MB each, one at a time per scoring run | removed in `finally`; `heldout-tool.mjs sweep` ends leftovers > 24 h after a crash |
 | `<session>/otel.ndjson` | ≈ 1 KB per record, ≈ 2–4 MB per process session | with the session dir (parent §14) |
 | `heldout/` in git | one sealed archive, ≈ 50 KB, replaced only by a re-seal before pre-registration | kept |

@@ -386,10 +386,14 @@ asserting duplicates agree on input/cache fields, reading `usage.cache_creation.
 - **Beside it:** the CLI's own `total_cost_usd`; per model main / children / internal; tokens per model from `modelUsage`.
 - **Checks:** T1 Σ`costUSD` = `total_cost_usd` ± $0.01; T2 O against E per model and kind ≤ max(0.5 %, 100 tokens), cost
   ≤ 1 % (breach → `otel incomplete`, cell kept); **T3** T re-priced at CLI rates (`prices.json` `cliRates`: Sonnet cache
-  read observed at $0.20 vs published $0.10) against E ≤ 2 %, and T4 T input/cache against E ≤ 0.1 % — **both computed
-  only over the models and `query_source`s that T actually records** (O's `query_source` separates `main`, `subagent`
-  and `auxiliary`; the CLI's internal line and compaction calls are `auxiliary` and are checked by O alone). The A/A and
-  P1 must show T covering those sources before **T3 becomes a stop**; until then a T3 breach is investigated, not fatal. If the smoke shows transcript `output_tokens` are placeholders like the stream's, T3's
+  read observed at $0.20 vs published $0.10) against **O restricted to the same `query_source`s** (`main`, `subagent`)
+  ≤ 2 %, and **T4** T input/cache against that same O ≤ 0.1 %. They are compared with O and not with E, because E's
+  `modelUsage` is aggregated per model and carries no `query_source` (checked: `summary.mjs:46`, and no stream fixture
+  holds one), so E cannot be cut down to what T sees. T2 (O against E, all sources) closes the loop. The CLI's internal
+  line and compaction calls are `auxiliary` and are checked by O alone. The A/A and P1 must show T covering `main` and
+  `subagent` before **T3 becomes a stop**; until then a T3 breach is investigated, not fatal. **Pre-registered fallback:**
+  if the A/A cannot establish T's coverage, T2 becomes the stop, with O and E reconciled per model within 1 %, before any
+  data cell; if O and E cannot be reconciled either, the series does not start until the instrument is repaired. If the smoke shows transcript `output_tokens` are placeholders like the stream's, T3's
   output column switches to O, decided and recorded before any data cell.
 - **A killed session without an envelope:** headline from O at published prices, flagged `no envelope`; never a fitted rate.
 - **The cost basis is stated, not assumed:** every figure is list-price API-equivalent; what the account is actually billed
@@ -424,7 +428,8 @@ consultant > ci_wait > coderabbit_wait > sleep300` — then `unattributed`. So a
 agent is working in it: one child's `sleep 300` cannot erase another child's build or model turn. Categories sum to the
 wall exactly — which proves the bookkeeping, not the attribution; the attribution is what T-T1 and the A/A smoke test. Also reported: the inclusive union per category, agent-seconds per
 category (labelled as work volume), the pairwise overlap matrix — **never a sum of spans**. GitHub-side durations (CI queue
-and run, CodeRabbit latency per push, PR open → merge) are reported apart. **Wall and active time** (= wall − waits)
+and run, CodeRabbit latency per push, PR open → merge) are reported apart. **Wall and active time** (active = the
+sum of the WORK categories `build_test + model_api + other_tool + hooks`; `unattributed` is its own bucket, never work)
 have equal standing for the process arm: active time removes the fixed waits, wall keeps the stack-dependent ones (a
 longer CI, a larger diff for the gate). Per-invocation latency (§5.3) is the runtime start-up cost, apart from both.
 
@@ -555,7 +560,8 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
    **session runner and series driver** (`series.mjs`, `prepare-/run-/collect-/summarize-/score-session.mjs`, the
    compliance checker of §5.4) — all before step 8.
 7. **Pre-register the analysis** (§11 first paragraph): statement, analysis contract, void rules, checklist, held-out hash,
-   prediction — committed before any paid session.
+   prediction — committed before any paid session **of the minigit task**. The one fixture-capture session of E1.S3 (an
+   unrelated tiny task, ≤ $1, counted as pilot spend) measures nothing and precedes it.
 8. **P0 smoke (no model):** a harness-authored PR per process template to `run/smoke-*/main` — base creation by deploy key, a direct
    push with the agent's PAT refused, CI on a non-default base, a planted lint/analyzer violation red, CodeRabbit reviews,
    merge blocked until threads resolve **and a CodeRabbit thread resolved with the agent's own PAT** (GraphQL
@@ -564,7 +570,8 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
    operator's home and the held-out suite are unreadable, the bridge refuses a `consult` whose `repoPath` is this
    repository, a `providers` call through the bridge lists the 5 vendors with their own sign-in.
    Then the **model smoke** (§8, ≈ $0.10) — the first paid call, before the A/A.
-9. **A/A + P1 pilot (paid, void):** two identical bare C# v1 sessions concurrent (A/A: structurally alike, T1–T4 hold,
+9. **A/A + P1 pilot (paid, void):** two identical bare C# v1 sessions concurrent (A/A: structurally alike, T1–T4 hold as §9
+   defines them — T3 and T4 against O over matched sources —
    partition Σ = wall ± 1 s, unattributed < 5 %); then **one process Node v1** session, cap $35 — go only if it merged
    with green checks, coai rounds are in its db, CodeRabbit reviewed, the scorer's numbers are reproduced by hand, T1–T4
    hold, `num_turns` > 1, the audit and canaries ran, read-back matches the pins. Then a v2 base from the pilot merge (no
