@@ -61,6 +61,8 @@ first unit test (§12, T-A1).
 | D17 | Effort `high` is pinned in the session's own `--settings` file (`effortLevel` and `modelSettings.{opus,sonnet,fable}.effortLevel`), because `--setting-sources project` and the fresh `CLAUDE_CONFIG_DIR` exclude the user settings where `high` lives today; children's effort is read back from the audit | judge review M2, verified in `~/.claude/settings.json` |
 | D18 | **The task inputs have no licence.** SPEC-v1/v2 and test-v1/v2 were written by Yusuke Endoh (`mame/ai-coding-lang-bench`), banteg's fork is byte-identical, and neither repository carries a licence (checked by `gh api …/license`, the clones and their history). The operator's decision: the files live **only inside the GitHub fork**, relying on GitHub ToS D.5 (public repositories may be viewed and forked on GitHub). Our three test fixes live there too, on a branch `inputs`. `dew_flow_benchmark`, which is not a fork, holds only their hashes and `UPSTREAM.md`; the harness fetches the files from the fork at a pinned sha into a local cache and verifies them. The ToS grants viewing and forking; the fixes inside the fork are the operator's call, recorded here | operator, 2026-10-29; consult `31e740fc` |
 | D19 | **No CodeRabbit in the series** (operator, 2026-10-29: "not needed"). Every CodeRabbit item elsewhere in this plan is void: the process arm's PR cycle is PR → CI → `sleep 300` → read CI → merge; the templates ship no `.coderabbit.yaml` and no `coderabbit-review.yml`; the CodeRabbit review item is dropped and the 300 s item now reads CI (the checklist is k/17); `coderabbit_wait` stays an empty category; P0 and P1 check no CodeRabbit review. The family rule asks for a reviewer bot only "where the repository has one configured", and the fork has none | operator, 2026-10-29 |
+| D20 | **The bare arm runs first** (operator, 2026-10-29): first C# vs TS results in hours, not days. E2.S1 and E2.S2 (process fixes, agent sandbox) are built first and a thin bare-arm runner is pulled forward from E3.S1; the three bare pairs run, after the pre-registration is committed, before the process arm is built. Deviation from §4.1's blocks: the bare pairs do not share time windows with the process pairs, so the process-vs-bare comparison (the interaction) is weaker and the report says so; the C#/TS comparison inside the bare arm keeps its concurrent pairs | operator, 2026-10-29 |
+| D21 | **The fork's `data` branch holds upstream's generated solutions** (JavaScript, TypeScript, C … — no C#), one `git fetch` away from any session that reaches GitHub, and the same branch is public in `mame/ai-coding-lang-bench`. So the agent box's network is restricted by host, not only audited: the bare arm reaches no GitHub at all; the process arm reaches GitHub and its other reads are audited (§7). Verified 2026-10-29 | E2 stories review |
 
 ## 4. Design
 
@@ -566,7 +568,7 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
 | Public PRs and `run/*` branches in the fork | 12 process session bases + smoke + pilot + re-runs ≈ 20, and ≈ 12–40 PRs; four `template/*` branches and `inputs` | kept permanently: the audit trail |
 | coai session dirs per session | ≤ 20 MB each, inside the session dir | with the session dir |
 | Vendor CLI stores (`~/.codex` …) | a few MB per session | not pruned by this plan — a decision: they are the operator's stores, written by the operator's own tools; their growth per session is measured and named in the report |
-| Credentials: two fine-grained PATs, two deploy keys (the rulesets' only bypass actors), CodeRabbit app access | live for the series only | **teardown** after the last cell is scored and archived: revoke both PATs, delete both deploy keys, remove the bypass actor from every ruleset, record the completion with dates in the report; the rulesets themselves stay, now with no bypass |
+| Credentials: one fine-grained PAT (the fork), one deploy key (the rulesets' only bypass actor), CodeRabbit app access | live for the series only | **teardown** after the last cell is scored and archived: revoke both PATs, delete both deploy keys, remove the bypass actor from every ruleset, record the completion with dates in the report; the rulesets themselves stay, now with no bypass |
 | In-flight state | a session interrupted mid-run leaves its dir and possibly an open PR | `series.mjs --resume` re-runs void and never-started sessions; `voids.mjs` marks it; an open PR of a void session is closed by the harness with a comment |
 
 ## 15. Build order
@@ -667,7 +669,7 @@ would exceed Q goes to the operator. Template symmetry (E2) gets a strict spec w
 conventions rows and branch, GitHub provisioning, env export and report rendering are ordinary work. Nothing here or in
 a stories document names a held-out case, reference or mutant in clear (§5.1).
 
-Cornerstones: 1 of 2 — E1.S3
+Cornerstones: 2 of 2 — E1.S3, E2.S2
 
 ### E1 — Measurement instruments: held-out suite and scorer, counters and the time partition (§15 steps 2–3 · 4 stories)
 
@@ -689,6 +691,9 @@ Cornerstones: 1 of 2 — E1.S3
   claim); the held-out instrument and its adjudication (cell-built state, SPEC traceability, blind classing, calibration).
 
 ### E2 — Isolation and the treatment, pinned: process fixes, both sandboxes, bridge, templates (§15 steps 1, 4–6a · 4 stories)
+
+- **Stories:** [PLAN_minigit_stack_bench_E2.md](PLAN_minigit_stack_bench_E2.md) — E2.S1–E2.S4; cornerstone **E2.S2**
+  (`model: fable`, the agent sandbox and launch; its text is an Opus draft for Fable to rewrite before any code).
 
 - **Goal:** what a session can reach, what it received and what each stack was given are proven — prevented where
   possible, audited where not (§7.3) — from one template source differing only inside marked regions.
