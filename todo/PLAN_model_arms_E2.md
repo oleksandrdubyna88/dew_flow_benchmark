@@ -1,7 +1,7 @@
 # PLAN — E2 stories: the step of the model-arms module — classify, recover, run, gate
 
-> Status: **plan only, nothing implemented yet — the parent is stopped for re-review (epoch 2 not yet approved); rewritten to the
-> re-review's split on 2026-10-30.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
+> Status: **plan only, nothing implemented yet — rewritten to the re-review's split on 2026-10-30; the parent's epoch 2 is OPEN
+> (approved 2026-10-30 by the coai document gate, interim path, six findings taken — gate finding 0 and 4 reach C12 here), so E2 may start.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
 > §4.5, §4.10; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 had landed; E1 is complete at `24e8e8f`.
 >
 > Scope: the step's state machine in `tools/model-arms/ModelArms.Core/Steps/` and `…/Launch/` (the result envelope, the classifier,
@@ -453,13 +453,15 @@ public sealed record StepSpec(StepId Id, StepKind Kind, string Model, int Minute
     public Outcome<string> OutputPath(string field);                // the bound relative path, or a failure naming the field and the step
 }
 public abstract record SchemeEntry { public sealed record Step(string Name, StepId Id) : SchemeEntry; public sealed record Tasks : SchemeEntry; }
-public sealed record TaskLimits(int Min, int Max, int MaxParallel, StepId Split, StepId SplitFix, StepId TaskCode);
+public sealed record TaskLimits(int Min, int Max, int MaxParallel, StepId Split, StepId SplitFix, StepId TaskCode,
+    IReadOnlyList<OutputBinding> Outputs);   // (gate finding 0) what the tasks entry contributes besides its split steps' outputs — the example binds CODE_NOTES
 public sealed record RunSpec(string Name, IReadOnlyList<IReadOnlyList<string>> Rounds, IReadOnlyList<string> ClosedArms, IReadOnlyList<string> Closed);
 public sealed record Experiment(…, IReadOnlyDictionary<StepId, StepSpec> Steps, IReadOnlyList<Scheme> Schemes, IReadOnlyList<RunSpec> Runs, …);   // Rounds gone
 public static class ExperimentFile { public const string Schema = "model-arms/experiment-v2"; … }
 public static class SchemePositions
 {   // the steps before a position, in order — the outputs a brief at that position may use
     public static IReadOnlyList<StepSpec> Before(Scheme scheme, int position, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks);
+    // a tasks entry stands for its split and split-fix steps in order, plus tasks.Outputs (gate finding 0); the task coder's per-task outputs are the pipeline's, not a scheme's
 }
 ```
 
@@ -486,7 +488,8 @@ no `..`).
 
 1. `steps` is keyed by id; a scheme entry `"<name>:<id>"` names a defined id or the refusal names both the entry and the ids defined;
    `kind` is one of the four or the refusal lists them; a `review` without `verdict`, a `gate` without `status`, a `verdict`/`status` on
-   any other kind, a `notes`/`verdict`/`status` naming a field not in the step's own `outputs`, an output path that is absolute, holds
+   any other kind, a `verdict`/`status` naming a field not in the step's own `outputs`, a `notes` naming a field neither the step nor an
+   earlier step of the scheme binds (gate finding 4: an earlier step's output may be named — the split fix appends to `SPLIT_NOTES`), an output path that is absolute, holds
    `..` or is outside `notes/` and `work/`, a `diffFrom` naming an id the scheme does not place at or before this step or that has no
    `snapshot` — each a problem sentence collected with the rest (E1 §8 item 6), never the first alone.
 2. `runs` is a map; every round names arms of defined schemes; no arm in two runs; `closedArms` name arms of some run; `rounds` at the
@@ -1618,7 +1621,7 @@ recovery: a `.session` without a stream starts fresh or resumes, a stream withou
 
 ## 10. Definition of Done — epic E2
 
-- [ ] The parent's `## Plan changes` re-review for epoch 2 has passed and the parent's status no longer says *stopped for re-review*
+- [x] The parent's `## Plan changes` re-review for epoch 2 has passed (2026-10-30, epoch 2 open) and the parent's status no longer says *stopped for re-review*
       — E2.S0 and the amended stories are built against the re-approved baseline, never during the stop (`common.plan-change-control`).
 - [ ] E2.S0–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
 - [ ] E2.S0's and E2.S1's scenarios and briefs were written by Fable into their sections before their coders started; the parent's ledger
