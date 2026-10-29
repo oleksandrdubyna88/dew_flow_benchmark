@@ -8,9 +8,17 @@
 > runner, files, git, transcripts and gate lock in `tools/model-arms/ModelArms/Adapters/`; the `gate-lock` and `run-arm` verbs (C and
 > CR); one widening of `tests/FakeCli` (`stdoutByCall`); one fix in the shared launcher (`ProcessRunner` observes both readers, E1 §8
 > item 15); tests under `tests/Bench.Tests/ModelArms/` (plus two in `tests/Bench.Tests/Infrastructure/`); recorded fixtures under
-> `tests/Bench.Tests/Fixtures/model-arms/`; `research/module_model_arms.md`. Eight stories, E2.S1–E2.S8 (the parent's map named seven;
-> §8 records the split). Cornerstone area of this epic: **the step's state machine**, marked on **E2.S1** (`model: fable`). The
+> `tests/Bench.Tests/Fixtures/model-arms/`; `research/module_model_arms.md`. Nine stories, E2.S0–E2.S8 (the parent's map named seven;
+> §8 records the split and the added S0). Cornerstone area of this epic: **the step's state machine**, marked on **E2.S1** (`model: fable`). The
 > parent's ledger now reads `Cornerstones: 2 of 2 — E1.S5, E2.S1`.
+>
+> **Amended 2026-10-29 at `24e8e8f` (E1 complete) after the epics 1–3 consultation, by Fable — before any E2 code.** Three gaps, each
+> verified against this document and the E1 code, each settled in the story it belongs to and marked *(amended)*: **(1)** a blocked gate
+> never resumed — E2.S7 removed `.done` to resume, E2.S2's recovery read the finished stream as done again (§1 *Amended*, S2, S4, S7);
+> **(2)** E2's git launches repeated E1's bare-name defect — `ArmGit` went through `GitCommand`, which E1's S22 scan forbids (S4, S8, and
+> E3's obligation in the parent's D17 d); **(3)** nothing kept a step from starting subagents — the new E2.S0 (a change to E1's
+> `StepLaunch`, `StepSpec` and the example). The parent's `## Plan changes` ledger carries them as 1.1–1.3 and is **stopped for
+> re-review** (`common.plan-change-control`); the stories here are the amended baseline that re-review reads.
 
 ## 1. Goal, before any solution
 
@@ -32,6 +40,32 @@ marked done in seconds, and the next round burned the same way (`/home/jinx/git/
 A classifier that reads one envelope wrong marks a whole round done; a recovery that resumes a finished session buys a finished
 agent extra time (the previous generation's arm C, `research/local-model-coding/incidents.md:39`). Those two are why this epic's
 cornerstone is the classifier and why every recovery is a pure function with a test.
+
+**Amended after the epics 1–3 consultation (2026-10-29).** Three things this document got wrong or left out, found by an ordered coai
+consultation over epics 1–3 and verified line by line before anything was changed:
+
+1. **A blocked gate never resumes.** E2.S7 step 4 deletes `.done` and calls the runner again *so that it resumes the same session*;
+   E2.S2's recovery table maps "`LastEnd is Finished` and no `.done`" to `RecoveredDone(Finished, …)` — never resumed. A gate whose
+   CLI result succeeded with `gate.json = blocked` would therefore wait `gateTries` times and never call the model again, and
+   `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` (three calls) would fail against the code as specified (one call).
+   The two rules are both right on their own ground — D7's "finished is done" is the previous generation's arm-C lesson, D10's
+   "blocked resumes" is the shell's — and they need a **durable intent that tells them apart**: a `<step>.continue` marker the gate
+   writes BEFORE it removes `.done`, read by recovery as "continue this completed session" (S2, S4, S7). A crash between the marker and
+   the resume is a test.
+2. **E2's git launches repeated E1's bare-name defect.** E2.S4's `ArmGit` went through `GitCommand.ReadAsync`, which launches a bare
+   `git` with the inherited environment (`src/Bench.Infrastructure/Git/GitHistory.cs:35`) — exactly what E1.S10's S22 scan forbids in
+   `tools/model-arms` (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), and E2.S8 resolved `git` only to print
+   it: the resolved path was not in `StepContext`. Now every git launch of E2 goes by the real path `Resolve` found, under
+   `GitEnvironment.Of(parent)`, from a cwd the runner chose — as E1's `SourceFacts` does — and E3's worktree orchestration inherits the
+   obligation through the parent's D17 (d) (S4, S8).
+3. **Nothing prevented a step from delegating to other models.** `StepLaunch` read mode denies `Edit Write NotebookEdit` plus
+   `tools.deny` (`StepLaunch.cs:84-90`); omitting `Agent` from `--allowedTools` does not remove it, and the example's Haiku `hreview`
+   and `taskCode` steps are WRITE mode, whose list carries `Agent` (`part6.experiment.json:29`, `:34`, `:48`). In the bash harness's
+   part 6 a Haiku review step started Opus and Sonnet subagents — $3.79 of $5.35 not Haiku — and the owner's shell repaired it for READ
+   steps only (`run-arm.sh:90-92`, part 7). The port makes delegation an explicit per-step policy, denied by default on every launch,
+   fresh and resumed: the new **E2.S0**, a change to E1's `StepSpec`, `StepLaunch` and the example.
+
+Each is a change to the parent after its approval; the parent's ledger records them and the plan is stopped for re-review.
 
 ## 2. What exists — verified at `a208d75`, 2026-10-29
 
@@ -72,6 +106,27 @@ Every line below was opened in this worktree or, for the shell and the product, 
 | The fake's test handle: `new FakeCli(script)` (fresh model id, `Home`), `Executable`, `Rewrite`, `Calls()` (argv, cwd, prompt, pid, env NAMES, `SubagentModelGuard`) | `tests/Bench.Tests/Probes/Driver/FakeCli.cs:10-82` |
 | Test helpers: `TempGitRepo.CreateAsync()`, `Path`, `HeadAsync()`; `Cli.Repository.Root`; `ManualClock : TimeProvider` (`Advance`) | `tests/Bench.Tests/Infrastructure/GitCheckoutTests.cs:147-181`; `tests/Bench.Tests/Cli/AppHostLaunchProfileTests.cs:95-97`; `tests/Bench.Tests/Ui/ManualClock.cs:6-56` |
 | The catalogue test reads only `bench …` and HTTP rows (`CatalogueRow` regex) — a `model-arms …` row is invisible to it until E5.S3 | `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs:99-100` |
+
+**Verified for the amendment, at `24e8e8f` (E1 complete), 2026-10-29:**
+
+| Fact | Where |
+|---|---|
+| `GitCommand.ReadAsync` launches the LITERAL `"git"` through the launcher overload that inherits the process environment | `src/Bench.Infrastructure/Git/GitHistory.cs:35` |
+| E1's launch shape for git: the real path `Resolve` found, `ProcessRunner.RunAsync(git, arguments, source, Budget, string.Empty, environment, ct)` — the REPLACING overload — with cwd = the source | `tools/model-arms/ModelArms/Adapters/SourceFacts.cs:87`; `src/Bench.Infrastructure/Process/ProcessRunner.cs:87` |
+| `GitEnvironment.Of(environment)` — the map minus every name starting `GIT_` (ordinal, ignoring case); in Core, in the pure list under `// E1.S10` | `tools/model-arms/ModelArms.Core/Experiment/HostChecks.cs:71-76`; `ModelArmsArchitectureTests.cs:41` |
+| The S22 scan: `GitCommand\.`, `ProcessRunner.\w+(\s*"[A-Za-z]`, `Process.Start(`, `new ProcessStartInfo` — any match under `tools/model-arms` is red; the canary is the fixture's bare git in `ExperimentRoot.cs` | `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs:139-144`, `:155-158`, `:147-151` |
+| `ExecutableResolution.Resolve(executable, pathDirectories, forbiddenRoots, host, windows) → Found(real) · Absent · Refused`; `PathEntryRefusal(entry, roots, host)` | `tools/model-arms/ModelArms.Core/Experiment/ExecutableResolution.cs:33`, `:52` |
+| `StepLaunch.Options(StepMode, ToolSets, ArmPaths, StepSession)`: read mode denies `Edit Write NotebookEdit` + `tools.Deny`; write and gate deny `tools.Deny` only; `PermittedTools` is the mode's list as configured — nothing about `Agent` | `tools/model-arms/ModelArms.Core/Launch/StepLaunch.cs:45`, `:71-100` |
+| `StepSpec(StepKind Kind, string Model, int Minutes, StepMode Mode)`; the file's step members are exactly `model`, `minutes`, `mode` | `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs:13`; `…/Experiment/FlowSection.cs:10`, `:57-64` |
+| `StrictJson` reads `Text`, `Positive`, `Texts`, `Choice` — no boolean member reader | `tools/model-arms/ModelArms.Core/Experiment/StrictJson.cs:146`, `:220`, `:244`, `:263` |
+| The example: `tools.write` holds `Agent`; `hreview` (haiku) and `taskCode` (haiku) are `"mode": "write"`; `review` (opus) is `read` | `tools/model-arms/examples/part6.experiment.json:48`, `:29`, `:34`, `:30` |
+| The template keeps a boolean as it was (strings blanked, numbers 0, "the rest as they were") | `tools/model-arms/ModelArms.Core/Experiment/ExperimentTemplate.cs:26-37` |
+| The shell's own repair after the incident: READ steps get `--disallowedTools Edit Write NotebookEdit Agent Task …` ("read steps start no subagent (Part 7: SRS3's Haiku step started Opus and Sonnet subagents in Part 6)"); write steps keep `Agent` | `/home/jinx/git/coai-exp2/run-arm.sh:90-92` |
+| `claude` 2.1.310 (`claude --help`, this host): `--disallowedTools, --disallowed-tools <tools...>` — "comma or space-separated list of tool names to deny"; `--allowedTools` the same shape; the subagent tool is `Agent` (the older name `Task` — denied too, as the shell did) | `claude --help` |
+| `CliArgv`: `--allowedTools` from `PermittedTools`, then `--disallowedTools` from `ClaudeDenied` (`DisallowedTools` ∪ the web pair, `Distinct`) | `src/Bench.Infrastructure/Models/CliAgentRuntime.cs:157-158`, `:188` |
+| E1.S6's argv test pins the three shapes with the denied group exactly `tools.Deny` / `Edit Write NotebookEdit + tools.Deny` — it changes with E2.S0 | `tests/Bench.Tests/ModelArms/StepLaunchTests.cs:76-113` |
+| The test root's helpers: `RealGit`, `Shim(path, name, thenRealGit)` (records `$0 $*` then execs the host's git), `ShimScript(path, body)`, `MarkerFile`, `Markers()`, `WithVariables`, `UsePath` | `tests/Bench.Tests/ModelArms/ExperimentRoot.cs:93`, `:100-121`, `:125`, `:134` |
+| `ArmPaths` spells paths through `Under(…)`; `Done(step)`, `Before(step)` at `:115`, `:117` — a `Continue(step)` joins them | `tools/model-arms/ModelArms.Core/Experiment/ArmPaths.cs:86-119` |
 
 **The shell, the behaviour to port** (`/home/jinx/git/coai-exp2/run-arm.sh`, read 2026-10-29): `has_result` `:52`; `limited` `:54-63` — the
 words `RX` `:56` (`usage.?limit|spend limit|session limit|rate.?limit|hit your (\w+ )*limit|limit reached|limit will reset|resets? at|overloaded|\b529\b|\b429\b|too many requests`, case-insensitive), the LAST result decides when there is one `:60-61`, the last 4000 characters of stderr only when there is none `:62`;
@@ -114,13 +169,15 @@ environment outranking it key by key (`:76-95`). Part 6 copied that settings fil
 
 E1's §3 holds unchanged (namespaces, *pure means pure*, refusals as values, red first on an ASSERTION, docs per story, commands). For E2:
 
-- **The pure list.** E2.S1 replaces the single `// E2` marker (`ModelArmsArchitectureTests.cs:42`) with eight, `// E2.S1` … `// E2.S8`,
+- **The pure list.** E2.S1 replaces the single `// E2` marker (`ModelArmsArchitectureTests.cs:46`) with eight, `// E2.S1` … `// E2.S8`,
   each on its own line with a blank line between; every later story writes only under its own. A story that adds a `public static
-  class` to Core adds it there in the same commit.
+  class` to Core adds it there in the same commit. E2.S0 adds no decider (it changes `StepLaunch`, already listed under `// E1.S6`).
 - **The module doc.** E2.S1 adds eight empty headings to `research/module_model_arms.md`, after *The first run: init and validate
   (E1.S11)*: *The result envelope and the step's end (E2.S1)*, *Timing, budget and recovery (E2.S2)*, *The launcher's follow-ups (E2.S3)*,
   *The step runner (E2.S4)*, *The review's answer (E2.S5)*, *The gate lock and the MCP configs (E2.S6)*, *The gate step (E2.S7)*, *run-arm
-  (E2.S8)*. Each story writes only under its own.
+  (E2.S8)*. Each story writes only under its own. E2.S0 writes a paragraph headed *The delegation policy (E2.S0)* at the END of the
+  existing *The launch boundary (E1.S5, E1.S6)* section (`research/module_model_arms.md:193`) — a different section from S1's eight, so
+  wave A's two writers never touch the same lines.
 - **Fixtures** live in `tests/Bench.Tests/Fixtures/model-arms/` (copied to the output by the test project's `Fixtures\**` item) and are
   read with `Path.Combine(AppContext.BaseDirectory, "Fixtures", "model-arms", name)`.
 - **The fake CLI as `claude`.** Every launch of a step goes through `ArmChildEnvironment`, which sets `TMPDIR` to the arm's `tmp/` — and
@@ -214,8 +271,10 @@ public static class SessionTranscripts
     public static string ClaudeHome(IReadOnlyDictionary<string, string> environment);
     public static string PathOf(string claudeHome, string workingDirectory, Guid session);
 }
+public sealed record ContinueMarker(int After, string Why);   // (amended) "attempt After finished; continue its session" — the gate's intent, durable
+public static class ContinueMarkers { public static string Write(ContinueMarker marker); public static Outcome<ContinueMarker> Read(string json); }
 public sealed record RecoveryFacts(bool DoneMarker, Outcome<Guid> Session, bool TranscriptExists, int LastAttempt, StepEnd LastEnd,
-    IReadOnlyList<TimingLine> Timing);
+    IReadOnlyList<TimingLine> Timing, Outcome<ContinueMarker> Continue);   // (amended) Continue: Failure = no marker, or one that cannot be read
 public abstract record StepEntry
 {
     private StepEntry() { }
@@ -261,6 +320,7 @@ reads — and a port would only let a test agree with itself (§8 item 9).
 
 ```csharp
 public sealed record StepContext(string Arm, ArmPaths Paths, SchemeEntry.Step Step, Experiment Experiment, string ClaudeExecutable,
+    string GitExecutable,   // (amended) the REAL path Resolve found for git — every git launch of the step goes by it (D17 d)
     string WorkingDirectory, IReadOnlyDictionary<string, string> ParentEnvironment, BriefTemplateFiles Templates, BriefLeakGuard Guard,
     int ScenarioCount, TaskFacts Task, string Problems, bool DeriveOutputs = true);
 public abstract record StepOutcome
@@ -274,6 +334,7 @@ public class StepProbe { public static StepProbe None { get; } = new(); public v
 public sealed class StepRunner(ICliAgentTranscripts cli, ISessionTranscripts transcripts, TimeProvider clock,
     Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, StepProbe probe)
 {
+    public StepEntry Recover(StepContext context);   // (amended) step 1's decision over the step's files — the gate step asks it too (E2.S7)
     public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping);
 }
 ```
@@ -283,9 +344,27 @@ IsBlocked => Status == "blocked"; }`, `public static class GateStatus { public s
 static bool WaitAgain(GateReading reading, int waitsSoFar, int gateTries); }`, `public static class McpConfig { public const string
 VaultKeyVariable = "COAI_CREDS_KEY"; public static string None(); public static string Coai(CoaiFacts coai, ArmPaths paths,
 IReadOnlyDictionary<string, string> harnessEnvironment); }`. `ModelArms.Adapters`: `public sealed class FileGateLock(TimeProvider clock,
-TimeSpan poll) : IGateLock`, `public sealed class GateStep(StepRunner runner, IGateLock gateLock, Func<TimeSpan, CancellationToken, Task>
-wait, TextWriter log) { public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping); }`. `ArmPaths` gains
-`public string CoaiData => Under("coai-data");`.
+TimeSpan poll) : IGateLock`, `public enum GatePoint { ContinueWritten, DoneRemoved }` and `public class GateProbe { public static GateProbe
+None { get; } = new(); public virtual void Reached(GatePoint point) { } }` (amended — the crash seam of the gate's two-file write, the shape
+of `StepProbe`), `public sealed class GateStep(StepRunner runner, IGateLock gateLock, Func<TimeSpan, CancellationToken, Task> wait,
+TextWriter log, GateProbe probe) { public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping); }`. `ArmPaths` gains
+`public string CoaiData => Under("coai-data");` (E2.S6) and `public string Continue(string step) => Under("out", Step(step) + ".continue");`
+(E2.S2, amended — spelled exactly as `Done(step)` is, `ArmPaths.cs:115`).
+
+**C11 — the delegation policy** (E2.S0, amended; read by S4, S8 and E3.S3). In `ModelArms.Core.Experiment` and `ModelArms.Core.Launch`:
+
+```csharp
+public sealed record StepSpec(StepKind Kind, string Model, int Minutes, StepMode Mode, bool Subagents = false);   // the file's "subagents": true|false, default false
+public static class StepLaunch
+{
+    public static readonly IReadOnlyList<string> SubagentTools = ["Agent", "Task"];   // the tool that starts a subagent, under both names the CLI has used
+    public static AgentAskOptions Options(StepSpec spec, ToolSets tools, ArmPaths paths, StepSession session);   // was (StepMode, …): the policy rides on the spec
+}
+```
+
+`Options` applies the mode as today and THEN the policy: unless `spec.Subagents`, `DisallowedTools` = `[.. SubagentTools, .. the mode's list]`
+and `PermittedTools` = the mode's list minus `SubagentTools` (ordinal). Fresh and resumed launches share `Options`, so a resume can never
+be wider than the launch it continues.
 
 **The exit and timing contract of a step** (D16; every story that stops writes it the same way):
 
@@ -301,6 +380,68 @@ wait, TextWriter log) { public Task<StepOutcome> RunAsync(StepContext context, C
 | the operator's Ctrl+C during an attempt or a wait | — | the classified state, `StoppedByOperator` | `stopped`, exit 5 | `Stopped(5)` | 5 |
 
 ## 5. Stories
+
+### E2.S0 — The delegation policy: no step starts a subagent unless its spec says so (amended — added after the epics 1–3 consultation)
+
+- **Coder:** sonnet · **Spec:** Fable (this section, 2026-10-29 at `24e8e8f`) · **Review:** Opus. **Depends on:** nothing in E2 (E1.S3, E1.S6,
+  E1.S11 landed). **Parallel with:** E2.S1, E2.S3. **Before:** E2.S4 (its `StepBench` reads the example and asserts argv) and E2.S8.
+- **Owns:** C11; the parent's §4.4 `DisallowedTools` row as amended; the example's and the template's `subagents` member. **Size:** ≈ 260
+  changed lines (≈ 70 code, 150 tests, the example and the template).
+- **Files.** `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs` (`Subagents`), `…/Experiment/FlowSection.cs` (`StepMembers` gains
+  `subagents`; `Step` reads it), `…/Experiment/StrictJson.cs` (one reader, `Flag`), `tools/model-arms/ModelArms.Core/Launch/StepLaunch.cs`
+  (`SubagentTools`, `Options(StepSpec, …)`, the private `Delegation`), `tools/model-arms/examples/part6.experiment.json` (eight lines and one
+  comment), the `init` template is DERIVED — no edit (`ExperimentTemplate`), `tests/Bench.Tests/ModelArms/StepLaunchTests.cs` (one theory
+  amended, one added), `tests/Bench.Tests/ModelArms/ExperimentFileTests.cs` (one added), `tests/Bench.Tests/ModelArms/ExampleExperimentTests.cs`
+  (one added), `research/module_model_arms.md` (*The delegation policy (E2.S0)*, §3).
+
+**Why a policy and not a tool list.** `--allowedTools` is a permission allow-list: what is absent from it is not forbidden, only asked
+about — and `-p` with `acceptEdits` answers for the agent. Under the shell, part 6's Haiku review step started Opus and Sonnet subagents
+and $3.79 of the step's $5.35 was not Haiku: the arm compared a model that was not the one named. The shell's repair denies `Agent Task`
+on READ steps only (`run-arm.sh:90-92`); the Haiku steps the experiment measures are WRITE steps (`hreview`, `taskCode`). So: **every
+step is launched with the subagent tool denied, fresh and resumed, unless its spec says `"subagents": true`** — the default is the
+measurement's, the opt-in is the operator's, and the record (`experiment.json`) says which. The deny-list is the measure (claude's
+permission rules: a deny rule outranks an allow rule); stripping the names from the allow-list too keeps the argv from reading as a
+contradiction, and the argv is what the analysis half and a reviewer read.
+
+**What changes, exactly.**
+
+1. `StepSpec` gains `bool Subagents = false` as the last positional member; every existing `new StepSpec(kind, model, minutes, mode)`
+   compiles unchanged. `FlowSection.Step` reads it through `StrictJson.Flag(step, path, "subagents", fallback: false)` — a new reader
+   beside `Choice` (`StrictJson.cs:263`): absent → the fallback; the JSON literal `true`/`false` → that; anything else (a string, a
+   number, `null`) → the problem `<path>.subagents must be true or false` collected like every other refusal, never a throw.
+2. `StepLaunch.Options(StepSpec spec, ToolSets tools, ArmPaths paths, StepSession session)` = `Session(Delegation(ForMode(spec.Mode, tools,
+   paths), spec.Subagents), session)`; `Ask(request)` passes `request.Spec`. `Delegation(options, allowed)` is one expression: `allowed ?
+   options : options with { PermittedTools = [.. options.PermittedTools.Where(t => !SubagentTools.Contains(t, StringComparer.Ordinal))],
+   DisallowedTools = [.. SubagentTools, .. options.DisallowedTools] }`. `ForMode` and `Session` are untouched; no method passes complexity 4.
+3. The example: every one of the eight step objects gains `"subagents": false` after `"mode"`, and the comment above `steps` gains one
+   sentence: *`subagents` says whether the step may start a subagent (the Agent tool) — false by default, and false for every measured
+   step: in part 6 a Haiku review step started Opus and Sonnet subagents and most of its cost was not Haiku.* The template follows by
+   derivation (a boolean is kept as it was, `ExperimentTemplate.cs:37`), so `The_init_template_is_the_example_with_its_values_blanked`
+   stays green without an edit.
+
+**Scenarios.**
+
+| Test | Given / When / Then | Red (stub: `Options` ignores `Subagents`; `Flag` not written) |
+|---|---|---|
+| `StepLaunchTests.Write_read_and_gate_modes_produce_the_shells_three_argv_shapes` (amended) | as today, with the spec `new StepSpec(Code, "sonnet", 45, mode)` (default policy); the expected `--disallowedTools` group becomes `["Agent", "Task", .. the mode's list]` and the expected `--allowedTools` group is the mode's list WITHOUT `Agent` (the example's `tools.write` carries one — the test asserts `tools.Write` contains `Agent` first, so the strip is observed) | `Expected groups to be equivalent to {…, "--disallowedTools␟Agent␟Task␟Read(//example/home/.claude/**)…", …}, but found "--disallowedTools␟Read(//example/home/.claude/**)…"` |
+| `StepLaunchTests.No_step_starts_a_subagent_unless_its_spec_says_so` (added, `[Theory]` over the three modes × `Fresh`/`Resume`) | **Given** a spec with the default policy; **when** `Options`; **then** `DisallowedTools` starts with `Agent`, `Task` and `PermittedTools` contains neither; **and given** the same spec `with { Subagents = true }`; **then** `DisallowedTools` contains neither and `PermittedTools` equals the mode's list as configured (`Agent` kept in write and gate) | `Expected denied to start with {"Agent", "Task"}, but found {"Read(//example/home/.claude/**)", …}` |
+| `StepLaunchTests.A_resume_is_never_wider_than_the_launch_it_continues` (added) | the resumed options of a default-policy spec equal the fresh ones except `SessionId`/`ResumeSessionId` (the existing `A_resume_carries_the_same_options…` compares the whole record; this one asserts the two deny-lists and the two allow-lists are equal, so a later story that widens one branch is caught by name) | passes on the stub — its red is the plant: apply `Delegation` in the `Fresh` branch of `Session` only → `Expected resumed.DisallowedTools to be equal to {"Agent", "Task", …}, but {…} differs at index 0.` |
+| `ExperimentFileTests.A_step_without_subagents_reads_as_denied_and_true_reads_as_allowed` (added) | the example read → every `Steps[kind].Subagents` is false; the example with `steps.code.subagents` set to `true` → `Steps[Code].Subagents` true; set to `"yes"` → refused, the problem naming `steps.code.subagents` and `true or false` | `Expected outcome to be Ok, but found Fail("steps.code.subagents is not a member …")` (the member is unknown until read) |
+| `ExampleExperimentTests.Every_step_of_the_example_says_subagents_false_explicitly` (added) | the example's text parsed as `JsonNode` (comments skipped) → each of the eight `steps.*` objects has a `subagents` member whose value is the literal `false` — so the record shows the decision rather than the default | `Expected 8 step(s) to carry "subagents": false, but found 0.` |
+
+**Break-it** (watched red, then restored): delete the `Delegation` call from `Options` → the amended theory and
+`No_step_starts_a_subagent_unless_its_spec_says_so` red together; E2.S8's `The_opus_review_and_the_haiku_review_are_launched_without_the_agent_tool_fresh_and_resumed`
+is the same plant seen through a real launch.
+
+**Commands.** `--filter-class "*StepLaunchTests"`, `"*ExperimentFileTests"`, `"*ExampleExperimentTests"`, `"*InitVerbTests"`, `"*ValidateVerbTests"`,
+`"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The five green, each seen red (the plant of the third observed); `ClaudeArgvSessionTests`, `ProbeArgvTests` and `ScoutArgvTests`
+unedited and green (nothing under `src/` changes); the module doc's paragraph states the default, the opt-in and the part-6 number.
+
+**Out of bounds.** A per-step model guard for the subagents a step is ALLOWED to start (the parent's D19 keeps the scout flags off);
+`--agents`; any change to `CliArgv` or `AgentAskOptions`; the task pipeline's launches (E3.S3 goes through `StepLaunch` and inherits the
+policy; its scenario is named in the parent's E3.S3 row).
 
 ### E2.S1 — `ClaudeResultEnvelope` and `StepEnd`: the step's end, structured first (CORNERSTONE)
 
@@ -639,9 +780,11 @@ fields; any C5 name; a fixture beyond the nine; `3-fix.a1.jsonl:5` (the recorded
 **Files.** `tools/model-arms/ModelArms.Core/Steps/TimingLine.cs` (`TimingLine`, `TimingLines`), `…/Steps/DoneMarker.cs` (`DoneMarker`,
 `DoneMarkers`), `…/Steps/StepBudget.cs` (`StepBudget`, `ResumeNotice`), `…/Steps/SessionTranscripts.cs`, `…/Steps/StepRecovery.cs`
 (`RecoveryFacts`, `StepEntry`, `StepRecovery`), `…/Steps/StepOutputs.cs` (`DerivedOutput`, `OutputFacts`, `OutputAnswer`, `StepOutputs`),
-`tools/model-arms/ModelArms.Core/Ports/ISessionTranscripts.cs`, `…/Ports/IGateLock.cs`; tests `StepRecoveryTests.cs`, `StepOutputsTests.cs`,
+`tools/model-arms/ModelArms.Core/Ports/ISessionTranscripts.cs`, `…/Ports/IGateLock.cs`; (amended) `…/Steps/ContinueMarker.cs` (`ContinueMarker`,
+`ContinueMarkers`) and `…/Experiment/ArmPaths.cs` (`Continue(step)`, one line, with its assertion in `ArmPathsTests.Every_path_of_an_arm_is_spelled_as_the_shell_spelled_it`:
+`Continue("4-gate")` → `/e/r/abc/out/4-gate.continue`); tests `StepRecoveryTests.cs`, `StepOutputsTests.cs`,
 `TimingLineTests.cs` (added class); fixture `timing-arm-C.jsonl` (a byte copy of `research/local-model-coding/data/arms/C/timing.jsonl`);
-under `// E2.S2` `typeof(TimingLines), typeof(DoneMarkers), typeof(StepBudget), typeof(ResumeNotice), typeof(SessionTranscripts),
+under `// E2.S2` `typeof(TimingLines), typeof(DoneMarkers), typeof(ContinueMarkers), typeof(StepBudget), typeof(ResumeNotice), typeof(SessionTranscripts),
 typeof(StepRecovery), typeof(StepOutputs),`; the module doc's *Timing, budget and recovery* (the formats, the recovery table, the
 outputs table).
 
@@ -671,10 +814,16 @@ outputs table).
   with every character outside `[A-Za-z0-9]` replaced by `-` (`run-arm.sh:67`; observed: the transcript folder of the C1 arm's clone is
   `-home-jinx-git-coai-exp2-r-<token>-arm`, a path recorded in `2-review.a1.jsonl:310`).
 
-**`StepRecovery.Decide(step, facts, spec, limits)`** — in this order (D7):
+- (amended) `ContinueMarkers.Write` — `{"after":N,"why":"<text>"}`, compact, no newline; `Read` takes that shape (`after` a positive
+  integer, `why` a string or absent → `""`) and refuses anything else naming it (a non-object, a missing or non-integral `after`), never
+  a throw. The marker is the gate's **durable intent**: "attempt `After` of this step FINISHED, and I want its session continued" — the
+  one thing a finished stream without `.done` cannot say by itself (D7 reads that as a runner that died after finishing).
+
+**`StepRecovery.Decide(step, facts, spec, limits)`** — in this order (D7; the first row amended after the epics 1–3 consultation):
 
 | facts | entry |
 |---|---|
+| `Continue is Ok(m)` and `m.After == LastAttempt` and `LastAttempt > 0` — **whatever `DoneMarker` says** | `Resume(session, LastAttempt + 1, remaining)` when `Session` read and `TranscriptExists`; else `Fresh(LastAttempt + 1, remaining)` — the gate asked for this completed session to go on (E2.S7 step 4); a `.done` still beside it is a gate that died between writing the marker and removing `.done`, and the runner removes it before the launch (E2.S4 step 1). A marker whose `After` is not `LastAttempt` is STALE (the attempt it ordered has started, or it never could have) and decides nothing — the rows below apply |
 | `DoneMarker` | `Skip` |
 | `LastAttempt > 0` and `LastEnd is Finished` | `RecoveredDone(Finished, LastAttempt)` — never resumed (the previous generation's arm C) |
 | `LastAttempt > 0` and the `End` line of that attempt in `Timing` has `State == "hard-deadline"` | `RecoveredDone(HardDeadline, LastAttempt)` — the runner died between the end line and `.done` |
@@ -682,7 +831,15 @@ outputs table).
 | otherwise | `Resume(session, LastAttempt + 1, remaining)` — an error result of any kind, a limit, an interruption |
 
 `remaining` = `StepBudget.RemainingSeconds(spec.Minutes, facts.Timing, step, limits.MinimumRemainingSeconds)` for both launches (the
-shell budgets a fresh launch the same way, `:84`).
+shell budgets a fresh launch the same way, `:84`) — a continued gate's finished attempt counts against its budget like any unlimited
+attempt (the shell's `used_seconds` summed it too), floored at the minimum. Shape: `Decide` = `Continued(facts) ? Launch(facts, remaining)
+: Settled(facts, remaining)`, each ≤ 4 branches; `Launch` is the `Fresh`-or-`Resume` choice the last two rows share.
+
+Why a marker and not a wider rule: "no `.done` and the last result is `Finished`" was EXACTLY the shape of the previous generation's
+arm-C defect (`research/local-model-coding/incidents.md:39`) and the shape the gate leaves on purpose; only a fact written by the one
+party that knows which it is can separate them, and it must survive the runner's death (the restart scenarios of E2.S7). Rejected: a
+field in `.done` (the gate removes `.done`; the shell's `.done` shape is read by the analysis, D5), a field in `timing.jsonl` (append-only;
+a resumed gate would need a line that is neither start nor end), and deleting the finished stream (the record).
 
 **`StepOutputs.Reconcile(kind, facts)`** — `missing` = `Of(kind)` minus `facts.Present`, in `Of`'s order. None → `Complete`. Else every
 missing output's input is checked, and the FIRST missing input answers `Resumable(reason)`: `ReviewJson` needs `FinalResult` Ok, not
@@ -702,6 +859,10 @@ therefore resumable, not done — §8 item 3.)
 | `StepRecoveryTests.The_remaining_budget_excludes_limited_attempts_and_floors_at_the_minimum` | timing for `2-review`: end 888 s limited, end 600 s unlimited, an end of ANOTHER step 999 s, a start without an end; `minutes 40` → `RemainingSeconds == 1800`; the same with an unlimited end of 2300 s → `300` (the floor); `UsedSeconds` of the real 2026-10-28 pair (888 s, recorded `"limited":false`) is 888 — the day's arithmetic, kept as evidence | `Expected 2400 to be 1800.` |
 | `StepRecoveryTests.Timing_of_a_real_arm_reads_back_every_line` | **Given** `timing-arm-C.jsonl` (8 lines, part 5's generation: no `limited`, no `end`); **when** `TimingLines.Read`; **then** 8 lines: 4 `Start`, 3 `End`, 1 `ArmDone`, no `Other`; `1-code` attempt 1 has a start and NO end; every `End` has `Limited == false`, `State == ""`, `Recovered == false`; `UsedSeconds(timing, "1-code") == 852`; the `2-review` start's `Deadline == "19:45 UTC (20:45 CET)"` (read as text, never re-spelled). The byte round trip is `TimingLineTests`' — on lines this build writes | `Expected lines to contain 8 item(s), but found 0.` |
 | `StepRecoveryTests.A_last_attempt_whose_end_line_says_hard_deadline_is_recovered_as_done` (added) | `LastEnd: Interrupted("no result…")` (the stream read back alone cannot see the wall), `LastAttempt: 1`, timing's end of attempt 1 `State: "hard-deadline"` → `RecoveredDone(HardDeadline, 1)` | `… of type StepEntry+RecoveredDone, but found StepEntry+Resume.` |
+| `StepRecoveryTests.A_continue_marker_for_the_last_attempt_resumes_the_finished_session_even_beside_a_done_marker` (amended, added) | **Given** `Continue: Ok(new(After: 2, "gate blocked: every provider rate-limited"))`, `LastAttempt: 2`, `LastEnd: Finished`, session `g`, its transcript, one unlimited end of 600 s, `minutes 40`, floor 300 — once with `DoneMarker: false` and once with `DoneMarker: true` (the gate died between its two writes); **then** `Resume(g, 3, 1800)` both times | the table as first written: `Expected entry to be Resume { Session = g, Attempt = 3, … }, but found RecoveredDone { End = Finished, Attempt = 2 }` (and `Skip` for the second case) — the consultation's finding, as an assertion |
+| `StepRecoveryTests.A_continue_marker_whose_attempt_has_started_is_stale_and_decides_nothing` (amended, added) | `Continue: Ok(After: 1)`, `LastAttempt: 2`, `LastEnd: Finished`, no `.done` → `RecoveredDone(Finished, 2)`; the same with `DoneMarker: true` → `Skip`; `Continue: Ok(After: 3)` (ahead of any attempt) → the same two answers; `Continue: Failure("no marker")` → the same | `Expected entry to be of type StepEntry+RecoveredDone, but found StepEntry+Resume.` (a reader that honours any marker) |
+| `StepRecoveryTests.A_continue_marker_without_a_transcript_starts_the_step_fresh` (amended, added) | `Continue: Ok(After: 1)`, `LastAttempt: 1`, `LastEnd: Finished`, `TranscriptExists: false` → `Fresh(2, …)`; a `Session` failure → the same | `… of type StepEntry+Fresh, but found StepEntry+RecoveredDone.` |
+| `TimingLineTests.A_continue_marker_round_trips_and_a_malformed_one_is_refused` (amended, added) | `Write(new(2, "gate blocked: x"))` is `{"after":2,"why":"gate blocked: x"}`; `Read(Write(m))` equals `m`; `Read("{\"after\":2}")` has `Why == ""`; `"[]"`, `{"after":"2"}`, `{"after":0}`, `{"why":"x"}` are each refused naming `after` or the shape | `Expected string to be "{\"after\":2,…", but "".` |
 | `StepOutputsTests.A_review_step_with_a_result_and_no_review_json_is_regenerated` | `Review`, nothing present, `FinalResult` = `result-success.jsonl`'s → `Regenerate([ReviewJson])` | `Expected answer to be of type OutputAnswer+Regenerate, but found OutputAnswer+Complete.` |
 | `StepOutputsTests.An_hreview_or_gate_step_with_a_before_snapshot_and_no_diff_is_regenerated` | `[Theory]` HReview, Gate; `BeforeExists`, nothing present → `Regenerate([StepDiff])` | as above |
 | `StepOutputsTests.A_derived_output_whose_input_is_missing_leaves_the_step_resumable_naming_the_input` | HReview without `.before` → `Resumable` containing `.before is missing`; Review whose `FinalResult` is the 400 line → `Resumable` containing `no result text`; Review with `FinalResult` a Failure → the same | `… of type OutputAnswer+Resumable, but found OutputAnswer+Complete.` |
@@ -715,13 +876,13 @@ therefore resumable, not done — §8 item 3.)
 | `TimingLineTests.The_resume_notice_is_the_shells_text_with_the_base_and_the_deadline` (added) | `For("6786582e…", "09:10 UTC (10:10 Europe/Paris)")` equals the shell's four lines with both substituted (the literal in the test) | `Expected "" to be "This session was interrupted …".` |
 | `TimingLineTests.The_transcript_path_is_the_working_directory_slug_under_the_claude_home` (added) | `PathOf("/h/.claude", "/home/op/git/coai_exp/r/abc/arm", g)` = `/h/.claude/projects/-home-op-git-coai-exp-r-abc-arm/<g:D>.jsonl`; `ClaudeHome({HOME:/h})` = `/h/.claude`; `ClaudeHome({HOME:/h, CLAUDE_CONFIG_DIR:/c})` = `/c`; neither → `""` | `Expected "" to be "/h/.claude/projects/…".` |
 
-**Red stub.** `Decide` → `new StepEntry.Fresh(1, 0)`; `Reconcile` → `Complete`; `Of` → `[]`; `Read` → `[]`; `Write`/`DoneMarkers.Write` →
-`""`; `RemainingSeconds` → `minutes * 60`; `Deadline` / `For` / `PathOf` / `ClaudeHome` → `""`.
+**Red stub.** `Decide` → `new StepEntry.Fresh(1, 0)`; `Reconcile` → `Complete`; `Of` → `[]`; `Read` → `[]`; `Write`/`DoneMarkers.Write`/`ContinueMarkers.Write` →
+`""`; `ContinueMarkers.Read` → `Failure("stub")`; `RemainingSeconds` → `minutes * 60`; `Deadline` / `For` / `PathOf` / `ClaudeHome` → `""`.
 
-**Commands.** `--filter-class "*StepRecoveryTests"`, `"*StepOutputsTests"`, `"*TimingLineTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
+**Commands.** `--filter-class "*StepRecoveryTests"`, `"*StepOutputsTests"`, `"*TimingLineTests"`, `"*ArmPathsTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
 
-**Done when.** The nineteen green, each seen red first (the `A_complete_step_needs_nothing` plant observed and removed); `timing-arm-C.jsonl`
-is a byte copy (`cmp` in the summary); the module doc's tables equal the two above.
+**Done when.** The twenty-three green, each seen red first (the `A_complete_step_needs_nothing` plant observed and removed); `timing-arm-C.jsonl`
+is a byte copy (`cmp` in the summary); the module doc's tables equal the two above, the recovery table with its first row.
 
 **Out of bounds.** Writing anything to disk; git; minting a session id; `ReviewAnswer` (E2.S5); TaskCode's use of `CoderHead`/`CoderDiff`
 (E3.S3 wires them; the table here is complete so E3 adds no kind).
@@ -790,10 +951,11 @@ behaviour; the `StreamAsync` byte reader beyond what the shared core does for it
 
 ### E2.S4 — `StepRunner`, `ArmFiles`, `ArmGit`, `ClaudeSessionTranscripts`: one step, end to end
 
-- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S1, E2.S2, E2.S3, E2.S5 (the review's derived output).
+- **Coder:** sonnet · **Spec:** Opus; the amended parts (`ArmGit`, `GitExecutable`, the continue marker's half, the three added scenarios)
+  by Fable, 2026-10-29 · **Review:** Opus. **Depends on:** E2.S0, E2.S1, E2.S2, E2.S3, E2.S5 (the review's derived output).
   **Parallel with:** E2.S6.
-- **Owns:** D8, D9 (the runner's half), D16 (a step's exits), D21 (the runner's half), §4.5's flow, E1 §8 items 1, 2 and 14 (the
-  environment, the brief's own token, the log). **Size:** ≈ 950 lines (≈ 450 code, 500 tests).
+- **Owns:** D8, D9 (the runner's half), D16 (a step's exits), D17 (d) for the step's git launches (amended), D21 (the runner's half), §4.5's
+  flow, E1 §8 items 1, 2 and 14 (the environment, the brief's own token, the log). **Size:** ≈ 1050 lines (≈ 480 code, 570 tests).
 
 **Files.** `tools/model-arms/ModelArms/Adapters/StepRunner.cs` (`StepRunner`, `StepContext`, `StepOutcome`, `StepPoint`, `StepProbe`),
 `…/Adapters/ArmFiles.cs`, `…/Adapters/ArmGit.cs`, `…/Adapters/DerivedOutputs.cs`, `…/Adapters/ClaudeSessionTranscripts.cs`;
@@ -804,8 +966,9 @@ runner* (the flow as a sequence diagram, the exit table of §4, the log format).
 **Uses.** `ICliAgentTranscripts.TranscriptAsync` `CliAgent.cs:306`; `AgentTranscript` `:293`; `AgentOutputSink.Lines` `:59`; `StepLaunch.Ask`
 `StepLaunch.cs:49`; `StepLaunchRequest` `:25`; `BriefTemplateFiles.Read(StepKind)` `BriefTemplateFiles.cs:18`; `BriefFields.For`
 `BriefFields.cs:24`; `BriefFiller.Fill` `BriefFiller.cs:25`; `ArmMap.Scrub` `ArmMap.cs:93`; `ArmPaths` members (§2); `ScoutStreamWriter`
-`ScoutArtifacts.cs:255`; `ArtifactCommit.Stage` `ArtifactCommit.cs:69`; `GitCommand.ReadAsync` `GitHistory.cs:35`; `ExitCodes` `ExitCodes.cs:15-28`;
-C5, C6, C7, `ReviewAnswer.Extract` (C10, E2.S5).
+`ScoutArtifacts.cs:255`; `ArtifactCommit.Stage` `ArtifactCommit.cs:69`; (amended) `ProcessRunner.RunAsync(exe, args, cwd, timeout, input,
+environment, ct)` `ProcessRunner.cs:87` and `GitEnvironment.Of` `HostChecks.cs:73` — never `GitCommand`; `ExitCodes` `ExitCodes.cs:15-28`;
+C5, C6, C7, C11, `ReviewAnswer.Extract` (C10, E2.S5).
 
 **Adapters (exact).**
 
@@ -817,12 +980,22 @@ C5, C6, C7, `ReviewAnswer.Extract` (C10, E2.S5).
   (append one line + `\n`, `Flush(flushToDisk: true)`); `IReadOnlyList<TimingLine> ReadTiming()`; `Outcome<string> ReadText(string path)`;
   `string Tail(string path, int characters)` (`""` when absent). Every directory it writes under (`out`, `notes`, `work`, `tmp`) is created
   on first use.
-- `ArmGit` (static, console) — `HeadAsync(dir, ct)` (`rev-parse HEAD`), `HeadShortAsync(dir, ct)` (`rev-parse --short HEAD`), `DiffAsync(dir,
-  from, ct)` (`diff <from> HEAD`, stdout only) through `GitCommand.ReadAsync`, 60 s each. A failed `head` is written as `""` and logged; a
-  failed diff is a `Resumable`-equivalent stop (exit 5, the reason).
-- `DerivedOutputs.WriteAsync(StepContext, IReadOnlyList<DerivedOutput>, ArmFiles, ct)` — the ONE writer of derived outputs, used by the
+- `ArmGit` (amended — a class, not a static over `GitCommand`): `public sealed class ArmGit(string git, string workingDirectory,
+  IReadOnlyDictionary<string, string> environment)` — `HeadAsync(ct)` (`rev-parse HEAD`), `HeadShortAsync(ct)` (`rev-parse --short HEAD`),
+  `DiffAsync(from, ct)` (`diff <from> HEAD`, stdout only), each `ProcessRunner.RunAsync(git, [..], workingDirectory, 60 s, string.Empty,
+  environment, ct)` — the REPLACING overload (`ProcessRunner.cs:87`), the shape `SourceFacts.GitRun.RunAsync` already has (`SourceFacts.cs:87`);
+  a `Completed` with exit 0 → its `StandardOutput` (trimmed for the two heads, verbatim for the diff), anything else → `Failure` with
+  git's first stderr line or the attempt's `Describe`. The runner builds it ONCE per step: `new ArmGit(context.GitExecutable,
+  context.WorkingDirectory, GitEnvironment.Of(context.ParentEnvironment))` — `git` is the REAL path `run-arm` resolved (C8), the
+  environment is the verb's minus every `GIT_*` (E1.S10 decision 5: a parent's `GIT_DIR`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES`,
+  `GIT_CONFIG_*`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER` would redirect the question or name a program; `HOME`, `PATH` pass as judged), the
+  cwd is the arm's clone. **Nothing in `ArmGit` names `GitCommand`** — the S22 scan (`GitCommand\.`) is red the moment it does, and that
+  scan is this story's first guard. A failed `head` is written as `""` and logged; a failed diff is a `Resumable`-equivalent stop (exit 5,
+  the reason). The arm's CLAUDE keeps its `GIT_*` untouched (D19): the harness's git and the agent's git are two processes with two
+  environments, on purpose.
+- `DerivedOutputs.WriteAsync(StepContext, IReadOnlyList<DerivedOutput>, ArmFiles, ArmGit, ct)` — the ONE writer of derived outputs, used by the
   first run and by every re-entry: `ReviewJson` ← `ReviewAnswer.Extract(ClaudeResultEnvelope.LastOf(final stream))` (C10); `StepDiff` ←
-  `ArmGit.DiffAsync(cwd, <step>.before)`; `CoderHead`/`CoderDiff` refused here with *"task outputs are written by the task pipeline
+  `git.DiffAsync(<step>.before)`; `CoderHead`/`CoderDiff` refused here with *"task outputs are written by the task pipeline
   (E3.S3)"* (the kinds reach the runner only in E3).
 - `ClaudeSessionTranscripts(string claudeHome) : ISessionTranscripts` — `File.Exists(SessionTranscripts.PathOf(claudeHome, cwd, id))`; an
   empty home answers false.
@@ -833,14 +1006,19 @@ C5, C6, C7, `ReviewAnswer.Extract` (C10, E2.S5).
 verb's output — `pids/<arm>.log` once detached, D13 — there is no `run.log`, §8 item 1). Then, in a loop (`waits` = 0):
 
 1. **Recover.** Facts: `.done` exists; `ReadSession`; `TranscriptExists` (asked only when the session read); `LastAttempt`; `LastEnd` =
-   `StepClassifier.Classify(LastOf(stream text), Tail(.err, 4000), AttemptFacts.Ran)` (when `LastAttempt > 0`); `ReadTiming()` →
+   `StepClassifier.Classify(LastOf(stream text), Tail(.err, 4000), AttemptFacts.Ran)` (when `LastAttempt > 0`); `ReadTiming()`;
+   (amended) `Continue = ContinueMarkers.Read(files.ReadText(paths.Continue(step)))` — a `Failure` from either the read or the parse,
+   and an unreadable marker is logged once (`<step>.continue could not be read (<reason>) — ignored`) →
    `StepRecovery.Decide`.
    - `Skip` → **reconcile** (step 7) without writing `.done` again → `Done(…, Skipped: true)`; log `<step> already done — skipped`.
    - `RecoveredDone(end, n)` → append an `End` line for attempt `n` if `Timing` has none (`WallSeconds`/`Exit` `Unavailable`, `Result` true
      for `Finished`, `Recovered: true`, `State` = `end.Word`) → reconcile → `.done` (`Recovered: true`) → `Done(end, false, true)`; log
      `<step> had finished before its runner died — marked done, not resumed`.
-2. **Before.** If `StepOutputs.NeedsBefore(kind)` and `.before` is absent: write `ArmGit.HeadAsync(cwd)` + `\n` to it (BEFORE the first
-   attempt, `run-arm.sh:139`, `:147`).
+   - (amended) `Resume`/`Fresh` while `Continue is Ok(m)` and `m.After == LastAttempt`: log `<step>: continuing its finished session as the
+     gate asked after attempt <n> (<m.Why>)`; if `.done` exists, `files.Delete(paths.Done(step))` NOW — before step 2 — so a gate that died
+     between its marker and its delete is finished by the runner, not left half-done.
+2. **Before.** If `StepOutputs.NeedsBefore(kind)` and `.before` is absent: write `git.HeadAsync()` + `\n` to it (BEFORE the first
+   attempt, `run-arm.sh:139`, `:147`) — `git` being the step's `ArmGit` (amended).
 3. **Prompt.** `Fresh(n, budget)`: `id = Guid.NewGuid()`; `ReplaceSession(step, id)`; `probe.Reached(SessionWritten)`; the prompt is the
    brief — `context.Templates.Read(kind)` → `BriefFields.For(kind, paths, new BriefFacts(Target.Plan, Target.Base.Value, Target.Branch,
    ScenarioCount, deadline, Known, context.Task, context.Problems))` → `BriefFiller.Fill(template, fields, context.Guard,
@@ -867,16 +1045,20 @@ verb's output — `pids/<arm>.log` once detached, D13 — there is no `run.log`,
    - `Errored` → `Stopped` line (exit 5, `"<step> ended in an ERROR result that is not a limit (<text>) — stopping; run me again to resume it"`) → `Stopped(5)`.
    - `Interrupted` → `Stopped` line (exit 5, `"<step> INTERRUPTED (<why>) — run me again to resume it"`) → `Stopped(5)`.
    - `NotStarted` → `Stopped` line (exit 3, the reason) → `Stopped(3)`.
-   - `Finished` / `HardDeadline` → step 7, then `.done` = `DoneMarker(n, exit, Stream(step, n), end.Word, false)` → `Done(end, false,
-     false)`; log `<step> done (<word>)`.
+   - `Finished` / `HardDeadline` → step 7, then `.done` = `DoneMarker(n, exit, Stream(step, n), end.Word, false)`, then (amended) delete
+     `<step>.continue` if present — AFTER `.done`, so a death between the two leaves a marker whose `After` (n − 1) is stale by the table
+     and decides nothing → `Done(end, false, false)`; log `<step> done (<word>)`. The `RecoveredDone` branch of step 1 deletes it the same
+     way after its `.done`.
 7. **Reconcile (D21)** — only when `context.DeriveOutputs`: `StepOutputs.Reconcile(kind, facts of the files + LastOf(the final stream))`;
    `Regenerate(list)` → `DerivedOutputs.WriteAsync` → `probe.Reached(OutputsDerived)`; `Resumable(reason)` → `Stopped` line (exit 5, the
    reason), NO `.done` → `Stopped(5)`; `Complete` → nothing.
 
 The `Stopped` line and the end line of an operator stop are written with `CancellationToken.None`: a stop must leave its record.
 
-**`StepBench`** (test helper, `IDisposable`): a temp root `<GetTempPath>/model-arms-step-<guid>`; an `ArmPaths(root, "tok0000000000000")`
-whose `CloneFolder` is a git repository with one commit (`git init`, `git commit --allow-empty`, through `GitCommand.RunAsync`);
+**`StepBench`** (test helper, `IDisposable`): a temp root `<GetTempPath>/model-arms-step-<guid>`; `Git` = the host's git by its real path
+(`ExperimentRoot.RealGit`, amended — the bench launches it through `ProcessRunner` by that path, and hands the same path to every
+`StepContext` as `GitExecutable`; a bare `GitCommand` in the bench would make the S22 canary's "one known bare launch" a lie); an
+`ArmPaths(root, "tok0000000000000")` whose `CloneFolder` is a git repository with one commit (`git init`, `git commit --allow-empty`);
 `Experiment` = the worked example read by `ExperimentFile.Read` at `new ExperimentLocation(root, "/x/home", "", "/x/repo")` after a
 `JsonNode` edit: every `steps.*.model` = the bench's `FakeCli.Model`, `steps.*.minutes` = 1, `limits` = `{waitSeconds: 900, tries: 2,
 gateWaitSeconds: 1800, gateTries: 2, minimumRemainingSeconds: 1, killGraceSeconds: 1}`; `Fake` (a `FakeCli`); `Parent` = `{HOME: <root>/home,
@@ -884,7 +1066,7 @@ PATH: <process PATH>, FAKE_CLI_HOME: Fake.Home, BENCH_DB: x, SUBAGENT_MODEL_GUAR
 `Transcripts` (a settable fake `ISessionTranscripts`, `true` by default); `Clock` (`BenchClock`, at `2026-10-28T21:32:38Z`, zone
 Europe/Paris); `Waits` (a recording wait delegate
 returning `Task.CompletedTask`, or one that cancels); `Log` (`StringWriter`); `Runner(probe?)`; `Context(stepName, kind)` with
-`ClaudeExecutable = FakeCli.Executable`, `WorkingDirectory = CloneFolder`, `Templates` over the shipped `briefs/` and an empty override
+`ClaudeExecutable = FakeCli.Executable`, `GitExecutable = Git` (amended), `WorkingDirectory = CloneFolder`, `Templates` over the shipped `briefs/` and an empty override
 folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], root)`, `ScenarioCount = 1`, `Task = TaskFacts.None`,
 `Problems = ""`; `Replay(name)` = the fixture's path; `Script(JsonObject)` rewrites the fake's script.
 
@@ -908,12 +1090,17 @@ folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], ro
 | `An_unfilled_brief_stops_with_exit_4_before_any_launch` (added) | an override template `1-code.template.md` = `"{{NOPE}}"` → `Stopped(4)` naming `{{NOPE}}`; 0 calls; no start line; last line `stopped` exit 4 | `Expected outcome to be of type Stopped …` |
 | `A_missing_claude_is_not_started_and_exits_3` (added) | `ClaudeExecutable` = `<root>/no-such-claude` → `Stopped(3)`; the end line's `end` is `not-started`; no `.done` | as above |
 | `Log_lines_carry_no_token` (added) | after the finished set-up, `Log` contains `[C1]` and `1-code done (finished)` and does not contain `tok0000000000000`; `<token>` stands in its place | `Expected log not to contain "tok0000000000000".` |
+| `An_ambient_GIT_DIR_in_the_parent_environment_does_not_change_which_head_the_before_snapshot_reads` (amended, added) | **Given** a second temp repository `other` with one commit (its HEAD ≠ the clone's); `Parent` gains `GIT_DIR = <other>/.git` and `GIT_WORK_TREE = <other>`; step `2-hreview` (kind HReview), `stdoutFile: result-success.jsonl`; **when** run; **then** `Done(Finished)`; `2-hreview.before` holds the CLONE's HEAD, never `other`'s; `2-hreview.diff` is empty; the call's `EnvironmentNames` still contain `GIT_DIR` (the arm's claude gets its environment untouched, D19 — the harness's git does not) | the plant (the only way to see it from inside the process: `ArmGit` given `context.ParentEnvironment` without `GitEnvironment.Of`): `Expected before to be "<clone sha>", but found "<other sha>".` — and the structural red, which needs no plant: `ArmGit` through `GitCommand` makes `The_module_launches_nothing_by_a_bare_name` fail with `Expected sites to be empty, but found {"ArmGit.cs"}`; with the inherited PROCESS environment a `GIT_DIR` in the bench's `Parent` map is never even seen, which is why the scan is the first guard and this test the second |
+| `The_step_launches_the_git_it_was_handed_by_its_real_path_and_no_other` (amended, added; Linux only — a shell shim; skipped elsewhere with its reason) | **Given** `bench.Git` replaced by a shim at `<root>/bin/git` (`ExperimentRoot.ShimScript`: append `"$0 $*"` and `env \| grep '^GIT_'` to a marker file, then `exec '<RealGit>' "$@"`); `Parent` gains `GIT_DIR=/nowhere`; step `2-hreview`, `stdoutFile: result-success.jsonl`; **when** run; **then** `Done(Finished)`; the marker holds at least three runs (`rev-parse HEAD`, `rev-parse --short HEAD`, `diff <sha> HEAD`) and NO line starting `GIT_`; `.before` holds the clone's HEAD | `Expected the shim to record at least 3 git runs, but found 0.` (the process's own git ran — a launch by name or by another path) |
+| `A_continue_marker_makes_the_runner_resume_the_finished_session_and_remove_a_leftover_done` (amended, added) | **Given** a finished `4-gate` (kind Gate, `DeriveOutputs: false`) from a first run (`.done` present, 1 call); the test writes `4-gate.continue` = `{"after":1,"why":"gate blocked: test"}` and leaves `.done` in place (a gate that died between its two writes); `stdoutByCall: {2: result-success.jsonl}`; **when** a second runner runs the step; **then** `Done(Finished, false, false)`; 2 calls, call 2 `--resume <call 1's id>` with the resume notice; `.done` present with `"attempts":2`; `4-gate.continue` gone; the log holds `continuing its finished session as the gate asked after attempt 1` | `Expected calls to contain 2 item(s), but found 1.` (`Skip` on the leftover `.done`, or `RecoveredDone` without it) |
 
 **Commands.** `--filter-class "*StepRunnerTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
 
-**Done when.** The sixteen green on this WSL host (none skipped), each seen red; the break-it of `The_session_file_is_written_before_the_launch`
-observed; `StepRunnerTests` runs in under 60 s (the only real wall is the 2 s one); the module doc's *The step runner* has the sequence
-diagram and the exit table.
+**Done when.** The nineteen green on this WSL host (none skipped), each seen red; the break-it of `The_session_file_is_written_before_the_launch`
+observed and the plant of the `GIT_DIR` test observed; `The_module_launches_nothing_by_a_bare_name` green with `ArmGit.cs` in the module
+(`grep -n GitCommand tools/model-arms -r --include=*.cs` finds nothing); `StepRunnerTests` runs in under 60 s (the only real wall is the 2 s
+one); the module doc's *The step runner* has the sequence diagram, the exit table and one paragraph on the step's git (the real path, the
+`GIT_*`-free environment, the chosen cwd — D17 d).
 
 **Out of bounds.** The gate's lock and loop (E2.S7 — `DeriveOutputs: false` is its switch); scheme order and `arm-done` (E2.S8); task
 steps (E3); keep-awake; anything under `src/`.
@@ -1033,25 +1220,39 @@ step's loop (E2.S7); a lock against a non-.NET holder (`flock(1)` — parent §9
 
 ### E2.S7 — The gate step: lock, step, read `gate.json`, wait out `blocked`, the diff once
 
-- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S4, E2.S6. **Parallel with:** nothing.
-- **Owns:** D10 (the step), §4.5 *The gate step*. **Size:** ≈ 420 lines.
+- **Coder:** sonnet · **Spec:** Opus; step 4, the probe and the three added scenarios amended by Fable, 2026-10-29 · **Review:** Opus.
+  **Depends on:** E2.S4, E2.S6. **Parallel with:** nothing.
+- **Owns:** D10 (the step), §4.5 *The gate step*, the continue marker's writer (amended). **Size:** ≈ 520 lines.
 
-**Files.** `tools/model-arms/ModelArms/Adapters/GateStep.cs`; `tests/Bench.Tests/ModelArms/GateStepTests.cs`; the module doc's *The gate step*.
+**Files.** `tools/model-arms/ModelArms/Adapters/GateStep.cs` (`GatePoint`, `GateProbe`, `GateStep`); `tests/Bench.Tests/ModelArms/GateStepTests.cs`; the module doc's *The gate step*.
 
-**Uses.** C8 (`StepRunner.RunAsync`, `StepContext` with `DeriveOutputs`), C9, `DerivedOutputs.WriteAsync`, `ArmFiles`, `StepOutputs.Reconcile`,
-`RootPaths.GateLock` (via `context.Paths.Root`), `StepBench` (E2.S4).
+**Uses.** C8 (`StepRunner.RunAsync`, `StepContext` with `DeriveOutputs`), C9, C6's `ContinueMarkers` and `ArmPaths.Continue` (amended),
+`DerivedOutputs.WriteAsync`, `ArmFiles` (`LastAttempt`, `Replace`, `Delete`), `StepOutputs.Reconcile`, `RootPaths.GateLock` (via
+`context.Paths.Root`), `StepBench` (E2.S4).
 
-**`GateStep.RunAsync(context, stopping)`** (`run-arm.sh:144-162`), `waits` = 0:
+**`GateStep.RunAsync(context, stopping)`** (`run-arm.sh:144-162`), `waits` = 0. (amended) One addition to `ArmFiles` (E2.S4's file, this
+story's lines): `void Replace(string path, string text)` — stage, flush, rename over, the shape of `ReplaceSession` — because a marker
+from an earlier blocked round may still be there.
 
-1. `.done` exists → reconcile the `.diff` (as E2.S4 step 7: missing and `.before` present → write it) → `Done(…, Skipped: true)`.
+1. (amended) `runner.Recover(context) is StepEntry.Skip` → reconcile the `.diff` (as E2.S4 step 7: missing and `.before` present → write
+   it) → `Done(…, Skipped: true)`. Not a file check of `.done` by the gate itself: a `.done` with a live `.continue` beside it (a gate that
+   died between its two writes) is NOT skipped — recovery's first row says `Resume`, and only recovery knows. `StepRunner.Recover(StepContext)
+   → StepEntry` is E2.S4's step 1 as a public method (C8 gains it; the runner's `RunAsync` calls the same), so the gate and the runner
+   can never read the files by two rules.
 2. Log `<step>: waiting for the gate lock`; `using (await gateLock.AcquireAsync(new RootPaths(context.Paths.Root).GateLock, stopping))`:
    log `<step>: gate lock taken`; `outcome = await runner.RunAsync(context with { DeriveOutputs = false }, stopping)`. The lock is
    released when the step returns, whatever it returned — before any wait (`:151`).
 3. `Stopped` → return it.
 4. `reading = GateStatus.Read(files.ReadText(paths.GateJson))`; `GateStatus.WaitAgain(reading, waits, Limits.GateTries)` → `waits++`;
-   delete `.done`; log `<step>: the gate was blocked (<why>) — waiting <s>s, then resuming (wait <k>)`; `await wait(GateWaitSeconds,
-   stopping)` (cancellation → a `stopped` line, exit 5 → `Stopped(5)`); loop to 2 — the runner then RESUMES the same session (D7: its
-   `.done` is gone, its session and transcript exist).
+   (amended) **record the intent, then remove the marker that contradicts it, in this order:** `files.Replace(paths.Continue(step),
+   ContinueMarkers.Write(new ContinueMarker(files.LastAttempt(step), "gate blocked: " + reading.Why)))` → `probe.Reached(ContinueWritten)`
+   → `files.Delete(paths.Done(step))` → `probe.Reached(DoneRemoved)`; log `<step>: the gate was blocked (<why>) — waiting <s>s, then
+   continuing the session (wait <k>)`; `await wait(GateWaitSeconds, stopping)` (cancellation → a `stopped` line, exit 5 → `Stopped(5)`); loop
+   to 2 — the runner then RESUMES the same session because the marker names its last attempt (E2.S2's first row), not because `.done`
+   is gone: without the marker, D7 reads a finished stream without `.done` as a runner that died after finishing and marks it done
+   again — the defect the consultation found. A death at any point of this step is recoverable: before `ContinueWritten` nothing changed
+   (`.done` stands, the gate re-reads `blocked` on re-entry and writes the marker then); between the two writes, `.done` and the marker
+   both stand and the runner removes `.done` itself; after `DoneRemoved`, the marker alone stands and is honoured.
 5. Otherwise reconcile `.diff` (write it from `.before..HEAD` through `DerivedOutputs`; a missing `.before` → `Stopped(5)`); log `<step>:
    gate status <status>` — **also when still `blocked` after `gateTries` waits** (the shell's fall-through, `:159-160`; §8 item 10) →
    `Done(end, false, false)`.
@@ -1061,7 +1262,9 @@ order with every launch and wait, and `gate.json` written by the test — the fa
 
 | Test | Given / When / Then | Red (stub: `GateStep.RunAsync` = one `runner.RunAsync`) |
 |---|---|---|
-| `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` | `stdoutFile: result-success.jsonl`; `gate.json` = blocked before the run; `gateTries: 2`; the wait delegate asserts `.done` is ABSENT when called and, on its 2nd call, rewrites `gate.json` to `{"status":"proceed"}` → `Done`; 3 calls (fresh, resume, resume — all one session id); waits `[1800 s, 1800 s]`; `.done` present at the end; log ends `gate status proceed` | `Expected calls to contain 3 item(s), but found 1.` |
+| `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` | `stdoutFile: result-success.jsonl`; `gate.json` = blocked before the run; `gateTries: 2`; the wait delegate asserts `.done` is ABSENT and `4-gate.continue` PRESENT with `"after"` = the calls so far when called and, on its 2nd call, rewrites `gate.json` to `{"status":"proceed"}` → `Done`; 3 calls (fresh, resume, resume — all one session id); waits `[1800 s, 1800 s]`; `.done` present and `.continue` absent at the end; log ends `gate status proceed` | `Expected calls to contain 3 item(s), but found 1.` — **this is also the red of the consultation's finding against the stories as first written**: with E2.S2's table lacking its first row, the gate removes `.done`, recovery reads the finished stream as `RecoveredDone`, and the model is never called again; the marker is what turns the 1 into 3 |
+| `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` (amended, added; `[Theory]` over `GatePoint.ContinueWritten` and `GatePoint.DoneRemoved`) | **Given** `gate.json` = blocked, `stdoutFile: result-success.jsonl`; gate 1 with a `GateProbe` that throws `IOException("killed")` at the given point; **when** gate 1 runs → the exception propagates; the files: `4-gate.continue` = `{"after":1,"why":"gate blocked: …"}`; `.done` present at `ContinueWritten`, absent at `DoneRemoved`; 1 call; **and when** the test writes `gate.json` = proceed and gate 2 (no probe, a new `StepBench.Runner()`, the same bench) runs → **then** `Done`; 2 calls, call 2 `--resume <call 1's id>`; `.done` present with `"attempts":2`; `.continue` absent; the lock events of gate 2 are `acquire, launch, release` | `Expected calls to contain 2 item(s), but found 1.` (gate 2 sees `.done` → `Skip`, or no `.done` and a finished stream → `RecoveredDone`). Break-it: swap step 4's two writes (delete `.done`, then write the marker) and kill at the point between them → the `DoneRemoved`-first case leaves neither file and gate 2 recovers it as done: red with the same message |
+| `A_finished_gate_removes_its_continue_marker_and_a_stale_one_is_ignored` (amended, added) | after the blocked-then-proceed run above, `4-gate.continue` is absent; **and** a finished gate whose test then writes a marker `{"after":1}` while `.done` says `"attempts":2` → a third gate run → `Done(Skipped)`, no new call (the marker is stale: its attempt has started) | `Expected File.Exists(".../4-gate.continue") to be false …` / `Expected calls to contain 2 item(s), but found 3.` |
 | `The_lock_is_released_during_the_wait` | the same; the recording lock's event list is `acquire, launch, release, wait, acquire, launch, release, wait, acquire, launch, release` | `Expected events to be equal to {"acquire", "launch", "release", "wait", …}, but {"launch"} …` |
 | `The_before_snapshot_is_taken_before_the_first_attempt_and_the_diff_only_from_a_finished_step` | call 1 replays the 429 line, call 2 success; the first limit wait (the runner's) commits a file `g.txt` in the clone and asserts `4-gate.diff` does not exist; → `4-gate.before` holds the commit before the run; `4-gate.diff` exists after and contains `g.txt`; an hreview variant (`2-hreview`, kind HReview, through `StepRunner` directly) has `.before` from before call 1 and `.diff` only once done | `Expected File.Exists(".../4-gate.before") to be true …` |
 | `Still_blocked_after_every_wait_finishes_the_step_with_its_status` (added) | `gate.json` stays blocked, `gateTries: 2` → `Done`; 3 calls; 2 waits; `.done` present; `.diff` written; log ends `gate status blocked` | `Expected outcome to be Done …` / `Expected calls … 3` |
@@ -1070,7 +1273,7 @@ order with every launch and wait, and `gate.json` written by the test — the fa
 
 **Commands.** `--filter-class "*GateStepTests"`, `"*StepRunnerTests"`; the whole suite.
 
-**Done when.** The six green, each seen red.
+**Done when.** The nine green (the theory's two cases counted once), each seen red; the swap break-it observed with its message.
 
 **Out of bounds.** The real `FileGateLock` (E2.S6 proves it; the gate step's tests record the order); `gate.json`'s schema beyond `status`
 and `why`.
@@ -1098,8 +1301,11 @@ and `why`.
    pipeline — not built yet, story E3.S3 of todo/PLAN_model_arms.md"`.
 2. `map = ArmMap.Read(arms.map.json)` → `TokenOf(arm)` (refusal → 4); `paths = root.Arm(token)`.
 3. Resolve `claude` and `git` through `ExecutableResolution.Resolve` over `input.Verb.Environment["PATH"]`, forbidden roots
-   `[Target.Source, root]`; a failure → 3 naming it; print `resolved executables:` and `  <name> → <path>` for both (D17 c) BEFORE the
-   first launch.
+   `[Target.Source, root]`; a failure → 3 naming it; (amended) every PATH entry through `ExecutableResolution.PathEntryRefusal` with the
+   same roots — the first refusal → 4 with its sentence (git and claude look their own helpers up in that PATH for hours; `validate`'s
+   judgement is not carried over by magic); print `resolved executables:` and `  <name> → <path>` for both (D17 c) BEFORE the first
+   launch — **and the two REAL paths go into every `StepContext` as `ClaudeExecutable` and `GitExecutable`** (C8): the printed path and
+   the launched path are one value, never two look-ups (D17 d).
 4. `scenarios = ScenariosFile.Read(<root>/<ScenariosFile>)` → its count (refusal → 4).
 5. Build one `StepRunner` (`CliAgentRuntime`, `ClaudeSessionTranscripts(SessionTranscripts.ClaudeHome(env))`, `TimeProvider.System`,
    `wait = (d, ct) => Task.Delay(d, ct)`, `Output`, `map`, `StepProbe.None`) and one `GateStep(runner, new FileGateLock(TimeProvider.System,
@@ -1130,13 +1336,16 @@ claude to the fake; links and POSIX paths")`).
 | `An_srs_arm_is_refused_until_the_task_pipeline_exists` (added) | `MakeArmAsync("SRS1", fake)` → 4 naming `E3.S3`; 0 calls | `Expected … "E3.S3"` |
 | `Run_arm_prints_the_resolved_claude_and_git_before_the_first_launch` (added) | the C1 run's output contains `claude → <temp>/bin/claude` and `git → …`, and that line comes before the first log line of `1-code` | `Expected output to contain "claude → …"` |
 | `A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes` (added) | `stdoutByCall: {2: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1` → 0; 5 calls; the review resumed `--resume <its id>`; `review.json` from call 3's success | `Expected 4 to be 0.` |
+| `Run_arm_launches_the_git_it_resolved_and_never_the_process_git` (amended, added) | **Given** `MakeArmAsync("C1", fake)` with `<temp>/bin/git` as a SHIM instead of a link (`root.ShimScript`: append `"$0 $*"` and `env \| grep '^GIT_'` to `root.MarkerFile("git")`, then `exec '<RealGit>' "$@"`), `root.WithVariables(("GIT_DIR", "/nowhere"), ("GIT_WORK_TREE", "/nowhere"))`; **when** `run-arm C1` → **then** 0; the output's `git → ` line names `<temp>/bin/git`'s REAL path; the marker holds every git run of the arm — at least `rev-parse HEAD` (the gate's `.before`), `rev-parse --short HEAD` (each start and end line) and `diff <sha> HEAD` — and no line starting `GIT_`; `4-gate.before` is the clone's HEAD | `Expected the git shim to have recorded at least 3 runs, but found 0.` (the process's git answered through `GitCommand`) |
+| `The_opus_review_and_the_haiku_review_are_launched_without_the_agent_tool_fresh_and_resumed` (amended, added — E2.S0's policy seen through a real launch) | **Given** `MakeArmAsync("CR1", fake)`, `stdoutByCall: {2: result-429-usage-limit-reached.jsonl, 4: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1`; **when** `run-arm CR1` → **then** 0; 7 calls — `1-code`, `2-hreview` (haiku, write: call 2 fresh, call 3 `--resume`), `3-review` (opus, read: call 4 fresh, call 5 `--resume`), `4-fix`, `5-gate`; for EVERY call the argv's `--disallowedTools` group starts `Agent`, `Task` and its `--allowedTools` group holds neither; calls 2–5 are asserted by name in the message (`2-hreview fresh`, `2-hreview resumed`, `3-review fresh`, `3-review resumed`); call 2's `--model` is the fake's id standing for haiku (the bench rewrites every model — the test reads the step name from the prompt's first line instead) | `Expected 4 to be 0.` on the `NotBuilt` stub; against E2.S0's break-it (no `Delegation`): `Expected the argv of call 2 (2-hreview, fresh) to carry "--disallowedTools" followed by "Agent", "Task", but found "--disallowedTools" followed by "Read(//…/.claude/**)"` |
 
 **Commands.** `--filter-class "*RunArmSchemeTests"`, `"*ModelArmsProgramTests"`, `"*ModuleTestsCatalogTests"`; the whole suite. By hand once,
 on a scratch root with the fake as `claude`: `./tools/model-arms/ModelArms/bin/Release/net10.0/model-arms run-arm C1 --experiment <root>`,
 quoted in the module doc.
 
-**Done when.** The seven green on this host (not skipped), each seen red; `Every_verb_the_command_line_accepts_has_a_dispatch_arm` and the
-catalogue test green; the module doc walks one C arm's files after a run.
+**Done when.** The nine green on this host (not skipped), each seen red; `Every_verb_the_command_line_accepts_has_a_dispatch_arm` and the
+catalogue test green; `grep -rn "GitCommand" tools/model-arms --include=*.cs` finds nothing (D17 d); the module doc walks one C arm's
+files after a run and shows the `resolved executables:` lines.
 
 **Out of bounds.** SRS (E3.S3); `make`, `run-all`, detaching, pid files (E4); the objective checks (E5); keep-awake.
 
@@ -1144,6 +1353,8 @@ catalogue test green; the module doc walks one C arm's files after a run.
 
 ```mermaid
 flowchart LR
+    S0[E2.S0 delegation policy — amended] --> S4
+    S0 --> S8
     S1[E2.S1 envelope + StepEnd — Fable spec first] --> S2[E2.S2 timing, budget, recovery, outputs]
     S1 --> S5[E2.S5 ReviewAnswer]
     S3[E2.S3 fake stdoutByCall + both readers] --> S4
@@ -1160,7 +1371,7 @@ flowchart LR
 
 | Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
 |---|---|---|
-| A | **E2.S1** (after Fable commits its spec here), **E2.S3** | none — disjoint (S1 alone adds the markers and headings) |
+| A | **E2.S0** (amended), **E2.S1** (after Fable commits its spec here), **E2.S3** | the module doc (S0 under E1.S6's section, S1 its own eight headings — disjoint); nothing else |
 | B | **E2.S2**, **E2.S5**, **E2.S6** (S6 once E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
 | C | **E2.S4** | the module doc (own heading) |
 | D | **E2.S7** | — |
@@ -1173,13 +1384,17 @@ E2.S6 waits and wave B is S2 ∥ S5; nothing else in E2 needs E1.S8–S11 before
 ## 7. Test plan (maps to the parent's §7, E2)
 
 Every class and method of the parent's E2 list is here under its exact name. Added, in the same style: `ClaudeResultEnvelopeTests` (2) and
-`StepEndTests` (5) — E2.S1, for Fable to specify; `StepRecoveryTests` (1), `StepOutputsTests` (1), `TimingLineTests` (6, a new class) — E2.S2;
-`FakeCliByCallTests` (1, new) and two in `ProcessRunnerStderrSinkTests` — E2.S3; `StepRunnerTests` (4) — E2.S4; `ReviewAnswerTests` (1) —
-E2.S5; `FileGateLockTests` (2), `GateStatusTests` (2, new), `McpConfigTests` (3, new) — E2.S6; `GateStepTests` (3) — E2.S7;
-`RunArmSchemeTests` (4) — E2.S8. Fixtures: the nine of E2.S1 and `timing-arm-C.jsonl` (E2.S2) — the parent's list less
+`StepEndTests` (5) — E2.S1, for Fable to specify; `StepRecoveryTests` (4), `StepOutputsTests` (1), `TimingLineTests` (7, a new class) — E2.S2;
+`FakeCliByCallTests` (1, new) and two in `ProcessRunnerStderrSinkTests` — E2.S3; `StepRunnerTests` (7) — E2.S4; `ReviewAnswerTests` (1) —
+E2.S5; `FileGateLockTests` (2), `GateStatusTests` (2, new), `McpConfigTests` (3, new) — E2.S6; `GateStepTests` (5) — E2.S7;
+`RunArmSchemeTests` (6) — E2.S8; and (amended) `StepLaunchTests` (1 amended, 2 added), `ExperimentFileTests` (1), `ExampleExperimentTests`
+(1) — E2.S0. Fixtures: the nine of E2.S1 and `timing-arm-C.jsonl` (E2.S2) — the parent's list less
 `objective-arm-C.json` and the log heads (E5's), plus the recorded three-results stream, the limited stream's head and the stderr line.
 The break-its: `The_session_file_is_written_before_the_launch` (E2.S4), `A_complete_step_needs_nothing` (E2.S2), the finalizer red of E2.S3
-if it will not show by itself, and the plant of `A_missing_unreadable_or_statusless_file_reads_as_missing` (E2.S6).
+if it will not show by itself, the plant of `A_missing_unreadable_or_statusless_file_reads_as_missing` (E2.S6), and (amended) the
+`Delegation` removal (E2.S0, seen again in E2.S8), the unfiltered environment of `ArmGit` (E2.S4) and the swapped marker-and-delete order
+of the gate (E2.S7). The three amendments' primary reds need no plant: `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries`
+(1 call for 3), `The_module_launches_nothing_by_a_bare_name` (`ArmGit.cs`) and the amended argv theory (`Agent Task` absent).
 
 What E2's suite does not prove: that claude 2.1.x honours `--resume` after a 429 the way the shell observed (the pilot, parent build order
 step 6); that `CLAUDE_CONFIG_DIR` relocates the projects folder (read, not measured — part 6 ran without it); a lock against `flock(1)`;
@@ -1256,20 +1471,57 @@ Found by the E2.S1 spec (Fable, 2026-10-29 at `5e808e1`, every line re-opened):
     the decision and the state are two responsibilities; the judge's Files line named one file. `ModelArmsFixtures.cs` is added so
     S4's `StepBench.Replay` reads the same folder through the same helper.
 
+Found by the epics 1–3 consultation (ordered coai consultation over E1–E3; verified by Fable at `24e8e8f`, 2026-10-29; the parent's
+ledger entries 1.1–1.3):
+
+24. **D7 and D10 contradict each other for the gate, and this document carried both sides without noticing.** D7: a finished stream
+    without `.done` is DONE (never resumed); D10: a `blocked` gate removes `.done` and resumes. E2.S7 step 4 did the second, E2.S2's table
+    did the first, and `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` would have failed against the code as specified
+    (1 call for 3). **Settled (S2, S4, S7):** the gate records its intent in `out/<step>.continue` (`{"after":N,"why":…}`) BEFORE removing
+    `.done`; recovery's first row honours a marker whose `after` is the last attempt, whatever `.done` says, and ignores a stale one; the
+    runner removes a leftover `.done` and the marker at the right moments; a death between the two writes is a theory in `GateStepTests`.
+    The parent's D7 and D10 are amended to name the marker. One new file in the layout (D5): written by the gate, removed when the step
+    is done; the analysis scripts read nothing by that name (E5's compatibility test lists what they read, not what must be absent).
+25. **`ArmGit` through `GitCommand` was the E1.S10 defect again, one epic later.** `GitCommand.ReadAsync` starts the literal `git` with
+    the inherited environment (`GitHistory.cs:35`); the S22 scan forbids `GitCommand\.` under `tools/model-arms`
+    (`ModelArmsArchitectureTests.cs:139-158`), so E2.S4 as written could not have gone green — and E2.S8 resolved `git` to print it and
+    then handed nothing to the step. **Settled (S4, S8):** `StepContext.GitExecutable` carries the real path; `ArmGit` is an instance over
+    (real path, chosen cwd, `GitEnvironment.Of(parent)`) launched through the replacing `ProcessRunner` overload; `run-arm` also judges
+    every PATH entry before the first launch; two scenarios with a recording shim and one with an ambient `GIT_DIR`. The parent's D17 gains
+    (d), which E3's worktree orchestration (`worktree add`, `submodule`, `cherry-pick`, `patch-id`, `worktree remove`) inherits.
+26. **No policy kept a step from delegating.** `StepLaunch` denied `Agent` nowhere; the example's Haiku steps are write mode with `Agent`
+    permitted; the measured incident is the shell's part 6 (a Haiku review step's cost was mostly Opus and Sonnet subagents) and the
+    shell's own repair covers READ steps only (`run-arm.sh:90-92`). **Settled (E2.S0, new):** `StepSpec.Subagents` (the file's
+    `"subagents"`, default false), `StepLaunch.Options(StepSpec, …)` denies `Agent` and `Task` and strips them from the allow-list unless
+    the spec opts in — fresh and resumed; the example says `false` eight times; argv asserted pure (S0) and through `run-arm` (S8, the
+    Opus review and the Haiku review, fresh and resumed); the Haiku task coder's scenario is E3.S3's, named in the parent's row. E1's
+    `StepLaunchTests` theory changes expectation (`Agent Task` first in the deny group, `Agent` absent from the allow group).
+27. **`StepRunner.Recover` is public** (C8): the gate step asks the runner's decision instead of reading `.done` itself, so a `.done`
+    with a live marker beside it is read by one rule. `GateStep` takes a `GateProbe` (C9) for the two-write crash seam, as `StepRunner`
+    takes a `StepProbe`.
+
 ## 9. Growth
 
 Nothing here adds a table, a database or a process that outlives its verb. What E2 writes is the parent's §4.11 rows (streams, `.err`,
 prompts, timing, markers — kept with the experiment root) plus: `<root>/.gate.lock` — one empty file, created once, never deleted (deleting
 a lock file another process holds open would split the lock); `out/<step>.session` — 37 bytes per step, rewritten only when a lost
-transcript forces a new id. Tests: each `StepBench`/`ExperimentRoot` deletes its temp folder on dispose; each `FakeCli` deletes its home.
+transcript forces a new id; (amended) `out/<step>.continue` — under 100 bytes, written by the gate step per blocked round, replaced in
+place, removed when the step is done, and ignored by its attempt number when a crash leaves it. Tests: each `StepBench`/`ExperimentRoot`
+deletes its temp folder on dispose; each `FakeCli` deletes its home.
 A run interrupted at any point leaves only files the next entry reads (§4's table) — there is no in-flight state without its own
 recovery: a `.session` without a stream starts fresh or resumes, a stream without an end line is classified from disk, an end line without
 `.done` is recovered (D7), a `.done` without its derived output regenerates it (D21).
 
 ## 10. Definition of Done — epic E2
 
-- [ ] E2.S1–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
+- [ ] The parent's `## Plan changes` re-review for epoch 2 has passed and the parent's status no longer says *stopped for re-review*
+      — E2.S0 and the amended stories are built against the re-approved baseline, never during the stop (`common.plan-change-control`).
+- [ ] E2.S0–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
 - [ ] E2.S1's scenarios and brief were written by Fable into its section before its coder started; the parent's ledger reads `2 of 2`.
+- [ ] (amended) `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` and
+      `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` green; `The_module_launches_nothing_by_a_bare_name`
+      green with `ArmGit.cs` present and `GitCommand` absent from `tools/model-arms`; every launch of `RunArmSchemeTests` carries
+      `--disallowedTools Agent Task …` and the example says `"subagents": false` eight times.
 - [ ] `ClaudeResultEnvelopeTests` and `StepEndTests` pass on the verbatim 2026-10-28 line and the three-results stream; the 2026-10-28
       attempt classifies as `Limited`, never `Finished` or `Errored`.
 - [ ] The two-process `FileGateLockTests` green on Linux, not skipped; `GateStepTests` show the lock released during every wait.
