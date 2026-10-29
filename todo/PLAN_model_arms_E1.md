@@ -1329,6 +1329,13 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
     the moved code; a later story may widen `Install` with a product name.
 13. **Arm tokens** are 16 hex characters (D4's 8 bytes); the shell's were 12. `ArmMap.Read` therefore refuses a shell map — a C# run
     mints its own, as `make` does.
+14. **Logging (common.logging-serilog), decided before E1.S9 — from the E1.S2 review (R3).** `tools/model-arms/ModelArms/Program.cs`
+    selects the logging rule, and neither the parent nor this document said how the host meets it. Decision: `model-arms` follows the
+    `bench` CLI's precedent — it builds no DI container and does not call `AddDewFlowLogging`. Its diagnostics are the run's own durable
+    files, which ARE the experiment's record: per arm the `timing.jsonl` lines, every attempt's `.jsonl` stream and `.err` (streamed,
+    D6/F8), `run.log`; per chain `chain/` markers and `executables.txt`; their owner and retention are the experiment root's (kept as the
+    result, parent §4.11). A verb's own sentences go to stdout/stderr with the exit code (D16). E1.S9 implements exactly this and says so in
+    `research/module_model_arms.md`; a host-level Serilog sink is not added.
 
 ## 9. Definition of Done — epic E1
 
