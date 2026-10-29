@@ -82,6 +82,7 @@ export function writeToySuite(root, { registryEdit = r => r } = {}) {
   put(root, 'refs/b/minigit', TOY_PROGRAM_B, 0o755);
   for (const m of TOY_MUTANTS) put(root, `mutants/${m.id}.json`, JSON.stringify({ id: m.id, clause: m.clause, file: m.file, find: m.find, replace: m.replace }));
   put(root, 'leak-tokens.txt', 'toy-token-quokka-7421\nanother-toy-token-zebra\n');
+  put(root, 'leak-shingles.txt', 'marmot lemur gibbon tapir okapi pangolin\n');
   const registry = registryEdit({
     salt: 'toysalt0',
     cases: TOY_CASES.map(({ id, group, scored, spec, needs }) => ({ id, group, scored, spec, needs })),

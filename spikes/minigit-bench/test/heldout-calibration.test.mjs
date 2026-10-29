@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { applyMutant, calibrate, compareCalibration, directScorer, readRegistry } from '../lib/heldout-calibrate.mjs';
@@ -108,4 +108,19 @@ test('compareCalibration_is_pure_and_names_blocked_differences_too', () => {
   assert.match(unseen.problems.join('\n'), /reference a.*v1.*visible.*unknown/);
   const optional = compareCalibration(registry, { references: { a: { v1: { ...sc([], []), visible100: null }, v2: sc([], []) } }, mutants: {} }, { requireVisible: false });
   assert.deepEqual(optional.problems, []);
+});
+
+test('Every_directory_under_refs_is_a_calibration_subject_and_a_failing_third_reference_names_its_cases', async t => {
+  if (!pythonGate(t)) return;
+  const dir = toySuite();
+  const b2 = path.join(dir, 'refs', 'b2');
+  mkdirSync(b2, { recursive: true });
+  writeFileSync(path.join(b2, 'minigit'), readFileSync(path.join(dir, 'refs', 'a', 'minigit'), 'utf8').replace("print(int(a[1]) + int(a[2]))", 'print(int(a[1]) - int(a[2]))'), { mode: 0o755 });
+  writeFileSync(path.join(b2, 'CHOICES.md'), 'not a subject');
+  const r = await run(dir);
+  assert.deepEqual(Object.keys(r.calibration.references), ['a', 'b', 'b2']);
+  assert.equal(r.ok, false);
+  assert.ok(r.problems.some(p => /reference b2 v1: not 100 %.*failed H1-02/.test(p)), r.problems.join('\n'));
+  assert.equal(r.calibration.references.b2.v1.heldout100, false);
+  assert.equal(r.calibration.references.a.v1.heldout100, true);
 });

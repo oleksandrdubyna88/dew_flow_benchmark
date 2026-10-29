@@ -7,11 +7,13 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { heldoutScore } from './heldout-run.mjs';
 import { maskCaptured, maskRules } from './adjudicate-mask.mjs';
+import { refuseInsideWorktree } from './git-guard.mjs';
 import { readFileOrNull } from './inputs.mjs';
 import { fail, ok } from './result.mjs';
 
 export { maskRules };
 const ADJ = 'adjudication';
+const PACKETS = 'adjudication-packets';
 const STEP1 = Object.freeze(['spec-ambiguity', 'not-ambiguous']);
 const STEP2 = Object.freeze(['product', 'harness']);
 
@@ -36,7 +38,7 @@ const writeJson = (file, doc) => {
 export function readCells(series) {
   const cells = [];
   const skipped = [];
-  for (const name of readdirSync(series, { withFileTypes: true }).filter(e => e.isDirectory() && e.name !== ADJ).map(e => e.name).sort()) {
+  for (const name of readdirSync(series, { withFileTypes: true }).filter(e => e.isDirectory() && e.name !== ADJ && e.name !== PACKETS).map(e => e.name).sort()) {
     const dir = path.join(series, name);
     const score = readJson(path.join(dir, 'score', 'score.json'));
     const result = score ? readJson(path.join(dir, 'score', `heldout-${score.phase}.json`)) : null;
@@ -73,13 +75,15 @@ export function buildPackets(cells) {
   return { packets: packets.sort((a, b) => a.blindId.localeCompare(b.blindId)), entries };
 }
 
-/** Writes `<series>/adjudication/{packets/<blindId>.json,map.json}`. Refuses to overwrite an earlier set (the blind ids would change). */
+/** Writes `<series>/adjudication-packets/<blindId>.json` (the only directory the blind judge reads) and `<series>/adjudication/map.json`. Refuses to overwrite an earlier set (the blind ids would change). */
 export function packetsFor({ series }) {
+  const outside = refuseInsideWorktree(series, 'series directory');
+  if (!outside.ok) return outside;
   if (existsSync(adjPath(series, 'map.json'))) return fail(`${adjPath(series, 'map.json')} already exists: packets and blind ids already exist for this series`);
   const { cells, skipped } = readCells(series);
   if (cells.length === 0) return fail(`no scored cell with a held-out result under ${series}`);
   const { packets, entries } = buildPackets(cells);
-  for (const p of packets) writeJson(adjPath(series, 'packets', `${p.blindId}.json`), p);
+  for (const p of packets) writeJson(path.join(series, PACKETS, `${p.blindId}.json`), p);
   writeJson(adjPath(series, 'map.json'), { format: 1, entries });
   return ok({ blindIds: packets.map(p => p.blindId), rules: maskRules.map(({ name, replacement }) => ({ name, replacement })), skipped });
 }
@@ -93,6 +97,8 @@ function record(series, step, blindId, verdict, reason) {
 }
 
 function checkVerdict(series, blindId, verdict, allowed, reason) {
+  const outside = refuseInsideWorktree(series, 'series directory');
+  if (!outside.ok) return outside;
   const map = mapOf(series);
   if (!map) return fail(`no packets yet under ${series}: run "packets" first`);
   if (!map.entries[blindId]) return fail(`unknown blindId ${blindId}`);
@@ -114,6 +120,8 @@ const unclassified = (map, step1) => Object.keys(map.entries).filter(id => !step
 
 /** Refuses until every packet has a step-1 verdict (the message names each missing blindId); then adds the cell's code path. */
 export function revealFor({ series }) {
+  const outside = refuseInsideWorktree(series, 'series directory');
+  if (!outside.ok) return outside;
   const map = mapOf(series);
   if (!map) return fail(`no packets yet under ${series}: run "packets" first`);
   const missing = unclassified(map, verdictsOf(series, 'step1'));
@@ -134,6 +142,8 @@ export function classifyOrigin({ series, blindId, klass, reason }) {
 
 /** Drop every case classed ambiguous in any cell from all cells; write each revised score beside its primary and a series summary. */
 export function revisedFor({ series }) {
+  const outside = refuseInsideWorktree(series, 'series directory');
+  if (!outside.ok) return outside;
   const map = mapOf(series);
   if (!map) return fail(`no packets yet under ${series}: run "packets" first`);
   const step1 = verdictsOf(series, 'step1');

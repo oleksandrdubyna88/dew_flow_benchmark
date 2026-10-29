@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -142,6 +142,11 @@ test('Leakcheck_decrypts_the_suite_and_scans_the_repository_naming_files_not_tok
   assert.equal(dirty.code, 1);
   assert.match(dirty.out, /leaked\.txt/);
   assert.equal(dirty.out.includes('quokka'), false);
+  rmSync(path.join(repo, 'leaked.txt'));
+  writeFileSync(path.join(repo, 'paraphrase.md'), 'Marmot, LEMUR\n gibbon -- tapir; okapi pangolin\n');
+  const shingled = await tool('leakcheck', '--key-file', w.keyFile, '--out-dir', w.outDir, '--repo', repo, '--work-root', w.workRoot);
+  assert.equal(shingled.code, 1);
+  assert.match(shingled.out, /paraphrase\.md/);
 });
 
 test('Sweep_removes_old_clear_leftovers_and_usage_errors_exit_4', async () => {

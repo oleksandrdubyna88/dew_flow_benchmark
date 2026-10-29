@@ -23,6 +23,16 @@
         "heldout100": true,
         "visible100": true
       }
+    },
+    "b2": {
+      "v1": {
+        "heldout100": true,
+        "visible100": true
+      },
+      "v2": {
+        "heldout100": true,
+        "visible100": true
+      }
     }
   },
   "mutants": {
@@ -140,5 +150,5 @@
     }
   },
   "ok": true,
-  "plaintextSha256": "f1a830c731feca78af556324c2d76de2134dc68e2dfa85c950a75dbe38144f80"
+  "plaintextSha256": "7e9c10d377744212704543c30d4a86adda5cc47cc206ba8fd8ea1e61c7496f8a"
 }

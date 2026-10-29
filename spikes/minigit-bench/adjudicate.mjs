@@ -24,6 +24,9 @@ const COMMANDS = Object.freeze({
     if (!r.ok) return r;
     write('masking rules applied to every packet:');
     r.value.rules.forEach(rule => write(`  ${rule.name} -> ${rule.replacement}`));
+    write('  stderr beyond one plain line, or whose first line needed masking -> <runtime output>');
+    write('  exit codes other than 0 and 1 -> <abnormal>');
+    write('the blind judge reads only <series>/adjudication-packets/; the map and the verdicts are in <series>/adjudication/');
     r.value.blindIds.forEach(id => write(`packet ${id}`));
     r.value.skipped.forEach(s => write(`skipped cell ${s.cell}: ${s.why}`));
     return r;

@@ -57,6 +57,7 @@ export async function stepScripts(ctx, scripts, built) {
 export async function stepHeldout(ctx, built) {
   const { plan, deps } = ctx;
   if (!built) return { known: true, primary100: false, reason: 'build failed' };
-  const box = boxFor(ctx, plan.copyDir, { cwd: false, cases: true });
+  // the cell's directory is read-only here: the held-out cases build their repositories under casesDir, so nothing writes into the copy
+  const box = boxFor(ctx, plan.copyDir, { cwd: false, cases: true, roFiles: [plan.copyDir] });
   return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box, casesDir: plan.casesDir, scoreDir: plan.scoreDir });
 }

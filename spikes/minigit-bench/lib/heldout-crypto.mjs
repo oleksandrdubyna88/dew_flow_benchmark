@@ -28,6 +28,10 @@ export function readKey(file = defaultKeyPath()) {
   if (st.uid !== process.getuid()) return fail(`${file} is not owned by the current user (uid ${st.uid})`);
   if ((st.mode & 0o077) !== 0) return fail(`${file} has mode ${(st.mode & 0o777).toString(8)}: group and others must have no access (chmod 600)`);
   if (st.size !== KEY_BYTES) return fail(`${file} has size ${st.size}: a key is exactly ${KEY_BYTES} bytes`);
+  const dir = lstatSync(path.dirname(file));
+  if (!dir.isDirectory() || dir.uid !== process.getuid() || (dir.mode & 0o077) !== 0) {
+    return fail(`the directory ${path.dirname(file)} of the key must be a real directory owned by the current user with mode 700 (it is ${(dir.mode & 0o777).toString(8)})`);
+  }
   const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const bytes = Buffer.alloc(KEY_BYTES + 1);

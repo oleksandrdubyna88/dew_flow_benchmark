@@ -4,7 +4,7 @@ import { cpSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../heldout-tool.mjs';
-import { parseTokens, scanFiles } from '../lib/heldout-leak.mjs';
+import { parseShingles, parseTokens, scanFiles } from '../lib/heldout-leak.mjs';
 import { withClearSuite } from '../lib/heldout-run.mjs';
 import { homeDir, keyGate, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 
@@ -16,7 +16,12 @@ const COMMITTED = ['calibration.json', 'manifest.json', 'suite.enc', 'suite.enc.
 const walk = dir => readdirSync(dir, { recursive: true, withFileTypes: true })
   .filter(e => e.isFile()).map(e => path.relative(dir, path.join(e.parentPath, e.name)).split(path.sep).join('/')).sort();
 
-const ENV_READ = /process\s*(?:\.|\[\s*['"`])\s*env\b/;
+const ENV_READ = new RegExp([
+  String.raw`process\s*(?:\.|\[\s*['"\x60])\s*env\b`, // process.env, process['env']
+  String.raw`\{[^}]*\benv\b[^}]*\}\s*=\s*process\b`, // const { env } = process
+  String.raw`import\s[^;]*\{[^}]*\benv\b[^}]*\}\s*from\s*['"](?:node:)?process['"]`, // import { env } from 'node:process'
+  String.raw`require\(\s*['"](?:node:)?process['"]\s*\)\s*\.\s*env\b`,
+].join('|'));
 const heldoutModules = () => [
   ...readdirSync(path.join(spikeDir, 'lib')).filter(f => /^(heldout|adjudicate)/.test(f)).map(f => path.join(spikeDir, 'lib', f)),
   path.join(spikeDir, 'heldout-tool.mjs'), path.join(spikeDir, 'adjudicate.mjs'),
@@ -27,6 +32,13 @@ test('No_heldout_module_reads_process_env', () => {
   const files = heldoutModules();
   assert.ok(files.length >= 8, `the scan covers the held-out modules (${files.length})`);
   assert.deepEqual(envReaders(files), []);
+});
+
+test('The_env_scan_recognises_every_way_to_read_the_environment_and_nothing_else', () => {
+  const reads = ['process.env.X', "process['env'].X", 'process [ "env" ]', 'const { env } = process;', 'const { argv, env: e } = process', "import { env } from 'node:process';",
+    'import process, { env } from "process"', "require('node:process').env"];
+  for (const text of reads) assert.equal(ENV_READ.test(text), true, text);
+  for (const text of ['process.argv', 'const { argv } = process', "import process from 'node:process'", 'const environment = 1', 'process.exitCode = 1']) assert.equal(ENV_READ.test(text), false, text);
 });
 
 test('The_env_scan_still_finds_a_known_reader', () => {
@@ -66,14 +78,17 @@ test('The_sealed_suite_matches_its_hash_records_its_manifest_and_its_calibration
 test('The_real_suite_leaves_no_distinctive_string_under_todo_or_spikes', async t => {
   if (!keyGate(t)) return;
   const workRoot = homeDir('leak');
-  const read = await withClearSuite({ workRoot, rid: 'leak' }, dir => readFileSync(path.join(dir, 'leak-tokens.txt'), 'utf8'));
+  const read = await withClearSuite({ workRoot, rid: 'leak' }, dir => [readFileSync(path.join(dir, 'leak-tokens.txt'), 'utf8'), readFileSync(path.join(dir, 'leak-shingles.txt'), 'utf8')]);
   assert.equal(read.ok, true, read.reason);
-  const tokens = parseTokens(read.value);
+  const shingles = parseShingles(read.value[1]);
+  assert.equal(shingles.ok, true, shingles.reason);
+  assert.ok(shingles.value.length >= 500, `the shingle list is alive (${shingles.value.length})`);
+  const tokens = parseTokens(read.value[0]);
   assert.equal(tokens.ok, true, tokens.reason);
   assert.ok(tokens.value.length >= 30, `the token list is alive (${tokens.value.length} tokens)`);
   const files = ['todo', 'spikes'].flatMap(top => walk(path.join(repoRoot, top)).map(f => `${top}/${f}`));
   assert.ok(files.length > 20, 'the walk covers todo/ and spikes/');
-  const { hits, unreadable } = scanFiles(repoRoot, files, tokens.value);
+  const { hits, unreadable } = scanFiles(repoRoot, files, tokens.value, shingles.value);
   assert.deepEqual(hits, [], 'a held-out string is in a file (hits name the file and the token NUMBER only)');
   assert.deepEqual(unreadable, []);
 });

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { packDir } from './heldout-archive.mjs';
 import { readRegistry } from './heldout-calibrate.mjs';
 import { readKey, seal, unseal } from './heldout-crypto.mjs';
-import { parseTokens } from './heldout-leak.mjs';
+import { parseShingles, parseTokens } from './heldout-leak.mjs';
 import { readFileOrNull } from './inputs.mjs';
 import { fail, ok } from './result.mjs';
 
@@ -20,11 +20,13 @@ const HASHES_PATH = 'heldout/suite.enc';
 export function validateSource(src) {
   const registry = readRegistry(src);
   if (!registry.ok) return registry;
-  const need = ['runner.py', 'refs/a/minigit', 'refs/b/minigit', 'leak-tokens.txt', ...registry.value.mutants.map(m => `mutants/${m.id}.json`)];
+  const need = ['runner.py', 'refs/a/minigit', 'refs/b/minigit', 'leak-tokens.txt', 'leak-shingles.txt', ...registry.value.mutants.map(m => `mutants/${m.id}.json`)];
   const missing = need.filter(rel => !existsSync(path.join(src, rel)));
   if (missing.length > 0) return fail(`the source ${src} lacks: ${missing.join(', ')}`);
   const tokens = parseTokens(readFileSync(path.join(src, 'leak-tokens.txt'), 'utf8'));
-  return tokens.ok ? registry : tokens;
+  if (!tokens.ok) return tokens;
+  const shingles = parseShingles(readFileSync(path.join(src, 'leak-shingles.txt'), 'utf8'));
+  return shingles.ok ? registry : shingles;
 }
 
 export const countsOf = registry => ({

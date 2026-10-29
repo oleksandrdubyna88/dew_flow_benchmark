@@ -34,6 +34,31 @@ function toySeries() {
   return series;
 }
 
+const DOTNET_TRACE = [
+  "Unhandled exception. System.IO.FileNotFoundException: Could not find file '/home/u/run/a.txt'.",
+  "File name: '/home/u/run/a.txt'",
+  '   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)',
+  '   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String path, OpenFlags flags, Int32 mode)',
+  '   at Minigit.Program.Main(String[] args) in /src/minigit/Program.cs:line 12',
+  'Aborted (core dumped)',
+].join('\n');
+const NODE_ENOENT = [
+  'node:fs:441',
+  '    return binding.open(',
+  '                   ^',
+  '',
+  "Error: ENOENT: no such file or directory, open 'a.txt'",
+  '    at Object.openSync (node:fs:573:18)',
+  '    at file:///home/u/run/minigit.mjs:3:9 {',
+  '  errno: -2,',
+  "  syscall: 'open',",
+  "  code: 'ENOENT',",
+  "  path: 'a.txt'",
+  '}',
+  '',
+  'Node.js v26.12.1',
+].join('\n');
+
 const readAll = dir => readdirSync(dir, { recursive: true, withFileTypes: true }).filter(e => e.isFile())
   .map(e => readFileSync(path.join(e.parentPath, e.name), 'utf8')).join('\n');
 
@@ -41,7 +66,7 @@ test('Adjudication_packets_carry_no_stack_or_arm', () => {
   const series = toySeries();
   const made = packetsFor({ series });
   assert.equal(made.ok, true, made.reason);
-  const packetsDir = path.join(series, 'adjudication', 'packets');
+  const packetsDir = path.join(series, 'adjudication-packets');
   const files = readdirSync(packetsDir);
   assert.equal(files.length, 3, 'one packet per failing scored case of every cell');
   assert.ok(files.every(f => /^[0-9a-f]{8}\.json$/.test(f)));
@@ -49,7 +74,7 @@ test('Adjudication_packets_carry_no_stack_or_arm', () => {
   for (const forbidden of ['csharp', 'node', 'process', 'bare', 'System.', 'Program.cs', '/home/jinx', '/tmp/mgb-score', 'TypeError', 'NullReference', 'node:internal', 'process-csharp-1', 'bare-node-2']) {
     assert.equal(everything.includes(forbidden), false, `a packet still holds ${forbidden}`);
   }
-  for (const marker of ['<frame>', '<path>', '<runtime>']) assert.ok(everything.includes(marker), `the masking is visible: ${marker}`);
+  assert.ok(everything.includes('<runtime output>'), 'the replaced runtime output is visible as such');
   const packet = JSON.parse(readFileSync(path.join(packetsDir, files[0]), 'utf8'));
   assert.deepEqual(Object.keys(packet).sort(), ['blindId', 'captured', 'caseId', 'spec']);
   assert.deepEqual(made.value.rules.map(r => r.name), maskRules.map(r => r.name), 'the masking rules are listed');
@@ -113,8 +138,8 @@ test('A_case_classed_ambiguous_is_dropped_for_every_cell_and_the_primary_is_kept
   assert.equal(revised.ok, true, revised.reason);
   assert.deepEqual(revised.value.droppedCases, ['H1-01']);
   const byCell = Object.fromEntries(revised.value.cells.map(c => [c.cell, c]));
-  assert.deepEqual(byCell['process-csharp-1'].totals, { total: 2, passed: 1, failed: 1, blocked: 0 });
-  assert.deepEqual(byCell['bare-node-2'].totals, { total: 2, passed: 2, failed: 0, blocked: 0 });
+  assert.deepEqual(byCell['process-csharp-1'].totals, { total: 2, passed: 1, failed: 1, blocked: 0, percent: 50 });
+  assert.deepEqual(byCell['bare-node-2'].totals, { total: 2, passed: 2, failed: 0, blocked: 0, percent: 100 });
   assert.equal(byCell['bare-node-2'].primary100, true, 'dropped from the cell that did NOT call it ambiguous too');
   const primaryAfter = ['process-csharp-1', 'bare-node-2'].map(c => readFileSync(path.join(series, c, 'score', 'heldout-v1.json'), 'utf8'));
   assert.deepEqual(primaryAfter, primaryBefore, 'the primary score is never rewritten');
@@ -154,4 +179,49 @@ test('The_command_line_drives_the_two_steps_and_prints_the_masking_rules_with_th
   assert.equal(revised.code, 0, revised.out);
   assert.equal((await run('classify', '--series', series)).code, 4);
   assert.equal((await run('nonsense')).code, 4);
+});
+
+const FORBIDDEN_RUNTIME = ['Unhandled exception', 'Could not find file', 'minigit.dll', 'ENOENT', 'syscall', 'errno', 'file://', '^^^', 'v26.12.1', 'Node.js', 'core dumped',
+  'Aborted', 'FileNotFound', 'Interop.', 'SafeFileHandle', 'openSync', 'node:fs'];
+
+test('Real_dotnet_and_node_shaped_traces_leave_nothing_of_the_runtime_in_a_packet', () => {
+  const series = tmpDir('series-runtime');
+  const cell = (name, arm, stack, stderr, exit, stdout = 'Committed deadbeefdeadbeef\n') => {
+    json(path.join(series, name, 'score', 'score.json'), { format: 1, sessionId: name, arm, stack, phase: 'v1' });
+    const c = failing('H1-07', stdout, stderr);
+    json(path.join(series, name, 'score', 'heldout-v1.json'), { format: 1, phase: 'v1', cases: [{ ...c, captured: [{ ...c.captured[0], exit }] }] });
+  };
+  cell('cell-a', 'process', 'csharp', DOTNET_TRACE, 134);
+  cell('cell-b', 'bare', 'node', NODE_ENOENT, 1);
+  cell('cell-c', 'bare', 'csharp', 'File not found\n', 1, '');
+  cell('cell-d', 'process', 'node', 'Segmentation fault', 139);
+  const made = packetsFor({ series });
+  assert.equal(made.ok, true, made.reason);
+  const dir = path.join(series, 'adjudication-packets');
+  const packets = readdirSync(dir).map(f => JSON.parse(readFileSync(path.join(dir, f), 'utf8')));
+  const text = JSON.stringify(packets);
+  for (const word of FORBIDDEN_RUNTIME) assert.equal(text.includes(word), false, `a packet still holds ${word}`);
+  const byExit = packets.map(p => p.captured[0]);
+  assert.deepEqual(byExit.map(c => c.exit).sort(), [1, 1, '<abnormal>', '<abnormal>'].sort(), 'exit codes outside 0 and 1 are normalised');
+  const stderrs = byExit.map(c => c.stderr).sort();
+  assert.deepEqual(stderrs, ['<runtime output>', '<runtime output>', '<runtime output>', 'File not found\n'].sort(), 'a plain one-line message survives; runtime output is replaced whole');
+});
+
+test('The_map_is_not_in_the_directory_the_blind_judge_reads', () => {
+  const series = toySeries();
+  packetsFor({ series });
+  assert.equal(existsSync(path.join(series, 'adjudication', 'map.json')), true);
+  assert.deepEqual(readdirSync(path.join(series, 'adjudication-packets')).filter(f => !/^[0-9a-f]{8}\.json$/.test(f)), [], 'only packets sit there');
+  assert.equal(readdirSync(path.join(series, 'adjudication-packets'), { recursive: true }).some(f => /map|step|reveal/.test(f)), false);
+});
+
+test('A_series_inside_a_git_worktree_is_refused', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const series = toySeries();
+  assert.equal(spawnSync('git', ['init', '-q', series]).status, 0);
+  for (const r of [packetsFor({ series }), revealFor({ series }), revisedFor({ series })]) {
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /git worktree/);
+  }
+  assert.equal(existsSync(path.join(series, 'adjudication-packets')), false, 'nothing was written');
 });

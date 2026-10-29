@@ -4,7 +4,7 @@
 //   node spikes/minigit-bench/heldout-tool.mjs keygen    [--key-file P]
 //   node spikes/minigit-bench/heldout-tool.mjs seal      --src <clear dir> [--key-file P] [--out-dir D] [--hashes F]
 //   node spikes/minigit-bench/heldout-tool.mjs calibrate [--src <clear dir>] [--key-file P] [--out-dir D] [--work-root D] [--inputs-repo U]
-//   node spikes/minigit-bench/heldout-tool.mjs leakcheck [--key-file P] [--out-dir D] [--repo D] [--work-root D]
+//   node spikes/minigit-bench/heldout-tool.mjs leakcheck [--key-file P] [--out-dir D] [--repo D] [--range A..B] [--work-root D]
 //   node spikes/minigit-bench/heldout-tool.mjs counts    [--key-file P] [--out-dir D] [--work-root D]
 //   node spikes/minigit-bench/heldout-tool.mjs sweep     [--work-root D] [--max-age-hours N]
 //
@@ -30,7 +30,7 @@ import { runBounded } from './lib/run.mjs';
 
 const OPTIONS = {
   'key-file': { type: 'string' }, src: { type: 'string' }, 'out-dir': { type: 'string' }, hashes: { type: 'string' }, 'work-root': { type: 'string' },
-  repo: { type: 'string' }, direct: { type: 'boolean' }, 'max-age-hours': { type: 'string' }, 'inputs-repo': { type: 'string' },
+  repo: { type: 'string' }, range: { type: 'string' }, direct: { type: 'boolean' }, 'max-age-hours': { type: 'string' }, 'inputs-repo': { type: 'string' },
 };
 const EXIT = Object.freeze({ ok: 0, check: 1, env: 3, usage: 4, broke: 5 });
 const BWRAP_PATH = '/usr/bin/bwrap';
@@ -95,9 +95,10 @@ async function cmdLeakcheck(o, write) {
   const root = await repoRoot(o);
   if (!root.ok) { write(root.reason); return EXIT.env; }
   const ran = await withClearSuite({ suiteEnc: path.join(s.outDir, 'suite.enc'), keyFile: s.keyFile, workRoot: s.workRoot, rid: 'leak' },
-    dir => leakcheck({ repoRoot: root.value, tokensText: readFileOrNull(path.join(dir, 'leak-tokens.txt'))?.toString('utf8') ?? '' }));
+    dir => leakcheck({ repoRoot: root.value, tokensText: readFileOrNull(path.join(dir, 'leak-tokens.txt'))?.toString('utf8') ?? '',
+      shinglesText: readFileOrNull(path.join(dir, 'leak-shingles.txt'))?.toString('utf8') ?? '', ...(o.range ? { range: o.range } : {}) }));
   if (!ran.ok) { write(`leakcheck could not decrypt the suite: ${ran.reason}`); return EXIT.env; }
-  write(ran.value.ok ? `leakcheck clean: ${ran.value.scanned} files of ${root.value} scanned` : `leakcheck FAILED: ${ran.value.reason}`);
+  write(ran.value.ok ? `leakcheck clean: ${ran.value.scanned} files of ${root.value} and ${ran.value.history.join(' + ') || 'no history'} scanned` : `leakcheck FAILED: ${ran.value.reason}`);
   return ran.value.ok ? EXIT.ok : EXIT.check;
 }
 

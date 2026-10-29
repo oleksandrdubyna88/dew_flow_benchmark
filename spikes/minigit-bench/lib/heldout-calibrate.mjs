@@ -1,14 +1,16 @@
 // Calibration: both references must score 100 % and every mutant must fail EXACTLY its pre-registered cases (and block exactly its
 // pre-registered ones), per phase. The registry is the pre-registration; an observed set is never copied into it. A mismatch is
 // resolved by fixing the case or the mutant in the clear source directory and re-sealing. This module knows the suite's SHAPE only.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { readFileOrNull } from './inputs.mjs';
 import { runSuite, heldoutScore } from './heldout-run.mjs';
 import { fail, ok } from './result.mjs';
 
 const PHASES = ['v1', 'v2'];
-const REFERENCES = ['a', 'b'];
+/** Every directory under refs/ that holds a `minigit` is a reference: A, B, and any independently written one (b2). */
+const referenceNames = suiteDir => readdirSync(path.join(suiteDir, 'refs'), { withFileTypes: true })
+  .filter(e => e.isDirectory() && existsSync(path.join(suiteDir, 'refs', e.name, 'minigit'))).map(e => e.name).sort();
 
 function readJson(file, what) {
   const bytes = readFileOrNull(file);
@@ -95,7 +97,7 @@ export function compareCalibration(registry, observations, { requireVisible = tr
   return { problems: [...Object.values(refs).flat(), ...Object.values(muts).flat()], refs, muts };
 }
 
-function summarize(registry, observations, compared, treeProblems) {
+function summarize(registry, observations, compared, treeProblems, names) {
   const refEntry = name => Object.fromEntries(PHASES.map(p => {
     const o = observations.references[name]?.[p];
     return [p, { heldout100: o?.heldout?.known === true && o.heldout.primary100 === true, visible100: o?.visible100 ?? null }];
@@ -109,7 +111,7 @@ function summarize(registry, observations, compared, treeProblems) {
     n1: registry.cases.filter(c => c.scored && c.group === 'H1').length,
     n2: registry.cases.filter(c => c.scored && c.group === 'H2').length,
     m: registry.mutants.length,
-    references: Object.fromEntries(REFERENCES.map(n => [n, refEntry(n)])),
+    references: Object.fromEntries(names.map(n => [n, refEntry(n)])),
     mutants: Object.fromEntries(registry.mutants.map(m => [m.id, mutEntry(m.id)])),
   };
 }
@@ -130,7 +132,8 @@ export async function calibrate({ suiteDir, workRoot, scoreSubject, requireVisib
   const registry = readRegistry(suiteDir);
   if (!registry.ok) return { ok: false, problems: [registry.reason], calibration: null };
   const refText = name => readFileSync(path.join(suiteDir, 'refs', name, 'minigit'), 'utf8');
-  const subjects = REFERENCES.map(name => ({ kind: 'reference', name, text: ok(refText(name)) }));
+  const names = referenceNames(suiteDir);
+  const subjects = names.map(name => ({ kind: 'reference', name, text: ok(refText(name)) }));
   const treeProblems = {};
   for (const m of registry.value.mutants) {
     const file = readJson(path.join(suiteDir, 'mutants', `${m.id}.json`), 'the mutant file');
@@ -147,7 +150,7 @@ export async function calibrate({ suiteDir, workRoot, scoreSubject, requireVisib
   }
   const compared = compareCalibration(registry.value, observations, { requireVisible });
   const problems = [...Object.values(treeProblems), ...compared.problems];
-  const calibration = summarize(registry.value, observations, compared, treeProblems);
+  const calibration = summarize(registry.value, observations, compared, treeProblems, names);
   return { ok: problems.length === 0, problems, calibration: { ...calibration, ok: problems.length === 0 } };
 }
 

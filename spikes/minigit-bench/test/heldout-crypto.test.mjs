@@ -89,3 +89,16 @@ test('Keygen_writes_32_random_bytes_at_mode_600_and_refuses_to_overwrite', () =>
   assert.equal(existsSync(file), true);
   assert.equal(readKey(file).ok, true);
 });
+
+test('A_key_in_a_directory_others_can_enter_is_refused', () => {
+  const dir = tmpDir('key-dir');
+  const file = keyIn(dir);
+  assert.equal(readKey(file).ok, true, 'the temp directory is 0700');
+  for (const mode of [0o755, 0o750, 0o705]) {
+    chmodSync(dir, mode);
+    const r = readKey(file);
+    assert.equal(r.ok, false, mode.toString(8));
+    assert.match(r.reason, /directory/);
+  }
+  chmodSync(dir, 0o700);
+});

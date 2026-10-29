@@ -32,7 +32,7 @@ test('Leakcheck_finds_a_planted_token_and_passes_a_clean_tree', async () => {
   writeFileSync(planted, 'before another-toy-token-zebra after\n'); // untracked but not ignored: a commit-to-be
   const dirty = await leakcheck({ repoRoot: root, tokensText: TOKENS });
   assert.equal(dirty.ok, false);
-  assert.deepEqual(dirty.hits, [{ file: 'docs/planted.txt', tokenNumber: 2 }]);
+  assert.deepEqual(dirty.hits, [{ file: 'docs/planted.txt', tokenNumber: 2, kind: 'literal' }]);
   assert.match(dirty.reason, /docs\/planted\.txt/);
   assert.equal(dirty.reason.includes('zebra'), false, 'the token itself is never printed');
   rmSync(planted);
@@ -79,4 +79,43 @@ test('A_listed_directory_such_as_a_submodule_root_is_reported_as_skipped_not_a_c
   const r = scanFiles(root, ['here.txt', 'submodule'], ['abcdefgh']);
   assert.deepEqual(r.hits, [], 'a gitlink is another repository: its files are not this repository\'s');
   assert.deepEqual(r.skippedDirs, ['submodule']);
+});
+
+const SHINGLES = 'zebra quokka marmot lemur gibbon tapir\nokapi pangolin dugong ibex serval caracal\n';
+
+test('A_literal_matches_case_insensitively_and_a_shingle_matches_through_case_whitespace_and_punctuation', async () => {
+  const { root } = await toyRepo();
+  writeFileSync(path.join(root, 'docs', 'shout.txt'), 'x ANOTHER-TOY-TOKEN-ZEBRA y\n');
+  const upper = await leakcheck({ repoRoot: root, tokensText: TOKENS });
+  assert.deepEqual(upper.hits, [{ file: 'docs/shout.txt', tokenNumber: 2, kind: 'literal' }]);
+  rmSync(path.join(root, 'docs', 'shout.txt'));
+  writeFileSync(path.join(root, 'docs', 'reflowed.md'), 'The Zebra,\n   QUOKKA -- marmot (lemur);\tgibbon: tapir.\n');
+  const reflowed = await leakcheck({ repoRoot: root, tokensText: TOKENS, shinglesText: SHINGLES });
+  assert.deepEqual(reflowed.hits, [{ file: 'docs/reflowed.md', tokenNumber: 1, kind: 'shingle' }]);
+  assert.equal(reflowed.reason.includes('quokka'), false);
+  rmSync(path.join(root, 'docs', 'reflowed.md'));
+  writeFileSync(path.join(root, 'docs', 'five.md'), 'zebra quokka marmot lemur gibbon\n');
+  assert.equal((await leakcheck({ repoRoot: root, tokensText: TOKENS, shinglesText: SHINGLES })).ok, true, 'five words are not a shingle');
+});
+
+test('Commit_messages_and_the_branch_diff_are_scanned_too_so_a_deleted_leak_is_still_found', async () => {
+  const { root, git } = await toyRepo();
+  const commit = async message => git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '--allow-empty', '-m', message);
+  await commit('base');
+  writeFileSync(path.join(root, 'docs', 'brief.md'), 'okapi pangolin dugong ibex serval caracal\n');
+  await git('add', '.');
+  await commit('add a note');
+  rmSync(path.join(root, 'docs', 'brief.md'));
+  await git('add', '-A');
+  await commit('the note is gone');
+  const range = 'HEAD~2..HEAD';
+  const files = await leakcheck({ repoRoot: root, tokensText: TOKENS, shinglesText: SHINGLES });
+  assert.equal(files.ok, true, 'the working tree is clean');
+  const diff = await leakcheck({ repoRoot: root, tokensText: TOKENS, shinglesText: SHINGLES, range });
+  assert.equal(diff.ok, false);
+  assert.ok(diff.hits.some(h => h.file === `git log -p ${range}`), JSON.stringify(diff.hits));
+  await commit('mentions another-toy-token-zebra in a message');
+  const msg = await leakcheck({ repoRoot: root, tokensText: TOKENS, range: 'HEAD~1..HEAD' });
+  assert.ok(msg.hits.some(h => h.file === 'git log messages of HEAD~1..HEAD'), JSON.stringify(msg.hits));
+  assert.equal((await leakcheck({ repoRoot: root, tokensText: TOKENS, range: 'HEAD~9..HEAD' })).ok, false, 'a range git cannot resolve is a failure, not a clean pass');
 });
