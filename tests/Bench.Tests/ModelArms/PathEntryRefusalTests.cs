@@ -131,4 +131,47 @@ public sealed class PathEntryRefusalTests
 
         ExecutableResolution.PathEntryRefusal(temp.Combine("l1", "bin"), roots, RootFacts.Host).Should().Contain("Too many levels").And.Contain("D17");
     }
+
+    [Fact]
+    public void A_config_folder_under_a_forbidden_root_is_refused_naming_the_variable_the_root_and_D17()
+    {
+        PosixPaths();
+        var host = ExecutableResolutionTests.Fake(_ => true, path => Outcome<string>.Success(path == "/opt/shortcut" ? "/t/x/h" : path));
+
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/t/h", Roots, host).Should().Contain("HOME '/t/h'").And.Contain("'/t'").And.Contain("D17");
+        ExecutableResolution.ConfigFolderRefusal("XDG_CONFIG_HOME", "/r/cfg", Roots, host).Should().Contain("XDG_CONFIG_HOME '/r/cfg'").And.Contain("'/r'");
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/opt/shortcut", Roots, host).Should().Contain("really '/t/x/h'").And.Contain("D17", "a link out of the target into it is refused by where it leads");
+        ExecutableResolution.ConfigFolderRefusal("HOME", "home/u", Roots, host).Should().Contain("HOME 'home/u'").And.Contain("relative").And.Contain("D17");
+    }
+
+    [Fact]
+    public void A_config_folder_outside_every_root_or_not_set_is_not_refused()
+    {
+        PosixPaths();
+        var host = ExecutableResolutionTests.Fake(_ => true);
+
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/home/u", Roots, host).Should().BeEmpty();
+        ExecutableResolution.ConfigFolderRefusal("XDG_CONFIG_HOME", string.Empty, Roots, host).Should().BeEmpty("an empty variable is an unset one: git falls back to HOME");
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/tx/h", Roots, host).Should().BeEmpty("/tx is not under /t");
+    }
+
+    [Fact]
+    public void A_config_folder_whose_existing_component_cannot_be_resolved_is_refused()
+    {
+        PosixPaths();
+        var host = new HostPaths(
+            path => path is "/home/u/link" or "/home/u/link/h" ? Outcome<string>.Failure("No such file or directory") : Same(path),
+            path => Outcome<bool>.Success(path != "/home/u/link/h"),
+            _ => true);
+
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/home/u/link/h", Roots, host).Should().Contain("HOME '/home/u/link/h' cannot be resolved").And.Contain("D17");
+    }
+
+    [Fact]
+    public void A_NUL_in_a_config_folder_is_a_refusal_never_a_thrown_exception()
+    {
+        PosixPaths();
+
+        ExecutableResolution.ConfigFolderRefusal("HOME", "/home/\0u", Roots, ExecutableResolutionTests.Fake(_ => true)).Should().Contain("NUL").And.NotContain("\0");
+    }
 }

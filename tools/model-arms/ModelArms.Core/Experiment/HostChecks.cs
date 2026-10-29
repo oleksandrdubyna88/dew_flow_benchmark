@@ -46,7 +46,8 @@ public abstract record SourceAnswer
 /// answer is <see cref="SourceAnswer.Unanswered"/>, not "no".
 /// <para>
 /// <paramref name="PathRefusals"/> are the sentences <see cref="ExecutableResolution.PathEntryRefusal"/> gave for the entries of PATH (the children inherit it),
-/// and <paramref name="Templates"/> the brief template each step kind the schemes use was read as. All three are <c>required</c>: a caller that did not read them
+/// <paramref name="EnvironmentRefusals"/> the sentences <see cref="ExecutableResolution.ConfigFolderRefusal"/> gave for <c>HOME</c> and <c>XDG_CONFIG_HOME</c> (git reads its
+/// global config from there), and <paramref name="Templates"/> the brief template each step kind the schemes use was read as. All four are <c>required</c>: a caller that did not read them
 /// must say so, not default to a host with nothing to say.
 /// </para></summary>
 public sealed record HostFacts(
@@ -58,6 +59,8 @@ public sealed record HostFacts(
     public required SourceAnswer Source { get; init; }
 
     public required IReadOnlyList<string> PathRefusals { get; init; }
+
+    public required IReadOnlyList<string> EnvironmentRefusals { get; init; }
 
     public required IReadOnlyDictionary<StepKind, Outcome<string>> Templates { get; init; }
 }
@@ -106,6 +109,7 @@ public static class HostChecks
     [
         .. ExecutableProblems(facts),
         .. facts.PathRefusals.Select(Wrong),
+        .. facts.EnvironmentRefusals.Select(Wrong),
         .. SourceProblems(experiment.Target, facts),
         .. ScenarioProblems(facts),
         .. CoaiProblems(experiment, facts),
@@ -129,13 +133,15 @@ public static class HostChecks
 
     /// <summary>The exit is decided on the TYPE of the answer, never on its words: an executable the host lacks is the environment (exit 3, named by the field that
     /// asked for it), one the configuration names and D17 refuses is a wrong configuration (exit 4).</summary>
-    private static IEnumerable<HostProblem> ExecutableProblems(HostFacts facts) =>
-        facts.Executables.Select(executable => executable.Answer switch
+    private static IEnumerable<HostProblem> ExecutableProblems(HostFacts facts) => facts.Executables.SelectMany(ProblemsOf);
+
+    private static IEnumerable<HostProblem> ProblemsOf(ResolvedExecutable executable) =>
+        executable.Answer switch
         {
-            ExecutableAnswer.Absent absent => new HostProblem($"{executable.Needed.Role} {absent.Reason}".TrimStart(), Environment: true),
-            ExecutableAnswer.Refused refused => Wrong(refused.Reason),
-            _ => null,
-        }).OfType<HostProblem>();
+            ExecutableAnswer.Absent absent => [new HostProblem($"{executable.Needed.Role} {absent.Reason}".TrimStart(), Environment: true)],
+            ExecutableAnswer.Refused refused => [Wrong(refused.Reason)],
+            _ => [],
+        };
 
     private static IEnumerable<HostProblem> SourceProblems(TargetFacts target, HostFacts facts) =>
         facts.Source switch
