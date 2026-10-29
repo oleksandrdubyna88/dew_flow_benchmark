@@ -14,20 +14,16 @@ internal static class TargetSection
     private static readonly string[] FormatMembers = ["solution", "verbs"];
     private static readonly string[] ExtensionMembers = ["directory", "command"];
 
-    /// <summary>Stands in for a base that did not parse. Never observable: a file that left any problem builds no experiment.</summary>
-    private static readonly CommitSha Unread =
-        CommitSha.Parse(new string('0', CommitSha.Length)) is Outcome<CommitSha>.Ok ok ? ok.Value : throw new InvalidOperationException("forty zeros are a sha");
-
     public static TargetFacts Read(StrictJson json, JsonObject top, ExperimentLocation location)
     {
         var target = json.ObjectMember(top, string.Empty, "target", Members, Members);
         var source = PathFields.Absolute(json, target, "target", "source");
-        var forbidden = ForbiddenRoots(source, location);
+        var forbidden = ExecutableRule.ForbiddenRoots(source, location.Root);
 
         return new TargetFacts(
             source,
             json.Text(target, "target", "planBranch"),
-            Base(json, target),
+            json.Sha(target, "target", "base"),
             PathFields.Relative(json, target, "target", "plan", "the target"),
             json.Text(target, "target", "branch"),
             PathFields.Relative(json, target, "target", "rulesSubmodule", "the target"),
@@ -51,28 +47,6 @@ internal static class TargetSection
         }
 
         return argv;
-    }
-
-    /// <summary>The roots no executable may sit under: the target, and the experiment root itself, which holds the base clone, the arms'
-    /// clones and everything else an arm could write. Forbidding the root, not just <c>base</c> and <c>r</c>, fails closed.</summary>
-    private static IReadOnlyList<string> ForbiddenRoots(string source, ExperimentLocation location) =>
-        [.. new[] { source, location.Root }.Where(root => root.Length > 0)];
-
-    private static CommitSha Base(StrictJson json, JsonObject target)
-    {
-        var text = json.Text(target, "target", "base");
-        if (text.Length == 0)
-        {
-            return Unread;
-        }
-
-        return CommitSha.Parse(text).Match(sha => sha, reason => Unparsed(json, text, reason));
-    }
-
-    private static CommitSha Unparsed(StrictJson json, string text, string reason)
-    {
-        json.Add($"target.base is '{text}': {reason}");
-        return Unread;
     }
 
     private static SuiteFacts Suite(StrictJson json, JsonObject target, IReadOnlyList<string> forbidden)
