@@ -147,12 +147,14 @@ internal sealed class StrictJson
         obj.ContainsKey(name) ? NonEmptyText(obj[name], Join(path, name)) : string.Empty;
 
     /// <summary>The text a node holds, which must be non-empty; the empty string after recording why not.</summary>
-    public string NonEmptyText(JsonNode? node, string where)
+    public string NonEmptyText(JsonNode? node, string where) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? Checked(text, where) : MustBeText(where);
+
+    private string Checked(string text, string where)
     {
-        if (node is not JsonValue value || !value.TryGetValue<string>(out var text))
+        if (ExecutableRule.HoldsNul(text))
         {
-            Add($"{where} must be text");
-            return string.Empty;
+            return RefuseNul(where);
         }
 
         if (text.Trim().Length == 0)
@@ -163,6 +165,14 @@ internal sealed class StrictJson
         return text;
     }
 
+    /// <summary>A NUL character ends a path in the operating system's eyes and makes <c>Path.GetFullPath</c> throw; no text of the experiment file holds one,
+    /// so it is refused here, once, for every member and every element, naming the field. The empty string stands in for the refused text.</summary>
+    private string RefuseNul(string where)
+    {
+        Add($"{where} holds a NUL character — a text of this file never does; refused (D17)");
+        return string.Empty;
+    }
+
     /// <summary>A text that may be empty, or the empty string after recording that it is not text. An absent member is silent.</summary>
     public string AnyText(JsonObject obj, string path, string name)
     {
@@ -171,12 +181,15 @@ internal sealed class StrictJson
             return string.Empty;
         }
 
-        if (obj[name] is JsonValue value && value.TryGetValue<string>(out var text))
-        {
-            return text;
-        }
+        var where = Join(path, name);
+        return obj[name] is JsonValue value && value.TryGetValue<string>(out var text) ? NoNul(text, where) : MustBeText(where);
+    }
 
-        Add($"{Join(path, name)} must be text");
+    private string NoNul(string text, string where) => ExecutableRule.HoldsNul(text) ? RefuseNul(where) : text;
+
+    private string MustBeText(string where)
+    {
+        Add($"{where} must be text");
         return string.Empty;
     }
 

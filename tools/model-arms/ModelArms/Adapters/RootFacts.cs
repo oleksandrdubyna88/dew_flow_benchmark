@@ -38,7 +38,11 @@ public static class RootFacts
     public static async Task<Outcome<int>> CurrentUidAsync(CancellationToken ct) =>
         (await Said("id", ["-u"], ct)).Match(text => Uid(text, "id -u"), Outcome<int>.Failure);
 
-    /// <summary>Who owns <paramref name="path"/> (from <c>stat</c>) and its mode (from the file system), file or folder alike.</summary>
+    /// <summary>Who owns <paramref name="path"/>, its mode, and what kind of file it is — all three read by ONE <c>stat</c> call on ONE normalised path, so they
+    /// are facts of one inode. The path is made absolute and trimmed once, here (a NUL is refused first): the owner used to come from the kernel's reading of
+    /// the raw path and the mode from .NET's reading of the normalised one, and a <c>..</c> after a symbolic link climbs from the link's TARGET in the kernel's
+    /// order but from the link's folder in .NET's, so the two could be two different files. A symbolic link at the path is refused; the facts of the file
+    /// itself are what is judged. The path in the answer is the normalised one.</summary>
     public static async Task<Outcome<FileFacts>> FileFactsAsync(string path, CancellationToken ct)
     {
         if (OperatingSystem.IsWindows())
@@ -46,23 +50,53 @@ public static class RootFacts
             return Outcome<FileFacts>.Failure($"the owner and mode of {path} are POSIX facts; RootTrust declares the check not performed on Windows");
         }
 
-        if (LinkTargetOf(path) is { } target)
+        if (ExecutableRule.HoldsNul(path))
         {
-            return Outcome<FileFacts>.Failure(
-                $"{path} is a symbolic link to '{target}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)");
+            return Outcome<FileFacts>.Failure($"the trust path '{path.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — refused (D17)");
         }
 
-        var owner = (await Said("stat", StatOwnerArguments(path), ct)).Match(text => Uid(text, "stat"), Outcome<int>.Failure);
-        return owner switch
-        {
-            Outcome<int>.Ok ok => Outcome<FileFacts>.Success(new FileFacts(path, ok.Value, File.GetUnixFileMode(path))),
-            Outcome<int>.Fail fail => Outcome<FileFacts>.Failure($"the owner of {path} cannot be read: {fail.Reason}"),
-            _ => throw new InvalidOperationException("unreachable"),
-        };
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var said = await Said("stat", StatArguments(full), ct);
+        return said.Match(text => Judge(full, text), reason => Outcome<FileFacts>.Failure($"the owner of {full} cannot be read: {reason}"));
     }
 
-    /// <summary>GNU <c>stat -c %u</c>; the BSD spelling on macOS.</summary>
-    private static string[] StatOwnerArguments(string path) => OperatingSystem.IsMacOS() ? ["-f", "%u", path] : ["-c", "%u", path];
+    /// <summary>GNU <c>stat -c '%u %a %F'</c> (owner, access rights in octal, file type); the BSD spelling on macOS. Without <c>-L</c>: the file itself, never what a link points to.</summary>
+    private static string[] StatArguments(string full) =>
+        OperatingSystem.IsMacOS() ? ["-f", "%u %Lp %HT", full] : ["-c", "%u %a %F", full];
+
+    private static Outcome<FileFacts> Judge(string full, string text) =>
+        StatLine.Read(text).Match(
+            line => line.IsLink
+                ? Outcome<FileFacts>.Failure(
+                    $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
+                : Outcome<FileFacts>.Success(new FileFacts(full, line.Uid, line.Mode)),
+            reason => Outcome<FileFacts>.Failure($"stat answered '{text}' for {full}: {reason}"));
+
+    /// <summary>One line of <c>stat</c>: <c>uid mode type</c>, the type being words (<c>regular file</c>, <c>symbolic link</c>).</summary>
+    private sealed record StatLine(int Uid, UnixFileMode Mode, string Type)
+    {
+        public bool IsLink => Type.Equals("symbolic link", StringComparison.OrdinalIgnoreCase);
+
+        public static Outcome<StatLine> Read(string text)
+        {
+            var parts = text.Split(' ', 3);
+            return parts.Length == 3 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var uid) && TryMode(parts[1], out var mode)
+                ? Outcome<StatLine>.Success(new StatLine(uid, mode, parts[2]))
+                : Outcome<StatLine>.Failure("expected an owner, an octal mode and a file type");
+        }
+
+        private static bool TryMode(string octal, out UnixFileMode mode)
+        {
+            mode = UnixFileMode.None;
+            var parsed = octal.Length is > 0 and <= 5 && octal.All(c => c is >= '0' and <= '7');
+            if (parsed)
+            {
+                mode = (UnixFileMode)Convert.ToInt32(octal, 8);
+            }
+
+            return parsed;
+        }
+    }
 
     private static Outcome<int> Uid(string text, string tool) =>
         int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var uid)
