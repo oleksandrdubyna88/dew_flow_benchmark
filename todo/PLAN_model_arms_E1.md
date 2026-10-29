@@ -1924,6 +1924,15 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
     key reaches the coai server — through `mcp-coai.json`'s `env`, never by widening the arm's environment — and pins it with a test;
     providers that sign in through their own CLI homes (part 6's codex, agy, vibe) are unaffected.
 
+17. **(Re-review, 2026-10-30 — the parent's `## Plan changes` record.)** E1.S3's `steps` keyed by the closed `StepKind`, E1.S4's fixed
+    notes members (`ReviewJson`, `CodeNotes`, …), E1.S6's `Options(StepMode, …)`, E1.S7's `BriefTemplates.NameOf(kind)` and
+    `BriefFields.For(kind, …)`, and E1.S10's rehearsal per kind bind part 6's workflow: the owner's part-7 CHH scheme
+    (`run-arm.sh:187-200`) cannot be configured under them. Every E1 story stands as built (the record's table); the correction is
+    **E2.S0, the step contract** (parent D25, D27; schema v2), forward on this code — never a rewrite of E1's history. E1.S8's
+    security findings (kernel real paths, no bare-name launches, `HOME`/`XDG_CONFIG_HOME` and PATH entries under a forbidden root
+    refused, `<fill me>` refused everywhere, the exclusive `mkdir`, the ctime re-check) are the parent's D26 — constraints every
+    later epic inherits by name.
+
 ## 9. Definition of Done — epic E1
 
 - [ ] E1.S1–E1.S11 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).

@@ -1,22 +1,34 @@
 # PLAN — E2 stories: the step of the model-arms module — classify, recover, run, gate
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16,
-> D21; §4.5; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 have landed and E1.S8–E1.S11 have not.
+> Status: **plan only, nothing implemented yet — the parent is stopped for re-review (epoch 2 not yet approved); rewritten to the
+> re-review's split on 2026-10-30.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
+> §4.5, §4.10; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 had landed; E1 is complete at `24e8e8f`.
 >
 > Scope: the step's state machine in `tools/model-arms/ModelArms.Core/Steps/` and `…/Launch/` (the result envelope, the classifier,
 > timing, budget, recovery, the reconciliation of derived outputs, the review's answer, the gate's status, the two MCP configs); its
-> runner, files, git, transcripts and gate lock in `tools/model-arms/ModelArms/Adapters/`; the `gate-lock` and `run-arm` verbs (C and
-> CR); one widening of `tests/FakeCli` (`stdoutByCall`); one fix in the shared launcher (`ProcessRunner` observes both readers, E1 §8
+> runner, files, git, transcripts and gate lock in `tools/model-arms/ModelArms/Adapters/`; the `gate-lock` and `run-arm` verbs (every
+> sequential scheme — C, CR, CHH); one widening of `tests/FakeCli` (`stdoutByCall`); one fix in the shared launcher (`ProcessRunner` observes both readers, E1 §8
 > item 15); tests under `tests/Bench.Tests/ModelArms/` (plus two in `tests/Bench.Tests/Infrastructure/`); recorded fixtures under
 > `tests/Bench.Tests/Fixtures/model-arms/`; `research/module_model_arms.md`. Nine stories, E2.S0–E2.S8 (the parent's map named seven;
-> §8 records the split and the added S0). Cornerstone area of this epic: **the step's state machine**, marked on **E2.S1** (`model: fable`). The
-> parent's ledger now reads `Cornerstones: 2 of 2 — E1.S5, E2.S1`.
+> §8 records the split and the added S0). Two cornerstone areas: **the step contract**, marked on **E2.S0** (`model: fable`; its spec is
+> written when the epic starts), and **the step's state machine**, marked on **E2.S1** (`model: fable`; spec written at `91e8197`). The
+> parent's ledger now reads `Cornerstones: 3 of 3 — E1.S5, E2.S0, E2.S1` (six epics, Q = 3).
 >
-> **Amended 2026-10-29 at `24e8e8f` (E1 complete) after the epics 1–3 consultation, by Fable — before any E2 code.** Three gaps, each
+> **Rewritten to the re-review's split, 2026-10-30, by Fable** (`common.plan-change-control` steps 4 and 7; the parent's `## Plan changes`
+> record). The parent now has six epics: this one covers the step AND every sequential scheme — C, CR and the part-7 CHH (two read-only
+> Haiku reviews to two verdict files, a fix that reads both, a diff from the first review's snapshot) — so **E2.S0 is no longer the
+> delegation policy alone: it is the step contract** (parent D25: a step's identity, brief and output bindings are configuration, its
+> execution kind is one of four; D27: named runs; schema v2; the eleven templates), which absorbs the policy and corrects E1.S3, S4, S6,
+> S7, S10 forward. S0's section below carries the contract (C12) and a table of what it changes in S2, S4, S5, S7 and S8; those
+> sections keep their earlier text and read C12 where it differs (E1.S9 and E1.S8 have landed, so §8 item 16's waits are over).
+> The old E3 (SRS) is the parent's E4; the checks and the preparation verbs are E3; isolation and the chain E5; the record E6.
+>
+> **Amended 2026-10-29 at `24e8e8f` (E1 complete) after the epics 1–3 consultation, by Fable — before any E2 code** (kept as history; the
+> re-review paragraph above is the current baseline). Three gaps, each
 > verified against this document and the E1 code, each settled in the story it belongs to and marked *(amended)*: **(1)** a blocked gate
 > never resumed — E2.S7 removed `.done` to resume, E2.S2's recovery read the finished stream as done again (§1 *Amended*, S2, S4, S7);
 > **(2)** E2's git launches repeated E1's bare-name defect — `ArmGit` went through `GitCommand`, which E1's S22 scan forbids (S4, S8, and
-> E3's obligation in the parent's D17 d); **(3)** nothing kept a step from starting subagents — the new E2.S0 (a change to E1's
+> E4's obligation in the parent's D17 d); **(3)** nothing kept a step from starting subagents — the new E2.S0 (a change to E1's
 > `StepLaunch`, `StepSpec` and the example). The parent's `## Plan changes` ledger carries them as 1.1–1.3 and is **stopped for
 > re-review** (`common.plan-change-control`); the stories here are the amended baseline that re-review reads.
 
@@ -56,7 +68,7 @@ consultation over epics 1–3 and verified line by line before anything was chan
    `git` with the inherited environment (`src/Bench.Infrastructure/Git/GitHistory.cs:35`) — exactly what E1.S10's S22 scan forbids in
    `tools/model-arms` (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), and E2.S8 resolved `git` only to print
    it: the resolved path was not in `StepContext`. Now every git launch of E2 goes by the real path `Resolve` found, under
-   `GitEnvironment.Of(parent)`, from a cwd the runner chose — as E1's `SourceFacts` does — and E3's worktree orchestration inherits the
+   `GitEnvironment.Of(parent)`, from a cwd the runner chose — as E1's `SourceFacts` does — and E4's worktree orchestration inherits the
    obligation through the parent's D17 (d) (S4, S8).
 3. **Nothing prevented a step from delegating to other models.** `StepLaunch` read mode denies `Edit Write NotebookEdit` plus
    `tools.deny` (`StepLaunch.cs:84-90`); omitting `Agent` from `--allowedTools` does not remove it, and the example's Haiku `hreview`
@@ -66,6 +78,15 @@ consultation over epics 1–3 and verified line by line before anything was chan
    fresh and resumed: the new **E2.S0**, a change to E1's `StepSpec`, `StepLaunch` and the example.
 
 Each is a change to the parent after its approval; the parent's ledger records them and the plan is stopped for re-review.
+
+**The re-review of 2026-10-30 (the parent's record under `## Plan changes`).** Two findings verified against the E1 code reshape this
+epic: **(a)** E1's contracts bind part 6's workflow — `steps` keyed by a closed `StepKind` (`FlowSection.cs:17`), one template per
+kind (`BriefTemplates.cs:11`), fixed paths per kind (`BriefFields.cs:36`), one `review.json` (`ArmPaths.cs:162`) — and the owner's
+part-7 CHH scheme (`run-arm.sh:187-200`) cannot be configured under them; E2.S0 becomes the step contract (parent D25, D27; C12)
+and the third cornerstone, and E2.S8 runs every sequential scheme including CHH. **(b)** D11's restore-on-entry rule is the parent's
+E5 to fix, not this epic's; nothing here touches a mode. The SRS pipeline moves to the parent's E4; `prep-base`, `make`, `status`
+and `checks` to E3. The consultants' third advice — a usable vertical slice first — is why this epic ends with **M1**: a fake
+sequential arm of each of the three schemes, resumed after a limit and after an interruption, whose files `metrics.mjs` reads.
 
 ## 2. What exists — verified at `a208d75`, 2026-10-29
 
@@ -241,7 +262,7 @@ public static class StepClassifier
 public static class LimitWords { public static string FirstIn(string text); }   // the matched text, "" when none
 ```
 
-**C6 — timing, budget, recovery, derived outputs** (E2.S2; read by S4, S7, S8 and E3). In `ModelArms.Core.Steps`:
+**C6 — timing, budget, recovery, derived outputs** (E2.S2; read by S4, S7, S8 and E4). In `ModelArms.Core.Steps`:
 
 ```csharp
 public abstract record TimingLine
@@ -284,7 +305,7 @@ public abstract record StepEntry
     public sealed record Resume(Guid Session, int Attempt, int BudgetSeconds) : StepEntry;
 }
 public static class StepRecovery { public static StepEntry Decide(string step, RecoveryFacts facts, StepSpec spec, Limits limits); }
-public enum DerivedOutput { ReviewJson, StepDiff, CoderHead, CoderDiff }
+public enum DerivedOutput { Verdict, StepDiff, CoderHead, CoderDiff }   // (re-review) Verdict: the file a review's `verdict` binding names
 public sealed record OutputFacts(IReadOnlySet<DerivedOutput> Present, bool BeforeExists, bool TaskBeforeExists,
     Outcome<ClaudeResultEnvelope> FinalResult);
 public abstract record OutputAnswer
@@ -296,9 +317,9 @@ public abstract record OutputAnswer
 }
 public static class StepOutputs
 {
-    public static IReadOnlyList<DerivedOutput> Of(StepKind kind);   // Review → [ReviewJson]; HReview, Gate → [StepDiff]; TaskCode → [CoderHead, CoderDiff]; else []
-    public static bool NeedsBefore(StepKind kind);                   // HReview, Gate
-    public static OutputAnswer Reconcile(StepKind kind, OutputFacts facts);
+    public static IReadOnlyList<DerivedOutput> Of(StepSpec spec);    // (re-review, C12) Verdict when spec.Verdict is bound; StepDiff when spec.DiffFrom is set; TaskCode → [CoderHead, CoderDiff]
+    public static bool NeedsBefore(StepSpec spec);                   // spec.Snapshot
+    public static OutputAnswer Reconcile(StepSpec spec, OutputFacts facts);
 }
 ```
 
@@ -316,7 +337,7 @@ public interface IGateLock
 No `IArmFiles` port (the parent's §4.1 lists one): the runner's tests run over real temp folders — the same files the analysis
 reads — and a port would only let a test agree with itself (§8 item 9).
 
-**C8 — the runner** (E2.S4; read by S7, S8 and E3.S3). In namespace `ModelArms.Adapters`:
+**C8 — the runner** (E2.S4; read by S7, S8 and E4.S3). In namespace `ModelArms.Adapters`:
 
 ```csharp
 public sealed record StepContext(string Arm, ArmPaths Paths, SchemeEntry.Step Step, Experiment Experiment, string ClaudeExecutable,
@@ -351,7 +372,8 @@ TextWriter log, GateProbe probe) { public Task<StepOutcome> RunAsync(StepContext
 `public string CoaiData => Under("coai-data");` (E2.S6) and `public string Continue(string step) => Under("out", Step(step) + ".continue");`
 (E2.S2, amended — spelled exactly as `Done(step)` is, `ArmPaths.cs:115`).
 
-**C11 — the delegation policy** (E2.S0, amended; read by S4, S8 and E3.S3). In `ModelArms.Core.Experiment` and `ModelArms.Core.Launch`:
+**C11 — the delegation policy** (E2.S0 as amended on 2026-10-29; **superseded by C12 in E2.S0's section** — the policy is one part of the
+step contract now; kept so the amendment's reasoning stays readable). In `ModelArms.Core.Experiment` and `ModelArms.Core.Launch`:
 
 ```csharp
 public sealed record StepSpec(StepKind Kind, string Model, int Minutes, StepMode Mode, bool Subagents = false);   // the file's "subagents": true|false, default false
@@ -381,67 +403,120 @@ be wider than the launch it continues.
 
 ## 5. Stories
 
-### E2.S0 — The delegation policy: no step starts a subagent unless its spec says so (amended — added after the epics 1–3 consultation)
+### E2.S0 — The step contract: identity, kind and bindings; schema v2; the delegation policy (CORNERSTONE — rewritten by the re-review, 2026-10-30)
 
-- **Coder:** sonnet · **Spec:** Fable (this section, 2026-10-29 at `24e8e8f`) · **Review:** Opus. **Depends on:** nothing in E2 (E1.S3, E1.S6,
-  E1.S11 landed). **Parallel with:** E2.S1, E2.S3. **Before:** E2.S4 (its `StepBench` reads the example and asserts argv) and E2.S8.
-- **Owns:** C11; the parent's §4.4 `DisallowedTools` row as amended; the example's and the template's `subagents` member. **Size:** ≈ 260
-  changed lines (≈ 70 code, 150 tests, the example and the template).
-- **Files.** `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs` (`Subagents`), `…/Experiment/FlowSection.cs` (`StepMembers` gains
-  `subagents`; `Step` reads it), `…/Experiment/StrictJson.cs` (one reader, `Flag`), `tools/model-arms/ModelArms.Core/Launch/StepLaunch.cs`
-  (`SubagentTools`, `Options(StepSpec, …)`, the private `Delegation`), `tools/model-arms/examples/part6.experiment.json` (eight lines and one
-  comment), the `init` template is DERIVED — no edit (`ExperimentTemplate`), `tests/Bench.Tests/ModelArms/StepLaunchTests.cs` (one theory
-  amended, one added), `tests/Bench.Tests/ModelArms/ExperimentFileTests.cs` (one added), `tests/Bench.Tests/ModelArms/ExampleExperimentTests.cs`
-  (one added), `research/module_model_arms.md` (*The delegation policy (E2.S0)*, §3).
+**Cornerstone — spec by Fable** (`model: fable`), written into this section when the epic starts, after epoch 2 is approved — not before:
+the scenarios (Given/When/Then and the expected red of each), the red stubs and the brief. The goal, the binding contract (C12) and
+the acceptance criteria below are the re-review's; they are the baseline the spec makes exact. Area: the step contract (parent
+`## Epics`, E2; parent D25, D27, D4, D15). The parent's ledger reads `Cornerstones: 3 of 3 — E1.S5, E2.S0, E2.S1`.
 
-**Why a policy and not a tool list.** `--allowedTools` is a permission allow-list: what is absent from it is not forbidden, only asked
-about — and `-p` with `acceptEdits` answers for the agent. Under the shell, part 6's Haiku review step started Opus and Sonnet subagents
-and $3.79 of the step's $5.35 was not Haiku: the arm compared a model that was not the one named. The shell's repair denies `Agent Task`
-on READ steps only (`run-arm.sh:90-92`); the Haiku steps the experiment measures are WRITE steps (`hreview`, `taskCode`). So: **every
-step is launched with the subagent tool denied, fresh and resumed, unless its spec says `"subagents": true`** — the default is the
-measurement's, the opt-in is the operator's, and the record (`experiment.json`) says which. The deny-list is the measure (claude's
-permission rules: a deny rule outranks an allow rule); stripping the names from the allow-list too keeps the argv from reading as a
-contradiction, and the argv is what the analysis half and a reviewer read.
+- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Depends on:** nothing in E2 (E1 landed whole). **Parallel with:** E2.S1,
+  E2.S3. **Before:** E2.S2 (`StepOutputs` over the bindings), E2.S4, E2.S5, E2.S7, E2.S8 — every story that reads a step's identity,
+  brief or outputs.
+- **Owns:** parent D25 (the step contract), D27's file half (`runs`), D4's v2, D15's eleven templates, C12 here; the parent's §4.2,
+  §4.4 and §4.10 as revised; the correction of E1.S3, E1.S4, E1.S6, E1.S7, E1.S10 and E1.S11's example and template — **forward, on
+  E1's landed code, never a rewrite of E1's history** (`common.plan-change-control` step 6). **Size:** ≈ 1100 changed lines (≈ 350
+  code, 550 tests, the example, the three templates, the module doc).
+- **Files.** `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs` (`StepKind` → `StepId` + the closed `StepKind {Session, Review,
+  Gate, TaskCode}`; `StepSpec` with `Brief`, `Outputs`, `Notes`, `Verdict`, `Status`, `Snapshot`, `DiffFrom`, `Subagents`),
+  `…/Experiment/FlowSection.cs` (`steps` keyed by id; `runs`), `…/Experiment/Scheme.cs` (`SchemeEntry.Step(Name, Id)`, the `tasks`
+  block's three ids), `…/Experiment/ExperimentFile.cs` (`Schema = "model-arms/experiment-v2"`, the v1 refusal, `Runs`),
+  `…/Experiment/StrictJson.cs` (`Flag`, a map reader), `…/Experiment/ArmPaths.cs` (`NotesFile(binding)`; the fixed notes members
+  retired — `CodeNotes`, `HReviewNotes`, `FixNotes`, `GateNotes`, `SplitNotes`, `ReviewJson`, `GateJson`; `TaskNotes(id)` stays),
+  `…/Experiment/HostChecks.cs` (the rehearsal per scheme position; the `tasks` block's kinds; `diffFrom`'s placement),
+  `…/Briefs/BriefTemplates.cs` (`NameOf(stem)` — a stem rule, no kind table), `…/Briefs/BriefFields.cs` (`For(scheme, position, paths,
+  facts)`), `…/Briefs/BriefRehearsal.cs`, `…/Launch/StepLaunch.cs` (`Options(StepSpec, …)`, `SubagentTools`, `Delegation`),
+  `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs` (`Read(stem)`), `tools/model-arms/briefs/hA-trace.template.md`,
+  `hB-tests.template.md`, `hfix.template.md` (byte for byte, parent §2's sums), `tools/model-arms/examples/part6.experiment.json`
+  (v2, every step of §4.2, the CHH scheme, the two runs), the `init` template by derivation (`ExperimentTemplate` — a map value is
+  blanked like a string), the E1 tests this changes (`ExperimentFileTests`, `ArmPathsTests`, `StepLaunchTests`, `BriefFillerTests`,
+  `ValidateVerbTests`, `ExampleExperimentTests`, `InitVerbTests`), `tests/Bench.Tests/ModelArms/StepContractTests.cs` (new),
+  `BriefFieldsTests.cs` (new), `research/module_model_arms.md` (*The step contract (E2.S0)* — replaces E1.S3's and E1.S7's
+  paragraphs on kinds and templates; the CHH walk-through).
 
-**What changes, exactly.**
+**Why.** E1 keyed the step definitions by a closed `StepKind` enum (`FlowSection.cs:17`), picked one template per kind
+(`BriefTemplates.cs:11`), filled fixed paths per kind (`BriefFields.cs:36`) and spelled one `review.json` per arm (`ArmPaths.cs:162`).
+One day later the owner's part 7 added CHH (`run-arm.sh:187-200`): two read-only Haiku reviews briefed differently, writing
+`notes/hA.json` and `notes/hB.json`; a fixer briefed with `HA_JSON` and `HB_JSON`; a `.diff` from the snapshot before the first review
+to HEAD after the fix. None of it is configurable under E1's contract. The port is of a harness: the owner changes a scheme between
+parts, and the runner must not have to be rebuilt for it. The parent's D25 says what is open and what is closed; this story makes it so.
 
-1. `StepSpec` gains `bool Subagents = false` as the last positional member; every existing `new StepSpec(kind, model, minutes, mode)`
-   compiles unchanged. `FlowSection.Step` reads it through `StrictJson.Flag(step, path, "subagents", fallback: false)` — a new reader
-   beside `Choice` (`StrictJson.cs:263`): absent → the fallback; the JSON literal `true`/`false` → that; anything else (a string, a
-   number, `null`) → the problem `<path>.subagents must be true or false` collected like every other refusal, never a throw.
-2. `StepLaunch.Options(StepSpec spec, ToolSets tools, ArmPaths paths, StepSession session)` = `Session(Delegation(ForMode(spec.Mode, tools,
-   paths), spec.Subagents), session)`; `Ask(request)` passes `request.Spec`. `Delegation(options, allowed)` is one expression: `allowed ?
-   options : options with { PermittedTools = [.. options.PermittedTools.Where(t => !SubagentTools.Contains(t, StringComparer.Ordinal))],
-   DisallowedTools = [.. SubagentTools, .. options.DisallowedTools] }`. `ForMode` and `Session` are untouched; no method passes complexity 4.
-3. The example: every one of the eight step objects gains `"subagents": false` after `"mode"`, and the comment above `steps` gains one
-   sentence: *`subagents` says whether the step may start a subagent (the Agent tool) — false by default, and false for every measured
-   step: in part 6 a Haiku review step started Opus and Sonnet subagents and most of its cost was not Haiku.* The template follows by
-   derivation (a boolean is kept as it was, `ExperimentTemplate.cs:37`), so `The_init_template_is_the_example_with_its_values_blanked`
-   stays green without an edit.
+**C12 — the step contract** (replaces C11; read by S2, S4, S5, S7, S8 and E4.S3). In `ModelArms.Core.Experiment`:
 
-**Scenarios.**
+```csharp
+public enum StepKind { Session, Review, Gate, TaskCode }            // closed: what the runner must KNOW; JSON session review gate taskCode
+public sealed record StepId(string Value);                          // open: letters and digits, the key under "steps" and the id a scheme entry names
+public sealed record OutputBinding(string Field, string RelativePath);   // "HA_JSON" → "notes/hA.json" (under the arm folder; notes/ or work/; no .., never absolute)
+public sealed record StepSpec(StepId Id, StepKind Kind, string Model, int Minutes, StepMode Mode, bool Subagents, string Brief,
+    IReadOnlyList<OutputBinding> Outputs, string Notes, string Verdict, string Status, bool Snapshot, string DiffFrom)
+{   // Notes / Verdict / Status name one of Outputs' fields or are ""; DiffFrom is a StepId's value or ""; Brief is a template stem
+    public Outcome<string> OutputPath(string field);                // the bound relative path, or a failure naming the field and the step
+}
+public abstract record SchemeEntry { public sealed record Step(string Name, StepId Id) : SchemeEntry; public sealed record Tasks : SchemeEntry; }
+public sealed record TaskLimits(int Min, int Max, int MaxParallel, StepId Split, StepId SplitFix, StepId TaskCode);
+public sealed record RunSpec(string Name, IReadOnlyList<IReadOnlyList<string>> Rounds, IReadOnlyList<string> ClosedArms, IReadOnlyList<string> Closed);
+public sealed record Experiment(…, IReadOnlyDictionary<StepId, StepSpec> Steps, IReadOnlyList<Scheme> Schemes, IReadOnlyList<RunSpec> Runs, …);   // Rounds gone
+public static class ExperimentFile { public const string Schema = "model-arms/experiment-v2"; … }
+public static class SchemePositions
+{   // the steps before a position, in order — the outputs a brief at that position may use
+    public static IReadOnlyList<StepSpec> Before(Scheme scheme, int position, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks);
+}
+```
 
-| Test | Given / When / Then | Red (stub: `Options` ignores `Subagents`; `Flag` not written) |
+In `ModelArms.Core.Briefs`: `BriefTemplates.NameOf(string stem) → Outcome<string>` (`<stem>.template.md`; a stem is `[A-Za-z0-9-]+`);
+`BriefFields.For(Scheme scheme, int position, ArmPaths paths, BriefFacts facts)` — the facts, `NOTES`, every earlier step's outputs
+(`OutputBinding.Field` → `paths.NotesFile(binding)`), the task fields; `BriefRehearsal.Run(experiment, templates)` fills every template at
+every position of every scheme and returns every problem at once. In `ModelArms.Core.Launch`: `StepLaunch.Options(StepSpec spec,
+ToolSets tools, ArmPaths paths, StepSession session)` applies the mode as today and THEN the policy (unless `spec.Subagents`,
+`DisallowedTools` = `[.. SubagentTools, .. the mode's list]` and `PermittedTools` = the mode's list minus `SubagentTools`, ordinal —
+fresh and resumed alike). `ArmPaths.NotesFile(OutputBinding binding) → string` resolves a binding under the arm folder (`Segment`-checked,
+no `..`).
+
+**What this changes in the other stories of this document** (each story reads the landed C12, not its older text):
+
+| story | was | is |
 |---|---|---|
-| `StepLaunchTests.Write_read_and_gate_modes_produce_the_shells_three_argv_shapes` (amended) | as today, with the spec `new StepSpec(Code, "sonnet", 45, mode)` (default policy); the expected `--disallowedTools` group becomes `["Agent", "Task", .. the mode's list]` and the expected `--allowedTools` group is the mode's list WITHOUT `Agent` (the example's `tools.write` carries one — the test asserts `tools.Write` contains `Agent` first, so the strip is observed) | `Expected groups to be equivalent to {…, "--disallowedTools␟Agent␟Task␟Read(//example/home/.claude/**)…", …}, but found "--disallowedTools␟Read(//example/home/.claude/**)…"` |
-| `StepLaunchTests.No_step_starts_a_subagent_unless_its_spec_says_so` (added, `[Theory]` over the three modes × `Fresh`/`Resume`) | **Given** a spec with the default policy; **when** `Options`; **then** `DisallowedTools` starts with `Agent`, `Task` and `PermittedTools` contains neither; **and given** the same spec `with { Subagents = true }`; **then** `DisallowedTools` contains neither and `PermittedTools` equals the mode's list as configured (`Agent` kept in write and gate) | `Expected denied to start with {"Agent", "Task"}, but found {"Read(//example/home/.claude/**)", …}` |
-| `StepLaunchTests.A_resume_is_never_wider_than_the_launch_it_continues` (added) | the resumed options of a default-policy spec equal the fresh ones except `SessionId`/`ResumeSessionId` (the existing `A_resume_carries_the_same_options…` compares the whole record; this one asserts the two deny-lists and the two allow-lists are equal, so a later story that widens one branch is caught by name) | passes on the stub — its red is the plant: apply `Delegation` in the `Fresh` branch of `Session` only → `Expected resumed.DisallowedTools to be equal to {"Agent", "Task", …}, but {…} differs at index 0.` |
-| `ExperimentFileTests.A_step_without_subagents_reads_as_denied_and_true_reads_as_allowed` (added) | the example read → every `Steps[kind].Subagents` is false; the example with `steps.code.subagents` set to `true` → `Steps[Code].Subagents` true; set to `"yes"` → refused, the problem naming `steps.code.subagents` and `true or false` | `Expected outcome to be Ok, but found Fail("steps.code.subagents is not a member …")` (the member is unknown until read) |
-| `ExampleExperimentTests.Every_step_of_the_example_says_subagents_false_explicitly` (added) | the example's text parsed as `JsonNode` (comments skipped) → each of the eight `steps.*` objects has a `subagents` member whose value is the literal `false` — so the record shows the decision rather than the default | `Expected 8 step(s) to carry "subagents": false, but found 0.` |
+| E2.S2 | `StepOutputs.Of(StepKind kind)`, `NeedsBefore(kind)`, `Reconcile(kind, facts)`; `DerivedOutput.ReviewJson` | `StepOutputs.Of(StepSpec spec)` — `Verdict` when `spec.Verdict` is bound, `StepDiff` when `spec.DiffFrom` is set, `CoderHead`/`CoderDiff` for `TaskCode`; `NeedsBefore(spec)` = `spec.Snapshot`; `Reconcile(spec, facts)`; `DerivedOutput.Verdict` |
+| E2.S4 | `StepContext.Step: SchemeEntry.Step(Name, Kind)`, `spec = Experiment.Steps[kind]`, `BriefTemplateFiles.Read(kind)`, `BriefFields.For(kind, …)`, `.before` by `NeedsBefore(kind)` | `SchemeEntry.Step(Name, Id)`, `spec = Experiment.Steps[id]`, `Read(spec.Brief)`, `BriefFields.For(scheme, position, …)` (`StepContext` gains `Scheme` and `Position`), `.before` when `spec.Snapshot`; the `.diff` from the `.before` of the step `spec.DiffFrom` names |
+| E2.S5 | the verdict to `paths.ReviewJson` | to `paths.NotesFile(spec.OutputPath(spec.Verdict))` |
+| E2.S7 | `gate.json` by `paths.GateJson` | by the `status` binding; everything else as amended |
+| E2.S8 | `run-arm` for C and CR | for every scheme without a `tasks` block — C, CR, CHH; the CHH scenario; the consumer read (M1) |
 
-**Break-it** (watched red, then restored): delete the `Delegation` call from `Options` → the amended theory and
-`No_step_starts_a_subagent_unless_its_spec_says_so` red together; E2.S8's `The_opus_review_and_the_haiku_review_are_launched_without_the_agent_tool_fresh_and_resumed`
-is the same plant seen through a real launch.
+**Acceptance criteria** (the spec makes each a scenario with its red):
 
-**Commands.** `--filter-class "*StepLaunchTests"`, `"*ExperimentFileTests"`, `"*ExampleExperimentTests"`, `"*InitVerbTests"`, `"*ValidateVerbTests"`,
+1. `steps` is keyed by id; a scheme entry `"<name>:<id>"` names a defined id or the refusal names both the entry and the ids defined;
+   `kind` is one of the four or the refusal lists them; a `review` without `verdict`, a `gate` without `status`, a `verdict`/`status` on
+   any other kind, a `notes`/`verdict`/`status` naming a field not in the step's own `outputs`, an output path that is absolute, holds
+   `..` or is outside `notes/` and `work/`, a `diffFrom` naming an id the scheme does not place at or before this step or that has no
+   `snapshot` — each a problem sentence collected with the rest (E1 §8 item 6), never the first alone.
+2. `runs` is a map; every round names arms of defined schemes; no arm in two runs; `closedArms` name arms of some run; `rounds` at the
+   top level is refused as *moved to runs.<name>.rounds*; `schema` v1 is refused naming the three moves.
+3. `BriefFields.For` at CHH's `4-hfix` yields `HA_JSON`, `HB_JSON`, `CODE_NOTES` and no `REVIEW`; at C's `2-review` yields
+   `CODE_NOTES` and no `REVIEW`; the rehearsal over a scheme placing `3-fix` before `2-review` refuses naming the scheme, the position
+   and `REVIEW`; the rehearsal over the example is clean.
+4. The example read as v2 binds every file the shell wrote (parent §4.2's list) — `The_example_binds_every_file_the_shell_wrote`; the
+   `init` template is the example blanked (E1.S11's test green without an edit); `validate` over the fixture root accepts it.
+5. `StepLaunch`: `Agent Task` lead every deny-list and are absent from every allow-list unless `subagents: true`, fresh and resumed
+   (the ledger-1.3 scenarios of the earlier S0, kept by name: `No_step_starts_a_subagent_unless_its_spec_says_so`,
+   `A_resume_is_never_wider_than_the_launch_it_continues`); the example says `"subagents": false` eleven times.
+6. The three part-7 templates ship byte for byte (their sha256 asserted against parent §2's); `BriefTemplates.NameOf` refuses a stem
+   with a separator or `..`; an experiment root's `briefs/` may ADD a template a step names.
+7. Every E1 test green under v2 under its name (renames: `The_schema_member_is_required_and_must_be_exactly_model_arms_experiment_v2`;
+   `Every_shipped_template_fills_completely_with_its_steps_fields` now per scheme position over eleven); `PureDeciders` carries the
+   new deciders under `// E2.S0`; `The_module_launches_nothing_by_a_bare_name` green; nothing under `src/` changes.
+
+**Break-its** (the spec names each red): the rehearsal skipped for one scheme → criterion 3's third scenario green on the stub, red
+on the plant; `Delegation` removed → criterion 5; `diffFrom` placement unchecked → criterion 1's last clause.
+
+**Commands.** `--filter-class "*StepContractTests"`, `"*BriefFieldsTests"`, `"*ExperimentFileTests"`, `"*ArmPathsTests"`,
+`"*StepLaunchTests"`, `"*BriefFillerTests"`, `"*ValidateVerbTests"`, `"*ExampleExperimentTests"`, `"*InitVerbTests"`,
 `"*ModelArmsArchitectureTests"`; the whole suite.
 
-**Done when.** The five green, each seen red (the plant of the third observed); `ClaudeArgvSessionTests`, `ProbeArgvTests` and `ScoutArgvTests`
-unedited and green (nothing under `src/` changes); the module doc's paragraph states the default, the opt-in and the part-6 number.
+**Done when.** The seven criteria green, each seen red; the module doc's *The step contract* section walks CHH from the example to the
+files it binds; `research/module_model_arms.md`'s E1.S3 and E1.S7 paragraphs say they are superseded by it.
 
-**Out of bounds.** A per-step model guard for the subagents a step is ALLOWED to start (the parent's D19 keeps the scout flags off);
-`--agents`; any change to `CliArgv` or `AgentAskOptions`; the task pipeline's launches (E3.S3 goes through `StepLaunch` and inherits the
-policy; its scenario is named in the parent's E3.S3 row).
+**Out of bounds.** A fifth kind (parent §9); a per-step model guard for the subagents a step is ALLOWED to start; `--agents`; any change
+to `CliArgv` or `AgentAskOptions`; the task pipeline's launches (E4.S3 goes through `StepLaunch` and inherits the policy).
 
 ### E2.S1 — `ClaudeResultEnvelope` and `StepEnd`: the step's end, structured first (CORNERSTONE)
 
@@ -885,7 +960,7 @@ therefore resumable, not done — §8 item 3.)
 is a byte copy (`cmp` in the summary); the module doc's tables equal the two above, the recovery table with its first row.
 
 **Out of bounds.** Writing anything to disk; git; minting a session id; `ReviewAnswer` (E2.S5); TaskCode's use of `CoderHead`/`CoderDiff`
-(E3.S3 wires them; the table here is complete so E3 adds no kind).
+(E4.S3 wires them; the table here is complete so E4 adds no kind).
 
 ### E2.S3 — The launcher's follow-ups: `stdoutByCall` in the fake, both readers observed in `ProcessRunner`
 
@@ -996,7 +1071,7 @@ C5, C6, C7, C11, `ReviewAnswer.Extract` (C10, E2.S5).
 - `DerivedOutputs.WriteAsync(StepContext, IReadOnlyList<DerivedOutput>, ArmFiles, ArmGit, ct)` — the ONE writer of derived outputs, used by the
   first run and by every re-entry: `ReviewJson` ← `ReviewAnswer.Extract(ClaudeResultEnvelope.LastOf(final stream))` (C10); `StepDiff` ←
   `git.DiffAsync(<step>.before)`; `CoderHead`/`CoderDiff` refused here with *"task outputs are written by the task pipeline
-  (E3.S3)"* (the kinds reach the runner only in E3).
+  (E4.S3)"* (the kinds reach the runner only in E4).
 - `ClaudeSessionTranscripts(string claudeHome) : ISessionTranscripts` — `File.Exists(SessionTranscripts.PathOf(claudeHome, cwd, id))`; an
   empty home answers false.
 
@@ -1103,7 +1178,7 @@ one); the module doc's *The step runner* has the sequence diagram, the exit tabl
 `GIT_*`-free environment, the chosen cwd — D17 d).
 
 **Out of bounds.** The gate's lock and loop (E2.S7 — `DeriveOutputs: false` is its switch); scheme order and `arm-done` (E2.S8); task
-steps (E3); keep-awake; anything under `src/`.
+steps (E4); keep-awake; anything under `src/`.
 
 ### E2.S5 — `ReviewAnswer`: the review step's verdict, from the last result only
 
@@ -1278,12 +1353,21 @@ order with every launch and wait, and `gate.json` written by the test — the fa
 **Out of bounds.** The real `FileGateLock` (E2.S6 proves it; the gate step's tests record the order); `gate.json`'s schema beyond `status`
 and `why`.
 
-### E2.S8 — `run-arm` for C and CR: the scheme in order, the exits, `arm-done`
+### E2.S8 — `run-arm` for every sequential scheme (C, CR, CHH): the scheme in order, the exits, `arm-done`, M1
 
 - **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S4, E2.S5, E2.S6, E2.S7; E1.S8 (`ScenariosFile`,
   `ExecutableResolution`, `RootRequirements`), E1.S9 (dispatch, `ExperimentGate`, `ExperimentRoot`).
 - **Owns:** D16 for the verb, D17(c) for `run-arm` (the resolved executables printed before the first launch), §4.1's `run-arm` row, the
-  parent's E2.S7. **Size:** ≈ 520 lines.
+  parent's E2.S8 (re-split). **Size:** ≈ 640 lines.
+- **(Re-review, 2026-10-30.)** The verb runs ANY scheme without a `tasks` block by walking its entries over C12 — it knows the four kinds and
+  nothing about C, CR or CHH by name; a `tasks` block is refused until E4 (`A_scheme_with_a_tasks_block_is_refused_until_the_task_pipeline_lands`).
+  Added scenarios (parent §7): `Scheme_CHH_runs_two_read_only_reviews_to_two_verdict_files_a_fix_that_reads_both_and_a_diff_from_the_first_snapshot`
+  (the fake's call log shows `hA-trace` and `hB-tests` briefs, `notes/hA.json` and `notes/hB.json` written from each review's last result,
+  `4-hfix`'s prompt carrying both paths, `out/4-hfix.diff` from `out/2-hA.before`); `The_opus_review_and_the_haiku_reviews_are_launched_without_the_agent_tool_fresh_and_resumed`;
+  `A_sequential_arm_leaves_the_files_the_example_binds_and_the_consumers_read_them` — M1: `research/local-model-coding/harness/metrics.mjs`
+  run as `node` + script (by its resolved path, D17 d) over the fake arm's root, exit 0 and its output naming the arm's steps (the
+  sequential half of the parent's D28; E6 runs every reader over every scheme). The steps below read `spec = Experiment.Steps[id]` and
+  `BriefTemplateFiles.Read(spec.Brief)` where they say `kind`.
 
 **Files.** `tools/model-arms/ModelArms/Verbs/RunArm.cs` (`RunArmVerb`); `tools/model-arms/ModelArms/Program.cs` (the `run-arm` arm only:
 `"run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),`); `tests/Bench.Tests/ModelArms/RunArmSchemeTests.cs`; `ExperimentRoot.cs`
@@ -1298,7 +1382,7 @@ and `why`.
 
 1. `arm = Positionals[0]`; `ArmNames.SchemeOf(arm)` → the scheme must be among `Experiment.Schemes` (else 4: `"<arm> belongs to scheme
    <s>, which is not among the schemes (C, CR, SRS)"`); a scheme holding a `SchemeEntry.Tasks` → 4: `"<arm>'s scheme runs the task
-   pipeline — not built yet, story E3.S3 of todo/PLAN_model_arms.md"`.
+   pipeline — not built yet, story E4.S3 of todo/PLAN_model_arms.md"`.
 2. `map = ArmMap.Read(arms.map.json)` → `TokenOf(arm)` (refusal → 4); `paths = root.Arm(token)`.
 3. Resolve `claude` and `git` through `ExecutableResolution.Resolve` over `input.Verb.Environment["PATH"]`, forbidden roots
    `[Target.Source, root]`; a failure → 3 naming it; (amended) every PATH entry through `ExecutableResolution.PathEntryRefusal` with the
@@ -1333,7 +1417,7 @@ claude to the fake; links and POSIX paths")`).
 | `Scheme_CR_inserts_the_fresh_review_and_fix` | `MakeArmAsync("CR1", fake)` → 0; 5 calls, `1-code`, `2-hreview`, `3-review`, `4-fix`, `5-gate`; `2-hreview.before`/`.diff` exist; `review.json` from `3-review` | as above |
 | `An_unknown_arm_is_refused_with_exit_4` | `run-arm XY1` → 4 naming `XY` and `C, CR, SRS`; `run-arm C9` (scheme exists, never made) → 4 naming `made-C9` (the gate's requirement) or the map; 0 calls | `Expected … to contain "XY"` |
 | `A_finished_arm_run_again_launches_nothing_and_writes_one_arm_done` (added) | C1 run twice → both 0; still 4 calls; exactly one `arm-done` line | `Expected arm-done lines to contain 1 item(s), but found 2.` |
-| `An_srs_arm_is_refused_until_the_task_pipeline_exists` (added) | `MakeArmAsync("SRS1", fake)` → 4 naming `E3.S3`; 0 calls | `Expected … "E3.S3"` |
+| `An_srs_arm_is_refused_until_the_task_pipeline_exists` (added) | `MakeArmAsync("SRS1", fake)` → 4 naming `E4.S3`; 0 calls | `Expected … "E4.S3"` |
 | `Run_arm_prints_the_resolved_claude_and_git_before_the_first_launch` (added) | the C1 run's output contains `claude → <temp>/bin/claude` and `git → …`, and that line comes before the first log line of `1-code` | `Expected output to contain "claude → …"` |
 | `A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes` (added) | `stdoutByCall: {2: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1` → 0; 5 calls; the review resumed `--resume <its id>`; `review.json` from call 3's success | `Expected 4 to be 0.` |
 | `Run_arm_launches_the_git_it_resolved_and_never_the_process_git` (amended, added) | **Given** `MakeArmAsync("C1", fake)` with `<temp>/bin/git` as a SHIM instead of a link (`root.ShimScript`: append `"$0 $*"` and `env \| grep '^GIT_'` to `root.MarkerFile("git")`, then `exec '<RealGit>' "$@"`), `root.WithVariables(("GIT_DIR", "/nowhere"), ("GIT_WORK_TREE", "/nowhere"))`; **when** `run-arm C1` → **then** 0; the output's `git → ` line names `<temp>/bin/git`'s REAL path; the marker holds every git run of the arm — at least `rev-parse HEAD` (the gate's `.before`), `rev-parse --short HEAD` (each start and end line) and `diff <sha> HEAD` — and no line starting `GIT_`; `4-gate.before` is the clone's HEAD | `Expected the git shim to have recorded at least 3 runs, but found 0.` (the process's git answered through `GitCommand`) |
@@ -1347,13 +1431,16 @@ quoted in the module doc.
 catalogue test green; `grep -rn "GitCommand" tools/model-arms --include=*.cs` finds nothing (D17 d); the module doc walks one C arm's
 files after a run and shows the `resolved executables:` lines.
 
-**Out of bounds.** SRS (E3.S3); `make`, `run-all`, detaching, pid files (E4); the objective checks (E5); keep-awake.
+**Out of bounds.** SRS (E4.S3); `make`, `run-all`, detaching, pid files (E4); the objective checks (E5); keep-awake.
 
 ## 6. Order and parallel groups
 
 ```mermaid
 flowchart LR
-    S0[E2.S0 delegation policy — amended] --> S4
+    S0[E2.S0 step contract — Fable spec first] --> S2
+    S0 --> S4
+    S0 --> S5
+    S0 --> S7
     S0 --> S8
     S1[E2.S1 envelope + StepEnd — Fable spec first] --> S2[E2.S2 timing, budget, recovery, outputs]
     S1 --> S5[E2.S5 ReviewAnswer]
@@ -1371,8 +1458,8 @@ flowchart LR
 
 | Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
 |---|---|---|
-| A | **E2.S0** (amended), **E2.S1** (after Fable commits its spec here), **E2.S3** | the module doc (S0 under E1.S6's section, S1 its own eight headings — disjoint); nothing else |
-| B | **E2.S2**, **E2.S5**, **E2.S6** (S6 once E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
+| A | **E2.S0** (after Fable commits its spec here — it touches E1's files, so it lands before anything that reads them), **E2.S1** (after Fable commits its spec here), **E2.S3** | the module doc (S0 its own *The step contract* section, S1 its own eight headings — disjoint); `PureDeciders` (own markers) |
+| B | **E2.S2**, **E2.S5**, **E2.S6** (S2 and S5 after S0 landed — they read the bindings; E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
 | C | **E2.S4** | the module doc (own heading) |
 | D | **E2.S7** | — |
 | E | **E2.S8** (needs E1.S8 and E1.S9) | `Program.cs` (its own arm line); `research/module_tests.md` (its own row) |
@@ -1395,6 +1482,11 @@ if it will not show by itself, the plant of `A_missing_unreadable_or_statusless_
 `Delegation` removal (E2.S0, seen again in E2.S8), the unfiltered environment of `ArmGit` (E2.S4) and the swapped marker-and-delete order
 of the gate (E2.S7). The three amendments' primary reds need no plant: `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries`
 (1 call for 3), `The_module_launches_nothing_by_a_bare_name` (`ArmGit.cs`) and the amended argv theory (`Agent Task` absent).
+
+Re-review additions (2026-10-30; the parent's §7, E2): `StepContractTests` (9) and `BriefFieldsTests` (4) — E2.S0; `StepRecoveryTests`
+gains the two continue-marker scenarios by name; `StepOutputsTests`' names say *verdict file* and *named snapshot*; `GateStepTests` gains
+`The_continue_marker_is_written_before_done_is_removed`; `RunArmSchemeTests` gains the three scenarios named in E2.S8. Fixtures: the three
+part-7 templates (shipped, sums asserted).
 
 What E2's suite does not prove: that claude 2.1.x honours `--resume` after a 429 the way the shell observed (the pilot, parent build order
 step 6); that `CLAUDE_CONFIG_DIR` relocates the projects folder (read, not measured — part 6 ran without it); a lock against `flock(1)`;
@@ -1488,17 +1580,29 @@ ledger entries 1.1–1.3):
     then handed nothing to the step. **Settled (S4, S8):** `StepContext.GitExecutable` carries the real path; `ArmGit` is an instance over
     (real path, chosen cwd, `GitEnvironment.Of(parent)`) launched through the replacing `ProcessRunner` overload; `run-arm` also judges
     every PATH entry before the first launch; two scenarios with a recording shim and one with an ambient `GIT_DIR`. The parent's D17 gains
-    (d), which E3's worktree orchestration (`worktree add`, `submodule`, `cherry-pick`, `patch-id`, `worktree remove`) inherits.
+    (d), which E4's worktree orchestration (`worktree add`, `submodule`, `cherry-pick`, `patch-id`, `worktree remove`) inherits.
 26. **No policy kept a step from delegating.** `StepLaunch` denied `Agent` nowhere; the example's Haiku steps are write mode with `Agent`
     permitted; the measured incident is the shell's part 6 (a Haiku review step's cost was mostly Opus and Sonnet subagents) and the
     shell's own repair covers READ steps only (`run-arm.sh:90-92`). **Settled (E2.S0, new):** `StepSpec.Subagents` (the file's
     `"subagents"`, default false), `StepLaunch.Options(StepSpec, …)` denies `Agent` and `Task` and strips them from the allow-list unless
     the spec opts in — fresh and resumed; the example says `false` eight times; argv asserted pure (S0) and through `run-arm` (S8, the
-    Opus review and the Haiku review, fresh and resumed); the Haiku task coder's scenario is E3.S3's, named in the parent's row. E1's
+    Opus review and the Haiku review, fresh and resumed); the Haiku task coder's scenario is E4.S3's, named in the parent's row. E1's
     `StepLaunchTests` theory changes expectation (`Agent Task` first in the deny group, `Agent` absent from the allow group).
 27. **`StepRunner.Recover` is public** (C8): the gate step asks the runner's decision instead of reading `.done` itself, so a `.done`
     with a live marker beside it is read by one rule. `GateStep` takes a `GateProbe` (C9) for the two-write crash seam, as `StepRunner`
     takes a `StepProbe`.
+
+Found by the re-review of 2026-10-30 (Fable; the parent's `## Plan changes` record):
+
+28. **E1's kind-keyed contracts cannot express part 7's CHH scheme** — verified at `FlowSection.cs:17`, `BriefTemplates.cs:11`,
+    `BriefFields.cs:36`, `ArmPaths.cs:162` against `run-arm.sh:187-200` (sha256 in the parent's §2). **Settled (E2.S0, C12):** the step
+    contract of the parent's D25 — identity, kind, brief, bindings — and schema v2; items 12 and 26 above are superseded where they
+    name `StepKind` or `BriefTemplateFiles.Read(StepKind)`.
+29. **The parent's D11 (restore on entry of any verb) would have unlocked a running experiment.** Not this epic's: nothing in E2 reads
+    or changes a mode; the parent's E5.S1 owns the rewritten rule. Said here so no story of E2 adds a restore "to be safe".
+30. **The stories named `review.json` and `gate.json` as members of `ArmPaths`** (`ReviewJson`, `GateJson`); under C12 they are the
+    example's bindings (`REVIEW`, `GATE_JSON`) resolved by `NotesFile`. The shell's names are unchanged on disk; only the spelling in
+    code moves from a member to a binding.
 
 ## 9. Growth
 
@@ -1517,7 +1621,10 @@ recovery: a `.session` without a stream starts fresh or resumes, a stream withou
 - [ ] The parent's `## Plan changes` re-review for epoch 2 has passed and the parent's status no longer says *stopped for re-review*
       — E2.S0 and the amended stories are built against the re-approved baseline, never during the stop (`common.plan-change-control`).
 - [ ] E2.S0–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
-- [ ] E2.S1's scenarios and brief were written by Fable into its section before its coder started; the parent's ledger reads `2 of 2`.
+- [ ] E2.S0's and E2.S1's scenarios and briefs were written by Fable into their sections before their coders started; the parent's ledger
+      reads `3 of 3`; E2.S0 landed before any story that reads a step's identity, brief or outputs.
+- [ ] (re-review) `StepContractTests` and `BriefFieldsTests` green; `RunArmSchemeTests.Scheme_CHH_…` green — a scheme configured, not coded;
+      M1 ran: a fake arm of C, CR and CHH, each resumed once after a limit and once after an interruption, read by `metrics.mjs`.
 - [ ] (amended) `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` and
       `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` green; `The_module_launches_nothing_by_a_bare_name`
       green with `ArmGit.cs` present and `GitCommand` absent from `tools/model-arms`; every launch of `RunArmSchemeTests` carries
