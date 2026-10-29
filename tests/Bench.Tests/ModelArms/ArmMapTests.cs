@@ -65,6 +65,16 @@ public sealed class ArmMapTests
     }
 
     [Fact]
+    public void An_arm_name_with_a_trailing_newline_is_refused_by_read_and_by_extend()
+    {
+        var token = Token(7);
+        var extend = () => ArmMap.Extend(ArmMap.Empty, ["C1\n"], new CountingSource(9).Next);
+
+        ArmMap.Read($"{{\"C1\\n\":\"{token}\"}}").Failed().Should().BeTrue("$ would let a trailing newline through, \\z does not");
+        extend.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void A_source_that_cannot_give_a_fresh_token_is_a_programming_error_and_not_an_endless_loop()
     {
         var map = Mapped("C1");

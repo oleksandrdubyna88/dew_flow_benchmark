@@ -15,7 +15,6 @@ public sealed record ArmMap
     private const int TokenBytes = 8;
     private const int MaximumDraws = 64;
 
-    private static readonly Regex ArmShape = new(@"^[A-Za-z]+[0-9]+\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     private static readonly Regex TokenShape = new(@"^[0-9a-f]{16}\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private ArmMap(IReadOnlyList<KeyValuePair<string, string>> entries) => Entries = Array.AsReadOnly(entries.ToArray());
@@ -126,7 +125,7 @@ public sealed record ArmMap
 
     private static List<string> Problems(List<KeyValuePair<string, string>> pairs) =>
     [
-        .. pairs.Where(pair => !ArmShape.IsMatch(pair.Key))
+        .. pairs.Where(pair => !ArmNames.IsArmName(pair.Key))
             .Select(pair => $"arm '{pair.Key}': an arm name is letters then digits, like C1 or SRS2"),
         .. pairs.Where(pair => !TokenShape.IsMatch(pair.Value))
             .Select(pair => $"arm '{pair.Key}': its token must be 16 lower-case hex characters, got '{pair.Value}'"),
@@ -137,7 +136,7 @@ public sealed record ArmMap
     ];
 
     private static string RequireArmName(string arm) =>
-        ArmShape.IsMatch(arm) ? arm : throw new ArgumentException($"'{arm}' is not an arm name (letters then digits, like C1)", nameof(arm));
+        ArmNames.IsArmName(arm) ? arm : throw new ArgumentException($"'{arm}' is not an arm name (letters then digits, like C1)", nameof(arm));
 
     private static string Mint(List<KeyValuePair<string, string>> taken, Func<byte[]> eightRandomBytes)
     {

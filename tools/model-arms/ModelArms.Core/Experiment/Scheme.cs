@@ -18,9 +18,12 @@ public abstract record SchemeEntry
 /// <summary>A scheme: its letters and its entries in order. An arm is a scheme name and a number (<c>SRS2</c>).</summary>
 public sealed record Scheme(string Name, IReadOnlyList<SchemeEntry> Entries);
 
-/// <summary>The one reading of an arm's name.</summary>
+/// <summary>The one reading of an arm's name. Strict: <c>\z</c>, not <c>$</c>, so a trailing newline is not part of a name.</summary>
 public static partial class ArmNames
 {
+    /// <summary>Whether <paramref name="arm"/> is an arm name: letters followed by digits and nothing else.</summary>
+    public static bool IsArmName(string arm) => ArmPattern().IsMatch(arm);
+
     /// <summary>The scheme an arm belongs to: <c>SRS2</c> is <c>SRS</c>. An arm is letters followed by digits and nothing else.</summary>
     public static Outcome<string> SchemeOf(string arm)
     {
@@ -30,6 +33,6 @@ public static partial class ArmNames
             : Outcome<string>.Failure($"'{arm}' is not an arm name — letters then a number, such as C1 or SRS2");
     }
 
-    [GeneratedRegex("^(?<scheme>[A-Za-z]+)[0-9]+$")]
+    [GeneratedRegex(@"^(?<scheme>[A-Za-z]+)[0-9]+\z", RegexOptions.CultureInvariant)]
     private static partial Regex ArmPattern();
 }
