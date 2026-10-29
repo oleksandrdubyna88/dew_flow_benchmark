@@ -22,6 +22,13 @@ public sealed class StepLaunchTests
     private static readonly ArmPaths Arm = new("/e", "tok");
     private static readonly Guid Session = new("3f2b6f9e-2a4c-4f0e-9d1a-0c6b5a7e8d10");
 
+    /// <summary>A literal set with every list non-empty and every name distinct, so a launch built from it needs no file and no skip.</summary>
+    private static readonly ToolSets Tools = new(
+        Write: ["Read", "Edit", "Bash(git *)"],
+        Read: ["Read", "Grep"],
+        Gate: ["mcp__coai__open", "mcp__coai__review_code"],
+        Deny: ["Read(//home/op/.claude/**)", "Read(//proc/**)"]);
+
     private static ToolSets ExampleTools()
     {
         PosixPaths();
@@ -63,7 +70,7 @@ public sealed class StepLaunchTests
     }
 
     private static StepLaunchRequest Request(StepSession session, IReadOnlyDictionary<string, string>? parent = null) =>
-        new("/usr/bin/claude", new StepSpec(StepKind.Code, "sonnet", 45, StepMode.Write), ExampleTools(), Arm, session, "/e/r/tok/arm", "the brief", TimeSpan.FromMinutes(45),
+        new("/usr/bin/claude", new StepSpec(StepKind.Code, "sonnet", 45, StepMode.Write), Tools, Arm, session, "/e/r/tok/arm", "the brief", TimeSpan.FromMinutes(45),
             parent ?? new Dictionary<string, string> { ["HOME"] = "/home/op" });
 
     [Theory]
@@ -106,21 +113,41 @@ public sealed class StepLaunchTests
     }
 
     [Fact]
-    public void The_child_environment_is_ArmChildEnvironment_passed_as_a_replaced_set()
+    public void The_child_environment_is_ArmChildEnvironment_plus_its_working_directory_passed_as_a_replaced_set()
     {
         var parent = new Dictionary<string, string> { ["HOME"] = "/home/op", ["BENCH_DB"] = "Host=db", ["TMPDIR"] = "/tmp/claude-1000", ["CLAUDE_CODE_OAUTH_TOKEN"] = "t" };
 
         var ask = StepLaunch.Ask(Request(new StepSession.Fresh(Session), parent));
 
         ask.Environment.IsReplaced.Should().BeTrue("the launcher must REPLACE the environment, never merge it into the harness's own");
-        ask.Environment.Variables.Should().BeEquivalentTo(ArmChildEnvironment.Of(parent, Arm));
+        ask.Environment.Variables.Should().BeEquivalentTo(
+            new Dictionary<string, string>(ArmChildEnvironment.Of(parent, Arm)) { ["PWD"] = "/e/r/tok/arm" },
+            "ArmChildEnvironment.Of, and the one named addition: PWD");
         ask.Environment.Variables.Should().NotContainKey("BENCH_DB").And.Contain("TMPDIR", Arm.Tmp, "the comparison above must not be two empty things");
+    }
+
+    [Fact]
+    public void The_child_sees_its_own_folder_as_PWD_and_no_trace_of_the_runners()
+    {
+        var parent = new Dictionary<string, string> { ["HOME"] = "/home/op", ["PWD"] = "/home/op/git/dew_flow_benchmark", ["OLDPWD"] = "/home/op" };
+
+        var variables = StepLaunch.Ask(Request(new StepSession.Fresh(Session), parent)).Environment.Variables;
+
+        variables["PWD"].Should().Be("/e/r/tok/arm", "the shell ran claude after cd into its folder, so PWD was that folder, not the runner's");
+        variables.Keys.Should().NotContain("OLDPWD", "the runner's previous folder is the runner's, and names where the experiment was started from");
+        variables.Should().Contain("HOME", "/home/op", "everything else the parent held still passes");
+    }
+
+    [Fact]
+    public void A_parent_without_PWD_still_gets_the_working_directory_as_PWD()
+    {
+        StepLaunch.Ask(Request(new StepSession.Fresh(Session))).Environment.Variables["PWD"].Should().Be("/e/r/tok/arm");
     }
 
     [Fact]
     public void A_resume_carries_the_same_options_with_resume_in_place_of_session_id()
     {
-        var tools = ExampleTools();
+        var tools = Tools;
 
         foreach (var mode in Enum.GetValues<StepMode>())
         {
