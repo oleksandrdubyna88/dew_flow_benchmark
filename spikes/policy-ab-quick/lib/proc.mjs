@@ -147,6 +147,20 @@ export function findOnPath(name, pathValue, exts = process.platform === 'win32' 
   return '';
 }
 
+/**
+ * How to start a CLI found on PATH without a shell. A Windows `.cmd` shim cannot be spawned directly, so the package's JS entry
+ * (`node_modules/<entry>` beside the shim) is run by the running node; anything else is started by its own path. Throws when the
+ * CLI or the entry is missing: an unexpected environment, never a fallback to a shell.
+ */
+export function cliInvocation(name, args, { pathValue = process.env.PATH, entry, exts = process.platform === 'win32' ? ['', '.exe', '.cmd'] : [''], exists = fs.existsSync } = {}) {
+  const found = findOnPath(name, pathValue, exts);
+  if (!found) throw new Error(`${name} not found on PATH`);
+  if (!/\.cmd$/i.test(found)) return { exe: found, args };
+  const js = path.join(path.dirname(found), 'node_modules', entry);
+  if (!exists(js)) throw new Error(`${name} is a .cmd shim and its script ${js} was not found: install it with a node that ships npm`);
+  return { exe: process.execPath, args: [js, ...args] };
+}
+
 /** Where a node distribution keeps npm's entry script: beside the exe (Windows) or under `<prefix>/lib` (POSIX). */
 const npmCliCandidates = (execPath = process.execPath) => {
   const dir = path.dirname(execPath);

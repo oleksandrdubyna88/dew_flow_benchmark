@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { descendantsOf, killTree, npmInvocation, run } from '../lib/proc.mjs';
+import { cliInvocation, descendantsOf, killTree, npmInvocation, run } from '../lib/proc.mjs';
 
 const posix = process.platform !== 'win32';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -142,5 +142,26 @@ test('Ctrl_C_on_the_parent_leaves_no_detached_child_behind', { skip: !posix && '
   } finally {
     for (const pid of pidsCarrying(mark)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
     try { process.kill(-parent.pid, 'SIGKILL'); } catch { /* gone */ }
+  }
+});
+
+test('A_cmd_shim_is_run_through_its_js_entry_by_the_running_node_and_anything_else_by_its_own_path', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'testsToDelete-pab-cli-'));
+  try {
+    const entry = '@openai/codex/bin/codex.js';
+    fs.mkdirSync(path.join(dir, 'win', 'node_modules', '@openai', 'codex', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'win', 'codex.cmd'), '@echo off\r\n');
+    fs.writeFileSync(path.join(dir, 'win', 'node_modules', entry), '');
+    fs.mkdirSync(path.join(dir, 'posix'));
+    fs.writeFileSync(path.join(dir, 'posix', 'codex'), '');
+    const exts = ['', '.exe', '.cmd'];
+    assert.deepEqual(cliInvocation('codex', ['exec', '-'], { pathValue: path.join(dir, 'win'), entry, exts }),
+      { exe: process.execPath, args: [path.join(dir, 'win', 'node_modules', entry), 'exec', '-'] });
+    assert.deepEqual(cliInvocation('codex', ['exec'], { pathValue: path.join(dir, 'posix'), entry, exts }), { exe: path.join(dir, 'posix', 'codex'), args: ['exec'] });
+    assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'none'), entry, exts }), /codex not found on PATH/);
+    fs.rmSync(path.join(dir, 'win', 'node_modules'), { recursive: true });
+    assert.throws(() => cliInvocation('codex', [], { pathValue: path.join(dir, 'win'), entry, exts }), /codex\.js/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
