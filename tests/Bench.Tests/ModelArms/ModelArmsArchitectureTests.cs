@@ -38,6 +38,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(ModelArmsCommandLine),
 
         // E1.S10
+        typeof(HostKinds), typeof(HostChecks), typeof(global::ModelArms.Core.Briefs.BriefRehearsal),
 
         // E1.S11
 

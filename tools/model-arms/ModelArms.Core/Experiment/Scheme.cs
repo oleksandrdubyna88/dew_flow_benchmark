@@ -12,11 +12,25 @@ public abstract record SchemeEntry
     public sealed record Step(string Name, StepKind Kind) : SchemeEntry;
 
     /// <summary>The SRS pipeline's tasks block.</summary>
-    public sealed record Tasks : SchemeEntry;
+    public sealed record Tasks : SchemeEntry
+    {
+        /// <summary>The step kinds the block runs: the split, its one fix round and the task coders. A scheme with the block needs all three under <c>steps</c>.</summary>
+        public static IReadOnlyList<StepKind> Kinds { get; } = [StepKind.Split, StepKind.SplitFix, StepKind.TaskCode];
+    }
 }
 
 /// <summary>A scheme: its letters and its entries in order. An arm is a scheme name and a number (<c>SRS2</c>).</summary>
-public sealed record Scheme(string Name, IReadOnlyList<SchemeEntry> Entries);
+public sealed record Scheme(string Name, IReadOnlyList<SchemeEntry> Entries)
+{
+    /// <summary>Every step kind the scheme runs, once each, in the order the entries first name them (the tasks block counts as its three).</summary>
+    public IReadOnlyList<StepKind> KindsUsed =>
+        [.. Entries.SelectMany(entry => entry switch
+        {
+            SchemeEntry.Step step => [step.Kind],
+            SchemeEntry.Tasks => SchemeEntry.Tasks.Kinds,
+            _ => [],
+        }).Distinct()];
+}
 
 /// <summary>The one reading of an arm's name. Strict: <c>\z</c>, not <c>$</c>, so a trailing newline is not part of a name.</summary>
 public static partial class ArmNames
