@@ -19,13 +19,16 @@ public sealed class ProcessRunnerCancellationTests
     {
         using var cancel = new CancellationTokenSource();
 
-        // A process that outlives the test unless somebody kills it. ping with a count is the one
-        // long-running, argument-driven, always-installed executable Windows offers.
+        // A process that outlives the test unless somebody kills it. On Windows, ping with a count is the one
+        // long-running, argument-driven, always-installed executable. `-n` is NOT a count on Linux (iputils reads it as
+        // "numeric output"), so there ping exited at once and the test was red whenever the 500 ms look came too late —
+        // measured 2026-10-29: red on every local WSL run, red once on CI after 8 green main runs. Linux uses `sleep`
+        // with a marker duration, so the lookup below finds this test's child and never another `sleep`.
         var launch = ProcessRunner.RunAsync(
-            "ping", ["-n", "60", "127.0.0.1"], Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
+            LongChild.Executable, LongChild.Arguments, Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
 
         await Task.Delay(500, TestContext.Current.CancellationToken);
-        var before = Process.GetProcessesByName("PING").Concat(Process.GetProcessesByName("ping")).ToArray();
+        var before = LongChild.Running();
         before.Should().NotBeEmpty("the child must be running before the cancellation, or this test proves nothing");
 
         cancel.Cancel();
@@ -52,6 +55,32 @@ public sealed class ProcessRunnerCancellationTests
 
             gone.Should().BeTrue(
                 $"pid {survivor.Id} must not outlive the wait — an orphan holds worktree handles nothing sweeps");
+        }
+    }
+
+    /// <summary>The long-running child per OS, and how to find exactly it among running processes.</summary>
+    private static class LongChild
+    {
+        private const string LinuxMarker = "617.3";
+
+        public static string Executable => OperatingSystem.IsWindows() ? "ping" : "sleep";
+
+        public static string[] Arguments => OperatingSystem.IsWindows() ? ["-n", "60", "127.0.0.1"] : [LinuxMarker];
+
+        public static Process[] Running() => OperatingSystem.IsWindows()
+            ? [.. Process.GetProcessesByName("PING"), .. Process.GetProcessesByName("ping")]
+            : Process.GetProcessesByName("sleep").Where(CarriesMarker).ToArray();
+
+        private static bool CarriesMarker(Process process)
+        {
+            try
+            {
+                return File.ReadAllText($"/proc/{process.Id}/cmdline").Contains(LinuxMarker, StringComparison.Ordinal);
+            }
+            catch (IOException)
+            {
+                return false; // it exited between the listing and the read: not a running child
+            }
         }
     }
 }
