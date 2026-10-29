@@ -1,6 +1,6 @@
 # PLAN — model arms: the experiment harness that launches the test runs, in C#, as a module of this repository
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: a new self-contained module `tools/model-arms/` (two
+> Status: **plan only, nothing implemented yet, 2026-10-29 — revised the same day after plan-gate round 1 (§11).** Scope: a new self-contained module `tools/model-arms/` (two
 > projects, a console `model-arms`), tests in `tests/Bench.Tests/ModelArms/`, three files moved out of `hosts/Cli` into a shared
 > host-support project, two widenings of the shared CLI launcher, one widening of `tests/FakeCli`, a `research/module_model_arms.md`
 > and the `research/module_tests.md` rows. It ports the RUN half of the owner's part-6 harness; the ANALYSIS half is deferred to
@@ -109,17 +109,19 @@ in one envelope and as a string in another.
 | D3 | **`CommandLine`, `ExitCodes` and `ShutdownSignal` move to a new `src/Bench.Hosting` project, namespace kept `Bench.Cli`**; `hosts/Cli` references it; no `using` changes anywhere. `CommandLineTests` runs unedited — the proof the move changed nothing. | reuse-first's fourth move: two hosts need them and neither may reference the other (a tool referencing `bench`'s exe would drag EF and Npgsql into the module's deployment). |
 | D4 | **The experiment's facts are one JSON file, `experiment.json`, at the experiment ROOT**, read once by every verb, refused by name for an unknown member, an absent file, a root inside a git checkout, or a root inside this repository. Random arm names are `arms.map.json` beside it, minted by `model-arms make` from `RandomNumberGenerator` (8 bytes, hex) — never printed, never in a brief, never in a log line. §4.2. | The shell's `exp.env`, `.map-<hash>.json`, `scenarios.json`, `baseline.json` and the constants at the top of each script, as configuration. Unpredictable rather than seeded: the whole point of a random name is that no arm can guess another's. |
 | D5 | **The on-disk layout of an arm (`r/<token>/{arm,out,notes,work,tmp,wt,coai-data}`, `out/<step>.session|.a<N>.jsonl|.a<N>.err|.a<N>.prompt.md|.done|.before|.diff`, `out/timing.jsonl`, `chain/*`, `pids/*`) is kept byte-compatible with the shell's, with ONE named rename** (`task-<id>-haiku.*` → `task-<id>-coder.*`, since the coder model is now a configuration field). `ArmPaths` in Core is the one spelling; a test pins every path. | The analysis half (§5) reads these files; keeping the layout is what lets the shell analysis scripts run on a C# run while their port is pending, and the compatibility test (§7, E5) is what makes "the same files" a fact. |
-| D6 | **A step ends in exactly one of six states**, decided by a pure classifier over the stream's last `result` line, the stderr tail and the launcher's attempt: `Finished` · `HardDeadline` (the wall killed the tree) · `Limited(reason)` · `Errored(text)` · `Interrupted` · `NotStarted(reason)`. `Limited` is read **structured first**: `is_error` AND (`api_error_status` ∈ {429, 529} read as number OR string, OR `api_error` matches the limit words, OR `result` + `errors` match them); then the stderr tail's words. `Errored` = `is_error` and not limited. Only `Finished` and `HardDeadline` write `.done`. | The 2026-10-28 incident (§1); `subtype` is `success` on a real 429 (§2) so it is never read; the string-typed status is real (§2). `ReviewerAccountOut.CliReason` is NOT reused for this: it refuses a plain 429 on purpose, because for a measured subject a rate limit is transient — here it is exactly what the runner must wait for. The words list is this plan's own and is tested on the three recorded lines. |
+| D6 | **A step ends in exactly one of six states**, decided by a pure classifier over the stream's last `result` line, the stderr tail and the launcher's attempt: `Finished` · `HardDeadline` (the wall killed the tree) · `Limited(reason)` · `Errored(text)` · `Interrupted` · `NotStarted(reason)`. `Limited` is read **structured first**: `is_error` AND (`api_error_status` ∈ {429, 529} read as number OR string, OR `api_error` matches the limit words, OR `result` + `errors` match them); then the words of the stderr tail, read from the attempt's `.err` FILE on disk (F8: stderr is streamed there while the process runs, §4.4). `Errored` = `is_error` and not limited. Only `Finished` and `HardDeadline` write `.done`, and **the marker and the timing line carry the state** (`{"end":"finished"}` / `{"end":"hard-deadline"}` in `.done`; an `end` field on the `end` timing line) so the two are never confused afterwards. | The 2026-10-28 incident (§1); `subtype` is `success` on a real 429 (§2) so it is never read; the string-typed status is real (§2). `ReviewerAccountOut.CliReason` is NOT reused for this: it refuses a plain 429 on purpose, because for a measured subject a rate limit is transient — here it is exactly what the runner must wait for. The words list is this plan's own and is tested on the three recorded lines. |
 | D7 | **Recovery is a pure decision** over the files a step left: `.done` → skip; no session file → fresh; a session file whose transcript does not exist → fresh (new id); the last stream's result is `Finished` and no `.done` → **done, recovered** (not resumed); the last stream's result is an error of any kind → resume; otherwise resume with `budget − Σ wall of unlimited ended attempts`, floored at the configured minimum (300 s). | Both generations' rules reconciled (§2): the lost "finished, runner died" rule back, and the repair script's "an error result is never kept as done" on top of it. A floor is a decision, not an accident — the consultants named it as the thing to decide explicitly. |
-| D8 | **The wall is the launcher's**: the attempt runs under `ProcessRunner` with `remaining + killGrace` (600 s) and the tree is killed at it — no SIGINT first. `HardDeadline` is done. | The shell's `timeout -s INT -k 60` could make the CLI write a `result` on the INT and read as finished; the previous generation already warned that "a polite stop can make Claude write a result event" (`research/local-model-coding/harness.md` §4). The stream on disk holds everything the CLI printed before the kill; the brief told the agent its deadline ten minutes earlier. |
+| D8 | **The wall is the launcher's**: the attempt runs under `ProcessRunner` with `remaining + killGrace` (600 s) and the tree is killed at it — no SIGINT first. **`HardDeadline` is DONE, deliberately** (plan-gate round 1, F1/F4 rejected): a step's budget is a condition of the experiment, not a failure of the step; the step ends and the next step works on what it left. The distinction stays visible everywhere: the `.done` marker and the `end` timing line say `hard-deadline` (D6), `status` lists every step that ended on its deadline, and `objective.json` carries `stepsOnDeadline` (an additive key, §4.9). | The shell's `timeout -s INT -k 60` could make the CLI write a `result` on the INT and read as finished; the previous generation already warned that "a polite stop can make Claude write a result event" (`research/local-model-coding/harness.md` §4). The stream on disk holds everything the CLI printed before the kill; the brief told the agent its deadline ten minutes earlier. Measured in part 6: C2's Opus review wrote its verdict and then hit its deadline, and the fixer used that verdict — resuming a reviewer that had finished would be the arm-C defect of the previous generation (§2) in another coat. |
 | D9 | **Resume keys on the session id**: a fresh attempt passes `--session-id <guid>` (minted by the runner and written to `<step>.session` BEFORE the launch); a resume passes `--resume <guid>` with the resume notice on stdin. Both are launch options the shared `CliArgv` gains (§4.4), refused by name on every other CLI. | The transcript the CLI keeps under `~/.claude/projects/<cwd-slug>/<guid>.jsonl` is what `--resume` reads; the shell checks it exists by exact name because the folder is unlistable under the lock (`run-arm.sh:67`). An `ISessionTranscripts` port answers that question; its adapter opens the path by name. |
 | D10 | **The gate lock is a file lock through the one launcher's sibling, tested with two real processes.** `IGateLock.AcquireAsync(path, ct)` — the POSIX/Windows adapter opens `.gate.lock` with `FileShare.None` and holds it for the step; the live test holds it from a second `model-arms gate-lock hold` process and asserts the first waits. A `blocked` status in `gate.json` removes `.done`, waits `gateWaitSeconds`, resumes — at most `gateTries`. | The shell used `flock`. One consultant warned (verified in the product's own `HeldFile`) that Linux's `FileShare.None` combined with inheritable handles once produced a SHARED lock — hence a test between two processes, not two tasks, and never a promise about a lock nobody watched. |
-| D11 | **Isolation is a port with a POSIX adapter and a refusal elsewhere.** `IsolationPlan.From(config, home)` (pure) names the closed (000) and unlisted (300) folders; the adapter saves every mode to `.locked-modes` BEFORE the first change, applies them with `File.SetUnixFileMode`, then **verifies** by trying to list one unlisted folder and refusing if it CAN (root, `CAP_DAC_OVERRIDE`); `unlock` restores in reverse order and renames the file `.locked-modes.restored-<utc>`; `model-arms unlock` is idempotent and `chain` runs it on entry when `chain/locked` exists without `chain/unlocked`. On Windows the adapter refuses: *"isolation by file modes is POSIX only"*. | `lock.sh:12-19`, with the two traps the consultants named: order and crash recovery, and a mode that does nothing for root. A measure you have not observed working is a comment (`common.security`): the verification is the observation. |
+| D11 | **Isolation is a port with a POSIX adapter and a refusal elsewhere, crash-safe in this order** (plan-gate round 1, F5): `IsolationPlan.From(config, home)` (pure) names the closed (000) and unlisted (300) folders; the adapter (1) reads EVERY folder's current mode and writes the whole snapshot to `.locked-modes` through `ArtifactCommit` — staged, flushed, renamed, durable BEFORE the first mode changes; (2) applies the modes with `File.SetUnixFileMode` in the plan's order; (3) **verifies** by trying to list one unlisted folder and, if it CAN (root, `CAP_DAC_OVERRIDE`), restores first and then refuses; (4) writes `chain/locked` last. **Restore is keyed off the snapshot file itself, never off a marker**: `unlock` restores every entry of `.locked-modes` in reverse order and then renames it `.locked-modes.restored-<utc>`; a snapshot found on entry of ANY verb (a `lock` killed half-way, a crash while locked) is restored before the verb does anything else; the standalone `lock` and `unlock` recover a partial operation the same way; `unlock` without a snapshot is a no-op that says so. On Windows the adapter refuses: *"isolation by file modes is POSIX only"*. **Every harness path is addressed by NAME, and no harness verb enumerates an unlisted folder while the lock stands — `status` included** (F0): mode 300 keeps traversal and open-by-name and removes listing only, which is the design and not a defect; the part-6 harness ran nine arms for hours under exactly these modes, and the one break was the operator's own glob over `pids/*.log`, fixed by naming the file. | `lock.sh:12-19`, with the two traps the consultants named: order and crash recovery, and a mode that does nothing for root. A measure you have not observed working is a comment (`common.security`): the verification is the observation. |
 | D12 | **Keep-awake is a port with three adapters, chosen by a pure decision from host facts**: `WindowsAwake` (in-process `SetThreadExecutionState` through `[LibraryImport("kernel32.dll")]`, released on dispose), `WslHostAwake` (a `pwsh.exe -NoProfile -ExecutionPolicy Bypass -File keep-awake.ps1` child HELD by `ProcessSession` for the scope and relaunched if it exits, checked every 2 min), `NoAwake` (declared no-op, logged once). WSL is detected from `WSL_DISTRO_NAME` or `/proc/version` containing `microsoft`. The three `.ps1` files ship with the module (`tools/model-arms/ModelArms/windows/`, copied to the output). | `after6.sh:14-23` and `keep-awake.ps1`. `SetThreadExecutionState` is per process: a `pwsh` that exits clears it — which is why the script sleeps and why the C# adapter must hold the child (consultant, verified against `keep-awake.ps1:1-6`). The harness runs under WSL on this machine, where kernel32 is not reachable in-process; natively on Windows it is. |
 | D13 | **Arms run as detached processes, through a port**: `IDetachedLauncher.Start(exe, argv, log) → pid`; the POSIX adapter launches `setsid` as exe + argv `[setsid, model-arms, run-arm, <arm>]` with stdout/stderr appended to `pids/<arm>.log`; the Windows adapter launches `model-arms.exe` directly (a child outlives its parent unless a job object holds it — declared, not assumed). Liveness is `WorkerLiveness.ProcessIsAlive`. `run-all` leaves an arm whose pid is alive alone. | `run-all.sh:7` (`setsid nohup`): the arms must survive the orchestrating session — three crashes taught it (`research/local-model-coding/harness.md` §4). |
 | D14 | **Parallel tasks of a batch run as parallel `Task`s inside the one `run-arm` process**, each its own CLI process in its own worktree; a batch whose task was interrupted stops the arm with "run me again" (exit 5), and re-entry resumes exactly the tasks without `.done`. Worktrees stranded by a crash are removed on re-entry when their task has no `picked-<id>` and no `.done` (recreated fresh). | `t-lib.sh:57-76`. One process, one cancellation token, one wall per task — the shell's subshells had none of that. |
 | D15 | **Brief templates ship with the module** (`tools/model-arms/briefs/*.template.md`, the eight of `/home/jinx/git/coai-exp2/briefs/`, byte for byte), and the `briefs` folder of an experiment root may OVERRIDE any of them by name. `BriefFiller.Fill(template, fields)` refuses an unfilled `{{NAME}}` naming it, and refuses a field VALUE that contains an arm name, a scheme name or a token (the leak check). | `run-arm.sh:40-50`, with the "no brief names the arm or its scheme" rule made a check rather than a habit. |
-| D16 | **Exit codes are this repository's contract** (`ExitCodes`): `0` the verb did its work · `3` environment (the CLI is not there, still limited after every wait, a worktree's warm build failed, the lock could not be verified) · `4` configuration (usage, an unknown arm, an unfilled brief, an invalid `experiment.json`, a task list still invalid after its fix round, a cherry-pick conflict — the split declared the files disjoint) · `5` stopped, resumable (interrupted, an error result, a batch's task interrupted). The last line of `timing.jsonl` says which, as `{"kind":"stopped","why":…}`. | `run-arm.sh`'s 1–6 mapped onto the vocabulary an agent already reads (`hosts/Cli/ExitCodes.cs:12`). |
+| D16 | **Exit codes are this repository's contract** (`ExitCodes`): `0` the verb did its work · `3` environment (the CLI is not there, still limited after every wait, a worktree's warm build failed, the lock could not be verified) · `4` configuration (usage, an unknown arm, an unfilled brief, an invalid `experiment.json`, a root missing a required file, a root or file the trust check refuses, a task list still invalid after its fix round, a cherry-pick conflict — the split declared the files disjoint) · `5` stopped, resumable (interrupted, an error result, a batch's task interrupted). The last line of `timing.jsonl` says which, as `{"kind":"stopped","why":…}`. | `run-arm.sh`'s 1–6 mapped onto the vocabulary an agent already reads (`hosts/Cli/ExitCodes.cs:12`). |
+| D17 | **`experiment.json` is TRUSTED operator input that names executables run with the user's rights** (plan-gate round 1, F7), so: (a) on POSIX every verb refuses a root, an `experiment.json` or a `scenarios.json` that is not owned by the current user or is writable by group or others, naming the file and its mode (on Windows the printed line says the check was *not performed* — never silently passed); (b) **the EXECUTABLE of every command is resolved outside the target** — from `PATH`, or an absolute path that is not under `target.source`, `<root>/base` or `<root>/r` — and a path under the target may appear only as an ARGUMENT (a solution, a script, a `.dll`): `ExperimentFile` refuses `./src_mcp/tests/bin/…/CoaiMcp.Tests` as an executable and takes `dotnet src_mcp/tests/bin/…/CoaiMcp.Tests.dll` instead; (c) `chain`, `run-arm` and `checks` print the resolved executables (name → absolute path) before their first launch, and `chain` writes them to `<root>/chain/executables.txt`. | The agents in the arms write into the target's `bin/`; a harness that then ran a file from there would run whatever an arm wrote. The target's lowering wrapper stays what it was in the shell — `node` is the executable, the script the argument. |
+| D18 | **Initialisation is a workflow with verbs** (plan-gate round 1, F6): `init <root>` creates the root — refusing one that exists — and writes a commented `experiment.json` template with every required member present and `<fill me>` values, an empty `scenarios.json` and an empty `briefs/`; the operator fills the two files; `validate` reads them through every refusal of D4 and D17 and prints the resolved executables; `prep-base` is refused until `validate` passes and refused when `baseline.json` exists, and writes `baseline.json`; `make`, `run-arm`, `run-all`, `chain` and `checks` each refuse a root missing a file their stage needs, naming it (`RootRequirements`, §4.12). | §4.1's table left the first run to be guessed from the shell; a refusal that names the missing file is the only honest answer to a half-made root. |
 
 ## 4. Design
 
@@ -129,6 +131,7 @@ in one envelope and as a string in another.
 tools/model-arms/
   ModelArms.Core/            pure — references Bench.Domain, Bench.Application; no packages
     Experiment/              ExperimentFile (the JSON shape, D4) · Scheme · StepSpec · ToolSets · ArmMap · ArmPaths (D5)
+                             · RootRequirements (D18) · RootTrust · ExecutableResolution (D17, pure over facts)
     Steps/                   StepEnd (D6) · StepRecovery (D7) · TimingLine · StepBudget · ResumeNotice · ReviewAnswer
     Launch/                  StepLaunch (AgentAskOptions per step mode) · ClaudeResultEnvelope · GateStatus
     Tasks/                   TasksPlan (the checker + batches) · TaskRecovery · PickBackOrder
@@ -139,7 +142,7 @@ tools/model-arms/
     Ports/                   ISessionTranscripts · IGateLock · IFolderIsolation · IHostAwake · IDetachedLauncher · IArmFiles · ITargetTools
   ModelArms/                 the console — references Core, Bench.Infrastructure, Bench.Hosting
     Program.cs               parse (CommandLine) · dispatch · ExitCodes · ShutdownSignal
-    Verbs/                   PrepBase · Make · Lock · Unlock · RunArm · RunAll · Chain · Checks · Status · GateLock
+    Verbs/                   Init · Validate · PrepBase · Make · Lock · Unlock · RunArm · RunAll · Chain · Checks · Status · GateLock
     Adapters/                StepRunner (over ICliAgentTranscripts + ScoutStreamWriter) · ClaudeSessionTranscripts · FileGateLock
                              · PosixFolderIsolation · WindowsAwake · WslHostAwake · NoAwake · SetsidLauncher · WindowsLauncher
                              · ArmFiles (ArtifactCommit) · TargetTools (ProcessRunner: dotnet/node/npm/git as exe + argv) · TaskWorktrees
@@ -154,14 +157,16 @@ The verbs, as an operator types them (`model-arms <verb> --experiment <root> …
 
 | verb | does | shell source |
 |---|---|---|
-| `prep-base` | clone the target's plan branch into `<root>/base`, point its rules submodule at the local checkout, `npm ci` the rules' tools, build, run both suites once, write `baseline.json` | `prep-base.sh` |
+| `init <root>` | create the root (refused if it exists), write the `experiment.json` template, an empty `scenarios.json`, `briefs/` (D18) | — (new) |
+| `validate` | read `experiment.json` and `scenarios.json` through every refusal (D4, D17), print the resolved executables (D17) | — (new) |
+| `prep-base` | clone the target's plan branch into `<root>/base`, point its rules submodule at the local checkout, `npm ci` the rules' tools, build, run both suites once, write `baseline.json` (refused before `validate` passes, refused when `baseline.json` exists) | `prep-base.sh` |
 | `make` | mint `arms.map.json` once; per arm copy `base` → `r/<token>/arm`, branch `<branch>`, warm build, write `mcp-none.json`, `mcp-coai.json`, copy the coai settings; `chain/made-<arm>` | `after6.sh:26-37` |
 | `lock` / `unlock` | D11 | `lock.sh` |
 | `run-arm <arm>` | one arm, resumable (D6–D9, D14) | `run-arm.sh`, `t-lib.sh` |
 | `run-all <arm>…` | start or resume arms detached (D13) | `run-all.sh` |
 | `chain` | make → lock → rounds → unlock → checks, markers per stage, keep-awake for the whole of it (D12) | `after6.sh` |
 | `checks <arm>` | the objective checks → `out/objective.json` (§4.9) | `objective-checks.sh` |
-| `status` | every arm: steps done / resumable / limited, the last timing line, pid liveness, the chain's markers | — (new; read-only) |
+| `status` | every arm: steps done / resumable / limited / **ended on its deadline**, the last timing line, pid liveness, the chain's markers — every file opened by NAME from `ArmPaths` and the arm map, nothing enumerated (D11, F0) | — (new; read-only) |
 | `gate-lock status\|hold --seconds N` | is the gate lock held; hold it (the live lock test's second process, and an operator's probe) | — (new) |
 | `version` · `help` | — | — |
 
@@ -179,7 +184,7 @@ The verbs, as an operator types them (`model-arms <verb> --experiment <root> …
     "rulesSubmodule": ".agents/conventions",
     "lowPriority": ["node", ".agents/conventions/tools/low-priority.mjs"],
     "build":      ["dotnet", "build", "dew_flow_connect_other_ais.slnx", "-c", "Debug", "-m:4", "--disable-build-servers"],
-    "suite":      { "command": ["./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests", "--report-xunit-ctrf"], "ctrfFile": "mcp.ctrf.json", "namePrefix": "CoaiMcp.Tests." },
+    "suite":      { "command": ["dotnet", "src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.dll", "--report-xunit-ctrf"], "ctrfFile": "mcp.ctrf.json", "namePrefix": "CoaiMcp.Tests." },
     "format":     { "solution": "dew_flow_connect_other_ais.slnx", "verbs": ["whitespace", "style"] },
     "extension":  { "directory": "src_vs_code", "command": ["npm", "test"] },
     "nodeModules": ["src_vs_code/node_modules", ".agents/conventions/node_modules"],
@@ -214,7 +219,10 @@ The verbs, as an operator types them (`model-arms <verb> --experiment <root> …
 ```
 
 Every command is **exe + argv**, never a string; `lowPriority` is prepended to `build`, `suite` and `extension` (the target's own
-lowering wrapper, run as `node` — a tool of the TARGET, exactly as `objective-checks.sh:11` did). An arm name's scheme is its letters
+lowering wrapper, run as `node` — a tool of the TARGET, exactly as `objective-checks.sh:11` did). **The executable of every command
+is resolved outside the target (D17)** — `dotnet`, `node`, `npm`, `git` from `PATH` or an absolute path — and a path under the target
+is an argument only, which is why the suite runs as `dotnet <tests.dll>` (an MTP test assembly runs that way) and not as the apphost
+the shell invoked from the target's `bin/`. An arm name's scheme is its letters
 (`SRS2` → `SRS`); `rounds` may only name arms whose scheme exists. `<root>` and `~` are the two placeholders `ExperimentFile` expands.
 Unknown members are refused (`JsonUnmappedMemberHandling.Disallow`, the catalog's rule). The `tasks` entry of a scheme is the SRS
 pipeline (§4.6) with the step names the shell used (`1-split`, `1b-split-fix`, `2-<id>-code`).
@@ -247,7 +255,11 @@ codex, gemini and agy through `Unsupported`):
 launches did not move. The prompt (a filled brief, or the resume notice) rides stdin; the environment is
 `ProbeChildEnvironment.ForScouts(parent)` plus `TMPDIR=<arm>/tmp` (a FIXED value, as the background-tasks switch is) — the arm's own temp
 folder, because `/tmp/claude-<uid>` would show every arm's name (`run-arm.sh:20`). The stream goes to `out/<step>.a<N>.jsonl` through
-`AgentOutputSink.Lines` into a `ScoutStreamWriter`; stderr to `.a<N>.err` after exit; the prompt to `.a<N>.prompt.md` before the launch.
+`AgentOutputSink.Lines` into a `ScoutStreamWriter`; **stderr is streamed the same way to `.a<N>.err` while the process runs, every
+line flushed** (F8) — one more widening of the one launcher: `ProcessRunner` gains a `stderrLine` sink beside `stdoutLine` (the
+wait, the wall and the tree kill unchanged, the whole stderr still returned), and `AgentAsk` gains `ErrorOutput` (an
+`AgentOutputSink`, `None` for every existing caller); the classifier reads the stderr tail from that file. The prompt goes to
+`.a<N>.prompt.md` before the launch.
 
 ### 4.5 The step — a state machine, pure, over files
 
@@ -269,7 +281,7 @@ stateDiagram-v2
 ```
 
 `timing.jsonl` lines are the shell's: `start` (arm, step, attempt, how, session, model, start_utc, budget_s, deadline, head, stream),
-`end` (end_utc, wall_s, exit, result, limited, head), `arm-done`, plus `stopped` (D16). `StepBudget.Used(timing, step)` sums the
+`end` (end_utc, wall_s, exit, result, limited, head — plus `end`, the classifier's state, D6), `arm-done`, plus `stopped` (D16). `StepBudget.Used(timing, step)` sums the
 `end` lines' `wall_s` where `limited` is false (`run-arm.sh:68-74`). The review step's answer is extracted by `ReviewAnswer.Extract`
 (the last `result`'s text, the first `{…}` block, else `{"verdict":"unparsed","raw":…}`) into `notes/review.json` — and a review
 whose last result is an error produces no `review.json` at all (the repair script's finding). The `.before` snapshot of `hreview` and
@@ -313,7 +325,8 @@ since `base` (whitespace, then style; none changed = pass) → `extension`; then
 baseline, diffNumstat, head, commits, uncommitted)` writes `objective.json` in the shell's shape (`objective-checks.sh:53-64`): per
 scenario `present` (a `git grep -F` of the name under `testGlobs`) and `passing` (`passed` · `failed` · `absent` · the joined statuses
 when mixed), the suite's totals and `failedNew` / `failedBaseline`, the extension's `failedNew`, `scenariosPresentCount`,
-`scenariosPassingCount`, and the diff's `changedLines` split into tests / src / docs. The parsers (`TestLogSummary` for MTP's `total:`
+`scenariosPassingCount`, the diff's `changedLines` split into tests / src / docs — and one additive key, `stepsOnDeadline`, the
+steps whose `.done` says `hard-deadline` (D8), so a report never hides that a review or a fix was cut by its budget. The parsers (`TestLogSummary` for MTP's `total:`
 / `succeeded:` / `skipped:` / `failed <name>`, `TsTestLog` for node's `✔ … (` / `✖ … (` / `ℹ tests N`, `CtrfScenarios`) are pure and
 tested on recorded lines; `PARSE_ONLY` becomes `--parse-only` (re-run the parsers over logs already there).
 
@@ -333,10 +346,21 @@ field nobody provides is refused naming it; a value carrying an arm name, a sche
 | `wt/<id>` worktrees | up to 4 per batch, each a built clone ≈ 1.5 GB, **≤ 6 GB transient** | removed after pick-back by the same verb | re-entry removes a worktree whose task has neither `.done` nor `picked-<id>` and creates it again |
 | `tmp/` (the CLI's temp per arm) | ≤ 1 GB per arm | with the clone | — |
 | `pids/*.log` | KB | with the root | — |
-| `.locked-modes` | one small file | `unlock` renames it; never deleted | a crash while locked leaves it; `chain` restores on entry (D11) |
+| `.locked-modes` | one small file | `unlock` renames it; never deleted | a `lock` killed half-way or a crash while locked leaves it; the next entry of ANY verb restores from it before working (D11) |
 
 No table, no database, no spawned process that outlives the verb except the detached arms (D13), which are owned by `pids/` and
 `WorkerLiveness`.
+
+### 4.12 Initialisation and trust — the first run
+
+The order, each step refusing what the one before did not leave (D18): `init <root>` → the operator fills `experiment.json` and
+`scenarios.json` → `validate` → `prep-base` (writes `baseline.json`) → `make` → `lock` / `chain`. `RootRequirements.For(verb)` is the
+pure table of which files a verb needs (`init`: a root that does not exist; `validate`: `experiment.json`, `scenarios.json`;
+`prep-base`: both, and no `baseline.json`; `make`: both and `baseline.json`; `run-arm` / `run-all` / `chain` / `checks`: those and
+`arms.map.json` and `chain/made-<arm>` for every arm named; `status`: `experiment.json` only), and every verb prints the first
+missing file by name and exits 4. `RootTrust.Decide(ownerUid, currentUid, mode)` is the pure half of D17's check and the adapter
+reads the facts; `ExecutableResolution.Resolve(command, path, forbiddenRoots)` is the pure half of D17's executable rule. Before the
+first launch, `chain` prints and writes the resolved executables; an operator who sees a path under the target there has found the bug.
 
 ## 5. Scope, and the boundaries named on both sides
 
@@ -373,16 +397,18 @@ edited by this plan (nothing is taken from them); the table above names the one 
 0. The plan round of the review gate (`mcp__coai__review_plan` on this document, by the session that implements it — the gate's
    order is plan → gate → implement), then the question consultant's advice already taken (D1, D6, D7, D10, D11, D12 carry it).
 1. **E1** — `Bench.Hosting` (D3); the module's two projects, in the solution, the architecture guard widened; `ExperimentFile`,
-   `ArmPaths`, `ArmMap`; the four launcher options (§4.4); `BriefFiller` and the templates. Nothing launches yet.
+   `ArmPaths`, `ArmMap`, `RootRequirements`, `RootTrust`, `ExecutableResolution` and the `init` / `validate` verbs (D17, D18); the
+   four launcher options and the stderr sink (§4.4); `BriefFiller` and the templates. Nothing launches a model yet.
 2. **E2** — the step: `ClaudeResultEnvelope`, `StepEnd`, `StepRecovery`, `TimingLine`, `StepBudget`, `ReviewAnswer`, `GateStatus`;
    `StepRunner` over `ICliAgentTranscripts` against `tests/FakeCli` (widened: `stdoutByCall`); `FileGateLock` with its two-process test;
    `run-arm` for C and CR.
 3. **E3** — `TasksPlan`, `TaskWorktrees`, the batches, pick-back; `run-arm` for SRS.
 4. **E4** — `IsolationPlan` + `PosixFolderIsolation` (+ the refusal), `HostAwakeSelection` + the three adapters, `SetsidLauncher`,
    `ChainPlan`; `prep-base`, `make`, `lock`, `unlock`, `run-all`, `chain`, `status`.
-5. **E5** — `checks` and its parsers; the layout-compatibility test; `research/module_model_arms.md` (created in E1's first code story,
-   finished here), the `research/module_tests.md` rows (the catalogue test widened to the module's dispatch), `README.md`'s layout table,
-   `POST_DEPLOY.md` unchanged (nothing deploys; the module is run by hand).
+5. **E5** — `checks` and its parsers; the catalogue test widened to read `tools/model-arms/ModelArms/Program.cs`'s dispatch (F2, its
+   own story and test); the layout-compatibility test; `research/module_model_arms.md` (created in E1's first code story, finished
+   here), the `research/module_tests.md` rows, `README.md`'s layout table, `POST_DEPLOY.md` unchanged (nothing deploys; the module
+   is run by hand).
 6. One attended dry run against a scratch target with `tests/FakeCli` as `claude` (every verb, all three schemes, one limited attempt,
    one interrupted arm resumed) — the pilot this plan's `module_tests.md` rows name as *not covered live*.
 
@@ -400,7 +426,12 @@ and `result-429-string-status.jsonl` from the product's tests, cited as paths), 
 
 - `HostingExtractionTests` — `The_cli_parser_and_exit_codes_live_in_Bench_Hosting_under_their_old_namespace`; `tests/Bench.Tests/Cli/CommandLineTests.cs` unedited and green.
 - `ModelArmsArchitectureTests` — `Core_references_only_the_runtime_the_domain_and_the_application_layer`; `Nothing_under_src_or_hosts_references_the_model_arms_module`; `Core_never_references_infrastructure_or_entity_framework`; `Every_core_decider_is_named_in_the_pure_list` (the module's own list, the gate's pattern).
-- `ExperimentFileTests` — `A_complete_file_reads_into_facts_with_every_command_as_exe_and_argv`; `An_unknown_member_is_refused_by_name`; `A_round_naming_an_arm_of_an_unknown_scheme_is_refused_naming_both`; `A_root_inside_a_git_checkout_is_refused`; `A_root_inside_this_repository_is_refused`; `The_root_and_home_placeholders_expand_in_isolation_paths`.
+- `ExperimentFileTests` — `A_complete_file_reads_into_facts_with_every_command_as_exe_and_argv`; `An_unknown_member_is_refused_by_name`; `A_round_naming_an_arm_of_an_unknown_scheme_is_refused_naming_both`; `A_root_inside_a_git_checkout_is_refused`; `A_root_inside_this_repository_is_refused`; `The_root_and_home_placeholders_expand_in_isolation_paths`; `An_executable_under_the_target_or_the_root_is_refused_and_may_only_be_an_argument` (F7); `The_suite_runs_as_dotnet_with_the_test_assembly_as_an_argument`.
+- `RootTrustTests` (F7) — `A_root_or_file_writable_by_group_or_others_is_refused_naming_the_file_and_the_mode` (live on Linux, a temp root at 664/775); `A_file_not_owned_by_the_current_user_is_refused` (the pure decision over facts — no second user exists in a test); `On_windows_the_check_is_declared_not_performed_never_passed_silently`.
+- `RootRequirementsTests` (F6) — `Each_verb_requires_exactly_the_files_its_stage_needs`; `A_root_missing_a_required_file_is_refused_naming_the_first_missing_one_with_exit_4`.
+- `InitVerbTests` (F6) — `Init_creates_the_root_the_template_the_empty_scenarios_and_the_briefs_folder`; `Init_refuses_an_existing_root`; `The_template_has_every_required_member_and_validate_refuses_it_until_filled`.
+- `ValidateVerbTests` (F6, F7) — `Validate_names_every_refused_member_in_one_answer`; `Validate_prints_the_resolved_executables_name_to_absolute_path`; `Prep_base_is_refused_before_validate_passes_and_when_a_baseline_exists`.
+- `ProcessRunnerStderrSinkTests` (in `tests/Bench.Tests/Infrastructure/`, F8) — `Stderr_lines_reach_the_sink_as_they_arrive_and_the_whole_text_is_still_returned`; `A_stderr_sink_that_throws_kills_the_tree_like_a_stdout_sink_does`; `Every_existing_launch_without_a_stderr_sink_is_unchanged` (the probes' and scouts' suites unedited).
 - `ArmPathsTests` — `Every_path_of_an_arm_is_spelled_as_the_shell_spelled_it` (the whole table of §4.3, one assertion per path); `The_coder_diff_is_the_one_renamed_file`.
 - `ArmMapTests` — `Tokens_are_minted_once_and_never_reminted_for_an_existing_map`; `A_token_never_appears_in_a_log_line_or_a_brief` (through `BriefFiller`'s leak check and the console writer's scrub).
 - `ClaudeArgvSessionTests` (in `tests/Bench.Tests/Models/`) — `A_fresh_attempt_passes_session_id_and_a_resume_passes_resume`; `Session_id_and_resume_together_are_refused`; `Permission_mode_accept_edits_default_and_plan_are_spelled`; `Permission_mode_beside_the_read_only_sandbox_is_refused`; `Permitted_tool_patterns_are_allowedTools_and_the_builtin_list_stays_tools`; `Codex_gemini_and_antigravity_refuse_the_four_options_by_name`; `IsNone_is_false_for_each_new_option`; `ProbeArgvTests` and `ScoutArgvTests` unedited and green.
@@ -412,7 +443,7 @@ and `result-429-string-status.jsonl` from the product's tests, cited as paths), 
 - `ClaudeResultEnvelopeTests` — `The_last_result_line_is_read_whatever_lines_precede_it`; `Api_error_status_reads_as_a_number_and_as_a_string`; `Subtype_success_on_an_error_result_is_ignored`; `A_stream_without_a_result_reads_as_none`.
 - `StepEndTests` — `The_2026_10_28_line_is_limited_by_its_structured_fields_whatever_the_words_say` (the verbatim line, the words removed); `A_monthly_spend_limit_429_is_limited`; `A_string_429_is_limited`; `A_529_overload_is_limited`; `An_error_result_that_is_not_a_limit_is_errored_never_finished`; `Limit_words_on_stderr_without_a_result_are_limited`; `A_success_result_is_finished`; `A_killed_tree_is_the_hard_deadline`; `No_result_and_no_limit_is_interrupted`; `A_launch_the_executable_refused_is_not_started`.
 - `StepRecoveryTests` — `A_done_marker_skips`; `A_last_stream_that_finished_without_a_marker_is_recovered_as_done_never_resumed`; `A_last_stream_whose_result_is_an_error_resumes`; `A_session_without_a_transcript_starts_fresh_with_a_new_id`; `The_remaining_budget_excludes_limited_attempts_and_floors_at_the_minimum`; `Timing_of_a_real_arm_reads_back_every_line` (the arm-C fixture).
-- `StepRunnerTests` — against `tests/FakeCli` as `claude` (D9, the fake's `stdoutByCall` widening): `A_limited_attempt_waits_then_resumes_the_same_session_and_the_wait_is_not_counted` (manual clock, two calls, the second with `--resume <same id>`); `An_errored_attempt_stops_the_arm_with_exit_5_and_no_done_marker`; `A_finished_attempt_writes_done_the_stream_the_stderr_the_prompt_and_both_timing_lines`; `The_wall_kills_the_tree_and_marks_the_hard_deadline_done` (`holdAfterLine`); `Still_limited_after_every_wait_exits_3`; `Ctrl_c_during_the_wait_exits_5_resumable`; `The_resume_notice_names_the_new_deadline_and_the_base_commit`; `The_session_file_is_written_before_the_launch` (break-it: write it after → the test that kills the fake mid-launch finds no session).
+- `StepRunnerTests` — against `tests/FakeCli` as `claude` (D9, the fake's `stdoutByCall` widening): `A_limited_attempt_waits_then_resumes_the_same_session_and_the_wait_is_not_counted` (manual clock, two calls, the second with `--resume <same id>`); `An_errored_attempt_stops_the_arm_with_exit_5_and_no_done_marker`; `A_finished_attempt_writes_done_the_stream_the_stderr_the_prompt_and_both_timing_lines`; `The_wall_kills_the_tree_and_marks_the_hard_deadline_done` (`holdAfterLine`); `The_done_marker_and_the_end_line_carry_the_classifiers_state_finished_or_hard_deadline` (F1/F4); `Stderr_is_on_disk_before_the_process_ends` (F8: the fake's `stderr` with `holdAfterLine`, the `.err` file read while the fake hangs); `Still_limited_after_every_wait_exits_3`; `Ctrl_c_during_the_wait_exits_5_resumable`; `The_resume_notice_names_the_new_deadline_and_the_base_commit`; `The_session_file_is_written_before_the_launch` (break-it: write it after → the test that kills the fake mid-launch finds no session).
 - `ReviewAnswerTests` — `The_json_block_of_the_last_result_is_the_review`; `No_block_is_unparsed_with_the_raw_text`; `An_error_result_produces_no_review_file`.
 - `GateStepTests` — `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries`; `The_lock_is_released_during_the_wait`; `The_before_snapshot_is_taken_before_the_first_attempt_and_the_diff_only_from_a_finished_step`.
 - `FileGateLockTests` — `A_second_process_holding_the_lock_makes_the_first_wait` (a live `model-arms gate-lock hold` child); `Cancellation_while_waiting_releases_nothing_and_surfaces_as_cancelled`.
@@ -427,18 +458,20 @@ and `result-429-string-status.jsonl` from the product's tests, cited as paths), 
 **E4 — chain, isolation, keep-awake**
 
 - `ChainPlanTests` — `The_first_action_is_making_every_unmade_arm`; `Lock_comes_after_the_last_make_and_before_the_first_start`; `An_arm_whose_runner_died_without_arm_done_stops_the_chain_naming_the_resume_command`; `A_finished_round_starts_the_next`; `Unlock_precedes_every_check`; `A_restarted_chain_skips_every_marked_stage`.
-- `ChainVerbTests` (recording fakes) — `Every_lock_is_unlocked_on_every_path_out_including_a_throw`; `The_awake_scope_spans_the_whole_chain`; `A_chain_entered_while_locked_restores_first`.
+- `ChainVerbTests` (recording fakes) — `Every_lock_is_unlocked_on_every_path_out_including_a_throw`; `The_awake_scope_spans_the_whole_chain`; `A_chain_entered_with_a_leftover_snapshot_restores_first`; `Resolved_executables_are_printed_and_written_before_the_first_launch` (F7).
+- `StatusVerbTests` (F0, F1/F4) — `A_step_that_ended_on_its_deadline_is_listed_as_such_apart_from_a_finished_one`; `Status_opens_every_file_by_name_and_enumerates_no_folder` (a recording file port: every call is an open-by-name; the live form on Linux — `status` green over a root whose `r/` and `pids/` are mode 300).
 - `IsolationPlanTests` — `The_closed_and_unlisted_folders_are_the_shells_in_the_shells_order`; `Restore_order_is_the_reverse_of_lock_order`; `HostAwakeSelection_picks_windows_wsl_or_none_from_the_facts`.
-- `PosixFolderIsolationTests` (Linux only, skipped with a printed reason elsewhere) — `Modes_are_saved_before_the_first_change_and_restored_in_reverse`; `A_locked_folder_cannot_be_listed_by_this_user`; `Verification_refuses_when_the_user_can_still_list_it`; `Unlock_is_idempotent`.
+- `PosixFolderIsolationTests` (Linux only, skipped with a printed reason elsewhere) — `Modes_are_saved_before_the_first_change_and_restored_in_reverse`; `The_snapshot_is_durable_before_the_first_mode_changes` (break-it: write it after → a kill between the two leaves no snapshot); `A_lock_killed_half_way_is_restored_on_the_next_entry` (F5: the adapter's test seam stops after the second of four modes, a new adapter instance enters, every mode is back and the snapshot is renamed `restored`); `A_verification_failure_restores_before_refusing`; `A_locked_folder_cannot_be_listed_by_this_user_and_is_still_traversed_by_name` (F0); `Verification_refuses_when_the_user_can_still_list_it`; `Unlock_is_idempotent_and_says_so_without_a_snapshot`.
+- `IsolationRecoveryTests` (F5, recording fakes) — `Every_verb_restores_a_leftover_snapshot_before_it_works`; `Restore_is_keyed_off_the_snapshot_file_and_not_off_the_locked_marker` (a snapshot with no marker restores; a marker with no snapshot does nothing but say so).
 - `WslHostAwakeTests` — `The_pwsh_child_is_held_for_the_scope_and_killed_on_dispose` (`tests/FakeCli` in `hang` mode as `pwsh.exe`); `A_child_that_exits_is_relaunched_at_the_next_check`.
 - `DetachedLauncherTests` — `An_arm_with_a_live_pid_is_left_alone`; `A_started_arm_survives_its_launchers_exit` (Linux: the child is a `FakeCli` hold).
 
 **E5 — checks, docs, compatibility**
 
 - `ObjectiveParsersTests` — `The_mtp_summary_reads_total_succeeded_skipped_and_every_failed_name`; `The_node_log_reads_passed_failed_and_the_count`; `Ctrf_decides_passed_failed_absent_and_mixed_per_scenario`; `New_failures_exclude_the_baseline`; `Changed_lines_split_into_tests_src_and_docs`.
-- `ObjectiveReportTests` — `The_report_of_a_real_arm_round_trips_the_shells_shape` (the arm-C fixture: every key present).
+- `ObjectiveReportTests` — `The_report_of_a_real_arm_round_trips_the_shells_shape` (the arm-C fixture: every key present); `Steps_that_ended_on_a_deadline_are_listed_under_stepsOnDeadline` (F1/F4).
 - `LayoutCompatibilityTests` — `A_fake_arm_run_leaves_exactly_the_files_the_shell_analysis_scripts_read` (the list from `metrics.mjs`, `judge-abs.sh`, `t-survival.mjs` — by name).
-- `ModuleTestsCatalogTests` widened — `The_scans_still_find_known_flows_in_each_source` gains `model-arms run-arm` and `model-arms chain`; every verb of §4.1 has a row.
+- `ModuleTestsCatalogTests` widened (F2, its own story E5.S3) — a third scan, `ModelArmsVerbs()`, over `tools/model-arms/ModelArms/Program.cs`'s dispatch with the `Arm()` regex and the prefix `model-arms `; `Every_model_arms_verb_is_derived_from_its_dispatch_and_has_its_row`; `The_scans_still_find_known_flows_in_each_source` gains `model-arms run-arm`, `model-arms chain` and `model-arms init`; the catalogue-row regex admits the `model-arms ` prefix; every verb of §4.1 has a row.
 
 What the suite does not prove, said in `module_tests.md`: a real `claude` under a real limit; a real `pwsh.exe`; a cherry-pick of a
 real multi-hour task; the chain on nine real arms. Step 6 of the build order is the attended pilot of the whole thing with the fake
@@ -468,7 +501,11 @@ Docker must be up for the whole suite (the durability tests); the module's own t
 - **Isolation by file modes is an access constraint, not a security boundary** against a same-user process that can change modes;
   the shell said the same ("chmod is not in their tools"). The arms' tool lists keep `chmod` out; nothing here claims more.
 - **A kill at the wall instead of SIGINT-then-kill (D8)** is a behaviour change: a session that would have finished in the 60 s grace
-  now reads as `HardDeadline`. Recorded as a deviation to watch in the pilot; the brief's deadline is ten minutes earlier.
+  now reads as `HardDeadline` — still done (D8), and named as such in the marker, the timing line, `status` and `objective.json`, so
+  the pilot can count how often it happens. The brief's deadline is ten minutes earlier.
+- **The trust check (D17) is about the operator's own files, not about the arms.** An arm's agent runs with the same user's rights
+  and could edit `experiment.json` if it reached it — which the deny list and the unlisted root are there to prevent; the check
+  catches a shared or mis-moded root, not a hostile same-user process.
 - **A lock between .NET processes on Linux** is proven by the two-process test (D10); a lock against a NON-.NET holder (the shell's
   `flock`) is not claimed, and the shell harness must not run beside this module on one experiment root.
 
@@ -477,13 +514,20 @@ Docker must be up for the whole suite (the durability tests); the module's own t
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` — 0 warnings; `dotnet format --verify-no-changes` clean.
 - [ ] `ArchitectureTests` green with the module's three new assertions (D1); `CommandLineTests`, `ProbeArgvTests`, `ScoutArgvTests` unedited and green (D3, §4.4).
 - [ ] Every test of §7 exists under its exact name, was watched red first (or its break-it was watched red with the real symptom), and is green.
-- [ ] `tests/FakeCli` widened (`stdoutByCall`), the probes' and scouts' suites unedited and green.
+- [ ] `tests/FakeCli` widened (`stdoutByCall`), `ProcessRunner` widened (the stderr sink), the probes' and scouts' suites unedited and green.
+- [ ] `PosixFolderIsolationTests.A_lock_killed_half_way_is_restored_on_the_next_entry` watched red against an adapter that wrote its snapshot late, then green (F5); `RootTrustTests` green on Linux (F7); `init → validate → prep-base → make → chain` documented in `research/module_model_arms.md` as the first run, every refusal quoted (F6); the catalogue test derives every `model-arms` verb (F2).
 - [ ] `experiment.json` of the owner's part-6 experiment (`/home/jinx/git/coai-exp2/exp.env`, `scenarios.json`, `baseline.json`, the tool lists of `run-arm.sh:25-38`) written once by the owner into a root outside every checkout and read by `model-arms status` without a refusal.
 - [ ] The attended pilot with the fake CLI (build order step 6) ran every verb and all three schemes, with one limited attempt resumed and one interrupted arm resumed; its log is in `research/module_model_arms.md`.
 - [ ] `research/module_model_arms.md` describes the module as it is (purpose, the state machine diagram, the layout, the ports and adapters, the verbs, the growth table); `research/architecture.md`'s module map gains its row; `README.md`'s layout table gains `tools/model-arms`; `research/module_tests.md` carries every verb's row.
 - [ ] Every growth surface of §4.11 is owned as written; no new table, no new database.
 - [ ] The plan is promoted with its deviations recorded; `todo/PLAN_model_arms_analysis.md` exists with its status line before the first real experiment is analysed.
 - [ ] The completion check: `node .agents/conventions/tools/plan-lifecycle.mjs` green.
+
+## 11. Review record
+
+| round | session | on | verdict | reviewers | gating | findings and decisions |
+|---|---|---|---|---|---|---|
+| plan 1 | coai `5b0614ae` | `8b08dcb` | REVISE | 2 of 2 (antigravity, codex) | 7 of threshold 6 | **F0** blocking (antigravity), "mode 300 on the root breaks child processes" — **rejected**, measured false (nine arms ran for hours under these modes; traversal needs only `x`; listing alone fails, by design); the plan now states the address-by-name rule and keeps the evidence (D11). **F1** major (antigravity) and **F4** blocking (codex), "`HardDeadline` writes `.done`" — **rejected**, deliberate: a step's budget is a condition of the experiment; the decision and its reason are now explicit and the state is visible in the marker, the timing line, `status` and `objective.json` (D6, D8, §4.9). **F2** major (antigravity) — **accepted**: the catalogue test's widening to the module's dispatch is a story with a test (E5.S3). **F3** minor (antigravity), "`FileGateLock` vs `flock(1)`" — **rejected**: only this harness's own processes take the lock (§9). **F5** major (codex) — **accepted**: crash-safe isolation order, restore keyed off the snapshot file, a killed lock restored on the next entry, tested (D11, §7). **F6** major (codex) — **accepted**: the initialisation workflow with `init` and `validate` and per-verb root requirements (D18, §4.12). **F7** major (codex) — **accepted**: the trust boundary of `experiment.json`, executables resolved outside the target, printed before the first launch (D17). **F8** minor (codex) — **accepted**: stderr streamed to the `.err` file while the process runs; classification reads it (D6, §4.4). Decisions recorded with `resolve` by the main session. |
 
 ## Epics
 
@@ -495,9 +539,10 @@ included.
 
 ### E1 — Facts, layout and the launch boundary (M) — cornerstone area: the launch boundary
 
-**Goal.** The module exists as two guarded projects, the facts are a refusing file, every path has one spelling, the shared launcher
-can start and resume a claude session under the three tool modes, and every brief fills completely. Nothing launches yet.
-**Scope.** D1–D5, D9 (the options), D15, §4.1–§4.4, §4.10. **Depends on.** Nothing. **Done when.** E1's tests of §7 are green;
+**Goal.** The module exists as two guarded projects, the facts are a refusing file with a trust check and an initialisation workflow,
+every path has one spelling, the shared launcher can start and resume a claude session under the three tool modes with stderr
+streamed to disk, and every brief fills completely. Nothing launches a model yet.
+**Scope.** D1–D5, D9 (the options), D15, D17, D18, §4.1–§4.4, §4.10, §4.12. **Depends on.** Nothing. **Done when.** E1's tests of §7 are green;
 `CommandLineTests`, `ProbeArgvTests` and `ScoutArgvTests` unedited; the solution builds with 0 warnings; `research/module_model_arms.md`
 exists with the layout.
 
@@ -507,9 +552,10 @@ exists with the layout.
 | E1.S2 | The two module projects and the architecture guard | D1, D2 | `tools/model-arms/ModelArms.Core/*.csproj`, `tools/model-arms/ModelArms/*.csproj`, `dew_flow_benchmark.slnx`, `tests/Bench.Tests/Bench.Tests.csproj`, `tests/Bench.Tests/ModelArms/ModelArmsArchitectureTests.cs` | the three assertions red against a planted reference, then green |
 | E1.S3 | `ExperimentFile` and its refusals | D4, §4.2 | `Core/Experiment/ExperimentFile.cs`, `Scheme.cs`, `StepSpec.cs`, `ToolSets.cs`, `ExperimentFileTests.cs` | `ExperimentFileTests` |
 | E1.S4 | `ArmPaths` and `ArmMap` | D4, D5, §4.3 | `Core/Experiment/ArmPaths.cs`, `ArmMap.cs`, `ArmPathsTests.cs`, `ArmMapTests.cs` | the path table pinned |
-| E1.S5 | The launcher's four options — **cornerstone candidate** | §4.4 | `src/Bench.Application/CliAgent.cs`, `src/Bench.Infrastructure/Models/CliAgentRuntime.cs`, `tests/Bench.Tests/Models/ClaudeArgvSessionTests.cs` | `ClaudeArgvSessionTests`; the existing argv suites unedited |
+| E1.S5 | The launcher's four options and the stderr sink — **cornerstone candidate** | §4.4, F8 | `src/Bench.Application/CliAgent.cs`, `src/Bench.Infrastructure/Models/CliAgentRuntime.cs`, `src/Bench.Infrastructure/Process/ProcessRunner.cs`, `tests/Bench.Tests/Models/ClaudeArgvSessionTests.cs`, `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs` | `ClaudeArgvSessionTests`, `ProcessRunnerStderrSinkTests`; the existing argv and launcher suites unedited |
 | E1.S6 | `StepLaunch` and the child environment | §4.4 | `Core/Launch/StepLaunch.cs`, `StepLaunchTests.cs` | `StepLaunchTests` |
 | E1.S7 | `BriefFiller`, `BriefFields`, the eight templates | D15, §4.10 | `Core/Briefs/*`, `tools/model-arms/briefs/*.template.md`, `BriefFillerTests.cs` | `BriefFillerTests` |
+| E1.S8 | `RootRequirements`, `RootTrust`, `ExecutableResolution`; the `init` and `validate` verbs | D17, D18, §4.12 | `Core/Experiment/RootRequirements.cs`, `RootTrust.cs`, `ExecutableResolution.cs`, `ModelArms/Verbs/Init.cs`, `Validate.cs`, `RootRequirementsTests.cs`, `RootTrustTests.cs`, `InitVerbTests.cs`, `ValidateVerbTests.cs` | the four classes green; `RootTrustTests` live on Linux |
 
 ### E2 — The step: classify, recover, run, gate (L) — cornerstone area: the step's state machine
 
@@ -548,10 +594,10 @@ tests of §7 green; the POSIX adapter's live test green on Linux; `WslHostAwakeT
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
-| E4.S1 | `IsolationPlan`, `IsolationRestoreOrder`, `PosixFolderIsolation` + the Windows refusal, `lock`/`unlock` | D11 | `Core/Isolation/*`, `ModelArms/Adapters/PosixFolderIsolation.cs`, `ModelArms/Verbs/Lock.cs`, `IsolationPlanTests.cs`, `PosixFolderIsolationTests.cs` | the verification's refusal observed on a listable folder |
+| E4.S1 | `IsolationPlan`, `IsolationRestoreOrder`, `PosixFolderIsolation` + the Windows refusal, the snapshot-first order, the restore-on-entry of every verb, `lock`/`unlock` | D11, F0, F5 | `Core/Isolation/*`, `ModelArms/Adapters/PosixFolderIsolation.cs`, `ModelArms/Verbs/Lock.cs`, `ModelArms/Program.cs` (the entry restore), `IsolationPlanTests.cs`, `PosixFolderIsolationTests.cs`, `IsolationRecoveryTests.cs` | the verification's refusal observed on a listable folder; the killed-half-way lock restored on the next entry |
 | E4.S2 | `HostAwakeSelection` and the three adapters | D12 | `Core/Isolation/HostAwakeSelection.cs`, `ModelArms/Adapters/WindowsAwake.cs`, `WslHostAwake.cs`, `NoAwake.cs`, `ModelArms/windows/*.ps1`, `WslHostAwakeTests.cs` | `WslHostAwakeTests` |
 | E4.S3 | `SetsidLauncher` / `WindowsLauncher`, `run-all`, pid files | D13 | `ModelArms/Adapters/*Launcher.cs`, `ModelArms/Verbs/RunAll.cs`, `DetachedLauncherTests.cs` | `DetachedLauncherTests` |
-| E4.S4 | `prep-base`, `make`, `status` | §4.1 | `ModelArms/Verbs/PrepBase.cs`, `Make.cs`, `Status.cs`, `MakeVerbTests.cs` | an arm made from a scratch base reads back by `status` |
+| E4.S4 | `prep-base`, `make`, `status` (by name, never enumerating; the deadline column) | §4.1, D18, F0, F1/F4 | `ModelArms/Verbs/PrepBase.cs`, `Make.cs`, `Status.cs`, `MakeVerbTests.cs`, `StatusVerbTests.cs` | an arm made from a scratch base reads back by `status`; `status` green over a mode-300 root on Linux |
 | E4.S5 | `ChainPlan` and `chain` | §4.7 | `Core/Chain/*`, `ModelArms/Verbs/Chain.cs`, `ChainPlanTests.cs`, `ChainVerbTests.cs` | the unlock-on-every-path test |
 
 ### E5 — The objective checks, the compatibility contract and the record (M)
@@ -565,5 +611,6 @@ every DoD line of §10 ticked.
 |---|---|---|---|---|
 | E5.S1 | The parsers and `ObjectiveReport` | §4.9 | `Core/Checks/*`, the log and CTRF fixtures, `objective-arm-C.json`, `ObjectiveParsersTests.cs`, `ObjectiveReportTests.cs` | `ObjectiveReportTests` round-trips the real shape |
 | E5.S2 | `TargetTools` and the `checks` verb | §4.9 | `ModelArms/Adapters/TargetTools.cs`, `ModelArms/Verbs/Checks.cs` | `checks --parse-only` over the fixtures |
-| E5.S3 | `LayoutCompatibilityTests` and the catalogue widening | D5 | `LayoutCompatibilityTests.cs`, `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs`, `research/module_tests.md` | both green |
-| E5.S4 | Docs and the attended pilot | §6 step 5–6 | `research/module_model_arms.md`, `research/architecture.md` (module map), `README.md`, this plan's promotion | the DoD |
+| E5.S3 | The catalogue test reads the module's dispatch (F2) — `ModelArmsVerbs()` over `tools/model-arms/ModelArms/Program.cs`, the row regex's `model-arms ` prefix, every verb's row | §7 E5 | `tests/Bench.Tests/Cli/ModuleTestsCatalogTests.cs` (~80 changed lines), `research/module_tests.md` | `Every_model_arms_verb_is_derived_from_its_dispatch_and_has_its_row` red against a verb without a row, then green |
+| E5.S4 | `LayoutCompatibilityTests` | D5 | `LayoutCompatibilityTests.cs` | green |
+| E5.S5 | Docs and the attended pilot | §6 step 5–6 | `research/module_model_arms.md` (the first-run workflow of §4.12 included), `research/architecture.md` (module map), `README.md`, this plan's promotion | the DoD |
