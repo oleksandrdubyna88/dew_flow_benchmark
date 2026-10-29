@@ -102,7 +102,7 @@ The module under `tools/model-arms` is its own console (`model-arms`), driven he
 | `model-arms prep-base` | covered | `ModelArmsScenarioTests` | the guard only (the same checks, then refused until E4.S4); the baseline measurement is not built |
 | `model-arms version` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
 | `model-arms help` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
-| `model-arms init` | not covered | — | not built yet, story E1.S11 |
+| `model-arms init` | covered | `ModelArmsScenarioTests` | the binary as a process: `init` makes a root, `validate` reads it and refuses the unfilled template (4) without a trust refusal, a second `init` is refused (4); `InitVerbTests` holds every refusal (existing root, link root, link parent, git checkout, this repository, missing parent, exit 3), the owner-only modes read back, and `init` then `validate` over a filled experiment (0); the template against the example in `ExampleExperimentTests` |
 | `model-arms make` | not covered | — | not built yet, story E4.S4 |
 | `model-arms lock` | not covered | — | not built yet, story E4.S1 |
 | `model-arms unlock` | not covered | — | not built yet, story E4.S1 |
@@ -173,8 +173,8 @@ key refused (4) with nothing created; an edited statement, a wrong key and the p
 - **That the recall matcher agrees with a person** — §3.7's 19-of-20 hand-check, E2 S5.
 - **The read API and the console** for the scouts (E3 S8), and the routes above marked `not covered`.
 - **Concurrency of two harnesses on one run**: every scenario runs one campaign at a time, as the design does.
-- **The `model-arms` harness drives `validate` and `prep-base` only.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
-  ran for those two verbs; a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
+- **The `model-arms` harness drives `init`, `validate` and `prep-base` only.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
+  ran for `validate` and `prep-base` (`init` launches nothing); a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
   as unprobed and were never run; the product's own bare `git` launches in `src` are outside it. The fixture's `claude`, `dotnet`, `node` and `npm` are empty files.
 - **Linux and macOS paths for the scouts**: the scenario runs where the suite runs; CI is ubuntu, local runs are Windows.
 

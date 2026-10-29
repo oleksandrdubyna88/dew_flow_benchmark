@@ -62,7 +62,7 @@ Separately, `Bench.Hosting` (the parser, the exit codes, the shutdown signal) is
 `ExperimentFile.Read(json, location)` turns the text of `experiment.json` into an `Experiment`, or refuses it with every problem of the file in
 one answer, one sentence per line (`Outcome<Experiment>`, the reason is the lines joined by `\n`). Core receives the TEXT and an
 `ExperimentLocation(Root, Home, EnclosingGitTop, ThisRepository)`; the console reads the file and answers the location's four questions.
-The worked example `tools/model-arms/examples/part6.experiment.json` is the one source the tests and, later, the `init` template are derived from.
+The worked example `tools/model-arms/examples/part6.experiment.json` is the one source the tests and the `init` template are derived from (*The first run*, below).
 
 **Reading.** `JsonNode.Parse` with comments skipped (the example carries `//` comments), trailing commas refused and a member written twice
 refused at any depth (`AllowDuplicateProperties = false`; it arrives as a `JsonException`, whereas the default would throw `ArgumentException` on later access, outside any catch). A malformed text, or one whose
@@ -528,3 +528,107 @@ tests); that a verb reads `scenarios.json` from the path the gate judged (the ga
 next reader of it).
 
 ## The first run: init and validate (E1.S11)
+
+The order of a first run, each step refusing what the one before did not leave (D18): **`init <root>`** → the operator fills `experiment.json` and `scenarios.json` → **`validate`** → **`prep-base`** (its guard today;
+the baseline is E4.S4). `init` is the only verb that does not go through `ExperimentGate`: there is no experiment to read and the root it is asked about does not exist yet.
+
+**The worked example and the template (D24, D18).** `tools/model-arms/examples/part6.experiment.json` is the part-6 run's values with `/example/...` paths and `//` comments. It travels beside the binary
+(`examples/`, a content glob in the console's project file, so the unit is the one file) and is the ONE source of two things: `ExampleExperimentTests.The_shipped_part6_example_validates_over_a_fixture_root_once_its_paths_exist`
+creates the paths it names on a fixture root and `validate` accepts it (exit 0), and `ExperimentTemplate.From(exampleText)` (Core, pure) derives the template `init` writes. The template is the example read with
+`Utf8JsonReader` (comments allowed) and written with `Utf8JsonWriter` (indented, `\n`, unescaped `<` and `>`): property names, structure, array lengths and comments are kept, every string value becomes `<fill me>`
+EXCEPT the direct values of the top-level members `schema`, `scenarios` and `baseline` (a fixed schema name and two file names), and every number becomes `0`. The two cannot drift: a member added to the example is in the
+template, and `ExampleExperimentTests.The_init_template_is_the_example_with_its_values_blanked` reads both back and compares every path, kind and array length, every string and every number, and that each comment of
+the example occurs in the template.
+
+**Comments.** JSON has no comments; the example's `//` lines are written back as `/* … */` (the writer's one comment form, plan deviation 7), and the experiment reader skips both. The writer puts a comment right
+after the value written before it, which would hang the comment about `target` under `schema`'s value, ahead of the comma; the template holds a comment back and writes it behind the property name that follows it
+(`"target":` then `/* The repository the arms work on: … */` then `{`), pinned by `A_comment_sits_after_the_name_of_the_member_it_describes_not_after_the_value_before_it`. A comment with no name after it
+(before a closing bracket) stays where it was.
+
+**`init <root>`** takes exactly one word and no flag (`ModelArmsCommandLine`). The root is made absolute and its trailing separator trimmed, then, in this order, each refusal ending the walk:
+
+1. **The root is there** — exit 4, `RootRequirements.For("init", …)` through `FirstUnmet`: `<root> already exists — init creates a new root and never writes into an existing one`. "There" is the directory entry by that name
+   (`RootFacts.Host.Present`, the kernel's `statx` without following a link), so a root that is a symbolic link — live or dangling — exists and is refused; `File.Exists`/`Directory.Exists` would call a dangling link absent
+   and `init` would then fail trying to make it. A kernel that cannot say is exit 3.
+2. **The parent does not exist** — exit 4, `<parent> does not exist — init creates one folder, not a path`.
+3. **Placement** — exit 4, `ExperimentFile.Placement` (the same two rules the gate applies to every `experiment.json`): `the experiment root <root> is inside this repository (<repo>) — a root lives outside every checkout`
+   and/or `… is inside the git checkout <top> — the arms' clones would nest in it`. `RootFacts.GitTopOf` answers for a root that does not exist yet.
+4. **The parent is a symbolic link** — exit 4, `<parent> is a symbolic link to '<target>' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)` (the
+   sentence is `RootFacts.ReadFacts`'s, asked with the expected kind `Directory`; a parent that is another kind of file is refused the same way, a read the host could not make is exit 3). Only the PARENT is
+   judged: an ancestor above it may be a link, as the gate allows (a WSL home usually is). Off Windows only: there the verb prints `the symbolic-link and owner-only checks were not performed — POSIX only (D17)`.
+5. **The shipped example cannot be read** — exit 3, before anything is made.
+
+Then it makes the root (`Directory.CreateDirectory(root, 0700)` off Windows — the mode is asked for at creation, so the folder is never open to others), judges the root again with `ReadFacts` (a link swapped in since
+step 1 is refused before a file goes through it), makes `briefs/` (0700) and writes `experiment.json` (the template) and `scenarios.json` (`[]` and a newline), both with `FileMode.CreateNew` and `UnixCreateMode` 0600, so an
+existing file or a link at the name is an error and never written through. A host that will not do any of it is exit 3 (`cannot create <path>: <reason>`), adding `init stopped part-way: remove <root> and run init again`
+when a part-made root is left behind; `init` removes nothing itself. A stop signal is honoured once, before anything is made (a root half-made by a stop would be refused as existing by the same command run again).
+On success: exit 0 and one line on standard output,
+
+```
+created <root>: experiment.json (a template — replace every <fill me>), scenarios.json (empty), briefs/ (template overrides by name). Next: model-arms validate --experiment <root>
+```
+
+The modes are what make the next step pass: the gate's trust check (D17 a) wants the root and its files owned by the operator and not group- or other-writable, and `0700`/`0600` are that whatever the umask
+(`InitVerbTests.Init_makes_the_root_and_its_files_owner_only_whatever_the_umask` reads the real modes back; `Init_then_validate_over_a_filled_experiment_reaches_the_host_checks_not_a_trust_refusal` fills the root with
+the fixture's `experiment.json` and `scenarios.json` and `validate` exits 0).
+
+**The walk, as it runs** (by hand, once, on this host: `model-arms init /tmp/ma-try && model-arms validate --experiment /tmp/ma-try`). `validate` on the template exits 4: every member is present (no line says `is missing`;
+`ExampleExperimentTests.A_template_is_read_back_by_the_experiment_reader_with_its_comments_and_every_required_member` holds that in Core), and every value is unfilled, so the gate prints the reader's problems, 61 of
+them on the shipped example, one per line:
+
+```
+model-arms validate: experiment.json is refused:
+  steps.code.minutes is 0 — it must be greater than zero
+  steps.code.mode is '<fill me>' — legal: write, read, gate
+  …
+  schemes.C[0] is '<fill me>' — an entry is "tasks" or "<file name>:<step kind>", such as "1-code:code"
+  …
+  target.source is '<fill me>' — it must be an absolute path
+  target.base is '<fill me>': a commit sha is 40 hexadecimal characters, got 9 — abbreviations are ambiguous and are refused
+  rounds[0][0]: '<fill me>' is not an arm name — letters then a number, such as C1 or SRS2
+  …
+  limits.waitSeconds is 0 — it must be greater than zero
+  …
+  coai.binary is '<fill me>' — it must be an absolute path
+  isolation.closed[0] is '<fill me>' — it must be <root>, start with <root>/ or ~/, or be an absolute path
+  awake is '<fill me>' — legal: auto, windows, wsl, none
+```
+
+The operator replaces every `<fill me>` and every `0` (the example beside the binary shows what a filled file looks like), writes the scenarios (`[{"id","kind","name"}]`, kind `cs` or `node`; an empty list is refused:
+`scenarios.json holds no scenario`), and runs `validate` again. Once the file is valid the refusals are the host's, quoted in the table of *The host* above (exit 3 for a CLI the host lacks, 4 for the rest); a pass prints the
+resolved executables and `model-arms validate: <root> is valid on this host (<HostKind>)`, exit 0. `prep-base` then runs the same checks and today says `validated; the baseline measurement is not built yet — story E4.S4`
+(exit 4). A verb that needs a file the first run has not made yet names it and the verb that writes it (`<root> does not exist — `model-arms init <root>` creates it`, `<path> is missing — `model-arms <verb>` writes it`).
+
+Every refusal of `init`, as the binary prints it (all lines start `model-arms init: `; the exit is the right-hand column):
+
+| Situation | Line | Exit |
+|---|---|---|
+| the root exists, as a folder, a file or a link (live or dangling) | `<root> already exists — init creates a new root and never writes into an existing one` | 4 |
+| the parent is missing | `<parent> does not exist — init creates one folder, not a path` | 4 |
+| inside a git checkout / inside this repository | `the experiment root <root> is inside the git checkout <top> — the arms' clones would nest in it` · `… is inside this repository (<repo>) — a root lives outside every checkout` | 4 |
+| the parent is a symbolic link | `<parent> is a symbolic link to '<target>' — the trust check judges the file itself, …` | 4 |
+| an empty name · a NUL character | `the root is an empty name — pass the folder to create` · `the root '<root>' holds a NUL character` | 4 |
+| no word, or two (the command line) | `init takes exactly one argument, the root folder: model-arms init <root>` (no `init:` prefix) | 4 |
+| the host will not make it | `cannot create <path>: <reason>` (+ `— init stopped part-way: remove <root> and run init again`) · `the shipped example <file> cannot be read: <reason>` | 3 |
+
+**Deviations from the story's text**, each because the code's contract differs:
+1. The story's `InitVerb.RunAsync` checks "the root exists" with the module's table; the verb asks the kernel for the directory entry (`RootFacts.Host.Present`) rather than `File.Exists || Directory.Exists`, which is what
+   the gate's own step 2 uses: a dangling link at the root would pass the latter and `CreateDirectory` would fail on it.
+2. The story's list has no link check; the review of E1.S10 bound one: a parent folder that is a symbolic link is refused (exit 4), the root is judged again after it is made, and the files are created exclusively.
+   The gate itself does not judge ancestors, so the check covers the parent only.
+3. `ExperimentGate.Home` is `internal` (was `private`) so `init` builds the same `ExperimentLocation` as the gate; `ScenariosFile.FileName` is `public const` (was `private`) so the file's name is spelt once.
+4. The comments are placed behind the name they describe (above), a change to the writer's own placement that the story's text ("comments kept") does not mention.
+5. `InitVerbTests.Init_refuses_a_root_inside_a_git_checkout` uses `TempGitRepo` (a real `git init`) as the story says; that helper names its folder `bench-src-<guid>`, not `testsToDelete-…`, and removes it on dispose.
+6. One test beyond the story's six: the scenario `ModelArmsScenarioTests.Init_through_the_binary_makes_a_root_that_validate_reads_and_refuses_until_it_is_filled` (the binary as a process, init then validate then init
+   again), because a new flow ships with its scenario (common.scenario-tests) and the catalogue row now names it.
+
+What the tests do NOT prove:
+- **A race for one root.** The root is checked absent and then made, two calls: two `init` processes racing for one name can both pass the check, and the second writes into the first's folder (its files are `CreateNew`, so it
+  overwrites nothing and fails with exit 3 on the first). The second `ReadFacts` after the creation is not tested — no seam stands between the creation and it; the link tests cover the check BEFORE, which is where a
+  link is placed in practice. Removing that second judgement turns no test red.
+- **An ancestor that is a link.** Only the parent folder is judged; a link above it is accepted, as the gate accepts it.
+- **The modes on a file system without POSIX modes** (a Windows drive mounted into WSL, `/mnt/c`): the test reads the modes on this host's `tmpfs`/ext4 back; on a mount that ignores `chmod`, `init` asks for 0700/0600 and
+  the next `validate` reports what the file system says (an untrusted mode, exit 4), not `init`.
+- **Windows.** The modes and links are POSIX; there the verb prints that the checks were not performed and the tests skip. Nothing here has run on a Windows host.
+- **A comment that holds `*/`.** The writer refuses such a comment; the shipped example has none, and the template of an example that had one would throw. The example is a file that ships, tested on every run.
+- **That a filled template is a GOOD experiment.** `init` followed by the fixture's values validates; whether an operator's values are right is `validate`'s and the pilot's.
