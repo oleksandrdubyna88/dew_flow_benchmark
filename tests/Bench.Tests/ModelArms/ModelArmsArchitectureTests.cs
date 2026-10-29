@@ -65,6 +65,8 @@ public sealed class ModelArmsArchitectureTests
     {
         var projects = ProductionProjects();
         projects.Should().NotBeEmpty("a scan that matches nothing passes forever");
+        NamesTheModule(Path.Combine(Cli.Repository.Root, "tests", "Bench.Tests", "Bench.Tests.csproj")).Should().BeTrue(
+            "the pattern must still match the one project that references the module on purpose");
 
         var naming = projects.Where(NamesTheModule).Select(path => Path.GetRelativePath(Cli.Repository.Root, path).Replace('\\', '/')).ToList();
         naming.Should().BeEmpty("the product does not know the module exists; only the module knows the product");
