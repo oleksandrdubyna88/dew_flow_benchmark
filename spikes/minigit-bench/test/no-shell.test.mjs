@@ -4,29 +4,10 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { spikeDir, tmpDir } from './helpers.mjs';
+import { ALLOWED_CHILD_PROCESS, shellRoutes } from './shell-routes.mjs';
 
 const SPIKES = [spikeDir, path.resolve(spikeDir, '..', 'policy-ab-quick')];
 const SKIPPED_DIRS = new Set(['test', 'node_modules', '.git']);
-const Q = String.raw`['"\x60]`;
-const SHELLS = String.raw`(?:sh|bash|dash|zsh|cmd|cmd\.exe)`;
-
-// Each rule matches across lines (`s` flag is not enough for a bounded gap: the gap classes below allow newlines).
-export const SHELL_RULES = Object.freeze([
-  { rule: 'cmd-exe-literal', re: new RegExp(`${Q}cmd\\.exe${Q}`, 'g') },
-  { rule: 'shell-true', re: /\bshell\s*:\s*true\b/g },
-  { rule: 'exec-import', re: /import\s*\{[^}]*\bexec(?:Sync)?\b[^}]*\}\s*from\s*['"](?:node:)?child_process['"]/g },
-  { rule: 'exec-member', re: /\bchild_process\s*\.\s*exec(?:Sync)?\b|\bcp\s*\.\s*exec(?:Sync)?\s*\(/g },
-  { rule: 'shell-dash-c', re: new RegExp(`\\(\\s*${Q}${SHELLS}${Q}\\s*,\\s*\\[\\s*${Q}(?:-c|\\/c|\\/d)${Q}`, 'g') },
-]);
-
-const lineOf = (text, index) => text.slice(0, index).split('\n').length;
-
-/** Every shell route in `text`, as `{ rule, line }`, in source order. */
-export function shellRoutes(text) {
-  return SHELL_RULES.flatMap(({ rule, re }) => [...text.matchAll(re)].map(m => ({ rule, line: lineOf(text, m.index) })))
-    .sort((a, b) => a.line - b.line);
-}
-
 /** Every non-test `.mjs` under `root`, as absolute paths. */
 const modulesUnder = root => readdirSync(root, { withFileTypes: true }).flatMap(e => {
   if (e.isDirectory()) return SKIPPED_DIRS.has(e.name) ? [] : modulesUnder(path.join(root, e.name));
@@ -44,21 +25,61 @@ test('The_shell_scan_still_finds_a_planted_route', () => {
   const file = path.join(tmpDir('no-shell'), 'planted.mjs');
   writeFileSync(file, "import { spawn } from 'node:child_process';\nspawn('cmd.exe', ['/c', 'x']);\nspawn('x', [], {\n  shell: true });\n");
   const hits = shellRoutes(readFileSync(file, 'utf8'));
-  assert.deepEqual(hits.map(h => h.rule).sort(), ['cmd-exe-literal', 'shell-dash-c', 'shell-true']);
+  assert.deepEqual(hits.map(h => h.rule).sort(), ['cmd-exe-literal', 'shell-key', 'shell-program-flag']);
   assert.deepEqual(hits.map(h => h.line), [2, 2, 4]);
 });
 
-test('The_scan_recognises_each_route_shape_across_lines_and_ignores_safe_code', () => {
-  const planted = {
-    'exec-import': "import {\n  spawn,\n  execSync,\n} from 'node:child_process';",
-    'exec-member': "child_process.exec('x')",
-    'shell-dash-c': "spawn(\n  'bash',\n  [\n    '-c', 'x'])",
-    'shell-true': 'spawn(a, b, { shell : true })',
-    'cmd-exe-literal': 'const exe = "cmd.exe";',
-  };
-  for (const [rule, text] of Object.entries(planted)) assert.ok(shellRoutes(text).some(h => h.rule === rule), rule);
-  const safe = "import { spawn, execFile } from 'node:child_process';\nspawn(exe, args, { shell: false });\nrun('sh', ['script.sh']);";
-  assert.deepEqual(shellRoutes(safe), []);
+// Every shape the reviewer found the first scan blind to (E2.S1 review), plus the routes the first scan did catch.
+const PLANTED = Object.freeze({
+  'namespace import': ["import * as cpx from 'node:child_process';\ncpx.execSync('rm -rf x');", ['child-process-whole-module']],
+  'default import': ["import childProc from 'child_process';\nchildProc.exec(cmd);", ['child-process-whole-module']],
+  'default and named': ["import cp, { execSync } from 'node:child_process';", ['child-process-whole-module', 'child-process-name']],
+  'require destructure': ["const { execSync } = require('child_process');", ['child-process-name']],
+  'require whole': ["const cp = require('child_process');", ['child-process-whole-module']],
+  'dynamic import destructure': ["const { exec } = await import('node:child_process');", ['child-process-name']],
+  'dynamic import whole': ["const cp = await import('node:child_process');", ['child-process-whole-module']],
+  'named as': ["import { exec as run } from 'node:child_process';", ['child-process-name']],
+  're-export': ["export { execSync } from 'node:child_process';", ['child-process-name']],
+  'export star': ["export * from 'node:child_process';", ['child-process-whole-module']],
+  'bracket member': ["import * as child_process from 'node:child_process';\nchild_process['exec'](cmd);", ['child-process-whole-module']],
+  'multi-line import': ["import {\n  spawn,\n  execSync,\n} from 'node:child_process';", ['child-process-name']],
+  'bin sh': ["spawn('/bin/sh', ['-c', cmd]);", ['shell-program-flag']],
+  'bash -lc': ["spawn('bash', ['-lc', cmd]);", ['shell-program-flag']],
+  'ksh': ["spawn('ksh', ['-c', cmd]);", ['shell-program-flag']],
+  'pwsh -Command': ["spawn('pwsh', ['-Command', cmd]);", ['shell-program-flag']],
+  'powershell.exe -c': ["spawn('powershell.exe', ['-c', cmd]);", ['shell-program-flag']],
+  'windows path cmd': ["spawn('C:\\\\Windows\\\\System32\\\\cmd.exe', ['/c', cmd]);", ['shell-program-flag']],
+  'cmd.exe literal': ["const exe = \"cmd.exe\";", ['cmd-exe-literal']],
+  'shell constant': ["const SH = 'sh';\nspawn(SH, ['-c', cmd]);", ['shell-program-flag']],
+  'execFileSync sh': ["execFileSync('sh', ['-c', `git ${x}`]);", ['shell-program-flag']],
+  'spawnSync bash -c': ["spawnSync('bash', ['-c', 'x'])", ['shell-program-flag']],
+  'shell true': ['spawn(a, b, { shell : true })', ['shell-key']],
+  'shell conditional': ["spawn(x, a, { shell: process.platform === 'win32' });", ['shell-key']],
+  'shell string': ["spawn(x, a, { shell: '/bin/bash' });", ['shell-key']],
+  'shell quoted key': ["spawn(x, a, { 'shell': true });", ['shell-key']],
+  'shell shorthand': ['const shell = true;\nspawn(x, a, { cwd, shell });', ['shell-key']],
+  'shell on its own line': ['spawn(x, a, {\n  shell:\n    true });', ['shell-key']],
+  execa: ["import { execa } from 'execa';", ['shell-package']],
+  shelljs: ["const sh = require('shelljs');", ['shell-package']],
+});
+const SAFE = Object.freeze({
+  'regex exec': 'const r = /x/.exec(s); regex.exec(t);',
+  'argv launchers': "import { spawn, spawnSync, execFile, execFileSync } from 'node:child_process';",
+  'shell false': 'spawn(a, b, { shell: false, cwd });',
+  'a table keyed shell': "const OPTIONS = { shell: ['-o', '+o'], git: ['-c'] };",
+  'a script run by a shell program': "spawn('bash', ['script.sh', '-x']);",
+  'git -c': "spawn('git', ['-c', 'core.autocrlf=false', 'add']);",
+  'node -c': 'spawn(process.execPath, ["-c", file]);',
+  'a comment': "// spawn('bash', ['-c', x]); import * as cp from 'node:child_process'; shell: true\n/* cmd.exe */",
+});
+
+test('The_scan_recognises_every_planted_route_shape', () => {
+  for (const [name, [text, rules]] of Object.entries(PLANTED)) assert.deepEqual(shellRoutes(text).map(h => h.rule), rules, name);
+});
+
+test('The_scan_leaves_safe_code_and_prose_alone', () => {
+  for (const [name, text] of Object.entries(SAFE)) assert.deepEqual(shellRoutes(text), [], name);
+  assert.deepEqual([...ALLOWED_CHILD_PROCESS], ['spawn', 'spawnSync', 'execFile', 'execFileSync']);
 });
 
 test('The_three_spikes_kill_through_one_function', () => {
