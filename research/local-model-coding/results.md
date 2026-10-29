@@ -127,6 +127,12 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
       accepted 9 and fixed them (8 real, 1 partly real). The mutation checks did not separate the schemes.
     - **Incidents.** The overnight spend limit stopped round 1 (repaired, [incidents.md](incidents.md) §2g). SRS3's Haiku review-and-fix
       started two subagents on other models, so that step is contaminated. n = 3 per scheme: a direction, not a measured size.
+    - **CR on both tasks (direction only; the numbers of parts 5c and 6 are not compared).** On each task, every CR arm scored 8 or more
+      in both judge runs, and the judge found no major in any CR arm (§7c, §7d). On each task, the Haiku step was a small part of the
+      arm's cost, and it did not lower the number of majors that the Opus review found after it. The two reviews found different
+      defects: in CR2, the Haiku review fixed the DeepSeek-key defect that C1 shipped. Where Haiku also applied the Opus review (CH,
+      part 5c), the judge found majors that came from over-wide Haiku fixes. Two tasks and 3–4 runs per scheme: a direction, not a
+      measured effect.
 
 **This run does not settle:** other tasks (this one is mostly tests: E5.5 is only tests, E5.6 mostly), smaller or more
 self-contained pieces, a filler given the repository (here it saw only its prompt), other local models, a skeleton step
