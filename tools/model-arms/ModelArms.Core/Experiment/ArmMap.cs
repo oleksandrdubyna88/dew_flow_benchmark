@@ -18,12 +18,17 @@ public sealed record ArmMap
     private static readonly Regex ArmShape = new(@"^[A-Za-z]+[0-9]+\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     private static readonly Regex TokenShape = new(@"^[0-9a-f]{16}\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
-    private ArmMap(IReadOnlyList<KeyValuePair<string, string>> entries) => Entries = entries;
+    private ArmMap(IReadOnlyList<KeyValuePair<string, string>> entries) => Entries = Array.AsReadOnly(entries.ToArray());
 
     public static ArmMap Empty { get; } = new([]);
 
-    /// <summary>Arm name to token, in the order the arms were added.</summary>
+    /// <summary>Arm name to token, in the order the arms were added. A read-only view over a private copy, so no cast reaches a writable list.</summary>
     public IReadOnlyList<KeyValuePair<string, string>> Entries { get; }
+
+    /// <summary>Equal when the same arms have the same tokens in the same order (ordinal), not when the lists are the same object.</summary>
+    public bool Equals(ArmMap? other) => other is not null && Entries.SequenceEqual(other.Entries);
+
+    public override int GetHashCode() => Entries.Aggregate(0, (hash, entry) => HashCode.Combine(hash, entry.Key, entry.Value));
 
     /// <summary>Reads <c>arms.map.json</c>: an object of arm name to token. Every arm that is wrong is named, one
     /// sentence per line; a shell-era map (12-hex tokens) is refused here and a run mints its own.</summary>
@@ -34,7 +39,8 @@ public sealed record ArmMap
                 : Outcome<ArmMap>.Success(new ArmMap(pairs)),
             reason => Outcome<ArmMap>.Failure(reason));
 
-    /// <summary>The map as the shell wrote it: an indented JSON object, arms in insertion order.</summary>
+    /// <summary>The map as an indented JSON object of strings in insertion order, like the shell's map but not byte-identical
+    /// (tokens, indent and file name differ).</summary>
     public string ToJson()
     {
         var buffer = new ArrayBufferWriter<byte>();
@@ -107,16 +113,16 @@ public sealed record ArmMap
         var pairs = new List<KeyValuePair<string, string>>();
         foreach (var property in map.EnumerateObject())
         {
-            if (property.Value.ValueKind != JsonValueKind.String)
-            {
-                return Outcome<List<KeyValuePair<string, string>>>.Failure($"arm '{property.Name}': its token must be a JSON string");
-            }
-
-            pairs.Add(new KeyValuePair<string, string>(property.Name, property.Value.GetString() ?? string.Empty));
+            pairs.Add(new KeyValuePair<string, string>(property.Name, TokenText(property.Value)));
         }
 
         return Outcome<List<KeyValuePair<string, string>>>.Success(pairs);
     }
+
+    /// <summary>The string itself, or for any other JSON value a description that can never look like a token, so the arm is
+    /// named with every other wrong arm instead of ending the read at the first one.</summary>
+    private static string TokenText(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : $"a JSON {value.ValueKind.ToString().ToLowerInvariant()}";
 
     private static List<string> Problems(List<KeyValuePair<string, string>> pairs) =>
     [

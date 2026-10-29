@@ -42,6 +42,7 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.GateLock), Paths.GateLock, At(".gate.lock")),
         (nameof(RootPaths.LockedModes), Paths.LockedModes, At(".locked-modes")),
         (nameof(RootPaths.LockLog), Paths.LockLog, At("lock.log")),
+        (nameof(RootPaths.LockedModesRestored), Paths.LockedModesRestored("20261029T101500Z"), At(".locked-modes.restored-20261029T101500Z")),
         (nameof(RootPaths.KeepAwakeLog), Paths.KeepAwakeLog, At("keep-awake.log")),
     ];
 
@@ -76,6 +77,8 @@ public sealed class ArmPathsTests
         (nameof(ArmPaths.Picked), Arm.Picked("t2"), At("r/abc/out/picked-t2")),
         (nameof(ArmPaths.PickRecord), Arm.PickRecord("t2"), At("r/abc/out/pick-t2.json")),
         (nameof(ArmPaths.PickLog), Arm.PickLog("t2"), At("r/abc/out/pick-t2.log")),
+        (nameof(ArmPaths.PrepBuildLog), Arm.PrepBuildLog, At("r/abc/out/prep-build.log")),
+        (nameof(ArmPaths.ObjectiveLog), Arm.ObjectiveLog, At("r/abc/out/objective.out")),
         (nameof(ArmPaths.WorktreeBuildLog), Arm.WorktreeBuildLog("t2"), At("r/abc/out/wt-build-t2.log")),
         (nameof(ArmPaths.CodeNotes), Arm.CodeNotes, At("r/abc/notes/code.md")),
         (nameof(ArmPaths.HReviewNotes), Arm.HReviewNotes, At("r/abc/notes/hreview.md")),
@@ -145,6 +148,7 @@ public sealed class ArmPathsTests
             () => Arm.TaskNotes("a\\b"),
             () => Arm.CoaiSettings("."),
             () => Paths.PidFile("../C1"),
+            () => Paths.LockedModesRestored("a/b"),
             () => Paths.Arm("a/b"),
             () => _ = new ArmPaths(Root, "..").Folder,
         };

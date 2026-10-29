@@ -49,6 +49,9 @@ public sealed record RootPaths(string Root)
 
     public string LockLog => Path.Combine(Root, "lock.log");
 
+    /// <summary>Where <c>unlock</c> moves <see cref="LockedModes"/> to once it has restored the modes; the stamp is UTC, like <c>20261029T101500Z</c>.</summary>
+    public string LockedModesRestored(string stamp) => Path.Combine(Root, ".locked-modes.restored-" + ArmPaths.Segment(stamp, "stamp"));
+
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
 
     /// <summary>A file the operator named in the experiment file, resolved inside the root; a rooted name or any
@@ -137,6 +140,12 @@ public sealed record ArmPaths(string Root, string Token)
     public string PickRecord(string id) => Under("out", "pick-" + Segment(id, "id") + ".json");
 
     public string PickLog(string id) => Under("out", "pick-" + Segment(id, "id") + ".log");
+
+    /// <summary>The warm build <c>make</c> runs in the clone.</summary>
+    public string PrepBuildLog => Under("out", "prep-build.log");
+
+    /// <summary>What the objective checks printed.</summary>
+    public string ObjectiveLog => Under("out", "objective.out");
 
     public string WorktreeBuildLog(string id) => Under("out", "wt-build-" + Segment(id, "id") + ".log");
 

@@ -139,4 +139,39 @@ public sealed class ArmMapTests
         ArmMap.Read("{\"C1\":5}").Reason().Should().Contain("C1");
         ArmMap.Read("{").Failed().Should().BeTrue();
     }
+
+    [Fact]
+    public void Every_wrong_arm_of_one_map_is_named_whatever_kind_of_fault_it_has()
+    {
+        var token = Token(7);
+
+        var reason = ArmMap.Read($"{{\"C1\":5,\"c-1\":\"{token}\",\"C2\":\"XYZ\"}}").Reason();
+
+        reason.Should().Contain("C1", "its value is not a string").And.Contain("c-1", "its name is not an arm name").And.Contain("C2", "its token is not hex");
+        reason.Split('\n').Should().HaveCount(3, "one sentence per wrong arm");
+        ArmMap.Read("{\"C1\":1234567890123456}").Failed().Should().BeTrue("a number that happens to have 16 digits is still not a token");
+    }
+
+    [Fact]
+    public void Two_maps_with_the_same_entries_are_equal_and_a_different_token_is_not()
+    {
+        var json = Mapped("C1", "CR1").ToJson();
+        var first = ArmMap.Read(json).Ok();
+        var second = ArmMap.Read(json).Ok();
+        var other = ArmMap.Read(json.Replace(Token(2), Token(9))).Ok();
+
+        first.Should().Be(second);
+        first.GetHashCode().Should().Be(second.GetHashCode());
+        first.Should().NotBe(other, "the second arm's token differs");
+        first.Should().NotBe(Mapped("CR1", "C1"), "order is part of the map");
+    }
+
+    [Fact]
+    public void The_entries_cannot_be_changed_through_the_list_they_are_handed_out_as()
+    {
+        var map = Mapped("C1");
+
+        map.Entries.Should().NotBeOfType<List<KeyValuePair<string, string>>>().And.NotBeOfType<KeyValuePair<string, string>[]>();
+        (map.Entries is IList<KeyValuePair<string, string>> { IsReadOnly: false }).Should().BeFalse("a cast back to a writable list would let a caller rewrite a token");
+    }
 }
