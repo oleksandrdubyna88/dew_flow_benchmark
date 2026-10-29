@@ -1,0 +1,37 @@
+diff --git a/research/module_tests.md b/research/module_tests.md
+index 064e6c64..33cf1280 100644
+--- a/research/module_tests.md
++++ b/research/module_tests.md
+@@ -4471,7 +4471,7 @@ line, reverted after each. Not recorded: a red for the scenarios marked so.
+ | `…ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst` (S5.5.4) | settings built by hand: `--home` under `<scratch>\own\kh-…`; the scratch gone after | green on arrival; teeth, `ConsultCheckScratch.Delete` with `KimiHomesDisposed` replaced by `true`: the recorder invoked for `own/kh-*/home/credentials` (1 red) |
+ | `AKimiQuestionRowTests.AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` (S5.6.7, Theory: `answered`, `refused before the launch`, `cancelled mid-turn`) | the prompt names the copy; the one-shot home and the copies gone; no `coai-question-*` folder left | green on arrival (all three); teeth, `QuestionRowLaunch.Launch` with `input.Prompt`: *Expected request.StdIn … to contain "…\tree"* (`answered` only); teeth, `QuestionRowLaunch.Release` with the home not disposed: all three red on the one-shot home check (message differs from the story; the recorder assertion not reached) |
+ | `CapabilityMatrixTests.KimiHasThreeRows_EachCitingItsCells` (S5.6.1) | three `kimi` rows, each citing its cells | *Expected none not to be <null>.* |
+-| `CapabilityMatrixTests` vectors test over every pair (S5.6.2; the test name was not recorded) | the kimi × none, kimi × disk and kimi × web pairs each have a vector | *the table's kimi × none row must have a vector deciding it* |
++| `CapabilityMatrixTests.TheVectorsActuallyLoaded_AndCoverEveryPairOfTheTable` (S5.6.2; the story's name `TheVectorsCoverKimi` was not used — this existing test covers the kimi pairs) | the kimi × none, kimi × disk and kimi × web pairs each have a vector | *the table's kimi × none row must have a vector deciding it* |
+ | `CapabilityMatrixTests.AdmissionFlagsBothKimiRows_AndRefusesItsWeb_NamingItsRecord` (S5.6.4) | `none` and `disk` admitted flagged; `web` refused naming `research/RESULTS_kimi_confinement.md` | *Expected type to be …Admitted, but found …Refused.* (the refusal's sentence was not seen red) |
+ | `ConfinementPlannerTests.ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` (S5.6.3) | `disk` a snapshot of the roots; `none` an empty scratch; no flag; `web` refused | *Expected disk.Cwd to be CwdKind.Snapshot …, but found CwdKind.Scratch* |
+ | `ConfinementPlannerTests.AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` (S5.6.5) | the shim request in the working folder or its copy, on the row's home, no session, no flag | *Expected disk.Request.WorkingDirectory … but they differ at index 10* |
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index 90ad5740..15c21114 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -25,6 +25,7 @@ namespace CoaiMcp.Tests;
+ /// (<see cref="KimiFixture"/>), and the kimi shim played in process (<see cref="PlayedKimi"/>). Kimi runs on every OS through the stand-in,
+ /// so no test here skips. Shaped like <c>AVibeQuestionRowReadsACopyOfItsRootsTests</c>; not inherited from it.
+ /// </remarks>
++[Collection("fakecli-env")]
+ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+ {
+     private readonly ProcessLauncher _launcher = new();
+diff --git a/src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs b/src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs
+index 736e1704..3f809556 100644
+--- a/src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs
++++ b/src_mcp/tests/AVibeQuestionRowReadsACopyOfItsRootsTests.cs
+@@ -21,6 +21,7 @@ namespace CoaiMcp.Tests;
+ /// (<see cref="PlayedVibe"/>). Windows only where a launch must start (D18); the refusal of a plain folder comes before
+ /// any launch and is asserted everywhere.
+ /// </remarks>
++[Collection("fakecli-env")]
+ public sealed class AVibeQuestionRowReadsACopyOfItsRootsTests : IAsyncLifetime
+ {
+     private const string Advice = "Retry with a jittered backoff, three attempts.";

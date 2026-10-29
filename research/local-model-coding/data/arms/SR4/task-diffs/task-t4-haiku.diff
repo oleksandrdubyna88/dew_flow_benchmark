@@ -1,0 +1,249 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+new file mode 100644
+index 00000000..001c0fd7
+--- /dev/null
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -0,0 +1,243 @@
++using System.Text.Json;
++using CoaiMcp.Runners.Acp;
++using CoaiMcp.Runners.Files;
++using CoaiMcp.Runners.Kimi;
++using CoaiMcp.Runners.Platform;
++using CoaiMcp.Runners.Processes;
++using CoaiMcp.Runners.Vibe;
++using CoaiMcp.Server;
++using FluentAssertions;
++using Xunit;
++
++namespace CoaiMcp.Tests;
++
++/// <summary>
++/// <c>--check-consultant</c> for a Kimi row (E5.5 of <c>todo/PLAN_vibe_and_kimi_runtimes_E5.md</c>, S5.5.1–S5.5.4): one turn runs as a consultation
++/// makes it — in a COPY of the check's scratch repository, on a ONE-SHOT home under the homes root, disposed junction-first whatever ended the check;
++/// and, with no homes root, on a home in the scratch's own folder, disposed junction-first with the scratch.
++/// </summary>
++/// <remarks>
++/// No production code: the check already gives a copy to a runtime that asks for a sanitised snapshot, and a one-shot home to one that declares a
++/// homes folder. The shim is played (<see cref="PlayedKimi"/>) over a fake person (<see cref="KimiFixture"/>); git runs for real.
++/// </remarks>
++public sealed class AKimiConsultantCheckTests : IDisposable
++{
++    private readonly string _data = Directory.CreateTempSubdirectory("testsToDelete-kcheck-data-").FullName;
++    private readonly string _temp = Directory.CreateTempSubdirectory("testsToDelete-kcheck-temp-").FullName;
++    private readonly List<string> _warned = [];
++    private readonly KimiFixture _person = new();
++
++    public void Dispose()
++    {
++        _person.Dispose();
++
++        foreach (var dir in (string[])[_data, _temp])
++        {
++            try
++            {
++                Directory.Delete(dir, recursive: true);
++            }
++            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
++            {
++                // A leftover temp directory is not a failing test.
++            }
++        }
++    }
++
++    /// <summary>Several scopes, given back in reverse.</summary>
++    private sealed class Scopes(params IDisposable[] scopes) : IDisposable
++    {
++        public void Dispose()
++        {
++            foreach (var scope in scopes.Reverse())
++            {
++                scope.Dispose();
++            }
++        }
++    }
++
++    /// <summary>
++    /// The person, the host and the lock root this flow's Kimi adapters see — set by a SYNCHRONOUS call, so the values reach the test's own flow
++    /// and every service call it awaits.
++    /// </summary>
++    private static IDisposable StandIn(KimiFixture person) => new Scopes(
++        WindowsStandIn.Begin(),
++        KimiCredentialsLock.RootFor(Path.Combine(person.Folder, "locks")),
++        KimiSeams.Using(HostKind.Windows, new KimiSeams(person.PlacesAt, () => (PlayedKimi.Shim, []))));
++
++    private PanelSettings Settings(string homesRoot) => new()
++    {
++        Providers = [],
++        DataDir = _data,
++        ReviewerTimeout = TimeSpan.FromSeconds(60),
++        ConsultEnabled = true,
++        ConsultantHomesRoot = homesRoot,
++        Consultants = new Dictionary<string, ConsultantChoice> { [CallerIdentity.Claude] = new("my-kimi", Runtime: "kimi") },
++    };
++
++    private async Task<(int Code, JsonElement Said, string Err)> Check(PanelSettings settings, IProcessLauncher launcher, CancellationToken ct)
++    {
++        var (code, stdout, stderr) = await ConsultantCheckMode.AnswerAsync(
++            settings, ["--check-consultant", "--caller", "claude"], launcher, _temp, _warned.Add, Noticing.None, ct);
++
++        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default, stderr);
++    }
++
++    /// <summary>A Kimi shim that reads the marker out of the COPY it stands in and answers it, as the Vibe check does.</summary>
++    private static PlayedKimi AnsweringKimi() => new(new ProcessLauncher())
++    {
++        Turn = (_, request) => PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31,
++            $"marker: {File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT"),
++    };
++
++    private static string After(IReadOnlyList<string> args, string flag) => args[args.ToList().IndexOf(flag) + 1];
++
++    /// <summary>S5.5.1: the check's turn runs in a copy, on a one-shot home under the homes root, and the check reports no breach.</summary>
++    [Fact]
++    public async Task AKimiCheck_RunsInACopy_OnAOneShotHome()
++    {
++        using var homes = TempDir.For("testsToDelete-kcheck-homes-");
++        using var stood = StandIn(_person);
++        var kimi = AnsweringKimi();
++
++        var (code, said, _) = await Check(Settings(homes), kimi, TestContext.Current.CancellationToken);
++
++        code.Should().Be(0);
++        said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
++        said.GetProperty("markerRead").GetBoolean().Should().BeTrue();
++        var shim = kimi.Shims.Should().ContainSingle().Subject.Request;
++        shim.WorkingDirectory.Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
++        After(shim.Arguments, "--cwd").Should().Be(shim.WorkingDirectory);
++        var home = After(shim.Arguments, AcpWords.HomeFlag);
++        home.Should().StartWith(Path.Combine(homes.Path, VibeHomes.OneShotFolder) + Path.DirectorySeparatorChar);
++        Path.GetFileName(home).Should().StartWith("kh-");
++        Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the copy goes with the check's scratch");
++    }
++
++    /// <summary>S5.5.2: however the turn ended, the one-shot home is gone — its junction unlinked before the deleter meets it — and the person is intact.</summary>
++    [Theory]
++    [InlineData("answered")]
++    [InlineData("failed-exit-70")]
++    public async Task AfterTheCheck_TheHomeIsGone_JunctionFirst(string arm)
++    {
++        using var homes = TempDir.For("testsToDelete-kcheck-homes-");
++        using var stood = StandIn(_person);
++        var before = _person.Hash();
++        var kimi = arm == "answered"
++            ? AnsweringKimi()
++            : new PlayedKimi(new ProcessLauncher()) { Turn = (_, _) => PlayedKimi.Lost(PlayedKimi.Minted) };
++        var recorded = new List<string>();
++
++        GitScratch.AfterUnlink = recorded.Add;
++        JsonElement said;
++        try
++        {
++            (_, said, _) = await Check(Settings(homes), kimi, TestContext.Current.CancellationToken);
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
++        }
++
++        if (arm == "answered")
++        {
++            said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
++        }
++        else
++        {
++            said.GetProperty("state").GetString().Should().NotBe("answered", said.ToString());
++        }
++
++        var coaiVh = Path.Combine(homes.Path, VibeHomes.OneShotFolder);
++        if (Directory.Exists(coaiVh))
++        {
++            Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty("the one-shot folder is gone");
++        }
++
++        recorded.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
++        _person.Hash().Should().Equal(before);
++        Directory.EnumerateFileSystemEntries(_person.Credentials).Should().NotBeEmpty();
++    }
++
++    /// <summary>S5.5.3: a check cancelled while its turn runs still disposes the one-shot home, junction-first, and the person is intact.</summary>
++    [Fact]
++    public async Task ACheckCancelledMidTurn_StillDisposesItsHome()
++    {
++        using var homes = TempDir.For("testsToDelete-kcheck-homes-");
++        using var stood = StandIn(_person);
++        var before = _person.Hash();
++        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
++        var kimi = new PlayedKimi(new ProcessLauncher())
++        {
++            During = async (_, ct) =>
++            {
++                await cancel.CancelAsync();
++                ct.ThrowIfCancellationRequested();
++            },
++        };
++        var recorded = new List<string>();
++
++        GitScratch.AfterUnlink = recorded.Add;
++        JsonElement said;
++        try
++        {
++            (_, said, _) = await Check(Settings(homes), kimi, cancel.Token);
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
++        }
++
++        // No state word of its own for a cancel: the turn is a failure classified as cancelled (ConsultFailure.Cancelled).
++        said.GetProperty("state").GetString().Should().Be(ConsultCheckStates.Failed, said.ToString());
++        said.GetProperty("failureKind").GetString().Should().Be("cancelled", said.ToString());
++
++        var coaiVh = Path.Combine(homes.Path, VibeHomes.OneShotFolder);
++        if (Directory.Exists(coaiVh))
++        {
++            Directory.EnumerateFileSystemEntries(coaiVh).Should().BeEmpty("the one-shot folder is gone");
++        }
++
++        recorded.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
++        _person.Hash().Should().Equal(before);
++        Directory.EnumerateFileSystemEntries(_person.Credentials).Should().NotBeEmpty();
++    }
++
++    /// <summary>S5.5.4: with no homes root, the home is kept in the check's scratch at <c>own\kh-*</c>, and goes with the scratch, junction-first.</summary>
++    [Fact]
++    public async Task ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst()
++    {
++        using var stood = StandIn(_person);
++        var before = _person.Hash();
++        var seen = string.Empty;
++        var kimi = new PlayedKimi(new ProcessLauncher())
++        {
++            Turn = (_, request) =>
++            {
++                seen = After(request.Arguments, AcpWords.HomeFlag);
++
++                return PlayedKimi.Answered(PlayedKimi.SessionOf(request), 19973, 31,
++                    $"marker: {File.ReadAllText(Path.Combine(request.WorkingDirectory, "CHECK.md")).Trim().Split(' ')[^1].TrimEnd('.')}{Environment.NewLine}canary: CANNOT");
++            },
++        };
++        var recorded = new List<string>();
++
++        GitScratch.AfterUnlink = recorded.Add;
++        JsonElement said;
++        try
++        {
++            (_, said, _) = await Check(Settings(string.Empty), kimi, TestContext.Current.CancellationToken);
++        }
++        finally
++        {
++            GitScratch.AfterUnlink = null;
++        }
++
++        said.GetProperty("state").GetString().Should().Be("answered", said.ToString());
++        seen.Should().Contain(Path.Combine("own", "kh-"));
++        Directory.Exists(Path.GetDirectoryName(Path.GetDirectoryName(seen))).Should().BeFalse("the scratch goes with its home");
++        recorded.Should().BeEmpty("KimiHome unlinked the junction first, so the deleter never met it");
++        _person.Hash().Should().Equal(before);
++        Directory.EnumerateFileSystemEntries(_person.Credentials).Should().NotBeEmpty();
++    }
++}

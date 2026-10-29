@@ -19,15 +19,23 @@ public sealed class ProcessRunnerCancellationTests
     {
         using var cancel = new CancellationTokenSource();
 
-        // A process that outlives the test unless somebody kills it. On Windows, ping with a count is the one
-        // long-running, argument-driven, always-installed executable. `-n` is NOT a count on Linux (iputils reads it as
-        // "numeric output"), so there ping exited at once and the test was red whenever the 500 ms look came too late —
-        // measured 2026-10-29: red on every local WSL run, red once on CI after 8 green main runs. Linux uses `sleep`
-        // with a marker duration, so the lookup below finds this test's child and never another `sleep`.
+        // A process that outlives the test unless somebody kills it. ping with a count is the one
+        // long-running, argument-driven, always-installed executable Windows offers. The count flag is
+        // the host's own: `-n` on Windows; on Linux `-n` means numeric output, so `-n 60` named a second
+        // host and iputils exits at once (CI red from the 2026-10-28 runner image on).
+        string[] count = OperatingSystem.IsWindows() ? ["-n", "60"] : ["-c", "60"];
         var launch = ProcessRunner.RunAsync(
-            ChildExecutable, ChildArguments, Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
+            "ping", [.. count, "127.0.0.1"], Path.GetTempPath(), TimeSpan.FromMinutes(5), cancel.Token);
 
-        var before = await RunningChildrenAsync();
+        // Polled, not one fixed sleep: a loaded runner can take longer than 500 ms to start the child.
+        // A launch that has already ended (a missing binary, a refused flag) stops the wait at once.
+        Process[] before = [];
+        for (var attempt = 0; attempt < 50 && before.Length == 0 && !launch.IsCompleted; attempt++)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            before = Process.GetProcessesByName("PING").Concat(Process.GetProcessesByName("ping")).ToArray();
+        }
+
         before.Should().NotBeEmpty("the child must be running before the cancellation, or this test proves nothing");
 
         await cancel.CancelAsync();
@@ -54,43 +62,6 @@ public sealed class ProcessRunnerCancellationTests
 
             gone.Should().BeTrue(
                 $"pid {survivor.Id} must not outlive the wait — an orphan holds worktree handles nothing sweeps");
-        }
-    }
-
-    private const string LinuxMarker = "617.3";
-
-    private static string ChildExecutable => OperatingSystem.IsWindows() ? "ping" : "sleep";
-
-    private static string[] ChildArguments => OperatingSystem.IsWindows() ? ["-n", "60", "127.0.0.1"] : [LinuxMarker];
-
-    /// <summary>Polls up to 5 s for the child to appear: a loaded runner may start it later than any fixed delay.</summary>
-    private static async Task<Process[]> RunningChildrenAsync()
-    {
-        var found = RunningChildren();
-
-        for (var attempt = 0; attempt < 50 && found.Length == 0; attempt++)
-        {
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-            found = RunningChildren();
-        }
-
-        return found;
-    }
-
-    private static Process[] RunningChildren() => OperatingSystem.IsWindows()
-        ? [.. Process.GetProcessesByName("PING"), .. Process.GetProcessesByName("ping")]
-        : [.. Process.GetProcessesByName("sleep").Where(CarriesMarker)];
-
-    /// <summary>True when the process's argv holds the marker as a whole argument (cmdline is NUL-separated).</summary>
-    private static bool CarriesMarker(Process process)
-    {
-        try
-        {
-            return File.ReadAllText($"/proc/{process.Id}/cmdline").Split('\0').Contains(LinuxMarker, StringComparer.Ordinal);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return false; // it exited between the listing and the read, or it is not ours to read: not this child
         }
     }
 }

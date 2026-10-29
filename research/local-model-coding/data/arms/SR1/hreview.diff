@@ -1,0 +1,26 @@
+diff --git a/src_mcp/tests/CapabilityMatrixTests.cs b/src_mcp/tests/CapabilityMatrixTests.cs
+index 51a0794d..49d52ae8 100644
+--- a/src_mcp/tests/CapabilityMatrixTests.cs
++++ b/src_mcp/tests/CapabilityMatrixTests.cs
+@@ -225,7 +225,7 @@ public sealed class CapabilityMatrixTests
+     }
+ 
+     [Fact]
+-    public void AdmissionFlagsBothKimiRows_AndRefusesItsWebNamingItsRecord()   // S5.6.4
++    public void AdmissionFlagsBothRows()   // S5.6.4
+     {
+         foreach (var capability in (Capability[])[Capability.None, Capability.Disk])
+         {
+diff --git a/src_mcp/tests/ConfinementPlannerTests.cs b/src_mcp/tests/ConfinementPlannerTests.cs
+index fe0eaf8b..323e038f 100644
+--- a/src_mcp/tests/ConfinementPlannerTests.cs
++++ b/src_mcp/tests/ConfinementPlannerTests.cs
+@@ -148,7 +148,7 @@ public sealed class ConfinementPlannerTests
+     /// stands in an EMPTY scratch folder; a disk row stands in the COPY of its roots (D6), because its AGENTS.md, skills and .mcp.json load from disk (M-K9).
+     /// </summary>
+     [Fact]
+-    public void Kimi_None_StandsInAnEmptyFolder_Disk_InTheCopyOfItsRoots_NoFlagEver_AndWebIsRefused()
++    public void ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb()
+     {
+         var none = Plan("kimi", CapabilityGrant.None);
+         none.Flags.Should().BeEmpty();

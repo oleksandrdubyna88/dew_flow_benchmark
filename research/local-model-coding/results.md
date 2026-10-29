@@ -1,7 +1,8 @@
 # Results — can a cheaper model write the code a Sonnet coder would? (2026-10-25/26)
 
-> Status: **complete — 30 arms in five parts, all checked, judged and mutation-checked (part 5 ended 2026-10-27 05:30
-> UTC).**
+> Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (part 5 ended 2026-10-27 05:30
+> UTC). Part 5b (SR, DR ×4) is complete (§7b, ended 2026-10-27 20:03 UTC). Part 5c (CR, CH ×4) is complete (§7c, ended
+> 2026-10-28 17:27 UTC).**
 > Every number below is in [tables.md](tables.md), generated from [data/](data/). How it was measured:
 > [harness.md](harness.md). What went wrong and what was corrected: [incidents.md](incidents.md). The pre-registered
 > protocol and its change log: [protocol.md](protocol.md).
@@ -10,7 +11,7 @@
 
 One real story pair of the coai project — **E5.5 + E5.6** of `dew_flow_connect_other_ais ·
 todo/PLAN_vibe_and_kimi_runtimes_E5.md` (12 scenarios, Opus-written spec), from commit `b4e2ea96` — implemented 30 times
-by eight schemes, every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5):
+by eight schemes (plus 8 arms of two more schemes in part 5b, §7b, and 8 in part 5c, §7c), every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5):
 
 | Scheme | Arms | What writes the code |
 |---|---|---|
@@ -22,6 +23,10 @@ by eight schemes, every arm ending in the same Opus review and a fix step (Sonne
 | **Opus tasks → Haiku, one Opus check, Haiku fixes** (part 5) | O1–O4 | as T without the Sonnet task reviews: one Opus review of the whole stories, and Haiku applies its findings |
 | **Sonnet tasks → Haiku, one Opus check, Haiku fixes** (part 5) | S1–S4 | as O, with Sonnet writing the task split |
 | **Haiku codes the stories directly** (part 5) | D1–D4 | no split: Haiku gets the classic coder brief; Opus review; Haiku fixes |
+| **S + a fresh Haiku review** (part 5b) | SR1–SR4 | as S; before the Opus review, a fresh Haiku session reviews the whole stories and fixes what it found |
+| **D + a fresh Haiku review** (part 5b) | DR1–DR4 | as D, with the same fresh Haiku review-and-fix before Opus |
+| **Classic + a fresh Haiku review** (part 5c) | CR1–CR4 | as C (Sonnet codes and fixes); before the Opus review, the same fresh Haiku review-and-fix |
+| **Classic + a fresh Haiku review, Haiku fixes** (part 5c) | CH1–CH4 | as CR, but Haiku applies the Opus review |
 
 The four classic arms are ONE configuration run four times: their spread shows how much one configuration varies on this
 task. Four runs are not a statistical threshold (and C had an accidental extra attempt), so every other arm is read
@@ -210,6 +215,128 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   at the classic level; a Sonnet split is cheaper than an Opus one and no worse here. Without a split, Haiku's code is
   incomplete in ways the review finds but the Haiku fixer does not finish. The saving of O and S comes from removing
   the Sonnet task reviews AND from a fix step that costs very little; it costs time.
+
+## 7b. Part 5b — S and D with a fresh Haiku review before Opus (SR, DR ×4)
+
+> Complete: all 8 arms checked, judged, mutation-checked and hand-checked (2026-10-27, the chain ended 20:03 UTC).
+> Every number is in [tables.md](tables.md) (§1–§4b, §6, §8; the fix-outcome table §9 was not extended to part 5b).
+
+- **Design** (the owner's, after part 5; recorded before the run in [protocol.md](protocol.md) "Part 5b"): the S and D
+  pipelines unchanged, plus ONE step after Haiku's coding — a fresh Haiku session reviews the whole stories with the
+  Opus review's checklist and fixes what it found (`hr-review-fix`, 30 min). The Opus reviewer is not told that a Haiku
+  review ran. Four rounds of two (SR_n with DR_n), 2026-10-27 10:50–17:43 UTC.
+- **Cost** (the host's own numbers, [tables.md](tables.md) §1, §4b): SR $6.69 / $6.28 / $7.47 / $6.23
+  (mean $6.67; S: $6.22); DR $5.18 / $6.68 / $5.54 / $4.80 (mean $5.55; D: $4.55). The classic band: $6.53–7.85.
+  The Haiku review step: SR $0.66 / $0.72 / $0.54 / $0.61, DR $0.68 / **$2.10** / $0.44 / $0.48 (DR2's session read
+  34 M cache tokens). DR2 is in the classic band; the other three DR arms are below it.
+- **Time** (real elapsed, first step start to last step end): SR 100 / 99 / 110 / 66 min (S: 62–107); DR 84 / 66 / 74 /
+  67 min (D: 47–64). The Haiku review step: SR 24 / 14 / 12 / 12 min, DR 16 / 16 / 15 / 13 min. DR1's Opus review
+  stopped at its hard deadline (30 min, exit 124) after it had written its review; that review counts as complete.
+- **What the Haiku reviewer found** (its own notes `data/arms/<arm>/<arm>-hreview.md`, counted by hand): SR 14 / 10 / 8 / 10 findings,
+  6 / 7 / 5 / 6 fixed, 3 / 4 / 4 / 2 left open; DR 21 / 23 / 24 / 22 findings, 9 / 12 / 13 / 14 fixed, 5 / 4 / 7 / 8 left
+  open (the rest: partly fixed, or wrong on a second look). Without a split, Haiku's code leaves about twice as much
+  for the reviewer.
+- **The Opus review after it** (`<arm>-review.json`): blocking + major findings per arm SR 0 / 0 / 0 / 0 (S: 0 / 0 / 0 /
+  1), DR 1 / 3 / 2 / 2 (D: 2 / 3 / 0 / 4). All findings: SR 4 / 5 / 6 / 5 (S: 4 / 6 / 5 / 4), DR 9 / 6 / 7 / 9 (D: 7 / 8
+  / 7 / 12). SR2 was the only arm of the 16 with the verdict "ready".
+- **The Haiku review introduced defects the Opus review then flagged** (prediction 5; each checked against the step's
+  commits): DR4 R3 — the Haiku review's guard against leading arguments (`0549de03`) raised `Build`'s cyclomatic
+  complexity to 5; DR1 R6 — the Haiku review created `KimiDeleterHookCollection.cs` with a comment that calls two
+  async-local hooks "process-wide statics". Two more are stale records the Haiku review left behind: SR4 R1 (deviation
+  50 still names a Theory the Haiku review had split into two Facts) and DR2 R4 (the deviations not updated after the
+  Haiku review's commits). All four are minor.
+- **Objective checks**: all 8 arms build, pass the format and generator checks and have 0 new test failures (MCP and
+  TypeScript). Scenarios by the detector: SR 12 / 11 / 12 / **9** of 12, DR 11 / 12 / 11 / 12. Haiku's code in SR:
+  560 / 511 / 602 / 511 meaningful lines, 98 / 99 / 100 / 91 % in the final code.
+- **Quality** (absolute judge, two runs each): SR 8 / 8 / 8 / 8, DR 7.5 / 7.5 / 7.5 / 7 (S 8 / 7.5 / 8 / 8, D 7.5 / 6 / 8 /
+  5.5). Majors named by the judge, both runs added: SR 0 / 0 / 2 / 0, DR 0 / 1 / 1 / 3 (S: 1 in all, D: 12 in all).
+  Hand-checked, three of them, all true: DR2's kimi guard refuses a plan with `Flags` but not with `Leading` (the same
+  gap DR4's Haiku review closed); SR3's Haiku FIXER (after the Opus review's R1, commit `5dff3a23`) rewrote the shared
+  "unconfined" caveat for every runtime in C# and TypeScript — the same pattern as O2 and O4 in part 5; DR4's plan says
+  `VibeHomes.EmptiedUnderItsLock` "does not exist in the source", but it is at `VibeHomes.cs:220`. Not checked: the
+  judge's DR3/DR4 point that S5.6.7 compares a snapshot of the shared TEMP folder while other classes run in parallel.
+- **Mutation checks** (all 8 arms): 48 of 48 mutants killed. Per intended test: **SR1's
+  `AKimiQuestionLaunch_IsTheShimRequest_InItsFolderOrItsCopy_OnTheRowsHome` is present and does NOT catch M2** (no
+  planner arm for kimi; other tests catch it). Opened in the code: the test builds `Confinement.Planned` by hand
+  (`PlanOf`) and calls the consultant's `Build`, never the planner — the same miss as T1, T2 and D3 in part 5. It is the
+  only intended test of the 8 arms that is present and misses. Missing by exact name — each one renamed or split
+  into two or three tests, and each of those catches its mutant (checked in `killedBy`; [tables.md](tables.md) §8 marks them `r`):
+  `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind` in DR1–DR4, SR3, SR4; `AdmissionFlagsBothRows` in SR2, DR3,
+  SR4; `APlanWithFlags_IsRefusedForKimi` in DR3; `AfterTheCheck_TheHomeIsGone_JunctionFirst` and
+  `ThePlannerArm_IsACopyForDisk_AnEmptyFolderForNone_AndRefusesWeb` in SR4 (SR4 has 9 of 12 scenarios by name).
+- **Independence — a leak found in the transcripts** ([incidents.md](incidents.md) §2e): the notes folder is shared by
+  all arms, and the Haiku reviewers of DR3 and DR4 listed it and read the PREVIOUS DR arm's review notes (DR3 read
+  DR2's, DR4 read DR3's; DR4's notes say "still open from DR3 H4"). DR3 and DR4 are therefore not independent of DR2
+  and DR3. Part 5's fixers also opened other arms' files, but only tool logs (format, suite, generator output) and, in S2,
+  D2's and O2's fix notes searched for the word "format" — no other arm's findings.
+- **Reading**: the fresh Haiku review costs about $0.5–0.7 and 12–24 min per arm (one outlier, $2.10). It
+  did not reduce what the Opus review finds — the DR arms still had majors for Opus in 4 of 4 arms — but the final
+  code after the Opus review and the Haiku fix was judged better than D's: no DR arm below 7 (D: 2 of 4), and the
+  judge's majors fell from 12 to 5. S was already at 8 and stays there. The Haiku fixer's over-wide fix (SR3, as O2 and O4 in part 5) is still
+  there, and the extra review added small defects of its own (prediction 5). n = 4 per scheme, one task, and DR3/DR4 are
+  partly dependent (above), so this is a direction, not a measured size.
+
+| Prediction (recorded before the run) | Observed | |
+|---|---|---|
+| 1. The Haiku step costs $0.3–1.0 and 10–30 min; SR $5.5–8.5, DR $4.5–6.5; DR the cheapest scheme and below the classic band; SR's mean inside or below the band | step $0.44–0.72 except DR2 $2.10; 12–24 min. SR $6.23–7.47 (mean $6.67, inside the band). DR $4.80–6.68: DR2 above $6.5 and inside the band; DR's mean $5.55 below the band, but D ($4.55) stays cheaper | partly holds |
+| 2. The Opus review finds fewer blocking+major than in S and D, by at least 1 per arm, most clearly in DR | SR 0 vs S 0.25; DR 2.0 vs D 2.25 per arm | **wrong** |
+| 3. DR at most 1 of 4 arms below 7; SR stays at 7.5–8 | DR 7–7.5 (none below 7); SR 8 | holds |
+| 4. The mutation checks still show at least one of the 8 arms with an intended test that misses its mutant | SR1's S5.6.5 test misses M2 (it never calls the planner; checked in the code) | holds |
+| 5. In at least 1 arm the Haiku fix changes something the Opus review then flags | DR4 R3 (complexity), DR1 R6 (a false comment); plus two stale records (SR4 R1, DR2 R4); all minor | holds |
+| 6. Wall time DR about 60–95 min, SR about 75–135 min | DR 66–84; SR 99–110, but SR4 66 | holds for DR; SR 3 of 4 |
+
+## 7c. Part 5c — the classic scheme with a fresh Haiku review before Opus (CR, CH ×4)
+
+> Complete: all 8 arms checked, judged, mutation-checked and hand-checked (2026-10-28, the chain ended 17:27 UTC).
+> Every number is in [tables.md](tables.md) (§1–§3b, §6, §8).
+
+- **Design** (the owner's, 2026-10-28; recorded before the run in [protocol.md](protocol.md) "Part 5c"): the classic
+  arm unchanged (Sonnet codes, brief `1-code`), plus the fresh Haiku review-and-fix of part 5b before the Opus review.
+  **CR**: Sonnet fixes after Opus, as in C. **CH**: Haiku fixes after Opus (`h-fix`; it differs from `3-fix` only in
+  the model's name). Four rounds of two (CR_n with CH_n), 11:01–15:59 UTC. Each arm had its own notes folder, and from
+  11:31 UTC every other arm's data was locked ([incidents.md](incidents.md) §2f); no CR/CH arm read another arm's work.
+- **Cost** ([tables.md](tables.md) §1, §2): CR $7.39 / $8.64 / $8.66 / $7.70 (mean **$8.10**, above the classic band
+  $6.53–7.85 in 2 of 4 arms); CH $7.04 / $7.09 / $6.97 / $7.33 (mean **$7.11**, all inside the band; C's mean $7.21).
+  The Haiku review step: CR $1.18 / $0.54 / $0.37 / $0.46, CH $0.97 / $0.39 / $0.70 / $0.41. The fix step: Sonnet
+  $0.88–1.19, Haiku $0.07–0.40 — that is the whole difference between CR and CH. Step 1 (Sonnet codes) $2.93–4.35.
+- **Time** (real elapsed): CR 78 / 66 / 70 / 60 min, CH 84 / 58 / 65 / 69 min (C's work time: 44–62). The Haiku review
+  step 10–20 min; the Opus review 5–17 min.
+- **What the Haiku reviewer found on Sonnet's code** (its notes, counted by hand): CR 5 / 4 / 4 / 5 findings, 2 / 2 / 1 /
+  3 fixed; CH 4 / 5 / 5 / 3, 1 / 0 / 2 / 1 fixed (the rest left open or wrong on a second look; CH2 changed no code).
+  On Haiku's own code it found 8–14 (SR) and 21–24 (DR): Sonnet's code leaves much less for it.
+- **The Opus review after it**: blocking + major per arm CR 0 / 1 / 1 / 0, CH 0 / 1 / 1 / 1 — 0.5 and 0.75 (C: 1 / 2 /
+  0 / 0, 0.75). All findings CR 6 / 5 / 5 / 6, CH 3 / 4 / 5 / 5 (C: 4 / 5 / 2 / 4). CR1 had the verdict "ready".
+- **The Haiku review introduced defects the Opus review then flagged** (prediction 5; checked against the step's
+  commits): CR4 R2 — the Haiku review added `[Collection("unlink-hooks")]` to four test classes with a comment that
+  calls the async-local `GitScratch.AfterUnlink` and `KimiHome.AfterUnlink` "process-wide" (the same false comment as
+  DR1); CH1 R2 — after the Haiku review's commit, the helper `TheRowsOneShotFolder` is never called. Both minor.
+- **Objective checks**: all 8 arms build, pass the format and generator checks, have 0 new test failures and deliver
+  12 / 12 scenarios by exact name. CR2's build passed on the second build: the first ended in a .NET runtime crash
+  ([incidents.md](incidents.md) §2f).
+- **Quality** (absolute judge, two runs each): **CR 8 / 8 / 8 / 8 with 0 majors** — of the 11 schemes run four times, it and SR
+  are the only ones at 8 in every arm, and it is the only one with no major at all; CH 7.5 / 7 / 8 / 8, 4 majors (C: 7 / 8 / 8 / 8, 2 majors).
+  Hand-checked, all true: **CH1 and CH2 (3 of the 4)** — after a minor Opus finding (the caveat "a shell is always there"
+  is false for Kimi), the **Haiku fixer** rewrote the shared "unconfined" caveat for every runtime in C# and TypeScript
+  and recorded no deviation (commits `58e06eee`, `ff1de017`). CR1's and CR4's **Sonnet fixers** made the same change for
+  the same finding, but recorded it as plan deviations 60 and 61, and the judge did not count it as major. The same
+  over-wide Haiku fix as O2, O4 and SR3. **CH4**: deviation 39, written by Sonnet in step 1, says the coder did not read
+  the selected rules in full — not caused by the Haiku steps.
+- **Mutation checks** (all 8 arms): 48 of 48 mutants killed, and every intended scenario test is present by name and
+  catches its mutant — no weak test and no renamed one, as in the four classic arms.
+- **Reading**: on Sonnet's code the fresh Haiku review is cheap ($0.4–1.2, 10–20 min) and finds little (3–5 per arm,
+  1–3 fixed); the Opus review afterwards finds about what it found in C. CR's final code scored 8 in every arm (as
+  SR) and is the only scheme with no major from the judge, at about $0.9 more than C. With Haiku as the fixer (CH), the cost falls to C's level
+  ($7.11) and the quality to 7–8: the Haiku fixer repeats its known over-wide fix of the shared caveat, without a
+  deviation. n = 4 per scheme, one task, and the judge compresses scores near 8: a direction, not a measured size.
+
+| Prediction (recorded before the run) | Observed | |
+|---|---|---|
+| 1. The Haiku step $0.3–1.0 and 10–30 min; CR $7.5–9.0 (mean above the classic band); CH $6.0–8.0 (mean inside the band, about $1 below CR) | step $0.37–1.18 (CR1 above $1.0), 10–20 min. CR $7.39–8.66, mean $8.10 (CR1 below $7.5). CH $6.97–7.33, mean $7.11, $0.99 below CR | holds, but CR1 outside two ranges |
+| 2. Wall time CR and CH 60–100 min | CR 60–78, CH 58–84 | holds (CH2 58) |
+| 3. Opus finds at most 1 blocking+major per arm on average in CR and CH; no clear fall from C | CR 0.5, CH 0.75 (C 0.75) | holds |
+| 4. CR 7.5–8 in all 4 arms; CH no arm below 7, its mean at most 0.5 below CR's | CR 8 / 8 / 8 / 8; CH 7.5 / 7 / 8 / 8, mean 7.6 (0.4 below) | holds |
+| 5. In at least 1 of 8 arms the Haiku review-and-fix changes something the Opus review then flags | CR4 R2 (a false "process-wide" comment), CH1 R2 (a helper left unused); both minor | holds |
+| 6. All 48 mutants killed; at most 1 of 8 arms with an intended test that misses its mutant | 48 / 48; none | holds |
 
 ## 8. Behaviour — the mutation checks on all 30 arms
 

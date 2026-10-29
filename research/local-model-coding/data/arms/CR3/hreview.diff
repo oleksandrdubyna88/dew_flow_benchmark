@@ -1,0 +1,12 @@
+diff --git a/src_mcp/tests/AKimiQuestionRowTests.cs b/src_mcp/tests/AKimiQuestionRowTests.cs
+index cb64b107..8f23d9b2 100644
+--- a/src_mcp/tests/AKimiQuestionRowTests.cs
++++ b/src_mcp/tests/AKimiQuestionRowTests.cs
+@@ -45,6 +45,7 @@ public sealed class AKimiQuestionRowTests : IAsyncLifetime
+ 
+     public ValueTask DisposeAsync()
+     {
++        GitScratch.AfterUnlink = null;
+         _dir.Dispose();
+         _person.Dispose();
+ 

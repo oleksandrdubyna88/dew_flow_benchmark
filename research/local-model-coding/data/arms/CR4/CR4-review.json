@@ -1,0 +1,21 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/core/QuestionConsult/CapabilityMatrix.cs", "line": 33,
+   "summary": "Kimi none and disk rows now get the shared Unconfined caveat 'can read this machine — a shell is always there, and no flag removes it', and the TypeScript twin at src_vs_code/src/capabilityAdmission.ts:60 says the same; for Kimi this is false, because the shim refuses every shell command (M-K3/M-K4) and the real reason is Grep and Glob (M-K6).",
+   "fix": "Make the Unconfined caveat true for every runtime that has it, on both sides: for example 'unconfined: can read this machine — no flag removes it'. Or give the reason from the row (its note) and not from a fixed shell sentence. The S5.6.8 test and AdmissionFlagsBothRows should then assert the Kimi caveat does not say 'shell'."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 24,
+   "summary": "The review fix adds [Collection(\"unlink-hooks\")] with the comment 'GitScratch.AfterUnlink and KimiHome.AfterUnlink are process-wide'. That is false: both are AsyncLocal, per async flow (GitScratch.cs:12-18, KimiHome.cs:59-66). The collection also does not cover the seven other classes that set these hooks, so it protects nothing. It also edits two pre-existing classes outside the stories (JunctionsTests.cs:23, KimiCanaryTests.cs:31).",
+   "fix": "Remove the attribute and its comment from AKimiConsultantCheckTests.cs:24, AKimiQuestionRowTests.cs:27, JunctionsTests.cs:23 and KimiCanaryTests.cs:31. Also remove the 'KimiHome.AfterUnlink = null' lines in the two new classes, because they never set that hook."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 177,
+   "summary": "S5.6.7's Then says the row's scratch is gone, but the test checks only the copy (<scratch>/tree/...), and the place's own dispose deletes that before the finally block runs. If someone removes QuestionRowLaunch's Remove(scratch), the scratch and its empty cwd folder stay and the test stays green. The fixture's planted src/AGENTS.md (line 45) is never checked to be absent from the copy.",
+   "fix": "Get the row's coai-question-* folder from the copy path (or from the launch's ScratchDir) and assert that it no longer exists in each arm. Either check during the played turn that the copy has no AGENTS.md (the M-K9 reason the class summary gives), or remove the planted file."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/ConfinementPlannerTests.cs", "line": 405,
+   "summary": "S5.6.6 tests only a plan with Flags. MustCarryNoFlag also refuses a plan with Leading (KimiConsultant.cs:62), and no test covers that half: if '{ Leading.Count: > 0 } or' is deleted, the suite stays green.",
+   "fix": "Make APlanWithFlags_IsRefusedForKimi a Theory with two arms: Flags = [\"--yolo\"] and Leading = [\"--yolo\"]. Each arm expects ArgumentException '*shim*'."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 182,
+   "summary": "S5.5.4 says --home is <scratch>\\own\\kh-…, but the test checks only that the parent folder is named 'own'. It does not check the home's own name, as S5.5.1 does with ^kh-[0-9a-f]{10}$.",
+   "fix": "Add Path.GetFileName(After(shim, \"--home\")).Should().MatchRegex(\"^kh-[0-9a-f]{10}$\") to ARootlessCheck_KeepsTheHomeInItsScratch_AndDisposesItJunctionFirst."},
+  {"id": "R6", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 3,
+   "summary": "After the review-fix commits a01f6a0b and 2790f239, the status line still says E5.5–E5.6 are 'not yet reviewed'. The as-built list (deviations 50–59) does not record those fixes. It also does not record that the story was built on Sonnet and fixed on Haiku, where §0 asks for Opus and for the fixes to come from the model that built the story.",
+   "fix": "Update the status line to the true review state. Add a deviation that names the review fixes and the coder and fixer models compared with §0's assignment."}
+ ]}

@@ -296,3 +296,101 @@ is one known case — the instrument must catch it to be trusted).
     after the results were seen, to read the prediction "Haiku's fixes leave more findings open" — whose registered test
     was the mutation checks and the judge. It is reported as post hoc.
   - "Renamed" scenario tests (O2, O3, D1, D2) found by hand; the mutation checks' `killedBy` lists confirm them.
+
+## Part 5b — S and D again, with a fresh Haiku review-and-fix before Opus (SR, DR x4), recorded before they run (2026-10-27T12:00Z)
+
+**Owner's request** (2026-10-27, after the Part 5 results): four more runs of each of the two Part 5 schemes the owner
+picked — S (Sonnet splits) and D (Haiku codes directly) — with ONE change: when Haiku has finished coding, a FRESH Haiku
+session reviews the whole stories and fixes what it found, so Opus reviews code that a Haiku review already passed.
+- **SR1–SR4:** Sonnet splits (`x-split`, unchanged) → Haiku codes each task (`t2-coder`) → **Haiku reviews + fixes**
+  (`hr-review-fix`, fresh session, 30 min) → Opus reviews once (`2-review`, unchanged) → Haiku fixes (`h-fix`, unchanged).
+- **DR1–DR4:** Haiku codes the stories (`d-code`) → **Haiku reviews + fixes** → Opus reviews → Haiku fixes.
+- **The new brief** `hr-review-fix` = the Opus review brief's checklist (the 12 scenarios with "would fail without the change",
+  the decisions, correctness, security, rules, scope) + the Haiku fix brief's working rules (red test first, the suites,
+  commits, notes); findings written to the notes BEFORE any edit. Its diff is kept (`<step>.diff`). The Opus reviewer is not
+  told that a Haiku review ran (its brief is unchanged); the judge's redaction already removes the word "Haiku".
+- **Unchanged and pinned:** base `b4e2ea96`, every other brief, step budgets, tools, models (claude-haiku-5-5,
+  claude-sonnet-5-5, claude-opus-5-5), Claude Code 2.1.310 (the same as Part 5), the judge rubric, the six frozen mutants.
+  The `x-split` brief still says nothing about the extra review (kept byte-identical so the split is the same variable as S).
+- **Order and load:** four rounds of two (SR_n with DR_n) — Part 5 ran rounds of three, so the load per arm is a little lower;
+  wall times are compared with that caveat.
+- **Rule deviations, by the owner's request:** Haiku codes, reviews and fixes (no role in `subagent-models.md`).
+
+**Predictions (before any SR/DR arm runs):**
+1. The Haiku review-and-fix step costs $0.3–1.0 and 10–30 min per arm, so SR $5.5–8.5 per arm and DR $4.5–6.5 — DR stays the
+   cheapest scheme and below the classic band ($6.53–7.85); SR's mean stays inside or below the band.
+2. The Opus review finds fewer blocking+major findings than in S and D (mean lower by at least 1 per arm), most clearly in DR.
+3. Quality (absolute judge): DR has at most 1 of 4 arms below 7 (D had 2 of 4: 6 and 5.5); SR stays at 7.5–8 like S.
+4. The Haiku reviewer does NOT reliably find tests that cannot fail: the mutation checks still show at least one arm of the 8
+   with an intended test that misses its mutant.
+5. In at least 1 of the 8 arms the Haiku review-and-fix changes something the Opus review then flags as a defect it introduced.
+6. Wall time grows by the step's 10–30 min: DR about 60–95 min, SR about 75–135 min.
+
+### Part 5b — operator stop, 2026-10-27 16:19–16:21 UTC (recorded before any SR4/DR4 result)
+
+The owner asked to pause. SR1–SR3 and DR1–DR3 had finished. SR4 (in its first task batch, 2.7 min of Haiku coding, 0 commits) and
+DR4 (in 1-code, 645 s of 75 min) were stopped with SIGINT to their `timeout` processes. **run-arm.sh read that as "stopped at its hard
+deadline" (exit 124) and marked the steps done**, then started the next steps (SR4 t2, DR4 2-hreview, which edited the coder's two
+test files for ~2 min). Those were then killed (SIGKILL). The two arms cannot be resumed cleanly (SR4's task worktrees were already
+removed; DR4's clone mixes the coder's and the reviewer's edits), so **both are re-run from scratch** when the chain is restarted. Their
+aborted data is kept, not deleted: `aborted-2026-10-27-1621/` (clones, results, notes, build logs). Lesson for the harness: to pause an
+arm, kill its whole process group with SIGKILL (no end line is written, so the step resumes), never SIGINT/SIGTERM the `timeout`.
+To restart: `setsid nohup ./after-y.sh >> chain-y.log 2>&1 < /dev/null &` — it remakes SR4 and DR4 from `base` and goes on.
+
+### Part 5b — the chain hung in the mutation step, 2026-10-27 19:02–19:55 UTC (recorded after the checks, the judge and the first two mutation results were read)
+
+`after-y.sh` ran the frozen mutation checks two arms at a time and waited for each pair with a bare `wait`. A bare `wait`
+also waits for the keep-awake guard, which never ends, so the chain stopped after SR1 and DR1. Fixed in the script (it
+waits only for the pair's own jobs) and restarted from its markers at 19:55 UTC; SR1's and DR1's mutation results were
+kept, nothing else re-ran. No arm, check or judge result was affected.
+
+## Part 5c — the classic scheme with a fresh Haiku review-and-fix before Opus (CR, CH x4), recorded before they run (2026-10-28T10:58:52Z)
+
+- **Design (the owner's, 2026-10-28):** the classic arm C unchanged (Sonnet codes, 75 min, brief `1-code` with `arm-C.md`),
+  plus ONE step after Sonnet's code — the same fresh Haiku review-and-fix as Part 5b (`hr-review-fix`, 30 min). Then the
+  Opus review (`2-review`, 20 min, read-only; not told that a Haiku review ran), then the fixes (30 min):
+  - **CR1–CR4:** Sonnet fixes (`3-fix`, as in C).
+  - **CH1–CH4:** Haiku fixes (`h-fix`; it differs from `3-fix` only in the model's name). The owner's second variant.
+- **One change in the harness, for every CR and CH arm:** each arm has its own notes folder, `notes/<arm>/`, so a Haiku
+  reviewer can no longer read another arm's notes (the Part 5b leak, incidents §2e). C had the shared folder; C's coder and
+  fixer never read another arm's notes, so this does not move the baseline.
+- **Order:** four rounds of two (CR_n with CH_n), `after-z.sh`; the same base `b4e2ea96`, the same checks, the absolute judge
+  (only the new arms), the frozen mutation checks.
+- **Baseline (C, C2, C3, C4):** cost $6.53–7.85 (mean $7.21); per step: code $2.6–3.6, review $2.3–3.6, fix $0.9–2.0; work
+  44–62 min; judge 7.75 (7–8); Opus blocking+major 0.75 per arm; the judge's majors 2 in all; 0 weak tests.
+
+| # | Prediction |
+|---|---|
+| 1 | The Haiku step costs $0.3–1.0 and 10–30 min per arm. CR costs $7.5–9.0 (mean above the classic band). CH costs $6.0–8.0 (mean inside the band, about $1 below CR). |
+| 2 | Wall time: CR and CH 60–100 min each (C + the Haiku step). |
+| 3 | The Opus review finds at most 1 blocking+major per arm on average in CR and in CH (C: 0.75); no clear fall from C, as in Part 5b. |
+| 4 | Judge: CR 7.5–8 in all 4 arms. CH: no arm below 7, and CH's mean at most 0.5 below CR's. |
+| 5 | In at least 1 of the 8 arms the Haiku review-and-fix changes something that the Opus review then flags. |
+| 6 | All 48 mutants killed; at most 1 of the 8 arms has an intended test that misses its mutant. |
+
+### Part 5c — other arms' data locked during the run (2026-10-28T11:31Z, CR1 and CH1 in step 1)
+
+- The owner asked whether an arm can read other runs' work and do better. A scan of all 40 earlier arms' tool calls found:
+  most cross-arm reads were tool logs (which format command was used); real reads of another arm's findings were DR3 and
+  DR4 (incidents §2e) and, not recorded before, **T2's fixer read the first 40 lines of `notes/T1-fix.md`** (T1's review
+  findings and fixes); O2 and S2 grepped other arms' fix notes for "generator" / "format". No arm read another arm's
+  clone, branch or transcript. CR1 and CH1 had read nothing outside their own folders up to the lock.
+- On the owner's choice, `lock-others.sh` set mode 000 on everything holding another arm's work (620 paths: the old arm
+  clones, old notes, results, worktrees, judge and mutation folders, RESULTS.md, PROTOCOL.md, fix-outcomes.json,
+  mutate.mjs, the old arms' Claude transcripts) and mode 300 on the folders above them (no listing). The arms run as the
+  same user and `chmod` is not in their allowed tools. Modes saved in `locked-modes.txt`; a watcher runs
+  `unlock-others.sh` once all 8 arms are done, before the objective checks, the judge, the mutation checks and the metrics.
+- Not covered by the lock: the owner's own repositories (`dew_flow_connect_other_ais` with the old arms' remote branches,
+  `dew_flow_benchmark` with the published data). The CR/CH transcripts will be scanned for any read of them.
+
+### Part 5c — after the run (2026-10-28, recorded with the results)
+
+- **The CR2 build check**: the chain's build of CR2's final commit ended with "Fatal error. Internal CLR error.
+  (0x80131506)" and no compiler error. Built again alone with the same command: succeeded, 0 warnings, 0 errors.
+  `objective.json`'s `build` was set to `true` before the judge read it; the chain's original is kept
+  (`data/arms/CR2/objective.json.orig`, `BUILD-RERUN.md`).
+- **The lock held**: a scan of all 8 arms' tool calls found no read of another arm's notes, clone, results or
+  transcripts, nor of the owner's repositories; no tool call was refused by the lock. The unlock ran at 15:59 UTC
+  (625 paths restored) before the objective checks.
+- **A false alarm**: the unlock watcher first reported "chain is gone" at 11:34 UTC. `chain-z.pid` held the PID of
+  `setsid`'s parent, not of the chain; the chain ran without a break. The PID was corrected and the watcher restarted.

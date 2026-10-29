@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1063,
+   "summary": "The as-built record is wrong or incomplete about where tests live. Deviation 50 still says S5.5.2 is a 'two-arm Theory', but commit c4b5737b split it into two Facts (`AnAnsweredCheck_TheHomeIsGone_JunctionFirst`, `AFailedCheck_TheHomeIsGone_JunctionFirst`), and no test has the table's name `AfterTheCheck_TheHomeIsGone_JunctionFirst`. Deviation 53 says only 'S5.6.7 in AKimiQuestionRowTests' and does not name its three Facts, which also do not have the table's name `AKimiDiskRow_ReadsItsCopies_AndLeavesNothingBehind`.",
+   "fix": "In deviation 50, replace 'Theory' with the two Fact names. In deviation 53, name the three S5.6.7 Facts (`AnAnsweredKimiDiskRow_…`, `ARefusedKimiDiskRow_…`, `ACancelledKimiDiskRow_…`) and say that they replace the table's one Theory."},
+  {"id": "R2", "severity": "minor", "file": "todo/PLAN_vibe_and_kimi_runtimes_E5.md", "line": 1067,
+   "summary": "The plan never records the red messages: every E5.5/E5.6 scenario was green on arrival, and deviation 54 gives their only proof of teeth as `notes/SR4-t3-code.md` and `notes/SR4-t4-code.md`, which are not in the repository. §0 says 'the red message goes into the summary'.",
+   "fix": "For each scenario, write the temporary break and the red message it produced into deviations 50 and 54. Remove the references to files outside the repository."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AKimiQuestionRowTests.cs", "line": 179,
+   "summary": "S5.6.7's Then says the row's scratch and `coai-vh\\<8>` are gone after EACH ending. The refused arm checks only the `coai-vh` folder, never that the row's `coai-question-*` scratch with its copies was removed. The refusal comes after `MakeScratch` and the first copy, so the `finally` path is untested for this ending.",
+   "fix": "Get hold of the row's scratch path (for example the copied root's folder seen through a seam, or the scratch named in the refusal), assert it is gone, or record this in the as-built as a stated limit."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/tests/AKimiConsultantCheckTests.cs", "line": 169,
+   "summary": "S5.5.3 does not get the H1-H3 fix that S5.5.2 got. It never captures `--home` or proves the one-shot home existed while the turn ran, and its `if (Directory.Exists(coaiVh))` guard lets the 'gone' check pass when nothing was ever made.",
+   "fix": "In `During`, capture `--home` and check that its folder exists, as `AfterTheCheck` does. After the check, assert that folder is gone, with no guard."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/runners/Kimi/KimiConsultant.cs", "line": 87,
+   "summary": "`MustCarryNoFlags` also refuses a plan with a `Leading` argument (deviation 52), but `APlanWithFlags_IsRefusedForKimi` tests only `Flags: [\"--yolo\"]`. The `Leading` half can be deleted and the suite stays green.",
+   "fix": "Make S5.6.6 a Theory with a second case that carries a `Leading` argument and no flags."}
+ ]}

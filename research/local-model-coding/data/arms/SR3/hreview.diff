@@ -1,0 +1,30 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 30235fc5..371627c4 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -137,11 +137,12 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+                 : AnswerWithTheMarker(request),
+         };
+ 
++        int code;
+         JsonElement said;
+         GitScratch.AfterUnlink = recorded.Add;
+         try
+         {
+-            (_, said, _) = await Check(Settings(homes), played, TestContext.Current.CancellationToken);
++            (code, said, _) = await Check(Settings(homes), played, TestContext.Current.CancellationToken);
+         }
+         finally
+         {
+@@ -155,6 +156,11 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         {
+             Text(said, "state").Should().NotBe("answered", said.ToString());
+         }
++        else
++        {
++            code.Should().Be(0, "the check passed");
++            Text(said, "state").Should().Be("answered", said.ToString());
++        }
+     }
+ 
+     /// <summary>S5.5.3 — a check cancelled mid-turn still disposes its home, and writes a record that says so.</summary>

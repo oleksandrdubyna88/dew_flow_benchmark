@@ -1,0 +1,95 @@
+{
+  "batches": [
+    [
+      "t1",
+      "t4"
+    ],
+    [
+      "t2"
+    ],
+    [
+      "t3"
+    ],
+    [
+      "t5"
+    ]
+  ],
+  "tasks": {
+    "t1": {
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "brief": "/home/jinx/git/coai-exp/vllm/work/SR4/t1.md",
+      "depends": [],
+      "scenarios": [
+        "S5.6.1",
+        "S5.6.2",
+        "S5.6.4",
+        "S5.6.8"
+      ]
+    },
+    "t2": {
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "brief": "/home/jinx/git/coai-exp/vllm/work/SR4/t2.md",
+      "depends": [
+        "t1"
+      ],
+      "scenarios": [
+        "S5.6.3",
+        "S5.6.5",
+        "S5.6.6"
+      ]
+    },
+    "t3": {
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs"
+      ],
+      "brief": "/home/jinx/git/coai-exp/vllm/work/SR4/t3.md",
+      "depends": [
+        "t1",
+        "t2"
+      ],
+      "scenarios": [
+        "S5.6.7"
+      ]
+    },
+    "t4": {
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs"
+      ],
+      "brief": "/home/jinx/git/coai-exp/vllm/work/SR4/t4.md",
+      "depends": [],
+      "scenarios": [
+        "S5.5.1",
+        "S5.5.2",
+        "S5.5.3",
+        "S5.5.4"
+      ]
+    },
+    "t5": {
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_core.md",
+        "research/module_runners.md",
+        "research/module_tests.md"
+      ],
+      "brief": "/home/jinx/git/coai-exp/vllm/work/SR4/t5.md",
+      "depends": [
+        "t1",
+        "t2",
+        "t3",
+        "t4"
+      ],
+      "scenarios": []
+    }
+  }
+}

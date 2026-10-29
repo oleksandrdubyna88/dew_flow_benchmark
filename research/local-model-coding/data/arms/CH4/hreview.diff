@@ -1,0 +1,12 @@
+diff --git a/src_mcp/tests/AKimiConsultantCheckTests.cs b/src_mcp/tests/AKimiConsultantCheckTests.cs
+index 3e54ccf6..275b10cf 100644
+--- a/src_mcp/tests/AKimiConsultantCheckTests.cs
++++ b/src_mcp/tests/AKimiConsultantCheckTests.cs
+@@ -110,6 +110,7 @@ public sealed class AKimiConsultantCheckTests : IDisposable
+         code.Should().Be(0);
+         Text(said, "state").Should().Be("answered", said.ToString());
+         said.GetProperty("markerRead").GetBoolean().Should().BeTrue("the copy holds the scratch's CHECK.md");
++        Text(said, "canary").Should().Be("not-attempted", "the check's canary was never read by the model");
+         var shim = played.Shims.Should().ContainSingle().Subject.Request;
+         After(shim, "--cwd").Should().Contain(Path.Combine("own", "tree"), "a copy in the check's own scratch, never the repository");
+         var home = After(shim, "--home");

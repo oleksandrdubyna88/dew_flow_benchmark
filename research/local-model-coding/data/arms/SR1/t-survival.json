@@ -1,0 +1,94 @@
+{
+  "arm": "SR1",
+  "haikuLines": 560,
+  "keptFinal": 0.9803571428571428,
+  "reviewChangedLines": null,
+  "tasks": [
+    {
+      "id": "t1",
+      "files": [
+        "shared/runtime-capabilities.json",
+        "shared/capability-matrix-vectors.json",
+        "src_mcp/core/QuestionConsult/RuntimeCapabilities.cs",
+        "src_mcp/tests/CapabilityMatrixTests.cs",
+        "src_vs_code/src/runtimeCapabilities.generated.ts",
+        "src_vs_code/src/test/capabilityAdmission.test.ts"
+      ],
+      "haikuLines": 120,
+      "keptFinal": 111,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "\"cells of research/RESULTS_kimi_confinement.md (Windows, 3 of 3, kimi 2.1.1). `cells` may be empty only\",",
+        "\"note\": \"mechanism: the shim refuses every write and shell command and serves Read inside the working folder only, but Grep and Glob read the disk directly, so the empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced (RESULTS §7) and no cell exercised them (§14)\"",
+        "\"note\": \"mechanism: the working folder is a coai-made sanitised COPY of the granted roots (D6) and the shim serves Read inside it only, but Grep and Glob search the disk directly - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced (RESULTS §7) and no cell exercised them (§14)\"",
+        "\"note\": \"not measured: no Kimi cell fetches or searches the web\"",
+        "RuntimeCapabilities.Builtin.Of(\"kimi\", Capability.None).Should().NotBeNull();",
+        "public void AdmissionFlagsBothKimiRows_AndRefusesItsWebNamingItsRecord()   // S5.6.4",
+        "note: 'mechanism: the shim refuses every write and shell command and serves Read inside the working folder only, but Grep and Glob read the disk directly, so the empty folder confines nothing - the row can read this machine; WebSearch and FetchURL are announced (RESULTS §7) and no cell exercised them (§14)',",
+        "note: 'mechanism: the working folder is a coai-made sanitised COPY of the granted roots (D6) and the shim serves Read inside it only, but Grep and Glob search the disk directly - the row can read this machine; every write and shell command is refused; WebSearch and FetchURL are announced (RESULTS §7) and no cell exercised them (§14)',",
+        "note: 'not measured: no Kimi cell fetches or searches the web',"
+      ]
+    },
+    {
+      "id": "t2",
+      "files": [
+        "src_mcp/core/QuestionConsult/ConfinementPlanner.cs",
+        "src_mcp/tests/ConfinementPlannerTests.cs"
+      ],
+      "haikuLines": 33,
+      "keptFinal": 32,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "public void Kimi_None_StandsInAnEmptyFolder_Disk_InTheCopyOfItsRoots_NoFlagEver_AndWebIsRefused()"
+      ]
+    },
+    {
+      "id": "t3",
+      "files": [
+        "src_mcp/runners/Kimi/KimiConsultant.cs",
+        "src_mcp/tests/KimiQuestionLaunchTests.cs"
+      ],
+      "haikuLines": 84,
+      "keptFinal": 84,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t4",
+      "files": [
+        "src_mcp/tests/AKimiConsultantCheckTests.cs",
+        "src_mcp/src/Server/Consultation/ConsultantCheck.cs",
+        "src_mcp/src/Server/Consultation/ConsultCheckScratch.cs"
+      ],
+      "haikuLines": 142,
+      "keptFinal": 142,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    },
+    {
+      "id": "t5",
+      "files": [
+        "src_mcp/tests/AKimiQuestionRowTests.cs",
+        "src_mcp/src/Server/QuestionConsult/QuestionRowLaunch.cs"
+      ],
+      "haikuLines": 158,
+      "keptFinal": 157,
+      "reviewChangedLines": 0,
+      "droppedFinal": [
+        "if (Directory.Exists(oneShot))"
+      ]
+    },
+    {
+      "id": "t6",
+      "files": [
+        "todo/PLAN_vibe_and_kimi_runtimes_E5.md",
+        "research/module_tests.md",
+        "research/module_core.md"
+      ],
+      "haikuLines": 23,
+      "keptFinal": 23,
+      "reviewChangedLines": 0,
+      "droppedFinal": []
+    }
+  ]
+}
