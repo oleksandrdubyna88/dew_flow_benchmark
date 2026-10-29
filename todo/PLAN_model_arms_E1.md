@@ -1308,7 +1308,10 @@ What E1's suite does not prove: that claude 2.1.x accepts `--session-id`, `--res
    action is `make` (`ChainPlanTests.The_first_action_is_making_every_unmade_arm`). **Settled (E1.S8):** `chain` requires what `make` requires.
    `lock`, `unlock`, `gate-lock` (absent from the table) require the root and `experiment.json`.
 4. **§4.3 omits files the shell writes:** `notes/split.md` (`t-lib.sh:80`, `:84`), `out/tasks-plan.log` (`:81`), `out/batch-<i>.done`
-   (`:61`), `out/task-<id>.before` (`:52`), `out/pick-<id>.log` (`:32`), `out/wt-build-<id>.log` (`:20`). `ArmPaths` spells them all.
+   (`:61`), `out/task-<id>.before` (`:52`), `out/pick-<id>.log` (`:32`), `out/wt-build-<id>.log` (`:20`) — and, found by the E1.S4
+   review (R1), three more this document's table also missed: `out/prep-build.log` (`after6.sh:31`, make's warm build),
+   `out/objective.out` (`after6.sh:50`) and `.locked-modes.restored-<UTC stamp>` (`lock.sh:19`). Nine in all; `ArmPaths`/`RootPaths` spell
+   them all. (E1.S4 also named the arm's clone folder `CloneFolder`, not `Clone`: a record may not declare a member named `Clone`, CS8859.)
 5. **D3's reason is half true.** "A tool referencing `bench`'s exe would drag EF and Npgsql into the module's deployment" — but D1's console
    references `Bench.Infrastructure`, which itself carries EF Core and Npgsql (`src/Bench.Infrastructure/Bench.Infrastructure.csproj:10-14`).
    The move stays right (an exe never references an exe); the stated reason does not hold.
