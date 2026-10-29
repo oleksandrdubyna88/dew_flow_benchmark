@@ -256,9 +256,17 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
 - **The audit record** (`policy-ab-quick/hooks/audit.mjs`) now carries `tool_use_id`, `session_id`, `duration_ms` (null when
   absent, never 0) and a Bash call's `run_in_background`; `--out <file>` names the log. `test/audit-contract.test.mjs` feeds
   its records to `spansFrom`.
-- **One kill.** `killTree(pid, { kill, log })` in `policy-ab-quick/lib/proc.mjs` signals the process group, then the pid; the
-  launcher, `run-cell.mjs`, `lib/run.mjs` and the capture all go through it. No spike module reaches a shell interpreter
-  (`test/no-shell.test.mjs` scans both spikes).
+- **One kill.** `killTree(pid, { kill, log })` in `policy-ab-quick/lib/proc.mjs` reads the pid's descendants from `/proc`
+  first, then signals the process group, the pid, and each descendant with its own group (a child that called `setsid`, as the
+  CLI's Bash-tool shell does, is in neither), never the caller's own group. `spawnTracked` is the one way to start a child that
+  is killed by pid: detached on POSIX and registered, so SIGINT, SIGTERM, SIGHUP and process exit kill the live children
+  (exit code 128 + the signal). The launcher, `run-cell.mjs`, `lib/run.mjs` and the capture all end children through it.
+  No spike module reaches a shell interpreter: `test/no-shell.test.mjs` scans both spikes (only `spawn`, `spawnSync`,
+  `execFile`, `execFileSync` may be imported from `child_process`; a `shell` option must be literally `false`).
+- **The ref rules** (`lib/contamination-refs.mjs`): a pull request is the first positional after a `gh pr` verb, option values
+  skipped, and a pull URL counts only under the own origin; the fork's `data` branch is found in any ref position (`origin/data`,
+  `data:`, `..data`, `?ref=data`, `/tarball/data`, `--branch=data`) and a bare `git fetch` or `--all` / `--mirror` is a low
+  reach; another run's ref is found after dots, `=` and `%2F` and as `run/*`, while a relative folder `run/output/` is not a ref.
 
 ## Entry points
 
