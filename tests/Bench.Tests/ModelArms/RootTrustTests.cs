@@ -114,8 +114,8 @@ public sealed class RootTrustTests
         answer.Should().NotBeOfType<TrustAnswer.Trusted>();
     }
 
-    private static FileFacts Facts(ulong device = 1, ulong inode = 2, FileKind kind = FileKind.Regular, int owner = 1000, UnixFileMode mode = Own) =>
-        new("/r/experiment.json", owner, mode) { Identity = new FileIdentity(device, inode, kind) };
+    private static FileFacts Facts(ulong device = 1, ulong inode = 2, FileKind kind = FileKind.Regular, int owner = 1000, UnixFileMode mode = Own, decimal ctime = 5m) =>
+        new("/r/experiment.json", owner, mode) { Identity = new FileIdentity(device, inode, kind, ctime) };
 
     [Fact]
     public void Two_reads_of_one_file_that_agree_on_everything_have_no_changes()
@@ -129,6 +129,7 @@ public sealed class RootTrustTests
     [InlineData("type")]
     [InlineData("owner")]
     [InlineData("mode")]
+    [InlineData("ctime")]
     public void Each_fact_that_differs_between_two_reads_is_named(string fact)
     {
         var after = fact switch
@@ -137,6 +138,7 @@ public sealed class RootTrustTests
             "inode" => Facts(inode: 3),
             "type" => Facts(kind: FileKind.Fifo),
             "owner" => Facts(owner: 0),
+            "ctime" => Facts(ctime: 5.000000001m),
             _ => Facts(mode: Own | UnixFileMode.GroupWrite),
         };
 

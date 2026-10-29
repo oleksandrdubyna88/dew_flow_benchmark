@@ -16,11 +16,13 @@ namespace ModelArms;
 /// </para>
 /// <para>
 /// <b>The residual race.</b> Reading a file by path cannot be tied to the <c>stat</c> before it, so the file is stat-ed AGAIN after the read and
-/// refused (exit 4) when its device, inode, type, owner or mode are not what was judged. That closes a swap in the window between the first
-/// <c>stat</c> and the read — measured before this check: 18 of 1500 passes read a link's target swapped in with <c>mv -T</c>. It does not close
-/// a swap AFTER the second <c>stat</c>, nor a swap and a swap back inside the window, and it judges nothing above the root: whoever can write the
-/// root (only the operator, by D17) or ANY ANCESTOR of it (ancestors are not judged) can still change what the harness reads. The gate reads
-/// <c>experiment.json</c> only; <c>scenarios.json</c> is judged here and read by the verb, which must look at it again as this does.
+/// refused (exit 4) when its device, inode, type, owner, mode or change time (ctime, with nanoseconds, read by the same <c>stat</c> call) are not what
+/// was judged. That closes a swap in the window between the first <c>stat</c> and the read — measured before this check: 18 of 1500 passes read a
+/// link's target swapped in with <c>mv -T</c> — and, through the ctime, a swap and a swap back (<c>ln -f</c>, <c>mv -T</c> twice) that leaves the same
+/// inode under the name: 101 of 1500 passed with both stats equal before the ctime. It does not close everything: inode numbers can be reused on some
+/// file systems, and a ctime narrows that but does not close it; a swap AFTER the second <c>stat</c> is not seen; and nothing above the root is
+/// judged, so whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can still swap the root or an ancestor and change what is
+/// read. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here and read by the verb, which must look at it again as this does.
 /// </para></summary>
 public static class ExperimentGate
 {
@@ -34,8 +36,9 @@ public static class ExperimentGate
 
     public static Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb) => RunAsync(input, verb, GateSeams.Real);
 
-    /// <summary>The same with the host's reads handed in; the one caller outside the tests is the overload above.</summary>
-    public static async Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb, GateSeams seams)
+    /// <summary>The same with the host's reads handed in. Internal: a caller that could hand in its own reads could skip the trust check, so only the
+    /// overload above (the real reads) and the test assembly reach it.</summary>
+    internal static async Task<int> RunAsync(VerbInput input, Func<ExperimentInput, Task<int>> verb, GateSeams seams)
     {
         var admitted = await Admit(input, seams);
         return await admitted.Match(verb, stop => Report(input, stop));

@@ -401,10 +401,10 @@ Each step refuses what the one before did not, and a refusal ends the walk:
 3. Trust (D17 a) of the root and `experiment.json`. On Windows the `NotPerformed` line is printed to the error writer and the walk goes on. Elsewhere `RootFacts.ReadFactsAsync` is asked for the NORMALISED
    paths and its answer is judged: a `stat` or `id` that fails is exit 3 with its reason (the host could not say); a refusal (a symbolic link, a NUL, a root that is not a folder, a file that is not a regular
    file — `is a FIFO, not a regular file` — a wrong owner, a group- or other-writable mode) is exit 4 with every problem printed. When one path is unread and another refused, the exit stays 3 and both are
-   printed, the unread lines first. `FileFacts.Path` is the path whose owner, mode and inode were read; the ONE `stat` call also reads the device and the inode (GNU `%d %i`, BSD `%d %i`), and `FileFacts.Identity`
-   carries them with the kind of file from the type bits.
+   printed, the unread lines first. `FileFacts.Path` is the path whose owner, mode and inode were read; the ONE `stat` call also reads the device, the inode and the change time with nanoseconds (GNU `%d %i %.9Z`, BSD `%d %i %Fc`), and
+   `FileFacts.Identity` carries them with the kind of file from the type bits.
 4. `experiment.json` is read from that judged path, never from the operator's spelling again (a file that cannot be read is exit 3; the read observes the stop token), then stat-ed AGAIN: a device, inode,
-   type, owner or mode that differs from what was judged is exit 4 (`experiment.json changed between its trust check and its read — refused (D17)`, naming the facts that differ; `RootTrust.Changes`). It then goes through `ExperimentFile.Read` with the home directory (`HOME`, else
+   type, owner, mode or change time (`ctime`) that differs from what was judged is exit 4 (`experiment.json changed between its trust check and its read — refused (D17)`, naming the facts that differ; `RootTrust.Changes`). It then goes through `ExperimentFile.Read` with the home directory (`HOME`, else
    `USERPROFILE`), the git checkout enclosing the root and this binary's repository. A refusal prints `experiment.json is refused:` and each problem indented (exit 4).
 5. `RootRequirements.For(verb, arms, scenarios, baseline)` with the arms the verb was given (`run-arm`, `run-all`, `checks`) and none otherwise: the first file missing names the verb that writes it (exit 4).
 6. Trust of `scenarios.json` when the root has one, as in 3.
@@ -414,12 +414,14 @@ Each step refuses what the one before did not, and a refusal ends the walk:
 asked (3), and `FileFactsAsync` is now its two-state view.
 
 **The residual race (D17).** A file read by path cannot be tied to the `stat` before it. Before the second look, 18 of 1500 gate passes read a link's target swapped in with an `mv -T` loop between the first
-`stat` and the read (measured by the E1.S9 review). The second `stat` refuses a swap that is still visible after the read. It does not close: a swap AFTER the second `stat`; a swap and a swap back inside the
-window; and anything above the root — whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can change what is read, because ancestors are not judged. The gate reads `experiment.json` only;
-`scenarios.json` is judged by the gate and read by the verb (E1.S10), which must look at it again after reading it, with the same `RootTrust.Changes`.
+`stat` and the read (measured by the E1.S9 review). The second `stat` refuses a swap that is still visible after the read; its change time also refuses a swap and a swap back
+(`ln -f experiment.json .keep; mv -T link experiment.json; mv -T .keep experiment.json`), which leaves the same inode under the name and passed 101 of 1500 passes with device and inode alone. It does not close:
+inode numbers can be reused on some file systems (the ctime narrows that but does not close it); a swap AFTER the second `stat`; and anything above the root — whoever can write the root (only the operator, by D17)
+or ANY ANCESTOR of it can swap the root or an ancestor, because ancestors are not judged. The gate reads `experiment.json` only; `scenarios.json` is judged by the gate and read by the verb (E1.S10), which must
+look at it again after reading it, with the same `RootTrust.Changes`.
 
 What the tests do NOT prove: the race itself (the swap test stands inside the window through `GateSeams.AfterRead`, deterministically; no test races a real writer against the gate); the trust steps on Windows
-(declared not performed, never run); that `FactsRead.Unread` is produced by a real `stat` that fails (the seam test feeds it, and the unreadable `experiment.json` stands in for the real host); BSD and macOS `stat`
+(declared not performed, never run); the ctime on a file system that keeps none or keeps seconds only (the comparison then only narrows less); that `FactsRead.Unread` is produced by a real `stat` that fails (the seam test feeds it, and the unreadable `experiment.json` stands in for the real host); BSD and macOS `stat`
 (the parser is tested over raw BSD lines, never run on a BSD); that the process-level `Main` maps Ctrl+C to exit 5 (the seam under it is tested with a token cancelled by hand, `ShutdownSignal` has its own
 tests); that a verb reads `scenarios.json` from the path the gate judged (the gate judges `RootPaths.Of(scenarios)` and passes the root on; the verb that reads the file, E1.S10, reads that same path and is the
 next reader of it).

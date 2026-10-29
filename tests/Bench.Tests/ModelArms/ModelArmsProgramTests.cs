@@ -343,6 +343,34 @@ public sealed partial class ModelArmsProgramTests
     }
 
     [Fact]
+    public async Task An_experiment_file_swapped_and_swapped_back_inside_the_window_is_refused_by_its_change_time()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("change times are read with GNU stat here");
+            return;
+        }
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        var seams = GateSeams.Real with
+        {
+            AfterRead = async _ =>
+            {
+                var keep = Path.Combine(root.Root, ".keep");
+                await ExperimentRoot.HardLinkAsync(path, keep);
+                File.Move(root.Write("decoy.json", "{}"), path, overwrite: true);
+                File.Move(keep, path, overwrite: true);
+            },
+        };
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(4, "the same inode is back under the name, so only its change time shows the swap");
+        passed.Error.Should().Contain("changed between its trust check and its read").And.Contain("ctime").And.NotContain("inode");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task An_experiment_file_that_becomes_a_link_after_the_read_is_refused_as_a_link()
     {
         if (!OperatingSystem.IsLinux())

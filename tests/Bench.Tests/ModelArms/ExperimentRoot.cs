@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FluentAssertions;
+using Xunit;
 using Bench.Cli;
 using ModelArms.Core.Experiment;
 using ModelArmsApp = ModelArms;
@@ -94,6 +96,17 @@ internal sealed class ExperimentRoot : IDisposable
             },
             seams ?? ModelArmsApp.GateSeams.Real);
         return new GatePass(code, output.ToString(), error.ToString(), calls);
+    }
+
+    /// <summary>A second name for <paramref name="existing"/> (<c>ln</c> in a child process: .NET has no hard-link call).</summary>
+    public static async Task HardLinkAsync(string existing, string link)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("ln") { UseShellExecute = false };
+        start.ArgumentList.Add(existing);
+        start.ArgumentList.Add(link);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        process.ExitCode.Should().Be(0, "ln makes the second name the test needs");
     }
 
     public void Dispose() => _temp.Dispose();

@@ -3,12 +3,14 @@ namespace ModelArms.Core.Experiment;
 /// <summary>What kind of file the type bits of a mode name. <see cref="Unknown"/> is "not captured", a different fact from any kind.</summary>
 public enum FileKind { Unknown, Regular, Directory, Link, Fifo, Socket, CharacterDevice, BlockDevice }
 
-/// <summary>Which inode a path reached when it was read: the device and inode numbers and the kind of file. Two reads of one path that disagree
-/// reached two different files.</summary>
-public sealed record FileIdentity(ulong Device, ulong Inode, FileKind Kind)
+/// <summary>Which inode a path reached when it was read: the device and inode numbers, the kind of file and the time of its last status change
+/// (<paramref name="Ctime"/>, seconds since the epoch with nine decimals). Two reads of one path that disagree reached two different files, or one
+/// file that was changed in between; a link made and removed again inside the window moves the ctime of the inode it touched even when the inode
+/// number is the same.</summary>
+public sealed record FileIdentity(ulong Device, ulong Inode, FileKind Kind, decimal Ctime)
 {
     /// <summary>No identity was captured (a fact built by hand, or a platform that reads none).</summary>
-    public static FileIdentity Unknown { get; } = new(0, 0, FileKind.Unknown);
+    public static FileIdentity Unknown { get; } = new(0, 0, FileKind.Unknown, 0m);
 }
 
 /// <summary>What the console learned about one file or folder: where it is, which user owns it, its mode and which inode that was.</summary>
@@ -50,7 +52,7 @@ public static class RootTrust
         return problems.Count == 0 ? new TrustAnswer.Trusted() : new TrustAnswer.Refused(problems);
     }
 
-    /// <summary>What differs between two reads of one path: the names of the facts (device, inode, type, owner, mode) that are not the same, empty when
+    /// <summary>What differs between two reads of one path: the names of the facts (device, inode, type, owner, mode, ctime) that are not the same, empty when
     /// nothing is. A path that reaches another file between its trust check and its read is the swap D17 exists to refuse.</summary>
     public static IReadOnlyList<string> Changes(FileFacts before, FileFacts after) =>
     [
@@ -61,6 +63,7 @@ public static class RootTrust
             ("type", before.Identity.Kind != after.Identity.Kind),
             ("owner", before.OwnerUid != after.OwnerUid),
             ("mode", before.Mode != after.Mode),
+            ("ctime", before.Identity.Ctime != after.Identity.Ctime),
         }.Where(change => change.Differs).Select(change => change.Fact),
     ];
 
