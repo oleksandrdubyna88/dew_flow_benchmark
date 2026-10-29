@@ -175,6 +175,7 @@ public static class ExperimentFile
         entry switch
         {
             "" => entry,
+            _ when ExecutableRule.HoldsNul(entry) => PathFields.Nul(json, where),
             "<root>" => location.Root,
             _ when entry.StartsWith("<root>/", StringComparison.Ordinal) => Path.Combine(location.Root, entry["<root>/".Length..]),
             _ when entry.StartsWith("~/", StringComparison.Ordinal) => Path.Combine(location.Home, entry["~/".Length..]),

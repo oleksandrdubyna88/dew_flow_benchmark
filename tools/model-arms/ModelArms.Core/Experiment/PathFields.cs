@@ -11,6 +11,11 @@ internal static partial class PathFields
     public static string Absolute(StrictJson json, JsonObject obj, string path, string name)
     {
         var text = json.Text(obj, path, name);
+        if (ExecutableRule.HoldsNul(text))
+        {
+            return Nul(json, StrictJson.Join(path, name));
+        }
+
         if (text.Length > 0 && !Path.IsPathFullyQualified(text))
         {
             json.Add($"{StrictJson.Join(path, name)} is '{text}' — it must be an absolute path");
@@ -30,8 +35,20 @@ internal static partial class PathFields
         return [.. json.Texts(obj, path, name).Select((text, index) => CheckRelative(json, text, $"{where}[{index}]", inside))];
     }
 
+    /// <summary>A NUL character makes <c>Path.GetFullPath</c> throw and no path holds one, so it is refused at the boundary and never reaches a comparison. Records the refusal for the field named <paramref name="where"/> and answers the empty string, which every consumer treats as "not read".</summary>
+    public static string Nul(StrictJson json, string where)
+    {
+        json.Add($"{where} holds a NUL character — a path never does; refused (D17)");
+        return string.Empty;
+    }
+
     private static string CheckRelative(StrictJson json, string text, string where, string inside)
     {
+        if (ExecutableRule.HoldsNul(text))
+        {
+            return Nul(json, where);
+        }
+
         if (text.Length > 0 && !IsInside(text))
         {
             json.Add($"{where} is '{text}' — it must be a relative path inside {inside}: not rooted, no '..' segment");

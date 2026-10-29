@@ -111,6 +111,23 @@ public sealed class BaselineFileTests
     }
 
     [Fact]
+    public void The_same_failure_named_twice_counts_once_against_the_total()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 1, ["a", "a", "a"], 2), Ran(1), string.Empty);
+
+        reason.Failed().Should().BeFalse("one distinct failing test of two is not more failures than tests");
+        BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 1, ["a", "b", "c"], 2), Ran(1), string.Empty).Reason().Should().Contain("3 failing tests of 2");
+    }
+
+    [Fact]
+    public void A_negative_total_is_named_once_without_a_second_more_failures_than_tests_sentence()
+    {
+        var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 1, ["a"], -1), Ran(1), string.Empty).Reason();
+
+        reason.Should().Contain("negative").And.NotContain("more failures than tests");
+    }
+
+    [Fact]
     public void Every_composition_problem_comes_back_at_once_and_a_green_run_is_accepted()
     {
         var reason = BaselineFile.Compose(BaseSha(), At, "h", new SuiteRun(true, 2, [], 1200), new SuiteRun(true, 0, [], 0), string.Empty).Reason();

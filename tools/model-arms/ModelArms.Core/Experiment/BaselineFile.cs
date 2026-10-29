@@ -132,8 +132,8 @@ public static class BaselineFile
         run.Total == 0 ? $"the {which} suite counted 0 tests — a run that ran nothing proves nothing about the target" : string.Empty;
 
     private static string MoreFailuresThanTests(string which, SuiteRun run) =>
-        run.Failed.Count > run.Total
-            ? $"the {which} suite named {run.Failed.Count.ToString(CultureInfo.InvariantCulture)} failing tests of {run.Total.ToString(CultureInfo.InvariantCulture)} — more failures than tests"
+        run.Total >= 0 && run.Failed.Distinct(StringComparer.Ordinal).Count() > run.Total
+            ? $"the {which} suite named {run.Failed.Distinct(StringComparer.Ordinal).Count().ToString(CultureInfo.InvariantCulture)} failing tests of {run.Total.ToString(CultureInfo.InvariantCulture)} — more failures than tests"
             : string.Empty;
 
     private static string Unnamed(string host) =>

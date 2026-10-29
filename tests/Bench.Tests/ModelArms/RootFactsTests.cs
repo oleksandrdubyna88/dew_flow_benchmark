@@ -175,6 +175,8 @@ public sealed class RootFactsTests
             (temp.Combine("experiment.json"), other),
             (temp.Combine("rootlink"), temp.Combine("root")),
             (temp.Combine("rootlink") + System.IO.Path.DirectorySeparatorChar, temp.Combine("root")),
+            (temp.Combine("rootlink") + "//", temp.Combine("root")),
+            (temp.Combine("rootlink") + "/.", temp.Combine("root")),
             (temp.Combine("dangling.json"), temp.Combine("nowhere")),
         })
         {

@@ -89,9 +89,9 @@ public static class RootFacts
         }
     }
 
-    /// <summary>Where a trust path points when it is itself a symbolic link (the trailing separator trimmed: <c>readlink("link/")</c> follows the link and
+    /// <summary>Where a trust path points when it is itself a symbolic link (made absolute and the trailing separators trimmed — <c>GetFullPath</c> collapses <c>link//</c> and <c>link/.</c>: <c>readlink("link/")</c> follows the link and
     /// reports none), or null for a path that is not one. An ancestor may be a link; the last segment may not.</summary>
-    private static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(path)).LinkTarget;
+    private static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))).LinkTarget;
 
     /// <summary>What a short-lived tool printed on stdout, or why it could not be asked.</summary>
     private static async Task<Outcome<string>> Said(string tool, IReadOnlyList<string> arguments, CancellationToken ct)

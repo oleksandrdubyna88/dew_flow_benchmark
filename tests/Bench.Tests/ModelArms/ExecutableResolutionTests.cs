@@ -95,11 +95,25 @@ public sealed class ExecutableResolutionTests
     [InlineData(@"\\.\C:\t\x.exe")]
     [InlineData("//?/C:/t/x.exe")]
     [InlineData("//./C:/t/x.exe")]
+    [InlineData(@"\??\C:\t\x.exe")]
+    [InlineData("/??/C:/t/x.exe")]
     public void A_verbatim_or_device_prefix_is_refused_as_a_spelling_on_every_platform(string spelled)
     {
         var refusal = ExecutableRule.Refusal(spelled, [@"C:\t"]);
 
         refusal.Should().Contain("verbatim or device prefix").And.Contain("D17");
+    }
+
+    [Fact]
+    public void A_nul_character_is_refused_naming_d17_in_a_spelled_executable_and_in_a_root_never_thrown()
+    {
+        PosixPaths();
+
+        Resolve("/usr/bin/git\0/x", ["/a"], _ => true).Reason().Should().Contain("NUL").And.Contain("D17");
+        Resolve("git\0", ["/a"], _ => true).Reason().Should().Contain("NUL").And.Contain("D17");
+        Resolve("git", ["/a"], _ => true, forbidden: ["/tmp\0x"]).Reason().Should().Contain("NUL").And.Contain("D17");
+        Resolve("/usr/bin/git", ["/a"], _ => true, forbidden: ["/t", "/tmp\0x"]).Reason().Should().Contain("NUL");
+        ExecutableRule.Refusal("/usr/bin/dotnet\0x", ["/t"]).Should().Contain("NUL").And.Contain("D17");
     }
 
     [Fact]
@@ -351,7 +365,7 @@ public sealed class ExecutableResolutionTests
         temp.Folder("bin1");
         File.CreateSymbolicLink(temp.Combine("bin1", "claude"), "nowhere");
 
-        Real(temp, temp.Combine("bin1", "claude"), []).Reason().Should().Contain("cannot be followed").And.Contain("No such file").And.Contain("D17");
+        Real(temp, temp.Combine("bin1", "claude"), []).Reason().Should().Contain("cannot be resolved").And.Contain("No such file").And.Contain("D17");
     }
 
     /// <summary>A guard against dropping the WRITTEN side of the judgement: a link INSIDE the target that points out of it must still be refused by its
@@ -389,9 +403,7 @@ public sealed class ExecutableResolutionTests
         using var temp = new TempFolder();
         var longFolder = temp.Folder("target-with-a-long-name");
         File.Copy(System.IO.Path.Combine(Environment.SystemDirectory, "cmd.exe"), System.IO.Path.Combine(longFolder, "x.exe"));
-        var buffer = new char[260];
-        var length = ShortNames.GetShortPathNameW(longFolder, buffer, buffer.Length);
-        var shortFolder = new string(buffer, 0, length);
+        var shortFolder = ShortNames.Of(longFolder);
         if (string.Equals(shortFolder, longFolder, StringComparison.OrdinalIgnoreCase))
         {
             Assert.Skip("8.3 names are disabled on this volume");
@@ -401,12 +413,30 @@ public sealed class ExecutableResolutionTests
         var roots = ExecutableRule.ForbiddenRoots(longFolder, temp.Combine("root"));
         var refused = ExecutableResolution.Resolve(System.IO.Path.Combine(shortFolder, "x.exe"), [], roots, RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: true);
 
-        refused.Reason().Should().Contain("D17").And.Contain(longFolder);
+        // %TEMP% may itself be spelled short: the real path the kernel answers for the long folder is what the sentence names.
+        refused.Reason().Should().Contain("D17").And.Contain(RootFacts.RealPathOf(longFolder).Ok());
     }
 }
 
 internal static class ShortNames
 {
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetShortPathNameW")]
-    internal static extern int GetShortPathNameW(string path, char[] buffer, int length);
+    /// <summary>The 8.3 spelling of an existing path. A return of 0 is a failure (thrown: the test cannot mean what it says without one); a return larger than the
+    /// buffer is the length needed, so the buffer grows and the call is repeated.</summary>
+    internal static string Of(string path)
+    {
+        var buffer = new char[260];
+        var length = GetShortPathNameW(path, buffer, buffer.Length);
+        if (length > buffer.Length)
+        {
+            buffer = new char[length];
+            length = GetShortPathNameW(path, buffer, buffer.Length);
+        }
+
+        return length == 0
+            ? throw new InvalidOperationException($"GetShortPathNameW failed for '{path}': {System.Runtime.InteropServices.Marshal.GetLastPInvokeErrorMessage()}")
+            : new string(buffer, 0, length);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetShortPathNameW", SetLastError = true)]
+    private static extern int GetShortPathNameW(string path, char[] buffer, int length);
 }

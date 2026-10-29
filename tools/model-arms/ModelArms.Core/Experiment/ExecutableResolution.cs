@@ -28,6 +28,11 @@ public static class ExecutableResolution
         Func<string, Outcome<string>> realPath,
         bool windows)
     {
+        if (forbiddenRoots.FirstOrDefault(ExecutableRule.HoldsNul) is { } nulRoot)
+        {
+            return Outcome<string>.Failure($"the forbidden root '{nulRoot.Replace("\0", "\\0", StringComparison.Ordinal)}' holds a NUL character — a path never does; refused (D17)");
+        }
+
         var roots = AsWrittenAndReal(forbiddenRoots, realPath);
         var spelled = ExecutableRule.Refusal(executable, roots);
         if (spelled.Length > 0)
@@ -76,7 +81,7 @@ public static class ExecutableResolution
     }
 
     private static string Unresolved(string path, string reason) =>
-        $"the symbolic links of '{path}' cannot be followed: {reason} — refused rather than assumed safe (D17)";
+        $"the real path of '{path}' cannot be resolved: {reason} — refused rather than assumed safe (D17)";
 
     /// <summary>The roots as written followed by where each really is.</summary>
     private static IReadOnlyList<string> AsWrittenAndReal(IReadOnlyList<string> roots, Func<string, Outcome<string>> realPath) =>
