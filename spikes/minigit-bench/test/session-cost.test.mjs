@@ -8,7 +8,7 @@ import { loadPrices } from '../lib/prices.mjs';
 import { renderUsd } from '../lib/render.mjs';
 import { sessionCost } from '../lib/session-cost.mjs';
 import { spikeDir } from './helpers.mjs';
-import { TWO_CHILDREN, asTranscripts, readEvents } from './synth.mjs';
+import { TWO_CHILDREN, apiAttrs, asTranscripts, otlpPayload, readEvents } from './synth.mjs';
 
 const readText = (...p) => readFileSync(path.join(spikeDir, ...p), 'utf8');
 const table = loadPrices(JSON.parse(readText('inputs', 'prices-2026-10-29.json'))).value;
@@ -64,10 +64,52 @@ test('Incomplete_otel_records_make_the_killed_session_figure_a_lower_bound_and_s
 });
 
 test('An_unpriced_model_in_otel_makes_the_killed_session_unknown_with_the_other_lines_priced', () => {
-  const O = syntheticO();
-  const renamed = { ...O, perModel: { 'claude-nope-1': O.perModel['claude-opus-5-5'], 'claude-sonnet-5-5': O.perModel['claude-sonnet-5-5'] } };
-  const cost = sessionCost({ E: null, O: renamed, T: null, table });
+  const cost = killedFromSpecs([{ model: 'claude-nope-1' }, { model: 'claude-sonnet-5-5' }]);
   assert.equal(cost.known, false);
   assert.equal(cost.perModel['claude-sonnet-5-5'].known, true);
+  assert.equal(cost.perModel['claude-nope-1'].known, false);
   assert.ok(cost.flags.includes('no envelope'));
+});
+
+const killedFromSpecs = specs => {
+  const records = specs.map((attrs, i) => ({ name: 'api_request', tsMs: 1760000000000 + i, attrs: apiAttrs({ request_id: `r${i}`, ...attrs }) }));
+  const O = otelView(apiRequests(decodeOtlpLogs(JSON.stringify(otlpPayload(records))).value));
+  return sessionCost({ E: { known: false, why: 'killed' }, O, T: null, table });
+};
+
+test('A_killed_session_whose_records_lack_query_source_is_priced_the_same_as_with_it', () => {
+  const withSource = killedFromSpecs([{ cache_creation_tokens: 0 }, { model: 'claude-sonnet-5-5', cache_creation_tokens: 0 }]);
+  const without = killedFromSpecs([{ query_source: undefined, cache_creation_tokens: 0 }, { query_source: undefined, model: 'claude-sonnet-5-5', cache_creation_tokens: 0 }]);
+  assert.equal(without.known, true);
+  assert.ok(without.usd > 0, 'absent is not zero');
+  near(without.usd, withSource.usd, 1e-12);
+});
+
+test('A_killed_session_with_no_complete_record_is_unknown_never_zero_dollars', () => {
+  const allMissing = killedFromSpecs([{ cache_read_tokens: undefined }, { cache_read_tokens: undefined, request_id: 'r9' }]);
+  assert.deepEqual(allMissing, { known: false, why: 'no complete api_request record', flags: ['no envelope', '2 otel records lack a token field and are left out: a lower bound'], cliTotalUsd: { known: false, why: 'no envelope' } });
+  assert.equal(renderUsd(allMissing), 'unknown');
+});
+
+test('A_model_whose_every_record_is_incomplete_makes_the_killed_session_unknown_not_cheaper', () => {
+  const cost = killedFromSpecs([{}, { model: 'claude-sonnet-5-5', input_tokens: undefined }]);
+  assert.equal(cost.known, false);
+  assert.match(cost.why, /claude-sonnet-5-5/);
+});
+
+test('A_lower_bound_is_never_exact', () => {
+  const cost = killedFromSpecs([{ cache_creation_tokens: 0 }, { cache_creation_tokens: 0, output_tokens: undefined, request_id: 'r_incomplete' }]);
+  assert.equal(cost.known, true);
+  assert.equal(cost.lowerBound, true);
+  assert.equal(cost.exact, false);
+  assert.equal(cost.perModel['claude-opus-5-5'].exact, true, 'the model line itself is exact; the session is a lower bound');
+});
+
+test('A_killed_session_is_priced_exactly_from_the_otel_cache_write_split_when_it_is_present', () => {
+  const cost = killedFromSpecs([{ cache_creation_tokens: 1000, cache_creation_5m_tokens: 400, cache_creation_1h_tokens: 600 }]);
+  assert.equal(cost.exact, true);
+  near(cost.usd, (10 * 4 + 20 * 20 + 300 * 0.2 + 400 * 5 + 600 * 8) / 1e6, 1e-12);
+  assert.match(cost.perModel['claude-opus-5-5'].basis, /otel/);
+  const partial = killedFromSpecs([{ cache_creation_tokens: 1000, cache_creation_5m_tokens: 400, cache_creation_1h_tokens: 600 }, { cache_creation_tokens: 50 }]);
+  assert.equal(partial.exact, false, 'one request without a split makes the model an interval again');
 });

@@ -69,15 +69,30 @@ export function collectAttrSecrets(sinkText) {
   return { ids: [...ids], emails: [...emails] };
 }
 
+const DATA_POINT_KINDS = Object.freeze(['sum', 'gauge', 'histogram', 'exponentialHistogram', 'summary']);
+
+const logAttributes = rl => [
+  ...(rl.resource?.attributes ?? []),
+  ...(rl.scopeLogs ?? []).flatMap(sl => [...(sl.scope?.attributes ?? []), ...(sl.logRecords ?? []).flatMap(r => r.attributes ?? [])]),
+];
+
+const pointAttributes = p => [...(p.attributes ?? []), ...(p.exemplars ?? []).flatMap(x => x.filteredAttributes ?? [])];
+
+const metricAttributes = rm => [
+  ...(rm.resource?.attributes ?? []),
+  ...(rm.scopeMetrics ?? []).flatMap(sm => [
+    ...(sm.scope?.attributes ?? []),
+    ...(sm.metrics ?? []).flatMap(m => DATA_POINT_KINDS.flatMap(k => (m[k]?.dataPoints ?? []).flatMap(pointAttributes))),
+  ]),
+];
+
+/** Every attribute of an OTLP payload line: logs (resource, scope, record) and metrics (resource, scope, every data point of every kind). */
 function attributesOf(line) {
   try {
     const doc = JSON.parse(JSON.parse(line).body);
-    return (doc.resourceLogs ?? []).flatMap(rl => [
-      ...(rl.resource?.attributes ?? []),
-      ...(rl.scopeLogs ?? []).flatMap(sl => (sl.logRecords ?? []).flatMap(r => r.attributes ?? [])),
-    ]);
+    return [...(doc.resourceLogs ?? []).flatMap(logAttributes), ...(doc.resourceMetrics ?? []).flatMap(metricAttributes)];
   } catch {
-    return [];
+    return []; // not an OTLP JSON line: nothing to collect (the fail-closed scan still reads it)
   }
 }
 
@@ -93,13 +108,17 @@ function literalPatterns({ out, home, user, host, email, token }) {
   const lit = (name, value, { path = false, bounded = false } = {}) => (typeof value === 'string' && value.length >= 3
     ? [{ name, variants: variants({ from: value, to: value, path, bounded }).map(v => ({ text: v.from, bounded })) }] : []);
   return [
-    ...lit('home directory', home, { path: true }), ...lit('raw out path', out, { path: true }), ...lit('user name', user, { bounded: true }),
-    ...lit('host name', host, { bounded: true }), ...lit('e-mail address', email), ...lit('the token value', token),
+    ...lit('home directory', home, { path: true }), ...lit('raw out path', out, { path: true }), ...lit('user name', user === PLACEHOLDER.user ? null : user, { bounded: true }),
+    ...lit('host name', host === PLACEHOLDER.host ? null : host, { bounded: true }), ...lit('e-mail address', email), ...lit('the token value', token),
   ];
 }
 
 const present = (haystack, { text, bounded }) => (bounded
   ? new RegExp(`(?<![A-Za-z0-9])${escapeRe(text)}(?![A-Za-z0-9])`).test(haystack) : haystack.includes(text));
+
+const EMAIL_SHAPE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const ALLOWED_EMAILS = Object.freeze(['noreply@anthropic.com', PLACEHOLDER.email]);
+const hasForeignEmail = text => [...text.matchAll(EMAIL_SHAPE)].some(m => !ALLOWED_EMAILS.includes(m[0].toLowerCase()));
 
 /** `[{ file, pattern }]`: every file (path or content) that holds this machine's identity, the out path, the token, or a credential shape. */
 export function leakScan(files, ctx) {
@@ -108,7 +127,8 @@ export function leakScan(files, ctx) {
     const haystacks = [f.relPath, f.text];
     const hits = lits.filter(p => p.variants.some(v => haystacks.some(h => present(h, v)))).map(p => p.name);
     const shapes = CREDENTIALS.filter(([, re]) => haystacks.some(h => re.test(h))).map(([name]) => name);
-    return [...new Set([...hits, ...shapes])].map(pattern => ({ file: f.relPath, pattern }));
+    const mail = haystacks.some(hasForeignEmail) ? ['e-mail address shape'] : [];
+    return [...new Set([...hits, ...shapes, ...mail])].map(pattern => ({ file: f.relPath, pattern }));
   });
 }
 

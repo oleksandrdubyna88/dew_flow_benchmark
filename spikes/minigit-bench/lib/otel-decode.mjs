@@ -1,13 +1,15 @@
 // O: Claude Code's OTel `api_request` records, decoded from OTLP/HTTP JSON. Pure.
 // Every attribute NAME the plan reads (E1.S3 row A-O1) is listed once, here. An attribute a record lacks is `null` with its name in
-// `missing` - absent is not zero. The three constants below are the capture's decisions (A-O1, A-O2, A-O5): each is a one-line change.
+// `missing` - absent is not zero. The constants below are the 2026-10-29 capture's decisions (A-O1, A-O2, A-O5), each a one-line change.
 import { fail, ok } from './result.mjs';
 
-/** A-O2: does an `api_request` record's timestamp mark the END of the request? 'end' | 'start' | 'unknown'. UNVERIFIED until the
- * step 0 capture (test/fixtures/real/claude-2.1.310-capture) decides; `verdicts.mjs` computes it and a test pins this constant to it. */
+/** A-O2: does an `api_request` record's timestamp mark the END of the request? 'end' | 'start' | 'unknown'. Decided by the 2026-10-29
+ * capture (test/fixtures/real/claude-2.1.310-capture, CAPTURE.md row A-O2: 7 matched, all 'end'); a test pins this constant to
+ * what `verdicts.mjs` computes from the capture. */
 export const OTEL_STAMP_MARKS = 'end';
 
-/** A-O1: where a record's name lives, tried in order: the log body or the `event.name` attribute. A `claude_code.` prefix is dropped. */
+/** A-O1: where a record's name lives, tried in order: the log body (`claude_code.api_request`, as the 2.1.310 capture sends it) or the
+ * `event.name` attribute (`api_request`, also present). A `claude_code.` prefix is dropped. */
 export const RECORD_NAME_SOURCES = Object.freeze(['body', 'event.name']);
 const NAME_PREFIX = 'claude_code.';
 
@@ -92,26 +94,33 @@ function decodeRecord(rec, scope) {
   return ok({ name: nameOf(rec, attrs.value), tsMs: nanoToMs(rec.timeUnixNano), attrs: attrs.value, scope });
 }
 
-/** OTLP logs JSON text -> `{ ok, value: [{ name, tsMs, attrs, scope }] }`, or `{ ok: false, reason }` (one unreadable attribute fails the payload). */
+/**
+ * OTLP logs JSON text -> `{ ok: true, value: [{ name, tsMs, attrs, scope }], rejected: [{ index, reason }] }`, or `{ ok: false, reason }` when
+ * the text is not an OTLP logs payload at all. A record with an unreadable attribute (an int64 past 2^53 - 1) is REJECTED BY ITSELF and
+ * named in `rejected`; its neighbours survive.
+ */
 export function decodeOtlpLogs(text) {
   let doc;
   try { doc = JSON.parse(text); } catch (e) { return fail(`not JSON: ${e.message}`); }
   if (!doc || !Array.isArray(doc.resourceLogs)) return fail('not an OTLP logs payload: no resourceLogs array');
   const out = [];
+  const rejected = [];
+  let index = 0;
   for (const rl of doc.resourceLogs) {
     for (const sl of rl.scopeLogs ?? []) {
       for (const rec of sl.logRecords ?? []) {
         const d = decodeRecord(rec, sl.scope?.name ?? null);
-        if (!d.ok) return d;
-        out.push(d.value);
+        if (d.ok) out.push(d.value); else rejected.push({ index, reason: d.reason });
+        index += 1;
       }
     }
   }
-  return ok(out);
+  return { ...ok(out), rejected };
 }
 
-/** Does the exporter send numbers as strings ("1749236")? Unknown until the capture; true = accept a plain decimal string for a numeric
- * attribute (A-O1's `types` column in CAPTURE.md says which spelling arrived). False = only OTLP int/double values are numbers. */
+/** Does the exporter send numbers as strings ("1749236")? Decided by the capture (CAPTURE.md A-O1, 'attributes seen'): `api_request` counts
+ * arrive as intValue and cost_usd as doubleValue, but `duration_ms` is an intValue on some events and a stringValue on others (the
+ * tool_result records A-H2 reads), so a plain decimal string is accepted for a numeric attribute. False would read only OTLP int/double values. */
 export const ACCEPT_NUMERIC_STRINGS = true;
 const DECIMAL = /^-?\d+(\.\d+)?$/;
 
@@ -153,14 +162,22 @@ export function toolResults(records) {
   });
 }
 
-const NEEDED = Object.freeze(['model', 'input', 'output', 'cacheRead', 'cacheCreation', 'role']);
-const SUMMED = Object.freeze(['input', 'output', 'cacheRead', 'cacheCreation']);
+const NEEDED = Object.freeze(['model', 'input', 'output', 'cacheRead', 'cacheCreation']);
+const SUMMED = Object.freeze(['input', 'output', 'cacheRead', 'cacheCreation', 'cacheCreation5m', 'cacheCreation1h', 'splitRequests']);
 
-const emptyBucket = () => ({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0, costUsd: 0, costKnownRequests: 0, requests: 0 });
+const emptyBucket = () => ({
+  input: 0, output: 0, cacheRead: 0, cacheCreation: 0, cacheCreation5m: 0, cacheCreation1h: 0, splitRequests: 0, costUsd: 0, costKnownRequests: 0, requests: 0,
+});
+
+/** Does the request carry a 5m/1h split that adds up to its cache write? (Then it can be priced exactly from O alone.) */
+const hasSplit = r => r.cacheCreation5m !== null && r.cacheCreation1h !== null && r.cacheCreation5m + r.cacheCreation1h === r.cacheCreation;
 
 function addTo(bucket, r) {
+  const split = hasSplit(r);
   return {
-    ...Object.fromEntries(SUMMED.map(k => [k, bucket[k] + r[k]])),
+    input: bucket.input + r.input, output: bucket.output + r.output, cacheRead: bucket.cacheRead + r.cacheRead, cacheCreation: bucket.cacheCreation + r.cacheCreation,
+    cacheCreation5m: bucket.cacheCreation5m + (split ? r.cacheCreation5m : 0), cacheCreation1h: bucket.cacheCreation1h + (split ? r.cacheCreation1h : 0),
+    splitRequests: bucket.splitRequests + (split ? 1 : 0),
     costUsd: bucket.costUsd + (r.costUsd ?? 0), costKnownRequests: bucket.costKnownRequests + (r.costUsd === null ? 0 : 1), requests: bucket.requests + 1,
   };
 }
@@ -170,15 +187,42 @@ const mergeBuckets = (a, b) => ({
   costKnownRequests: a.costKnownRequests + b.costKnownRequests, requests: a.requests + b.requests,
 });
 
-/** Sums per model and ROLE (main / subagent / auxiliary) over records with no missing token field; the rest are counted in `incomplete` and left out. */
+const sameRequest = (a, b) => ['model', 'input', 'output', 'cacheRead', 'cacheCreation', 'costUsd'].every(k => a[k] === b[k]);
+
+/** One record per request id (the first), the rest counted: an exporter that re-sends a batch must not double the sums. */
+function dedupe(requests) {
+  const first = new Map();
+  const kept = [];
+  let duplicates = 0;
+  let conflicting = 0;
+  for (const r of requests) {
+    if (r.requestId === null || !first.has(r.requestId)) {
+      if (r.requestId !== null) first.set(r.requestId, r);
+      kept.push(r);
+    } else {
+      duplicates += 1;
+      if (!sameRequest(first.get(r.requestId), r)) conflicting += 1;
+    }
+  }
+  return { kept, duplicates, conflicting };
+}
+
+/**
+ * Sums per model and ROLE (main / subagent / auxiliary / unknown) over records with every token field; the rest are counted in `incomplete`
+ * and left out. A record without a role is summed under 'unknown', never dropped. Duplicate request ids are counted in `duplicates`.
+ */
 export function otelView(requests, { toolResults: tr = [], misconfigured = 0 } = {}) {
-  const complete = requests.filter(r => NEEDED.every(k => r[k] !== null));
+  const { kept, duplicates, conflicting } = dedupe(requests);
+  const complete = kept.filter(r => NEEDED.every(k => r[k] !== null));
   const perModel = {};
   for (const r of complete) {
     const bySource = perModel[r.model]?.bySource ?? {};
-    perModel[r.model] = { bySource: { ...bySource, [r.role]: addTo(bySource[r.role] ?? emptyBucket(), r) } };
+    const role = r.role ?? 'unknown';
+    perModel[r.model] = { bySource: { ...bySource, [role]: addTo(bySource[role] ?? emptyBucket(), r) } };
   }
-  return { present: requests.length > 0, requests, toolResults: tr, perModel, incomplete: requests.length - complete.length, misconfigured };
+  return {
+    present: kept.length > 0, requests: kept, toolResults: tr, perModel, incomplete: kept.length - complete.length, duplicates, conflictingDuplicates: conflicting, misconfigured,
+  };
 }
 
 /** One model's buckets summed over the given sources (default: all of them). */

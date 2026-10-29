@@ -152,7 +152,7 @@ test('T3_matches_T_against_the_O_records_it_names_and_lists_the_rest_by_source',
 
 test('T3_is_investigate_until_armed_then_stop', () => {
   const O = oFromT(T, { inflate: 1.05 });
-  const at = t3 => run({ E, T, O, policy: policyWith({ t3 }) }).t3;
+  const at = t3 => run({ E, T, O, policy: policyWith({ t3, ...(t3 === 'fallback-t2' ? { t2: 'stop' } : {}) }) }).t3;
   assert.equal(at('investigate').verdict, 'investigate');
   assert.equal(at('investigate').status, 'breach');
   assert.equal(at('stop').verdict, 'stop');
@@ -256,4 +256,56 @@ test('T3_prices_the_cli_billed_view_of_the_sessions_own_cli_version', () => {
   assert.equal(at289.status, 'pass');
   assert.ok(Math.abs(at289.computed - at310.computed - (5951 * 0.1) / 1e6) < 1e-9, 'the sonnet cache read is $0.10 cheaper per million on 2.1.310');
   assert.equal(run({ E, T, O, cliVersion: undefined }).t3.computed, at310.computed, 'no version means published, never an older version\'s rate');
+});
+
+const mainOnly = transcriptView(asTranscripts(real).filter(f => !f.relPath.includes('/subagents/')));
+
+test('T3_and_T4_are_unchecked_when_T_lost_the_subagent_transcripts_even_when_T3_is_armed', () => {
+  const O = oFromT(T, { extra: [AUX] });
+  assert.equal(mainOnly.coverage.subagent, false);
+  for (const t3 of ['investigate', 'stop']) {
+    const c = run({ E, T: mainOnly, O, policy: policyWith({ t3 }) });
+    for (const id of ['t3', 't4']) {
+      assert.equal(c[id].status, 'unchecked', `${id} under t3=${t3}`);
+      assert.match(c[id].why, /T incomplete: \d+ main\/subagent api_request records have no transcript message/);
+    }
+    assert.ok(c.join.unmatchedO.subagent > 0 && c.join.unmatchedO.auxiliary === 1);
+  }
+});
+
+test('An_api_request_with_no_role_that_T_does_not_name_also_makes_T_incomplete', () => {
+  const c = run({ E, T, O: oFromT(T, { extra: [{ ...AUX, query_source: undefined, request_id: 'req_roleless' }] }) });
+  assert.equal(c.join.unmatchedO.unknown, 1);
+  assert.match(c.t3.why, /T incomplete: 1 main\/subagent api_request record/);
+});
+
+test('Two_transcript_messages_with_one_request_id_make_T3_and_T4_unchecked', () => {
+  const dup = { ...T, messages: T.messages.map((m, i) => (i === 1 ? { ...m, requestId: T.messages[0].requestId } : m)) };
+  const c = run({ E, T: dup, O: otelView(oFromT(dup).requests) });
+  for (const id of ['t3', 't4']) assert.match(c[id].why, /1 request id\(s\) shared by more than one transcript message/, id);
+});
+
+test('Transcripts_with_disagreeing_duplicates_or_unreadable_lines_are_not_trusted_by_T3_or_T4', () => {
+  const O = oFromT(T);
+  const bad = { ...T, disagreements: [{ id: 'msg_x', field: 'cacheRead', values: [0, 1] }] };
+  assert.match(run({ E, T: bad, O }).t3.why, /disagree/);
+  const skipped = { ...T, skippedLines: 2 };
+  assert.match(run({ E, T: skipped, O }).t4.why, /2 unreadable transcript line/);
+  assert.equal(run({ E, T, O }).t4.status, 'pass', 'the same pair without the defects is checked');
+});
+
+test('Conflicting_duplicate_api_requests_make_T3_and_T4_unchecked', () => {
+  const O = oFromT(T);
+  const first = O.requests[0];
+  const conflicting = otelView([...O.requests, { ...first, output: first.output + 7 }]);
+  assert.equal(conflicting.conflictingDuplicates, 1);
+  assert.match(run({ E, T, O: conflicting }).t3.why, /conflicting duplicate/);
+});
+
+test('A_policy_that_leaves_no_stop_at_all_is_refused', () => {
+  const refused = loadPolicy({ ...policyFile, t3: 'fallback-t2', t2: 'otel-incomplete' });
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /fallback-t2.*t2.*stop/);
+  assert.equal(loadPolicy({ ...policyFile, t3: 'fallback-t2', t2: 'stop' }).ok, true);
+  assert.equal(loadPolicy({ ...policyFile, t3: 'investigate', t2: 'otel-incomplete' }).ok, true);
 });

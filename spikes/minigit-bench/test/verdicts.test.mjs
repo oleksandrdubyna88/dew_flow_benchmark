@@ -71,6 +71,15 @@ test('A_protobuf_transport_refutes_the_json_assumption_and_says_what_arrived', (
   assert.match(v.observed, /application\/x-protobuf/);
 });
 
+test('A_record_the_decoder_rejected_refutes_A_O1_and_is_counted', () => {
+  const c = derivedCapture();
+  const doc = JSON.parse(c.sink[0].body);
+  doc.resourceLogs[0].scopeLogs[0].logRecords[0].attributes.push({ key: 'input_tokens', value: { intValue: '9007199254740993' } });
+  const row = rowsOf({ ...c, sink: [{ ...c.sink[0], body: JSON.stringify(doc) }] }).find(r => r.id === 'A-O1');
+  assert.equal(row.verdict, 'refuted');
+  assert.match(row.observed, /rejected records 1/);
+});
+
 test('A_capture_without_transcripts_refutes_the_transcript_rows_and_the_join', () => {
   const v = verdictsOf(derivedCapture({ withTranscripts: false }));
   assert.equal(v['A-T1'], 'refuted');

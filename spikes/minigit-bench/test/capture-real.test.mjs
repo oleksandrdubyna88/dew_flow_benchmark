@@ -10,7 +10,9 @@ import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { computeVerdicts, decisionsOf, renderVerdicts, verdictBlockOf } from '../capture/verdicts.mjs';
 import { viewsOf } from '../capture/verdict-rules.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
+import { envelopeView, headlineUsd, transcriptView } from '../lib/claude-usage.mjs';
 import { crosscheck } from '../lib/crosscheck.mjs';
+import { sessionCost } from '../lib/session-cost.mjs';
 import { OTEL_STAMP_MARKS } from '../lib/otel-decode.mjs';
 import { startReceiver } from '../lib/otel-receiver.mjs';
 import { asTheCliBills, priceFor } from '../lib/prices.mjs';
@@ -126,4 +128,69 @@ test('For_2_1_310_the_cli_billed_view_equals_published_on_the_real_capture', t =
   const row = computeVerdicts(capture, { table, policy: loaded().policy }).find(r => r.id === 'A-P1');
   assert.equal(row.verdict, 'holds', row.observed);
   assert.ok(views.E.perModel['claude-sonnet-5-5'].cacheRead > 0, 'the sonnet line reads from cache, so its rate matters in this capture');
+});
+
+const CORNERSTONE_USD = 0.1809576;
+const near = (a, b, eps = 5e-7) => assert.ok(Math.abs(a - b) < eps, `${a} is not within ${eps} of ${b}`);
+
+test('The_cornerstone_headline_on_the_real_capture_is_exact_and_every_cross_check_passes', t => {
+  if (!captureGate(t)) return;
+  const { table, policy, views } = loaded();
+  const headline = headlineUsd(views.E, views.T, table);
+  assert.equal(headline.known, true);
+  assert.equal(headline.exact, true);
+  near(headline.usd, CORNERSTONE_USD);
+  const cost = sessionCost({ E: views.E, O: views.O, T: views.T, table });
+  assert.equal(cost.exact, true);
+  near(cost.usd, CORNERSTONE_USD);
+  near(cost.cliTotalUsd, CORNERSTONE_USD);
+  const c = crosscheck({ E: views.E, O: views.O, T: views.T, table, policy, cliVersion: views.cliVersion });
+  assert.deepEqual(['t1', 't2', 't3', 't4'].map(k => c[k].status), ['pass', 'pass', 'pass', 'pass']);
+});
+
+test('A_killed_session_on_the_real_otel_is_priced_exactly_from_its_own_cache_write_split', t => {
+  if (!captureGate(t)) return;
+  const { table, views } = loaded();
+  const cost = sessionCost({ E: { known: false, why: 'killed' }, O: views.O, T: null, table });
+  assert.equal(cost.known, true);
+  assert.equal(cost.exact, true, 'api_request carries cache_creation_5m/1h_tokens, so no interval is needed');
+  near(cost.usd, CORNERSTONE_USD);
+});
+
+test('A_real_capture_that_lost_its_subagent_transcripts_is_not_cross_checked_and_not_exact', t => {
+  if (!captureGate(t)) return;
+  const { capture, table, policy, views } = loaded();
+  const lost = transcriptView(capture.transcripts.filter(f => !f.relPath.includes('/subagents/')));
+  assert.equal(lost.coverage.subagent, false);
+  for (const t3 of ['investigate', 'stop']) {
+    const c = crosscheck({ E: views.E, O: views.O, T: lost, table, policy: { ...policy, t3 }, cliVersion: views.cliVersion });
+    for (const id of ['t3', 't4']) {
+      assert.equal(c[id].status, 'unchecked', `${id} with t3=${t3}`);
+      assert.match(c[id].why, /T incomplete: 4 main\/subagent api_request records have no transcript message/);
+    }
+  }
+  const headline = headlineUsd(views.E, lost, table);
+  assert.equal(headline.perModel['claude-fable-5-1'].exact, false, 'a model whose every transcript is lost is an interval');
+  assert.equal(headline.perModel['claude-sonnet-5-5'].exact, false);
+  assert.equal(headline.exact, false);
+  assert.ok(headline.low <= CORNERSTONE_USD && CORNERSTONE_USD <= headline.high, 'the interval still contains the true cost');
+});
+
+test('A_child_rewritten_onto_the_main_model_whose_file_is_lost_is_an_interval_that_holds_the_truth', t => {
+  if (!captureGate(t)) return;
+  const { capture, table } = loaded();
+  const swap = s => s.replaceAll('claude-fable-5-1', 'claude-opus-5-5');
+  const events = capture.events.map(e => JSON.parse(swap(JSON.stringify(e))));
+  const mu = capture.events.findLast(e => e.type === 'result').modelUsage;
+  const a = mu['claude-opus-5-5'];
+  const b = mu['claude-fable-5-1'];
+  const merged = Object.fromEntries(Object.keys(a).map(k => [k, typeof a[k] === 'number' && typeof b[k] === 'number' && !['contextWindow', 'maxOutputTokens'].includes(k) ? a[k] + b[k] : a[k]]));
+  events.findLast(e => e.type === 'result').modelUsage = { ...events.findLast(e => e.type === 'result').modelUsage, 'claude-opus-5-5': merged };
+  const E = envelopeView(events);
+  const all = capture.transcripts.map(f => ({ ...f, text: swap(f.text) }));
+  const whole = headlineUsd(E, transcriptView(all), table).perModel['claude-opus-5-5'];
+  const lost = headlineUsd(E, transcriptView(all.filter(f => !f.relPath.includes('agent-a92c'))), table).perModel['claude-opus-5-5'];
+  assert.equal(whole.exact, true);
+  assert.equal(lost.exact, false, 'the lost child file must not let its tokens inherit the main session\'s share');
+  assert.ok(lost.low <= whole.usd + 1e-9 && whole.usd <= lost.high + 1e-9);
 });

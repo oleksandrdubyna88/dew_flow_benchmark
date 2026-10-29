@@ -190,6 +190,8 @@ test('A_line_that_is_not_json_is_counted_not_dropped_silently', () => {
   const t = transcriptView([{ relPath: 's.jsonl', text: `not json\n${JSON.stringify(assistantOf('claude-opus-5-5', 1, 0))}\n` }]);
   assert.equal(t.skippedLines, 1);
   assert.equal(t.messages.length, 1);
+  // the count has an effect: the headline built from it says so, and T3/T4 refuse to vouch for it (see crosscheck.test.mjs)
+  assert.deepEqual(headlineUsd(opusE(1), t, table).flags, ['1 unreadable transcript line(s)']);
 });
 
 test('A_message_without_the_5m_1h_split_is_marked_unsplit_not_zero', () => {
@@ -202,4 +204,52 @@ test('A_message_without_the_5m_1h_split_is_marked_unsplit_not_zero', () => {
   assert.equal(m.cacheWrite5m, null);
   assert.equal(m.cacheWrite1h, null);
   assert.equal(share1h(t, 'claude-opus-5-5').known, false);
+});
+
+const opusE = cacheWrite => envelopeView([resultOf({ 'claude-opus-5-5': usageOf({ cacheCreationInputTokens: cacheWrite }) })]);
+const lineOf = (E, T) => headlineUsd(E, T, table).perModel['claude-opus-5-5'];
+const jsonl = (...msgs) => [{ relPath: 's.jsonl', text: msgs.map(m => JSON.stringify(m)).join('\n') }];
+
+test('A_cache_write_the_transcripts_do_not_account_for_is_an_interval_not_an_extrapolation', () => {
+  // The envelope wrote 1500 tokens; the transcripts that survived hold 1000 of them (all 1h). The 500 a lost child file held could be either.
+  const m = lineOf(opusE(1500), transcriptView(jsonl(assistantOf('claude-opus-5-5', 0, 1000))));
+  assert.equal(m.exact, false);
+  near(m.low, (1000 * 8 + 500 * 5) / 1e6, 1e-12);
+  near(m.high, (1000 * 8 + 500 * 8) / 1e6, 1e-12);
+  assert.ok(m.basis.includes('1000 of 1500'), m.basis);
+});
+
+test('A_mixed_split_and_unsplit_model_is_an_interval_over_what_the_split_does_not_cover', () => {
+  const unsplit = assistantOf('claude-opus-5-5', 10000, 0);
+  delete unsplit.message.usage.cache_creation;
+  unsplit.message.id = 'msg_unsplit';
+  const m = lineOf(opusE(10100), transcriptView(jsonl(assistantOf('claude-opus-5-5', 100, 0), unsplit)));
+  assert.equal(m.exact, false);
+  near(m.low, (100 * 5 + 10000 * 5) / 1e6, 1e-12);
+  near(m.high, (100 * 5 + 10000 * 8) / 1e6, 1e-12);
+});
+
+test('Transcripts_that_hold_more_cache_writes_than_the_envelope_do_not_narrow_anything', () => {
+  const m = lineOf(opusE(500), transcriptView(jsonl(assistantOf('claude-opus-5-5', 0, 900))));
+  assert.equal(m.exact, false);
+  near(m.low, (500 * 5) / 1e6, 1e-12);
+  near(m.high, (500 * 8) / 1e6, 1e-12);
+});
+
+test('Transcripts_that_account_for_every_cache_write_are_exact', () => {
+  const m = lineOf(opusE(1500), transcriptView(jsonl(assistantOf('claude-opus-5-5', 500, 0), { ...assistantOf('claude-opus-5-5', 0, 1000), message: { ...assistantOf('claude-opus-5-5', 0, 1000).message, id: 'msg_b' } })));
+  assert.equal(m.exact, true);
+  near(m.usd, (500 * 5 + 1000 * 8) / 1e6, 1e-12);
+});
+
+test('Disagreeing_duplicates_and_unreadable_lines_are_flagged_on_the_headline', () => {
+  const dup = assistantOf('claude-opus-5-5', 1000, 0);
+  const second = structuredClone(dup);
+  second.message.usage.cache_read_input_tokens = 5;
+  const clean = headlineUsd(opusE(1000), transcriptView(jsonl(dup)), table);
+  assert.deepEqual(clean.flags, []);
+  const t = transcriptView([{ relPath: 's.jsonl', text: `${JSON.stringify(dup)}\n${JSON.stringify(second)}\nnot json\n` }]);
+  const flagged = headlineUsd(opusE(1000), t, table);
+  assert.ok(flagged.flags.some(f => /1 transcript message id\(s\) whose duplicates disagree/.test(f)), JSON.stringify(flagged.flags));
+  assert.ok(flagged.flags.some(f => /1 unreadable transcript line/.test(f)));
 });

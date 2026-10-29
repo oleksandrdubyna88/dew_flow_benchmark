@@ -171,23 +171,50 @@ export function share1h(t, model) {
 
 // ---- the headline -----------------------------------------------------------------------------------------------------------
 
-function line(id, u, t, table) {
-  const price = priceFor(table, id);
-  if (!price.known) return { known: false, why: price.why };
-  const share = share1h(t, id);
-  const base = { input: u.input, output: u.output, cacheRead: u.cacheRead };
-  if (u.cacheWrite === 0) return exact(priceUsage(price.value, { ...base, cacheWrite5m: 0, cacheWrite1h: 0 }), share, 'no cache writes: nothing to split');
-  if (share.known) {
-    const w1 = Math.round(u.cacheWrite * share.value);
-    return exact(priceUsage(price.value, { ...base, cacheWrite5m: u.cacheWrite - w1, cacheWrite1h: w1 }), share, `5m/1h split from transcripts (1h share ${share.value})`);
-  }
-  const { low, high } = priceUsage(price.value, { ...base, cacheWrite: u.cacheWrite, split: share });
-  return { known: true, exact: false, usd: low, low, high, share1h: share, basis: `${share.why}: an interval, every write at 5m to every write at 1h` };
+/** The 5m/1h cache writes the transcripts' SPLIT messages account for, per model. */
+function splitWritesOf(T, model) {
+  const msgs = (T?.messages ?? []).filter(m => m.model === model && m.splitKnown);
+  return { w5: msgs.reduce((a, m) => a + m.cacheWrite5m, 0), w1: msgs.reduce((a, m) => a + m.cacheWrite1h, 0) };
 }
 
 const exact = (usd, share, basis) => ({ known: true, exact: true, usd, low: usd, high: usd, share1h: share, basis });
 
-/** The session's USD at published list prices -> `{ known: true, usd, low, high, exact, basis, perModel } | { known: false, why, perModel? }`. */
+/**
+ * A cache write is priced exactly only where its 5m/1h split is KNOWN FOR EVERY TOKEN of it: the exporter's own split (`u.otelSplit`), or
+ * transcripts that account for all of the envelope's writes. What the transcripts do not cover is an interval - a lost child file never
+ * lets its tokens inherit the main session's share.
+ */
+function line(id, u, T, table) {
+  const price = priceFor(table, id);
+  if (!price.known) return { known: false, why: price.why };
+  const share = share1h(T, id);
+  const base = { input: u.input, output: u.output, cacheRead: u.cacheRead };
+  if (u.cacheWrite === 0) return exact(priceUsage(price.value, { ...base, cacheWrite5m: 0, cacheWrite1h: 0 }), share, 'no cache writes: nothing to split');
+  if (u.otelSplit) return exact(priceUsage(price.value, { ...base, cacheWrite5m: u.otelSplit.w5, cacheWrite1h: u.otelSplit.w1 }), share, 'exact 5m/1h split from the otel cache_creation_5m/1h_tokens');
+  const known = splitWritesOf(T, id);
+  const rest = u.cacheWrite - known.w5 - known.w1;
+  const covered = rest < 0 ? { w5: 0, w1: 0 } : known;
+  const left = rest < 0 ? u.cacheWrite : rest;
+  const at = (w5, w1) => priceUsage(price.value, { ...base, cacheWrite5m: covered.w5 + w5, cacheWrite1h: covered.w1 + w1 });
+  if (left === 0) return exact(at(0, 0), share, `5m/1h split from transcripts (1h share ${share.value}); they account for every cache-write token`);
+  const low = at(left, 0);
+  const high = at(0, left);
+  return {
+    known: true, exact: false, usd: low, low, high, share1h: share,
+    basis: `transcripts account for ${rest < 0 ? 0 : u.cacheWrite - left} of ${u.cacheWrite} cache-write tokens${rest < 0 ? ' (they hold more than the envelope: ignored)' : ''}: the other ${left} are an interval, every one at 5m to every one at 1h`,
+  };
+}
+
+/** Defects of T the reader must see beside any figure priced from it. */
+function transcriptFlags(T) {
+  const ids = new Set((T?.disagreements ?? []).map(d => d.id));
+  return [
+    ...(ids.size > 0 ? [`${ids.size} transcript message id(s) whose duplicates disagree`] : []),
+    ...((T?.skippedLines ?? 0) > 0 ? [`${T.skippedLines} unreadable transcript line(s)`] : []),
+  ];
+}
+
+/** The session's USD at published list prices -> `{ known: true, usd, low, high, exact, basis, perModel, flags } | { known: false, why, perModel? }`. */
 export function headlineUsd(E, T, table) {
   if (!E?.known) return { known: false, why: 'no envelope' };
   const perModel = Object.fromEntries(Object.entries(E.perModel).map(([id, u]) => [id, line(id, u, T, table)]));
@@ -197,5 +224,5 @@ export function headlineUsd(E, T, table) {
   const low = lines.reduce((a, l) => a + l.low, 0);
   const high = lines.reduce((a, l) => a + l.high, 0);
   const basis = `published list prices (${table.readOn}); tokens from the result envelope; 5m/1h split from transcripts`;
-  return { known: true, usd: lines.reduce((a, l) => a + l.usd, 0), low, high, exact: lines.every(l => l.exact), basis, perModel };
+  return { known: true, usd: lines.reduce((a, l) => a + l.usd, 0), low, high, exact: lines.every(l => l.exact), basis, perModel, flags: transcriptFlags(T) };
 }

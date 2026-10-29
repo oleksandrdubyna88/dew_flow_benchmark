@@ -78,9 +78,10 @@ export const RULES = Object.freeze({
   'A-O1': v => {
     const types = [...new Set(v.sink.map(l => l.contentType))];
     const undecodable = v.decoded.filter(x => !x.d.ok).map(x => x.d.reason);
+    const rejected = v.decoded.flatMap(x => (x.d.ok ? x.d.rejected : []));
     const missing = v.O.requests.flatMap(r => r.missing);
-    const ok = v.logLines.length > 0 && v.sink.every(l => isJsonType(l.contentType)) && undecodable.length === 0 && v.O.present && missing.length === 0;
-    return verdictOf(ok, `content types ${JSON.stringify(types)}; ${v.O.requests.length} api_request record(s); undecodable payloads ${undecodable.length}; missing attributes ${JSON.stringify([...new Set(missing)])}; attributes seen ${JSON.stringify(attributeKinds(v.logLines))}`);
+    const ok = v.logLines.length > 0 && v.sink.every(l => isJsonType(l.contentType)) && undecodable.length === 0 && rejected.length === 0 && v.O.present && missing.length === 0;
+    return verdictOf(ok, `content types ${JSON.stringify(types)}; ${v.O.requests.length} api_request record(s); undecodable payloads ${undecodable.length}; rejected records ${rejected.length}; missing attributes ${JSON.stringify([...new Set(missing)])}; attributes seen ${JSON.stringify(attributeKinds(v.logLines))}`);
   },
   'A-O2': v => stampRule(v),
   'A-O3': v => {

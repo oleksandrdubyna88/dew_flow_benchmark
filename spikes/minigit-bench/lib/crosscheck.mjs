@@ -27,6 +27,7 @@ export function loadPolicy(json) {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(json.decidedOn ?? '')) return fail('policy.decidedOn is a date (YYYY-MM-DD)');
   if (typeof json.reason !== 'string' || json.reason.trim() === '') return fail('policy.reason says why the values are what they are');
+  if (json.t3 === 'fallback-t2' && json.t2 !== 'stop') return fail("policy.t3 is 'fallback-t2' but policy.t2 is not 'stop': T3 would be informational and nothing would stop the series");
   return ok(Object.freeze({ ...json }));
 }
 
@@ -110,12 +111,31 @@ export function matchTO(T, O, join) {
   return { by: join, matched, unmatchedT: [], unmatchedO: countBy(reqs.filter(r => !matched.includes(r))) };
 }
 
+function sharedRequestIds(T) {
+  const counts = Map.groupBy(T.messages.filter(m => m.requestId), m => m.requestId);
+  return [...counts.values()].filter(group => group.length > 1).length;
+}
+
+function transcriptTrouble(T) {
+  const ids = new Set(T.disagreements.map(d => d.id));
+  if (ids.size > 0) return `the transcripts hold ${ids.size} message id(s) whose duplicates disagree`;
+  if (T.skippedLines > 0) return `${T.skippedLines} unreadable transcript line(s): T may be incomplete`;
+  return null;
+}
+
 function gate34(T, O, M) {
   if (!T || T.messages.length === 0) return 'no transcripts';
   if (!O?.present) return 'no otel';
   if (M.by === 'query_source' && !T.coverage.subagent) return 'T covers only main';
   const n = M.unmatchedT.length;
   if (n > 0) return `otel incomplete: ${n} transcript message${n === 1 ? '' : 's'} ${n === 1 ? 'has' : 'have'} no api_request`;
+  const stray = Object.entries(M.unmatchedO).filter(([role]) => role !== 'auxiliary').reduce((a, [, count]) => a + count, 0);
+  if (stray > 0) return `T incomplete: ${stray} main/subagent api_request records have no transcript message`;
+  const shared = sharedRequestIds(T);
+  if (shared > 0) return `${shared} request id(s) shared by more than one transcript message: the join is ambiguous`;
+  const trouble = transcriptTrouble(T);
+  if (trouble) return trouble;
+  if ((O.conflictingDuplicates ?? 0) > 0) return `otel has ${O.conflictingDuplicates} conflicting duplicate api_request record(s): the same request id with different counts`;
   const incomplete = M.matched.filter(r => r.missing.length > 0 || r.model === null);
   if (incomplete.length > 0) return `otel incomplete: ${incomplete.length} matched api_request records lack ${[...new Set(incomplete.flatMap(r => r.missing))].join(', ')}`;
   const unread = T.messages.find(m => [m.input, m.cacheRead, m.cacheWrite].includes(null));

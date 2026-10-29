@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { findCalls, findNames, importedNames, localGraph, mjsFiles, stripComments } from './scan.mjs';
-import { spikeDir } from './helpers.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { findCalls, findNames, importViolations, importedNames, localGraph, sourceFiles, stripComments } from './scan.mjs';
+import { spikeDir, tmpDir } from './helpers.mjs';
 
 const FORBIDDEN = ['costFromMessages', 'CostMeter', 'summarize', 'parallelism', 'childCosts', 'OUTPUT_FLOOR_PER_MESSAGE'];
-const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder'];
+// the spec's list, plus initInfo (pure, aliases.mjs) and assertRemovable (safe-rm's guard, beside removeUnder)
+const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder', 'assertRemovable'];
 const rel = f => path.relative(spikeDir, f).split(path.sep).join('/');
-const production = () => mjsFiles(spikeDir, ['test', 'node_modules']);
+const production = () => sourceFiles(spikeDir, ['test', 'node_modules']);
 const policyLib = file => path.resolve(spikeDir, '..', 'policy-ab-quick', 'lib', file);
 
 test('The_spike_never_calls_a_fitted_rate_path', () => {
@@ -46,6 +48,40 @@ test('The_cost_modules_take_from_the_older_spike_only_the_pure_readers_they_need
   const imported = graph.flatMap(f => importedNames(readFileSync(f, 'utf8'), /policy-ab-quick/));
   assert.ok(imported.length > 0, 'the graph does reach the older spike (resultEnvelope), so this check is not vacuous');
   assert.deepEqual(imported.filter(n => !ALLOWED_FROM_POLICY_AB.includes(n)), []);
+});
+
+test('Every_production_file_takes_only_allowed_names_from_the_older_spike', () => {
+  const files = production();
+  const bad = files.flatMap(f => importViolations(readFileSync(f, 'utf8'), /policy-ab-quick/, ALLOWED_FROM_POLICY_AB).map(v => `${rel(f)}: ${v}`));
+  assert.deepEqual(bad, []);
+  assert.ok(files.some(f => importedNames(readFileSync(f, 'utf8'), /policy-ab-quick/).length > 0), 'the check is not vacuous');
+});
+
+test('A_local_declaration_does_not_mask_an_aliased_import_of_a_fitted_path', () => {
+  const masked = "import { summarize as s } from '../../policy-ab-quick/lib/summary.mjs';\nfunction summarize() {}\ns({});";
+  assert.ok(findNames(masked, FORBIDDEN, { ownDeclarations: true }).some(h => h.name === 'summarize'), 'the aliased import is still a hit');
+  assert.ok(importViolations(masked, /policy-ab-quick/, ALLOWED_FROM_POLICY_AB).some(v => /summarize/.test(v)));
+});
+
+test('Namespace_default_dynamic_and_require_forms_of_the_older_spike_are_violations', () => {
+  const forms = [
+    "import * as s from '../../policy-ab-quick/lib/summary.mjs';",
+    "import s from '../../policy-ab-quick/lib/summary.mjs';",
+    "const s = await import('../../policy-ab-quick/lib/summary.mjs');",
+    "const s = require('../../policy-ab-quick/lib/summary.cjs');",
+  ];
+  for (const f of forms) assert.equal(importViolations(f, /policy-ab-quick/, ALLOWED_FROM_POLICY_AB).length, 1, f);
+  assert.deepEqual(importViolations("import { resultEnvelope } from '../../policy-ab-quick/lib/summary.mjs';", /policy-ab-quick/, ALLOWED_FROM_POLICY_AB), []);
+});
+
+test('Js_and_cjs_files_are_scanned_like_mjs', () => {
+  const dir = tmpDir('scan');
+  mkdirSync(path.join(dir, 'lib'));
+  writeFileSync(path.join(dir, 'lib', 'a.cjs'), 'costFromMessages([]);\n');
+  writeFileSync(path.join(dir, 'lib', 'b.js'), 'x();\n');
+  writeFileSync(path.join(dir, 'lib', 'c.mjs'), 'y();\n');
+  writeFileSync(path.join(dir, 'lib', 'd.txt'), 'costFromMessages([]);\n');
+  assert.deepEqual(sourceFiles(dir).map(f => path.basename(f)).sort(), ['a.cjs', 'b.js', 'c.mjs']);
 });
 
 test('The_scan_root_is_this_spike', () => {

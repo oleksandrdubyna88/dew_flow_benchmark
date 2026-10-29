@@ -39,8 +39,68 @@ test('Int_values_arrive_as_strings_and_decode_to_safe_integers', () => {
   const raw = JSON.parse(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs() }]));
   raw.resourceLogs[0].scopeLogs[0].logRecords[0].attributes.push({ key: 'cache_read_tokens', value: { intValue: '9007199254740993' } });
   const refused = decodeOtlpLogs(JSON.stringify(raw));
-  assert.equal(refused.ok, false);
-  assert.match(refused.reason, /cache_read_tokens/);
+  assert.equal(refused.ok, true, 'one unreadable record does not void the payload');
+  assert.equal(refused.value.length, 0);
+  assert.equal(refused.rejected.length, 1);
+  assert.match(refused.rejected[0].reason, /cache_read_tokens/);
+});
+
+test('One_unreadable_record_is_rejected_by_itself_and_its_neighbours_survive', () => {
+  const raw = JSON.parse(payloadText([
+    { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'good_1' }) },
+    { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'bad' }) },
+    { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'good_2' }) },
+  ]));
+  raw.resourceLogs[0].scopeLogs[0].logRecords[1].attributes.push({ key: 'input_tokens', value: { intValue: '9007199254740993' } });
+  const r = decodeOtlpLogs(JSON.stringify(raw));
+  assert.equal(r.ok, true);
+  assert.deepEqual(apiRequests(r.value).map(q => q.requestId), ['good_1', 'good_2']);
+  assert.deepEqual(r.rejected.map(x => x.index), [1]);
+  assert.match(r.rejected[0].reason, /input_tokens/);
+});
+
+test('A_record_without_query_source_is_summed_under_unknown_never_dropped', () => {
+  const attrs = apiAttrs({ query_source: undefined, request_id: 'r_nosrc' });
+  const view = otelView(apiRequests(decoded(payloadText([{ name: 'api_request', tsMs: T0, attrs }]))));
+  assert.equal(view.incomplete, 0);
+  assert.deepEqual(Object.keys(view.perModel['claude-opus-5-5'].bySource), ['unknown']);
+  assert.equal(view.perModel['claude-opus-5-5'].bySource.unknown.cacheRead, 300);
+});
+
+test('The_same_request_id_sent_twice_is_counted_once_and_reported', () => {
+  const rec = { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'dup' }) };
+  const other = { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'other', cache_read_tokens: 7 }) };
+  const view = otelView(apiRequests(decoded(payloadText([rec, rec, other, rec]))));
+  assert.equal(view.requests.length, 2);
+  assert.equal(view.duplicates, 2);
+  assert.equal(view.conflictingDuplicates, 0);
+  assert.equal(view.perModel['claude-opus-5-5'].bySource.main.requests, 2);
+  const conflict = otelView(apiRequests(decoded(payloadText([rec, { ...rec, attrs: { ...rec.attrs, output_tokens: 999 } }]))));
+  assert.deepEqual([conflict.duplicates, conflict.conflictingDuplicates], [1, 1]);
+  const noId = { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: undefined }) };
+  assert.equal(otelView(apiRequests(decoded(payloadText([noId, noId])))).requests.length, 2, 'records without an id cannot be told apart, so none is dropped');
+});
+
+test('The_receiver_counts_a_resent_request_once_in_the_live_sum', async t => {
+  const rx = await startReceiver({ dir: tmpDir('recv-dup') });
+  t.after(() => rx.close());
+  for (let i = 0; i < 3; i += 1) assert.equal((await post(`http://127.0.0.1:${rx.port}`, '/v1/logs', synthetic)).status, 200);
+  const live = rx.liveSum();
+  assert.equal(live.requests, 3);
+  assert.ok(Math.abs(live.usd - (0.0204 + 0.0233382 + 0.001493)) < 1e-9);
+  assert.equal(live.duplicates, 6);
+});
+
+test('A_payload_with_one_unreadable_record_is_accepted_and_the_rest_is_kept', async t => {
+  const dir = tmpDir('recv-reject');
+  const rx = await startReceiver({ dir });
+  t.after(() => rx.close());
+  const raw = JSON.parse(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'ok' }) }, { name: 'api_request', tsMs: T0, attrs: apiAttrs({ request_id: 'bad' }) }]));
+  raw.resourceLogs[0].scopeLogs[0].logRecords[1].attributes.push({ key: 'input_tokens', value: { intValue: '9007199254740993' } });
+  assert.equal((await post(`http://127.0.0.1:${rx.port}`, '/v1/logs', JSON.stringify(raw))).status, 200);
+  assert.equal(parseLines(readFileSync(path.join(dir, 'otel.ndjson'), 'utf8')).length, 1);
+  assert.equal(rx.rejectedRecords, 1);
+  assert.match(readFileSync(path.join(dir, 'otel-rejected.ndjson'), 'utf8'), /input_tokens/);
 });
 
 test('Text_that_is_not_an_otlp_logs_payload_is_a_value_not_a_throw', () => {

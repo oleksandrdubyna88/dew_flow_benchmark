@@ -54,6 +54,41 @@ test('The_account_ids_and_emails_an_otlp_payload_carries_are_found_and_redacted_
   assert.deepEqual(collectAttrSecrets('not json at all'), { ids: [], emails: [] });
 });
 
+test('Account_ids_and_emails_in_a_metrics_payload_are_found_in_every_data_point_type', () => {
+  const attr = (key, v) => ({ key, value: { stringValue: v } });
+  const point = tag => ({ attributes: [attr('user.account_uuid', `ACCT-${tag}`), attr('user.email', `${tag}@real.example`), attr('session.id', 'sess-keep')] });
+  const kinds = ['sum', 'gauge', 'histogram', 'exponentialHistogram', 'summary'];
+  const body = JSON.stringify({
+    resourceMetrics: [{
+      resource: { attributes: [attr('organization.id', 'ORG-RES'), attr('user.id', 'USER-RES')] },
+      scopeMetrics: [{ metrics: kinds.map(k => ({ name: `m.${k}`, [k]: { dataPoints: [point(k)] } })) }],
+    }],
+  });
+  const sink = JSON.stringify({ receivedAt: 1, path: '/v1/metrics', contentType: 'application/json', body });
+  const found = collectAttrSecrets(sink);
+  assert.deepEqual([...found.ids].sort(), ['ACCT-exponentialHistogram', 'ACCT-gauge', 'ACCT-histogram', 'ACCT-sum', 'ACCT-summary', 'ORG-RES', 'USER-RES']);
+  assert.deepEqual([...found.emails].sort(), ['exponentialHistogram@real.example', 'gauge@real.example', 'histogram@real.example', 'sum@real.example', 'summary@real.example']);
+  const out = sanitiseText(sink, buildMap({ ...ctx, email: null, idValues: found.ids, extraEmails: found.emails }));
+  for (const secret of [...found.ids, ...found.emails]) assert.equal(out.includes(secret), false, secret);
+  assert.ok(out.includes('sess-keep'));
+});
+
+test('A_resource_level_secret_in_a_logs_payload_is_collected_too', () => {
+  const attr = (key, v) => ({ key, value: { stringValue: v } });
+  const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [attr('user.email', 'res@real.example'), attr('organization.id', 'ORG-LOGRES')] }, scopeLogs: [] }] });
+  const found = collectAttrSecrets(JSON.stringify({ path: '/v1/logs', body }));
+  assert.deepEqual([found.ids, found.emails], [['ORG-LOGRES'], ['res@real.example']]);
+});
+
+test('The_scanner_flags_any_email_shape_except_the_two_placeholders', () => {
+  const scan = text => leakScan([{ relPath: 'f.txt', text }], { out: null, home: '/home/user', user: 'user', host: 'host', email: null, token: null });
+  assert.ok(scan('contact stranger@somewhere.example now').some(f => f.pattern === 'e-mail address shape'));
+  assert.ok(scan('a.b+c@sub.domain.org').length > 0);
+  assert.deepEqual(scan('mail noreply@anthropic.com and user@example.invalid and Noreply@Anthropic.com'), []);
+  assert.deepEqual(scan('an @types/node import and a decorator @Injectable() are not emails'), []);
+  assert.equal(JSON.stringify(scan('stranger@somewhere.example')).includes('stranger'), false, 'a finding never repeats the address');
+});
+
 test('The_scanner_names_the_file_and_the_pattern_for_every_kind_of_leak_and_never_the_matched_text', () => {
   const planted = [
     { relPath: 'a.txt', text: 'token sk-ant-oat01-AAAAAAAAAAAAAAAAAAAAAAAAAAAA end' },

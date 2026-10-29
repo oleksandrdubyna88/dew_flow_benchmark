@@ -17,12 +17,14 @@ export const otelEnv = port => Object.freeze({
   OTEL_LOG_TOOL_DETAILS: '1', OTEL_LOG_USER_PROMPTS: '0',
 });
 
-/** The running sum over decoded record lines (`{ receivedAt, name, tsMs, attrs }`): cost of `api_request`s whose cost is known. */
+/** The running sum over decoded record lines (`{ receivedAt, name, tsMs, attrs }`): cost of `api_request`s whose cost is known, each request id once. */
 export function liveSumOf(records) {
-  const reqs = apiRequests(records.filter(r => r.name === 'api_request'));
+  const all = apiRequests(records.filter(r => r.name === 'api_request'));
+  const seen = new Set();
+  const reqs = all.filter(r => r.requestId === null || (!seen.has(r.requestId) && seen.add(r.requestId)));
   const lastAt = records.filter(r => r.name === 'api_request').reduce((m, r) => Math.max(m, r.receivedAt ?? 0), 0);
   return {
-    usd: reqs.reduce((a, r) => a + (r.costUsd ?? 0), 0), requests: reqs.length, costUnknown: reqs.filter(r => r.costUsd === null).length, lastAt,
+    usd: reqs.reduce((a, r) => a + (r.costUsd ?? 0), 0), requests: reqs.length, duplicates: all.length - reqs.length, costUnknown: reqs.filter(r => r.costUsd === null).length, lastAt,
   };
 }
 
@@ -50,6 +52,8 @@ function makeHandler({ append, counters, store }) {
         counters.undecodable += 1;
         return refuse(res, 400, req, decoded.reason);
       }
+      counters.rejectedRecords += decoded.rejected.length;
+      decoded.rejected.forEach(x => append('otel-rejected.ndjson', { receivedAt, ...x }));
       const lines = decoded.value.map(r => ({ receivedAt, ...r }));
       lines.forEach(l => append('otel.ndjson', l));
       store.records = [...store.records, ...lines];
@@ -73,7 +77,7 @@ function makeHandler({ append, counters, store }) {
 /** Start the receiver in `dir`. `port` 0 = any free one. Resolves once listening. */
 export async function startReceiver({ dir, port = 0 }) {
   mkdirSync(dir, { recursive: true });
-  const counters = { misconfigured: 0, undecodable: 0 };
+  const counters = { misconfigured: 0, undecodable: 0, rejectedRecords: 0 };
   const store = { records: [] };
   const append = (name, obj) => appendFileSync(path.join(dir, name), `${JSON.stringify(obj)}\n`);
   const handle = makeHandler({ append, counters, store });
@@ -89,6 +93,7 @@ export async function startReceiver({ dir, port = 0 }) {
     liveSum: () => liveSumOf(store.records),
     get misconfigured() { return counters.misconfigured; },
     get undecodable() { return counters.undecodable; },
+    get rejectedRecords() { return counters.rejectedRecords; },
     close: () => new Promise(resolve => { server.close(() => resolve()); server.closeAllConnections(); }),
   };
 }

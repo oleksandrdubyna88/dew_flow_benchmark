@@ -28,12 +28,14 @@ export function stripComments(src) {
   return out;
 }
 
-/** Every `.mjs` under `dir`, skipping `skip` directory names. */
-export function mjsFiles(dir, skip = []) {
+const SOURCE_EXTENSIONS = Object.freeze(['.mjs', '.js', '.cjs']);
+
+/** Every `.mjs`, `.js` and `.cjs` under `dir`, skipping `skip` directory names. */
+export function sourceFiles(dir, skip = []) {
   return readdirSync(dir).flatMap(name => {
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) return skip.includes(name) || name === 'node_modules' ? [] : mjsFiles(full, skip);
-    return name.endsWith('.mjs') ? [full] : [];
+    if (statSync(full).isDirectory()) return skip.includes(name) || name === 'node_modules' ? [] : sourceFiles(full, skip);
+    return SOURCE_EXTENSIONS.includes(path.extname(name)) ? [full] : [];
   });
 }
 
@@ -45,7 +47,8 @@ export function declaredNames(text, names) {
 
 /** `[{ name, line }]` for each word-bounded occurrence of a name in the comment-stripped text; a name the file declares itself is skipped. */
 export function findNames(text, names, { ownDeclarations = false } = {}) {
-  const own = ownDeclarations ? declaredNames(text, names) : [];
+  const imported = importedNames(text, /./);
+  const own = ownDeclarations ? declaredNames(text, names).filter(n => !imported.includes(n)) : [];
   const lines = stripComments(text).split('\n');
   return lines.flatMap((l, i) => names.filter(n => !own.includes(n) && new RegExp(`\\b${n}\\b`).test(l)).map(name => ({ name, line: i + 1 })));
 }
@@ -62,6 +65,22 @@ export function importedNames(text, fromRe) {
     if (fromRe.test(m[2])) out.push(...m[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0]).filter(Boolean));
   }
   return out;
+}
+
+/**
+ * Imports from a module matching `fromRe` that are not on the allow-list: a named import outside it, or any namespace, default, dynamic
+ * `import()` or `require()` form (those cannot be checked name by name, so they are refused).
+ */
+export function importViolations(text, fromRe, allowed) {
+  const code = stripComments(text);
+  const named = importedNames(text, fromRe).filter(n => !allowed.includes(n)).map(n => `imports '${n}', which is not on the allow-list`);
+  const forms = [
+    [/import\s*\*\s*as\s+\w+\s+from\s*['"]([^'"]+)['"]/g, 'a namespace import'],
+    [/import\s+\w+\s*(?:,\s*\{[^}]*\}\s*)?from\s*['"]([^'"]+)['"]/g, 'a default import'],
+    [/import\s*\(\s*['"]([^'"]+)['"]/g, 'a dynamic import'],
+    [/require\s*\(\s*['"]([^'"]+)['"]/g, 'a require'],
+  ].flatMap(([re, what]) => [...code.matchAll(re)].filter(m => fromRe.test(m[1])).map(m => `${what} of ${m[1]}`));
+  return [...named, ...forms];
 }
 
 /** Spike-local modules reachable from `entry` through relative imports that stay inside `root`. */

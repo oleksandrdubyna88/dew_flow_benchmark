@@ -5,5 +5,5 @@
   "t3OutputSource": "transcript",
   "join": "request_id",
   "decidedOn": "2026-10-29",
-  "reason": "Pre-registered defaults before the step 0 capture exists (E1.S3). t1: the envelope disagreeing with itself is an instrument failure. t2: an O/E gap marks the cell otel-incomplete and keeps it. t3: a breach is investigated until E3 arms it (t3 = stop) after the A/A and P1 show T covering main and subagent with no unmatched transcript message; the pre-registered fallback is t3 = fallback-t2 with t2 = stop. t3OutputSource and join are A-T2 and A-J1: PROVISIONAL, replaced by the capture's verdicts in a dated commit."
+  "reason": "Pre-registered defaults (E1.S3), with join and t3OutputSource decided by the 2026-10-29 step 0 capture (claude 2.1.310, test/fixtures/real/claude-2.1.310-capture/CAPTURE.md: A-J1 holds so join = request_id, A-T2 holds so t3OutputSource = transcript). t1: the envelope disagreeing with itself is an instrument failure. t2: an O/E gap marks the cell otel-incomplete and keeps it. t3: a breach is investigated until E3 arms it (t3 = stop) after the A/A and P1 show T covering main and subagent with no unmatched transcript message; the pre-registered fallback is t3 = fallback-t2 with t2 = stop. A test pins both values to the capture's verdicts; change them only by a dated commit."
 }

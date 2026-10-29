@@ -9,20 +9,35 @@ const NO_ENVELOPE = Object.freeze({ known: false, why: 'no envelope' });
 function envelopeShapedFrom(O) {
   const perModel = Object.fromEntries(Object.entries(O.perModel).map(([model, entry]) => {
     const s = sumSources(entry);
-    return [model, { input: s.input, output: s.output, cacheRead: s.cacheRead, cacheWrite: s.cacheCreation, costUsd: null }];
+    const whole = s.cacheCreation > 0 && s.splitRequests === s.requests;
+    return [model, { input: s.input, output: s.output, cacheRead: s.cacheRead, cacheWrite: s.cacheCreation, costUsd: null, otelSplit: whole ? { w5: s.cacheCreation5m, w1: s.cacheCreation1h } : null }];
   }));
   return { known: true, perModel };
 }
 
+/** Why no figure can be given from O, or null: nothing complete at all, or a model whose every record was left out (it would read as free). */
+function unpriceable(O) {
+  if (Object.keys(O.perModel).length === 0) return 'no complete api_request record';
+  const dropped = [...new Set(O.requests.map(r => r.model).filter(Boolean))].filter(m => !(m in O.perModel));
+  return dropped.length > 0 ? `no complete api_request record for ${dropped.join(', ')}` : null;
+}
+
 function fromOtel(O, T, table) {
-  const headline = headlineUsd(envelopeShapedFrom(O), T, table);
   const flags = ['no envelope', ...(O.incomplete > 0 ? [`${O.incomplete} otel records lack a token field and are left out: a lower bound`] : [])];
-  return { ...headline, ...(headline.known ? { basis: `otel api_request tokens at published prices (${table.readOn}); 5m/1h split from transcripts where they have it` } : {}), flags, cliTotalUsd: NO_ENVELOPE, lowerBound: O.incomplete > 0 };
+  const why = unpriceable(O);
+  if (why) return { known: false, why, flags, cliTotalUsd: NO_ENVELOPE };
+  const headline = headlineUsd(envelopeShapedFrom(O), T, table);
+  const lowerBound = O.incomplete > 0;
+  const basis = `otel api_request tokens at published prices (${table.readOn}); 5m/1h split from the otel cache_creation_5m/1h_tokens, else transcripts, else an interval`;
+  return { ...headline, ...(headline.known ? { basis, exact: headline.exact && !lowerBound } : {}), flags: [...flags, ...(headline.flags ?? [])], cliTotalUsd: NO_ENVELOPE, lowerBound };
 }
 
 /** `{ known, usd, low, high, exact, basis, perModel, cliTotalUsd, flags }` or `{ known: false, why }`. */
 export function sessionCost({ E, O, T, table }) {
-  if (E?.known) return { ...headlineUsd(E, T, table), cliTotalUsd: E.totalCostUsd, flags: [] };
+  if (E?.known) {
+    const headline = headlineUsd(E, T, table);
+    return { ...headline, cliTotalUsd: E.totalCostUsd, flags: headline.flags ?? [] };
+  }
   if (O?.present) return fromOtel(O, T, table);
   return { known: false, why: 'no envelope and no otel records' };
 }
