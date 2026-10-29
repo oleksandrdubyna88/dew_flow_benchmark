@@ -11,7 +11,8 @@ public sealed record Scenario(string Id, string Kind, string Name);
 /// experiment with no scenario has nothing to measure.</summary>
 public static class ScenariosFile
 {
-    private const string FileName = "scenarios.json";
+    /// <summary>The file's name in the experiment root, as the template's <c>scenarios</c> member spells it.</summary>
+    public const string FileName = "scenarios.json";
 
     private static readonly string[] Members = ["id", "kind", "name"];
     private static readonly (string Key, string Value)[] Kinds = [("cs", "cs"), ("node", "node")];

@@ -10,13 +10,17 @@ namespace Bench.Tests.ModelArms;
 /// test chose — because the defects these guard against (a program looked up in the current directory or on a PATH entry in the target) exist only in a real process, not in
 /// an in-process call. The subject is never doubled; what is placed in the target are marker-writing shims, a program the target could hold.
 /// <para>
-/// What this does NOT prove: any verb but <c>validate</c> and <c>prep-base</c> (the others are not built yet; the catalogue says so), the binary on Windows (the shims and links
+/// What this does NOT prove: any verb but <c>init</c>, <c>validate</c> and <c>prep-base</c> (the others are not built yet; the catalogue says so), the binary on Windows (the shims and links
 /// are POSIX), a launch made by a later story (the structural test in <c>ModelArmsArchitectureTests</c> sees those land), or that the fixture's <c>claude</c>, <c>dotnet</c>,
 /// <c>node</c> and <c>npm</c> run (empty files; only git is launched).
 /// </para></summary>
 public sealed class ModelArmsScenarioTests
 {
-    private static async Task<(int Code, string Output, string Error)> RunBinaryAsync(ExperimentRoot root, string workingDirectory, params string[] arguments)
+    private static Task<(int Code, string Output, string Error)> RunBinaryAsync(ExperimentRoot root, string workingDirectory, params string[] arguments) =>
+        RunProcessAsync(root, workingDirectory, [.. arguments, "--experiment", root.Root]);
+
+    /// <summary>The binary started as a process with exactly <paramref name="arguments"/> (a verb such as <c>init</c> takes no <c>--experiment</c>), in the fixture's environment.</summary>
+    private static async Task<(int Code, string Output, string Error)> RunProcessAsync(ExperimentRoot root, string workingDirectory, string[] arguments)
     {
         var environment = root.Environment.ToDictionary(variable => variable.Key, variable => variable.Value);
         foreach (var name in new[] { "DOTNET_ROOT", "DOTNET_ROOT_X64" })
@@ -28,7 +32,7 @@ public sealed class ModelArmsScenarioTests
         }
 
         var attempt = await ProcessRunner.RunAsync(
-            ExperimentRoot.ConsoleBinary, [.. arguments, "--experiment", root.Root], workingDirectory, TimeSpan.FromSeconds(60), string.Empty, environment, TestContext.Current.CancellationToken);
+            ExperimentRoot.ConsoleBinary, arguments, workingDirectory, TimeSpan.FromSeconds(60), string.Empty, environment, TestContext.Current.CancellationToken);
         var done = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
         return (done.ExitCode, done.StandardOutput, done.StandardError);
     }
@@ -86,6 +90,26 @@ public sealed class ModelArmsScenarioTests
         code.Should().Be(4);
         output.Should().Contain("resolved executables:");
         error.Should().Contain("E4.S4");
+    }
+
+    [Fact]
+    public async Task Init_through_the_binary_makes_a_root_that_validate_reads_and_refuses_until_it_is_filled()
+    {
+        Posix();
+        using var fixture = new ExperimentRoot();
+        var fresh = Path.Combine(fixture.Temp, "fresh");
+
+        var init = await RunProcessAsync(fixture, fixture.Temp, ["init", fresh]);
+        var validate = await RunProcessAsync(fixture, fixture.Temp, ["validate", "--experiment", fresh]);
+        var again = await RunProcessAsync(fixture, fixture.Temp, ["init", fresh]);
+
+        init.Code.Should().Be(0, init.Error);
+        init.Output.Should().Contain($"Next: model-arms validate --experiment {fresh}");
+        validate.Code.Should().Be(4, "the template is a shape, not an experiment");
+        validate.Error.Should().Contain("experiment.json is refused").And.Contain("<fill me>");
+        validate.Error.Should().NotContain("trust", "a root init made is the operator's own and closed to group and others");
+        again.Code.Should().Be(4);
+        again.Error.Should().Contain("already exists");
     }
 
     [Fact]

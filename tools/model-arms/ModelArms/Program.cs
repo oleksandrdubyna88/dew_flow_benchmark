@@ -79,7 +79,7 @@ public static class Program
     {
         return input.Verb switch
         {
-            "init" => NotBuilt(input, "E1.S11"),
+            "init" => InitVerb.RunAsync(input),
             "validate" => ExperimentGate.RunAsync(input, ValidateVerb.RunAsync),
             "prep-base" => ExperimentGate.RunAsync(input, ValidateVerb.PrepBaseGuardAsync),
             "make" => NotBuilt(input, "E4.S4"),
