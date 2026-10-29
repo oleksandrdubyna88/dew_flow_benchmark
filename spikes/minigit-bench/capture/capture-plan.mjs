@@ -8,6 +8,12 @@ export const CAPTURE_PROMPT = 'In ONE message launch two subagents with the Agen
   + '(subagent_type general-purpose), each told to run `ls` in the current directory and reply with the file names only. '
   + 'When both have returned, run `echo capture-ok` with Bash yourself and reply DONE.';
 
+/** The subagent tool has two names: `--tools Agent` is accepted, and CLI 2.1.310's init event reports it as `Task` (as 2.1.289's did). */
+export const SUBAGENT_TOOL_NAMES = Object.freeze(['Agent', 'Task']);
+
+/** Which of the two names a tool list carries (exact match: `TaskStop` is not it), or null. */
+export const subagentToolOf = names => SUBAGENT_TOOL_NAMES.find(n => names.includes(n)) ?? null;
+
 export const WALL_LIMIT_MS = 10 * 60 * 1000;
 export const MAX_BUDGET_USD = '1.5';
 const TOOLS = 'Agent,Bash,Read,Glob';

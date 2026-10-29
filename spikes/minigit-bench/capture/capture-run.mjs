@@ -5,7 +5,7 @@ import { appendFileSync, closeSync, copyFileSync, createWriteStream, mkdirSync, 
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fail, ok } from '../lib/result.mjs';
-import { capturePlan } from './capture-plan.mjs';
+import { SUBAGENT_TOOL_NAMES, capturePlan, subagentToolOf } from './capture-plan.mjs';
 import { startSink } from './otlp-sink.mjs';
 
 const EXIT_CAPTURE_FAILED = 5;
@@ -45,7 +45,7 @@ function copyTranscripts(out) {
   });
 }
 
-/** Watches the stream as it arrives: the init event's tool list must hold `Agent` (the parent plan's launch line says `Task`). */
+/** Watches the stream as it arrives: the init event's tool list must hold the subagent tool under either name (SUBAGENT_TOOL_NAMES). */
 function streamWatcher(onProblem) {
   let buffer = '';
   const seen = { init: null, result: null };
@@ -55,7 +55,7 @@ function streamWatcher(onProblem) {
     if (ev.type === 'system' && ev.subtype === 'init') {
       seen.init = ev;
       const names = (ev.tools ?? []).map(t => (typeof t === 'string' ? t : t?.name));
-      if (!names.includes('Agent')) onProblem(`the init event's tools list lacks Agent (${names.join(', ') || 'empty'}): the capture cannot launch its children`);
+      if (!subagentToolOf(names)) onProblem(`the init event's tools list lacks ${SUBAGENT_TOOL_NAMES.join(' or ')} (${names.join(', ') || 'empty'}): the capture cannot launch its children`);
     }
     if (ev.type === 'result') seen.result = ev;
   };

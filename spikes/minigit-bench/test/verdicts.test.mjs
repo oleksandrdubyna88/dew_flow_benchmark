@@ -42,6 +42,7 @@ test('The_real_envelope_rules_report_the_numbers_they_rest_on', () => {
   assert.match(rows['A-E2'].observed, /total_cost_usd 0\.594582/);
   assert.match(rows['A-P1'].observed, /claude-sonnet-5-5: costUSD 0\.0233/);
   assert.match(rows['A-M1'].observed, /fable not exercised/);
+  assert.match(rows['A-M1'].observed, /subagent tool reported by init: Task/, 'the 2.1.289 init names the tool Task');
   assert.match(rows['A-O1'].observed, /"input_tokens":\["intValue"\]/, 'the observed value kinds are recorded: they decide the numeric-string switch');
 });
 

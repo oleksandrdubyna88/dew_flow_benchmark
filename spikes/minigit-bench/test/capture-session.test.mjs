@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, 
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { CAPTURE_PROMPT, capturePlan } from '../capture/capture-plan.mjs';
+import { CAPTURE_PROMPT, SUBAGENT_TOOL_NAMES, capturePlan, subagentToolOf } from '../capture/capture-plan.mjs';
 import { findOnPath, outProblems, readToken, tokenStatus } from '../capture/capture-env.mjs';
 import { runCapture } from '../capture/capture-run.mjs';
 import { sanitiseCapture } from '../capture/capture-files.mjs';
@@ -192,7 +192,7 @@ const mode = '__MODE__';
 let prompt = '';
 for await (const c of process.stdin) prompt += c;
 const emit = o => process.stdout.write(JSON.stringify(o) + '\\n');
-const tools = mode === 'noagent' ? ['Bash'] : ['Agent', 'Bash', 'Read', 'Glob'];
+const tools = mode === 'noagent' ? ['Bash', 'TaskStop'] : mode === 'task' ? ['Task', 'Bash', 'Read', 'Glob'] : ['Agent', 'Bash', 'Read', 'Glob'];
 emit({ type: 'system', subtype: 'init', session_id: 'stub-session', claude_code_version: '0.0.0-stub', model: 'stub-model', tools, cwd: process.cwd() });
 if (mode === 'sleep' || mode === 'noagent') await new Promise(r => setTimeout(r, 60000));
 const proj = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', '-stub-tree');
@@ -254,6 +254,20 @@ test('A_stream_whose_init_lacks_the_agent_tool_stops_the_capture_and_says_so', a
   assert.equal(r.ok, false);
   assert.equal(r.exit, 5);
   assert.match(r.reason, /init.*tools.*Agent/);
+});
+
+test('A_stream_whose_init_reports_the_subagent_tool_as_Task_passes_the_guard', async () => {
+  const { r } = await stubRun('task');
+  assert.equal(r.ok, true, r.reason);
+});
+
+test('The_subagent_tool_has_two_names_in_one_constant_and_a_lookalike_is_neither', () => {
+  assert.deepEqual([...SUBAGENT_TOOL_NAMES], ['Agent', 'Task']);
+  assert.equal(subagentToolOf(['Bash', 'Task']), 'Task');
+  assert.equal(subagentToolOf(['Agent', 'Task']), 'Agent');
+  assert.equal(subagentToolOf(['TaskStop', 'ListAgents', 'Bash']), null);
+  assert.equal(subagentToolOf([]), null);
+  assert.ok(plan().argv.join(' ').includes('--tools Agent,Bash,Read,Glob'), '--tools keeps Agent; the guard only reads');
 });
 
 test('A_capture_past_its_wall_limit_is_killed_with_its_process_tree_and_fails_named', async () => {

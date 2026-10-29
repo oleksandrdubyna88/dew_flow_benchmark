@@ -6,6 +6,7 @@ import { apiRequests, decodeOtlpLogs, otelView, toolResults } from '../lib/otel-
 import { asTheCliBills, priceFor, priceUsage } from '../lib/prices.mjs';
 import { agentTimeline } from '../../policy-ab-quick/lib/parallel.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
+import { subagentToolOf } from './capture-plan.mjs';
 
 const holds = observed => ({ verdict: 'holds', observed });
 const refuted = observed => ({ verdict: 'refuted', observed });
@@ -163,8 +164,9 @@ function aliasRule(v) {
   const noCanonical = Object.entries(usage).filter(([, u]) => !u?.canonicalModel).map(([m]) => m);
   const rec = aliasRecord({ events: v.events });
   const fable = ids.some(i => /fable/.test(i));
+  const initTools = (v.events.find(e => e.type === 'system' && e.subtype === 'init')?.tools ?? []).map(t => (typeof t === 'string' ? t : t?.name));
   return verdictOf(ids.length > 0 && notPriced.length === 0 && noCanonical.length === 0 && rec.ok,
-    `ids ${JSON.stringify(ids)}; not in the price table ${JSON.stringify(notPriced)}; modelUsage lines without canonicalModel ${JSON.stringify(noCanonical)}; aliases ${rec.ok ? JSON.stringify(rec.value.aliases) : rec.reason}; fable ${fable ? 'exercised' : 'not exercised'}`);
+    `ids ${JSON.stringify(ids)}; not in the price table ${JSON.stringify(notPriced)}; modelUsage lines without canonicalModel ${JSON.stringify(noCanonical)}; aliases ${rec.ok ? JSON.stringify(rec.value.aliases) : rec.reason}; fable ${fable ? 'exercised' : 'not exercised'}; subagent tool reported by init: ${subagentToolOf(initTools) ?? 'neither Agent nor Task'}`);
 }
 
 /** A-P1: each envelope model line reproduced at the CLI's rates (published for all but the observed ones), the split taken from the transcripts. */
