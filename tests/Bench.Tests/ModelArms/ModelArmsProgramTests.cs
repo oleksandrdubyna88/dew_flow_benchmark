@@ -470,9 +470,9 @@ public sealed partial class ModelArmsProgramTests
         using var root = new ExperimentRoot();
         var seams = GateSeams.Real with
         {
-            ReadFacts = (path, _, _) => Task.FromResult<FactsRead>(path == root.Root
-                ? new FactsRead.Unread("stat -c: no such tool")
-                : new FactsRead.Refused($"{path} is a symbolic link to 'elsewhere'")),
+            ReadFacts = (path, _) => path == root.Root
+                ? new FactsRead.Unread("statx: no such tool")
+                : new FactsRead.Refused($"{path} is a symbolic link to 'elsewhere'"),
         };
 
         var passed = await root.PassAsync(seams, "status");
@@ -480,7 +480,7 @@ public sealed partial class ModelArmsProgramTests
         passed.ExitCode.Should().Be(3, "the host could not say about one path, so the walk is environment");
         var lines = passed.Error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         lines.Should().HaveCount(2);
-        lines[0].Should().Contain("stat -c: no such tool");
+        lines[0].Should().Contain("statx: no such tool");
         lines[1].Should().Contain("symbolic link").And.Contain("experiment.json");
         passed.Calls.Should().BeEmpty();
     }

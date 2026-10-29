@@ -333,6 +333,194 @@ public sealed class ValidateVerbTests
     }
 
     [Fact]
+    public async Task A_target_config_that_names_programs_is_read_but_none_of_them_runs()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var target = Path.Combine(root.Temp, "example", "target");
+        var cfg = root.Shim(Path.Combine(root.Temp, "shims", "cfg"), "cfg");
+        var hooks = Path.Combine(target, "hooks");
+        foreach (var hook in new[]
+        {
+            "applypatch-msg", "pre-applypatch", "post-applypatch", "pre-commit", "pre-merge-commit", "prepare-commit-msg", "commit-msg", "post-commit", "pre-rebase",
+            "post-checkout", "post-merge", "pre-push", "pre-receive", "update", "post-receive", "post-update", "push-to-checkout", "pre-auto-gc", "post-rewrite",
+            "fsmonitor-watchman", "reference-transaction", "proc-receive",
+        })
+        {
+            root.Shim(Path.Combine(hooks, hook), "cfg");
+        }
+
+        File.AppendAllText(
+            Path.Combine(target, ".git", "config"),
+            $"""
+
+            [core]
+                fsmonitor = {cfg}
+                pager = {cfg}
+                editor = {cfg}
+                sshCommand = {cfg}
+                askPass = {cfg}
+                alternateRefsCommand = {cfg}
+                hooksPath = {hooks}
+            [diff]
+                external = {cfg}
+            [filter "x"]
+                clean = {cfg}
+                smudge = {cfg}
+            [credential]
+                helper = {cfg}
+            [gpg]
+                program = {cfg}
+            [sequence]
+                editor = {cfg}
+            [mergetool "x"]
+                cmd = {cfg}
+            [difftool "x"]
+                cmd = {cfg}
+            [uploadpack]
+                packObjectsHook = {cfg}
+            [alias]
+                rev-parse = !{cfg}
+            [pager]
+                rev-parse = {cfg}
+
+            """);
+
+        var (code, output, error) = await RunAsync(root);
+
+        error.Should().BeEmpty();
+        code.Should().Be(0, "the config is read and the source is asked: " + output);
+        root.Markers().Should().BeEmpty("no program a key of the target's config names ran for rev-parse");
+    }
+
+    [Fact]
+    public async Task The_source_is_asked_through_the_git_that_resolved_without_the_parents_GIT_variables()
+    {
+        Posix();
+        Assert.SkipUnless(File.Exists("/usr/bin/env"), "the shim dumps its environment with /usr/bin/env, by absolute path (PATH is the test's only entry)");
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var git = Path.Combine(Bin(root), "git");
+        File.Delete(git);
+        root.ShimScript(
+            git,
+            $"echo \"$1\" >> '{root.MarkerFile("git")}'\n/usr/bin/env >> '{root.MarkerFile("git.env")}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        root.WithVariables(("GIT_DIR", "/nowhere"), ("GIT_CEILING_DIRECTORIES", "/"), ("GIT_CONFIG_GLOBAL", "/nowhere"));
+
+        var (code, output, error) = await RunAsync(root);
+
+        error.Should().BeEmpty();
+        code.Should().Be(0);
+        File.ReadAllLines(root.MarkerFile("git")).Should().Equal("rev-parse", "rev-parse", "rev-parse", "rev-parse");
+        var seen = File.ReadAllLines(root.MarkerFile("git.env"));
+        seen.Should().Contain(line => line.StartsWith("PATH=", StringComparison.Ordinal), "the dump saw git's environment at all — a test that saw nothing would pass vacuously");
+        seen.Should().NotContain(line => line.StartsWith("GIT_", StringComparison.Ordinal), "no GIT_ variable of the parent reaches git");
+        output.Should().Contain($"  git → {git}");
+    }
+
+    [Fact]
+    public async Task A_git_that_cannot_answer_is_the_environment_naming_its_words()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var git = Path.Combine(Bin(root), "git");
+        File.Delete(git);
+        root.ShimScript(git, "echo 'fatal: detected dubious ownership in repository' >&2\nexit 128\n");
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(3);
+        error.Should().Contain("git could not answer about target.source").And.Contain("dubious ownership").And.NotContain("is not a git repository");
+    }
+
+    [Fact]
+    public async Task An_absent_git_leaves_the_source_unchecked_and_says_so()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        File.Delete(Path.Combine(Bin(root), "git"));
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(3);
+        error.Should().Contain("git is not on PATH").And.Contain("the source was not checked: git is absent").And.NotContain("is not a git repository");
+    }
+
+    [Fact]
+    public async Task The_source_is_not_asked_while_PATH_is_refused()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var git = Path.Combine(Bin(root), "git");
+        File.Delete(git);
+        root.Shim(git, "git", thenRealGit: true);
+        root.UsePath(Join(Bin(root), "relative"));
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain("PATH entry 'relative'").And.Contain("the source was not checked: PATH is refused");
+        root.Markers().Should().NotContain("git", "git looks its helpers up in PATH, so it is not started while PATH is refused");
+    }
+
+    [Fact]
+    public async Task A_source_that_is_a_plain_folder_inside_a_checkout_is_not_a_git_repository()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var sub = Path.Combine(root.Temp, "example", "target", "sub");
+        Directory.CreateDirectory(sub);
+        root.Edit(top => top["target"]!["source"] = sub);
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain("is not a git repository").And.Contain(sub);
+    }
+
+    [Fact]
+    public void An_absent_executable_is_the_environment_and_a_refused_one_the_configuration_by_its_kind_not_its_words()
+    {
+        var experiment = Example(top => { });
+        var good = Good(experiment, HostKind.OtherPosix);
+        ResolvedExecutable Named(string name, ExecutableAnswer answer) => new(new NeededExecutable(string.Empty, name), answer);
+
+        var absent = HostChecks.Decide(experiment, good with { Executables = [Named("x", new ExecutableAnswer.Absent("x (D17) y"))] });
+        var refused = HostChecks.Decide(experiment, good with { Executables = [Named("x", new ExecutableAnswer.Refused("plain words"))] });
+
+        absent.Should().ContainSingle().Which.Should().Be(new HostProblem("x (D17) y", Environment: true), "the host lacks it, whatever the sentence says");
+        refused.Should().ContainSingle().Which.Should().Be(new HostProblem("plain words", Environment: false), "the configuration names it, whatever the sentence says");
+    }
+
+    [Fact]
+    public async Task A_missing_coai_binary_is_named_by_its_field_with_exit_3()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        var missing = Path.Combine(root.Temp, "example", "coai", "no-such");
+        root.Edit(top => top["coai"]!["binary"] = missing);
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(3);
+        error.Should().Contain($"coai.binary {missing} does not exist").And.NotContain("cannot be resolved");
+    }
+
+    [Fact]
+    public async Task Every_absent_executable_is_named_by_its_role()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.Edit(top => top["target"]!["suite"]!["command"]![0] = "/opt/no-such-dir/tool");
+        File.Delete(Path.Combine(Bin(root), "claude"));
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(3);
+        error.Should().Contain("  - target.suite.command[0] /opt/no-such-dir/tool does not exist");
+        error.Should().Contain("  - claude is not on PATH on this host", "the three the harness always needs name themselves, with no role");
+    }
+
+    [Fact]
     public async Task A_scenarios_file_swapped_between_its_trust_check_and_its_read_is_refused_with_exit_4()
     {
         Posix();
@@ -458,13 +646,16 @@ public sealed class ValidateVerbTests
     {
         var experiment = Example(top => { });
 
-        HostChecks.NeededExecutables(experiment, HostKind.OtherPosix).Should().Equal(
-            "git", "claude", "dotnet", "node", "npm", experiment.Coai.Binary);
-        HostChecks.NeededExecutables(experiment, HostKind.Wsl).Should().Contain("pwsh.exe", "awake auto on WSL keeps the machine awake through PowerShell");
-        HostChecks.NeededExecutables(Example(top => top["awake"] = "none"), HostKind.Wsl).Should().NotContain("pwsh.exe");
-        HostChecks.NeededExecutables(Example(top => top["awake"] = "wsl"), HostKind.OtherPosix).Should().Contain("pwsh.exe");
-        HostChecks.NeededExecutables(Example(top => top["steps"]!["gate"]!["mode"] = "write"), HostKind.OtherPosix)
+        static IEnumerable<string> Names(Experiment e, HostKind host) => HostChecks.NeededExecutables(e, host).Select(needed => needed.Name);
+
+        Names(experiment, HostKind.OtherPosix).Should().Equal("git", "claude", "dotnet", "node", "npm", experiment.Coai.Binary);
+        Names(experiment, HostKind.Wsl).Should().Contain("pwsh.exe", "awake auto on WSL keeps the machine awake through PowerShell");
+        Names(Example(top => top["awake"] = "none"), HostKind.Wsl).Should().NotContain("pwsh.exe");
+        Names(Example(top => top["awake"] = "wsl"), HostKind.OtherPosix).Should().Contain("pwsh.exe");
+        Names(Example(top => top["steps"]!["gate"]!["mode"] = "write"), HostKind.OtherPosix)
             .Should().NotContain(experiment.Coai.Binary, "coai is needed only when a step is a gate step");
+        HostChecks.NeededExecutables(experiment, HostKind.OtherPosix).Select(needed => needed.Role).Should().Equal(
+            string.Empty, string.Empty, string.Empty, "target.lowPriority[0]", "target.extension.command[0]", "coai.binary");
     }
 
     [Fact]
@@ -477,10 +668,9 @@ public sealed class ValidateVerbTests
             Executables =
             [
                 .. good.Executables.Select(
-                    executable => executable.Name == "claude" ? executable with { Path = Outcome<string>.Failure("claude is not on PATH on this host") } : executable),
+                    executable => executable.Needed.Name == "claude" ? executable with { Answer = new ExecutableAnswer.Absent("claude is not on PATH on this host") } : executable),
             ],
-            SourceExists = false,
-            SourceIsGit = false,
+            Source = new SourceAnswer.Missing(),
             Scenarios = Outcome<IReadOnlyList<Scenario>>.Failure("scenarios.json holds no scenario"),
             CoaiSettingsExists = false,
         };
@@ -522,13 +712,12 @@ public sealed class ValidateVerbTests
     private static HostFacts Good(Experiment experiment, HostKind host) =>
         new(
             host,
-            [.. HostChecks.NeededExecutables(experiment, host).Select(name => new ResolvedExecutable(name, Outcome<string>.Success("/usr/bin/" + name)))],
-            SourceExists: true,
-            SourceIsGit: true,
-            PlanBranchExists: true,
-            BaseExists: true,
-            PlanAtBase: true,
-            Scenarios: Outcome<IReadOnlyList<Scenario>>.Success([new Scenario("S1", "cs", "A")]),
-            CoaiBinaryExists: true,
-            CoaiSettingsExists: true);
+            [.. HostChecks.NeededExecutables(experiment, host).Select(needed => new ResolvedExecutable(needed, new ExecutableAnswer.Found("/usr/bin/" + needed.Name)))],
+            Outcome<IReadOnlyList<Scenario>>.Success([new Scenario("S1", "cs", "A")]),
+            CoaiSettingsExists: true)
+        {
+            Source = new SourceAnswer.Asked(true, true, true, true),
+            PathRefusals = [],
+            Templates = new Dictionary<StepKind, Outcome<string>>(),
+        };
 }

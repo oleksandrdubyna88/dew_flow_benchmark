@@ -26,37 +26,49 @@ internal static class HostFactsReader
         var host = HostKinds.From(OperatingSystem.IsWindows(), environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
         var entries = PathEntries(environment);
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
-        var source = await SourceFacts.ReadAsync(experiment.Target, input.Verb.Stopping);
+        var executables = Executables(experiment, host, entries, roots);
+        var refusals = PathRefusals(entries, roots);
 
-        var facts = new HostFacts(
-            host,
-            Executables(experiment, host, entries, roots),
-            source.Exists,
-            source.IsGit,
-            source.PlanBranch,
-            source.Base,
-            source.PlanAtBase,
-            scenarios,
-            File.Exists(experiment.Coai.Binary),
-            File.Exists(experiment.Coai.Settings))
+        var facts = new HostFacts(host, executables, scenarios, File.Exists(experiment.Coai.Settings))
         {
-            PathRefusals = PathRefusals(entries, roots),
+            Source = await SourceAsync(input, executables, refusals),
+            PathRefusals = refusals,
             Templates = Templates(input),
         };
         return new Passage<HostFacts>.Through(facts);
     }
 
+    /// <summary>The source is asked only through a git the resolution FOUND and only while PATH is clean: git looks its own helpers up in PATH, and a refused PATH is exit 4
+    /// whatever git says (and a PATH that is refused is the cause to name before git's own state). Otherwise the sentence says it was not checked, and why.</summary>
+    private static async Task<SourceAnswer> SourceAsync(ExperimentInput input, IReadOnlyList<ResolvedExecutable> executables, IReadOnlyList<string> refusals)
+    {
+        var target = input.Experiment.Target;
+        if (!Directory.Exists(target.Source))
+        {
+            return new SourceAnswer.Missing();
+        }
+
+        var git = executables.FirstOrDefault(executable => executable.Needed.Name == "git")?.Answer;
+        return (git, refusals.Count) switch
+        {
+            (_, > 0) => new SourceAnswer.NotAsked("the source was not checked: PATH is refused"),
+            (ExecutableAnswer.Found found, _) => await SourceFacts.ReadAsync(target, found.Real, GitEnvironment.Of(input.Verb.Environment), RootFacts.RealPathOf, input.Verb.Stopping),
+            (ExecutableAnswer.Refused, _) => new SourceAnswer.NotAsked("the source was not checked: git is refused"),
+            _ => new SourceAnswer.NotAsked("the source was not checked: git is absent"),
+        };
+    }
+
     private static IReadOnlyList<ResolvedExecutable> Executables(Experiment experiment, HostKind host, IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
-        [.. HostChecks.NeededExecutables(experiment, host).Select(name => new ResolvedExecutable(
-            name,
-            ExecutableResolution.Resolve(name, entries, roots, RootFacts.IsExecutableFile, RootFacts.RealPathOf, OperatingSystem.IsWindows())))];
+        [.. HostChecks.NeededExecutables(experiment, host).Select(needed => new ResolvedExecutable(
+            needed,
+            ExecutableResolution.Resolve(needed.Name, entries, roots, RootFacts.Host, OperatingSystem.IsWindows())))];
 
     /// <summary>The PATH of the environment map split into its entries, an empty one included; none when the map has no PATH at all.</summary>
     private static IReadOnlyList<string> PathEntries(IReadOnlyDictionary<string, string> environment) =>
         environment.TryGetValue("PATH", out var path) ? [.. path.Split(Path.PathSeparator)] : [];
 
     private static IReadOnlyList<string> PathRefusals(IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
-        [.. entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.RealPathOf)).Where(refusal => refusal.Length > 0).Distinct(StringComparer.Ordinal)];
+        [.. entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).Where(refusal => refusal.Length > 0).Distinct(StringComparer.Ordinal)];
 
     private static IReadOnlyDictionary<StepKind, Outcome<string>> Templates(ExperimentInput input)
     {
@@ -76,9 +88,9 @@ internal static class HostFactsReader
         }
     }
 
-    /// <summary><c>scenarios.json</c> as the gate judged it: read through <see cref="RootPaths.Of"/> (the path the gate judged), then stat-ed again — by the gate's
-    /// own helper — and refused (exit 4) when it is no longer the file that was judged. The answer is what <see cref="ScenariosFile.Read"/> made of the text, or why
-    /// the file could not be read at all.</summary>
+    /// <summary><c>scenarios.json</c> as the gate judged it: read at the path the gate read the facts of (<see cref="FileFacts.Path"/>, the normalised one), then stat-ed
+    /// again — by the gate's own helper — and refused (exit 4) when it is no longer the file that was judged. The answer is what <see cref="ScenariosFile.Read"/> made of
+    /// the text, or why the file could not be read at all.</summary>
     private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ScenariosAsync(ExperimentInput input, GateSeams seams)
     {
         if (input.JudgedScenarios is not [var judged])
@@ -87,16 +99,14 @@ internal static class HostFactsReader
                 ExitCodes.Environment, $"model-arms {input.Verb.Verb}: the gate did not hand over the facts it judged {input.Experiment.ScenariosFile} by — refused rather than read unjudged (D17)");
         }
 
-        return await input.Root.Of(input.Experiment.ScenariosFile).Match(
-            path => ReadScenariosAsync(input, path, judged, seams),
-            reason => Task.FromResult(Passage<Outcome<IReadOnlyList<Scenario>>>.Stop(ExitCodes.Configuration, $"model-arms {input.Verb.Verb}: {reason}")));
+        return await ReadScenariosAsync(input, judged, seams);
     }
 
-    private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ReadScenariosAsync(ExperimentInput input, string path, FileFacts judged, GateSeams seams)
+    private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ReadScenariosAsync(ExperimentInput input, FileFacts judged, GateSeams seams)
     {
-        var text = await TextOf(path, input.Verb.Stopping);
-        await seams.AfterRead(path);
-        var same = await ExperimentGate.StillTheSame(input.Verb, judged, seams);
+        var text = await TextOf(judged.Path, input.Verb.Stopping);
+        await seams.AfterRead(judged.Path);
+        var same = ExperimentGate.StillTheSame(input.Verb, judged, seams);
         return same.Map(_ => text.Match(ScenariosFile.Read, Outcome<IReadOnlyList<Scenario>>.Failure));
     }
 

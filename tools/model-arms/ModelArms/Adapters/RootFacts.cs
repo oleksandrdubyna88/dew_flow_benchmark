@@ -1,6 +1,4 @@
-using System.Globalization;
 using Bench.Domain;
-using Bench.Infrastructure.Process;
 using ModelArms.Core.Experiment;
 
 namespace ModelArms.Adapters;
@@ -12,11 +10,6 @@ public static class RootFacts
 {
     private const string SolutionFile = "dew_flow_benchmark.slnx";
     private const UnixFileMode AnyExecute = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
-
-    private static readonly TimeSpan Ask = TimeSpan.FromSeconds(10);
-
-    /// <summary>The child's whole environment: the C locale, so nothing it prints is translated. The answers are numbers and bits, so this is belt and braces.</summary>
-    private static readonly IReadOnlyDictionary<string, string> NeutralLocale = new Dictionary<string, string> { ["LC_ALL"] = "C" };
 
     /// <summary>The nearest ancestor-or-self of <paramref name="path"/> holding a <c>.git</c> file (a worktree) or folder (a clone); the empty string
     /// when there is none. The path need not exist yet: <c>init</c> asks about a root it has not made.</summary>
@@ -37,25 +30,25 @@ public static class RootFacts
     /// Nothing is a pass by default: the caller refuses what this could not resolve.</summary>
     public static Outcome<string> RealPathOf(string path) => RealPath.Of(path);
 
-    /// <summary>The uid this process runs as, from <c>id -u</c>.</summary>
-    public static async Task<Outcome<int>> CurrentUidAsync(CancellationToken ct) =>
-        (await Said("id", ["-u"], ct)).Match(text => Uid(text, "id -u"), Outcome<int>.Failure);
+    /// <summary>The uid this process runs as: <c>geteuid(2)</c> through libc, no process.</summary>
+    public static int CurrentUid() => KernelFacts.EffectiveUid();
 
-    /// <summary>Who owns <paramref name="path"/>, its mode, and what kind of file it is — all three read by ONE <c>stat</c> call on ONE normalised path, so they
+    /// <summary>The host's answers about paths, for the deciders that judge them: where a path really is, whether a directory entry is there, whether it is an executable file.</summary>
+    public static HostPaths Host { get; } = new(RealPathOf, KernelFacts.Present, IsExecutableFile);
+
+    /// <summary>Who owns <paramref name="path"/>, its mode, and what kind of file it is — all read by ONE <c>statx</c> call on ONE normalised path, so they
     /// are facts of one inode. The path is made absolute and trimmed once, here (a NUL is refused first): the owner used to come from the kernel's reading of
     /// the raw path and the mode from .NET's reading of the normalised one, and a <c>..</c> after a symbolic link climbs from the link's TARGET in the kernel's
     /// order but from the link's folder in .NET's, so the two could be two different files. A symbolic link at the path is refused; the facts of the file
     /// itself are what is judged. The path in the answer is the normalised one.</summary>
-    public static async Task<Outcome<FileFacts>> FileFactsAsync(string path, CancellationToken ct) =>
-        (await ReadFactsAsync(path, ct)).ToOutcome();
+    public static Outcome<FileFacts> FileFacts(string path) => ReadFacts(path).ToOutcome();
 
-    /// <summary><see cref="ReadFactsAsync(string, CancellationToken)"/> for a path that must be of the <paramref name="expected"/> kind.</summary>
-    public static async Task<FactsRead> ReadFactsAsync(string path, FileKind expected, CancellationToken ct) =>
-        (await ReadFactsAsync(path, ct)).MustBe(expected);
+    /// <summary><see cref="ReadFacts(string)"/> for a path that must be of the <paramref name="expected"/> kind.</summary>
+    public static FactsRead ReadFacts(string path, FileKind expected) => ReadFacts(path).MustBe(expected);
 
-    /// <summary><see cref="FileFactsAsync"/> with the cause of a failure kept: a path the check refuses to judge (a link, a NUL) is
-    /// <see cref="FactsRead.Refused"/>, a <c>stat</c> that could not say is <see cref="FactsRead.Unread"/>. The console exits 4 for the first and 3 for the second.</summary>
-    public static async Task<FactsRead> ReadFactsAsync(string path, CancellationToken ct)
+    /// <summary>The facts of a trust path, with the cause of a failure kept: a path the check refuses to judge (a link, a NUL) is
+    /// <see cref="FactsRead.Refused"/>, a read the host could not make is <see cref="FactsRead.Unread"/>. The console exits 4 for the first and 3 for the second.</summary>
+    public static FactsRead ReadFacts(string path)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -68,41 +61,24 @@ public static class RootFacts
         }
 
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        var said = await Said("stat", StatArguments(full), ct);
-        return said.Match(text => Judge(full, text), reason => new FactsRead.Unread($"the owner of {full} cannot be read: {reason}"));
+        var read = KernelFacts.Read(full);
+        return read is FactsRead.Read { Facts.Identity.Kind: FileKind.Link }
+            ? new FactsRead.Refused(
+                $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
+            : read;
     }
 
-    /// <summary>GNU <c>stat -c '%u %f %d %i %.9Z'</c> (owner, the raw mode in hex, the device, the inode, the change time in seconds with nine decimals); BSD and macOS <c>stat -f '%u %p %d %i %Fc'</c> (the same, the mode in octal). The raw mode carries the
-    /// file type in its high bits, so the type is decided on bits and never on a word <c>stat</c> prints in the user's language. Without <c>-L</c>: the file itself.</summary>
-    private static string[] StatArguments(string full) =>
-        OperatingSystem.IsMacOS() ? ["-f", "%u %p %d %i %Fc", full] : ["-c", "%u %f %d %i %.9Z", full];
-
-    /// <summary>The facts in one line of <c>stat</c> output, or why the line cannot be used. A symbolic link is refused, naming where it points: the trust check
-    /// judges the file itself, not a link that can be re-pointed. Public so the parser can be tested over the raw outputs of both <c>stat</c> flavours.</summary>
-    public static Outcome<FileFacts> FactsOfStat(string full, string text, bool bsd) => ReadStat(full, text, bsd).ToOutcome();
-
-    private static FactsRead ReadStat(string full, string text, bool bsd) =>
-        StatLine.Read(text, bsd).Match(
-            line => line.IsLink
-                ? new FactsRead.Refused(
-                    $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")
-                : new FactsRead.Read(new FileFacts(full, line.Uid, line.Permissions) { Identity = new FileIdentity(line.Device, line.Inode, line.Kind, line.Ctime) }),
-            reason => (FactsRead)new FactsRead.Unread($"stat answered '{text}' for {full}: {reason}"));
-
-    private static FactsRead Judge(string full, string text) => ReadStat(full, text, OperatingSystem.IsMacOS());
-
-    /// <summary>One line of <c>stat</c>: <c>uid rawmode device inode ctime</c>. The raw mode is S_IFMT (<c>0xF000</c>) type bits over the permission bits (<c>0xFFF</c>, which includes set-id and sticky).</summary>
-    private sealed record StatLine(int Uid, int RawMode, ulong Device, ulong Inode, decimal Ctime)
+    /// <summary>The type bits and the permission bits of a raw mode, as the kernel reports it: the file type in the high bits (<c>S_IFMT</c>, <c>0xF000</c>) over the
+    /// permission bits (<c>0xFFF</c>, set-id and sticky included).</summary>
+    internal sealed record RawMode(int Raw)
     {
         private const int TypeMask = 0xF000;
         private const int PermissionMask = 0xFFF;
 
-        public bool IsLink => Kind == FileKind.Link;
-
-        public UnixFileMode Permissions => (UnixFileMode)(RawMode & PermissionMask);
+        public UnixFileMode Permissions => (UnixFileMode)(Raw & PermissionMask);
 
         public FileKind Kind =>
-            (RawMode & TypeMask) switch
+            (Raw & TypeMask) switch
             {
                 0x8000 => FileKind.Regular,
                 0x4000 => FileKind.Directory,
@@ -113,47 +89,7 @@ public static class RootFacts
                 0x6000 => FileKind.BlockDevice,
                 _ => FileKind.Unknown,
             };
-
-        public static Outcome<StatLine> Read(string text, bool bsd)
-        {
-            var parts = text.Split(' ');
-            return parts.Length == 5 && TryOwnerAndMode(parts[0], parts[1], bsd, out var uid, out var raw) && TryIdentity(parts[2], parts[3], parts[4], out var device, out var inode, out var ctime)
-                ? Outcome<StatLine>.Success(new StatLine(uid, raw, device, inode, ctime))
-                : Outcome<StatLine>.Failure("expected an owner, a raw mode, a device, an inode and a change time");
-        }
-
-        private static bool TryOwnerAndMode(string owner, string mode, bool bsd, out int uid, out int raw)
-        {
-            raw = 0;
-            return int.TryParse(owner, NumberStyles.None, CultureInfo.InvariantCulture, out uid) && TryRaw(mode, bsd, out raw);
-        }
-
-        private static bool TryIdentity(string device, string inode, string changed, out ulong deviceNumber, out ulong inodeNumber, out decimal ctime)
-        {
-            inodeNumber = 0;
-            ctime = 0m;
-            return ulong.TryParse(device, NumberStyles.None, CultureInfo.InvariantCulture, out deviceNumber)
-                && ulong.TryParse(inode, NumberStyles.None, CultureInfo.InvariantCulture, out inodeNumber)
-                && decimal.TryParse(changed, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out ctime);
-        }
-
-        private static bool TryRaw(string digits, bool octal, out int raw)
-        {
-            raw = 0;
-            var parsed = digits.Length is > 0 and <= 8 && digits.All(c => octal ? c is >= '0' and <= '7' : char.IsAsciiHexDigit(c));
-            if (parsed)
-            {
-                raw = Convert.ToInt32(digits, octal ? 8 : 16);
-            }
-
-            return parsed;
-        }
     }
-
-    private static Outcome<int> Uid(string text, string tool) =>
-        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var uid)
-            ? Outcome<int>.Success(uid)
-            : Outcome<int>.Failure($"{tool} answered '{text}', not a user id");
 
     private static IEnumerable<string> AncestorsOrSelf(string path)
     {
@@ -178,13 +114,4 @@ public static class RootFacts
     /// <summary>Where a trust path points when it is itself a symbolic link (made absolute and the trailing separators trimmed — <c>GetFullPath</c> collapses <c>link//</c> and <c>link/.</c>: <c>readlink("link/")</c> follows the link and
     /// reports none), or null for a path that is not one. An ancestor may be a link; the last segment may not.</summary>
     private static string? LinkTargetOf(string path) => new FileInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))).LinkTarget;
-
-    /// <summary>What a short-lived tool printed on stdout, or why it could not be asked.</summary>
-    private static async Task<Outcome<string>> Said(string tool, IReadOnlyList<string> arguments, CancellationToken ct)
-    {
-        var attempt = await ProcessRunner.RunAsync(tool, arguments, Path.GetTempPath(), Ask, string.Empty, NeutralLocale, ct);
-        return attempt is ProcessAttempt.Completed { Result.ExitCode: 0 } done
-            ? Outcome<string>.Success(done.Result.StandardOutput.Trim())
-            : Outcome<string>.Failure($"{tool} {string.Join(' ', arguments)}: {attempt.Describe}");
-    }
 }

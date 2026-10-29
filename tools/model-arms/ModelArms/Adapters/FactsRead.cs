@@ -3,7 +3,7 @@ using ModelArms.Core.Experiment;
 
 namespace ModelArms.Adapters;
 
-/// <summary>What one read of a trust path came to. Three states, never two: the host <see cref="Unread"/> (a <c>stat</c> that could not run or whose
+/// <summary>What one read of a trust path came to. Three states, never two: the host <see cref="Unread"/> (a kernel read that failed or whose
 /// answer could not be read: the environment is not ready, exit 3) is not the path <see cref="Refused"/> (a symbolic link, a NUL: the operator's file
 /// is wrong, exit 4), and neither is <see cref="Read"/>.</summary>
 public abstract record FactsRead

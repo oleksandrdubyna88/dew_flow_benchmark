@@ -38,7 +38,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(ModelArmsCommandLine),
 
         // E1.S10
-        typeof(HostKinds), typeof(HostChecks), typeof(global::ModelArms.Core.Briefs.BriefRehearsal),
+        typeof(HostKinds), typeof(HostChecks), typeof(global::ModelArms.Core.Briefs.BriefRehearsal), typeof(GitEnvironment),
 
         // E1.S11
 
@@ -125,6 +125,37 @@ public sealed class ModelArmsArchitectureTests
         FilesReadingLinks(Path.Combine(Cli.Repository.Root, "src")).Should().Contain(
             "FileSystemLinkTargets.cs", "the pattern must still match the one known instance outside the module — a scan that matches nothing passes forever");
     }
+
+    /// <summary>Nothing the module starts is looked up by name: a bare name handed to <c>Process.Start</c> is resolved by the runtime — beside the binary, in the
+    /// CURRENT DIRECTORY, then along PATH — so an arm's file in the target could be what answers the question that exists to keep arms' files from running
+    /// (measured on 2026-10-29 with marker-writing shims). Every launch names the absolute path the module resolved and judged. The scan reads whole files,
+    /// across lines.
+    /// <para>
+    /// What this does NOT prove: that no other API starts a process (<c>Process.Start</c> itself is not matched), or that a launch by an absolute path is made
+    /// under the right environment — only that the two shared launchers are not given a literal name and the git helper that does so is not used.
+    /// </para></summary>
+    [Fact]
+    public void The_module_launches_nothing_by_a_bare_name()
+    {
+        var sites = FilesLaunchingByName(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
+
+        sites.Should().BeEmpty("a launch by a literal name is looked up in the cwd before PATH; name the absolute path Resolve found");
+    }
+
+    [Fact]
+    public void The_bare_name_scan_still_finds_the_fixtures_bare_git()
+    {
+        FilesLaunchingByName(Path.Combine(Cli.Repository.Root, "tests", "Bench.Tests", "ModelArms")).Should().Contain(
+            "ExperimentRoot.cs", "the pattern must still match the one known bare launch — it builds the fixture and is not the subject — or the scan above passes forever");
+    }
+
+    private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>
+        [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(path), "GitCommand\\.|ProcessRunner\\.\\w+\\(\\s*\"[A-Za-z]"))
+            .Select(Path.GetFileName)
+            .Cast<string>()
+            .Order(StringComparer.Ordinal)];
 
     private static IReadOnlyList<string> FilesReadingLinks(string folder) =>
         [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)

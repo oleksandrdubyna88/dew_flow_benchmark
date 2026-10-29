@@ -18,9 +18,19 @@ public sealed class ExecutableResolutionTests
 
     private static Outcome<string> Same(string path) => Outcome<string>.Success(path);
 
-    private static Outcome<string> Resolve(
+    /// <summary>The pure host: a path the kernel answers "No such file" for is absent, every other path is there.</summary>
+    internal static HostPaths Fake(Func<string, bool> isExecutable, Func<string, Outcome<string>>? finalTarget = null)
+    {
+        var real = finalTarget ?? Same;
+        return new HostPaths(
+            real,
+            path => Outcome<bool>.Success(real(path) is not Outcome<string>.Fail fail || !fail.Reason.Contains("No such file", StringComparison.OrdinalIgnoreCase)),
+            isExecutable);
+    }
+
+    private static ExecutableAnswer Resolve(
         string executable, string[] path, Func<string, bool> isExecutable, Func<string, Outcome<string>>? finalTarget = null, bool windows = false, string[]? forbidden = null) =>
-        ExecutableResolution.Resolve(executable, path, forbidden ?? Forbidden, isExecutable, finalTarget ?? Same, windows);
+        ExecutableResolution.Resolve(executable, path, forbidden ?? Forbidden, Fake(isExecutable, finalTarget), windows);
 
     private static void PosixPaths()
     {
@@ -80,7 +90,7 @@ public sealed class ExecutableResolutionTests
     {
         PosixPaths();
         Resolve("/usr/bin/git", ["/a"], p => p == "/usr/bin/git").Ok().Should().Be("/usr/bin/git");
-        Resolve("/usr/bin/git", ["/a"], _ => false).Reason().Should().Be("/usr/bin/git does not exist or is not executable");
+        Resolve("/usr/bin/git", ["/a"], _ => false).Reason().Should().Contain("/usr/bin/git is not an executable file", "it exists but is not executable");
     }
 
     [Fact]
@@ -130,13 +140,67 @@ public sealed class ExecutableResolutionTests
     }
 
     [Fact]
+    public void A_spelled_file_that_is_not_there_is_absent_and_one_that_is_there_but_cannot_be_resolved_is_refused()
+    {
+        PosixPaths();
+        var host = new HostPaths(
+            path => path switch
+            {
+                "/opt/no-such-dir/tool" or "/opt/dangling" => Outcome<string>.Failure("No such file or directory"),
+                "/opt/locked/t" => Outcome<string>.Failure("Permission denied"),
+                _ => Same(path),
+            },
+            path => path switch
+            {
+                "/opt/no-such-dir/tool" => Outcome<bool>.Success(false),
+                "/opt/locked/t" => Outcome<bool>.Failure("Permission denied"),
+                _ => Outcome<bool>.Success(true),
+            },
+            _ => true);
+
+        var absent = ExecutableResolution.Resolve("/opt/no-such-dir/tool", [], Forbidden, host, windows: false);
+        var dangling = ExecutableResolution.Resolve("/opt/dangling", [], Forbidden, host, windows: false);
+        var locked = ExecutableResolution.Resolve("/opt/locked/t", [], Forbidden, host, windows: false);
+
+        absent.Should().BeOfType<ExecutableAnswer.Absent>().Which.Reason.Should().Be("/opt/no-such-dir/tool does not exist", "no directory entry is the host's lack");
+        dangling.Should().BeOfType<ExecutableAnswer.Refused>().Which.Reason.Should().Contain("cannot be resolved").And.Contain("D17").And.Contain("/opt/dangling");
+        locked.Should().BeOfType<ExecutableAnswer.Refused>().Which.Reason.Should().Contain("Permission denied", "a kernel that cannot say is refused, not read as absent");
+    }
+
+    [Fact]
+    public void A_bare_name_on_no_entry_is_absent_and_a_spelled_file_that_is_not_executable_is_refused()
+    {
+        PosixPaths();
+
+        Resolve("claude", ["/a"], _ => false).Should().BeOfType<ExecutableAnswer.Absent>().Which.Reason.Should().Be("claude is not on PATH on this host");
+        Resolve("/opt/plain", [], _ => false).Should().BeOfType<ExecutableAnswer.Refused>().Which.Reason.Should().Contain("/opt/plain is not an executable file").And.Contain("D17");
+    }
+
+    [Fact]
+    public void A_forbidden_root_whose_component_cannot_be_resolved_refuses_every_executable()
+    {
+        PosixPaths();
+        var host = new HostPaths(
+            path => path is "/mnt/loop" or "/mnt/loop/target" ? Outcome<string>.Failure("Too many levels of symbolic links") : Same(path),
+            path => Outcome<bool>.Success(path != "/mnt/loop/target"),
+            _ => true);
+        string[] roots = ["/mnt/loop/target"];
+
+        var executable = ExecutableResolution.Resolve("/usr/bin/git", [], roots, host, windows: false);
+        var entry = ExecutableResolution.PathEntryRefusal("/usr/bin", roots, host);
+
+        executable.Should().BeOfType<ExecutableAnswer.Refused>().Which.Reason.Should().Contain("'/mnt/loop/target'").And.Contain("cannot be resolved").And.Contain("Too many levels");
+        entry.Should().Contain("'/mnt/loop/target'").And.Contain("cannot be resolved");
+    }
+
+    [Fact]
     public void On_windows_a_name_is_also_tried_with_an_exe_suffix()
     {
         PosixPaths();
         var resolved = Resolve("git", ["/a"], p => p == "/a/git.exe", windows: true);
 
         resolved.Ok().Should().Be("/a/git.exe");
-        Resolve("git", ["/a"], p => p == "/a/git.exe", windows: false).Failed().Should().BeTrue("off Windows a name is not given a suffix");
+        Resolve("git", ["/a"], p => p == "/a/git.exe", windows: false).Should().BeOfType<ExecutableAnswer.Absent>("off Windows a name is not given a suffix");
     }
 
     [Fact]
@@ -183,7 +247,7 @@ public sealed class ExecutableResolutionTests
         temp.Folder("outside");
         File.CreateSymbolicLink(temp.Combine("outside", "git"), real);
 
-        var resolved = ExecutableResolution.Resolve("git", [temp.Combine("outside")], Roots(temp), RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: false);
+        var resolved = ExecutableResolution.Resolve("git", [temp.Combine("outside")], Roots(temp), RootFacts.Host, windows: false);
 
         resolved.Ok().Should().Be(real);
     }
@@ -192,7 +256,7 @@ public sealed class ExecutableResolutionTests
     public void A_link_that_cannot_be_followed_refuses_instead_of_passing()
     {
         PosixPaths();
-        Outcome<string> Broken(string path) => Outcome<string>.Failure("too many levels of symbolic links");
+        Outcome<string> Broken(string path) => path.StartsWith("/usr/bin", StringComparison.Ordinal) ? Outcome<string>.Failure("too many levels of symbolic links") : Same(path);
 
         Resolve("t", ["/usr/bin"], _ => true, Broken).Reason().Should().Contain("too many levels of symbolic links").And.Contain("/usr/bin/t");
     }
@@ -224,8 +288,8 @@ public sealed class ExecutableResolutionTests
 
     private static string[] Roots(TempFolder temp) => [.. ExecutableRule.ForbiddenRoots(temp.Combine("target"), temp.Combine("root"))];
 
-    private static Outcome<string> Real(TempFolder temp, string executable, string[] path) =>
-        ExecutableResolution.Resolve(executable, path, Roots(temp), RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: false);
+    private static ExecutableAnswer Real(TempFolder temp, string executable, string[] path) =>
+        ExecutableResolution.Resolve(executable, path, Roots(temp), RootFacts.Host, windows: false);
 
     [Fact]
     public void A_real_symbolic_link_into_the_target_is_refused_and_a_real_file_beside_it_is_not()
@@ -313,8 +377,8 @@ public sealed class ExecutableResolutionTests
         temp.Executable("home", "bin", "honest");
         var roots = ExecutableRule.ForbiddenRoots(temp.Combine("home", "git", "proj"), temp.Combine("root"));
 
-        var refused = ExecutableResolution.Resolve("t", [temp.Combine("home", "bin")], roots, RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: false);
-        var control = ExecutableResolution.Resolve("honest", [temp.Combine("home", "bin")], roots, RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: false);
+        var refused = ExecutableResolution.Resolve("t", [temp.Combine("home", "bin")], roots, RootFacts.Host, windows: false);
+        var control = ExecutableResolution.Resolve("honest", [temp.Combine("home", "bin")], roots, RootFacts.Host, windows: false);
 
         refused.Reason().Should().Contain("D17").And.Contain(temp.Combine("mnt", "git", "proj"));
         control.Ok().Should().Be(temp.Combine("home", "bin", "honest"));
@@ -417,7 +481,7 @@ public sealed class ExecutableResolutionTests
         }
 
         var roots = ExecutableRule.ForbiddenRoots(longFolder, temp.Combine("root"));
-        var refused = ExecutableResolution.Resolve(System.IO.Path.Combine(shortFolder, "x.exe"), [], roots, RootFacts.IsExecutableFile, RootFacts.RealPathOf, windows: true);
+        var refused = ExecutableResolution.Resolve(System.IO.Path.Combine(shortFolder, "x.exe"), [], roots, RootFacts.Host, windows: true);
 
         // %TEMP% may itself be spelled short: the real path the kernel answers for the long folder is what the sentence names.
         refused.Reason().Should().Contain("D17").And.Contain(RootFacts.RealPathOf(longFolder).Ok());
@@ -445,4 +509,19 @@ internal static class ShortNames
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetShortPathNameW", SetLastError = true)]
     private static extern int GetShortPathNameW(string path, char[] buffer, int length);
+}
+
+/// <summary>Reads an <see cref="ExecutableAnswer"/> the way the tests read an <c>Outcome</c>: the real path of a found one, the reason of any other.</summary>
+internal static class AnswerEx
+{
+    public static string Ok(this ExecutableAnswer answer) =>
+        answer is ExecutableAnswer.Found found ? found.Real : throw new InvalidOperationException($"expected a found executable, got {answer}");
+
+    public static string Reason(this ExecutableAnswer answer) =>
+        answer switch
+        {
+            ExecutableAnswer.Absent absent => absent.Reason,
+            ExecutableAnswer.Refused refused => refused.Reason,
+            _ => throw new InvalidOperationException($"expected a refusal, got {answer}"),
+        };
 }

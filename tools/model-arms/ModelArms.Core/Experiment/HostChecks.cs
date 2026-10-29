@@ -17,31 +17,59 @@ public static class HostKinds
         : HostKind.OtherPosix;
 }
 
-/// <summary>One executable the experiment needs and where it really is on this host (the REAL path, which the harness launches and prints), or why it is refused.</summary>
-public sealed record ResolvedExecutable(string Name, Outcome<string> Path);
+/// <summary>An executable the experiment needs and the field that asked for it (<c>target.suite.command[0]</c>, <c>coai.binary</c>); the role is empty for the three
+/// the harness always needs, which name themselves.</summary>
+public sealed record NeededExecutable(string Role, string Name);
 
-/// <summary>Everything the console read about the host that <see cref="HostChecks.Decide"/> judges. A fact it could not establish is <c>false</c>, and the
-/// sentence that names the fact is the answer — not a guess about why.
+/// <summary>A needed executable and what <see cref="ExecutableResolution.Resolve"/> answered for it.</summary>
+public sealed record ResolvedExecutable(NeededExecutable Needed, ExecutableAnswer Answer);
+
+/// <summary>What git said about <c>target.source</c>, or why it was not asked. Four states, closed: each has its own exit.</summary>
+public abstract record SourceAnswer
+{
+    private SourceAnswer() { }
+
+    /// <summary>The source is not a folder — exit 4.</summary>
+    public sealed record Missing : SourceAnswer;
+
+    /// <summary>Git answered all it was asked; every "no" is an answer (<paramref name="IsGit"/> false stops the questions) — exit 4 each.</summary>
+    public sealed record Asked(bool IsGit, bool PlanBranch, bool Base, bool PlanAtBase) : SourceAnswer;
+
+    /// <summary>Git was not asked, and the sentence says why (git absent or refused, PATH refused) — printed as a finding the exit of which is already 3 or 4 from the cause.</summary>
+    public sealed record NotAsked(string Reason) : SourceAnswer;
+
+    /// <summary>Git ran and could not say (dubious ownership, a timeout, a start that failed) — exit 3.</summary>
+    public sealed record Unanswered(string Reason) : SourceAnswer;
+}
+
+/// <summary>Everything the console read about the host that <see cref="HostChecks.Decide"/> judges. A fact it could not establish is never a guess: git that did not
+/// answer is <see cref="SourceAnswer.Unanswered"/>, not "no".
 /// <para>
 /// <paramref name="PathRefusals"/> are the sentences <see cref="ExecutableResolution.PathEntryRefusal"/> gave for the entries of PATH (the children inherit it),
-/// and <paramref name="Templates"/> the brief template each step kind the schemes use was read as — both default to nothing read, so a host that was not
-/// asked is a host with nothing to say.
+/// and <paramref name="Templates"/> the brief template each step kind the schemes use was read as. All three are <c>required</c>: a caller that did not read them
+/// must say so, not default to a host with nothing to say.
 /// </para></summary>
 public sealed record HostFacts(
     HostKind Host,
     IReadOnlyList<ResolvedExecutable> Executables,
-    bool SourceExists,
-    bool SourceIsGit,
-    bool PlanBranchExists,
-    bool BaseExists,
-    bool PlanAtBase,
     Outcome<IReadOnlyList<Scenario>> Scenarios,
-    bool CoaiBinaryExists,
     bool CoaiSettingsExists)
 {
-    public IReadOnlyList<string> PathRefusals { get; init; } = [];
+    public required SourceAnswer Source { get; init; }
 
-    public IReadOnlyDictionary<StepKind, Outcome<string>> Templates { get; init; } = new Dictionary<StepKind, Outcome<string>>();
+    public required IReadOnlyList<string> PathRefusals { get; init; }
+
+    public required IReadOnlyDictionary<StepKind, Outcome<string>> Templates { get; init; }
+}
+
+/// <summary>The environment git is launched under: the verb's map minus every <c>GIT_*</c> name (ordinal, ignoring case). A parent's <c>GIT_DIR</c>,
+/// <c>GIT_WORK_TREE</c>, <c>GIT_CEILING_DIRECTORIES</c>, <c>GIT_CONFIG_*</c>, <c>GIT_EXEC_PATH</c> or <c>GIT_SSH*</c> would redirect the question or name a program.
+/// <c>HOME</c> and <c>PATH</c> pass: the operator's own global config is theirs, and PATH was judged.</summary>
+public static class GitEnvironment
+{
+    public static IReadOnlyDictionary<string, string> Of(IReadOnlyDictionary<string, string> environment) =>
+        environment.Where(variable => !variable.Key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(variable => variable.Key, variable => variable.Value, StringComparer.Ordinal);
 }
 
 /// <summary>One finding. <paramref name="Environment"/> is true when the host is not ready (a CLI it lacks: exit 3, D16) and false when the configuration is
@@ -52,26 +80,25 @@ public sealed record HostProblem(string Text, bool Environment);
 public static class HostChecks
 {
     private const string PowerShell = "pwsh.exe";
-    private const string Refusal = "(D17)";
 
-    /// <summary>The executables the experiment will start, each once, in the order the harness reaches for them: the three it always needs, the first word of
-    /// each configured command, PowerShell when the awake keeper uses it, and the coai binary when a step is a gate step.</summary>
-    public static IReadOnlyList<string> NeededExecutables(Experiment experiment, HostKind host) =>
+    /// <summary>The executables the experiment will start, each name once (the first role that asked for it kept), in the order the harness reaches for them:
+    /// the three it always needs, the first word of each configured command, PowerShell when the awake keeper uses it, and the coai binary when a step is a gate step.</summary>
+    public static IReadOnlyList<NeededExecutable> NeededExecutables(Experiment experiment, HostKind host) =>
     [
-        .. new[]
+        .. new NeededExecutable[]
             {
-                "git",
-                "claude",
-                "dotnet",
-                First(experiment.Target.LowPriority),
-                First(experiment.Target.Build),
-                First(experiment.Target.Suite.Command),
-                First(experiment.Target.Extension.Command),
-                KeepsAwakeWithPowerShell(experiment.Awake, host) ? PowerShell : string.Empty,
-                HasGateStep(experiment) ? experiment.Coai.Binary : string.Empty,
+                new(string.Empty, "git"),
+                new(string.Empty, "claude"),
+                new(string.Empty, "dotnet"),
+                new("target.lowPriority[0]", First(experiment.Target.LowPriority)),
+                new("target.build[0]", First(experiment.Target.Build)),
+                new("target.suite.command[0]", First(experiment.Target.Suite.Command)),
+                new("target.extension.command[0]", First(experiment.Target.Extension.Command)),
+                new("awake", KeepsAwakeWithPowerShell(experiment.Awake, host) ? PowerShell : string.Empty),
+                new("coai.binary", HasGateStep(experiment) ? experiment.Coai.Binary : string.Empty),
             }
-            .Where(name => name.Length > 0)
-            .Distinct(StringComparer.Ordinal),
+            .Where(needed => needed.Name.Length > 0)
+            .DistinctBy(needed => needed.Name, StringComparer.Ordinal),
     ];
 
     /// <summary>One <see cref="HostProblem"/> per finding, all at once, in the order of the checks.</summary>
@@ -100,26 +127,33 @@ public static class HostChecks
 
     private static IEnumerable<HostProblem> Only(bool found, string text) => found ? [Wrong(text)] : [];
 
-    /// <summary>An executable the host lacks is the environment (exit 3). One it HAS but that D17 refuses (a link into the target, a file under the root) is a
-    /// wrong configuration (exit 4): every D17 refusal says so, and "not on PATH" and "does not exist" do not.</summary>
+    /// <summary>The exit is decided on the TYPE of the answer, never on its words: an executable the host lacks is the environment (exit 3, named by the field that
+    /// asked for it), one the configuration names and D17 refuses is a wrong configuration (exit 4).</summary>
     private static IEnumerable<HostProblem> ExecutableProblems(HostFacts facts) =>
-        facts.Executables.Select(executable => executable.Path).OfType<Outcome<string>.Fail>()
-            .Select(fail => new HostProblem(fail.Reason, Environment: !fail.Reason.Contains(Refusal, StringComparison.Ordinal)));
+        facts.Executables.Select(executable => executable.Answer switch
+        {
+            ExecutableAnswer.Absent absent => new HostProblem($"{executable.Needed.Role} {absent.Reason}".TrimStart(), Environment: true),
+            ExecutableAnswer.Refused refused => Wrong(refused.Reason),
+            _ => null,
+        }).OfType<HostProblem>();
 
     private static IEnumerable<HostProblem> SourceProblems(TargetFacts target, HostFacts facts) =>
-        (facts.SourceExists, facts.SourceIsGit) switch
+        facts.Source switch
         {
-            (false, _) => [Wrong($"target.source {target.Source} does not exist")],
-            (true, false) => [Wrong($"target.source {target.Source} is not a git repository")],
-            _ => GitProblems(target, facts),
+            SourceAnswer.Missing => [Wrong($"target.source {target.Source} does not exist")],
+            SourceAnswer.Asked { IsGit: false } => [Wrong($"target.source {target.Source} is not a git repository")],
+            SourceAnswer.Asked asked => GitProblems(target, asked),
+            SourceAnswer.NotAsked notAsked => [new(notAsked.Reason, Environment: true)],
+            SourceAnswer.Unanswered unanswered => [new(unanswered.Reason, Environment: true)],
+            _ => [],
         };
 
     /// <summary>The plan is asked of a commit that exists, so a missing base is one finding, not two.</summary>
-    private static IEnumerable<HostProblem> GitProblems(TargetFacts target, HostFacts facts) =>
+    private static IEnumerable<HostProblem> GitProblems(TargetFacts target, SourceAnswer.Asked asked) =>
     [
-        .. Only(!facts.PlanBranchExists, $"the plan branch {target.PlanBranch} does not exist in {target.Source}"),
-        .. Only(!facts.BaseExists, $"the base commit {target.Base.Value} is not in {target.Source}"),
-        .. Only(facts.BaseExists && !facts.PlanAtBase, $"the plan {target.Plan} does not exist at {target.Base.Value}"),
+        .. Only(!asked.PlanBranch, $"the plan branch {target.PlanBranch} does not exist in {target.Source}"),
+        .. Only(!asked.Base, $"the base commit {target.Base.Value} is not in {target.Source}"),
+        .. Only(asked.Base && !asked.PlanAtBase, $"the plan {target.Plan} does not exist at {target.Base.Value}"),
     ];
 
     private static IEnumerable<HostProblem> ScenarioProblems(HostFacts facts) =>
@@ -127,13 +161,8 @@ public static class HostChecks
 
     private static IEnumerable<HostProblem> CoaiProblems(Experiment experiment, HostFacts facts) =>
         experiment.Coai.Configured
-            ? [.. Only(!facts.CoaiBinaryExists && !Refused(facts, experiment.Coai.Binary), $"coai.binary {experiment.Coai.Binary} does not exist"),
-                .. Only(!facts.CoaiSettingsExists, $"coai.settings {experiment.Coai.Settings} does not exist")]
+            ? Only(!facts.CoaiSettingsExists, $"coai.settings {experiment.Coai.Settings} does not exist")
             : Only(HasGateStep(experiment), "a scheme has a gate step and coai is not configured");
-
-    /// <summary>Whether the executable of that name was already refused above: a coai binary that is missing is said once.</summary>
-    private static bool Refused(HostFacts facts, string name) =>
-        facts.Executables.Any(executable => executable.Name == name && executable.Path is Outcome<string>.Fail);
 
     private static IEnumerable<HostProblem> HostProblems(Experiment experiment, HostFacts facts) =>
     [

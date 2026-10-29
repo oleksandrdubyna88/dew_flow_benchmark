@@ -19,7 +19,7 @@ public sealed class RootTrustTests
         answer.Should().BeOfType<TrustAnswer.Refused>().Subject.Problems;
 
     [Fact]
-    public async Task A_root_or_file_writable_by_group_or_others_is_refused_naming_the_file_and_the_mode()
+    public void A_root_or_file_writable_by_group_or_others_is_refused_naming_the_file_and_the_mode()
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -32,8 +32,8 @@ public sealed class RootTrustTests
         File.SetUnixFileMode(root, (UnixFileMode)Convert.ToInt32("775", 8));
         File.SetUnixFileMode(experiment, (UnixFileMode)Convert.ToInt32("664", 8));
 
-        var uid = (await RootFacts.CurrentUidAsync(CancellationToken.None)).Ok();
-        var facts = new[] { (await RootFacts.FileFactsAsync(root, CancellationToken.None)).Ok(), (await RootFacts.FileFactsAsync(experiment, CancellationToken.None)).Ok() };
+        var uid = RootFacts.CurrentUid();
+        var facts = new[] { RootFacts.FileFacts(root).Ok(), RootFacts.FileFacts(experiment).Ok() };
         var problems = ProblemsOf(RootTrust.Decide(true, uid, facts, root));
 
         problems.Should().HaveCount(2);
@@ -42,7 +42,7 @@ public sealed class RootTrustTests
     }
 
     [Fact]
-    public async Task A_root_closed_to_group_and_others_and_owned_by_the_operator_is_trusted()
+    public void A_root_closed_to_group_and_others_and_owned_by_the_operator_is_trusted()
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -54,8 +54,8 @@ public sealed class RootTrustTests
         File.SetUnixFileMode(temp.Path, (UnixFileMode)Convert.ToInt32("755", 8));
         File.SetUnixFileMode(experiment, (UnixFileMode)Convert.ToInt32("644", 8));
 
-        var uid = (await RootFacts.CurrentUidAsync(CancellationToken.None)).Ok();
-        var facts = new[] { (await RootFacts.FileFactsAsync(temp.Path, CancellationToken.None)).Ok(), (await RootFacts.FileFactsAsync(experiment, CancellationToken.None)).Ok() };
+        var uid = RootFacts.CurrentUid();
+        var facts = new[] { RootFacts.FileFacts(temp.Path).Ok(), RootFacts.FileFacts(experiment).Ok() };
 
         RootTrust.Decide(true, uid, facts, temp.Path).Should().BeOfType<TrustAnswer.Trusted>("readable by others is fine; writable is not");
     }

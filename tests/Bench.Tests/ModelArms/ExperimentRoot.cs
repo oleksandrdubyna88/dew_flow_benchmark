@@ -5,6 +5,7 @@ using FluentAssertions;
 using Xunit;
 using Bench.Cli;
 using Bench.Infrastructure.Process;
+using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using ModelArmsApp = ModelArms;
 
@@ -25,6 +26,12 @@ internal sealed class ExperimentRoot : IDisposable
     private const string PlanBranch = "docs/plan-a-spent-quota-cools-the-model-down";
     private const string PlanFile = "todo/PLAN_a_spent_quota_cools_the_model_down.md";
     private static readonly TimeSpan GitBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>The host's git, found once through the module's own resolution against the test process's PATH: <c>&lt;temp&gt;/bin/git</c> is a link to it, so the git the
+    /// console launches is a real one. Empty where no git resolves (the fixture then cannot be built).</summary>
+    private static readonly Lazy<string> HostGit = new(() => ExecutableResolution
+        .Resolve("git", (System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator), [], RootFacts.Host, OperatingSystem.IsWindows())
+        is ExecutableAnswer.Found found ? found.Real : string.Empty);
 
     private readonly TempFolder _temp = new();
     private readonly Dictionary<string, string> _variables;
@@ -59,6 +66,8 @@ internal sealed class ExperimentRoot : IDisposable
     /// source are read by the real <c>git</c> on the process's own PATH; the PATH map is what <c>validate</c> resolves the configured executables against.</summary>
     public async Task<ExperimentRoot> WithTargetAsync()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the fixture's git is a link to the host's git; links need a privilege on Windows");
+        Assert.False(RealGit.Length == 0, "a git must resolve on the test process's PATH to build the fixture's target");
         var target = _temp.Folder("example", "target");
         await GitAsync(target, "init", "--quiet", "--initial-branch", PlanBranch);
         _temp.File("a plan\n", "example", "target", "todo", "PLAN_a_spent_quota_cools_the_model_down.md");
@@ -69,13 +78,56 @@ internal sealed class ExperimentRoot : IDisposable
 
         Executable("example", "coai", "coai-mcp");
         _temp.File("{}", "example", "vault", "connectOtherAis", "wsl-ubuntu", "settings.json");
-        foreach (var name in new[] { "git", "claude", "dotnet", "node", "npm", "pwsh.exe" })
+        Directory.CreateDirectory(Path.Combine(Temp, "bin"));
+        File.CreateSymbolicLink(Path.Combine(Temp, "bin", "git"), RealGit);
+        foreach (var name in new[] { "claude", "dotnet", "node", "npm", "pwsh.exe" })
         {
             Executable("bin", name);
         }
 
         _variables["PATH"] = Path.Combine(Temp, "bin");
         return this;
+    }
+
+    /// <summary>The host's git by its real path: what <c>&lt;temp&gt;/bin/git</c> links to, and what a shim ends in.</summary>
+    public static string RealGit => HostGit.Value;
+
+    /// <summary>The console's apphost, copied beside the test assembly by the project reference: the binary the scenario tests run as a process.</summary>
+    public static string ConsoleBinary { get; } = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "model-arms.exe" : "model-arms");
+
+    /// <summary>A <c>0755</c> shell script at <paramref name="path"/> that appends one line to <c>&lt;temp&gt;/markers/&lt;name&gt;</c> and then either exits 0 or, with
+    /// <paramref name="thenRealGit"/>, runs the host's git with the same arguments. A program the target could place where something looks it up: the marker says it ran.</summary>
+    public string Shim(string path, string name, bool thenRealGit = false) =>
+        ShimScript(path, $"echo \"$0 $*\" >> '{MarkerFile(name)}'\n" + (thenRealGit ? $"exec '{RealGit}' \"$@\"\n" : "exit 0\n"));
+
+    /// <summary>A <c>0755</c> shell script with the given body (after the shebang), its folder created.</summary>
+    public string ShimScript(string path, string body)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Directory.CreateDirectory(Path.Combine(Temp, "markers"));
+        File.WriteAllText(path, "#!/bin/sh\n" + body);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("755", 8));
+        }
+
+        return path;
+    }
+
+    /// <summary>Where a shim named <paramref name="name"/> writes its marker lines.</summary>
+    public string MarkerFile(string name) => Path.Combine(Temp, "markers", name);
+
+    /// <summary>The names of the shims that ran at least once.</summary>
+    public IReadOnlyList<string> Markers() =>
+        Directory.Exists(Path.Combine(Temp, "markers")) ? [.. Directory.EnumerateFiles(Path.Combine(Temp, "markers")).Select(Path.GetFileName).Cast<string>().Order(StringComparer.Ordinal)] : [];
+
+    /// <summary>Adds or replaces variables of <see cref="Environment"/>.</summary>
+    public void WithVariables(params (string Name, string Value)[] variables)
+    {
+        foreach (var (name, value) in variables)
+        {
+            _variables[name] = value;
+        }
     }
 
     /// <summary>Replaces the <c>PATH</c> of <see cref="Environment"/>, the only list <c>validate</c> resolves the configured executables against.</summary>
