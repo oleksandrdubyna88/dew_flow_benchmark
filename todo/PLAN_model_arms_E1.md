@@ -1323,6 +1323,13 @@ gate); a console writer that scrubs tokens (E2.S4).
   leak guard, so a KNOWN or an override template that would be refused (a scheme name such as `C` in free text: "C#", "(C)") is
   caught before the chain starts, never hours into it at a step's launch. Test: a KNOWN carrying a scheme name makes `validate` refuse,
   naming the field and the template.
+- **Carried from the E1.S8 re-review (R5):** a real path for the configured executable is only as safe as the PATH its children
+  inherit — a shebang interpreter (`#!/usr/bin/env node`) or a child (`dotnet` spawning `git`) looks its name up there, and an entry
+  under a forbidden root, or an empty or relative one with the cwd in the target, is refused today only when the CONFIGURED name is
+  found in it (observed: an outside tool's `#!/usr/bin/env mynode` ran the target's `mynode`). `validate` refuses a PATH that holds an
+  entry under `ExecutableRule.ForbiddenRoots` (by its kernel real path), or an empty or relative entry, naming each entry and D17.
+  Test: PATH = `<temp>/example/target/bin:<temp>/bin` → 4, naming the target entry; PATH with an empty entry → 4, naming it. The
+  launch side (a filtered PATH for the children) stays with E2's launcher.
 
 **Files.** Core `…/Experiment/HostChecks.cs` (`HostKind`, `HostKinds`, `ResolvedExecutable`, `HostFacts`, `HostProblem`, `HostChecks`);
 console `ModelArms/Adapters/HostFactsReader.cs`, `ModelArms/Verbs/Validate.cs`; `ModelArms/Program.cs` (two arms: `"validate" =>
