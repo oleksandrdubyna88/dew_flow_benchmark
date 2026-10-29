@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Xunit;
 using Bench.Cli;
+using Bench.Infrastructure.Process;
 using ModelArms.Core.Experiment;
 using ModelArmsApp = ModelArms;
 
@@ -21,12 +22,17 @@ internal sealed class ExperimentRoot : IDisposable
     private const string ScenariosText = """[{"id":"S1","kind":"cs","name":"A_scenario"}]""";
     private static readonly UnixFileMode Closed = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
+    private const string PlanBranch = "docs/plan-a-spent-quota-cools-the-model-down";
+    private const string PlanFile = "todo/PLAN_a_spent_quota_cools_the_model_down.md";
+    private static readonly TimeSpan GitBudget = TimeSpan.FromSeconds(30);
+
     private readonly TempFolder _temp = new();
+    private readonly Dictionary<string, string> _variables;
 
     public ExperimentRoot()
     {
         Root = _temp.Folder("example", "root");
-        Environment = Variables(Path.Combine(Temp, "example", "home"));
+        _variables = Variables(Path.Combine(Temp, "example", "home"));
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(Root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -45,7 +51,55 @@ internal sealed class ExperimentRoot : IDisposable
     public string Temp => _temp.Path;
 
     /// <summary>The test process's variables plus <c>HOME</c> inside the scratch folder; <c>MODEL_ARMS_EXPERIMENT</c> is never carried over.</summary>
-    public IReadOnlyDictionary<string, string> Environment { get; }
+    public IReadOnlyDictionary<string, string> Environment => _variables;
+
+    /// <summary>Makes the root validate on this host: the target <c>&lt;temp&gt;/example/target</c> as a git repository holding the plan on its plan branch
+    /// (<c>target.base</c> of <c>experiment.json</c> rewritten to that commit), the coai binary and settings the example names, and <c>&lt;temp&gt;/bin</c> with an
+    /// empty 0755 file for each executable the example configures — which becomes the only <c>PATH</c> of <see cref="Environment"/>. The facts about the
+    /// source are read by the real <c>git</c> on the process's own PATH; the PATH map is what <c>validate</c> resolves the configured executables against.</summary>
+    public async Task<ExperimentRoot> WithTargetAsync()
+    {
+        var target = _temp.Folder("example", "target");
+        await GitAsync(target, "init", "--quiet", "--initial-branch", PlanBranch);
+        _temp.File("a plan\n", "example", "target", "todo", "PLAN_a_spent_quota_cools_the_model_down.md");
+        await GitAsync(target, "add", PlanFile);
+        await GitAsync(target, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "the plan");
+        var sha = (await GitAsync(target, "rev-parse", "HEAD")).Trim();
+        Edit(top => top["target"]!["base"] = sha);
+
+        Executable("example", "coai", "coai-mcp");
+        _temp.File("{}", "example", "vault", "connectOtherAis", "wsl-ubuntu", "settings.json");
+        foreach (var name in new[] { "git", "claude", "dotnet", "node", "npm", "pwsh.exe" })
+        {
+            Executable("bin", name);
+        }
+
+        _variables["PATH"] = Path.Combine(Temp, "bin");
+        return this;
+    }
+
+    /// <summary>Replaces the <c>PATH</c> of <see cref="Environment"/>, the only list <c>validate</c> resolves the configured executables against.</summary>
+    public void UsePath(string path) => _variables["PATH"] = path;
+
+    /// <summary>An empty file inside the scratch folder with mode 0755 (where modes exist). Returns its path.</summary>
+    public string Executable(params string[] parts)
+    {
+        var path = _temp.File(string.Empty, parts);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("755", 8));
+        }
+
+        return path;
+    }
+
+    private static async Task<string> GitAsync(string folder, params string[] arguments)
+    {
+        var attempt = await ProcessRunner.RunAsync("git", arguments, folder, GitBudget, TestContext.Current.CancellationToken);
+        var done = attempt.Should().BeOfType<ProcessAttempt.Completed>().Subject;
+        done.Result.ExitCode.Should().Be(0, $"git {arguments[0]} builds the fixture target: {done.Result.Output}");
+        return done.Result.StandardOutput;
+    }
 
     /// <summary>A file of the root with the given text (mode 0600 where modes exist); its folder is created with the root's mode.</summary>
     public string Write(string relative, string text)

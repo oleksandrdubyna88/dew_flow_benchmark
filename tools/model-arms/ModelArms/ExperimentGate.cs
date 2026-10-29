@@ -22,7 +22,8 @@ namespace ModelArms;
 /// inode under the name: 101 of 1500 passed with both stats equal before the ctime. It does not close everything: inode numbers can be reused on some
 /// file systems, and a ctime narrows that but does not close it; a swap AFTER the second <c>stat</c> is not seen; and nothing above the root is
 /// judged, so whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can still swap the root or an ancestor and change what is
-/// read. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here and read by the verb, which must look at it again as this does.
+/// read. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here (its facts travel on as <see cref="ExperimentInput.JudgedScenarios"/>) and read by the verb, which must
+/// look at it again as this does — <c>validate</c> does, through <see cref="StillTheSame"/>.
 /// </para></summary>
 public static class ExperimentGate
 {
@@ -116,7 +117,7 @@ public static class ExperimentGate
     }
 
     private static async Task<Passage<ExperimentInput>> TrustedFile(ExperimentInput admitted, string path, GateSeams seams) =>
-        (await Judge(admitted.Verb, admitted.Root.Root, [new(path, FileKind.Regular)], seams)).Map(_ => admitted);
+        (await Judge(admitted.Verb, admitted.Root.Root, [new(path, FileKind.Regular)], seams)).Map(facts => admitted with { JudgedScenarios = [facts[0]] });
 
     private static Passage<T> Unmet<T>(VerbInput input, IReadOnlyList<RootRequirement> requirements, string root, T carried)
     {
@@ -157,8 +158,8 @@ public static class ExperimentGate
         }
     }
 
-    /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Off POSIX nothing was judged, so nothing is compared.</summary>
-    private static async Task<Passage<FileFacts>> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
+    /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Shared with the verbs that read a file the gate only judged. Off POSIX nothing was judged, so nothing is compared.</summary>
+    internal static async Task<Passage<FileFacts>> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
     {
         if (OperatingSystem.IsWindows())
         {
