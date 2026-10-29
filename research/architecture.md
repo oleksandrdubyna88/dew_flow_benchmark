@@ -85,11 +85,13 @@ flowchart TB
 exit-code contract and the root cancellation token, and an exe may not reference an exe
 (`todo/PLAN_model_arms.md` D3); it keeps the namespace `Bench.Cli` so no `using` changed, and it references nothing.
 
-Two projects depend on **nothing**: `Bench.Domain` and `Bench.Contracts`. That is not tidiness — a wire
-contract able to reference the domain is a contract that leaks it, and a domain able to reference a package
-is a domain whose rules cannot be tested without one.
+Two projects depend on **nothing** and are the layers' floor: `Bench.Domain` and `Bench.Contracts`. That is not
+tidiness — a wire contract able to reference the domain is a contract that leaks it, and a domain able to
+reference a package is a domain whose rules cannot be tested without one. `Bench.Hosting` is a third leaf, held by
+its own architecture assertion (`Hosting_references_nothing_beyond_the_runtime`): a host that takes the parser takes
+no layer along.
 
-**A third depends on nothing and is not a layer at all: `Bench.Delivered`.** It is the delivered-work
+**A fourth depends on nothing and is not a layer at all: `Bench.Delivered`.** It is the delivered-work
 instrument, ported *mechanism rather than repository* from the operator's `scoreMeter` V2
 (`todo/PLAN_scoremeter_port.md`), and it is a SIBLING LEAF — it may not see `Bench.Domain` either. Two
 architecture assertions hold it there: it references nothing, and nothing outside the Application layer may
