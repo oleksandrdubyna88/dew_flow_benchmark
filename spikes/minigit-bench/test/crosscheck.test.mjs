@@ -32,7 +32,8 @@ function buildO(specs) {
   return otelView(apiRequests(decoded.value));
 }
 
-const cliUsd = (model, t) => priceUsage(priceFor(asTheCliBills(table), model).value, t);
+const CLI_VERSION = '2.1.289'; // the version the two-children fixture was captured on
+const cliUsd = (model, t) => priceUsage(priceFor(asTheCliBills(table, CLI_VERSION), model).value, t);
 
 /** One O record per T message at the CLI's rates; `over(m)` varies a record; `extra` adds records T never named. */
 function oFromT(t, { over = () => ({}), extra = [], outputOf = m => m.output, inflate = 1 } = {}) {
@@ -65,7 +66,7 @@ function oFromEnvelope(e, { without = [] } = {}) {
   return buildO(specs.filter(s => !without.includes(s.model)));
 }
 
-const run = (over = {}) => crosscheck({ E, O: null, T: null, table, policy: policyWith(), ...over });
+const run = (over = {}) => crosscheck({ E, O: null, T: null, table, policy: policyWith(), cliVersion: CLI_VERSION, ...over });
 
 test('The_committed_policy_loads_and_an_illegal_value_names_the_legal_ones', () => {
   assert.deepEqual([policyFile.t1, policyFile.t2, policyFile.t3, policyFile.t3OutputSource, policyFile.join], ['stop', 'otel-incomplete', 'investigate', 'transcript', 'request_id']);
@@ -235,4 +236,24 @@ test('Matching_names_exactly_the_records_whose_request_id_a_transcript_carries',
   assert.equal(m.matched.length, T.messages.length);
   assert.equal(m.matched.some(r => r.querySource === 'auxiliary'), false);
   assert.equal(matchTO(T, O, 'query_source').matched.length, T.messages.length);
+});
+
+const REAL_SPELLING = { main: 'sdk', subagent: 'agent:builtin:general-purpose' };
+
+test('The_query_source_join_understands_the_spellings_the_cli_really_uses', () => {
+  const O = oFromT(T, { over: m => ({ query_source: REAL_SPELLING[m.source] }), extra: [{ ...AUX, query_source: 'compact' }] });
+  const c = run({ E, T, O, policy: policyWith({ join: 'query_source' }) });
+  assert.deepEqual(c.join.unmatchedO, { auxiliary: 1 });
+  assert.equal(c.join.matched, T.messages.length);
+  assert.equal(c.t3.status, 'pass', c.t3.detail);
+  assert.equal(c.t4.status, 'pass', c.t4.detail);
+});
+
+test('T3_prices_the_cli_billed_view_of_the_sessions_own_cli_version', () => {
+  const O = oFromT(T);
+  const at289 = run({ E, T, O, cliVersion: '2.1.289' }).t3;
+  const at310 = run({ E, T, O, cliVersion: '2.1.310' }).t3;
+  assert.equal(at289.status, 'pass');
+  assert.ok(Math.abs(at289.computed - at310.computed - (5951 * 0.1) / 1e6) < 1e-9, 'the sonnet cache read is $0.10 cheaper per million on 2.1.310');
+  assert.equal(run({ E, T, O, cliVersion: undefined }).t3.computed, at310.computed, 'no version means published, never an older version\'s rate');
 });

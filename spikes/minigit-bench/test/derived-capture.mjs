@@ -4,7 +4,9 @@ import { agentTimeline } from '../../policy-ab-quick/lib/parallel.mjs';
 import { streamView, transcriptView } from '../lib/claude-usage.mjs';
 import { TWO_CHILDREN, apiAttrs, asTranscripts, otlpPayload, readEvents } from './synth.mjs';
 
-export function derivedCapture({ stamp = 'end', durationMs = 6000, contentType = 'application/json', withTranscripts = true } = {}) {
+const REAL_SPELLING = { main: 'sdk', subagent: 'agent:builtin:general-purpose' };
+
+export function derivedCapture({ stamp = 'end', durationMs = 6000, contentType = 'application/json', withTranscripts = true, spelling = 'plain', parentAgent = true } = {}) {
   const events = readEvents(TWO_CHILDREN);
   const timeline = agentTimeline(events);
   const parentOf = new Map(events.filter(e => e.type === 'assistant' && e.parent_tool_use_id).map(e => [e.message.id, e.parent_tool_use_id]));
@@ -15,9 +17,9 @@ export function derivedCapture({ stamp = 'end', durationMs = 6000, contentType =
     name: 'api_request',
     tsMs: stamp === 'end' ? m.lastTsMs + 50 : m.lastTsMs - durationMs,
     attrs: apiAttrs({
-      model: m.model, query_source: m.source, request_id: m.requestId, input_tokens: m.input, output_tokens: m.output, cache_read_tokens: m.cacheRead,
+      model: m.model, query_source: spelling === 'real' ? REAL_SPELLING[m.source] : m.source, request_id: m.requestId, input_tokens: m.input, output_tokens: m.output, cache_read_tokens: m.cacheRead,
       cache_creation_tokens: m.cacheWrite, cost_usd: 0.001, duration_ms: durationMs,
-      ...(m.source === 'subagent' ? { agent_id: agentIdOf(m.id), parent_agent_id: 'root-agent' } : {}),
+      ...(m.source === 'subagent' ? { agent_id: agentIdOf(m.id), parent_agent_id: parentAgent ? 'root-agent' : undefined } : {}),
     }),
   }));
   const aux = { name: 'api_request', tsMs: messages[0].lastTsMs, attrs: apiAttrs({ model: 'claude-haiku-4-5-20251001', query_source: 'auxiliary', request_id: 'req_aux', cost_usd: 0.001493, duration_ms: 300 }) };

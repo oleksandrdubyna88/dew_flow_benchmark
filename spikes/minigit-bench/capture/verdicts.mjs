@@ -17,7 +17,7 @@ export const ASSUMPTIONS = Object.freeze([
   ['A-H1', 'hook_started/hook_response carry hook_id and no timestamp; hook tool_use_ids are the stream\'s'],
   ['A-H2', 'with OTEL_LOG_TOOL_DETAILS=1, tool_result records carry tool_use_id and duration_ms'],
   ['A-M1', 'init.model, resolvedModel and modelUsage keys are exact ids; canonicalModel is present'],
-  ['A-P1', 'the CLI bills Sonnet cache reads at its observed rate and everything else at published rates'],
+  ['A-P1', 'the CLI bills every model at published rates, except the cache-read rate observed for this CLI version (none = published)'],
 ]);
 
 export const BEGIN = '<!-- verdicts:begin -->';

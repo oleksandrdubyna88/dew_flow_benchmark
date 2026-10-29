@@ -54,7 +54,7 @@ test('The_cli_billed_view_reproduces_the_pilots_sonnet_line_while_the_published_
   const tokens = { input: 104, output: 31113, cacheRead: 1749236, cacheWrite5m: 176496, cacheWrite1h: 0 };
   const t = table();
   const published = priceUsage(priceFor(t, 'claude-sonnet-5-5').value, tokens);
-  const cli = priceUsage(priceFor(asTheCliBills(t), 'claude-sonnet-5-5').value, tokens);
+  const cli = priceUsage(priceFor(asTheCliBills(t, '2.1.289'), 'claude-sonnet-5-5').value, tokens);
   near(published, 0.9275016);
   near(cli, 1.1024252);
   near(cli - published, 0.1749236);
@@ -65,16 +65,16 @@ test('The_fixtures_sonnet_child_was_billed_at_twenty_cents_too', () => {
   const tokens = { input: 4, output: 118, cacheRead: 5951, cacheWrite5m: 8384, cacheWrite1h: 0 };
   const t = table();
   near(priceUsage(priceFor(t, 'claude-sonnet-5-5').value, tokens), 0.0227431);
-  near(priceUsage(priceFor(asTheCliBills(t), 'claude-sonnet-5-5').value, tokens), 0.0233382);
+  near(priceUsage(priceFor(asTheCliBills(t, '2.1.289'), 'claude-sonnet-5-5').value, tokens), 0.0233382);
 });
 
 test('A_cli_rate_for_an_unpriced_model_is_refused', () => {
-  const bad = { ...dated, cliRates: [{ modelId: 'claude-x', cacheRead: 0.2, observed: 'a probe' }] };
+  const bad = { ...dated, cliRates: [{ modelId: 'claude-x', cacheRead: 0.2, observed: 'a probe', cliVersion: '2.1.289' }] };
   const refused = loadPrices(bad);
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /claude-x/);
-  assert.equal(loadPrices({ ...dated, cliRates: [{ modelId: 'claude-sonnet-5-5', cacheRead: 0.2, observed: '  ' }] }).ok, false);
-  assert.equal(loadPrices({ ...dated, cliRates: [{ modelId: 'claude-sonnet-5-5', cacheRead: -1, observed: 'x' }] }).ok, false);
+  assert.equal(loadPrices({ ...dated, cliRates: [{ modelId: 'claude-sonnet-5-5', cacheRead: 0.2, observed: '  ', cliVersion: '2.1.289' }] }).ok, false);
+  assert.equal(loadPrices({ ...dated, cliRates: [{ modelId: 'claude-sonnet-5-5', cacheRead: -1, observed: 'x', cliVersion: '2.1.289' }] }).ok, false);
 });
 
 test('An_unpriced_model_reads_unknown_never_zero', () => {
@@ -106,6 +106,30 @@ test('The_dated_table_loads_and_carries_the_fable_row', () => {
   );
   assert.equal(t.cliRates[0].modelId, 'claude-sonnet-5-5');
   assert.equal(t.cliRates[0].cacheRead, 0.20);
+  assert.equal(t.cliRates[0].cliVersion, '2.1.289');
+});
+
+test('A_cli_rate_applies_only_to_the_cli_version_it_was_observed_on', () => {
+  const t = table();
+  const read = v => priceFor(asTheCliBills(t, v), 'claude-sonnet-5-5').value.cacheRead;
+  assert.equal(read('2.1.289'), 0.20, 'the pilot observation still reproduces for 2.1.289');
+  assert.equal(read('2.1.310'), 0.10, 'the capture observed published billing on 2.1.310');
+  assert.equal(read('9.9.9'), 0.10, 'a version with no observation is billed as published, never at an older version\'s rate');
+  assert.equal(read(undefined), 0.10);
+  assert.equal(read(null), 0.10);
+  const observed310 = t.cliRates.find(r => r.cliVersion === '2.1.310');
+  assert.match(observed310.observed, /E1\.S3 capture/);
+});
+
+test('A_cli_rate_without_a_version_or_repeated_for_one_model_and_version_is_refused', () => {
+  const rate = { modelId: 'claude-sonnet-5-5', cacheRead: 0.2, observed: 'a probe', cliVersion: '2.1.289' };
+  const noVersion = loadPrices({ ...dated, cliRates: [{ ...rate, cliVersion: undefined }] });
+  assert.equal(noVersion.ok, false);
+  assert.match(noVersion.reason, /cliVersion/);
+  const twice = loadPrices({ ...dated, cliRates: [rate, { ...rate, cacheRead: 0.3 }] });
+  assert.equal(twice.ok, false);
+  assert.match(twice.reason, /claude-sonnet-5-5.*2\.1\.289/);
+  assert.equal(loadPrices({ ...dated, cliRates: [rate, { ...rate, cliVersion: '2.1.310' }] }).ok, true);
 });
 
 test('A_table_is_refused_for_a_non_https_source_no_models_duplicates_or_negative_rates', () => {

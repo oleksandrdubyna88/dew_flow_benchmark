@@ -102,6 +102,34 @@ test('A_sonnet_line_billed_at_the_published_rate_refutes_the_cli_rate_assumption
   assert.equal(rowsOf({ ...c, events }).find(r => r.id === 'A-P1').verdict, 'refuted');
 });
 
+test('A_subagent_with_the_real_query_source_spelling_is_exercised_not_skipped', () => {
+  const row = rowsOf(derivedCapture({ spelling: 'real' })).find(r => r.id === 'A-O5');
+  assert.equal(row.verdict, 'holds', row.observed);
+  assert.match(row.observed, /7 subagent record/);
+});
+
+test('A_child_without_a_parent_agent_id_refutes_A_O5_as_worded_and_says_what_did_hold', () => {
+  const row = rowsOf(derivedCapture({ spelling: 'real', parentAgent: false })).find(r => r.id === 'A-O5');
+  assert.equal(row.verdict, 'refuted');
+  assert.match(row.observed, /agent_id present on 7 of 7/);
+  assert.match(row.observed, /parent_agent_id present on 0 of 7/);
+  assert.match(row.observed, /match the Agent results' agentIds/);
+});
+
+const withInitVersion = (c, version) => ({ ...c, events: c.events.map(e => (e.type === 'system' && e.subtype === 'init' ? { ...e, claude_code_version: version } : e)) });
+const sonnetCost = (c, costUSD) => ({ ...c, events: c.events.map(e => (e.type === 'result' ? { ...e, modelUsage: { ...e.modelUsage, 'claude-sonnet-5-5': { ...e.modelUsage['claude-sonnet-5-5'], costUSD } } } : e)) });
+
+test('A_P1_compares_with_the_cli_billed_view_of_the_captures_own_cli_version', () => {
+  const published = 0.0227431;
+  const billedAt20 = 0.0233382;
+  const verdict = (version, cost) => rowsOf(sonnetCost(withInitVersion(derivedCapture(), version), cost)).find(r => r.id === 'A-P1').verdict;
+  assert.equal(verdict('2.1.289', billedAt20), 'holds', 'the pilot observation');
+  assert.equal(verdict('2.1.289', published), 'refuted');
+  assert.equal(verdict('2.1.310', published), 'holds', 'on 2.1.310 the CLI bills Sonnet cache reads at the published rate');
+  assert.equal(verdict('2.1.310', billedAt20), 'refuted', 'the 2.1.289 rate does not leak into 2.1.310');
+  assert.equal(verdict('9.9.9', published), 'holds', 'an unobserved version is billed as published');
+});
+
 test('The_decisions_follow_the_rows', () => {
   const rows = rowsOf(derivedCapture());
   assert.deepEqual(decisionsOf(rows), { join: 'request_id', t3OutputSource: 'otel', stampMarks: 'end' });

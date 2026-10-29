@@ -24,7 +24,8 @@ export function viewsOf(capture, { table, policy }) {
   const E = envelopeView(capture.events);
   const requests = apiRequests(records);
   const O = otelView(requests, { toolResults: toolResults(records) });
-  return { ...capture, table, policy, E, S: streamView(capture.events), T: transcriptView(capture.transcripts), logLines, decoded, records, O, agents: agentTimeline(capture.events) };
+  const init = capture.events.find(e => e.type === 'system' && e.subtype === 'init');
+  return { ...capture, table, policy, cliVersion: init?.claude_code_version ?? null, E, S: streamView(capture.events), T: transcriptView(capture.transcripts), logLines, decoded, records, O, agents: agentTimeline(capture.events) };
 }
 
 export const RULES = Object.freeze({
@@ -92,12 +93,16 @@ export const RULES = Object.freeze({
     return verdictOf(near(o, v.E.totalCostUsd, 0.01), `sum of api_request cost_usd ${o} against total_cost_usd ${v.E.totalCostUsd}`);
   },
   'A-O5': v => {
-    const subs = v.O.requests.filter(r => r.querySource === 'subagent');
-    if (subs.length === 0) return notExercised('no api_request has query_source subagent');
+    const subs = v.O.requests.filter(r => r.role === 'subagent');
+    if (subs.length === 0) return notExercised(`no api_request has a subagent role (query_source values seen: ${JSON.stringify([...new Set(v.O.requests.map(r => r.querySource))])})`);
     const ids = new Set(subs.map(r => r.agentId).filter(Boolean));
     const childIds = v.agents.map(a => a.agentId).filter(Boolean);
-    const lacking = subs.filter(r => !r.agentId || !r.parentAgentId).length;
-    return verdictOf(lacking === 0 && childIds.length > 0 && childIds.every(id => ids.has(id)), `${subs.length} subagent record(s), ${lacking} lacking agent_id/parent_agent_id; Agent result agentIds ${JSON.stringify(childIds)} against otel agent_ids ${JSON.stringify([...ids])}`);
+    const withAgent = subs.filter(r => r.agentId).length;
+    const withParent = subs.filter(r => r.parentAgentId).length;
+    const matched = childIds.length > 0 && childIds.every(id => ids.has(id));
+    return verdictOf(withAgent === subs.length && withParent === subs.length && matched,
+      `${subs.length} subagent record(s): agent_id present on ${withAgent} of ${subs.length}, parent_agent_id present on ${withParent} of ${subs.length}; `
+      + `otel agent_ids ${matched ? '' : 'do not '}match the Agent results' agentIds ${JSON.stringify(childIds)}`);
   },
   'A-H1': v => {
     const hookEvents = v.events.filter(e => e.type === 'system' && (e.subtype === 'hook_started' || e.subtype === 'hook_response'));
@@ -169,15 +174,16 @@ function aliasRule(v) {
     `ids ${JSON.stringify(ids)}; not in the price table ${JSON.stringify(notPriced)}; modelUsage lines without canonicalModel ${JSON.stringify(noCanonical)}; aliases ${rec.ok ? JSON.stringify(rec.value.aliases) : rec.reason}; fable ${fable ? 'exercised' : 'not exercised'}; subagent tool reported by init: ${subagentToolOf(initTools) ?? 'neither Agent nor Task'}`);
 }
 
-/** A-P1: each envelope model line reproduced at the CLI's rates (published for all but the observed ones), the split taken from the transcripts. */
+/** A-P1: each envelope model line reproduced at the rates of the capture's own CLI version (published unless that version has an observed
+ * rate), the 5m/1h split taken from the transcripts. */
 function billingRule(v) {
   if (!v.E.known) return refuted(`no usable envelope: ${v.E.why}`);
-  const cli = asTheCliBills(v.table);
+  const cli = asTheCliBills(v.table, v.cliVersion);
   const rows = Object.entries(v.E.perModel).map(([id, u]) => billingRow(id, u, v, cli));
-  const sonnetRead = rows.some(r => r.cliOnly && r.cacheRead > 0);
-  const text = rows.map(r => `${r.id}: costUSD ${r.cost}, ${r.note}`).join('; ');
+  const observed = v.table.cliRates.filter(r => r.cliVersion === v.cliVersion).length;
+  const text = `CLI ${v.cliVersion ?? 'unknown'} (${observed} observed rate(s) for it; none = published): ${rows.map(r => `${r.id}: costUSD ${r.cost}, ${r.note}`).join('; ')}`;
   if (rows.some(r => !r.fits)) return refuted(text);
-  return sonnetRead ? holds(text) : notExercised(`${text}; no model with an observed CLI rate read from cache`);
+  return rows.some(r => r.cacheRead > 0) ? holds(text) : notExercised(`${text}; no model read from cache, so no cache-read rate was tested`);
 }
 
 function billingRow(id, u, v, cli) {

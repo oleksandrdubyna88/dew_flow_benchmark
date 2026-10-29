@@ -13,7 +13,7 @@ import { aliasRecord } from '../lib/aliases.mjs';
 import { crosscheck } from '../lib/crosscheck.mjs';
 import { OTEL_STAMP_MARKS } from '../lib/otel-decode.mjs';
 import { startReceiver } from '../lib/otel-receiver.mjs';
-import { priceFor } from '../lib/prices.mjs';
+import { asTheCliBills, priceFor } from '../lib/prices.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
 import { CAPTURE_DIR, captureGate, parseLines } from './synth.mjs';
 
@@ -71,7 +71,7 @@ test('The_receiver_replays_the_capture_and_sums_cost_live', async t => {
 test('T4_holds_on_the_real_capture', t => {
   if (!captureGate(t)) return;
   const { table, policy, views } = loaded();
-  const c = crosscheck({ E: views.E, O: views.O, T: views.T, table, policy });
+  const c = crosscheck({ E: views.E, O: views.O, T: views.T, table, policy, cliVersion: views.cliVersion });
   assert.equal(c.t4.status, 'pass', c.t4.detail);
   assert.equal(c.t4.gap, 0, 'token counts agree exactly');
   assert.equal(c.t3.status, 'pass', `${c.t3.detail} ${c.t3.why ?? ''}`);
@@ -105,4 +105,25 @@ test('The_capture_ran_the_argv_the_plan_prescribes_and_stayed_inside_its_budget'
   assert.deepEqual(capture.argv.argv, claudeArgv('/cap'));
   assert.ok(capture.meta.costUsd !== null && capture.meta.costUsd <= 1.5, `cost ${capture.meta.costUsd}`);
   assert.match(capture.meta.cliVersion, /^2\.1\.310$/);
+});
+
+test('A_O5_is_evaluated_on_the_real_capture_and_never_skipped', t => {
+  if (!captureGate(t)) return;
+  const { capture, table, policy } = loaded();
+  const row = computeVerdicts(capture, { table, policy }).find(r => r.id === 'A-O5');
+  assert.notEqual(row.verdict, 'not exercised', row.observed);
+  assert.match(row.observed, /subagent record/);
+});
+
+test('For_2_1_310_the_cli_billed_view_equals_published_on_the_real_capture', t => {
+  if (!captureGate(t)) return;
+  const { table, views, capture } = loaded();
+  assert.equal(views.cliVersion, '2.1.310');
+  assert.equal(views.cliVersion, capture.meta.cliVersion);
+  const sonnet = (tb, v) => priceFor(asTheCliBills(tb, v), 'claude-sonnet-5-5').value;
+  assert.deepEqual(sonnet(table, '2.1.310'), priceFor(table, 'claude-sonnet-5-5').value);
+  assert.notDeepEqual(sonnet(table, '2.1.289'), priceFor(table, 'claude-sonnet-5-5').value);
+  const row = computeVerdicts(capture, { table, policy: loaded().policy }).find(r => r.id === 'A-P1');
+  assert.equal(row.verdict, 'holds', row.observed);
+  assert.ok(views.E.perModel['claude-sonnet-5-5'].cacheRead > 0, 'the sonnet line reads from cache, so its rate matters in this capture');
 });

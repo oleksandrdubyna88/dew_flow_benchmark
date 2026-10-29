@@ -94,9 +94,9 @@ function t2(E, O, policy) {
 
 // ---- the T <-> O join --------------------------------------------------------------------------------------------------------
 
-const countBy = reqs => reqs.reduce((acc, r) => ({ ...acc, [r.querySource ?? 'unknown']: (acc[r.querySource ?? 'unknown'] ?? 0) + 1 }), {});
+const countBy = reqs => reqs.reduce((acc, r) => ({ ...acc, [r.role ?? 'unknown']: (acc[r.role ?? 'unknown'] ?? 0) + 1 }), {});
 
-/** Which O records T names. `request_id`: exactly those whose id a transcript message carries. `query_source`: main + subagent. */
+/** Which O records T names. `request_id`: exactly those whose id a transcript message carries. `query_source`: the main and subagent ROLES (roleOf maps the CLI's raw spellings). */
 export function matchTO(T, O, join) {
   const reqs = O?.requests ?? [];
   const msgs = T?.messages ?? [];
@@ -106,7 +106,7 @@ export function matchTO(T, O, join) {
     const matched = reqs.filter(r => r.requestId && tIds.has(r.requestId));
     return { by: join, matched, unmatchedT: msgs.filter(m => !m.requestId || !oIds.has(m.requestId)), unmatchedO: countBy(reqs.filter(r => !matched.includes(r))) };
   }
-  const matched = reqs.filter(r => JOIN_SOURCES.includes(r.querySource));
+  const matched = reqs.filter(r => JOIN_SOURCES.includes(r.role));
   return { by: join, matched, unmatchedT: [], unmatchedO: countBy(reqs.filter(r => !matched.includes(r))) };
 }
 
@@ -150,11 +150,11 @@ function t3Line(model, msgs, M, cli, source) {
   return { usd };
 }
 
-function t3(T, O, M, table, policy) {
+function t3(T, O, M, table, policy, cliVersion) {
   const gate = gate34(T, O, M);
   if (gate) return unchecked('T3', gate);
   if (M.matched.some(r => r.costUsd === null)) return unchecked('T3', 'otel incomplete: a matched api_request has no cost_usd');
-  const lines = [...byModel(T.messages, 'model')].map(([model, msgs]) => [model, t3Line(model, msgs, M, asTheCliBills(table), policy.t3OutputSource)]);
+  const lines = [...byModel(T.messages, 'model')].map(([model, msgs]) => [model, t3Line(model, msgs, M, asTheCliBills(table, cliVersion), policy.t3OutputSource)]);
   const refused = lines.find(([, l]) => l.why);
   if (refused) return unchecked('T3', refused[1].why);
   const computed = sum(lines, ([, l]) => l.usd);
@@ -195,9 +195,9 @@ function t4(T, O, M, policy) {
   });
 }
 
-/** The four checks and the join that fed T3/T4. */
-export function crosscheck({ E, O, T, table, policy }) {
+/** The four checks and the join that fed T3/T4. `cliVersion` selects the CLI-billed rates (none = published). */
+export function crosscheck({ E, O, T, table, policy, cliVersion }) {
   const M = matchTO(T, O, policy.join);
   const join = { by: M.by, matched: M.matched.length, unmatchedT: M.unmatchedT.length, unmatchedO: M.unmatchedO };
-  return { t1: t1(E, policy), t2: t2(E, O, policy), t3: t3(T, O, M, table, policy), t4: t4(T, O, M, policy), join };
+  return { t1: t1(E, policy), t2: t2(E, O, policy), t3: t3(T, O, M, table, policy, cliVersion), t4: t4(T, O, M, policy), join };
 }

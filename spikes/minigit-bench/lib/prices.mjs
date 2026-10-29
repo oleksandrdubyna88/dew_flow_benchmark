@@ -28,10 +28,11 @@ function parseCliRate(row, models) {
   if (!row || !models.has(row.modelId)) {
     return fail(`the CLI rate for '${row?.modelId}' is refused - it must name a priced model (priced: ${[...models.keys()].join(', ')})`);
   }
+  if (!isText(row.cliVersion)) return fail(`the CLI rate for '${row.modelId}' is refused - it needs the cliVersion it was observed on`);
   if (!isRate(row.cacheRead) || !isText(row.observed)) {
     return fail(`the CLI rate for '${row.modelId}' is refused - it needs a non-negative cacheRead and where it was observed`);
   }
-  return ok(Object.freeze({ modelId: row.modelId, cacheRead: row.cacheRead, observed: row.observed }));
+  return ok(Object.freeze({ modelId: row.modelId, cliVersion: row.cliVersion, cacheRead: row.cacheRead, observed: row.observed }));
 }
 
 /** Validate a parsed price file -> `{ ok, value: PriceTable } | { ok: false, reason }`. */
@@ -44,6 +45,9 @@ export function loadPrices(json) {
   const rates = (json.cliRates ?? []).map(r => parseCliRate(r, models.value));
   const refused = rates.find(r => !r.ok);
   if (refused) return refused;
+  const keys = rates.map(r => `${r.value.modelId}@${r.value.cliVersion}`);
+  const twice = keys.find((k, i) => keys.indexOf(k) !== i);
+  if (twice) return fail(`the CLI rate for '${twice.split('@')[0]}' on ${twice.split('@')[1]} is given twice`);
   return ok(Object.freeze({ source: json.source, readOn: json.readOn, models: models.value, cliRates: Object.freeze(rates.map(r => r.value)) }));
 }
 
@@ -54,9 +58,12 @@ export function priceFor(table, modelId) {
   return { known: false, why: `no price for '${modelId}'; priced: ${[...table.models.keys()].join(', ')}` };
 }
 
-/** The table as the CLI bills: each model with an observed CLI rate carries that cache-read rate. A new table; the argument is untouched. */
-export function asTheCliBills(table) {
-  const byModel = new Map(table.cliRates.map(r => [r.modelId, r.cacheRead]));
+/**
+ * The table as the CLI of `cliVersion` bills: each model with a CLI rate OBSERVED ON THAT VERSION carries that cache-read rate. A version
+ * with no observation (or none given) is billed as published - an older version's rate never carries over. A new table; the argument is untouched.
+ */
+export function asTheCliBills(table, cliVersion) {
+  const byModel = new Map(table.cliRates.filter(r => r.cliVersion === cliVersion).map(r => [r.modelId, r.cacheRead]));
   const models = new Map([...table.models].map(([id, p]) => [id, byModel.has(id) ? Object.freeze({ ...p, cacheRead: byModel.get(id) }) : p]));
   return Object.freeze({ ...table, models });
 }

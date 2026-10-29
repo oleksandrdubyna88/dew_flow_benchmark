@@ -4,7 +4,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
 import {
-  API_REQUEST_ATTRS, OTEL_STAMP_MARKS, REQUIRED_FOR_SUBAGENT, apiRequests, decodeOtlpLogs, otelView, toolResults,
+  API_REQUEST_ATTRS, OTEL_STAMP_MARKS, REQUIRED_FOR_SUBAGENT, apiRequests, decodeOtlpLogs, otelView, roleOf, toolResults,
 } from '../lib/otel-decode.mjs';
 import { liveSumOf, otelEnv, startReceiver } from '../lib/otel-receiver.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
@@ -69,13 +69,34 @@ test('The_record_name_comes_from_the_body_or_the_event_name_attribute', () => {
   assert.equal(apiRequests(decoded(wrap([byBody, byAttr, other]))).length, 2);
 });
 
-test('A_subagent_request_needs_agent_ids_and_a_main_request_does_not', () => {
-  assert.deepEqual([...REQUIRED_FOR_SUBAGENT].sort(), ['agent_id', 'parent_agent_id']);
+test('A_subagent_request_needs_an_agent_id_and_a_main_request_does_not', () => {
+  assert.deepEqual([...REQUIRED_FOR_SUBAGENT], ['agent_id'], 'the 2.1.310 capture: a depth-one child carries agent_id and no parent_agent_id');
   const main = apiRequests(decoded(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs() }])));
   assert.deepEqual(main[0].missing, []);
   assert.equal(main[0].agentId, null);
-  const sub = apiRequests(decoded(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs({ query_source: 'subagent' }) }])));
-  assert.deepEqual(sub[0].missing, ['agent_id', 'parent_agent_id']);
+  for (const qs of ['subagent', 'agent:builtin:general-purpose']) {
+    const sub = apiRequests(decoded(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs({ query_source: qs }) }])));
+    assert.deepEqual(sub[0].missing, ['agent_id'], qs);
+    assert.equal(sub[0].role, 'subagent');
+  }
+  const withId = apiRequests(decoded(payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs({ query_source: 'agent:builtin:general-purpose', agent_id: 'a1' }) }])));
+  assert.deepEqual(withId[0].missing, []);
+  assert.equal(withId[0].parentAgentId, null);
+});
+
+test('The_raw_query_source_maps_to_one_of_three_roles', () => {
+  assert.deepEqual(['sdk', 'main'].map(roleOf), ['main', 'main']);
+  assert.deepEqual(['subagent', 'agent:builtin:general-purpose', 'agent:custom:x'].map(roleOf), ['subagent', 'subagent', 'subagent']);
+  assert.deepEqual(['auxiliary', 'compact', 'agent', 'sdk2', 'Agent:x', ''].map(roleOf), ['auxiliary', 'auxiliary', 'auxiliary', 'auxiliary', 'auxiliary', null]);
+  assert.equal(roleOf(null), null, 'an absent source is unknown, not auxiliary');
+  assert.equal(roleOf(undefined), null);
+});
+
+test('The_view_buckets_by_role_and_keeps_the_raw_source_on_the_request', () => {
+  const attrs = (qs, id) => ({ name: 'api_request', tsMs: T0, attrs: apiAttrs({ query_source: qs, request_id: id, agent_id: qs.startsWith('agent:') ? 'a' : undefined }) });
+  const reqs = apiRequests(decoded(payloadText([attrs('sdk', 'r1'), attrs('agent:builtin:general-purpose', 'r2'), attrs('compact', 'r3')])));
+  assert.deepEqual(reqs.map(r => [r.querySource, r.role]), [['sdk', 'main'], ['agent:builtin:general-purpose', 'subagent'], ['compact', 'auxiliary']]);
+  assert.deepEqual(Object.keys(otelView(reqs).perModel['claude-opus-5-5'].bySource).sort(), ['auxiliary', 'main', 'subagent']);
 });
 
 test('The_plans_attribute_names_are_the_ones_the_decoder_reads', () => {

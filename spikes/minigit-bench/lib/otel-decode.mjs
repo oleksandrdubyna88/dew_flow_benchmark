@@ -11,8 +11,25 @@ export const OTEL_STAMP_MARKS = 'end';
 export const RECORD_NAME_SOURCES = Object.freeze(['body', 'event.name']);
 const NAME_PREFIX = 'claude_code.';
 
-/** A-O5: attributes only a subagent's request carries (CLI >= 2.1.310); a main request without them is not `missing` them. */
-export const REQUIRED_FOR_SUBAGENT = Object.freeze(['agent_id', 'parent_agent_id']);
+/** A-O5, as the 2.1.310 capture settled it: a depth-one child's request carries `agent_id` and NO `parent_agent_id` (that one is for nested
+ * agents). So only `agent_id` is required of a subagent request; a main request without it is not `missing` it. */
+export const REQUIRED_FOR_SUBAGENT = Object.freeze(['agent_id']);
+
+/** Attributes only some requests carry: required (and reported `missing`) only where REQUIRED_FOR_SUBAGENT says so. */
+const CONDITIONAL = Object.freeze(['agent_id', 'parent_agent_id']);
+const MAIN_SOURCES = Object.freeze(['sdk', 'main']);
+const SUBAGENT_SOURCE = /^agent:/;
+
+/**
+ * The role of a raw `query_source`: 'main' (`sdk`, `main`), 'subagent' (`agent:...`, `subagent`), else 'auxiliary' (kept raw on the request).
+ * The documented names (main/subagent/auxiliary) are not what the CLI prints; the 2.1.310 capture showed `sdk` and `agent:builtin:general-purpose`.
+ * An absent source is null - unknown, not auxiliary.
+ */
+export function roleOf(querySource) {
+  if (typeof querySource !== 'string' || querySource === '') return null;
+  if (MAIN_SOURCES.includes(querySource)) return 'main';
+  return querySource === 'subagent' || SUBAGENT_SOURCE.test(querySource) ? 'subagent' : 'auxiliary';
+}
 
 /** The names `api_request` is read by -> the field they feed and their kind. */
 export const API_REQUEST_ATTRS = Object.freeze({
@@ -121,10 +138,10 @@ function readAttrs(spec, attrs, required) {
 /** `api_request` records as `OReq[]`; an attribute the plan names but the record lacks is `null` plus its name in `missing`. */
 export function apiRequests(records) {
   return records.filter(r => r.name === 'api_request').map(r => {
-    const isSub = r.attrs.query_source === 'subagent';
-    const { fields, missing } = readAttrs(API_REQUEST_ATTRS, r.attrs, n => isSub || !REQUIRED_FOR_SUBAGENT.includes(n));
+    const isSub = roleOf(r.attrs.query_source) === 'subagent';
+    const { fields, missing } = readAttrs(API_REQUEST_ATTRS, r.attrs, n => !CONDITIONAL.includes(n) || (isSub && REQUIRED_FOR_SUBAGENT.includes(n)));
     const optional = readAttrs(OPTIONAL_API_REQUEST_ATTRS, r.attrs, () => false).fields;
-    return { name: 'api_request', tsMs: r.tsMs, ...fields, ...optional, missing };
+    return { name: 'api_request', tsMs: r.tsMs, ...fields, ...optional, role: roleOf(fields.querySource), missing };
   });
 }
 
@@ -136,7 +153,7 @@ export function toolResults(records) {
   });
 }
 
-const NEEDED = Object.freeze(['model', 'input', 'output', 'cacheRead', 'cacheCreation', 'querySource']);
+const NEEDED = Object.freeze(['model', 'input', 'output', 'cacheRead', 'cacheCreation', 'role']);
 const SUMMED = Object.freeze(['input', 'output', 'cacheRead', 'cacheCreation']);
 
 const emptyBucket = () => ({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0, costUsd: 0, costKnownRequests: 0, requests: 0 });
@@ -153,13 +170,13 @@ const mergeBuckets = (a, b) => ({
   costKnownRequests: a.costKnownRequests + b.costKnownRequests, requests: a.requests + b.requests,
 });
 
-/** Sums per model and `query_source` over records with no missing token field; the rest are counted in `incomplete` and left out. */
+/** Sums per model and ROLE (main / subagent / auxiliary) over records with no missing token field; the rest are counted in `incomplete` and left out. */
 export function otelView(requests, { toolResults: tr = [], misconfigured = 0 } = {}) {
   const complete = requests.filter(r => NEEDED.every(k => r[k] !== null));
   const perModel = {};
   for (const r of complete) {
     const bySource = perModel[r.model]?.bySource ?? {};
-    perModel[r.model] = { bySource: { ...bySource, [r.querySource]: addTo(bySource[r.querySource] ?? emptyBucket(), r) } };
+    perModel[r.model] = { bySource: { ...bySource, [r.role]: addTo(bySource[r.role] ?? emptyBucket(), r) } };
   }
   return { present: requests.length > 0, requests, toolResults: tr, perModel, incomplete: requests.length - complete.length, misconfigured };
 }
