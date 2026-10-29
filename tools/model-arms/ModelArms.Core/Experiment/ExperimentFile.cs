@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bench.Domain;
 
@@ -33,7 +32,7 @@ public static class ExperimentFile
             reader.Add(problem);
         }
 
-        var experiment = Parse(json, reader) is { } root ? Walk(reader, root, location) : null;
+        var experiment = reader.ParseObject(json, "experiment.json") is { } root ? Walk(reader, root, location) : null;
         return Verdict(reader, experiment);
     }
 
@@ -57,28 +56,6 @@ public static class ExperimentFile
         }
 
         return problems;
-    }
-
-    private static JsonObject? Parse(string json, StrictJson reader)
-    {
-        try
-        {
-            var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = false, AllowDuplicateProperties = false };
-            var node = JsonNode.Parse(json, default, options);
-            if (node is not JsonObject)
-            {
-                reader.Add("experiment.json must be a JSON object");
-            }
-
-            return node as JsonObject;
-        }
-        catch (JsonException ex)
-        {
-            // A malformed text, and a member written twice at any depth (AllowDuplicateProperties = false), both arrive as JsonException:
-            // the operator's file being wrong is an expected answer, not a crash.
-            reader.Add($"experiment.json is not JSON: {ex.Message}");
-            return null;
-        }
     }
 
     private static Experiment Walk(StrictJson json, JsonObject top, ExperimentLocation location)

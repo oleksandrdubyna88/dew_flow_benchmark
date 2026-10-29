@@ -32,6 +32,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(global::ModelArms.Core.Briefs.BriefTemplates), typeof(global::ModelArms.Core.Briefs.BriefFields), typeof(global::ModelArms.Core.Briefs.BriefFiller),
 
         // E1.S8
+        typeof(RootRequirements), typeof(RootTrust), typeof(ExecutableResolution), typeof(ScenariosFile), typeof(BaselineFile),
 
         // E1.S9
 

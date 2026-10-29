@@ -22,6 +22,12 @@ public static class ExecutableRule
             _ => UnderForbiddenRoot(executable, forbiddenRoots),
         };
 
+    /// <summary>The roots no executable may sit under: the target, and the experiment root itself, which holds the base clone, the arms'
+    /// clones and everything else an arm could write. Forbidding the root, not just <c>base</c> and <c>r</c>, fails closed. A root that was not
+    /// read (the empty string) is no root. One answer for the experiment file's static check and for the host's resolution.</summary>
+    public static IReadOnlyList<string> ForbiddenRoots(string source, string root) =>
+        [.. new[] { source, root }.Where(candidate => candidate.Length > 0)];
+
     private static string Relative(string executable) =>
         $"the executable '{executable}' is a relative path, resolved against the target — use a name from PATH or an absolute path outside the target (D17)";
 

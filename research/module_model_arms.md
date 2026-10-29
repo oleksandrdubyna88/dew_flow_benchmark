@@ -296,6 +296,52 @@ at run time, not here.
 
 ## The root, trust and the host (E1.S8, E1.S10)
 
+The first half (E1.S8): the root's requirements, its trust, executables on a host, and the two data files beside `experiment.json`. Five pure
+deciders in `ModelArms.Core.Experiment`, one console adapter, `ModelArms.Adapters.RootFacts`. E1.S10 adds `HostChecks` and the `validate` verb
+(the second half); nothing here is called by a verb yet (E1.S9's gate, E1.S10's validate and E4.S4's `prep-base` call it).
+
+**`RootRequirements`** (D18, parent §4.12) is the table of which files of the root each verb needs, in the order they are checked. The names come
+from `RootPaths` (one spelling of the layout); the scenarios and baseline names are the configured ones. `FirstUnmet(requirements, root, exists)` is the
+first requirement the host does not meet, as a sentence naming the path and the verb that writes the file, or the empty string.
+
+| Verb | Requirements, in order (`!` = must NOT exist) |
+|---|---|
+| `init` | `!` the root |
+| `version`, `help` | none (an unknown verb also none: the command line refuses it first) |
+| `validate` | root, `experiment.json`, scenarios |
+| `prep-base` | root, `experiment.json`, scenarios, `!` baseline |
+| `make`, `chain` | root, `experiment.json`, scenarios, baseline |
+| `run-arm`, `run-all`, `checks` | the same, `arms.map.json`, then `chain/made-<arm>` for each arm given |
+| `status`, `lock`, `unlock`, `gate-lock` | root, `experiment.json` |
+
+`chain` requires what `make` requires (its first action is making every unmade arm), and `lock`, `unlock`, `gate-lock` require the root and `experiment.json`
+(deviations 3 of the stories document). Producers: root, `experiment.json`, scenarios are written by `init`; the baseline by `prep-base`; `arms.map.json` and the
+`made-` markers by `make`.
+
+**`RootTrust.Decide(posix, currentUid, files, root)`** (D17 a) judges facts the console read. Off POSIX the answer is `NotPerformed` with the line
+`the ownership and mode check of <root> was not performed — POSIX only (D17)`: a check that was not performed is not a check that passed. On POSIX each file whose owner is not the
+current user, and each whose mode has a group-write or other-write bit, is a problem of its own naming the path (the mode as three octal digits, with the
+`chmod go-w` to run); none is `Trusted`. The caller passes the root folder, `experiment.json` and `scenarios.json`.
+
+**`ExecutableResolution.Resolve`** (D17 b) turns a command's executable into the path to run: a bare name is searched in the PATH directories (on Windows also with `.exe`,
+empty entries skipped), an absolute path must exist and be executable; a relative path is refused. The path found goes through `ExecutableRule` (a PATH entry under the target is
+refused like a spelled path), and then its FINAL symbolic-link target does too (the end of the link, and of every folder above it). The result is the path as written, because that is the
+name the harness will run. The forbidden roots are `ExecutableRule.ForbiddenRoots(target.source, root)`: the target and the experiment root itself, compared ignoring case. A link that cannot be
+followed (a loop) is a refusal, never a pass.
+
+**`ScenariosFile.Read`** reads `scenarios.json` (`[{"id","kind","name"}]`, kind `cs` or `node`) with the same strict walk as the experiment file: unknown and missing members named, a repeated id named,
+an empty list refused, every problem in one answer. **`BaselineFile`** (D24) is `{"schema":"model-arms/baseline-v1","base","measuredAt","host","mcpFailed","tsFailed","suiteTotal","extensionTotal","note"}`
+(the shell's failure keys kept: `mcpFailed` is the main suite's, `tsFailed` the extension's). `Compose` refuses a run that did not complete (`absent is not zero`), a blank host and a negative total; the
+instant is written in UTC ending in `Z`. `Read` refuses unknown members, another schema, a missing member (the note may be empty, not absent), a sha that is not 40 hex and an instant that is not UTC.
+
+**`RootFacts`** (console) reads what the deciders judge: `GitTopOf(path)` (nearest ancestor-or-self holding `.git`, a path that does not exist yet included), `ThisRepository(baseDirectory)` (nearest ancestor holding
+`dew_flow_benchmark.slnx`), `IsExecutableFile` (exists and, off Windows, any execute bit), `FinalTargetOf` (follows one link per round from the root down, bounded at 40, so a link in a folder of the path is
+followed too), `CurrentUidAsync` (`id -u`) and `FileFactsAsync` (`stat` for the owner, `File.GetUnixFileMode` for the mode; macOS `stat -f`).
+
+What the tests do NOT prove: that a link is still what it was when it was checked (a race between `validate` and a launch; the resolved paths are printed before the first launch so the operator sees what was seen); that a
+file outside the forbidden roots is safe to run; ownership on a file system that reports no Unix owner; any of the facts on Windows, where the trust check is declared not performed and links need a privilege (those tests skip, saying why).
+The live trust and owner tests run on Linux only (they read `/proc`); the real-link tests skip where links cannot be made.
+
 ## The command line (E1.S9)
 
 ## The first run: init and validate (E1.S11)
