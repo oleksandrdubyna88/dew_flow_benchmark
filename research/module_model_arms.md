@@ -368,4 +368,45 @@ Stated gaps, not checks:
 
 ## The command line (E1.S9)
 
+`model-arms <verb> [positional words] [--flags]`. The line is read in two halves (D20) so the shared flag parser stays flags-only: `ModelArmsCommandLine.Split(args)` (Core, pure)
+takes the verb and exactly its positional words by a per-verb table, and `Bench.Cli.CommandLine.Parse` reads the rest unchanged.
+
+| Verb | Words | Verb | Words |
+|---|---|---|---|
+| `init` | `<root>` | `run-arm`, `checks` | `<arm>` |
+| `run-all` | `<arm>...` (one or more) | `gate-lock` | `status` or `hold` |
+| `validate`, `prep-base`, `make`, `lock`, `unlock`, `chain`, `status`, `version`, `help` | none | | |
+
+No arguments is `help`. A first word that is not a verb is refused naming every verb. The words are the consecutive tokens after the verb that do not start with `--`; a count outside the
+verb's shape, or a word outside `status|hold`, is refused (`<verb> takes <shape>: model-arms <usage>`). After the words a `--flag` may be followed by ONE bare token, its value (the shared
+parser's own rule); any other bare token is refused (`'<x>' is not a flag or a value`). `VerbLine.Rest` is the verb and the flag tokens.
+
+**`Program`** (console) maps what happened to the exit codes of D16: `0` the verb did its work; `3` a fault nobody expected (`model-arms <verb>: unexpected <Type>: <message>`) or a host that could not
+say; `4` a line that does not split, a flag the verb cannot read (`CommandLineException`), a verb whose story is not built yet (`model-arms <verb>: not built yet — story <id> of todo/PLAN_model_arms.md`);
+`5` a stop the operator asked for (Ctrl+C, SIGTERM), after which the same command resumes. `Dispatch` has one `"verb" =>` arm per line, and
+`ModelArmsProgramTests.Every_verb_the_command_line_accepts_has_a_dispatch_arm` reads the source and holds the arms equal to `ModelArmsCommandLine.Verbs`. `version` and `help` need no root.
+Which story replaces which `NotBuilt` arm: `init` E1.S11, `validate` E1.S10, `prep-base` and `make` and `status` E4.S4, `lock` and `unlock` E4.S1, `run-arm` E2.S7, `run-all` E4.S3, `chain` E4.S5,
+`checks` E5.S2, `gate-lock` E2.S6.
+
+**`ExperimentGate.RunAsync(input, verb)`** is the one road in for every verb that reads an experiment (a later story replaces a `NotBuilt` arm with `ExperimentGate.RunAsync(input, SomeVerb.RunAsync)`).
+Each step refuses what the one before did not, and a refusal ends the walk:
+
+1. The root: `--experiment`, else `MODEL_ARMS_EXPERIMENT` (the map the verb was given, never the process's own); none is exit 4. It is made absolute and its trailing separator trimmed ONCE.
+2. `RootRequirements.ToRead`: the root and `experiment.json` exist (exit 4, naming `init`).
+3. Trust (D17 a) of the root and `experiment.json`. On Windows the `NotPerformed` line is printed to the error writer and the walk goes on. Elsewhere `RootFacts.ReadFactsAsync` is asked for the NORMALISED
+   paths and its answer is judged: a `stat` or `id` that fails is exit 3 with its reason (the host could not say); a refusal (a symbolic link, a NUL, a wrong owner, a group- or other-writable mode) is
+   exit 4 with every problem printed. `FileFacts.Path` is the path whose owner and mode were read.
+4. `experiment.json` is read from that judged path, never from the operator's spelling again (a file that cannot be read is exit 3), through `ExperimentFile.Read` with the home directory (`HOME`, else
+   `USERPROFILE`), the git checkout enclosing the root and this binary's repository. A refusal prints `experiment.json is refused:` and each problem indented (exit 4).
+5. `RootRequirements.For(verb, arms, scenarios, baseline)` with the arms the verb was given (`run-arm`, `run-all`, `checks`) and none otherwise: the first file missing names the verb that writes it (exit 4).
+6. Trust of `scenarios.json` when the root has one, as in 3.
+7. The verb, with `ExperimentInput(input, RootPaths(root), experiment)`.
+
+`RootFacts.ReadFactsAsync` is `FileFactsAsync` with the cause kept (`FactsRead.Read`, `.Refused`, `.Unread`): the gate needs the difference between a file the operator must fix (4) and a host that could not be
+asked (3), and `FileFactsAsync` is now its two-state view.
+
+What the tests do NOT prove: the exit-3 path of a failing `stat` or `id` (no test can make a host tool fail; the unreadable `experiment.json` stands in for the host that could not say, and `FactsRead.Unread` is
+mapped to 3 by the same branch); the trust steps on Windows (declared not performed, never run); that the process-level `Main` maps Ctrl+C to exit 5 (the seam under it is tested with a token cancelled
+by hand, `ShutdownSignal` has its own tests); that a verb reads `scenarios.json` from the path the gate judged (the gate judges `RootPaths.Of(scenarios)` and passes the root on; the verb that reads the file, E1.S10, reads that same path and is the next reader of it).
+
 ## The first run: init and validate (E1.S11)

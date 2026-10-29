@@ -149,4 +149,17 @@ public sealed class RootRequirementsTests
         RootRequirements.FirstUnmet(For("init"), Root, Existing()).Should().BeEmpty("a root that does not exist is what init needs");
         RootRequirements.FirstUnmet(For("version"), Root, Existing()).Should().BeEmpty("no requirements, nothing unmet");
     }
+
+    [Fact]
+    public async Task A_root_missing_a_required_file_is_refused_naming_the_first_missing_one_with_exit_4()
+    {
+        using var root = new ExperimentRoot();
+        File.Delete(System.IO.Path.Combine(root.Root, "scenarios.json"));
+
+        var passed = await root.PassAsync("validate");
+
+        passed.ExitCode.Should().Be(4, passed.Error);
+        passed.Error.Should().Contain("scenarios.json is missing").And.Contain("init");
+        passed.Calls.Should().BeEmpty("a verb is never started on a half-made root");
+    }
 }
