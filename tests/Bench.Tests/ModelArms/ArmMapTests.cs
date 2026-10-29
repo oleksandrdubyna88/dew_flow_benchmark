@@ -95,6 +95,13 @@ public sealed class ArmMapTests
         map.Leaks("MCP suite", "C1", ["C"]).Should().BeEmpty("a scheme name is a whole word only");
         map.Leaks("C10 and XC1", "C1", Schemes).Should().BeEmpty("neither is C1 as a whole word");
         map.Leaks("(CR1).", "C1", Schemes).Should().Equal(["CR1"], "punctuation is not part of a word");
+        map.Leaks("SRC1 and src1", "C1", Schemes).Should().BeEmpty("a name inside a longer word is not that name, in either case");
+        map.Leaks("as c1 did", "C1", Schemes).Should().Equal(["C1"], "an arm name is found whatever its case");
+        map.Leaks("the cr1 arm", "C1", Schemes).Should().Equal(["CR1"]);
+        map.Leaks("the srs arm", "C1", ["C", "SRS"]).Should().Equal(["SRS"], "a scheme of several letters is found whatever its case");
+        map.Leaks("the Cr scheme", "C1", Schemes).Should().Equal(["CR"]);
+        map.Leaks("/mnt/c/exp and c:", "C1", Schemes).Should().BeEmpty("a one-letter scheme is matched in its own case only, or every WSL path would leak");
+        map.Leaks("scheme C", "C1", Schemes).Should().Equal(["C"]);
     }
 
     [Fact]

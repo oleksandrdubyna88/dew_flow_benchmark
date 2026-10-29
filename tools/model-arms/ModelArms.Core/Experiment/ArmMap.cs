@@ -79,7 +79,8 @@ public sealed record ArmMap
             : Outcome<string>.Failure($"unknown arm '{arm}'; the known arms are: {(Entries.Count == 0 ? "(none)" : string.Join(", ", Entries.Select(e => e.Key)))}");
 
     /// <summary>What <paramref name="text"/> would reveal to the arm <paramref name="ownArm"/>: every arm name (its own
-    /// included) and every scheme name found as a whole word, and every token but its own found anywhere. Its own
+    /// included) and every scheme name found as a whole word (a one-letter scheme in its own case only, every other name
+    /// in any case), and every token but its own found anywhere. Its own
     /// token is its working directory and is allowed. Empty means clean.</summary>
     public IReadOnlyList<string> Leaks(string text, string ownArm, IReadOnlyCollection<string> schemes) =>
         [.. Entries.Select(entry => entry.Key).Concat(schemes)
@@ -156,11 +157,13 @@ public sealed record ArmMap
         throw new InvalidOperationException($"the random source repeated an existing token {MaximumDraws} times in a row");
     }
 
-    /// <summary>Whole word: not preceded and not followed by an ASCII letter or digit. Case-sensitive, so the scheme
-    /// <c>C</c> is found in "scheme C" and not in "MCP" or "C1".</summary>
+    /// <summary>Whole word: not preceded and not followed by an ASCII letter or digit. A name of several characters is matched
+    /// whatever its case ("as c1 did" names <c>C1</c>); a single character only in its own case, so the scheme <c>C</c> is
+    /// found in "scheme C" and not in "MCP", "C1" or the <c>/mnt/c/</c> of a WSL path.</summary>
     private static bool ContainsWholeWord(string text, string word)
     {
-        for (var at = word.Length == 0 ? -1 : text.IndexOf(word, StringComparison.Ordinal); at >= 0; at = text.IndexOf(word, at + 1, StringComparison.Ordinal))
+        var comparison = word.Length > 1 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        for (var at = word.Length == 0 ? -1 : text.IndexOf(word, comparison); at >= 0; at = text.IndexOf(word, at + 1, comparison))
         {
             var after = at + word.Length;
             if ((at == 0 || !char.IsAsciiLetterOrDigit(text[at - 1])) && (after == text.Length || !char.IsAsciiLetterOrDigit(text[after])))
