@@ -1,7 +1,7 @@
 // Steps 4-6 of the scoring pipeline: a visible/upstream test script run on its own fresh copy of the built tree, and the held-out slot.
 import path from 'node:path';
 import { expectedTotal } from './inputs.mjs';
-import { boxFor, inBox, writeMarker } from './score-steps.mjs';
+import { boxFor, inBox, markOwned } from './score-steps.mjs';
 import { installShim, parseVisibleOutput, shimIntact } from './visible.mjs';
 
 const tail = (text, n = 1500) => (text.length > n ? text.slice(-n) : text);
@@ -13,25 +13,28 @@ const failedRecord = (script, expected, extra) => ({
 /** The whole-script limit: the base plus the per-invocation limit once for every `../minigit` in the script. */
 export const scriptLimitS = (text, limits) => limits.scriptBaseS + limits.perInvocationS * (text.split('../minigit').length - 1);
 
-/** One script, on a fresh copy of the built tree (marked first), with the harness-side script dropped in and the timeout shim in front of minigit. */
+/**
+ * One script, on a fresh copy of the BUILT tree (marked first, nothing left out: build output is what runs), with the harness-side
+ * script dropped in and bound read-only over the copy, and the timeout shim in front of minigit.
+ */
 async function runOneScript(ctx, script, text) {
   const { plan, deps } = ctx;
   const expected = expectedTotal(text);
-  const runDir = path.join(plan.scoreDir, `run-${script.kind}-${script.name}`);
-  writeMarker(ctx, runDir);
-  deps.fs.copyTree(plan.copyDir, runDir, plan.stack);
+  const name = `run-${script.kind}-${script.name}`;
+  const runDir = path.join(plan.scoreDir, name);
+  markOwned(ctx, name);
+  deps.fs.copyTree(plan.copyDir, runDir, []);
   deps.fs.writeFile(path.join(runDir, script.name), text, 0o755);
   const shim = installShim(runDir, plan.limits.perInvocationS);
   if (!shim.ok) return failedRecord(script, expected, { reason: shim.reason });
   const limitS = scriptLimitS(text, plan.limits);
   const started = deps.now();
-  const r = await inBox(ctx, runDir, ['bash', script.name], limitS);
-  if (!r.ok) return failedRecord(script, expected, { reason: r.reason });
+  const r = await inBox(ctx, runDir, ['bash', script.name], limitS, { roFiles: [path.join(runDir, script.name)] });
   const intact = shimIntact(runDir, shim.value.sha256);
   return {
-    ...failedRecord(script, expected, {}), ...parseVisibleOutput(r.value.stdout, expected),
-    exitCode: r.value.code, timedOut: r.value.timedOut, limitS, ms: deps.now() - started,
-    shimIntact: intact, perInvocationTimeout: intact ? 'enforced' : 'not enforced', outputTail: tail(r.value.stdout + r.value.stderr),
+    ...failedRecord(script, expected, {}), ...parseVisibleOutput(r.stdout, expected),
+    exitCode: r.code, signal: r.signal, timedOut: r.timedOut, limitS, ms: deps.now() - started,
+    shimIntact: intact, perInvocationTimeout: intact ? 'enforced' : 'not enforced', outputTail: tail(r.stdout + r.stderr),
   };
 }
 
@@ -51,6 +54,6 @@ export async function stepScripts(ctx, scripts, built) {
 export async function stepHeldout(ctx, built) {
   const { plan, deps } = ctx;
   if (!built) return { known: true, primary100: false, reason: 'build failed' };
-  const box = boxFor(ctx, plan.copyDir, { cwd: false });
+  const box = boxFor(ctx, plan.copyDir, { cwd: false, cases: true });
   return deps.heldout({ binary: path.join(plan.copyDir, 'minigit'), phase: plan.phase, box });
 }

@@ -1,6 +1,6 @@
 // The pinned inputs' bookkeeping: the sha256sum-format list, the check of files against it, the expected test count.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 
@@ -34,11 +34,33 @@ export function readFileOrNull(file) {
 
 export const sha256Of = bytes => createHash('sha256').update(bytes).digest('hex');
 
-/** Per entry { path, expected, actual, ok }. A missing file is `actual: null`, never a mismatch with the empty string. */
-export function verifyFiles(root, entries, readFile = readFileOrNull) {
+/** The largest input file worth hashing; the pinned ones are a few KB. Anything bigger is not a pinned input. */
+export const MAX_INPUT_BYTES = 4 * 1024 * 1024;
+
+/**
+ * For a path inside an agent-written tree: the bytes of a REGULAR file of at most `maxBytes`, `null` when absent, or
+ * `{ unreadable: why }` for a symlink, a device, a pipe, a directory or an oversize file. lstat first, so a link to /dev/zero is
+ * never opened. Anything unreadable counts as tampered by the caller.
+ */
+export function readRegularFile(file, maxBytes = MAX_INPUT_BYTES) {
+  let st;
+  try {
+    st = lstatSync(file);
+  } catch (e) {
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return null;
+    throw e;
+  }
+  if (st.isSymbolicLink()) return { unreadable: 'symlink' };
+  if (!st.isFile()) return { unreadable: 'not a regular file' };
+  if (st.size > maxBytes) return { unreadable: `larger than ${maxBytes} bytes` };
+  return readFileSync(file);
+}
+
+/** Per entry { path, expected, actual, ok }. A missing file is `actual: null`; an unreadable one is `actual: 'unreadable: <why>'`. Never ok. */
+export function verifyFiles(root, entries, readFile = readRegularFile) {
   return entries.map(({ sha256, path: rel }) => {
-    const bytes = readFile(path.join(root, rel));
-    const actual = bytes === null ? null : sha256Of(bytes);
+    const got = readFile(path.join(root, rel));
+    const actual = got === null ? null : got.unreadable ? `unreadable: ${got.unreadable}` : sha256Of(got);
     return { path: rel, expected: sha256, actual, ok: actual === sha256 };
   });
 }

@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 import { stepScripts, stepHeldout } from './score-scripts.mjs';
-import { stepBuild, stepCleanup, stepCopy, stepInputs, stepSweep } from './score-steps.mjs';
+import { ScorerEnvironmentError, stepBuild, stepCleanup, stepCopy, stepInputs, stepPreflight, stepSweep } from './score-steps.mjs';
 
 export const DEFAULT_LIMITS = Object.freeze({ buildS: 600, scriptBaseS: 600, perInvocationS: 10, wallS: 7200 });
 const ARMS = ['process', 'bare'];
@@ -17,18 +17,20 @@ const scriptsFor = (phase, kind, dir) =>
     name, kind, source: kind === 'visible' ? 'harness' : 'upstream', referenceOnly: kind === 'upstream', inputsPath: `${dir}${name}` }));
 
 /** The ordered steps for one session. Pure. A bad argument is a `fail`, never a throw. */
-export function scoringPlan({ arm, stack, phase, sourceDir, sessionDir, limits = {} }) {
+export function scoringPlan({ arm, stack, phase, sourceDir, sessionDir, limits = {}, nugetCache, npmCache }) {
   const bad = [[ARMS, arm, 'arm'], [STACKS, stack, 'stack'], [PHASES, phase, 'phase']].find(([allowed, v]) => !allowed.includes(v));
   if (bad) return fail(`${bad[2]} must be one of ${bad[0].join('|')}, got ${JSON.stringify(bad[1])}`);
   if (!sourceDir || !sessionDir) return fail('sourceDir and sessionDir are required');
   const scoreDir = path.join(sessionDir, 'score');
   return ok(Object.freeze({
-    arm, stack, phase, sourceDir, sessionDir, scoreDir,
+    arm, stack, phase, sourceDir, sessionDir, scoreDir, nugetCache, npmCache,
+    nugetCopy: nugetCache ? path.join(scoreDir, 'cache-nuget') : undefined,
+    npmCopy: npmCache ? path.join(scoreDir, 'cache-npm') : undefined,
     sessionId: path.basename(sessionDir),
     copyDir: path.join(scoreDir, 'copy'), homeDir: path.join(scoreDir, 'home'), tmpDir: path.join(scoreDir, 'tmp'), casesDir: path.join(scoreDir, 'cases'),
     limits: Object.freeze({ ...DEFAULT_LIMITS, ...limits }),
     steps: Object.freeze([
-      { id: 'sweep' }, { id: 'copy' }, { id: 'inputs' }, { id: 'build' },
+      { id: 'sweep' }, { id: 'copy' }, { id: 'preflight' }, { id: 'inputs' }, { id: 'build' },
       { id: 'visible', scripts: scriptsFor(phase, 'visible', '') },
       { id: 'heldout' },
       { id: 'upstream', referenceOnly: true, scripts: scriptsFor(phase, 'upstream', 'upstream/') },
@@ -37,7 +39,9 @@ export function scoringPlan({ arm, stack, phase, sourceDir, sessionDir, limits =
   }));
 }
 
-const hundredPercent = s => s.summaryCaptured && !s.buildFailed && s.failed === 0 && s.passed === s.expectedTotal;
+/** A script's result is 100 % only when its summary says so AND the script itself ended cleanly: exit 0, no signal, no timeout. */
+export const hundredPercent = s => s.summaryCaptured && !s.buildFailed && s.failed === 0 && s.passed === s.expectedTotal
+  && s.exitCode === 0 && s.timedOut === false && s.signal == null;
 
 /**
  * accepted = build ok AND every visible script 100 % AND held-out primary 100 % AND (process) delivered. A definite failure is
@@ -61,6 +65,8 @@ async function runSteps(ctx) {
   trace.push(line('sweep', `removed ${sweep.removed.length}, unmarked ${sweep.unmarked.join(',') || 'none'}`));
   const copied = stepCopy(ctx, sweep);
   if (!copied.ok) return copied;
+  const started = await stepPreflight(ctx);
+  if (!started.ok) return started;
   const inputs = stepInputs(ctx);
   trace.push(line('inputs', `tampered [${inputs.inputsTampered}] absent [${inputs.inputsAbsent}]`));
   const build = await stepBuild(ctx);
@@ -82,6 +88,9 @@ export async function runScoring(plan, deps) {
   let body;
   try {
     body = await runSteps(ctx);
+  } catch (e) {
+    if (!(e instanceof ScorerEnvironmentError)) throw e;
+    body = fail(`the scoring box could not run: ${e.message}`, { kind: 'environment' });
   } finally {
     ctx.cleanup = stepCleanup(ctx);
   }

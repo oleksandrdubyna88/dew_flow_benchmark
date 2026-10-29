@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PINNED_INPUTS_SHA, fetchInputs } from '../lib/fetch-inputs.mjs';
-import { expectedTotal, parseHashes, readFileOrNull, verifyFiles } from '../lib/inputs.mjs';
+import { expectedTotal, parseHashes, readRegularFile, verifyFiles } from '../lib/inputs.mjs';
 import { inputs, spikeDir, tmpDir } from './helpers.mjs';
 
 const hashesText = readFileSync(path.join(spikeDir, 'inputs', 'hashes.txt'), 'utf8');
@@ -12,7 +12,7 @@ const hashesText = readFileSync(path.join(spikeDir, 'inputs', 'hashes.txt'), 'ut
 test('Every_pinned_input_matches_hashes_txt', async () => {
   const { root, entries } = await inputs();
   assert.equal(entries.length, 6);
-  const clean = verifyFiles(root, entries, readFileOrNull);
+  const clean = verifyFiles(root, entries);
   assert.deepEqual(clean.filter(r => !r.ok), []);
 
   const copy = tmpDir('hashes');
@@ -21,7 +21,7 @@ test('Every_pinned_input_matches_hashes_txt', async () => {
   const bytes = readFileSync(victim);
   bytes[0] ^= 1;
   writeFileSync(victim, bytes);
-  const edited = verifyFiles(copy, entries, readFileOrNull);
+  const edited = verifyFiles(copy, entries);
   assert.deepEqual(edited.filter(r => !r.ok).map(r => r.path), ['upstream/SPEC-v1.txt']);
 });
 
@@ -73,21 +73,54 @@ const walk = dir => readdirSync(dir).flatMap(name => {
   return statSync(p).isDirectory() ? walk(p) : [p];
 });
 
-test('No_upstream_line_is_anywhere_in_the_spike', async () => {
+const NEEDLE_MIN = 25;
+/** Every distinctive line of the six files that live only in the fork: trimmed, at least NEEDLE_MIN characters and 12 letters or digits (a rule of dashes is not distinctive). */
+async function forkLines() {
   const { root } = await inputs();
   const lines = new Set();
-  for (const f of ['upstream/SPEC-v1.txt', 'upstream/SPEC-v2.txt']) {
-    readFileSync(path.join(root, f), 'utf8').split('\n').map(l => l.trim()).filter(l => l.length >= 20).slice(0, 5).forEach(l => lines.add(l));
+  for (const f of ['upstream/SPEC-v1.txt', 'upstream/SPEC-v2.txt', 'upstream/test-v1.sh', 'upstream/test-v2.sh', 'test-v1.sh', 'test-v2.sh']) {
+    readFileSync(path.join(root, f), 'utf8').split('\n').map(l => l.trim()).filter(l => l.length >= NEEDLE_MIN && l.replace(/[^A-Za-z0-9]/g, '').length >= 12).forEach(l => lines.add(l));
   }
-  for (const f of ['upstream/test-v1.sh', 'upstream/test-v2.sh']) {
-    readFileSync(path.join(root, f), 'utf8').split('\n').filter(l => /^# Test \d+:/.test(l)).forEach(l => lines.add(l));
-  }
-  assert.ok(lines.size >= 40, `the needle list is alive (${lines.size})`);
-  const hits = walk(spikeDir).filter(file => {
-    const text = readFileSync(file, 'utf8');
-    return [...lines].some(l => text.includes(l));
-  });
-  assert.deepEqual(hits, []);
+  return lines;
+}
+const filesContaining = (dir, lines) => walk(dir).filter(file => {
+  const text = readFileSync(file, 'utf8');
+  return [...lines].some(l => text.includes(l));
+});
+
+test('No_line_of_the_six_fork_files_is_anywhere_in_the_spike', async () => {
+  const lines = await forkLines();
+  assert.ok(lines.size >= 150, `the needle list is alive (${lines.size} lines)`);
+  const planted = tmpDir('needle');
+  writeFileSync(path.join(planted, 'innocent.txt'), `harmless\n${[...lines][7]}\n`);
+  assert.deepEqual(filesContaining(planted, lines).map(f => path.basename(f)), ['innocent.txt'], 'control: the scan finds a planted line');
+  assert.deepEqual(filesContaining(spikeDir, lines), []);
+});
+
+test('Only_a_regular_file_of_sane_size_is_hashed_and_anything_else_is_not_the_pinned_input', async () => {
+  const { root, entries } = await inputs();
+  const dir = tmpDir('regular');
+  const bytes = readFileSync(path.join(root, 'upstream', 'SPEC-v1.txt'));
+  const name = 'SPEC-v1.txt';
+  const entry = [{ sha256: entries.find(e => e.path === 'upstream/SPEC-v1.txt').sha256, path: name }];
+  writeFileSync(path.join(dir, name), bytes);
+  assert.equal(verifyFiles(dir, entry)[0].ok, true, 'control: the real bytes verify');
+  rmSync(path.join(dir, name));
+  symlinkSync(path.join(root, 'upstream', 'SPEC-v1.txt'), path.join(dir, name));
+  assert.deepEqual([verifyFiles(dir, entry)[0].ok, verifyFiles(dir, entry)[0].actual], [false, 'unreadable: symlink'], 'a link to the right bytes is still not the file');
+  rmSync(path.join(dir, name));
+  symlinkSync('/dev/zero', path.join(dir, name));
+  assert.equal(verifyFiles(dir, entry)[0].actual, 'unreadable: symlink', 'a link to /dev/zero is never opened');
+  rmSync(path.join(dir, name));
+  mkdirSync(path.join(dir, name));
+  assert.equal(verifyFiles(dir, entry)[0].actual, 'unreadable: not a regular file');
+  rmSync(path.join(dir, name), { recursive: true });
+  execFileSync('mkfifo', [path.join(dir, name)]);
+  assert.equal(verifyFiles(dir, entry)[0].actual, 'unreadable: not a regular file', 'a pipe would block a read forever');
+  rmSync(path.join(dir, name));
+  writeFileSync(path.join(dir, name), bytes);
+  assert.equal(readRegularFile(path.join(dir, name), bytes.length - 1).unreadable, `larger than ${bytes.length - 1} bytes`);
+  assert.equal(readRegularFile(path.join(dir, 'absent')), null);
 });
 
 test('A_cached_tree_that_no_longer_matches_is_a_failure_naming_the_file_never_a_refetch', async () => {

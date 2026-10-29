@@ -84,34 +84,48 @@ const B = 'b'.repeat(40);
 
 const parentScript = 'test-v2.sh';
 
+/** The message upstream's Test N passes with, read from the fetched upstream script at run time (the text lives only in the fork). */
+async function upstreamMessage(testNo) {
+  const { root } = await inputs();
+  const lines = readFileSync(path.join(root, 'upstream/test-v2.sh'), 'utf8').split('\n');
+  const from = lines.findIndex(l => l.startsWith(`# Test ${testNo}:`));
+  const to = lines.findIndex(l => l.startsWith(`# Test ${testNo + 1}:`));
+  const found = /pass "([^"]+)"/.exec(lines.slice(from, to).join('\n'));
+  assert.ok(found, `Test ${testNo} of upstream has a pass message`);
+  return found[1];
+}
+const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const CASES = [[20, 'COMMIT1'], [24, 'COMMIT2']];
+
 // The defect, kept reproducible: upstream's Test 20 and Test 24 pass a commit whose parent is wrong. (This is the RED the fixed
 // script's test was first watched failing against.)
 test('The_unedited_upstream_test_v2_passes_a_commit_whose_parent_is_wrong_and_that_is_the_point', async () => {
-  const t20 = await runParentBlock('upstream/test-v2.sh', 20, { commitVar: 'COMMIT1', parentHash: B, expectedHash: A });
-  assert.match(t20.stdout, /^PASS: checkout then new commit works$/m);
-  const t24 = await runParentBlock('upstream/test-v2.sh', 24, { commitVar: 'COMMIT2', parentHash: B, expectedHash: A });
-  assert.match(t24.stdout, /^PASS: reset then recommit uses reset target as parent$/m);
+  for (const [no, commitVar] of CASES) {
+    const r = await runParentBlock('upstream/test-v2.sh', no, { commitVar, parentHash: B, expectedHash: A });
+    assert.match(r.stdout, new RegExp(`^PASS: ${escapeRe(await upstreamMessage(no))}$`, 'm'));
+  }
 });
 
 test('The_fixed_test_v2_fails_a_commit_whose_parent_is_wrong', async () => {
-  const t20 = await runParentBlock(parentScript, 20, { commitVar: 'COMMIT1', parentHash: B, expectedHash: A });
-  assert.match(t20.stdout, new RegExp(`^FAIL: checkout then new commit works \\(parent is not ${A}\\)$`, 'm'), `Test 20 printed: ${t20.stdout}`);
-  assert.doesNotMatch(t20.stdout, /^PASS:/m);
-  const t24 = await runParentBlock(parentScript, 24, { commitVar: 'COMMIT2', parentHash: B, expectedHash: A });
-  assert.match(t24.stdout, new RegExp(`^FAIL: reset then recommit uses reset target as parent \\(parent is not ${A}\\)$`, 'm'), `Test 24 printed: ${t24.stdout}`);
-  assert.doesNotMatch(t24.stdout, /^PASS:/m);
+  for (const [no, commitVar] of CASES) {
+    const message = await upstreamMessage(no);
+    const r = await runParentBlock(parentScript, no, { commitVar, parentHash: B, expectedHash: A });
+    assert.match(r.stdout, new RegExp(`^FAIL: ${escapeRe(message)} \\(parent is not ${A}\\)$`, 'm'), `Test ${no} printed: ${r.stdout}`);
+    assert.doesNotMatch(r.stdout, /^PASS:/m);
+  }
 });
 
 test('The_fixed_test_v2_still_passes_a_commit_whose_parent_is_right', async () => {
-  const t20 = await runParentBlock(parentScript, 20, { commitVar: 'COMMIT1', parentHash: A, expectedHash: A });
-  assert.match(t20.stdout, /^PASS: checkout then new commit works$/m);
-  const t24 = await runParentBlock(parentScript, 24, { commitVar: 'COMMIT2', parentHash: A, expectedHash: A });
-  assert.match(t24.stdout, /^PASS: reset then recommit uses reset target as parent$/m);
+  for (const [no, commitVar] of CASES) {
+    const r = await runParentBlock(parentScript, no, { commitVar, parentHash: A, expectedHash: A });
+    assert.match(r.stdout, new RegExp(`^PASS: ${escapeRe(await upstreamMessage(no))}$`, 'm'));
+  }
 });
 
 test('A_missing_summary_scores_as_all_failed_never_zero_of_zero', () => {
   const r = parseVisibleOutput('FAIL: something\nno summary here\n', 11);
   assert.equal(r.summaryCaptured, false);
+  assert.match(r.reason, /no PASSED\/FAILED\/TOTAL summary/);
   assert.equal(r.passed, 0);
   assert.equal(r.failed, 11);
   assert.equal(r.total, 11);
@@ -123,12 +137,16 @@ test('A_captured_summary_is_read_from_its_last_block_and_must_agree_with_the_exp
   assert.deepEqual([good.summaryCaptured, good.passed, good.failed, good.total, good.failLines], [true, 9, 2, 11, ['FAIL: x']]);
   const wrongTotal = parseVisibleOutput(block(3, 0), 11);
   assert.equal(wrongTotal.summaryCaptured, false);
+  assert.match(wrongTotal.reason, /does not add up|expected 11/);
+  assert.equal(good.reason, undefined, 'a captured summary carries no reason');
   assert.equal(wrongTotal.failed, 11);
 });
 
 test('A_build_failure_line_scores_every_test_failed', () => {
   const r = parseVisibleOutput('BUILD FAILED\nPASSED: 0\nFAILED: 1\n', 30);
   assert.equal(r.buildFailed, true);
+  assert.equal(r.summaryCaptured, false);
+  assert.equal(r.reason, 'build failed');
   assert.deepEqual([r.passed, r.failed, r.total], [0, 30, 30]);
 });
 

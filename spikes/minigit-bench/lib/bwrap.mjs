@@ -7,7 +7,6 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const BWRAP_PATH = '/usr/bin/bwrap';
 export const roRoot = () => ['--ro-bind', '/', '/'];
 export const tmpfs = p => ['--tmpfs', p];
 export const bind = p => ['--bind', p, p];
@@ -19,13 +18,11 @@ export const chdir = p => ['--chdir', p];
 /** `--clearenv`, then one `--setenv` per key, keys sorted so the argv is stable. */
 export const setenvAll = env => ['--clearenv', ...Object.keys(env).sort().flatMap(k => ['--setenv', k, String(env[k])])];
 
-const cacheNamed = (cacheDirs, name) => cacheDirs.find(d => path.basename(d) === name);
-
 /**
- * The scoring environment: a fixed allow-list, never the operator's. `cacheDirs` are bound read-write; the one named `nuget` becomes
- * NUGET_PACKAGES and the one named `npm` becomes npm_config_cache (each falls back to a place inside `home`).
+ * The scoring environment: a fixed allow-list, never the operator's. `nugetCache` / `npmCache` are the per-scoring copies of the
+ * seeded offline caches; with none given each cache lives inside `home`.
  */
-export function scoreEnv({ home, tmp, toolchainDirs = [], cacheDirs = [] }) {
+export function scoreEnv({ home, tmp, toolchainDirs = [], nugetCache, npmCache }) {
   return Object.freeze({
     PATH: [...toolchainDirs.flatMap(d => [`${d}/bin`, d]), '/usr/bin', '/bin'].join(':'),
     HOME: home,
@@ -37,30 +34,42 @@ export function scoreEnv({ home, tmp, toolchainDirs = [], cacheDirs = [] }) {
     DOTNET_CLI_USE_MSBUILD_SERVER: '0',
     MSBUILDDISABLENODEREUSE: '1',
     UseSharedCompilation: 'false',
-    NUGET_PACKAGES: cacheNamed(cacheDirs, 'nuget') ?? path.join(home, '.nuget', 'packages'),
-    npm_config_cache: cacheNamed(cacheDirs, 'npm') ?? path.join(home, '.npm'),
+    NUGET_PACKAGES: nugetCache ?? path.join(home, '.nuget', 'packages'),
+    npm_config_cache: npmCache ?? path.join(home, '.npm'),
     npm_config_offline: 'true',
   });
 }
 
 /**
- * The argv prefix (ending in `--`) of the scoring box: the whole filesystem read-only, the operator's home, /mnt and WSL's /run/WSL
- * replaced by empty tmpfs, then only what scoring needs bound back in: toolchains read-only (node lives under the home), the
- * copy, cases, HOME, TMPDIR and the caches read-write. No network, own pid namespace, an environment of the allow-list only.
+ * The argv prefix (ending in `--`) of the scoring box: the whole filesystem read-only; the operator's home, /mnt, /run (the session
+ * bus and every service socket under it: a process that reaches the user manager can start a unit OUTSIDE the box), /tmp and /var/tmp
+ * (the host's build-server sockets) replaced by empty tmpfs; then only what scoring needs bound back in, AFTER the tmpfs so they show:
+ * toolchains read-only (node lives under the home); the copy, HOME, TMPDIR and the cache copies read-write; `casesDir` only for the
+ * held-out step; `roFiles` read-only OVER the writable copy (the harness test script the tree must not rewrite). No network, own pid
+ * namespace, an environment of the allow-list only. A directory the host lacks is not mounted over (bwrap cannot create it on a ro root).
  */
-export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], cacheDirs = [], cwd, operatorHome = os.homedir(), exists = existsSync }) {
+export function scoreBoxArgv({ copyDir, casesDir, home, tmp, toolchainDirs = [], nugetCache, npmCache, roFiles = [], cwd, operatorHome = os.homedir(), exists = existsSync }) {
+  const hidden = [operatorHome, '/mnt', '/run', '/tmp', '/var/tmp'].filter(p => p === operatorHome || exists(p));
   return Object.freeze([
     'bwrap',
     ...roRoot(),
     ...devProc(),
-    ...tmpfs(operatorHome),
-    ...tmpfs('/mnt'),
-    ...(exists('/run/WSL') ? tmpfs('/run/WSL') : []),
+    ...hidden.flatMap(tmpfs),
     ...toolchainDirs.flatMap(roBind),
-    ...[copyDir, casesDir, home, tmp, ...cacheDirs].flatMap(bind),
+    ...[copyDir, casesDir, home, tmp, nugetCache, npmCache].filter(Boolean).flatMap(bind),
+    ...roFiles.flatMap(roBind),
     ...isolation(),
-    ...setenvAll(scoreEnv({ home, tmp, toolchainDirs, cacheDirs })),
+    ...setenvAll(scoreEnv({ home, tmp, toolchainDirs, nugetCache, npmCache })),
     ...(cwd ? chdir(cwd) : []),
     '--',
   ]);
+}
+
+/** Resolve an executable on PATH the way spawn does, or null. */
+export function findOnPath(name, pathValue = process.env.PATH ?? '') {
+  for (const dir of pathValue.split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(dir, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
 }

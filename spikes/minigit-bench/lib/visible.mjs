@@ -7,7 +7,7 @@ import { fail, ok } from './result.mjs';
 export const REAL_BINARY = '.minigit-scored-real';
 const SUMMARY = /^PASSED: (\d+)\nFAILED: (\d+)\nTOTAL: +(\d+)$/gm;
 
-const allFailed = (expected, extra) => ({ summaryCaptured: false, passed: 0, failed: expected, total: expected, buildFailed: false, failLines: [], ...extra });
+const allFailed = (expected, reason, extra) => ({ summaryCaptured: false, reason, passed: 0, failed: expected, total: expected, buildFailed: false, failLines: [], ...extra });
 
 /**
  * Reads a visible script's stdout. The summary is the LAST `PASSED/FAILED/TOTAL` block (a binary may print look-alikes earlier) and
@@ -16,12 +16,13 @@ const allFailed = (expected, extra) => ({ summaryCaptured: false, passed: 0, fai
  */
 export function parseVisibleOutput(stdout, expectedTotal) {
   const failLines = stdout.split('\n').filter(l => l.startsWith('FAIL: '));
-  if (/^BUILD FAILED$/m.test(stdout)) return allFailed(expectedTotal, { buildFailed: true, failLines });
-  const blocks = [...stdout.matchAll(SUMMARY)];
-  const last = blocks.at(-1);
-  if (!last) return allFailed(expectedTotal, { failLines });
+  if (/^BUILD FAILED$/m.test(stdout)) return allFailed(expectedTotal, 'build failed', { buildFailed: true, failLines });
+  const last = [...stdout.matchAll(SUMMARY)].at(-1);
+  if (!last) return allFailed(expectedTotal, 'no PASSED/FAILED/TOTAL summary in the output', { failLines });
   const [passed, failed, total] = last.slice(1).map(Number);
-  if (passed + failed !== total || total !== expectedTotal) return allFailed(expectedTotal, { failLines });
+  if (passed + failed !== total || total !== expectedTotal) {
+    return allFailed(expectedTotal, `the summary (${passed} passed, ${failed} failed, total ${total}) does not add up to the expected ${expectedTotal}`, { failLines });
+  }
   return { summaryCaptured: true, passed, failed, total, buildFailed: false, failLines };
 }
 
