@@ -472,10 +472,10 @@ public sealed class ArchitectureTests
             .Select(path => Path.GetRelativePath(root, path))
             .Order(StringComparer.Ordinal)];
 
-    private static IEnumerable<AssemblyName> Referenced(string fileName) =>
+    internal static IEnumerable<AssemblyName> Referenced(string fileName) =>
         Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, fileName)).GetReferencedAssemblies();
 
-    private static bool IsRuntime(AssemblyName name) =>
+    internal static bool IsRuntime(AssemblyName name) =>
         name.Name!.StartsWith("System", StringComparison.Ordinal)
         || name.Name == "netstandard"
         || name.Name == "mscorlib";
