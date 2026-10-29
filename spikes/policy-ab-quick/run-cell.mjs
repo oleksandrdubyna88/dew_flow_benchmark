@@ -53,7 +53,8 @@ function launch(exe, args, { cwd, env, prompt, streamPath, stderrPath, wallMs, c
   return new Promise((resolve, reject) => {
     const out = fs.createWriteStream(streamPath);
     const err = fs.createWriteStream(stderrPath);
-    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true });
+    // detached on POSIX: the timers below kill the child's process GROUP (lib/proc.mjs killTree).
+    const child = spawn(exe, args, { cwd, env, shell: false, windowsHide: true, detached: process.platform !== 'win32' });
     const meter = new CostMeter();
     let timedOut = false;
     let overCap = false;

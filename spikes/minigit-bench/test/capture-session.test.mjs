@@ -392,7 +392,7 @@ test('A_kill_that_fails_for_a_reason_other_than_a_gone_group_is_logged_and_never
   assert.equal(logged.length, 1, 'a group that is already gone is the goal, not a problem');
   const calls = [];
   killTree({ pid: 4242 }, { kill: (pid, sig) => calls.push([pid, sig]) });
-  assert.deepEqual(calls, [[-4242, 'SIGKILL']]);
+  assert.deepEqual(calls, [[-4242, 'SIGKILL'], [4242, 'SIGKILL']], 'the group, then the pid (the one shared kill)');
 });
 
 function configWith(build) {

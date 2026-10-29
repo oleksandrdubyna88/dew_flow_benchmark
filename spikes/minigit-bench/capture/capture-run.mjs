@@ -1,10 +1,12 @@
 // The `run` verb: executes a capture plan. I/O at the edge - it starts the file sink, spawns the CLI as exe + argv (no shell) with the
 // prompt on stdin and the fixed environment, enforces the wall limit by killing the whole process group, then collects what the CLI left.
 import { spawn } from 'node:child_process';
-import { appendFileSync, closeSync, copyFileSync, createWriteStream, lstatSync, mkdirSync, openSync, readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, createWriteStream, mkdirSync, openSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { killTree as killProcessTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { fail, ok } from '../lib/result.mjs';
+import { copyTranscripts as copyTranscriptsFrom } from '../lib/transcripts.mjs';
 import { SUBAGENT_TOOL_NAMES, capturePlan, subagentToolOf } from './capture-plan.mjs';
 import { startSink } from './otlp-sink.mjs';
 
@@ -12,57 +14,15 @@ const EXIT_CAPTURE_FAILED = 5;
 const failed = reason => fail(reason, { exit: EXIT_CAPTURE_FAILED });
 
 /**
- * Kill the child's whole process group. Called from timers and stream callbacks, so it NEVER throws: a group that is already gone
- * (ESRCH) is the goal, any other failure (EPERM, ...) is reported through `log` and the capture goes on to its own failure.
+ * Kill the child's whole process group (and the child): the spikes' one kill implementation, `killTree` of policy-ab-quick/lib/proc.mjs.
+ * Called from timers and stream callbacks, so it NEVER throws; a failure other than a gone group is reported through `log`.
  */
 export function killTree(child, { kill = process.kill.bind(process), log = () => {} } = {}) {
-  if (!child.pid) return; // never started: nothing to kill
-  try {
-    kill(-child.pid, 'SIGKILL');
-  } catch (e) {
-    if (e.code !== 'ESRCH') {
-      log(`could not kill the process group of pid ${child.pid}: ${e.code ?? e.name}: ${e.message}`);
-    }
-  }
+  killProcessTree(child.pid, { kill, log });
 }
 
-/**
- * Every `*.jsonl` under `root` as a path relative to it, plus `refused`: entries that are neither a real directory nor a regular
- * file (a link, a device, a pipe). The layout is an assumption (A-T1), so it is walked, never built; nothing is followed, because
- * the config directory is written by the CLI under test and a link in it must not lead the copy outside the capture.
- */
-function walkJsonl(root) {
-  const files = [];
-  const refused = [];
-  const walk = dir => {
-    for (const name of readdirSync(dir)) {
-      const full = path.join(dir, name);
-      const stat = lstatSync(full);
-      if (stat.isDirectory()) walk(full);
-      else if (!stat.isFile()) refused.push(path.relative(root, full));
-      else if (name.endsWith('.jsonl')) files.push(path.relative(root, full));
-    }
-  };
-  try {
-    walk(root);
-  } catch (e) {
-    if (e.code !== 'ENOENT') throw e;
-  }
-  return { files, refused };
-}
-
-/** Copy the CLI's transcripts into `transcripts/`: ok(relative paths), or a failure naming every refused entry and copying nothing. */
-export function copyTranscripts(out) {
-  const from = path.join(out, 'config', 'projects');
-  const { files, refused } = walkJsonl(from);
-  if (refused.length > 0) return fail(`the transcript tree holds ${refused.length} entr${refused.length === 1 ? 'y' : 'ies'} that ${refused.length === 1 ? 'is' : 'are'} not a regular file or a real directory (${refused.join(', ')}): nothing was copied`);
-  return ok(files.map(rel => {
-    const target = path.join(out, 'transcripts', rel);
-    mkdirSync(path.dirname(target), { recursive: true });
-    copyFileSync(path.join(from, rel), target);
-    return rel;
-  }));
-}
+/** Copy the CLI's transcripts into `transcripts/` (the shared copy of lib/transcripts.mjs): ok(relative paths), or a failure naming every refused entry. */
+export const copyTranscripts = out => copyTranscriptsFrom(path.join(out, 'config'), path.join(out, 'transcripts'));
 
 /** Watches the stream as it arrives: the init event's tool list must hold the subagent tool under either name (SUBAGENT_TOOL_NAMES). */
 function streamWatcher(onProblem) {

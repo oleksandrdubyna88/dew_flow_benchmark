@@ -32,7 +32,7 @@ const ONLY=(process.env.READ_SOURCES||'').split(',').filter(Boolean);
 const out=fs.existsSync(Q+'assess-results.json')?JSON.parse(fs.readFileSync(Q+'assess-results.json','utf8')):{};
 for(const id of Object.keys(key)){if(out[id]?.parsed)continue;if(ONLY.length&&!ONLY.includes(key[id].source))continue;const cwd=Q+'assess/'+id;const t0=Date.now();let attempts=[];let parsed=null;
  for(let a=0;a<2&&!parsed;a++){
-  const r=spawnSync('codex',['exec','--sandbox','read-only','--skip-git-repo-check','-C',cwd,'--ephemeral','-'],{input:prompt(a?'\nYour previous reply was invalid ('+attempts.at(-1).err+'). Output ONLY the JSON object.':''),encoding:'utf8',maxBuffer:1e9,shell:true});
+  const r=spawnSync('codex',['exec','--sandbox','read-only','--skip-git-repo-check','-C',cwd,'--ephemeral','-'],{input:prompt(a?'\nYour previous reply was invalid ('+attempts.at(-1).err+'). Output ONLY the JSON object.':''),encoding:'utf8',maxBuffer:1e9});
   const raw=r.stdout||'';const c=check(raw);attempts.push({raw,stderrTail:(r.stderr||'').slice(-1500),status:r.status,err:typeof c==='string'?c:null});
   if(typeof c!=='string')parsed=c}
  out[id]={source:key[id].source,attempts,parsed,wallSeconds:(Date.now()-t0)/1000};
