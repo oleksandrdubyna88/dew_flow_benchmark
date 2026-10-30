@@ -299,6 +299,11 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   the SNI. Effect tests in the box: another name over the npm edge fails, the same edge under its own name succeeds, and an HTTP/2
   `:authority` of another host sent over an npm-SNI connection is answered 403 by the edge (no content; no TLS is intercepted, so this
   rests on the edge's behaviour and is not a property the proxy provides).
+  **Residual risk (stated, not closed):** only the FIRST ClientHello of a tunnel is checked; after the gate passes, every later byte is piped
+  unread. A second plaintext ClientHello (the HelloRetryRequest case, where the client sends a new hello after the server's retry request) is piped
+  unchecked, and a TLS 1.2 renegotiation is encrypted, so the proxy cannot see it. Neither is blocked here: the proxy relies on the edge, which
+  routes a connection by the hello it read first (`probe-egress.mjs` of the 2026-10-30 review: a second hello with another SNI after an allowed
+  one reached the upstream, 3184 bytes for two hellos). The proxy never sees inside TLS, so a check after the first hello would be a guess.
 - **The broker** (`lib/broker.mjs`, `lib/broker-routes.mjs`, `lib/budget.mjs`). On `net/api.sock`: replaces `Authorization` with the real
   token (read by the harness through `lib/secrets.mjs`), forwards every other request header (an open list: `anthropic-beta` carries the
   OAuth capability), drops `accept-encoding` so the usage parser reads plain SSE and every hop-by-hop header (`connection`, `keep-alive`, `proxy-connection`, `proxy-authenticate`, `proxy-authorization`, `te`, `trailer`, `transfer-encoding`, `upgrade`, `http2-settings`, and each name the `Connection` header lists; before, an `Upgrade: h2c` reached the upstream), streams the answer back chunk by chunk, follows no
