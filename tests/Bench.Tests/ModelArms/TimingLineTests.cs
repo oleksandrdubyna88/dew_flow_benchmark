@@ -261,7 +261,7 @@ public sealed class TimingLineTests
     /// <c>[a-zA-Z0-9]</c> replaced by <c>-</c>; when that is longer than 200 it is cut to its first 200 and <c>-</c> plus <c>Math.abs(h).toString(36)</c> is appended, <c>h</c> being the 31-multiplier hash of the ORIGINAL
     /// path over its UTF-16 units (<c>h = (h &lt;&lt; 5) - h + charCodeAt | 0</c>). The expected values were computed with node from the same JS:
     /// <c>node -e 'const h=t=&gt;{let e=0;for(let n=0;n&lt;t.length;n++)e=(e&lt;&lt;5)-e+t.charCodeAt(n)|0;return e};const FH=e=&gt;{const n=e.replace(/[^a-zA-Z0-9]/g,"-");return n.length&lt;=200?n:`${n.slice(0,200)}-${Math.abs(h(e)).toString(36)}`};console.log(FH(process.argv[1]))' "&lt;the path&gt;"</c>.
-    /// Rows: 200 characters (kept whole), 201 (cut and hashed), a mixed path that is hashed from its ORIGINAL text, and 101 astral characters (203 UTF-16 units, so 202 dashes before the cut).</summary>
+    /// Rows: 200 characters (kept whole), 201 (cut and hashed), a mixed path that is hashed from its ORIGINAL text, and 101 astral characters (203 UTF-16 units, so 203 dashes before the cut).</summary>
     [Theory]
     [MemberData(nameof(LongPaths))]
     public void A_working_directory_longer_than_200_characters_is_cut_and_hashed_as_claude_does(string cwd, string slug)
@@ -281,7 +281,7 @@ public sealed class TimingLineTests
         SessionTranscripts.PathOf(SessionTranscripts.ClaudeHome(new Dictionary<string, string>()), "/home/op/arm", id).Should().BeEmpty();
     }
 
-    /// <summary>The part-5 fill steps (<c>2a-fill</c>, <c>2b-fill</c> of the Q arms, 16 recorded start lines) wrote <c>"how":"script"</c> and no <c>budget_s</c>, <c>session</c> or <c>deadline</c>: no claude ran, so no budget, session or
+    /// <summary>The part-5 fill steps (<c>2a-fill</c>, <c>2b-fill</c> of the Q and H arms, 16 recorded start lines) wrote <c>"how":"script"</c> and no <c>budget_s</c>, <c>session</c> or <c>deadline</c>: no claude ran, so no budget, session or
     /// deadline exists. They are a NAMED exception: this reader keeps them as <c>Other</c> with the raw bytes, and an analysis must not count a fill script's start through <c>Read</c>. Two of the recorded lines, byte for byte.</summary>
     [Fact]
     public void The_part_5_fill_script_start_lines_are_kept_as_other_with_their_bytes()
