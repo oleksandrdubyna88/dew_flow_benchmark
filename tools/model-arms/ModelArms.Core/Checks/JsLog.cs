@@ -14,7 +14,7 @@ namespace ModelArms.Core.Checks;
 internal static class JsLog
 {
     /// <summary>JavaScript's whitespace except its line terminators: inside a class of a pattern that runs over <see cref="Lines"/>'s text, so it is what <c>\s</c> is there.</summary>
-    public const string Blank = @"\t\v\f    -   　﻿";
+    public const string Blank = @"\t\v\f \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff";
 
     /// <summary>JavaScript's <c>\S</c> over <see cref="Lines"/>'s text: one character that is neither blank nor a line end.</summary>
     public const string NonBlank = $@"[^{Blank}\n]";

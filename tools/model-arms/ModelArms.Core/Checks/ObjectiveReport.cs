@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Bench.Domain.Trace;
 using ModelArms.Core.Experiment;
 
 namespace ModelArms.Core.Checks;
@@ -69,7 +70,7 @@ public static class ObjectiveReport
         });
     }
 
-    private static bool Passed(Bench.Domain.Trace.CapturedCount exit) => exit is { WasCaptured: true, Value: 0 };
+    private static bool Passed(CapturedCount exit) => exit is { WasCaptured: true, Value: 0 };
 
     private static string Shortstat(ObjectiveFacts facts) => facts.Shortstat.Trim();
 

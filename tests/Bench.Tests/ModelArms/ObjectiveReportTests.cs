@@ -13,7 +13,7 @@ namespace Bench.Tests.ModelArms;
 /// (<see cref="ObjectiveBench"/>); the part-6/7 judges read only <c>objective.json</c>, so that round trip stands for them (D28). The shape test reads part 6's real C1 report for its member paths.
 /// <para>
 /// What this does NOT prove: that the shell's report and the port's agree where the shell's own code is wrong for a name — a scenario name holding a pattern character (the port matches it as a literal, E3 §8 item 13), a key the
-/// JavaScript object would re-order (an id that reads as an array index) or a lone surrogate (never produced by a decoded UTF-8 log); that the facts <c>checks</c> will gather (E3.S5) are the facts this test gathers.
+/// JavaScript object would re-order (an id that reads as an array index) or a lone surrogate (the CTRF reader refuses one; the writer would quietly write U+FFFD for one that reached it); that the facts <c>checks</c> will gather (E3.S5) are the facts this test gathers.
 /// </para></summary>
 public sealed class ObjectiveReportTests
 {

@@ -4,10 +4,10 @@ using System.Text.RegularExpressions;
 namespace ModelArms.Core.Checks;
 
 /// <summary>One line of <c>git diff --numstat</c>: the path and the lines added and deleted. A binary file's counts are <c>-</c> in git's text and 0 here (the shell's <c>+a || 0</c>).</summary>
-public sealed record NumstatRow(string File, int Added, int Deleted);
+public sealed record NumstatRow(string File, long Added, long Deleted);
 
 /// <summary>The lines of the diff split as the judges read them: those in test files, those in source files that are not tests, those in documents. The three are NOT a partition — a document under a <c>tests/</c> folder counts in two.</summary>
-public sealed record ChangedLines(int Tests, int Src, int Docs);
+public sealed record ChangedLines(long Tests, long Src, long Docs);
 
 /// <summary>The shell's diff arithmetic (<c>objective-checks.sh:51</c>, <c>:62-63</c>) over the text of <c>git diff --numstat &lt;base&gt;..HEAD</c>.</summary>
 public static class DiffStats
@@ -26,9 +26,9 @@ public static class DiffStats
             Sum(rows, file => file.StartsWith("src_", StringComparison.Ordinal) && !TestFolder.IsMatch(file)),
             Sum(rows, file => file.EndsWith(".md", StringComparison.Ordinal)));
 
-    private static int Sum(IReadOnlyList<NumstatRow> rows, Func<string, bool> wanted) =>
+    private static long Sum(IReadOnlyList<NumstatRow> rows, Func<string, bool> wanted) =>
         rows.Where(row => wanted(row.File)).Sum(row => row.Added + row.Deleted);
 
-    private static int Lines(string field) =>
-        int.TryParse(field.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var lines) ? lines : 0;
+    private static long Lines(string field) =>
+        long.TryParse(field.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var lines) ? lines : 0;
 }

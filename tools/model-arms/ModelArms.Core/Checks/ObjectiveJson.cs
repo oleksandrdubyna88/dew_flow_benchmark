@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Bench.Domain.Trace;
@@ -22,9 +21,9 @@ internal static class ObjectiveJson
     private static readonly JsonWriterOptions Compact = Pretty with { Indented = false };
 
     /// <summary>Two-space indented text, <c>\n</c> line ends and no trailing newline.</summary>
-    public static string Indented(Action<Utf8JsonWriter> write) => Written(Pretty, write);
+    public static string Indented(Action<Utf8JsonWriter> write) => JsonText.Write(Pretty, write);
 
-    public static string OneLine(Action<Utf8JsonWriter> write) => Written(Compact, write);
+    public static string OneLine(Action<Utf8JsonWriter> write) => JsonText.Write(Compact, write);
 
     /// <summary>A count as a JSON number, or <c>null</c> when it was not captured — the shell's <c>NaN</c>, never a zero.</summary>
     public static void Count(this Utf8JsonWriter writer, string name, CapturedCount count)
@@ -48,16 +47,5 @@ internal static class ObjectiveJson
         }
 
         writer.WriteEndArray();
-    }
-
-    private static string Written(JsonWriterOptions options, Action<Utf8JsonWriter> write)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, options))
-        {
-            write(writer);
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
     }
 }

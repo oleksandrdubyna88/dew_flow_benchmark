@@ -100,14 +100,5 @@ public static class McpConfig
         writer.WriteEndObject();
     }
 
-    private static string Written(Action<Utf8JsonWriter> write)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, Stringify))
-        {
-            write(writer);
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
+    private static string Written(Action<Utf8JsonWriter> write) => JsonText.Write(Stringify, write);
 }

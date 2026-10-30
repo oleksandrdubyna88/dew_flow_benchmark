@@ -10,7 +10,7 @@ namespace Bench.Tests.ModelArms;
 /// <summary>The readers of the target's logs and of the CTRF report (<c>objective-checks.sh:33-47</c>, C13): pure functions over text, tested on the recorded lines of part 6's arm C1 (<c>Fixtures/model-arms/objective</c>, its
 /// token replaced by <c>0123456789ab</c>). Two things in the fixtures are WRITTEN, not recorded, and say so: C1's run had no failing test, so <c>mtp.log</c> carries two <c>failed …</c> records written in the shape of its real
 /// <c>skipped</c> records, and <c>node.log</c> carries two <c>✖</c> lines (one printed twice, as the node runner prints a failure inline and again in its summary) and three indented <c>✔</c> lines — C1's log holds no indented one,
-/// and the shell's pattern allows them. The summary lines of <c>mtp.log</c> are C1's: <c>failed: 0</c> beside two failed records is the fixture's, and the shell never reads that line.
+/// and the shell's pattern allows them. The summary lines of <c>mtp.log</c> are C1's: <c>failed: 0</c> beside two failed records is the fixture's, and the shell never reads that line. Every other edit of a recorded file is declared here too: <c>node.log</c> also carries a WRITTEN <c>✖ failing tests:</c> line and an <c>AssertionError …</c> line after the second <c>✖</c> (the shape the runner prints a failure in); <c>ctrf.json</c>'s twelve real tests lost their per-test <c>start</c>, <c>stop</c> and <c>extra</c> and the two hash entries of their <c>suite</c> array, its <c>summary</c> is recomputed for the sixteen tests and its envelope's <c>extra</c> dropped (what the readers use — <c>results.tests[].name</c> and <c>.status</c> — is C1's).
 /// <para>
 /// What this does NOT prove: that the shell's patterns match every line another version of the test runners prints (the readers port the shell's patterns, not the runners' grammars); the byte-for-byte agreement over a whole
 /// report is <see cref="ObjectiveReportTests"/>'s.
@@ -95,6 +95,16 @@ public sealed class ObjectiveParsersTests
         lines.Docs.Should().Be(3);
         rows.Select(r => r.File).Should().Equal("src_mcp/tests/ATests.cs", "src_mcp/src/A.cs", "research/x.md", "src_vs_code/icon.png", "tools/b.mjs");
         rows.Single(r => r.File == "src_vs_code/icon.png").Should().Be(new NumstatRow("src_vs_code/icon.png", 0, 0), "a binary row counts no line");
+    }
+
+    [Fact]
+    public void A_changed_line_count_beyond_int_is_kept_and_the_sums_never_throw()
+    {
+        var rows = DiffStats.Rows("3000000000\t5\tsrc_a/x.cs\n2147483647\t2147483647\tsrc_a/y.cs\n");
+
+        ((long)rows[0].Added).Should().Be(3_000_000_000L, "a count too big for an int is a count, not a zero");
+        var lines = DiffStats.Split(rows);
+        ((long)lines.Src).Should().Be(3_000_000_005L + 4_294_967_294L, "the sums are wide enough for a diff of billions of lines");
     }
 
     [Fact]
