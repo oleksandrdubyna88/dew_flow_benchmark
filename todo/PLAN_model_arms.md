@@ -56,6 +56,18 @@ Narrowed: no — nothing left the scope, the Definition of Done, the merge condi
 
 > Epoch 2 · approved 2026-10-30 · by reviewers · state: open
 
+  (E2.S0's cornerstone spec — Fable, 2026-10-30 at `c8213f3` on `feat/model-arms-e2` — and the two ordered coai RISK consultations the
+  E2 plan round's reply asked for (story 2.0, the step contract and the delegation policy; story 2.7, the gate's continue marker; both
+  closed solved, every finding verified against the E1 code before it was taken) are the stories document written as the epic starts
+  (`common.plan-change-control` § *What counts as a change*: not a change), on the same approval path as that plan round: before E2's
+  first code round, ordered by the gate's own reply (`common.coai-consultant`, trigger 7). Their findings refine E2's shared contracts
+  (C6: a `gate-wait` timing line and the end line's `missing`; C8: `StepPoint.Prepared`; C9: `GateStatus.WaitsSoFar`, two gate probe
+  points) and E2.S2, E2.S4 and E2.S7 — not this plan's decisions: D5's layout, D7, D10, D21 and D25 hold as written; the destination rule
+  (one producer per path a scheme places), the model-written class of bindings (recorded, never required) and the durable wait count are
+  refinements D25 and D6 leave open, each settled in E2 §8 items 37–46 with the delegation policy's measurement on claude 2.1.310
+  (item 43: the check reads tool events and subagent messages, never `modelUsage` alone — M3 repeats it on the measurement build). Not
+  ledger entries: the baseline of E2 under epoch 2, as the plan round's five below. Epoch 2 stays at zero entries.)
+
   (E2's own plan round — `mcp__coai__review_plan` on `feat/model-arms-e2` over `todo/PLAN_model_arms_E2.md` at `431e759`, 2026-10-30, verdict proceed; five findings accepted, one rejected because that reviewer had read a truncated copy — is the round `common.plan-change-control` § *Reviewing the revised plan* orders for an epic not yet started: it is part of the re-review's approval path for E2, so its accepted findings are the re-review's baseline for E2, never epoch-2 entries, exactly as step 4 says of what the re-review changes. The five: E2.S0 lands strictly before every other E2 story; the deadline is spelled `HH:mm UTC (HH:mm ±hh:mm)`; an interruption-and-resume scenario per sequential scheme; the MCP key guarantee narrowed to "the config requests the delivery" with M2's key check in E3; an output field bound once. Each is settled in E2 §8 items 31–36 and carried into §4.2, §4.5, §6, §7, §11 and the epics here. Epoch 2 stays at zero entries; a finding of a later round on this branch — a code round, or a plan round of E3–E6 that changes what E2 built — is an entry.)
 
 ## 1. The goal, before any solution

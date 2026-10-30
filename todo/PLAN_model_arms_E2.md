@@ -5,7 +5,11 @@
 > E2's own plan round (`mcp__coai__review_plan` on `feat/model-arms-e2` at `431e759`, 2026-10-30 — the round `common.plan-change-control`
 > § *Reviewing the revised plan* orders for an epic not yet started) said PROCEED, five findings taken (§8 items 31–36: E2.S0 strictly
 > first; the deadline as a UTC offset; an interruption scenario per scheme; the MCP key guarantee narrowed to a request with M2's check;
-> an output field bound once) — the re-review's baseline for E2, never ledger entries.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
+> an output field bound once) — the re-review's baseline for E2, never ledger entries. E2.S0's cornerstone spec was written 2026-10-30 at
+> `c8213f3` by Fable, after the two ordered coai RISK consultations the plan round's reply asked for (story 2.0, the step contract and the
+> delegation policy; story 2.7, the gate's continue marker — both closed solved, every finding verified against the E1 code before it was
+> taken): their findings are the spec's criteria and the amendments of C6, C8, C9, E2.S2, E2.S4 and E2.S7 (§8 items 37–46) — part of writing
+> this document as the epic starts, not epoch-2 entries (the parent's note under epoch 2).** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
 > §4.5, §4.10; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 had landed; E1 is complete at `24e8e8f`.
 >
 > Scope: the step's state machine in `tools/model-arms/ModelArms.Core/Steps/` and `…/Launch/` (the result envelope, the classifier,
@@ -196,7 +200,8 @@ E1's §3 holds unchanged (namespaces, *pure means pure*, refusals as values, red
 
 - **The pure list.** E2.S1 replaces the single `// E2` marker (`ModelArmsArchitectureTests.cs:46`) with eight, `// E2.S1` … `// E2.S8`,
   each on its own line with a blank line between; every later story writes only under its own. A story that adds a `public static
-  class` to Core adds it there in the same commit. E2.S0 adds no decider (it changes `StepLaunch`, already listed under `// E1.S6`).
+  class` to Core adds it there in the same commit. E2.S0 adds `SchemePositions` under its own `// E2.S0` marker, inserted ABOVE the single
+  `// E2` marker (which S1 then replaces with its eight); `StepLaunch` stays under `// E1.S6`.
 - **The module doc.** E2.S1 adds eight empty headings to `research/module_model_arms.md`, after *The first run: init and validate
   (E1.S11)*: *The result envelope and the step's end (E2.S1)*, *Timing, budget and recovery (E2.S2)*, *The launcher's follow-ups (E2.S3)*,
   *The step runner (E2.S4)*, *The review's answer (E2.S5)*, *The gate lock and the MCP configs (E2.S6)*, *The gate step (E2.S7)*, *run-arm
@@ -275,7 +280,11 @@ public abstract record TimingLine
     public sealed record Start(string Arm, string Step, int Attempt, string How, string Session, string Model, DateTimeOffset StartUtc,
         int BudgetSeconds, string Deadline, string Head, string Stream) : TimingLine;
     public sealed record End(string Arm, string Step, int Attempt, DateTimeOffset EndUtc, CapturedCount WallSeconds, CapturedCount Exit,
-        bool Result, bool Limited, string Head, string State, bool Recovered) : TimingLine;   // State "" = a shell line that carried none
+        bool Result, bool Limited, string Head, string State, bool Recovered) : TimingLine   // State "" = a shell line that carried none
+    {
+        public IReadOnlyList<string> Missing { get; init; } = [];   // (S0 spec, §8 item 41) the step's MODEL-WRITTEN outputs absent when a DONE attempt ended; written only when non-empty
+    }
+    public sealed record GateWait(string Arm, string Step, int After, int Wait, string Why, DateTimeOffset AtUtc) : TimingLine;   // (S0 spec, §8 item 44) one blocked round of a gate step, DECIDED: attempt After was blocked, this is wait number Wait (1-based)
     public sealed record ArmDone(string Arm, DateTimeOffset DoneUtc) : TimingLine;
     public sealed record Stopped(string Arm, string Step, int Exit, string Why, DateTimeOffset AtUtc) : TimingLine;
     public sealed record Other(string Raw) : TimingLine;   // a line this build does not read — kept, never dropped
@@ -355,7 +364,7 @@ public abstract record StepOutcome
     public sealed record Done(StepEnd End, bool Skipped, bool Recovered) : StepOutcome;
     public sealed record Stopped(int ExitCode, string Why) : StepOutcome;
 }
-public enum StepPoint { SessionWritten, Launched, Classified, OutputsDerived }
+public enum StepPoint { SessionWritten, Prepared, Launched, Classified, OutputsDerived }   // Prepared (S0 spec, §8 item 45): the prompt and the start line are on disk, no stream yet
 public class StepProbe { public static StepProbe None { get; } = new(); public virtual void Reached(StepPoint point) { } }
 public sealed class StepRunner(ICliAgentTranscripts cli, ISessionTranscripts transcripts, TimeProvider clock,
     Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, StepProbe probe)
@@ -367,11 +376,14 @@ public sealed class StepRunner(ICliAgentTranscripts cli, ISessionTranscripts tra
 
 **C9 — the gate** (E2.S6, E2.S7). `ModelArms.Core.Launch`: `public sealed record GateReading(string Status, string Why) { public bool
 IsBlocked => Status == "blocked"; }`, `public static class GateStatus { public static GateReading Read(Outcome<string> gateJson); public
-static bool WaitAgain(GateReading reading, int waitsSoFar, int gateTries); }`, `public static class McpConfig { public const string
+static bool WaitAgain(GateReading reading, int waitsSoFar, int gateTries); public static int WaitsSoFar(IReadOnlyList<TimingLine> timing,
+string step); }` (`WaitsSoFar` — S0 spec, §8 item 44: the count of `GateWait` lines of `step`, the DURABLE wait count a restart reads back),
+`public static class McpConfig { public const string
 VaultKeyVariable = "COAI_CREDS_KEY"; public static string None(); public static string Coai(CoaiFacts coai, ArmPaths paths,
 IReadOnlyDictionary<string, string> harnessEnvironment); }`. `ModelArms.Adapters`: `public sealed class FileGateLock(TimeProvider clock,
-TimeSpan poll) : IGateLock`, `public enum GatePoint { ContinueWritten, DoneRemoved }` and `public class GateProbe { public static GateProbe
-None { get; } = new(); public virtual void Reached(GatePoint point) { } }` (amended — the crash seam of the gate's two-file write, the shape
+TimeSpan poll) : IGateLock`, `public enum GatePoint { StatusRead, WaitRecorded, ContinueWritten, DoneRemoved }` and `public class GateProbe { public static GateProbe
+None { get; } = new(); public virtual void Reached(GatePoint point) { } }` (amended — the crash seams of the gate's judgement and its writes
+(§8 item 44: `StatusRead` after `gate.json` was read, `WaitRecorded` after the `GateWait` line), the shape
 of `StepProbe`), `public sealed class GateStep(StepRunner runner, IGateLock gateLock, Func<TimeSpan, CancellationToken, Task> wait,
 TextWriter log, GateProbe probe) { public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping); }`. `ArmPaths` gains
 `public string CoaiData => Under("coai-data");` (E2.S6) and `public string Continue(string step) => Under("out", Step(step) + ".continue");`
@@ -410,9 +422,12 @@ be wider than the launch it continues.
 
 ### E2.S0 — The step contract: identity, kind and bindings; schema v2; the delegation policy (CORNERSTONE — rewritten by the re-review, 2026-10-30)
 
-**Cornerstone — spec by Fable** (`model: fable`), written into this section when the epic starts, after epoch 2 is approved — not before:
-the scenarios (Given/When/Then and the expected red of each), the red stubs and the brief. The goal, the binding contract (C12) and
-the acceptance criteria below are the re-review's; they are the baseline the spec makes exact. Area: the step contract (parent
+**Cornerstone — spec by Fable** (`model: fable`, **written 2026-10-30 at `c8213f3`**, after epoch 2 was approved and after the two ordered
+coai RISK consultations the plan round's reply asked for — story 2.0 (this story) and story 2.7 (the gate's marker), both closed solved,
+every finding re-opened against the E1 code before it was taken; every citation below re-opened the same day): the scenarios (Given/When/Then and the
+expected red of each), the red stubs and the brief. The goal, the binding contract (C12) and
+the acceptance criteria below are the re-review's; they are the baseline the spec makes exact — where the spec corrects one, §8 says so
+(items 37–39). Area: the step contract (parent
 `## Epics`, E2; parent D25, D27, D4, D15). The parent's ledger reads `Cornerstones: 3 of 3 — E1.S5, E2.S0, E2.S1`.
 
 - **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Depends on:** nothing in E2 (E1 landed whole). **Parallel with:** nothing —
@@ -421,25 +436,31 @@ the acceptance criteria below are the re-review's; they are the baseline the spe
   be built against E1's contracts and rebased onto different files. **Before:** E2.S1–E2.S8, all of them (§6, wave 0).
 - **Owns:** parent D25 (the step contract), D27's file half (`runs`), D4's v2, D15's eleven templates, C12 here; the parent's §4.2,
   §4.4 and §4.10 as revised; the correction of E1.S3, E1.S4, E1.S6, E1.S7, E1.S10 and E1.S11's example and template — **forward, on
-  E1's landed code, never a rewrite of E1's history** (`common.plan-change-control` step 6). **Size:** ≈ 1100 changed lines (≈ 350
-  code, 550 tests, the example, the three templates, the module doc).
+  E1's landed code, never a rewrite of E1's history** (`common.plan-change-control` step 6). **Size:** ≈ 1350 changed lines (≈ 450
+  code, 700 tests, the example, the three templates, the module doc) — the spec's count; the judge's estimate was 1100.
 - **Files.** `tools/model-arms/ModelArms.Core/Experiment/StepSpec.cs` (`StepKind` → `StepId` + the closed `StepKind {Session, Review,
-  Gate, TaskCode}`; `StepSpec` with `Brief`, `Outputs`, `Notes`, `Verdict`, `Status`, `Snapshot`, `DiffFrom`, `Subagents`),
-  `…/Experiment/FlowSection.cs` (`steps` keyed by id; `runs`), `…/Experiment/Scheme.cs` (`SchemeEntry.Step(Name, Id)`, the `tasks`
-  block's three ids), `…/Experiment/ExperimentFile.cs` (`Schema = "model-arms/experiment-v2"`, the v1 refusal, `Runs`),
-  `…/Experiment/StrictJson.cs` (`Flag`, a map reader), `…/Experiment/ArmPaths.cs` (`NotesFile(binding)`; the fixed notes members
+  Gate, TaskCode}`; `StepSpec` with `Brief`, `Outputs`, `Notes`, `Verdict`, `Status`, `Snapshot`, `DiffFrom`, `Subagents`; `OutputPath`,
+  `ModelWritten`), `…/Experiment/OutputBinding.cs` (new: the record and its `Parse`), `…/Experiment/SchemePositions.cs` (new: `PlacedOutput`,
+  `SchemePositions`), `…/Experiment/StepSection.cs` (new, internal: one step's members and its per-step rules), `…/Experiment/SchemeChecks.cs`
+  (new, internal: the per-scheme rules), `…/Experiment/RunSection.cs` (new, internal: `runs`),
+  `…/Experiment/FlowSection.cs` (`steps` keyed by id; the schemes over ids), `…/Experiment/Scheme.cs` (`SchemeEntry.Step(Name, Id)`; `Tasks`
+  without `Kinds`), `…/Experiment/ExperimentFile.cs` (`Schema = "model-arms/experiment-v2"`, the v1 refusal, `Runs`, the `tasks` block's ids and `outputs`),
+  `…/Experiment/ExperimentFacts.cs` (`Experiment.Steps` by `StepId`, `Runs` for `Rounds`, `TaskLimits` with the three ids and `Outputs`, `RunSpec`),
+  `…/Experiment/StrictJson.cs` (`Flag`, `TextMap`), `…/Experiment/ArmPaths.cs` (`NotesFile(binding)`; the fixed notes members
   retired — `CodeNotes`, `HReviewNotes`, `FixNotes`, `GateNotes`, `SplitNotes`, `ReviewJson`, `GateJson`; `TaskNotes(id)` stays),
-  `…/Experiment/HostChecks.cs` (the rehearsal per scheme position; the `tasks` block's kinds; `diffFrom`'s placement),
-  `…/Briefs/BriefTemplates.cs` (`NameOf(stem)` — a stem rule, no kind table), `…/Briefs/BriefFields.cs` (`For(scheme, position, paths,
-  facts)`), `…/Briefs/BriefRehearsal.cs` (the rehearsal per scheme position; its `Deadline` stand-in takes C6's shape,
+  `…/Experiment/HostChecks.cs` (`HasGateStep` by kind; `Templates` by stem; `FlowProblems` retired — the reader owns those rules now),
+  `…/Briefs/BriefTemplates.cs` (`NameOf(stem) → Outcome<string>`, `Shipped` — a stem rule, no kind table), `…/Briefs/BriefFields.cs` (`For(spec,
+  visible, tasks, paths, facts)`), `…/Briefs/BriefRehearsal.cs` (the rehearsal per scheme position; `StemsUsed`; its `Deadline` stand-in takes C6's shape,
   `"00:00 UTC (00:00 +00:00)"`, §8 item 32), `…/Launch/StepLaunch.cs` (`Options(StepSpec, …)`, `SubagentTools`, `Delegation`),
-  `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs` (`Read(stem)`), `tools/model-arms/briefs/hA-trace.template.md`,
+  `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs` (`Read(stem)`), `tools/model-arms/ModelArms/Adapters/HostFactsReader.cs`
+  (`Templates` over `BriefRehearsal.StemsUsed`, three lines), `tools/model-arms/briefs/hA-trace.template.md`,
   `hB-tests.template.md`, `hfix.template.md` (byte for byte, parent §2's sums), `tools/model-arms/examples/part6.experiment.json`
   (v2, every step of §4.2, the CHH scheme, the two runs), the `init` template by derivation (`ExperimentTemplate` — a map value is
   blanked like a string), the E1 tests this changes (`ExperimentFileTests`, `ArmPathsTests`, `StepLaunchTests`, `BriefFillerTests`,
   `ValidateVerbTests`, `ExampleExperimentTests`, `InitVerbTests`), `tests/Bench.Tests/ModelArms/StepContractTests.cs` (new),
-  `BriefFieldsTests.cs` (new), `research/module_model_arms.md` (*The step contract (E2.S0)* — replaces E1.S3's and E1.S7's
-  paragraphs on kinds and templates; the CHH walk-through).
+  `BriefFieldsTests.cs` (new), `ModelArmsArchitectureTests.cs` (`// E2.S0`: `typeof(SchemePositions),`), `research/module_model_arms.md`
+  (*The step contract (E2.S0)* — replaces E1.S3's and E1.S7's paragraphs on kinds and templates; the CHH walk-through; and *The delegation
+  policy (E2.S0)* at the end of *The launch boundary*, carrying the measurement table of this spec's *Evidence* section, §3).
 
 **Why.** E1 keyed the step definitions by a closed `StepKind` enum (`FlowSection.cs:17`), picked one template per kind
 (`BriefTemplates.cs:11`), filled fixed paths per kind (`BriefFields.cs:36`) and spelled one `review.json` per arm (`ArmPaths.cs:162`).
@@ -456,27 +477,34 @@ public sealed record StepId(string Value);                          // open: let
 public sealed record OutputBinding(string Field, string RelativePath);   // "HA_JSON" → "notes/hA.json" (under the arm folder; notes/ or work/; no .., never absolute)
 public sealed record StepSpec(StepId Id, StepKind Kind, string Model, int Minutes, StepMode Mode, bool Subagents, string Brief,
     IReadOnlyList<OutputBinding> Outputs, string Notes, string Verdict, string Status, bool Snapshot, string DiffFrom)
-{   // Notes / Verdict / Status name one of Outputs' fields or are ""; DiffFrom is a StepId's value or ""; Brief is a template stem
-    // a field name is bound ONCE within a step and by at most ONE step of the whole map (§8 item 35)
+{   // Notes names one of Outputs' fields OR an earlier step's (gate finding 4) or is ""; Verdict / Status name one of Outputs' fields or are ""; DiffFrom is a StepId's value or ""; Brief is a template stem
+    // a field name is bound ONCE within a step and by at most ONE step of the whole map (§8 item 35); a DESTINATION is written by at most one producer a scheme places (§8 item 40)
     public Outcome<string> OutputPath(string field);                // the bound relative path, or a failure naming the field and the step
+    public IReadOnlyList<OutputBinding> ModelWritten { get; }       // (S0 spec, §8 item 41) Outputs minus the one Verdict names: what the MODEL is briefed to write, which the runner never requires
 }
 public abstract record SchemeEntry { public sealed record Step(string Name, StepId Id) : SchemeEntry; public sealed record Tasks : SchemeEntry; }
 public sealed record TaskLimits(int Min, int Max, int MaxParallel, StepId Split, StepId SplitFix, StepId TaskCode,
-    IReadOnlyList<OutputBinding> Outputs);   // (gate finding 0) what the tasks entry contributes besides its split steps' outputs — the example binds CODE_NOTES
+    IReadOnlyList<OutputBinding> Outputs)   // (gate finding 0) what the tasks entry contributes besides its split steps' outputs — the example binds CODE_NOTES
+{ public static TaskLimits Shell { get; } }   // (S0 spec) 4 / 7 / 4 and the shell's own step names — split, splitFix, taskCode — with no outputs: what an absent block means
 public sealed record RunSpec(string Name, IReadOnlyList<IReadOnlyList<string>> Rounds, IReadOnlyList<string> ClosedArms, IReadOnlyList<string> Closed);
 public sealed record Experiment(…, IReadOnlyDictionary<StepId, StepSpec> Steps, IReadOnlyList<Scheme> Schemes, IReadOnlyList<RunSpec> Runs, …);   // Rounds gone
 public static class ExperimentFile { public const string Schema = "model-arms/experiment-v2"; … }
+public sealed record PlacedOutput(int Position, string Producer, OutputBinding Binding);   // (S0 spec, §8 item 38) Producer: the entry's file name ("2-hA"), or the split / split-fix id, or "tasks" for the block's own outputs
 public static class SchemePositions
-{   // the steps before a position, in order — the outputs a brief at that position may use
-    public static IReadOnlyList<StepSpec> Before(Scheme scheme, int position, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks);
-    // a tasks entry stands for its split and split-fix steps in order, plus tasks.Outputs (gate finding 0); the task coder's per-task outputs are the pipeline's, not a scheme's
+{   // every output the scheme's entries bind, in scheme order: a Step entry → (position, name, each output); a Tasks entry → the split's, then the split-fix's, then tasks.Outputs (gate finding 0)
+    public static IReadOnlyList<PlacedOutput> Outputs(Scheme scheme, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks);
+    // the bindings a brief at `position` for step `id` may use: every output of an EARLIER position, the step's OWN outputs (the gate's template names its own GATE_JSON — §8 item 37),
+    // and, inside a Tasks entry, the block's steps up to and including `id` (split before split-fix before the task coder) — never the block's own `outputs`, which are for the steps AFTER it
+    public static IReadOnlyList<OutputBinding> Visible(Scheme scheme, int position, StepId id, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks);
 }
 ```
 
-In `ModelArms.Core.Briefs`: `BriefTemplates.NameOf(string stem) → Outcome<string>` (`<stem>.template.md`; a stem is `[A-Za-z0-9-]+`);
-`BriefFields.For(Scheme scheme, int position, ArmPaths paths, BriefFacts facts)` — the facts, `NOTES`, every earlier step's outputs
-(`OutputBinding.Field` → `paths.NotesFile(binding)`), the task fields; `BriefRehearsal.Run(experiment, templates)` fills every template at
-every position of every scheme and returns every problem at once. In `ModelArms.Core.Launch`: `StepLaunch.Options(StepSpec spec,
+In `ModelArms.Core.Briefs`: `BriefTemplates.NameOf(string stem) → Outcome<string>` (`<stem>.template.md`; a stem is `[A-Za-z0-9-]+`) and
+`BriefTemplates.Shipped` (the eleven stems); `BriefFields.For(StepSpec spec, IReadOnlyList<OutputBinding> visible, TaskLimits tasks, ArmPaths
+paths, BriefFacts facts)` — the facts, `NOTES`, every visible binding (`OutputBinding.Field` → `paths.NotesFile(binding)`), the task fields
+(the callers — the rehearsal, E2.S4's runner — pass `SchemePositions.Visible(…)`); `BriefRehearsal.Problems(experiment, root, scenarioCount,
+templates by stem)` fills every template at every position of every scheme and returns every problem at once; `BriefRehearsal.StemsUsed(experiment)`.
+In `ModelArms.Core.Launch`: `StepLaunch.Options(StepSpec spec,
 ToolSets tools, ArmPaths paths, StepSession session)` applies the mode as today and THEN the policy (unless `spec.Subagents`,
 `DisallowedTools` = `[.. SubagentTools, .. the mode's list]` and `PermittedTools` = the mode's list minus `SubagentTools`, ordinal —
 fresh and resumed alike). `ArmPaths.NotesFile(OutputBinding binding) → string` resolves a binding under the arm folder (`Segment`-checked,
@@ -487,7 +515,7 @@ no `..`).
 | story | was | is |
 |---|---|---|
 | E2.S2 | `StepOutputs.Of(StepKind kind)`, `NeedsBefore(kind)`, `Reconcile(kind, facts)`; `DerivedOutput.ReviewJson` | `StepOutputs.Of(StepSpec spec)` — `Verdict` when `spec.Verdict` is bound, `StepDiff` when `spec.DiffFrom` is set, `CoderHead`/`CoderDiff` for `TaskCode`; `NeedsBefore(spec)` = `spec.Snapshot`; `Reconcile(spec, facts)`; `DerivedOutput.Verdict` |
-| E2.S4 | `StepContext.Step: SchemeEntry.Step(Name, Kind)`, `spec = Experiment.Steps[kind]`, `BriefTemplateFiles.Read(kind)`, `BriefFields.For(kind, …)`, `.before` by `NeedsBefore(kind)` | `SchemeEntry.Step(Name, Id)`, `spec = Experiment.Steps[id]`, `Read(spec.Brief)`, `BriefFields.For(scheme, position, …)` (`StepContext` gains `Scheme` and `Position`), `.before` when `spec.Snapshot`; the `.diff` from the `.before` of the step `spec.DiffFrom` names |
+| E2.S4 | `StepContext.Step: SchemeEntry.Step(Name, Kind)`, `spec = Experiment.Steps[kind]`, `BriefTemplateFiles.Read(kind)`, `BriefFields.For(kind, …)`, `.before` by `NeedsBefore(kind)` | `StepContext(…, Scheme Scheme, int Position, …)` in place of `Step` — the entry is `Scheme.Entries[Position]`, a `SchemeEntry.Step(Name, Id)`; `spec = Experiment.Steps[id]`, `Read(spec.Brief)`, `visible = SchemePositions.Visible(scheme, position, id, Steps, Tasks)`, `BriefFields.For(spec, visible, Tasks, paths, facts)`; `.before` when `spec.Snapshot`; the `.diff` from the `.before` of the step `spec.DiffFrom` names; `StepBench.Context(scheme, position)` replaces `Context(stepName, kind)` |
 | E2.S5 | the verdict to `paths.ReviewJson` | to `paths.NotesFile(spec.OutputPath(spec.Verdict))` |
 | E2.S7 | `gate.json` by `paths.GateJson` | by the `status` binding; everything else as amended |
 | E2.S8 | `run-arm` for C and CR | for every scheme without a `tasks` block — C, CR, CHH; the CHH scenario; the consumer read (M1) |
@@ -508,9 +536,10 @@ no `..`).
    naming the scheme, the step and the field. The example stays accepted.
 2. `runs` is a map; every round names arms of defined schemes; no arm in two runs; `closedArms` name arms of some run; `rounds` at the
    top level is refused as *moved to runs.<name>.rounds*; `schema` v1 is refused naming the three moves.
-3. `BriefFields.For` at CHH's `4-hfix` yields `HA_JSON`, `HB_JSON`, `CODE_NOTES` and no `REVIEW`; at C's `2-review` yields
-   `CODE_NOTES` and no `REVIEW`; the rehearsal over a scheme placing `3-fix` before `2-review` refuses naming the scheme, the position
-   and `REVIEW`; the rehearsal over the example is clean.
+3. `BriefFields.For` at CHH's `4-hfix` yields `HA_JSON`, `HB_JSON`, `CODE_NOTES` (and its own `HFIX_NOTES`) and no `REVIEW`; at C's
+   `2-review` yields `CODE_NOTES` and its OWN `REVIEW`, and none of a LATER step's outputs (`FIX_NOTES`, `GATE_JSON`) — corrected by the
+   spec, §8 item 37: a step's own outputs ARE fields, because the gate's template names its own `GATE_JSON`; the rehearsal over a scheme
+   placing `3-fix` before `2-review` refuses naming the scheme, the position and `REVIEW`; the rehearsal over the example is clean.
 4. The example read as v2 binds every file the shell wrote (parent §4.2's list) — `The_example_binds_every_file_the_shell_wrote`; the
    `init` template is the example blanked (E1.S11's test green without an edit); `validate` over the fixture root accepts it.
 5. `StepLaunch`: `Agent Task` lead every deny-list and are absent from every allow-list unless `subagents: true`, fresh and resumed
@@ -521,20 +550,321 @@ no `..`).
 7. Every E1 test green under v2 under its name (renames: `The_schema_member_is_required_and_must_be_exactly_model_arms_experiment_v2`;
    `Every_shipped_template_fills_completely_with_its_steps_fields` now per scheme position over eleven); `PureDeciders` carries the
    new deciders under `// E2.S0`; `The_module_launches_nothing_by_a_bare_name` green; nothing under `src/` changes.
+8. **(risk consultation 2.0, finding 1 — §8 item 40) A destination is written by one producer.** Among the producers a scheme places
+   (its steps, and a `tasks` entry's split, split-fix and the block's own `outputs`), two DIFFERENT fields never bind the same
+   normalized path: `hB.outputs.HB_JSON = notes/hA.json` beside `hA.outputs.HA_JSON = notes/hA.json` is refused at the READ naming the
+   scheme, both producers, both fields and the path — before `validate` or `run-arm` does anything else; two fields of ONE step naming
+   one path are refused at the step. `notes` naming an earlier step's output is appending, not a second producer, and stays legal.
+9. **(finding 2 — §8 item 41) Bound is not produced.** `StepSpec.ModelWritten` separates what the runner derives (the `verdict` output
+   of a `review` kind — D21: regenerated or resumable, required by construction) from what the MODEL is briefed to write (every other
+   output; the `tasks` block's `outputs` the same — `CODE_NOTES` under SRS is the path the shell handed its reviewers though no SRS step
+   wrote it, kept as an optional, shell-compatible binding). The runner never requires a model-written output: it RECORDS its absence
+   (E2.S4 step 6: the `End` line's `missing`, one log line per field) and, before a consumer's launch, logs each visible earlier output
+   whose file does not exist (E2.S4 step 3) — the arm goes on, as the shell's did; no exit code is added to D16's table.
+10. **(finding 3 — §8 item 42) CHH's two verdicts are two files and its fixer gets both.** At CHH's `4-hfix` the fields `HA_JSON` and
+    `HB_JSON` resolve to `notes/hA.json` and `notes/hB.json` — distinct paths from two `review` steps with two `verdict` bindings; a
+    scheme placing `4-hfix` before `2-hA` and `3-hB` is refused by the rehearsal naming the scheme, the position and both fields; the
+    runtime half (two distinct verdict CONTENTS from two calls) is E2.S8's CHH scenario, amended to assert it.
 
-**Break-its** (the spec names each red): the rehearsal skipped for one scheme → criterion 3's third scenario green on the stub, red
-on the plant; `Delegation` removed → criterion 5; `diffFrom` placement unchecked → criterion 1's `diffFrom` clause; the cross-step
-uniqueness check removed → criterion 1's bound-once scenario (two steps binding `CODE_NOTES` read as the later one winning, silently).
+#### Corrections to the baseline — Fable (each also in §8)
+
+- **Own outputs are fields** (criterion 3; item 37). `gate.template.md` names `{{GATE_JSON}}`, the gate's own `status` output, and
+  `hfix.template.md` names `{{NOTES}}` = its own `HFIX_NOTES`; the shell's fill map handed every path to every template
+  (`run-arm.sh:40-50`). So `Visible` includes the step's own outputs, and the property worth asserting is "none of a LATER step's".
+- **`SchemePositions` returns bindings, not specs** (item 38): `Outputs` (every placed binding with its producer and position — what the
+  destination rule and the runner's consumer log need) and `Visible` (what a brief may use); `BriefFields.For` takes the visible list
+  rather than re-walking the scheme, so the rehearsal and the runner cannot fill by two rules.
+- **A `taskCode` step carries no bindings** (item 39): the pipeline names its notes (`TaskNotes(id)`), its snapshot (`task-<id>.before`)
+  and its diff per task — paths a static binding cannot spell. `outputs` (non-empty), `notes`, `verdict`, `status`, `snapshot: true` or
+  `diffFrom` on a `taskCode` step are each refused.
+- **A gate's mode is `gate`, and only a gate's** (item 39): the mode decides the MCP config and the tool set, the kind decides the lock
+  and the status read; a `gate` kind in `write` mode would run without the coai server, a `session` kind in `gate` mode would hold the
+  lock for nothing. One refusal each way.
+- **An absent `tasks` block means the shell's names** (item 38): `TaskLimits.Shell` is 4 / 7 / 4 with `split`, `splitFix`, `taskCode`
+  and no outputs; its three ids are checked (defined, of the right kinds) whenever the block is present OR a scheme has a `tasks` entry.
+
+#### The binding shape (C12, made exact) — Fable
+
+Nothing in C12 is renamed beyond the two corrections above. What follows fixes the bytes a test can assert: every member's reading rule,
+the exact sentence of every refusal, the stub each type starts life with, and the private shape that keeps every method under
+complexity 4. **Every sentence about a step, a scheme, a run or the tasks block starts with its dotted path, then a space or a colon**
+— `UnfilledValues.Refuse` (`UnfilledValues.cs:31-32`) de-duplicates by that prefix, and `ExampleExperimentTests.Every_value_the_template_leaves_unfilled_is_named_by_the_reader`
+holds only while every refusal keeps the shape.
+
+**`StepId`, `OutputBinding`** — `…/Experiment/StepSpec.cs`, `…/Experiment/OutputBinding.cs`, namespace `ModelArms.Core.Experiment`:
+
+- `public sealed record StepId(string Value)` with `public static Outcome<StepId> Parse(string text)`: `^[A-Za-z][A-Za-z0-9]*$`
+  (`CultureInvariant`), else `Failure("'<text>' is not a step id — letters and digits, starting with a letter (hA, splitFix)")`.
+  `ToString` prints the value.
+- `public sealed record OutputBinding(string Field, string RelativePath)` with `public static Outcome<OutputBinding> Parse(string field,
+  string path)`: the field is `^[A-Z_]+$` (the filler's own `Placeholder`, `BriefFiller.cs:18` — a name the filler cannot match is a
+  binding no template can use), else `Failure("<field> is not a field name — capitals and underscores, as a template's {{NAME}}")`;
+  the path is split on `'/'` (a `'\\'` anywhere is refused, the path is never a native one), has at least two segments, the first is
+  exactly `notes` or `work`, no segment is empty, `.` or `..`, none holds NUL, and `Path.IsPathRooted(path)` is false — else
+  `Failure("'<path>' is not an output path — relative, under notes/ or work/, forward slashes, no '..' (notes/hA.json)")`. The value is
+  kept as written; `RelativePath` IS the normalized destination, compared `OrdinalIgnoreCase` wherever two are compared (it fails closed
+  on a case-insensitive host, as `ExecutableRule` does).
+- `StepSpec.OutputPath(field)` → `Success(binding.RelativePath)` of the output with that field (ordinal), else
+  `Failure("<field> is not an output of step <id> (outputs: <F1>, <F2>)")` — `(outputs: none)` when there are none.
+  `StepSpec.ModelWritten` → `Outputs` minus the one whose `Field == Verdict` (every output when `Verdict` is `""`).
+- **Stubs:** `StepId.Parse` and `OutputBinding.Parse` return `Success` of anything (so every refusal test is red on `Failed()`);
+  `OutputPath` returns `Failure("stub")`; `ModelWritten` returns `Outputs` whole.
+
+**The reader** — `ExperimentFile` (`Walk`), `StepSection` (one step), `FlowSection` (the map and the schemes), `SchemeChecks` (per
+scheme), `RunSection` (`runs`), each internal, each file under 300 lines; `StrictJson` gains `bool Flag(JsonObject obj, string path,
+string name, bool fallback)` (absent → `fallback`; the JSON literals → their value; anything else → `"<where> must be true or false"`,
+`fallback`) and `IReadOnlyList<KeyValuePair<string, string>> TextMap(JsonObject parent, string path, string name)` (absent → empty; not an
+object → `"<where> must be a JSON object"`, empty; an EMPTY object is legal — `MapMember`'s "needs at least one member" is for `steps`,
+`schemes` and `runs`; each value through `NonEmptyText` at `<where>.<key>`; the pairs in file order).
+
+| member | rule | the sentence (exact) |
+|---|---|---|
+| `schema` | exactly `model-arms/experiment-v2` | v1: `schema is 'model-arms/experiment-v1' — this build reads 'model-arms/experiment-v2': steps are keyed by a step id and carry kind, brief and outputs; the notes files are bindings; rounds moved to runs.<name>.rounds`; any other text: `schema is '<x>' — this build reads exactly 'model-arms/experiment-v2'` |
+| `rounds` at the top level | in `Known`, never in `Required`; its presence is one sentence | `rounds — moved to runs.<name>.rounds (schema v2)` |
+| `steps.<key>` | the key through `StepId.Parse` | `steps.<key>: <Parse's reason>` |
+| `steps.<id>` members | known `kind model minutes mode subagents brief outputs notes verdict status snapshot diffFrom`; required `kind model minutes mode brief` | `Object`'s own sentences (`steps.<id>.kind is missing`, `steps.<id>.colour is not a member …`) |
+| `kind` | `Choice` over `session review gate taskCode` | `steps.<id>.kind is '<x>' — legal: session, review, gate, taskCode` |
+| `mode` | `Choice` as today; then the pairing | `steps.<id>.mode is '<m>' — a gate step's mode is gate` · `steps.<id>.mode is 'gate' — only a gate step runs in gate mode (this step's kind is <k>)` |
+| `subagents` | `Flag`, fallback `false` | `steps.<id>.subagents must be true or false` |
+| `brief` | `NonEmptyText`, then `BriefTemplates.NameOf` | `steps.<id>.brief: <NameOf's reason>` — `'<x>' is not a template stem — letters, digits and dashes, no separator and no '..' (hA-trace names hA-trace.template.md)` |
+| `outputs` | `TextMap`; each pair through `OutputBinding.Parse`; two fields of one step with one path (`OrdinalIgnoreCase`) | `steps.<id>.outputs.<F>: <Parse's reason>` · `steps.<id>.outputs — <A> and <B> both name <path>` |
+| `verdict` / `status` | required for `review` / `gate`, naming one of the step's own outputs; refused on any other kind | `steps.<id>.verdict is missing — a review step names the output its last result's JSON block is written to` · `steps.<id>.status is missing — a gate step names the output it reads status from` · `steps.<id>.verdict is '<X>' — not one of the step's outputs (<list or none>)` (status the same) · `steps.<id>.verdict — only a review step has a verdict (this step's kind is <k>)` · `steps.<id>.status — only a gate step has a status (…)` |
+| `notes` | a field some step or the tasks block binds (the map-level check; the position check is the scheme's) | `steps.<id>.notes is '<X>' — no step binds it` |
+| `snapshot` | `Flag`, fallback `false` | `steps.<id>.snapshot must be true or false` |
+| `diffFrom` | a defined step id (the placement and the snapshot are the scheme's) | `steps.<id>.diffFrom is '<x>' — not a step id defined under steps (<ids>)` |
+| a `taskCode` step | `outputs` non-empty, `notes`, `verdict`, `status`, `snapshot: true`, `diffFrom` — one sentence each | `steps.<id>.<member> — a taskCode step has no bindings: the task pipeline names its notes, snapshot and diff per task (E4)` |
+| the map | a field bound by two steps (file order; `Ordinal`) | `steps.<later>.outputs — <F> is already bound by step <earlier>` |
+| `schemes.<S>[<i>]` | `tasks`, or `^(?<name>[0-9]+[a-z]?-[A-Za-z0-9-]+):(?<id>[A-Za-z][A-Za-z0-9]*)$` whose id is defined | `schemes.<S>[<i>] is '<text>' — an entry is "tasks" or "<file name>:<step id>", such as "1-code:code"` · `schemes.<S>[<i>] is '<text>' — step id '<id>' is not defined under steps (defined: <ids>)` |
+| a scheme | a name placed twice; `tasks` twice | `schemes.<S> — '<name>' is placed twice` · `schemes.<S> — tasks is placed twice` |
+| a scheme, per position (`SchemeChecks`, over `SchemePositions.Visible`) | `notes` naming a field not visible at the position; `diffFrom` not placed at or before, or without `snapshot` | `schemes.<S>[<i>] (<name>): notes <X> is bound by no step at or before this position (visible: <fields>)` · `schemes.<S>[<i>] (<name>): diffFrom <x> is not placed at or before this position` · `schemes.<S>[<i>] (<name>): diffFrom <x> has no snapshot` |
+| a scheme, the producers (`SchemePositions.Outputs`) | one path from two (producer, field) pairs (`OrdinalIgnoreCase`); one field from a step and the tasks block | `schemes.<S> — <path> is written by two of its producers: <p1> (<F1>) and <p2> (<F2>)` · `schemes.<S> — <F> is bound by step <id> and by the tasks block` |
+| `tasks` | known `min max maxParallel split splitFix taskCode outputs`; the six required, `outputs` optional (`TextMap`, `OutputBinding.Parse`); the ids checked when the block is present or a scheme has a `tasks` entry | `tasks.split is '<x>' — not a step id defined under steps (<ids>)` · `tasks.split is '<x>' — its kind is <k>; the split is a session step` (`splitFix` … `the split fix is a session step`; `taskCode` … `the task coder is a taskCode step`) · `tasks.outputs.<F>: <reason>` |
+| `runs` | `MapMember` (at least one); a name `^[A-Za-z0-9-]+$` | `runs.<name> — a run name is letters, digits and dashes: it names the folder chain/<name>/` |
+| `runs.<name>` members | known `rounds closedArms closed`; required `rounds` | `Object`'s sentences |
+| `runs.<name>.rounds` | a non-empty array of non-empty arrays of arm names of defined schemes (the shapes of today's `Rounds`, re-pathed) | `runs.<name>.rounds must be a non-empty array of arrays of arm names` · `runs.<name>.rounds[<i>] must be a non-empty array of arm names` · `runs.<name>.rounds[<i>][<j>]: '<x>' is not an arm name — letters then a number, such as C1 or SRS2` · `runs.<name>.rounds[<i>][<j>] names '<arm>', whose scheme '<s>' is not among the schemes (<names>)` |
+| the runs | an arm twice in one run; an arm in two runs; a closed arm no run names; `closed` through the `isolation` expansion | `runs.<name>.rounds — arm <A> is named twice` · `runs.<name2> — arm <A> is already in run <name1>` · `runs.<name>.closedArms[<i>] names '<A>', which no run names` · `runs.<name>.closed[<i>] is '<x>' — it must be <root>, start with <root>/ or ~/, or be an absolute path` |
+
+Private shape, each ≤ 4 branches: `StepSection.Read(json, id, node)` → the record through `Members`, `Bindings`, `Kinded` (verdict /
+status / mode pairing by a `(kind, has verdict, has status)` switch), `TaskCodeRefusals`; `FlowSection.Steps` (ids, `StepSection`,
+`FieldBoundOnce`); `FlowSection.Schemes` → `SchemeChecks.Problems(scheme, steps, tasks)` = `[.. Placement, .. Positions, .. Producers]`;
+`RunSection.Runs` (`Named`, `Rounds`, `Across`, `ClosedArms`, `Closed`); `SchemePositions.Outputs` is one `SelectMany` over a switch on the
+entry; `Visible` filters it by position and, inside a tasks entry, by the block's order. **Stubs:** `ExperimentFile.Schema` is the v2
+string and `Walk` reads every v2 member into the records with NO per-step, per-scheme, map or runs rule beyond the shapes — so the
+example reads (criterion 4's positive is green on the stub, and says so) and every refusal scenario is red on `Failed() == true`.
+
+**`SchemePositions`, `BriefFields`, `BriefRehearsal`, `BriefTemplates`, `BriefTemplateFiles`** — `BriefTemplates.NameOf(stem)`: the stem
+regex `^[A-Za-z0-9-]+$` → `Success(stem + ".template.md")`, else the reason above; `Shipped` = the eleven stems, a literal list in the
+order `1-code 2-review 3-fix gate hr-review-fix t2-coder x-split x-split-fix hA-trace hB-tests hfix`. `BriefFields.For(spec, visible,
+tasks, paths, facts)`: `PLAN BASE BRANCH SCEN_COUNT DEADLINE KNOWN WORK` as today; `NOTES` = `paths.TaskNotes(facts.Task.Id)` for a
+`taskCode` kind, else `-` when `spec.Notes` is `""`, else `paths.NotesFile` of the visible binding whose `Field == spec.Notes` (`Single()`
+— the reader guaranteed it; two would be a caller's bug); one field per visible binding, `Field → paths.NotesFile(binding)`; `TASK
+TASK_BRIEF TASK_FILES BEFORE` for a `taskCode` kind; `PROBLEMS` when `spec.Id == tasks.SplitFix`. `BriefRehearsal.Problems(experiment,
+root, scenarioCount, templates)` (templates keyed by STEM): for every scheme, every position: a Step entry → one fill of its spec's brief;
+a Tasks entry → three fills (split, split-fix, task coder) in that order, each with `Visible(scheme, position, id, …)`; a problem is
+`<stem>.template.md at schemes.<S>[<i>] (<name or id>): <Fill's reason>`; an unreadable template its `Fail.Reason` as today; distinct.
+`StemsUsed(experiment)` = the briefs of every step the schemes place, a tasks entry counting its three, distinct, first-seen order.
+`BriefTemplateFiles.Read(string stem)` → `NameOf(stem)` then the two folders as today. **Stubs:** `Outputs` and `Visible` return `[]`;
+`For` returns the seven facts and `NOTES` only; `Problems` returns `[]`; `StemsUsed` returns `[]`.
+
+**`ArmPaths.NotesFile(OutputBinding binding)`** = `Path.Combine([Folder, .. binding.RelativePath.Split('/').Select(s => Segment(s, "output segment"))])`
+— `Segment` throws on `..`, `.`, an empty segment or a separator: the reader refused them, so a throw here is a caller's bug (defence in
+depth, `ArmPathsTests.A_binding_with_a_climbing_segment_is_a_programming_error`). The seven fixed members go; `TaskNotes(id)` stays.
+
+**`StepLaunch`** — `public static readonly IReadOnlyList<string> SubagentTools = ["Agent", "Task"];` `Options(StepSpec spec, ToolSets
+tools, ArmPaths paths, StepSession session) => Session(Delegation(ForMode(spec.Mode, tools, paths), spec.Subagents), session);`
+`private static AgentAskOptions Delegation(AgentAskOptions options, bool subagents) => subagents ? options : options with { DisallowedTools
+= [.. SubagentTools, .. options.DisallowedTools], PermittedTools = [.. options.PermittedTools.Where(tool => !SubagentTools.Contains(tool,
+StringComparer.Ordinal))] };` `Ask` passes `request.Spec`. With `subagents: true` the policy adds nothing and removes nothing: the mode's
+lists go out as configured (the example's `tools.write` keeps `Agent`; a step that opts in gets it). **Stub:** `Options` without
+`Delegation` — the E1 shape — so the policy's three tests are red on the deny group's first token.
+
+#### Evidence — the delegation policy measured on claude 2.1.310 (2026-10-30, this host, by Fable, before the spec)
+
+What the tests of criterion 5 prove is PRESENCE: the argv carries `--disallowedTools Agent Task …` and no `Agent` in `--allowedTools`.
+Whether the CLI honours it — on a fresh launch and, the open question of ledger 1.3, on a `--resume` of a session that HAD the tool — is
+the receiver's decision (`common.security`: a measure at a boundary you do not own is a request until you have seen the answer). So it was
+measured, once, with `claude -p --model haiku --output-format stream-json --verbose --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+--permission-mode default` and a prompt asking the model to start a subagent that replies `PONG` (else to answer `NOAGENT`):
+
+| run | launch | the `init` line's `tools` | `Agent` tool_use events | subagent messages (`parent_tool_use_id` set) | result | `modelUsage` |
+|---|---|---|---|---|---|---|
+| A | fresh, `--allowedTools Read --disallowedTools Agent Task` | no `Agent`, no `Task` | none | none | `NOAGENT` | haiku only |
+| B | `--resume` of A, the same deny | no `Agent`, no `Task` | none | none | `NOAGENT` | haiku only |
+| C | fresh, `--allowedTools Read Agent Task` (the positive control) | `Agent` present | two | a Sonnet subagent answered `PONG` | `PONG` | haiku + sonnet |
+| D | `--resume` of C with `--allowedTools Read --disallowedTools Agent Task` | no `Agent` | ONE — the model still emitted it, and the CLI refused it: `tool_use_error: No such tool available: Agent. Agent is disabled for this session, in subagents as well as here.` | none | `NOAGENT` | haiku + **`claude-sonnet-5-5`, 5 output tokens, $0.0758** (haiku $0.0074) — although no subagent ran |
+
+Read as: the default deny holds on this CLI build on a fresh launch (A) and on a resumed one (B, D) — on D the session's earlier tool
+inventory did not survive the resume, and a call the model emitted from memory was refused by the CLI itself. **The anomaly of D is the
+caveat for every cost metric**: a resumed haiku attempt carried a sonnet line in `modelUsage` with no subagent — an internal CLI call on
+resume, whose purpose this measurement did not establish. Decided here: (1) a delegation check — E6's consumer check, the analysis plan's
+cost split (M3) — reads TOOL EVENTS (`tool_use` named `Agent` or `Task`, present in D as a refused call) and SUBAGENT MESSAGES (a line
+whose `parent_tool_use_id` is non-null), **never `modelUsage` alone**; (2) `modelUsage`'s per-model cost is still the cost, so the analysis
+reports it beside the delegation facts and never infers one from the other; (3) M3 re-runs A–D on the measurement CLI version and records
+the version beside the result, because a later build may change what a resume keeps. The module doc's *The delegation policy (E2.S0)*
+paragraph carries this table with the version and the date (§3), and §8 item 43 records it for the analysis plan.
+
+#### Scenarios — `StepContractTests` (`tests/Bench.Tests/ModelArms/`, namespace `Bench.Tests.ModelArms`)
+
+`using System.Text.Json; using System.Text.Json.Nodes; using FluentAssertions; using ModelArms.Core.Experiment; using Xunit;`. Class doc:
+the step contract (parent D25, D27; schema v2) read strictly, every refusal named at once, the worked example the one source; *what this
+does NOT prove*: that a path exists, that a template fills (`BriefFieldsTests`), or that a model writes what it is briefed to (the runner
+records that, E2.S4). Helpers, the shape of `ExperimentFileTests`: `ExampleText()`, `Edited(Action<JsonObject>)`, `Refused(edit) →
+reason` (asserts `Failed()` first), `Lines(reason)`, `PosixPaths()`; plus `Step(root, id)` = `root["steps"]![id]!.AsObject()` and
+`Scheme(root, name)` = `root["schemes"]![name]!.AsArray()`. Every expectation on a reason is `Lines(reason).Should().Contain(line =>
+line.StartsWith("<path> ", Ordinal) && line.Contains("<the rest>", Ordinal))` — the prefix rule is asserted on every refusal, not only
+named. The reds below are against the stubs (the walker reads v2 shapes and refuses nothing), in FluentAssertions 7.2.2's shape; the
+coder records the runner's exact text.
+
+| Test | Given / When / Then | Red against the stub |
+|---|---|---|
+| `Steps_are_keyed_by_identity_and_a_kind_is_one_of_four` | **Given** the example; **then** `Steps` has eleven keys (`code hreview review fix gate split splitFix taskCode hA hB hfix` as `StepId`s), `Steps[new("hA")]` equals `new StepSpec(new("hA"), StepKind.Review, "haiku", 40, StepMode.Read, false, "hA-trace", [new("HA_JSON", "notes/hA.json")], "", "HA_JSON", "", true, "")`, `Steps[new("splitFix")].Outputs` is empty and its `Notes == "SPLIT_NOTES"`; **and** `Step(root, "code")["kind"] = "lint"` → `steps.code.kind is 'lint' — legal: session, review, gate, taskCode`; `root["steps"]!["2bad"] = <a copy of code>` → `steps.2bad: '2bad' is not a step id — …`; `Step(root, "code").Remove("kind")` → `steps.code.kind is missing`; `Step(root, "code")["subagents"] = "no"` → `steps.code.subagents must be true or false` | `Expected failed to be true because the edited file must be refused, but found False.` |
+| `A_scheme_entry_names_a_step_id_the_file_defines_or_is_refused_naming_both` | `Scheme(root, "C")[1] = "2-review:reviewer"` → `schemes.C[1] is '2-review:reviewer' — step id 'reviewer' is not defined under steps (defined: code, hreview, review, …)` (the eleven ids); `Scheme(root, "C")[1] = "2 review:review"` → `… an entry is "tasks" or "<file name>:<step id>"`; `Scheme(root, "C").Add("2-review:review")` → `schemes.C — '2-review' is placed twice`; `Scheme(root, "SRS").Add("tasks")` → `schemes.SRS — tasks is placed twice`; **and** the example's `Schemes[3].Entries[1]` is `new SchemeEntry.Step("2-hA", new("hA"))` | as above |
+| `Every_output_is_a_relative_path_under_notes_or_work_and_a_field_name_in_capitals` | `[Theory]` over the paths `/notes/x.md` · `notes/../x.md` · `tmp/x.md` · `notes` · `notes\\x.md` · `notes//x.md` · `notes/./x.md` · `C:/notes/x.md`, each set as `Step(root, "code")["outputs"]!["CODE_NOTES"]` → `steps.code.outputs.CODE_NOTES: '<path>' is not an output path — relative, under notes/ or work/, forward slashes, no '..' (notes/hA.json)`; the field names `code_notes` · `CODE-NOTES` · `CODE_NOTES1` (`[A-Z_]+` is the filler's own pattern) → `steps.code.outputs.<f>: <f> is not a field name — capitals and underscores, as a template's {{NAME}}`; **and** `OutputBinding.Parse("X", "work/a/b.md")` is `Ok()` with `RelativePath == "work/a/b.md"`; **and** `Step(root, "code")["outputs"]!["CODE_TWO"] = "Notes/Code.md"` → `steps.code.outputs — CODE_NOTES and CODE_TWO both name Notes/Code.md` (the case-insensitive comparison, said in the doc) | as above |
+| `A_review_without_a_verdict_and_a_gate_without_a_status_are_refused_and_so_is_either_on_a_session` | `Step(root, "review").Remove("verdict")` → `steps.review.verdict is missing — a review step names the output its last result's JSON block is written to`; `Step(root, "gate").Remove("status")` → `steps.gate.status is missing — a gate step names the output it reads status from`; `Step(root, "code")["verdict"] = "CODE_NOTES"` → `steps.code.verdict — only a review step has a verdict (this step's kind is session)`; `Step(root, "code")["status"] = "CODE_NOTES"` → `steps.code.status — only a gate step has a status (this step's kind is session)`; `Step(root, "review")["verdict"] = "NOPE"` → `steps.review.verdict is 'NOPE' — not one of the step's outputs (REVIEW)`; `Step(root, "gate")["mode"] = "write"` → `steps.gate.mode is 'write' — a gate step's mode is gate`; `Step(root, "code")["mode"] = "gate"` → `steps.code.mode is 'gate' — only a gate step runs in gate mode (this step's kind is session)` | as above |
+| `Diff_from_names_a_snapshotting_step_at_or_before_this_one_in_every_scheme_that_uses_it` | `Step(root, "hfix")["diffFrom"] = "nope"` → `steps.hfix.diffFrom is 'nope' — not a step id defined under steps (…)`; `Step(root, "hfix")["diffFrom"] = "review"` (placed AFTER hfix in CHH) → `schemes.CHH[3] (4-hfix): diffFrom review is not placed at or before this position`; `Step(root, "hfix")["diffFrom"] = "hB"` (before, no snapshot) → `schemes.CHH[3] (4-hfix): diffFrom hB has no snapshot`; **and** the example is accepted: `hreview`'s `diffFrom` is itself (`snapshot: true`, "at or before" includes the step) and `hfix`'s is `hA` | as above |
+| `The_tasks_block_names_three_ids_of_the_right_kinds` | `root["tasks"]!["split"] = "nope"` → `tasks.split is 'nope' — not a step id defined under steps (…)`; `root["tasks"]!["splitFix"] = "review"` → `tasks.splitFix is 'review' — its kind is review; the split fix is a session step`; `root["tasks"]!["taskCode"] = "code"` → `tasks.taskCode is 'code' — its kind is session; the task coder is a taskCode step`; `root.Remove("tasks")` with the example's `split`, `splitFix`, `taskCode` steps in place → accepted, `Tasks == TaskLimits.Shell` (4 / 7 / 4, the three names, no outputs); `root.Remove("tasks")` AND `root["steps"]!.AsObject().Remove("split")` → `tasks.split is 'split' — not a step id defined under steps (…)` (the default is checked because SRS has a `tasks` entry) | as above |
+| `A_v1_file_is_refused_naming_the_three_moves` | **Given** the E1 example as it was at `431e759` (the text of `git show 431e759:tools/model-arms/examples/part6.experiment.json`, copied into the test as a fixture `experiment-v1-431e759.json` under `Fixtures/model-arms/`); **then** `Lines(reason)` contains exactly one line starting `schema is 'model-arms/experiment-v1' — this build reads 'model-arms/experiment-v2'` and holding `steps are keyed by a step id and carry kind, brief and outputs`, `the notes files are bindings`, `rounds moved to runs.<name>.rounds`; and one `rounds — moved to runs.<name>.rounds (schema v2)`; and `runs is missing`; and no line holds `is not a member this build knows` for `rounds` | as above |
+| `Runs_are_named_and_no_arm_appears_in_two_runs` | the example's `Runs` has two: `part6` (three rounds, `Rounds[1]` is `C2 CR2 SRS2`, no closed arms) and `part7` (one round `CHH1 CHH2 CHH3`, nine `ClosedArms`, three `Closed` paths expanded — `/x/root/judge-abs`, `/x/root/judge-coai`, `/x/root/chain/part6`); `root["runs"]!["part 8"] = <a copy of part7>` → `runs.part 8 — a run name is letters, digits and dashes: it names the folder chain/part 8/`; `root["runs"]!["part7"]!["rounds"]![0]!.AsArray().Add("C1")` → `runs.part7 — arm C1 is already in run part6`; `root["runs"]!["part6"]!["rounds"]![1]!.AsArray().Add("C1")` → `runs.part6.rounds — arm C1 is named twice`; `… .Add("XY2")` → `runs.part6.rounds[1][3] names 'XY2', whose scheme 'XY' is not among the schemes (C, CR, SRS, CHH)`; `root["runs"] = new JsonObject()` → `runs is empty — it needs at least one member`; `root["runs"]!["part6"]!.AsObject().Remove("rounds")` → `runs.part6.rounds is missing` | as above |
+| `Closed_arms_of_a_run_must_be_arms_of_some_run` | `root["runs"]!["part7"]!["closedArms"]!.AsArray().Add("C9")` → `runs.part7.closedArms[9] names 'C9', which no run names`; `root["runs"]!["part7"]!["closed"]!.AsArray().Add("relative/x")` → `runs.part7.closed[3] is 'relative/x' — it must be <root>, start with <root>/ or ~/, or be an absolute path`; `… .Add("~/judges")` → accepted, `Closed` ends with `/x/home/judges` | as above |
+| `The_tasks_block_contributes_its_split_steps_outputs_and_its_own_to_later_steps` | **Given** the example; **when** `SchemePositions.Outputs(SRS, Steps, Tasks)`; **then** the first three placed outputs are `(0, "split", SPLIT_NOTES → notes/split.md)`, `(0, "tasks", CODE_NOTES → notes/code.md)` (the split fix binds nothing) and `(1, "3-hreview", HREVIEW_NOTES → notes/hreview.md)`; **and** `Visible(SRS, 1, new("hreview"), …)` holds `SPLIT_NOTES`, `CODE_NOTES` and `HREVIEW_NOTES` (its own); `Visible(SRS, 0, new("split"), …)` is `[SPLIT_NOTES]` (its own, nothing earlier, not the block's `CODE_NOTES`); `Visible(SRS, 0, new("splitFix"), …)` is `[SPLIT_NOTES]`; `Visible(SRS, 0, new("taskCode"), …)` is `[SPLIT_NOTES]` | `Expected outputs to contain 3 item(s) at least, but found 0.` (the stub's `[]`) |
+| `Notes_may_name_an_earlier_steps_output_and_is_refused_when_nothing_before_binds_it` | the example's `splitFix` has `Notes == "SPLIT_NOTES"` and no output of its own, and the file is accepted; `Step(root, "code")["notes"] = "REVIEW"` (bound by a LATER step of C, CR and CHH) → `schemes.C[0] (1-code): notes REVIEW is bound by no step at or before this position (visible: CODE_NOTES)`, and the same line for `schemes.CR[0]`, `schemes.CHH[0]`; `Step(root, "code")["notes"] = "NOPE"` → `steps.code.notes is 'NOPE' — no step binds it` and no per-scheme line (one cause, one sentence) | as above |
+| `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` (E2's plan round) | `Step(root, "fix")["outputs"]!["CODE_NOTES"] = "notes/fix2.md"` → `steps.fix.outputs — CODE_NOTES is already bound by step code`; `root["tasks"]!["outputs"]!["HREVIEW_NOTES"] = "notes/hreview.md"` (SRS places both) → `schemes.SRS — HREVIEW_NOTES is bound by step hreview and by the tasks block`, and no such line for `C`, `CR` or `CHH`; the example's `tasks.outputs.CODE_NOTES` beside `code`'s `CODE_NOTES` is accepted (no scheme places both — gate finding 0); **and** the raw text of the example with `"outputs": { "FIX_NOTES": "notes/fix.md", "FIX_NOTES": "notes/fix2.md" }` substituted for `fix`'s outputs (string surgery on purpose — a `JsonObject` cannot hold the duplicate) → `Failed()`, the reason starts `experiment.json is not JSON:`, and the one line names `FIX_NOTES` (the parser's own sentence; if .NET 10's `JsonException` for `AllowDuplicateProperties = false` does not name the member, the coder quotes the real sentence in the summary and the assertion narrows to `is not JSON` plus the line number it does carry — said in the test's doc, never silently) | as above |
+| `Two_fields_never_bind_one_file_among_the_producers_a_scheme_places` (added — risk consultation 2.0, finding 1) | `Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json"` → `schemes.CHH — notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)`; `Step(root, "hB")["outputs"]!["HB_JSON"] = "Notes/HA.json"` → the same line (`OrdinalIgnoreCase`); `root["tasks"]!["outputs"]!["TASK_NOTES"] = "notes/hreview.md"` → `schemes.SRS — notes/hreview.md is written by two of its producers: tasks (TASK_NOTES) and 3-hreview (HREVIEW_NOTES)`; **and** a step placed in no scheme binding `notes/hA.json` (`root["steps"]!["spare"] = { kind session … outputs { SPARE: notes/hA.json } notes SPARE }`) is accepted — coexistence is per scheme, said in the doc; **and** `Step(root, "splitFix")["notes"] = "SPLIT_NOTES"` (as the example has it) is accepted: appending is not producing | `Expected failed to be true because two producers of one file would make the fixer read one verdict twice, but found False.` |
+| `The_verdict_is_the_runners_output_and_every_other_binding_is_the_models` (added — finding 2) | the example: `Steps[review].ModelWritten` is empty; `Steps[hA].ModelWritten` is empty; `Steps[code].ModelWritten` is `[CODE_NOTES → notes/code.md]`; `Steps[gate].ModelWritten` is `[GATE_NOTES, GATE_JSON]` (the gate's status file is the model's — `GateStatus.Read` answers `missing` when it is not there, the shell's rule); `Steps[review].OutputPath("REVIEW")` is `Ok("notes/review.json")`, `OutputPath("NOPE")` fails with `NOPE is not an output of step review (outputs: REVIEW)`; `Steps[taskCode].OutputPath("X")` fails with `(outputs: none)` | `Expected modelWritten to be empty, but found {OutputBinding { Field = REVIEW, … }}.` (the stub returns `Outputs` whole) |
+| `A_taskCode_step_carries_no_bindings_the_pipeline_names_them_per_task` (added — §8 item 39) | `[Theory]` over `("outputs", {"X":"notes/x.md"})` · `("notes", "X")` · `("verdict", "X")` · `("status", "X")` · `("snapshot", true)` · `("diffFrom", "code")` set on `Step(root, "taskCode")` → `steps.taskCode.<member> — a taskCode step has no bindings: the task pipeline names its notes, snapshot and diff per task (E4)`; `("outputs", {})` and `("snapshot", false)` → accepted | as above |
+| `Every_refusal_of_the_step_contract_starts_with_its_dotted_path` (added) | **Given** every edit of the scenarios above that is refused, run once more through one helper; **then** every line of every reason matches `^(schema|rounds|steps|schemes|tasks|runs)\b` and the character after the longest dotted prefix is a space or a colon — the property `UnfilledValues.Refuse` relies on, pinned in one place (`ExampleExperimentTests.Every_value_the_template_leaves_unfilled_is_named_by_the_reader` is the consumer) | passes on the stub (nothing is refused) — its red is the plant: one sentence rewritten as `the step code: …` → `Expected line to start with "steps"…` |
+
+#### Scenarios — `BriefFieldsTests` (`tests/Bench.Tests/ModelArms/`)
+
+Helpers: the example read at `Loc`; `Paths = new ArmPaths("/e", "tok0000000000000")`; `Facts` as `BriefFillerTests` builds them; `Fields(scheme, position, id)` =
+`BriefFields.For(Steps[id], SchemePositions.Visible(Scheme(scheme), position, id, Steps, Tasks), Tasks, Paths, Facts)`; `At(relative)` = `Paths.NotesFile(new("X", relative))`.
+Class doc: the fields of a brief at a scheme position — the facts, the step's own `NOTES`, every visible output under the field name it was declared
+with; *what this does NOT prove*: that a template uses what it is given (the shipped eleven are pinned by `BriefFillerTests`' theory), or
+that a file at any of these paths exists.
+
+| Test | Given / When / Then | Red (the stub's seven facts and `NOTES`) |
+|---|---|---|
+| `At_CHH_hfix_the_fields_are_both_verdicts_the_code_notes_and_its_own_notes_and_no_review` | `Fields("CHH", 3, hfix)` has `HA_JSON == At("notes/hA.json")`, `HB_JSON == At("notes/hB.json")` (two distinct paths — finding 3), `CODE_NOTES == At("notes/code.md")`, `HFIX_NOTES == At("notes/hfix.md")`, `NOTES == HFIX_NOTES`'s value; no `REVIEW`, no `FIX_NOTES`, no `GATE_JSON` (later steps'); the seven facts present; `SCEN_COUNT` invariant | `Expected fields to contain key "HA_JSON".` |
+| `At_C_review_the_fields_are_the_code_notes_and_its_own_verdict_and_none_of_a_later_steps` (criterion 3 as corrected) | `Fields("C", 1, review)` has `CODE_NOTES`, `REVIEW == At("notes/review.json")` (its own), `NOTES == "-"`; no `FIX_NOTES`, `GATE_NOTES`, `GATE_JSON`, `HREVIEW_NOTES`, `HA_JSON`; **and** `Fields("C", 3, gate)` has `GATE_JSON` (its own — `gate.template.md` names it), `GATE_NOTES`, `CODE_NOTES`, `REVIEW`, `FIX_NOTES` and `NOTES == At("notes/gate.md")` | `Expected fields to contain key "CODE_NOTES".` |
+| `A_tasks_entry_gives_its_three_steps_their_own_fields_and_later_steps_the_blocks_outputs` | `Fields("SRS", 0, split)` has `NOTES == At("notes/split.md")`, `WORK`, no `PROBLEMS`, no `CODE_NOTES`; `Fields("SRS", 0, splitFix)` has `NOTES == At("notes/split.md")` (the split's — appending), `PROBLEMS == Facts.Problems`; `Fields("SRS", 0, taskCode)` has `NOTES == Paths.TaskNotes(Facts.Task.Id)`, `TASK`, `TASK_BRIEF`, `TASK_FILES`, `BEFORE`; `Fields("SRS", 1, hreview)` has `CODE_NOTES == At("notes/code.md")` (the block's own output, gate finding 0) and `SPLIT_NOTES` | `Expected fields to contain key "PROBLEMS".` |
+| `A_scheme_that_places_a_fix_before_the_reviews_it_reads_is_refused_by_the_rehearsal_naming_the_position_and_the_fields` (finding 3) | **Given** the example with a scheme `X: ["1-code:code", "4-hfix:hfix", "2-hA:hA", "3-hB:hB"]` added (`Edited`; the file still reads — placement is the rehearsal's); **when** `BriefRehearsal.Problems(experiment, new RootPaths("/e"), 1, templates)` with the eleven shipped templates read by stem; **then** exactly one problem, `hfix.template.md at schemes.X[1] (4-hfix): the brief has unfilled fields: {{HA_JSON}} {{HB_JSON}}`; **and** over the unedited example the problems are empty; **and** `BriefRehearsal.StemsUsed(example)` equals `BriefTemplates.Shipped` as a set | `Expected problems to contain 1 item(s), but found 0.` |
+
+#### Scenarios — the E1 suites this story amends (every name kept unless a rename is listed)
+
+| Suite · test | What changes | Red after the stubs |
+|---|---|---|
+| `StepLaunchTests.Write_read_and_gate_modes_produce_the_shells_three_argv_shapes` | `Options(Spec(mode), tools, Arm, Fresh)` with `Spec(mode)` = the `Request` helper's spec at that mode and `subagents: false`; expected `denied` = `["Agent", "Task", .. <the mode's list as today>]`, `allowed` = the mode's list minus `Agent` and `Task`; the theory asserts `tools.Write.Should().Contain("Agent")` first, so the strip is observed and not vacuous | `Expected collection to be equivalent to {…"--disallowedTools\u001fAgent\u001fTask…"…}, but it misses …` (the coder records) |
+| `StepLaunchTests.No_step_starts_a_subagent_unless_its_spec_says_so` (added; ledger 1.3's name) | `[Theory]` over the three modes × `subagents` false/true, over `ExampleTools()`: false → `DisallowedTools` starts `Agent, Task` and `PermittedTools` holds neither; true → `DisallowedTools` equals the mode's list exactly (no `Agent`) and `PermittedTools` is the mode's list as configured (`Agent` present for write and gate, absent for read — the example's `tools.read` never had it) | `Expected disallowed to start with {"Agent", "Task"}, but found {"Read(//example/home/.claude/**)", …}.` |
+| `StepLaunchTests.A_resume_is_never_wider_than_the_launch_it_continues` (renamed from `A_resume_carries_the_same_options_with_resume_in_place_of_session_id`, widened) | as today over every mode and both flags, plus: with `subagents: false` the resumed options' `DisallowedTools` starts `Agent, Task` and `PermittedTools` holds neither | the plant (`Delegation` applied under `Fresh` only): `Expected resumed.DisallowedTools to start with {"Agent", "Task"}…` |
+| `StepLaunchTests.The_working_directory_model_wall_and_prompt_are_the_requests` and the `Request` helper | `StepLaunch.Options(request.Spec, …)`; the helper's spec is `new StepSpec(new("code"), StepKind.Session, "sonnet", 45, StepMode.Write, false, "1-code", [new("CODE_NOTES", "notes/code.md")], "CODE_NOTES", "", "", false, "")` | compiles against the new signature; green |
+| `ExperimentFileTests.A_complete_file_reads_into_facts_with_every_command_as_exe_and_argv` | `Steps[new StepId("review")]` is the v2 record (`"review", Review, "opus", 40, Read, false, "2-review", [REVIEW → notes/review.json], "", "REVIEW", "", false, ""`); `Schemes` names `C, CR, SRS, CHH`; `Schemes[0].Entries[1]` is `Step("2-review", new("review"))`; `Runs` has two, `Runs[0].Rounds[1]` is `C2 CR2 SRS2`; `Tasks` is `new TaskLimits(4, 7, 4, new("split"), new("splitFix"), new("taskCode"), [new("CODE_NOTES", "notes/code.md")])` | `Expected experiment.Steps[…] to be StepSpec { … Kind = Review … }, but found …` once the example is v2 and the reader is the stub |
+| `ExperimentFileTests.A_round_naming_an_arm_of_an_unknown_scheme_is_refused_naming_both` | the edit is `root["runs"]!["part6"]!["rounds"] = …`; the sentence starts `runs.part6.rounds[0][1] names 'XY2'` and ends `(C, CR, SRS, CHH)` | `Expected failed to be true…` |
+| `ExperimentFileTests.The_schema_member_is_required_and_must_be_exactly_model_arms_experiment_v2` (renamed) | `"model-arms/experiment-v3"` → `this build reads exactly 'model-arms/experiment-v2'`; the v1 text → the three-moves sentence (the full assertion is `StepContractTests`') | as above |
+| `ExperimentFileTests.A_step_kind_this_build_does_not_know_is_refused_naming_the_legal_ones` | `root["steps"]!["lint"] = { kind: "lint", model, minutes, mode, brief }` → `steps.lint.kind is 'lint' — legal: session, review, gate, taskCode`; the loop over `Enum.GetValues<StepKind>()` asserts each of the four keys | as above |
+| `ExperimentFileTests.A_scheme_entry_of_an_undefined_step_or_an_unreadable_shape_is_refused` | `schemes.C[3] is '4-gate:gate' — step id 'gate' is not defined…` after `steps.gate` is removed; `5 - review` → the entry shape; `schemes.C1` (a digit in the name) as today | as above |
+| `ExperimentFileTests.An_empty_rounds_steps_or_schemes_is_refused_rather_than_read_as_an_experiment_with_nothing_to_run` | `runs` for `rounds`: `runs is empty — it needs at least one member`; `runs.part6.rounds must be a non-empty array…` | as above |
+| `ExperimentFileTests.The_optional_members_default_when_absent` | `tasks` absent → `TaskLimits.Shell` (the three default ids, `Outputs` empty) and the example STILL accepted (its `split`, `splitFix`, `taskCode` steps exist) | `Expected experiment.Tasks to be TaskLimits { … Split = split …}` |
+| `ExperimentFileTests.Every_object_valued_member_refuses_a_JSON_null` | rows added: `runs`, `runs.part6`, `steps.code.outputs`, `tasks.outputs` → `must be a JSON object` | as above |
+| `ArmPathsTests.Every_path_of_an_arm_is_spelled_as_the_shell_spelled_it` | the seven rows `CodeNotes … GateJson` removed; rows added `(nameof(ArmPaths.NotesFile), Arm.NotesFile(new("HA_JSON", "notes/hA.json")), At("r/abc/notes/hA.json"))` and `(…, Arm.NotesFile(new("X", "work/a/b.md")), At("r/abc/work/a/b.md"))`; `PathMembers(typeof(ArmPaths))` must stop listing the retired seven (the reflection half fails naming them until they are gone) | `Expected … to be equivalent … but it contains {"CodeNotes", …}` on the retired members; `Expected "" to be "/e/r/abc/notes/hA.json"` on the stub |
+| `ArmPathsTests.A_binding_with_a_climbing_segment_is_a_programming_error` (added) | `Arm.NotesFile(new("X", "notes/../x.md"))` and `new("X", "notes//x.md")` each throw `ArgumentException` whose message holds `output segment` | `Expected a <System.ArgumentException> to be thrown, but no exception was thrown.` |
+| `BriefFillerTests.Every_shipped_template_fills_completely_with_its_steps_fields` | the theory's `MemberData` is every `(scheme, position, id)` the example places — 4 + 5 + (1 × 3 + 4) + 7 = 23 fills over the eleven stems; each `Fill(template of Steps[id].Brief, Fields(scheme, position, id), Guard)` has no `{{`; the `code` row asserts `Facts.Plan` and `…/notes/code.md` as today; the `gate` rows assert `…/notes/gate.json` (its own output filled) | `Expected text not to contain "{{" because the gate template must have a value for every placeholder it carries, but found "{{GATE_JSON}}"…` (the stub's `Visible` is empty) |
+| `BriefFillerTests.Each_step_kind_gets_its_notes_file` → `Each_placed_step_gets_its_notes_path_and_every_visible_output` (renamed) | over the example's placements: `review`'s `NOTES` is `-`; `splitFix`'s is the split's `notes/split.md`; `taskCode`'s is `TaskNotes("t3")`; `code`, `hreview`, `fix`, `gate`, `split`, `hfix` their own; `PROBLEMS` only for `splitFix`; the four task fields only for `taskCode`; `SCEN_COUNT` invariant; `WORK` for all | `Expected "" to be "-"` |
+| `BriefFillerTests.The_eight_shipped_templates_are_the_shells_byte_for_byte` → `The_eleven_shipped_templates_are_the_shells_byte_for_byte` (renamed) | `ShellHashes` gains `hA-trace.template.md` `971c664b5b29f1e4cc7778e7f5e658319ef2e8a944439cdcb5a26e595a8b862b`, `hB-tests.template.md` `a34fbe71a0e91cc005adb464f7cc14a9a91ce4507d00af60a2275fd989662cbc`, `hfix.template.md` `fb2ecc7c2c9611b2452cc64244ca7ecf0a9b2e6b155f292e6fe8942ba67a4b09` (parent §2; re-computed by Fable on 2026-10-30 over `/home/jinx/git/coai-exp2/briefs/`, equal); `BriefTemplates.Shipped.Select(NameOf → Ok)` equals the keys; the folder scan finds eleven and nothing beside them | `Expected … to be equivalent to {11 items}, but found {8 items}` until the three files are copied |
+| `BriefFillerTests` `With(…)` helper and the override/UTF-8 tests | `BriefTemplateFiles.Read("1-code")` by stem; `NameOf("../x")` and `NameOf("a/b")` are `Failed()` with the stem sentence (one added assertion in `An_experiment_root_overrides_a_template_by_name`: an experiment root's `briefs/` may ADD `hC-extra.template.md` that a step names, and `Read("hC-extra")` returns it) | `Expected failed to be true…` on the stem refusal |
+| `ValidateVerbTests.Every_step_kind_the_example_runs_has_its_template_rehearsed` → `Every_template_the_example_names_is_rehearsed_at_every_position` (renamed) | `BriefRehearsal.StemsUsed(example)` equals `BriefTemplates.Shipped` as a set | `Expected stems to be equivalent to {11 items}, but found {}` |
+| `ValidateVerbTests.A_KNOWN_that_names_a_scheme_is_refused_before_the_chain_starts_naming_the_field_and_the_template`, `An_override_template_that_names_a_scheme_is_refused_naming_it`, `A_template_the_schemes_use_that_cannot_be_found_is_refused_naming_it` | the sentences now start `<stem>.template.md at schemes.<S>[<i>] (<name>):`; the assertions keep what they asserted (the template name, the field, `KNOWN`) and add the position prefix once; the not-found case names `hA-trace.template.md` after `root.Briefs/hA-trace.template.md` is removed AND the shipped copy hidden by an unreadable override — the shape the test already has | as today's reds, re-spelled |
+| `ValidateVerbTests.An_unsupported_host_configuration_is_refused_naming_it` | the rows about an arm named twice and a tasks entry without its steps move to `StepContractTests` (the reader's rules now); the host rows stay; `A_host_with_every_fact_good_has_no_problem` builds `Templates` by stem | compiles; green |
+| `ExampleExperimentTests.The_example_binds_every_file_the_shell_wrote` (added; criterion 4) | over the example's `Steps` and `Tasks.Outputs`, `{ NotesFile(binding) relative to the arm folder }` as a set equals exactly `notes/code.md notes/hreview.md notes/review.json notes/fix.md notes/gate.md notes/gate.json notes/split.md notes/hA.json notes/hB.json notes/hfix.md` (parent §4.2's list; `CODE_NOTES` once — the step's and the block's are one path); the example's text holds `"subagents": false` exactly eleven times and `"Agent"` inside `tools.write` (the policy strips it; the configured list is the shell's); `validate` over the fixture root still prints `is valid on this host` | `Expected … to be equivalent to {10 items}, but found {}` on the stub |
+| `ExampleExperimentTests.The_init_template_is_the_example_with_its_values_blanked`, `A_template_is_read_back…`, `Every_value_the_template_leaves_unfilled…` | by derivation: the template's `steps.*.outputs` keep their field names with `<fill me>` paths, `subagents` stays `false`, `snapshot` stays `true`, `runs.*.rounds` arrays keep their lengths; the unfilled scan must now reach `steps.code.brief`, `steps.code.outputs.CODE_NOTES`, `runs.part6.rounds[0][0]`, `tasks.split` (four names added to the `Contain` of `Every_value…`) | `Expected unfilled to contain {"steps.code.brief", …}` until the example is v2; then each must be named by the reader — a red there is a refusal sentence that lost its prefix |
+| `InitVerbTests` | green by derivation (`The_template_has_every_required_member…`, `Init_then_validate_over_a_filled_experiment…` — the fixture's filled text is the v2 example) | compiles; green |
+
+#### Brief — the order of work
+
+1. **The three templates, byte for byte, by path** (never typed): `cp /home/jinx/git/coai-exp2/briefs/{hA-trace,hB-tests,hfix}.template.md
+   tools/model-arms/briefs/`; `sha256sum tools/model-arms/briefs/*.template.md` — the eleven sums equal parent §2's (the three new ones
+   above); `git check-attr -a tools/model-arms/briefs/hfix.template.md` shows `-text` (the root `.gitattributes` line of E1.S7 covers
+   `*.template.md`); the sums go into the summary.
+2. **The example as v2**: `tools/model-arms/examples/part6.experiment.json` becomes the parent's §4.2 block with the E1 example's
+   `/example/…` paths and its `//` comments kept (one comment per new member: `steps` — "one entry per step id: its kind, model, minutes,
+   mode, subagents, brief and bindings"; `runs` — "a run is its rounds; a later part adds a run"; `tasks.outputs` — "handed to the steps
+   after the block, as the shell handed CODE_NOTES to SRS's reviewers though no SRS step wrote it"); `"subagents": false` eleven times;
+   `tools.write` keeps `Agent`. The v1 text at `431e759` is saved as the fixture `tests/Bench.Tests/Fixtures/model-arms/experiment-v1-431e759.json`
+   (`git show 431e759:tools/model-arms/examples/part6.experiment.json > …`; its sha256 in the summary).
+3. **Stubs with their final signatures** (E1 §3: a compile error is not a red): `StepId`, `OutputBinding` (+ `Parse` stubs), the v2
+   `StepSpec`, `SchemeEntry.Step(Name, Id)`, `TaskLimits` and `Shell`, `RunSpec`, `Experiment` (`Runs`), `PlacedOutput`, `SchemePositions`
+   (`[]`), `ExperimentFile.Schema` v2 with the shape-only `Walk`, `StrictJson.Flag`/`TextMap`, `ArmPaths.NotesFile` (the seven members
+   deleted), `BriefTemplates.NameOf(stem)`/`Shipped`, `BriefFields.For(spec, visible, tasks, paths, facts)` (facts + `NOTES`),
+   `BriefRehearsal.Problems`/`StemsUsed` (`[]`), `BriefTemplateFiles.Read(stem)`, `HostFacts.Templates` by stem, `HostFactsReader.Templates`,
+   `HostChecks` (`HasGateStep` by kind, `FlowProblems` deleted), `StepLaunch.Options(StepSpec, …)` WITHOUT `Delegation`;
+   `ModelArmsArchitectureTests`: `// E2.S0` + `typeof(SchemePositions),` above `// E2`. Doc comments final from the first write. Build;
+   every E1 test of the table above re-pointed at the new signatures and names — nothing else in them changed yet.
+4. **The two new classes and the added tests** as specified, names verbatim; build; run `StepContractTests`, `BriefFieldsTests`,
+   `StepLaunchTests`, `ExperimentFileTests`, `ArmPathsTests`, `BriefFillerTests`, `ValidateVerbTests`, `ExampleExperimentTests`,
+   `InitVerbTests`, `ModelArmsArchitectureTests`; **record every failing assertion message** in the summary (the expected count: 16 + 4
+   new, 1 added and 3 amended in `StepLaunchTests`, 1 added in `ArmPathsTests`, 1 added in `ExampleExperimentTests`, and the amended E1
+   tests — the four that must be GREEN on the stub are named in their rows: `Every_refusal_of_the_step_contract_starts_with_its_dotted_path`
+   and the derivation tests). Any other test green here has no teeth: fix the test, not the stub.
+5. **Implement**, in this order, running the named class after each: the reader (`StepSection`, `FlowSection`, `SchemeChecks`,
+   `RunSection`, `ExperimentFile`) → `StepContractTests`, `ExperimentFileTests`; `SchemePositions`, `BriefFields`, `BriefRehearsal`,
+   `BriefTemplates` → `BriefFieldsTests`, `BriefFillerTests`, `ValidateVerbTests`; `ArmPaths.NotesFile` → `ArmPathsTests`;
+   `StepLaunch.Delegation` → `StepLaunchTests`; then `ExampleExperimentTests`, `InitVerbTests`, `ModelArmsArchitectureTests`
+   (`The_module_launches_nothing_by_a_bare_name` green: no launch changed); 0 warnings; `dotnet format`; the whole suite (Docker up).
+6. **Break-its, each planted in the finished code, observed red on the named test, then restored** — the summary quotes each red:
+   - (a) `Delegation` removed → `No_step_starts_a_subagent_unless_its_spec_says_so` and the argv theory (the messages of their rows).
+   - (b) `Delegation` applied under `Fresh` only → `A_resume_is_never_wider_than_the_launch_it_continues`.
+   - (c) the per-scheme destination rule removed → `Two_fields_never_bind_one_file_among_the_producers_a_scheme_places`: `Expected failed
+     to be true because two producers of one file would make the fixer read one verdict twice, but found False.` — the consultation's
+     finding, in the suite.
+   - (d) the map-level field rule removed → `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` (two steps binding
+     `CODE_NOTES` read as the later one winning, silently).
+   - (e) `diffFrom`'s placement unchecked → `Diff_from_names_a_snapshotting_step_at_or_before_this_one_in_every_scheme_that_uses_it`.
+   - (f) the rehearsal over the FIRST position of each scheme only (the kind-table habit) → `A_scheme_that_places_a_fix_before_the_reviews…`:
+     `Expected problems to contain 1 item(s), but found 0.`
+   - (g) `Visible` without the step's own outputs → `Every_shipped_template_fills_completely…` (the gate rows): `{{GATE_JSON}}` survives.
+   - (h) `NotesFile` without `Segment` → `A_binding_with_a_climbing_segment_is_a_programming_error`.
+   - (i) `ModelWritten` returning `Outputs` whole → `The_verdict_is_the_runners_output_and_every_other_binding_is_the_models`.
+   - (j) one refusal sentence rewritten without its dotted prefix → `Every_refusal_of_the_step_contract_starts_with_its_dotted_path`, and
+     `Every_value_the_template_leaves_unfilled_is_named_by_the_reader` red with the same cause (two guards, one property).
+7. **Docs.** `research/module_model_arms.md`: a section *The step contract (E2.S0)* after *The experiment file (E1.S3)* — the v2 member
+   table (the exact sentences of *The binding shape*'s table), the four kinds and what each closes, the bindings (`outputs`, `notes`,
+   `verdict`, `status`, `snapshot`, `diffFrom`), `Visible` and `Outputs` with the SRS example, the destination rule and the model-written
+   class (§8 items 40–41), the CHH walk-through from the example to the ten files it binds, `runs`; E1.S3's and E1.S7's paragraphs each
+   gain one opening line "superseded by *The step contract (E2.S0)*; kept as the E1 record" and the E1.S7 kind table is replaced by the
+   placement table; at the END of *The launch boundary (E1.S5, E1.S6)*: *The delegation policy (E2.S0)* — `SubagentTools`, `Delegation`,
+   fresh and resumed, the part-6 incident, and the *Evidence* table of this spec with the CLI version and the date, the anomaly and the
+   three decisions. `ArmPathsTests`' path table in the doc loses its seven rows and gains `NotesFile`.
+8. **Commit by path** — `git add` every file of the Files line by name (the three templates, the fixture, the example, the Core and
+   console files, the two new test classes, the amended test classes, `ModelArmsArchitectureTests.cs`, `research/module_model_arms.md`);
+   `git diff --staged --stat` read against ≈ 1350 lines; `git status --short` read for anything else, left alone:
+   `feat(model-arms): the step contract — identity, kind and bindings, schema v2, the eleven templates and the delegation policy (E2.S0)`,
+   the body carrying the runner's numbers for every class named in step 4 and the suite, the reds of step 4 and the ten of step 6 as the
+   runner printed them, the eleven sums of step 1 and the fixture's. Then, as §6 says, land on `feat/model-arms-e2` (rebase); every other
+   E2 story waits for this commit.
+
+**Break-its** (the spec names each red): the ten of brief step 6.
 
 **Commands.** `--filter-class "*StepContractTests"`, `"*BriefFieldsTests"`, `"*ExperimentFileTests"`, `"*ArmPathsTests"`,
 `"*StepLaunchTests"`, `"*BriefFillerTests"`, `"*ValidateVerbTests"`, `"*ExampleExperimentTests"`, `"*InitVerbTests"`,
-`"*ModelArmsArchitectureTests"`; the whole suite.
+`"*ModelArmsArchitectureTests"`; `--filter-namespace "Bench.Tests.ModelArms"`; `dotnet format --verify-no-changes`; the whole suite;
+`node .agents/conventions/tools/plan-lifecycle.mjs`.
 
-**Done when.** The seven criteria green, each seen red; the module doc's *The step contract* section walks CHH from the example to the
-files it binds; `research/module_model_arms.md`'s E1.S3 and E1.S7 paragraphs say they are superseded by it.
+**Done when.** The ten criteria green, each seen red (the messages of brief step 4 in the summary); the ten break-its of brief step 6
+observed red and restored, their messages in the summary; the eleven sums equal parent §2's and the test asserts them; the example reads
+as v2 and `The_example_binds_every_file_the_shell_wrote` is green; `validate` over the fixture root prints `is valid on this host`; the
+module doc's *The step contract* section walks CHH from the example to the files it binds and *The delegation policy* carries the
+measurement table; `research/module_model_arms.md`'s E1.S3 and E1.S7 paragraphs say they are superseded by it; the build has 0
+warnings, `dotnet format` is clean, the whole suite green; the commit of brief step 8 carries only the Files line.
 
 **Out of bounds.** A fifth kind (parent §9); a per-step model guard for the subagents a step is ALLOWED to start; `--agents`; any change
-to `CliArgv` or `AgentAskOptions`; the task pipeline's launches (E4.S3 goes through `StepLaunch` and inherits the policy).
+to `CliArgv` or `AgentAskOptions`; the task pipeline's launches (E4.S3 goes through `StepLaunch` and inherits the policy); requiring a
+model-written output (§8 item 41 — the runner records, E2.S4; a stop is one line of step 7 away if the owner ever wants it, and D16's
+table would gain a row then, not now); a step placed twice in one scheme (the destination rule refuses it whenever it binds anything —
+said in the doc, not ruled on); any change to C5, C6 or C8 beyond the lines this spec amended (`Missing`, `GateWait`, `Prepared`).
+
+**What this spec's tests do NOT prove.** That claude honours the deny list — the *Evidence* table is the observation, on 2.1.310, and
+M3 repeats it on the measurement build; that a template reads well to a model; that the model writes any bound file (the runner records
+it, never requires it); that `metrics.mjs` or any consumer reads the bindings' files (E2.S8's `PinnedConsumer` and E6's check do); or
+anything about the task pipeline's per-task paths beyond `TaskNotes(id)` (E4).
 
 ### E2.S1 — `ClaudeResultEnvelope` and `StepEnd`: the step's end, structured first (CORNERSTONE)
 
@@ -890,12 +1220,16 @@ outputs table).
 
 - `TimingLines.Write` — one line of compact JSON, no newline, the shell's key order (`run-arm.sh:104`, `:111`, `:186`), UTC as
   `yyyy-MM-ddTHH:mm:ssZ`: **start** `kind, arm, step, attempt, how, session, model, start_utc, budget_s, deadline, head, stream`; **end**
-  `kind, arm, step, attempt, end_utc, wall_s, exit, result, limited, head, end` and then `"recovered":true` only when recovered; an
+  `kind, arm, step, attempt, end_utc, wall_s, exit, result, limited, head, end` and then `"recovered":true` only when recovered, then
+  `"missing":["CODE_NOTES",…]` only when non-empty (the S0 spec, §8 item 41: the model-written outputs a DONE attempt left unwritten); an
   uncaptured `wall_s` or `exit` is JSON `null` (*absent is not zero* — the previous generation's recovered line, `research/local-model-coding/harness/run-arm.sh:92`,
-  wrote `null` the same way); **arm-done** `kind, arm, done_utc`; **stopped** `kind, arm, step, exit, why, at_utc`.
+  wrote `null` the same way); **arm-done** `kind, arm, done_utc`; **stopped** `kind, arm, step, exit, why, at_utc`; **gate-wait**
+  `kind, arm, step, after, wait, why, at_utc` (the S0 spec, §8 item 44: one DECIDED blocked round of a gate step — `after` the attempt
+  that was blocked, `wait` 1-based; the durable count E2.S7 reads back; an unknown `kind` passes `metrics.mjs`, which filters
+  `kind === 'start'` / `'end'` — `metrics.mjs:14`, `:78-80` — exactly as `stopped` already does).
 - `TimingLines.Read` — one `TimingLine` per non-empty line; a line that is not a JSON object, or whose `kind` is unknown, is `Other(raw)`;
-  a missing `limited` reads `false`, a missing `end` reads `State = ""`, a missing or `null` `wall_s`/`exit` reads `Unavailable` (the
-  shell's and the previous generation's lines both read).
+  a missing `limited` reads `false`, a missing `end` reads `State = ""`, a missing `missing` reads `[]`, a missing or `null` `wall_s`/`exit`
+  reads `Unavailable` (the shell's and the previous generation's lines both read).
 - `DoneMarkers.Write` — `{"attempts":N,"exit":rc|null,"stream":"<path>","end":"finished|hard-deadline"}` plus `"recovered":true` when
   recovered: the shell's three keys first (`run-arm.sh:121` — `review_json` and the repair script read `stream`), then `end`. `Read`
   takes the shell's marker (no `end` → `State = ""`) and refuses a non-object, naming it.
@@ -967,7 +1301,8 @@ therefore resumable, not done — §8 item 3.)
 | `StepOutputsTests.A_complete_step_needs_nothing` | `[Theory]` over every `StepKind` with all of `Of(kind)` present → `Complete`; `Of(Code)`, `Of(Fix)`, `Of(Split)`, `Of(SplitFix)` are empty | passes on the stub for kinds with no output — its red is the plant: make `Of(Code)` return `[StepDiff]` → `Expected answer to be of type Complete, but found Resumable.` |
 | `StepOutputsTests.Regeneration_is_the_same_function_the_first_run_used` | `Reconcile` is the only road: for Review the regenerate list is exactly `[ReviewJson]` whether nothing was ever written (a first run) or the file was deleted afterwards (a re-entry) — the two `OutputFacts` differ only in history the type cannot see, and the answers are equal. (The bytes are compared in E2.S4's `A_runner_killed_between_the_result_line_and_review_json_writes_the_review_on_the_next_entry`.) | the stub's `Complete` → `Expected … Regenerate …` |
 | `StepOutputsTests.A_review_that_ended_on_its_deadline_without_a_result_is_resumable_not_done_with_a_hole` (added) | Review, `FinalResult` Failure ("no result line") → `Resumable` (D21 over D8 for this one case — §8 item 3) | as above |
-| `TimingLineTests.Every_line_kind_round_trips_in_the_shells_key_order` (added) | one value of each kind (an `End` with `Recovered`, one without, one with an `Unavailable` exit) → `Write` produces exactly the expected literal (keys in the order above, `null` for the uncaptured) and `Read(Write(x))` equals `x` | `Expected string to be "{\"kind\":\"start\",…", but "" …` |
+| `TimingLineTests.Every_line_kind_round_trips_in_the_shells_key_order` (added) | one value of each kind (an `End` with `Recovered`, one without, one with an `Unavailable` exit, one with `Missing = ["CODE_NOTES"]` whose literal ends `,"missing":["CODE_NOTES"]}` and one with `Missing` empty whose literal has no `missing` key; a `GateWait`) → `Write` produces exactly the expected literal (keys in the order above, `null` for the uncaptured) and `Read(Write(x))` equals `x` | `Expected string to be "{\"kind\":\"start\",…", but "" …` |
+| `TimingLineTests.A_gate_wait_line_round_trips_and_the_budget_ignores_it` (added — the S0 spec, §8 item 44) | `Write(new GateWait("C1", "4-gate", 1, 1, "every provider rate-limited", 2026-10-28T21:32:38Z))` is exactly `{"kind":"gate-wait","arm":"C1","step":"4-gate","after":1,"wait":1,"why":"every provider rate-limited","at_utc":"2026-10-28T21:32:38Z"}`; `Read` of it equals the value; a timing of two such lines, one unlimited `End` of 600 s for `4-gate` and one `Start` → `UsedSeconds(timing, "4-gate") == 600` (the lines spend no budget); a `gate-wait` line with no `why` reads `Why == ""`, one with `"wait":"1"` is `Other` | `Expected string to be "{\"kind\":\"gate-wait\",…", but "".` |
 | `TimingLineTests.A_shell_end_line_reads_without_an_end_state` (added) | the two recorded 2026-10-28 `2-review` lines (start and end, quoted in the test; they carry `limited` and no `end`) → `End.Limited == false` (as recorded), `State == ""`, `WallSeconds.Value == 888`, `Exit.Value == 1` | `Expected … to be of type End, but found Other.` |
 | `TimingLineTests.A_done_marker_round_trips_and_the_shells_marker_reads` (added) | `Write` of `(2, Number(0), "/e/out/2-review.a2.jsonl", "finished", false)` is `{"attempts":2,"exit":0,"stream":"/e/out/2-review.a2.jsonl","end":"finished"}`; the recorded shell marker reads with `State == ""`; `"[]"` is refused | `Expected string to be "{\"attempts\":2,…", but "".` |
 | `TimingLineTests.The_deadline_is_spelled_in_utc_and_as_the_local_offset` (added; renamed and widened by §8 item 32) | `[Theory]`: `Deadline(2026-10-28T21:32:38Z, 2400, Europe/Paris)` = `"22:12 UTC (23:12 +01:00)"` — the recorded line's minutes (`"22:12 UTC (23:12 CET)"`), the offset where the shell wrote `%Z`; `Deadline(2026-07-01T10:00:00Z, 600, Europe/Paris)` = `"10:10 UTC (12:10 +02:00)"` (summer — what `CET` could not say); `Deadline(2026-10-28T21:32:38Z, 2400, America/New_York)` = `"22:12 UTC (18:12 -04:00)"`; `Deadline(2026-10-28T21:32:38Z, 2400, TimeZoneInfo.Utc)` = `"22:12 UTC (22:12 +00:00)"`; `Deadline(2026-10-28T23:50:00Z, 1200, Europe/Paris)` = `"00:10 UTC (01:10 +01:00)"` (the clock, never the date — the shell's shape); the zones by `TimeZoneInfo.FindSystemTimeZoneById` with the IANA id, which .NET resolves on every host | `Expected "" to be "22:12 UTC (23:12 +01:00)".` |
@@ -979,7 +1314,7 @@ therefore resumable, not done — §8 item 3.)
 
 **Commands.** `--filter-class "*StepRecoveryTests"`, `"*StepOutputsTests"`, `"*TimingLineTests"`, `"*ArmPathsTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
 
-**Done when.** The twenty-three green, each seen red first (the `A_complete_step_needs_nothing` plant observed and removed); `timing-arm-C.jsonl`
+**Done when.** The twenty-four green, each seen red first (the `A_complete_step_needs_nothing` plant observed and removed); `timing-arm-C.jsonl`
 is a byte copy (`cmp` in the summary); the module doc's tables equal the two above, the recovery table with its first row.
 
 **Out of bounds.** Writing anything to disk; git; minting a session id; `ReviewAnswer` (E2.S5); TaskCode's use of `CoderHead`/`CoderDiff`
@@ -1084,7 +1419,11 @@ C5, C6, C7, C11, `ReviewAnswer.Extract` (C10, E2.S5).
   not exist, **probed by name** (no folder is enumerated, D11); `int LastAttempt(string step)` = that minus 1; `Outcome<Guid> ReadSession(step)`;
   `void ReplaceSession(step, Guid)` (stage, flush, rename over — the one file rewritten, when a fresh id replaces a lost transcript's);
   `ScoutStreamWriter Open(string path)` (`FileMode.CreateNew`, `FileShare.Read`); `void WriteOnce(string path, string text)` (through
-  `ArtifactCommit.Stage` — the prompt, `.before`, `.done`, `review.json`, `.diff`); `void Delete(string path)`; `void AppendTiming(TimingLine)`
+  `ArtifactCommit.Stage` — `.before`, `.done`, the verdict file, `.diff`; **never the prompt**); `void Replace(string path, string text)`
+  (stage, flush, rename over — the shape of `ReplaceSession`; this story's, moved here from E2.S7, which uses it for the marker);
+  `bool WritePrompt(string step, int n, string text)` (the S0 spec, §8 item 45: throws `InvalidOperationException` when `Stream(step, n)`
+  exists — a prompt is immutable once its attempt has started, and a caller that tries is wrong — else `Replace(Prompt(step, n), text)`,
+  returning whether a prompt was already there); `void Delete(string path)`; `void AppendTiming(TimingLine)`
   (append one line + `\n`, `Flush(flushToDisk: true)`); `IReadOnlyList<TimingLine> ReadTiming()`; `Outcome<string> ReadText(string path)`;
   `string Tail(string path, int characters)` (`""` when absent). Every directory it writes under (`out`, `notes`, `work`, `tmp`) is created
   on first use.
@@ -1132,8 +1471,17 @@ verb's output — `pids/<arm>.log` once detached, D13 — there is no `run.log`,
    ScenarioCount, deadline, Known, context.Task, context.Problems))` → `BriefFiller.Fill(template, fields, context.Guard,
    BriefTemplates.NameOf(kind))`; a refusal → `Stopped` line with exit 4 and the reason → `Stopped(4)` (no start line, no launch).
    `Resume(id, n, budget)`: the prompt is `ResumeNotice.For(Target.Base.Value, deadline)`. `deadline` = `StepBudget.Deadline(now, budget,
-   clock.LocalTimeZone)`. Write the prompt to `Prompt(step, n)`.
-4. **Start line** — `Start(arm, step, n, "fresh"|"resume", id:D, spec.Model, now, budget, deadline, HeadShort, Stream(step, n))`.
+   clock.LocalTimeZone)`. Before the fill (the S0 spec, §8 item 41): for every placed output of an EARLIER entry of the scheme
+   (`SchemePositions.Outputs(scheme, Steps, Tasks)` with `Position < context.Position`) whose `paths.NotesFile` does not exist, log
+   `<step>: <FIELD> (<relative path>) was not written by step <producer> — the brief names a file that does not exist` — one line per
+   field, and the launch goes on with the path in the brief, as the shell's did. Write the prompt through `files.WritePrompt(step, n, prompt)`;
+   when it answers that a prompt was already there, log `<step>: attempt <n> was prepared by an earlier run and never launched — its prompt
+   is rewritten` (risk consultation 2.7, finding 6, §8 item 45: `NextAttempt` counts STREAMS, so a prompt — and a start line — of attempt
+   `n` without `Stream(step, n)` belong to a launch that never happened; the fresh prompt carries the fresh deadline, and the earlier start
+   line stays in the record — a start without an end is a shape `Timing_of_a_real_arm_reads_back_every_line` already pins, and
+   `metrics.mjs` reads such an attempt as `complete: false`).
+4. **Start line** — `Start(arm, step, n, "fresh"|"resume", id:D, spec.Model, now, budget, deadline, HeadShort, Stream(step, n))`;
+   `probe.Reached(Prepared)`.
 5. **Launch.** `ask = StepLaunch.Ask(new StepLaunchRequest(context.ClaudeExecutable, spec, Experiment.Tools, paths, Fresh|Resume(id),
    context.WorkingDirectory, prompt, StepBudget.Wall(budget, Limits.KillGraceSeconds), context.ParentEnvironment)) with { Output =
    Lines(stream.Line), ErrorOutput = Lines(err.Line) }` over two writers opened on `Stream(step, n)` and `Stderr(step, n)` (disposed when
@@ -1142,8 +1490,11 @@ verb's output — `pids/<arm>.log` once detached, D13 — there is no `run.log`,
    `OperationCanceledException` while `stopping.IsCancellationRequested` → `new AttemptFacts("", false, true)`; any other exception
    propagates (an unexpected infrastructure failure, which E1.S9's `RunAsync` maps to 3).
 6. **Classify and record.** `end = Classify(LastOf(File stream text), Tail(.err, 4000), facts)` — **read back from the files**, the same
-   bytes recovery will read (D6: the stderr tail from the `.err` FILE); append `End(arm, step, n, now, wall, exit, result: LastOf is Ok,
-   limited: end is Limited, HeadShort, end.Word, false)` where `wall` = the launch's elapsed whole seconds (`Unavailable` when not
+   bytes recovery will read (D6: the stderr tail from the `.err` FILE); `missing` = when `end.IsDone`, the fields of `spec.ModelWritten`
+   whose `paths.NotesFile` does not exist, else `[]` (the S0 spec, §8 item 41 — each logged `<step> done without writing <FIELD>
+   (<relative path>)`; recorded, never required: the shell never checked, and a 3-hour step is not undone for a note a model skipped);
+   append `End(arm, step, n, now, wall, exit, result: LastOf is Ok,
+   limited: end is Limited, HeadShort, end.Word, false) { Missing = missing }` where `wall` = the launch's elapsed whole seconds (`Unavailable` when not
    started) and `exit` = the transcript's `ExitCode` (`Unavailable` when the wall killed it, it never started, or the operator stopped
    it — §8 item 5); `probe.Reached(Classified)`. Then by `end` (the table of §4):
    - operator stop → `Stopped` line (exit 5, `"stopped by the operator — run the same command again to resume"`) → `Stopped(5)`.
@@ -1173,7 +1524,9 @@ gateWaitSeconds: 1800, gateTries: 2, minimumRemainingSeconds: 1, killGraceSecond
 PATH: <process PATH>, FAKE_CLI_HOME: Fake.Home, BENCH_DB: x, SUBAGENT_MODEL_GUARD: off, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: 1}`;
 `Transcripts` (a settable fake `ISessionTranscripts`, `true` by default); `Clock` (`BenchClock`, at `2026-10-28T21:32:38Z`, zone
 Europe/Paris); `Waits` (a recording wait delegate
-returning `Task.CompletedTask`, or one that cancels); `Log` (`StringWriter`); `Runner(probe?)`; `Context(stepName, kind)` with
+returning `Task.CompletedTask`, or one that cancels); `Log` (`StringWriter`); `Runner(probe?)`; `Context(scheme, position)` (C12: the
+entry's name and id come from the example's scheme — `Context("C", 0)` is `1-code`, `Context("CR", 1)` is `2-hreview`, `Context("C", 3)` is
+`4-gate`; the rows below say the step they mean) with
 `ClaudeExecutable = FakeCli.Executable`, `GitExecutable = Git` (amended), `WorkingDirectory = CloneFolder`, `Templates` over the shipped `briefs/` and an empty override
 folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], root)`, `ScenarioCount = 1`, `Task = TaskFacts.None`,
 `Problems = ""`; `Replay(name)` = the fixture's path; `Script(JsonObject)` rewrites the fake's script.
@@ -1201,11 +1554,29 @@ folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], ro
 | `An_ambient_GIT_DIR_in_the_parent_environment_does_not_change_which_head_the_before_snapshot_reads` (amended, added) | **Given** a second temp repository `other` with one commit (its HEAD ≠ the clone's); `Parent` gains `GIT_DIR = <other>/.git` and `GIT_WORK_TREE = <other>`; step `2-hreview` (kind HReview), `stdoutFile: result-success.jsonl`; **when** run; **then** `Done(Finished)`; `2-hreview.before` holds the CLONE's HEAD, never `other`'s; `2-hreview.diff` is empty; the call's `EnvironmentNames` still contain `GIT_DIR` (the arm's claude gets its environment untouched, D19 — the harness's git does not) | the plant (the only way to see it from inside the process: `ArmGit` given `context.ParentEnvironment` without `GitEnvironment.Of`): `Expected before to be "<clone sha>", but found "<other sha>".` — and the structural red, which needs no plant: `ArmGit` through `GitCommand` makes `The_module_launches_nothing_by_a_bare_name` fail with `Expected sites to be empty, but found {"ArmGit.cs"}`; with the inherited PROCESS environment a `GIT_DIR` in the bench's `Parent` map is never even seen, which is why the scan is the first guard and this test the second |
 | `The_step_launches_the_git_it_was_handed_by_its_real_path_and_no_other` (amended, added; Linux only — a shell shim; skipped elsewhere with its reason) | **Given** `bench.Git` replaced by a shim at `<root>/bin/git` (`ExperimentRoot.ShimScript`: append `"$0 $*"` and `env \| grep '^GIT_'` to a marker file, then `exec '<RealGit>' "$@"`); `Parent` gains `GIT_DIR=/nowhere`; step `2-hreview`, `stdoutFile: result-success.jsonl`; **when** run; **then** `Done(Finished)`; the marker holds at least three runs (`rev-parse HEAD`, `rev-parse --short HEAD`, `diff <sha> HEAD`) and NO line starting `GIT_`; `.before` holds the clone's HEAD | `Expected the shim to record at least 3 git runs, but found 0.` (the process's own git ran — a launch by name or by another path) |
 | `A_continue_marker_makes_the_runner_resume_the_finished_session_and_remove_a_leftover_done` (amended, added) | **Given** a finished `4-gate` (kind Gate, `DeriveOutputs: false`) from a first run (`.done` present, 1 call); the test writes `4-gate.continue` = `{"after":1,"why":"gate blocked: test"}` and leaves `.done` in place (a gate that died between its two writes); `stdoutByCall: {2: result-success.jsonl}`; **when** a second runner runs the step; **then** `Done(Finished, false, false)`; 2 calls, call 2 `--resume <call 1's id>` with the resume notice; `.done` present with `"attempts":2`; `4-gate.continue` gone; the log holds `continuing its finished session as the gate asked after attempt 1` | `Expected calls to contain 2 item(s), but found 1.` (`Skip` on the leftover `.done`, or `RecoveredDone` without it) |
+| `A_restart_after_the_prompt_and_the_start_line_but_before_the_launch_launches_the_attempt_once_without_an_overwrite` (added — risk consultation 2.7, finding 6; §8 item 45) | **Given** a finished `4-gate` (1 call, `.done` says `"attempts":1`); the test writes `4-gate.continue` = `{"after":1,"why":"gate blocked: test"}` and deletes `.done` (the gate's two writes done); runner 1 with a probe that throws `IOException("killed")` at `Prepared`; **when** runner 1 runs → the exception propagates; `4-gate.a2.prompt.md` exists (a resume notice), timing has a `Start` for attempt 2 and no `End` for it, `4-gate.a2.jsonl` is absent, still 1 call, the marker still there; **and when** runner 2 (the bench's clock advanced 10 minutes; `stdoutByCall: {2: result-success.jsonl}`) runs → **then** `Done(Finished)`; exactly 2 calls, call 2 `--resume <call 1's id>`; `4-gate.a2.prompt.md` is the NEW resume notice — the test kept the first text and asserts the two differ in their deadline (`21:33 UTC` → `21:43 UTC`); timing for `4-gate` reads `Start a1, End a1, Start a2, Start a2, End a2` — two start lines for attempt 2 (the orphan kept, a start without an end) and one end; `.done` says `"attempts":2`; `.continue` gone; the log holds `attempt 2 was prepared by an earlier run and never launched — its prompt is rewritten`; nothing threw | the prompt through `WriteOnce`: `Did not expect any exception, but found System.IO.IOException: The file '…/out/4-gate.a2.prompt.md' already exists.` (`ArtifactCommit.Stage`'s `File.Move(…, overwrite: false)`, `ArtifactCommit.cs:69-80`; the coder records the runtime's text) |
+| `A_step_done_without_writing_a_bound_output_says_so_in_its_log_and_end_line_and_the_arm_goes_on` (added — risk consultation 2.0, finding 2; the S0 spec's criterion 9, §8 item 41) | **Given** `Context("C", 0)` (`1-code`, `CODE_NOTES → notes/code.md`), `stdoutFile: result-success.jsonl` (the fake writes nothing under `notes/`); **when** run → **then** `Done(Finished)`, `.done` written, the log holds `1-code done without writing CODE_NOTES (notes/code.md)`, the last `End` line reads back with `Missing == ["CODE_NOTES"]` and its raw JSON holds `"missing":["CODE_NOTES"]`; **and** in a second bench where the test writes `notes/code.md` before the run → `Missing` empty and no `missing` key in the line, no such log line; **and when**, in the first bench, the test writes `notes/review.json` (`{"verdict":"ready","findings":[]}`) and `3-fix` runs (`Context("C", 2)`; its template names `CODE_NOTES` and `REVIEW`) → **then** `Done(Finished)`, one more call whose prompt holds the `…/notes/code.md` path (the shell's behaviour: the path is handed whether or not the file exists), and the log holds `3-fix: CODE_NOTES (notes/code.md) was not written by step 1-code — the brief names a file that does not exist` and no such line for `REVIEW` | `Expected log to contain "1-code done without writing CODE_NOTES (notes/code.md)", but found …` |
+
+**The restart matrix** (risk consultation 2.7 — the cases the consultant found holding, pinned to the test that proves each; a state
+not in this table is a state the next entry must be shown to handle before it is added):
+
+| on disk when the next entry starts | the entry (E2.S2's table) | proved by |
+|---|---|---|
+| attempt N finished, `.done` N, no marker | `Skip` — nothing launched | `A_rerun_after_done_launches_nothing` |
+| attempt N finished, marker `After = N`, `.done` N still there (the gate died between its two writes) | `Resume`; the runner removes `.done` first | `A_continue_marker_makes_the_runner_resume_the_finished_session_and_remove_a_leftover_done` |
+| marker `After = N`, prompt and start line N+1, no stream N+1 (died before the launch) | `Resume` as attempt N+1 again; the prompt rewritten, one launch, no overwrite | `A_restart_after_the_prompt_and_the_start_line_but_before_the_launch_…` |
+| marker `After = N`, stream N+1 unfinished (an error, a limit, an interruption) | the marker is STALE (`After ≠ LastAttempt`); `Resume` by the ordinary rows | `StepRecoveryTests.A_continue_marker_whose_attempt_has_started_is_stale_and_decides_nothing`; `Ctrl_c_during_the_wait_exits_5_resumable` |
+| marker `After = N`, stream N+1 finished, no `.done` (died between the end line and `.done`) | stale marker; `RecoveredDone(Finished, N+1)` — the marker then deleted after `.done` | `A_last_stream_that_finished_without_a_marker_is_recovered_as_done_never_resumed`; `A_runner_killed_between_the_result_line_and_review_json_…` |
+| `.done` N+1 written, marker `After = N` not yet deleted (died between the two) | stale marker; `Skip` — no launch | `A_continue_marker_whose_attempt_has_started_is_stale_and_decides_nothing`; `GateStepTests.A_finished_gate_removes_its_continue_marker_and_a_stale_one_is_ignored` |
+| a second blocked round: the marker replaced with `After = N+1` | `Resume` of N+2 | `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` (the wait delegate reads `"after"` = the calls so far) |
+| a marker whose session has no transcript | `Fresh` with a new id | `StepRecoveryTests.A_continue_marker_without_a_transcript_starts_the_step_fresh` |
+| `.done` written by the runner, the gate's round not yet recorded or ordered | the gate judges again from `gate.json` on every entry | `GateStepTests.A_gate_killed_after_done_and_before_its_round_was_recorded_or_ordered_is_judged_again_on_restart` |
 
 **Commands.** `--filter-class "*StepRunnerTests"`, `"*ModelArmsArchitectureTests"`; the whole suite.
 
-**Done when.** The nineteen green on this WSL host (none skipped), each seen red; the break-it of `The_session_file_is_written_before_the_launch`
-observed and the plant of the `GIT_DIR` test observed; `The_module_launches_nothing_by_a_bare_name` green with `ArmGit.cs` in the module
+**Done when.** The twenty-one green on this WSL host (none skipped), each seen red; the break-it of `The_session_file_is_written_before_the_launch`
+observed, the plant of the `GIT_DIR` test observed, and the prompt-through-`WriteOnce` break-it observed with the runtime's text;
+`The_module_launches_nothing_by_a_bare_name` green with `ArmGit.cs` in the module
 (`grep -n GitCommand tools/model-arms -r --include=*.cs` finds nothing); `StepRunnerTests` runs in under 60 s (the only real wall is the 2 s
 one); the module doc's *The step runner* has the sequence diagram, the exit table and one paragraph on the step's git (the real path, the
 `GIT_*`-free environment, the chosen cwd — D17 d).
@@ -1343,50 +1714,74 @@ step's loop (E2.S7); a lock against a non-.NET holder (`flock(1)` — parent §9
 `DerivedOutputs.WriteAsync`, `ArmFiles` (`LastAttempt`, `Replace`, `Delete`), `StepOutputs.Reconcile`, `RootPaths.GateLock` (via
 `context.Paths.Root`), `StepBench` (E2.S4).
 
-**`GateStep.RunAsync(context, stopping)`** (`run-arm.sh:144-162`), `waits` = 0. (amended) One addition to `ArmFiles` (E2.S4's file, this
-story's lines): `void Replace(string path, string text)` — stage, flush, rename over, the shape of `ReplaceSession` — because a marker
-from an earlier blocked round may still be there.
+**`GateStep.RunAsync(context, stopping)`** (`run-arm.sh:144-162` — the shell's loop kept whole: lock, step, unlock, read the status,
+blocked → remove `.done`, wait, loop; **rewritten by the S0 spec after risk consultation 2.7, finding 5 (§8 item 44): the judgement runs
+on EVERY entry, a skipped step's included, and the wait count is DURABLE**). `spec` = `context.Experiment.Steps[id]`, `files` =
+`new ArmFiles(context.Paths)`, `statusFile` = `paths.NotesFile` of the binding `spec.OutputPath(spec.Status)` names. The gate reads no
+`.done` and keeps no `waits` of its own, and it no longer calls `runner.Recover` (C8 keeps the method public for the runner's own use
+and its tests; §8 item 27's "one rule" now holds because the gate asks the runner to RUN, and the runner's recovery is the one rule).
+`ArmFiles.Replace` is E2.S4's now (its `WritePrompt` needs it first); this story uses it for the marker.
 
-1. (amended) `runner.Recover(context) is StepEntry.Skip` → reconcile the `.diff` (as E2.S4 step 7: missing and `.before` present → write
-   it) → `Done(…, Skipped: true)`. Not a file check of `.done` by the gate itself: a `.done` with a live `.continue` beside it (a gate that
-   died between its two writes) is NOT skipped — recovery's first row says `Resume`, and only recovery knows. `StepRunner.Recover(StepContext)
-   → StepEntry` is E2.S4's step 1 as a public method (C8 gains it; the runner's `RunAsync` calls the same), so the gate and the runner
-   can never read the files by two rules.
-2. Log `<step>: waiting for the gate lock`; `using (await gateLock.AcquireAsync(new RootPaths(context.Paths.Root).GateLock, stopping))`:
-   log `<step>: gate lock taken`; `outcome = await runner.RunAsync(context with { DeriveOutputs = false }, stopping)`. The lock is
-   released when the step returns, whatever it returned — before any wait (`:151`).
-3. `Stopped` → return it.
-4. `reading = GateStatus.Read(files.ReadText(paths.GateJson))`; `GateStatus.WaitAgain(reading, waits, Limits.GateTries)` → `waits++`;
-   (amended) **record the intent, then remove the marker that contradicts it, in this order:** `files.Replace(paths.Continue(step),
-   ContinueMarkers.Write(new ContinueMarker(files.LastAttempt(step), "gate blocked: " + reading.Why)))` → `probe.Reached(ContinueWritten)`
-   → `files.Delete(paths.Done(step))` → `probe.Reached(DoneRemoved)`; log `<step>: the gate was blocked (<why>) — waiting <s>s, then
-   continuing the session (wait <k>)`; `await wait(GateWaitSeconds, stopping)` (cancellation → a `stopped` line, exit 5 → `Stopped(5)`); loop
-   to 2 — the runner then RESUMES the same session because the marker names its last attempt (E2.S2's first row), not because `.done`
-   is gone: without the marker, D7 reads a finished stream without `.done` as a runner that died after finishing and marks it done
-   again — the defect the consultation found. A death at any point of this step is recoverable: before `ContinueWritten` nothing changed
-   (`.done` stands, the gate re-reads `blocked` on re-entry and writes the marker then); between the two writes, `.done` and the marker
-   both stand and the runner removes `.done` itself; after `DoneRemoved`, the marker alone stands and is honoured.
-5. Otherwise reconcile `.diff` (write it from `.before..HEAD` through `DerivedOutputs`; a missing `.before` → `Stopped(5)`); log `<step>:
-   gate status <status>` — **also when still `blocked` after `gateTries` waits** (the shell's fall-through, `:159-160`; §8 item 10) →
-   `Done(end, false, false)`.
+1. Log `<step>: waiting for the gate lock`; `using (await gateLock.AcquireAsync(new RootPaths(context.Paths.Root).GateLock, stopping))`:
+   log `<step>: gate lock taken`; `outcome = await runner.RunAsync(context with { DeriveOutputs = false }, stopping)` — a done step comes
+   back `Done(…, Skipped: true)` at once from the runner's own recovery; a step with a live marker is resumed by it (E2.S2's first row),
+   and a leftover `.done` beside the marker is removed by it (E2.S4 step 1). The lock is released when the step returns, whatever it
+   returned — before any wait (`:151`).
+2. `Stopped` → return it.
+3. **Judge — on every entry, skipped or not.** `reading = GateStatus.Read(files.ReadText(statusFile))`; `waits =
+   GateStatus.WaitsSoFar(files.ReadTiming(), step)` — the count of this step's `gate-wait` lines, the durable count: a restart reads back
+   exactly what every earlier entry decided; `probe.Reached(StatusRead)`. `GateStatus.WaitAgain(reading, waits, Limits.GateTries)`:
+   - true → **record the round, then the intent, then remove the marker that contradicts it, in this order:**
+     `files.AppendTiming(new TimingLine.GateWait(arm, step, files.LastAttempt(step), waits + 1, reading.Why, now))` →
+     `probe.Reached(WaitRecorded)` → `files.Replace(paths.Continue(step), ContinueMarkers.Write(new ContinueMarker(files.LastAttempt(step),
+     "gate blocked: " + reading.Why)))` → `probe.Reached(ContinueWritten)` → `files.Delete(paths.Done(step))` → `probe.Reached(DoneRemoved)`;
+     log `<step>: the gate was blocked (<why>) — waiting <s>s, then continuing the session (wait <k> of <gateTries>)`; `await
+     wait(GateWaitSeconds, stopping)` (cancellation → a `stopped` line, exit 5 → `Stopped(5)`); **loop to 1** — the in-process round and a
+     restart take one road: the runner RESUMES the same session because the marker names its last attempt (E2.S2's first row), never
+     because `.done` is gone (without the marker, D7 reads a finished stream without `.done` as a runner that died after finishing and
+     marks it done again — the epics 1–3 consultation's finding).
+   - false → 4.
+4. **Finalize.** Reconcile `.diff` (write it from the `.before` of the step `spec.DiffFrom` names to HEAD through `DerivedOutputs`; a
+   missing `.before` → `Stopped(5)`; present → nothing); log `<step>: gate status <status>` — when still `blocked`: `<step>: gate status
+   blocked — after <waits> waits, finished as the shell did` (the shell's fall-through, `:159-160`; §8 item 10) →
+   `Done(outcome.End, outcome.Skipped, outcome.Recovered)`.
+
+**Why a timing line and not a field of the marker.** The marker is deleted when the step is done (E2.S4 step 6), so a count kept in it
+would read zero on the entry after a gate that finished still blocked — and `gateTries` more waits would follow on EVERY restart.
+`timing.jsonl` is append-only, is read by the runner already (`RecoveryFacts.Timing`), survives the step, and an unknown `kind` passes
+`metrics.mjs` (it filters `start`/`end`; `stopped` rides the same way). **Why the round is recorded before the marker:** a try is spent
+when it is DECIDED; a death between the line and the marker costs one try and never an extra round — the other order would let every
+crash in that window buy one round beyond `gateTries`. **What a death at each point leaves, and what the next entry does:** before
+`StatusRead` — nothing changed; the entry judges again from the status file. Between `StatusRead` and `WaitRecorded` — the same. Between
+`WaitRecorded` and `ContinueWritten` — one line more, `.done` standing, no marker: the runner skips, the judgement counts the line (a
+spent try) and decides from the CURRENT status. Between `ContinueWritten` and `DoneRemoved` — the runner removes `.done` and resumes.
+After `DoneRemoved` — the marker alone stands and is honoured. In none of them is a blocked gate skipped for good, and in none does
+`waits` restart from zero. **The old step 1 was the defect** the consultant found: `Recover is Skip → Done(Skipped)` without reading the
+status, so a death after the runner's `.done` and before the marker left a blocked gate done forever, and `waits` lived in a local.
+To revive a gate that finished still blocked: raise `limits.gateTries` in the experiment file (re-read at every entry, D4) and run the
+arm again — the judgement sees `waits < gateTries` and waits once more. Deliberate, and in the log.
 
 **Scenarios** (`GateStepTests`, over `StepBench` with step `4-gate` kind Gate, a recording `IGateLock` that logs `acquire`/`release` in
 order with every launch and wait, and `gate.json` written by the test — the fake cannot write it).
 
 | Test | Given / When / Then | Red (stub: `GateStep.RunAsync` = one `runner.RunAsync`) |
 |---|---|---|
-| `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` | `stdoutFile: result-success.jsonl`; `gate.json` = blocked before the run; `gateTries: 2`; the wait delegate asserts `.done` is ABSENT and `4-gate.continue` PRESENT with `"after"` = the calls so far when called and, on its 2nd call, rewrites `gate.json` to `{"status":"proceed"}` → `Done`; 3 calls (fresh, resume, resume — all one session id); waits `[1800 s, 1800 s]`; `.done` present and `.continue` absent at the end; log ends `gate status proceed` | `Expected calls to contain 3 item(s), but found 1.` — **this is also the red of the consultation's finding against the stories as first written**: with E2.S2's table lacking its first row, the gate removes `.done`, recovery reads the finished stream as `RecoveredDone`, and the model is never called again; the marker is what turns the 1 into 3 |
+| `A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` | `stdoutFile: result-success.jsonl`; `gate.json` = blocked before the run; `gateTries: 2`; the wait delegate asserts `.done` is ABSENT and `4-gate.continue` PRESENT with `"after"` = the calls so far when called and, on its 2nd call, rewrites `gate.json` to `{"status":"proceed"}` → `Done`; 3 calls (fresh, resume, resume — all one session id); waits `[1800 s, 1800 s]`; `.done` present and `.continue` absent at the end; timing holds exactly two `gate-wait` lines (`after` 1 and 2, `wait` 1 and 2, the test's `why`), each written BEFORE the wait delegate was called (the delegate asserts the count); log ends `gate status proceed` | `Expected calls to contain 3 item(s), but found 1.` — **this is also the red of the consultation's finding against the stories as first written**: with E2.S2's table lacking its first row, the gate removes `.done`, recovery reads the finished stream as `RecoveredDone`, and the model is never called again; the marker is what turns the 1 into 3 |
+| `A_gate_killed_after_done_and_before_its_round_was_recorded_or_ordered_is_judged_again_on_restart` (added — risk consultation 2.7, finding 5; `[Theory]` over `(GatePoint.StatusRead, 1)`, `(StatusRead, 2)`, `(WaitRecorded, 1)`, `(WaitRecorded, 2)` — the point and the blocked round it is reached on; `gateTries: 2`) | **Given** `gate.json` = blocked, `stdoutFile: result-success.jsonl`; gate 1 with a probe that throws `IOException("killed")` the n-th time the named point is reached (n = the round); gate 1's wait delegate leaves `gate.json` blocked; **when** gate 1 runs → the exception propagates; the files: `.done` present (the runner's, `attempts` = the round), NO `.continue`, the `gate-wait` lines are round − 1 (`StatusRead`) or round (`WaitRecorded`); **and when** gate 2 (no probe, a new `Runner()`, the same bench) runs with a wait delegate that rewrites `gate.json` to proceed on its first call → **then**, by row: `(StatusRead, 1)` → `Done`, 2 calls (call 2 `--resume`), 1 wait in gate 2, 1 line in all; `(StatusRead, 2)` → `Done`, 3 calls, 1 wait, 2 lines; `(WaitRecorded, 1)` → `Done`, 2 calls, 1 wait, 2 lines (the orphan line counted as a spent try; round 2 is the one ordered); `(WaitRecorded, 2)` → `Done(Skipped: true)`, 2 calls, NO wait in gate 2 (`waits` = 2 = `gateTries`; the delegate never runs and `gate.json` stays blocked), 2 lines, log `gate status blocked — after 2 waits`; every row: `.continue` absent at the end, `.diff` present, `.done`'s `attempts` = the calls | against the old step 1 (`Skip → Done(Skipped)` without reading the status), `(StatusRead, 1)`: `Expected calls to contain 2 item(s), but found 1.` — the consultation's finding; against a count kept in a local, `(WaitRecorded, 2)`: `Expected waits to be empty because the second round was already decided before the death, but found {1800 s}.` |
+| `A_gate_finished_still_blocked_after_its_tries_is_not_revived_by_a_restart_unless_the_tries_are_raised` (added — finding 5) | `gate.json` stays blocked, `gateTries: 2` → gate 1: `Done`, 3 calls, waits `[1800 s, 1800 s]`, 2 `gate-wait` lines, log `gate status blocked — after 2 waits`; gate 2 over the same bench → `Done(Skipped: true)`, still 3 calls, no wait, the same log line, `.diff` present; **and** the bench's experiment rewritten with `gateTries: 3` (the file is re-read at every entry) → gate 3 → one more wait, call 4 `--resume`, 3 lines, log `… after 3 waits` | `Expected calls to contain 3 item(s), but found 5.` (a count that restarts at zero: two more waits and two more calls on gate 2) |
 | `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` (amended, added; `[Theory]` over `GatePoint.ContinueWritten` and `GatePoint.DoneRemoved`) | **Given** `gate.json` = blocked, `stdoutFile: result-success.jsonl`; gate 1 with a `GateProbe` that throws `IOException("killed")` at the given point; **when** gate 1 runs → the exception propagates; the files: `4-gate.continue` = `{"after":1,"why":"gate blocked: …"}`; `.done` present at `ContinueWritten`, absent at `DoneRemoved`; 1 call; **and when** the test writes `gate.json` = proceed and gate 2 (no probe, a new `StepBench.Runner()`, the same bench) runs → **then** `Done`; 2 calls, call 2 `--resume <call 1's id>`; `.done` present with `"attempts":2`; `.continue` absent; the lock events of gate 2 are `acquire, launch, release` | `Expected calls to contain 2 item(s), but found 1.` (gate 2 sees `.done` → `Skip`, or no `.done` and a finished stream → `RecoveredDone`). Break-it: swap step 4's two writes (delete `.done`, then write the marker) and kill at the point between them → the `DoneRemoved`-first case leaves neither file and gate 2 recovers it as done: red with the same message |
 | `A_finished_gate_removes_its_continue_marker_and_a_stale_one_is_ignored` (amended, added) | after the blocked-then-proceed run above, `4-gate.continue` is absent; **and** a finished gate whose test then writes a marker `{"after":1}` while `.done` says `"attempts":2` → a third gate run → `Done(Skipped)`, no new call (the marker is stale: its attempt has started) | `Expected File.Exists(".../4-gate.continue") to be false …` / `Expected calls to contain 2 item(s), but found 3.` |
 | `The_lock_is_released_during_the_wait` | the same; the recording lock's event list is `acquire, launch, release, wait, acquire, launch, release, wait, acquire, launch, release` | `Expected events to be equal to {"acquire", "launch", "release", "wait", …}, but {"launch"} …` |
 | `The_before_snapshot_is_taken_before_the_first_attempt_and_the_diff_only_from_a_finished_step` | call 1 replays the 429 line, call 2 success; the first limit wait (the runner's) commits a file `g.txt` in the clone and asserts `4-gate.diff` does not exist; → `4-gate.before` holds the commit before the run; `4-gate.diff` exists after and contains `g.txt`; an hreview variant (`2-hreview`, kind HReview, through `StepRunner` directly) has `.before` from before call 1 and `.diff` only once done | `Expected File.Exists(".../4-gate.before") to be true …` |
-| `Still_blocked_after_every_wait_finishes_the_step_with_its_status` (added) | `gate.json` stays blocked, `gateTries: 2` → `Done`; 3 calls; 2 waits; `.done` present; `.diff` written; log ends `gate status blocked` | `Expected outcome to be Done …` / `Expected calls … 3` |
-| `A_gate_step_that_is_done_regenerates_a_missing_diff_and_launches_nothing` (added) | a finished gate; `4-gate.diff` deleted → second run: `Done(Skipped)`, no new call, `.diff` back | `Expected File.Exists(".../4-gate.diff") to be true …` |
+| `Still_blocked_after_every_wait_finishes_the_step_with_its_status` (added) | `gate.json` stays blocked, `gateTries: 2` → `Done`; 3 calls; 2 waits; 2 `gate-wait` lines; `.done` present; `.diff` written; log ends `gate status blocked — after 2 waits, finished as the shell did` | `Expected outcome to be Done …` / `Expected calls … 3` |
+| `A_gate_step_that_is_done_regenerates_a_missing_diff_and_launches_nothing` (added) | a finished gate (status proceed); `4-gate.diff` deleted → second run: the judgement runs (proceed, no wait), finalization regenerates: `Done(Skipped)`, no new call, `.diff` back | `Expected File.Exists(".../4-gate.diff") to be true …` |
 | `A_blocked_round_leaves_no_diff_behind` (added) | gate blocked once then proceed; the wait delegate asserts `4-gate.diff` is ABSENT at each wait | `Expected File.Exists(".../4-gate.diff") to be false …` (a runner that derived the gate's diff inside the loop) |
 
 **Commands.** `--filter-class "*GateStepTests"`, `"*StepRunnerTests"`; the whole suite.
 
-**Done when.** The nine green (the theory's two cases counted once), each seen red; the swap break-it observed with its message.
+**Done when.** The eleven green (the two theories' cases counted once each), each seen red; the swap break-it observed with its message;
+the old-step-1 break-it (judge only when the runner did not skip) observed red on `(StatusRead, 1)`, and the local-count break-it
+(`waits` a local instead of `WaitsSoFar`) observed red on `(WaitRecorded, 2)` and on the not-revived test — their messages in the summary.
 
 **Out of bounds.** The real `FileGateLock` (E2.S6 proves it; the gate step's tests record the order); `gate.json`'s schema beyond `status`
 and `why`.
@@ -1401,7 +1796,10 @@ and `why`.
   nothing about C, CR or CHH by name; a `tasks` block is refused until E4 (`A_scheme_with_a_tasks_block_is_refused_until_the_task_pipeline_lands`).
   Added scenarios (parent §7): `Scheme_CHH_runs_two_read_only_reviews_to_two_verdict_files_a_fix_that_reads_both_and_a_diff_from_the_first_snapshot`
   (the fake's call log shows `hA-trace` and `hB-tests` briefs, `notes/hA.json` and `notes/hB.json` written from each review's last result,
-  `4-hfix`'s prompt carrying both paths, `out/4-hfix.diff` from `out/2-hA.before`); `The_opus_review_and_the_haiku_reviews_are_launched_without_the_agent_tool_fresh_and_resumed`;
+  `4-hfix`'s prompt carrying both paths, `out/4-hfix.diff` from `out/2-hA.before`; **and the two verdicts are two CONTENTS** — the S0
+  spec's criterion 10, §8 item 42: `stdoutByCall: {2: <a copy of result-success.jsonl the test writes whose result text ends
+  {"verdict":"ready","findings":[{"id":"A"}]}>, 3: <the same with "B">}`, so `notes/hA.json` is `{"verdict":"ready","findings":[{"id":"A"}]}`
+  and `notes/hB.json` is the `"B"` one — each its own call's, never one verdict read twice); `The_opus_review_and_the_haiku_reviews_are_launched_without_the_agent_tool_fresh_and_resumed`;
   `A_sequential_arm_leaves_the_files_the_example_binds_and_the_consumers_read_them` — M1: `research/local-model-coding/harness/metrics.mjs`
   run as `node` + script (by its resolved path, D17 d) over the fake arm's root through `PinnedConsumer` (below), exit 0 and its output
   naming the arm's steps (the sequential half of the parent's D28; E6 runs every reader over every scheme); and (E2's plan round, §8
@@ -1556,6 +1954,21 @@ literals re-spelled `+01:00` (E2.S2, E2.S4); `FakeCliByCallTests.A_launch_with_a
 `RunArmSchemeTests.An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme` (a theory over
 C, CR and CHH, through `PinnedConsumer`, E2.S8).
 
+The S0 spec's additions (Fable, 2026-10-30 at `c8213f3`; §8 items 37–46): `StepContractTests` grows to 16 (`Two_fields_never_bind_one_file_among_the_producers_a_scheme_places`,
+`The_verdict_is_the_runners_output_and_every_other_binding_is_the_models`, `A_taskCode_step_carries_no_bindings_the_pipeline_names_them_per_task`,
+`Every_refusal_of_the_step_contract_starts_with_its_dotted_path`), `BriefFieldsTests` is 4 as named in E2.S0, `StepLaunchTests` gains
+`No_step_starts_a_subagent_unless_its_spec_says_so` and renames its resume test to `A_resume_is_never_wider_than_the_launch_it_continues`,
+`ArmPathsTests` gains `A_binding_with_a_climbing_segment_is_a_programming_error`, `ExampleExperimentTests` gains `The_example_binds_every_file_the_shell_wrote`,
+the E1 suites are amended as E2.S0's table lists (three renames); `TimingLineTests` gains `A_gate_wait_line_round_trips_and_the_budget_ignores_it`
+(E2.S2); `StepRunnerTests` gains `A_restart_after_the_prompt_and_the_start_line_but_before_the_launch_launches_the_attempt_once_without_an_overwrite`
+and `A_step_done_without_writing_a_bound_output_says_so_in_its_log_and_end_line_and_the_arm_goes_on` (E2.S4); `GateStepTests` gains
+`A_gate_killed_after_done_and_before_its_round_was_recorded_or_ordered_is_judged_again_on_restart` (a theory of four) and
+`A_gate_finished_still_blocked_after_its_tries_is_not_revived_by_a_restart_unless_the_tries_are_raised` (E2.S7); `GateStatusTests` asserts
+`WaitsSoFar` in `A_blocked_status_and_its_reason_are_read` (E2.S6: over a timing of two `gate-wait` lines of `4-gate` and one of `6-gate`,
+`WaitsSoFar(timing, "4-gate") == 2` and `WaitsSoFar(timing, "1-code") == 0`); the CHH scenario of `RunArmSchemeTests` asserts two distinct
+verdict contents (E2.S8). Fixtures: `experiment-v1-431e759.json` (E2.S0). Break-its: the ten of E2.S0's brief, the prompt-through-`WriteOnce`
+plant (E2.S4), the old-step-1 and the local-count plants (E2.S7).
+
 What E2's suite does not prove: that claude 2.1.x honours `--resume` after a 429 the way the shell observed (the pilot, parent build order
 step 6); that `CLAUDE_CONFIG_DIR` relocates the projects folder (read, not measured — part 6 ran without it); a lock against `flock(1)`;
 the coai server reading `COAI_CREDS_KEY` from `mcp-coai.json`'s `env` (the product's code says it layers the environment over the file;
@@ -1706,13 +2119,82 @@ what it changes is the re-review's baseline for E2 (the parent's `## Plan change
     `SessionTranscripts.PathOf` spells; `MakeArmAsync` sets it. A fix that makes the scenarios as written possible, not a change of what
     they assert.
 
+Found by the E2.S0 spec (Fable, 2026-10-30 at `c8213f3`, every file of E2.S0's Files line re-opened, the eleven templates' sums
+re-computed) and by the two ordered coai RISK consultations the plan round's reply asked for — story 2.0 (the step contract and the
+delegation policy) and story 2.7 (the gate's continue marker), both closed `solved`, each finding verified against the E1 code before
+it was taken. **These are the stories document written as the epic starts, not epoch-2 entries** (item 46):
+
+37. **Criterion 3 said "no `REVIEW` at C's `2-review`"; the gate's own template names its own `GATE_JSON`** (`gate.template.md`, and
+    `hfix.template.md` names its own `NOTES` = `HFIX_NOTES`), and the shell's fill map handed every path to every template
+    (`run-arm.sh:40-50`). **Settled:** a step's own outputs ARE fields (`SchemePositions.Visible` includes them); the property worth
+    asserting is "none of a LATER step's outputs", and the criterion and the `BriefFieldsTests` row say so.
+38. **C12's `SchemePositions.Before` returned `StepSpec`s and `BriefFields.For` took a scheme position, which cannot resolve ids without the
+    map.** **Settled:** `SchemePositions.Outputs` (every placed binding with its producer and position — what the destination rule and the
+    runner's consumer log need) and `Visible` (what a brief may use); `BriefFields.For(spec, visible, tasks, paths, facts)` takes the list,
+    so the rehearsal and the runner fill by one rule; `TaskLimits.Shell` carries the shell's step names so an absent `tasks` block means
+    what the shell meant, and the ids are checked whenever a scheme has a `tasks` entry.
+39. **A `taskCode` step with bindings, and a `gate` kind in another mode, were not refused.** The pipeline names its notes, snapshot and
+    diff per task — paths no static binding can spell; the mode decides the MCP config and the kind the lock. **Settled:** six refusals
+    on a `taskCode` step's bindings, two on the mode pairing (E2.S0's table).
+40. **(risk 2.0, finding 1) Two DIFFERENT fields could bind ONE file** — criterion 1 refused duplicate field NAMES only;
+    `hB.outputs.HB_JSON = notes/hA.json` beside `hA`'s would have made CHH's fixer read one verdict twice. **Settled:** among the producers
+    a scheme places (its steps; a `tasks` entry's split, split-fix and the block's own `outputs`), one normalized path (`OrdinalIgnoreCase`)
+    has one producer, refused at the READ naming the scheme, both producers, both fields and the path; two fields of one step naming one
+    path refused at the step; per scheme, not per map (two steps no scheme places together may write one path); `notes` naming an earlier
+    output is appending, not producing, and stays legal (gate finding 4).
+41. **(risk 2.0, finding 2) Bound is not produced.** A step that finished without writing a bound output let a later consumer be briefed as
+    if the file existed, and nothing said so. **Settled, as a record and not a stop:** `StepSpec.ModelWritten` separates the runner's
+    derived output (the `verdict` — D21, required by construction) from the model's (everything else, the `tasks` block's `CODE_NOTES`
+    included — the path the shell handed SRS's reviewers though no SRS step wrote it, kept as an optional, shell-compatible binding);
+    the runner records a done attempt's absent model-written outputs in the `End` line's `missing` and one log line each (E2.S4 step 6),
+    and logs, before a consumer's launch, each earlier output whose file does not exist (step 3); the arm goes on, as the shell's did,
+    and D16's table gains no row. Rejected: a stop (exit 5) — it would end a three-hour arm for a note a model skipped, a change of the
+    experiment's semantics the owner did not ask for; it is one line of step 7 away and is said to be, in E2.S0's *Out of bounds*.
+42. **(risk 2.0, finding 3) CHH's two verdicts and the fixer's two fields are now asserted as two paths AND two contents**: `BriefFieldsTests`
+    (the paths, from two `review` steps with two `verdict` bindings), the rehearsal scenario (a scheme placing `4-hfix` before `2-hA` and
+    `3-hB` is refused naming the position and both fields), and E2.S8's CHH scenario (two replays, two distinct `notes/hA.json` and
+    `notes/hB.json`).
+43. **(risk 2.0, finding 4) The delegation policy was MEASURED on claude 2.1.310 before the spec was written** (E2.S0 *Evidence*): the
+    default deny holds on a fresh launch and on a `--resume` — the resumed session's `init` carries no `Agent`, and a call the model still
+    emitted was refused by the CLI (`No such tool available: Agent. Agent is disabled for this session, in subagents as well as here.`).
+    **The anomaly:** the resumed haiku attempt's `modelUsage` carried `claude-sonnet-5-5` with 5 output tokens and $0.0758 although no
+    subagent ran — an internal CLI call on resume. **Settled:** a delegation check reads tool events and subagent messages, never
+    `modelUsage` alone; `modelUsage`'s cost is reported beside, never inferred from; M3 re-runs A–D on the measurement CLI version and
+    records the version — a caveat the analysis plan (`todo/PLAN_model_arms_analysis.md`, E6.S3) carries from its first line.
+44. **(risk 2.7, finding 5) A blocked gate became permanently skipped, and `waits` was not durable.** E2.S7 step 1 answered `Recover is
+    Skip → Done(Skipped)` without reading `gate.json`, so a death after the runner's `.done` and before the marker left a blocked gate done
+    forever; `waits` lived in a local, so every restart had `gateTries` fresh waits. **Settled:** the gate always runs the runner under
+    the lock (a done step skips by its own recovery) and JUDGES on every entry; each blocked round is a `gate-wait` timing line
+    (`TimingLine.GateWait`; `GateStatus.WaitsSoFar` counts them) written BEFORE the marker — a try is spent when decided; a gate that
+    finished still blocked is not revived unless `gateTries` is raised in the file; the probe points `StatusRead` and `WaitRecorded`
+    make the two new windows theories. Why not a field of the marker: the runner deletes the marker when the step is done. Why not a
+    new file: D5's layout is unchanged — `timing.jsonl` is append-only, already read by recovery, and `metrics.mjs` ignores an unknown kind.
+45. **(risk 2.7, finding 6) A restart between the prompt and the stream repeated `WriteOnce(prompt)`, which `ArtifactCommit.Stage`
+    refuses.** `LastAttempt` counts streams, so the restart picked the same attempt number. **Settled:** the attempt number is reserved by
+    the STREAM; a prompt (and a start line) of an attempt whose stream does not exist belong to a launch that never happened and are
+    superseded — `ArmFiles.WritePrompt` replaces the prompt (refusing only when the stream exists, a caller's bug), the runner logs the
+    rewrite, the orphan start line stays (a start without an end is a pinned shape; `metrics.mjs` reads it as `complete: false`), and
+    `StepPoint.Prepared` makes the window a scenario. The restart matrix in E2.S4 pins the consultant's other cases to the tests that
+    prove them. Rejected: reserving the number by the prompt (`NextAttempt` counting prompts) — recovery, `metrics.mjs` and the shell's
+    `.done` all count streams, and a second counter is a second rule.
+46. **The ledger.** The cornerstone spec is the stories document written when the epic starts (`common.plan-change-control` § *What
+    counts as a change*: not a change); the two risk consultations were ordered by the plan round's reply (`common.coai-consultant`,
+    trigger 7) before E2's first code round, on the same approval path as the plan round whose findings the parent already records as
+    the re-review's baseline (the parent's note under epoch 2). Their findings change this document's contracts (C6, C8, C9) and
+    stories, not the parent's decisions: D5's layout, D7, D10, D21 and D25 hold as written; the gate-wait line, the model-written class
+    and the destination rule are refinements the parent's D25 and D6 leave open. So: the baseline of E2, not epoch-2 entries — one
+    indented note under the parent's epoch 2 says so. In doubt, it is a change — and the doubt was checked against each decision above.
+
 ## 9. Growth
 
 Nothing here adds a table, a database or a process that outlives its verb. What E2 writes is the parent's §4.11 rows (streams, `.err`,
 prompts, timing, markers — kept with the experiment root) plus: `<root>/.gate.lock` — one empty file, created once, never deleted (deleting
 a lock file another process holds open would split the lock); `out/<step>.session` — 37 bytes per step, rewritten only when a lost
 transcript forces a new id; (amended) `out/<step>.continue` — under 100 bytes, written by the gate step per blocked round, replaced in
-place, removed when the step is done, and ignored by its attempt number when a crash leaves it. Tests: each `StepBench`/`ExperimentRoot`
+place, removed when the step is done, and ignored by its attempt number when a crash leaves it; (the S0 spec) `gate-wait` lines in
+`out/timing.jsonl` — at most `gateTries` per gate step per arm (8 in the example), ≈ 150 bytes each, kept with the root like every
+timing line; a second `Start` line per attempt only after a death between the prompt and the launch (one per restart in that window,
+never more). Tests: each `StepBench`/`ExperimentRoot`
 deletes its temp folder on dispose; each `FakeCli` deletes its home.
 A run interrupted at any point leaves only files the next entry reads (§4's table) — there is no in-flight state without its own
 recovery: a `.session` without a stream starts fresh or resumes, a stream without an end line is classified from disk, an end line without
@@ -1732,6 +2214,13 @@ recovery: a `.session` without a stream starts fresh or resumes, a stream withou
 - [ ] (E2's plan round) `StepBudget.Deadline` spelled `HH:mm UTC (HH:mm ±hh:mm)` in every consumer and test (§8 item 32);
       `McpConfigTests` state a request and M2's key check is named in E3 (§8 item 34);
       `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` green with the example still accepted (§8 item 35).
+- [ ] (the S0 spec, 2026-10-30) The ten criteria of E2.S0 green, each seen red, the ten break-its observed; `The_example_binds_every_file_the_shell_wrote`
+      green with the eleven sums asserted; the module doc's *The delegation policy (E2.S0)* carries the measurement table with the CLI
+      version; `Two_fields_never_bind_one_file_among_the_producers_a_scheme_places` green; the restart matrix of E2.S4 has a green test per
+      row (`A_restart_after_the_prompt_and_the_start_line_…` included) and `A_step_done_without_writing_a_bound_output_…` green;
+      `GateStepTests.A_gate_killed_after_done_and_before_its_round_was_recorded_or_ordered_is_judged_again_on_restart` (four cases) and
+      `A_gate_finished_still_blocked_after_its_tries_is_not_revived_by_a_restart_unless_the_tries_are_raised` green; M3's checklist names
+      the A–D re-run of the delegation measurement on the measurement CLI version.
 - [ ] (amended) `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` and
       `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` green; `The_module_launches_nothing_by_a_bare_name`
       green with `ArmGit.cs` present and `GitCommand` absent from `tools/model-arms`; every launch of `RunArmSchemeTests` carries
