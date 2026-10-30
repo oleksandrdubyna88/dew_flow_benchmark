@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import net from 'node:net';
 import { test } from 'node:test';
 import { brokerView, forwardHeaders, parseSseUsage } from '../lib/broker.mjs';
 import { chunksOf, sleep, sseAnswer, sseBody, startBroker, stubUpstream, viaSocket } from './broker-stub.mjs';
@@ -266,6 +268,26 @@ test('An_upstream_that_cannot_be_dialled_answers_502_and_charges_nothing_because
   }
 });
 
+test('A_request_the_upstream_reset_after_part_of_it_was_written_is_charged_the_reservation_not_waived', async () => {
+  // a raw upstream that takes the first bytes of a 3 MB body and resets: the connection was made and request bytes left, but the request never finished
+  const raw = net.createServer(sock => { sock.once('data', () => sock.destroy()); sock.on('error', () => {}); });
+  await new Promise(r => raw.listen(0, '127.0.0.1', r));
+  const b = await startBroker({ stub: { upstream: { host: '127.0.0.1', port: raw.address().port, tls: false } }, capUsd: 10 });
+  try {
+    const body = JSON.stringify({ model: 'claude-sonnet-5-5', pad: 'x'.repeat(3 * 1024 * 1024) });
+    assert.equal((await viaSocket(b.socketPath, { body })).status, 502);
+    const line = b.lines.find(l => l.event === 'upstream-error');
+    assert.equal(line.requestSent, false, 'the request was not fully handed over');
+    const settled = b.lines.find(l => l.event === 'settled');
+    assert.equal(settled.chargedUsd, 0.05, 'part of it may have reached the API: the reservation stands');
+    assert.notEqual(settled.priced.why, 'no byte was sent upstream');
+    assert.equal(b.broker.summary().spentUsd, 0.05);
+  } finally {
+    await b.close();
+    await new Promise(r => { raw.close(r); });
+  }
+});
+
 test('Four_upstream_529s_do_not_use_the_cap_and_the_fifth_request_is_still_forwarded', async () => {
   const overloaded = { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } };
   const stub = await stubUpstream((_q, res) => json(res, 529, overloaded));
@@ -401,23 +423,26 @@ test('Close_destroys_an_in_flight_upstream_request_and_a_clean_seal_is_not_a_low
   }
 });
 
-test('Drain_that_wakes_early_leaves_no_timer_behind_so_the_ceiling_never_holds_the_event_loop', async () => {
-  const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 4), 80));
-  const b = await startBroker({ stub });
-  const timers = () => process.getActiveResourcesInfo().filter(t => t === 'Timeout').length;
-  try {
-    const before = timers();
+test('Drain_that_wakes_early_leaves_no_timer_behind_so_the_ceiling_never_holds_the_event_loop', () => {
+  // in a process of its own: a timer count in this one would also count the timers other tests leave. The child drains with a 120 s ceiling, wakes early,
+  // closes everything, and must EXIT by itself: a ceiling timer left running would keep it alive for the full 120 s.
+  const stubUrl = new URL('./broker-stub.mjs', import.meta.url).href;
+  const script = `
+    import { chunksOf, sleep, sseAnswer, sseBody, startBroker, stubUpstream, viaSocket } from ${JSON.stringify(stubUrl)};
+    const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 4), 80));
+    const b = await startBroker({ stub });
     viaSocket(b.socketPath, { abortAfterFirstChunk: true }).catch(() => {});
     await sleep(40);
-    const started = Date.now();
-    const drained = await b.broker.drain(120_000);
-    assert.equal(drained.drained, true);
-    assert.ok(Date.now() - started < 3000, 'it woke when the request settled, not at the ceiling');
-    assert.equal(timers(), before, 'the 120 s ceiling timer was cleared when it woke early');
-  } finally {
+    const d = await b.broker.drain(120_000);
     await b.close();
     await stub.close();
-  }
+    process.stdout.write(JSON.stringify({ drained: d.drained }));
+  `;
+  const started = Date.now();
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).drained, true);
+  assert.ok(Date.now() - started < 15_000, `the child exited by itself in ${Date.now() - started} ms, not after the 120 s ceiling`);
 });
 
 test('A_response_from_a_model_the_table_does_not_know_is_charged_at_the_dearest_rates_and_the_cell_record_says_so', async () => {

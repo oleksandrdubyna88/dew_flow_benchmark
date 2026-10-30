@@ -214,13 +214,32 @@ function relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, n
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
   let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
   up.on('finish', () => { sent = true; });
+  const wire = watchWire(up, upstream);
   up.on('error', e => {
-    ledger.emit({ seq: entry.seq, event: 'upstream-error', code: e.code ?? e.message, requestSent: sent });
-    settleOnError(ledger, entry, progress, { error: e.code ?? e.message }, sent ? null : 'no byte was sent upstream');
+    const proof = wire.noByteSent();
+    ledger.emit({ seq: entry.seq, event: 'upstream-error', code: e.code ?? e.message, requestSent: sent, noByteSent: proof });
+    settleOnError(ledger, entry, progress, { error: e.code ?? e.message }, proof ? 'no byte was sent upstream' : null);
     if (!res.headersSent) res.writeHead(502, { connection: 'close' });
     res.end();
   });
   up.end(body); // the exact bytes that were read and checked
+}
+
+/**
+ * Watch the upstream socket of one request: `noByteSent()` is true only when it is PROVEN that no byte of the request reached the upstream: no socket ever
+ * existed; or the socket was new and never finished connecting (Node holds a write until the connection is made, over TLS until the handshake is done); or it
+ * is a plain socket that has written nothing since the request took it. Anything else (a reset after part of the request was written, a handshake that
+ * finished, a reused connection over TLS) may have been read by the API in part, so it is charged at the reservation, never waived.
+ */
+function watchWire(up, upstream) {
+  const w = { socket: null, fresh: false, established: false, base: 0 };
+  up.on('socket', s => {
+    w.socket = s;
+    w.base = s.bytesWritten;
+    w.fresh = s.connecting === true || s.pending === true;
+    if (w.fresh) s.once(upstream.tls ? 'secureConnect' : 'connect', () => { w.established = true; });
+  });
+  return { noByteSent: () => w.socket === null || (w.fresh && !w.established) || (!upstream.tls && w.socket.bytesWritten === w.base) };
 }
 
 /**
