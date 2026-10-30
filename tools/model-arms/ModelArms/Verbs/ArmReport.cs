@@ -56,7 +56,7 @@ internal static class ArmReport
         };
 
     private static string Pid(string text, Func<string, string> scrub) =>
-        text.Length > 0 && text.All(char.IsAsciiDigit) && int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid) && pid > 0
+        RunnerPid.Parse(text) is { } pid
             ? $"pid {pid} " + (WorkerLiveness.ProcessIsAlive(pid) ? "alive" : "gone")
             : $"unreadable — the pid file holds '{ExecutableRule.Printable(ExecutableRule.Cut(scrub(text), 20))}', not a pid";
 

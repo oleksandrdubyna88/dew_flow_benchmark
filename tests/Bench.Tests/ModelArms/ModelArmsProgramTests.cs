@@ -50,7 +50,7 @@ public sealed partial class ModelArmsProgramTests
         var (code, _, error) = await RunAsync(["chain", "--experiment", "/x"]);
 
         code.Should().Be(4);
-        error.Should().Contain("E4.S5").And.Contain("chain");
+        error.Should().Contain("E5.S4").And.Contain("chain");
     }
 
     [Fact]

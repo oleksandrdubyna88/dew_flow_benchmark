@@ -39,24 +39,7 @@ internal static class RunArmAdmission
             ? Outcome<IGateLock>.Success(given)
             : FileGateLock.Create(TimeProvider.System, LockPoll).Match(created => Outcome<IGateLock>.Success(created), Outcome<IGateLock>.Failure);
 
-    private static Passage<ArmChoice> Choose(ExperimentInput input)
-    {
-        var arm = input.Verb.Positionals[0];
-        return ArmNames.SchemeOf(arm).Match(name => Known(input, arm, name), reason => Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {reason}"));
-    }
-
-    private static Passage<ArmChoice> Known(ExperimentInput input, string arm, string name)
-    {
-        var schemes = input.Experiment.Schemes;
-        if (schemes.FirstOrDefault(scheme => scheme.Name == name) is not { } scheme)
-        {
-            return Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {arm} belongs to scheme {name}, which is not among the schemes ({string.Join(", ", schemes.Select(each => each.Name))})");
-        }
-
-        return scheme.Entries.Any(entry => entry is SchemeEntry.Tasks)
-            ? Passage<ArmChoice>.Stop(ExitCodes.Configuration, $"{Name}: {arm}'s scheme runs the task pipeline — not built yet, story E4.S3 of todo/PLAN_model_arms.md")
-            : new Passage<ArmChoice>.Through(new ArmChoice(arm, scheme));
-    }
+    private static Passage<ArmChoice> Choose(ExperimentInput input) => ArmChoices.Of(input, Verb, allowTasks: false);
 
     private static Passage<ArmPlaced> Place(ExperimentInput input, ArmChoice choice)
     {
