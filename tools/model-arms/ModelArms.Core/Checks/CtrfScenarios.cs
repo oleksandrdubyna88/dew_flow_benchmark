@@ -71,15 +71,32 @@ public static class CtrfScenarios
         var read = new List<CtrfTest>(tests.GetArrayLength());
         foreach (var test in tests.EnumerateArray())
         {
-            if (Text(test, "name") is not { } name || Text(test, "status") is not { } status)
+            var one = One(test, read.Count);
+            if (one is Outcome<CtrfTest>.Fail refused)
             {
-                return Fail($"results.tests[{read.Count}] has no string \"name\" and \"status\"");
+                return Fail(refused.Reason);
             }
 
-            read.Add(new CtrfTest(name, status));
+            read.Add(((Outcome<CtrfTest>.Ok)one).Value);
         }
 
         return Outcome<IReadOnlyList<CtrfTest>>.Success(read);
+    }
+
+    /// <summary>One test of the report, or why it is not one. The report is the target's own output, so a name or status may be valid JSON that is not text: an escaped lone surrogate (<c>"\ud800"</c>), which <c>GetString</c> refuses by throwing — a refusal
+    /// with its reason here, like every other bad report, and never an exception.</summary>
+    private static Outcome<CtrfTest> One(JsonElement test, int index)
+    {
+        try
+        {
+            return Text(test, "name") is { } name && Text(test, "status") is { } status
+                ? Outcome<CtrfTest>.Success(new CtrfTest(name, status))
+                : Outcome<CtrfTest>.Failure($"results.tests[{index}] has no string \"name\" and \"status\"");
+        }
+        catch (InvalidOperationException)
+        {
+            return Outcome<CtrfTest>.Failure($"results.tests[{index}] has a name or status that is not well-formed text (a lone surrogate)");
+        }
     }
 
     private static string? Text(JsonElement test, string member) =>

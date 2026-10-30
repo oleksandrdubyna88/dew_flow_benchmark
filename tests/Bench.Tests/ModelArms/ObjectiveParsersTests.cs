@@ -121,10 +121,11 @@ public sealed class ObjectiveParsersTests
     {
         IReadOnlyList<CtrfTest> tests =
         [
-            new("Ns.FooBar", "passed"), new("Ns.Foo(x: 1)", "passed"), new("Ns.AxB", "passed"), new("Ns.Given a name (x)", "passed"), new("Ns.Hit+Run", "failed"),
+            new("Ns.FooBar", "failed"), new("Ns.Foo(x: 1)", "passed"), new("Ns.AxB", "passed"), new("Ns.Given a name (x)", "passed"), new("Ns.Hit+Run", "failed"),
         ];
 
-        PassingOf("Foo", tests: tests).Should().Be("passed", "`Ns.Foo(x: 1)` holds Foo as a whole word");
+        PassingOf("Foo", tests: tests).Should().Be("passed", "`Ns.Foo(x: 1)` holds Foo as a whole word and `Ns.FooBar` (failed) does not: a match of it would read passed+failed");
+        PassingOf("Bar", tests: tests).Should().Be("absent", "Bar ends `Ns.FooBar` but does not start a word there: the leading boundary");
         PassingOf("FooBa", tests: tests).Should().Be("absent", "FooBa is not a whole word of FooBar");
         PassingOf("A.B", tests: tests).Should().Be("absent", "the dot is a dot, not any character: AxB is not A.B");
         PassingOf("Given a name", tests: tests).Should().Be("passed", "a space in a name is matched as a space");
@@ -141,6 +142,8 @@ public sealed class ObjectiveParsersTests
             ("""{"results":{}}""", "tests"),
             ("""{"results":{"tests":[{"name":"A"}]}}""", "status"),
             ("""{"results":{"tests":[{"name":"A","status":"passed"}""", "valid JSON"),
+            ("""{"results":{"tests":[{"name":"A","status":"passed"},{"name":"\ud800","status":"passed"}]}}""", "results.tests[1] has a name or status that is not well-formed text (a lone surrogate)"),
+            ("""{"results":{"tests":[{"name":"A","status":"\udc00"}]}}""", "lone surrogate"),
         };
 
         foreach (var (text, why) in refused)
@@ -152,8 +155,11 @@ public sealed class ObjectiveParsersTests
 
         CtrfScenarios.Tests("""{"results":{"tests":[]}}""").Ok().Should().BeEmpty("a report of no tests is a report");
 
-        var report = ObjectiveReport.Write(ObjectiveFactsKit.Facts() with { Ctrf = Outcome<string>.Success("[]"), Scenarios = [new Scenario("S1", "cs", "A")], Present = new Dictionary<string, bool> { ["S1"] = true } });
-        ObjectiveFactsKit.Value(ObjectiveFactsKit.Parse(report), "scenarios", "S1", "passing").Should().Be("absent", "a report that is not a CTRF is read as no tests");
+        foreach (var notCtrf in new[] { "[]", refused[^2].Item1 })
+        {
+            var report = ObjectiveReport.Write(ObjectiveFactsKit.Facts() with { Ctrf = Outcome<string>.Success(notCtrf), Scenarios = [new Scenario("S1", "cs", "A")], Present = new Dictionary<string, bool> { ["S1"] = true } });
+            ObjectiveFactsKit.Value(ObjectiveFactsKit.Parse(report), "scenarios", "S1", "passing").Should().Be("absent", "a report that is not a CTRF is read as no tests");
+        }
     }
 
     [Fact]
