@@ -7,6 +7,11 @@ namespace ModelArms.Core.Launch;
 public sealed record GateReading(string Status, string Why)
 {
     public bool IsBlocked => Status == "blocked";
+
+    /// <summary>STUB (red first).</summary>
+    public string Unjudgeable { get; init; } = string.Empty;
+
+    public bool IsUnjudgeable => Unjudgeable.Length > 0;
 }
 
 /// <summary>What the gate step reads of its own step's files, as decisions (plan C9, <c>run-arm.sh:153-156</c>). The file is a model's answer, so it is read as a stranger's input: whatever it holds reads as a status or as

@@ -166,6 +166,65 @@ public sealed class GateStepInputTests
         }
     }
 
+    private static byte[] U8(string text) => System.Text.Encoding.UTF8.GetBytes(text);
+
+    private const string BlockedJson = """{"status":"blocked","why":"x"}""";
+
+    public static TheoryData<string, byte[]> Unjudgeable => new()
+    {
+        { "a Markdown fence around the object", U8("```json\n" + BlockedJson + "\n```\n") },
+        { "text after the object", U8(BlockedJson + "\nand that is all") },
+        { "two objects", U8(BlockedJson + BlockedJson) },
+        { "a // comment", U8("// the gate\n" + BlockedJson) },
+        { "a byte order mark twice", [.. Bom(""), .. Bom(BlockedJson)] },
+        { "white space before the byte order mark", [(byte)' ', .. Bom(BlockedJson)] },
+        { "an over-long encoded quote", [0x7B, 0xC0, 0xA2, .. U8("status" + "\":\"blocked\"}")] },
+        { "an invalid byte inside the status word", [.. U8("{\"status\":\"blo"), 0xFF, .. U8("ked\"}")] },
+        { "the wrong case, Blocked", U8("""{"status":"Blocked","why":"x"}""") },
+        { "an unknown word", U8("""{"status":"stuck","why":"x"}""") },
+        { "an empty file", [] },
+    };
+
+    [Theory]
+    [MemberData(nameof(Unjudgeable))]
+    public async Task A_status_that_is_there_and_cannot_be_judged_stops_resumable_with_the_reason_and_the_start_of_the_text_and_records_no_round(string what, byte[] bytes)
+    {
+        var (outcome, bench) = await RunWithAsync(bytes);
+        using (bench)
+        {
+            var stopped = outcome.IsStopped(5);
+            stopped.Why.Should().Contain("the gate's status cannot be judged", what).And.Contain("it begins:").And.Contain("removing it finishes the gate as missing");
+            bench.GateWaits().Should().BeEmpty($"{what}: no round was decided");
+            bench.Waits.Recorded.Should().BeEmpty();
+            File.Exists(bench.Paths.Continue(GateName)).Should().BeFalse();
+        }
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"why":"nothing to say"}""")]
+    public async Task An_object_with_no_status_finishes_the_gate_as_missing(string json)
+    {
+        var (outcome, bench) = await RunWithAsync(U8(json));
+        using (bench)
+        {
+            outcome.IsDone();
+            bench.Waits.Recorded.Should().BeEmpty();
+            bench.LogLines.Last().Should().EndWith("gate status missing");
+        }
+    }
+
+    [Fact]
+    public async Task A_blocked_object_with_a_trailing_comma_is_still_judged_blocked()
+    {
+        var (outcome, bench) = await RunWithAsync(U8("""{"status":"blocked","why":"x",}"""));
+        using (bench)
+        {
+            outcome.IsDone();
+            bench.GateWaits().Should().HaveCount(1);
+        }
+    }
+
     [Fact]
     public void The_portable_read_takes_a_byte_order_mark_off_and_refuses_UTF_16_and_a_NUL_as_the_kernel_road_does()
     {

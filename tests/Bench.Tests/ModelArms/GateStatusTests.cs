@@ -49,16 +49,49 @@ public sealed class GateStatusTests
     }
 
     [Theory]
-    [InlineData("not json")]
-    [InlineData("[]")]
-    [InlineData("""{"status":3}""")]
-    [InlineData("""{"status":null}""")]
     [InlineData("{}")]
-    [InlineData("")]
-    [InlineData("""{"status":"proceed""")]
-    public void A_missing_unreadable_or_statusless_file_reads_as_missing(string text)
+    [InlineData("""{"status":null}""")]
+    public void An_object_that_says_nothing_reads_as_missing(string text)
     {
-        Of(text).Should().Be(new GateReading("missing", string.Empty));
+        Of(text).Should().Be(new GateReading("missing", string.Empty), "a model that chose to say nothing wrote no status: the shell finishes the gate");
+    }
+
+    [Theory]
+    [InlineData("not json", "is not JSON")]
+    [InlineData("[]", "JSON object")]
+    [InlineData("""{"status":3}""", "'status'")]
+    [InlineData("", "empty")]
+    [InlineData("   \r\n", "empty")]
+    [InlineData("""{"status":"proceed""", "is not JSON")]
+    [InlineData("""{"status":""}""", "not one of")]
+    [InlineData("""{"status":"Blocked"}""", "not one of")]
+    [InlineData("""{"status":"done"}""", "not one of")]
+    public void Text_that_is_present_and_is_no_status_is_unjudgeable_with_the_reason_never_missing(string text, string reason)
+    {
+        var reading = Of(text);
+
+        reading.IsUnjudgeable.Should().BeTrue($"'{text}' is there and says nothing the gate can act on");
+        reading.Unjudgeable.Should().Contain(reason);
+        reading.IsBlocked.Should().BeFalse();
+        GateStatus.WaitAgain(reading, 0, 8).Should().BeFalse("an unjudgeable status is a stop, never a wait");
+    }
+
+    [Theory]
+    [InlineData("in_progress")]
+    [InlineData("proceed")]
+    [InlineData("good_enough")]
+    [InlineData("rounds_spent")]
+    [InlineData("call_human")]
+    [InlineData("blocked")]
+    public void Every_status_word_the_gate_brief_allows_is_read_as_itself(string word)
+    {
+        Of("{\"status\":\"" + word + "\"}").Should().Be(new GateReading(word, string.Empty));
+    }
+
+    [Fact]
+    public void A_trailing_comma_is_tolerated_and_a_blocked_object_stays_blocked()
+    {
+        Of("""{"status":"blocked","why":"x",}""").Should().Be(new GateReading("blocked", "x"));
     }
 
     [Fact]
@@ -72,6 +105,6 @@ public sealed class GateStatusTests
     {
         Of("""{"status":"blocked","why":3}""").Should().Be(new GateReading("blocked", string.Empty), "the status is read; a reason that is not a string is none");
         Of("""{"status":"blocked","why":"\ud83d"}""").Should().Be(new GateReading("blocked", string.Empty), "a model's lone surrogate (an emoji cut in two) is not text and must not throw");
-        Of("""{"status":"\ud83d"}""").Should().Be(new GateReading("missing", string.Empty), "and a status that is not text is no status");
+        Of("""{"status":"\ud83d"}""").IsUnjudgeable.Should().BeTrue("and a status that is there and is not text cannot be judged");
     }
 }
