@@ -116,7 +116,7 @@ test('A_changed_harness_without_an_accepting_amendment_line_is_refused', async (
   commit(w.repo, 'harness change');
   const now = (await harnessIdentity(w.repo)).value;
   const r = await resume(w, ['--accept-harness', now, '--amendment', '2026-11-02']);
-  assert.match(r.out, /amendments\.md has no line dated 2026-11-02 that names harness:/);
+  assert.match(r.out, /amendments\.md has no instrument line dated 2026-11-02 that names harness:/);
   assert.equal(readRunMap(w.runMapFile).value.harnessAccepted, undefined, 'a refused acceptance writes nothing');
   assert.equal(existsSync(w.ledgerFile), false);
 });

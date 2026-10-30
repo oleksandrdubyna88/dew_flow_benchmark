@@ -70,14 +70,20 @@ function launchingAction(d) {
 /** `[{ rid, action: 'launch' | 'adopt' | 'void-interrupted' | 'reset' | 'score' | 'rebuild-record' | 'lost', reason }]`, one per session, in map order. */
 export const resumePlan = (map, dirs) => Object.values(map.sessions).map(s => ({ rid: s.rid, ...actionFor(s, dirs[s.rid]) }));
 
-const AMENDMENT_LINE = /^(\d{4}-\d{2}-\d{2}) \|/;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/**
+ * A changed harness identity is accepted by `--accept-harness <identity> --amendment <date>` only when a valid INSTRUMENT line of amendments.md (`parseAmendments().instrument`: date, `instrument`,
+ * `harness:<12 hex>`, a reason; review N6: no other kind of line and no prose counts, whatever it mentions) carries that date and the 12 hex of the identity, and only while the series holds no
+ * data session: the instrument may change after the A/A and BEFORE pair 1 (contract section 10). An identity accepted earlier is in `map.harnessAccepted` and needs neither.
+ */
 function harnessAccepted({ map, current, acceptHarness, amendments }) {
   if (!acceptHarness) return fail(`harnessIdentity changed (${map.harnessIdentity.slice(0, 12)} -> ${current.harnessIdentity.slice(0, 12)}): a harness change needs --accept-harness <identity> --amendment <date> naming a dated amendments.md line`);
   if (acceptHarness.identity !== current.harnessIdentity) return fail(`--accept-harness names ${acceptHarness.identity.slice(0, 12)}, but the harness running is ${current.harnessIdentity.slice(0, 12)}`);
-  const line = (amendments ?? '').split('\n').find(l => AMENDMENT_LINE.exec(l)?.[1] === acceptHarness.amendmentDate && l.includes(`harness:${current.harnessIdentity.slice(0, 12)}`));
-  if (!line) return fail(`amendments.md has no line dated ${acceptHarness.amendmentDate} that names harness:${current.harnessIdentity.slice(0, 12)}`);
+  const identity = current.harnessIdentity.slice(0, 12);
+  const line = parseAmendments(amendments ?? '').instrument.find(i => i.date === acceptHarness.amendmentDate && i.identity === identity);
+  if (!line) return fail(`amendments.md has no instrument line dated ${acceptHarness.amendmentDate} that names harness:${identity} (a line \`YYYY-MM-DD | instrument | harness:<12 hex> | <reason, with its G-id>\`; a verdict, input or budget line, or prose, does not count)`);
+  if (hasDataSession(map)) return fail(`the harness changed (${map.harnessIdentity.slice(0, 12)} -> ${identity}) after a data session exists in this series: the instrument may change after the A/A and before pair 1 (contract section 10), so the acceptance is refused. Start a new series`);
   return ok({ from: map.harnessIdentity, to: current.harnessIdentity, amendmentDate: acceptHarness.amendmentDate });
 }
 

@@ -165,3 +165,44 @@ test('A_changed_quiet_or_package_flags_file_is_accepted_only_by_a_dated_input_li
   assert.equal(again.ok, true, again.reason);
   assert.deepEqual(again.value.inputs, [], 'nothing new to record');
 });
+
+// ---- the harness acceptance reads instrument lines only, and only before pair 1 (contract section 10; review N6) ----------------------
+
+test('A_harness_acceptance_reads_the_instrument_lines_only_not_any_line_that_mentions_the_identity', () => {
+  const map = series();
+  const id12 = '9'.repeat(12);
+  const changed = { ...current(), harnessIdentity: '9'.repeat(64) };
+  const accept = amendments => checkResumable({ map, current: changed, acceptHarness: { identity: '9'.repeat(64), amendmentDate: '2026-11-02' }, amendments });
+  assert.equal(accept(`2026-11-02 | instrument | harness:${id12} | the sampler fix (G-11)\n`).ok, true, 'control: the instrument line');
+  const imposters = {
+    'a by-hand verdict that names it in a field': `2026-11-02 | G-11 | holds | harness:${id12} | scratch/x.md | me\n`,
+    'an input line that names it in its reason': `2026-11-02 | instrument | input:quiet.json:0123456789ab | see harness:${id12}\n`,
+    'a budget line that names it in its reason': `2026-11-02 | budget-raise | pair:1 | n:1 | usd:6.6 | harness:${id12}\n`,
+    'an instrument line with no reason (malformed)': `2026-11-02 | instrument | harness:${id12} |\n`,
+    'a line without a valid date': `soon | instrument | harness:${id12} | the sampler fix\n`,
+    'prose': `The sampler fix is harness:${id12} (dated 2026-11-02).\n`,
+  };
+  for (const [why, text] of Object.entries(imposters)) {
+    const r = accept(`# header\n${text}`);
+    assert.equal(r.ok, false, why);
+    assert.match(r.reason, /no instrument line dated 2026-11-02/, why);
+  }
+});
+
+test('A_harness_change_after_a_data_session_exists_is_refused_even_with_its_line_and_one_accepted_earlier_stays_accepted', () => {
+  const id = '9'.repeat(64);
+  const line = `# header\n2026-11-02 | instrument | harness:${id.slice(0, 12)} | the sampler fix (G-11)\n`;
+  const acceptHarness = { identity: id, amendmentDate: '2026-11-02' };
+  const changed = { ...current(), harnessIdentity: id };
+  const started = must(planSession(series(), session('aaaaaa')));
+  const late = checkResumable({ map: started, current: changed, acceptHarness, amendments: line });
+  assert.equal(late.ok, false);
+  assert.match(late.reason, /data session/);
+  assert.match(late.reason, /before pair 1/);
+  const aa = must(planSession(series(), session('bbbbbb', { kind: 'aa', pair: 0 })));
+  assert.equal(checkResumable({ map: aa, current: changed, acceptHarness, amendments: line }).ok, true, 'the A/A and the pilot are not data sessions');
+  const accepted = { ...started, harnessAccepted: [id] };
+  const again = checkResumable({ map: accepted, current: changed });
+  assert.equal(again.ok, true, 'an identity accepted before the data sessions needs no flag and no line again');
+  assert.equal(again.value.accepted, null);
+});
