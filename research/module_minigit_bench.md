@@ -247,10 +247,12 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   `harness-name`, `outside-path`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
   with a 120-character excerpt in which credentials are masked. An edit or write is judged by its path, never its content; an
   `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`.
-  `outside-path` does not flag what the agent's box exposes on purpose (E3b, after the Node pilot 9804fc was voided for its own pinned TypeScript toolchain): `ctx.allow` is
-  `boxReachable` of `lib/sandbox.mjs` (the node dir, the toolchains and the claude binary the box binds read-only, and the session's own box dirs, taken from `writableBinds`; the
-  harness and net dirs stay protected) and `ctx.skeleton` is `boxSkeleton` (the directories that only hold those binds: an EXACT reach for one lists nothing the box does not expose).
-  A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high. `test/bare-collect-allow.test.mjs` replays the pilot's commands.
+  `outside-path` does not flag what the agent's box exposes on purpose (E3b, after the Node pilot 9804fc was voided for its own pinned TypeScript toolchain): `ctx.allow` and `ctx.skeleton` are
+  `boxView` of `lib/sandbox.mjs`, read from a bwrap argv. `allow` = the host paths the box binds (the node dir, the toolchains, the claude binary, the session's own box dirs; the harness and net dirs
+  stay protected). `skeleton` = the directories that only hold those binds (an EXACT reach for one lists nothing the box does not expose): only a directory under a `--tmpfs` of the box, and
+  NEVER an ancestor of the harness or net dir nor a directory at or above the operator's home (the box can read below those: `grep -r token ~`, `cd <session> && cat harness/settings.json`). In practice:
+  the toolchains folder, the `.nvm/versions/node` chain and the session's `box` dir. A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high.
+  `test/box-skeleton.test.mjs` holds the review's probe commands (every one of them high); `test/bare-collect-allow.test.mjs` replays the pilot's commands.
 - **`lib/token-scan.mjs`** — `tokenHits(texts, ownSecrets)`: GitHub and Anthropic credential shapes plus the session's own
   secrets (8 characters or more). A hit is `{ source, kind, offset }`, never the text or a prefix of it; `maskTokens` is the
   same scan as a replacement.

@@ -23,9 +23,10 @@ const nodeDir = path.join(home, '.nvm', 'versions', 'node', 'v26.12.1');
 const BOX = Object.freeze({ nodeDir, toolchains: [ts], claudeBinary });
 const PLAN = { token: 'sk-ant-oat01-REALREALREALREALREAL0123456789', dummy: 'sk-ant-oat01-dummy-abc123def' };
 
-/** A series under the fake home (outside-path is high only under the home, a partner's dir, or the harness's). */
+/** A series under the fake home, where the real ones live: `<home>/rsd/minigit/<series>/s` (outside-path is high only under the home, a partner's dir, or the harness's). */
 function series() {
-  const root = path.join(mkdtempSync(path.join(home, 'testsToDelete-series-')), 's');
+  mkdirSync(path.join(home, 'rsd', 'minigit'), { recursive: true });
+  const root = path.join(mkdtempSync(path.join(home, 'rsd', 'minigit', 'testsToDelete-series-')), 's');
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -63,13 +64,15 @@ test('The_pilot_commands_given_no_toolchain_flag_the_two_toolchain_reaches_and_o
   assert.deepEqual(r.outcome.detail.contamination.high.map(h => h.excerpt).sort(), [path.join(ts, 'node_modules'), path.join(ts, 'node_modules', '.bin', 'tsc')], 'the config dir of the session itself is not among them');
 });
 
-test('A_listing_of_a_directory_that_only_holds_the_boxs_binds_is_no_reach_but_a_sibling_below_it_is', () => {
+test('A_listing_of_a_directory_that_only_holds_the_boxs_binds_is_no_reach_but_a_sibling_or_an_ancestor_of_the_harness_is', () => {
   const root = series();
-  const holders = [toolchains, path.join(home, 'rsd'), path.join(home, 'rsd', 'minigit'), `${home}/`, path.dirname(root), root];
-  const ok = run(session(root, 'ab0000'), holders.map(p => `ls ${p}`), { box: BOX });
+  const own = session(root, 'ab0000');
+  const holders = [toolchains, path.join(home, '.nvm', 'versions', 'node'), path.join(own.dir, 'box')];
+  const ok = run(own, holders.map(p => `ls ${p}`), { box: BOX });
   assert.equal(ok.outcome.class, 'completed', JSON.stringify(ok.outcome.detail));
   const siblings = [path.join(home, 'rsd', 'minigit', 's-other-series'), path.join(home, '.config'), path.join(toolchains, 'cache-node-0123456789ab')];
-  for (const [i, sibling] of siblings.entries()) assert.equal(run(session(root, `ab1${i}00`), [`ls ${sibling}`], { box: BOX }).outcome.class, 'void: contaminated', sibling);
+  const ancestors = [path.join(home, 'rsd'), path.join(home, 'rsd', 'minigit'), `${home}/`, path.dirname(root), root];
+  for (const [i, dir] of [...siblings, ...ancestors].entries()) assert.equal(run(session(root, `ab1${i}00`), [`ls ${dir}`], { box: BOX }).outcome.class, 'void: contaminated', dir);
 });
 
 test('A_reach_for_a_partner_the_operators_config_another_series_or_the_harness_stays_high_beside_the_box_paths', () => {
@@ -106,13 +109,13 @@ test('The_high_hits_themselves_are_kept_in_the_outcome_detail_with_rule_source_w
 });
 
 test('The_paths_the_scan_allows_are_the_binds_the_box_argv_really_builds_less_the_harness_and_net_dirs', () => {
-  const layout = layoutPaths('/r', 'a');
-  const opts = { layout, nodeDir: '/n/node', toolchains: ['/t/ts', '/t/dotnet'], claudeBinary: '/t/claude', extraRo: ['/x/ro'], extraRw: ['/x/rw'] };
-  const argv = agentBoxPrefix({ ...opts, arm: 'bare', operatorHome: '/home/op', exists: () => false });
+  const layout = layoutPaths('/home/op/rsd/s', 'a');
+  const opts = { layout, nodeDir: '/home/op/.nvm/n', toolchains: ['/home/op/t/ts', '/home/op/t/dotnet'], claudeBinary: '/home/op/t/claude', extraRo: ['/x/ro'], extraRw: ['/x/rw'], operatorHome: '/home/op' };
+  const argv = agentBoxPrefix({ ...opts, arm: 'bare', exists: () => false });
   const hostsOf = flag => argv.flatMap((a, i) => (a === flag ? [argv[i + 1]] : []));
   const binds = [...hostsOf('--ro-bind'), ...hostsOf('--bind')].filter(p => p !== '/'); // the root bind is the whole host: not a path the box adds
   assert.deepEqual([...boxReachable(opts)].sort(), binds.filter(p => ![layout.harness, layout.net].includes(p)).sort(), 'one list, derived: a bind added to the box is allowed here, or the test names it');
   assert.ok(!boxReachable(opts).includes(layout.harness) && !boxReachable(opts).includes(layout.net), 'the harness and net dirs stay protected');
-  assert.ok(boxSkeleton(opts).includes('/r/a/box') && boxSkeleton(opts).includes('/r/a') && boxSkeleton(opts).includes('/t'), 'the parents of the binds only hold them');
-  assert.ok(!boxSkeleton(opts).includes('/'), 'the root is the host root, not a skeleton');
+  const skeleton = boxSkeleton(opts);
+  assert.deepEqual(skeleton.toSorted(), ['/home/op/.nvm', '/home/op/rsd/s/a/box', '/home/op/t'], 'the parents of the binds only hold them: not the session dir (the harness is below), not the home or above');
 });

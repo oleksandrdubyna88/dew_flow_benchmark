@@ -126,25 +126,36 @@ export const writableBinds = (layout, extraRw = []) => Object.freeze([
   ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].map(p => ({ box: p, host: p })),
 ]);
 
-/**
- * The host paths the agent's box exposes ON PURPOSE, for the contamination scan's `allow`: the node dir, the toolchains and the claude binary it binds read-only, any extra read-only
- * bind, and the writable binds (the session's own box dirs: `writableBinds` is the one table, never retyped). NOT the harness and net dirs the box binds read-only as well: those stay
- * protected (a reach for the harness's files is contamination whatever the box shows). A test diffs this list against the binds `agentBoxPrefix` really builds.
- */
-export const boxReachable = ({ layout, nodeDir, toolchains = [], claudeBinary, extraRo = [], extraRw = [] }) => Object.freeze([
-  ...[nodeDir, ...toolchains, claudeBinary, ...extraRo].filter(Boolean),
-  ...writableBinds(layout, extraRw).map(b => b.host),
-]);
+const BIND_FLAGS = new Set(['--bind', '--ro-bind']);
+const startsBelow = (p, dir) => p.startsWith(dir === '/' ? '/' : `${dir}/`);
+
+/** The `{ host, box }` pairs a bwrap argv binds (the root bind, which is the whole host, and the `/dev/null` masks, which expose nothing, left out). */
+export const bindPairsOf = argv => argv.flatMap((a, i) => (BIND_FLAGS.has(a) ? [{ host: argv[i + 1], box: argv[i + 2] }] : [])).filter(b => typeof b.host === 'string' && b.host !== '/' && b.host !== '/dev/null');
 
 /** Every proper ancestor directory of the paths, nearest last, `/` left out: `['/a/b/c']` -> `['/a', '/a/b']`. */
 const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`));
 
 /**
- * The directories that only HOLD the box's binds: bwrap makes the parent of every bind point, and inside the box it lists nothing but the binds (the operator's home is an empty tmpfs). A
- * listing of one (`ls <toolchains folder>`) shows what the box exposes and nothing else, so the scan does not flag an EXACT match on one; a path below one that is not itself bound stays
- * a reach. Derived from every bind, the harness and net dirs included.
+ * What the agent's box shows of the host, read from a bwrap argv (the plan's, or the one a session wrote to its `argv.json`): `allow` = the host paths it binds ON PURPOSE (the node dir, the toolchains, the claude
+ * binary, the session's own box dirs), for the contamination scan; the harness and net dirs are bound as well and stay PROTECTED (a reach for their files is contamination whatever the box shows). `skeleton` =
+ * the directories that only HOLD those binds: bwrap makes the parent of every bind point, and inside the box a directory under a `--tmpfs` lists nothing but them, so an EXACT reach for one shows nothing the box
+ * does not expose and is no reach. Never an ancestor of the harness or net dir, nor a directory at or above the operator's `home`: the box can read below those (`grep -r token ~`, `cd <session> && cat harness/..`).
  */
-export const boxSkeleton = opts => Object.freeze([...new Set(ancestorsOf([...boxReachable(opts), opts.layout.harness, opts.layout.net]))]);
+export function boxView({ argv, layout, home }) {
+  const protectedDirs = [layout.harness, layout.net];
+  const binds = bindPairsOf(argv);
+  const hidden = argv.flatMap((a, i) => (a === '--tmpfs' ? [argv[i + 1]] : []));
+  const holdsOnlyBinds = dir => hidden.some(h => startsBelow(dir, h)) && !protectedDirs.some(p => startsBelow(p, dir)) && dir !== home && !startsBelow(home, dir);
+  return Object.freeze({
+    allow: Object.freeze([...new Set(binds.map(b => b.host).filter(h => !protectedDirs.includes(h)))]),
+    skeleton: Object.freeze([...new Set(ancestorsOf(binds.map(b => b.box)))].filter(holdsOnlyBinds)),
+  });
+}
+
+/** The plan-time view: `boxView` of the argv `agentBoxPrefix` builds for these options (a test diffs it against the binds a session really wrote). */
+const planView = opts => boxView({ argv: agentBoxPrefix({ arm: 'bare', ...opts }), layout: opts.layout, home: opts.operatorHome ?? os.homedir() });
+export const boxReachable = opts => planView(opts).allow;
+export const boxSkeleton = opts => planView(opts).skeleton;
 
 /**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
