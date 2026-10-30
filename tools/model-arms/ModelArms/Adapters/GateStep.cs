@@ -84,6 +84,9 @@ internal sealed class GateRun
     /// <summary>The longest <c>why</c> that is WRITTEN DOWN — in the <c>gate-wait</c> line and the marker, which every later entry reads again: a model's reason is a stranger's text, and a few kilobytes say what it means.</summary>
     private const int KeptCharacters = 2048;
 
+    /// <summary>How much of an unjudgeable status the stop's sentence quotes.</summary>
+    private const int BeginsCharacters = 200;
+
     private readonly StepContext _context;
     private readonly GateDeps _deps;
     private readonly ArmFiles _files;
@@ -138,10 +141,15 @@ internal sealed class GateRun
         var status = GateStatusFile.Read(_statusFile);
         if (status is GateStatusFile.Answer.Refused refused)
         {
-            return _log.Stop(_step, 5, $"{_step}: the gate's status cannot be judged — {refused.Reason}; fix it and run me again (removing it finishes the gate as missing)");
+            return _log.Stop(_step, 5, CannotJudge(refused.Reason, null));
         }
 
         var judged = Judge(status);
+        if (judged.Reading.IsUnjudgeable)
+        {
+            return _log.Stop(_step, 5, CannotJudge(judged.Reading.Unjudgeable, Begins(status)));
+        }
+
         if (!GateStatus.WaitAgain(judged.Reading, judged.Waits, Limits.GateTries))
         {
             return await FinalizedAsync(done, judged, stopping);
@@ -257,6 +265,14 @@ internal sealed class GateRun
         var git = new ArmGit(_context.GitExecutable, _context.WorkingDirectory, GitEnvironment.Of(_context.ParentEnvironment));
         return await DerivedOutputs.WriteAsync(_context, regenerate.Outputs, _files, git, stopping) is Outcome<IReadOnlyList<DerivedOutput>>.Fail failed ? _log.Stop(_step, 5, failed.Reason) : null;
     }
+
+    /// <summary>The stop's sentence for a status that is there and cannot be judged. <paramref name="begins"/> is the start of the text, so the operator sees what the model wrote without opening the file; <c>null</c> when no text was read (a refused file).
+    /// Removing the file finishes the gate as <c>missing</c> — the shell's answer — and the sentence says so.</summary>
+    private string CannotJudge(string reason, string? begins) =>
+        $"{_step}: the gate's status cannot be judged — {Shown(reason)}; {(begins is null ? string.Empty : $"it begins: {begins}; ")}fix it and run me again (removing it finishes the gate as missing)";
+
+    private static string Begins(GateStatusFile.Answer status) =>
+        status is GateStatusFile.Answer.Text { Value.Length: > 0 } text ? ExecutableRule.Printable(text.Value.Length <= BeginsCharacters ? text.Value : Cut(text.Value, BeginsCharacters) + "…") : "(nothing)";
 
     /// <summary>At most <see cref="KeptCharacters"/> characters, never cut inside a surrogate pair.</summary>
     private static string Clamped(string text) => Cut(text, KeptCharacters);

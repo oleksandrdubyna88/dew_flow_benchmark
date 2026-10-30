@@ -8,9 +8,9 @@ namespace Bench.Tests.ModelArms;
 
 /// <summary>What the gate step reads of its own step's files: <c>notes/gate.json</c> (a status word and a reason, <c>run-arm.sh:153</c>, <c>:156</c>), whether another wait is allowed (<c>:154</c>), and how many blocked
 /// rounds the arm has already waited out, counted from the durable <c>gate-wait</c> lines of <c>timing.jsonl</c> (E2 §8 item 44) — never from a local that a restart forgets. The file is a model's answer: whatever it holds
-/// reads as a status or as <c>missing</c>, and nothing throws.
+/// reads as a status word of the gate brief, as <c>missing</c> (no file, or an object that says no status) or as UNJUDGEABLE (text that is there and is no status — E2 §8 item 60), and nothing throws.
 /// <para>
-/// What this does NOT prove: what a real gate model writes into <c>gate.json</c> (the status words are the shell's: <c>proceed</c>, <c>blocked</c>, <c>missing</c> when unreadable), or that the file is read at the right
+/// What this does NOT prove: what a real gate model writes into <c>gate.json</c> (the status words are the gate brief's six, matched exactly), or that the file is read at the right
 /// moment — that is the gate step's (E2.S7).
 /// </para></summary>
 public sealed class GateStatusTests

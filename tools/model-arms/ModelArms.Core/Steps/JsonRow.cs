@@ -71,6 +71,9 @@ internal sealed class JsonRow
     /// <summary>True when the field is exactly the text <paramref name="expected"/>; any other value, of any kind, is false and no problem.</summary>
     public bool Is(string name, string expected) => Find(name, out var value) && value.ValueKind == JsonValueKind.String && TryText(value, out var text) && text == expected;
 
+    /// <summary>True when the field is present and not JSON <c>null</c>, of whatever kind.</summary>
+    public bool Has(string name) => Find(name, out _);
+
     private bool Find(string name, out JsonElement value) => root.TryGetProperty(name, out value) && value.ValueKind != JsonValueKind.Null;
 
     private T Absent<T>(string name, bool required, string expected, T fallback)
