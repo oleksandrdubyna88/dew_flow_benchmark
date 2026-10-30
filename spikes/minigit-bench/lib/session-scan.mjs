@@ -34,7 +34,7 @@ function scanWhole(root, rel, scanText, { limits, hooks }) {
   hooks.beforeRead?.(rel);
   const bytes = readAgentFileUnder(root, rel, limits.maxScanBytes);
   if (!Buffer.isBuffer(bytes)) return null;
-  return scanText(bytes.toString('latin1')).map(h => ({ ...h, source: rel }));
+  return scanText(bytes.toString('latin1'), rel).map(h => ({ ...h, source: rel }));
 }
 
 /** The hits of one big file read in windows -> `{ hits } | { unreadable }`; only the hits that start in a window's own part are kept. */
@@ -42,7 +42,7 @@ function scanWindows(root, rel, scanText, { limits, hooks }) {
   hooks.beforeRead?.(rel);
   const hits = [];
   const read = scanAgentFileWindows(root, rel, { windowBytes: limits.windowBytes, overlapBytes: limits.overlapBytes, maxBytes: limits.maxStreamBytes }, (bytes, { base, ownBytes }) => {
-    const own = scanText(bytes.toString('latin1')).filter(h => h.offset < ownBytes);
+    const own = scanText(bytes.toString('latin1'), rel).filter(h => h.offset < ownBytes);
     hits.push(...own.map(h => ({ ...h, source: rel, offset: h.offset + base })));
   });
   return read === null || read.unreadable ? { unreadable: read?.unreadable ?? 'absent' } : { hits };
@@ -68,37 +68,44 @@ export function scanFiles(root, rels, scanText, limits = SCAN_LIMITS, hooks = {}
 }
 
 /**
- * Scan a directory -> `{ hits, scanned, streamed: [rel], tooLarge: [rel], links: [{ rel, kind, severity: 'high', why? }], insideLinks: [{ link, target }] }`. Files are read as
+ * Scan a directory -> `{ hits, extra, unreadable, scanned, streamed: [rel], tooLarge: [rel], links: [{ rel, kind, severity: 'high', why? }], insideLinks: [{ link, target }] }`. Files are read as
  * latin1, so a binary file (an environ dump) is searchable. `limits` and `hooks` (`afterList`, `beforeRead`) are test seams.
+ * ONE pass over every file (review C2): `extra` is `[{ name, applies(rel), scanText(text) }]`, further text scans that ride on the same read of the files they apply to (the bare collector's
+ * canary scan over the evidence files); their hits come back in `extra[name]`. `unreadable` lists `{ rel, why }` for every file no scan could read (too large, swapped after the listing).
  */
-export function scanSessionDir(root, { real, dummy = null, binds = [], limits = SCAN_LIMITS, hooks = {} }) {
+export function scanSessionDir(root, { real, dummy = null, binds = [], limits = SCAN_LIMITS, hooks = {}, extra = [] }) {
   const entries = filesUnder(root);
   hooks.afterList?.(); // a test seam: the agent runs while the scan does, and can change the tree between the listing and the reads
   const finding = (f, kind = f.kind, extra = {}) => ({ rel: f.rel, kind, severity: 'high', ...extra });
-  const scanText = text => realTokenHits([{ source: '', text }], { real, dummy });
+  const scanText = (text, rel) => [
+    ...realTokenHits([{ source: '', text }], { real, dummy }).map(h => ({ ...h, scan: '' })),
+    ...extra.filter(x => x.applies(rel)).flatMap(x => x.scanText(text).map(h => ({ ...h, scan: x.name }))),
+  ];
   const ctx = { limits, hooks };
-  const hits = [];
+  const all = [];
   const streamed = [];
   const tooLarge = [];
   const problems = [];
+  const unreadable = [];
   let scanned = 0;
   for (const f of entries.filter(e => e.kind === 'file')) {
     if (f.size <= limits.maxScanBytes) {
       const found = scanWhole(root, f.rel, scanText, ctx);
       // a regular file that is no longer one when it is opened (or whose directories were swapped for a link) was changed after the listing: that is a finding too
-      if (found === null) { problems.push(finding(f, 'swapped')); continue; }
-      hits.push(...found);
+      if (found === null) { problems.push(finding(f, 'swapped')); unreadable.push({ rel: f.rel, why: 'swapped after the listing' }); continue; }
+      all.push(...found);
     } else {
       const found = f.size <= limits.maxStreamBytes ? scanWindows(root, f.rel, scanText, ctx) : { unreadable: `larger than ${limits.maxStreamBytes} bytes` };
-      if (found.unreadable) { tooLarge.push(f.rel); problems.push(finding(f, found.unreadable.startsWith('larger') ? 'unscanned' : 'swapped', { why: found.unreadable })); continue; }
+      if (found.unreadable) { tooLarge.push(f.rel); unreadable.push({ rel: f.rel, why: found.unreadable }); problems.push(finding(f, found.unreadable.startsWith('larger') ? 'unscanned' : 'swapped', { why: found.unreadable })); continue; }
       streamed.push(f.rel);
-      hits.push(...found.hits);
+      all.push(...found.hits);
     }
     scanned += 1;
   }
   const classified = entries.filter(f => f.kind === 'symlink').map(f => ({ f, c: classifyLink({ root, rel: f.rel, binds }) }));
+  const strip = ({ scan, ...hit }) => hit;
   return {
-    hits, scanned, streamed, tooLarge,
+    hits: all.filter(h => h.scan === '').map(strip), extra: Object.fromEntries(extra.map(x => [x.name, all.filter(h => h.scan === x.name).map(strip)])), unreadable, scanned, streamed, tooLarge,
     links: [
       ...entries.filter(f => f.kind === 'other').map(f => finding(f)),
       ...classified.filter(x => x.c.severity === 'high').map(x => finding(x.f, 'symlink', { why: x.c.why })),

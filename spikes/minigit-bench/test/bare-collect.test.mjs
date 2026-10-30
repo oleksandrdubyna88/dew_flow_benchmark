@@ -167,3 +167,31 @@ test('A_T2_breach_marks_the_session_otel_incomplete_as_a_flag', () => {
   assert.equal(r.value.outcome.class, 'completed', 'a flag never changes the class');
   assert.ok(!collect(sessionFromFixture()).outcome.flags.includes('otel incomplete'), 'control: the whole record set has no such flag');
 });
+
+test('Every_evidence_file_is_read_once_for_the_session_scan_the_canary_and_the_real_token_whole_or_in_windows', () => {
+  const canary = 'c0ffee0123456789abcdef0123456789';
+  for (const [mode, scanLimits] of [['whole', undefined], ['windows', { maxScanBytes: 512, windowBytes: 4096, overlapBytes: 1024, maxStreamBytes: 1024 * 1024 * 1024 }]]) {
+    const layout = sessionFromFixture();
+    const reads = [];
+    const r = collect(layout, { canaryTokens: [canary], scanLimits, scanHooks: { beforeRead: rel => reads.push(rel) } });
+    const counts = Object.entries(Object.groupBy(reads, rel => rel)).map(([rel, list]) => [rel, list.length]);
+    assert.ok(counts.length > 10, `${mode}: ${counts.length} files were read`);
+    assert.deepEqual(counts.filter(([, n]) => n !== 1), [], `${mode}: a file read more than once is a second pass over the same bytes`);
+    assert.equal(r.scan.scanned, counts.length, `${mode}: the pass covered every file the session scan counts`);
+    assert.ok(counts.some(([rel]) => rel === 'stream.ndjson') && counts.some(([rel]) => rel.startsWith('transcripts')), `${mode}: the evidence files are among them`);
+  }
+});
+
+test('A_canary_and_a_credential_shape_in_evidence_files_are_still_found_by_the_one_pass_whole_or_in_windows', () => {
+  const canary = 'c0ffee0123456789abcdef0123456789';
+  const windows = { maxScanBytes: 512, windowBytes: 4096, overlapBytes: 1024, maxStreamBytes: 1024 * 1024 * 1024 };
+  for (const scanLimits of [undefined, windows]) {
+    const withCanary = sessionFromFixture();
+    appendFileSync(withCanary.files.stream, `${JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: `read ${canary}` }] } })}\n`);
+    assert.equal(collect(withCanary, { canaryTokens: [canary], scanLimits }).outcome.class, 'void: contaminated', `a canary in the stream (${scanLimits ? 'windows' : 'whole'})`);
+    const shape = sessionFromFixture();
+    writeFileSync(path.join(shape.work, 'note.txt'), `ghp_${'a1B2'.repeat(9)}\n`);
+    assert.notEqual(collect(shape, { scanLimits }).outcome.class, 'completed', `a credential shape in box/work is found (${scanLimits ? 'windows' : 'whole'})`);
+    assert.equal(collect(sessionFromFixture(), { canaryTokens: [canary], scanLimits }).outcome.class, 'completed', 'control: no canary, no shape');
+  }
+});
