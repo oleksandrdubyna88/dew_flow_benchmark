@@ -568,7 +568,7 @@ public sealed class RunArmSchemeTests
 
         code.Should().Be(5);
         output.ToString().Should().Contain("C4 is in no run").And.Contain("2 arms of arms.map.json", "the fallback is said in the log");
-        output.ToString().Should().Contain("waiting at most 611 min", "one arm ahead: 1 minute + 600 s + 40 × 900 s = 36 660 s");
+        output.ToString().Should().Contain("waiting at most 811 min", "one arm ahead: 1 minute + 600 s + 40 × 900 s + 40 × 300 s = 48 660 s");
     }
 
     [Fact]
@@ -604,7 +604,7 @@ public sealed class RunArmSchemeTests
         var code = await RunWithSeamsAsync(root, "C1", seams, output, stopping.Token);
 
         code.Should().Be(5, "the operator's stop while the gate waits for its lock");
-        output.ToString().Should().Contain("waiting at most 1222 min", "C1 is in a round of three in the example's run part6 (a fourth arm is made but named by no run): two can queue ahead of this one, each for the gate's 1 minute (the fixture) plus the 600 s kill grace plus 40 × 900 s of limit waits it may spend under the lock");
+        output.ToString().Should().Contain("waiting at most 1622 min", "C1 is in a round of three in the example's run part6 (a fourth arm is made but named by no run): two can queue ahead of this one, each for the gate's 1 minute (the fixture) plus the 600 s kill grace plus 40 × 900 s of limit waits and 40 × 300 s of resume floors it may spend under the lock");
         output.ToString().Should().NotContain("is in no run", "the arm is named by a run: the size of its round is what counts");
         fake.Calls().Select(call => BriefOf(call)).Should().Equal("1-code", "2-review", "3-fix");
     }

@@ -43,7 +43,7 @@ internal sealed class RunArmWalk
         var experiment = plan.Input.Experiment;
         var longestGate = experiment.Steps.Values.Where(spec => spec.Kind == StepKind.Gate).Select(spec => spec.Minutes).DefaultIfEmpty(0).Max();
         var limits = experiment.Limits;
-        return GateLockCeiling.For(Queue(plan).Arms, longestGate, limits.KillGraceSeconds, limits.Tries, limits.WaitSeconds, GateStep.MaxLockCeiling);
+        return GateLockCeiling.For(Queue(plan).Arms, longestGate, limits.KillGraceSeconds, limits.Tries, limits.WaitSeconds, limits.MinimumRemainingSeconds, GateStep.MaxLockCeiling);
     }
 
     private static GateQueue Queue(ArmPlan plan) => GateLockCeiling.QueueOf(plan.Input.Experiment.Runs, plan.Arm, plan.Map.Entries.Count);

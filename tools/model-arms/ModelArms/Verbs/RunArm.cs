@@ -21,7 +21,7 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 /// </para>
 /// <para>
 /// <b>The gate lock's ceiling (E2 §8 items 59 and 61) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> — for each of the other arms of the arm's own round (the largest round of the run that names it; every arm of
-/// <c>arms.map.json</c> only when no run does, and the log says so), the longest gate step's minutes plus the kill grace plus the usage-limit waits the runner may spend under the lock (<c>limits.tries</c> × <c>limits.waitSeconds</c>); never less than
+/// <c>arms.map.json</c> only when no run does, and the log says so), the longest gate step's minutes plus the kill grace plus the usage-limit waits the runner may spend under the lock and the floor of each resumed attempt (<c>limits.tries</c> × (<c>limits.waitSeconds</c> + <c>limits.minimumRemainingSeconds</c>)); never less than
 /// one such span. What remains is a wedged holder, which only a heartbeat (E4) tells from a slow one: it is told apart only when the ceiling runs out. E4's <c>run-all</c> sizes its own the same way from the round it starts, or builds the heartbeat.
 /// </para>
 /// <para>
