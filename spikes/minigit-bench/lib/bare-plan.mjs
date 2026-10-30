@@ -46,13 +46,24 @@ export function promptFor({ stack, phase, registered = JSON.parse(readFileSync(R
 /** The pinned input files a workspace of this phase holds, and nothing else (v2 keeps the v1 inputs: the agent's tree already holds them). */
 export const workspaceFiles = phase => (phase === 'v1' ? ['SPEC-v1.txt', 'test-v1.sh'] : ['SPEC-v1.txt', 'test-v1.sh', 'SPEC-v2.txt', 'test-v2.sh']);
 
+/** The only keys `over` may set: a stub upstream and the launcher's own clocks. Everything else (the token, the dummy, the layout, the allow-list, the operator home, the toolchains, the caps, the prompt) is the real plan. */
+export const PLAN_OVER_KEYS = Object.freeze(['upstream', 'tickMs', 'sampleMs', 'settleMs', 'graceMs', 'drainMs']);
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
+
+function checkedOver(over) {
+  const refused = Object.keys(over).filter(k => !PLAN_OVER_KEYS.includes(k));
+  if (refused.length > 0) throw new Error(`over may not set '${refused.join("', '")}': it takes only the test seams ${PLAN_OVER_KEYS.join(', ')} (a security or treatment field is never overridden)`);
+  if (over.upstream !== undefined && !LOOPBACK.has(over.upstream?.host)) throw new Error('over.upstream must be a loopback address: the real token is sent to the upstream, and a seam may point it at this machine only');
+  return over;
+}
+
 /**
  * The plan `launchSession` takes for one bare session (E2.S2's entry point); every value an input of it, none read from the environment. `over` is the test seam (a stub upstream,
- * short ticks) and is spread LAST, so a real run passes none.
+ * short ticks): it takes only `PLAN_OVER_KEYS`, an upstream only on a loopback address, and a real run passes none (review G3).
  */
 export function bareSessionPlan({ layout, stack, phase, claudeBinary, cliVersion, nodeDir, tsDir, token, dummy, prices, operatorHome, harnessSources, caps = BARE_CAPS, envExtra = {}, over = {} }) {
   return {
     layout, arm: 'bare', cellId: `cell-${layout.rid}`, prompt: promptFor({ stack, phase }), ...caps,
-    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra, ...over,
+    claudeBinary, cliVersion, nodeDir, tsDir, toolchains: [tsDir], token, dummy, prices, allow: EGRESS_HOSTS.bare, operatorHome, harnessSources, envExtra, ...checkedOver(over),
   };
 }

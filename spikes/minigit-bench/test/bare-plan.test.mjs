@@ -110,3 +110,15 @@ test('The_session_plan_carries_the_registered_caps_and_hosts_and_a_neutral_cell_
   const stubbed = bareSessionPlan({ layout, stack: 'node', phase: 'v2', claudeBinary: '/x/c', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', token: 'real', dummy: 'dummy', prices: {}, operatorHome: '/h', harnessSources: {}, over: { upstream: { host: '127.0.0.1', port: 1, tls: false }, tickMs: 5 } });
   assert.deepEqual([stubbed.upstream.port, stubbed.tickMs, plan.upstream], [1, 5, undefined], 'the test seam reaches the plan; a real run has no upstream override');
 });
+
+test('The_plan_override_takes_only_the_test_seams_and_never_a_security_field', () => {
+  const given = { layout: { rid: 'abc123' }, stack: 'csharp', phase: 'v1', claudeBinary: '/x/c', cliVersion: '2.1.310', nodeDir: '/n', tsDir: '/ts', token: 'REAL-TOKEN-VALUE', dummy: 'dummy', prices: {}, operatorHome: '/h', harnessSources: {} };
+  const real = bareSessionPlan(given);
+  for (const [key, value] of Object.entries({ token: 'other', dummy: 'x', layout: { rid: 'zzz' }, allow: ['evil.example'], operatorHome: '/', claudeBinary: '/bin/sh', toolchains: ['/'], envExtra: { A: '1' }, cellId: 'cell-x', capUsd: 600, wallMs: 1, prompt: 'x', harnessSources: {} })) {
+    assert.throws(() => bareSessionPlan({ ...given, over: { [key]: value } }), new RegExp(`over may not set '${key}'`), `${key} is a security or treatment field`);
+  }
+  assert.throws(() => bareSessionPlan({ ...given, over: { upstream: { host: 'evil.example', port: 443, tls: true } } }), /upstream must be a loopback address/, 'the real token is sent to the upstream: a seam may point it at the machine itself only');
+  try { bareSessionPlan({ ...given, over: { token: 'LEAKED' } }); } catch (e) { assert.doesNotMatch(e.message, /LEAKED|REAL-TOKEN-VALUE/, 'a refusal names the key, never a value'); }
+  const ok = bareSessionPlan({ ...given, over: { upstream: { host: '127.0.0.1', port: 9, tls: false }, tickMs: 5, sampleMs: 5, settleMs: 5, graceMs: 5, drainMs: 5 } });
+  assert.deepEqual([ok.tickMs, ok.upstream.port, ok.token, ok.allow], [5, 9, real.token, real.allow], 'the seams pass, everything else is the real plan');
+});
