@@ -1,25 +1,26 @@
 // Reading and writing capture directories (I/O at the edge): load one for the verdicts, sanitise one into a fixture directory.
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { agentEntries, readAgentFileUnder } from '../lib/agent-files.mjs';
 import { fail, ok } from '../lib/result.mjs';
 import { buildMap, collectAttrSecrets, leakScan, localContext, sanitisePath, sanitiseText } from './sanitise.mjs';
 
 const REQUIRED = Object.freeze(['stream.ndjson', 'otlp-raw.ndjson', 'argv.json', 'meta.json']);
 const OPTIONAL = Object.freeze(['hooks.ndjson', 'stderr.txt']);
 
-const walk = dir => (existsSync(dir) ? readdirSync(dir).flatMap(name => {
-  const full = path.join(dir, name);
-  return statSync(full).isDirectory() ? walk(full) : [full];
-}) : []);
-
-/** The files a sanitised copy holds: `[{ relPath, text }]`, or a failure naming the missing required file. */
+/** The files a capture directory holds: `[{ relPath, text }]`, or a failure naming the missing required file or any path that is a link, a pipe or a device. */
 export function readCaptureFiles(from, { optional = OPTIONAL } = {}) {
   const missing = REQUIRED.filter(f => !existsSync(path.join(from, f)));
   if (missing.length > 0) return fail(`${from} lacks ${missing.join(', ')}: is it a capture directory?`);
   const named = [...new Set([...REQUIRED, ...optional])].filter(f => existsSync(path.join(from, f)));
-  const transcripts = walk(path.join(from, 'transcripts')).map(f => path.relative(from, f));
-  return ok([...named, ...transcripts].map(relPath => ({ relPath, text: readFileSync(path.join(from, relPath), 'utf8') })));
+  const tdir = path.join(from, 'transcripts');
+  const found = existsSync(tdir) ? agentEntries(tdir) : [];
+  const odd = found.filter(e => e.kind !== 'file').map(e => `transcripts/${e.rel}: ${e.kind}`);
+  const read = [...named, ...found.filter(e => e.kind === 'file').map(e => path.join('transcripts', e.rel))].map(relPath => ({ relPath, bytes: readAgentFileUnder(from, relPath) }));
+  const refused = [...odd, ...read.filter(r => r.bytes === null || r.bytes.unreadable).map(r => `${r.relPath}: ${r.bytes?.unreadable ?? 'vanished'}`)];
+  if (refused.length > 0) return fail(`${from} holds ${refused.length} path(s) that are not plain regular files (${refused.join('; ')}): nothing was read`);
+  return ok(read.map(r => ({ relPath: r.relPath, text: r.bytes.toString('utf8') })));
 }
 
 function parseNdjson(name, text) {

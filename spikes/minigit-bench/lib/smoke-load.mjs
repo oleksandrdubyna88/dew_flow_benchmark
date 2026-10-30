@@ -1,7 +1,8 @@
 // The bare-session smoke as files: staging a session directory into the flat, capture-shaped layout (so E1's loaders and the sanitiser read
 // it) and loading it back. I/O at the edge; the verdicts over what is loaded are pure (smoke-verdicts.mjs).
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { agentEntries, readAgentFileUnder } from './agent-files.mjs';
 import { fail, ok } from './result.mjs';
 
 /** session-dir relative path -> flat name. `otel/otel-raw.ndjson` is the file sink's line shape under the capture's name. */
@@ -12,29 +13,38 @@ export const STAGED = Object.freeze({
 });
 export const REQUIRED_STAGED = Object.freeze(['stream.ndjson', 'otlp-raw.ndjson', 'argv.json', 'meta.json', 'broker.ndjson', 'egress.ndjson', 'readback.json', 'checks.json']);
 
-const walk = dir => (existsSync(dir) ? readdirSync(dir).flatMap(n => {
-  const full = path.join(dir, n);
-  return statSync(full).isDirectory() ? walk(full) : [full];
-}) : []);
+/** Every file under `dir` (absolute), for the loader of a sanitised fixture, which holds regular files only. */
+const walk = dir => (existsSync(dir) ? agentEntries(dir).map(e => path.join(dir, e.rel)) : []);
 
-/** Copy the smoke's evidence from a session dir into `to` (flat names, `transcripts/` kept). Refuses a missing required file. */
+/** The `{ rel, dest, required }` rows of what a session dir stages: the named files, then every file under `transcripts/`. A non-regular transcript entry is `odd`. */
+function stagingPlan(from) {
+  const named = Object.entries(STAGED).map(([rel, flat]) => ({ rel, dest: flat, required: REQUIRED_STAGED.includes(flat) }));
+  const dir = path.join(from, 'transcripts');
+  const entries = existsSync(dir) ? agentEntries(dir) : [];
+  return {
+    rows: [...named, ...entries.filter(e => e.kind === 'file').map(e => ({ rel: path.join('transcripts', e.rel), dest: path.join('transcripts', e.rel), required: true }))],
+    odd: entries.filter(e => e.kind !== 'file').map(e => `transcripts/${e.rel}: ${e.kind}`),
+  };
+}
+
+/**
+ * Copy the smoke's evidence from a session dir into `to` (flat names, `transcripts/` kept). The session dir is agent-written (box/out holds
+ * the audit log, the transcripts come from box/config), so every file is read through lib/agent-files.mjs FIRST: a link, a pipe or a link
+ * among the directories refuses the whole staging, naming it, and nothing is written. A missing required file is a refusal too.
+ */
 export function stageSmoke(from, to) {
-  const missing = Object.entries(STAGED).filter(([rel, flat]) => REQUIRED_STAGED.includes(flat) && !existsSync(path.join(from, rel))).map(([rel]) => rel);
+  const { rows, odd } = stagingPlan(from);
+  const read = rows.map(r => ({ ...r, bytes: readAgentFileUnder(from, r.rel) }));
+  const refused = [...odd, ...read.filter(r => r.bytes?.unreadable).map(r => `${r.rel}: ${r.bytes.unreadable}`)];
+  if (refused.length > 0) return fail(`the session dir holds ${refused.length} path(s) that are not plain regular files (${refused.join('; ')}): nothing was staged`);
+  const missing = read.filter(r => r.required && r.bytes === null).map(r => r.rel);
   if (missing.length > 0) return fail(`${from} lacks ${missing.join(', ')}: is it a smoke session dir?`);
-  mkdirSync(to, { recursive: true });
-  const copied = [];
-  for (const [rel, flat] of Object.entries(STAGED)) {
-    if (!existsSync(path.join(from, rel))) continue;
-    copyFileSync(path.join(from, rel), path.join(to, flat));
-    copied.push(flat);
+  const present = read.filter(r => r.bytes !== null);
+  for (const r of present) {
+    mkdirSync(path.dirname(path.join(to, r.dest)), { recursive: true });
+    writeFileSync(path.join(to, r.dest), r.bytes);
   }
-  for (const f of walk(path.join(from, 'transcripts'))) {
-    const rel = path.join('transcripts', path.relative(path.join(from, 'transcripts'), f));
-    mkdirSync(path.dirname(path.join(to, rel)), { recursive: true });
-    copyFileSync(f, path.join(to, rel));
-    copied.push(rel);
-  }
-  return ok(copied);
+  return ok(present.map(r => r.dest));
 }
 
 const readText = (dir, name) => (existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), 'utf8') : '');

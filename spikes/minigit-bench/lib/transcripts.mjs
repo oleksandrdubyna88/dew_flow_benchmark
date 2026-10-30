@@ -1,6 +1,7 @@
 // The CLI's transcripts: walk `<config>/projects` and copy the `*.jsonl` files out. Extracted from capture/capture-run.mjs.
-import { copyFileSync, lstatSync, mkdirSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { copyAgentFile } from './agent-files.mjs';
 import { fail, ok } from './result.mjs';
 
 /**
@@ -33,10 +34,7 @@ export function copyTranscripts(fromConfigDir, toDir) {
   const from = path.join(fromConfigDir, 'projects');
   const { files, refused } = walkJsonl(from);
   if (refused.length > 0) return fail(`the transcript tree holds ${refused.length} entr${refused.length === 1 ? 'y' : 'ies'} that ${refused.length === 1 ? 'is' : 'are'} not a regular file or a real directory (${refused.join(', ')}): nothing was copied`);
-  return ok(files.map(rel => {
-    const target = path.join(toDir, rel);
-    mkdirSync(path.dirname(target), { recursive: true });
-    copyFileSync(path.join(from, rel), target);
-    return rel;
-  }));
+  const copies = files.map(rel => copyAgentFile(from, rel, path.join(toDir, rel)));
+  const bad = copies.find(c => !c.ok);
+  return bad ? fail(`a transcript could not be copied (${bad.reason}): the copy is incomplete`) : ok(files);
 }
