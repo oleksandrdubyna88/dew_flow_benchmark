@@ -61,13 +61,13 @@ function ledgerKind(ctx, outcome) {
 // ---- the gates ------------------------------------------------------------------------------------------------------------------
 
 /** -> `null` (go) or a `{ exit, message }`. */
-async function gates({ ctx, deps, step, state, h }) {
+async function gates({ ctx, deps, step, state, h, say }) {
   const guard = await deps.guard({ paid: true, requireSeed: ctx.kind === 'data' });
   if (!guard.ok) return done(EXIT.config, guard.reason);
   await deps.retireStale();
   const pre = await deps.preflight();
   if (!pre.ok) return done(EXIT.halt, `the preflight refuses: ${pre.reason}`);
-  const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null, cellIds: cellIdsOf(h) });
+  const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null, cellIds: cellIdsOf(h), say });
   if (!quiet.ok) return done(EXIT.halt, quiet.reason, { verdict: quiet.verdict });
   state.quiet = quiet.value;
   const gate = spendGate({ ledger: readLedger(ctx.ledgerFile), liveUsd: 0, caps: step.sessions.map(() => ctx.caps.capUsd), ceilingUsd: ctx.ceilingUsd, bareBudgetUsd: ctx.bareBudgetUsd });
@@ -83,7 +83,7 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
       h.apply(planSession(h.get(), { rid: item.rid, pair: ctx.pair, ...item.session, kind: ctx.kind, label: step.label, mask: item.mask }));
     }
   }
-  const stopped = await gates({ ctx, deps, step, state, h });
+  const stopped = await gates({ ctx, deps, step, state, h, say });
   if (stopped) return stopped;
   if (step.phase === 'v2' && h.get().pairs?.[ctx.pair]?.barrierAtMs === undefined) h.commit({ ...h.get(), pairs: { ...(h.get().pairs ?? {}), [ctx.pair]: { barrierAtMs: deps.now() } } });
   for (const item of items) h.apply(transition(h.get(), item.rid, 'launching', { startedAt: new Date(deps.now()).toISOString() }));

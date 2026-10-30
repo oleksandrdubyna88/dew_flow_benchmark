@@ -51,10 +51,12 @@ function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now, procAp
     liveSessions: () => liveSessionDirs(rsdRoot), spin, now, patterns: thresholds.agentPatterns,
   });
   return {
-    async quiet({ phase, v1Quiet, cellIds = [] }) {
+    async quiet({ phase, v1Quiet, cellIds = [], say = () => {} }) {
       const sampler = await build(cellIds);
       const check = () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep });
-      const waited = await waitForQuiet({ check, maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep });
+      const secs = ms => Math.round(ms / 1000);
+      const onRetry = ({ verdict, waitedMs, nextCheckInMs }) => say(`the machine is not quiet (${verdict.failures.map(f => `${f.condition}: ${f.detail}`).join('; ')}); waited ${secs(waitedMs)} s of ${secs(thresholds.maxWaitMs)} s; next check in ${secs(nextCheckInMs)} s`);
+      const waited = await waitForQuiet({ check, maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep, onRetry });
       if (waited.quiet) return ok({ quiet: true, flags: [], numbers: waited.verdict.numbers, waitedMs: waited.waitedMs });
       if (!acceptNoisy) return fail(`the machine was not quiet for ${Math.round(waited.waitedMs / 60000)} min: ${waited.verdict.failures.map(f => `${f.condition} (${f.detail})`).join('; ')}`, { verdict: waited.verdict });
       const o = noisyOverride({ phase, v1Quiet, reason: acceptNoisy });

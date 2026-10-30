@@ -170,13 +170,13 @@ test('The_bare_budget_is_raised_once_by_the_worst_case_of_the_re_runs_of_a_pair_
 // ---- the sampler of a phase (review M1) ---------------------------------------------------------------------------------------------
 
 /** A process table with ONE busy process whose environment is `environ` (every read of its stat adds a CPU-second): the host side of the sampler, stubbed. */
-const busyHost = environ => {
+const busyHost = (environ, cmdline = 'node\0worker.js') => {
   let ticks = 0;
   return {
     pids: () => ['4242'],
     read: (pid, file) => {
       if (file === 'stat') return `${pid} (worker) S 1 1 1 0 0 0 0 0 0 0 ${(ticks += 100)} 0`;
-      return { cmdline: 'node\0worker.js', status: 'Uid:\t1000\t1000\nCpus_allowed_list:\t0-5\n', environ: environ.join('\0') }[file];
+      return { cmdline, status: 'Uid:\t1000\t1000\nCpus_allowed_list:\t0-5\n', environ: environ.join('\0') }[file];
     },
     signal: () => {},
   };
@@ -210,4 +210,16 @@ test('The_sampler_counts_the_cells_of_the_phase_as_ours_and_a_stranger_as_foreig
   const stranger = await onePhase({ environOf: () => ['BENCH_CELL=cell-someone-elses'] });
   assert.ok(stranger.samples.some(s => s.foreignCpus > 1), 'control: the same process under another cell id IS foreign');
   assert.ok(Object.values(stranger.map.sessions).every(s => s.run.flags.includes('foreign load')));
+});
+
+test('A_wait_for_a_quiet_machine_tells_the_operator_each_retry_through_the_output_callback', async () => {
+  const w = await wiring({ quiet: { intervalMs: 10, windowMs: 20, recheckMs: 15, maxWaitMs: 800, spinIterations: 1000 } });
+  const procApi = busyHost([], 'claude\0-p\0someone elses session');
+  const built = await buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home, procApi } });
+  assert.equal(built.ok, true, built.reason);
+  const told = [];
+  const r = await built.value.deps.quiet({ phase: 'v1', v1Quiet: null, cellIds: [], say: l => told.push(l) });
+  assert.equal(r.ok, false, 'a foreign claude -p never goes away: the wait gives up');
+  assert.ok(told.length >= 1, 'the operator was told while it waited');
+  assert.ok(told.every(l => /not quiet/.test(l) && /foreign-agent/.test(l) && /waited \d+ s/.test(l) && /next check in \d+ s/.test(l)), told.join('\n'));
 });

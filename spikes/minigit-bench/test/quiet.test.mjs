@@ -183,3 +183,18 @@ test('The_spin_probe_is_calibrated_only_on_a_quiet_machine', async () => {
   assert.equal(probes, q.spinCalibrationRuns);
   assert.equal(quiet.value.window.quiet, true, 'the spin of the window itself (999 ms) did not count: it is the thing being calibrated');
 });
+
+test('Every_retry_of_the_wait_is_reported_with_its_verdict_the_time_waited_and_the_next_check', async () => {
+  const c = clock();
+  const bad = { quiet: false, failures: [{ condition: 'foreign-agent', detail: 'claude -p x' }] };
+  const told = [];
+  const r = await waitForQuiet({ check: async () => { c.advance(60_000); return c.now() > 250_000 ? { quiet: true, failures: [] } : bad; }, maxWaitMs: 1_800_000, recheckMs: 60_000, now: c.now, sleep: c.sleep, onRetry: x => told.push(x) });
+  assert.equal(r.quiet, true);
+  assert.equal(told.length, 2, 'two windows were not quiet: two retries, none for the quiet one');
+  assert.deepEqual(told.map(t => t.attempt), [1, 2]);
+  assert.deepEqual(told.map(t => t.waitedMs), [60_000, 180_000]);
+  assert.ok(told.every(t => t.nextCheckInMs === 60_000 && t.verdict.failures[0].condition === 'foreign-agent'));
+  const giveUp = [];
+  await waitForQuiet({ check: async () => { c.advance(60_000); return bad; }, maxWaitMs: 100_000, recheckMs: 60_000, now: c.now, sleep: c.sleep, onRetry: x => giveUp.push(x) });
+  assert.equal(giveUp.length, 1, 'the window that gives up is the result, not a retry: nothing is promised for after it');
+});
