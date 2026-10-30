@@ -45,3 +45,12 @@ test('A_word_is_placed_from_the_directory_or_by_its_own_root_and_unplaced_when_r
   assert.deepEqual(['$d', '*.ts', '$(x)', '~root', 'a b'].map(w => resolvable(w)), [false, false, false, false, true]);
   assert.deepEqual(['$HOME/x', '${HOME}', '~/x'].map(w => resolvable(w)), [true, true, true]);
 });
+
+test('A_command_of_many_segments_is_stepped_in_linear_time', () => {
+  const command = Array.from({ length: 30000 }, (_, i) => `echo ${i}`).join(' && ');
+  const started = performance.now();
+  const steps = shellSteps(command, ctx);
+  const ms = performance.now() - started;
+  assert.equal(steps.length, 30000);
+  assert.ok(ms < 500, `${ms.toFixed(0)} ms: copying the steps again at every segment is quadratic`);
+});

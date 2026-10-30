@@ -73,10 +73,13 @@ const dataStep = (state, text) => ({ state, step: { segment: '', words: [], cwd:
  */
 export function shellSteps(text, ctx) {
   const { text: commands, data } = stripData(text);
-  const done = commands.split(SEGMENT).reduce((acc, segment) => {
+  const steps = []; // built here and appended to in place: a copy per segment would make a command of 30,000 segments quadratic; the result is a new array, nothing outside is touched
+  let state = { cwd: ctx.treeRoot, saved: [] };
+  for (const segment of commands.split(SEGMENT)) {
     const body = PLACEHOLDER.exec(segment.trim());
-    const next = body ? dataStep(acc.state, data[Number(body[1])]) : stepOf(acc.state, segment, ctx);
-    return { state: next.state, steps: [...acc.steps, next.step] };
-  }, { state: { cwd: ctx.treeRoot, saved: [] }, steps: [] });
-  return done.steps;
+    const next = body ? dataStep(state, data[Number(body[1])]) : stepOf(state, segment, ctx);
+    state = next.state;
+    steps.push(next.step);
+  }
+  return steps;
 }
