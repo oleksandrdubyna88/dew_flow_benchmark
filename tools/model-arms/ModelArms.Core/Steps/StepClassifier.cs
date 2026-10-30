@@ -46,12 +46,14 @@ public static class StepClassifier
         : envelope.IsError ? ErrorLimitReason(envelope)
         : string.Empty;
 
-    private static string ErrorLimitReason(ClaudeResultEnvelope envelope)
+    /// <summary><c>api_error</c> first; the words are searched only when it names no limit, and once.</summary>
+    private static string ErrorLimitReason(ClaudeResultEnvelope envelope) =>
+        LimitWords.FirstIn(envelope.ApiError).Length > 0 ? $"api_error '{envelope.ApiError}' — {Text(envelope)}" : WordsReason(envelope);
+
+    private static string WordsReason(ClaudeResultEnvelope envelope)
     {
         var words = WordsIn(envelope);
-        return LimitWords.FirstIn(envelope.ApiError).Length > 0 ? $"api_error '{envelope.ApiError}' — {Text(envelope)}"
-            : words.Length > 0 ? $"the words '{words}' in the result — {Text(envelope)}"
-            : string.Empty;
+        return words.Length > 0 ? $"the words '{words}' in the result — {Text(envelope)}" : string.Empty;
     }
 
     private static bool IsLimitStatus(CapturedCount status) => status.WasCaptured && status.Value is 429 or 529;

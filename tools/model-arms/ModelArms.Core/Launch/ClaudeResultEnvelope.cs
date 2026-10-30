@@ -96,12 +96,15 @@ public sealed record ClaudeResultEnvelope(bool IsError, CapturedCount ApiErrorSt
             envelope = IsResult(document.RootElement) ? Read(document.RootElement, number) : null;
             return envelope is null ? LineKind.Skipped : LineKind.Result;
         }
-        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
+        catch (Exception ex) when (IsLineFault(ex))
         {
             envelope = null;
             return LineKind.Unreadable;
         }
     }
+
+    /// <summary>The three exceptions a line can raise: malformed JSON, a raw lone surrogate that cannot be transcoded, and an escaped one (or a wrong-kind read) in a key or a value.</summary>
+    private static bool IsLineFault(Exception ex) => ex is JsonException or ArgumentException or InvalidOperationException;
 
     private static bool IsResult(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object
