@@ -51,6 +51,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(StepClassifier), typeof(LimitWords),
 
         // E2.S2
+        typeof(TimingLines), typeof(DoneMarkers), typeof(ContinueMarkers), typeof(StepBudget), typeof(ResumeNotice), typeof(SessionTranscripts), typeof(StepRecovery), typeof(StepOutputs),
 
         // E2.S3
 

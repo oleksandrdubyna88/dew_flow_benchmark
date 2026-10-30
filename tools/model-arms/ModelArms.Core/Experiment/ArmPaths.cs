@@ -114,6 +114,8 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string Done(string step) => OutFile(step, ".done");
 
+    public string Continue(string step) => Folder;
+
     public string Before(string step) => OutFile(step, ".before");
 
     public string Diff(string step) => OutFile(step, ".diff");

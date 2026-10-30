@@ -64,6 +64,7 @@ public sealed class ArmPathsTests
         (nameof(ArmPaths.Stderr), Arm.Stderr("2-review", 3), At("r/abc/out/2-review.a3.err")),
         (nameof(ArmPaths.Prompt), Arm.Prompt("2-review", 3), At("r/abc/out/2-review.a3.prompt.md")),
         (nameof(ArmPaths.Done), Arm.Done("2-review"), At("r/abc/out/2-review.done")),
+        (nameof(ArmPaths.Continue), Arm.Continue("4-gate"), At("r/abc/out/4-gate.continue")),
         (nameof(ArmPaths.Before), Arm.Before("2-review"), At("r/abc/out/2-review.before")),
         (nameof(ArmPaths.Diff), Arm.Diff("2-review"), At("r/abc/out/2-review.diff")),
         (nameof(ArmPaths.Timing), Arm.Timing, At("r/abc/out/timing.jsonl")),
