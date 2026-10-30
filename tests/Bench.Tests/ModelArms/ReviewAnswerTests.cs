@@ -273,6 +273,22 @@ public sealed class ReviewAnswerTests
         ShouldBeUnparsedWith(AnswerFor(pairs).Ok(), pairs);
     }
 
+    // ---- Fix round R2 -----------------------------------------------------------------------------------------------------------------------------------------------
+
+    /// <summary>Given a result line whose text holds a valid verdict AND an escaped lone surrogate (<c>\ud83d</c>, as a model may print one cut from an emoji) — before or after the object, or inside it — When the stream is read
+    /// by <c>LastOf</c> and extracted, Then the verdict span is returned: the escape must not turn a good review into <c>unparsed</c> with a double-escaped <c>raw</c> (the probe of the Opus review). The lone half inside the
+    /// object is U+FFFD in the span, the one change.</summary>
+    [Fact]
+    public void An_escaped_lone_surrogate_in_the_result_text_does_not_turn_a_valid_verdict_into_unparsed()
+    {
+        const string head = """{"type":"result","subtype":"success","is_error":false,"result":""";
+
+        Extract(head + """ "{\"verdict\":\"ready\",\"findings\":[]} trailing \ud83d"}""").Ok().Should().Be(Ready, "a lone half after the object is outside the span");
+        Extract(head + """ "\ud83d lead {\"verdict\":\"ready\",\"findings\":[]}"}""").Ok().Should().Be("{\"verdict\":\"ready\",\"findings\":[]}", "and before it");
+        Extract(head + """ "{\"verdict\":\"ready\",\"note\":\"cut \ud83d here\"}"}""").Ok().Should().Be("{\"verdict\":\"ready\",\"note\":\"cut \uFFFD here\"}", "inside the object it is U+FFFD in the span");
+        Extract(head + """ "no braces \ud83d at all"}""").Ok().Should().Be(Unparsed("no braces \uFFFD at all"), "and an unparsed raw is the decoded text, not the escaped one");
+    }
+
     // ---- Scenario 9 (added): a lone surrogate ---------------------------------------------------------------------------------------------------------------------------
 
     private static ClaudeResultEnvelope WithText(string text) =>
