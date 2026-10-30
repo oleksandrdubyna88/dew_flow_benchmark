@@ -7,7 +7,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import v8 from 'node:v8';
 import vm from 'node:vm';
-import { scanSessionDir } from '../lib/session-scan.mjs';
+import { scanFiles, scanSessionDir } from '../lib/session-scan.mjs';
+import { tokenHits } from '../lib/token-scan.mjs';
 import { fakeToken } from './broker-stub.mjs';
 import { tmpDir } from './helpers.mjs';
 
@@ -69,4 +70,17 @@ test('A_small_file_is_read_whole_and_the_scan_reads_one_file_at_a_time_keeping_o
   assert.deepEqual(scan.streamed, []);
   assert.equal(scan.scanned, 5);
   assert.equal(JSON.stringify(scan).includes('nothing-secret-here'), false, 'no file content is in the result');
+});
+
+test('scanFiles_runs_any_text_scan_over_whole_and_windowed_files_with_one_hit_per_token', () => {
+  const canary = 'c0ffee0123456789abcdef0123456789';
+  const dir = tmpDir('scan-files');
+  write(dir, 'small.txt', filled(300, [100, canary]));
+  write(dir, 'big.txt', filled(4000, [256 - 10, canary], [3000, canary]));
+  write(dir, 'none.txt', filled(5000));
+  const found = scanFiles(dir, ['small.txt', 'big.txt', 'none.txt', 'absent.txt'], text => tokenHits([{ source: 'x', text }], [canary]).filter(h => h.kind === 'own-value'), LIMITS);
+  assert.deepEqual(found.hits.map(h => [h.source, h.offset]), [['small.txt', 100], ['big.txt', 246], ['big.txt', 3000]], 'each token once, at its offset, the straddling one too');
+  assert.deepEqual(found.unreadable, [], 'an absent file is not a finding');
+  const swapped = scanFiles(dir, ['big.txt'], () => [], { ...LIMITS, maxStreamBytes: 100 });
+  assert.equal(swapped.unreadable.length, 1, 'a file no scan can read is reported, never skipped');
 });

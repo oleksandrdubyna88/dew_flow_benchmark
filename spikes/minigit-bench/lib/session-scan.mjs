@@ -10,6 +10,7 @@
 // The tree is agent-written: a link or any other non-regular entry in it is a HIGH-severity finding (`links`), never a skip, and is never read through.
 // With the box's bind table (`binds`) a link whose target string maps INSIDE the agent-writable tree is `inside` (lib/link-class.mjs): listed apart in
 // `insideLinks` as box paths, not a finding. Without one every link is high.
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { MAX_AGENT_FILE_BYTES, agentEntries, readAgentFileUnder, scanAgentFileWindows } from './agent-files.mjs';
 import { classifyLink } from './link-class.mjs';
@@ -28,24 +29,42 @@ export function realTokenHits(texts, { real, dummy = null }) {
   return tokenHits(masked, [real]);
 }
 
-/** The hits of one file read whole, or null when it was not a regular file any more (a swap after the listing). */
-function scanWhole(root, rel, size, { real, dummy, limits, hooks }) {
+/** The hits of one file read whole, or null when it was not a regular file any more (a swap after the listing). `scanText(text)` -> `[{ kind, offset, ... }]`. */
+function scanWhole(root, rel, scanText, { limits, hooks }) {
   hooks.beforeRead?.(rel);
   const bytes = readAgentFileUnder(root, rel, limits.maxScanBytes);
   if (!Buffer.isBuffer(bytes)) return null;
-  const hits = realTokenHits([{ source: rel, text: bytes.toString('latin1') }], { real, dummy });
-  return hits;
+  return scanText(bytes.toString('latin1')).map(h => ({ ...h, source: rel }));
 }
 
 /** The hits of one big file read in windows -> `{ hits } | { unreadable }`; only the hits that start in a window's own part are kept. */
-function scanWindows(root, rel, { real, dummy, limits, hooks }) {
+function scanWindows(root, rel, scanText, { limits, hooks }) {
   hooks.beforeRead?.(rel);
   const hits = [];
   const read = scanAgentFileWindows(root, rel, { windowBytes: limits.windowBytes, overlapBytes: limits.overlapBytes, maxBytes: limits.maxStreamBytes }, (bytes, { base, ownBytes }) => {
-    const own = realTokenHits([{ source: rel, text: bytes.toString('latin1') }], { real, dummy }).filter(h => h.offset < ownBytes);
-    hits.push(...own.map(h => ({ ...h, offset: h.offset + base })));
+    const own = scanText(bytes.toString('latin1')).filter(h => h.offset < ownBytes);
+    hits.push(...own.map(h => ({ ...h, source: rel, offset: h.offset + base })));
   });
   return read === null || read.unreadable ? { unreadable: read?.unreadable ?? 'absent' } : { hits };
+}
+
+/**
+ * Run a pure text scan over the named files of `root`, one at a time, whatever their size: whole up to `maxScanBytes`, in overlapping windows above it up to `maxStreamBytes` (never skipped: a
+ * token in a big file is the case an agent would choose). `scanText(latin1Text)` -> `[{ kind, offset, ... }]`. -> `{ hits: [{ source, kind, offset, ... }], unreadable: [{ rel, why }] }`. An absent
+ * file is skipped; one that cannot be scanned (a link, too large, swapped while it was read) is `unreadable`, never a quiet pass. The session scan's own loop is built on the same two readers.
+ */
+export function scanFiles(root, rels, scanText, limits = SCAN_LIMITS, hooks = {}) {
+  const hits = [];
+  const unreadable = [];
+  for (const rel of rels) {
+    const size = statSync(path.join(root, rel), { throwIfNoEntry: false })?.size;
+    if (size === undefined) continue;
+    const found = size <= limits.maxScanBytes ? scanWhole(root, rel, scanText, { limits, hooks }) : size <= limits.maxStreamBytes ? scanWindows(root, rel, scanText, { limits, hooks }) : { unreadable: `larger than ${limits.maxStreamBytes} bytes` };
+    if (found === null) unreadable.push({ rel, why: 'swapped after the listing' });
+    else if (found.unreadable) unreadable.push({ rel, why: found.unreadable });
+    else hits.push(...(Array.isArray(found) ? found : found.hits));
+  }
+  return { hits, unreadable };
 }
 
 /**
@@ -56,7 +75,8 @@ export function scanSessionDir(root, { real, dummy = null, binds = [], limits = 
   const entries = filesUnder(root);
   hooks.afterList?.(); // a test seam: the agent runs while the scan does, and can change the tree between the listing and the reads
   const finding = (f, kind = f.kind, extra = {}) => ({ rel: f.rel, kind, severity: 'high', ...extra });
-  const ctx = { real, dummy, limits, hooks };
+  const scanText = text => realTokenHits([{ source: '', text }], { real, dummy });
+  const ctx = { limits, hooks };
   const hits = [];
   const streamed = [];
   const tooLarge = [];
@@ -64,12 +84,12 @@ export function scanSessionDir(root, { real, dummy = null, binds = [], limits = 
   let scanned = 0;
   for (const f of entries.filter(e => e.kind === 'file')) {
     if (f.size <= limits.maxScanBytes) {
-      const found = scanWhole(root, f.rel, f.size, ctx);
+      const found = scanWhole(root, f.rel, scanText, ctx);
       // a regular file that is no longer one when it is opened (or whose directories were swapped for a link) was changed after the listing: that is a finding too
       if (found === null) { problems.push(finding(f, 'swapped')); continue; }
       hits.push(...found);
     } else {
-      const found = f.size <= limits.maxStreamBytes ? scanWindows(root, f.rel, ctx) : { unreadable: `larger than ${limits.maxStreamBytes} bytes` };
+      const found = f.size <= limits.maxStreamBytes ? scanWindows(root, f.rel, scanText, ctx) : { unreadable: `larger than ${limits.maxStreamBytes} bytes` };
       if (found.unreadable) { tooLarge.push(f.rel); problems.push(finding(f, found.unreadable.startsWith('larger') ? 'unscanned' : 'swapped', { why: found.unreadable })); continue; }
       streamed.push(f.rel);
       hits.push(...found.hits);

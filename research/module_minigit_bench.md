@@ -587,6 +587,7 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 | Outcome | `lib/bare-outcome.mjs` | the outcome table below, a pure function over records |
 | Schedule | `lib/bare-schedule.mjs` | the barrier and the void / re-run table below |
 | Money | `lib/spend-gate.mjs`, `lib/ledger.mjs`, `policy-ab-quick/lib/spend.mjs` | two limits through one widened `spendDecision(spent, ceiling, caps, { liveUsd, factor, label })`; the stop-rule figure; the cost of an interrupted session |
+| Evidence scans | `lib/bare-collect.mjs`, `lib/session-scan.mjs` | every evidence file (stream, transcripts, `box/out`, `box/work`) goes through `scanFiles`, the streamed scan of the session scan: whole up to 64 MiB, overlapping windows above it, never skipped; a file no scan can read is a named `unscanned` token hit, not a quiet pass (review G5) |
 | Records | `lib/bare-record.mjs`, `lib/bare-records-io.mjs`, `lib/loc.mjs` | the session, cell and pair records; `model_api` is the partition's model category (so a killed session without an envelope keeps its time bounds), the envelope's `duration_api_ms` is descriptive only (review M6) |
 | State | `lib/run-map.mjs`, `lib/amendments.mjs`, `lib/alias-store.mjs` | the run-map and its transitions, the dated amendment lines, the D12 baseline |
 | Scoring | `lib/score-run.mjs` | `score-session.mjs` as a child under `taskset -c 0-13`, bounded as a whole |

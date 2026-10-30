@@ -119,3 +119,20 @@ test('A_link_in_a_session_dir_is_refused_by_the_one_loader_not_followed', () => 
   assert.equal(r.ok, false);
   assert.match(r.reason, /broker\.ndjson: symlink|not plain regular files/);
 });
+
+test('A_canary_or_a_credential_in_an_evidence_file_over_16_MiB_is_found_not_skipped', () => {
+  const canary = 'c0ffee0123456789abcdef0123456789';
+  const layout = sessionFromFixture();
+  // 20 MiB of filler with the canary in its last bytes: the old reader skipped every evidence file over 16 MiB
+  const big = path.join(layout.work, 'big.log');
+  writeFileSync(big, Buffer.alloc(20 * 1024 * 1024, '.'));
+  appendFileSync(big, canary);
+  const r = collect(layout, { canaryTokens: [canary] });
+  assert.equal(r.outcome.class, 'void: contaminated', 'the canary is in a file an agent would choose to hide it in');
+  const none = collect(layout);
+  assert.equal(none.outcome.class, 'completed', 'control: the same big file without the canary registered');
+  const credential = sessionFromFixture();
+  writeFileSync(path.join(credential.work, 'big.log'), Buffer.alloc(20 * 1024 * 1024, '.'));
+  appendFileSync(path.join(credential.work, 'big.log'), `ghp_${'a1B2'.repeat(9)}`);
+  assert.ok(['void: contaminated', 'stop: security'].includes(collect(credential).outcome.class), 'a GitHub token shape in a big file is a hit too');
+});
