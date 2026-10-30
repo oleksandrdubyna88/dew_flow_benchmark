@@ -552,6 +552,7 @@ changedLines {tests, src, docs}, files}`, then the additive `stepsOnDeadline` (a
 | `ObjectiveReportTests.The_shape_is_the_part6_arms_every_member_in_its_order` | the member paths (names, nesting, order, JSON kinds; the scenario map's entries aside) of the port's report equal `objective-part6-C1.json`'s, plus `stepsOnDeadline` last | stub: `Expected paths to be equal to {"arm", …}` |
 | `ObjectiveReportTests.Steps_that_ended_on_a_deadline_are_listed_under_stepsOnDeadline` | facts with `["3-fix"]` → the text ends `"stepsOnDeadline": [\n    "3-fix"\n  ]\n}` | stub without the member: `Expected text to end with …` |
 | `ObjectiveReportTests.The_summary_line_is_the_shells` | equals the oracle's stdout line over the round-trip inputs | stub `""` |
+| `ObjectiveReportTests.Arm_written_strings_are_escaped_and_parse_back_exactly` | facts whose scenario names, numstat paths and log-derived names hold `"`, `\\`, a newline, a tab, `\u0001`, `ё`, an emoji and `"},"x":{"` → the text parses with `JsonDocument`; the member paths equal the shape test's; every string reads back equal to its input | a plant that writes raw strings: `JsonReaderException` |
 | `ObjectiveReportTests.Unknown_exits_are_null_and_never_pass` | `StageExits` all Unavailable → `"build": false`, `"format": false`, `"mcp": {"exit": null, …`, `"ts": {"exit": null, …` | stub writes `0`: `Expected … "exit": null …` |
 
 **Break-its** (plant, watch the named test go red with the real symptom, restore): `TsTestLog` takes the LAST `ℹ tests` → *the node log*
@@ -809,7 +810,11 @@ cost (§3); the task pipeline's steps (E4.S3 extends `status`).
    refused → 4).
 6. Git in the clone (`ArmGit`, `GitEnvironment.Of(TargetEnvironment.Of(parent))`): uncommitted count, `HEAD --short`, the count since
    `base`, numstat, shortstat, and `MentionsAsync(name, testGlobs)` per scenario. A failure → 3, no report.
-7. The suite and extension logs (`BoundedFile`, 64 MiB each; refused → read as empty, a line says why), the CTRF at
+7. **The folder is still the one made** (consult on 3.5): every child has ended; `out/objective`'s facts now equal those taken right after
+   step 5 made it (Kernel road: device and inode; Portable: not a `ReparsePoint` and a folder — the line's clause) — else 3 *"out/objective was
+   replaced while the arm's code ran — no report"*, nothing read or written through it. The suite and extension logs are read back from
+   the harness's own HELD streams (seek 0, at most 64 MiB each; past it → read as empty, a line says why) — never re-opened by path, so a
+   log unlinked and replaced by the arm's code is not what the report reads; the CTRF at
    `out/objective/<ctrfFile>` (`BoundedFile`, 64 MiB — the real one is 11.7 MB; absent → `[]`; refused → `[]` and a line naming why).
 8. `stepsOnDeadline` = `DeadlineSteps.Of(scheme, stem → DoneMarkers.Read through BoundedFile)`.
 9. `out/objective.json` = `ObjectiveReport.Write` (`ArmFiles.Replace`); the summary line on stdout and in `out/objective.out`; `chain/objective-<arm>`
@@ -824,6 +829,8 @@ cost (§3); the task pipeline's steps (E4.S3 extends `status`).
 | `ChecksVerbTests.Format_runs_only_over_the_cs_files_changed_since_base_and_passes_when_none_changed` | none changed → no format call, `"format": true`; an added `a b.cs` → ONE argument | stub runs format always |
 | `ChecksVerbTests.A_failed_build_is_recorded_and_the_report_is_still_written` | the build shim exits 1 → `"build": false`, the suite still ran, exit 0 | stub stops at the build |
 | `ChecksVerbTests.A_link_planted_where_a_log_will_be_written_is_never_followed` | the BUILD shim (the arm's code) makes `out/objective/mcp-tests.log` and `out/objective/stages.json` links to two files outside the root → their bytes unchanged afterwards; the logs are regular files holding the shims' output | a lazy `FileMode.Create` plant: `Expected outside bytes to be equal to …` |
+| `ChecksVerbTests.A_log_the_arms_code_unlinks_and_forges_is_not_what_the_report_reads` | the suite shim prints its summary (total 12, failed 0), then unlinks `out/objective/mcp-tests.log` and writes a forged one (total 99, a failure) at that name → the report's `mcp` totals are 12 and 0 | a by-path re-read plant: `Expected total 12, but found 99` |
+| `ChecksVerbTests.An_objective_folder_swapped_for_a_link_is_refused_and_nothing_is_written_through_it` | Linux: the suite shim renames `out/objective` aside and links the name to a fixture folder holding a distinctive CTRF → 3 naming `replaced`; the fixture's listing and bytes unchanged (no `stages.json` in it); no `objective.json`, no marker | a stub without the check: `Expected exit 3, but found 0` |
 | `ChecksVerbTests.A_ctrf_that_is_a_link_a_fifo_or_too_big_reads_as_no_tests_and_says_why` | theory (FIFO on Linux): every `cs` scenario `absent`, a line names the reason, exit 0 within the test's wall | a `File.ReadAllText` plant: the wall fires on the FIFO |
 | `ChecksVerbTests.An_earlier_objective_folder_is_kept_aside_not_overwritten` | two full runs → `out/objective.prev-<stamp>/build.log` holds the first run's text | stub overwrites |
 | `ChecksVerbTests.Checks_refuses_an_arm_whose_runner_is_alive` | `pids/C1.pid` = a live `FakeCli` hold → 4, no shim called | stub runs |
@@ -992,7 +999,11 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
 17. **`checks` runs the arm's model-written code** — its build, its tests, its npm scripts — with the operator's rights, by design: that is
     the measurement, and the shell did the same; in the chain it runs after `unlock` (§4.7). The harness's guarantees are about ITS
     executables (resolved, D17), ITS files (exclusive or renamed) and the model's files it READS (bounded, no-follow) — said in the module
-    doc's threat paragraph. Not a change.
+    doc's threat paragraph. **The report is not authenticated against that code** (consult on 3.5): with the operator's rights it can
+    rewrite `objective.json` after `checks` ends, and the CTRF is its suite's own output by nature. The exclusive logs, the held-stream
+    read-back and the folder's identity check stop the harness from FOLLOWING or CONSUMING a substitution while it measures; they are not
+    a claim that the numbers are true — the module doc says so in those words, and authenticity needs an isolation boundary (a residual the
+    module doc names). Not a change.
 18. **The launcher keeps every output line in memory** (`ProcessRunner.cs:283-300`); a test that prints gigabytes grows the harness until
     its wall. Not widened here (the shared launcher is a cornerstone area); a residual in the module doc.
 19. **E2's follow-ups that reach E3:** item 14 (`mcp-coai.json` at `0600` — S3; the published record's exclusion is E6.S3's, and
