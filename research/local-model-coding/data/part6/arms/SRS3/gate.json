@@ -1,0 +1,46 @@
+{"status": "proceed",
+ "why": "plan round 1 and code rounds 1 and 2 all ended proceed; 3 findings accepted and fixed in 6927d17b, 36 rejected with reasons",
+ "rounds": [
+  {"stage": "plan", "round": 1, "verdict": "proceed", "asked": 2, "answered": 2,
+   "findings": [
+    {"severity": "Major", "file": "", "summary": "§12 leaves a restored account parked until its reset (lift unreachable via a round)", "decision": "reject", "reason": "plan frozen; known recorded cost (D12, §12 last item)", "fixedIn": null},
+    {"severity": "Major", "file": "", "summary": "S35-S37 test contention in one process only", "decision": "reject", "reason": "plan frozen; chosen test method", "fixedIn": null},
+    {"severity": "Minor", "file": "", "summary": "no kill-during-write scenario", "decision": "reject", "reason": "plan frozen", "fixedIn": null},
+    {"severity": "Major", "file": "", "summary": "lift and guess-doubling are dead code since CanRun excludes a cooling key", "decision": "reject", "reason": "plan frozen; same known item as the first finding", "fixedIn": null},
+    {"severity": "Major", "file": "", "summary": "Spent==true with gauge Available has no reset instant defined", "decision": "reject", "reason": "plan frozen; code already falls back to the text reset (S41)", "fixedIn": null},
+    {"severity": "Minor", "file": "", "summary": "D9 date examples inconsistent about the year", "decision": "reject", "reason": "plan frozen", "fixedIn": null}
+   ]},
+  {"stage": "code", "round": 1, "verdict": "proceed", "asked": 8, "answered": 8,
+   "findings": [
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "hand-written partial split of QuotaCooldowns", "decision": "accept", "reason": "rule: extract a named unit, never partial", "fixedIn": "6927d17b"},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "no bound on entry count/size", "decision": "reject", "reason": "plan §8 budget; keys only from configured rows", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs", "summary": "quota probes run serially", "decision": "accept", "reason": "same as the antigravity finding", "fixedIn": "6927d17b"},
+    {"severity": "Blocking", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Claude models in the agy quota table violate vendor-routing", "decision": "reject", "reason": "plan D3 specifies the row; a key mapping routes nothing", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "mutable dictionary in WriteUnderLock", "decision": "reject", "reason": "local builder under the lock, never shared", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "List<T> in internal JSON record", "decision": "reject", "reason": "doctrine is about public contracts", "fixedIn": null},
+    {"severity": "Blocking", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs", "summary": "key via Invocation.Adapter drops adapter-less runtimes", "decision": "reject", "reason": "Adapter is the runtime; Kimi Bound() is a KimiRuntime; tested", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "second QuotaCooldowns instance", "decision": "reject", "reason": "one instance passed to RoundEngine", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "closed model table", "decision": "reject", "reason": "plan D3 chose it deliberately", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "multi-line parse throws on trailing lines", "decision": "reject", "reason": "caught; TryParseValue reads one value; R5 test", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "disposal of the lock stream", "decision": "reject", "reason": "disposing Taken stream is HeldFile's contract", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs", "summary": "cancel bubbles from ReadQuotaAsync", "decision": "reject", "reason": "by design (D5)", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "file read on every CanRun, no cache", "decision": "reject", "reason": "plan D4 decision", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs", "summary": "/quota probes sequential", "decision": "accept", "reason": "probes of distinct keys should run together", "fixedIn": "6927d17b"},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "allocations in Parse", "decision": "reject", "reason": "negligible", "fixedIn": null}
+   ]},
+  {"stage": "code", "round": 2, "verdict": "proceed", "asked": 8, "answered": 8,
+   "findings": [
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "quota table outside a shared seam", "decision": "reject", "reason": "plan D3; every caller uses AgyQuotaGroups", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "16 KiB not enforced at write", "decision": "reject", "reason": "plan §8; decided in round 1", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/src/Server/Rounds/RoundEngine.cs", "summary": "round waits for quota probes", "decision": "reject", "reason": "D5; now bounded to one 30 s timeout", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "provider.Model vs resolved model mismatch", "decision": "reject", "reason": "wrong: RosterBuilder uses the same provider.Model", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaRound.cs", "summary": "unlocked Standing before Lift", "decision": "reject", "reason": "review fix R3; locked re-read decides", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/BoundedScheduler.cs", "summary": "ResetOutlasts evaluated when Spent is false", "decision": "reject", "reason": "plan D1: ResetOutlasts half unchanged", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "casing of unknown-model key", "decision": "reject", "reason": "same string on both sides", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "TimeLeft 0 min at expiry", "decision": "reject", "reason": "sub-tick window, truthful", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "probe stderr unredacted", "decision": "reject", "reason": "goes through Redaction.SafeText", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "file read per provider, no cache", "decision": "reject", "reason": "plan D4; decided in round 1", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "allocations in Parse", "decision": "reject", "reason": "no measured cost; decided in round 1", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/src/Server/PanelService.cs", "summary": "TimeLeft negative (duplicate)", "decision": "reject", "reason": "same as the TimeLeft finding", "fixedIn": null}
+   ]}
+ ]}

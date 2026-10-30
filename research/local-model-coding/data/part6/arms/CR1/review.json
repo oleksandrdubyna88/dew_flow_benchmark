@@ -1,0 +1,12 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs", "line": 830,
+   "summary": "DeepseekRuntime (registered as a built-in at ReviewerRuntime.cs:898) inherits CodexRuntime's new `public virtual string QuotaKeyOf(string model) => \"codex\"` (line 614), so DeepSeek API-key rows and codex sign-in rows share one cooldown key: a spent codex allowance shuts DeepSeek rows out of the round with the sentence 'its Codex usage limit is spent', a hopeless DeepSeek refusal parks codex, and a DeepSeek `Ok` lifts a standing codex park (AfterRoundAsync groups and lifts by key). This breaks D3: the key is the quota, and a custom-endpoint codex keeps the empty key.",
+   "fix": "Override `QuotaKeyOf` in DeepseekRuntime to return string.Empty, as CustomCodexRuntime already does. Add a test that `new DeepseekRuntime().QuotaKeyOf(m)` is empty and that a codex park leaves a deepseek row's CanRun alone."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs", "line": 168,
+   "summary": "An agy row with no model configured is launched on `DefaultModel` (gemini-3.7-flash-high, line 131), but `QuotaKeyOf` gets `settings.Model` / `provider.Model`, which is empty. Its key becomes 'antigravity/?' (unknown group): /quota is never asked, a park does not cover the Gemini rows that share its real quota, and the round sentence reads 'quota for  on Antigravity (group unknown)'.",
+   "fix": "Resolve the model the launch actually uses before looking up the key: `AgyQuotaGroups.KeyOf(model.Length > 0 ? model : DefaultModel)`. Add an S14-style assertion that an empty model maps to antigravity/gemini."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/src/Server/Rounds/RoundEngine.cs", "line": 442,
+   "summary": "No test drives the one line that connects the feature to real rounds (`results = await _cooldowns.AfterRoundAsync(results, cancellation.Token)`). The coder records this in §12. Deleting the line leaves every test green, but a spent row would then be launched again by the next round, which is the DoD's main promise.",
+   "fix": "Add one PanelService/RoundEngine-level test: a scripted round whose agy or claude row ends spent leaves `Standing(key)` set and drops the row from the next round's `ExcludedFrom`. Or name it explicitly as unproved in research/module_tests.md."}
+ ]}

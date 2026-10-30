@@ -1,0 +1,57 @@
+{
+ "CHH1": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 122862,
+   "tokensOut": 4333
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 617817,
+   "tokensOut": 11264
+  }
+ ],
+ "CHH2": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 124236,
+   "tokensOut": 3745
+  },
+  {
+   "stage": "plan",
+   "number": 2,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 123222,
+   "tokensOut": 4078
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 616630,
+   "tokensOut": 13994
+  }
+ ],
+ "CHH3": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 139413,
+   "tokensOut": 25418
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 619739,
+   "tokensOut": 12117
+  }
+ ]
+}

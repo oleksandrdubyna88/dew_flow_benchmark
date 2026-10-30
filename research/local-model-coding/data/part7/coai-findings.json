@@ -1,0 +1,1370 @@
+{
+ "CHH1": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "verdict": "proceed",
+   "gating": 4,
+   "threshold": 6,
+   "reviewers": "all 2 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "§3 D4–D5: Locking writes does not prevent a delayed round from overwriting a newer quota decision",
+     "why": "For example, round A records a spent refusal and starts a slow `/quota` probe; round B then gets an `Ok` for the same key and lifts its cooldown; when A's probe finishes, it parks the key based on the older refusal. The row stays excluded despite the later successful launch. The reverse ordering can let a delayed `Ok` lift a newer spent cooldown.",
+     "fix": "Define cross-round ordering for each key and enforce it when applying the aggregate, such as recording a decision timestamp or generation and refusing to apply stale results under the lock.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. (D5 decides one aggregate per round under the lock; a cross-round generation counter is a design change.)"
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Completeness",
+     "file": "",
+     "line": 0,
+     "title": "§3 D9 and §6: Compatibility with an older extension is promised but never checked",
+     "why": "The plan says an older extension ignores the new `cooldown` member, but its parser test only feeds an old-server response to the new extension. If an older extension rejects or mishandles a response containing `cooldown`, deploying the server first can break provider parsing for existing users; the project's rule requires measuring a wire-field addition against the old other side.",
+     "fix": "Add a compatibility check that runs the old extension parser against a new-server provider response containing `cooldown`, and include it in the DoD.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Checked in code: the pre-change parseProviders/oneProvider (base 6786582e) destructures named fields only, so an old extension ignores an unknown cooldown member; no defect."
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "Section 3 (D4 / D5): Missing directory creation before acquiring the persistent lock file causes unhandled IO exceptions on clean installations",
+     "why": "When coai runs in a clean environment where PanelSettings.DataDir does not yet exist, taking the lock via HeldFile.TakeWithin(path, wait) at '<data dir>/quota-cooldowns.lock' will throw DirectoryNotFoundException when creating or opening the FileStream. While D4 explicitly notes handling directory creation for the JSON write, the lock acquisition happens before the JSON write. This results in every round failing to acquire the lock and reporting CooldownWrite.Refused instead of parking exhausted models.",
+     "fix": "Ensure QuotaCooldowns creates Directory.CreateDirectory(dataDir) before calling HeldFile.TakeWithin for quota-cooldowns.lock.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Checked in code: QuotaCooldowns.cs calls Directory.CreateDirectory (line 142) before HeldFile.TakeWithin (line 149); no defect."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Consistency",
+     "file": "",
+     "line": 0,
+     "title": "Section 3 (D9 / S30) vs Section 12 (Deviation 14): Discrepancy between ProviderHealth.cooldown contract and rounds-log UI consumption",
+     "why": "In Section 3 D9 and S30, ProviderHealth.cooldown is defined as a property on provider health instances sent from the server. However, Deviation 14 records extending the rounds-log row (roundsBlock.ts) with cooldownOf and nowMs without specifying how rounds-log obtains cooldown data across process restarts or whether CooldownReport is persisted into the historical rounds database. When viewing historical rounds in the rounds log after a restart or when reviewing past rounds, roundsBlock.ts will either display missing cooldown lines or crash if cooldown data is expected but only present in transient provider probe states.",
+     "fix": "Specify the exact data flow for roundsBlock.ts: pass the current active provider cooldown map from PanelProvider rather than assuming historical round records persist CooldownReport, or define a fallback to the ledger reset-line when viewing historical rounds.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Checked in code: panelProvider.ts passes the live providerHealth().reported map to roundsBlock; an absent cooldown falls back to the ledger line, nothing is persisted into round history and nothing throws; no defect."
+    },
+    {
+     "index": 4,
+     "severity": "Minor",
+     "category": "Clarity",
+     "file": "",
+     "line": 0,
+     "title": "Section 3 (D3): Model family extraction ignores hyphens in model names when stripping tier suffixes",
+     "why": "D3 specifies model family as 'the id minus its trailing -low / -medium / -high' and matches against names like 'gemini-3.8-flash' and 'claude-sonnet-5-5'. If an agy model ID has no tier suffix (e.g. bare 'gemini-3.8-flash' or custom variants) or uses an unexpected tier naming pattern, naive suffix stripping will either leave unrecognized families falling back to 'antigravity/?<model>' or fail table lookups, preventing proper bucket grouping and gauge inspection.",
+     "fix": "Specify an exact regex or lookup helper for model family normalization that safely strips known tier suffixes (-low, -medium, -high) only when present, leaving bare family names intact.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Checked in code: AgyQuotaGroups strips a -low/-medium/-high suffix only when present, so a bare family id matches (plan section 11, F4 of the second plan gate); no defect."
+    }
+   ]
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "verdict": "proceed",
+   "gating": 11,
+   "threshold": 5,
+   "reviewers": "all 8 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Blocking",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 157,
+     "title": "Cooldown updates mutate the existing entry list instead of returning a new value.",
+     "why": "The `Parked` and `Lift` paths modify the `List<QuotaCooldownEntry>` in place, and `Applied` mutates that same list while processing decisions. This breaks the C# doctrine’s immutability rule for the new cooldown state.",
+     "fix": "Have the park, lift, and aggregate operations produce new entry lists, then serialize the returned list.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Not a defect. The immutability rule (csharp.doctrine section 7) is about contracts: public members return IReadOnlyList and new values. The List in Mutate/Locked/Applied/Parked is a private working copy, freshly read under the lock and never shared or returned; the public surface (Standing returns an immutable record, the file is replaced atomically) is immutable. A refactor would change no behaviour, so no test could fail for the right reason."
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Consistency",
+     "file": "src_mcp/runners/Reviewers/BoundedScheduler.cs",
+     "line": 679,
+     "title": "An explicit transient verdict can still stop the retry ladder on the stated reset text.",
+     "why": "When an adapter returns `Spent = false` but its reason contains a reset later than the remaining budget, `Spent ?? RateLimit.Hopeless(...)` is false and `ResetOutlasts(...)` is still true. The scheduler therefore ends after one launch despite the vendor explicitly saying the limit is transient, contrary to the requirement that a structured verdict outrank the word scan and preserve retries for transient refusals.",
+     "fix": "Make the structured verdict govern the whole hopelessness decision: when `Spent` is non-null, use it directly; evaluate the text and `ResetOutlasts` only when it is null.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside scope and already decided: plan D1 says Hopeless becomes limited.Spent ?? RateLimit.Hopeless(reason) with the ResetOutlasts half UNCHANGED, and the DoD keeps AStatedResetIsNeverWaitedOutTests green. A reset the vendor stated beyond the remaining budget is not worth climbing the ladder for, whatever Spent says. No runtime returns Spent=false with a stated reset today."
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Security",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 150,
+     "title": "Malformed cooldown entries can spoof a permanent quota park",
+     "why": "`Normalised` accepts any nonempty key and trusts `UntilUtc` without validating its source, timestamp, or bounds. If the cooldown file is edited or partially corrupted into valid JSON with a future timestamp and a known key such as `claude`, `Standing` treats it as authoritative and `PanelService.CanRun` excludes that model indefinitely, even though the entry was never produced by the application.",
+     "fix": "Validate each entry when reading: require a recognized key/source, a valid future-bounded UTC timestamp and sane metadata; discard invalid entries and warn once rather than letting hand-edited or malformed data control roster eligibility.",
+     "providers": [
+      "codex"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside scope. D4 decides the read rule (an entry stands while untilUtc > now; fail open on torn files). The file lives in the person's own data directory, the same trust level as their settings; hand-editing it to park a model is the person's own act and is lifted by an Ok answer or the clock. A bounds/source validator is a design addition the plan does not ask for."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 177,
+     "title": "A spent bucket with an unreadable sibling bucket can be parked only until the shorter reset",
+     "why": "`ResetFor` drops buckets whose fraction is unreadable before deciding whether the quota is available. If the weekly bucket is spent until next week but the active 5-hour bucket has an unreadable fraction, the method returns a reset based only on the weekly bucket. The 5-hour bucket may also be spent and reset later, so the next round can launch the model while its quota is still spent and incur another timeout.",
+     "fix": "Retain active buckets with unreadable fractions as uncertainty; when any readable bucket is spent, do not claim the quota is available or choose a reset that ignores an active unreadable sibling. Return an unknown/uncertain reading so the caller uses its estimate or guess.",
+     "providers": [
+      "codex"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Already decided by the plan: D6 and S40 say a bucket whose remaining_fraction is missing or not a number in [0,1] is unreadable and skipped, and the group follows the readable buckets. S40 pins exactly this."
+    },
+    {
+     "index": 4,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 158,
+     "title": "A single malformed entry makes every cooldown read fail open.",
+     "why": "If `quota-cooldowns.json` contains valid JSON with one entry missing `untilUtc` or `key`, deserialization can leave non-nullable record fields null. `Normalised` filters only on `Key.Length`, so it can throw before `Standing` finds another valid entry. For every provider check in every stage, the file is reparsed and this exception is caught by `AfterRoundAsync` only, not by `Standing`; a single hand-edited or partially malformed entry can therefore make roster construction fail instead of parking the affected row or reading other rows.",
+     "fix": "Validate every deserialized entry field before dereferencing it and make `Standing` fail open consistently for malformed contents.",
+     "providers": [
+      "codex"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong; checked by running it. A scratch test with a file holding a null entry, an entry with no key, an entry with no untilUtc and one good entry: Standing does not throw, the keyless and timeless entries park nobody, the good entry still stands (Normalised filters on is { Key.Length: > 0 }; a missing untilUtc is default and so expired). A wrong-typed field is a JsonException, which Read catches as fail-open per D4 and S19. Scratch test removed."
+    },
+    {
+     "index": 5,
+     "severity": "Minor",
+     "category": "Performance",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 418,
+     "title": "Every roster eligibility check reparses the entire cooldown file.",
+     "why": "`CanRun` calls `Cooling`, which calls `Standing`, and `Standing` reads and deserializes the whole JSON file. Roster construction checks providers repeatedly across stages and the security lane; with 10× as many provider rows, that is 10× file opens and JSON parses per roster build, even though the file is unchanged during the decision.",
+     "fix": "Read the cooldown snapshot once per roster build (or cache it with invalidation after writes) and use that snapshot for all `CanRun` checks.",
+     "providers": [
+      "codex"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Already decided: D4 says the file is read on every decision with no cache because it is under 16 KiB for ever (section 8); a cache would also hide another process's park or lift from this one, which D4's two-processes rule relies on being seen on the next decision."
+    },
+    {
+     "index": 6,
+     "severity": "Major",
+     "category": "Architecture",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 418,
+     "title": "Uncached disk reads inside CanRun create an O(N*M) synchronous I/O bottleneck across roster building and wire status reporting",
+     "why": "PanelService.CanRun invokes Cooling(provider), which calls _cooldowns.Standing(key, now), reading and parsing 'quota-cooldowns.json' from disk synchronously on every single provider check. During roster construction, security checks, and provider status enumeration across stages (e.g. RosterBuilder iterating all stages and providers), CanRun is evaluated repeatedly (dozens of times per round or UI poll), resulting in dozens of redundant File.ReadAllText and JsonSerializer.Deserialize operations on the same thread. Any future addition of models, stages, or background polling amplifies disk contention and latency on the stdio protocol path.",
+     "fix": "Retain file-based durability across processes by holding an in-memory cached snapshot with a timestamp or file modification check (or snapshotting cooldown state once per roster-generation / providers query) rather than performing File.ReadAllText on every CanRun invocation.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Already decided: D4 and section 8 (read on every CanRun, no cache, file under 16 KiB). A mtime cache is a design change the frozen plan rejects; same finding as the codex one."
+    },
+    {
+     "index": 7,
+     "severity": "Major",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 158,
+     "title": "Mutate creates a race condition by dropping expired entries before change lambda inspects consecutive guess counts",
+     "why": "In QuotaCooldowns.Locked, Mutate executes 'entries.RemoveAll(entry => entry.UntilUtc <= now)' before invoking the change callback. When Parked runs inside change, it searches for existing entries to calculate consecutive guesses ('var standing = entries.FirstOrDefault(entry => entry.Key == parking.Key); consecutive = standing is ... ? standing.Consecutive + 1 : 0;'). If an entry with Source == QuotaSources.Guess just expired right before the round ends and parks again, Mutate has already purged it from 'entries'. Consequently, standing is null, resetting consecutive back to 0 instead of honoring backoff progression. Future backoff strategies or auditing that rely on recent cooldown history will silently malfunction.",
+     "fix": "Do not purge expired entries from the active list before inspecting them for history/consecutive tracking, or retain recently expired entries in a separate tracking lookup during mutation so backoff state is preserved.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Intended and pinned: D5 says doubling restarts after expiry (an expired entry is deleted and a refusal after a gap starts at 30 minutes again) and S39 pins it. Keeping the expired entry for the count is the behaviour the plan decided against."
+    },
+    {
+     "index": 8,
+     "severity": "Minor",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+     "line": 86,
+     "title": "AntigravityRuntime.ReadResetAsync violates layer boundaries by directly executing external probe processes",
+     "why": "AntigravityRuntime invokes AgyQuotaProbe.ReadAsync directly from inside the reviewer runtime adapter, coupling quota probe execution mechanics directly to the runtime definition. In contrast, other executor and runner components mediate external CLI interactions through ReviewerExecutor or designated service launchers. Making future probe modifications (such as shared credential injection, cancellation scopes, or mockable telemetry across different vendor probes) requires modifying individual runtime implementations rather than a unified probe executor.",
+     "fix": "Extract quota probing behind a dedicated probe interface or coordinate probe invocation through the launcher service layer rather than embedding direct probe execution inside AntigravityRuntime.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Outside scope: D3/D5/D6 put ReadResetAsync on IReviewerRuntime with the probe inside the adapter, and QuotaCooldowns passes the launcher. A new probe interface is a design change; the plan is frozen."
+    },
+    {
+     "index": 9,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 133,
+     "title": "A single unreadable or corrupt cooldown file permanently disables cooldown warning logs for the lifetime of the process",
+     "why": "Interlocked.Exchange(ref _warnedAboutTheFile, 1) in WarnOnce ensures _log.Warning is called only once per process. If an invalid or unreadable file is encountered early (or across transient file lock / I/O glitches on reading), the process will permanently suppress warnings about subsequent read failures on every round and every CanRun check. If a user or external process replaces or corrupts quota-cooldowns.json later, it silently fails open forever with zero logging.",
+     "fix": "Track the last logged warning time or warning state keyed to the file modification/hash, or throttle warnings (e.g. at most once every N minutes or when the exception message changes), rather than suppressing warnings permanently for the lifetime of the process.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Required by the plan: D4 and S19 say a bad file reads as no cooldown with ONE warning per process. S19 asserts exactly one warning after three reads."
+    },
+    {
+     "index": 10,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 115,
+     "title": "Candidates in AgyQuotaReport.Parse evaluates line candidates in reverse order without trailing object boundary delimiter checks",
+     "why": "Candidates yields stdout.Trim() and then lines starting with '{' in reverse order. In multi-line JSON or NDJSON stream output, lines starting with '{' may be arbitrary partial object starts from intermediate stream events or pretty-printed chunks. If an earlier intermediate event on a single line starts with '{' and happens to match the command.data.groups structure, or if JsonDocument.Parse consumes only the first statement on a line, it may evaluate a stale or unintended stream line rather than the terminal output block.",
+     "fix": "Parse stream items sequentially or inspect stream records in forward order according to agy's envelope protocol, validating that the chosen JSON object is the final terminal result payload.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Not a defect. Parse tries the whole answer first; a line is used only when it holds command.data.groups as an array, so an intermediate stream event cannot match. The real capture is one JSON object (QUOTA_REAL, S43); the line fallback is a stream habit noted in the code, and a structural match is required for any candidate."
+    },
+    {
+     "index": 11,
+     "severity": "Minor",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+     "line": 95,
+     "title": "String containment check for IndividualQuota matches unredacted raw error reason rather than structured error fields",
+     "why": "In ReadResetAsync, explicitly is checked via reason.Contains(AgyError.IndividualQuota, StringComparison.Ordinal). The string reason is passed down from the failure explanation, which could match if an arbitrary model prompt, error trace, or tool invocation output happened to include the substring 'Individual quota reached' in an unrelated failure context, inappropriately treating an arbitrary failure as an explicit spent quota.",
+     "fix": "Check for explicit quota exhaustion against the parsed AgyError instances or pass the structured Spent verdict directly into ReadResetAsync rather than rescanning the free-form text reason.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Recorded deviation 9 of plan section 12: the ReadResetAsync signature in D5 has no Spent parameter, so explicit vs undecided is read from the reason, which is the vendor sentence taken from the structured AGY_ERROR message (or the marked line of a rate-limited result), not arbitrary model output. Signature is frozen by the plan."
+    },
+    {
+     "index": 12,
+     "severity": "Blocking",
+     "category": "Performance",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 425,
+     "title": "Uncached synchronous file reads in `Cooling` cause N+1 quadratic disk I/O and JSON deserialization on provider roster loops",
+     "why": "`PanelService.Cooling` calls `_cooldowns.Standing(key, ...)` on every invocation. `Standing()` synchronously reads `<data dir>/quota-cooldowns.json` via `File.ReadAllText` and deserializes JSON on disk without in-memory caching. In `ProvidersAnswer` and during roster building (`CanRun`, `CoolingReasonOf`, `ExcludedFrom`), `Cooling` is evaluated multiple times per configured provider row. With 10–20 configured providers across multiple stages or UI polls every 10 seconds, every check triggers tens of synchronous disk reads and JSON parsing passes on the MCP request thread.",
+     "fix": "Cache the parsed `QuotaCooldownFile` in memory with its file last-write timestamp (or reload on file mtime modification) inside `QuotaCooldowns`, so `Standing()` performs an in-memory dictionary lookup instead of hitting the filesystem on every provider query.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Already decided: D4 and section 8, read on every decision, no cache (duplicate of the earlier uncached-read findings)."
+    },
+    {
+     "index": 13,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 252,
+     "title": "Sequential asynchronous probes in `DecideAsync` serialize external CLI gauge execution across quota keys",
+     "why": "When multiple quota keys fail during a round (e.g. Gemini and Claude/Argon limits hit concurrently), `DecideAsync` loops sequentially with `foreach (var key in keyed)` and awaits `ParkedOrNot`, which in turn awaits `AgyQuotaProbe.ReadAsync` with a 30s process execution timeout per key. At ten quota keys or multiple spent providers, the engine blocks sequentially for multiple CLI process invocations (up to 30s * N) before concluding `AfterRoundAsync`.",
+     "fix": "Run probe resolutions across distinct quota keys concurrently using `Task.WhenAll` across keys before applying the aggregated mutations.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside scope: D5 asks for one probe per key per round, outside the lock; it does not ask for concurrency. Only agy has a probe, so at most three keys, each bounded at 30 s by the launcher, run once after the round. Concurrent probes would add ordering and cancellation questions S42 does not cover."
+    },
+    {
+     "index": 14,
+     "severity": "Minor",
+     "category": "Ux",
+     "file": "src_mcp/src/Server/CooldownSentence.cs",
+     "line": 26,
+     "title": "Guess cooldown sentence omits duration left while other sources provide relative time",
+     "why": "For `QuotaSources.Guess`, `CooldownSentence.Of` renders `its {quotaName} is spent — reset time unknown; next try at {at} (coai's own wait)`, omitting the relative time duration `(in X min)`. In contrast, the VS Code extension UI (`cooldownWords.ts`) renders `(in 30 min)` for guesses, creating an inconsistency between CLI/round summary logs and the UI card.",
+     "fix": "Include `(in {Left(entry.UntilUtc - now)})` in the `QuotaSources.Guess` template in `CooldownSentence.Of` matching the extension's phrasing.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The code is as the plan words it: D9 gives the guess sentence as 'its <quota> is spent - reset time unknown; next try at <ISO UTC> (coai's own wait)' with no time left; the 'in N min' form belongs to the extension's card line, which D9 words separately, and the server sentence is UTC for logs and the calling AI."
+    }
+   ]
+  }
+ ],
+ "CHH2": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "verdict": "revise",
+   "gating": 7,
+   "threshold": 6,
+   "reviewers": "all 2 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Blocking",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "One-shot CLI mode --providers fails to serialize or format when quota-cooldowns.json contains an unhandled exception or when called outside panel lifecycle",
+     "why": "Section D4 and the non-negotiables in PROJECT.md define one-shot CLI modes including `--providers`, whose entire contract is stdout carrying text/JSON without protocol corruption or crashes. However, Section D4 specifies that `Standing` reads the un-cached file on every call and catches JsonException, IOException, and UnauthorizedAccessException, but does not specify how `--providers` behaves if the data directory path or file cannot be determined (e.g., in a clean environment where `PanelSettings.DataDir` is not set or standard path resolution throws). More critically, the project instructions mandate that any one-shot mode binary MUST NEVER exit 64. If `--providers` encounters an unhandled exception during `Standing` or JSON serialization of `ProviderStatus.Cooldown`, it causes an uncontrolled crash or nonzero exit violating the one-shot CLI contract.",
+     "fix": "Specify in D4 that `Standing` handles missing or invalid configuration paths gracefully by returning empty/null without throwing, guaranteeing `--providers` never exits abnormally on cooldown checks.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Also, the code already holds this: QuotaCooldowns.Standing reads through Entries(), which catches JsonException, IOException and UnauthorizedAccessException and answers no cooldown; Commit never throws (CooldownWrite.Refused)."
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Ux",
+     "file": "",
+     "line": 0,
+     "title": "A person re-authenticating or upgrading an account during a cooldown has no way to lift the lock except manual file deletion",
+     "why": "In Section 12 (Deviation 14), the author notes: 'CanRun excludes every row of a parked key, so no Ok for that key can reach AfterRoundAsync while the park stands. D4's lift therefore fires only when launches of a round that began before the park end Ok — it does not answer a person who fixes the account under a standing park. Until the later try now plan exists the cures are: wait for the reset, or delete the key's entry from <data dir>/quota-cooldowns.json. The card's cooling line names the reset, not the cure.' Concretely, when an engineer tops up credits, upgrades subscription, or logs in with new credentials, the model remains blocked for up to 14 days (or hours/days depending on resetUtc). The human is given no UI button, no CLI command, and the UI does not even explain how to break the lock.",
+     "fix": "Add a one-shot CLI command or documented flag (e.g. `--lift-cooldown <key>`) or include the cure/guidance in the exclusion/card reason so the user knows how to clear the parked state without waiting days.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. (The recovery gap is the plan's own recorded deviation 14, already reviewed and documented; noted for the code round.)"
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "HeldFile lock wait of 30s during AfterRoundAsync can block round engine completion under file contention",
+     "why": "Section D4 specifies taking a lock `HeldFile.TakeWithin(path, 30s)` during `AfterRoundAsync`. If multiple instances or background tasks contend or if a process holds the lock file across an I/O stall, `RoundEngine` pauses for up to 30 seconds synchronously before summary generation, or marks the write as `Refused`. While `Refused` is handled, the 30-second stall directly delays user-facing round completion for an auxiliary cooldown persistence task.",
+     "fix": "Reduce the lock acquisition timeout for `AfterRoundAsync` to a small bounded duration (e.g. 2–5 seconds) or decouple the cooldown file flush so round summary completion is not delayed by lock contention.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. The 30 s wait only happens when another process holds the lock; it is a documented, tested choice (lockWait), not a code defect."
+    },
+    {
+     "index": 3,
+     "severity": "Blocking",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "§12 deviation 14 leaves a repaired account parked until expiry with no supported recovery path",
+     "why": "After an Antigravity or Claude account is parked, `CanRun` excludes every row sharing its quota key, so no successful launch can reach `Lift`. If the person reauthenticates or upgrades the plan before `untilUtc`, the card still says the row is cooling and rounds cannot use the now-working account; the only recovery is manually editing the data file, which is neither a supported operation nor described as safe while servers may be running.",
+     "fix": "Add a supported, per-key recovery operation that removes the cooldown and is exposed to the person (or recheck the live quota before excluding the row); specify its concurrency and test the repaired-account path.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. This is the plan's own recorded deviation 14 (a later 'try now' plan is the cure); noted for the code round."
+    },
+    {
+     "index": 4,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "D4's fail-open handling can silently erase the cooldown after a successful read",
+     "why": "If `quota-cooldowns.json` is readable but contains invalid JSON, D4 says to answer no cooldown; the next successful Park or Lift then re-reads the same bad file under the lock and, unless that mutation path treats the parse failure as a refused write, can replace it with a new aggregate containing only its own changes. Existing parked keys disappear, so a later round launches models whose quota was still spent. The plan explicitly defines fail-open reads and write refusals for I/O, but does not define how mutations preserve or refuse on a parse-corrupt file.",
+     "fix": "Specify mutation behavior for a corrupt/unparseable existing file: refuse the mutation and report it, or quarantine/repair it without dropping unknown entries; add a test that corrupts a file containing a standing cooldown and then attempts an unrelated park or lift.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. A wholly unparseable file holds no readable entry, so a rewrite drops nothing that could be read; fail-open is the plan's D4."
+    },
+    {
+     "index": 5,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "D5's cancellation rule can discard cooldown updates after reviewers have already produced results",
+     "why": "If cancellation arrives during the post-round `/quota` probe, S42 requires `AfterRoundAsync` to return without parking anything, while D5 says the completed results still reach the summary. The user can stop a round after receiving an explicit spent-quota refusal; the result is reported, but no cooldown is stored, so the next round launches the same model again and may incur the long timeout the feature is meant to prevent.",
+     "fix": "Separate cancellation of the probe from cancellation of persistence: retain completed spent outcomes and park them using the stated/guess fallback when the probe is cancelled, or define a durable pending decision that is completed before the next round; test cancellation after a spent result.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. S42 states the cancel rule on purpose and the code matches it."
+    },
+    {
+     "index": 6,
+     "severity": "Major",
+     "category": "Completeness",
+     "file": "",
+     "line": 0,
+     "title": "D9's expiry display and roster decision can disagree because their clocks are not specified as one snapshot",
+     "why": "A cooldown may expire between `CanRun` and `ProbeAsync` (or between the two repeated reads used by a round). The roster can exclude a row using the pre-expiry read while the provider response omits its cooldown using the post-expiry read, leaving the person with an excluded row and no explanation; the inverse can show a cooling badge for a row that is already eligible. The plan injects a clock for tests but does not say the round uses one time snapshot for eligibility and reporting.",
+     "fix": "Use one captured `nowUtc` for a roster/probe response or make the server response report the exact cooldown decision used for that round; add a boundary test with expiry between eligibility and status construction.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. The roster and the status read the file separately by design; a one-instant expiry race only changes a badge for one read."
+    }
+   ]
+  },
+  {
+   "stage": "plan",
+   "number": 2,
+   "verdict": "proceed",
+   "gating": 3,
+   "threshold": 6,
+   "reviewers": "all 2 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "§12.14 leaves no race-safe way to clear a cooldown after the account is fixed",
+     "why": "If a person re-authenticates or upgrades the account while its key is parked, `CanRun` excludes every row for that key, so no successful launch can trigger `Lift`; the plan tells them to delete the entry from `quota-cooldowns.json`. If a server has already read the old file under the lock when the person edits it directly, its later atomic write can restore the entry, leaving the row parked until expiry despite the repair.",
+     "fix": "Provide a supported clear operation that takes the same lock and removes the key, or state that all servers using the data directory must be stopped before manually editing the file.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. This is the plan's own recorded deviation 14; noted for the code round."
+    },
+    {
+     "index": 1,
+     "severity": "Minor",
+     "category": "Consistency",
+     "file": "",
+     "line": 0,
+     "title": "The status line says nothing is implemented while the plan records all four stories as built",
+     "why": "A reader or lifecycle check sees `Status: plan only, nothing implemented yet` even though the opening line says S1–S43 were built and §12 records implementation deviations. This misstates whether work remains and can leave a completed plan treated as open.",
+     "fix": "Make the status line reflect the implementation state, or keep the document as an open plan and remove the claim that all stories are built.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. The old 'plan only' status line is history; the plan file is not changed in this run."
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "Section D3/D6: Missing one-shot CLI mode registration on coai-mcp violates non-negotiable project rule",
+     "why": "The project's non-negotiable architecture rule in .agents/PROJECT.md mandates: 'Adding a one-shot mode means adding it here — in THIS file' and binds every mode selected by args[0] before JSON-RPC transport opens. The plan in D4/S29 introduces reading cooldowns from the '--providers' CLI mode or a provider status probe, and D6 introduces running an external probe command. If any CLI flag or inspection mode is invoked or extended without updating the canonical list in PROJECT.md, family checks (or subsequent reviewers enforcing the strict exit 64/65 rule) fail.",
+     "fix": "Explicitly confirm in D4/D9 that '--providers' is already an existing sanctioned one-shot mode in PROJECT.md, and ensure no new one-shot flags are introduced without adding them to PROJECT.md's sanctioned mode list.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. The change adds no one-shot mode and no new CLI flag; --providers already exists."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Ux",
+     "file": "",
+     "line": 0,
+     "title": "Section D4 and Deviation 14: Lift-on-success cannot execute while parked, leaving users with no recovery path without editing internal JSON files",
+     "why": "D4 claims that a successful launch ('Ok') lifts the standing cooldown (e.g. after re-login or quota purchase). However, as admitted in Deviation 14, CanRun unconditionally excludes parked rows from the roster before launches occur. Consequently, no launch can ever succeed while parked, rendering the automatic lift mechanism unreachable after manual account replenishment. The user's only recourse is waiting for timeout or manually deleting entries in '<data dir>/quota-cooldowns.json'.",
+     "fix": "Provide a safe programmatic recovery mechanism or probe path when a provider's credentials change, or document the exact CLI command/workflow rather than requiring manual editing of internal server state files.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Same as finding 0: the plan's own deviation 14."
+    },
+    {
+     "index": 4,
+     "severity": "Minor",
+     "category": "Consistency",
+     "file": "",
+     "line": 0,
+     "title": "Section D5 and S25 vs Deviation 1: Scenario S25 relies on a past date contrary to stated reset validity rules",
+     "why": "In §4 Scenario S25, the codex test uses July 15, 2026 as a refresh date while NOW is fixed at October 11, 2026. Because D6 explicitly specifies that past instants are discarded, building S25 as written in the plan specification fails validation unless altered as noted in Deviation 1.",
+     "fix": "Update S25 in the plan text to use a future date (e.g., October 15, 2026) so the specification is internally consistent without requiring post-hoc deviation notes.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. Deviation 1 already records the date change in the test."
+    }
+   ]
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "verdict": "proceed",
+   "gating": 12,
+   "threshold": 5,
+   "reviewers": "all 8 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Major",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 40,
+     "title": "AgyQuotaGroups table routes Claude and GPT models through the agy CLI key mapping",
+     "why": "The table maps claude-opus-5-5, claude-sonnet-5-5, and gpt-oss-120b to antigravity/3p. The mandatory rule in vendor-routing.md states: 'A Claude model runs through the claude CLI. Never through agy, never through codex.' and 'Do not pick a Claude model from the antigravity model list because it is in the list.' Routing and assigning Claude models under agy quota groups directly violates vendor CLI routing rules.",
+     "fix": "Remove Claude models from the agy model family table or ensure Claude reviewer configurations are strictly directed to ClaudeRuntime.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan: D3 fixes the agy table on purpose, with the claude-* and gpt-oss families as the 'antigravity/3p' group, and names the vendor-routing rule itself (a Claude model is still not routed to agy; the row exists only because a person may configure one and its quota is a fact). The table maps a quota key, it does not route a launch."
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 84,
+     "title": "Method SkipWhile uses Func delegate parameter instead of static predicate or switch expression",
+     "why": "C# doctrine section 6 dictates 'Pure functions, small methods' and avoiding unnecessary heap allocations or non-pure functional constructs on high-throughput parsing loops. Passing Func<char, bool> allocates or indirection-calls where local pure static methods or char checks are expected in doctrine.",
+     "fix": "Avoid passing generic Func<char, bool> delegates; write a direct char-checking static method or use standard ReadOnlySpan<char> methods.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong: SkipWhile is called with static method groups or a static lambda (char.IsWhiteSpace, IsSeparator); the compiler caches them, nothing is allocated per call, and the method runs on one stderr string once per refusal, not in a hot loop. The doctrine names no ban on a Func parameter."
+    },
+    {
+     "index": 2,
+     "severity": "Minor",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 150,
+     "title": "Default DateTimeOffset formatting string specifies hardcoded format instead of standard format specifier",
+     "why": "C# doctrine and repo conventions use standard round-trip 'O' or ISO-8601 UTC format strings across logging and DTOs (e.g. UsageEntry.ResetsUtc ('O', UTC)), while Iso() manually rolls 'yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z''.",
+     "fix": "Use instant.ToUniversalTime().ToString(\"O\", CultureInfo.InvariantCulture) or standard ISO formatting.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Wrong: 'O' always writes seven fraction digits; Iso() writes whole seconds without a fraction on purpose (the file and the wire say so, and a test pins the text). The format is UTC ISO 8601 as common.utc-timestamps asks."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldownRound.cs",
+     "line": 62,
+     "title": "QuotaKeyOf resolution in AfterRoundAsync duplicates PanelService logic and defaults to unkeyed on missing environment keys",
+     "why": "PanelService resolves apiKey from _keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty).Length > 0, whereas QuotaCooldownRound.Rows() calls QuotaCooldowns.RunsOnApiKey(result.Invocation.Request.Environment). If a provider runs with an API key resolved from credentials or settings where the environment variable name does not match '*_API_KEY' with a non-empty value in invocation.Request.Environment (or if the runner does not populate it into Request.Environment identically), the key is computed as unkeyed ('claude' or 'codex' instead of 'claude+key' or 'codex+key'). A spent rate limit on an API-key row will then park the sign-in quota key or fail to lift/park the row's actual key used by PanelService.CanRun, violating single source of truth for quota keys.",
+     "fix": "Store the determined QuotaKey (or the apiKey boolean flag) directly on ReviewerInvocation when constructed by PanelService/runners, so AfterRoundAsync and CanRun share the identical QuotaKey without divergent recomputation.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Not a divergence in practice: both sides read the same fact, settings.ApiKey being non-empty. PanelService reads it from the vault key, and every runtime that gets a key writes it to Request.Environment under a *_API_KEY name (ANTHROPIC_API_KEY, ANTIGRAVITY_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY). Recorded in the plan's deviation 12; storing the flag on ReviewerInvocation would be a wider change than the plan scopes."
+    },
+    {
+     "index": 4,
+     "severity": "Minor",
+     "category": "Consistency",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 126,
+     "title": "ClosingQuote in AgyError.cs scans past escape characters without bounds check",
+     "why": "In ClosingQuote, when text[at] == '\\', it advances at += 2 without checking if at + 1 < text.Length. If an invalid or trailing escape character sits at the end of the input string, at exceeds text.Length. While Math.Min(at, text.Length) prevents returning an out-of-bounds index, the loop guard 'at < text.Length' is evaluated after the increment, which could skip past the boundary.",
+     "fix": "Ensure the loop increment guards against trailing escapes: at += (text[at] == '\\' && at + 1 < text.Length) ? 2 : 1.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Wrong: I opened ClosingQuote. With a trailing backslash 'at' reaches text.Length+1, the guard 'at < text.Length' ends the loop (there is no read past the end), and Math.Min clamps the result to text.Length. Balanced then stops the same way. No exception and no infinite loop; an unterminated object just fails to parse and is no error, which is the plan's safe default."
+    },
+    {
+     "index": 5,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 133,
+     "title": "ClosingQuote loops infinitely on backslash at end of string or trailing odd backslashes",
+     "why": "In `ClosingQuote(string text, int open)`, the loop advances with `at += text[at] == '\\\\' ? 2 : 1;`. If the string has a trailing backslash right before the end of the text (e.g. `text[text.Length - 1] == '\\\\'`), `at` increments from `text.Length - 1` by 2 to `text.Length + 1`. The while loop condition is `at < text.Length && text[at] != '\"'`. Since `at < text.Length` becomes false, that terminates; BUT if `at == text.Length - 1` and `text[at] == '\\\\'`, `at` becomes `text.Length + 1`. In `Balanced`, `at = PastString(text, at) + 1` is evaluated. More critically, if `text[open + 1] == '\\\\'` and `text` ends with `\\`, `at` jumps past `text.Length`, causing `text[at]` inside `while (at < text.Length && text[at] != '\"')` to throw IndexOutOfRangeException on arbitrary malformed input, or in `DepthChange(text[at])` in `Balanced`. Worse, if `text[at] == '\\\\'` when `at == text.Length - 1`, `text[at]` is checked, but when `at + 2` is used, in the next loop evaluation if `text.Length` boundary handling is slightly off or if `text[at]` evaluates out of bounds, unhandled IndexOutOfRangeException is thrown during stderr scanning.",
+     "fix": "Ensure `at < text.Length - 1` before skipping an escape character (e.g., `at += (text[at] == '\\\\' && at + 1 < text.Length) ? 2 : 1;`), and guard bounds in `Balanced`.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong, same as finding 4: the loop condition is evaluated before every text[at] read, so 'at' jumping to Length+1 cannot index out of range, and the loop always advances by at least one, so it cannot be infinite. A test (ABraceOrAnEscapedQuoteInsideTheSentence_DoesNotEndTheObject) already guards the scanner."
+    },
+    {
+     "index": 6,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 286,
+     "title": "File.ReadAllText without sharing permissions throws IOException on concurrent read/write",
+     "why": "In `QuotaCooldowns.Entries()`, `File.ReadAllText(FilePath)` is called without a lock on every `CanRun`, `CoolingOf`, and `Standing` invocation. When another thread or process is writing to `FilePath` via `AtomicFile.Write` (or replacing/flushing), `File.ReadAllText` can throw `IOException` (sharing violation) or read partial text. Although `Entries()` catches `IOException`, it logs a warning via `Interlocked.Exchange(ref _warned, 1)` and returns `[]`. Once `_warned` is set to 1, future unreadable events are completely silent and fail open, treating active cooldowns as non-cooling and launching rows that should have stayed parked.",
+     "fix": "Open the file with `FileShare.ReadWrite | FileShare.Delete` using `FileStream` before reading, or retry on transient sharing violations before concluding the file is missing/unreadable.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Already covered by the plan: D4 states the fail-open contract whole (a read that throws IOException answers 'no cooldown', one warning per process) and AtomicFile publishes by move, so a reader sees the whole old or new file. A sharing violation is a transient, one-read miss."
+    },
+    {
+     "index": 7,
+     "severity": "Minor",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 103,
+     "title": "Depth tracking in Balanced goes negative and terminates early on unmatched closing brace",
+     "why": "In `Balanced`, `depth += DepthChange(text[at])` checks `if (depth == 0 && text[at] == '}')`. If `text` contains an unmatched `}` prior to an object (e.g. log preamble containing `}` outside of quotes), `depth` starts at 0, decrements to -1, and if another object follows with `{`, `depth` becomes 0 on `{`, then next `}` matches `depth == 0`, prematurely slicing a broken JSON fragment and failing parsing.",
+     "fix": "Only decrement depth if `depth > 0`, or start balancing only when the opening `{` is first encountered.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Not a defect: Balanced starts at the first character after the marker and separators, so an unmatched '}' before the object means the text is not an object; the result is a fragment that does not parse, which gives 'no error'. That is the plan's safe default (D2: a line whose JSON does not parse is no error)."
+    },
+    {
+     "index": 8,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 415,
+     "title": "CanRun re-reads and deserializes quota-cooldowns.json from disk for every provider row and check",
+     "why": "Every invocation of `CanRun` (and `CoolingOf`) invokes `_cooldowns.Standing(...)`, which calls `Entries()`, executing `File.Exists`, `File.ReadAllText`, and `JsonSerializer.Deserialize` synchronously. For a panel refresh, roster build, or stage resolution with N providers evaluated multiple times (e.g. `CanRun`, `ReasonFor`, `ProbeAsync`), this performs dozens of identical disk I/O and JSON parsing passes on the request thread. At 10x providers or frequent status polls, disk read latency and allocations occur on hot evaluation paths.",
+     "fix": "Cache the deserialized cooldown file entries in memory along with the file's last modified timestamp (or update the cache on writes and re-read only when `File.GetLastWriteTimeUtc` changes).",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan: D4 decides 'read on every CanRun, no cache' on purpose, because the file is under 16 KiB for ever (section 8) and a cache would let one server miss another process's park or lift."
+    },
+    {
+     "index": 9,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 128,
+     "title": "ClosingQuote scans line-by-line using char indexing that re-scans escaped backslashes incorrectly or inefficiently",
+     "why": "In `ClosingQuote`, `at += text[at] == '\\\\' ? 2 : 1` advances by 2 on backslashes, but does not guard against `text[at] == '\\\\'` when `at == text.Length - 1`. If stderr ends with a trailing backslash inside a string, `at` jumps beyond `text.Length` before checking `< text.Length`, causing an `IndexOutOfRangeException` or out-of-bounds access. Furthermore, repeated string allocations in `Balanced` via `text[from..(at + 1)]` allocate substring buffers in loops on large stderr outputs.",
+     "fix": "Check `at + 1 < text.Length` before skipping two characters for escape sequences, and clamp `at` safely within text bounds.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong, same as findings 4 and 5: there is no out-of-bounds read. The substring in Balanced is taken once per AGY_ERROR line of a refusal's stderr, not in a loop over large output."
+    },
+    {
+     "index": 10,
+     "severity": "Minor",
+     "category": "Ux",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 442,
+     "title": "Left helper produces ambiguous or inconsistent countdowns for small and negative durations",
+     "why": "In `PanelService.Left(TimeSpan span)`, when `span` is between 0 and 1 minute, `Math.Max(1, Math.Ceiling(span.TotalMinutes))` returns `1 min`. If `span` expires or is negative, `span >= TimeSpan.FromHours(1)` is false, but `span.TotalMinutes` is <= 0, causing `Math.Max(1, ...)` to still report `1 min` left even though the quota has already reset. The user sees a row marked as spent waiting for `1 min` after it has already matured.",
+     "fix": "Return `0 min` or handle non-positive durations explicitly when `span <= TimeSpan.Zero`.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Not a defect: Left is reached only for an entry that stands (UntilUtc > now) and its text is rounded UP by design (plan D9, as resetWords.ts does). A span of a few milliseconds reads '1 min', which is the plan's rule."
+    },
+    {
+     "index": 11,
+     "severity": "Major",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 58,
+     "title": "Quota keys cross runtime boundaries as untyped strings.",
+     "why": "The C# doctrine says: “A business concept does not travel as a `string` or an `int`. Wrap it in a typed value with parsing and validation.” `AgyQuotaGroups.KeyOf` returns a quota key as `string`, and the runtime and cooldown store use that string to group and persist quota state, so an invalid or mismatched key can travel through those boundaries unchecked.",
+     "fix": "Introduce a validated quota-key value type and use it at runtime and store boundaries, converting to strings only for file or wire serialization.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan: D3 defines the quota key as a string on purpose (the file and the wire carry it, tests compare it), and the whole runtime interface, IReviewerRuntime.QuotaKeyOf(string), is the plan's contract; a key value type is a wider refactor than this change's scope."
+    },
+    {
+     "index": 12,
+     "severity": "Major",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/ReviewerExecutor.cs",
+     "line": 237,
+     "title": "The required three-valued spent verdict conflicts with the no-null business-logic rule.",
+     "why": "The C# doctrine says: “No null in business logic.” The plan requires the verdict to be `bool?`, with `null` meaning “read the words as before.” The diff implements that nullable state in business logic on `ReviewerOutcome.RateLimited.Spent` and `RateLimitVerdict.Spent`, so these written requirements conflict.",
+     "fix": "Resolve the conflict in the written requirements and use the agreed representation consistently; for example, represent the verdict with an explicit three-case type instead of `bool?` if the no-null rule governs.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan: D1 requires exactly this: 'bool? Spent' with three values (true, false, null = read the words as today). It is a closed three-state vendor verdict, not a missing value in business logic; the plan passed its own gate with it."
+    },
+    {
+     "index": 13,
+     "severity": "Minor",
+     "category": "Convention",
+     "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+     "line": 87,
+     "title": "The test fixture uses an unchecked `as never` cast instead of a real type.",
+     "why": "The TypeScript doctrine says: “The same applies to `as never`, `as unknown as T`, and a `@ts-expect-error` left in a fixture.” The `state as never` cast suppresses type checking for the page fixture, so changes to the required state shape can leave this test compiling while it supplies an invalid fixture.",
+     "fix": "Construct the fixture with the real input type, using a typed factory with defaults and explicit overrides.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Matches the surrounding code: 'state as never' is how this test directory passes a page fixture to catalogHtml (139 occurrences in 93 test files, among them the sibling modelsTab tests); the page is read off the running HTML, so a changed state shape fails the assertions. Minor, non-gating."
+    },
+    {
+     "index": 14,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 194,
+     "title": "Invalid data-directory paths bypass the refused-write notice",
+     "why": "If the configured data directory is an invalid path (for example, it contains a null character), `Directory.CreateDirectory` throws `ArgumentException`, which `Created()` does not catch. The exception escapes `Commit`; `AfterRoundAsync` catches it only in its outer catch and logs a warning, so the failed cooldown write is not returned as `CooldownWrite.Refused` or offered as the required server notice.",
+     "fix": "Convert expected path and filesystem exceptions from directory creation and lock acquisition into `CooldownWrite.Refused`, and route them through `Refuse()` so the notice callback is invoked.",
+     "providers": [
+      "codex"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Not a real input: PanelSettings.DataDir is a path the server already uses for every other file. An invalid one fails everything first, and the plan's contract (D4) names IOException and UnauthorizedAccessException. If it did throw, AfterRoundAsync catches it, logs it and returns the results unchanged, so the round is not hurt."
+    },
+    {
+     "index": 15,
+     "severity": "Minor",
+     "category": "Completeness",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 280,
+     "title": "The cooldown file has no hard size limit",
+     "why": "The code caps each note but does not bound the number or length of entries. If a configured roster uses many distinct model IDs from unknown agy families and they are parked before their resets, each gets its own key and the next serialized file can exceed the stated 16 KiB limit.",
+     "fix": "Enforce a serialized-size bound before writing and refuse the write explicitly if it would exceed 16 KiB; also bound or validate persisted entry keys and models.",
+     "providers": [
+      "codex"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Already covered by the plan: section 8 bounds the file by the number of keys (codex, claude, kimi, three agy groups, and one per unknown agy model a person configures: under ten), at most 600 bytes each, and S20 pins under 16 KiB; every write drops expired entries. A hard cap is a new rule the plan did not ask for."
+    },
+    {
+     "index": 16,
+     "severity": "Major",
+     "category": "Ux",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldownRound.cs",
+     "line": 58,
+     "title": "Quota probes run sequentially after launches and can leave the round waiting several extra minutes without progress feedback.",
+     "why": "If ten distinct quota keys are spent and each `/quota` probe hits its 30-second bound, the `foreach` waits up to five minutes before the round can finish and show its summary; no per-probe progress is surfaced.",
+     "fix": "Run independent per-key probes concurrently with a bounded fan-out, or otherwise enforce a total probe budget and report probe progress while settling the round.",
+     "providers": [
+      "codex"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong in scale: only agy probes /quota, one probe per spent agy KEY, and there are three agy groups; unknown families are not probed (D3). Worst case is about 90 s, each bounded at 30 s by the launcher's timeout (section 8), after a round that already took minutes. Concurrent probes are not in the plan."
+    },
+    {
+     "index": 17,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 216,
+     "title": "Cooldown entries have no count or total-size bound, so distinct keys can grow the persisted file past the plan's 16 KiB limit.",
+     "why": "For example, parking 100 distinct unknown Antigravity model keys adds 100 entries; writes retain every unexpired entry and only cap each note, so the file can exceed 16 KiB and every later `Standing` call must read and deserialize that larger file.",
+     "fix": "Enforce a total serialized-size or entry-count bound before writing, and return a visible refused result when adding an entry would exceed it.",
+     "providers": [
+      "codex"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Duplicate of finding 15; see its reason (plan section 8 and S20)."
+    }
+   ]
+  }
+ ],
+ "CHH3": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "verdict": "proceed",
+   "gating": 4,
+   "threshold": 6,
+   "reviewers": "all 2 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "§D4/D5 leaves a recovered account parked when its only row is excluded",
+     "why": "If a person has one Antigravity row, it is parked after a spent refusal, then fixes the account or upgrades the plan, `CanRun` still excludes that row. The design says an `Ok` launch lifts the entry, but the row cannot launch to produce that `Ok`; even a `/quota` result showing available does not lift an explicitly spent refusal. With no manual lift in scope, the row stays unavailable until the old reset expires.",
+     "fix": "Define a recovery path that can lift a standing cooldown without first launching the excluded row, such as treating a successful gauge reading as authoritative or adding a user-triggered retry/lift.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. (A manual lift is named in D12 as out of scope; the lift by an answered launch and the expiry by the clock are what the plan ships.)"
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Completeness",
+     "file": "",
+     "line": 0,
+     "title": "§8's 16 KiB file ceiling is not bounded for changing unknown model keys",
+     "why": "A person can configure and spend quota on successive unknown Antigravity model IDs during the stated 14-day maximum reset window. Each ID gets its own key, and the old unexpired entries remain after the model is removed. More than ten such changes can therefore exceed the claimed 16 KiB ceiling; S20 only checks ten entries and the implementation plan specifies no cap or other bound.",
+     "fix": "Bound the number or total serialized size of entries and define what happens when the bound is reached, or revise the projected-size claim and budget using a stated configuration-churn limit.",
+     "providers": [
+      "codex"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. (Entries expire by their own reset and every write drops the expired ones, so the file is bounded by the churn inside one reset window; noted, to be checked against the code in the code round.)"
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "Section 3 (D4, D5, D12) & Section 2: Standing cooldown excludes models unconditionally from the roster, making the promised success-based Lift unreachable after re-login or plan renewal",
+     "why": "When a model (such as an Antigravity Gemini row) exhausts its quota, D5 parks its key until the bucket's reset time (which can be up to weekly, e.g. 62h). If the user subsequently re-logs in with an active account via CLI or upgrades their plan/subscription, the next round's RosterBuilder checks PanelService.CanRun, which unconditionally returns false while QuotaCooldowns.Standing returns an unexpired entry. Because the row is excluded from the roster, it is never launched. Because it is never launched, it can never produce an Ok outcome to trigger Lift(key) in AfterRoundAsync. With D12 explicitly deferring a manual 'try now' button to a future plan and no CLI command provided to clear cooldowns, the user remains blocked from using their working account for days until untilUtc elapses.",
+     "fix": "Provide a mechanism to unblock or verify a renewed account, such as an MCP one-shot CLI mode to clear cooldowns (e.g. --clear-cooldown <key>), or allow a manual round invocation to probe the gauge or attempt a launch rather than hard-excluding in CanRun without an escape hatch.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. A manual 'try now' / lift is explicitly deferred by D12 to a later plan."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "",
+     "line": 0,
+     "title": "Section 3 (D4, D5) & Section 4 (S21, S39): Exponential backoff ladder for unstated reset guesses is dead code because CanRun blocks launches until after expiry",
+     "why": "D5 and S21 specify that when a model's reset time cannot be parsed from error text (e.g. Claude spend limits or Kimi), the guess duration doubles per consecutive failure (30m -> 60m -> 120m -> 240m -> 5h) based on the standing entry's consecutive count. However, while a cooldown is standing, PanelService.CanRun excludes the model from the roster, so no launches can occur to increment consecutive while the entry is active. Once untilUtc expires, the model is eligible to run again, but D4 and S39 specify that expired entries are dropped on read/write and that any gap past expiry resets consecutive to 0. Consequently, every post-expiry failure will always encounter an expired/missing entry and reset consecutive to 0, permanently remaining at the initial 30-minute wait and never reaching 60m, 120m, 240m, or 5h.",
+     "fix": "Decouple the backoff consecutive counter from the immediate untilUtc cooldown expiration (e.g. maintain a failure streak with a separate decay window such as 24 hours), so that a repeated failure after the 30-minute cooldown elapses increments consecutive instead of resetting to 0.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. 'Doubling restarts after expiry' is a recorded decision of D5 and is pinned by S39. Noted for the code round: the code matches the plan (QuotaCooldowns.ConsecutiveOf reads only a standing guess entry)."
+    },
+    {
+     "index": 4,
+     "severity": "Minor",
+     "category": "Consistency",
+     "file": "",
+     "line": 0,
+     "title": "Section 4 (S9 vs S14/S34) & Section 3 (D3): Inconsistent key format in AgyQuotaReport test specifications",
+     "why": "D3 establishes quota keys with an 'antigravity/' prefix ('antigravity/gemini', 'antigravity/argon', 'antigravity/3p'), which scenarios S14 and S34 test directly with ResetFor('antigravity/argon', NOW) and ResetFor('antigravity/gemini', NOW). However, scenario S9 specifies ResetFor('gemini', NOW) and ResetFor('3p', NOW) without the prefix. Depending on how ResetFor matches keys against D3's table, either S9 will fail by missing the group, or S34 will fail with an unstripped key.",
+     "fix": "Update S9 to pass the canonical prefixed keys ('antigravity/gemini' and 'antigravity/3p') matching D3, S14, and S34.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "PlanCritique",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan is frozen for this change: it passed its own plan gate before the code was written, and this branch implements it as committed; a plan change is out of scope here. This is a wording point of a scenario in the plan; it shows no defect in the code."
+    }
+   ]
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "verdict": "proceed",
+   "gating": 9,
+   "threshold": 5,
+   "reviewers": "all 8 reviewers answered",
+   "findings": [
+    {
+     "index": 0,
+     "severity": "Major",
+     "category": "Convention",
+     "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+     "line": 461,
+     "title": "Quota keys are represented as untyped strings across runtime boundaries.",
+     "why": "The C# doctrine says: “A business concept does not travel as a `string` or an `int`. Wrap it in a typed value with parsing and validation”. `QuotaKeyOf` returns `string`, and the quota key is then passed through cooldown decisions and storage as a string, so invalid or misspelled keys are not rejected at the service boundary.",
+     "fix": "Introduce a validated quota-key value type and use it for `QuotaKeyOf` and the cooldown APIs, converting to and from strings only at serialization boundaries.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Conventions",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan's scope. D3 fixes the seam as `string QuotaKeyOf(string model)` on IReviewerRuntime and the file's `key` as a string; a key value type would change every runtime, the store, the wire-adjacent tests and S1-S43 for no behaviour. A key is built in one place per runtime (the explicit AgyQuotaGroups table or a constant) and is validated by being looked up in the file, not trusted. Not a defect of this change."
+    },
+    {
+     "index": 1,
+     "severity": "Major",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 184,
+     "title": "The shared cooldown store also decides how each vendor's refusal should be interpreted.",
+     "why": "When a new quota-backed runtime is added, `AfterRoundAsync` sends its outcomes through this store's generic selection and reset flow, while agy overrides `ReadResetAsync` on its runtime. The generic path uses `RateLimit.Hopeless` and text parsing to choose a refusal before calling that reset hook; the result is that vendor-specific spent/transient semantics are split between the shared coordinator and runtime adapters, so a future structured verdict can be bypassed when sibling rows share a key or the wrong refusal is selected.",
+     "fix": "Move per-key outcome qualification and refusal selection behind a runtime-owned decision method, returning a park/lift/no-change decision; keep `QuotaCooldowns` responsible for grouping, probing orchestration, and locked persistence.",
+     "providers": [
+      "codex"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "This is the design the plan chose, not a defect. D5 puts the per-key qualification (spent wins over a sibling Ok, RateLimit.Spent ?? Hopeless) in the aggregate and only the reset in the runtime (ReadResetAsync). The structured verdict is NOT bypassed: Decided ranks `Spent == true` first (Rank 0) and Parked passes `limited.Spent` into ReadResetAsync, so agy reads it. Moving the decision behind the runtime is a redesign outside the frozen plan."
+    },
+    {
+     "index": 2,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 198,
+     "title": "A slower spent-quota probe can overwrite a newer successful launch's lift",
+     "why": "If round A gets a spent refusal and its quota probe is slow, round B can finish an Ok launch for the same key and write a lift first. When A later writes its already-decided ParkChange, the quota is parked again despite the newer successful launch, so subsequent rounds keep excluding a working model until the stale reset expires.",
+     "fix": "Make the decision order safe across concurrent rounds: serialize per-key outcome processing through the probe and write, or attach ordering information and re-check under the lock so a park cannot supersede a later successful launch.",
+     "providers": [
+      "codex"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Outside the plan and not decidable from the data in hand. Outcomes carry no launch timestamp, so the store cannot know whether the slow round's refusal or the other round's Ok is newer; D5 states the rule it ships (a qualifying spent outcome wins; two rounds ending at once serialise on the lock and both aggregates land, S35). The error is bounded: the park ends at its reset and the next Ok of the key lifts it. Ordering information across rounds would be a new feature."
+    },
+    {
+     "index": 3,
+     "severity": "Major",
+     "category": "Ux",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 147,
+     "title": "Sequential quota probes can hold the round open for 90 seconds without progress.",
+     "why": "If Gemini, Argon, and 3p quotas are all spent, `AfterRoundAsync` awaits each key’s agy probe in turn. Each probe can take 30 seconds, so the completed review results and summary wait up to 90 seconds for cooldown bookkeeping; the user sees no indication which probe is running or how many remain.",
+     "fix": "Run the distinct-key probes concurrently with a bounded limit, or move them off the summary path and report their progress and completion separately.",
+     "providers": [
+      "codex"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Not a defect within the plan. D5 asks for ONE gauge call per key and says nothing about running them in parallel; each is bounded at 30 s by the launcher, and 90 s needs all three agy quotas spent in one round. Parallel probes would also run three `agy` children in the one read-only home directory (AntigravityReadOnly.Home()) that the plan fixes for the probe, which is a new risk. The completed results are not lost or changed, only the summary waits."
+    },
+    {
+     "index": 4,
+     "severity": "Major",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 133,
+     "title": "AgyQuotaReport.Parse silently swallows format breakages by treating any parse error as an empty report",
+     "why": "When agy CLI stdout contains invalid JSON or unexpected schema layout, Parse returns an empty report with Groups=0. In AgyQuotaProbe.Judged, this maps to CannotCheck(\"no report in the answer\"). However, if Parse is called on any stream payload that fails JsonException, it masks malformed vendor payloads as an empty/missing group instead of preserving the underlying diagnostic error for logging or handling, creating an abstraction seam where format drift cannot be distinguished from missing reports.",
+     "fix": "Differentiate between empty valid output and JSON parse exceptions in AgyQuotaReport.Parse, returning a typed parse failure with the exception detail so AgyQuotaProbe can accurately report why checking failed.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong against the plan. D6 and S15 pin exactly this: stdout that is not a parseable report is CannotCheck(\"no report in the answer\"), and a probe that fails names its reason (exit code + stderr, 'timed out after 30 s'). The note is only a human sentence; the decision (not parked / stated-guess) is the same for every cannot-check cause, so a typed parse failure would change no behaviour."
+    },
+    {
+     "index": 5,
+     "severity": "Minor",
+     "category": "Architecture",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 140,
+     "title": "QuotaCooldowns depends directly on IProcessLauncher across abstraction boundaries",
+     "why": "QuotaCooldowns is a persistent state coordinator and storage manager for cooldown entries, but AfterRoundAsync accepts and threads IProcessLauncher to invoke runtime probe executions (ReadResetAsync) before mutating state. This couples file locking and state storage to process execution mechanics.",
+     "fix": "Pass a delegate or dedicated probe resolver (e.g. Func<ReviewerInvocation, RateLimited, Task<QuotaReset>>) to QuotaCooldowns or perform probe resolution in RoundEngine before delegating to QuotaCooldowns.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan fixes this signature: D5's ReadResetAsync takes an IProcessLauncher and the coder's recorded deviation 2 passes the launcher to AfterRoundAsync (the probe is the one child process this class orders). A delegate would add an indirection for no behaviour. Style preference, not a defect."
+    },
+    {
+     "index": 6,
+     "severity": "Minor",
+     "category": "Consistency",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 40,
+     "title": "Hardcoded model mappings in AgyQuotaGroups create capability drift when models are added or renamed",
+     "why": "AgyQuotaGroups maintains a static dictionary of model families to map model names to quota keys (e.g. claude-opus-5-5, gpt-oss-120b). Any new model supported by agy that is not in this explicit list will fall back to 'antigravity/?<model>', breaking the intended family-based shared quota pooling and causing duplicate cooldown states for models belonging to the same vendor quota pool.",
+     "fix": "Document the explicit model update contract or centralize family mapping with the existing model catalog definitions in the repository.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "Architecture",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan decided it: D3 says 'one explicit, measured table', rejecting a prefix rule because Argon's ids start `gemini-` too; an unknown family gets its own key on purpose and 'Adding a family is one table row with the fixture that shows it'. S14 pins it, and the table is checked against the committed `agy models` fixtures. A repository model catalog does not hold agy's quota groups."
+    },
+    {
+     "index": 7,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 49,
+     "title": "AgyQuotaGroups bucket lookup fails when given namespaced keys like 'antigravity/gemini'",
+     "why": "AgyQuotaGroups.KeyOf returns keys with the 'antigravity/' prefix (e.g. 'antigravity/gemini'), but BucketIds is keyed by the same constant ('antigravity/gemini'). In BucketsOf(string key), it checks: `BucketIds.TryGetValue(key.Contains('/') ? key : Prefix + key, out var ids)`. However, the constant definitions in BucketIds are `[Gemini] = [...]` which equals `\"antigravity/gemini\"`. When key is `\"antigravity/gemini\"`, `key.Contains('/')` is true, so it looks up `\"antigravity/gemini\"`. BUT for callers passing just `\"gemini\"`, it prepends `Prefix`. However, in `AgyQuotaReport.ResetFor(key, nowUtc)`, if `key` does not match exact BucketIds keys or if someone passes `antigravity/3p` vs `3p`, inconsistency occurs. More critically, in `AgyQuotaGroups.KeyOf(string model)`: when an unlisted model is encountered, it returns `$\"{Prefix}?{model}\"` (e.g. `antigravity/?foo`). In `BucketsOf(key)`, `key.Contains('/')` is true, looking up `\"antigravity/?foo\"` which yields empty buckets `[]`. In `AntigravityRuntime.ReadResetAsync`, `BucketsOf(key).Count == 0` causes it to return `GroupMissing`, meaning any unlisted agy model will permanently fail to gauge check and stay open or fall back without probing.",
+     "fix": "Ensure fallback handling for unknown models in AntigravityRuntime explicitly documents and handles fallback rather than routing through missing bucket gauge checks.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "The claim describes the planned behaviour and the code handles it as D3/D5 say. For `antigravity/?<model>` AntigravityRuntime.ReadResetAsync sees BucketsOf(key).Count == 0 and answers GroupMissing WITHOUT launching /quota; then Spent == true is parked on the stated/guess road with the cause named, and an undecided refusal is not parked (StaysOpen). That is D3's 'no inferred group; no gauge-based parking' and S14. Keys of both shapes (`antigravity/gemini` and bare `gemini`) resolve to the same bucket ids; I found no inconsistency."
+    },
+    {
+     "index": 8,
+     "severity": "Major",
+     "category": "Reliability",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 269,
+     "title": "Uncaught exception on missing parent directory during file reads or lock operations when data directory does not exist",
+     "why": "In `QuotaCooldowns.Read()`, `File.Exists(FilePath)` returns false if the directory doesn't exist, which returns `[]`. But in `QuotaCooldowns.Locked()`, `FolderRefusal()` creates `dataDirectory`, whereas `HeldFile.TakeWithin(LockPath, wait)` is called on `LockPath`. If `LockPath` directory creation fails or permissions are restricted, `HeldFile.TakeWithin` can throw unhandled exceptions instead of returning `Hold.Unusable` if `FileStream` creation throws an unhandled exception before reaching the switch.",
+     "fix": "Ensure all exceptions from `HeldFile.TakeWithin` are captured or handled cleanly in `Locked` so `Mutate` never throws unhandled I/O exceptions up to `AfterRoundAsync`.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Already covered. QuotaCooldowns.Locked calls FolderRefusal() first (Directory.CreateDirectory inside a catch for IOException/UnauthorizedAccessException) and returns Refused; HeldFile.TakeWithin -> TakenByDotNet maps UnauthorizedAccess/DirectoryNotFound/PathTooLong to Hold.Unusable and IOException to Hold.Busy, both mapped to CooldownWrite.Refused (S37). And the only caller on the round path, AfterRoundAsync, wraps the whole of it in catch (Exception), so nothing escapes past the engine."
+    },
+    {
+     "index": 9,
+     "severity": "Minor",
+     "category": "Security",
+     "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+     "line": 235,
+     "title": "Vendor error text appended to note without length truncation before combining strings",
+     "why": "In `QuotaCooldowns.WithVendorSentence(string note, string reason)`, the unconstrained `reason` string is appended to `note`. While `ParkChange.Capped` later caps the final string to `NoteCap` (400 chars), if `note` is already near 400 chars, `WithVendorSentence` allocates large strings unnecessarily when `reason` is large (e.g., massive stderr dump).",
+     "fix": "Truncate `VendorReason.Written(reason)` before string formatting in `WithVendorSentence`.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "SecurityReliability",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "The plan decided it: D4 says 'read on every CanRun, no cache (it is under 16 KiB for ever, §8)', and the reason for no cache is the two-process case (another coai-mcp may park or lift between two reads; a cache keyed on mtime is a new staleness rule). Reads are of a file of a few hundred bytes on a 10 s refresh; a missing file is a File.Exists. No measurement shows a cost."
+    },
+    {
+     "index": 10,
+     "severity": "Major",
+     "category": "Performance",
+     "file": "src_mcp/src/Server/PanelService.cs",
+     "line": 421,
+     "title": "ProbeAsync reads and deserializes quota-cooldowns.json from disk for every provider row sequentially",
+     "why": "PanelService.CooldownOf (line 421) is called via PanelService.CanRun and during ProviderStatus construction in ProbeAsync (line 314). In QuotaCooldowns.Standing, every call performs File.ReadAllText(FilePath) and JsonSerializer.Deserialize without any in-memory caching or file mtime check. When ProbeAsync evaluates all configured provider rows (e.g. 10 to 20 providers) or when roster filtering checks CanRun repeatedly, it performs 20-40 synchronous file reads and JSON deserializations from disk on every 10-second webview poll loop, creating redundant disk I/O and heap allocations on a periodic UI refresh path.",
+     "fix": "Read QuotaCooldowns once per ProbeAsync / CanRun batch evaluation, or cache the deserialized entries in memory keyed by file last-write timestamp/mtime.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong. The reason is already bounded before it reaches here: the launcher caps captured output (ProcessRequest.MaxOutputChars) and VendorReason.Written(reason) = Redaction.SafeText(reason, SafetyCap) caps it before it is formatted into the note; Capped then cuts the final note to 400 characters. Nothing unbounded is allocated."
+    },
+    {
+     "index": 11,
+     "severity": "Major",
+     "category": "Ux",
+     "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+     "line": 204,
+     "title": "ResetFor calculates time-to-return from nowUtc, rendering stale durations if probe results are rendered later",
+     "why": "In AgyQuotaReport.ResetFor and AntigravityRuntime.ReadResetAsync, the note written into QuotaReset.Back embeds a static string with the duration or timestamp generated at probe time. More critically, in Server/CooldownSentences.cs lines 41-43, Excluded produces a human-facing message containing '(in {Left(entry.UntilUtc - nowUtc)})' evaluated when CanRun/ExcludedFrom runs, but in QuotaReset.Back it bakes an immutable sentence into Note. When displayed later on the webview card tooltip, the elapsed duration inside Note never refreshes, displaying contradictory times against the live dynamic cooldown-line.",
+     "fix": "Do not hardcode relative durations into the stored Note string; store ISO UTC timestamps in structured fields and allow cooldownWords.ts or CooldownSentences to dynamically calculate relative durations at render time.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": true,
+     "decision": "reject",
+     "reason": "Wrong. The stored note holds absolute ISO UTC instants only (e.g. '/quota reads the antigravity/gemini quota spent (weekly), back at 2026-10-14T07:19:16Z'); no relative duration is baked into it. The 'in N h' is computed live from UntilUtc in CooldownSentences.Excluded on the server and in cooldownWords.ts at render time, exactly as the finding asks (D9)."
+    },
+    {
+     "index": 12,
+     "severity": "Minor",
+     "category": "Performance",
+     "file": "src_mcp/runners/Reviewers/AgyError.cs",
+     "line": 42,
+     "title": "Parse splits entire stderr string and performs redundant UTF-8 allocations in Utf8JsonReader",
+     "why": "AgyError.Parse calls stderr.Split('\\n') (allocating string arrays and substring strings for each line), and for every AGY_ERROR marker, passes a substring to OfJson which calls Encoding.UTF8.GetBytes(text) allocating byte arrays for Utf8JsonReader. If a tool run dumps extensive stderr (e.g. megabytes of debug logs or stack traces), this causes unnecessary string array and byte buffer allocations across the entire stderr payload.",
+     "fix": "Use ReadOnlySpan<char> or inspect UTF-8 bytes directly using MemoryExtensions.EnumerateLines and Utf8JsonReader on the underlying byte buffer without intermediate string allocations.",
+     "providers": [
+      "antigravity"
+     ],
+     "role": "UxDxPerformance",
+     "capReason": "",
+     "alsoSeenBy": [],
+     "isGating": false,
+     "decision": "reject",
+     "reason": "Not a defect, and bounded: AgyError.Parse runs only on a non-zero agy exit, on stderr that the launcher already caps (BoundedText(MaxOutputChars)), and only for lines starting AGY_ERROR. The allocation saving is theoretical; the project has no measurement that asks for it."
+    }
+   ]
+  }
+ ]
+}
