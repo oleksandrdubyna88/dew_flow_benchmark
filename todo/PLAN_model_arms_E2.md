@@ -2192,6 +2192,19 @@ it was taken. **These are the stories document written as the epic starts, not e
     (6) Decisions of the review the spec left open: a binding cannot be named like a fact or a fixed field; a `notes` never names a verdict; `tasks.splitFix` is not `tasks.split`; `diffFrom` inside one tasks entry
     follows the block's order; a path segment has no control or format character and no edge space (`Printable` escapes them); a closed arm is an arm of an EARLIER run only (R8); a `taskCode` step is placed only
     through a tasks entry (R9); a scheme that runs the pipeline refuses a binding of its files (R11: `work/tasks.json`, `work/batches.json`, `work/t<n>.md`, `notes/t<n>-code.md`, the id being `TaskIds.Pattern` `^t[0-9]+\z`, defined once in Core for E4's `tasks.json` checker to reuse; U+2028, U+2029 and non-ASCII spaces are refused in a segment, and a scheme or run name is printed escaped); a refused binding is kept by name so nothing says it twice (R13).
+48. **E2.S3 as built — a deviation from the spec's item 1, decided at its fix round** (2026-10-30, the Opus review of `4b0b08a`, R1). The spec had the launcher await BOTH readers "to their end" on every
+    path. After a kill that is a wait with no ceiling: a descendant that escaped the tree kill (`(setsid sleep N &)`) holds the pipes, so a cancelled launch took N seconds (measured 12.3 s; base 1.1 s) and a
+    long-lived one would hold it for good (`common.reliability`: every wait has a ceiling). **Settled:** the wait for the readers AFTER the kill — the wall's and the caller's cancellation — is bounded by one
+    named constant, `ProcessRunner.DrainAfterKill` (10 s); past it the launch answers as the path does (the caller's `OperationCanceledException`, or `TimedOut` with the text of the readers that ended) and a
+    continuation observes the abandoned readers' faults and then disposes the wait's budget. The completed path is not bounded. Also settled: the caller's cancellation is one form on every cancelled path — an
+    `OperationCanceledException` carrying the caller's token (the wait's own cancellation, or the reader fault it outranked, as the inner exception); the fake's `transcripts: true` reads `HOME` from the
+    environment, writes nothing (and says so) with neither `HOME` nor `CLAUDE_CONFIG_DIR`, refuses `--resume` of a session with no transcript with claude's sentence (`No conversation found with session ID: <id>`,
+    exit 1) and leaves nothing for a launch it refuses. Item 36's "leaves the empty file claude would" stands; these are what "would" means.
+49. **Owned follow-up (owner E2.S2, which lands `SessionTranscripts.PathOf`): the fake's transcript path against `PathOf`, with the cwd the LAUNCHER was given.** E2.S3's tests compare the file the fake wrote with a
+    slug rule written a third time in the test, using the cwd the fake itself logged (`FakeCliByCallTests.SeenCwd`) — which hides a gap: the runner computes its path from the cwd it handed the launcher, and on a
+    host whose temp folder is a link (macOS `/var` → `/private/var`) the process reports the resolved path. E2.S2, in the commit that adds `PathOf`, adds to
+    `A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked` the assertion `SessionTranscripts.PathOf(<home>/.claude, <the cwd handed to RunAsync>, g)` names the file the fake left, and keeps
+    `SeenCwd` only with the note that it hides the gap, or drops it.
 
 ## 9. Growth
 

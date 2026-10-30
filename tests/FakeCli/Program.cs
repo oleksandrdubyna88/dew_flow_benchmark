@@ -27,7 +27,6 @@ public static class Program
 
         var prompt = PromptOf(args, Console.IsInputRedirected ? new StreamReader(Console.OpenStandardInput(), utf8).ReadToEnd() : string.Empty);
         var call = Events.Record(ModelOf(args), args, prompt);
-        Transcripts.Leave(script, args);
 
         return new Behaviour(script, args, prompt, call).Run();
     }
@@ -194,15 +193,26 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             Thread.Sleep(script.DelayMs);
         }
 
+        var mode = ModeOf();
+
+        // A launch claude would refuse starts no session; one it accepts leaves its transcript before anything else it does (a hang, a quota marker, an answer).
+        return mode != "refuse" && Transcripts.Enter(script, args) is { Length: > 0 } refusal ? Exit(1, refusal) : Dispatch(mode);
+    }
+
+    private string ModeOf()
+    {
         var mode = (script.QuotaFrom > 0 && call >= script.QuotaFrom, script.HangOnCall == call) switch
         {
             (true, _) => "quota",
             (_, true) => "hang",
             _ => script.Mode,
         };
-        var refused = script.RefuseArgvContaining.Length > 0 && args.Contains(script.RefuseArgvContaining);
 
-        return (refused ? "refuse" : mode) switch
+        return script.RefuseArgvContaining.Length > 0 && args.Contains(script.RefuseArgvContaining) ? "refuse" : mode;
+    }
+
+    private int Dispatch(string mode) =>
+        mode switch
         {
             "refuse" => Exit(script.RefuseExit, script.RefuseText),
             "hang" => Hang(),
@@ -211,7 +221,6 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             "silent" => 0,
             _ => Answer(),
         };
-    }
 
     private static int Exit(int code, string stderr)
     {
@@ -574,41 +583,70 @@ public static class Grammar
 }
 
 /// <summary>The transcript claude leaves for a session (model arms E2.S3, E2 §8 item 36): an EMPTY <c>&lt;home&gt;/projects/&lt;slug&gt;/&lt;id&gt;.jsonl</c>, <c>home</c>
-/// being <c>CLAUDE_CONFIG_DIR</c> when it is set and non-empty, else <c>~/.claude</c>, and <c>slug</c> this process's working directory with every character
-/// outside <c>[A-Za-z0-9]</c> replaced by <c>-</c>. The rule of the module's own path spelling, written a second time on purpose: the fake references
-/// nothing of the module, so a disagreement between the two shows in a test instead of cancelling out. An existing file is left as it is — a
-/// resumed session's transcript is appended to, never truncated.</summary>
+/// being <c>CLAUDE_CONFIG_DIR</c> when it is set and non-empty, else <c>$HOME/.claude</c> — read from the environment, never from the platform's idea of the user's home, so
+/// a test that forgot to give the fake one cannot reach the developer's own transcripts; with neither set the fake says so on stderr and writes nothing — and <c>slug</c>
+/// this process's working directory with every character outside <c>[A-Za-z0-9]</c> replaced by <c>-</c>. The rule of the module's own path spelling, written a second time
+/// on purpose: the fake references nothing of the module, so a disagreement between the two shows in a test instead of cancelling out.
+/// <para>
+/// The fake accepts no more than claude does: <c>--resume &lt;id&gt;</c> for a session with no transcript is refused with claude's own sentence
+/// (<c>No conversation found with session ID: &lt;id&gt;</c>, exit 1), so a runner that resumes a session it never started goes red here as it would live. A launch the
+/// fake refuses for another reason (<c>refuseArgvContaining</c>) leaves nothing. An existing transcript is left as it is — a resumed session's file is appended to,
+/// never truncated.
+/// </para></summary>
 public static class Transcripts
 {
-    public static void Leave(Script script, string[] args)
-    {
-        if (script.Transcripts && SessionOf(args) is { } session)
-        {
-            var file = Path.Combine(Home(), "projects", Slug(Directory.GetCurrentDirectory()), $"{session:D}.jsonl");
+    /// <summary>One session argument of a launch: <c>--session-id</c> starts it, <c>--resume</c> continues it.</summary>
+    public sealed record Request(bool Resume, Guid Id);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.AppendAllText(file, string.Empty);
+    /// <summary>Takes the launch in: the sentence claude refuses it with, or empty when it is accepted (the transcript left, or nothing asked for).</summary>
+    public static string Enter(Script script, string[] args)
+    {
+        if (!script.Transcripts || RequestOf(args) is not { } request)
+        {
+            return string.Empty;
         }
+
+        if (Home() is not { Length: > 0 } home)
+        {
+            Console.Error.Write("fake-cli: transcripts: neither CLAUDE_CONFIG_DIR nor HOME is set; no transcript left\n");
+            return string.Empty;
+        }
+
+        return Admit(request, Path.Combine(home, "projects", Slug(Directory.GetCurrentDirectory()), $"{request.Id:D}.jsonl"));
     }
 
-    /// <summary>The id after <c>--session-id</c> or <c>--resume</c>, when it is a guid (claude refuses anything else, so the fake leaves nothing for it).</summary>
-    public static Guid? SessionOf(string[] args)
+    private static string Admit(Request request, string file)
+    {
+        if (request.Resume && !File.Exists(file))
+        {
+            return $"No conversation found with session ID: {request.Id:D}";
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.AppendAllText(file, string.Empty);
+        return string.Empty;
+    }
+
+    /// <summary>The session argument, when its id is a guid (claude refuses anything else, so the fake leaves nothing for it).</summary>
+    public static Request? RequestOf(string[] args)
     {
         for (var i = 0; i < args.Length - 1; i++)
         {
-            if (args[i] is "--session-id" or "--resume")
+            if (IsSessionFlag(args[i]))
             {
-                return Guid.TryParse(args[i + 1], out var session) ? session : null;
+                return Guid.TryParse(args[i + 1], out var id) ? new Request(args[i] == "--resume", id) : null;
             }
         }
 
         return null;
     }
 
+    private static bool IsSessionFlag(string argument) => argument is "--session-id" or "--resume";
+
     private static string Home() =>
-        Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured
-            ? configured
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
+        Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured ? configured
+            : Environment.GetEnvironmentVariable("HOME") is { Length: > 0 } home ? Path.Combine(home, ".claude")
+            : string.Empty;
 
     private static string Slug(string workingDirectory) => Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-");
 }

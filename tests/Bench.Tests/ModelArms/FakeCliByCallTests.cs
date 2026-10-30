@@ -13,8 +13,8 @@ namespace Bench.Tests.ModelArms;
 /// to the fake; nothing paid is called.
 /// <para>
 /// What this does NOT prove: that the transcript path is the one <c>SessionTranscripts.PathOf</c> spells — that type is E2.S2's and does not exist yet, so the
-/// path here is written out a second time (the slug rule, on purpose: the fake references nothing of the module); once it lands, the integration adds the
-/// comparison. Nor does it prove where a real claude puts its transcript on a host this was not measured on.
+/// path here is written out a second time (the slug rule, on purpose: the fake references nothing of the module); once it lands, E2.S2 adds the
+/// comparison (E2 §8 item 49). Nor does it prove where a real claude puts its transcript on a host this was not measured on.
 /// </para></summary>
 public sealed class FakeCliByCallTests
 {
@@ -63,7 +63,9 @@ public sealed class FakeCliByCallTests
     private static string Slug(string cwd) => Regex.Replace(cwd, "[^A-Za-z0-9]", "-");
 
     /// <summary>The cwd the fake logged for its call: what the process itself reports (a symbolic link in the temp folder's path would differ from the
-    /// path the launcher was handed, and claude slugs the one it sees).</summary>
+    /// path the launcher was handed, and claude slugs the one it sees). NOTE: this HIDES a gap — the module's runner will compute its transcript path from the cwd the
+    /// LAUNCHER was given, and on a host whose temp folder is a link (macOS <c>/var</c> → <c>/private/var</c>) the two differ. Closing it is E2 §8 item 49's, once
+    /// <c>SessionTranscripts.PathOf</c> exists.</summary>
     private static string SeenCwd(FakeCli fake) => fake.Calls()[^1].Cwd;
 
     private static string Transcript(string home, string cwd, Guid session) => Path.Combine(home, "projects", Slug(cwd), $"{session:D}.jsonl");
