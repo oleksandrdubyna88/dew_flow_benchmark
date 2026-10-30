@@ -249,6 +249,8 @@ export function startPhaseSampler({ sample, file, intervalMs, thresholds, sleep 
   let error = null;
   const loop = (async () => {
     while (running) {
+      await sleep(intervalMs); // the first reading is one interval in: the sampler's own baseline was taken when it started
+      if (!running) return;
       try {
         const s = await sample();
         taken.push(s);
@@ -257,7 +259,6 @@ export function startPhaseSampler({ sample, file, intervalMs, thresholds, sleep 
         error = e.message;
         return;
       }
-      await sleep(intervalMs);
     }
   })();
   return {
