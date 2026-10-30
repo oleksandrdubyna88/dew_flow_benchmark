@@ -261,3 +261,62 @@ test('Bytes_sent_after_the_hello_in_the_same_chunk_reach_the_upstream_with_it', 
     await p.close();
   }
 });
+
+/** A proxy whose dial connects to `echo` only after `delayMs`; `received` holds what the upstream got. */
+async function proxyWithSlowDial(delayMs, over = {}) {
+  const dir = tmpDir('eg-slow');
+  const socketPath = path.join(dir, 'p.sock');
+  const lines = [];
+  const received = [];
+  const echo = net.createServer(c => c.on('data', d => received.push(d)));
+  await new Promise(r => echo.listen(0, '127.0.0.1', r));
+  const dialed = [];
+  const dial = () => { const s = new net.Socket(); dialed.push(s); const t = setTimeout(() => s.connect(echo.address().port, '127.0.0.1'), delayMs); s.once('close', () => clearTimeout(t)); return s; };
+  const proxy = await egressProxy({ socketPath, allow: BARE, log: l => lines.push(l), dial, ...over });
+  return { socketPath, lines, received, dialed, close: async () => { await proxy.close(); echo.close(); echo.closeAllConnections?.(); } };
+}
+
+test('A_hello_that_arrives_before_the_upstream_connected_is_held_and_forwarded_not_dropped', async () => {
+  const p = await proxyWithSlowDial(300);
+  try {
+    const hello = npmHello();
+    const c = net.connect(p.socketPath);
+    c.on('error', () => {});
+    await new Promise(r => c.on('connect', r));
+    c.write('CONNECT registry.npmjs.org:443 HTTP/1.1\r\nHost: registry.npmjs.org:443\r\n\r\n');
+    await sleep(60); // the client does not wait for the 200: its hello goes out while the proxy is still dialling
+    c.write(hello);
+    await sleep(900);
+    assert.equal(Buffer.concat(p.received).equals(hello), true, `the upstream got ${Buffer.concat(p.received).length} of ${hello.length} hello bytes`);
+    assert.deepEqual(p.lines.map(l => l.verdict), ['allowed']);
+    c.destroy();
+  } finally {
+    await p.close();
+  }
+});
+
+test('A_client_that_never_finishes_its_header_block_is_cut_off_after_the_header_timeout', async () => {
+  const p = await proxyWithSlowDial(0, { headerTimeoutMs: 150 });
+  try {
+    const r = await talk(p.socketPath, 'CONNECT registry.npmjs.org:443 HTTP/1.1\r\nHost: x\r\n', { waitMs: 700 });
+    assert.equal(r.closed, true, 'the proxy closed a connection that never completed its header block');
+    assert.equal(p.dialed.length, 0, 'and never dialled');
+    assert.deepEqual(p.lines.map(l => l.verdict), ['nonConnect']);
+    assert.match(p.lines[0].why, /no complete header block within 150 ms/);
+  } finally {
+    await p.close();
+  }
+});
+
+test('An_upstream_that_never_connects_is_cut_off_after_the_dial_timeout_counted_from_the_accept', async () => {
+  const p = await proxyWithSlowDial(60_000, { dialTimeoutMs: 200 });
+  try {
+    const r = await talk(p.socketPath, 'CONNECT registry.npmjs.org:443 HTTP/1.1\r\n\r\n', { waitMs: 800 });
+    assert.equal(r.closed, true);
+    assert.equal(r.got.includes('200'), false, 'no 200 for a tunnel that never opened');
+    assert.deepEqual(p.lines.map(l => [l.verdict, l.code]), [['upstream-error', 'ETIMEDOUT']]);
+    assert.equal(p.dialed[0].destroyed, true, 'the half-open upstream socket was destroyed');
+  } finally {
+    await p.close();
+  }
+});

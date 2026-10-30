@@ -11,6 +11,10 @@ import net from 'node:net';
 import { inspectClientHello } from './tls-hello.mjs';
 
 export const HELLO_TIMEOUT_MS = 10_000;
+/** From accept: the whole header block must have arrived (a slow-drip client holds a socket and a slot otherwise). */
+export const HEADER_TIMEOUT_MS = 10_000;
+/** From accept: the upstream must be connected, the header read included (the two do not stack). */
+export const DIAL_TIMEOUT_MS = 15_000;
 
 export const MAX_HEADER_BYTES = 64 * 1024;
 const CONNECT_LINE = /^CONNECT ([^\s:/]+):(\d+) HTTP\/1\.[01]$/;
@@ -88,14 +92,25 @@ function gateAndPipe({ client, upstream, decision, rest, emit, helloTimeoutMs })
   };
   client.on('data', onData);
   client.on('close', () => { clearTimeout(timer); settled = true; });
+  client.resume(); // paused since the header block was read: what the client sent while the upstream was dialling is delivered to `onData`, not dropped
   check();
 }
 
 /** Open the tunnel after an allowed decision: dial, answer 200, then gate on the ClientHello. An upstream error is logged and the client dropped. */
-function tunnel({ client, decision, rest, dial, emit, helloTimeoutMs }) {
+function tunnel({ client, decision, rest, dial, emit, helloTimeoutMs, dialDeadline }) {
   const upstream = dial({ host: decision.host, port: decision.port });
   let connected = false;
+  const dialTimer = setTimeout(() => {
+    if (connected) return;
+    emit({ verdict: 'upstream-error', host: decision.host, port: decision.port, code: 'ETIMEDOUT', why: 'the upstream did not connect before the dial deadline' });
+    connected = true; // the error line is written once
+    upstream.destroy();
+    client.destroy();
+  }, Math.max(0, dialDeadline - Date.now()));
+  upstream.once('close', () => clearTimeout(dialTimer));
+  client.once('close', () => clearTimeout(dialTimer));
   upstream.once('connect', () => {
+    clearTimeout(dialTimer);
     connected = true;
     client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
     gateAndPipe({ client, upstream, decision, rest, emit, helloTimeoutMs });
@@ -109,8 +124,14 @@ function tunnel({ client, decision, rest, dial, emit, helloTimeoutMs }) {
 }
 
 /** Serve one client connection: read the header block (bounded), decide on its first line, then answer or tunnel. */
-function serveClient(client, { allow, dial, emit, helloTimeoutMs }) {
+function serveClient(client, { allow, dial, emit, helloTimeoutMs, headerTimeoutMs, dialTimeoutMs }) {
   let buffered = Buffer.alloc(0);
+  const acceptedAt = Date.now();
+  const headerTimer = setTimeout(() => {
+    emit({ verdict: 'nonConnect', why: `no complete header block within ${headerTimeoutMs} ms: the connection was closed` });
+    client.destroy();
+  }, headerTimeoutMs);
+  client.once('close', () => clearTimeout(headerTimer));
   const onData = chunk => {
     buffered = Buffer.concat([buffered, chunk]);
     const end = buffered.indexOf(HEADER_END);
@@ -121,10 +142,12 @@ function serveClient(client, { allow, dial, emit, helloTimeoutMs }) {
       }
       return;
     }
+    clearTimeout(headerTimer);
+    client.pause(); // before the listener goes: a paused stream keeps what arrives next, an unattended flowing one drops it (gateAndPipe resumes)
     client.off('data', onData);
     const line = buffered.subarray(0, end).toString('latin1').split('\r\n')[0];
     const decision = connectDecision(line, allow);
-    if (decision.allow) return tunnel({ client, decision, rest: buffered.subarray(end + HEADER_END.length), dial, emit, helloTimeoutMs });
+    if (decision.allow) return tunnel({ client, decision, rest: buffered.subarray(end + HEADER_END.length), dial, emit, helloTimeoutMs, dialDeadline: acceptedAt + dialTimeoutMs });
     emit(decision.status === 403
       ? { verdict: 'refused', host: decision.host, port: decision.port, status: 403, why: decision.why }
       : { verdict: 'nonConnect', line: line.slice(0, 200), why: decision.why });
@@ -138,7 +161,7 @@ function serveClient(client, { allow, dial, emit, helloTimeoutMs }) {
  * Start the proxy on `socketPath` (mode 600) -> `{ close() }`. `allow` is the arm's exact host list; `log(line)` receives
  * `{ t, verdict, host?, port?, line?, why?, code?, sni?, reason? }`; `dial` is the seam tests use to point an allowed host at a local server.
  */
-export async function egressProxy({ socketPath, allow, log, helloTimeoutMs = HELLO_TIMEOUT_MS, dial = ({ host, port }) => net.connect({ host, port }) }) {
+export async function egressProxy({ socketPath, allow, log, helloTimeoutMs = HELLO_TIMEOUT_MS, headerTimeoutMs = HEADER_TIMEOUT_MS, dialTimeoutMs = DIAL_TIMEOUT_MS, dial = ({ host, port }) => net.connect({ host, port }) }) {
   const emit = line => {
     try { log({ t: new Date().toISOString(), ...line }); } catch (e) { process.stderr.write(`egress: the log sink failed: ${e.message}\n`); }
   };
@@ -146,7 +169,7 @@ export async function egressProxy({ socketPath, allow, log, helloTimeoutMs = HEL
   const server = net.createServer(client => {
     clients.add(client);
     client.on('close', () => clients.delete(client));
-    serveClient(client, { allow, dial, emit, helloTimeoutMs });
+    serveClient(client, { allow, dial, emit, helloTimeoutMs, headerTimeoutMs, dialTimeoutMs });
   });
   rmSync(socketPath, { force: true });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });

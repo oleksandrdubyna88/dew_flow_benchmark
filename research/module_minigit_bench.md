@@ -288,7 +288,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   inner process by its marker.
 - **Egress** (`lib/egress.mjs`, `lib/tls-hello.mjs`). A CONNECT proxy on `net/proxy.sock`: only `CONNECT <host>:443` for a host named EXACTLY in
   `EGRESS_HOSTS[arm]` (no suffix, no case folding), `403` otherwise, `405` for any non-CONNECT line (plain HTTP is not proxied), a header
-  block over 64 KiB closes the connection; every request is one log line. `api.anthropic.com` is in no list. **The CONNECT host is not the
+  block over 64 KiB closes the connection, and so does a header block not complete within 10 s of the accept (`nonConnect` line) or an upstream not connected within 15 s of the accept (`upstream-error`, `ETIMEDOUT`; the two deadlines both count from the accept and do not stack); bytes the client sends while the upstream is still dialling are held (the client is paused when the header block is read and resumed once the hello gate is listening), not dropped; every request is one log line. `api.anthropic.com` is in no list. **The CONNECT host is not the
   whole decision** (review of 2026-10-30: `curl --connect-to www.cloudflare.com:443:registry.npmjs.org:443 https://www.cloudflare.com/`
   answered 200 through the proxy, because a CDN edge routes by the TLS SNI and the proxy piped raw bytes): after the `200` the proxy holds
   the client's first bytes, reads the whole ClientHello (a pure parser, `lib/tls-hello.mjs`: it spans records and chunks, 16 KiB cap, 10 s
@@ -424,6 +424,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | An `error` event on the response (a client that resets mid-write) cannot end the broker, and the request is still read to its end and charged (before: an unhandled `error` event on `res`) | `broker.test.mjs` |
 | A `drain` that wakes early leaves no timer behind (with the `clearTimeout` removed the test fails: the 120 s ceiling timer stays) | `broker.test.mjs` |
 | A request the upstream reset after part of its body was written is charged the reservation, not waived; only a socket that never connected is free | `broker.test.mjs` |
+| A hello sent before the upstream connected reaches it whole (before: the bytes between the CONNECT headers and the dial were dropped); a client that never completes its header block, and an upstream that never connects, are cut off by their timeouts | `egress.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
