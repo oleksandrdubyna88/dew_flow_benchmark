@@ -516,6 +516,43 @@ public sealed class RunArmSchemeTests
     }
 
     [Fact]
+    public async Task A_stop_during_the_gates_finalization_diff_is_a_stopped_line_because_the_arm_is_not_yet_done()
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        (await RunAsync(root, "C1")).Code.Should().Be(0);
+        var paths = root.PathsOf("C1");
+        File.Delete(paths.Diff("4-gate"));
+        File.WriteAllLines(paths.Timing, File.ReadAllLines(paths.Timing).Where(line => !line.Contains("\"arm-done\"", StringComparison.Ordinal)));
+        var shim = Path.Combine(root.Temp, "bin", "git");
+        File.Delete(shim); // a link to the host's git: a write through it would be a write into the host's git
+        var hit = root.MarkerFile("diff");
+        root.ShimScript(shim, $"case \" $* \" in *\" diff \"*) echo hit >> '{hit}'; /usr/bin/sleep 20;; esac\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        using var stopping = new CancellationTokenSource();
+        var watcher = Task.Run(
+            async () =>
+            {
+                while (!File.Exists(hit))
+                {
+                    await Task.Delay(50, Ct);
+                }
+
+                await stopping.CancelAsync();
+            },
+            Ct);
+
+        var stopped = await RunAsync(root, "C1", stopping.Token);
+        await watcher;
+
+        stopped.Code.Should().Be(5, stopped.Error);
+        File.Exists(paths.Diff("4-gate")).Should().BeFalse("the stop came before the diff was written");
+        root.TimingOf("C1").Last().Should().BeOfType<TimingLine.Stopped>("the arm is unfinished — no diff, no arm-done — so the last line must say a stop happened (D16)");
+        root.ArmDones("C1").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_stopped_line_after_arm_done_does_not_earn_the_arm_a_second_arm_done()
     {
         using var root = new ExperimentRoot();

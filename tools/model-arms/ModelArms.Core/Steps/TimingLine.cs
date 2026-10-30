@@ -62,6 +62,11 @@ public static class TimingLines
             _ => throw new InvalidOperationException("unreachable"),
         };
 
+    /// <summary>Whether <paramref name="arm"/> has finished its scheme and nothing has run since: an <c>arm-done</c> line of this arm after the LAST <c>start</c> or <c>gate-wait</c> line. A <c>stopped</c> line after an <c>arm-done</c> does not make the arm
+    /// unfinished — only work does. The one rule <c>run-arm</c> writes <c>arm-done</c> by and the gate step decides a stop needs no line by.</summary>
+    public static bool IsArmDone(IReadOnlyList<TimingLine> timing, string arm) =>
+        timing.Skip(timing.ToList().FindLastIndex(line => line is TimingLine.Start or TimingLine.GateWait) + 1).Any(line => line is TimingLine.ArmDone done && done.Arm == arm);
+
     /// <summary>One <see cref="TimingLine"/> per non-empty line of <paramref name="text"/>. A line that is not a JSON object, whose <c>kind</c> is unknown or one of whose required fields is missing or of the wrong
     /// kind is <see cref="TimingLine.Other"/> with its text, so a reader never drops a line and never throws on one. A missing <c>limited</c>, <c>recovered</c> or <c>end</c> reads as false or empty (the shell's lines
     /// and the previous generation's carry none); a missing or null <c>wall_s</c> or <c>exit</c> is <see cref="Bench.Domain.Trace.CapturedCount.Unavailable"/>.</summary>

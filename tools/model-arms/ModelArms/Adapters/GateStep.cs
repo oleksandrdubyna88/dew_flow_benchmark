@@ -120,12 +120,13 @@ internal sealed class GateRun
         }
     }
 
-    /// <summary>The gate has nothing left to do: its step is done (recovery would skip it) and what <c>gate.json</c> says does not ask for another round. A stop that lands while a rerun waits for the lock of such a gate still ends the run with exit 5, but writes
-    /// no <c>stopped</c> line — nothing was interrupted, and a line after the arm's <c>arm-done</c> would say it was.</summary>
+    /// <summary>The gate has nothing left to do AND the arm already says so: its step is done (recovery would skip it), what <c>gate.json</c> says does not ask for another round, and the arm has its <c>arm-done</c> (<see cref="TimingLines.IsArmDone"/>, the
+    /// rule <c>run-arm</c> writes it by). A stop that lands while a rerun waits for the lock of such a gate still ends the run with exit 5, but writes no <c>stopped</c> line — nothing was interrupted, and a line after the arm's <c>arm-done</c> would say it was.
+    /// Without the <c>arm-done</c> the finalization (the diff) may not have run, and the last line of an unfinished arm must say a stop happened (D16).</summary>
     private bool IsFinal()
     {
         var status = GateStatusFile.Read(_statusFile);
-        if (status is GateStatusFile.Answer.Refused || _deps.Runner.Recover(_context) is not StepEntry.Skip)
+        if (status is GateStatusFile.Answer.Refused || !ArmSaysDone())
         {
             return false;
         }
@@ -133,6 +134,8 @@ internal sealed class GateRun
         var judged = Read(status);
         return !judged.Reading.IsUnjudgeable && !GateStatus.WaitAgain(judged.Reading, judged.Waits, Limits.GateTries);
     }
+
+    private bool ArmSaysDone() => _deps.Runner.Recover(_context) is StepEntry.Skip && TimingLines.IsArmDone(_files.ReadTiming(), _context.Arm);
 
     /// <summary>Lock, step, unlock, judge; a blocked round with tries left is decided, waited and the loop goes round; anything else ends it. A <c>Stopped</c> step ends it at once — never run again inside this loop.</summary>
     private async Task<StepOutcome> LoopAsync(CancellationToken stopping)

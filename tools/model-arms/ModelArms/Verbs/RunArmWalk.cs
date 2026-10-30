@@ -65,16 +65,13 @@ internal sealed class RunArmWalk
     /// waited for the gate lock) does not make the arm unfinished: only work does.</summary>
     public void Finish()
     {
-        if (!AlreadyDone(_files.ReadTiming(), _plan.Arm))
+        if (!TimingLines.IsArmDone(_files.ReadTiming(), _plan.Arm))
         {
             _files.AppendTiming(new TimingLine.ArmDone(_plan.Arm, _clock.GetUtcNow()));
         }
 
         _log.Line("arm done");
     }
-
-    private static bool AlreadyDone(IReadOnlyList<TimingLine> timing, string arm) =>
-        timing.Skip(timing.ToList().FindLastIndex(line => line is TimingLine.Start or TimingLine.GateWait) + 1).Any(line => line is TimingLine.ArmDone done && done.Arm == arm);
 
     private StepContext ContextAt(int position) =>
         new(
