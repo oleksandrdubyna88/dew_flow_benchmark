@@ -22,6 +22,8 @@ internal sealed class RecordingGateLock(List<string> events) : IGateLock
 
     public Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken) => Task.FromResult(TryAcquire(path)!);
 
+    public string Describe(string path) => "(holder unknown)";
+
     private sealed class Release(List<string> events) : IDisposable
     {
         private int _released;
@@ -42,6 +44,24 @@ internal sealed class RefusingGateLock : IGateLock
     public IDisposable? TryAcquire(string path) => throw new GateLockRefusedException($"{path} is a link — refused (D17)");
 
     public Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken) => throw new GateLockRefusedException($"{path} is a link — refused (D17)");
+
+    public string Describe(string path) => "(holder unknown)";
+}
+
+/// <summary>A lock somebody else holds for ever, and says who: the description is the DOUBLE's, so a gate that asks the file instead of the port is seen.</summary>
+internal sealed class BusyGateLock : IGateLock
+{
+    public const string Holder = "by the double, pid 4242, since never";
+
+    public IDisposable? TryAcquire(string path) => null;
+
+    public async Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        throw new InvalidOperationException("unreachable");
+    }
+
+    public string Describe(string path) => Holder;
 }
 
 /// <summary>The runner's probe that notes every launch as an event.</summary>

@@ -9,4 +9,7 @@ public interface IGateLock
 
     /// <summary>Waits until the lock is free and returns it held. Cancellation throws and holds nothing.</summary>
     Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken);
+
+    /// <summary>Who has the lock at <paramref name="path"/>, as words a person reads after "held": <c>by pid N since &lt;utc&gt;</c>, or <c>(holder unknown)</c>. A hint — the lock itself is the truth. Never throws, never waits.</summary>
+    string Describe(string path);
 }

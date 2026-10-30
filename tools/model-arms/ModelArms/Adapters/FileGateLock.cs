@@ -154,6 +154,9 @@ public sealed class FileGateLock : IGateLock
     /// <summary>The words <c>status</c> prints for a lock somebody has, after <c>held</c>.</summary>
     public static string WhoHolds(string path) => GateHolderNote.Describe(path);
 
+    /// <summary>STUB (red first).</summary>
+    public string Describe(string path) => string.Empty;
+
     private GateLockAnswer Opened(string path, FileMode mode, bool note)
     {
         AfterJudged?.Invoke(path);
