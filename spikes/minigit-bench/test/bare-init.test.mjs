@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { applyInit, describePlan, initPlan } from '../lib/bare-init.mjs';
 import { treeHash } from '../lib/cache-snapshot.mjs';
 import { appendLedger, readLedger } from '../lib/ledger.mjs';
-import { readRunMap } from '../lib/run-map.mjs';
+import { markStopped, planSession, readRunMap, transition, writeRunMap } from '../lib/run-map.mjs';
 import { spendGate, spendTotals } from '../lib/spend-gate.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
 
@@ -143,4 +143,40 @@ test('A_line_an_earlier_series_carried_is_counted_once_and_kept_when_its_origin_
   rmSync(path.join(s.seriesRoot, 's-20261029-aaaa'), { recursive: true, force: true });
   const gone = initPlan({ ...s, seriesId: 's-20261031-cccc' }).value.prior.filter(l => l.kind !== 'prior');
   assert.deepEqual(gone.map(l => [l.fromSeries, l.rid, l.usd]), [['s-20261029-aaaa', 'r1', 3], ['s-20261030-bbbb', 'r2', 2]], 'the copy keeps the spend when the origin directory was removed');
+});
+
+// ---- an earlier series that is not settled blocks a new one (review MINOR-5) -------------------------------------------------------------
+
+/** Change the run-map of an earlier series with `edit(map) -> map`. */
+function editMap(s, id, edit) {
+  const file = path.join(s.seriesRoot, id, 'run-map.json');
+  writeRunMap(file, edit(readRunMap(file).value));
+}
+const sessionOf = (map, rid, status, patch = {}) => {
+  let m = planSession(map, { rid, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5' }).value;
+  if (status !== 'planned') m = transition(m, rid, 'launching').value;
+  return status === 'ran' ? transition(m, rid, 'ran', { class: 'completed', data: true, usd: 1, ...patch }).value : m;
+};
+
+test('Init_refuses_while_an_earlier_series_holds_a_launching_session_or_a_waiting_stop_naming_the_resume_command', () => {
+  const s = setup();
+  earlierSeries(s, 's-20261029-aaaa', [{ kind: 'aa', usd: 1, what: 'completed', rid: 'r1' }]);
+  const dir = path.join(s.seriesRoot, 's-20261029-aaaa');
+  const fresh = () => initPlan({ ...s, seriesId: 's-20261031-cccc' });
+  assert.equal(fresh().ok, true, 'control: an earlier series with nothing open lets a new one start');
+  editMap(s, 's-20261029-aaaa', m => sessionOf(m, 'aaaaaa', 'launching'));
+  const launching = fresh();
+  assert.equal(launching.ok, false);
+  assert.match(launching.reason, /s-20261029-aaaa/);
+  assert.match(launching.reason, /aaaaaa/);
+  assert.ok(launching.reason.includes(`resume --series ${dir} --settle-only`), `the sentence names the command to settle it: ${launching.reason}`);
+  editMap(s, 's-20261029-aaaa', m => sessionOf(markStopped({ ...m, sessions: {} }, { rule: 'stop: auth', reason: '{}', at: 't' }), 'bbbbbb', 'launching'));
+  assert.equal(fresh().ok, false, 'a stopped series that still holds a launching session is not settled either: its spend is not in its ledger');
+  editMap(s, 's-20261029-aaaa', m => ({ ...sessionOf({ ...m, sessions: {}, stopped: null }, 'cccccc', 'ran', { stopRules: [{ rule: 'T5 unchecked', detail: 'no broker ledger' }] }) }));
+  const waiting = fresh();
+  assert.equal(waiting.ok, false, 'a stop an ended session carries and nobody recorded is open work');
+  assert.match(waiting.reason, /T5 unchecked/);
+  assert.ok(waiting.reason.includes(`resume --series ${dir}`) && !waiting.reason.includes('--settle-only'), 'a plain resume records the stop and launches nothing');
+  editMap(s, 's-20261029-aaaa', m => markStopped(m, { rule: 'T5 unchecked', reason: '{}', at: 't' }));
+  assert.equal(fresh().ok, true, 'the stop is recorded and nothing is launching: the earlier series is settled and a new series may start');
 });

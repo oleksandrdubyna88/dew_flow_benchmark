@@ -15,7 +15,7 @@ import { appendChargeOnce, appendLedger, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
 import { ownerAlive, readState, stateOf } from './session-state.mjs';
-import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
+import { markStopped, pendingStops, planSession, resumePlan, transition, writeRunMap } from './run-map.mjs';
 import { layoutPaths } from './sandbox.mjs';
 import { spendGate } from './spend-gate.mjs';
 
@@ -55,9 +55,6 @@ function fixedStep(map, kind) {
 
 /** The cell ids of every session the live run-map holds: what the sampler must count as ours (the map the run started from holds none of the sessions planned since). */
 const cellIdsOf = h => Object.keys(h.get().sessions).map(rid => `cell-${rid}`);
-
-/** The `void: contaminated` sessions of the whole series: the second one stops it (registered series stop; analysis contract section 9). */
-const contaminatedVoids = map => Object.values(map.sessions).filter(s => s.class === 'void: contaminated').length;
 
 /** The ledger kind of a session: its OWN kind (a resume or a settle-only may run under another `--what`), and `data` or `void` for a data-pair session. */
 function ledgerKind(kind, outcome) {
@@ -128,13 +125,6 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
     return done(EXIT.halt, `the phase could not start (nothing was paid): ${phase.reason}`);
   }
   return settleSessions({ ctx, deps, h, phase: phase.value, state, signal, say });
-}
-
-/** The series stops the settled sessions of the map carry (`stopRules`, written with the session's `ran` transition), plus the second `void: contaminated`: `[{ rid, rule, detail }]`. */
-function pendingStops(map) {
-  const carried = Object.values(map.sessions).flatMap(s => (s.stopRules ?? []).map(x => ({ rid: s.rid, ...x })));
-  if (carried.length === 0 && contaminatedVoids(map) >= 2) return [{ rid: Object.values(map.sessions).filter(s => s.class === 'void: contaminated').map(s => s.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(map) } }];
-  return carried;
 }
 
 const unsettledOf = map => Object.values(map.sessions).filter(s => s.status === 'launching').map(s => s.rid);

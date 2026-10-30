@@ -7,7 +7,7 @@ import path from 'node:path';
 import { treeHash } from './cache-snapshot.mjs';
 import { appendLedger, priorLines, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
-import { openSeries, writeRunMap } from './run-map.mjs';
+import { openSeries, pendingStops, readRunMap, writeRunMap } from './run-map.mjs';
 import { LEDGER_KINDS } from './spend-gate.mjs';
 import { BARE_CAPS } from './bare-plan.mjs';
 
@@ -56,6 +56,28 @@ function earlierSpend({ seriesRoot, seriesId }) {
   return ok({ lines, series: names });
 }
 
+const RUNNER = 'node spikes/minigit-bench/bare-runner.mjs';
+
+/** The sentence for sessions an earlier series left `launching`, or null: they may be paid for and are not in its ledger. */
+function launchingSentence({ name, dir, map }) {
+  const launching = Object.values(map.sessions ?? {}).filter(s => s.status === 'launching').map(s => s.rid);
+  return launching.length === 0 ? null : `the earlier series ${name} has a session left launching (${launching.join(', ')}): it may be paid for and is not settled, so its spend is not in the ledger a new series starts from. Settle it first: ${RUNNER} resume --series ${dir} --settle-only`;
+}
+
+/** The sentence for a series stop an ended session carries and nobody recorded, or null. */
+function waitingStopSentence({ name, dir, map }) {
+  const [stop] = map.stopped ? [] : pendingStops(map);
+  return stop ? `the earlier series ${name} holds a series stop nobody recorded (${stop.rule} in ${stop.rid}): record it first with ${RUNNER} resume --series ${dir} (it records the stop and launches nothing), then start the new series` : null;
+}
+
+/** A sentence when the earlier series `name` has work nobody settled (review MINOR-5), else null. Both kinds are settled by a resume. */
+function openWorkOf({ seriesRoot, name }) {
+  const dir = path.join(seriesRoot, name);
+  const read = readRunMap(path.join(dir, 'run-map.json'));
+  if (!read.ok) return `the earlier series ${name} has no readable run-map (${read.reason}): whether it has unsettled work cannot be told, so a new series is not started over it`;
+  return [launchingSentence, waitingStopSentence].map(f => f({ name, dir, map: read.value })).find(Boolean) ?? null;
+}
+
 /**
  * Gather and check everything. `facts` = `{ preregTag, preregCommit, harnessIdentity }` (from git; injected). -> `ok(plan)` | `fail` naming the first missing or mismatched input.
  * `plan` carries the run-map as it would be written, the CLI copy to make, the ledger lines to seed and the directories to create.
@@ -85,6 +107,8 @@ export function initPlan({ inputsDir, seriesRoot, seriesId, versionsDir, toolcha
   });
   const earlier = earlierSpend({ seriesRoot, seriesId });
   if (!earlier.ok) return earlier;
+  const open = earlier.value.series.map(name => openWorkOf({ seriesRoot, name })).find(Boolean);
+  if (open) return fail(open);
   const prior = [...priorLines(readJson(path.join(inputsDir, 'spend-prior.json'))), ...earlier.value.lines];
   return ok({ seriesDir, runMap, copy, prior, earlier: { series: earlier.value.series, lines: earlier.value.lines.length }, dirs: ['s', 'pairs', 'canaries'].map(d => path.join(seriesDir, d)) });
 }

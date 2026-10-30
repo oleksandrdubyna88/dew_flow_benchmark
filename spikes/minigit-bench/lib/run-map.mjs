@@ -48,6 +48,16 @@ export function transition(map, rid, to, patch = {}) {
   return ok(Object.freeze({ ...map, sessions: Object.freeze({ ...map.sessions, [rid]: Object.freeze({ ...s, ...patch, status: to }) }) }));
 }
 
+/** The `void: contaminated` sessions of the whole series: the second one stops it (registered series stop; analysis contract section 9). */
+export const contaminatedVoids = map => Object.values(map.sessions).filter(s => s.class === 'void: contaminated').length;
+
+/** The series stops the settled sessions of the map carry (`stopRules`, written with the session's `ran` transition), plus the second `void: contaminated`: `[{ rid, rule, detail }]`. */
+export function pendingStops(map) {
+  const carried = Object.values(map.sessions).flatMap(s => (s.stopRules ?? []).map(x => ({ rid: s.rid, ...x })));
+  if (carried.length === 0 && contaminatedVoids(map) >= 2) return [{ rid: Object.values(map.sessions).filter(s => s.class === 'void: contaminated').map(s => s.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(map) } }];
+  return carried;
+}
+
 /** Record a series stop (`{ rule, reason, at }`): resume is refused from then on. */
 export const markStopped = (map, stop) => Object.freeze({ ...map, stopped: Object.freeze(stop) });
 
