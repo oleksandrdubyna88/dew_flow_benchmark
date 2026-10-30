@@ -18,27 +18,30 @@ function g5(f) {
   return apart ? refuted(`B ${broker} is not E ${envelope} within $${T5_TOLERANCE_USD}; ${t5.note}`) : t5;
 }
 
-/** The stream's own wall in whole ms: the first to the last stamped line (what the partition is cut from), or null. */
-function stampedWall(f) {
-  const t = (f.loaded?.stamped ?? []).map(s => s.t);
-  return t.length > 1 ? Math.round(Math.max(...t)) - Math.round(Math.min(...t)) : null;
-}
-
 const sumOf = categories => Object.values(categories).reduce((a, b) => a + b, 0);
 const percent = share => `${(share * 100).toFixed(1)} %`;
 
-const g6Problems = ({ sum, wall, share }) => [
-  ...(sum === wall ? [] : [`the categories sum to ${sum} ms, the stamped wall is ${wall} ms`]),
+/** "To the ms" (contract section 10): the wall and the partition's stamps are each rounded to a whole ms, so two figures one ms apart are the same figure. */
+const WALL_TOLERANCE_MS = 1;
+
+/** The problems of G-6 for the figures of one session: `gap` = registered wall minus the categories' sum (the part of the wall the partition does not cover, counted as unattributed when positive). */
+const g6Problems = ({ sum, wall, gap, share }) => [
+  ...(Math.abs(gap) <= WALL_TOLERANCE_MS ? [] : [`the categories sum to ${sum} ms, the registered wall is ${wall} ms: a gap of ${Math.abs(gap)} ms${gap > 0 ? ' (counted as unattributed)' : ' (the partition is longer than the wall)'}`]),
   ...(share < UNATTRIBUTED_MAX_SHARE ? [] : [`unattributed is ${percent(share)} of the wall (limit 5 %)`]),
 ];
 
-/** G-6: the categories sum to the stamped wall to the ms, and `unattributed` is under 5 % of it. */
+/**
+ * G-6: the categories sum to the REGISTERED wall (the record's `time.wallMs`: the launcher's clock, spawn to exit) to the ms, and `unattributed`, with the gap between the two counted as unattributed, is under 5 % of it. The stamped
+ * stream's own span is NOT the wall: the partition is cut from it, so it sums to it by construction and shows nothing. A dated `explained` line turns a refuted G-6 into `explained` (`withExplain`).
+ */
 function g6(f) {
   const part = leaf(f.record, 'time', 'partition');
-  const wall = stampedWall(f);
-  if (!part || wall === null) return unknown('no partition in the record or no stamped stream');
-  const figures = { sum: sumOf(part.categories), wall, share: part.unattributed / wall };
-  return fromProblems(g6Problems(figures), `sum ${figures.sum} ms = wall ${wall} ms; unattributed ${percent(figures.share)}`);
+  const wall = leaf(f.record, 'time', 'wallMs');
+  if (!part || typeof wall !== 'number' || wall <= 0) return unknown('no partition or no registered wall in the record');
+  const sum = sumOf(part.categories);
+  const gap = wall - sum;
+  const figures = { sum, wall, gap, share: (part.unattributed + Math.max(gap, 0)) / wall };
+  return fromProblems(g6Problems(figures), `sum ${sum} ms = registered wall ${wall} ms; unattributed ${percent(figures.share)}`);
 }
 
 // ---- G-8: isolation ---------------------------------------------------------------------------------------------------------

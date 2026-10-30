@@ -29,7 +29,7 @@ export const goodRecord = ({ rid, stack = 'csharp', kind = 'aa' }) => ({
     aliases: known({ aliases: { opus: 'claude-opus-5-5' }, internal: [], fallbacks: [], unresolved: [], check: { verdict: 'ok', reasons: [] } }),
   },
   time: {
-    wallMs: known(WALL_MS + 3000), modelApiMs: known(40000), activeMs: known(46100), activeMinusModelApiMs: known(6100),
+    wallMs: known(WALL_MS), modelApiMs: known(40000), activeMs: known(46100), activeMinusModelApiMs: known(6100),
     partition: known({ categories: { build_test: 6000, model_api: 40000, other_tool: 100, unattributed: 100 }, unattributed: 100, waits: 0 }),
     children: known({ launched: 0, maxConcurrent: 0, openEnded: 0, unknownStart: 0, perModel: {} }),
   },

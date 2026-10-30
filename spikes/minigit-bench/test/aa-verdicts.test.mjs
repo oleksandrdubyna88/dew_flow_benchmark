@@ -95,7 +95,7 @@ test('G6_explained_counts_as_holds', () => {
   assert.equal(rowOf(explained, 'G-6').verdict, 'explained');
   assert.equal(explained.verdict, 'GO', 'an explained G-6 counts as holds');
   const sum = report(makeSeries({ records: { aa0001: { time: { partition: known({ categories: { build_test: 6000, model_api: 40000, other_tool: 100, unattributed: 90 }, unattributed: 90, waits: 0 }) } } } }));
-  assert.equal(rowOf(sum, 'G-6').verdict, 'refuted', 'the categories do not sum to the stamped wall');
+  assert.equal(rowOf(sum, 'G-6').verdict, 'refuted', 'the categories do not sum to the registered wall');
 });
 
 test('Aliases_follow_D12_not_equal_model_sets', () => {
