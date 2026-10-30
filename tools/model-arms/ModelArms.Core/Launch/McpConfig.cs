@@ -6,7 +6,7 @@ using ModelArms.Core.Experiment;
 namespace ModelArms.Core.Launch;
 
 /// <summary>The two MCP configuration files an arm's claude is started with (<c>--mcp-config</c>; <c>after6.sh:33</c>, <c>:34</c>): <see cref="None"/> for an arm without the gate and <see cref="Coai"/> for one with it. Both are TEXT; writing
-/// them is <c>make</c>'s (E4.S4), and neither ends in a newline — the writer adds the one the shell's <c>console.log</c> added.
+/// them is <c>make</c>'s (E3.S3, through <c>ArmFiles.ReplacePrivate</c>), and neither ends in a newline — the writer adds the one the shell's <c>console.log</c> added.
 /// <para>
 /// <b>The vault key (E1 §8 item 16).</b> The coai server reads its one vault key from its layered configuration, the copied settings file first and its own environment over it (<c>KeyVault.cs:35</c>, <c>:76-95</c> of the product).
 /// Under the shell, claude inherited the harness's whole environment and handed it to the server, so an exported key reached it; under D19 the arm's claude never sees <c>COAI_*</c> or a secret-named variable
@@ -16,7 +16,7 @@ namespace ModelArms.Core.Launch;
 /// </para>
 /// <para>
 /// <b>The consequence, stated.</b> An exported key is WRITTEN into <c>r/&lt;token&gt;/mcp-coai.json</c>, which <c>make</c> writes with mode <c>0600</c> — the same exposure as the copied settings file the panel already writes the key into —
-/// and, like it, a file the experiment's published record must never carry (E5.S5 excludes <c>mcp-coai.json</c> and <c>coai-data/</c>). Nothing here logs, prints or returns the key anywhere but in the text of that one file.
+/// and, like it, a file the experiment's published record must never carry (E6.S3 excludes <c>mcp-coai.json</c> and <c>coai-data/</c>). Nothing here logs, prints or returns the key anywhere but in the text of that one file.
 /// </para>
 /// <para>
 /// <b>What this guarantees, exactly (E2 §8 item 34): the config REQUESTS the delivery.</b> Whether claude hands a stdio server the <c>env</c> member of its config is claude's behaviour, which no test of this module starts; the proof is

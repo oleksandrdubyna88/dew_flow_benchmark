@@ -184,9 +184,10 @@ public sealed class StatusVerbTests
             Forbidden.Where(word => Source(file).Contains(word, StringComparison.Ordinal)).Should().BeEmpty($"{file}: a verb that lists an unlisted folder fails at mode 300, the one state the isolation exists for");
         }
 
-        var instance = Source("ModelArms/Adapters/ArmFiles.cs");
+        var instance = Source("ModelArms/Adapters/BaseCopy.cs");
+        instance.Should().Contain("EnumerateFileSystemInfos", "the live instance the scan must still find is BaseCopy's listing of the base's folders (E3.S3) — a scan that matches nothing passes forever");
         Forbidden.Where(word => instance.Contains(word, StringComparison.Ordinal)).Should().NotBeEmpty(
-            "the scan is alive: it still finds the one live listing of the adapters (ArmFiles' staged-file sweep) — a scan that matches nothing passes forever");
+            "the scan's own words still match where a folder IS listed: a pattern that stopped matching would pass every verb above for ever");
     }
 
     [Theory]

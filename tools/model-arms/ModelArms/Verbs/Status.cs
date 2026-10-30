@@ -71,15 +71,13 @@ public static class StatusVerb
             yield return $"run {run.Name}: locked {Marker(reads, root.RunMarker(run.Name, RunStage.Locked))}, unlocked {Marker(reads, root.RunMarker(run.Name, RunStage.Unlocked))}, arms done {Marker(reads, root.RunMarker(run.Name, RunStage.ArmsDone))}";
         }
 
-        foreach (var line in ArmsOf(input.Experiment, map).SelectMany(arm => ArmReport.Lines(input.Experiment, root, reads, map, arm)))
+        // Every arm of the map in its order, then each arm of the runs that the map lacks, once.
+        var arms = map.Entries.Select(entry => entry.Key).Concat(RunArms.Of(input.Experiment.Runs)).Distinct(StringComparer.Ordinal);
+        foreach (var line in arms.SelectMany(arm => ArmReport.Lines(input.Experiment, root, reads, map, arm)))
         {
             yield return line;
         }
     }
-
-    /// <summary>Every arm of the map in its order, then each arm of the runs that the map lacks, once, in the order the runs name them.</summary>
-    private static IEnumerable<string> ArmsOf(Core.Experiment.Experiment experiment, ArmMap map) =>
-        map.Entries.Select(entry => entry.Key).Concat(experiment.Runs.SelectMany(run => run.Rounds.SelectMany(round => round))).Distinct(StringComparer.Ordinal);
 
     /// <summary><c>yes</c> or <c>no</c> for a marker by name; a kernel that cannot say is <c>unknown (why)</c> — never a <c>no</c> read off a failure.</summary>
     internal static string Marker(StatusReads reads, string path) =>

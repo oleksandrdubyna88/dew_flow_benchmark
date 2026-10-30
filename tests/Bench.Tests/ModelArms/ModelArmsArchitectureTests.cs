@@ -80,6 +80,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(TargetEnvironment), typeof(TargetArgv), typeof(TargetWalls), typeof(GitModules),
 
         // E3.S3
+        typeof(RunArms),
 
         // E3.S4
         typeof(StepStatuses), typeof(LockSnapshots), typeof(IsolationLine),
@@ -150,13 +151,20 @@ public sealed class ModelArmsArchitectureTests
     /// <c>..</c> as text, so a second site that read links itself would be a second, wrong, answer. The scan reads whole files, across lines.
     /// <para>
     /// What this does NOT prove: that no other API reads a link (<c>Directory.ResolveLinkTarget</c> is matched; a P/Invoke of <c>readlink</c> is not).
+    /// </para>
+    /// <para>
+    /// <c>BaseCopy.cs</c> (E3.S3) is the second sanctioned site, for a different question: it reads a link's TEXT (<c>LinkTarget</c>) to make the same link in an arm's clone, and resolves nothing — so it may name <c>.LinkTarget</c> and may not name <c>ResolveLinkTarget</c>. That it never follows is
+    /// <c>BaseCopyTests.Links_are_copied_as_links_and_never_followed</c>'s, with outside sentinels.
     /// </para></summary>
     [Fact]
     public void The_module_reads_links_only_through_RootFacts_RealPathOf()
     {
         var sites = FilesReadingLinks(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
 
-        sites.Should().BeSubsetOf(["RootFacts.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect");
+        sites.Should().BeSubsetOf(["RootFacts.cs", "BaseCopy.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect — except where a link is COPIED as the text it holds (BaseCopy)");
+        var copy = Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, "tools", "model-arms"), "BaseCopy.cs", SearchOption.AllDirectories).ToList();
+        copy.Should().ContainSingle("a scan that cannot see the second sanctioned site passes forever");
+        File.ReadAllText(copy[0]).Should().NotContain("ResolveLinkTarget", "BaseCopy copies the text a link holds and never resolves where it leads");
     }
 
     [Fact]
