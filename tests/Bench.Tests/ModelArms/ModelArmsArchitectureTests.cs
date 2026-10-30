@@ -66,6 +66,7 @@ public sealed class ModelArmsArchitectureTests
         // E2.S7
 
         // E2.S8
+        typeof(GateLockCeiling),
 
         // E3
 

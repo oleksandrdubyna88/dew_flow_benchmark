@@ -29,6 +29,20 @@ internal static class PinnedConsumer
 
     private static string Pinned => Path.Combine(Cli.Repository.Root, "research", "local-model-coding", "harness", "metrics.mjs");
 
+    /// <summary>The script over a made arm of <paramref name="root"/> (E2.S8; E6 reuses it for every scheme): the arm's <c>out/timing.jsonl</c>, under the name the script lists the scheme by, in a scratch folder of the root's own.</summary>
+    public static Task<MetricsRun> MetricsAsync(ExperimentRoot root, string arm, CancellationToken cancellationToken) =>
+        MetricsAsync(root.Scratch("metrics-" + arm), root.PathsOf(arm).Timing, Listed(arm), cancellationToken);
+
+    /// <summary>The name the pinned script lists an arm by: the script's fixed list holds <c>C</c>, <c>CR1</c> and <c>CH1</c> — not <c>C1</c> or <c>CHH1</c>. An arm it does not list is a test error.</summary>
+    public static string Listed(string arm) =>
+        arm switch
+        {
+            "C1" => "C",
+            "CR1" => "CR1",
+            "CHH1" => "CH1",
+            _ => throw new ArgumentException($"the pinned metrics.mjs does not list an arm named {arm}", nameof(arm)),
+        };
+
     /// <summary>Runs the pinned script over <paramref name="timingFile"/>, which the script finds as the timing of the arm it lists as <paramref name="listed"/> (<c>C</c> for the C scheme).</summary>
     public static async Task<MetricsRun> MetricsAsync(string scratch, string timingFile, string listed, CancellationToken cancellationToken)
     {
