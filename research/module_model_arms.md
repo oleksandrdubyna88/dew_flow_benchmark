@@ -800,3 +800,39 @@ What the tests do NOT prove:
 - **A umask in this process.** The in-process modes test runs under the test process's umask; the `0277` case runs the binary as a child, so a umask that takes the owner's bits is observed through a shell, not through the in-process path.
 - **A comment that holds `*/`.** The writer refuses such a comment; the shipped example has none, and the template of an example that had one would throw. The example is a file that ships, tested on every run.
 - **That a filled template is a GOOD experiment.** `init` followed by the fixture's values validates; whether an operator's values are right is `validate`'s and the pilot's.
+
+## The launcher's follow-ups (E2.S3)
+
+Three changes to shared test and launcher code, made before the step runner (E2.S4) is built on them. None adds a script field beyond the two named, and every
+existing script and every existing caller behaves as before.
+
+**The fake CLI replays a file per call (`stdoutByCall`).** `tests/FakeCli`'s `Script.StdoutForCall(n)` reads `stdoutByCall.<n>`, `n` being the call number the fake's own
+log gave the launch (per model, 1-based). It is chosen before every other replay (`stdoutByPrompt`, `stdoutByPromptContaining`, `stdoutFile`); a call with no entry falls
+through to them exactly as before. One test scripts a step's attempts in order — a limited attempt, then its resume — without hashing prompts.
+
+**The fake leaves the transcript claude would (`transcripts: true`).** With the flag set, a launch whose argv carries `--session-id <guid>` or `--resume <guid>` creates, before
+it answers, the EMPTY file `<home>/projects/<slug>/<guid:D>.jsonl`, `home` being `CLAUDE_CONFIG_DIR` when set and non-empty, else `~/.claude`, and `slug` the working directory
+with every character outside `[A-Za-z0-9]` replaced by `-`. An existing file is not truncated. Why: through `run-arm` the runner's session probe is the real `ClaudeSessionTranscripts`,
+and a fake that leaves no transcript makes every re-entry `Fresh` with a new id, so no `--resume` could ever be asserted (E2 plan §8 item 36). The slug rule is written a second time
+on purpose — the fake references nothing of the module — and `SessionTranscripts.PathOf` (E2.S2) is the module's own spelling of the same path; until it lands the tests spell the path
+a third time, in the test, and the comparison with `PathOf` is for the integration to add.
+
+**`ProcessRunner` observes both readers (E1 §8 item 15, R1).** The shared core awaits BOTH reader tasks to their end on every path out of the wait — completed, timed out,
+the caller's cancellation, a sink's fault — through one private helper, `BothAsync`, which is `Task.WhenAll` over (stdout, stderr). Consequences:
+
+| Situation | Before | Now |
+|---|---|---|
+| a stdout sink throws while a stderr sink is inside a call | the launch threw at once; the stderr sink then ran on, after the launch had returned | the launch throws after the stderr reader has ended |
+| both sinks throw | the stderr fault was never observed (raised by the finalizer later); its pump's catch could cancel an already disposed budget | the stdout reader's fault is thrown (argument order, with its own stack), the stderr's is observed and dropped |
+| the caller cancels | the caller's `OperationCanceledException` at once, readers running on | the same exception, after both readers ended; if a reader faulted meanwhile the caller's cancellation still outranks it |
+
+The wait, the wall, the tree kill and the two result shapes are unchanged; `PumpAsync`, `Reader`, `Utf8`, `Merge` and `Kill` are untouched. The cancellation path now also
+waits for the readers, as the timeout path always did: they end when the killed tree's pipes close, so a descendant that outlives the tree kill while holding a pipe would keep a
+cancelled launch waiting (the same exposure the timeout path always had).
+
+What the tests pin: `FakeCliByCallTests` (the by-call replay and its fallback; the transcript under `HOME`, under `CLAUDE_CONFIG_DIR`, for `--resume`, never truncated, and none without the flag or
+without a session argument) and, in `ProcessRunnerStderrSinkTests`, `A_launch_never_returns_while_a_sink_is_still_running`, `A_cancelled_launch_ends_both_readers_before_it_throws_the_callers_cancellation`
+and `When_both_sinks_throw_the_stdout_readers_fault_surfaces_and_the_other_is_observed` (finalizer-driven: it waits for the killed child's pipes to close before collecting).
+
+What they do not prove: the encoding half of E1.S5's criterion 4 (UTF-8 only when a sink is given) — on Linux the default is already UTF-8, so only a Windows run could see it go wrong; that a real
+claude puts its transcript where the fake does on a host nobody measured; the byte reader (`StreamAsync`) beyond what the shared core does for it.

@@ -286,18 +286,39 @@ public static class ProcessRunner
 
             if (cancellationToken.IsCancellationRequested)
             {
-                // The caller's own signal still surfaces as one — only the orphan is new.
+                // The caller's own signal still surfaces as one — only the orphan is new. Both readers end first: the child is dead, so its
+                // pipes close, and a reader the launch left behind would run its sink (and cancel a disposed budget) after this method is gone.
+                await BothAsync(stdout, stderr, cancellationToken);
                 throw;
             }
 
-            var (hungOut, hungErr) = (await stdout, await stderr);
+            var (hungOut, hungErr) = await BothAsync(stdout, stderr, cancellationToken);
             return new ProcessAttempt.TimedOut(timeout, Merge(hungOut, hungErr), hungOut.Trim(), hungErr.Trim());
         }
 
-        var (printed, errors) = (await stdout, await stderr);
+        var (printed, errors) = await BothAsync(stdout, stderr, cancellationToken);
 
         return new ProcessAttempt.Completed(
             new ProcessResult(process.ExitCode, Merge(printed, errors), printed.Trim(), errors.Trim()));
+    }
+
+    /// <summary>BOTH readers, to their end, on every path out of the wait (model arms E2.S3, E1 §8 item 15). Awaiting only one would leave the other
+    /// running — a sink still inside its callback after the launch has returned or thrown, a fault nobody observes, a pump whose catch cancels the
+    /// wait's budget after the launch disposed it. <see cref="Task.WhenAll(Task[])"/> waits for every task even when one has faulted and observes every
+    /// fault, and rethrows the first in ARGUMENT order — stdout's if it faulted, else stderr's, never "whichever came first" — with its own stack; the
+    /// other is observed and dropped. The caller's cancellation outranks a fault: once <paramref name="caller"/> has asked to stop, the readers' ends are
+    /// awaited and observed all the same, and what surfaces is the caller's own <see cref="OperationCanceledException"/>.</summary>
+    private static async Task<(string Stdout, string Stderr)> BothAsync(Task<string> stdout, Task<string> stderr, CancellationToken caller)
+    {
+        try
+        {
+            var both = await Task.WhenAll(stdout, stderr);
+            return (both[0], both[1]);
+        }
+        catch when (caller.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(caller);
+        }
     }
 
     private static string Merge(string stdout, string stderr) => (stdout + stderr).Trim();

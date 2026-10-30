@@ -181,6 +181,57 @@ public sealed class ProcessRunnerStderrSinkTests
         await GoneAsync(fake.Calls().Single().Pid);
     }
 
+    /// <summary>The caller's cancellation is still the caller's own <see cref="OperationCanceledException"/> — and it surfaces only after both readers
+    /// ended (model arms E2.S3): a sink still inside its callback when the caller got its cancellation back would write after the caller had moved on.</summary>
+    [Fact]
+    public async Task A_cancelled_launch_ends_both_readers_before_it_throws_the_callers_cancellation()
+    {
+        using var fake = new FakeCli();
+        Replay(fake, 20, new JsonObject { ["lineDelayMs"] = 50, ["holdAfterLine"] = 10 });
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var calls = 0;
+        var clock = Stopwatch.StartNew();
+        var leftAt = TimeSpan.Zero;
+
+        var launch = Task.Run(async () =>
+        {
+            try
+            {
+                return await ProcessRunner.RunAsync(
+                    FakeCli.Executable, Argv(fake), Cwd, TimeSpan.FromMinutes(1), "prompt",
+                    environment: null,
+                    stdoutLine: _ => { },
+                    stderrLine: _ =>
+                    {
+                        if (Interlocked.Increment(ref calls) == 1)
+                        {
+                            entered.Set();
+                            release.Wait(TimeSpan.FromSeconds(20));
+                        }
+                    },
+                    caller.Token);
+            }
+            finally
+            {
+                leftAt = clock.Elapsed;
+            }
+        }, Ct);
+
+        entered.Wait(TimeSpan.FromSeconds(10), Ct).Should().BeTrue("the stderr pump reached its sink");
+        await caller.CancelAsync();
+        await Task.Delay(TimeSpan.FromSeconds(1), Ct);
+        var releasedAt = clock.Elapsed;
+        release.Set();
+
+        var thrown = await Record.ExceptionAsync(() => launch);
+
+        thrown.Should().BeAssignableTo<OperationCanceledException>("the caller's cancellation surfaces as a cancellation, not as anything a sink did");
+        leftAt.Should().BeGreaterThanOrEqualTo(releasedAt, "a cancelled launch never returns while a sink it started is still running");
+        await GoneAsync(fake.Calls().Single().Pid);
+    }
+
     /// <summary>Both readers fault; the one the caller sees is the stdout reader's (task order, never "whichever came first") and the other is OBSERVED
     /// before the launch ends — an unobserved faulted task is raised by the finalizer, long after the test that caused it (common.reliability).</summary>
     [Fact]
