@@ -236,3 +236,24 @@ test('A_T2_breach_carries_one_flag_per_cause_T2_breach_under_the_stop_policy_and
   assert.ok(registered.includes('otel incomplete'));
   assert.equal(registered.includes('T2 breach'), false, 'control: under t2: otel-incomplete the flag is `otel incomplete` alone');
 });
+
+test('An_unchecked_check_under_a_stop_policy_stops_the_series_when_the_session_has_an_envelope_and_not_when_it_has_none', () => {
+  const { policy } = ctx();
+  const stop = { ...policy, t2: 'stop' };
+  const noOtel = () => { const layout = sessionFromFixture(); rmSync(path.join(layout.otel, 'otel-raw.ndjson'), { force: true }); return layout; };
+  const r = collect(noOtel(), { policy: stop });
+  assert.equal(r.views.c.t2.status, 'unchecked', `the evidence is gone: ${r.views.c.t2.why}`);
+  assert.deepEqual(r.seriesStops.map(x => x.rule), ['T2 unchecked'], 'fail closed under t2: stop');
+  assert.ok(r.outcome.flags.includes('T2 unchecked'));
+  assert.equal(r.outcome.flags.includes('otel incomplete'), false, 'one flag per cause');
+  assert.equal(r.outcome.class, 'completed', 'the class is how the session ended');
+  const registered = collect(noOtel(), { policy });
+  assert.deepEqual(registered.seriesStops, [], 'control: under the registered t2: otel-incomplete the missing evidence is a flag');
+  assert.ok(registered.outcome.flags.includes('otel incomplete'));
+  // a session with no envelope at all (killed before it wrote one) has no evidence to be missing
+  const cut = sessionFromFixture();
+  const lines = readFileSync(cut.files.stream, 'utf8').split('\n').filter(Boolean).filter(l => JSON.parse(l).type !== 'result');
+  writeFileSync(cut.files.stream, `${lines.join('\n')}\n`);
+  const killed = collect(cut, { policy: { ...policy, t1: 'stop', t2: 'stop', t3: 'stop', t5: 'stop' } });
+  assert.deepEqual(killed.seriesStops, [], 'no envelope: nothing is a stop for want of evidence');
+});

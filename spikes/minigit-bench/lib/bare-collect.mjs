@@ -55,8 +55,8 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   };
   const recomputeUsd = cost.known ? cost.usd : null;
   const classed = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: realHits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
-  // a check whose policy is `stop` and that breaches is a SERIES stop beside the class (T1, T2, T3 and T5 alike: registered, review M4 and N3): the class is how the session ended and stays, the flag says why the series stopped
-  const seriesStops = seriesStopsOf(views.c);
+  // a check whose policy is `stop` and that breaches is a SERIES stop beside the class (T1, T2, T3 and T5 alike, a breach or, failing closed, evidence that is missing: registered, review M4, N3 and N11): the class is how the session ended and stays, the flag says why the series stopped
+  const seriesStops = seriesStopsOf(views.c, policy, { enveloped: views.E.known });
   const t2 = views.c.t2;
   // T2: O is not the envelope, or is incomplete: the flag `otel incomplete`, never a class; the cell stays and is marked. One flag per cause (review N10): when T2 IS the series stop, `T2 breach` is the flag and this one is not added
   const t2Incomplete = !seriesStops.some(x => x.check === 'T2') && (t2.status === 'breach' || (t2.status === 'unchecked' && /otel|lower bound/.test(t2.why ?? '')));

@@ -335,16 +335,40 @@ test('T5_is_unchecked_without_a_ledger_without_an_envelope_or_with_an_unsettled_
   assert.match(killed.t5.why, /1 request.*never settled.*0\.31/, 'B is then the price of what the session did spend, and says so');
 });
 
+const STOP_ALL = { t1: 'stop', t2: 'stop', t3: 'stop', t5: 'stop' };
+
 // ---- series stops: one generic rule over every check whose policy is `stop` (review N3) --------------------------------------------
 
 test('Every_check_whose_policy_is_stop_and_that_breaches_is_a_series_stop_and_no_other_verdict_is', () => {
   const check = (id, verdict, status = 'breach') => ({ id, status, verdict, detail: `${id} says ${verdict}` });
   const all = { t1: check('T1', 'stop'), t2: check('T2', 'stop'), t3: check('T3', 'stop'), t4: check('T4', 'investigate'), t5: check('T5', 'stop') };
-  assert.deepEqual(seriesStopsOf(all).map(x => x.rule), ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach'], 'T1, T2, T3 and T5 alike; T4 has no policy and only investigates');
-  assert.deepEqual(seriesStopsOf(all).map(x => x.detail), ['T1 says stop', 'T2 says stop', 'T3 says stop', 'T5 says stop']);
+  assert.deepEqual(seriesStopsOf(all, STOP_ALL, { enveloped: true }).map(x => x.rule), ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach'], 'T1, T2, T3 and T5 alike; T4 has no policy and only investigates');
+  assert.deepEqual(seriesStopsOf(all, STOP_ALL, { enveloped: true }).map(x => x.detail), ['T1 says stop', 'T2 says stop', 'T3 says stop', 'T5 says stop']);
   const lenient = { t1: check('T1', 'investigate'), t2: check('T2', 'otel incomplete'), t3: check('T3', 'investigate'), t4: check('T4', 'investigate'), t5: check('T5', 'investigate') };
-  assert.deepEqual(seriesStopsOf(lenient), [], 'a breach under any other policy is investigated or flagged, never a stop');
+  assert.deepEqual(seriesStopsOf(lenient, STOP_ALL, { enveloped: true }), [], 'a breach under any other policy is investigated or flagged, never a stop');
   const passing = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, { ...v, status: 'pass', verdict: 'ok' }]));
-  assert.deepEqual(seriesStopsOf(passing), []);
-  assert.deepEqual([...CHECK_STOP_RULES], ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach'], 'the rules the runner refuses to pass with --after-stop are derived from the same list');
+  assert.deepEqual(seriesStopsOf(passing, STOP_ALL, { enveloped: true }), []);
+  assert.deepEqual([...CHECK_STOP_RULES], ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach', 'T1 unchecked', 'T2 unchecked', 'T3 unchecked', 'T5 unchecked'], 'the rules the runner refuses to pass with --after-stop are derived from the same list');
+});
+
+test('A_check_that_could_not_run_for_want_of_evidence_is_a_stop_under_a_stop_policy_and_only_then', () => {
+  const unchecked = (id, why, extra = {}) => ({ id, status: 'unchecked', verdict: 'unchecked', detail: why, why, ...extra });
+  const c = { t1: unchecked('T1', 'no envelope'), t2: unchecked('T2', 'no otel'), t3: unchecked('T3', 'T covers only main'), t4: unchecked('T4', 'no otel'), t5: unchecked('T5', 'no broker ledger') };
+  const rules = (policy, opts) => seriesStopsOf(c, policy, opts).map(x => x.rule);
+  assert.deepEqual(rules(STOP_ALL, { enveloped: true }), ['T1 unchecked', 'T2 unchecked', 'T3 unchecked', 'T5 unchecked'], 'fail closed: evidence that is missing is not a pass (T4 has no policy)');
+  assert.deepEqual(rules({ ...STOP_ALL, t2: 'otel-incomplete', t3: 'investigate', t5: 'investigate' }, { enveloped: true }), ['T1 unchecked'], 'only the checks whose policy is stop');
+  assert.deepEqual(rules(STOP_ALL, { enveloped: false }), [], 'a session that ended with no envelope (killed, never answered) has no evidence to be missing: its class says how it ended');
+  const midRequest = { ...c, t5: unchecked('T5', '1 request(s) never settled', { byEnding: true }) };
+  assert.deepEqual(seriesStopsOf(midRequest, { t5: 'stop' }, { enveloped: true }).map(x => x.rule), [], 'a request the cut-short session never settled is how it ended');
+  assert.equal(seriesStopsOf({ t2: unchecked('T2', 'no otel') }, STOP_ALL, { enveloped: true })[0].detail, 'no otel', 'the detail says what was missing');
+});
+
+test('The_real_checks_mark_only_what_the_ending_explains_as_by_ending', () => {
+  const policy = policyWith({ t5: 'stop' });
+  const noEnvelope = crosscheck({ E: { known: false, why: 'no result event' }, O: { present: false }, T, B: { present: true, unsettled: 0, spentUsd: 1, forwarded: 1, refused: 0 }, table, policy, cliVersion: '2.1.310' });
+  assert.equal(noEnvelope.t5.status, 'unchecked');
+  const midRequest = crosscheck({ E, O: { present: false }, T, B: { present: true, unsettled: 2, spentUsd: 1, forwarded: 3, refused: 0 }, table, policy, cliVersion: '2.1.310' });
+  assert.equal(midRequest.t5.byEnding, true, 'unsettled requests: the session was stopped mid-request');
+  const noLedger = crosscheck({ E, O: { present: false }, T, B: { present: false }, table, policy, cliVersion: '2.1.310' });
+  assert.equal(noLedger.t5.byEnding, undefined, 'a missing ledger is missing evidence, not an ending');
 });
