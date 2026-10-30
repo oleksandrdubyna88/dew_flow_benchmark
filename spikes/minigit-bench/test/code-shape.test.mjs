@@ -11,7 +11,7 @@ import { spikeDir } from './helpers.mjs';
  * The files E3b owns: the runner and everything the bare arm added around it. Each is measured whole, with no exemption. A file joins the list in the commit that splits its last function.
  * Files NOT listed are owned by E1 or E2 (the counters, the broker, the egress proxy, the box, the launch, the smoke, the held-out suite) and are left as they are.
  */
-const E3B_FILES = ['bare-runner.mjs'];
+const E3B_FILES = ['bare-runner.mjs', 'lib/bare-series.mjs', 'lib/bare-exit.mjs', 'lib/bare-gates.mjs', 'lib/bare-settle.mjs', 'lib/bare-resume.mjs'];
 
 test('The_shape_scanner_counts_decisions_in_code_and_not_words_in_messages', () => {
   const sample = [
