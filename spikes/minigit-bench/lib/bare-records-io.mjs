@@ -5,6 +5,7 @@ import path from 'node:path';
 import { layoutPaths } from './sandbox.mjs';
 import { ok } from './result.mjs';
 import { cellOf, pairRecord, sessionRecord } from './bare-record.mjs';
+import { v2FromRefutedV1 } from './bare-reclass.mjs';
 import { collectSession } from './bare-collect.mjs';
 import { treeSize } from './cache-snapshot.mjs';
 import { locOfTree } from './loc.mjs';
@@ -66,6 +67,7 @@ export function writePairRecord({ ctx, map, pair }) {
   const cells = Object.fromEntries(stacks.map(s => [s, cellOf(rec(s, 'v1'), rec(s, 'v2'))]));
   const entries = Object.values(map.sessions).filter(s => s.pair === pair && s.kind === 'data');
   const pairEntry = map.pairs?.[pair] ?? {};
+  const refutedSources = v2FromRefutedV1(map, pair);
   const record = pairRecord({
     pair, cells,
     masks: Object.fromEntries(entries.map(e => [e.rid, e.run?.mask?.value ?? e.run?.mask ?? null])),
@@ -74,7 +76,8 @@ export function writePairRecord({ ctx, map, pair }) {
     barrierAtMs: pairEntry.barrierAtMs ?? null,
     labels: Object.fromEntries(entries.map(e => [e.rid, { stack: e.stack, phase: e.phase, attempt: e.attempt, label: e.label, class: e.class ?? null }])),
     quality: Object.fromEntries(['v1', 'v2'].map(ph => [ph, Object.fromEntries(stacks.map(s => [s, rec(s, ph)?.quality ?? null]))])),
-    flags: [...new Set(entries.flatMap(e => e.run?.flags ?? []))],
+    flags: [...new Set([...entries.flatMap(e => e.run?.flags ?? []), ...(refutedSources.length > 0 ? ['v2 from refuted v1'] : [])])],
+    v2FromRefutedV1: refutedSources,
   });
   writeJson(path.join(ctx.seriesDir, 'pairs', `p${pair}.json`), record);
   return record;

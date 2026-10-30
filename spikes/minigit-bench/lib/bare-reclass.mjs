@@ -28,3 +28,23 @@ export function reclassifyByHand({ map, handVerdictsFor }) {
   }
   return { map: changes.length === 0 ? map : Object.freeze({ ...map, sessions: Object.freeze(sessions) }), changes };
 }
+
+const ENDED = ['ran', 'scored'];
+const wasData = s => s.data === true || s.reclassified !== undefined; // data when a later session started: still data, or refuted by hand since
+const startedBefore = (a, b) => !a.startedAt || !b.startedAt || a.startedAt < b.startedAt; // no start time: counted
+const isOwnV2 = v2 => v2.phase === 'v2' && v2.data === true && ENDED.includes(v2.status);
+
+/** The v1 session a data v2 of `mine` ran from: the highest attempt among the v1 sessions of its stack that were data when it started and started before it. */
+function sourceOf(mine, v2) {
+  const earlier = s => s.phase === 'v1' && s.stack === v2.stack && wasData(s) && startedBefore(s, v2);
+  return mine.filter(earlier).sort((a, b) => a.attempt - b.attempt).at(-1);
+}
+
+/**
+ * The rids of the data v2 sessions of `pair` that ran from a v1 tree a hand verdict refuted LATER, and that have no refuted line of their own (review N4 follow-up): `reclassifyByHand` names them as `dependents` and
+ * does not reclassify them (a line names one session), so without this the pair record would show a clean v2 on a refuted tree. The pair record carries the list and the flag `v2 from refuted v1`.
+ */
+export function v2FromRefutedV1(map, pair) {
+  const mine = Object.values(map.sessions).filter(s => s.pair === pair && s.kind === 'data');
+  return mine.filter(v2 => isOwnV2(v2) && v2.reclassified === undefined && sourceOf(mine, v2)?.reclassified !== undefined).map(v2 => v2.rid);
+}

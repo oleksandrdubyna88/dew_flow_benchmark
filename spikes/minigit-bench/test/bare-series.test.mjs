@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
 import { firstStack, ridOf } from '../lib/bare-plan.mjs';
-import { reclassifyByHand } from '../lib/bare-reclass.mjs';
+import { reclassifyByHand, v2FromRefutedV1 } from '../lib/bare-reclass.mjs';
 import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
@@ -574,12 +574,29 @@ test('A_dated_refuted_line_reclassifies_an_ended_session_on_the_next_run_records
   assert.equal(rec.reclassified.from.class, 'completed', 'the record shows the reclassification');
   assert.ok(rec.flags.includes('reclassified by hand'));
   assert.deepEqual(rec.discrepancies, []);
+  // the C# v2 ran from the v1 tree this line refuted and has no refuted line of its own: the pair record says so (review N4 follow-up); the Node cell is clean
+  const pairRecord = JSON.parse(readFileSync(path.join(t.ctx.seriesDir, 'pairs', 'p1.json'), 'utf8'));
+  assert.ok(pairRecord.flags.includes('v2 from refuted v1'), `the pair record flags it: ${pairRecord.flags}`);
+  assert.deepEqual(pairRecord.v2FromRefutedV1, [rid('csharp', 'v2', 1)], 'and names the session, so the operator can refute it by its own line');
   // run again: nothing is reclassified twice and nothing is launched twice
   const launchedBefore = t.launched.length;
   const third = await runLoop({ ctx, deps: t.deps, map, say: () => {} });
   assert.equal(third.exit, EXIT.done);
   assert.equal(t.launched.length, launchedBefore, 'the re-run was planned once');
   assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.event === 'reclassify').length, 1);
+});
+
+test('A_v2_counts_as_run_from_a_refuted_v1_only_when_that_v1_was_its_source_and_it_has_no_refuted_line_of_its_own', () => {
+  const entry = (id, stack, phase, attempt, over = {}) => ({ rid: id, pair: 1, stack, phase, attempt, kind: 'data', status: 'scored', data: true, startedAt: `2026-11-0${attempt + (phase === 'v2' ? 3 : 0)}T10:00:00Z`, ...over });
+  const refuted = { reclassified: { from: { class: 'completed', data: true }, g: 'G-13', date: '2026-11-09' }, class: 'void: harness', data: false };
+  const mapOf = (...list) => ({ sessions: Object.fromEntries(list.map(e => [e.rid, e])) });
+  const base = [entry('c1', 'csharp', 'v1', 1), entry('n1', 'node', 'v1', 1), entry('c2', 'csharp', 'v2', 1), entry('n2', 'node', 'v2', 1)];
+  assert.deepEqual(v2FromRefutedV1(mapOf(...base), 1), [], 'nothing refuted');
+  assert.deepEqual(v2FromRefutedV1(mapOf(entry('c1', 'csharp', 'v1', 1, refuted), ...base.slice(1)), 1), ['c2'], 'the C# v1 was refuted after its v2 ran from it');
+  assert.deepEqual(v2FromRefutedV1(mapOf(entry('c1', 'csharp', 'v1', 1, refuted), ...base.slice(1), entry('c2', 'csharp', 'v2', 1, refuted)), 1), [], 'a v2 with a refuted line of its own is not flagged again');
+  const rerun = entry('c1b', 'csharp', 'v1', 2, { startedAt: '2026-11-02T10:00:00Z' }); // the re-run v1 ran BEFORE this v2: the v2 came from it, not from the refuted a1
+  assert.deepEqual(v2FromRefutedV1(mapOf(entry('c1', 'csharp', 'v1', 1, refuted), rerun, ...base.slice(1)), 1), [], 'the refuted v1 was not the source');
+  assert.deepEqual(v2FromRefutedV1(mapOf(entry('c1', 'csharp', 'v1', 1, refuted), ...base.slice(1)), 2), [], 'another pair is not looked at');
 });
 
 test('A_refuted_line_never_reclassifies_a_stop_or_a_contaminated_void_and_never_an_unlisted_rid', async () => {

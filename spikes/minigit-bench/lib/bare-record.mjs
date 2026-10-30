@@ -137,12 +137,12 @@ export function ratioOf(c, t) {
  * One pair's record: `cells` are `{ csharp, node }` from `cellOf`. Each ratio is given WITH every cell and WITHOUT the cells that hold a `ran unpaired` session
  * (then it is unknown when either cell does), beside the unpaired labels, masks, spawn stamps, skews and the quality of each phase.
  */
-export function pairRecord({ pair, cells, masks, spawnStamps, skewsMs, barrierAtMs, labels, quality, flags = [] }) {
+export function pairRecord({ pair, cells, masks, spawnStamps, skewsMs, barrierAtMs, labels, quality, flags = [], v2FromRefutedV1 = [] }) {
   const ratios = Object.fromEntries(MEASURES.map(m => [m, {
     with: ratioOf(cells.csharp[m], cells.node[m]),
     without: cells.csharp.unpaired || cells.node.unpaired ? { known: false, why: 'a cell holds a ran unpaired session' } : ratioOf(cells.csharp[m], cells.node[m]),
   }]));
-  return { pair, masks, spawnStamps, skewsMs, barrierAtMs, labels, cells, ratios, quality, flags };
+  return { pair, masks, spawnStamps, skewsMs, barrierAtMs, labels, cells, ratios, quality, flags, v2FromRefutedV1 };
 }
 
 /**
