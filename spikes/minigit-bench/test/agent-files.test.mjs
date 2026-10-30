@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { copyAgentFile, agentEntries, readAgentFile, readAgentFileUnder } from '../lib/agent-files.mjs';
@@ -74,4 +74,26 @@ test('Copying_an_agent_file_copies_a_regular_file_and_refuses_a_link_with_the_re
   const refused = copyAgentFile(tree, path.join('out', 'link.txt'), path.join(root, 'copy', 'link.txt'));
   assert.equal(refused.ok, false);
   assert.match(refused.reason, /out.link\.txt.*symlink/);
+});
+
+test('A_parent_directory_swapped_for_a_link_between_the_check_and_the_open_is_caught_by_the_path_the_descriptor_resolves_to', () => {
+  const { root, tree } = planted();
+  const outside = path.join(root, 'outside');
+  mkdirSync(outside);
+  writeFileSync(path.join(outside, 'real.txt'), 'HOST-ONLY-CONTENT\n'); // the same file name, in a place the agent must not get read for it
+  // the swap the review described: the lstat walk finds `out` a real directory; then the agent (running) replaces it with a link; the open follows the link
+  const swapOut = () => { renameSync(path.join(tree, 'out'), path.join(root, 'moved-out')); symlinkSync(outside, path.join(tree, 'out')); };
+  const swapped = readAgentFileUnder(tree, 'out/real.txt', undefined, { afterCheck: swapOut });
+  assert.equal(typeof swapped?.unreadable, 'string', `no bytes were used: ${Buffer.isBuffer(swapped) ? swapped.toString() : JSON.stringify(swapped)}`);
+  assert.match(swapped.unreadable, /resolved|swapped|elsewhere/);
+  // control: with no swap the same call reads the file, through the same descriptor check
+  const { tree: tree2 } = planted();
+  assert.equal(readAgentFileUnder(tree2, 'out/real.txt', undefined, { afterCheck: () => {} }).toString(), 'real\n');
+});
+
+test('The_expected_real_path_is_the_roots_real_path_so_a_root_that_is_itself_reached_through_a_link_is_read_normally', () => {
+  const { root, tree } = planted();
+  const viaLink = path.join(root, 'tree-link');
+  symlinkSync(tree, viaLink);
+  assert.equal(readAgentFileUnder(viaLink, 'out/real.txt').toString(), 'real\n', 'the root is trusted and resolved once');
 });

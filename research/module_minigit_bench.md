@@ -373,7 +373,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   path under them may be a symlink to a host file (the review planted one at `box/out/audit.ndjson` and the staging copied the host file as
   the audit), a pipe (a read blocks) or a device. Every host-side read or copy goes through one reader: every directory of the path is
   lstat-walked, the file is opened with `O_NOFOLLOW | O_NONBLOCK` and the opened descriptor must be a regular file under a size cap, so a
-  link swapped in after a check is not followed either; a listing reports links and other entries as entries, and a link anywhere in the
+  link swapped in for the LAST component after a check is not followed either. A parent directory swapped for a link between the walk and the open is not covered by `O_NOFOLLOW`, so after the open the descriptor's own path (`readlink /proc/self/fd/N`) must equal `realpath(root)/rel`; any other path is `unreadable` and no byte is used (`scanSessionDir` reports it as a `swapped` finding; the review's gate G12); a listing reports links and other entries as entries, and a link anywhere in the
   session dir is a high-severity finding of `scanSessionDir`, never a skip. Sites using it: `stageSmoke`, the `token.txt` fact,
   `copyTranscripts`, the capture reader (`readCaptureFiles`), `inputs.readRegularFile` (the scorer's read of the agent's tree) and the
   session scan. (`holdsPaidWork` only asks whether an entry exists and is unchanged.)
@@ -431,6 +431,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A request the upstream reset after part of its body was written is charged the reservation, not waived; only a socket that never connected is free | `broker.test.mjs` |
 | A hello sent before the upstream connected reaches it whole (before: the bytes between the CONNECT headers and the dial were dropped); a client that never completes its header block, and an upstream that never connects, are cut off by their timeouts | `egress.test.mjs` |
 | A `server_name` list with more than one entry, or any entry type other than `host_name`, is refused (the reviewer's probe: another type first, then the allowed name) | `tls-hello.test.mjs` |
+| A parent directory swapped for a link between the lstat walk and the open is caught by the descriptor's path, in the reader and in the session scan (before: the file outside the tree was read) | `agent-files.test.mjs`, `agent-files-sites.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 

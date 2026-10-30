@@ -5,7 +5,7 @@
 // With the box's bind table (`binds`) a link whose target string maps INSIDE the agent-writable tree is `inside` (lib/link-class.mjs): listed apart in
 // `insideLinks` as box paths, not a finding. Without one every link is high.
 import path from 'node:path';
-import { MAX_AGENT_FILE_BYTES, agentEntries, readAgentFile } from './agent-files.mjs';
+import { MAX_AGENT_FILE_BYTES, agentEntries, readAgentFileUnder } from './agent-files.mjs';
 import { classifyLink } from './link-class.mjs';
 import { tokenHits } from './token-scan.mjs';
 
@@ -22,14 +22,15 @@ export function realTokenHits(texts, { real, dummy = null }) {
 }
 
 /** Scan a directory -> `{ hits, scanned, tooLarge: [rel], links: [{ rel, kind, severity: 'high', why? }], insideLinks: [{ link, target }] }`. Files are read as latin1, so a binary file (an environ dump) is searchable. */
-export function scanSessionDir(root, { real, dummy = null, binds = [] }) {
+export function scanSessionDir(root, { real, dummy = null, binds = [], hooks = {} }) {
   const entries = filesUnder(root);
+  hooks.afterList?.(); // a test seam: the agent runs while the scan does, and can change the tree between the listing and the reads
   const finding = (f, kind = f.kind, extra = {}) => ({ rel: f.rel, kind, severity: 'high', ...extra });
   const files = entries.filter(f => f.kind === 'file');
   const readable = files.filter(f => f.size <= MAX_SCAN_BYTES);
-  const reads = readable.map(f => ({ f, bytes: readAgentFile(path.join(root, f.rel), MAX_SCAN_BYTES) }));
+  const reads = readable.map(f => ({ f, bytes: readAgentFileUnder(root, f.rel, MAX_SCAN_BYTES) }));
   const texts = reads.filter(r => Buffer.isBuffer(r.bytes)).map(r => ({ source: r.f.rel, text: r.bytes.toString('latin1') }));
-  // a regular file that is no longer one when it is opened was swapped for a link after the listing: that is a finding too
+  // a regular file that is no longer one when it is opened (or whose directories were swapped for a link) was changed after the listing: that is a finding too
   const swapped = reads.filter(r => !Buffer.isBuffer(r.bytes)).map(r => finding(r.f, 'swapped'));
   const classified = entries.filter(f => f.kind === 'symlink').map(f => ({ f, c: classifyLink({ root, rel: f.rel, binds }) }));
   return {

@@ -2,7 +2,7 @@
 // in a temp dir holding a fake token-shaped value, never a real secret; a site is red when the decoy's content reaches anything it wrote.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { readCaptureFiles } from '../capture/capture-files.mjs';
@@ -121,4 +121,18 @@ test('The_capture_reader_refuses_a_linked_transcript', () => {
   const r = readCaptureFiles(from);
   assert.equal(r.ok, false);
   assert.match(r.reason, /transcripts.leak\.jsonl.*symlink/);
+});
+
+test('The_scan_uses_no_byte_of_a_file_whose_parent_directory_was_swapped_for_a_link_after_the_listing', () => {
+  const dir = sessionDir();
+  const real = fakeToken();
+  write(path.join(dir, 'box', 'out', 'd', 'f.txt'), 'clean\n');
+  const outside = tmpDir('af-outside');
+  writeFileSync(path.join(outside, 'f.txt'), `HOST ${real}\n`); // what the swapped directory would show: a token-shaped decoy outside the tree
+  const swap = () => { renameSync(path.join(dir, 'box', 'out', 'd'), path.join(dir, 'moved-d')); symlinkSync(outside, path.join(dir, 'box', 'out', 'd')); };
+  const scan = scanSessionDir(dir, { real, hooks: { afterList: swap } });
+  assert.deepEqual(scan.hits, [], 'nothing was read through the swapped directory');
+  const found = scan.links.find(l => l.rel === path.join('box', 'out', 'd', 'f.txt'));
+  assert.equal(found?.severity, 'high', JSON.stringify(scan.links));
+  assert.equal(found.kind, 'swapped');
 });

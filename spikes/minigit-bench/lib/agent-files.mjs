@@ -6,7 +6,7 @@
 //     check and the read; a pipe opens without blocking), then fstat must say regular file, and its size is capped;
 //   - a listing reports links and other non-regular entries as entries (`kind`), never skips them.
 // Returns follow the older reader's contract (`Buffer | null | { unreadable }`) so score-deps keeps its callers.
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 
@@ -15,8 +15,12 @@ export const MAX_AGENT_FILE_BYTES = 64 * 1024 * 1024;
 const OPEN_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 const ABSENT = new Set(['ENOENT', 'ENOTDIR']);
 
-/** `Buffer` of a regular file of at most `maxBytes`; `null` when absent; `{ unreadable: why }` for a link, a pipe, a device, a directory or an oversize file. */
-export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES) {
+/**
+ * `Buffer` of a regular file of at most `maxBytes`; `null` when absent; `{ unreadable: why }` for a link, a pipe, a device, a directory, an oversize file, or (with
+ * `expectedReal`, the real path the file must have) a file the open reached by another path: the agent can swap a parent directory for a link after a caller's
+ * check, and `O_NOFOLLOW` covers only the last component, so the descriptor's own path is compared with the expected one before a byte is read.
+ */
+export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES, expectedReal = null) {
   let fd;
   try {
     fd = openSync(file, OPEN_FLAGS);
@@ -26,6 +30,7 @@ export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES) {
     throw e;
   }
   try {
+    if (expectedReal !== null && descriptorPath(fd) !== expectedReal) return { unreadable: 'the open resolved to another path than the one checked (a parent directory was swapped for a link)' };
     const st = fstatSync(fd);
     if (!st.isFile()) return { unreadable: 'not a regular file' };
     if (st.size > maxBytes) return { unreadable: `larger than ${maxBytes} bytes` };
@@ -33,6 +38,11 @@ export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES) {
   } finally {
     closeSync(fd);
   }
+}
+
+/** Where the kernel says an open descriptor lives (`/proc/self/fd/N`), or null when it cannot be read: then nothing matches and the file is not used. */
+function descriptorPath(fd) {
+  try { return readlinkSync(`/proc/self/fd/${fd}`); } catch { return null; }
 }
 
 /** The first link among the directories between `root` and `rel`'s last component: its relative path, or null. */
@@ -47,11 +57,17 @@ function linkAmong(root, rel) {
   return null;
 }
 
-/** `readAgentFile` of `<root>/<rel>`, also refusing a link among the directories in between (`root` itself is trusted). */
-export function readAgentFileUnder(root, rel, maxBytes = MAX_AGENT_FILE_BYTES) {
+/**
+ * `readAgentFile` of `<root>/<rel>`, also refusing a link among the directories in between (`root` itself is trusted). The lstat walk and the open are
+ * two steps, and the agent runs in between: it can swap a parent directory for a link after the walk. `O_NOFOLLOW` covers only the last component, so
+ * after the open the descriptor's own path (`/proc/self/fd/N`) must equal `realpath(root)/rel`; any other path means the open went elsewhere, and no byte is used.
+ * `hooks.afterCheck` (a test seam) runs between the walk and the open.
+ */
+export function readAgentFileUnder(root, rel, maxBytes = MAX_AGENT_FILE_BYTES, hooks = {}) {
   const link = linkAmong(root, rel);
   if (link !== null) return { unreadable: `a link among the directories of the path (${link})` };
-  return readAgentFile(path.join(root, rel), maxBytes);
+  hooks.afterCheck?.();
+  return readAgentFile(path.join(root, rel), maxBytes, path.join(realpathSync(root), rel));
 }
 
 /** Every entry under `root` that is not a directory, as `{ rel, kind: 'file' | 'symlink' | 'other', size }`; real directories are walked, links to them are not. */
