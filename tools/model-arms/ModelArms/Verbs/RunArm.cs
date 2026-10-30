@@ -21,11 +21,11 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 /// </para>
 /// <para>
 /// <b>The gate lock's ceiling (E2 §8 item 59) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> over the arms of <c>arms.map.json</c> and the longest gate step of the experiment — (arms − 1) × (that step's minutes plus the kill grace),
-/// never less than one such span — so a queue of healthy gates behind this arm never passes it; a wedged holder is told apart only when it runs out. E4's <c>run-all</c> must size its own the same way (the arms of its run), or replace the
+/// never less than one such span — so a queue of gates that each hold the lock for their wall never passes it. It does NOT cover a usage limit waited out WHILE the lock is held (the runner waits inside the gate step: up to the step's minutes plus tries × waitSeconds — hours in the example), nor the closed arms of earlier runs that <c>arms.map.json</c> still lists (they count as queued); a wedged holder is told apart only when the ceiling runs out. E4's <c>run-all</c> must size its own from the largest round of its run (a gate's wall plus its limit waits, for the arms of that run only), or replace the
 /// total time with a heartbeat (the holder is alive and its stream grows).
 /// </para>
 /// <para>
-/// What this does NOT do: judge <c>HOME</c> and <c>XDG_CONFIG_HOME</c> as <c>validate</c> does (git reads its global config from there) — only the PATH entries are judged here, and the two resolved executables; detach (E4); the objective checks (E5).
+/// What this does NOT do: detach (E4); run the objective checks (E5).
 /// </para></summary>
 public static class RunArmVerb
 {

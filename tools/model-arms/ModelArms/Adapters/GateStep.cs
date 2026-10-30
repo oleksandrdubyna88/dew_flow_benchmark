@@ -116,8 +116,22 @@ internal sealed class GateRun
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
-            return _log.Stop(_step, 5, OperatorStop);
+            return IsFinal() ? new StepOutcome.Stopped(5, OperatorStop) : _log.Stop(_step, 5, OperatorStop);
         }
+    }
+
+    /// <summary>The gate has nothing left to do: its step is done (recovery would skip it) and what <c>gate.json</c> says does not ask for another round. A stop that lands while a rerun waits for the lock of such a gate still ends the run with exit 5, but writes
+    /// no <c>stopped</c> line — nothing was interrupted, and a line after the arm's <c>arm-done</c> would say it was.</summary>
+    private bool IsFinal()
+    {
+        var status = GateStatusFile.Read(_statusFile);
+        if (status is GateStatusFile.Answer.Refused || _deps.Runner.Recover(_context) is not StepEntry.Skip)
+        {
+            return false;
+        }
+
+        var judged = Read(status);
+        return !judged.Reading.IsUnjudgeable && !GateStatus.WaitAgain(judged.Reading, judged.Waits, Limits.GateTries);
     }
 
     /// <summary>Lock, step, unlock, judge; a blocked round with tries left is decided, waited and the loop goes round; anything else ends it. A <c>Stopped</c> step ends it at once — never run again inside this loop.</summary>
@@ -162,10 +176,15 @@ internal sealed class GateRun
     /// <summary>What <c>gate.json</c> says and how many blocked rounds this step has already spent, both read from the files — on EVERY entry, whatever the runner did.</summary>
     private Judgement Judge(GateStatusFile.Answer status)
     {
-        var reading = GateStatus.Read(status is GateStatusFile.Answer.Text text ? Outcome<string>.Success(text.Value) : Outcome<string>.Failure("gate.json does not exist"));
-        var judged = new Judgement(reading with { Why = Clamped(reading.Why) }, GateStatus.WaitsSoFar(_files.ReadTiming(), _step));
+        var judged = Read(status);
         _deps.Probe.Reached(GatePoint.StatusRead);
         return judged;
+    }
+
+    private Judgement Read(GateStatusFile.Answer status)
+    {
+        var reading = GateStatus.Read(status is GateStatusFile.Answer.Text text ? Outcome<string>.Success(text.Value) : Outcome<string>.Failure("gate.json does not exist"));
+        return new Judgement(reading with { Why = Clamped(reading.Why) }, GateStatus.WaitsSoFar(_files.ReadTiming(), _step));
     }
 
     /// <summary>A blocked round, in the one order that cannot lose it: the round is recorded (a try is spent when it is DECIDED), then the marker that says the session is to go on, then the <c>.done</c> that contradicts the marker is removed; the

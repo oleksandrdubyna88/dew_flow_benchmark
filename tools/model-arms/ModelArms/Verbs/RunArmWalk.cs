@@ -10,7 +10,7 @@ namespace ModelArms.Verbs;
 
 /// <summary>The walk of one arm: one <see cref="StepRunner"/> and one <see cref="GateStep"/> built over the SAME clock, the SAME log writer and the SAME <see cref="ArmMap"/> (E2 §8 item 58 — the gate stamps its own <c>gate-wait</c> and <c>stopped</c>
 /// lines and scrubs its own log through them), the scheme's entries in order, each through the runner or, for a gate step, through the gate; the first step that stops ends the walk and nothing after it launches. The arm's <c>arm-done</c> line is
-/// written once, <b>unless the timing's last line already is one for this arm</b>: a re-run of a finished arm adds nothing (the shell appended one per run). Every wait is the one the seams hold, bounded and cancellable by the operator's stop.</summary>
+/// written once, <b>unless this arm already has one after the timing's last start or gate-wait line</b>: a re-run of a finished arm adds nothing (the shell appended one per run). Every wait is the one the seams hold, bounded and cancellable by the operator's stop.</summary>
 internal sealed class RunArmWalk
 {
     private readonly ArmPlan _plan;
@@ -61,16 +61,20 @@ internal sealed class RunArmWalk
         return null;
     }
 
-    /// <summary>The arm ran its whole scheme: one <c>arm-done</c> line, unless the last line already is this arm's.</summary>
+    /// <summary>The arm ran its whole scheme: one <c>arm-done</c> line, unless this arm already has one AFTER the last <c>start</c> or <c>gate-wait</c> line — nothing has run since it. A <c>stopped</c> line after an <c>arm-done</c> (a stop while a rerun
+    /// waited for the gate lock) does not make the arm unfinished: only work does.</summary>
     public void Finish()
     {
-        if (_files.ReadTiming().LastOrDefault() is not TimingLine.ArmDone { Arm: var arm } || arm != _plan.Arm)
+        if (!AlreadyDone(_files.ReadTiming(), _plan.Arm))
         {
             _files.AppendTiming(new TimingLine.ArmDone(_plan.Arm, _clock.GetUtcNow()));
         }
 
         _log.Line("arm done");
     }
+
+    private static bool AlreadyDone(IReadOnlyList<TimingLine> timing, string arm) =>
+        timing.Skip(timing.ToList().FindLastIndex(line => line is TimingLine.Start or TimingLine.GateWait) + 1).Any(line => line is TimingLine.ArmDone done && done.Arm == arm);
 
     private StepContext ContextAt(int position) =>
         new(

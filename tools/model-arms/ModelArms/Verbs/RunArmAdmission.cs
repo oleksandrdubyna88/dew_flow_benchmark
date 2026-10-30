@@ -20,7 +20,7 @@ internal sealed record ArmPlan(ExperimentInput Input, string Arm, Scheme Scheme,
 
 /// <summary>Admission for <c>run-arm</c>: each refusal ends the walk, so a later check never runs on what an earlier one refused and nothing is launched before all of them have passed — the scheme (the arm's letters must be among the experiment's
 /// schemes, and a <c>tasks</c> block waits for E4), the arm's token from <c>arms.map.json</c>, the PATH the child programs inherit and the two executables that PATH resolves, and <c>scenarios.json</c> as the gate judged it. The PATH is judged before the
-/// executables are looked up in it: git and claude look their own helpers up there for hours, and <c>validate</c>'s judgement is not carried over by magic. Exit 3 is the host (a CLI that is not there, a file that cannot be read), exit 4 a wrong configuration.</summary>
+/// executables are looked up in it: git and claude look their own helpers up there for hours, and <c>validate</c>'s judgement is not carried over by magic. <c>HOME</c> and <c>XDG_CONFIG_HOME</c> are judged next, by the same helper <c>validate</c> uses (D26 c: git reads its global config there and a claude its settings and hooks). Exit 3 is the host (a CLI that is not there, a file that cannot be read), exit 4 a wrong configuration.</summary>
 internal static class RunArmAdmission
 {
     private const string Name = "model-arms run-arm";
@@ -80,11 +80,17 @@ internal static class RunArmAdmission
     {
         var entries = input.Verb.Environment.TryGetValue("PATH", out var path) ? path.Split(Path.PathSeparator) : [];
         var roots = ExecutableRule.ForbiddenRoots(input.Experiment.Target.Source, input.Experiment.Root);
-        var refusal = entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).FirstOrDefault(sentence => sentence.Length > 0) ?? string.Empty;
+        var refusal = FirstRefusal(input, entries, roots);
         return refusal.Length > 0
             ? Passage<ArmPlan>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
             : Resolve("claude", entries, roots).Bind(claude => Resolve("git", entries, roots).Map(git => Planned(input, placed, new ArmTools(claude, git))));
     }
+
+    /// <summary>The first refusal of what the children inherit: a PATH entry, then <c>HOME</c> or <c>XDG_CONFIG_HOME</c> (D26 c — <see cref="ConfigFolders"/>, the one helper <c>validate</c> shares), else the empty string.</summary>
+    private static string FirstRefusal(ExperimentInput input, IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
+        entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).FirstOrDefault(sentence => sentence.Length > 0)
+        ?? ConfigFolders.Refusals(input.Verb.Environment, roots).Select(home => home.Refusal).FirstOrDefault()
+        ?? string.Empty;
 
     private static ArmPlan Planned(ExperimentInput input, ArmPlaced placed, ArmTools tools) =>
         new(input, placed.Choice.Arm, placed.Choice.Scheme, placed.Map, placed.Paths, tools, ScenarioCount: 0);

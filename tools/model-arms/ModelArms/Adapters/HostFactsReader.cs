@@ -30,7 +30,7 @@ internal static class HostFactsReader
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
         var executables = Executables(experiment, host, entries, roots);
         var refusals = PathRefusals(entries, roots);
-        var homes = ConfigFolderRefusals(environment, roots);
+        var homes = ConfigFolders.Refusals(environment, roots);
 
         var facts = new HostFacts(host, executables, scenarios, File.Exists(experiment.Coai.Settings))
         {
@@ -75,14 +75,6 @@ internal static class HostFactsReader
 
     private static IReadOnlyList<string> PathRefusals(IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
         [.. entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).Where(refusal => refusal.Length > 0).Distinct(StringComparer.Ordinal)];
-
-    /// <summary>The variables git reads its global config from that name a folder an arm could write: <c>HOME</c> and <c>XDG_CONFIG_HOME</c>, each with the sentence that
-    /// refuses it. A variable the map does not hold is not refused.</summary>
-    private static IReadOnlyList<(string Variable, string Refusal)> ConfigFolderRefusals(IReadOnlyDictionary<string, string> environment, IReadOnlyList<string> roots) =>
-        [.. new[] { "HOME", "XDG_CONFIG_HOME" }
-            .Where(environment.ContainsKey)
-            .Select(variable => (Variable: variable, Refusal: ExecutableResolution.ConfigFolderRefusal(variable, environment[variable], roots, RootFacts.Host)))
-            .Where(home => home.Refusal.Length > 0)];
 
     private static IReadOnlyDictionary<string, Outcome<string>> Templates(ExperimentInput input)
     {
