@@ -3,7 +3,7 @@
 // and the guard were missed because the tests stubbed exactly this layer.
 import { realHome } from './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../bare-runner.mjs';
@@ -52,7 +52,7 @@ async function wiring({ map: over = {}, amendments = AMENDMENTS, quiet = {} } = 
 }
 const resume = async (w, extra = []) => {
   const lines = [];
-  const code = await main(['resume', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home });
+  const code = await main(['resume', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home, ownInputs: w.inputs });
   return { code, out: lines.join('\n') };
 };
 
@@ -125,7 +125,7 @@ test('A_changed_harness_without_an_accepting_amendment_line_is_refused', async (
 
 const run = async (w, extra = []) => {
   const lines = [];
-  const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home });
+  const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home, ownInputs: w.inputs });
   return { code, out: lines.join('\n') };
 };
 
@@ -322,7 +322,7 @@ test('Resume_settle_only_is_not_refused_on_a_stopped_series_launches_nothing_and
   assert.match(settle.out, /settle-only: .*nothing was launched/);
   assert.match(settle.out, /series remains stopped \(stop: auth\)/);
   assert.deepEqual(readRunMap(w.runMapFile).value.sessions, before.sessions);
-  const run = async extra => { const lines = []; const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home }); return { code, out: lines.join('\n') }; };
+  const run = async extra => { const lines = []; const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home, ownInputs: w.inputs }); return { code, out: lines.join('\n') }; };
   const misuse = await run(['--settle-only']);
   assert.equal(misuse.code, 4, '--settle-only belongs to resume');
   assert.match(misuse.out, /--settle-only/);
@@ -337,7 +337,7 @@ test('A_run_or_resume_takes_the_series_lock_refuses_while_it_is_held_and_leaves_
   writeFileSync(lock, `${JSON.stringify({ pid: process.pid, startTime: processStartTime(process.pid), at: 't' })}\n`); // another runner, alive
   for (const verb of ['run', 'resume']) {
     const lines = [];
-    const code = await main([verb, '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs], l => lines.push(l), { repo: w.repo, home: w.home });
+    const code = await main([verb, '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs], l => lines.push(l), { repo: w.repo, home: w.home, ownInputs: w.inputs });
     assert.equal(code, 4, verb);
     assert.match(lines.join('\n'), new RegExp(`${verb}: the series ${path.basename(w.seriesDir)} is in use .*pid ${process.pid}`), verb);
   }
@@ -349,4 +349,33 @@ test('A_run_or_resume_takes_the_series_lock_refuses_while_it_is_held_and_leaves_
   const free = await run(w);
   assert.doesNotMatch(free.out, /is in use/, free.out);
   assert.equal(existsSync(lock), false, 'the lock is released when the command ends, whatever it ended with');
+});
+
+// ---- --inputs-dir on a paid run (review N17) ------------------------------------------------------------------------------------------
+
+test('A_paid_run_refuses_an_inputs_dir_that_is_not_the_repositorys_own_inputs_folder', async () => {
+  const w = await wiring();
+  const elsewhere = tmpDir('other-inputs');
+  cpSync(w.inputs, elsewhere, { recursive: true }); // every registered file, byte for byte: still not the repository's own folder
+  const call = (verb, dir, seams, extra = []) => { const lines = []; return main([verb, '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', dir, ...extra], l => lines.push(l), { repo: w.repo, home: w.home, ...seams }).then(code => ({ code, out: lines.join('\n') })); };
+  for (const verb of ['run', 'resume']) {
+    const r = await call(verb, elsewhere, { ownInputs: w.inputs });
+    assert.equal(r.code, 4, `${verb}: ${r.out}`);
+    assert.match(r.out, /--inputs-dir .* is not the repository's own inputs folder/, verb);
+    assert.match(r.out, /paid run/);
+  }
+  const own = await call('run', w.inputs, { ownInputs: w.inputs });
+  assert.doesNotMatch(own.out, /inputs folder/, `control: the repository's own folder is accepted: ${own.out}`);
+  const link = path.join(tmpDir('link'), 'inputs');
+  symlinkSync(w.inputs, link);
+  const viaLink = await call('run', link, { ownInputs: w.inputs });
+  assert.doesNotMatch(viaLink.out, /inputs folder/, 'a path that RESOLVES to the own folder is the own folder');
+  const dry = await call('run', elsewhere, { ownInputs: w.inputs }, ['--dry-run']);
+  assert.equal(dry.code, 0, `a dry run pays nothing and may read any inputs folder: ${dry.out}`);
+  const noFlag = await call('run', w.inputs, { ownInputs: w.inputs });
+  assert.doesNotMatch(noFlag.out, /inputs folder/);
+  const lines = [];
+  const defaultOwn = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs], l => lines.push(l), { repo: w.repo, home: w.home });
+  assert.equal(defaultOwn, 4, 'with no seam the own folder is this repository\'s spikes/minigit-bench/inputs, and a temp folder is not it');
+  assert.match(lines.join('\n'), /not the repository's own inputs folder/);
 });

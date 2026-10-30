@@ -15,7 +15,7 @@
 // The runner re-executes itself under `taskset -c 6,7` (an env marker stops a loop), so its broker, receiver, proxy and sampler sit on core 3, the harness's (parent 4.1).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -149,6 +149,11 @@ async function runCommand(v, write, { resume }, seams = {}) {
   const rehearsing = what.kind === 'rehearsal';
   if (rehearsing && rehearsalRefusal(read.value)) { write(rehearsalRefusal(read.value)); return EXIT.config; }
   const inputsDir = v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs');
+  // a PAID run reads the registered inputs of THIS repository and no copy of them (review N17): the guard compares the repository's blobs with the tag, so a folder it does not look at could carry other thresholds
+  if (!dry && !rehearsing && v['inputs-dir'] && !sameFolder(inputsDir, seams.ownInputs ?? path.join(SPIKE, 'inputs'))) {
+    write(`${resume ? 'resume' : 'run'} refused: --inputs-dir ${inputsDir} is not the repository's own inputs folder (${seams.ownInputs ?? path.join(SPIKE, 'inputs')}): a paid run reads the registered inputs of this repository only; --inputs-dir is for dry runs and tests`);
+    return EXIT.config;
+  }
   let map = read.value;
   if (!dry) {
     // the pins are read from DISK now and compared with the run-map (step 11), at every paid run and resume, before anything is built or read
@@ -217,7 +222,12 @@ function cmdStatus(v, write) {
   return EXIT.done;
 }
 
-/** The whole command; `write` receives each output line. `seams` (`{ repo, home }`) are for tests only: a run uses this repository and the operator's home. Resolves to the exit code. */
+/** Do two paths resolve (links followed) to the same folder? A path that does not exist is not the same as anything. */
+function sameFolder(a, b) {
+  try { return realpathSync(a) === realpathSync(b); } catch { return false; }
+}
+
+/** The whole command; `write` receives each output line. `seams` (`{ repo, home, ownInputs }`) are for tests only: a run uses this repository, the operator's home and this repository's inputs folder. Resolves to the exit code. */
 export async function main(argv, write = line => process.stdout.write(`${line}\n`), seams = {}) {
   const [command, ...rest] = argv;
   let values;
