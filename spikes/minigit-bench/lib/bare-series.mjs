@@ -171,6 +171,9 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     const pending = stops.length > 0 ? `; a series stop is waiting (${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}): it is recorded when every session is settled, so resume settles ${waiting.join(', ')} first` : '';
     return done(EXIT.failed, `${failures.join('; ')}${pending}`);
   }
+  // `void: rate limit` is a resumable halt (contract section 9, review N2), taken once the whole phase is settled: the account's usage window is spent, so the re-run the schedule plans must not start in it
+  const limited = phase.sessions.filter(x => h.get().sessions[x.rid]?.class === 'void: rate limit').map(x => x.rid);
+  if (limited.length > 0) return done(EXIT.halt, `void: rate limit in ${limited.join(', ')}: the account's usage window is spent. The phase is settled and charged; nothing more is launched in this window. Resume after the window resets: the schedule then plans the re-run`);
   return signal?.aborted ? done(ctx.abortExit(), 'cancelled; the sessions that ran are recorded as interrupted harness voids') : null;
 }
 

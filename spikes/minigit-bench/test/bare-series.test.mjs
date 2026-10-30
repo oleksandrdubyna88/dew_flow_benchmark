@@ -509,3 +509,22 @@ test('A_series_stop_of_a_check_survives_a_failed_collection_of_the_partner_the_s
   assert.equal(settled.exit, EXIT.stop, 'the T1 breach of the settled session is remembered by the run-map, not recomputed from nothing');
   assert.equal(readRunMap(t.ctx.runMapFile).value.stopped.rule, 'T1 breach');
 });
+
+test('A_rate_limit_void_is_a_resumable_halt_after_the_phase_is_settled_and_the_re_run_is_not_launched_in_the_same_window', async () => {
+  const t = harness({ variants: { [rid('csharp', 'v1', 1)]: 'ratelimit' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.halt, `contract section 9: void: rate limit is a resumable halt (exit 3): ${r.message}`);
+  assert.match(r.message, /void: rate limit/);
+  assert.match(r.message, new RegExp(rid('csharp', 'v1', 1)));
+  assert.match(r.message, /[Rr]esume/);
+  let map = readRunMap(t.ctx.runMapFile).value;
+  assert.equal(map.stopped, null, 'a halt is not a series stop');
+  assert.equal(map.sessions[rid('csharp', 'v1', 1)].class, 'void: rate limit');
+  assert.equal(map.sessions[rid('node', 'v1', 1)].status, 'ran', 'the phase is settled: the partner is classified and charged too');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort());
+  assert.equal(t.launched.length, 2, 'nothing, the re-run included, is launched in the window that just ran out');
+  // the operator resumes after the window: the schedule goes on as for any void (the partner's v2 alone, the re-run, its v2)
+  const again = await runLoop({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(again.exit, EXIT.done, again.message);
+  assert.deepEqual(t.launched.slice(2), [rid('node', 'v2', 1), rid('csharp', 'v1', 2), rid('csharp', 'v2', 1)]);
+});

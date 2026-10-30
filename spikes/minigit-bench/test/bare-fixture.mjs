@@ -24,6 +24,12 @@ export function lay(layout, variant) {
     writeFileSync(layout.files.stream, `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
     appendFileSync(layout.files.brokerLog, `${JSON.stringify({ t: '2026-10-30T10:30:00Z', seq: 99, event: 'forwarding' })}\n${JSON.stringify({ t: '2026-10-30T10:30:01Z', seq: 99, event: 'settled', status: 529, usage: null, chargedUsd: 0 })}\n`);
   }
+  if (variant === 'ratelimit') { // the account's usage window is spent: the CLI ends with a 429 envelope and the limit sentence
+    const lines = readFileSync(layout.files.stream, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+    const i = lines.findLastIndex(e => e.type === 'result');
+    lines[i] = { ...lines[i], subtype: 'success', is_error: true, api_error_status: 429, result: 'You have hit your usage limit; it resets at 05:00' };
+    writeFileSync(layout.files.stream, `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
+  }
   if (variant === 't1') { // the envelope disagrees with itself: total_cost_usd is not the sum of its modelUsage
     const lines = readFileSync(layout.files.stream, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
     const i = lines.findLastIndex(e => e.type === 'result');

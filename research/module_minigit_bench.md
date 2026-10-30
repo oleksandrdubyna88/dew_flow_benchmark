@@ -603,7 +603,7 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 | Pins | `lib/bare-pins.mjs` | what the disk holds NOW against the run-map (stacks file and its pins, prices file, registered snapshots, prereg tag, seed hash, harness identity); records an accepted harness |
 | Quiet | `lib/cpu-sampler.mjs`, `lib/quiet.mjs`, `inputs/quiet.json` | the machine-quiet check, the phase sampler, the spin probe |
 
-**Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`) |
+**Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`, or a `void: rate limit` once its phase is settled and charged: review N2, contract section 9; the re-run is planned by the resume, never launched in the window that ran out) |
 4 usage or configuration (including every guard refusal) | 5 the runner or the scorer failed | 130 / 143 cancelled by SIGINT / SIGTERM. A cancel DURING a launch records the sessions that ran as interrupted harness voids; a cancel anywhere else (between steps, in a gate, in the quiet wait, while scoring) launches nothing and voids nothing, so no re-run is spent (`runLoop` checks the signal before every step and in the gates, the quiet wait ends at once; review M7).
 
 **The outcome table** (`bareOutcome`, first match wins; a † row is a registered extension of parent 11.1). A class is decided by how the session ended, never by the exit code and never
