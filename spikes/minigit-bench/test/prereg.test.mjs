@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { BEYOND_PLAN_TABLE, PREREG_FILES } from '../lib/prereg-guard.mjs';
+import { excludedDirs } from '../lib/score-deps.mjs';
 import { buildPrompts, extractPrompts } from '../prereg/extract-prompts.mjs';
 import { QUOTES, MARKER, extractQuotes, keptTail, renderQuotes } from '../prereg/extract-contract.mjs';
 import { extractPrediction, extractWeakenings, renderPrediction } from '../prereg/extract-prediction.mjs';
@@ -172,4 +173,16 @@ test('The_three_quoting_files_name_the_same_main_commit', () => {
   };
   assert.ok(named.prediction && named.contract && named.prompts, JSON.stringify(named));
   assert.equal(new Set(Object.values(named)).size, 1, `one commit for every quote: ${JSON.stringify(named)}`);
+});
+
+test('The_registered_workspace_rule_names_each_stacks_exclusion_exactly_as_implemented', () => {
+  const phrase = (label, stack, only) => `${label}: \`${excludedDirs(stack).map(d => `${d}/`).join(' ')}\`${only ? ' only' : ''}`;
+  for (const file of ['statement.md', 'analysis-contract.md']) {
+    const text = read(file).replace(/\s+/g, ' ');
+    assert.ok(text.includes(phrase('C#', 'csharp', false)), `${file} says what a C# v2 workspace leaves out`);
+    assert.ok(text.includes(phrase('TypeScript', 'node', true)), `${file} says what a TypeScript v2 workspace leaves out, and that it is only that`);
+  }
+  const contract = read('analysis-contract.md');
+  assert.ok(contract.indexOf('G-14') > contract.indexOf('OPERATIONALIZATIONS'), 'the rule is in the pre-registration\'s own half, below the marker');
+  assert.match(read('analysis-contract.md').replace(/\s+/g, ' '), /a Node project's `bin\/` .* source/, 'the reason for the asymmetry is written down');
 });

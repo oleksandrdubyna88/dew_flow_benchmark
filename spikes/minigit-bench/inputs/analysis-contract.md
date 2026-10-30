@@ -65,6 +65,10 @@ through a dated line of `inputs/amendments.md`, and after the A/A only the instr
 - **Quality is per phase**, never summed over v1 and v2: prediction 5's medians are per phase.
 - A **pair** is the C# cell and the TypeScript cell of one k. Their v1 sessions start in one tick on the CPU masks 0-5 and 8-13 (the masks swap each pair; the seed decides pair 1);
   their v2 sessions start only after both v1 sessions are collected and scored (the **barrier**). A void session is not scored, so the barrier waits only for data sessions.
+- **The v2 workspace** is a copy of the v1 session's tree plus `SPEC-v2.txt` and the fixed `test-v2.sh`, leaving out, at any depth, per stack: C#: `bin/ obj/ node_modules/`; TypeScript: `node_modules/` only. The
+  asymmetry is deliberate: a C# `bin/` and `obj/` are build output that the offline build regenerates, while a Node project's `bin/` conventionally holds source (the executable entry script), so leaving it out could delete the
+  agent's own code. The list is the scorer's own (`excludedDirs`), so the workspace and the scorer agree. The cost, stated: a TypeScript tree that holds generated output in `bin/` or `obj/` keeps it into v2. Every v2
+  session's record lists the directories that were left out. A v1 input the agent changed is kept and flagged `v1 inputs changed`.
 - Only pairs 1–3 are data. The A/A and the Node pilot are instrument checks (section 10); they never enter a median, a range or a ratio. Their spend counts in the bare budget.
 
 ### 2. How a session ended: the outcome classes
@@ -250,7 +254,7 @@ scorer (`--what rehearse-v2`); then one bare Node v1 alone (`--what pilot-node`)
 | G-11 ‡ | the quiet check passed; the sampler and the spin probe wrote every 5 s; `maskObserved` true for every cell | the contention control is not in force | fix; A/A again |
 | G-12 ‡ | the cap stops a session that reaches it, at settled spend ≥ $6 | the cap failed | **stop**; fix |
 | G-13 ‡ | each session's class read by hand against its stream and broker log — a dated line | the classifier misreads an ending | fix, re-classify |
-| G-14 | the v2 rehearsal: the v2 workspace is the v1 tree minus `bin/ obj/ node_modules/` plus the v2 inputs; the stub v2 session's records are complete; `score.json` at v2 has every step known | the v2 path is broken | fix, rehearse again (free) |
+| G-14 | the v2 rehearsal: the v2 workspace is the v1 tree minus the stack's exclusion (C#: `bin/ obj/ node_modules/`; TypeScript: `node_modules/` only; section 1) plus the v2 inputs; the stub v2 session's records are complete; `score.json` at v2 has every step known | the v2 path is broken | fix, rehearse again (free) |
 
 **GO** = every G `holds` (G-6 `explained` counts as holds; G-9 never gates), except these, which may be **`not exercised`**, each with its replacing evidence named in `AA.md`:
 **G-4's subagent half** → the E2.S2 smoke fixture's B-T1 on the same CLI; **G-12** (no twin reached the cap) → E2.S2's broker proof P-6 and the budget tests green at the run's harness

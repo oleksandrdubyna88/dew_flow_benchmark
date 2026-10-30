@@ -426,3 +426,14 @@ test('A_crash_between_the_ledger_line_and_the_run_map_transition_does_not_charge
   assert.equal(settled.value.sessions[r0].status, 'ran', 'the session moves on');
   assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.rid === r0).length, 1, 'and is charged once: the ledger line that was already there stands');
 });
+
+test('The_record_of_a_v2_session_lists_which_directories_its_workspace_left_out_per_stack', async () => {
+  const t = harness();
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  const record = (stack, phase) => JSON.parse(readFileSync(path.join(t.ctx.sessionsRoot, rid(stack, phase, 1), 'record.json'), 'utf8'));
+  assert.deepEqual(record('csharp', 'v2').workspace.value.excludedDirs, ['bin', 'obj', 'node_modules'], 'C#: build output and dependencies');
+  assert.deepEqual(record('node', 'v2').workspace.value.excludedDirs, ['node_modules'], 'TypeScript: dependencies only, a Node bin/ may hold source');
+  assert.equal(record('csharp', 'v1').workspace.known, false, 'a v1 workspace is filled from the pinned inputs: nothing was left out');
+  assert.match(record('csharp', 'v1').workspace.why, /pinned inputs/);
+});

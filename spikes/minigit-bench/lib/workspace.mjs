@@ -36,12 +36,13 @@ export function fillV1({ inputsRoot, hashes, work }) {
 
 /**
  * `work` <- the v1 session's tree minus build output (`excludedDirs(stack)`, the scorer's own list: a C# tree loses bin/ obj/ node_modules/, a Node
- * tree keeps a real bin/ of source), then SPEC-v2.txt and test-v2.sh. -> `ok({ changed, flags })`; `changed` lists the v1 inputs the agent changed.
+ * tree keeps a real bin/ of source), then SPEC-v2.txt and test-v2.sh. -> `ok({ changed, flags, excludedDirs })`; `changed` lists the v1 inputs the agent changed and `excludedDirs` what this stack's copy left out (it goes into the session record).
  */
 export function fillV2({ inputsRoot, hashes, v1Work, work, stack }) {
-  nodeFs.copyTree(v1Work, work, excludedDirs(stack));
+  const excluded = excludedDirs(stack);
+  nodeFs.copyTree(v1Work, work, excluded);
   const written = writeInputs({ inputsRoot, hashes, work, names: FILES.v2 });
   if (!written.ok) return written;
   const changed = pinnedInputsChanged({ work, hashes, phase: 'v1' });
-  return ok({ changed, flags: changed.length > 0 ? ['v1 inputs changed'] : [] });
+  return ok({ changed, flags: changed.length > 0 ? ['v1 inputs changed'] : [], excludedDirs: excluded });
 }

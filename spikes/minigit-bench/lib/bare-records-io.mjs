@@ -34,7 +34,7 @@ export function writeSessionRecord({ ctx, entry, score }) {
   const record = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
     outcome, run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
-    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta,
+    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);
   return ok(record);

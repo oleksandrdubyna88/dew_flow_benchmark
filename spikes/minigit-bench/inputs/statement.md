@@ -46,8 +46,11 @@ This measurement counts the same thing correctly:
 Two arms are planned (D1). **The bare arm runs first and alone** (D20, operator, 2026-10-29); the process arm is built later and registers its own scope as a dated amendment (E3.S3).
 
 **Bare** = the task prompt only. No conventions and no instruction files, no MCP server (`--strict-mcp-config`, empty), no review gate, no consultants, no GitHub. The agent works in an
-empty directory that holds only the phase's pinned inputs (v1: `SPEC-v1.txt` and the fixed `test-v1.sh`; v2: the v1 tree minus `bin/ obj/ node_modules/`, plus `SPEC-v2.txt` and the fixed
-`test-v2.sh`). The session ends when the agent ends it, or at the cap, the wall or the stall limit.
+empty directory that holds only the phase's pinned inputs (v1: `SPEC-v1.txt` and the fixed `test-v1.sh`; v2: the v1 tree minus the stack's build output and dependencies, plus `SPEC-v2.txt` and the fixed
+`test-v2.sh`). **What the v2 workspace leaves out, per stack, at any depth:** C#: `bin/ obj/ node_modules/`; TypeScript: `node_modules/` only. The two stacks differ on purpose: a C# `bin/` and `obj/`
+are build output that the offline build regenerates, but a Node project's `bin/` conventionally holds source (the executable entry script), so leaving it out could delete the agent's own code. It is the scorer's own
+list (`excludedDirs`), so the workspace and the scorer agree; the cost of the asymmetry is that a TypeScript tree that happens to hold generated output in `bin/` or `obj/` keeps it, and the record of every v2 session
+lists what was left out. The session ends when the agent ends it, or at the cap, the wall or the stall limit.
 
 ## 4. The conditions
 

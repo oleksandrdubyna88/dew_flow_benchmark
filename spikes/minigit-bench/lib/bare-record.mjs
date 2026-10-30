@@ -65,7 +65,7 @@ const qualityPart = score => {
 };
 
 /** One session's record. `run` carries what the runner observed (mask, spawn stamp, skew, quiet, spin, harness identity, prereg tag, CLI version). */
-export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null }) {
+export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null, workspace = null }) {
   return {
     ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail,
     run: {
@@ -77,6 +77,7 @@ export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, ali
     time: timePart({ views, meta }),
     quality: qualityPart(score),
     loc: loc ? known(loc) : notCaptured('the tree was not counted'),
+    workspace: workspace ? known({ phase: workspace.phase, excludedDirs: workspace.excludedDirs, note: 'the directories, at any depth, the v2 copy of the v1 tree left out for this stack' }) : notCaptured('a v1 workspace is filled from the pinned inputs: nothing was copied, so nothing was left out'),
     egress: known({ ...views.egress, bytesCaptured: Object.keys(views.egress.allowed).every(h => h in views.egress.bytes), cacheGrowthBytes }),
     packages: packages ? known({ packages: packages.packages, added: packages.added, flagged: packages.flagged }) : notCaptured('the caches were not read'),
     process: { compliance: NOT_BARE, coaiRounds: NOT_BARE, codeRabbit: NOT_BARE, ciRuns: NOT_BARE, deliveredBy: NOT_BARE },
