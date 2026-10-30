@@ -6,8 +6,9 @@ import { cpSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../bare-runner.mjs';
-import { g14Verdict, rehearsalRefusal, twinOf } from '../lib/rehearsal.mjs';
-import { openSeries, planSession, transition, writeRunMap } from '../lib/run-map.mjs';
+import { EXIT } from '../lib/bare-series.mjs';
+import { g14Verdict, rehearsalRefusal, rehearseV2, twinOf } from '../lib/rehearsal.mjs';
+import { openSeries, planSession, readRunMap, transition, writeRunMap } from '../lib/run-map.mjs';
 import { fillV1, fillV2 } from '../lib/workspace.mjs';
 import { sha256Of } from '../lib/inputs.mjs';
 import { write } from './bare-ctx.mjs';
@@ -106,4 +107,21 @@ test('A_rehearsal_needs_an_A_A_twin_and_names_the_one_it_uses', async () => {
   assert.match(dry.out, /rehearse-v2: would rehearse the v2 path on the tree of twin aaaaaa/);
   assert.match(dry.out, /stub CLI .* nothing is paid/);
   assert.deepEqual(readdirSync(s.dir).sort(), before, 'a dry run writes nothing');
+});
+
+test('A_rehearsal_that_stopped_at_the_gates_leaves_one_planned_session_and_the_next_run_reuses_it', async () => {
+  const s = series({ twin: true });
+  const ctx = { seriesDir: s.dir, sessionsRoot: path.join(s.dir, 's'), runMapFile: path.join(s.dir, 'run-map.json'), ledgerFile: path.join(s.dir, 'ledger.ndjson'), kind: 'aa', pair: 0, home: tmpDir('home'), caps: { capUsd: 6, wallMs: 1, stallMs: 1 }, harnessIdentity: 'a'.repeat(64) };
+  const deps = { guard: async () => ({ ok: false, reason: 'the tag is not on origin' }), retireStale: async () => {}, preflight: async () => ({ ok: true }), now: Date.now, phase: {} };
+  const rehearse = map => rehearseV2({ ctx, deps, map, say: () => {} });
+  const first = await rehearse(s.map);
+  assert.equal(first.exit, EXIT.config, first.message);
+  const planned = () => Object.values(readRunMap(ctx.runMapFile).value.sessions).filter(x => x.kind === 'rehearsal');
+  assert.equal(planned().length, 1);
+  assert.equal(planned()[0].status, 'planned');
+  const firstRid = planned()[0].rid;
+  const again = await rehearse(readRunMap(ctx.runMapFile).value);
+  assert.equal(again.exit, EXIT.config, again.message);
+  assert.equal(planned().length, 1, 'the still-planned session is reused: no second rid, no leftover');
+  assert.equal(planned()[0].rid, firstRid, 'the same rid');
 });

@@ -44,9 +44,9 @@ function itemsOf({ ctx, step }) {
   return refs.map(ref => ({ session: { ...ref }, rid: ridOf({ seed: ctx.seed, pair: ctx.pair, ...ref }), mask: maskFor({ seed: ctx.seed, pair: ctx.pair, stack: ref.stack }) }));
 }
 
-/** A fixed list (the A/A, the pilot): one launch of everything still planned, then one score of what ended with data. */
-function fixedStep(map) {
-  const all = Object.values(map.sessions);
+/** A fixed list (the A/A, the pilot, the rehearsal): one launch of everything of ITS OWN KIND still planned, then one score of what ended with data (review N15: a run-map holds the sessions of every kind, and `--what aa` must not launch the pilot's or the rehearsal's). */
+function fixedStep(map, kind) {
+  const all = Object.values(map.sessions).filter(s => s.kind === kind);
   const planned = all.filter(s => s.status === 'planned');
   if (planned.length > 0) return { action: 'launch', phase: planned[0].phase, sessions: planned.map(s => ({ stack: s.stack, phase: s.phase, attempt: s.attempt, rid: s.rid })), label: 'paired' };
   const unscored = all.filter(s => s.status === 'ran' && s.data === true);
@@ -235,7 +235,7 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };
     if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched. A stop is final for its series: fix the named cause and start a new series (init, then an A/A that is GO)`), map: h.get() };
     applyHandVerdicts({ ctx, h, say });
-    const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get());
+    const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get(), ctx.kind);
     if (step.action === 'done') {
       if (ctx.kind === 'data') writePairRecord({ ctx, map: h.get(), pair: ctx.pair });
       return { ...done(EXIT.done, 'done'), map: h.get() };

@@ -580,7 +580,7 @@ run through it.** What is still open is listed at the end of this section and in
 
 **One command, one pair.** `bare-runner.mjs run --series <dir> --what pair:<k>` runs pair k: C# v1 and TS v1 started in the same tick on their CPU masks, both collected and
 scored (the **barrier**), then both v2 from their own v1 trees; every session is classified by how it ENDED, voids are re-run once by the schedule, and every session and the pair
-get a record. `--what aa` (two identical bare C# v1 twins on masks 0-5 and 8-13) and `--what pilot-node` (one bare Node v1) are the same machinery over a fixed list. The run-map is
+get a record. `--what aa` (two identical bare C# v1 twins on masks 0-5 and 8-13) and `--what pilot-node` (one bare Node v1) are the same machinery over a fixed list, and a fixed list launches and scores only the sessions of ITS OWN KIND (`fixedStep` filters by `ctx.kind`, review N15: the run-map holds the A/A, the pilot, the rehearsal and the data pairs, and `--what aa` must not launch the pilot's session). `--what rehearse-v2` reuses its own session if an earlier attempt left it `planned` (it stopped at the gates), so a rid is not planned per attempt. The run-map is
 written tmp + rename after every transition, so a crash resumes from what the files say.
 
 | Piece | File | What it decides |

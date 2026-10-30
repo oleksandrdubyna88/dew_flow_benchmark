@@ -646,3 +646,23 @@ test('Resume_never_removes_or_settles_a_session_directory_whose_state_file_names
   assert.equal(settled.value.sessions[id].status, 'planned', 'control: with a dead owner the unpaid claim is cleared as before');
   assert.equal(existsSync(layout.dir), false);
 });
+
+// ---- the fixed lists and the rehearsal (review N15) ---------------------------------------------------------------------------------------
+
+test('A_fixed_list_run_launches_only_the_sessions_of_its_own_kind', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  const entry = (id, kind, stack) => ({ rid: id, pair: 0, stack, phase: 'v1', attempt: 1, kind, label: 'paired', mask: '0-5' });
+  let map = t.map;
+  for (const e of [entry('aaaaaa', 'aa', 'csharp'), entry('bbbbbb', 'pilot', 'node'), entry('cccccc', 'rehearsal', 'csharp')]) map = planSession(map, e).value;
+  const ctx = { ...t.ctx, kind: 'aa', pair: 0 };
+  const r = await runLoop({ ctx, deps: t.deps, map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  assert.deepEqual(t.launched, ['aaaaaa'], 'the A/A launches its own twin and not the pilot or the rehearsal planned in the same run-map');
+  const after = readRunMap(t.ctx.runMapFile).value;
+  assert.deepEqual(['aaaaaa', 'bbbbbb', 'cccccc'].map(id => after.sessions[id].status), ['scored', 'planned', 'planned']);
+  const pilot = await runLoop({ ctx: { ...t.ctx, kind: 'pilot', pair: 0 }, deps: t.deps, map: after });
+  assert.equal(pilot.exit, EXIT.done, pilot.message);
+  assert.deepEqual(t.launched, ['aaaaaa', 'bbbbbb'], 'and the pilot launches the pilot, scoring only its own: the A/A twin was scored already');
+  assert.equal(readRunMap(t.ctx.runMapFile).value.sessions.cccccc.status, 'planned', 'the rehearsal is still waiting for its own command');
+});

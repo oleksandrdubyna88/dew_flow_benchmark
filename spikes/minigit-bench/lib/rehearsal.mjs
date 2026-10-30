@@ -11,6 +11,7 @@ import { leafProblems } from './bare-record.mjs';
 import { readSessionRecord, writeJson } from './bare-records-io.mjs';
 import { EXIT, runLoop } from './bare-series.mjs';
 import { sha256Of } from './inputs.mjs';
+import { ok } from './result.mjs';
 import { planSession, writeRunMap } from './run-map.mjs';
 import { layoutPaths } from './sandbox.mjs';
 import { stubClaude } from './stub-cli.mjs';
@@ -85,10 +86,12 @@ export async function rehearseV2({ ctx, deps, map, say = () => {}, signal, rando
   mkdirSync(dir, { recursive: true });
   const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 20));
   try {
-    const rid = pilotRid(random());
-    const planned = planSession(map, { rid, pair: 0, stack: 'csharp', phase: 'v2', attempt: 1, kind: 'rehearsal', label: 'paired', mask: '0-5', twin: `rehearse-${twin.rid}` });
+    // a rehearsal that stopped before it launched (the gates, say) leaves its session `planned`: the next run REUSES it (review N15), so a rid is not planned per attempt and no leftover is launched
+    const waiting = Object.values(map.sessions).find(s => s.kind === 'rehearsal' && s.status === 'planned');
+    const rid = waiting?.rid ?? pilotRid(random());
+    const planned = waiting ? ok(map) : planSession(map, { rid, pair: 0, stack: 'csharp', phase: 'v2', attempt: 1, kind: 'rehearsal', label: 'paired', mask: '0-5', twin: `rehearse-${twin.rid}` });
     if (!planned.ok) return { exit: EXIT.failed, message: planned.reason, map };
-    writeRunMap(ctx.runMapFile, planned.value);
+    if (!waiting) writeRunMap(ctx.runMapFile, planned.value);
     const rehearsalCtx = {
       ...ctx, kind: 'rehearsal', pair: 0, rehearsalOf: twin.rid, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, claudeBinary: stubClaude(dir), aliasStore: null, aliasBaseline: null,
       handVerdictsFor: () => [], planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 },
