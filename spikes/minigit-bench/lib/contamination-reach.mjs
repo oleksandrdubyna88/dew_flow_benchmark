@@ -1,7 +1,8 @@
 // What `outside-path` and the link rules share (contamination.mjs, contamination-links.mjs): the tool sets, "is this path at or under a protected root", "does this simple command walk DOWN from the paths it names", and the
-// paths a call reaches, each shell word resolved from the directory the `cd` segments before it left (contamination-cwd.mjs). A heredoc body is data, never a command (contamination-heredoc.mjs).
+// paths a call reaches, each shell word resolved from the directory the `cd` segments before it left (contamination-cwd.mjs). A heredoc body is data, never a command, unless a shell runs it; an interpreter's body is judged by its quoted absolute-path literals (contamination-heredoc.mjs).
 import { findOutsideAccesses } from '../../policy-ab-quick/lib/leak.mjs';
 import { isRooted, resolvable, shellSteps, unquote } from './contamination-cwd.mjs';
+import { pathLiterals } from './contamination-heredoc.mjs';
 import { fedWalk } from './contamination-pipe.mjs';
 
 export const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
@@ -68,7 +69,15 @@ function stepReaches(step, call, opts, forceWalk = false) {
   return lost === undefined ? found : [...found, unplaced(call, lost)];
 }
 
-const ownReaches = (step, call, opts) => (step.cd || step.data !== undefined ? [] : stepReaches(step, call, opts));
+/** What an interpreter's heredoc body reaches: its quoted absolute-path literals, each a PLAIN reach (`walks` false: the body is not shell, so no `-r` or `find` in it is read as a walk). */
+const literalReaches = (step, call, opts) => findOutsideAccesses([{ agent: call.agent, tool: call.tool, input: { command: '' }, cwd: step.cwd, paths: pathLiterals(step.data) }], opts).map(f => ({ ...f, walks: false }));
+
+/** The reaches of a step's own words: none for a `cd` (it only moves the base) or for a body that is plain data. */
+function ownReaches(step, call, opts) {
+  if (step.cd) return [];
+  if (step.data === undefined) return stepReaches(step, call, opts);
+  return step.code ? literalReaches(step, call, opts) : [];
+}
 
 /** A wrapped walker that a pipe feeds (`echo / | xargs find`): its producers' paths are judged as a walk, and an unknown producer is high. */
 function pipedReaches(steps, i, call, opts) {
@@ -79,7 +88,7 @@ function pipedReaches(steps, i, call, opts) {
 
 /**
  * Every path outside the work tree a call reaches, `{ agent, tool, path, resolved, walks, excerpt? }`; `walks` = the command that names it reads below it. A shell command is read one simple command at a time, its heredoc
- * bodies left out: a `cd` is no reach (it only moves the base), and the relative words and the `..` chains after it are resolved from where it moved to. A search tool walks below its path.
+ * bodies left out (an interpreter's body is read for its quoted absolute paths only): a `cd` is no reach (it only moves the base), and the relative words and the `..` chains after it are resolved from where it moved to. A search tool walks below its path.
  */
 export function reachesOf(call, ctx) {
   const opts = { treeRoot: ctx.treeRoot, home: ctx.boxHome ?? ctx.home, flavour: 'posix', allow: ctx.allow ?? [], isLink: ctx.isLink };

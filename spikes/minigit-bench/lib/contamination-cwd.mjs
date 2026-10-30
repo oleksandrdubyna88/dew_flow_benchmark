@@ -1,7 +1,8 @@
 // The working directory of a shell command, simple command by simple command (and the directory it ends in, which the next call of the session begins in: contamination-session-cwd.mjs): the one ordered pass the contamination scan's path rules (`outside-path`, contamination-reach.mjs) and its link rules
 // (contamination-links.mjs) both read. A `cd` reads nothing: it only moves the directory every LATER relative path word is resolved from. Lexical (nothing is followed on the host), and
 // the same approximation as leak.mjs for what it cannot see: a command is split at `;`, `&`, `|` and a newline, quotes ignored. A heredoc body or here-string is DATA, not commands (contamination-heredoc.mjs): it
-// is no step of its own but one `data` step (`{ segment: '', words: [], data }`), whose text only the link rule reads (a script's `symlink(` call).
+// is no step of its own but one `data` step (`{ segment: '', words: [], data, code }`), whose text only the link rule reads (a script's `symlink(` call); `code` = an interpreter's source, whose quoted absolute paths the reach rule also
+// reads (a body a SHELL runs is no data step: it stays in the command and is read as shell).
 //
 // The directory is an absolute path, or `null` = UNKNOWN: after `cd -`, `popd`, `pushd` with no directory, `cd $OLDPWD`, a variable, a glob, a substitution or `~user`. A relative word cannot be placed then.
 // A `( ... )` group keeps its `cd` to itself: the directory before the group comes back at its `)` (counted at the segment's edges; a `$( ... )` inside a segment is not a group).
@@ -65,8 +66,8 @@ function stepOf(state, segment, ctx) {
   return { state: closeScopes(moved, closesOf(segment)), step: { segment, words, cwd: opened.cwd, cd } };
 }
 
-/** A heredoc body is no command: a step with no words, in the directory it is written in. */
-const dataStep = (state, text) => ({ state, step: { segment: '', words: [], cwd: state.cwd, cd: undefined, data: text } });
+/** A heredoc body is no command: a step with no words, in the directory it is written in; `code` when an interpreter runs it. */
+const dataStep = (state, text, code) => ({ state, step: { segment: '', words: [], cwd: state.cwd, cd: undefined, data: text, code } });
 
 /** `[{ segment, piped }]`: the simple commands of a command line, `piped` when a single pipe (`|`, `|&`) stands before it, so the command before it feeds it. */
 function pieces(commands) {
@@ -80,12 +81,12 @@ function pieces(commands) {
  * (contamination-heredoc.mjs): a body is one `data` step. `end` is null when the scan cannot place it.
  */
 export function shellRun(text, ctx, start = ctx.treeRoot) {
-  const { text: commands, data } = stripData(text);
+  const { text: commands, data, code } = stripData(text);
   const steps = []; // built here and appended to in place: a copy per segment would make a command of 30,000 segments quadratic; the result is a new array, nothing outside is touched
   let state = { cwd: start, saved: [] };
   for (const { segment, piped } of pieces(commands)) {
     const body = PLACEHOLDER.exec(segment.trim());
-    const next = body ? dataStep(state, data[Number(body[1])]) : stepOf(state, segment, ctx);
+    const next = body ? dataStep(state, data[Number(body[1])], code[Number(body[1])]) : stepOf(state, segment, ctx);
     state = next.state;
     steps.push({ ...next.step, piped });
   }

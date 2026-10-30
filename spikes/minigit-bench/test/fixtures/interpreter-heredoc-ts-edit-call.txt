@@ -1,0 +1,41 @@
+python3 - <<'EOF'
+p='src/tool.ts'
+s=open(p).read()
+s=s.replace('''function helper(''','''interface Entry {
+  parent: string;
+  stamp: string;
+  items: Map<string, string>;
+}
+
+function loadEntry(key: string | undefined): Entry | undefined {
+  if (key === undefined || key === "" || key.includes("/") || key.startsWith(".")) return undefined;
+  const file = `${STORE}/${key}`;
+  if (!isFile(file)) return undefined;
+  const fields = new Map<string, string>();
+  const items = new Map<string, string>();
+  let inItems = false;
+  for (const line of readFileSync(file, "utf8").split("\\n")) {
+    if (inItems) {
+      const sep = line.lastIndexOf(" ");
+      if (sep > 0) items.set(line.slice(0, sep), line.slice(sep + 1));
+    } else if (line === "items:") {
+      inItems = true;
+    } else {
+      const sep = line.indexOf(": ");
+      if (sep >= 0) fields.set(line.slice(0, sep), line.slice(sep + 2));
+    }
+  }
+  return { parent: fields.get("parent") ?? "", stamp: fields.get("stamp") ?? "", items };
+}
+
+function helper(''')
+s=s.replace('''  const names = [...new Set(index)].filter(isFile).sort();
+  const stamp = Math.floor(Date.now() / 1000);
+  let content = `parent: ${parent}\\nstamp: ${stamp}\\nitems:\\n`;
+''','''  // Snapshot = the parent's items with the staged ones layered on top.
+  const names = new Map(loadEntry(head)?.items ?? []);
+  let content = `parent: ${parent}\\nstamp: ${stamp}\\nitems:\\n`;
+''')
+open(p,'w').write(s)
+EOF
+grep -c loadEntry src/tool.ts; grep -n "loadEntry" src/tool.ts
