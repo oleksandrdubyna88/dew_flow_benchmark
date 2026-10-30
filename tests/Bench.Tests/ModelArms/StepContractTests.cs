@@ -60,7 +60,7 @@ public sealed class StepContractTests
 
     /// <summary>The prefix rule, asserted on every refusal: a line about <paramref name="path"/> starts with it, then a space or a colon, and holds <paramref name="rest"/>.</summary>
     private static void HasLine(string reason, string path, string rest) =>
-        Lines(reason).Should().Contain(line => Names(line, path) && line.Contains(rest, StringComparison.Ordinal), $"a line about {path} holding '{rest}'");
+        Lines(reason).Any(line => Names(line, path) && line.Contains(rest, StringComparison.Ordinal)).Should().BeTrue($"a line about {path} holding '{rest}' is expected, and the reason was:\n{reason}");
 
     private static bool Names(string line, string path) =>
         line.StartsWith(path, StringComparison.Ordinal) && line.Length > path.Length && line[path.Length] is ' ' or ':';
@@ -317,9 +317,9 @@ public sealed class StepContractTests
     {
         PosixPaths();
 
-        Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json").Split('\n').Should().Contain(
-            line => Names(line, "schemes.CHH") && line.Contains("notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)", StringComparison.Ordinal),
+        ExperimentFile.Read(Edited(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json"), Loc).Failed().Should().BeTrue(
             "two producers of one file would make the fixer read one verdict twice");
+        HasLine(Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json"), "schemes.CHH", "notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)");
         HasLine(Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "Notes/HA.json"), "schemes.CHH", "notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)");
         HasLine(
             Refused(root => root["tasks"]!["outputs"]!["TASK_NOTES"] = "notes/hreview.md"),
