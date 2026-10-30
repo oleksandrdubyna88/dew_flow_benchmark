@@ -1,6 +1,6 @@
 # Prediction, bare part
 
-Quoted from `todo/PLAN_minigit_stack_bench.md` section 11 at `85c54b790a37479a32fc88b7b0b4353652fed601`, a commit of origin/main (the full prediction has been public since `01b7459`); `prereg/extract-prediction.mjs` wrote it. Process clauses are elided and marked; items 3, 4 and 6 are process items and stand in the parent at the named commits.
+Quoted from `todo/PLAN_minigit_stack_bench.md` section 11 at `d4c982def9265d0605f1bda9a760dd1be504df01`, a commit of origin/main (the full prediction has been public since `01b7459`); `prereg/extract-prediction.mjs` wrote it. Process clauses are elided and marked; items 3, 4 and 6 are process items and stand in the parent at the named commits.
 
 > *(The ranges below are descriptive expectations about medians and ratios, stated before the run — not effect sizes
 > claimed as findings.)*

@@ -1,6 +1,6 @@
 # Analysis contract, bare scope
 
-The blocks below are quoted word for word from `todo/PLAN_minigit_stack_bench.md` at `85c54b790a37479a32fc88b7b0b4353652fed601`, a commit of origin/main; `prereg/extract-contract.mjs` wrote them and a test checks them. Section 5.3's acceptance is quoted whole; its `delivered` clause is the process arm's and is **process-only**: a bare session is never judged on it.
+The blocks below are quoted word for word from `todo/PLAN_minigit_stack_bench.md` at `d4c982def9265d0605f1bda9a760dd1be504df01`, a commit of origin/main; `prereg/extract-contract.mjs` wrote them and a test checks them. Section 5.3's acceptance is quoted whole; its `delivered` clause is the process arm's and is **process-only**: a bare session is never judged on it.
 
 <!-- quote: Unit of analysis (parent section 11) -->
 > **Unit of analysis = the cell**, not the session: v2 inherits v1, so the 24 sessions are 12 observations with two phases

@@ -1,7 +1,7 @@
 {
   "source": {
     "file": "todo/PLAN_minigit_stack_bench.md",
-    "commit": "85c54b790a37479a32fc88b7b0b4353652fed601",
+    "commit": "d4c982def9265d0605f1bda9a760dd1be504df01",
     "section": "4.3"
   },
   "templates": {
@@ -11,7 +11,7 @@
   "slots": {
     "csharp": {
       "STACK": "C#",
-      "STACK_SENTENCE": "Use C# 14 on .NET 10 (SDK 10.0.113 is installed)."
+      "STACK_SENTENCE": "Use C# 14 on .NET 10 (SDK 10.0.114 is installed)."
     },
     "node": {
       "STACK": "TypeScript",
@@ -21,12 +21,12 @@
   "prompts": {
     "csharp": {
       "v1": {
-        "text": "Implement minigit as described in SPEC-v1.txt using C#. The executable must be named 'minigit' and be runnable as ./minigit. For compiled languages, include a Makefile or build script. For interpreted languages, ensure the minigit file has a proper shebang line and is executable. Verify your implementation passes all tests by running: bash test-v1.sh Use C# 14 on .NET 10 (SDK 10.0.113 is installed).",
-        "sha256": "dc66d95a6073b0659bd939abfcdc55a198c7e1c4bd1fd503365aa94f3cd85f8b"
+        "text": "Implement minigit as described in SPEC-v1.txt using C#. The executable must be named 'minigit' and be runnable as ./minigit. For compiled languages, include a Makefile or build script. For interpreted languages, ensure the minigit file has a proper shebang line and is executable. Verify your implementation passes all tests by running: bash test-v1.sh Use C# 14 on .NET 10 (SDK 10.0.114 is installed).",
+        "sha256": "0ed6f0961e565a541c429d25df4d04a97b97341d2bbde1222c651d018263f94e"
       },
       "v2": {
-        "text": "You are in a workspace copied from the v1 implementation. Read SPEC-v2.txt and modify the existing minigit implementation in place to satisfy the full v2 spec while preserving all v1 behavior. Do not start over unless it is strictly necessary. Verify your implementation passes all tests by running: bash test-v2.sh Use C# 14 on .NET 10 (SDK 10.0.113 is installed).",
-        "sha256": "17ef74b5c58ec16dd0e41c931e29f53d22978583804659f24ec28100b0fa6d10"
+        "text": "You are in a workspace copied from the v1 implementation. Read SPEC-v2.txt and modify the existing minigit implementation in place to satisfy the full v2 spec while preserving all v1 behavior. Do not start over unless it is strictly necessary. Verify your implementation passes all tests by running: bash test-v2.sh Use C# 14 on .NET 10 (SDK 10.0.114 is installed).",
+        "sha256": "2ed947b9178125861652398a5a93659e430cb3469bb8290b81a4f38622a06205"
       }
     },
     "node": {
