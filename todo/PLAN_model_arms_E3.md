@@ -649,7 +649,7 @@ D26 (a)–(f) for `TargetTools` and `ArmGit`.
 **Files.** `ModelArms/Verbs/Make.cs` (`MakeVerb`), `ModelArms/Adapters/ArmMaker.cs`, `ModelArms/Adapters/BaseCopy.cs`, `ArmFiles.cs`
 (`ReplacePrivate`), `ModelArms.Core/Experiment/RunArms.cs`, `RootRequirements.cs` (`make` and `chain` require `base/`, producer `prep-base`),
 `McpConfig.cs` (its doc's story ids only: `make` E3.S3, the record's exclusion E6.S3); `Program.cs` (the `make` arm only); tests
-`MakeVerbTests.cs`, `BaseCopyTests.cs`, the `make`/`chain` rows of `RootRequirementsTests.Each_verb_requires_exactly_the_files_its_stage_needs`;
+`MakeVerbTests.cs`, `BaseCopyTests.cs`, `ArmFilesTests.cs` (new — one test), the `make`/`chain` rows of `RootRequirementsTests.Each_verb_requires_exactly_the_files_its_stage_needs`;
 under `// E3.S3` `typeof(RunArms)`; the module doc's *make*; `research/module_tests.md` (`make`: `covered`, `MakeVerbTests`).
 
 **`MakeVerb.RunAsync(ExperimentInput)`**: (1) `LaunchAdmission`: PATH, `HOME`, `XDG_CONFIG_HOME`; resolve `git`, `lowPriority[0]`,
