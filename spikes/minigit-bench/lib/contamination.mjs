@@ -8,13 +8,13 @@
 import { findOutsideAccesses } from '../../policy-ab-quick/lib/leak.mjs';
 import { EGRESS_HOSTS } from './egress-hosts.mjs';
 import { escapeRe, firstMatch, foreignPr, foreignRunRef, isHit, lower, upstreamSolutions } from './contamination-refs.mjs';
+import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, walksDown } from './contamination-reach.mjs';
+import { createdLinks, linkOut, linkWalk } from './contamination-links.mjs';
 import { maskTokens } from './token-scan.mjs';
 
 const EXCERPT_MAX = 120;
 const EXCERPT_LEAD = 30;
-const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'NotebookEdit']);
-const SEARCH_TOOLS = new Set(['Glob', 'Grep']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const MCP_PREFIX = 'mcp__';
 
@@ -68,18 +68,6 @@ function web(text, ctx, call) {
   return null;
 }
 
-const under = (resolved, root) => resolved === root || resolved.startsWith(root.endsWith('/') ? root : `${root}/`);
-const holds = (resolved, root) => root.startsWith(resolved === '/' ? '/' : `${resolved}/`); // `resolved` is a directory ABOVE `root`
-
-/** A shell command that walks DOWN from the paths it names: find, tree, du, tar, cd, a recursive flag. A plain listing, a cat or a stat of a directory does not. */
-const WALKS = /(?:^|[\s;&|(])(?:find|tree|du|tar|cd|pushd|rsync|zip|rg|fd|ag)(?=[\s;&|)]|$)|\s-[A-Za-z]*[rR][A-Za-z]*(?=\s|$)|--recursive/;
-
-/** Whether the call reads everything BELOW the directories it names: a search tool always does, a shell command when it walks. */
-const walksDown = (text, call) => SEARCH_TOOLS.has(call.tool) || (SHELL_TOOLS.has(call.tool) && WALKS.test(text));
-
-/** The protected roots a reach is judged against: a partner's dirs, the harness's, the operator's home. High when the path is at or under one, or (a walk) a directory that holds one: `find /`. */
-const isHigh = (resolved, roots, walks) => roots.some(root => under(resolved, root) || (walks && holds(resolved, root)));
-
 function outsidePath(text, ctx, call) {
   const skeleton = new Set(ctx.skeleton ?? []); // a directory that only holds the box's binds: an exact reach for it shows nothing the box does not expose
   const found = findOutsideAccesses([call], { treeRoot: ctx.treeRoot, home: ctx.boxHome ?? ctx.home, flavour: 'posix', allow: ctx.allow ?? [], isLink: ctx.isLink }).filter(f => !skeleton.has(f.resolved));
@@ -101,6 +89,8 @@ export const CONTAMINATION_RULES = Object.freeze([
   { rule: 'minigit-elsewhere', severity: 'high', scope: 'text', find: minigitElsewhere },
   { rule: 'harness-name', severity: 'high', scope: 'text', find: harnessName },
   { rule: 'outside-path', severity: 'high', scope: 'call', find: outsidePath }, // 'low' when the path is under none of the protected roots
+  { rule: 'link-out', severity: 'high', scope: 'call', find: linkOut }, // a symbolic link to a path outside the work tree and the box's own binds
+  { rule: 'link-walk', severity: 'high', scope: 'call', find: linkWalk }, // a walk through a symbolic link that leaves them
   { rule: 'web', severity: 'low', scope: 'call', find: web },
 ]);
 
@@ -122,7 +112,7 @@ const excerptAt = (text, index) => text.slice(Math.max(0, index - EXCERPT_LEAD))
 function hitsOf(record, ctx) {
   const text = maskTokens(record.text, ctx.ownSecrets);
   return CONTAMINATION_RULES.filter(r => r.scope === 'text' || record.call).flatMap(r => {
-    const found = r.find(text, ctx, record.call);
+    const found = r.find(text, { ...ctx, links: record.links }, record.call);
     if (!isHit(found)) return [];
     const excerpt = maskTokens(found.excerpt ?? excerptAt(text, found.index), ctx.ownSecrets).slice(0, EXCERPT_MAX);
     return [{ severity: found.severity ?? r.severity, rule: r.rule, source: record.source, where: record.where, excerpt }];
@@ -133,10 +123,11 @@ function hitsOf(record, ctx) {
  * Pure. `calls` = `[{ agent, tool, input, source? }]` (the stream's tool_use blocks, main and forwarded children, and the audit);
  * `mcpResults` = the text of every tool_result whose tool_use named an `mcp__` tool (a string, or `{ text, where? }`);
  * `ctx` = { rid, runId, runIdPattern, ownPrefix, ownOrigin, ownPrs, otherStack, partnerPaths, harnessPaths, treeRoot, home, boxHome,
- * allow, skeleton?, isLink?, arm?, ownSecrets? }. `isLink(path)` says whether a path is a symbolic link on the host: a `..` after one is not resolved lexically (leak.mjs). `home` = the OPERATOR's home (a protected root); `boxHome` = the agent's own HOME inside the box, what its `~`, `$HOME` and `${HOME}` mean (absent: `home`). `allow` = directory prefixes the box exposes on purpose; `skeleton` = directories that only hold them (exact match). `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
+ * allow, skeleton?, isLink?, readLink?, maps?, arm?, ownSecrets? }. `readLink(path)` is the target of a symbolic link on the host, or null (no link; never followed), `maps` the `{ host, box }` binds whose paths differ (the box's `/tmp`): the link rules (contamination-links.mjs). `isLink(path)` says whether a path is a symbolic link on the host: a `..` after one is not resolved lexically (leak.mjs). `home` = the OPERATOR's home (a protected root); `boxHome` = the agent's own HOME inside the box, what its `~`, `$HOME` and `${HOME}` mean (absent: `home`). `allow` = directory prefixes the box exposes on purpose; `skeleton` = directories that only hold them (exact match). `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
  */
 export function contaminationHits({ calls = [], mcpResults = [], ctx }) {
-  const fromCalls = calls.map(call => ({ text: callText(call), call, source: call.source ?? 'call', where: `${call.agent ?? 'main'}:${call.tool}` }));
+  const made = createdLinks(calls, ctx); // a link a call made is known to it and to every later call, though it is deleted by the end
+  const fromCalls = calls.map((call, i) => ({ text: callText(call), call, links: made.filter(l => l.at <= i), source: call.source ?? 'call', where: `${call.agent ?? 'main'}:${call.tool}` }));
   const fromResults = mcpResults.map((r, i) => {
     const text = typeof r === 'string' ? r : String(r?.text ?? '');
     return { text, call: null, source: 'mcp', where: typeof r === 'object' && r?.where ? r.where : `mcp:${i}` };

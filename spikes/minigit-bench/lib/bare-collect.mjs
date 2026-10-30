@@ -1,6 +1,6 @@
 // Reading a finished (or cut-short) session back and classifying how it ENDED (E3b.S1 steps 5, 7): the evidence files of its directory, the scans that decide
 // `stop: security` and `void: contaminated`, the alias check, E1's views and the cost, then `bareOutcome`. No model call and no write: the runner writes.
-import { existsSync, lstatSync } from 'node:fs';
+import { existsSync, lstatSync, readlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkAliases, aliasRecord } from './aliases.mjs';
@@ -20,6 +20,9 @@ import { callsOf } from './stream-calls.mjs';
 
 /** Whether a host path is a symbolic link (a path that is not there is not one): the scan resolves `a/../b` lexically only when no component it leaves is a link. */
 const isLinkOnHost = p => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
+
+/** The target of a symbolic link on the host, or null for a path that is none or is not there (never followed): the link rules read what a link in the work tree points at. */
+const readLinkOnHost = p => { try { return readlinkSync(p); } catch { return null; } };
 
 /** The directories whose files the model could have written or read: what a canary or a credential could show up in (never the caches, never the harness). */
 const EVIDENCE = Object.freeze(['stream.ndjson', 'transcripts', path.join('box', 'out'), path.join('box', 'work')]);
@@ -52,7 +55,7 @@ function contaminationPart({ scan, events, layout, plan, home, partnerDirs, argv
   // `allow` and `skeleton` = what the box exposed on purpose (the toolchains it bound, the session's own box dirs), read from the session's OWN argv.json (never a plan or a context: a re-collection has neither the C# nor the
   // TypeScript box in hand): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected; a session with no readable argv.json allows nothing.
   const view = boxView({ argv: argv?.bwrap ?? [], layout, home });
-  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: view.allow, skeleton: view.skeleton, isLink: isLinkOnHost };
+  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: view.allow, skeleton: view.skeleton, maps: view.maps, isLink: isLinkOnHost, readLink: readLinkOnHost };
   return {
     realHits: scan.hits.filter(h => h.kind === 'own-value'),
     contamination: {

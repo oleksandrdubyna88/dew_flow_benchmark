@@ -2,7 +2,7 @@
 // toolchain the box binds read-only and the session's own box dirs are no reach; a partner's dir, the operator's other files, another series and the harness's own dirs stay one.
 import './fake-home.mjs'; // first: the scan reads os.homedir() as the protected home
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -147,4 +147,18 @@ test('No_caller_of_collectSession_names_a_box_of_its_own', () => {
     const call = text.slice(text.indexOf('collectSession({'), text.indexOf('});', text.indexOf('collectSession({')));
     assert.ok(!/\bbox:/.test(call), `${file}: the box is read from the session's argv.json`);
   }
+});
+
+test('A_link_to_the_harness_made_in_a_call_or_held_by_the_work_tree_is_a_reach_in_a_collected_session', () => {
+  const root = series();
+  const made = run(session(root, 'af0000'), ['ln -s ../.. up && grep -r token up', 'rm up']);
+  assert.equal(made.outcome.class, 'void: contaminated');
+  assert.ok(['link-out', 'link-walk'].every(rule => made.outcome.detail.contamination.high.some(h => h.rule === rule)), JSON.stringify(made.outcome.detail.contamination.high));
+  const held = session(root, 'af1000');
+  symlinkSync('../..', path.join(held.work, 'up')); // a link the work tree holds at collection, made by no call of the stream
+  const walked = run(held, ['grep -r token up']);
+  assert.ok(walked.outcome.detail.contamination.high.some(h => h.rule === 'link-walk'), JSON.stringify(walked.outcome.detail));
+  const inside = session(root, 'af2000');
+  symlinkSync('src', path.join(inside.work, 'main'));
+  assert.ok(!run(inside, ['grep -r token main', 'ln -s src/minigit.ts main.ts']).outcome.detail.contamination?.high?.some(h => h.rule.startsWith('link-')), 'a link inside the tree');
 });

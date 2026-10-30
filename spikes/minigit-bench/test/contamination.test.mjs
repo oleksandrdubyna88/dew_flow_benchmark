@@ -8,6 +8,7 @@ const ctx = Object.freeze({
   rid: 'ab12', runId: 'RUN-00000001', runIdPattern: /RUN-\d{8}/, ownPrefix: 'run/ab12/', ownOrigin: 'oleksandrdubyna88/minigit-bench', ownPrs: [3],
   otherStack: 'csharp', partnerPaths: ['/srv/partner'], harnessPaths: ['/srv/harness'], treeRoot: '/srv/me/box/work', home: '/home/u',
   allow: ['/usr/', '/bin/', '/etc/', '/dev/null', '/proc/self/'], arm: 'bare', ownSecrets: [],
+  readLink: p => (p === '/srv/me/box/work/up' ? '../..' : null), // a link `up` -> ../.. that the work tree holds
 });
 const bash = command => ({ agent: 'main', tool: 'Bash', input: { command } });
 const hits = (calls, extra = {}) => contaminationHits({ calls, mcpResults: [], ctx: { ...ctx, ...extra } });
@@ -23,14 +24,16 @@ const SHAPES = Object.freeze({
   'minigit-elsewhere': [bash('git remote add x https://github.com/x/minigit'), 'high'],
   'harness-name': [bash('ls dew_flow_benchmark'), 'high'],
   'outside-path': [{ agent: 'main', tool: 'Read', input: { file_path: '/srv/partner/box/work/a.cs' } }, 'high'],
+  'link-out': [bash('ln -s /srv/me/box b'), 'high', { skeleton: ['/srv/me/box'] }], // outside the tree; the path scan takes a directory that only holds the box's binds as no reach
+  'link-walk': [bash('grep -r token up'), 'high'],
   web: [bash('curl https://example.com'), 'low'],
 });
 
 test('Each_contamination_rule_flags_its_own_shape', () => {
   assert.deepEqual(Object.keys(SHAPES).sort(), CONTAMINATION_RULES.map(r => r.rule).sort(), 'every exported rule has a shape here');
   for (const { rule } of CONTAMINATION_RULES) {
-    const [call, severity] = SHAPES[rule];
-    const found = hits([call]);
+    const [call, severity, extra] = SHAPES[rule];
+    const found = hits([call], extra);
     assert.deepEqual(rulesOf(found), [rule], `${rule}: exactly one hit, and it is that rule`);
     assert.equal(found[0].severity, severity, rule);
     assert.ok(found[0].excerpt.length <= 120 && found[0].excerpt.length > 0, rule);

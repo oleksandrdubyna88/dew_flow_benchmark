@@ -137,7 +137,7 @@ const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).
 
 /**
  * What the agent's box shows of the host, read from a bwrap argv (the plan's, or the one a session wrote to its `argv.json`): `allow` = the host paths it binds ON PURPOSE (the node dir, the toolchains, the claude
- * binary, the session's own box dirs), for the contamination scan; the harness and net dirs are bound as well and stay PROTECTED (a reach for their files is contamination whatever the box shows). `skeleton` =
+ * binary, the session's own box dirs), for the contamination scan; the harness and net dirs are bound as well and stay PROTECTED (a reach for their files is contamination whatever the box shows). `maps` = the binds whose box path is not the host path (the box's `/tmp`). `skeleton` =
  * the directories that only HOLD those binds: bwrap makes the parent of every bind point, and inside the box a directory under a `--tmpfs` lists nothing but them, so an EXACT reach for one shows nothing the box
  * does not expose and is no reach. Never an ancestor of the harness or net dir, nor a directory at or above the operator's `home`: the box can read below those (`grep -r token ~`, `cd <session> && cat harness/..`).
  */
@@ -149,6 +149,7 @@ export function boxView({ argv, layout, home }) {
   return Object.freeze({
     allow: Object.freeze([...new Set(binds.map(b => b.host).filter(h => !protectedDirs.includes(h)))]),
     skeleton: Object.freeze([...new Set(ancestorsOf(binds.map(b => b.box)))].filter(holdsOnlyBinds)),
+    maps: Object.freeze(binds.filter(b => b.box !== b.host).map(b => Object.freeze({ host: b.host, box: b.box }))), // the box's `/tmp` is a host dir: a path the agent names there is judged at its host path
   });
 }
 

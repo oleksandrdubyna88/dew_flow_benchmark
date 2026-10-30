@@ -242,9 +242,9 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
 - **`lib/egress-hosts.mjs`** — `EGRESS_HOSTS` per arm (bare: the npm and NuGet registries; process: plus `github.com`,
   `api.github.com`, `codeload.github.com`) and `KNOWN_REFUSED`. One list for the egress proxy (E2.S2) and the contamination
   scan's `web` rule. `api.anthropic.com` is in no arm's list: the API leaves through the credential broker (D23).
-- **`lib/contamination.mjs`** — `contaminationHits({ calls, mcpResults, ctx })`, nine named rules in `CONTAMINATION_RULES`
+- **`lib/contamination.mjs`** — `contaminationHits({ calls, mcpResults, ctx })`, eleven named rules in `CONTAMINATION_RULES`
   (`foreign-run-ref`, `other-run-id`, `foreign-pr`, `other-stack-template`, `upstream-solutions`, `minigit-elsewhere`,
-  `harness-name`, `outside-path`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
+  `harness-name`, `outside-path`, `link-out`, `link-walk`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
   with a 120-character excerpt in which credentials are masked. An edit or write is judged by its path, never its content; an
   `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`. Its tokenizer reads `~/x` as ONE path (the home pattern's; no stray absolute `/x` after the `~`) and the `../` inside an absolute path as part of it,
   not as a second relative path; `a/../b` resolves lexically (`typescript-7.0.2/../claude-2.1.310` is the bound claude copy) only when no component the `..` leaves is a link (`ctx.isLink`, an `lstat` on the host):
@@ -257,6 +257,12 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   the toolchains folder, the `.nvm/versions/node` chain and the session's `box` dir. A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high.
   A WALK that starts above the home is high too (`find /`, `grep -r x /`, `cd / && cat home/<operator>/rsd/.../harness/..`, the Grep and Glob tools over `/`): the harness and net dirs are bound at their own
   paths, so a walk from a directory that holds a protected root reads them; a plain `ls /` shows only what the box shows and stays low.
+  A walk does not follow a symbolic link by itself: `ln -s ../.. up && grep -r token up` reads the harness and the home while the path scan sees only `up`. `lib/contamination-links.mjs` adds two layers (both lexical, the
+  target resolved from the link's own directory, a `cd` of the same command moving the base): `link-out` = a call that CREATES a link (`ln -s`, `cp -s`, a Node or Python `symlink`) to a path outside the work tree and outside
+  `ctx.allow` (the box's `/tmp` is judged at its host dir, `ctx.maps`) is high, whatever happens next; `link-walk` = a walk (a recursive flag, find, tar, du, rsync, tree, `cd`, the Grep and Glob tools) whose path or any
+  component of it is a link that leaves them is high: a link this session's calls made (known to every later call, though it is deleted by the end) or one the work tree holds at collection (`ctx.readLink`, a `readlink` on
+  the host, never followed). A link inside the tree, npm's own `.bin` links and a link to what the box binds stay no-hit. Not covered: a plain read through a link (`cat up/harness/x` is the path scan's), a word the scan
+  cannot resolve (`$D`, a glob), a link made by a tool that is not a call (a checkout that holds a link). The helpers `outside-path` and the link rules share are in `lib/contamination-reach.mjs`.
   `~`, `$HOME` and `${HOME}` in an agent command are the BOX home (`ctx.boxHome` = `layout.home`, the agent's HOME), not the operator's: `ls ~/.nuget/packages` there is the agent's own cache; the operator's home stays
   a protected root (`ctx.home`), so an explicit `/home/<operator>/.ssh` is high. `test/box-skeleton.test.mjs` holds the review's probe commands (every one of them high); `test/bare-collect-allow.test.mjs` replays the pilot's commands.
 - **`lib/token-scan.mjs`** — `tokenHits(texts, ownSecrets)`: GitHub and Anthropic credential shapes plus the session's own
