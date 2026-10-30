@@ -203,7 +203,7 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
     exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,
-    broker: { spentUsd: collected.broker.spentUsd, upstreamRequests: collected.broker.upstreamRequests, refused: collected.broker.refused, refusedByReason: collected.broker.refusedByReason, overCap: collected.broker.overCap, overshootUsd: collected.broker.overshootUsd },
+    broker: { spentUsd: collected.broker.spentUsd, upstreamRequests: collected.broker.upstreamRequests, refused: collected.broker.refused, refusedByReason: collected.broker.refusedByReason, unpricedModels: collected.broker.unpricedModels ?? [], overCap: collected.broker.overCap, overshootUsd: collected.broker.overshootUsd },
     unsettledAtClose: collected.unsettledAtClose,
     receiver: { usd: live.usd, requests: live.requests, misconfigured: rec.receiver.misconfigured, undecodable: rec.receiver.undecodable },
     errors: [...rec.errors], cleanup,

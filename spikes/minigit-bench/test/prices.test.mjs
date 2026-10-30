@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { asTheCliBills, loadPrices, priceFor, priceOpenAiShaped, priceUsage } from '../lib/prices.mjs';
+import { asTheCliBills, dearestPrice, loadPrices, priceFor, priceOpenAiShaped, priceUsage } from '../lib/prices.mjs';
 import { renderUsd } from '../lib/render.mjs';
 import { spikeDir } from './helpers.mjs';
 
@@ -163,4 +163,12 @@ test('The_table_is_not_changed_by_asTheCliBills', () => {
   asTheCliBills(t);
   assert.equal(priceFor(t, 'claude-sonnet-5-5').value.cacheRead, 0.10);
   assert.ok(Object.isFrozen(t));
+});
+
+test('The_dearest_price_is_the_maximum_of_every_token_class_over_the_rows_and_names_itself', () => {
+  const t = table();
+  const d = dearestPrice(t);
+  for (const k of ['input', 'output', 'cacheRead', 'cacheWrite5m', 'cacheWrite1h']) assert.equal(d[k], Math.max(...[...t.models.values()].map(r => r[k])), k);
+  assert.equal(d.modelId, '(dearest known rates)');
+  assert.deepEqual([d.input, d.output, d.cacheWrite1h], [10, 50, 20], 'today the fable row for these three classes (the cache-read class is the opus 4.8 row)');
 });

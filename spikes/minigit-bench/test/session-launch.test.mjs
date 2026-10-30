@@ -100,6 +100,7 @@ test('The_launch_stamps_every_line_and_collects_what_E1_reads', async t => {
   assert.equal(JSON.parse(readFileSync(layout.files.state, 'utf8')).phase, 'closed');
   assert.equal(meta.outcome.label, 'ok');
   assert.equal(meta.broker.spentUsd, 0.009232);
+  assert.deepEqual(meta.broker.unpricedModels, [], 'the cell record lists every model that was charged at the dearest rates: none here');
   assert.equal(meta.janitorEnded, 0);
   assert.equal(meta.stopped, null);
   assert.equal(meta.stoppedAt, null, 'nothing stopped it: no stop time');

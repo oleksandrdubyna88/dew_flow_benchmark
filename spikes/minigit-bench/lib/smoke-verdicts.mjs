@@ -110,7 +110,7 @@ const ruleS3b = v => {
 const rule$1 = v => {
   const oUsd = liveSumOf(v.apiRecords.map(r => ({ ...r, receivedAt: 0 }))).usd;
   const ok = v.c.t5.status === 'pass' && Math.abs(v.B.spentUsd - oUsd) <= 0.000001;
-  return verdictOf(ok, `T5 ${v.c.t5.status}: ${v.c.t5.detail ?? v.c.t5.why}; B ${v.B.spentUsd}, O ${oUsd}`);
+  return verdictOf(ok, `T5 ${v.c.t5.status}: ${v.c.t5.detail ?? v.c.t5.why}; B ${v.B.spentUsd}, O ${oUsd}; models charged at the dearest known rates (unpriced): ${names(v.B.unpricedModels)}`);
 };
 
 const ruleT1 = v => {

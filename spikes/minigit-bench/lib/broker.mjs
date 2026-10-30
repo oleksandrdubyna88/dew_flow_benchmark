@@ -70,6 +70,9 @@ export const REFUSAL_REASONS = Object.freeze(['cap', 'path']);
 const refusedByReason = lines => lines.filter(l => l.event === 'refused')
   .reduce((acc, l) => ({ ...acc, [l.reason]: (acc[l.reason] ?? 0) + 1 }), Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])));
 
+/** A settled line whose model the price table did not hold: it was charged at the dearest known rates, and says so. */
+const isUnpriced = l => l.priced?.known === false && l.priced?.usd !== undefined;
+
 /** The ledger read out of `broker.ndjson` lines: the 4th cost view `B`, beside E, O and T. */
 export function brokerView(lines) {
   const settled = lines.filter(l => l.event === 'settled');
@@ -80,9 +83,10 @@ export function brokerView(lines) {
     forwarded: forwarded.length,
     refused: lines.filter(l => l.event === 'refused').length,
     refusedByReason: refusedByReason(lines),
+    unpricedModels: [...new Set(settled.filter(isUnpriced).map(l => l.model))],
     unsettled: forwarded.filter(l => !done.has(l.seq)).length,
     spentUsd: settled.reduce((a, l) => a + l.chargedUsd, 0),
-    settled: settled.map(l => ({ seq: l.seq, model: l.model, usage: l.usage, chargedUsd: l.chargedUsd, status: l.status, clientClosedEarly: l.clientClosedEarly })),
+    settled: settled.map(l => ({ seq: l.seq, model: l.model, usage: l.usage, chargedUsd: l.chargedUsd, status: l.status, clientClosedEarly: l.clientClosedEarly, ...(isUnpriced(l) ? { unpriced: true } : {}) })),
   };
 }
 

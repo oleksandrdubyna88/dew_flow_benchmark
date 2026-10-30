@@ -297,6 +297,25 @@ test('Drain_returns_at_once_when_nothing_is_in_flight_and_at_the_ceiling_when_so
   }
 });
 
+test('A_response_from_a_model_the_table_does_not_know_is_charged_at_the_dearest_rates_and_the_cell_record_says_so', async () => {
+  const unknown = { id: 'm', model: 'claude-unknown-9', usage: { input_tokens: 1000, output_tokens: 1000 } }; // dearest: 1000 x 10 + 1000 x 50 = 0.06
+  const stub = await stubUpstream((_q, res) => json(res, 200, unknown));
+  const b = await startBroker({ stub, capUsd: 1 });
+  try {
+    await viaSocket(b.socketPath);
+    const settled = b.lines.find(l => l.event === 'settled');
+    assert.equal(settled.chargedUsd, 0.06);
+    assert.deepEqual(settled.priced, { known: false, usd: 0.06, model: 'claude-unknown-9', why: 'unpriced model: dearest known rates' });
+    const view = brokerView(b.lines);
+    assert.deepEqual(view.unpricedModels, ['claude-unknown-9'], 'the cell record names every model that was not priced');
+    assert.equal(view.settled[0].unpriced, true);
+    assert.deepEqual(brokerView([]).unpricedModels, []);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('The_socket_is_private_and_close_removes_it', async () => {
   const stub = await stubUpstream((_q, res) => json(res, 200, OK_JSON));
   const b = await startBroker({ stub });
@@ -337,5 +356,5 @@ test('brokerView_reads_the_ledger_lines', () => {
   assert.equal(v.spentUsd, 0.1);
   assert.equal(v.unsettled, 1, 'seq 3 never settled');
   assert.deepEqual(v.settled, [{ seq: 1, model: 'm', usage: { a: 1 }, chargedUsd: 0.1, status: 200, clientClosedEarly: false }]);
-  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, refusedByReason: { cap: 0, path: 0 }, unsettled: 0, spentUsd: 0, settled: [] });
+  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, refusedByReason: { cap: 0, path: 0 }, unpricedModels: [], unsettled: 0, spentUsd: 0, settled: [] });
 });

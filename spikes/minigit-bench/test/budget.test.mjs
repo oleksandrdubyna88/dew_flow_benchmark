@@ -43,7 +43,6 @@ test('Nothing_parsed_or_priced_is_charged_the_reservation_never_zero', () => {
   const state = reserve(openState(), 0.05);
   const cases = [
     { usage: null, model: null, why: /no usage/ },
-    { usage: USAGE, model: 'claude-unknown-9', why: /no price/ },
     { usage: { input_tokens: 'x' }, model: 'claude-sonnet-5-5', why: /./ },
   ];
   for (const c of cases) {
@@ -79,6 +78,27 @@ test('A_reservation_is_the_floor_or_the_largest_charge_settled_so_far_in_the_cel
   assert.equal(reservationFor(state, 0.05), 0.07, 'the next request reserves what the dearest one cost');
   state = spend(1000).state;
   assert.equal(state.largestChargeUsd, 0.07, 'a cheaper settlement does not lower it');
+});
+
+test('A_model_the_table_does_not_know_is_charged_at_the_dearest_known_rate_of_every_token_class_and_flagged', () => {
+  // the refuted approach: charge the reservation. A cap must never UNDERcount, and a reservation of 0.05 undercounted a 0.116565 request.
+  const rows = [...table.models.values()];
+  const dearest = k => Math.max(...rows.map(r => r[k]));
+  const usage = { input_tokens: 2, output_tokens: 1009, cache_read_input_tokens: 100, cache_creation: { ephemeral_5m_input_tokens: 50, ephemeral_1h_input_tokens: 9133 } };
+  const expected = (2 * dearest('input') + 1009 * dearest('output') + 100 * dearest('cacheRead') + 50 * dearest('cacheWrite5m') + 9133 * dearest('cacheWrite1h')) / 1e6;
+  const r = settle({ state: reserve(openState(), 0.05), entry: { reserveUsd: 0.05 }, usage, model: 'claude-unknown-9', table, cliVersion: '2.1.310' });
+  assert.equal(r.line.priced.known, false, 'it is flagged: the price is not a price of that model');
+  assert.equal(r.line.priced.model, 'claude-unknown-9');
+  assert.equal(r.line.priced.why, 'unpriced model: dearest known rates');
+  assert.ok(Math.abs(r.line.chargedUsd - expected) < 1e-9, `${r.line.chargedUsd} is the dearest-rate figure ${expected}`);
+  assert.ok(r.line.chargedUsd > 0.05, 'above the reservation it would have been');
+  for (const known of ['claude-opus-5-5', 'claude-fable-5-1', 'claude-opus-4-8']) {
+    const priced = settle({ state: reserve(openState(), 0.05), entry: { reserveUsd: 0.05 }, usage, model: known, table, cliVersion: '2.1.310' }).line.chargedUsd;
+    assert.ok(r.line.chargedUsd >= priced - 1e-12, `never below what the known model ${known} would have cost (${priced})`);
+  }
+  assert.equal(r.state.spentUsd, r.line.chargedUsd);
+  const noUsage = settle({ state: reserve(openState(), 0.05), entry: { reserveUsd: 0.05 }, usage: null, model: 'claude-unknown-9', table, cliVersion: '2.1.310' });
+  assert.equal(noUsage.line.chargedUsd, 0.05, 'with no usage parsed there is nothing to price: the reservation stands');
 });
 
 test('An_unsplit_cache_write_is_charged_at_the_upper_bound', () => {
