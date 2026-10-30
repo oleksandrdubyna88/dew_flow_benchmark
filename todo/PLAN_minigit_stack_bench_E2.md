@@ -31,7 +31,7 @@ of this document is the order of use:
 
 **E2.S1 and E2.S2 together are the prerequisite of a thin bare-arm runner** (prepare / run / collect / score / summarize for
 the bare arm, pairs C# ∥ TS started together, `taskset` masks, the $6 cap, voids), which is pulled forward from E3.S1 as a
-separate small epic or story set and is **not written here**. Neither S1 nor S2 may depend on the bridge, the templates or
+separate small epic or story set and is **not written here** but in [PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md) (E3b.S1). Neither S1 nor S2 may depend on the bridge, the templates or
 GitHub. E2.S3 and E2.S4 follow afterwards, for the process arm.
 
 **Public repository, networked sessions (parent §5.1).** Nothing here names a held-out case, reference or mutant.
