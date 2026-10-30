@@ -110,21 +110,10 @@ internal static class HostFactsReader
 
     private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ReadScenariosAsync(ExperimentInput input, FileFacts judged, GateSeams seams)
     {
-        var text = await TextOf(judged.Path, input.Verb.Stopping);
+        input.Verb.Stopping.ThrowIfCancellationRequested();
+        var text = ExperimentGate.TextOf(judged.Path, seams.Road.Bounded);
         await seams.AfterRead(judged.Path);
         var same = ExperimentGate.StillTheSame(input.Verb, judged, seams);
         return same.Map(_ => text.Match(ScenariosFile.Read, Outcome<IReadOnlyList<Scenario>>.Failure));
-    }
-
-    private static async Task<Outcome<string>> TextOf(string path, CancellationToken ct)
-    {
-        try
-        {
-            return Outcome<string>.Success(await File.ReadAllTextAsync(path, ct));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Outcome<string>.Failure($"{path} cannot be read: {ex.Message}");
-        }
     }
 }

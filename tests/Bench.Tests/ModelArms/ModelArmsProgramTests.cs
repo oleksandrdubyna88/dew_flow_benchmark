@@ -580,6 +580,49 @@ public sealed partial class ModelArmsProgramTests
         passed.Error.Should().Contain("inode and change time", "what passed is said to be unchecked — the honesty is the assertion");
     }
 
+    /// <summary>The root's own files take the bounded road (E3 §3): on the portable road a FIFO passes "a regular file" (the runtime cannot tell), so the READ must not wait for a writer past the stop token. The Mac's road is handed in on this Linux host.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task On_the_portable_road_a_FIFO_experiment_file_is_refused_within_the_ceiling_not_waited_on()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "a FIFO is made with mkfifo here");
+        using var root = new ExperimentRoot();
+        var path = Path.Combine(root.Root, "experiment.json");
+        File.Delete(path);
+        await MakeFifoAsync(path);
+        File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("600", 8));
+
+        var pass = Task.Run(() => root.PassAsync(MacSeams(), "status"), TestContext.Current.CancellationToken); // on a worker: an unbounded read blocks its caller before the first await
+        var finished = await Task.WhenAny(pass, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken));
+        PlatformKit.ReleaseFifo(path);
+
+        finished.Should().BeSameAs(pass, "the read of the root's own file is bounded: a FIFO with no writer blocks an unbounded read for ever");
+        var passed = await pass;
+        passed.ExitCode.Should().Be(3, passed.Error);
+        passed.Error.Should().Contain("experiment.json cannot be read").And.Contain("was not read within");
+        passed.Calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task On_the_portable_road_a_FIFO_scenarios_file_is_refused_within_the_ceiling_not_waited_on()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "a FIFO is made with mkfifo here");
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        Close(root, "700");
+        var path = Path.Combine(root.Root, "scenarios.json");
+        File.Delete(path);
+        await MakeFifoAsync(path);
+        File.SetUnixFileMode(path, (UnixFileMode)Convert.ToInt32("600", 8));
+
+        var run = Task.Run(() => ThroughValidateAsync(root, MacSeams()), TestContext.Current.CancellationToken);
+        var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken));
+        PlatformKit.ReleaseFifo(path);
+
+        finished.Should().BeSameAs(run, "scenarios.json is read by the bounded road too");
+        (await run).Error.Should().Contain("scenarios.json").And.Contain("was not read within");
+    }
+
     private static async Task MakeFifoAsync(string path)
     {
         var start = new System.Diagnostics.ProcessStartInfo("mkfifo") { UseShellExecute = false };

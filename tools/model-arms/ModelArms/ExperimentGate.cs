@@ -104,7 +104,8 @@ public static class ExperimentGate
     /// <summary>Step 4: <c>experiment.json</c>, read from the path the trust check judged, looked at again after the read, then through every refusal of D4.</summary>
     private static async Task<Passage<ExperimentInput>> ReadExperiment(VerbInput input, Judged judged, GateSeams seams)
     {
-        var text = await TextOf(judged.Experiment.Path, input.Stopping);
+        input.Stopping.ThrowIfCancellationRequested();
+        var text = TextOf(judged.Experiment.Path, seams.Road.Bounded);
         await seams.AfterRead(judged.Experiment.Path);
         var same = StillTheSame(input, judged.Experiment, seams);
         return text.Match(
@@ -159,18 +160,28 @@ public static class ExperimentGate
     internal static string Home(IReadOnlyDictionary<string, string> environment) =>
         environment.GetValueOrDefault("HOME", string.Empty) is { Length: > 0 } home ? home : environment.GetValueOrDefault("USERPROFILE", string.Empty);
 
-    /// <summary>The file's text, or why the host could not give it. A stop the operator asked for cancels the read.</summary>
-    private static async Task<Outcome<string>> TextOf(string path, CancellationToken ct)
+    /// <summary>The most a root file the harness reads (<c>experiment.json</c>, <c>scenarios.json</c>) may hold: the files are the operator's, hand-written, and far below it; what is bigger is never read whole.</summary>
+    internal const int RootFileLimitBytes = 1024 * 1024;
+
+    /// <summary>The text of a root's own file through <see cref="BoundedFile"/> on <paramref name="road"/> (C16, E3 §3): under the lock an arm can still create a file by name in the root, and on the portable road a FIFO passes "a regular file" because the runtime cannot tell, so
+    /// the read itself must not wait for a writer. A refusal is the words of why — the same exit the unreadable file always had (3, the host could not give it).</summary>
+    internal static Outcome<string> TextOf(string path, BoundedRoad road) =>
+        BoundedFile.Read(path, RootFileLimitBytes, road) switch
+        {
+            BoundedRead.Bytes bytes => Outcome<string>.Success(Decoded(bytes.Value)),
+            BoundedRead.Refused refused => Outcome<string>.Failure($"{path} cannot be read: {WithoutPath(refused.Reason, path)}"),
+            _ => Outcome<string>.Failure($"{path} cannot be read: it is no longer there"),
+        };
+
+    /// <summary>Text as <c>File.ReadAllText</c> reads it: UTF-8 unless a byte order mark says otherwise, the mark itself not part of the text.</summary>
+    private static string Decoded(byte[] bytes)
     {
-        try
-        {
-            return Outcome<string>.Success(await File.ReadAllTextAsync(path, ct));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return Outcome<string>.Failure($"{path} cannot be read: {ex.Message}");
-        }
+        using var reader = new StreamReader(new MemoryStream(bytes), detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
+
+    private static string WithoutPath(string reason, string path) =>
+        reason.StartsWith(path, StringComparison.Ordinal) ? reason[path.Length..].TrimStart(':', ' ') : reason;
 
     /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Shared with the verbs that read a file the gate only judged. Off POSIX nothing was judged, so nothing is compared.</summary>
     internal static Passage<FileFacts> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
