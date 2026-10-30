@@ -333,7 +333,7 @@ The table — every row explicit, no catch-all (`common.platform-limits`): a POS
 | Host | Trust | Bounded | Holder | LibcMkdir | NotVerified (the line's clauses) |
 |---|---|---|---|---|---|
 | Linux x86-64, `statx` | Kernel | Kernel | ProcTicks | yes | — (the line is empty) |
-| Linux, another architecture, `statx` | Kernel | Portable | ProcTicks | yes | `the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a 5 s ceiling)` |
+| Linux, another architecture, `statx` | Kernel | Portable | ProcTicks | yes | `the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a 5 s ceiling), and a link swapped in between the path's check and the open is followed` |
 | Linux without `statx` | Portable | by architecture | ProcTicks | yes | the three trust clauses below, plus the bounded clause when Portable |
 | macOS; FreeBSD | Portable | Portable | ProcessStartTime | yes | `the owner of the root, experiment.json and scenarios.json (no probed kernel reader on <platform>; their mode WAS judged)`; `whether each is a regular file (a FIFO or a device is not told from a file)`; `the inode and change time between the trust check and the read (the length and write time were compared instead)`; `the gate lock's held file against its path after the open`; the bounded clause; `a lock holder's start is believed within 2 s of its note, not by the kernel's tick` |
 | any other POSIX | Portable | Portable | ProcessStartTime | yes | as macOS, naming `Description` |
@@ -404,7 +404,8 @@ refusals — `isolation` on Windows, `awake: wsl` off WSL — are not touched).
    fails off Linux x86-64 and `status` never names a holder there.
 9. **The bounded no-follow read** — `BoundedFile` (C16; adapter, new, extracted from `GateStatusFile`'s `Judged` and `Portable`;
    `GateStatusFile.Read` and `GateHolderNote.Read` delegate): `Read(path, limit, road) → BoundedRead` (`Absent · Bytes · Refused`): a link is
-   refused by the path (`ReparsePoint`, both roads), an absent path is `Absent`; `Bounded = Kernel` → `KernelFacts.ReadSmall`, as today;
+   refused by the path (`ReparsePoint`, both roads; on `Portable` the check precedes the open, so a link swapped in between is followed —
+   the runtime has no no-follow open, and the bounded clause of the line says so: plan gate F2), an absent path is `Absent`; `Bounded = Kernel` → `KernelFacts.ReadSmall`, as today;
    `Portable` → the runtime's `FileStream(Open, Read, ReadWrite | Delete)` and the `limit + 1` read, the WHOLE open-and-read run on a task under
    `OpenCeiling = 5 s`: not back in time → `Refused("<path> was not read within 5 s — a FIFO with no writer, or a stalled file system; not
    read (D17)")` and the task is left to end when its open returns (a verb process ends it — said in the doc; the alternative is a hang no
@@ -442,7 +443,7 @@ Mac is unobserved (§8 item 25). `MacRoad` = `PlatformRoads.Of(new(false, false,
 
 | Test | Given / When / Then | Red (the assertion seen first, against the stub) |
 |---|---|---|
-| `PlatformRoadsTests.Each_host_takes_its_declared_roads_and_names_what_it_does_not_verify` | theory over the table's rows (Linux x64 statx; Linux arm64 statx; Linux x64 no statx; macOS arm64; FreeBSD x64; Windows) → `Trust`, `Bounded`, `Holder`, `LibcMkdir` as the table says; `Line` empty for Linux x64 and Windows; the Mac's line names `the owner`, `regular file`, `inode and change time`, `5 s ceiling`, `2 s` and `macOS` | stub every road `Kernel`: `Expected road.Trust to be Portable, but found Kernel.` |
+| `PlatformRoadsTests.Each_host_takes_its_declared_roads_and_names_what_it_does_not_verify` | theory over the table's rows (Linux x64 statx; Linux arm64 statx; Linux x64 no statx; macOS arm64; FreeBSD x64; Windows) → `Trust`, `Bounded`, `Holder`, `LibcMkdir` as the table says; `Line` empty for Linux x64 and Windows; the Mac's line names `the owner`, `regular file`, `inode and change time`, `5 s ceiling`, `swapped in`, `2 s` and `macOS` | stub every road `Kernel`: `Expected road.Trust to be Portable, but found Kernel.` |
 | `PlatformRoadsTests.No_host_is_refused_for_want_of_a_reader` | every row, and an unnamed POSIX (`Description = "Illumos"`) → a road, never a throw or a failure; `Portable` on every road for the unnamed one, its line naming `Illumos` | stub throws for the unnamed host: `Expected no exception` |
 | `PortableFactsTests.The_portable_reader_gives_the_mode_the_kind_and_the_witness_and_never_the_owner` | live: a file `640`, a folder `755` → `Read`: `Mode` the set mode, `Kind` `Unknown` / `Directory`, `OwnerUid` null, `Source` `Portable`, `Witness.Length` the bytes written, `WriteTicks` within a minute of now | stub `Unread("not built")`: `Expected Read, but found Unread` |
 | `PortableFactsTests.A_link_is_reported_as_a_link_and_nothing_is_read_through_it` | live: a link to a `777` file → `Kind` `Link`, `Mode` `None`; `RootFacts.ReadFacts(link, MacRoad)` → `Refused` naming the target (E1.S8's sentence) | stub follows the link: `Expected Kind to be Link, but found Unknown` |
@@ -571,7 +572,7 @@ differs at byte 2).
 `ModelArms.Core/Experiment/GitModules.cs`, `HostChecks.cs` (`npm` with the role `target.nodeModules` when `NodeModules` is not empty),
 `TargetSection.cs` (`target.suite.ctrfFile` must be one file name), `ArmPaths.cs` (`RootPaths.PrepBaseLog` `prep-base.log`, `BaseBuildLog`
 `base-build.log`, `BaseNpmLog(int n)` `base-npm-<n>.log`, `BaseSuiteLog` `base-test.log`, `BaseExtensionLog` `base-ts-test.log`, `BaseResults`
-`base-results`); `ModelArms.Core/Ports/ITargetTools.cs`; adapters `ModelArms/Adapters/TargetTools.cs`, `ArmGit.cs` (C14's widening);
+`base-results`, `PrepBasePrevious(string stamp)` `prep-base.prev-<stamp>`); `ModelArms.Core/Ports/ITargetTools.cs`; adapters `ModelArms/Adapters/TargetTools.cs`, `ArmGit.cs` (C14's widening);
 verbs `ModelArms/Verbs/LaunchAdmission.cs`, `RunArmAdmission.cs` (calls it), `PrepBase.cs` (`PrepBaseVerb`), `Validate.cs` (`CheckedAsync`
 internal, the guard removed); `Program.cs` (the `prep-base` arm only: `"prep-base" => ExperimentGate.RunAsync(input, PrepBaseVerb.RunAsync),`);
 tests `TargetEnvironmentTests.cs`, `TargetArgvTests.cs`, `PrepBaseTests.cs`, `TargetBench.cs`, one test in `ValidateVerbTests.cs`, one in
@@ -584,7 +585,9 @@ tests `TargetEnvironmentTests.cs`, `TargetArgvTests.cs`, `PrepBaseTests.cs`, `Ta
 1. Validate's checks (`ValidateVerb.CheckedAsync`): any problem → validate's exit (3/4) and nothing launched. The executables are the ones
    `HostFacts` resolved and printed — `ToolPaths` is built from them, never looked up again.
 2. `base/` present (no baseline — the gate refused one) → a crashed `prep-base`: removed whole (`Directory.Delete(recursive)` — a link inside
-   is removed, never followed: a test), said in one line.
+   is removed, never followed: a test), said in one line. Any of the root's `prep-base.log`, `base-*.log` and `base-results/` left by an
+   earlier attempt is RENAMED into `prep-base.prev-<utc stamp>/` (kept, never followed — `checks`' `ObjectivePrevious` shape), said in one
+   line, so step 5's exclusive creates succeed on a retry (plan gate F1).
 3. `ArmGit(git, root, env).CloneAsync(source, planBranch, base)`; `DetachAsync(target.base)`; `HeadAsync` must equal `target.base` (else 3).
 4. `GitModules.NameOf(SubmodulePathsAsync(), rulesSubmodule)` — `""` → 4 *"target.rulesSubmodule <p> is not a submodule of the target at
    <base>"*; `SetSubmoduleUrlAsync(name, <source>/<rulesSubmodule>)`; `SubmoduleUpdateAsync(rulesSubmodule)`.
@@ -606,6 +609,7 @@ tests `TargetEnvironmentTests.cs`, `TargetArgvTests.cs`, `PrepBaseTests.cs`, `Ta
 | `PrepBaseTests.Every_target_tool_is_launched_by_its_resolved_path_under_a_built_environment` | the parent holds `BENCH_DB`, `GIT_DIR`, `GITHUB_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `COAI_CREDS_KEY`, `KEEP_ME`; every shim's `$0` is the REAL path printed under `resolved executables:`; every lowered call's first argument is `<base>/.agents/conventions/tools/low-priority.mjs` and its next the `dotnet`/`npm` shim's REAL path; the build's, the suite's and npm's variable names lack all six stripped names and keep `KEEP_ME`, `PATH`, `HOME`; git (a recording shim that execs the real git) sees no `GIT_*` but `GIT_NO_LAZY_FETCH` and no secret | stub passes the parent's environment: `Expected names not to contain "GITHUB_TOKEN"` |
 | `PrepBaseTests.The_base_is_the_configured_commit_and_its_rules_submodule_comes_from_the_local_source` | real git: `planBranch` one commit AHEAD of `base` → `base/` HEAD = `base`; `.agents/conventions/tools/low-priority.mjs` present; `submodule.<name>.url` = `<source>/.agents/conventions` | stub clone without the detach: `Expected head to be "<base>", but found "<branch head>"` |
 | `PrepBaseTests.A_base_that_does_not_build_writes_no_baseline_and_exits_3` | the build shim exits 1 → 3; no suite call; `prep-base.log` ends `build rc=1 …` | stub goes on: `Expected calls not to contain "suite"` |
+| `PrepBaseTests.A_failed_attempts_logs_are_moved_aside_and_the_retry_writes_fresh_ones` | a first run whose build shim exits 1 → 3, `base-build.log` and `prep-base.log` present; the shim fixed, a second run → 0, `prep-base.prev-<stamp>/base-build.log` holds the first run's bytes, the root's `base-build.log` the second's | stub without the move: `Expected exit 0, but found 3` (the exclusive create refused) |
 | `PrepBaseTests.A_half_made_base_is_redone_whole` | `base/` holding `stale.txt` and a link to a file outside the root, no baseline → `stale.txt` gone, the outside file's bytes unchanged, baseline written | stub keeps `base/`: `Expected File.Exists(stale) to be False` |
 | `PrepBaseTests.Npm_ci_runs_in_every_node_modules_folder_and_ignores_scripts_only_under_the_rules_submodule` | the npm shim's log: `.agents/conventions` `ci --no-audit --no-fund --ignore-scripts` BEFORE the build; `ext` `ci --no-audit --no-fund` AFTER it | stub one list: `Expected index of build call to be greater than …` |
 | `ValidateVerbTests.Npm_is_needed_when_node_modules_are_configured` | `extension.command` `["node", …]`, `nodeModules` not empty, no `npm` on PATH → a problem naming `target.nodeModules npm …`, exit 3 | `Expected problems to contain …npm…` |
@@ -1016,7 +1020,8 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
 | what grows | at 12 arms (part 6 + part 7) | who retires it | interrupted |
 |---|---|---|---|
 | `base/` — a built clone of the target | ~1.5 GB, one per root | with the root (the owner, after the record is promoted) | a `base/` without `baseline.json` is removed whole and redone by the next `prep-base` |
-| `base-*.log`, `prep-base.log`, `base-results/` (the CTRF ~12 MB) | ~13 MB, once | with the root | rewritten by the next `prep-base` (which requires no baseline) |
+| `base-*.log`, `prep-base.log`, `base-results/` (the CTRF ~12 MB) | ~13 MB, once | with the root | moved into `prep-base.prev-<utc>/` by the next `prep-base` (which requires no baseline), which writes fresh ones |
+| `prep-base.prev-<utc>/` | ~13 MB per failed attempt (rare) | with the root; the operator may delete them | — |
 | the arms (`r/<token>/…`) | the parent's §4.11 row, ~18 GB | the parent's §4.11 | an arm without `made-<arm>` is redone whole unless it ran (then refused, exit 4) |
 | `out/objective/` per checked arm | ~13 MB (the CTRF ~12 MB, logs ~0.7 MB) → ~160 MB | with the root | a stopped `checks` leaves a partial folder and no marker; the next run moves it aside |
 | `out/objective.prev-<utc>/` | ~13 MB per re-run of `checks` (by hand, rare) | with the root; the operator may delete them | — |
