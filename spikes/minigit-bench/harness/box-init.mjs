@@ -4,6 +4,8 @@
 // the command with inherited stdio and exits with its code; a child ended by a signal exits 128 + that signal's number.
 // A SIGTERM aimed at this process is ignored on purpose: the stop (janitor.endCell) signals every inner process by its marker, the
 // command included, and a second, forwarded SIGTERM would be a double delivery. Forwarders die with this process.
+// THIS DEPENDS ON endCell: ignoring the signal is only safe because the stop always signals the command itself. A caller that signalled
+// this process alone (not through janitor.endCell) would leave the command running with nothing to end it but bwrap's death.
 import { spawn } from 'node:child_process';
 import { constants } from 'node:os';
 import net from 'node:net';

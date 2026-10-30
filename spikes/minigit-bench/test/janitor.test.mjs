@@ -10,7 +10,7 @@ import { startReceiver } from '../lib/otel-receiver.mjs';
 import { agentBoxArgv } from '../lib/sandbox.mjs';
 import { claudeArgv, mcpConfigFor, settingsFor } from '../lib/launch.mjs';
 import { TS_DIR, boxOptions, envFor, newSession, nodeDir, sleep } from './box-helpers.mjs';
-import { sandboxGate, tmpDir } from './helpers.mjs';
+import { hostLacks, sandboxGate, tmpDir } from './helpers.mjs';
 import { findOnPath } from '../lib/find-on-path.mjs';
 
 const rand = () => Math.random().toString(36).slice(2, 10);
@@ -168,7 +168,7 @@ test('The_janitor_ends_a_survivor_by_its_marker_never_by_name', async () => {
 test('The_CLI_stopped_mid_request_exits_itself_within_the_grace', async t => {
   if (!sandboxGate(t)) return;
   const claude = findOnPath('claude');
-  if (!claude) { t.skip('the claude executable is not on PATH on this host'); return; }
+  if (!claude) return hostLacks(t, 'the claude executable is not on PATH on this host');
   const layout = newSession();
   const cell = `cell-${rand()}`;
   // the hanging recorder: records the POST and never answers; free (no model is reached)

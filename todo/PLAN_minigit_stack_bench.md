@@ -1,6 +1,6 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
-> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2–E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
+> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2.S1–S2 (process fixes, the agent sandbox, broker and launch) implemented 2026-10-30; E2.S3–S4, E3, E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
 > (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
 > `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.
@@ -95,14 +95,20 @@ first unit test (§12, T-A1).
 | Instructions | the template's AGENTS.md → ENTRY → pinned conventions; all hooks | none |
 | MCP | coai (plan gate, code gate, consult, ask_consultants) | none (`--strict-mcp-config`, empty) |
 | GitHub | fine-grained PAT for this one repo; Contents/PR RW, Actions/Checks/Statuses R; **no Workflows** | none; `gh` hidden inside the sandbox (`--ro-bind /dev/null /usr/bin/gh`) — PATH is not filtered, because `gh` lives in `/usr/bin` beside bash, git, make and dotnet, and `env.mjs`'s `filterPath` would drop the whole directory |
-| Toolchain | per template (`package.json`, `global.json`) | the same versions pre-installed read-only: dotnet 10.0.113, node 26.x, and `typescript@7.0.2` on PATH; the npm registry and nuget.org are reachable and are not counted as contamination |
+| Toolchain | per template (`package.json`, `global.json`) | the same versions pre-installed read-only: dotnet 10.0.114, node 26.x, and `typescript@7.0.2` on PATH; the npm registry and nuget.org are reachable and are not counted as contamination |
 | Done when | merged into the run base with green required checks, or the session ends | the session ends |
 | Session cap | $35, wall 240 min | $6, wall 60 min |
 
 ### 4.3 Prompts (byte-identical across stacks except `{STACK}` and `{STACK_SENTENCE}`)
 
-Stack sentences: C# — *"Use C# 14 on .NET 10 (SDK 10.0.113 is installed)."* TS — *"Use TypeScript run directly by Node 26
+Stack sentences: C# — *"Use C# 14 on .NET 10 (SDK 10.0.114 is installed)."* TS — *"Use TypeScript run directly by Node 26
 (native type stripping, no build step), with `tsc --noEmit` as the type check."*
+
+**Amendment 2026-10-30 (SDK pin).** An unattended apt upgrade on the series host moved the .NET SDK from 10.0.113 to
+10.0.114 (runtime 10.0.14) at 06:19 (`/var/log/apt/history.log`); 10.0.113 is no longer installed. The pin, the C# stack
+sentence above, `global.json` and every check now name 10.0.114, the newest .NET 10 SDK — the experiment's aim. Rows that
+record 2026-10-29 measurements keep 10.0.113. Before any paid minigit session the pre-registration quotes this text; the
+operator holds the `dotnet-*` packages for the series, and the preflight refuses a session whose SDK differs from the pin.
 
 **Process, v1:**
 
@@ -248,7 +254,7 @@ stack files differ only between `# --- stack:begin/end ---` markers; its output 
   agent land the work in several PRs, as the family's process would; a required acceptance step would turn every PR
   before the last red and force one PR — a distortion of the treatment. The prompt's own done-criterion (the tests pass
   on the base) and the scorer still hold the agent to them.
-- **C# only:** `global.json` (sdk 10.0.113, `rollForward: disable`, MTP runner), `Directory.Build.props` (from
+- **C# only:** `global.json` (sdk 10.0.114, `rollForward: disable`, MTP runner), `Directory.Build.props` (from
   `wsl_care`), `Directory.Build.rsp` (`-nr:false`), `Directory.Packages.props` (xunit.v3, FluentAssertions 7.2.2 for tests;
   no Serilog), `nuget.config`, empty `minigit.slnx`, `scripts/run-tests.sh`.
 - **Node only:** `package.json` (`type: module`, `engines.node >=26`, devDeps typescript 7.0.2, eslint, @types/node),
@@ -368,7 +374,7 @@ banteg ran, registered in E3b.S3 — each box's own pid namespace already keeps 
 `credential.https://github.com.helper = !gh auth git-credential` plus the fixed bench author — so `git push` inside the
 sandbox authenticates with the session's PAT and nothing else (read-back: a `git push --dry-run` from the sandbox
 succeeds in P0). Auto-update off; no warm-up. `preflight.mjs` refuses to start unless `dotnet --list-sdks` shows exactly
-the `global.json` SDK (10.0.113, `rollForward: disable`) and `node --version` is the pinned 26.x.
+the `global.json` SDK (10.0.114, `rollForward: disable`) and `node --version` is the pinned 26.x.
 
 **Read-back before the first paid turn counts:** init event (model, tools, `mcp_servers[].status`: coai connected in the
 process arm, none in bare, permission mode), `argv.json`, settings/mcp hashes, `coai-mcp --providers` with the exact env

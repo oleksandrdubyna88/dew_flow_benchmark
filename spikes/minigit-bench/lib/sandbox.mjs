@@ -9,6 +9,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
+import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, roBind, roRoot, tmpfs } from './bwrap.mjs';
 import { fail, ok } from './result.mjs';
 
@@ -80,7 +81,7 @@ export function sessionLayout(root, rid) {
 
 /**
  * The environment the agent runs with (the same for every arm; the process arm adds its own keys through `extra`): a fixed allow-list, never the parent's. `PATH` is constructed, so no `/mnt` entry and no WSL
- * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot.
+ * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot: it may add keys, never replace one of the base (that throws).
  */
 export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, extra = {} }) {
   const proxy = `http://127.0.0.1:${BOX_PROXY_PORT}`;
@@ -89,20 +90,33 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     HOME: layout.home, TMPDIR: '/tmp', LANG: 'C.UTF-8',
     CLAUDE_CODE_OAUTH_TOKEN: dummy, ANTHROPIC_BASE_URL: `http://127.0.0.1:${BOX_API_PORT}`, CLAUDE_CONFIG_DIR: layout.config,
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', DISABLE_AUTOUPDATER: '1',
-    CLAUDE_CODE_ENABLE_TELEMETRY: '1', OTEL_LOGS_EXPORTER: 'otlp', OTEL_METRICS_EXPORTER: 'otlp', OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
-    OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${BOX_OTEL_PORT}`, OTEL_LOGS_EXPORT_INTERVAL: '1000', OTEL_METRIC_EXPORT_INTERVAL: '1000',
-    OTEL_LOG_TOOL_DETAILS: '1', OTEL_LOG_USER_PROMPTS: '0',
+    ...otelEnv(BOX_OTEL_PORT),
     HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NO_PROXY: '127.0.0.1,localhost',
     DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_CLI_USE_MSBUILD_SERVER: '0',
     MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
   };
+  // compared in lower case: `https_proxy` is read by curl and others next to `HTTPS_PROXY`, so a different spelling of a base key replaces it as well
+  const baseByLower = new Map(Object.keys(base).map(k => [k.toLowerCase(), k]));
+  const clash = Object.keys(extra).filter(k => baseByLower.has(k.toLowerCase()));
+  if (clash.length > 0) throw new Error(`agentEnv: extra may only ADD keys; ${clash.map(k => (baseByLower.get(k.toLowerCase()) === k ? k : `${k} (the base key ${baseByLower.get(k.toLowerCase())}, in another case)`)).join(', ')} ${clash.length === 1 ? 'is' : 'are'} already set by the base environment (the dummy credential, the proxy and the exporter wiring are not an arm's to replace)`);
   return Object.freeze({ ...base, ...extra });
 }
 
 /** The forwarder specs `box-init.mjs` takes: the box's loopback port -> the harness's unix socket. */
 export const forwarderSpecs = layout => Object.freeze([
   `${BOX_PROXY_PORT}:${layout.sockets.proxy}`, `${BOX_API_PORT}:${layout.sockets.api}`, `${BOX_OTEL_PORT}:${layout.sockets.otel}`,
+]);
+
+const bindPair = b => ['--bind', b.host, b.box];
+
+/**
+ * The read-write binds of the agent's box as `{ box, host }` pairs (the box's `/tmp` is `box/tmp`; the rest sit at the same path inside as
+ * outside): the one table `agentBoxPrefix` binds from and the link classifier maps a link's target through.
+ */
+export const writableBinds = (layout, extraRw = []) => Object.freeze([
+  { box: '/tmp', host: layout.tmp },
+  ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].map(p => ({ box: p, host: p })),
 ]);
 
 /**
@@ -114,10 +128,10 @@ export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nod
   return Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
-    '--bind', layout.tmp, '/tmp',
+    ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),
     ...roBind(claudeBinary),
-    ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].flatMap(bind),
+    ...writableBinds(layout, extraRw).slice(1).map(b => b.host).flatMap(bind),
     ...(arm === 'bare' ? GH_PATHS.filter(p => exists(p)).flatMap(p => ['--ro-bind', '/dev/null', p]) : []),
     ...isolation(), '--unshare-ipc', ...chdir(layout.work), '--',
   ]);

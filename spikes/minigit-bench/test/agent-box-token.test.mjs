@@ -56,6 +56,33 @@ test('The_box_holds_only_the_dummy_in_proc_environ', async t => {
   }
 });
 
+test('The_box_holds_only_the_dummy_when_the_operators_own_environment_carries_a_real_looking_token', async t => {
+  if (!sandboxGate(t)) return;
+  const REAL = `sk-ant-oat01-operator-${Math.random().toString(36).slice(2, 14)}`; // a test value shaped like the operator's token, never a real one
+  const keys = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
+  const saved = Object.fromEntries(keys.map(k => [k, process.env[k]]));
+  keys.forEach(k => { process.env[k] = REAL; });
+  const layout = newSession();
+  const broker = await brokerHolding(layout, REAL);
+  try {
+    const env = envFor(layout);
+    assert.equal(JSON.stringify(env).includes(REAL), false, 'the environment built for the box holds none of the operator\'s values');
+    assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, dummyToken('probe'));
+    assert.equal('ANTHROPIC_API_KEY' in env, false);
+    const count = value => `cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -c -F -e ${value} ; true`;
+    const box = await probeInit(layout, `printenv CLAUDE_CODE_OAUTH_TOKEN; echo "real=$(${count(REAL)})"; echo "dummy=$(${count(dummyToken('probe'))})"; env`, { env });
+    assert.ok(box.out.includes(dummyToken('probe')), 'the box holds the dummy');
+    assert.equal(box.out.includes(REAL), false, 'and the operator\'s value is nowhere in its printenv or env');
+    assert.match(box.out, /real=0\b/);
+    assert.match(box.out, /dummy=([1-9]\d*)\b/, 'the probe can read environs: the dummy IS in them');
+    const leaky = await probeInit(newSession(), `echo "real=$(${count(REAL)})"`, { env: { ...envFor(layout), ...process.env, PATH: envFor(layout).PATH } });
+    assert.match(leaky.out, /real=([1-9]\d*)\b/, 'positive control: a spawn that inherited the operator\'s environment WOULD have carried it into the box');
+  } finally {
+    await broker.close();
+    keys.forEach(k => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+  }
+});
+
 test('The_box_holds_only_the_dummy_in_what_it_persists', async t => {
   if (!sandboxGate(t)) return;
   const R = fakeToken();

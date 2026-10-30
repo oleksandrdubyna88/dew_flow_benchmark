@@ -2,29 +2,35 @@
   "present": true,
   "forwarded": 5,
   "refused": 0,
+  "refusedByReason": {
+    "cap": 0,
+    "path": 0,
+    "body": 0
+  },
+  "unpricedModels": [],
   "unsettled": 0,
-  "spentUsd": 0.1148446,
+  "spentUsd": 0.1089383,
   "settled": [
     {
       "seq": 1,
       "model": "claude-opus-5-5",
       "usage": {
         "input_tokens": 2,
-        "cache_creation_input_tokens": 8980,
+        "cache_creation_input_tokens": 8958,
         "cache_read_input_tokens": 0,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 8980
+          "ephemeral_1h_input_tokens": 8958
         },
-        "output_tokens": 309,
+        "output_tokens": 206,
         "service_tier": "standard",
         "inference_geo": "global",
         "speed": "standard",
         "output_tokens_details": {
-          "thinking_tokens": 100
+          "thinking_tokens": 0
         }
       },
-      "chargedUsd": 0.078028,
+      "chargedUsd": 0.075792,
       "status": 200,
       "clientClosedEarly": false
     },
@@ -33,13 +39,13 @@
       "model": "claude-sonnet-5-5",
       "usage": {
         "input_tokens": 2,
-        "cache_creation_input_tokens": 7220,
+        "cache_creation_input_tokens": 7218,
         "cache_read_input_tokens": 0,
         "cache_creation": {
-          "ephemeral_5m_input_tokens": 7220,
+          "ephemeral_5m_input_tokens": 7218,
           "ephemeral_1h_input_tokens": 0
         },
-        "output_tokens": 77,
+        "output_tokens": 78,
         "service_tier": "standard",
         "inference_geo": "global",
         "speed": "standard",
@@ -47,7 +53,7 @@
           "thinking_tokens": 0
         }
       },
-      "chargedUsd": 0.018824,
+      "chargedUsd": 0.018829,
       "status": 200,
       "clientClosedEarly": false
     },
@@ -56,10 +62,10 @@
       "model": "claude-sonnet-5-5",
       "usage": {
         "input_tokens": 2,
-        "cache_creation_input_tokens": 708,
-        "cache_read_input_tokens": 7220,
+        "cache_creation_input_tokens": 709,
+        "cache_read_input_tokens": 7218,
         "cache_creation": {
-          "ephemeral_5m_input_tokens": 708,
+          "ephemeral_5m_input_tokens": 709,
           "ephemeral_1h_input_tokens": 0
         },
         "output_tokens": 11,
@@ -70,7 +76,7 @@
           "thinking_tokens": 0
         }
       },
-      "chargedUsd": 0.002606,
+      "chargedUsd": 0.0026083,
       "status": 200,
       "clientClosedEarly": false
     },
@@ -79,13 +85,13 @@
       "model": "claude-opus-5-5",
       "usage": {
         "input_tokens": 2,
-        "cache_creation_input_tokens": 573,
-        "cache_read_input_tokens": 8980,
+        "cache_creation_input_tokens": 469,
+        "cache_read_input_tokens": 8958,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 573
+          "ephemeral_1h_input_tokens": 469
         },
-        "output_tokens": 110,
+        "output_tokens": 85,
         "service_tier": "standard",
         "inference_geo": "global",
         "speed": "standard",
@@ -93,7 +99,7 @@
           "thinking_tokens": 0
         }
       },
-      "chargedUsd": 0.008588,
+      "chargedUsd": 0.0072516,
       "status": 200,
       "clientClosedEarly": false
     },
@@ -102,21 +108,21 @@
       "model": "claude-opus-5-5",
       "usage": {
         "input_tokens": 2,
-        "cache_creation_input_tokens": 185,
-        "cache_read_input_tokens": 9553,
+        "cache_creation_input_tokens": 158,
+        "cache_read_input_tokens": 9427,
         "cache_creation": {
           "ephemeral_5m_input_tokens": 0,
-          "ephemeral_1h_input_tokens": 185
+          "ephemeral_1h_input_tokens": 158
         },
-        "output_tokens": 170,
+        "output_tokens": 65,
         "service_tier": "standard",
         "inference_geo": "global",
         "speed": "standard",
         "output_tokens_details": {
-          "thinking_tokens": 31
+          "thinking_tokens": 0
         }
       },
-      "chargedUsd": 0.0067986,
+      "chargedUsd": 0.004457399999999999,
       "status": 200,
       "clientClosedEarly": false
     }
@@ -124,9 +130,15 @@
   "upstreamRequests": 5,
   "reservedUsd": 0,
   "inFlight": 0,
+  "largestChargeUsd": 0.075792,
   "overCap": false,
   "overshootUsd": 0,
   "withinCap": true,
   "capUsd": 0.2,
-  "overCapFactor": 1.1
+  "overCapFactor": 1.1,
+  "unsettledAtClose": {
+    "count": 0,
+    "reservedUsd": 0
+  },
+  "lowerBound": false
 }

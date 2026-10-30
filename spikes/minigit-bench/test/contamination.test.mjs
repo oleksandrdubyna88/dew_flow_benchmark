@@ -72,7 +72,7 @@ test('An_empty_ownPrs_makes_every_number_foreign_and_the_arm_picks_the_web_list'
   const github = bash('curl https://api.github.com/user');
   assert.deepEqual(rulesOf(hits([github], { arm: 'bare' })), ['web']);
   assert.deepEqual(hits([github], { arm: 'process' }), []);
-  assert.ok(EGRESS_HOSTS.process.includes('api.github.com'), 'the rule reads the one list');
+  assert.ok(new Set(EGRESS_HOSTS.process).has('api.github.com'), 'the rule reads the one list');
   assert.throws(() => hits([github], { arm: 'both' }), /bare, process/);
 });
 

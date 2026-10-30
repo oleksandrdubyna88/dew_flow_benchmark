@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { buildMap, collectAttrSecrets, leakScan, localContext, sanitisePath, sanitiseText } from '../capture/sanitise.mjs';
-import { spikeDir, tmpDir } from './helpers.mjs';
+import { hostLacks, spikeDir, tmpDir } from './helpers.mjs';
 import { SKIP_CAPTURE, hasCapture } from './synth.mjs';
 
 const REAL = path.join(spikeDir, 'test', 'fixtures', 'real');
@@ -135,7 +135,7 @@ test('The_committed_fixtures_are_clean_of_this_machines_identity_and_of_credenti
 });
 
 test('The_committed_capture_is_clean_and_the_scanner_still_bites', t => {
-  if (!hasCapture()) return t.skip(SKIP_CAPTURE);
+  if (!hasCapture()) return hostLacks(t, SKIP_CAPTURE);
   const found = leakScan(filesOf(REAL), { ...localContext(), out: null });
   assert.deepEqual(found, []);
   const claudeRoot = path.join(REAL, 'claude-2.1.310-capture');

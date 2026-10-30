@@ -59,3 +59,29 @@ test('The_stream_tap_stamps_every_complete_line_keeps_the_raw_bytes_and_survives
   assert.deepEqual(seen.map(s => s[0]), ['system', 'result'], 'a line that is not JSON is stamped and never inspected');
   assert.equal(tap.events.length, 2);
 });
+
+test('A_multibyte_character_split_across_two_chunks_reaches_the_stamped_line_and_the_event_whole', () => {
+  // the refuted approach: buffer += chunk.toString('utf8') decodes each chunk alone, so a split character becomes two U+FFFD
+  const stamped = [];
+  const events = [];
+  const tap = streamTap({ clock: () => 1, writeRaw: () => {}, writeStamped: s => stamped.push(s), onEvent: ev => events.push(ev) });
+  const bytes = Buffer.from('{"type":"assistant","text":"café € \u{1F600}"}\n');
+  const cut = bytes.indexOf(0xc3) + 1; // between the two bytes of the e-acute
+  const euro = bytes.indexOf(0xe2) + 1; // after the first byte of the euro sign
+  tap.push(bytes.subarray(0, cut));
+  tap.push(bytes.subarray(cut, euro));
+  tap.push(bytes.subarray(euro));
+  tap.flush();
+  assert.equal(events[0].text, 'café € \u{1F600}');
+  assert.equal(JSON.parse(stamped[0]).line.includes('�'), false);
+});
+
+test('The_sse_usage_feeder_decodes_a_multibyte_character_split_across_chunks_whole', async () => {
+  const { parseSseUsage } = await import('../lib/broker.mjs');
+  const f = parseSseUsage();
+  const body = Buffer.from(`event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { model: 'claude-sonnet-5-5é', usage: { input_tokens: 1 } } })}\n\n`);
+  const cut = body.indexOf(0xc3) + 1;
+  f.feed(body.subarray(0, cut));
+  f.feed(body.subarray(cut));
+  assert.equal(f.result().model, 'claude-sonnet-5-5é');
+});

@@ -10,7 +10,7 @@ import {
   AGENT_ENV_KEYS, BOX_API_PORT, BOX_OTEL_PORT, BOX_PROXY_PORT, SOCKET_PATH_MAX_BYTES, agentBoxArgv, agentBoxPrefix, agentEnv, dummyToken, layoutPaths, sessionLayout,
 } from '../lib/sandbox.mjs';
 import { boxOptions, envFor, newSession, nodeDir, probe, probeArgv, withoutBind, withoutFlag } from './box-helpers.mjs';
-import { homeDir, sandboxGate, tmpDir } from './helpers.mjs';
+import { homeDir, hostLacks, sandboxGate, tmpDir } from './helpers.mjs';
 
 const HOME = '/home/someone';
 
@@ -187,7 +187,7 @@ test('The_box_has_no_dns_and_that_is_the_point', async t => {
   const inside = await probe(layout, 'getent hosts api.anthropic.com >/dev/null 2>&1; echo rc=$?; ls /etc/resolv.conf >/dev/null 2>&1; echo resolv=$?');
   assert.match(inside.out, /rc=[1-9]/, 'no name resolves inside');
   const outside = await runBounded('getent', ['hosts', 'api.anthropic.com'], { timeoutMs: 20_000 });
-  if (!outside.ok || outside.value.code !== 0) { t.skip('the host itself resolves no names, so the control cannot show the difference'); return; }
+  if (!outside.ok || outside.value.code !== 0) return hostLacks(t, 'the host itself resolves no names, so the control cannot show the difference');
   assert.ok(outside.value.stdout.length > 0, 'control: outside, the same name resolves');
 });
 
@@ -195,7 +195,7 @@ test('The_agent_box_cannot_see_the_session_bus_or_the_user_manager', async t => 
   if (!sandboxGate(t)) return;
   const uid = process.getuid();
   const runDir = `/run/user/${uid}`;
-  if (!existsSync(runDir)) { t.skip(`${runDir} does not exist on this host`); return; }
+  if (!existsSync(runDir)) return hostLacks(t, `${runDir} does not exist on this host`);
   const layout = newSession();
   const sock = path.join(runDir, `testsToDelete-mgb-agent-${process.pid}.sock`);
   const server = net.createServer().unref();
@@ -205,11 +205,12 @@ test('The_agent_box_cannot_see_the_session_bus_or_the_user_manager', async t => 
     const argv = agentBoxPrefix(boxOptions(layout));
     assert.match((await probeArgv(withoutPair2(argv, '/run'), command, envFor(layout))).out, /VISIBLE/, 'control: without the tmpfs the same probe sees the socket');
     assert.match((await probe(layout, command)).out, /^HIDDEN\n$/);
-    const host = await runBounded('systemd-run', ['--user', '--wait', '--pipe', 'true'], { timeoutMs: 20_000 });
-    if (!host.ok || host.value.code !== 0) { t.diagnostic('the host has no working systemd user manager: the unit half is skipped'); return; }
     const escape = 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus XDG_RUNTIME_DIR=/run/user/$(id -u); systemd-run --user --wait --pipe true >/dev/null 2>&1; echo rc=$?';
+    assert.match((await probe(layout, escape)).out, /rc=[1-9]/, 'inside the box `systemd-run --user true` fails');
+    assert.match((await probe(layout, 'systemd-run --user --wait --pipe true >/dev/null 2>&1; echo rc=$?')).out, /rc=[1-9]/, 'and without the bus address too');
+    const host = await runBounded('systemd-run', ['--user', '--wait', '--pipe', 'true'], { timeoutMs: 20_000 });
+    if (!host.ok || host.value.code !== 0) return hostLacks(t, 'the host has no working systemd user manager: the control that the unit half can fail is unavailable');
     assert.match((await probeArgv(withoutPair2(argv, '/run'), escape, envFor(layout))).out, /rc=0/, 'control: without the tmpfs the box reaches the user manager');
-    assert.match((await probe(layout, escape)).out, /rc=[1-9]/);
   } finally {
     server.close();
     (await import('node:fs')).rmSync(sock, { force: true });

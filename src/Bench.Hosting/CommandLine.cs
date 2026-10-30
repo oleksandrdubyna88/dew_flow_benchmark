@@ -1,7 +1,7 @@
 namespace Bench.Cli;
 
 /// <summary>A flag whose value cannot be read as what the verb needs. Its message names the flag and
-/// what was typed; <see cref="Program.Run"/> turns it into the configuration exit code — the one
+/// what was typed; <c>Program.Run</c> of the host turns it into the configuration exit code — the one
 /// exception-shaped refusal here, because the flags are read lazily deep inside every verb.</summary>
 public sealed class CommandLineException(string message) : Exception(message);
 

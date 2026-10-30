@@ -1,6 +1,6 @@
 # PLAN — E2 stories: isolation and the treatment of the minigit stack bench (process fixes, the agent sandbox, coai's box and bridge, the templates)
 
-> Status: **plan only, nothing implemented yet, 2026-10-29.** Scope: epic E2 of
+> Status: **in progress — E2.S1 and E2.S2 implemented 2026-10-30 (with the amendments below: B-S3 split, SDK 10.0.114); E2.S3 and E2.S4 open.** Pilot spend of the four smokes: $0.115, $0.172, $0.109, $0.109. Scope: epic E2 of
 > [PLAN_minigit_stack_bench.md](PLAN_minigit_stack_bench.md) (§15 steps 1, 4–6a) — fixes in `spikes/policy-ab-quick/`, new
 > modules in `spikes/minigit-bench/`, the fork `oleksandrdubyna88/minigit-bench` (template branches, rulesets, settings) and
 > one snapshot branch plus a short boundary plan in `dew_flow_conventions`. Four stories, E2.S1–E2.S4; cornerstone **E2.S2**
@@ -346,7 +346,7 @@ allow-list inside TLS, and the only answer to that is the broker. It is written 
 | D-6 | **Bind an explicit list, never the session dir.** rw: `box/work` (cwd), `box/home` (HOME), `box/config` (`CLAUDE_CONFIG_DIR`), `box/tmp` at `/tmp` (`TMPDIR=/tmp`), `box/nuget`, `box/npm`, `box/out`; ro: `harness/` (settings, mcp.json, `audit.mjs`, `box-init.mjs`), `net/` (the three sockets), the `claude` binary FILE, the node dir, the TypeScript toolchain dir; the bare arm `--ro-bind /dev/null /usr/bin/gh`. `extraRo` / `extraRw` are S3's and S4's slots | the session dir also holds the stream, OTel, transcripts, `egress.ndjson`, `broker.ndjson`, `coai/` (S3) and `score/`: an agent that reads its own instruments is a contamination path; N-15 |
 | D-7 | **Secrets never enter the box.** `bwrap` is spawned with `env = agentEnv(…)` and no `--clearenv`/`--setenv` at all (bwrap hands its environment to the child unchanged, so every variable travels the same way and none is on argv — N-10); and the one credential in that env is the **dummy** (D-16). The real token is read once by the harness process and held by the broker; `argv.json` records env KEYS only | F-1, P-7; `--setenv` lands in `/proc/<pid>/cmdline`, readable by every user; an env value lands in `/proc/<pid>/environ`, readable by the box |
 | D-8 | `agentEnv` is a fixed allow-list; `PATH` is constructed (`<node>/bin:<ts>/node_modules/.bin:/usr/local/bin:/usr/bin:/bin`), so no `/mnt` entry and no `WSL_INTEROP` can exist; `CLAUDE_CODE_ENTRYPOINT` not set; the proxy triple and `ANTHROPIC_BASE_URL` set | parent §7.1; N-15; P-1 |
-| D-9 | The CLI is the resolved file `~/.local/share/claude/versions/2.1.310` (realpath of `~/.local/bin/claude`), run by absolute path; `inputs/stacks.json` pins `claude` 2.1.310, node 26.12.1, dotnet SDK 10.0.113, typescript 7.0.2 and how each is probed | V4 |
+| D-9 | The CLI is the resolved file `~/.local/share/claude/versions/2.1.310` (realpath of `~/.local/bin/claude`), run by absolute path; `inputs/stacks.json` pins `claude` 2.1.310, node 26.12.1, dotnet SDK 10.0.114, typescript 7.0.2 and how each is probed | V4 |
 | D-10 | TypeScript 7.0.2 lives read-only in `~/rsd/minigit/toolchains/typescript-7.0.2/`; **the preflight installs it when absent** (`npm install --prefix <dir> typescript@7.0.2`, then `chmod -R a-w`, no sudo) and refuses to start if `tsc --version` from inside a box is not 7.0.2 | N-16 |
 | D-11 | Settings: `PINNED_EFFORT` imported from `settings.mjs:27-30`; `permissions.allow` per arm (`BARE_ALLOW = ['Bash', 'Read', 'Edit', 'Write', 'Glob', 'Grep', 'TodoWrite', 'Agent', 'Task']` — plain `Bash`, because a bare session runs arbitrary build commands and nobody answers a prompt); hooks `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `SubagentStart`, `SubagentStop` → `node <s>/harness/audit.mjs --out <s>/box/out/audit.ndjson`; no `defaultMode`, never `bypassPermissions`, **never `apiKeyHelper`** (a test asserts the key is absent). `mcp.json = { mcpServers: {} }` (bare) | D11, D17; N-12 (four of the five events observed firing; `PostToolUseFailure` registered, not exercised); F-1 |
 | D-12 | argv: `-p --model opus --output-format stream-json --verbose --forward-subagent-text --include-hook-events --setting-sources project --settings <s>/harness/settings.json --strict-mcp-config --mcp-config <s>/harness/mcp.json --max-budget-usd <cap> --tools Agent,Bash,Read,Edit,Write,Glob,Grep,TodoWrite`; prompt on stdin; persistence ON. `BARE_TOOLS` is that list; `ToolSearch` and `mcp__coai__*` join in S3. The CLI's `--max-budget-usd` stays beside the broker's cap (P-8): the first is the CLI's own stop, the second holds against everything else | parent §8; N-12, N-14 |
@@ -435,7 +435,7 @@ naming the length. Its boundary tests are 108 (accepted), 109 (refused) and 108 
 5. **Preflight** (`host-checks.mjs`, called by `smoke-session.mjs` and later by E3's `preflight.mjs`): `bwrap` present and
    `unshare -Ur true` ok; the toolchain install plan executed when the dir is absent (D-10); then, **inside a box built by
    `agentBoxArgv`** with no proxy and no broker running (so the probes cannot reach anything): `claude --version` 2.1.310, `node --version`
-   26.12.1, `dotnet --list-sdks` exactly one line `10.0.113`, `tsc --version` 7.0.2 — each against `stacks.json`; the token file's
+   26.12.1, `dotnet --list-sdks` exactly one line `10.0.114`, `tsc --version` 7.0.2 — each against `stacks.json`; the token file's
    status (`secretStatus`), and in the process arm the PAT file's. `retireStale` over the runs root (D-21). A listener scan is no longer
    part of the preflight (D-2).
 6. **Launch, read-back, watchdogs, stop, collect** (`launchSession`): as in the Files table. Read-back on the init event, before the
@@ -479,6 +479,18 @@ naming the length. Its boundary tests are 108 (accepted), 109 (refused) and 108 
 | B-K1 | after exit, no host process carries `BENCH_CELL=<cell>`; the janitor ended 0; `state.json.phase = 'closed'`; no socket file left | — | find the escape before any cell |
 | B-K2 | (only when a session was stopped by `endCell`) an `api_request` record or a broker `settled` line for the in-flight request arrived after the SIGTERM | the grace flushes a killed session's last price | `not exercised` on a clean smoke; `refuted` → B is the price of a killed session and D-14 says so |
 | B-C1 | `contaminationHits` and `tokenHits` over the smoke: none | — | read by hand |
+
+**Amendment 2026-10-30 (B-S3, after the E2.S2 review and two smokes).** B-S3 is split. **B-S3** (host side) holds only when
+the samplers took ≥ 5 samples, counted the real token 0 times in cmdline and environ, counted the dummy ≥ 1 time (the
+positive control), and `tokenHits` over the out dir, links included, is clean. **B-S3b** (in-box) was "`token.txt` equals
+the dummy". Two smokes refuted the probe, not the box: in `20261029T233033Z` the Bash tool of CLI 2.1.310 did not pass
+`CLAUDE_CODE_OAUTH_TOKEN` to its subprocess (empty file); in `20261030T002834Z` a prompt that read the CLI's own
+`/proc/<pid>/environ` was refused by Opus 5.5 and by the CLI's refusal fallback, Opus 4.8. The probe is not reworded to get
+round a refusal: B-S3b is retired from the model smoke and recorded `not exercised` by design. The box-side fact stays
+proven by the effect tests (`printenv` in the box with a positive control) and by B-S3's positive control. The same smoke
+showed that `model_refusal_fallback` puts a second model (`claude-opus-4-8`) into a session: its prices row was read from
+the pricing page on 2026-10-30, and the broker prices any unknown model at the dearest known rates, flagged, so it never
+undercounts.
 
 ### Test scenarios
 
@@ -779,7 +791,7 @@ the conventions repository changes its rules for the bench.
    `POST_DEPLOY.md`, `todo/README.md`, `research/README.md`, stub `research/architecture.md` and `research/module_tests.md`,
    `.github/workflows/{family-checks,pr-title}.yml` from `wsl_care` with `branches: [main, 'run/**']`
    (`wsl_care/.github/workflows/family-checks.yml:13-17`), `ci.yml` (required job + non-required acceptance job, parent §6),
-   `.agents/PROJECT.md` with the identical precedence sentence; C#: `global.json` (10.0.113, `rollForward: disable`, MTP),
+   `.agents/PROJECT.md` with the identical precedence sentence; C#: `global.json` (10.0.114, `rollForward: disable`, MTP),
    `Directory.Build.props` (from `wsl_care`), `Directory.Build.rsp`, `Directory.Packages.props`, `nuget.config`, empty
    `minigit.slnx`, `scripts/run-tests.sh`; Node: `package.json`, lockfile, `tsconfig.json`, `eslint.config.mjs`,
    `scripts/run-tests.mjs`. No `.coderabbit.yaml`, no `coderabbit-review.yml` (D19).

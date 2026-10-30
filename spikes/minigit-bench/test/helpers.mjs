@@ -42,24 +42,24 @@ const track = dir => { created.push(dir); return dir; };
 export const tmpDir = prefix => track(mkdtempSync(path.join(os.tmpdir(), `testsToDelete-mgb-${prefix}-`)));
 
 /**
- * A test that needs bwrap calls this first. Without bwrap it skips with its reason, unless BENCH_REQUIRE_SANDBOX=1,
- * which turns the skip into a failure so a host without bwrap cannot report the epic done. Returns whether to go on.
+ * The ONE place a test says the host cannot do what it needs (bwrap, python, a toolchain, the network, a sibling checkout, the
+ * operator's token). Without BENCH_REQUIRE_SANDBOX=1 it skips with the reason; with it (the epic's completion run) the same case
+ * throws, so a host that lacks something cannot report the epic done. Always returns false: `return hostLacks(t, why)`.
  */
-export function sandboxGate(t) {
-  if (findOnPath('bwrap') !== null) return true;
-  const why = 'bwrap is not on PATH: the scoring box cannot run here';
+export function hostLacks(t, why) {
   if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
   t.skip(why);
   return false;
 }
 
-/** A test that needs python3 calls this first; it skips with its reason, or fails under BENCH_REQUIRE_SANDBOX=1 (like sandboxGate). */
+/** A test that needs bwrap calls this first. Returns whether to go on. */
+export function sandboxGate(t) {
+  return findOnPath('bwrap') !== null || hostLacks(t, 'bwrap is not on PATH: the scoring box cannot run here');
+}
+
+/** A test that needs python3 calls this first (like sandboxGate). */
 export function pythonGate(t) {
-  if (existsSync(PYTHON)) return true;
-  const why = `${PYTHON} is missing: the held-out runner cannot run here`;
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
-  t.skip(why);
-  return false;
+  return existsSync(PYTHON) || hostLacks(t, `${PYTHON} is missing: the held-out runner cannot run here`);
 }
 
 /** A fresh directory UNDER THE HOME (the clear suite is decrypted only there); removed when the test process exits. */
@@ -69,17 +69,10 @@ export const homeDir = prefix => {
   return track(mkdtempSync(path.join(base, `testsToDelete-${prefix}-`)));
 };
 
-/**
- * A test that needs the held-out key calls this first. With no key it skips with its reason, unless BENCH_REQUIRE_SANDBOX=1
- * (the epic's completion run), which turns the skip into a failure. Returns whether to go on.
- */
+/** A test that needs the held-out key calls this first (like sandboxGate). */
 export function keyGate(t) {
   const key = readKey(defaultKeyPath());
-  if (key.ok) return true;
-  const why = `the held-out key is unusable here: ${key.reason}`;
-  if (process.env.BENCH_REQUIRE_SANDBOX === '1') throw new Error(`BENCH_REQUIRE_SANDBOX=1 and ${why}`);
-  t.skip(why);
-  return false;
+  return key.ok || hostLacks(t, `the held-out key is unusable here: ${key.reason}`);
 }
 
 /**

@@ -13,7 +13,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { streamMeterUsd, streamView } from './claude-usage.mjs';
-import { brokerView, brokerServer } from './broker.mjs';
+import { DRAIN_MS, brokerView, brokerServer } from './broker.mjs';
 import { disposerStack } from './disposers.mjs';
 import { egressProxy, egressSummary } from './egress.mjs';
 import { cellProcesses, cpuTicksOf, endCell, endSurvivors, realProcApi } from './janitor.mjs';
@@ -90,12 +90,12 @@ function expectedInit(plan, settings) {
   return { cwd: plan.layout.work, tools: plan.tools ?? BARE_TOOLS, mcpServers: 0, cliVersion: plan.cliVersion, configDir: plan.layout.config, priced: m => m !== undefined && priceFor(plan.prices, m).known, settings };
 }
 
-/** The costs the watchdog reads: the broker's (settled + reserved), O's live sum, the stream meter; `null` = silent, never zero. */
+/** The costs the watchdog reads: the broker's SETTLED spend, O's live sum, the stream meter; `null` = silent, never zero. */
 function costsNow(plan, rec, events) {
   const b = rec.broker.summary();
   const live = rec.receiver.liveSum();
   const meter = streamMeterUsd(streamView(events), plan.prices, { outputFloor: METER_OUTPUT_FLOOR });
-  return { brokerUsd: b.spentUsd + b.reservedUsd, liveUsd: live.requests > 0 ? live.usd : null, meterUsd: meter.usd ?? null };
+  return { brokerSpentUsd: b.spentUsd, liveUsd: live.requests > 0 ? live.usd : null, meterUsd: meter.usd ?? null };
 }
 
 function lastOtelAt(plan) {
@@ -143,7 +143,7 @@ function supervise({ plan, d, stack, rec, signal }) {
     let closed = false;
     let stopping = null;
     const stop = reason => {
-      rec.stopped ??= reason;
+      if (rec.stopped === null) { rec.stopped = reason; rec.stoppedAtMs = d.now(); } // the first stop names the reason and the instant
       stopping ??= d.endCell({ cellId: plan.cellId, bwrapPid: child.pid, graceMs: plan.graceMs, killTree: d.killTree, procApi: d.procApi });
       return stopping;
     };
@@ -178,13 +178,20 @@ async function collect({ plan, d, rec, exit }) {
   const { layout } = plan;
   await d.sleep(plan.settleMs);
   const survivorsEnded = await d.endSurvivors(plan.cellId, { killTree: d.killTree, procApi: d.procApi });
+  // the upstream bills a request whatever the client does: wait until the broker has read every one to its end (or the ceiling) BEFORE the
+  // ledger is read, or an abandoned request is written down as 0 spent
+  await rec.broker.drain(plan.drainMs);
+  // past the ceiling a request may still be in flight: the broker is SEALED here, before its ledger is read. B is then the settled spend plus the unsettled
+  // reservations (`lowerBound: true`: the API may have billed more), the summary is the ledger's last line, and a late settlement writes nothing after broker.json
+  const sealed = rec.broker.seal();
+  const unsettledAtClose = sealed.unsettled;
   const copied = copyTranscripts(layout.config, layout.transcripts);
   const egressLines = readLines(layout.files.egressLog);
   const brokerLines = readLines(layout.files.brokerLog);
   writeFileSync(layout.files.egress, `${JSON.stringify(egressSummary(egressLines), null, 2)}\n`);
-  const broker = { ...brokerView(brokerLines), ...rec.broker.summary() };
+  const broker = { ...brokerView(brokerLines), ...sealed.summary, unsettledAtClose, lowerBound: sealed.lowerBound };
   writeFileSync(layout.files.broker, `${JSON.stringify(broker, null, 2)}\n`);
-  return { survivorsEnded, transcripts: copied.ok ? copied.value : [], transcriptsProblem: copied.ok ? null : copied.reason, broker, outcome: sessionOutcome(rec.result, exit) };
+  return { survivorsEnded, unsettledAtClose, transcripts: copied.ok ? copied.value : [], transcriptsProblem: copied.ok ? null : copied.reason, broker, outcome: sessionOutcome(rec.result, exit) };
 }
 
 /** A read of a dependency at the very end: its failure is recorded in `errors`, never allowed to lose the meta of a paid session. */
@@ -196,10 +203,11 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
   const live = attempt(rec, 'receiver.liveSum', () => rec.receiver.liveSum(), { usd: null, requests: null });
   return {
     rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: d.now() - rec.startedAtMs,
-    exit, stopped: rec.stopped, outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
+    exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,
-    broker: { spentUsd: collected.broker.spentUsd, upstreamRequests: collected.broker.upstreamRequests, refused: collected.broker.refused, overCap: collected.broker.overCap, overshootUsd: collected.broker.overshootUsd },
+    broker: { spentUsd: collected.broker.spentUsd, lowerBound: collected.broker.lowerBound, upstreamRequests: collected.broker.upstreamRequests, refused: collected.broker.refused, refusedByReason: collected.broker.refusedByReason, unpricedModels: collected.broker.unpricedModels ?? [], overCap: collected.broker.overCap, overshootUsd: collected.broker.overshootUsd },
+    unsettledAtClose: collected.unsettledAtClose,
     receiver: { usd: live.usd, requests: live.requests, misconfigured: rec.receiver.misconfigured, undecodable: rec.receiver.undecodable },
     errors: [...rec.errors], cleanup,
   };
@@ -209,11 +217,11 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
 
 const newRecord = (plan, d) => ({
   state: { phase: 'starting', hostPid: process.pid, hostStartTime: processStartTime(process.pid), cell: plan.cellId, startedAt: new Date(d.now()).toISOString(), heartbeatAt: new Date(d.now()).toISOString() },
-  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null,
+  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
   samplers: emptyCounts(), errors: [], receiver: null, broker: null, proxy: null, child: null, settings: null, settingsSha256: null, mcpSha256: null,
 });
 
-const DEFAULTS = Object.freeze({ reserveUsd: BARE_RESERVE_USD, tickMs: 5000, sampleMs: 1000, settleMs: 3000, graceMs: 5000, arm: 'bare', envExtra: {} });
+const DEFAULTS = Object.freeze({ reserveUsd: BARE_RESERVE_USD, tickMs: 5000, sampleMs: 1000, settleMs: 3000, graceMs: 5000, drainMs: DRAIN_MS, arm: 'bare', envExtra: {} });
 
 /**
  * Launch one session. `plan` names everything (layout, cell, prompt, caps, binaries, the real `token` and the `dummy`); `deps` are the

@@ -59,6 +59,15 @@ export function priceFor(table, modelId) {
 }
 
 /**
+ * A price made of the DEAREST known rate of each token class over every row (not any one model's price): what an unpriced model is charged,
+ * so that a cap is never undercounted. A new object; it names itself so it cannot be mistaken for a model.
+ */
+export function dearestPrice(table) {
+  const rows = [...table.models.values()];
+  return Object.freeze({ modelId: '(dearest known rates)', ...Object.fromEntries(RATE_KEYS.map(k => [k, Math.max(...rows.map(r => r[k]))])) });
+}
+
+/**
  * The table as the CLI of `cliVersion` bills: each model with a CLI rate OBSERVED ON THAT VERSION carries that cache-read rate. A version
  * with no observation (or none given) is billed as published - an older version's rate never carries over. A new table; the argument is untouched.
  */

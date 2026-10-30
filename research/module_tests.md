@@ -6,6 +6,9 @@
 > The record the shared rule `common.scenario-tests` requires in every repository: where the harness is, how it runs, every flow with
 > `covered` / `not covered` and a reason, what it does not prove, and when it runs. Adopted the way that rule's *Adoption* section asks — the
 > catalogue first, most flows `not covered` on day one, closed flow by flow.
+>
+> **The minigit stack bench's Node scenarios (E2.S1, E2.S2) were added 2026-10-30** — see *The minigit stack bench scenarios* below; the C# catalogue
+> test ignores that section.
 
 ## Where the harness is
 
@@ -91,6 +94,28 @@ names a flow that no longer exists, or when a row marked `covered` names a test 
 | `bench scouts key` | covered | `ScoutsPrivateTaskTests` | `key init` refused inside a checkout and a second time at the same path; a later verb refusing a missing key (4) and creating nothing; the placement rules alone in `ScoutCampaignKeyTests` |
 | `bench scouts hygiene` | covered | `ScoutsHygieneCommandTests` | a staged blob and a staged file name carrying a deny-list entry, a home path or an e-mail refused by rule (1); a staged BINARY blob carrying an entry in its bytes — as UTF-8 in another case, as UTF-16LE — refused by index and encoding (1), a clean binary passing (E2 code round); a staged rename scanned under its new name; every blob announced `scanning [i/n]` off the one `cat-file --batch`; a commit range read at its end; no deny-list named (4), one that does not load (4), not a repository (3). The byte scan alone in `BinaryScanTests`; the batch reader, its listings and the no-deadlock property in `GitBlobBatchTests` |
 
+### CLI — `model-arms <verb>`
+
+The module under `tools/model-arms` is its own console (`model-arms`), driven here as a process by `ModelArmsScenarioTests` and in-process through the real parser by `ModelArmsProgramTests`. The list is derived from
+`ModelArmsCommandLine.Verbs`, and `ModelArmsScenarioTests.The_catalogue_names_every_verb_the_command_line_accepts` fails when a verb has no row. (`ModuleTestsCatalogTests` reads the `bench` rows only; E5.S3 widens it.)
+
+| flow | status | test | reason |
+|---|---|---|---|
+| `model-arms validate` | covered | `ModelArmsScenarioTests` | the binary started inside the target and with a target PATH entry runs nothing the target placed; `ValidateVerbTests` holds every finding |
+| `model-arms prep-base` | covered | `ModelArmsScenarioTests` | the guard only (the same checks, then refused until E4.S4); the baseline measurement is not built |
+| `model-arms version` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
+| `model-arms help` | covered | `ModelArmsProgramTests` | in-process, through the real parser |
+| `model-arms init` | covered | `ModelArmsScenarioTests` | the binary as a process: `init` makes a root, `validate` reads it and refuses the unfilled template (4) without a trust refusal, a second `init` is refused (4); a second scenario runs it under `umask 0277` (modes still owner-only); `InitVerbTests` holds every refusal (existing root, link root, link parent, git checkout, this repository, missing parent, exit 3), the owner-only modes read back, and `init` then `validate` over a filled experiment (0); the template against the example in `ExampleExperimentTests` |
+| `model-arms make` | not covered | — | not built yet, story E4.S4 |
+| `model-arms lock` | not covered | — | not built yet, story E4.S1 |
+| `model-arms unlock` | not covered | — | not built yet, story E4.S1 |
+| `model-arms run-arm` | not covered | — | not built yet, story E2.S7 |
+| `model-arms run-all` | not covered | — | not built yet, story E4.S3 |
+| `model-arms chain` | not covered | — | not built yet, story E4.S5 |
+| `model-arms checks` | not covered | — | not built yet, story E5.S2 |
+| `model-arms status` | not covered | — | not built yet, story E4.S4 |
+| `model-arms gate-lock` | not covered | — | not built yet, story E2.S6 |
+
 ### API — `bench-api` and `bench-collector` routes (`src/Bench.Api`)
 
 | flow | status | test | reason |
@@ -142,6 +167,75 @@ the local-only files (the private tasks file, the companion, the withheld detail
 plants are alive. A third test takes the key through its lifecycle: `key init` refused inside a checkout and a second time; a verb without the
 key refused (4) with nothing created; an edited statement, a wrong key and the public file alone each refused by label.
 
+## The minigit stack bench scenarios (E2.S1 and E2.S2, `spikes/minigit-bench/`)
+
+A second harness lives in this repository: the Node test suite of the minigit stack bench's agent sandbox, in `spikes/minigit-bench/test/` (and, for
+the process fixes of E2.S1 that live in the sibling spike, `spikes/policy-ab-quick/test/`). It is written in the spike's own language (ES modules, Node
+26) and drives the real instruments: a real `bwrap` box, a real egress proxy and credential broker on real unix sockets, a real session launch around
+a stub `claude`, and the committed fixture of one real paid session. What a scenario substitutes is only what it cannot have: the paid API (a local
+stub upstream replays a recorded SSE body), the real token (a FAKE `sk-ant-fake-…` value), and the CLI (a script that does what the real one does at
+its edges). **The flow list is derived**: the Node test `module-tests-catalog.test.mjs` reads the verdict ids out of `SMOKE_ASSUMPTIONS`
+(`lib/smoke-verdicts.mjs`) and every `*.test.mjs` file of the spike's `test/` directory, and fails when one is not named in this section, or when a
+row names a test file that does not exist. The design is [module_minigit_bench.md](module_minigit_bench.md).
+
+**How it is run** (from the repository root; ~30 minutes at the lowered priority the local CPU budget requires; **0 failed and 0 skipped** is the bar):
+
+```bash
+BENCH_REQUIRE_SANDBOX=1 node spikes/minigit-bench/run-tests.mjs                          # everything in spikes/minigit-bench/test
+node spikes/minigit-bench/run-tests.mjs test/broker.test.mjs test/egress.test.mjs        # a few files (globs are relative to the spike)
+node spikes/minigit-bench/run-tests.mjs '../policy-ab-quick/test/proc.test.mjs' '../policy-ab-quick/test/audit.test.mjs'   # the E2.S1 process fixes
+```
+
+`BENCH_REQUIRE_SANDBOX=1` turns a test that skips because the host lacks something (`bwrap`, user namespaces, the network, the token file) into a
+failure, so "0 skipped" is a claim about this machine and not about a gap. **When it runs:** on this machine only (it needs WSL2 with `bwrap`; CI does not
+run it), by whoever changes the spike, before every commit that touches it and in full before a review gate; the paid re-smoke (one session, cap $0.20)
+runs by the operator's word only, once per code round, and the fixture it produces is then re-checked by `smoke-real.test.mjs` on every run.
+
+| Flow | Status | Test files |
+|---|---|---|
+| E2.S1: one group kill, no spike launcher reaches a shell | covered | `spikes/policy-ab-quick/test/proc.test.mjs`, `test/no-shell.test.mjs` |
+| E2.S1: the audit hook's record and the span builder that reads it | covered | `spikes/policy-ab-quick/test/audit.test.mjs`, `test/audit-contract.test.mjs` |
+| E2.S1: the contamination scan, the token scan, the canary targets (POSIX paths) | covered | `test/contamination.test.mjs`, `test/token-scan.test.mjs`, `test/token-path.test.mjs`, `test/canary-plan.test.mjs` |
+| E2.S2: the agent box's argv, hide list and environment (no `--setenv`, no secret on argv, the allow-listed env) | covered | `test/bwrap.test.mjs`, `test/agent-box.test.mjs`, `test/agent-env.test.mjs`, `test/reuse-scan.test.mjs` |
+| E2.S2: what the box sees (no home, no key, no `/mnt`, no interop, no `gh`, its own `/tmp`, no instruments) and what it holds (the dummy only) | covered | `test/agent-box-fs.test.mjs`, `test/agent-box-token.test.mjs`, `test/box-init.test.mjs` |
+| E2.S2: the egress proxy: exact CONNECT hosts, the SNI gate and its timeouts, the effect through a real box | covered | `test/egress.test.mjs`, `test/egress-hosts.test.mjs`, `test/tls-hello.test.mjs`, `test/egress-box.test.mjs` |
+| E2.S2: the credential broker: the route list, the body check, signing, streaming, pricing, the budget, the drain and the seal | covered | `test/broker.test.mjs`, `test/broker-routes.test.mjs`, `test/broker-body.test.mjs`, `test/budget.test.mjs`, `test/prices.test.mjs`, `test/session-cost.test.mjs` |
+| E2.S2: the host's reads of what the agent wrote (links, pipes, swapped directories) and the real-token scan | covered | `test/agent-files.test.mjs`, `test/agent-files-sites.test.mjs`, `test/link-class.test.mjs`, `test/session-scan.test.mjs`, `test/secrets.test.mjs`, `test/transcripts.test.mjs` |
+| E2.S2: the launch: settings, argv, read-back, watchdogs, the stop, the janitor, disposers, the state file | covered | `test/launch.test.mjs`, `test/readback.test.mjs`, `test/watchdogs.test.mjs`, `test/janitor.test.mjs`, `test/session-launch.test.mjs`, `test/session-parts.test.mjs`, `test/session-state.test.mjs`, `test/preflight.test.mjs`, `test/host-checks.test.mjs` |
+| E2.S2: the smoke's machinery rehearsed free, and the verdicts over the committed real fixture | covered | `test/smoke-run.test.mjs`, `test/smoke-real.test.mjs`, `test/smoke-k2.test.mjs`, `test/capture-session.test.mjs`, `test/verdicts.test.mjs` |
+| This catalogue itself: every verdict id and test file is named, every named file exists | covered | `test/module-tests-catalog.test.mjs` |
+| E1 instruments the sandbox runs on (the scorer, the held-out suite, the counters, the capture); catalogued in `module_minigit_bench.md`, listed here by file only | covered | `test/adjudicate.test.mjs`, `test/aliases.test.mjs`, `test/capture-real.test.mjs`, `test/capture-sanitise.test.mjs`, `test/capture-tools.test.mjs`, `test/classify.test.mjs`, `test/claude-usage.test.mjs`, `test/coai-usage.test.mjs`, `test/crosscheck.test.mjs`, `test/heldout-archive.test.mjs`, `test/heldout-calibration.test.mjs`, `test/heldout-crypto.test.mjs`, `test/heldout-hostile.test.mjs`, `test/heldout-leak.test.mjs`, `test/heldout-pipeline.test.mjs`, `test/heldout-run.test.mjs`, `test/heldout-tool.test.mjs`, `test/host-lacks.test.mjs`, `test/inputs.test.mjs`, `test/no-fitted-rates.test.mjs`, `test/otel.test.mjs`, `test/repo-scan.test.mjs`, `test/score-pipeline-isolation.test.mjs`, `test/score-pipeline.test.mjs`, `test/score-session.test.mjs`, `test/timeline.test.mjs`, `test/visible.test.mjs` |
+| The process arm: coai in its own box, the stdio bridge, the conventions snapshot (E2.S3, E2.S4) | not covered | not built yet; the plan is `todo/PLAN_minigit_stack_bench_E2.md` |
+| A fresh paid session against the real API, run by the suite | not covered | it costs money and needs the operator's word; the suite re-checks the last real one's fixture, it does not make a new one |
+| `ToolSearch` and any other tool of the process arm in a real request body (does the CLI send a server tool?) | not covered | the broker's body check refuses a server tool; the bare arm's own requests are checked by B-S2 (0 `body` refusals) in each paid smoke; the process arm has had none |
+
+The verdict ids of the smoke (derived from `SMOKE_ASSUMPTIONS`; each is computed by `computeSmokeVerdicts` over the loaded fixture, never typed):
+
+| Verdict | Status | Test files |
+|---|---|---|
+| `B-R1`, `B-R2` | covered | `test/smoke-real.test.mjs`, `test/readback.test.mjs` |
+| `B-N1`, `B-N2` | covered | `test/smoke-real.test.mjs`, `test/egress.test.mjs` |
+| `B-S2` | covered | `test/smoke-real.test.mjs`, `test/broker-body.test.mjs` |
+| `B-S3` | covered | `test/smoke-real.test.mjs`, `test/session-scan.test.mjs`, `test/link-class.test.mjs` |
+| `B-S3b` | not covered | retired by design: the models refuse the in-box probe; B-S3's positive control covers the CLI's environ from the host |
+| `B-$1` | covered | `test/smoke-real.test.mjs`, `test/budget.test.mjs`, `test/crosscheck.test.mjs` |
+| `B-O1`, `B-T1`, `B-E1`, `B-A1`, `B-A2`, `B-A3`, `B-H1`, `B-C1` | covered | `test/smoke-real.test.mjs` |
+| `B-K1` | covered | `test/smoke-real.test.mjs`, `test/janitor.test.mjs` |
+| `B-K2` | covered | `test/smoke-k2.test.mjs`; not exercised by the committed fixture (the session ended by itself) |
+
+**What this harness does NOT prove.**
+
+- **That the real API behaves as the stub upstream does.** The broker's tests replay one recorded SSE body and scripted error answers; the real
+  API is only seen in a paid smoke, once per code round. Error shapes, a stream cut at a given event, billing of a reset request: assumed, not measured.
+- **Anything about a CLI other than 2.1.310** (the read-back pins the version) or a model the price table does not hold (the broker charges the dearest rates and says so).
+- **That `bwrap` isolation holds on another kernel.** The box tests run against this machine's kernel and `bwrap`; a different host is a new measurement.
+- **The TLS edge.** The SNI gate is tested against recorded real hellos and a local upstream; what a CDN edge does with a second hello, a renegotiation or an
+  HTTP/2 `:authority` is not provided by the proxy (residual risk, written in `module_minigit_bench.md`).
+- **Effect tests that need the network** (`egress-box.test.mjs`, the npm and dotnet restores) run against real hosts: they say so and, without
+  `BENCH_REQUIRE_SANDBOX=1`, skip when the host has none.
+- **One real session.** The committed fixture is one paid run on one day; it proves the verdict rules read a real stream, not that every session behaves so.
+- **Concurrency beyond a few requests**, and a run of days: the broker's budget and the janitor are exercised at the scale of seconds.
+
 ## What the harness does NOT prove
 
 - **That a real claude prints these streams.** The cells replay synthetic streams in claude 2.1.289's shape; the four LIVE streams under
@@ -151,6 +245,9 @@ key refused (4) with nothing created; an edited statement, a wrong key and the p
 - **That the recall matcher agrees with a person** — §3.7's 19-of-20 hand-check, E2 S5.
 - **The read API and the console** for the scouts (E3 S8), and the routes above marked `not covered`.
 - **Concurrency of two harnesses on one run**: every scenario runs one campaign at a time, as the design does.
+- **The `model-arms` harness drives `init`, `validate` and `prep-base` only.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
+  ran for `validate` and `prep-base` (`init` launches nothing); a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
+  as unprobed and were never run; the product's own bare `git` launches in `src` are outside it. The fixture's `claude`, `dotnet`, `node` and `npm` are empty files.
 - **Linux and macOS paths for the scouts**: the scenario runs where the suite runs; CI is ubuntu, local runs are Windows.
 
 ## Definition of Done for a new flow

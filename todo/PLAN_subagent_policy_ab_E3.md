@@ -67,7 +67,7 @@ the exact signatures** — where they change a name, follow them and keep this d
   test seam is a `PolicyVerbServices` record (S3) in the shape of `ScoutVerbServices` (`hosts/Cli/ScoutsInputs.cs:24-28`): the CLI
   word lookup, the variables a TEST adds to the child environment (the fake CLI's home), the **Claude home**
   (`%USERPROFILE%\.claude` in production, a temp folder in every test) and a wall override in seconds for tests.
-- **Exit codes** (`hosts/Cli/ExitCodes.cs:12-28`): 0 pass · 3 a stop, a no-go, a moved pin, a ceiling refusal, the environment ·
+- **Exit codes** (`src/Bench.Hosting/ExitCodes.cs:12-28`): 0 pass · 3 a stop, a no-go, a moved pin, a ceiling refusal, the environment ·
   4 configuration (flags, records, roots) · 5 nothing produced (the launch did not run).
 - **Paths.** The runs root and the artefact root lie outside every git checkout (refused with 4 otherwise — stricter than the
   scouts' git-ignored allowance, `src/Bench.Infrastructure/Scouts/ScoutRoots.cs:13-21`, because a cell tree holds a whole public

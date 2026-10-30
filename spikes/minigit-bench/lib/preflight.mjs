@@ -9,6 +9,7 @@ import { runBounded } from './run.mjs';
 import { fail, ok } from './result.mjs';
 import { agentBoxPrefix, agentEnv, dummyToken, sessionLayout } from './sandbox.mjs';
 import { secretStatus } from './secrets.mjs';
+import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 
 const PROBE_MS = 60_000;
 const INSTALL_MS = 300_000;
@@ -62,7 +63,7 @@ export async function preflight({ home, nodeDir, tsDir, claudeBinary, stacks, in
     const done = await install(plan);
     if (!done.ok) problems.push(done.reason);
   }
-  const token = secretStatus({ home, parts: ['.config', 'minigit-bench', 'claude-oauth-token'], label: 'token' });
+  const token = secretStatus({ home, parts: TOKEN_FILE_PARTS, label: 'token' });
   if (!token.present) problems.push(token.why);
   let facts = null;
   if (bwrap.ok && existsSync(path.join(tsDir, 'node_modules', '.bin', 'tsc'))) {

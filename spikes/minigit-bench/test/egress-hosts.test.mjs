@@ -13,16 +13,16 @@ test('The_process_arm_is_the_bare_list_plus_the_github_hosts', () => {
 });
 
 test('The_bare_arm_has_no_github_host_and_no_arm_lists_raw_githubusercontent', () => {
-  for (const host of GITHUB_HOSTS) assert.equal(EGRESS_HOSTS.bare.includes(host), false, host);
+  for (const host of GITHUB_HOSTS) assert.equal(new Set(EGRESS_HOSTS.bare).has(host), false, host);
   for (const [arm, hosts] of Object.entries(EGRESS_HOSTS)) {
-    assert.equal(hosts.includes('raw.githubusercontent.com'), false, arm);
+    assert.equal(new Set(hosts).has('raw.githubusercontent.com'), false, arm);
   }
 });
 
 test('The_api_reaches_the_cell_through_the_broker_only_so_no_arm_lists_it', () => {
-  assert.ok(KNOWN_REFUSED.includes('api.anthropic.com'));
+  assert.ok(new Set(KNOWN_REFUSED).has('api.anthropic.com'));
   for (const [arm, hosts] of Object.entries(EGRESS_HOSTS)) {
-    for (const refused of KNOWN_REFUSED) assert.equal(hosts.includes(refused), false, `${arm} lists ${refused}`);
+    for (const refused of KNOWN_REFUSED) assert.equal(new Set(hosts).has(refused), false, `${arm} lists ${refused}`);
   }
 });
 
