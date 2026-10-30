@@ -157,13 +157,16 @@ test('The_prior_spend_is_read_from_its_evidence_and_counts_every_paid_instrument
   const derived = spendPrior();
   assert.equal(derived.ok, true, derived.reason);
   assert.deepEqual(JSON.parse(read('spend-prior.json')), derived.value);
-  assert.equal(derived.value.length, 7, 'capture, design run, broker proof, the first smoke, the three re-smokes counted once each (the committed fixture is the last)');
+  assert.equal(derived.value.length, 8, 'capture, token check, design run, broker proof, the first smoke, the three re-smokes counted once each (the committed fixture is the last)');
+  const tokenCheck = derived.value.find(e => /token check/.test(e.what));
+  assert.deepEqual([tokenCheck.usd, tokenCheck.approx, tokenCheck.date], [0.01, true, '2026-10-29'], 'the token check: one small claude -p call, about $0.010, stated as approximate');
+  assert.equal(tokenCheck.evidence, 'team-lead session log, 2026-10-29: token check $0.010; raw output not kept');
   const total = derived.value.reduce((a, e) => a + e.usd, 0);
   assert.ok(total > 0.8 && total < 0.85, `the instrument work before E3b: ${total}`);
   for (const e of derived.value) {
     assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(e.usd > 0 && e.what && e.evidence, JSON.stringify(e));
-    assert.equal(existsSync(path.join(REPO, e.evidence.split(' (')[0])), true, `${e.evidence} exists`);
+    if (e.approx !== true) assert.equal(existsSync(path.join(REPO, e.evidence.split(' (')[0])), true, `${e.evidence} exists`); // an approximate figure's evidence is a session log summary, not a file
   }
 });
 
@@ -198,7 +201,7 @@ test('The_prior_spend_reads_each_figure_from_its_own_section_not_from_a_mention_
   writeFileSync(path.join(repo, 'todo/PLAN_minigit_stack_bench_E2.md'), '### The network decision\ncost **$0.5, 13.7 s wall\n### The credential broker, and what was run to prove it (paid total $0.25)\nx\n');
   writeFileSync(path.join(repo, 'research/module_minigit_bench.md'), [
     '#### The bare-session smoke (2026-10-30)', "> the FIRST smoke's (envelope $0.1)", 'a later mention: the second re-smoke is below, and the first re-smoke too, envelope **$9.99** was the decoy',
-    '#### The first re-smoke (2026-10-30)', 'envelope **$0.2**', '#### The second re-smoke (2026-10-30)', 'envelope **$0.3**', '#### The third re-smoke', 'envelope **$0.4**', ''].join('\n'));
+    '#### The first re-smoke (2026-10-30)', 'envelope **$0.2**', '#### The second re-smoke (2026-10-30)', 'envelope **$0.3**', '#### The third re-smoke', 'envelope **$0.4**', '#### The token check', 'cost **$0.01**', ''].join('\n'));
   const derived = spendPrior(repo);
   assert.equal(derived.ok, true, derived.reason);
   assert.deepEqual(derived.value.filter(e => /re-smoke/.test(e.what)).slice(0, 2).map(e => e.usd), [0.2, 0.3], 'each figure comes from the section its heading names');

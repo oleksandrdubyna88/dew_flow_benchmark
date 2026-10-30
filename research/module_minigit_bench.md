@@ -518,6 +518,11 @@ or under the box `/tmp`, a target outside every bind or mapping to none, a dangl
 not refute B-S3; **every host-side reader still refuses every link** (`O_NOFOLLOW`), so the classification changes only the verdict, never what is
 read. The run was re-scanned from its raw directory (no new paid session) and the fixture replaced with it.
 
+#### The token check (2026-10-29; paid, approximate)
+
+One small `claude -p` call to check the subscription token, run by the team lead on 2026-10-29, before the E2.S2 design run: cost **$0.010**. This figure is APPROXIMATE: the raw output was not kept, and the only evidence is the
+team lead's session-log summary ("token check $0.010"). It is in the prior spend (`inputs/spend-prior.json`, marked `approx: true`) because it was paid instrument work before E3b; `prereg/spend-prior.mjs` reads the figure from this section.
+
 #### The network facts N-1…N-16 (observed 2026-10-29, this machine, CLI 2.1.310)
 
 Copied from the spec's section *The network decision* (`todo/PLAN_minigit_stack_bench_E2.md`, `## E2.S2`), with the date they were taken and what has re-verified them since. A fact marked *test* is held by a test that runs in the box on every complete run; *smoke 1* is the first smoke (its fixture has been replaced), *smoke 2* the first re-smoke after the review fixes (artefacts outside git: the model refused the in-box probe), and *smoke 3* the second re-smoke `20261030T004243Z` (fixture since replaced), and *smoke 4* the third re-smoke `20261030T051710Z`, **the committed fixture**: it holds B-R1, B-R2, B-N1, B-N2, B-S2, B-S3, B-$1, B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1 and B-C1, so every row marked as verified by one of those verdicts is also verified by smoke 4 (B-S3b and B-K2 are `not exercised`); a row that cites smoke 3 was true of that run and is true of this one for the same verdicts.
@@ -694,7 +699,7 @@ commit, then a new registration (review m7). The directories of the other two ru
 and the session record's `egress` leaf carries `bytes`, `bytesCaptured` and `cacheGrowthBytes`. `callsOf` lives in `lib/stream-calls.mjs`; the session loader is `loadSessionDir` in `lib/smoke-load.mjs` (one loader, every read through
 `lib/agent-files.mjs`, nothing required). Row 7 reads the broker's `reason`: only `cap` makes `killed: cap`; `path`, `body`, `busy` and a missing reason do not.
 
-**Not built.** `aa-verdicts` and `report` (E3b.S4 and S5). `--what rehearse-v2` IS built (review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8163 over seven paid instrument sessions, not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The review also asked for the "token check" session: no research/ or E1 plan text gives its figure, so it is NOT in the file and nothing was invented; if it was paid, its evidence is needed.
+**Not built.** `aa-verdicts` and `report` (E3b.S4 and S5). `--what rehearse-v2` IS built (review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
 
 ## Entry points
 

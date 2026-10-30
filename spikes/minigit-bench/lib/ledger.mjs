@@ -9,7 +9,7 @@ export const readLedger = file => (existsSync(file) ? readFileSync(file, 'utf8')
 export const appendLedger = (file, line) => appendFileSync(file, `${JSON.stringify(line)}\n`);
 
 /** `inputs/spend-prior.json` entries as `prior` ledger lines. */
-export const priorLines = entries => entries.map(e => ({ kind: 'prior', usd: e.usd, what: e.what, evidence: e.evidence, date: e.date }));
+export const priorLines = entries => entries.map(e => ({ kind: 'prior', usd: e.usd, what: e.what, evidence: e.evidence, date: e.date, ...(e.approx ? { approx: true } : {}) }));
 
 /**
  * Append a charge unless the ledger already holds a charge for the same rid (a spend line, not an event): a session is charged ONCE. A crash between this append and the run-map write

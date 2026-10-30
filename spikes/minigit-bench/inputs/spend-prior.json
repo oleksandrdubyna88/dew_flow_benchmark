@@ -7,6 +7,13 @@
   },
   {
     "date": "2026-10-29",
+    "what": "token check (one small claude -p call to check the subscription token; approximate)",
+    "usd": 0.01,
+    "approx": true,
+    "evidence": "team-lead session log, 2026-10-29: token check $0.010; raw output not kept"
+  },
+  {
+    "date": "2026-10-29",
     "what": "E2.S2 design run (one bare session, real token in the box)",
     "usd": 0.1119485,
     "evidence": "todo/PLAN_minigit_stack_bench_E2.md (the design run paragraph)"

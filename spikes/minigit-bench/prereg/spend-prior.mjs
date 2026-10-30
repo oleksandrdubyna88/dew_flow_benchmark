@@ -42,12 +42,14 @@ export function spendPrior(repo = REPO) {
   const first = number(doc, /^#### The bare-session smoke/, /FIRST smoke's \(envelope \$([0-9.]+)\)/, 'the first smoke\'s envelope', MODULE_DOC);
   const resmoke1 = number(doc, /^#### The first re-smoke/, /envelope \*\*\$([0-9.]+)\*\*/, 'the first re-smoke\'s envelope', MODULE_DOC);
   const resmoke2 = number(doc, /^#### The second re-smoke/, /envelope \*\*\$([0-9.]+)\*\*/, 'the second re-smoke\'s envelope', MODULE_DOC);
-  const bad = [design, proof, first, resmoke1, resmoke2].find(r => !r.ok);
+  const tokenCheck = number(doc, /^#### The token check/, /cost \*\*\$([0-9.]+)\*\*/, 'the token check cost', MODULE_DOC);
+  const bad = [design, proof, first, resmoke1, resmoke2, tokenCheck].find(r => !r.ok);
   if (bad) return bad;
   const capture = json(`${FIXTURES}/claude-2.1.310-capture/meta.json`);
   const smoke = json(`${FIXTURES}/claude-2.1.310-bare-smoke/meta.json`);
   return ok([
     { date: capture.date.slice(0, 10), what: 'E1.S3 capture session (one tiny session on an unrelated task)', usd: capture.costUsd, evidence: `${FIXTURES}/claude-2.1.310-capture/meta.json` },
+    { date: '2026-10-29', what: 'token check (one small claude -p call to check the subscription token; approximate)', usd: tokenCheck.value, approx: true, evidence: 'team-lead session log, 2026-10-29: token check $0.010; raw output not kept' },
     { date: '2026-10-29', what: 'E2.S2 design run (one bare session, real token in the box)', usd: design.value, evidence: `${E2_PLAN} (the design run paragraph)` },
     { date: '2026-10-29', what: 'E2.S2 credential-broker proof sessions', usd: proof.value, evidence: `${E2_PLAN} (the credential broker section: paid total)` },
     { date: '2026-10-30', what: 'E2.S2 bare-session smoke through the broker (the first one)', usd: first.value, evidence: `${MODULE_DOC} (the first smoke, "Replaced" note)` },
