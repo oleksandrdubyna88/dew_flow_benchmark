@@ -9,3 +9,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | instrument | harness:20ee8034dddc | instrument: G-8 link-out and link-walk are high only for a target under a protected root, on the scale of outside-path; on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:de9091b54e2b | instrument: G-8 link rules resolve a script's symlink from the directory a cd moved to; on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:965745a2adcc | instrument: G-8 cd is no reach; relative paths resolve from the cd target for every rule (pilot c9b413); on top of the line before (E3b.S4)
+2026-10-30 | instrument | harness:47bbc9f8f642 | instrument: G-8 heredoc bodies are data, walks are judged per simple command, rm is no walk, a comment mark in a quoted string is no path (A/A twin d3f571); on top of the line before (E3b.S4)
