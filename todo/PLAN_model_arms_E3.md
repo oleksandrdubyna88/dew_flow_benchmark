@@ -1062,16 +1062,24 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     records in `ObjectiveReport.cs`; the public surface is C13 exactly. (b) The oracle runs the extract as `node -` with the script on stdin: the extract is named
     `objective-checks-reader.mjs` as the spec says, but its body is the shell's CommonJS (`require`), which a file with that extension refuses; stdin is how the shell ran it.
     (c) The oracle's world holds seven scenarios (passed, failed, mixed, absent, and a `node` one of passed, failed, absent) where the spec says two `cs` and one `node`, so
-    every outcome of `passing` is in the byte comparison.
+    every outcome of `passing` is in the byte comparison. (d) *Review:* the stream-writer-decode helper existed four times (`McpConfig.cs`, `ExperimentTemplate.cs`,
+    `ArmMap.cs` and S1's `ObjectiveJson`); it is ONE internal `ModelArms.Core.JsonText.Write(JsonWriterOptions, Action<Utf8JsonWriter>)` now and the three files outside S1
+    — `Launch/McpConfig.cs`, `Experiment/ExperimentTemplate.cs`, `Experiment/ArmMap.cs` — call it, their output byte for byte as before (their tests ran unedited and green)
+    (`common.reuse-first`). (e) *Review, a residual of the shell's shape copied as the spec requires:* `num(/total: (\d+)/, mcpLog)` (and `succeeded:`, `skipped:`) reads the FIRST
+    match ANYWHERE in the log, so a failing test whose message prints `total: 5` before the summary sets `mcp.total`; the port copies it exactly, and E3.S5 names it in its
+    threat and residual text. (f) *Review:* the writer is `Utf8JsonWriter` with the relaxed encoder, which writes U+FFFD for a lone surrogate without refusing (`McpConfig`
+    refuses before it writes); the CTRF reader refuses an escaped lone surrogate in a test's name or status with its index (it used to throw).
 28. **E3.S1's reading choices, each inside C13's words.** `ObjectiveFacts.Present` is keyed by scenario id (an id with no entry reads as not present); the shortstat is
     trimmed (the shell's `git()` trimmed it); a CTRF the caller could not read (`Ctrf` a failed outcome) and one that is not a CTRF (`CtrfScenarios.Tests` Failure) are both
     read as no tests, and `checks` says why (S5 calls `CtrfScenarios.Tests` itself); a numstat line of fewer than three fields is not a row; a count too large for
-    `long` reads as not captured. The residuals the shell's own code has and the port does not copy are in the module doc (an id JavaScript would re-order as an array index,
+    `long` reads as not captured. *Review:* `NumstatRow` and `ChangedLines` are `long` (C13 says `int`): a numstat count beyond `int` read as 0 and the `int` sums could throw
+    `OverflowException`; a count beyond `long` still reads 0. The residuals the shell's own code has and the port does not copy are in the module doc (an id JavaScript would re-order as an array index,
     a pattern character in a name, a character outside printable BMP text in the bytes).
 29. **E3.S1's tests beyond the table, and what the table's fixtures could not be.** One test more than the spec's fourteen (`A_line_ends_where_javascript_ends_it`, from 27 (a)).
     Part 6's C1 run had no failing test and no indented `✔` line, so `mtp.log` carries two WRITTEN `failed …` records and `node.log` two WRITTEN `✖` lines (one twice) and three
     indented `✔` lines — said in the test class's comment, as the spec asks for the `failed` and `✖` ones; the MTP summary lines stay C1's (`failed: 0`). `ctrf.json`'s
-    `summary` is recomputed for its sixteen tests and its `extra` dropped. `research/module_tests.md` has no row of S1's own (its flows are verbs): the `checks` row names the
+    `summary` is recomputed for its sixteen tests and its envelope `extra` dropped; its twelve real tests lost their per-test `start`, `stop` and `extra` and the two hash entries
+    of their `suite` array; `node.log`'s written lines are the two `✖` lines (one twice), `✖ failing tests:`, an `AssertionError …` line and three indented `✔` lines. `research/module_tests.md` has no row of S1's own (its flows are verbs): the `checks` row names the
     pure half's tests and stays *not covered*. A one-off run of the three parsers over all twelve part-6 arms' own logs and CTRF reports (outside the repository,
     read-only, not kept as a test) agreed with each arm's recorded `objective.json` on every count, failed list and scenario.
 
