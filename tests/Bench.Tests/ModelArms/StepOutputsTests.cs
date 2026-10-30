@@ -112,6 +112,22 @@ public sealed class StepOutputsTests
         StepOutputs.Reconcile(Step("hreview"), Facts(before: true)).Should().Be(StepOutputs.Reconcile(Step("hreview"), Facts(before: true, final: Result("result-success.jsonl"))));
     }
 
+    /// <summary>E2 §8 item 50: the verdict's input is judged by the classifier, the predicate the review's answer uses — a .done the runner did not write must not send a limited or cut result to a regeneration.</summary>
+    [Fact]
+    public void A_result_the_classifier_does_not_call_finished_is_no_verdict_to_regenerate_from()
+    {
+        var limitedWhateverIsErrorSays = Outcome<ClaudeResultEnvelope>.Success(new ClaudeResultEnvelope(
+            false, Bench.Domain.Trace.CapturedCount.Number(429), "usage_limit_reached", "You've hit your limit", [], "success", 1));
+        var cut = ClaudeResultEnvelope.LastOf(ModelArmsFixtures.Read("result-success.jsonl") + "{\"type\":\"result\",\"is_error\":false,\"result\":\"cut");
+
+        cut.Ok().FollowedByUnreadResult.Should().BeTrue("the set-up must be the shape: an earlier success whose last line is a cut result");
+        foreach (var final in new[] { limitedWhateverIsErrorSays, cut })
+        {
+            StepOutputs.Reconcile(Step("review"), Facts(final: final)).Should().BeOfType<OutputAnswer.Resumable>(
+                "the classifier says Limited / Interrupted, and the review's answer would refuse the same result");
+        }
+    }
+
     [Fact]
     public void A_review_that_ended_on_its_deadline_without_a_result_is_resumable_not_done_with_a_hole()
     {

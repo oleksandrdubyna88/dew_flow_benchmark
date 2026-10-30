@@ -70,7 +70,9 @@ public static class StepOutputs
             _ => facts.TaskBeforeExists ? string.Empty : "the task's .before is missing — the coder's head and diff have no base; the step stays resumable",
         };
 
-    /// <summary>True when the last result is not an error and carries text: an error result's text is the error, never a verdict (the repair script's finding).</summary>
+    /// <summary>True when the stream's last word is a finished attempt with text: the SAME predicate as the review's answer (<c>StepClassifier.Classify(lastResult, "", AttemptFacts.Ran)</c> is <see cref="StepEnd.Finished"/>), so the two
+    /// gates cannot disagree on a captured 429/529 whose <c>is_error</c> says false, or on an earlier success followed by a cut result line (E2 §8 item 50). An error result's text is the error, never a verdict (the repair script's finding).</summary>
     private static bool HasVerdictText(Outcome<ClaudeResultEnvelope> result) =>
-        result is Outcome<ClaudeResultEnvelope>.Ok { Value: { IsError: false } envelope } && !string.IsNullOrWhiteSpace(envelope.Result);
+        StepClassifier.Classify(result, string.Empty, AttemptFacts.Ran) is StepEnd.Finished
+        && result is Outcome<ClaudeResultEnvelope>.Ok { Value: var envelope } && !string.IsNullOrWhiteSpace(envelope.Result);
 }
