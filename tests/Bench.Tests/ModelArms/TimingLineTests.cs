@@ -143,6 +143,19 @@ public sealed class TimingLineTests
     }
 
     [Fact]
+    public void A_lone_surrogate_in_a_reason_is_written_as_a_replacement_character_and_a_line_holding_one_is_kept_never_thrown_on()
+    {
+        var stopped = new TimingLine.Stopped("C1", "2-review", 5, "cut \ud800 here", Later);
+
+        var written = TimingLines.Write(stopped);
+
+        written.Should().Contain("cut \uFFFD here", "no UTF-8 encoding can hold a lone surrogate, and a model's reason may carry one");
+        One(written).Should().ContainSingle().Which.Should().Be(stopped with { Why = "cut \uFFFD here" });
+        One("{\"kind\":\"stopped\",\"arm\":\"C1\",\"step\":\"x\",\"exit\":5,\"why\":\"a\\ud800b\",\"at_utc\":\"2026-10-28T21:47:26Z\"}")
+            .Should().ContainSingle().Which.Should().BeOfType<TimingLine.Other>("a line that carries a lone surrogate escape is kept as it is, never a throw");
+    }
+
+    [Fact]
     public void A_done_marker_round_trips_and_the_shells_marker_reads()
     {
         var marker = new DoneMarker(2, CapturedCount.Number(0), "/e/out/2-review.a2.jsonl", "finished", false);

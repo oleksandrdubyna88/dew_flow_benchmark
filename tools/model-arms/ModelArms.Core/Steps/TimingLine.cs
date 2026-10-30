@@ -43,15 +43,88 @@ public abstract record TimingLine
     public sealed record Other(string Raw) : TimingLine;
 }
 
-/// <summary>Reads and writes <c>timing.jsonl</c> lines in the shell's key order (<c>run-arm.sh</c> of the part-6 experiment).</summary>
+/// <summary>Reads and writes <c>timing.jsonl</c> lines in the shell's key order (<c>run-arm.sh</c> of the part-6 experiment): UTC as <c>yyyy-MM-ddTHH:mm:ssZ</c>, one compact line, no newline.</summary>
 public static class TimingLines
 {
     /// <summary>The reason of a wall or an exit the file (a timing line or a <c>.done</c> marker) did not carry.</summary>
     public const string NotRecorded = "the file does not carry it";
 
-    /// <summary>One line of compact JSON, no newline.</summary>
-    public static string Write(TimingLine line) => string.Empty;
+    /// <summary>One line of compact JSON, no newline, keys in the shell's order. An uncaptured wall or exit is JSON <c>null</c>; <c>recovered</c> and <c>missing</c> are written only when they say something.</summary>
+    public static string Write(TimingLine line) =>
+        line switch
+        {
+            TimingLine.Start start => WriteStart(start),
+            TimingLine.End end => WriteEnd(end),
+            TimingLine.GateWait wait => WriteGateWait(wait),
+            TimingLine.ArmDone done => LineJson.Object(("kind", LineJson.Text("arm-done")), ("arm", LineJson.Text(done.Arm)), ("done_utc", LineJson.Utc(done.DoneUtc))),
+            TimingLine.Stopped stopped => WriteStopped(stopped),
+            TimingLine.Other other => other.Raw,
+            _ => throw new InvalidOperationException("unreachable"),
+        };
 
-    /// <summary>One <see cref="TimingLine"/> per non-empty line of <paramref name="text"/>.</summary>
-    public static IReadOnlyList<TimingLine> Read(string text) => [];
+    /// <summary>One <see cref="TimingLine"/> per non-empty line of <paramref name="text"/>. A line that is not a JSON object, whose <c>kind</c> is unknown or one of whose required fields is missing or of the wrong
+    /// kind is <see cref="TimingLine.Other"/> with its text, so a reader never drops a line and never throws on one. A missing <c>limited</c>, <c>recovered</c> or <c>end</c> reads as false or empty (the shell's lines
+    /// and the previous generation's carry none); a missing or null <c>wall_s</c> or <c>exit</c> is <see cref="Bench.Domain.Trace.CapturedCount.Unavailable"/>.</summary>
+    public static IReadOnlyList<TimingLine> Read(string text) =>
+        [.. text.Split('\n').Select(raw => raw.TrimEnd('\r')).Where(raw => !string.IsNullOrWhiteSpace(raw)).Select(ReadLine)];
+
+    private static TimingLine ReadLine(string raw) =>
+        Row.Parse(raw, "a timing line").Match(row => Typed(row) ?? new TimingLine.Other(raw), _ => new TimingLine.Other(raw));
+
+    private static TimingLine? Typed(Row row)
+    {
+        TimingLine? line = row.Text("kind", required: true) switch
+        {
+            "start" => ReadStart(row),
+            "end" => ReadEnd(row),
+            "gate-wait" => ReadGateWait(row),
+            "arm-done" => new TimingLine.ArmDone(row.Text("arm", required: true), row.Utc("done_utc")),
+            "stopped" => ReadStopped(row),
+            _ => null,
+        };
+        return row.Problem.Length == 0 ? line : null;
+    }
+
+    private static TimingLine.Start ReadStart(Row row) =>
+        new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("attempt"), row.Text("how"), row.Text("session"), row.Text("model"), row.Utc("start_utc"), row.Int("budget_s"),
+            row.Text("deadline"), row.Text("head"), row.Text("stream"));
+
+    private static TimingLine.End ReadEnd(Row row) =>
+        new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("attempt"), row.Utc("end_utc"), row.Count("wall_s"), row.Count("exit"), row.Flag("result"), row.Flag("limited"),
+            row.Text("head"), row.Text("end"), row.Flag("recovered"))
+        {
+            Missing = row.Texts("missing"),
+        };
+
+    private static TimingLine.GateWait ReadGateWait(Row row) =>
+        new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("after"), row.Int("wait"), row.Text("why"), row.Utc("at_utc"));
+
+    private static TimingLine.Stopped ReadStopped(Row row) =>
+        new(row.Text("arm", required: true), row.Text("step"), row.Int("exit"), row.Text("why"), row.Utc("at_utc"));
+
+    private static string WriteStart(TimingLine.Start start) =>
+        LineJson.Object(
+            ("kind", LineJson.Text("start")), ("arm", LineJson.Text(start.Arm)), ("step", LineJson.Text(start.Step)), ("attempt", LineJson.Number(start.Attempt)), ("how", LineJson.Text(start.How)),
+            ("session", LineJson.Text(start.Session)), ("model", LineJson.Text(start.Model)), ("start_utc", LineJson.Utc(start.StartUtc)), ("budget_s", LineJson.Number(start.BudgetSeconds)),
+            ("deadline", LineJson.Text(start.Deadline)), ("head", LineJson.Text(start.Head)), ("stream", LineJson.Text(start.Stream)));
+
+    private static string WriteEnd(TimingLine.End end) =>
+        LineJson.Object(
+            [
+                ("kind", LineJson.Text("end")), ("arm", LineJson.Text(end.Arm)), ("step", LineJson.Text(end.Step)), ("attempt", LineJson.Number(end.Attempt)), ("end_utc", LineJson.Utc(end.EndUtc)),
+                ("wall_s", LineJson.Count(end.WallSeconds)), ("exit", LineJson.Count(end.Exit)), ("result", LineJson.Flag(end.Result)), ("limited", LineJson.Flag(end.Limited)),
+                ("head", LineJson.Text(end.Head)), ("end", LineJson.Text(end.State)),
+                .. LineJson.Only(end.Recovered, "recovered", () => LineJson.Flag(true)),
+                .. LineJson.Only(end.Missing.Count > 0, "missing", () => LineJson.Texts(end.Missing)),
+            ]);
+
+    private static string WriteGateWait(TimingLine.GateWait wait) =>
+        LineJson.Object(
+            ("kind", LineJson.Text("gate-wait")), ("arm", LineJson.Text(wait.Arm)), ("step", LineJson.Text(wait.Step)), ("after", LineJson.Number(wait.After)), ("wait", LineJson.Number(wait.Wait)),
+            ("why", LineJson.Text(wait.Why)), ("at_utc", LineJson.Utc(wait.AtUtc)));
+
+    private static string WriteStopped(TimingLine.Stopped stopped) =>
+        LineJson.Object(
+            ("kind", LineJson.Text("stopped")), ("arm", LineJson.Text(stopped.Arm)), ("step", LineJson.Text(stopped.Step)), ("exit", LineJson.Number(stopped.Exit)), ("why", LineJson.Text(stopped.Why)),
+            ("at_utc", LineJson.Utc(stopped.AtUtc)));
 }

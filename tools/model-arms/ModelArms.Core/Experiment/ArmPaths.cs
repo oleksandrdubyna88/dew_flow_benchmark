@@ -114,7 +114,8 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string Done(string step) => OutFile(step, ".done");
 
-    public string Continue(string step) => Folder;
+    /// <summary>The gate's marker "attempt N finished, continue its session" (D7, D10) — spelled as <see cref="Done"/> is.</summary>
+    public string Continue(string step) => OutFile(step, ".continue");
 
     public string Before(string step) => OutFile(step, ".before");
 
