@@ -15,20 +15,72 @@ const sha256File = file => createHash('sha256').update(readFileSync(file)).diges
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 const SERIES = /^s-\d{8}-[0-9a-f]{4}$/;
 
+const hashed = r => Boolean(r?.treeSha256 && r.parts);
+
+/** The sentence for a snapshot directory that is missing or no longer hashes to the registered tree, or null. */
+function snapshotDirProblem({ stack, r, dir, verify }) {
+  if (!existsSync(dir)) return `the ${stack} snapshot directory ${dir} does not exist`;
+  return verify && treeHash(dir) !== r.treeSha256 ? `the ${stack} snapshot at ${dir} no longer hashes to ${r.treeSha256.slice(0, 12)}` : null;
+}
+
+/** One registered snapshot, found in the toolchains folder and (when `verify`) re-hashed. -> `ok({ dir, treeSha256, parts, sizeBytes })` | `fail`. */
+function snapshotOf({ stack, registered, toolchainsDir, verify }) {
+  const r = registered[stack];
+  if (!hashed(r)) return fail(`cache-snapshots.json has no hashed snapshot for ${stack}`);
+  const dir = path.join(toolchainsDir, `cache-${stack}-${r.treeSha256.slice(0, 12)}`);
+  const problem = snapshotDirProblem({ stack, r, dir, verify });
+  return problem ? fail(problem) : ok({ dir, treeSha256: r.treeSha256, parts: r.parts, sizeBytes: r.sizeBytes ?? null });
+}
+
 function snapshotsOf({ inputsDir, toolchainsDir, verify }) {
   const file = path.join(inputsDir, 'cache-snapshots.json');
   if (!existsSync(file)) return fail(`${file} does not exist: make the cache snapshots (bare-runner.mjs snapshot) and register them before init`);
   const registered = readJson(file);
   const out = {};
   for (const stack of ['csharp', 'node']) {
-    const r = registered[stack];
-    if (!r?.treeSha256 || !r.parts) return fail(`cache-snapshots.json has no hashed snapshot for ${stack}`);
-    const dir = path.join(toolchainsDir, `cache-${stack}-${r.treeSha256.slice(0, 12)}`);
-    if (!existsSync(dir)) return fail(`the ${stack} snapshot directory ${dir} does not exist`);
-    if (verify && treeHash(dir) !== r.treeSha256) return fail(`the ${stack} snapshot at ${dir} no longer hashes to ${r.treeSha256.slice(0, 12)}`);
-    out[stack] = { dir, treeSha256: r.treeSha256, parts: r.parts, sizeBytes: r.sizeBytes ?? null };
+    const one = snapshotOf({ stack, registered, toolchainsDir, verify });
+    if (!one.ok) return one;
+    out[stack] = one.value;
   }
   return ok(out);
+}
+
+/** The other series directories of the runs root, by name. */
+const seriesNames = ({ seriesRoot, seriesId }) => (existsSync(seriesRoot) ? readdirSync(seriesRoot).filter(n => SERIES.test(n) && n !== seriesId && statSync(path.join(seriesRoot, n)).isDirectory()).sort() : []);
+
+/** The ledger of an earlier series: `ok(lines)`, or a `fail` for one that is missing or unreadable. */
+function loadLedger(seriesRoot, name) {
+  const file = path.join(seriesRoot, name, 'ledger.ndjson');
+  if (!existsSync(file)) return fail(`the earlier series ${name} has no ledger.ndjson: its spend cannot be counted, so a new series is not started over it`);
+  try {
+    return ok(readLedger(file));
+  } catch (e) {
+    return fail(`the ledger of the earlier series ${name} is unreadable (${e.message}): its spend cannot be counted`);
+  }
+}
+
+/** An earlier series' ledger, checked: `fail` for a line of an unknown kind. */
+function earlierLedger(seriesRoot, name) {
+  const loaded = loadLedger(seriesRoot, name);
+  if (!loaded.ok) return loaded;
+  const bad = loaded.value.find(l => l.event === undefined && !LEDGER_KINDS.includes(l.kind));
+  return bad ? fail(`the ledger of the earlier series ${name} holds a line of kind '${bad.kind}': the legal kinds are ${LEDGER_KINDS.join(', ')}`) : loaded;
+}
+
+const alreadyCarried = (lines, l) => lines.some(x => x.fromSeries === l.fromSeries && x.rid === l.rid);
+
+/** A line this series itself CARRIED from another (`fromSeries`) is a copy: its origin series is read on its own, and counting both would double it; a copy whose origin directory is gone stays. -> the line to add, or null. */
+const carried = (l, name, names, lines) => {
+  if (l.fromSeries === undefined) return { ...l, fromSeries: name };
+  return !names.includes(l.fromSeries) && !alreadyCarried(lines, l) ? l : null;
+};
+
+/** Add the spend lines of one earlier ledger (event lines are not spend; the registered prior spend is seeded by the new series itself) to `lines`. */
+function addSpend({ lines, ledger, name, names }) {
+  for (const l of ledger.filter(x => x.event === undefined && x.kind !== 'prior')) {
+    const line = carried(l, name, names, lines);
+    if (line) lines.push(line);
+  }
 }
 
 /**
@@ -38,20 +90,12 @@ function snapshotsOf({ inputsDir, toolchainsDir, verify }) {
  * A series directory whose ledger is absent, unreadable or holds a line of an unknown kind is a refusal naming it: a spend nobody can read is a spend nobody can count.
  */
 function earlierSpend({ seriesRoot, seriesId }) {
-  const names = existsSync(seriesRoot) ? readdirSync(seriesRoot).filter(n => SERIES.test(n) && n !== seriesId && statSync(path.join(seriesRoot, n)).isDirectory()).sort() : [];
+  const names = seriesNames({ seriesRoot, seriesId });
   const lines = [];
   for (const name of names) {
-    const file = path.join(seriesRoot, name, 'ledger.ndjson');
-    if (!existsSync(file)) return fail(`the earlier series ${name} has no ledger.ndjson: its spend cannot be counted, so a new series is not started over it`);
-    let ledger;
-    try { ledger = readLedger(file); } catch (e) { return fail(`the ledger of the earlier series ${name} is unreadable (${e.message}): its spend cannot be counted`); }
-    const bad = ledger.find(l => l.event === undefined && !LEDGER_KINDS.includes(l.kind));
-    if (bad) return fail(`the ledger of the earlier series ${name} holds a line of kind '${bad.kind}': the legal kinds are ${LEDGER_KINDS.join(', ')}`);
-    for (const l of ledger.filter(x => x.event === undefined && x.kind !== 'prior')) {
-      // a line this series itself CARRIED from another (`fromSeries`) is a copy: its origin series is read on its own, and counting both would double it; a copy whose origin directory is gone stays
-      if (l.fromSeries === undefined) lines.push({ ...l, fromSeries: name });
-      else if (!names.includes(l.fromSeries) && !lines.some(x => x.fromSeries === l.fromSeries && x.rid === l.rid)) lines.push(l);
-    }
+    const ledger = earlierLedger(seriesRoot, name);
+    if (!ledger.ok) return ledger;
+    addSpend({ lines, ledger: ledger.value, name, names });
   }
   return ok({ lines, series: names });
 }
@@ -78,37 +122,67 @@ function openWorkOf({ seriesRoot, name }) {
   return [launchingSentence, waitingStopSentence].map(f => f({ name, dir, map: read.value })).find(Boolean) ?? null;
 }
 
+const REQUIRED_INPUTS = ['stacks.json', 'spend-prior.json', 'prices-2026-10-29.json', 'quiet.json', 'package-flags.json'];
+
+const idProblem = ({ seriesId }) => (SERIES.test(seriesId) ? null : `series id '${seriesId}' must look like s-yyyymmdd-<4 hex>`);
+const inputsProblem = ({ inputsDir }) => {
+  const absent = REQUIRED_INPUTS.find(f => !existsSync(path.join(inputsDir, f)));
+  return absent ? `${path.join(inputsDir, absent)} does not exist` : null;
+};
+const cliProblem = ({ inputsDir, versionsDir }) => {
+  const pin = readJson(path.join(inputsDir, 'stacks.json')).pins.claude;
+  const source = path.join(versionsDir, pin);
+  return existsSync(source) ? null : `the pinned CLI ${pin} is not at ${source}: the operator's auto-update may have removed it`;
+};
+const seedHashProblem = ({ inputsDir }) => (existsSync(path.join(inputsDir, 'seed.sha256')) ? null : 'inputs/seed.sha256 does not exist: run seed-commit and commit its hash with the pre-registration');
+
+/** The sentence for the first input the plan needs that is not there (or a series id that is not one), or null. In this order: the id, the registered inputs, the pinned CLI, the seed hash. */
+function planProblem(args) {
+  for (const check of [idProblem, inputsProblem, cliProblem, seedHashProblem]) {
+    const problem = check(args);
+    if (problem) return problem;
+  }
+  return null;
+}
+
+/** The run-map a new series starts with: what it is pinned to, from the inputs on disk. */
+function newRunMap({ inputsDir, seriesId, facts, stacks, snaps, copy, pin }) {
+  const file = name => path.join(inputsDir, name);
+  const prices = 'prices-2026-10-29.json';
+  return openSeries({
+    seriesId, seedSha256: readFileSync(file('seed.sha256'), 'utf8').trim(), harnessIdentity: facts.harnessIdentity, preregTag: facts.preregTag, preregCommit: facts.preregCommit, pins: stacks.pins,
+    stacksSha256: sha256File(file('stacks.json')), pricesFile: prices, pricesSha256: sha256File(file(prices)),
+    quietSha256: sha256File(file('quiet.json')), packageFlagsSha256: sha256File(file('package-flags.json')),
+    snapshots: Object.fromEntries(Object.entries(snaps).map(([s, v]) => [s, v.treeSha256])), snapshotDirs: Object.fromEntries(Object.entries(snaps).map(([s, v]) => [s, v.dir])),
+    claude: { path: copy.to, sha256: copy.sha256, version: pin }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: null,
+  });
+}
+
+/** The spend of the earlier series, unless one of them holds work nobody settled. -> `ok({ lines, series })` | `fail`. */
+function earlierChecked({ seriesRoot, seriesId }) {
+  const earlier = earlierSpend({ seriesRoot, seriesId });
+  if (!earlier.ok) return earlier;
+  const open = earlier.value.series.map(name => openWorkOf({ seriesRoot, name })).find(Boolean);
+  return open ? fail(open) : earlier;
+}
+
 /**
  * Gather and check everything. `facts` = `{ preregTag, preregCommit, harnessIdentity }` (from git; injected). -> `ok(plan)` | `fail` naming the first missing or mismatched input.
  * `plan` carries the run-map as it would be written, the CLI copy to make, the ledger lines to seed and the directories to create.
  */
 export function initPlan({ inputsDir, seriesRoot, seriesId, versionsDir, toolchainsDir, facts, verifySnapshots = true }) {
-  if (!SERIES.test(seriesId)) return fail(`series id '${seriesId}' must look like s-yyyymmdd-<4 hex>`);
-  const stacksFile = path.join(inputsDir, 'stacks.json');
-  const absent = ['stacks.json', 'spend-prior.json', 'prices-2026-10-29.json', 'quiet.json', 'package-flags.json'].find(f => !existsSync(path.join(inputsDir, f)));
-  if (absent) return fail(`${path.join(inputsDir, absent)} does not exist`);
-  const stacks = readJson(stacksFile);
+  const problem = planProblem({ seriesId, inputsDir, versionsDir });
+  if (problem) return fail(problem);
+  const stacks = readJson(path.join(inputsDir, 'stacks.json'));
   const pin = stacks.pins.claude;
   const source = path.join(versionsDir, pin);
-  if (!existsSync(source)) return fail(`the pinned CLI ${pin} is not at ${source}: the operator's auto-update may have removed it`);
-  const seedFile = path.join(inputsDir, 'seed.sha256');
-  if (!existsSync(seedFile)) return fail('inputs/seed.sha256 does not exist: run seed-commit and commit its hash with the pre-registration');
-  const prices = ['prices-2026-10-29.json'].find(f => existsSync(path.join(inputsDir, f)));
   const snaps = snapshotsOf({ inputsDir, toolchainsDir, verify: verifySnapshots });
   if (!snaps.ok) return snaps;
   const seriesDir = path.join(seriesRoot, seriesId);
   const copy = { from: source, to: path.join(toolchainsDir, `claude-${pin}`), sha256: sha256File(source), sizeBytes: statSync(source).size };
-  const runMap = openSeries({
-    seriesId, seedSha256: readFileSync(seedFile, 'utf8').trim(), harnessIdentity: facts.harnessIdentity, preregTag: facts.preregTag, preregCommit: facts.preregCommit, pins: stacks.pins,
-    stacksSha256: sha256File(stacksFile), pricesFile: prices, pricesSha256: sha256File(path.join(inputsDir, prices)),
-    quietSha256: sha256File(path.join(inputsDir, 'quiet.json')), packageFlagsSha256: sha256File(path.join(inputsDir, 'package-flags.json')),
-    snapshots: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.treeSha256])), snapshotDirs: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.dir])),
-    claude: { path: copy.to, sha256: copy.sha256, version: pin }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: null,
-  });
-  const earlier = earlierSpend({ seriesRoot, seriesId });
+  const runMap = newRunMap({ inputsDir, seriesId, facts, stacks, snaps: snaps.value, copy, pin });
+  const earlier = earlierChecked({ seriesRoot, seriesId });
   if (!earlier.ok) return earlier;
-  const open = earlier.value.series.map(name => openWorkOf({ seriesRoot, name })).find(Boolean);
-  if (open) return fail(open);
   const prior = [...priorLines(readJson(path.join(inputsDir, 'spend-prior.json'))), ...earlier.value.lines];
   return ok({ seriesDir, runMap, copy, prior, earlier: { series: earlier.value.series, lines: earlier.value.lines.length }, dirs: ['s', 'pairs', 'canaries'].map(d => path.join(seriesDir, d)) });
 }
@@ -125,20 +199,34 @@ export const describePlan = plan => [
   `spin probe: calibrated at init on a quiet machine (${plan.runMap.spin ? `median ${plan.runMap.spin.medianMs} ms` : 'not yet'})`,
 ];
 
+/** The pinned CLI already at its place must be the pinned one. -> `fail` or null. */
+function existingCliProblem(plan) {
+  return sha256File(plan.copy.to) === plan.copy.sha256 ? null : fail(`${plan.copy.to} exists and is not the pinned CLI (sha256 differs)`);
+}
+
+/** Copy the pinned CLI to its place, read-only and executable, and re-check its hash. -> `fail` or null. */
+function copyCli(plan) {
+  copyFileSync(plan.copy.from, plan.copy.to);
+  chmodSync(plan.copy.to, 0o555);
+  return sha256File(plan.copy.to) === plan.copy.sha256 ? null : fail('the CLI copy does not hash to its source');
+}
+
+const installCli = plan => (existsSync(plan.copy.to) ? existingCliProblem(plan) : copyCli(plan));
+
+/** The ledger starts with the prior lines (and the earlier series' spend); a ledger that already has lines is left alone. */
+function seedLedger(plan) {
+  const ledger = path.join(plan.seriesDir, 'ledger.ndjson');
+  if (readLedger(ledger).length === 0) plan.prior.forEach(l => appendLedger(ledger, l));
+}
+
 /** Write the plan: the CLI copy (0555, hash re-checked), the directories, the ledger's prior lines, `run-map.json` (with `spin` as calibrated). -> `ok(runMap)` | `fail`. */
 export function applyInit({ plan, spin }) {
   if (existsSync(plan.seriesDir)) return fail(`${plan.seriesDir} already exists: a series is initialised once`);
   mkdirSync(path.dirname(plan.copy.to), { recursive: true });
-  if (existsSync(plan.copy.to)) {
-    if (sha256File(plan.copy.to) !== plan.copy.sha256) return fail(`${plan.copy.to} exists and is not the pinned CLI (sha256 differs)`);
-  } else {
-    copyFileSync(plan.copy.from, plan.copy.to);
-    chmodSync(plan.copy.to, 0o555);
-    if (sha256File(plan.copy.to) !== plan.copy.sha256) return fail('the CLI copy does not hash to its source');
-  }
+  const installed = installCli(plan);
+  if (installed) return installed;
   for (const d of plan.dirs) mkdirSync(d, { recursive: true, mode: 0o700 });
-  const ledger = path.join(plan.seriesDir, 'ledger.ndjson');
-  if (readLedger(ledger).length === 0) plan.prior.forEach(l => appendLedger(ledger, l));
+  seedLedger(plan);
   const runMap = { ...plan.runMap, spin };
   writeRunMap(path.join(plan.seriesDir, 'run-map.json'), runMap);
   return ok(runMap);

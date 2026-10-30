@@ -28,14 +28,17 @@ export function maskedSpawn({ mask, stamp, d }) {
   };
 }
 
+/** The workspace of a phase: v1 is exactly the pinned inputs, v2 a copy of the item's v1 tree plus the v2 inputs. */
+const fillFor = ({ ctx, item, layout }) => (item.session.phase === 'v1'
+  ? fillV1({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, work: layout.work })
+  : fillV2({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, v1Work: ctx.v1WorkOf(item.session), work: layout.work, stack: item.session.stack }));
+
 function prepare({ ctx, item, d }) {
   const made = sessionLayout(ctx.sessionsRoot, item.rid);
   if (!made.ok) return made;
   const layout = made.value;
-  const { stack, phase } = item.session;
   const release = failure => { rmSync(layout.dir, { recursive: true, force: true }); return failure; }; // this attempt claimed the dir and nothing is paid yet: a retry claims the same rid again
-  const filled = phase === 'v1' ? fillV1({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, work: layout.work })
-    : fillV2({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, v1Work: ctx.v1WorkOf(item.session), work: layout.work, stack });
+  const filled = fillFor({ ctx, item, layout });
   if (!filled.ok) return release(filled);
   const seeded = seedCaches({ layout, snapshots: ctx.snapshots });
   return seeded.ok ? ok({ ...item, layout, workspace: filled.value, seeded: seeded.value }) : release(seeded);
@@ -44,12 +47,19 @@ function prepare({ ctx, item, d }) {
 const manifestOf = ({ ctx, item }) => path.join(ctx.seriesDir, 'canaries', `${item.rid}.json`);
 
 /** Unplant every manifest that exists (one that was never written has nothing planted); a failure on one is collected and thrown after the rest are done. */
-function unplantManifests({ manifests, home, roots }) {
-  const errors = [];
-  for (const m of manifests) {
-    if (!existsSync(m)) continue;
-    try { unplant(m, home, { roots }); } catch (e) { errors.push(`${m}: ${e.message}`); }
+/** Unplant one manifest: `null`, or the sentence of the error (a manifest that is not there is nothing to remove). */
+function unplantOne(m, home, roots) {
+  if (!existsSync(m)) return null;
+  try {
+    unplant(m, home, { roots });
+    return null;
+  } catch (e) {
+    return `${m}: ${e.message}`;
   }
+}
+
+function unplantManifests({ manifests, home, roots }) {
+  const errors = manifests.map(m => unplantOne(m, home, roots)).filter(Boolean);
   if (errors.length > 0) throw new Error(`canaries could not be removed: ${errors.join('; ')}`);
 }
 
@@ -69,52 +79,65 @@ function sessionPlan({ ctx, item }) {
   });
 }
 
+const removeLayouts = prepared => prepared.forEach(x => rmSync(x.layout.dir, { recursive: true, force: true }));
+
+/** Prepare every item (a layout claimed, a workspace filled, the caches seeded). A failure releases what the earlier items claimed: nothing paid has started, so the layouts hold nothing worth keeping. -> `ok(prepared)` | the failing `fail`. */
+function prepareAll({ ctx, items, d }) {
+  const prepared = [];
+  for (const item of items) {
+    const p = prepare({ ctx, item, d });
+    if (!p.ok) { removeLayouts(prepared); return p; }
+    prepared.push(p.value);
+  }
+  return ok(prepared);
+}
+
+/** Start one session behind its mask: the mask is checked after `maskCheckMs`, the spawn is stamped, and the result is the item with its plan and what `launchSession` returned. */
+function startOne({ item, plan, d, signal, stamps, observed }) {
+  const timer = setTimeout(() => {
+    const pids = cellProcesses(plan.cellId, d.procApi, { inner: true }).pids;
+    observed[item.rid] = maskObserved({ pids, mask: item.mask, procApi: d.procApi });
+  }, d.maskCheckMs);
+  const launched = d.launchSession(plan, { spawnBox: maskedSpawn({ mask: item.mask, stamp: () => { stamps[item.rid] = d.now(); }, d }) }, { signal })
+    .finally(() => clearTimeout(timer));
+  return launched.then(result => ({ ...item, plan, launched: result }));
+}
+
+/**
+ * The cleanup scope starts BEFORE the first canary is planted: whatever throws from here on (a planting, a plan, a launch), every manifest started is unplanted and, when nothing paid
+ * had started, the claimed layouts are released (review G2). -> `{ settled, stamps, observed }`.
+ */
+async function launchPrepared({ ctx, prepared, d, signal }) {
+  const manifests = [];
+  const stamps = {};
+  const observed = {};
+  let launching = false;
+  try {
+    const withCanaries = prepared.map(item => {
+      manifests.push(manifestOf({ ctx, item }));
+      return { ...item, canary: plantFor({ ctx, item, partner: prepared.find(x => x !== item), d }) };
+    });
+    const plans = withCanaries.map(item => ({ item, plan: sessionPlan({ ctx, item }) })); // every plan is made before any launch starts: a throw here has paid for nothing
+    launching = true;
+    const settled = await Promise.all(plans.map(({ item, plan }) => startOne({ item, plan, d, signal, stamps, observed })));
+    return { settled, stamps, observed };
+  } catch (e) {
+    if (!launching) removeLayouts(prepared); // nothing paid has started
+    throw e;
+  } finally {
+    unplantManifests({ manifests, home: ctx.home, roots: [ctx.sessionsRoot] });
+  }
+}
+
 /**
  * Launch `items` (`[{ session, rid, mask }]`, the first stack first) together. -> `ok({ sessions: [{ ...item, layout, plan, launched, stampMs, canary, maskObserved }], startSkewMs })`
  * after every session has closed and the canaries are unplanted; `fail` when a layout, a workspace or a seed could not be made (nothing paid has started then).
  */
 export async function launchPhase({ ctx, items, deps = {}, signal }) {
   const d = { ...DEFAULT_PHASE_DEPS, ...deps };
-  const prepared = [];
-  for (const item of items) {
-    const p = prepare({ ctx, item, d });
-    if (!p.ok) {
-      prepared.forEach(x => rmSync(x.layout.dir, { recursive: true, force: true })); // nothing paid has started: the claimed layouts hold nothing worth keeping
-      return p;
-    }
-    prepared.push(p.value);
-  }
-  // The cleanup scope starts BEFORE the first canary is planted: whatever throws from here on (a planting, a plan, a launch), every manifest started is unplanted and, when nothing paid
-  // had started, the claimed layouts are released (review G2).
-  const manifests = [];
-  const stamps = {};
-  const observed = {};
-  let launching = false;
-  let settled;
-  let withCanaries;
-  try {
-    withCanaries = prepared.map(item => {
-      manifests.push(manifestOf({ ctx, item }));
-      return { ...item, canary: plantFor({ ctx, item, partner: prepared.find(x => x !== item), d }) };
-    });
-    const plans = withCanaries.map(item => ({ item, plan: sessionPlan({ ctx, item }) })); // every plan is made before any launch starts: a throw here has paid for nothing
-    launching = true;
-    const running = plans.map(({ item, plan }) => {
-      const timer = setTimeout(() => {
-        const pids = cellProcesses(plan.cellId, d.procApi, { inner: true }).pids;
-        observed[item.rid] = maskObserved({ pids, mask: item.mask, procApi: d.procApi });
-      }, d.maskCheckMs);
-      const launched = d.launchSession(plan, { spawnBox: maskedSpawn({ mask: item.mask, stamp: () => { stamps[item.rid] = d.now(); }, d }) }, { signal })
-        .finally(() => clearTimeout(timer));
-      return launched.then(result => ({ ...item, plan, launched: result }));
-    });
-    settled = await Promise.all(running);
-  } catch (e) {
-    if (!launching) prepared.forEach(x => rmSync(x.layout.dir, { recursive: true, force: true })); // nothing paid has started
-    throw e;
-  } finally {
-    unplantManifests({ manifests, home: ctx.home, roots: [ctx.sessionsRoot] });
-  }
+  const prepared = prepareAll({ ctx, items, d });
+  if (!prepared.ok) return prepared;
+  const { settled, stamps, observed } = await launchPrepared({ ctx, prepared: prepared.value, d, signal });
   const sessions = settled.map(s => ({ ...s, stampMs: stamps[s.rid] ?? null, maskObserved: observed[s.rid] ?? null }));
   const spawned = sessions.map(s => s.stampMs).filter(x => x !== null);
   return ok({ sessions, startSkewMs: spawned.length === 2 ? Math.abs(spawned[0] - spawned[1]) : null });
