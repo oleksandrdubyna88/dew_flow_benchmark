@@ -77,13 +77,16 @@ function g8(f, ctx) {
 
 // ---- G-11: the contention control ---------------------------------------------------------------------------------------------
 
-/** The sampler's gaps: the samples of the session's window, at most twice the registered interval apart, each with a spin probe figure. */
+/** The scheduler's jitter the sampler may show on top of its registered interval (the contract says every 5 s: a gap of 2x is a missed sample, not jitter). */
+const SAMPLER_JITTER_MS = 1000;
+
+/** The sampler's gaps: the samples of the session's window, at most the registered interval plus the jitter apart, each with a spin probe figure. */
 function samplerProblems(f, intervalMs) {
   const t = f.samples.map(s => s.t);
   const gaps = t.slice(1).map((x, i) => x - t[i]);
   return [
     ...(f.samples.length < 2 ? [`${f.samples.length} sampler sample(s) in the session's window`] : []),
-    ...(Math.max(0, ...gaps) > 2 * intervalMs ? [`a gap of ${Math.max(...gaps)} ms between samples (the interval is ${intervalMs} ms)`] : []),
+    ...(Math.max(0, ...gaps) > intervalMs + SAMPLER_JITTER_MS ? [`a gap of ${Math.max(...gaps)} ms between samples (the interval is ${intervalMs} ms)`] : []),
     ...(f.samples.some(s => typeof s.spinMs !== 'number') ? ['a sample without the spin probe'] : []),
   ];
 }

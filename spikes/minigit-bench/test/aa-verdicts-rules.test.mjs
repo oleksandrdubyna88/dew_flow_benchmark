@@ -94,3 +94,13 @@ test('An_explained_line_is_no_hold_for_G10_and_G13_the_contract_allows_it_only_f
     assert.equal(rep.verdict, 'NO GO', g);
   }
 });
+
+// ---- G-11: the sampler wrote every 5 s ------------------------------------------------------------------------------------------
+
+test('G11_refutes_a_gap_over_the_registered_interval_plus_a_one_second_jitter_and_not_a_double_interval', () => {
+  const g11 = every => rowOf(report(makeSeries({ sampler: { every } })), 'G-11');
+  assert.equal(g11(5000).verdict, 'holds');
+  assert.equal(g11(6000).verdict, 'holds', 'one second of jitter is allowed');
+  assert.equal(g11(6100).verdict, 'refuted', '6.1 s is not every 5 s (the old rule allowed 10 s)');
+  assert.match(g11(7000).observed, /gap of 7000 ms.*interval is 5000 ms/);
+});
