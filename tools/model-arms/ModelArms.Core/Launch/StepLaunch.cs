@@ -40,16 +40,19 @@ public static class StepLaunch
 {
     private const string PwdVariable = "PWD";
 
+    /// <summary>The tool that starts a subagent, under both names the CLI has used.</summary>
+    public static readonly IReadOnlyList<string> SubagentTools = ["Agent", "Task"];
+
     /// <summary>The options of a step: stream-json events, MCP servers off and the arm's notes and work folders granted, whatever the mode;
     /// then the session; then the mode's permission mode, permission list, deny list and MCP config.</summary>
-    public static AgentAskOptions Options(StepMode mode, ToolSets tools, ArmPaths paths, StepSession session) =>
-        Session(ForMode(mode, tools, paths), session);
+    public static AgentAskOptions Options(StepSpec spec, ToolSets tools, ArmPaths paths, StepSession session) =>
+        Session(ForMode(spec.Mode, tools, paths), session);
 
     /// <summary>The question put to claude for one attempt of a step.</summary>
     public static AgentAsk Ask(StepLaunchRequest request) =>
         new(ModelRuntimeKind.CliClaude, request.ClaudeExecutable, request.Prompt, request.WorkingDirectory, request.Wall, request.Spec.Model)
         {
-            Options = Options(request.Spec.Mode, request.Tools, request.Paths, request.Session),
+            Options = Options(request.Spec, request.Tools, request.Paths, request.Session),
             Environment = AgentEnvironment.Only(ChildVariables(request)),
         };
 

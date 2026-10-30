@@ -239,6 +239,36 @@ internal sealed class StrictJson
         return number;
     }
 
+    /// <summary><c>true</c> or <c>false</c>, or <paramref name="fallback"/> when the member is absent (silent) or is anything else (recorded).</summary>
+    public bool Flag(JsonObject obj, string path, string name, bool fallback)
+    {
+        if (!obj.ContainsKey(name))
+        {
+            return fallback;
+        }
+
+        if (obj[name] is JsonValue value && value.TryGetValue(out bool flag))
+        {
+            return flag;
+        }
+
+        Add($"{Join(path, name)} must be true or false");
+        return fallback;
+    }
+
+    /// <summary>The member as a JSON object whose every value is a non-empty text, as pairs in file order. Absent: empty and silent. An EMPTY object is legal — <see cref="MapMember"/>'s
+    /// "at least one member" belongs to the maps that must hold something.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> TextMap(JsonObject parent, string path, string name)
+    {
+        if (!parent.ContainsKey(name))
+        {
+            return [];
+        }
+
+        var where = Join(path, name);
+        return [.. Map(parent[name], where).Select(member => new KeyValuePair<string, string>(member.Key, NonEmptyText(member.Value, ExecutableRule.Printable(Join(where, member.Key)))))];
+    }
+
     /// <summary>An array of non-empty texts, or an empty list after recording why not. Every bad element is named by its index.
     /// A command passes <paramref name="atLeastOne"/>: an executable and its arguments cannot be nothing.</summary>
     public IReadOnlyList<string> Texts(JsonObject obj, string path, string name, bool atLeastOne = false)

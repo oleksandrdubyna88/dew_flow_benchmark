@@ -80,13 +80,8 @@ public sealed class ArmPathsTests
         (nameof(ArmPaths.PrepBuildLog), Arm.PrepBuildLog, At("r/abc/out/prep-build.log")),
         (nameof(ArmPaths.ObjectiveLog), Arm.ObjectiveLog, At("r/abc/out/objective.out")),
         (nameof(ArmPaths.WorktreeBuildLog), Arm.WorktreeBuildLog("t2"), At("r/abc/out/wt-build-t2.log")),
-        (nameof(ArmPaths.CodeNotes), Arm.CodeNotes, At("r/abc/notes/code.md")),
-        (nameof(ArmPaths.HReviewNotes), Arm.HReviewNotes, At("r/abc/notes/hreview.md")),
-        (nameof(ArmPaths.FixNotes), Arm.FixNotes, At("r/abc/notes/fix.md")),
-        (nameof(ArmPaths.GateNotes), Arm.GateNotes, At("r/abc/notes/gate.md")),
-        (nameof(ArmPaths.SplitNotes), Arm.SplitNotes, At("r/abc/notes/split.md")),
-        (nameof(ArmPaths.ReviewJson), Arm.ReviewJson, At("r/abc/notes/review.json")),
-        (nameof(ArmPaths.GateJson), Arm.GateJson, At("r/abc/notes/gate.json")),
+        (nameof(ArmPaths.NotesFile), Arm.NotesFile(new OutputBinding("HA_JSON", "notes/hA.json")), At("r/abc/notes/hA.json")),
+        (nameof(ArmPaths.NotesFile), Arm.NotesFile(new OutputBinding("X", "work/a/b.md")), At("r/abc/work/a/b.md")),
         (nameof(ArmPaths.TaskNotes), Arm.TaskNotes("t2"), At("r/abc/notes/t2-code.md")),
         (nameof(ArmPaths.TasksJson), Arm.TasksJson, At("r/abc/work/tasks.json")),
         (nameof(ArmPaths.TaskBrief), Arm.TaskBrief("t2"), At("r/abc/work/t2.md")),
@@ -103,8 +98,8 @@ public sealed class ArmPathsTests
 
         RootTable.Select(row => row.Member).Should().BeEquivalentTo(PathMembers(typeof(RootPaths)),
             "a path added to RootPaths needs its spelling in this table");
-        ArmTable.Select(row => row.Member).Should().BeEquivalentTo(PathMembers(typeof(ArmPaths)),
-            "a path added to ArmPaths needs its spelling in this table");
+        ArmTable.Select(row => row.Member).Distinct().Should().BeEquivalentTo(PathMembers(typeof(ArmPaths)),
+            "a path added to ArmPaths needs its spelling in this table, and the seven fixed notes members are retired: a step's notes files are its bindings now");
     }
 
     [Fact]
@@ -135,6 +130,21 @@ public sealed class ArmPathsTests
 
         Paths.Of("../x.json").Reason().Should().Be("'../x.json' must be a file name inside the experiment root");
         Paths.Of("scenarios.json").Ok().Should().Be(At("scenarios.json"));
+    }
+
+    [Fact]
+    public void A_binding_with_a_climbing_segment_is_a_programming_error()
+    {
+        var thrown = new Action[]
+        {
+            () => Arm.NotesFile(new OutputBinding("X", "notes/../x.md")),
+            () => Arm.NotesFile(new OutputBinding("X", "notes//x.md")),
+        };
+
+        foreach (var action in thrown)
+        {
+            action.Should().Throw<ArgumentException>().Where(ex => ex.Message.Contains("output segment", StringComparison.Ordinal), "the reader refused such a path, so a throw here is a caller's bug");
+        }
     }
 
     [Fact]
@@ -180,7 +190,7 @@ public sealed class ArmPathsTests
         }
 
         var method = type.GetMethod(member)!;
-        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : "t1").ToArray();
+        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : p.ParameterType == typeof(OutputBinding) ? new OutputBinding("X", "notes/t1.md") : "t1").ToArray();
         return (string)method.Invoke(target, arguments)!;
     }
 }

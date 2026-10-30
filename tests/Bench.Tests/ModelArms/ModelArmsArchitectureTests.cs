@@ -43,6 +43,9 @@ public sealed class ModelArmsArchitectureTests
         // E1.S11
         typeof(ExperimentTemplate),
 
+        // E2.S0
+        typeof(SchemePositions),
+
         // E2
 
         // E3

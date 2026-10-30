@@ -15,16 +15,15 @@ public sealed record TaskFacts(string Id, string Brief, string Files, string Bef
 /// plan-splitter was told about.</summary>
 public sealed record BriefFacts(string Plan, string Base, string Branch, int ScenarioCount, string Deadline, string Known, TaskFacts Task, string Problems);
 
-/// <summary>The fields one step's brief is filled with: the same thirteen for every kind, one notes file per kind, and
-/// the task or the problems for the kinds that carry them — the shell's three field sets (<c>run-arm.sh</c> and
-/// <c>t-lib.sh</c>), in one place. A template that uses none of a field is not an error: the shell passed
-/// <c>HREVIEW_NOTES</c> and <c>BEFORE</c> to templates that never named them, and so does this.</summary>
+/// <summary>The fields one step's brief is filled with: the seven facts, <c>NOTES</c>, one field per binding the brief may see (<see cref="SchemePositions.Visible"/> — the
+/// callers, the rehearsal and the runner, pass it, so the two cannot fill by two rules), and the task or the problems for the steps that carry them. A template that uses none
+/// of a field is not an error: the shell passed every path to every template, and so does this.</summary>
 public static class BriefFields
 {
-    public static IReadOnlyDictionary<string, string> For(StepKind kind, ArmPaths paths, BriefFacts facts) =>
-        Common(kind, paths, facts).Concat(Extra(kind, facts)).ToDictionary(field => field.Key, field => field.Value);
+    public static IReadOnlyDictionary<string, string> For(StepSpec spec, IReadOnlyList<OutputBinding> visible, TaskLimits tasks, ArmPaths paths, BriefFacts facts) =>
+        Facts(paths, facts).ToDictionary(field => field.Key, field => field.Value);
 
-    private static IEnumerable<KeyValuePair<string, string>> Common(StepKind kind, ArmPaths paths, BriefFacts facts) =>
+    private static IEnumerable<KeyValuePair<string, string>> Facts(ArmPaths paths, BriefFacts facts) =>
     [
         Field("PLAN", facts.Plan),
         Field("BASE", facts.Base),
@@ -32,42 +31,9 @@ public static class BriefFields
         Field("SCEN_COUNT", facts.ScenarioCount.ToString(CultureInfo.InvariantCulture)),
         Field("DEADLINE", facts.Deadline),
         Field("KNOWN", facts.Known),
-        Field("REVIEW", paths.ReviewJson),
-        Field("CODE_NOTES", paths.CodeNotes),
-        Field("HREVIEW_NOTES", paths.HReviewNotes),
-        Field("FIX_NOTES", paths.FixNotes),
         Field("WORK", paths.Work),
-        Field("GATE_JSON", paths.GateJson),
-        Field("NOTES", NotesOf(kind, paths, facts.Task)),
+        Field("NOTES", "-"),
     ];
-
-    private static IEnumerable<KeyValuePair<string, string>> Extra(StepKind kind, BriefFacts facts) =>
-        kind switch
-        {
-            StepKind.TaskCode =>
-            [
-                Field("TASK", facts.Task.Id),
-                Field("TASK_BRIEF", facts.Task.Brief),
-                Field("TASK_FILES", facts.Task.Files),
-                Field("BEFORE", facts.Task.Before),
-            ],
-            StepKind.SplitFix => [Field("PROBLEMS", facts.Problems)],
-            _ => [],
-        };
-
-    /// <summary>The file a step writes its notes to. The review step writes none: the shell passed a dash.</summary>
-    private static string NotesOf(StepKind kind, ArmPaths paths, TaskFacts task) =>
-        kind switch
-        {
-            StepKind.Code => paths.CodeNotes,
-            StepKind.Review => "-",
-            StepKind.Fix => paths.FixNotes,
-            StepKind.HReview => paths.HReviewNotes,
-            StepKind.Gate => paths.GateNotes,
-            StepKind.Split or StepKind.SplitFix => paths.SplitNotes,
-            StepKind.TaskCode => paths.TaskNotes(task.Id),
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "a step kind this build has no notes file for"),
-        };
 
     private static KeyValuePair<string, string> Field(string name, string value) => new(name, value);
 }

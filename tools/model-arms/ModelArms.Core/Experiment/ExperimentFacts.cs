@@ -40,12 +40,25 @@ public sealed record TargetFacts(
 /// <summary>The waiting limits, in seconds and tries, that every step and the gate run under.</summary>
 public sealed record Limits(int WaitSeconds, int Tries, int GateWaitSeconds, int GateTries, int MinimumRemainingSeconds, int KillGraceSeconds);
 
-/// <summary>How many task batches the SRS pipeline's split may plan, and how many run at once. <see cref="Shell"/> is what the
-/// shell harness hard-coded, kept as the default when the file says nothing.</summary>
-public sealed record TaskLimits(int Min, int Max, int MaxParallel)
+/// <summary>How many task batches the SRS pipeline's split may plan, how many run at once, the ids of the three steps the block runs (the split, its one fix round and the
+/// task coder) and what the block contributes to the steps after it besides its split steps' outputs — the example binds <c>CODE_NOTES</c>, the path the shell handed SRS's
+/// reviewers though no SRS step wrote it. <see cref="Shell"/> is what the shell harness hard-coded, kept as the default when the file says nothing.
+/// <para>
+/// Equality is by value, <see cref="Outputs"/> included.
+/// </para></summary>
+public sealed record TaskLimits(int Min, int Max, int MaxParallel, StepId Split, StepId SplitFix, StepId TaskCode, IReadOnlyList<OutputBinding> Outputs)
 {
-    public static TaskLimits Shell { get; } = new(4, 7, 4);
+    public static TaskLimits Shell { get; } = new(4, 7, 4, new StepId("split"), new StepId("splitFix"), new StepId("taskCode"), []);
+
+    public bool Equals(TaskLimits? other) =>
+        other is not null && (Min, Max, MaxParallel, Split, SplitFix, TaskCode) == (other.Min, other.Max, other.MaxParallel, other.Split, other.SplitFix, other.TaskCode)
+        && Outputs.SequenceEqual(other.Outputs);
+
+    public override int GetHashCode() => HashCode.Combine(Min, Max, MaxParallel, Split, SplitFix, TaskCode, Outputs.Count);
 }
+
+/// <summary>One named run (D27): its rounds of arms, the arms of earlier runs it closes while it works, and the paths it closes besides, already expanded.</summary>
+public sealed record RunSpec(string Name, IReadOnlyList<IReadOnlyList<string>> Rounds, IReadOnlyList<string> ClosedArms, IReadOnlyList<string> Closed);
 
 /// <summary>The multi-vendor code gate's binary, its settings file and the folder name its side lives under. <see cref="None"/>
 /// means the experiment runs no gate; absent is a different fact from empty text, so it has its own value.</summary>
@@ -73,9 +86,9 @@ public sealed record Experiment(
     string ScenariosFile,
     string BaselineFile,
     string Known,
-    IReadOnlyDictionary<StepKind, StepSpec> Steps,
+    IReadOnlyDictionary<StepId, StepSpec> Steps,
     IReadOnlyList<Scheme> Schemes,
-    IReadOnlyList<IReadOnlyList<string>> Rounds,
+    IReadOnlyList<RunSpec> Runs,
     Limits Limits,
     TaskLimits Tasks,
     ToolSets Tools,

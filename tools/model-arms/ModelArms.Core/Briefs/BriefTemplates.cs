@@ -1,27 +1,16 @@
-using ModelArms.Core.Experiment;
+using Bench.Domain;
 
 namespace ModelArms.Core.Briefs;
 
-/// <summary>Which shipped template file each step kind is briefed from. The names are the part-6 harness's, kept as they
-/// were so the eight files stay byte for byte what that experiment ran; the console reads them from the experiment
-/// root's <c>briefs</c> folder first and from the shipped folder second.</summary>
+/// <summary>Which template file a step's brief stem names. A stem is what a step's <c>brief</c> member says (<c>hA-trace</c> names <c>hA-trace.template.md</c>); the console
+/// reads the file from the experiment root's <c>briefs</c> folder first and from the shipped folder second, so a stem is a name and never a path — no separator and no
+/// <c>..</c> can reach outside the two folders.</summary>
 public static class BriefTemplates
 {
-    /// <summary>The template file name of a step kind.</summary>
-    public static string NameOf(StepKind kind) =>
-        kind switch
-        {
-            StepKind.Code => "1-code.template.md",
-            StepKind.Review => "2-review.template.md",
-            StepKind.Fix => "3-fix.template.md",
-            StepKind.HReview => "hr-review-fix.template.md",
-            StepKind.Gate => "gate.template.md",
-            StepKind.Split => "x-split.template.md",
-            StepKind.SplitFix => "x-split-fix.template.md",
-            StepKind.TaskCode => "t2-coder.template.md",
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "a step kind this build has no brief template for"),
-        };
+    /// <summary>The stems of the eleven templates the module ships: part 6's eight and part 7's three, the shell harness's bytes.</summary>
+    public static IReadOnlyList<string> Shipped { get; } =
+        ["1-code", "2-review", "3-fix", "gate", "hr-review-fix", "t2-coder", "x-split", "x-split-fix", "hA-trace", "hB-tests", "hfix"];
 
-    /// <summary>Every template file name, one per step kind, derived from the kinds so a kind added without a template fails here.</summary>
-    public static IReadOnlyList<string> All { get; } = [.. Enum.GetValues<StepKind>().Select(NameOf)];
+    /// <summary>The template file name of a stem, or why the text is no stem.</summary>
+    public static Outcome<string> NameOf(string stem) => Outcome<string>.Success(stem + ".template.md");
 }

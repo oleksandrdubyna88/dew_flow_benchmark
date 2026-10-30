@@ -149,19 +149,9 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string WorktreeBuildLog(string id) => Under("out", "wt-build-" + Segment(id, "id") + ".log");
 
-    public string CodeNotes => Under("notes", "code.md");
-
-    public string HReviewNotes => Under("notes", "hreview.md");
-
-    public string FixNotes => Under("notes", "fix.md");
-
-    public string GateNotes => Under("notes", "gate.md");
-
-    public string SplitNotes => Under("notes", "split.md");
-
-    public string ReviewJson => Under("notes", "review.json");
-
-    public string GateJson => Under("notes", "gate.json");
+    /// <summary>The file a binding stands for (<c>notes/hA.json</c>), under the arm folder. The reader refused a climbing, empty or rooted segment, so a throw here is a
+    /// caller's bug, caught by <see cref="Segment"/> as it is for every other member.</summary>
+    public string NotesFile(OutputBinding binding) => Path.Combine([Folder, .. binding.RelativePath.Split('/')]);
 
     public string TaskNotes(string id) => Under("notes", Segment(id, "id") + "-code.md");
 

@@ -35,6 +35,25 @@ public sealed partial class ExampleExperimentTests
     }
 
     [Fact]
+    public void The_example_binds_every_file_the_shell_wrote()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the worked example and the location use POSIX absolute paths");
+        var text = File.ReadAllText(SourceExample);
+        var experiment = ExperimentFile.Read(text, new ExperimentLocation("/x/root", "/x/home", string.Empty, "/x/repo")).Ok();
+        var arm = new ArmPaths("/x/root", "tok");
+
+        var bound = experiment.Steps.Values.SelectMany(step => step.Outputs).Concat(experiment.Tasks.Outputs)
+            .Select(binding => Path.GetRelativePath(arm.Folder, arm.NotesFile(binding)).Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+
+        bound.Should().BeEquivalentTo(
+            ["notes/code.md", "notes/hreview.md", "notes/review.json", "notes/fix.md", "notes/gate.md", "notes/gate.json", "notes/split.md", "notes/hA.json", "notes/hB.json", "notes/hfix.md"],
+            "parent §4.2's list: the files the shell wrote, once each — the step's CODE_NOTES and the block's are one path");
+        Regex.Matches(text, "\"subagents\": false").Should().HaveCount(11, "every step of the example says it starts no subagent");
+        experiment.Tools.Write.Should().Contain("Agent", "the configured list is the shell's; the delegation policy strips the tool at launch, not the file");
+    }
+
+    [Fact]
     public void The_example_travels_beside_the_binary_as_the_file_the_source_tree_holds()
     {
         var beside = ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory).ExampleFile;
@@ -94,7 +113,9 @@ public sealed partial class ExampleExperimentTests
             .ToList();
         var lines = Refusal(template).Split('\n');
 
-        unfilled.Should().Contain(["known", "target.planBranch", "steps.code.model", "coai.side"], "the scan must still reach the fields no other rule rejects");
+        unfilled.Should().Contain(
+            ["known", "target.planBranch", "steps.code.model", "coai.side", "steps.code.brief", "steps.code.outputs.CODE_NOTES", "runs.part6.rounds[0][0]", "tasks.split"],
+            "the scan must still reach the fields no other rule rejects, and the v2 members: a brief stem, an output path, an arm name and a step id");
         unfilled.Where(path => !lines.Any(line => Names(line, path))).Should().BeEmpty("a <fill me> the reader lets through is a template that validates as filled");
     }
 

@@ -8,14 +8,13 @@ namespace ModelArms.Core.Experiment;
 /// answer, one per line. The text arrives as a string; the console owns the file, so Core opens nothing.</summary>
 public static class ExperimentFile
 {
-    public const string Schema = "model-arms/experiment-v1";
+    public const string Schema = "model-arms/experiment-v2";
 
     private static readonly string[] Required =
-        ["schema", "target", "scenarios", "baseline", "known", "steps", "schemes", "rounds", "limits", "tools", "awake"];
+        ["schema", "target", "scenarios", "baseline", "known", "steps", "schemes", "runs", "limits", "tools", "awake"];
 
-    private static readonly string[] Known = [.. Required, "tasks", "coai", "isolation"];
+    private static readonly string[] Known = [.. Required, "rounds", "tasks", "coai", "isolation"];
     private static readonly string[] LimitMembers = ["waitSeconds", "tries", "gateWaitSeconds", "gateTries", "minimumRemainingSeconds", "killGraceSeconds"];
-    private static readonly string[] TaskMembers = ["min", "max", "maxParallel"];
     private static readonly string[] ToolMembers = ["write", "read", "gate", "deny"];
     private static readonly string[] CoaiMembers = ["binary", "settings", "side"];
     private static readonly string[] IsolationMembers = ["closed", "unlisted"];
@@ -75,7 +74,9 @@ public static class ExperimentFile
         json.Object(top, string.Empty, Known, Required);
         CheckSchema(json, top);
         var steps = FlowSection.Steps(json, top);
+        var tasks = TaskSection.Read(json, top);
         var schemes = FlowSection.Schemes(json, top, steps);
+        FlowSection.Check(json, steps, tasks, schemes);
         return new Experiment(
             location.Root,
             TargetSection.Read(json, top, location),
@@ -84,9 +85,9 @@ public static class ExperimentFile
             json.Text(top, string.Empty, "known"),
             steps,
             schemes,
-            FlowSection.Rounds(json, top, schemes),
+            RunSection.Runs(json, top, schemes, location),
             Limits(json, top),
-            Tasks(json, top),
+            tasks,
             Tools(json, top),
             Coai(json, top),
             Isolation(json, top, location),
@@ -112,23 +113,6 @@ public static class ExperimentFile
             json.Positive(limits, "limits", "gateTries"),
             json.Positive(limits, "limits", "minimumRemainingSeconds"),
             json.Positive(limits, "limits", "killGraceSeconds"));
-    }
-
-    private static TaskLimits Tasks(StrictJson json, JsonObject top)
-    {
-        if (!top.ContainsKey("tasks"))
-        {
-            return TaskLimits.Shell;
-        }
-
-        var tasks = json.ObjectMember(top, string.Empty, "tasks", TaskMembers, TaskMembers);
-        var limits = new TaskLimits(json.Positive(tasks, "tasks", "min"), json.Positive(tasks, "tasks", "max"), json.Positive(tasks, "tasks", "maxParallel"));
-        if (limits.Min > limits.Max && limits.Max > 0)
-        {
-            json.Add($"tasks.min ({limits.Min}) is greater than tasks.max ({limits.Max}) — the split plans at least min and at most max tasks");
-        }
-
-        return limits;
     }
 
     private static ToolSets Tools(StrictJson json, JsonObject top)
@@ -175,12 +159,13 @@ public static class ExperimentFile
 
         var isolation = json.ObjectMember(top, string.Empty, "isolation", IsolationMembers, IsolationMembers);
         return new IsolationFacts(
-            Expanded(json, isolation, "closed", location),
-            Expanded(json, isolation, "unlisted", location));
+            Expanded(json, isolation, "isolation", "closed", location),
+            Expanded(json, isolation, "isolation", "unlisted", location));
     }
 
-    private static IReadOnlyList<string> Expanded(StrictJson json, JsonObject isolation, string name, ExperimentLocation location) =>
-        [.. json.Texts(isolation, "isolation", name).Select((entry, index) => Expand(json, entry, $"isolation.{name}[{index}]", location))];
+    /// <summary>The array <paramref name="name"/> of <paramref name="parent"/> with every entry's placeholders expanded; each refusal names <c>path.name[i]</c>.</summary>
+    internal static IReadOnlyList<string> Expanded(StrictJson json, JsonObject parent, string path, string name, ExperimentLocation location) =>
+        [.. json.Texts(parent, path, name).Select((entry, index) => Expand(json, entry, $"{StrictJson.Join(path, name)}[{index}]", location))];
 
     /// <summary>One isolation entry with its placeholders expanded: <c>&lt;root&gt;</c> is the experiment root, a leading <c>~</c> the home directory.</summary>
     private static string Expand(StrictJson json, string entry, string where, ExperimentLocation location) =>

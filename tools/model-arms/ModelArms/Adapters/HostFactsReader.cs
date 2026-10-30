@@ -84,10 +84,10 @@ internal static class HostFactsReader
             .Select(variable => (Variable: variable, Refusal: ExecutableResolution.ConfigFolderRefusal(variable, environment[variable], roots, RootFacts.Host)))
             .Where(home => home.Refusal.Length > 0)];
 
-    private static IReadOnlyDictionary<StepKind, Outcome<string>> Templates(ExperimentInput input)
+    private static IReadOnlyDictionary<string, Outcome<string>> Templates(ExperimentInput input)
     {
         var files = new BriefTemplateFiles(input.Verb.Module.ShippedBriefs, input.Root.Briefs);
-        return BriefRehearsal.KindsUsed(input.Experiment).ToDictionary(kind => kind, files.Read);
+        return BriefRehearsal.StemsUsed(input.Experiment).ToDictionary(stem => stem, files.Read);
     }
 
     private static async Task<string> ProcVersionAsync(CancellationToken ct)
