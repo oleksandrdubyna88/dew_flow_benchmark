@@ -4,8 +4,8 @@
 > reading half), D16–D18, D23, D24, D26, D27; §4.1's `prep-base`, `make`, `status` and `checks` rows; §4.9; §4.12; §6 step 3 — M2 and M2's
 > key check; §7's E3 tests). Written at `5a8b4ce` on `feat/model-arms-e3` (E1 and E2 merged to `main`), by the judge role (Opus), as the epic
 > starts — `common.plan-change-control` § *What counts as a change*: not a change. **No cornerstone** (the ledger stays `3 of 3`, §8 item 1).
-> **One proposed parent change** waits for the owner (§8 item 2 — E3.S4 reads two file shapes E5 writes); the stories are written so that
-> either answer leaves them buildable (E3.S4 *Fallback*).
+> **§8 item 2 answered by the owner (2026-10-30): a fix that satisfies the plan as written, not a change** — no ledger entry; E3.S4 lands the
+> read side, E5 keeps every writer.
 >
 > Scope: four verbs of the console `model-arms` — `prep-base` (the baseline, D24), `make` (the arms, D4/D5), `status` (read-only, by name,
 > D11/F0) and `checks` (the objective report, §4.9) — the pure readers of the target's logs and the report in
@@ -749,7 +749,7 @@ Arms: the map's, in order, then the arms of the runs the map lacks (`not made`).
 `tasks` entry → `tasks: listed when the task pipeline lands (E4)`. Limits: `.done`/`.continue` 4 KiB, `timing.jsonl` 16 MiB, a pid file 64 B,
 the snapshot files and the map 1 MiB. Exit 0 once printed; 4 when the map is refused (by the road or as a map).
 
-**Fallback** if the owner refuses §8 item 2: `RunMarker`, `LockedModesApplied` and `IsolationFiles` are not added; the `run …` lines are not
+**Fallback** (NOT taken — the owner classed §8 item 2 as a fix, 2026-10-30) if the owner refuses §8 item 2: `RunMarker`, `LockedModesApplied` and `IsolationFiles` are not added; the `run …` lines are not
 printed, `isolation:` says *not read — E5 adds it*, `Status_reports_the_isolation_snapshots_state_and_restores_nothing` and
 `Each_runs_markers_…` move to E5.S1/E5.S4 by name, and S3/S5 print no isolation line until then (their
 `Make_prints_the_isolation_state_…` and `Checks_prints_the_isolation_state_…` move to E5.S1 by name too).
@@ -967,6 +967,10 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
    `status` print (D11's "read it and print one line"); E5.S1 and E5.S4 keep every WRITER, use these members, and remove the root-level
    `Locked`/`Unlocked`/`ArmsDone`. **If refused:** S4's *Fallback* (the two tests move to E5 by name; no isolation line in E3). The owner
    may also class it as a fix that satisfies the plan as written — the stories are buildable either way.
+   **Answered 2026-10-30 by the owner: a fix that satisfies the plan as written, NOT a change** (`common.plan-change-control` § *What counts
+   as a change*: the parent's E3.S4 row and its test already put the snapshot's state in E3; only where two path names are first spelled
+   moves). No ledger entry — epoch 2 stays at one (2.1). E3.S4 lands the read side as proposed; E5.S1 and E5.S4, when their stories are
+   written, USE `RootPaths.LockedModesApplied`, `RootPaths.RunMarker` and `LockSnapshots.State` and keep every writer.
 3. **The round-trip fixture.** The parent's §7 names `objective-arm-C.json`, a copy of `research/local-model-coding/data/arms/C/objective.json`;
    that file is the parts 1–5 generation's report (members `generatorCheck`, `scenariosPresent`/`scenariosPassing` as lists, `formatNote`,
    `scenariosNote`, `mcp.failedEnvironment`), not `objective-checks.sh:53-64`'s, which §4.9 requires. **Settled (S1):** part 6's C1 report
@@ -1131,7 +1135,7 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
 - [ ] `RunArmSchemeTests`, `GateStatusFileTests` (and E2's suites) unedited and green after the two extractions.
 - [ ] **M2** ran as written and is logged in `research/module_model_arms.md`; **M2's key check** observed by the owner (the two vault fields
       logged) or its fallback recorded here and in the parent's §11.
-- [ ] §8 item 2 answered by the owner, and the stories followed the answer (the proposal, or S4's *Fallback*).
+- [x] §8 item 2 answered by the owner (2026-10-30: a fix, not a change), and the stories followed the answer (the proposal).
 - [ ] `research/module_model_arms.md` describes E3 as built (the threat paragraph of §8 item 17, the walls, the environment rule, the
       residuals); `research/module_tests.md`'s `prep-base`, `make`, `status`, `checks` rows `covered`, and the E5 rows' ids corrected.
 - [ ] `dotnet build dew_flow_benchmark.slnx -c Release` 0 warnings; `dotnet format --verify-no-changes` clean; the whole suite green.
