@@ -321,7 +321,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   total, never one bare count. It holds the cell's own budget: a request reserves the larger of the floor (0.05) and the largest charge
   settled so far in the cell (never sized from `max_tokens`, which the CLI sets to 32k-128k), is admitted while spend plus reservations plus
   its own stays within the cap, and settles priced from the parsed usage with `asTheCliBills`. The reservation is the charge only when nothing
-  parsed on a 2xx, or a connection dropped before any answer after the request was sent. **A stream cut or reset after the answer began is charged the
+  parsed on a 2xx, or a connection dropped before any answer once any byte of the request may have been written (a reset after part of a large body, a finished handshake: `noByteSent` is false; before, only a request fully handed to the socket counted as sent). **A stream cut or reset after the answer began is charged the
   usage already parsed** (`parser.result()`), priced (at the dearest known rates when the model is unknown or absent), and **never less than the
   reservation** (`budget.settle` with `floor`; before: the parsed usage was thrown away, and 200k Sonnet input tokens followed by a reset cost 0.05 instead of 0.40); **an upstream error answer (status >= 400 with the API's
   JSON `type: "error"` body), a `2xx` from `count_tokens` (it is free: `why: "count_tokens is free"`) and a request **provably never written to the upstream socket** (the socket never connected, or never finished its TLS handshake, or a plain socket wrote nothing) charge 0** (`priced: { known: true, usd: 0, why }`), so four
