@@ -19,7 +19,7 @@ const series = path.join(minigit, 's-20261030-92a9');
 const layout = layoutPaths(path.join(series, 's'), '9804fc');
 const partner = layoutPaths(path.join(series, 's'), '433bf6');
 const box = { layout, nodeDir, toolchains: [ts], claudeBinary: path.join(toolchains, 'claude-2.1.310') };
-const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: [partner.dir], arm: 'bare', ownSecrets: [], allow: boxReachable(box), skeleton: boxSkeleton(box) };
+const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: [partner.dir], arm: 'bare', ownSecrets: [], allow: boxReachable(box), skeleton: boxSkeleton(box), isLink: () => false };
 
 const sev = (tool, input) => contaminationHits({ calls: [{ tool, input }], ctx }).filter(h => h.rule === 'outside-path').map(h => h.severity).join() || '-';
 const bash = command => sev('Bash', { command });
@@ -52,4 +52,12 @@ test('What_the_box_exposes_on_purpose_and_the_pilots_three_reaches_stay_no_hit',
 
 test('A_sibling_of_a_bound_toolchain_and_an_unbound_node_version_stay_high', () => {
   for (const command of [`ls ${toolchains}/cache-node-0123456789ab`, `ls ${path.join(home, '.nvm', 'versions', 'node', 'v20.0.0')}`, `ls ${partner.work}`, `ls ${home}/.config`]) assert.equal(bash(command), 'high', command);
+});
+
+test('A_dot_dot_between_two_bound_toolchains_resolves_lexically_unless_a_component_it_leaves_is_a_link', () => {
+  const command = `ls ${ts}/../claude-2.1.310`;
+  assert.equal(bash(command), '-', 'typescript-7.0.2/../claude-2.1.310 is the bound claude copy');
+  const linked = { ...ctx, isLink: p => p === ts };
+  const sevLinked = contaminationHits({ calls: [{ tool: 'Bash', input: { command } }], ctx: linked }).filter(h => h.rule === 'outside-path').map(h => h.severity).join();
+  assert.equal(sevLinked, 'high', 'a link there: the real parent is unknown, the path is reported');
 });

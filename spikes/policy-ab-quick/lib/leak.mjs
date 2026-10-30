@@ -17,10 +17,10 @@ const PATTERNS = [
   new RegExp('(?<![\\w./\\\\])\\.\\.(?=\\s|$|["\'])', 'g'),
 ];
 const POSIX_PATTERNS = [
-  new RegExp(`(?<![\\w.:/\\\\'"\x60}-])/${TAIL_CHAR}+`, 'g'), // absolute: not inside a URL, a word or a regex
+  new RegExp(`(?<![\\w.:/\\\\'"\x60}~-])/${TAIL_CHAR}+`, 'g'), // absolute: not inside a URL, a word, a regex or after the `~` of `~/x` (the home pattern's)
   new RegExp('(?<=^|\\s)/(?=\\s|$)', 'g'), // a lone `/`
   new RegExp(`(?:\\$\\{?HOME\\}?|(?<![\\w.])~)(?=[/\\s"'\x60;|&)]|$)${TAIL}`, 'g'),
-  new RegExp(`(?<![\\w.])(?:\\.\\.[/])+${TAIL}`, 'g'),
+  new RegExp(`(?<![\\w.])(?<![^.]/)(?:\\.\\.[/])+${TAIL}`, 'g'), // not the `../` inside an absolute path (`/a/b/../c`): `./../x` still counts
   new RegExp('(?<![\\w./])\\.\\.(?=\\s|$|["\'])', 'g'),
 ];
 const ALLOW = [/^c:\\program files( \(x86\))?\\/i, /^c:\\windows\\/i, /\\appdata\\local\\npm-cache(\\|$)/i, /\\appdata\\roaming\\npm(\\|$)/i];
@@ -33,15 +33,26 @@ export function resolvePath(raw, { treeRoot, home }) {
   return win.resolve(treeRoot, p.replace(/\//g, '\\'));
 }
 
-/** Pure: one raw path-ish string -> an absolute POSIX path (`~`, `$HOME`, `${HOME}` expanded, relative paths against the tree). */
-export function resolvePosix(raw, { treeRoot, home }) {
+/** Whether a `..` of the absolute path climbs out of a component that is a link: `isLink(<the path up to the dir the dots leave>)`. The real parent of a link's target is not the link's lexical parent. */
+function dotsAfterLink(abs, isLink) {
+  const parts = abs.split('/').filter(p => p !== '' && p !== '.');
+  return parts.some((part, i) => part === '..' && i > 0 && isLink(`/${parts.slice(0, i).join('/')}`));
+}
+
+/**
+ * Pure: one raw path-ish string -> an absolute POSIX path (`~`, `$HOME`, `${HOME}` expanded, relative paths against the tree), resolved LEXICALLY (`a/../b` is `b`) - which is the real path only when no
+ * component a `..` leaves is a link. With an `isLink(path)` that says one is, the path is returned UN-normalised (its `..` kept), so no caller can take it for a path inside the tree or one it allows.
+ */
+export function resolvePosix(raw, { treeRoot, home, isLink }) {
   const p = raw.replace(/^["']|["']$/g, '').replace(/^(\$\{?HOME\}?|~)(?=\/|$)/, home);
-  return posix.resolve(treeRoot, p);
+  const abs = posix.isAbsolute(p) ? p : `${treeRoot}/${p}`;
+  return isLink && dotsAfterLink(abs, isLink) ? abs : posix.resolve(treeRoot, p);
 }
 
 const lower = p => win.normalize(p).toLowerCase();
 export const isInside = (resolved, root) => lower(resolved) === lower(root) || lower(resolved).startsWith(`${lower(root)}\\`);
 const isInsidePosix = (resolved, root) => resolved === root || resolved.startsWith(root === '/' ? '/' : `${root}/`);
+const keepsDotDot = resolved => /(^|\/)\.\.(\/|$)/.test(resolved); // only an un-normalised path (a `..` after a link) still holds one
 const allowed = resolved => ALLOW.some(re => re.test(resolved));
 /** An `allow` entry is a directory prefix (`/usr/`) or one exact path (`/dev/null`); a prefix ends at a path boundary. */
 const allowedPosix = (resolved, allow) => allow.some(a => {
@@ -84,20 +95,22 @@ function outsideWin32(calls, { treeRoot, home }) {
   }));
 }
 
-function outsidePosix(calls, { treeRoot, home, allow }) {
+function outsidePosix(calls, { treeRoot, home, allow, isLink }) {
   const root = posix.resolve(treeRoot);
   return calls.flatMap(c => candidatePaths(c.tool, c.input, posixPathsIn).flatMap(raw => {
-    const resolved = resolvePosix(raw, { treeRoot: root, home });
-    return isInsidePosix(resolved, root) || allowedPosix(resolved, allow) ? [] : [hit(c, raw, resolved)];
+    const resolved = resolvePosix(raw, { treeRoot: root, home, isLink });
+    const known = !keepsDotDot(resolved);
+    return known && (isInsidePosix(resolved, root) || allowedPosix(resolved, allow)) ? [] : [hit(c, raw, resolved)];
   }));
 }
 
 /**
  * calls: [{agent, tool, input}] (audit summaries or raw tool_use inputs). `flavour` is 'win32' (default) or 'posix'; `allow` is the
- * POSIX allowed prefixes, always passed by the caller (a default would hide a reach); the win32 flavour keeps its own list.
+ * POSIX allowed prefixes, always passed by the caller (a default would hide a reach); the win32 flavour keeps its own list. `isLink(path)` (posix only, optional) says whether a path is a symbolic link:
+ * a `..` after one is not resolved lexically (see `resolvePosix`).
  */
-export function findOutsideAccesses(calls, { treeRoot, home, flavour = 'win32', allow = [] }) {
-  if (flavour === 'posix') return outsidePosix(calls, { treeRoot, home, allow });
+export function findOutsideAccesses(calls, { treeRoot, home, flavour = 'win32', allow = [], isLink }) {
+  if (flavour === 'posix') return outsidePosix(calls, { treeRoot, home, allow, isLink });
   if (flavour === 'win32') return outsideWin32(calls, { treeRoot, home });
   throw new Error(`findOutsideAccesses: flavour '${flavour}' is not one of win32, posix`);
 }

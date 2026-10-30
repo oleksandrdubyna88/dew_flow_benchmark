@@ -246,7 +246,9 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   (`foreign-run-ref`, `other-run-id`, `foreign-pr`, `other-stack-template`, `upstream-solutions`, `minigit-elsewhere`,
   `harness-name`, `outside-path`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
   with a 120-character excerpt in which credentials are masked. An edit or write is judged by its path, never its content; an
-  `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`.
+  `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`. Its tokenizer reads `~/x` as ONE path (the home pattern's; no stray absolute `/x` after the `~`) and the `../` inside an absolute path as part of it,
+  not as a second relative path; `a/../b` resolves lexically (`typescript-7.0.2/../claude-2.1.310` is the bound claude copy) only when no component the `..` leaves is a link (`ctx.isLink`, an `lstat` on the host):
+  with one, the real parent is unknown and the path is reported un-normalised, never inside the tree and never allowed.
   `outside-path` does not flag what the agent's box exposes on purpose (E3b, after the Node pilot 9804fc was voided for its own pinned TypeScript toolchain): `ctx.allow` and `ctx.skeleton` are
   `boxView` of `lib/sandbox.mjs`, read from a bwrap argv. `allow` = the host paths the box binds (the node dir, the toolchains, the claude binary, the session's own box dirs; the harness and net dirs
   stay protected). `skeleton` = the directories that only hold those binds (an EXACT reach for one lists nothing the box does not expose): only a directory under a `--tmpfs` of the box, and

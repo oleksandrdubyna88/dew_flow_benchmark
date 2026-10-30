@@ -1,6 +1,6 @@
 // Reading a finished (or cut-short) session back and classifying how it ENDED (E3b.S1 steps 5, 7): the evidence files of its directory, the scans that decide
 // `stop: security` and `void: contaminated`, the alias check, E1's views and the cost, then `bareOutcome`. No model call and no write: the runner writes.
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkAliases, aliasRecord } from './aliases.mjs';
@@ -17,6 +17,9 @@ import { sessionSpendUsd, stopRuleFigure } from './spend-gate.mjs';
 import { tokenHits } from './token-scan.mjs';
 import { smokeViews } from './smoke-verdicts.mjs';
 import { callsOf } from './stream-calls.mjs';
+
+/** Whether a host path is a symbolic link (a path that is not there is not one): the scan resolves `a/../b` lexically only when no component it leaves is a link. */
+const isLinkOnHost = p => { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } };
 
 /** The directories whose files the model could have written or read: what a canary or a credential could show up in (never the caches, never the harness). */
 const EVIDENCE = Object.freeze(['stream.ndjson', 'transcripts', path.join('box', 'out'), path.join('box', 'work')]);
@@ -47,7 +50,7 @@ function contaminationPart({ scan, events, layout, plan, home, partnerDirs, box 
   const shapeHits = scan.hits.filter(h => h.kind !== 'own-value'); // in any file of the session directory, not only the evidence files
   const unscanned = scan.unreadable.filter(u => isEvidence(u.rel)).map(u => ({ source: u.rel, kind: 'unscanned', why: u.why }));
   // `allow` = what the box exposes on purpose (the toolchain it binds, the session's own box dirs): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected.
-  const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: boxReachable({ ...box, layout }), skeleton: boxSkeleton({ ...box, layout }) };
+  const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: boxReachable({ ...box, layout }), skeleton: boxSkeleton({ ...box, layout }), isLink: isLinkOnHost };
   return {
     realHits: scan.hits.filter(h => h.kind === 'own-value'),
     contamination: {

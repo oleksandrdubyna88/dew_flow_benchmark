@@ -56,3 +56,25 @@ test('Quoted_absolute_paths_are_found_like_unquoted_ones', () => {
   assert.deepEqual(outside([call('Bash', { command: 'cat "/srv/me/box/work/src/a.cs"' })]), [], 'a quoted path inside the tree is fine');
   assert.deepEqual(outside([call('Bash', { command: "tr '/' '-' < f; sed 's/a/b/' f; echo \"a/b\"" })]), [], 'a lone slash and a substitution are not paths');
 });
+
+test('A_tilde_path_is_one_path_not_also_the_absolute_path_after_its_tilde', () => {
+  assert.deepEqual(resolved([call('Bash', { command: 'ls ~/rsd/minigit' })]), ['/home/u/rsd/minigit'], 'no stray /rsd/minigit');
+  assert.deepEqual(resolved([call('Bash', { command: 'cat ~/.npmrc; ls "$HOME/.nuget"' })]), ['/home/u/.npmrc', '/home/u/.nuget']);
+});
+
+test('A_dot_dot_inside_an_absolute_path_resolves_lexically_and_is_not_a_second_relative_path', () => {
+  const command = 'ls /srv/tc/typescript-7.0.2/../claude-2.1.310';
+  assert.deepEqual(resolved([call('Bash', { command })]), ['/srv/tc/claude-2.1.310'], 'one path, not also ../claude-2.1.310 against the tree');
+  assert.deepEqual(outside([call('Bash', { command })], { allow: ['/srv/tc/claude-2.1.310'] }), [], 'it lands on a bound copy: no hit');
+  assert.deepEqual(resolved([call('Bash', { command: 'cat ./../../x' })]), ['/srv/me/x'], 'a ./ before the dots still climbs from the tree');
+});
+
+test('A_dot_dot_after_a_link_is_not_resolved_lexically_because_the_real_parent_is_unknown', () => {
+  const isLink = p => p === '/srv/tc/typescript-7.0.2';
+  const command = 'ls /srv/tc/typescript-7.0.2/../claude-2.1.310';
+  const hits = outside([call('Bash', { command })], { allow: ['/srv/tc/claude-2.1.310', '/srv/tc/'], isLink });
+  assert.equal(hits.length, 1, 'the allow list does not cover a path whose parent is unknown');
+  assert.equal(hits[0].resolved, '/srv/tc/typescript-7.0.2/../claude-2.1.310', 'reported un-normalised, under the home or not, never inside or allowed');
+  assert.deepEqual(outside([call('Bash', { command: 'ls /srv/tc/typescript-7.0.2/../claude-2.1.310' })], { allow: ['/srv/tc/claude-2.1.310'], isLink: () => false }), [], 'no component is a link: lexical');
+  assert.equal(outside([call('Bash', { command: 'cd /srv/me/box/work/up/../x' })], { isLink: p => p.endsWith('/up') }).length, 1, 'a link inside the tree does not make the climb out of it safe');
+});
