@@ -104,14 +104,26 @@ export function checkResumable({ map, current, acceptHarness = null, amendments 
   return accepted.ok ? ok({ accepted: accepted.value, inputs: inputs.value }) : accepted;
 }
 
+const anyLaunching = map => Object.values(map.sessions ?? {}).some(s => s.status === 'launching');
+const acceptedInput = (map, current, f) => f in INPUT_FIELDS && (map.inputsAccepted ?? []).some(a => a.file === INPUT_FIELDS[f] && a.sha256 === current[f]);
+const acceptedHarness = (map, current, f) => f === 'harnessIdentity' && (map.harnessAccepted ?? []).includes(current.harnessIdentity);
+
 /**
- * `resume --settle-only` (review N12): settles and charges the sessions a stopped series left `launching`, and launches nothing, so it is allowed on a stopped series and accepts nothing (no harness,
- * no input amendment). It reads evidence a run already paid for, so a reader fix after the data sessions must not leave a paid session uncharged (the harness identity is not compared); every OTHER pin is,
- * because the prices, the snapshots and the seed decide what a session cost and how it is read.
+ * `resume --settle-only` (review N12 and MINOR-4): settles and charges the sessions a series left `launching`, and launches nothing; it is refused when no session is `launching` (nothing to settle). It is
+ * allowed on a stopped series and accepts nothing (no harness, no input amendment). On a STOPPED series it reads evidence a run already paid for, so a reader fix after the data sessions must not leave a paid
+ * session uncharged and the harness identity is not compared; on a series that is not stopped the harness that settles is the one that classes the session, so its identity must be the pinned (or an accepted) one.
+ * Every other pin is compared on both, because the prices, the snapshots and the seed decide what a session cost and how it is read.
  */
 function settleCheck({ map, current }) {
-  const field = [...PINNED_FIELDS, ...Object.keys(INPUT_FIELDS)].find(f => !same(map[f], current[f]) && !(f in INPUT_FIELDS && (map.inputsAccepted ?? []).some(a => a.file === INPUT_FIELDS[f] && a.sha256 === current[f])));
+  if (!anyLaunching(map)) return fail('nothing to settle: no session of the series is launching. `resume --settle-only` settles and charges a session that was left launching (its evidence could not be read before) and launches nothing');
+  const field = driftedField({ map, current });
   return field ? fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`) : ok({ accepted: null, inputs: [] });
+}
+
+/** The first pin a settle compares that differs from the run-map and is not an accepted change, or undefined. */
+function driftedField({ map, current }) {
+  const fields = [...PINNED_FIELDS, ...Object.keys(INPUT_FIELDS), ...(map.stopped ? [] : ['harnessIdentity'])];
+  return fields.find(f => !same(map[f], current[f]) && !acceptedInput(map, current, f) && !acceptedHarness(map, current, f));
 }
 
 /**

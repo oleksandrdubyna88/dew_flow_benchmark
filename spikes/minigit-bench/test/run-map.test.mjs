@@ -212,8 +212,10 @@ test('A_harness_change_after_a_data_session_exists_is_refused_even_with_its_line
 
 // ---- settle-only on a stopped series (review N12) -------------------------------------------------------------------------------------
 
+const launching = map => must(transition(must(planSession(map, session('aaaaaa'))), 'aaaaaa', 'launching'));
+
 test('Settle_only_is_allowed_on_a_stopped_series_and_does_not_need_the_harness_to_be_the_pinned_one', () => {
-  const stopped = markStopped(series(), { rule: 'stop: auth', reason: 'x', at: 't' });
+  const stopped = launching(markStopped(series(), { rule: 'stop: auth', reason: 'x', at: 't' }));
   assert.equal(checkResumable({ map: stopped, current: current() }).ok, false, 'control: a plain resume is refused');
   const settle = checkResumable({ map: stopped, current: current(), settleOnly: true });
   assert.equal(settle.ok, true, settle.reason);
@@ -237,4 +239,19 @@ test('A_data_session_that_is_only_planned_is_not_pair_1_started_and_an_instrumen
   assert.equal(r.value.inputs.length, 1);
   const reset = must(transition(must(transition(planned, 'aaaaaa', 'launching')), 'aaaaaa', 'planned')); // launching -> planned when nothing was paid
   assert.equal(hasDataSession(reset), false, 'a session that went back to planned never ran');
+});
+
+test('Settle_only_is_refused_unless_some_session_is_launching_and_compares_the_harness_unless_the_series_is_stopped', () => {
+  const changed = { ...current(), harnessIdentity: '9'.repeat(64) };
+  const none = checkResumable({ map: must(planSession(series(), session('aaaaaa'))), current: current(), settleOnly: true });
+  assert.equal(none.ok, false, 'a planned session is nothing to settle');
+  assert.match(none.reason, /nothing to settle/);
+  assert.equal(checkResumable({ map: markStopped(series(), { rule: 'stop: auth', reason: 'x', at: 't' }), current: current(), settleOnly: true }).ok, false, 'a stopped series with nothing launching has nothing to settle either');
+  const open = launching(series()); // not stopped: the harness that settles is the one that classes the session, so it is the pinned one (or an accepted one)
+  assert.equal(checkResumable({ map: open, current: current(), settleOnly: true }).ok, true, 'control: the pinned harness settles');
+  const drift = checkResumable({ map: open, current: changed, settleOnly: true });
+  assert.equal(drift.ok, false, 'a settle on a series that is not stopped does not accept a changed harness');
+  assert.match(drift.reason, /harnessIdentity differs/);
+  assert.equal(checkResumable({ map: { ...open, harnessAccepted: ['9'.repeat(64)] }, current: changed, settleOnly: true }).ok, true, 'an identity accepted before by a plain resume needs nothing more');
+  assert.equal(checkResumable({ map: launching(markStopped(series(), { rule: 'stop: auth', reason: 'x', at: 't' })), current: changed, settleOnly: true }).ok, true, 'a stopped series keeps the reader-fix rule (N12)');
 });

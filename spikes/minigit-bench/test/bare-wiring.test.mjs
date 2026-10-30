@@ -299,7 +299,7 @@ test('An_amended_quiet_file_is_accepted_through_resume_once_recorded_in_the_run_
 });
 
 test('An_input_amendment_after_a_data_session_exists_is_refused_by_resume', async () => {
-  const w = await wiring({ map: { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', status: 'planned' } } } });
+  const w = await wiring({ map: { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', status: 'launching' } } } }); // a session that left `planned`: pair 1 has started
   const sha = editQuiet(w);
   writeFileSync(path.join(w.inputs, 'amendments.md'), `${AMENDMENTS}2026-11-02 | instrument | input:quiet.json:${sha.slice(0, 12)} | the sampler window (G-11)\n`);
   const r = await resume(w);
@@ -309,7 +309,7 @@ test('An_input_amendment_after_a_data_session_exists_is_refused_by_resume', asyn
 });
 
 test('Resume_settle_only_is_not_refused_on_a_stopped_series_launches_nothing_and_a_plain_resume_is_refused', async () => {
-  const w = await wiring({ map: { stopped: { rule: 'stop: auth', reason: '{}', at: 't' } } });
+  const w = await wiring({ map: { stopped: { rule: 'stop: auth', reason: '{}', at: 't' }, sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', status: 'launching' } } } });
   const plain = await resume(w);
   assert.equal(plain.code, 4);
   assert.match(plain.out, /the series is stopped \(stop: auth\).*NEW series/s);
@@ -321,7 +321,12 @@ test('Resume_settle_only_is_not_refused_on_a_stopped_series_launches_nothing_and
   assert.equal(settle.code, 0, settle.out);
   assert.match(settle.out, /settle-only: .*nothing was launched/);
   assert.match(settle.out, /series remains stopped \(stop: auth\)/);
-  assert.deepEqual(readRunMap(w.runMapFile).value.sessions, before.sessions);
+  assert.match(settle.out, /settled aaaaaa \(planned\)/, 'the launching session had no directory and paid nothing: it is planned again, not launched');
+  assert.equal(readRunMap(w.runMapFile).value.sessions.aaaaaa.status, 'planned');
+  assert.equal(before.sessions.aaaaaa.status, 'launching');
+  const nothing = await resume(w, ['--settle-only']);
+  assert.equal(nothing.code, 4, 'now nothing is launching: there is nothing to settle');
+  assert.match(nothing.out, /nothing to settle/);
   const run = async extra => { const lines = []; const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home, ownInputs: w.inputs }); return { code, out: lines.join('\n') }; };
   const misuse = await run(['--settle-only']);
   assert.equal(misuse.code, 4, '--settle-only belongs to resume');
