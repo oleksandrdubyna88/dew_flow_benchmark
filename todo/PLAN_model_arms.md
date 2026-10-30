@@ -882,6 +882,8 @@ D17 (c)/(d) for `TargetTools`. **Depends on.** E1 (the parsers, `prep-base`, `ma
 **Done when.** E3's tests of §7 green; **M2**: the attended sequential pilot (`init → validate → prep-base → make → run-arm C1 → checks C1`
 over a scratch target with the fake CLI) logged in `research/module_model_arms.md`, **and M2's key check** (§6 step 3: the real `claude`
 over a generated `mcp-coai.json`, the two `providers` answers logged, or the fallback recorded as a deviation).
+**Stories:** [PLAN_model_arms_E3.md](PLAN_model_arms_E3.md) — E3.S1–E3.S5, written when the epic started (2026-10-30, `5a8b4ce`); no
+cornerstone (the ledger stays 3 of 3); its §8 item 2 is a change proposed to the owner, not recorded here.
 
 | Id | Story | Owns | Files | Done when |
 |---|---|---|---|---|
