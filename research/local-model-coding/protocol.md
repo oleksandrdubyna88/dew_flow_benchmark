@@ -451,7 +451,7 @@ likely at M4, M5 or M6; 7–8 of 8 killed per arm; no scheme difference beyond o
   SRS1's batch markers and Haiku diffs of t4, t5 and t7). Commits and uncommitted work stayed. Round 2 had no commit and a clean tree, so its out, notes
   and work folders were reset to a fresh start. The detector was changed to read `api_error_status` and `api_error` first, and an error result is
   never "done" (it stops the runner for a person to look). The chain restarted at 08:45 UTC and the round-1 sessions resumed with the time left of their budgets.
-- Effect on the data: no step was lost; Claude-only costs of the interrupted attempts are counted (C1's Opus review: $8.75 in two attempts, against $3.98–$4.76 elsewhere, which raises the C mean from $15.16 to $16.63); active minutes leave the wait out; round-1 elapsed times (779–862 min) contain it.
+- Effect on the data: no step was lost; the work done before the limit is counted once (a resumed session reports its running total; the first count added the attempts and was corrected on 2026-10-30, [incidents.md](incidents.md) §2h: C1 $16.47, CR1 $15.52, SRS1 $14.64 after correction); active minutes leave the wait out; round-1 elapsed times (779–862 min) contain it.
 
 ### Part 6 — after the run (2026-10-29, recorded with the results)
 
@@ -474,3 +474,52 @@ likely at M4, M5 or M6; 7–8 of 8 killed per arm; no scheme difference beyond o
   and the providers not shown. It worked in each arm's clone, where the scheme was not redacted. The main session then opened the four major findings of the absolute judge in the code
   ([data/part6/judge-abs/handcheck.json](data/part6/judge-abs/handcheck.json)).
 - **Mutation checks** ran from 19:57 to 20:37 UTC, two arms at a time, 4 test threads each.
+
+### Part 6 — the cost correction (2026-10-30, recorded with the results)
+
+The Part 6 costs in this file's predictions table are unchanged (they are predictions). The observed costs were recomputed after a counting error was found:
+a resumed attempt reports its session's running total, and the first `metrics6.mjs` added every attempt. The corrected means are C $15.48, CR $16.30,
+SRS $17.09 ($15.83 without SRS3's subagents); first count $16.63, $16.55, $17.16. Details: [incidents.md](incidents.md) §2h. Prediction 1 against
+the corrected numbers is in [results.md](results.md) §7d.
+
+## Part 7 — CHH: the classic scheme with two focused Haiku reviewers, on the same task as Part 6 (3 arms), recorded before they run (2026-10-29)
+
+The full design is the end of [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md), copied as written before the run. Summary and the facts the log adds.
+
+- **Design (the owner's, 2026-10-29).** Three arms, CHH1–CHH3, at the same time, on the same task, plan (`6786582e`), base, isolation and limit handling as
+  Part 6. Steps: Sonnet codes (180 min, brief `1-code`) → **Haiku A**, read-only, the decision tracer (40 min, brief `hA-trace`: each plan decision at every
+  site — subclasses, callers, readers and writers, the issue's sample data, mixes and orders, failure paths) → **Haiku B**, read-only, test truth (40 min,
+  brief `hB-tests`: scenario names, does each test fail if its decision breaks, does it pass on every CI job: Linux, Windows, macOS) → **Sonnet fixes both**
+  (60 min, brief `hfix`) → Opus reviews (40, `2-review`) → Sonnet fixes (60, `3-fix`) → the coai code gate (150, `gate`).
+- **Why these two focuses.** coai's code gate ran four roles in Part 6 (Conventions, Architecture, Security & Reliability, UX-DX & Performance). The real
+  defects that it and the Opus review missed fell into two kinds that no role names: a plan decision not held at one site, and a test that does not test
+  what it claims or fails on another CI system.
+- **Bias, stated before the run.** The focuses were chosen after seeing Part 6's misses ON THIS SAME TASK. The briefs name no Part 6 defect and no file, but
+  CHH has a hindsight advantage over C, CR and SRS. A fair test of the focuses needs another task. (The briefs' checklists do describe the defect kinds.)
+- **Changes to the runner.** Read-only steps refuse the `Agent` and `Task` tools. The C, CR and SRS arms are not re-run. `lock.sh` takes an `EXTRA_CLOSED`
+  list: the lock also closes (mode 000) every Part 6 result (the nine arm folders, the judges and hand check, the mutation runs, the metrics, the logs, the
+  protocol and the write-up worktree). `after7.sh` makes the three arms and runs them. `mutate6.mjs` got the anchors for the CHH arms before any CHH result.
+- **Measured.** As in Part 6, plus the two Haiku reviewers' findings (`notes/hA.json`, `notes/hB.json`) and what the fixer did with each (`notes/hfix.md`).
+  Not pre-registered, added after the results: the hand check of the judge's major (CHH3), the check of the renamed S33, the check of the three named defects
+  against the reviewed commits and the final code, and the Welch tests of the cost differences.
+
+| # | Prediction (recorded before the run) |
+|---|---|
+| P7-1 | Haiku A reports at least one finding that the later judge rates real in at least 2 of 3 arms. |
+| P7-2 | Haiku B reports at least one CI-portability or no-teeth test finding in at least 2 of 3 arms. |
+| P7-3 | The Opus review after the fix finds 0–1 blocking + major per arm (CR in Part 6: 1 / 2 / 2). |
+| P7-4 | The blind judge scores every CHH arm 8 or more in both runs, with no hand-checked major in at least 2 of 3 arms. |
+| P7-5 | Claude-only cost per arm $17–21 (CR: $15.88–17.49); active time 170–210 min (CR: 119–166). |
+| P7-6 | The coai gate's findings stay mostly not real (judge's score 2–4 per arm). |
+| P7-7 | The mutation checks kill 8 of 8 in every arm (no separation, as in Part 6). |
+
+### Part 7 — after the run (2026-10-30, recorded with the results)
+
+- **Timeline.** The arms started at 21:37 UTC on 2026-10-29. CHH3 ended at 00:18, CHH2 at 00:35 and CHH1 at 04:27 UTC (it waited for the spend limit from
+  00:53 to 04:08). The lock was released at 04:28; the objective checks ran 04:28–05:00; the mutation checks 05:05–05:15 (CHH3 repeated 05:22–05:31, after
+  the SDK upgrade at 05:19:54); the judges ran after the checks.
+- **The limit, the account, the SDK upgrade, the flaky test and the trust warning** are in [incidents.md](incidents.md) §2i.
+- **The data differ from the owner's note** on the start of the limit wait: 00:53 UTC in the streams (the note says 01:38).
+- **The judges.** The absolute blind judge: 6 sessions (2 per arm, redaction counts 2–4). The judge of the coai findings: 3 sessions, one per arm, in the arm's clone
+  (as in Part 6). The hand check of CHH3's major and of CHH1's renamed S33 is in `data/part7/judge-abs/handcheck.json` (the `part7` block) and in
+  [results.md](results.md) §7e.

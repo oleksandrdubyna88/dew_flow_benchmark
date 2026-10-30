@@ -133,9 +133,10 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   (Europe/Paris)", with `api_error_status` 429. The limit detector in `run-arm.sh` looked for other words and missed this one. A step that ended
   in that error was marked done, and the next step started at once and failed in about 4 seconds. 14 attempts ended this way: C1 3, CR1 4, SRS1 7.
   Three of them (C1's Opus review, CR1's Haiku review, SRS1's task t4) had worked 4–22 minutes first. Round 2 (C2, CR2, SRS2) started at 21:48 UTC
-  and ended in a minute with no work and no commit. *Effect on the data:* no commit or finished step was lost. The interrupted attempts are in the
-  Claude-only cost (C1's review $3.46 before the limit and $5.30 after the resume; CR1's Haiku review $0.75 and $1.10; SRS1's t4 $0.21 and $0.75). Active minutes
-  leave the wait out. Round 1's elapsed times (779–862 min) contain 11 hours of waiting. C1's Opus review cost $8.75 in all, against $3.98–$4.76 for a review in one attempt, so the limit raises the C mean: $16.63 as measured, $15.16 with C1's review at the mean of C2's and C3's ($4.35). The `limited` field in round 1's `timing.jsonl` reads false
+  and ended in a minute with no work and no commit. *Effect on the data:* no commit or finished step was lost. The work done before the limit
+  is in the Claude-only cost, once: the session's running total counts C1's review ($3.46 at the limit, $5.30 at its end), CR1's Haiku review ($0.75 and $1.10) and
+  SRS1's task t4 ($0.21 and $0.75). (The first count added the two attempts of each: see §2h.) Active minutes
+  leave the wait out. Round 1's elapsed times (779–862 min) contain 11 hours of waiting. The `limited` field in round 1's `timing.jsonl` reads false
   for those attempts, because the detector wrote it. *What was changed:* [harness/part6/repair-limit-2026-10-28.sh](harness/part6/repair-limit-2026-10-28.sh)
   (kept as the record) removed the `.done` marker of every step whose last result is an error, the arm-done line, and what was computed from a bogus
   step (a `review.json` parsed from an error, before/diff snapshots at the wrong commit, SRS1's batch markers and the Haiku diffs of t4, t5 and t7).
@@ -149,8 +150,8 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   *Effect:* of the step's $5.35, Haiku cost $1.57, the Opus subagent $2.84 and the Sonnet subagent $0.94: $3.79 is not Haiku. The step's 12
   findings come from a Haiku session with two stronger helpers. It is the only step of all nine arms with a subagent (`grep -c '"name":"Agent"'`
   on all streams: only this file). *Why it could happen:* `run-arm.sh` allows `Agent` in every step that can write. *What was changed:* nothing in
-  the run. SRS3's Haiku-review result is marked contaminated in [tables.md](tables.md) §10 and [results.md](results.md) §7d, and the measured SRS mean cost ($17.16, the primary figure) is given with
-  "($15.90 if the two subagents are left out)" beside it. A re-run should take `Agent` out of the write tools.
+  the run. SRS3's Haiku-review result is marked contaminated in [tables.md](tables.md) §10 and [results.md](results.md) §7d, and the measured SRS mean cost ($17.09 after the §2h correction, the primary figure) is given with
+  "($15.83 if the two subagents are left out)" beside it. A re-run should take `Agent` out of the write tools.
 - **The isolation scan.** Every tool call in the nine arms' streams (6,060) and in the two subagents of SRS3 (158) was read for paths. *Checked:* no arm
   read another arm's folder, clone, notes, results or token; none read the old experiment, the owner's repositories or the vendors' homes; no tool call was
   refused by the mode-000/300 folders. Four `Read` calls were refused by the deny list (C1 1, CR2 1, SRS3 2): each one wanted the arm's own saved tool result under `~/.claude/projects/`. Two things were opened one by one. SRS1's Haiku coder (task t2) ran `readlink /proc/<pid>/cwd` on two process
@@ -173,6 +174,74 @@ NAS and the branches pushed after each phase. On 2026-10-26 there were 0 new bad
   consultants first, a cadence). All gate agents declined them with the reason that the plan is frozen and the brief fixes the flow.
 - **The judge of the coai findings was not blind to the scheme.** It worked in each arm's clone, where the commit messages and the plan's notes were
   visible and not redacted; the label was random and the gate agent's decisions were not shown. The absolute judge saw a redacted diff only.
+
+## 2h. A cost-counting error in Part 6 (found 2026-10-30) and the check of parts 1–5c
+
+- **What was wrong.** The first `metrics6.mjs` took each attempt's `result` event and added the costs of all attempts of a step. A RESUMED
+  attempt (`claude --resume`) reports the running total of its session, in `total_cost_usd` and in `modelUsage`, so the sum counted the earlier
+  attempts twice. Every resumed step of Part 6 was over-counted.
+- **How it was found.** The owner's session measured Part 7's CHH1, step `6-fix`, with 14 attempts. Attempts 2 to 13 each ran one turn in 1–4
+  seconds, and each reported exactly the same $1.646 and 31,855 Sonnet output tokens as attempt 1 (checked in the streams). Attempt 14 reported
+  attempt 1's total plus its own work ($2.264). The first count gave CHH1 $44.92. In Part 6 the same shape is in the resumed steps of
+  round 1: for example C1's Opus review, where a2 ran 5 turns in 53 seconds and reports $1.84 more than a1.
+- **What it did to Part 6.** Only the three round-1 arms had resumed steps: C1 $19.92 → **$16.47** (its Opus review $8.75 → $5.30), CR1
+  $16.27 → **$15.52** (its Haiku review $1.85 → $1.10), SRS1 $14.85 → **$14.64** (task t4 $0.96 → $0.75). The six arms of rounds 2 and 3 ran each step
+  in one attempt and do not change. The scheme means moved from C $16.63, CR $16.55, SRS $17.16 to **C $15.48, CR $16.30, SRS $17.09**
+  (SRS without SRS3's two subagents: $15.83, first count $15.90). SRS3's subagent cost ($3.79 of $5.35) is unchanged: that step ran once.
+- **What changed in the conclusions.** The first count made C look dearest, and the write-up first explained that with C1's limit-split
+  Opus review and then "adjusted" the C mean to $15.16 and said the C/CR order reverses. That adjustment was mostly this counting error.
+  With the corrected numbers C has the lowest mean and CR the next, SRS the highest, and no difference is measured with three arms each
+  (Welch's t 0.55–1.15). Active minutes, elapsed minutes, quality, findings and mutation results are not touched.
+- **What was changed.** `metrics6.mjs` now takes, per session, the result of the LAST attempt, and sums that over the sessions of a step (a header
+  comment says why). The first output is kept as `data/part6/metrics6.v1-summed-attempts.json`. Every Part 6 cost in [results.md](results.md),
+  [tables.md](tables.md), [README.md](README.md), this file and [protocol.md](protocol.md) was recomputed from `metrics6.json`.
+- **Parts 1–5c: not affected.** Four arms have a resumed attempt in `data/arms/<arm>/timing.jsonl`: C (1-code a2), C2 (1-code a2), V (1-code a2) and C4
+  (3-fix a2). There `metrics.mjs` also adds the attempts of a step, but there the resumed attempt does NOT carry the session's total: C's a1 reports $2.54 and
+  44,090 output tokens, and its a2 only $0.44 and 6,960 (19 turns); C2's a2 is $0.53, V's $0.17 and C4's $0.08, each far below its first attempt's
+  cost (C2, V and C4's first attempts were cut off with no result, and their costs were estimated from the transcripts). So those a2 figures are the
+  attempts' own work, and the published costs of these arms stand. (Why: those first attempts ended in a Windows crash or a SIGKILL, so the session's
+  total was probably not saved for the resume. That is a guess; the check above does not depend on it.) No other arm of parts 1–5c has a resumed attempt.
+
+## 2i. Part 7 (CHH × 3, the same task) (2026-10-29 21:37 – 2026-10-30 05:31 UTC)
+
+- **The bias is in the design, not an incident, and it is stated here too.** The two reviewer focuses were chosen after Part 6, from what Part 6 had
+  missed on this same task. The briefs' checklists name the defect kinds (an inherited default, text over several lines, an order of results, a
+  time zone that the runtime ignores, a Unix socket path over 108 characters). Read [results.md](results.md) §7e with that in mind.
+- **The trust warning in every step of every arm.** Every stderr file of the arms starts "Ignoring 5 permissions.allow entries from
+  .claude/settings.json: this workspace has not been trusted. Run Claude Code interactively here once and accept the trust dialog …". *Checked:*
+  all 111 stderr files have it: 77 of the 9 Part 6 arms and 34 of the 3 CHH arms (none has any other text). So the condition was the SAME in Part 6
+  and Part 7. *Effect:* the project's own allow list was not applied, and the permission set of every step is the runner's `--allowedTools` list, the same
+  for every arm ([harness.md](harness.md) §3 said this for the earlier parts). The warning does not touch a number and does not separate the schemes.
+- **The spend limit and the account (2026-10-30 00:53–04:08 UTC).** CHH1's last fix step (`6-fix`) worked for 31 minutes (82 turns) and then ended
+  with "You've hit your individual spend limit … your session limit resets 5am (Europe/Paris)", `api_error_status` 429. That is 04:00 UTC (Paris is UTC+1
+  after 25 October). The runner (with the fixed limit detector of §2g) waited 15 minutes and resumed the same session. Attempts 2 to 13 each ended
+  in 3–4 seconds with the same error (12 attempts), and attempt 14, at 04:08:46 UTC, went through and finished in 26 seconds. CHH2 and CHH3 had ended
+  before the limit (00:35 and 00:18 UTC); CHH1's gate ran 04:09–04:27. The owner's session reports that the Claude account was changed during the night (and
+  the owner's email address in this session's context changed with it). *The data cannot show that:* the reset time in the message also fits
+  attempt 14. *The data differ from the owner's note on one point:* the limit began at 00:53 UTC, not at 01:38, so the wait was 3 h 16 min, not 2.5 h.
+  *Effect:* CHH1's elapsed time is 410 minutes; its active time (215) leaves the waits out; its cost is counted once (§2h; the first count gave $44.92, the corrected one
+  $23.52). No step was marked done by the limit.
+- **The .NET SDK was upgraded in the middle of CHH3's mutation run.** The system (apt, unattended) upgraded `dotnet-sdk` from 10.0.113 to 10.0.114 at 05:19:54 UTC.
+  CHH3's first run had finished M1 to M4 and its builds of M5 and M6 failed (NETSDK1042, the path `/usr/lib/dotnet/sdk/10.0.113/…` was gone), so they were
+  "not applicable". The run was repeated whole (05:22–05:31 UTC). *Effect:* CHH3's final mutation numbers are on SDK 10.0.114, the CHH1 and CHH2 numbers (05:05–05:15)
+  and the objective checks (04:28–05:00) on 10.0.113. The first run is kept as `data/part7/arms/CHH3/mutation.attempt1-sdk-upgraded-mid-run.json`. All 24 mutants of
+  the final runs were killed on both SDKs.
+- **CHH3: a failing suite test in the objective check, and the judge's major.** The objective check of CHH3 reports 1 new failure,
+  `HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_…`. Both judge runs named it a major (and scored 7). The hand check did not confirm it: the
+  class alone passed 6 of 6 three times, CHH3 does not touch `HeldFile`, and two whole-suite re-runs gave 0 failures and 16 failures; the second ran
+  while the mutation checks and two coders loaded the host. The owner's session reports that this second re-run overlapped the SDK upgrade above; **I could not
+  check that time, because no log of the re-run was kept.** Part 6's C3 gate note names the same test as failing once under load. Treated as load-dependent;
+  the 7 and 7 stay in the tables as the judge gave them.
+- **CHH1's S33 was renamed**, so the exact-name check reads 42 of 43. The renamed test reads the drawn card as a node tree (`pageTree`) and does not run
+  the page's script (`runPageHtml`), so it does not read the RUNNING page that the plan's name asks for. Recorded in the arm's plan as deviation 10 ([results.md](results.md) §7e).
+- **The read-only steps refuse subagents.** The Part 6 fault (SRS3) was closed for Part 7: `Agent` and `Task` are in `--disallowedTools` for read steps. No
+  stream of the three arms has such a call, and no step shows another model's cost.
+- **The isolation scan** of the three arms (2,074 tool calls): no path of another arm or of a Part 6 folder, no path of the old experiment, the owner's
+  repositories or the vendors' homes, no `/proc`. One `Read` of the arm's own saved tool result under `~/.claude/projects/` (CHH1, review step) was refused by the deny list.
+  The lock also closed every Part 6 result and the write-up worktree (22 paths in all, with the old experiment) (a side effect: git lost its registration of that worktree; it was
+  recreated from the branch with no change of content).
+- **The long temp folder again.** CHH1's `hfix` notes record the same `RegularFilesTests.A_fifo_…` failure as in Part 6 (§2g). In its
+  first whole-suite run it first named another test by mistake and corrected that in its notes. The objective check of CHH1 shows 0 new failures.
 
 ## 3. Changes of plan during the run (all by the owner, all recorded before the affected arms ran)
 

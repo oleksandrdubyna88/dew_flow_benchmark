@@ -165,7 +165,7 @@ ever reaches a brief (a field that stays unfilled stops the runner).
 
 - **A random folder per arm.** `r/<token>/` holds the clone (`arm/`), `notes/`, `work/`, `out/` (streams, prompts, timing), `tmp/` (the arm's own `TMPDIR`, so Claude
   Code's temp folder under `/tmp` does not name another arm), the arm's coai data folder, and the SRS worktrees (`wt/`). The token-to-arm map is
-  [data/part6/arm-tokens.json](data/part6/arm-tokens.json). Every arm uses the same branch name, `feat/quota-cooldown`.
+  [data/part6/arm-tokens.json](data/part6/arm-tokens.json) (Part 7: [data/part7/arm-tokens.json](data/part7/arm-tokens.json)). Every arm uses the same branch name, `feat/quota-cooldown`.
 - **Other work is closed while arms run** (`lock.sh`): the old experiment mode 000; the experiment root, `r/`, `pids/` and the four Claude Code state folders
   (`projects`, `file-history`, `session-env`, `shell-snapshots`) mode 300, which lets the owner enter by name but not list. The modes are saved and restored by `lock.sh unlock`.
   The arms run as the same user, and `chmod` is not in their tools.
@@ -189,13 +189,14 @@ Each attempt is timed alone (`timing.jsonl`), so waits are not work. The step co
 | Script | What it computes |
 |---|---|
 | [objective-checks.sh](harness/part6/objective-checks.sh) | On the final commit: the build; the whole MCP suite (CTRF report); the extension suite; `dotnet format` whitespace and style on the changed C# files; which of the 43 scenarios exist (the test name occurs in the sources) and pass (a test of that name, as a whole word, passed in the report); failures against `baseline.json` (none known); the diff by kind. Writes `objective.json`. |
-| [metrics6.mjs](harness/part6/metrics6.mjs) | Per arm and step: cost from the `result` event of each attempt (one process per attempt, so the totals are cumulative within it), by model; active time = the sum of the attempts' wall time from `timing.jsonl` (waits between attempts not counted); attempts; the arm's span (first start to arm-done, waits included). A model other than the step's own shows as a subagent. **Not counted:** the cost of the coai providers (other vendors). |
+| [metrics6.mjs](harness/part6/metrics6.mjs) | Per arm and step: cost by model from the `result` event of the LAST attempt of each session, summed over the sessions of a step (a resumed attempt reports its session's running total, so adding every attempt over-counts; corrected 2026-10-30, [incidents.md](incidents.md) §2h); active time = the sum of the attempts' wall time from `timing.jsonl` (waits between attempts not counted); attempts; the arm's span (first start to arm-done, waits included). A model other than the step's own shows as a subagent. **Not counted:** the cost of the coai providers (other vendors). |
 | [judge-abs.sh](harness/part6/judge-abs.sh) | The absolute judge: one Opus session per diff and run (2 per arm), random labels, the diff redacted for words that name a scheme or a model (counted in `key.json`), 4 sessions at a time; four criteria and an overall score, anchored (10 nothing to flag · 8–9 minor only · 6–7 one major or many minor · 4–5 several major or one blocking · 0–3 not delivered). `research/module_*.md` and `RESULTS_*.md` are out of scope. |
 | [coai-findings.mjs](harness/part6/coai-findings.mjs) | Every coai finding of each arm's gate step, from the gate session's own stream: the `review_plan` and `review_code` replies joined with the agent's `resolve` decisions. Writes `coai-findings.json`. |
 | [coai-cost.mjs](harness/part6/coai-cost.mjs) | The token counts (`cost.tokensIn`, `cost.tokensOut`) that the coai server reported in each plan and code round reply of each gate stream. Tokens, not dollars; one pair per round, not per provider. Writes `coai-cost.json`. |
 | [judge-coai.sh](harness/part6/judge-coai.sh) | One Opus session per arm judges every code finding (real, partly, not real; severity; usefulness) by opening the code at the commit that round reviewed, and scores the set 1–10 and names what it missed. The gate agent's decisions and the providers are not shown. The session works in the arm's clone (not redacted). 3 at a time. |
 | [mutate6.mjs](harness/part6/mutate6.mjs) | Eight frozen mutants, each one edit in the arm's final code (the anchors per arm are in the file); a shared clone of the arm's head; the test project built and the arm's test classes run (the classes the arm changed, the classes with a scenario test, and the classes of the area) against an unmutated baseline and then against each mutant. Killed = a test that passed in the baseline fails and fails again on a re-run; a mutant that does not apply or does not build is "not applicable", never "killed". 4 test threads per arm, two arms at a time. |
 | [make-tables6.mjs](harness/part6/make-tables6.mjs) | [tables.md](tables.md) §10, from [data/part6/](data/part6/) only (called by `make-tables.mjs`). |
+| [make-tables7.mjs](harness/part6/make-tables7.mjs) | [tables.md](tables.md) §11 (Part 7), from [data/part7/](data/part7/) and `data/part6/metrics6.json` (called by `make-tables.mjs`). |
 
 ### 9.5 Re-running
 
@@ -217,3 +218,24 @@ node research/local-model-coding/harness/make-tables.mjs
 | 2026-10-29 | The per-arm `TMPDIR` made a Unix-socket path longer than 108 characters, so one suite test failed inside the arms (not in the objective checks) | Reported by the arms as environmental; no change |
 | 2026-10-29 | The scenario pass check matches the exact name as a whole word, so a theory whose method name is longer (C1's S14) reads "absent" though it passed | Not changed; the mutation check found the test by its longer name; reported in [results.md](results.md) §7d |
 | 2026-10-29 | The `limited` field of `timing.jsonl` for the 14 attempts of round 1 reads false (written by the old detector) | Not changed; the repair script does not use it |
+| 2026-10-30 | `metrics6.mjs` summed the result of every attempt, but a resumed attempt reports the session's running total, so every resumed step was over-counted (Part 6: C1 $19.92 instead of $16.47, CR1 $16.27 instead of $15.52, SRS1 $14.85 instead of $14.64; Part 7: CHH1 $44.92 instead of $23.52) | Fixed: per session, the last attempt's result; the first output kept as `data/part6/metrics6.v1-summed-attempts.json`; every Part 6 cost recomputed ([incidents.md](incidents.md) §2h). `harness/metrics.mjs` (parts 1–5c) was checked: its four resumed attempts do not carry a running total, so it is not affected |
+
+### 9.7 Part 7 (CHH) — what differs from Part 6
+
+| Scheme | Steps (model, budget) — `run-arm.sh`, case `CHH[0-9]*` |
+|---|---|
+| CHH1–CHH3 | `1-code` Sonnet 180 → `2-hA` Haiku 40, read-only (brief `hA-trace`; its final JSON goes to `notes/hA.json`) → `3-hB` Haiku 40, read-only (brief `hB-tests`; `notes/hB.json`) → `4-hfix` Sonnet 60 (brief `hfix`, which reads both JSON files; `notes/hfix.md`; its diff is kept) → `5-review` Opus 40 → `6-fix` Sonnet 60 → `7-gate` Sonnet 150 |
+
+- **Read steps start no subagent.** `--disallowedTools` for read-mode steps now lists `Agent` and `Task`, next to `Edit Write NotebookEdit` (Part 6's SRS3 Haiku step started Opus and Sonnet subagents).
+  A search of every CHH stream for those tool names finds none, and no CHH step shows another model's cost in `metrics6.json`.
+- **`review_json` takes a destination**, so the same function keeps the Opus review (`notes/review.json`) and the two Haiku reviews (`notes/hA.json`, `notes/hB.json`).
+- **`lock.sh` has `EXTRA_CLOSED`**: a space-separated list of paths that are also set to mode 000 and restored by `unlock`. `after7.sh` fills it with every Part 6 result (the nine arm folders, `judge-abs`,
+  `judge-coai`, `mut6`, `coai-findings.json`, `metrics6.json`, the logs, the protocol) and the write-up worktree, so that no CHH arm could read them. It also makes the three arms, runs them at the same
+  time (no rounds), unlocks, and runs the objective checks (markers in `chain7/`).
+- **The briefs** are in [harness/part6/briefs/](harness/part6/briefs/): `hA-trace`, `hB-tests`, `hfix`. Their checklists describe the defect kinds that Part 6 left in the code (an inherited default, text over several lines, an order of results, a time
+  zone that the runtime ignores, a Unix socket path over 108 characters); they name no defect and no file. The hindsight bias that follows is stated in [results.md](results.md) §7e.
+- **Everything else is Part 6's:** the objective checks, `judge-abs.sh` and `judge-coai.sh` (they take every arm of the map that has no session yet), `coai-findings.mjs`, `metrics6.mjs` (it knows the step kinds `hA`, `hB` and `hfix`) and
+  `mutate6.mjs`, which got the anchors for the CHH arms (the same eight mutants) before any CHH result. A mutation run is not repeated by the script; CHH3's was repeated by hand after the SDK upgrade
+  ([incidents.md](incidents.md) §2i).
+- **The trust warning.** Every step of every Part 6 and Part 7 arm printed "Ignoring 5 permissions.allow entries … this workspace has not been trusted" (111 of 111 stderr files). The runner's `--allowedTools` is therefore the permission set of
+  every step, as in §3 of this file.

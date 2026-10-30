@@ -59,21 +59,24 @@
 `keep-awake.ps1` (holds Windows out of Modern Standby with `SetThreadExecutionState`, no power settings changed),
 `stop-keep-awake.ps1`, `check-keep-awake.ps1`.
 
-## part6/ — Part 6, the second task (it ran in `/home/jinx/git/coai-exp2`; see [../harness.md](../harness.md) §9)
+## part6/ — Part 6 and Part 7, the second task and its CHH follow-up (they ran in `/home/jinx/git/coai-exp2`; see [../harness.md](../harness.md) §9)
 
 | File | Role |
 |---|---|
-| `PROTOCOL.md` | The design and the six predictions, as written before the run |
+| `PROTOCOL.md` | The design and the six predictions of Part 6, and (at the end) the design and the seven predictions of Part 7, as written before each run |
 | `exp.env`, `scenarios.json`, `baseline.json` | The experiment's fixed facts (base commit, plan path, branch, scenario count), the 43 scenarios with their test names, the failures known at the base (none) |
 | `prep-base.sh` | Builds and tests the base once |
+| `after7.sh` | Part 7: makes the three CHH arms, locks (with `EXTRA_CLOSED`: every Part 6 result), runs them at the same time, unlocks, runs the objective checks |
 | `after6.sh` | The chain: makes the nine arms, locks, runs the rounds of three, unlocks, runs the objective checks (markers per stage) |
-| `run-arm.sh`, `run-all.sh` | One arm, resumable: C, CR, SRS with the coai gate step; the starter (detached). The copy here has the fixed limit detector |
+| `run-arm.sh`, `run-all.sh` | One arm, resumable: C, CR, SRS and CHH (Part 7) with the coai gate step; the starter (detached). The copy here has the fixed limit detector and the read steps that refuse `Agent` and `Task` |
 | `t-lib.sh`, `tasks-plan.mjs` | The SRS arms: the Sonnet split, the check of its task list, the batches in parallel worktrees, the carry-back |
-| `lock.sh` | Closes the old experiment and unlists the folders that would name another arm, while arms run; restores the modes |
+| `lock.sh` | Closes the old experiment (and, in Part 7, every Part 6 result: `EXTRA_CLOSED`) and unlists the folders that would name another arm, while arms run; restores the modes |
 | `repair-limit-2026-10-28.sh` | The one-off repair after the overnight spend limit ([../incidents.md](../incidents.md) §2g), kept as the record |
 | `objective-checks.sh` | The objective gate of one arm, with the 43 scenarios |
-| `metrics6.mjs` | Cost (Claude only), active time, attempts, span per arm and step |
+| `metrics6.mjs` | Cost (Claude only; per session the last attempt's result, corrected 2026-10-30), active time, attempts, span per arm and step |
+| `coai-cost.mjs` | The tokens that the coai server reported in each plan and code round reply |
 | `judge-abs.sh`, `coai-findings.mjs`, `coai-cost.mjs`, `judge-coai.sh` | The absolute blind judge; the coai findings of every gate step; the tokens the coai server reported per round; the blind judge of those findings |
 | `mutate6.mjs` | The eight frozen mutants, with the prediction written in its header |
+| `make-tables7.mjs` | [../tables.md](../tables.md) §11 (Part 7), from [../data/part7/](../data/part7/) and `../data/part6/metrics6.json` |
 | `make-tables6.mjs` | [../tables.md](../tables.md) §10, from [../data/part6/](../data/part6/) only (called by `../make-tables.mjs`) |
-| `briefs/` | `1-code`, `2-review`, `3-fix`, `hr-review-fix`, `x-split`, `x-split-fix`, `t2-coder`, `gate`, `5-judge-abs`, `judge-coai` |
+| `briefs/` | `1-code`, `2-review`, `3-fix`, `hr-review-fix`, `x-split`, `x-split-fix`, `t2-coder`, `gate`, `5-judge-abs`, `judge-coai`; Part 7: `hA-trace`, `hB-tests`, `hfix` |

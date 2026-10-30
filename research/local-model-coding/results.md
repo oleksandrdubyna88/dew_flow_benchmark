@@ -3,7 +3,9 @@
 > Status: **parts 1–5 complete — 30 arms, all checked, judged and mutation-checked (part 5 ended 2026-10-27 05:30
 > UTC). Part 5b (SR, DR ×4) is complete (§7b, ended 2026-10-27 20:03 UTC). Part 5c (CR, CH ×4) is complete (§7c, ended
 > 2026-10-28 17:27 UTC). Part 6 — a second task, 9 arms (C, CR, SRS × 3), each ending in the coai code gate — is complete
-> (§7d, arms ended 2026-10-29 17:47 UTC, mutation checks 20:37 UTC).**
+> (§7d, arms ended 2026-10-29 17:47 UTC, mutation checks 20:37 UTC). Part 7 — CHH, three arms with two focused Haiku reviewers, on the same task — is complete
+> (§7e, arms ended 2026-10-30 04:28 UTC, mutation checks 05:31 UTC). Part 6's costs were corrected on 2026-10-30
+> ([incidents.md](incidents.md) §2h).**
 > Every number below is in [tables.md](tables.md), generated from [data/](data/). How it was measured:
 > [harness.md](harness.md). What went wrong and what was corrected: [incidents.md](incidents.md). The pre-registered
 > protocol and its change log: [protocol.md](protocol.md).
@@ -12,7 +14,7 @@
 
 One real story pair of the coai project — **E5.5 + E5.6** of `dew_flow_connect_other_ais ·
 todo/PLAN_vibe_and_kimi_runtimes_E5.md` (12 scenarios, Opus-written spec), from commit `b4e2ea96` — implemented 30 times
-by eight schemes (plus 8 arms of two more schemes in part 5b, §7b, and 8 in part 5c, §7c), every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5). Part 6 (§7d) is a different task with its own arms and tables:
+by eight schemes (plus 8 arms of two more schemes in part 5b, §7b, and 8 in part 5c, §7c), every arm ending in the same Opus review and a fix step (Sonnet fixes in parts 1–4, Haiku in part 5). Part 6 (§7d) is a different task with its own arms and tables, and Part 7 (§7e) runs one more scheme on that task:
 
 | Scheme | Arms | What writes the code |
 |---|---|---|
@@ -114,12 +116,13 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
       43 of 43 scenarios. Every one of 72 mutants was killed. Inside the arms, the long temp folder made one test fail in the arms' own
       whole-suite runs, in all nine arms (a Unix-socket path over 108 characters); the suite counts in the tables are those of the
       objective checks.
-    - **Cost, Claude only.** The coai providers' cost was not measured. So the total cost of a scheme that ends in the gate cannot be
-      compared from these figures. The measured means are **$16.63 (C), $16.55 (CR) and $17.16 (SRS)**. The $17.16 includes SRS3's two
-      subagents ($15.90 if the Opus and Sonnet subagents are left out). The $16.63 includes C1's Opus review of $8.75, which a limit
-      interruption split in two attempts (the other arms' reviews cost $3.98–$4.76). With that review at the mean of C2's and C3's, the C
-      mean is $15.16. The C/CR order then reverses, so the cost difference between C and CR is not measured. The spread inside C
-      ($14.88–$19.92) is larger than the spread between schemes.
+    - **Cost, Claude only, corrected on 2026-10-30.** The coai providers' cost was not measured. So the total cost of a scheme that ends in
+      the gate cannot be compared from these figures. The first count over-counted every resumed step: a resumed attempt reports the running
+      total of its session, and the first script added every attempt. The corrected means are **$15.48 (C), $16.30 (CR) and $17.09 (SRS)**.
+      The $17.09 includes SRS3's two subagents ($15.83 if the Opus and Sonnet subagents are left out). The first count had C at $16.63, CR at
+      $16.55 and SRS at $17.16, and a "C is dear because of the limit" reading that was mostly this error. **C has the lowest mean, but no
+      difference between the schemes is measured** with n = 3 (Welch's t 0.55–1.15; the ranges overlap). The spread inside SRS alone
+      ($14.64–$19.11) is larger than any difference between means.
     - **Quality.** The absolute judge gave C 7.67, CR 8.50 and SRS 8.00. CR has the highest observed mean in three runs, with no major
       finding in any CR arm. But its range overlaps the other schemes, and the gap to C comes from C1 alone (6.5, two real majors). No scheme
       effect is measured. The Opus review still found 1–2 majors in every arm.
@@ -133,6 +136,20 @@ writes code (H, T, O, S, D) is a deviation the owner asked for, recorded in [pro
       defects: in CR2, the Haiku review fixed the DeepSeek-key defect that C1 shipped. Where Haiku also applied the Opus review (CH,
       part 5c), the judge found majors that came from over-wide Haiku fixes. Two tasks and 3–4 runs per scheme: a direction, not a
       measured effect.
+
+14. **Part 7 — CHH, two focused Haiku reviewers, on the same task as Part 6 (§7e).** Three arms: Sonnet codes, Haiku A traces each plan
+    decision at every site, Haiku B checks the tests (read-only), Sonnet fixes both, then Opus review, fix and the coai gate as in C.
+    **The focuses were drawn from Part 6's misses on this same task, so the test favours CHH** and a fair test needs another task.
+    - **What the Haiku reviewers did.** 30 findings (A 19, B 11). Haiku A named, in each arm, a defect that an arm of Part 6 had shipped
+      (DeepSeek's quota key, a multi-line `AGY_ERROR`, a transient refusal that hides a hopeless one), and the fixer fixed each with a red
+      test first. Haiku B found 11 findings about tests (6 major) and none about a CI machine.
+    - **Quality and cost.** The Opus review found 1 / 1 / 0 blocking + major (C, CR, SRS: 1.33–1.67). The judge gave 8, 8 and 7; the 7 rests on
+      a failing suite test that the hand check did not confirm (load-dependent). Claude-only cost $23.52 / $20.73 / $19.77, mean
+      **$21.34**, which is $5.86 above C and $5.04 above CR (Welch's t 4.76 and 3.95, above the 5 % limits 3.5 and 3.2) and $4.25 above SRS
+      (not measured). The extra cost comes mainly from the step that fixes the Haiku findings ($2.99).
+    - **The gate and the mutants.** The gate agents accepted 0 of 46 findings (1 real, 8 partly real, 37 not real). All 24 mutants were killed.
+    - **Incidents.** CHH1 waited 3 h 16 min for the owner's spend limit; the SDK was upgraded during CHH3's mutation run and the run was
+      repeated ([incidents.md](incidents.md) §2i).
 
 **This run does not settle:** other tasks (this one is mostly tests: E5.5 is only tests, E5.6 mostly), smaller or more
 self-contained pieces, a filler given the repository (here it saw only its prompt), other local models, a skeleton step
@@ -401,7 +418,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
   read of another arm, of `/proc` outside the arm, or of the real repository ([incidents.md](incidents.md) §2g).
 - **Interruption.** The spend limit stopped round 1 (C1, CR1, SRS1) on the night of 28 October. 14 attempts ended in the limit error
   (C1 3, CR1 4, SRS1 7). The runner marked them done by mistake. They were repaired and resumed 11 hours later. Round 1's elapsed times
-  include the wait. Round 1's costs include the interrupted attempts ([incidents.md](incidents.md) §2g).
+  include the wait. Round 1's costs include the work done before the limit. A resumed session is counted once, by its running total ([incidents.md](incidents.md) §2g and §2h).
 - **Contamination.** SRS3's Haiku review-and-fix started two subagents, one on Opus and one on Sonnet. $3.79 of that step's $5.35 is not
   Haiku. The step is marked contaminated in every table.
 - **Objective checks.** All 9 arms build and pass the format check. The MCP suite (13,878–13,916 tests) and the TypeScript suite
@@ -415,46 +432,58 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
     `AnUnknownModel_HasNoGroup_AndEveryKnownOneHasItsKey`. It is a theory with 8 cases, and all 8 passed. The check looks for the exact
     name as a whole word, and a longer name does not match. So this is a naming artefact, not a failure. The mutation check found the test
     and it caught its mutant. The quality judge was told that a longer name is a rename, not an absence.
-- **Cost and time** ([tables.md](tables.md) §10.1 and §10.2). Cost is Claude-only.
+- **Cost and time** ([tables.md](tables.md) §10.1 and §10.2). Cost is Claude-only. **Corrected on 2026-10-30** (see "The first count was wrong" below).
 
 | Arm | Claude-only $ | Active min | Elapsed min | Attempts |
 |---|---|---|---|---|
-| C1 | $19.92 | 125 | 796 † | 7 |
+| C1 | $16.47 | 125 | 796 † | 7 |
 | C2 | $14.88 | 157 | 157 | 4 |
 | C3 | $15.08 | 142 | 142 | 4 |
-| **C mean** | **$16.63** | **141** | 142–157 (round 2 and 3 arms) | 5.0 |
-| CR1 | $16.27 | 119 | 779 † | 9 |
+| **C mean** | **$15.48** | **141** | 142–157 (round 2 and 3 arms) | 5.0 |
+| CR1 | $15.52 | 119 | 779 † | 9 |
 | CR2 | $15.88 | 124 | 124 | 5 |
 | CR3 | $17.49 | 166 | 169 | 5 |
-| **CR mean** | **$16.55** | **136** | 124–169 (round 2 and 3 arms) | 6.3 |
-| SRS1 | $14.85 | 235 | 862 † | 19 |
+| **CR mean** | **$16.30** | **136** | 124–169 (round 2 and 3 arms) | 6.3 |
+| SRS1 | $14.64 | 235 | 862 † | 19 |
 | SRS2 | $17.53 | 231 | 190 | 12 |
 | SRS3 | $19.11 ‡ | 248 | 228 | 12 |
-| **SRS mean** | **$17.16** ($15.90 if SRS3's Opus and Sonnet subagents are left out) | **238** | 190–228 (round 2 and 3 arms) | 14.3 |
+| **SRS mean** | **$17.09** ($15.83 if SRS3's Opus and Sonnet subagents are left out) | **238** | 190–228 (round 2 and 3 arms) | 14.3 |
 
-  ‡ SRS3's cost includes $3.79 of subagent cost (Opus and Sonnet) in its Haiku review-and-fix step.
+  ‡ SRS3's cost includes $3.79 of subagent cost (Opus and Sonnet) in its Haiku review-and-fix step. That step ran in one attempt, so the
+  correction below does not change it: Haiku $1.57, Sonnet $0.94 and Opus $2.84 make the step's $5.35.
   † Round 1 waited out the overnight spend limit. Its elapsed time is not a work time. Active minutes leave the waits out. In SRS the Haiku
   tasks of one batch ran at the same time. So SRS active minutes are a sum of work, and the elapsed time is shorter.
 
-  - **Which figures the comparison uses.** The measured means are the primary figures: **$16.63 (C), $16.55 (CR), $17.16 (SRS)**. They
-    include the contamination and the interruption. Two adjusted figures sit beside them, only to size two effects.
-  - **C is raised by C1's interrupted review.** C1's Opus review cost $8.75 over two attempts: $3.46 before the limit stopped it, and $5.30
-    after the resume. The other arms' reviews, in one attempt, cost $3.98–$4.76. If C1's review costs the mean of C2's and C3's
-    reviews ($4.35), C1 would cost $15.52 and **C's mean would be $15.16** (C2 and C3 alone: $14.98). The measured C mean ($16.63) is $0.08
-    above CR ($16.55). The adjusted C mean ($15.16) is $1.39 below it. So **the order of C and CR reverses**, and **the cost difference
-    between C and CR is not measured** by these runs.
-  - **SRS has a second adjustment.** Without SRS3's two subagents, the SRS mean is **$15.90** (measured: **$17.16**). The comparison above
-    uses the measured $17.16. With both adjustments the means are C $15.16, SRS $15.90 and CR $16.55.
-  - **The spread inside one scheme is larger than the spread between schemes.** C alone ranges over $14.88–$19.92.
+  - **The first count was wrong (found 2026-10-30).** The first version of `metrics6.mjs` added the result of every attempt of a step. But
+    a RESUMED attempt reports the running total of its session, not only its own work. So every resumed step was counted twice in part.
+    - *How it was found:* the owner's session measured a later arm (CHH1, Part 7). Its step `6-fix` had 14 attempts. Attempts 2 to 13 each
+      ran one turn and lasted 1–4 seconds, and each reported the same $1.646 and the same 31,855 Sonnet output tokens as attempt 1.
+      Attempt 14 reported attempt 1's total plus its own work ($2.264). The same shape is in Part 6: C1's Opus review ran in two
+      attempts ($3.46, then $5.30); the second attempt ran 5 turns in 53 seconds.
+    - *What changed:* the script now takes, per session, the result of the LAST attempt, and sums that over the sessions of a step. Only
+      the three round-1 arms had resumed steps. C1 falls from $19.92 to $16.47 (its review: $8.75 to $5.30), CR1 from $16.27 to $15.52
+      (its Haiku review: $1.85 to $1.10), SRS1 from $14.85 to $14.64 (task t4: $0.96 to $0.75). The six arms of rounds 2 and 3 are unchanged.
+      The first count is kept as `data/part6/metrics6.v1-summed-attempts.json`.
+    - *What it did to the conclusions:* the first count made C look dear ($16.63) and made the cost gap between C and CR look like the
+      limit's doing. A first reading of the "adjusted" C mean ($15.16) came from taking C1's review down to the mean of C2's and C3's. That
+      adjustment was mostly the counting error, not an effect of the interruption. The corrected C mean is $15.48, and C1's review ($5.30)
+      is now only $0.5 above the next review (CR2 and SRS2, $4.76). The resumed attempt added $1.84 to that review. How much of it the
+      interruption caused is not known.
+  - **What the corrected means say.** C $15.48, CR $16.30, SRS $17.09 ($15.83 without SRS3's subagents). **C has the lowest mean** in
+    either case, by $0.82 (CR) and $1.62 (SRS; $0.35 if SRS3's subagents are left out). With three arms each, **no difference between the
+    schemes is measured**: Welch's t is 1.04 for CR against C, 1.15 for SRS against C, 0.55 for SRS against CR (2.6–3.9 degrees of
+    freedom; the 5 % limit of |t| is 2.8–3.7). The ranges overlap: C $14.88–$16.47, CR $15.52–$17.49, SRS $14.64–$19.11. The spread inside SRS
+    alone ($4.47) is larger than any difference between means.
   - **Mean cost by role (C / CR / SRS), Claude only.**
     - Sonnet code or split: $8.35 / $9.10 / $3.36.
-    - Haiku task coding: — / — / $3.57.
-    - Haiku review-and-fix: — / $1.31 / $2.92 ($1.66 if SRS3's subagents are left out).
-    - Opus review: $5.82 / $3.89 / $4.04.
+    - Haiku task coding: — / — / $3.50.
+    - Haiku review-and-fix: — / $1.06 / $2.92 ($1.66 if SRS3's subagents are left out).
+    - Opus review: $4.67 / $3.89 / $4.04.
     - Sonnet fix: $1.25 / $1.27 / $1.62.
     - coai gate (the Sonnet agent only): $1.20 / $0.98 / $1.64.
-  - **Writing is the largest item in C and CR.** It is 42–60 % of an arm. In SRS the split and the Haiku tasks cost $6.93 on average. That is
-    $1.42 less than Sonnet's coding step in C. The Haiku review, the fixes and the gate then take that saving back.
+  - **Writing is the largest item in C and CR.** It is 51–56 % of an arm in C and 49–63 % in CR. In SRS the split and the Haiku tasks cost
+    $6.86 on average. That is $1.49 less than Sonnet's coding step in C ($8.35). The Haiku review, the fixes and the gate take that saving
+    back, and SRS ends $1.62 above C.
   - **Time.** C and CR needed 119–166 active minutes. SRS needed 231–248 (the sum of its sessions). In rounds 2 and 3, the elapsed time is
     124–169 min for C and CR, and 190–228 min for SRS. The gate step took 15–37 min of the agent's time. The wait for the lock is not counted.
   - **C2's Opus review** ran to its hard deadline (50 min, exit 124) after it had written its review. The review is used as written.
@@ -536,26 +565,31 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
     kill stands.
   - The mutants did not separate the schemes.
 - **What this shows.** All three schemes deliver the plan on this task. In the objective checks (normal temp folder) all 9 arms build, pass
-  the format check and both suites, deliver 43 of 43 scenarios, and every one of 72 mutants was killed. The measured Claude-only means are
-  within $0.6 of each other ($16.55–$17.16), and the spread inside one scheme is larger. The ordering of C and CR on cost reverses once C1's
-  interrupted review is adjusted, so the cost difference between C and CR is not measured. SRS needs the most time (190–228 min elapsed
-  against 124–169 for C and CR) and shows no quality gain. The Haiku review-and-fix did not lower the Opus review's major findings, but
-  it found real defects (DeepSeek's key in CR2 and SRS1). The gate step costs about $1 of Sonnet per arm, and its reviewers' cost is not measured.
-  It found a few small real defects (8 accepted and fixed) among many findings that are wrong or against the plan (110 of 146).
+  the format check and both suites, deliver 43 of 43 scenarios, and every one of 72 mutants was killed.
+  - **Cost.** The measured Claude-only means are C $15.48, CR $16.30 and SRS $17.09 ($15.83 without SRS3's subagents). C is the cheapest
+    mean, but with three arms each no difference is measured: Welch's t is 0.55–1.15, and the ranges overlap. The spread inside one
+    scheme is larger than the differences between means. The reviewers' cost in the gate is not measured, so the total cost of a scheme
+    that ends in the gate is not known.
+  - **Time.** SRS needs the most time (190–228 min elapsed against 124–169 for C and CR).
+  - **Quality.** SRS shows no quality gain. CR has the highest judge mean, with no scheme effect measured.
+  - **The reviews.** The Haiku review-and-fix did not lower the Opus review's major findings, but it found real defects (DeepSeek's key in
+    CR2 and SRS1).
+  - **The gate.** It costs about $1 of Sonnet per arm. It found a few small real defects (8 accepted and fixed) among many findings that
+    are wrong or against the plan (110 of 146).
 - **What it does not show.**
-  - n = 3 per scheme. The ranges overlap, and C1 alone moves the C mean.
+  - n = 3 per scheme. The ranges overlap, and no cost difference between schemes is measured.
   - One task, one repository.
   - One judge model (Opus, 2 runs). It compresses scores near 8. It scored 8 or 9 for arms with 4–9 minor findings.
   - One judge of the coai findings. It worked in each arm's clone. Commit messages and plan notes were visible, and the scheme words were
     not redacted there as in the diffs of the quality judge.
   - The cost leaves out the coai providers. The total cost of a scheme with the gate is not known.
-  - Round 1's costs include a limit interruption.
+  - Round 1's costs include the work done before a limit interruption (counted once, after the 2026-10-30 correction).
   - SRS3's Haiku review is contaminated. Its cost and its 12 findings are not those of a clean Haiku review.
   - The arms of a round ran at the same time on one host, so times carry load.
 
 | Prediction (recorded before the run, [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md)) | Observed | |
 |---|---|---|
-| P1. Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's | C $14.88–19.92 (only C1 in range), CR $15.88–17.49 (all below), SRS $14.85–19.11 (SRS2 and SRS3 in range). CR's mean $16.55 against C's $16.63: $0.08 below. With C1's interrupted review adjusted, C's mean is $15.16 and CR is $1.39 above | **wrong** for the cost level (all lower than predicted); the CR-above-C part is **not decided** (it depends on the adjustment) |
+| P1. Cost per arm (Claude only): C $18–33, CR $20–35, SRS $16–30; CR's mean about $1–3 above C's | C $14.88–16.47 (all below), CR $15.52–17.49 (all below), SRS $14.64–19.11 (SRS2 and SRS3 in range). CR's mean $16.30 against C's $15.48: $0.82 above, a difference that is not measured (t 1.04) | **wrong** for the cost level (all lower than predicted); the sign of the CR − C gap is as predicted, its size ($0.82) is below the predicted $1–3 and not measured |
 | P2. Elapsed per arm, gate included, 3–6 h; the gate step 30–120 min | Elapsed (rounds 2 and 3): C 142–157 min, CR 124–169, SRS 190–228: 2 of 6 arms in 3–6 h (SRS2, SRS3). Round 1 cannot be read (overnight wait; active time 119–235 min). Gate step 15–37 min: 1 of 9 arms at 30 min or more (C3) | **wrong** (shorter than predicted) |
 | P3. Opus review's blocking + major per arm: C 1–3; CR at most C's; SRS at least C's | C 1 / 1 / 2 (in range), CR mean 1.67 against C's 1.33, SRS 1.67 | C holds, SRS holds, **CR wrong** (CR is above C) |
 | P4. The coai gate's first code round gives ≥ 3 findings in every arm; the judge rates at least half of all coai findings real; in at least 2 of the 3 schemes coai finds a real defect the Opus review did not name | First rounds: 6–18 findings. Real: 10 of 146 (7 %); real or partly: 36 of 146 (25 %); the best arm (C3) 6 of 17. A real finding the Opus review did not name: in C (C2, C3), CR (CR2) and SRS (SRS1, SRS2, SRS3) | parts 1 and 3 hold, **part 2 wrong** |
@@ -563,9 +597,145 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 | P6. Scenarios by exact name: C and CR ≥ 40 of 43 in every arm; SRS ≥ 38 | 43 present in all 9; 43 passing in 8, 42 in C1 (a naming artefact) | holds |
 | Mutation checks (written in `mutate6.mjs` before the run): M1, M2, M3, M7, M8 killed in all 9 arms; survivors most likely at M4–M6; 7–8 of 8 killed per arm; no scheme difference beyond one mutant; at most 2 not applicable | 8 of 8 killed in all 9 arms; no survivor; 0 not applicable; no scheme difference | the kills hold; **the expected survivors at M4–M6 did not appear** |
 
+## 7e. Part 7 — CHH: the classic scheme with two focused Haiku reviewers, on the same task as Part 6 (3 arms)
+
+> Complete: all 3 arms checked, judged, mutation-checked and hand-checked (2026-10-30: the arms ended 04:28 UTC, the checks 05:00, the
+> mutation checks 05:31). Every number is in [tables.md](tables.md) §11, generated from [data/part7/](data/part7/) and
+> [data/part6/metrics6.json](data/part6/metrics6.json). The task, the plan (`6786582e`), the base and the gate are those of §7d, so the
+> CHH arms can be put beside C, CR and SRS (tables.md §11.9). Cost is Claude-only, as in §7d.
+>
+> **Read this first: the test is biased in favour of CHH.** The two reviewer focuses were chosen after Part 6, from what Part 6 had
+> missed ON THIS SAME TASK. The briefs name no defect and no file. But their checklists describe the defect kinds that Part 6 left in
+> the code: "a subclass that does NOT override and so inherits a default", "text that spans several lines", "the important item first
+> and last", "an environment variable the runtime ignores on one system", "a Unix socket path over 108 characters". So the finds
+> below are not evidence that the scheme would find the defects of another task. A fair test needs another task.
+
+- **Question.** After Sonnet codes, do two fresh, read-only Haiku reviewers with two narrow focuses (that the coai gate's four roles lack)
+  find real defects early, so that the later steps find fewer?
+- **Arms.** Three runs, at the same time (CHH1–CHH3):
+  - Sonnet codes (180 min, the same brief as C).
+  - **Haiku A, the decision tracer** (read-only, 40 min): does each plan decision hold at every site? It looks at every subclass, caller,
+    reader and writer, at the issue's sample data, at mixes and orders of results, and at failure paths.
+  - **Haiku B, test truth** (read-only, 40 min): does each test fail if its decision breaks, and does it pass on every CI machine (Linux,
+    Windows, macOS)?
+  - Sonnet fixes what both found (`hfix`, 60 min). Then, as in C: Opus reviews (40), Sonnet fixes (60), the coai code gate (150).
+- **Runner changes** ([harness.md](harness.md) §9.7). The read-only steps now refuse the `Agent` and `Task` tools (SRS3's Haiku step in
+  Part 6 started two subagents). The lock also closed every Part 6 result (the nine arm folders, the judges, the hand check, the mutation
+  runs, the metrics, the logs, the protocol and this write-up), so no CHH arm could read them. No stream of the three arms has an `Agent`
+  or `Task` call. A scan of 2,074 tool calls found no read of another arm, of a Part 6 folder, of the old experiment, of the owner's
+  repositories or of `/proc`. One `Read` of the arm's own saved tool result under `~/.claude` was refused by the deny list.
+- **Objective checks** ([tables.md](tables.md) §11.3). All 3 arms build and pass the format check, and the TypeScript suite has 0 new
+  failures. The MCP suite has 0 new failures in CHH1 and CHH2.
+  - **CHH3 has 1 new failure** in the objective check: `HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_…`
+    (13,888 tests, 13,770 passed). It was not confirmed as a defect of CHH3 (see the hand check below).
+  - **CHH1 shows 42 of 43 scenarios present**: S33 was renamed (see below). CHH2 and CHH3 show 43 of 43, and all present tests passed.
+  - The same long temp folder as in Part 6 made `RegularFilesTests.A_fifo_…` fail in the arms' own whole-suite runs. CHH1's `hfix` notes name it. It is
+    not counted, as in §7d.
+- **Cost and time** ([tables.md](tables.md) §11.1, §11.2). Claude-only. The corrected counting is used ([incidents.md](incidents.md) §2h).
+
+| Arm | Claude-only $ | Active min | Elapsed min | Attempts (sessions) |
+|---|---|---|---|---|
+| CHH1 | $23.52 | 215 | 410 † | 20 (7) |
+| CHH2 | $20.73 | 172 | 178 | 7 (7) |
+| CHH3 | $19.77 | 160 | 160 | 7 (7) |
+| **CHH mean** | **$21.34** ($19.77–$23.52) | **182** (160–215) | 160–178 (CHH2 and CHH3) | |
+
+  † CHH1's last fix step hit the owner's spend limit and waited 3 h 16 min ([incidents.md](incidents.md) §2i). Active minutes leave the wait out.
+
+  - **CHH costs more than the other three schemes.** The means: C $15.48, CR $16.30, SRS $17.09, CHH $21.34. CHH is $5.86 above C, $5.04
+    above CR and $4.25 above SRS. Welch's t is 4.76 against C and 3.95 against CR (the 5 % limits are 3.5 and 3.2), so those two gaps are
+    larger than the spread of the runs. Against SRS it is 2.46 (limit 2.8): not measured. Three arms each, one task: read these as a direction.
+  - **Where the extra cost is** (mean per arm, CHH against CR). The two Haiku reviewers cost $0.47 and $0.44. The step that fixes their
+    findings costs $2.99 more (Sonnet, 23–58 min). CR's single Haiku step cost $1.06. Sonnet's coding step cost $9.10 (CR $9.10, C $8.35), so it is not an extra.
+    The Opus review cost $5.54 (C $4.67, CR $3.89), and the last fix and the gate $1.57 and $1.25.
+  - **Time.** CHH needed 160–215 active minutes (CR 119–166). Elapsed, CHH2 and CHH3 needed 178 and 160 min (CR2 and CR3: 124 and 169).
+- **What the Haiku reviewers found** ([tables.md](tables.md) §11.5; the fixer's outcomes read by hand from `hfix.md`).
+  - Haiku A: 8, 6 and 5 findings in CHH1, CHH2, CHH3 (1 blocking, 9 major, 9 minor in all). Haiku B: 2, 6 and 3 findings (6 major).
+    30 findings in all. The fixer fixed 26, amended the plan for 1 (the code was right) and left 3 (reasons in the notes).
+  - **Haiku A named a defect that an arm of Part 6 had shipped, in each of the three arms.** Each was opened in the code at the commit the
+    reviewer read, and in the final code. The fixer wrote a test that failed first, then fixed it:
+    - **CHH1 A1 (blocking):** `DeepseekRuntime` inherits `CodexRuntime.QuotaKeyOf = "codex"`, so a DeepSeek refusal parks every Codex row.
+      C1 shipped this defect (hand-checked major in Part 6). Fixed in `d398446b`. The final code overrides the key with an empty one.
+    - **CHH2 A2 (major):** `AgyError.Parse` reads one line, so the issue's own multi-line `AGY_ERROR` sample gives no error. SRS2 and SRS3
+      shipped this (their Opus reviews named it, and the Part 6 coai judge listed it as missed). Fixed in `d0809c4d`. The final code reads a
+      balanced object over several lines.
+    - **CHH3 A1 (major):** a transient refusal that comes before a hopeless one hides it. SRS2 shipped this (hand-checked major edge case).
+      Fixed in `6a0097f5`. The final code ranks the refusals, spent first.
+  - **Haiku B found tests without teeth, not tests that fail on another machine.** 11 findings, 6 of them major, mostly about teeth: a cap test that stays
+    under its bound when the cap is removed (CHH1), an assertion that a dropped row also passes (CHH2), a lock hook on one store only
+    (CHH2), no test that runs `RoundEngine` (CHH2 F3, CHH3 B1; the Opus review named the same gap in CHH1 and in six arms of Part 6), a
+    roster no test builds with a cooling row (CHH3). **None of the 11 is about a CI machine** (time zone, path length, platform). The
+    C1 time-zone defect of Part 6 is that kind, and the brief names it as a kind, but no CHH arm had one that B found.
+- **The Opus review after the fixes** ([tables.md](tables.md) §11.4). Blocking + major per arm: 1 / 1 / 0 (mean 0.67; Part 6, same task:
+  C 1.33, CR 1.67, SRS 1.67). All findings per arm: 6 / 6 / 3. No blocking finding. CHH1's major is the missing round-level test. CHH2's major is
+  that S3 cannot fail for the plan's reason. CHH3 had three minor findings.
+- **Quality: the absolute blind judge** ([tables.md](tables.md) §11.6). One Opus session per diff, 2 runs, scheme words redacted
+  (2–4 words per arm).
+
+| Arm | Judge overall (run 1 / run 2) | Correctness | Tests | Conventions | Simplicity | Judge majors named / confirmed |
+|---|---|---|---|---|---|---|
+| CHH1 | **8.0** (8 / 8) | 8.5 | 8.0 | 8.0 | 7.5 | 0 / 0 |
+| CHH2 | **8.0** (8 / 8) | 8.5 | 8.0 | 8.0 | 7.0 | 0 / 0 |
+| CHH3 | **7.0** (7 / 7) | 8.5 | 7.0 | 8.0 | 7.5 | 2 / 0 |
+| **CHH mean** | **7.67** | 8.50 | 7.67 | 8.00 | 7.33 | 2 / 0 |
+
+  - **CHH3's two judge majors were not confirmed.** Both runs named the same failing MCP suite test (`HeldFileInheritableOnLinuxTests…`),
+    guessing a fork race with CHH3's new end-to-end test that starts git. The hand check (2026-10-30): the class alone passed 6 of 6, three
+    times; CHH3 does not touch the `HeldFile` code; two whole-suite re-runs of CHH3 gave 0 failures in the first and 16 in the second.
+    The second re-run ran while the mutation checks and two coders loaded the host. The owner's session also reports that it overlapped
+    the unattended .NET SDK upgrade at 05:19:54 UTC ([incidents.md](incidents.md) §2i). I could not check the time of that re-run: no log of it
+    was kept. Part 6's C3 gate note names the same test as failing once under load. So the failure is load-dependent and is not
+    attributed to CHH3. CHH3's 7 and 7 rest on this finding, and without it the score would probably be higher. That is a guess.
+  - **CHH1's S33 was renamed.** The plan's name ends "read off the RUNNING page; nothing for a row that is not cooling", and CHH1's test
+    name drops "read off the RUNNING page;". I opened the test (`aCoolingRowSaysWhenItIsBack.test.ts`, at the arm's last commit). **It does
+    not read the RUNNING page**: it calls `modelsTabHtml`, then reads the drawn html as a node tree with `pageTree`, and it never calls
+    `runPageHtml`, which would run the page's script. The plan names `runPageHtml` for S33. It does read the drawn card (the cooldown line,
+    the badge and its title, and no reset line), so its assertions cover the *Then*. It is recorded as deviation 10 in the plan, with
+    the reason that the page script has no part in the card. The judge rated it minor in both runs, and the exact-name check reads it as
+    absent. CHH2's S33 calls `runPageHtml` but throws the result away and asserts on the same kind of tree (the judge: minor).
+- **The coai gate** ([tables.md](tables.md) §11.7). One code round in each arm, all `proceed` (CHH2 also had a second plan round: the
+  first plan round said `revise`; all 12 plan findings in the two rounds were rejected as frozen).
+  - **46 code findings** (15, 18, 13). The blind judge: **1 real, 8 partly, 37 not real**; set scores 3, 2, 3 (Part 6: 2–4). The one real
+    finding is minor (a test cast in CHH2).
+  - **The gate agents accepted 0 of the 46** (verified in `coai-findings.json`: 46 rejections, each with a reason). In Part 6 they accepted
+    9 of 146. No fix commit came from the gate in any CHH arm.
+  - The judge named important defects the review missed: CHH1 0, CHH2 1 (the cooldown file is written with no sharing retry), CHH3 2
+    (a slower probe can overwrite a newer lift; a synchronous lock wait in an async round).
+  - Gate cost, Claude only: $1.34, $1.15, $1.24 (18–33 min of the agent). **The providers' cost is not measured.** The server reported
+    740,679, 864,088 and 759,152 tokens in (15,597, 21,817 and 37,535 out) for the three arms; these are tokens, not dollars.
+- **Mutation checks** ([tables.md](tables.md) §11.8). The same eight mutants as in §7d, with the anchors for the CHH arms added before any CHH
+  result. **24 of 24 killed**; every intended test caught its mutant (S34 included, which SRS2 and SRS3 missed in Part 6). For M5, two
+  tests killed it in CHH1, CHH2 and CHH3; in CHH1 and CHH3 the second is the source-scan test that is not a behavioural kill (S25's test also failed). CHH3's first run was spoiled when
+  the system upgraded the .NET SDK (10.0.113 to 10.0.114) at 05:19:54 UTC and two builds failed; the run was repeated, so CHH3's final
+  numbers are on SDK 10.0.114 and all others on 10.0.113. The first attempt is kept. The mutants did not separate the schemes.
+- **What this shows.**
+  - The two focused Haiku reviewers found, in each arm, a defect that Part 6's arms had shipped, and the fixer fixed it. That is the
+    result the briefs were written for, and the hindsight above explains it. It is not a measure of the scheme on a new task.
+  - Their findings did not turn into a clear gain later. The Opus review after them found 0–1 majors (mean 0.67; C, CR, SRS: 1.33–1.67).
+    The judge's mean is 7.67, the same as C (7.67), below CR (8.50) and SRS (8.00); CHH3's 7 rests on an unconfirmed finding.
+  - The extra cost is large and measured against C and CR: $5.04–$5.86 per arm, mostly from the step that fixes the Haiku findings
+    ($2.99) and a dearer Opus review ($5.54; why is not known).
+  - The coai gate found nothing that its agent fixed. Together with Part 6, after a review and fixes, the judge rated most of the gate's findings as not real.
+- **What it does not show.**
+  - n = 3, one task, and the same task that the focuses were drawn from. No other task was tried.
+  - One judge model, 2 runs. CHH3's score depends on a finding that the hand check did not confirm.
+  - The cost leaves out the coai providers. The total cost of a scheme with the gate is not known.
+  - CHH1's elapsed time contains a 3 h 16 min wait for the spend limit. The three arms ran together and the others ran earlier, in rounds of three: the host load differed.
+  - CHH has two Haiku steps and one more Sonnet step than CR: its extra cost cannot be assigned to the focuses alone.
+
+| Prediction (recorded before the run, [harness/part6/PROTOCOL.md](harness/part6/PROTOCOL.md)) | Observed | |
+|---|---|---|
+| P7-1. Haiku A reports at least one finding that the later judge rates real, in at least 2 of 3 arms | The coai judge rates only coai findings, so I used the fixer's red test and my reading of the code. Yes in 3 of 3: the three defects above | holds (3 of 3; judged by a red test and by reading the code) |
+| P7-2. Haiku B reports at least one CI-portability or no-teeth test finding, in at least 2 of 3 arms | At least one no-teeth finding in 3 of 3 (11 in all, 6 major). No CI-portability finding in any arm | holds for no-teeth; the portability half produced nothing |
+| P7-3. The Opus review after the fix finds 0–1 blocking + major per arm (CR in Part 6: 1 / 2 / 2) | 1 / 1 / 0 | holds |
+| P7-4. The judge scores every CHH arm 8 or more in both runs, with no hand-checked major in at least 2 of 3 arms | CHH1 8 / 8, CHH2 8 / 8, CHH3 7 / 7; no confirmed major in 3 of 3 (CHH3's was not confirmed) | **wrong** for the first part (CHH3 scored 7 and 7 on an unconfirmed finding); holds for the second |
+| P7-5. Claude-only cost per arm $17–21 (CR: $15.88–17.49); active time 170–210 min (CR: 119–166) | $23.52 / $20.73 / $19.77, mean $21.34; 215 / 172 / 160 min (CR, corrected: $15.52–17.49, 119–166 min) | cost: 2 of 3 in range, CHH1 above; time: 1 of 3 in range (CHH1 above, CHH3 below) — **partly wrong** |
+| P7-6. The coai gate's findings stay mostly not real (judge's score 2–4 per arm) | 37 of 46 not real; scores 3 / 2 / 3 | holds |
+| P7-7. The mutation checks kill 8 of 8 in every arm | 24 of 24 | holds |
+
 ## 8. Behaviour — the mutation checks on all 30 arms
 
-> Part 6 has its own frozen mutants (8, on another task): §7d, [tables.md](tables.md) §10.7.
+> Part 6 has its own frozen mutants (8, on another task): §7d, [tables.md](tables.md) §10.7; Part 7 re-used them on the same task: §7e, [tables.md](tables.md) §11.8.
 
 - **The instrument** ([harness/mutate.mjs](harness/mutate.mjs), [tables.md](tables.md) §8): six mutants frozen before any
   part 5 result, each breaking one decision of the spec in an arm's final code (M1 one-shot homes not disposed
@@ -584,7 +754,7 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 
 ## 9. Predictions against observations
 
-> The predictions of parts 5b, 5c and 6 are in §7b, §7c and §7d, beside their results.
+> The predictions of parts 5b, 5c, 6 and 7 are in §7b, §7c, §7d and §7e, beside their results.
 
 | Recorded before the run | Observed | |
 |---|---|---|
@@ -655,11 +825,17 @@ or with a time limit that lets Haiku's fixer finish, or a local model in the tas
 - **Concurrency was capped per arm, not per machine**: two T arms with up to three tasks each meant up to six parallel
   builds; the disk's causal role in the crashes stays unproven (one crash came with no experiment load).
 - **Part 6** (§7d): n = 3 per scheme, one task, one repository. The cost is Claude-only: it leaves out the coai providers (other vendors), whose cost was not measured (only tokens, §7d). Round 1 was
-  interrupted by the overnight spend limit: its elapsed times contain the wait, and its costs contain the interrupted attempts. SRS3's Haiku
-  review-and-fix started two subagents (Opus and Sonnet; $3.79 of its $5.35): it is not a Haiku review. C1's Opus review was split by the limit and cost $8.75 (the other arms' $3.98–$4.76), which raises the C mean to $16.63 ($15.16 adjusted). One judge model scored the code
+  interrupted by the overnight spend limit: its elapsed times contain the wait. Its costs were first over-counted (a resumed attempt reports its session's running total) and were corrected on 2026-10-30, [incidents.md](incidents.md) §2h. SRS3's Haiku
+  review-and-fix started two subagents (Opus and Sonnet; $3.79 of its $5.35): it is not a Haiku review. One judge model scored the code
   (2 runs, compressed near 8), and one judge model rated the coai findings from inside each arm's clone, where the scheme was not redacted.
   The three arms of a round ran at the same time on one host; the gate steps ran one at a time. The mutants cover 8 decisions of 12.
   The arms' own whole-suite runs showed one failing test in all nine arms (a Unix-socket path longer than 108 characters under the per-arm temp folder, an effect
   of the isolation). The objective checks ran with the normal temp folder, and that test passed there; the suite counts in the tables are from those checks.
+- **Part 7** (§7e): n = 3, one task, and the SAME task that the two reviewer focuses were drawn from, so the result favours CHH and says
+  little about another task. The cost is Claude-only (the coai providers' cost was not measured). CHH3's judge score (7 and 7) rests on a
+  failing suite test that the hand check did not confirm (a load-dependent test; one of the re-runs overlapped an unattended .NET SDK
+  upgrade, by the owner's account). CHH3's mutation run was repeated on SDK 10.0.114 after the upgrade spoiled the first one; the other
+  arms ran on 10.0.113. CHH1's last fix waited 3 h 16 min for the owner's spend limit. The "ran at the same time" holds for the three CHH
+  arms, but they ran after the Part 6 arms, in one block, not in rounds beside them.
 - **Survival** counts verbatim (whitespace-free) lines: an edited line counts as dropped, so it measures code kept as
   written, not ideas kept.
