@@ -68,7 +68,18 @@ public sealed class ModelArmsArchitectureTests
         // E2.S8
         typeof(GateLockCeiling),
 
-        // E3
+        // E3.S0
+        typeof(PlatformRoads),
+
+        // E3.S1
+
+        // E3.S2
+
+        // E3.S3
+
+        // E3.S4
+
+        // E3.S5
 
         // E4
 

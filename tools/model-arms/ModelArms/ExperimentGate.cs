@@ -194,8 +194,8 @@ public static class ExperimentGate
     {
         if (OperatingSystem.IsWindows())
         {
-            input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(false, 0, [], root)).Line);
-            return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, -1, UnixFileMode.None))]);
+            input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(TrustRoad.NotPerformed, 0, [], root)).Line);
+            return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, null, UnixFileMode.None))]);
         }
 
         return JudgeFacts(input, root, files, RootFacts.CurrentUid(), seams);
@@ -207,7 +207,7 @@ public static class ExperimentGate
 
         var unread = reads.OfType<FactsRead.Unread>().Select(read => read.Reason).ToList();
         var facts = reads.OfType<FactsRead.Read>().Select(read => read.Facts).ToList();
-        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(true, uid, facts, root))];
+        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(TrustRoad.Kernel, uid, facts, root))];
         if (unread.Count > 0)
         {
             return Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, [.. unread.Concat(refusals).Select(reason => $"model-arms {input.Verb}: {reason}")]);
