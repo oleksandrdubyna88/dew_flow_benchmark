@@ -955,17 +955,6 @@ The fix round's own break-its: (k) the flag never set: `A_last_line_cut_inside_a
 
 ## The launcher's follow-ups (E2.S3)
 
-## The step runner (E2.S4)
-
-## The review's answer (E2.S5)
-
-## The gate lock and the MCP configs (E2.S6)
-
-## The gate step (E2.S7)
-
-## run-arm (E2.S8)
-## The launcher's follow-ups (E2.S3)
-
 Three changes to shared test and launcher code, made before the step runner (E2.S4) is built on them. None adds a script field beyond the two named, and every
 existing script and every existing caller behaves as before.
 
@@ -1000,7 +989,7 @@ Past it the launch answers as the path does: the caller's cancellation, or `Time
 (the pump keeps its text where the launch can read it, buffered or line by line), and says that it is partial: `ProcessAttempt.TimedOut.ReadersAbandoned` is true, and `Describe` adds that what the child
 printed after the bound is missing — an empty text with the flag set means "nothing arrived yet", never "printed nothing" (absent is not zero). The abandoned readers are not cancelled; they end when the
 descendant lets go, and a continuation observes their faults and then disposes the wait's budget (so an abandoned pump whose catch cancels the budget never meets a disposed source). A completed child's wait is not
-bounded: its readers end with its pipes, as before. **This is a deviation from E2.S3's spec item 1** ("awaited to their end on every path"), decided at the fix round (E2 §8 item 48): the
+bounded: its readers end with its pipes, as before. **This is a deviation from E2.S3's spec item 1** ("awaited to their end on every path"), decided at the fix round (E2 §8 item 49): the
 spec's wait had no ceiling (`common.reliability`).
 
 The wait, the wall, the tree kill and the two result shapes are unchanged; `PumpAsync`, `Reader`, `Utf8`, `Merge` and `Kill` are untouched.
@@ -1015,5 +1004,16 @@ bound + margin — each takes about ten seconds, the price of the bound; the tim
 finalizers no unobserved fault and no first-chance `ObjectDisposedException` out of the pump may have been seen; it takes about sixteen seconds).
 
 What they do not prove: Windows (a job object is how an escaped descendant would be held there); that the fake's transcript path is the module's own
-(`SessionTranscripts.PathOf` does not exist yet, and the tests read the cwd the fake saw, which hides a symbolic-linked temp folder — E2 §8 item 49); the encoding half of E1.S5's criterion 4 (UTF-8 only when a sink is given) — on Linux the default is already UTF-8, so only a Windows run could see it go wrong; that a real
+(`SessionTranscripts.PathOf` does not exist yet, and the tests read the cwd the fake saw, which hides a symbolic-linked temp folder — E2 §8 item 50); the encoding half of E1.S5's criterion 4 (UTF-8 only when a sink is given) — on Linux the default is already UTF-8, so only a Windows run could see it go wrong; that a real
 claude puts its transcript where the fake does on a host nobody measured; the byte reader (`StreamAsync`) beyond what the shared core does for it.
+
+
+## The step runner (E2.S4)
+
+## The review's answer (E2.S5)
+
+## The gate lock and the MCP configs (E2.S6)
+
+## The gate step (E2.S7)
+
+## run-arm (E2.S8)
