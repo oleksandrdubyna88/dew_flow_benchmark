@@ -7,6 +7,7 @@ import { checkAliases, aliasRecord } from './aliases.mjs';
 import { bareOutcome } from './bare-outcome.mjs';
 import { contaminationHits } from './contamination.mjs';
 import { emptyCounts } from './proc-sampler.mjs';
+import { ok } from './result.mjs';
 import { loadSessionDir } from './session-load.mjs';
 import { filesUnder, realTokenHits, scanSessionDir } from './session-scan.mjs';
 import { sessionCost } from './session-cost.mjs';
@@ -51,5 +52,5 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   const recomputeUsd = cost.known ? cost.usd : null;
   const outcome = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
   const usd = Math.max(stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null }) ?? 0, sessionSpendUsd(brokerLines));
-  return { ok: true, value: { loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } } };
+  return ok({ loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } });
 }

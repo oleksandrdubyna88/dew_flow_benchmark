@@ -10,6 +10,7 @@ import { collectSession } from './bare-collect.mjs';
 import { finalSession, readSessionRecord, writePairRecord, writeSessionRecord } from './bare-records-io.mjs';
 import { nextStep } from './bare-schedule.mjs';
 import { appendLedger, readLedger } from './ledger.mjs';
+import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
 import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
 import { layoutPaths } from './sandbox.mjs';
@@ -196,12 +197,12 @@ export async function reconcile({ ctx, deps, map, say = () => {} }) {
     if (a.action === 'reset') { h.apply(transition(h.get(), a.rid, 'planned')); say(`${a.rid}: ${a.reason}`); continue; }
     const entry = h.get().sessions[a.rid];
     const layout = layoutPaths(ctx.sessionsRoot, a.rid);
-    const launched = a.action === 'adopt' ? { ok: true, value: { meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) } } : null;
+    const launched = a.action === 'adopt' ? ok({ meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) }) : null;
     const item = { rid: a.rid, session: { stack: entry.stack, phase: entry.phase, attempt: entry.attempt }, layout, plan: { token: ctx.token, dummy: entry.dummy }, launched, canary: { tokens: entry.canaryTokens ?? [] }, workspace: { flags: entry.workspaceFlags ?? [] }, mask: entry.mask, maskObserved: null, stampMs: entry.run?.spawnStampMs ?? null };
     const stopped = await settleSessions({ ctx: { ...ctx, abortExit: () => EXIT.halt, abortReason: () => null }, deps, h, phase: { sessions: [item], startSkewMs: null }, state: { quiet: null, sampler: null }, signal: null, say });
-    if (stopped) return { ok: false, reason: stopped.message, exit: stopped.exit, map: h.get() };
+    if (stopped) return fail(stopped.message, { exit: stopped.exit, map: h.get() });
   }
-  return { ok: true, value: h.get() };
+  return ok(h.get());
 }
 
 export { finalSession, readSessionRecord };

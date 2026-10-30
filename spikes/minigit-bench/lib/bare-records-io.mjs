@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { layoutPaths } from './sandbox.mjs';
+import { ok } from './result.mjs';
 import { cellOf, pairRecord, sessionRecord } from './bare-record.mjs';
 import { collectSession } from './bare-collect.mjs';
 import { locOfTree } from './loc.mjs';
@@ -32,7 +33,7 @@ export function writeSessionRecord({ ctx, entry, score }) {
     views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);
-  return { ok: true, value: record };
+  return ok(record);
 }
 
 /** The record of a session read back from disk, or null. */
