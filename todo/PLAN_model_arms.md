@@ -610,6 +610,15 @@ successor of that harness's RUN half, and a later plan may move the Qwen arms on
 is its own instrument (`bench policy`); it shares nothing but the launcher widenings of §4.4, which it may use. Neither document is
 edited by this plan (nothing is taken from them); the table above names the one new boundary, with the plan that does not exist yet.
 
+**The product's own launches (added 2026-10-30, by the plan on the other side).** D17 (d) and D26 (b, c) govern
+`tools/model-arms` only; the product's bare `git` launches under `src/` and `hosts/` (`GitCommand`, `ScoutTrees`,
+`GitBlobBatch`, the hook) are [PLAN_product_git_by_resolved_path.md](PLAN_product_git_by_resolved_path.md)'s — plan
+only, not approved. That plan MOVES `ExecutableRule`, `ExecutableResolution`, `ExecutableAnswer`/`HostPaths`,
+`PathScope`, `GitEnvironment` to `Bench.Domain.Process` and `RealPath` to `Bench.Infrastructure.Process`, and this
+module consumes them from there; `ConfigFolders`, `RootFacts`, `ArmGit` and `KernelFacts` stay here. Order: whichever
+of that plan and E3/E4 (`TargetTools`, `TaskWorktrees`) lands second is re-pointed at the moved deciders — one
+implementation either way.
+
 ## 6. Build order
 
 Re-split by the re-review of 2026-10-30 (`## Plan changes`): six epics, three merge milestones, each a thing an operator can run. The
