@@ -181,7 +181,7 @@ public sealed class ClaudeResultEnvelopeTests
     }
 
     /// <summary>The product's codex lesson in this reader: <c>GetString</c> on a number throws <c>InvalidOperationException</c>, not <c>JsonException</c>, and this runs on the path of an
-    /// attempt that has ALREADY failed.</summary>
+    /// attempt that has ALREADY failed. The last row is well-formed JSON whose string holds a lone surrogate escape: <c>GetString</c> throws on it too, and the reader reads it as its raw text.</summary>
     [Theory]
     [InlineData("""{"type":"result","is_error":true}""", true, "", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"result":42}""", true, "", "", "", "")]
@@ -189,6 +189,7 @@ public sealed class ClaudeResultEnvelopeTests
     [InlineData("""{"type":"result","result":"no is_error at all"}""", false, "no is_error at all", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"errors":["rate limit exceeded",7,null,{"a":1}]}""", true, "", "", "rate limit exceeded", "the words 'rate limit' in the result — an error result with no text")]
     [InlineData("""{"type":"result","errors":"x","api_error":5}""", false, "", "", "", "")]
+    [InlineData("""{"type":"result","is_error":true,"result":"\ud800"}""", true, "\\ud800", "", "", "")]
     public void An_odd_field_in_a_result_object_reads_as_its_safe_default_and_nothing_throws(string line, bool isError, string result, string apiError, string errors, string limitedReason)
     {
         var read = () => ClaudeResultEnvelope.LastOf(line);

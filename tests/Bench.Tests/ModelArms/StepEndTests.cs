@@ -348,4 +348,17 @@ public sealed class StepEndTests
         End("""{"type":"result","is_error":true,"result":42}""").Should().Be(new StepEnd.Errored("an error result with no text"));
         End(Edited(Limit429, o => o["result"] = new string('a', 300))).Should().Be(new StepEnd.Limited("api_error_status 429 — " + head), "the same head on a limit's reason");
     }
+
+    /// <summary>The head is cut at 200 UTF-16 units; a cut between the two halves of a surrogate pair would leave a lone surrogate in a reason that the timing line and the end line
+    /// are written from, and the JSON writer refuses one. So the cut moves back one unit (an addition to the plan's text, which says only "the first 200 characters").</summary>
+    [Fact]
+    public void A_head_never_cuts_a_surrogate_pair_in_two()
+    {
+        var result = new string('a', 199) + "\U0001F600" + "b";
+
+        var end = End(ErrorResult(result));
+
+        end.Should().Be(new StepEnd.Errored(new string('a', 199) + "…"), "the pair that straddles character 200 is dropped whole, never halved");
+        end.Should().BeOfType<StepEnd.Errored>().Subject.Text.Any(char.IsSurrogate).Should().BeFalse("no half of a pair survives");
+    }
 }

@@ -30,7 +30,17 @@ public abstract record StepEnd
     public bool IsDone => this is Finished or HardDeadline;
 
     /// <summary>The spelling of <c>.done</c> and of the end line: <c>finished</c>, <c>hard-deadline</c>, <c>limited</c>, <c>errored</c>, <c>interrupted</c>, <c>not-started</c>.</summary>
-    public string Word => string.Empty;
+    public string Word =>
+        this switch
+        {
+            Finished => "finished",
+            HardDeadline => "hard-deadline",
+            Limited => "limited",
+            Errored => "errored",
+            Interrupted => "interrupted",
+            NotStarted => "not-started",
+            _ => throw new InvalidOperationException("unreachable"),
+        };
 }
 
 /// <summary>What the launcher knew of one attempt besides its streams: why it did not start (empty when it did), whether the wall killed the tree and whether the operator
