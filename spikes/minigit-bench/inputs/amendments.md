@@ -24,3 +24,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | instrument | harness:179624f5fec2 | instrument: G-6 wall is spawn to process exit; the 3 s harness settle is no longer in the wall (A/A bf89); on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:eff387f2f438 | instrument: the stub CLI writes matching transcripts so T3/T4 check its sessions under t3 = stop (E3b.S4)
 2026-10-30 | instrument | harness:faaf55b4ecf7 | instrument: one finalizer settles the box supervision, so a box that fails to start leaves no timer running (coai; on top of the line before, E3b.S4)
+2026-10-30 | instrument | harness:9475b1fed23f | instrument: G-8 the Bash tool's cwd persists across calls and resets to the work tree when it leaves it (data session ebd0b0, series bf89); on top of the line before (E3b.S4)
