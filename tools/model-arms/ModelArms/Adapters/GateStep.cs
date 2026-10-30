@@ -23,9 +23,13 @@ public class GateProbe
 }
 
 /// <summary>STUB (E2.S7, red first): one run of the step, no lock, no judgement.</summary>
-public sealed class GateStep(StepRunner runner, IGateLock gateLock, TimeProvider clock, Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, TimeSpan lockCeiling, GateProbe? probe = null)
+public sealed class GateStep
 {
     public static readonly TimeSpan DefaultLockCeiling = TimeSpan.FromHours(6);
 
-    public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping) => runner.RunAsync(context, stopping);
+    private readonly StepRunner _runner;
+
+    public GateStep(StepRunner runner, IGateLock gateLock, TimeProvider clock, Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, TimeSpan lockCeiling, GateProbe? probe = null) => _runner = runner;
+
+    public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping) => _runner.RunAsync(context with { DeriveOutputs = false }, stopping);
 }

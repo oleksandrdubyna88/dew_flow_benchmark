@@ -94,13 +94,17 @@ internal sealed class StepBench : IDisposable
 
     public string Home { get; }
 
+    /// <summary>The experiment file written again with <paramref name="edit"/> and read again, as every entry of the real verb re-reads it (D4): the next <see cref="Context"/> carries the new limits.</summary>
+    public void RereadExperiment(Action<JsonObject> edit) =>
+        Experiment = ExperimentFile.Read(Edited(Fake.Model, edit), new ExperimentLocation(Root, "/x/home", string.Empty, "/x/repo")).Ok();
+
     public string Token { get; }
 
     public ArmMap Map { get; }
 
     public ArmPaths Paths { get; }
 
-    public Experiment Experiment { get; }
+    public Experiment Experiment { get; private set; }
 
     public FakeCli Fake { get; }
 
