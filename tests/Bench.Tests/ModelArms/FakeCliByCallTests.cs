@@ -14,7 +14,7 @@ namespace Bench.Tests.ModelArms;
 /// <para>
 /// What this does NOT prove: that the transcript path is the one <c>SessionTranscripts.PathOf</c> spells — that type is E2.S2's and does not exist yet, so the
 /// path here is written out a second time (the slug rule, on purpose: the fake references nothing of the module); once it lands, E2.S2 adds the
-/// comparison (E2 §8 item 49). Nor does it prove where a real claude puts its transcript on a host this was not measured on.
+/// comparison (E2 §8 item 50). Nor does it prove where a real claude puts its transcript on a host this was not measured on.
 /// </para></summary>
 public sealed class FakeCliByCallTests
 {
@@ -64,7 +64,7 @@ public sealed class FakeCliByCallTests
 
     /// <summary>The cwd the fake logged for its call: what the process itself reports (a symbolic link in the temp folder's path would differ from the
     /// path the launcher was handed, and claude slugs the one it sees). NOTE: this HIDES a gap — the module's runner will compute its transcript path from the cwd the
-    /// LAUNCHER was given, and on a host whose temp folder is a link (macOS <c>/var</c> → <c>/private/var</c>) the two differ. Closing it is E2 §8 item 49's, once
+    /// LAUNCHER was given, and on a host whose temp folder is a link (macOS <c>/var</c> → <c>/private/var</c>) the two differ. Closing it is E2 §8 item 50's, once
     /// <c>SessionTranscripts.PathOf</c> exists.</summary>
     private static string SeenCwd(FakeCli fake) => fake.Calls()[^1].Cwd;
 
