@@ -651,6 +651,7 @@ D26 (a)–(f) for `TargetTools` and `ArmGit`.
 `McpConfig.cs` (its doc's story ids only: `make` E3.S3, the record's exclusion E6.S3); `Program.cs` (the `make` arm only); tests
 `MakeVerbTests.cs`, `BaseCopyTests.cs`, `ArmFilesTests.cs` (new — one test), the `make`/`chain` rows of `RootRequirementsTests.Each_verb_requires_exactly_the_files_its_stage_needs`;
 under `// E3.S3` `typeof(RunArms)`; the module doc's *make*; `research/module_tests.md` (`make`: `covered`, `MakeVerbTests`).
+**Carried from S4 (§8 item 32), for S3's coder and reviewer.** (1) Replace `StatusVerb.ArmsOf` (`Verbs/Status.cs`) AND the copy in `BriefRehearsal.cs` (`ArmsOf`, the arms the runs name) with `RunArms.Of` — one derivation, three callers. (2) Repoint `StatusVerbTests.The_verbs_source_holds_no_way_to_list_a_folder_and_the_scan_still_finds_one_where_one_lives`'s companion at `BaseCopy.cs`'s `EnumerateFileSystemInfos` (the live instance the parent's text names), or keep `ArmFiles.cs` and say so.
 
 **`MakeVerb.RunAsync(ExperimentInput)`**: (1) `LaunchAdmission`: PATH, `HOME`, `XDG_CONFIG_HOME`; resolve `git`, `lowPriority[0]`,
 `build[0]`; print `resolved executables:`. (2) Print `IsolationLine` (C16); restore nothing. (3) `arms` = `RunArms.Of(runs)` without
@@ -1087,8 +1088,7 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     at attempt 3`, not `limited at attempt 2` — read literally ("the step's last `end` line") the limited line would outlive the attempt that replaced it. (b) The `why` of the
     `limited` row is the LAST `stopped` line of the step after that end line; a `why` and a refusal are printed through `ExecutableRule.Printable` and a `why` is cut at 120
     characters of the original with a `…`, never inside a surrogate pair. (c) A `.done` whose `end` is empty (a shell marker) reads `done (not recorded)`, and an end line with no
-    state `resumable — not recorded at attempt N`. (d) A `timing.jsonl` the road refused leaves the steps read from their streams and markers alone and the arm's `last line:`
-    says `unreadable — <why>`; the residual (a finished step can read as interrupted) is in the module doc.
+    state `resumable — not recorded at attempt N`. (d) A `timing.jsonl` the road refused is not an absent one: every step that no marker decided (not `unreadable`, `continuing` or `done`) is `unreadable — timing.jsonl: <why>` and the arm's `last line:` says `unreadable`; the adapter decides it, `StepEvidence`'s shape is C16's and unchanged. (e) A `why` and a pid text are scrubbed by `ArmMap.Scrub` BEFORE they are cut (`StepStatuses.Line` takes the scrub as a parameter); the cut is `ExecutableRule.Cut`, the one copy, which `GateStep` uses too.
 31. **E3.S4's decisions about what the files do not say.** (a) `Applied(run, since)`'s `since` is the applied file's `verifiedAt` (the moment the isolation was observed to hold),
     `Applying`'s is the snapshot's own `since` — the story names the member `verifiedAt` (§8 item 2) and the line says *applied since*. (b) An ABSENT `arms.map.json` is an empty
     map — every arm of every run is `not made`, exit 0 — and only a map that is there and refused (the road, or as a map) is exit 4, as the story says. (c) A marker presence the kernel
@@ -1096,11 +1096,7 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     (*isolation: isolation applied for part7 since …*), as the story's layout and the line's spelling give it; `make` and `checks` print the line alone. (e) The live mode-300 test
     also closes each arm's `out/` — stronger than the lock, which lists only `r/`, `pids/` and `chain/` — so a verb that counted attempts by listing `out/` is red live as well as by
     the scan. The by-name test of the story is three methods (names asked, live run, scan).
-32. **E3.S4 stands beside E3.S3 and does not wait for it.** `RunArms.Of` (C15) and `BaseCopy.cs` are E3.S3's, built in parallel and absent from this branch: `status` derives the arms
-    of the runs privately (`StatusVerb.ArmsOf`, the map's arms then each run's, once) — replace it by `RunArms.Of` when S3 lands — and the by-name scan's companion finds the live
-    `EnumerateFiles` of `ArmFiles.cs` where the story names `EnumerateFileSystemInfos` in `BaseCopy.cs`; repoint it then (the scan only needs ONE known instance). `status` reads the
-    pid file as the decimal text of a pid and asks `WorkerLiveness`; nothing in this repository writes a pid file yet (E4's `run-all`), so the format is the story's `pids/<arm>.pid` and
-    nothing more.
+32. **E3.S4 is built before E3.S3, which depends on it (wave C, §6)**, so `RunArms.Of` (C15) and `BaseCopy.cs` could not exist for it; two follow-ups are carried into E3.S3's section ("Carried from S4"). `status` derives the arms of the runs privately (`StatusVerb.ArmsOf`, the map's arms then each run's, once), and the by-name scan's companion finds the live `EnumerateFiles` of `ArmFiles.cs` where the parent's text names `EnumerateFileSystemInfos` in `BaseCopy.cs`. `status` reads the pid file as the decimal text of a pid and asks `WorkerLiveness`; nothing writes a pid file until E4's `run-all`, so the format is the story's `pids/<arm>.pid` and not settled until E4 writes one.
 
 ## 9. Growth
 

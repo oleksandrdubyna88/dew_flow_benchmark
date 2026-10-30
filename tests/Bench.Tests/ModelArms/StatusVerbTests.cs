@@ -26,6 +26,8 @@ public sealed class StatusVerbTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    private static void Posix() => Assert.SkipWhen(OperatingSystem.IsWindows(), "modes, links and FIFOs are POSIX");
+
     [DllImport("libc", SetLastError = true)]
     private static extern int mkfifo([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
 
@@ -170,14 +172,14 @@ public sealed class StatusVerbTests
 
     private static readonly string[] RecordPlumbing = ["Equals", "GetHashCode", "ToString", "Deconstruct", "<Clone>$"];
 
-    private static readonly string[] Forbidden = ["Enumerate", "GetFiles", "GetDirectories", "DirectoryInfo"];
+    private static readonly string[] Forbidden = ["Enumerate", "GetFiles", "GetDirectories", "GetFileSystemEntries", "DirectoryInfo", "FileSystemInfo"];
 
     private static string Source(string relative) => File.ReadAllText(Path.Combine(Cli.Repository.Root, "tools", "model-arms", relative));
 
     [Fact]
     public void The_verbs_source_holds_no_way_to_list_a_folder_and_the_scan_still_finds_one_where_one_lives()
     {
-        foreach (var file in new[] { "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/StatusArm.cs" })
+        foreach (var file in new[] { "ModelArms/Verbs/Status.cs", "ModelArms/Verbs/ArmReport.cs", "ModelArms/Adapters/IsolationFiles.cs" })
         {
             Forbidden.Where(word => Source(file).Contains(word, StringComparison.Ordinal)).Should().BeEmpty($"{file}: a verb that lists an unlisted folder fails at mode 300, the one state the isolation exists for");
         }
@@ -194,6 +196,7 @@ public sealed class StatusVerbTests
     [InlineData("inconsistent", "snapshot", "other", "isolation: isolation snapshot inconsistent")]
     public async Task Status_reports_the_isolation_snapshots_state_and_restores_nothing(string state, string? snapshot, string? applied, string expected)
     {
+        Posix();
         using var kit = new StatusKit("C1");
         var texts = new Dictionary<string, string>
         {
@@ -224,6 +227,7 @@ public sealed class StatusVerbTests
     [Fact]
     public async Task Status_never_prints_a_token()
     {
+        Posix();
         using var kit = new StatusKit("C1", "CR1");
         var token = kit.Tokens[0];
         var stream = $"{kit.Root.Root}/r/{token}/out/1-code.a1.jsonl";
@@ -278,6 +282,7 @@ public sealed class StatusVerbTests
     [Fact]
     public async Task A_marker_that_is_a_link_a_fifo_or_too_big_is_unreadable_never_done()
     {
+        Posix();
         using var kit = new StatusKit("C1");
         var paths = kit.Paths("C1");
         kit.Done("C1", "1-code", "finished");
@@ -311,6 +316,7 @@ public sealed class StatusVerbTests
     [Fact]
     public async Task The_runner_is_reported_alive_gone_or_not_recorded()
     {
+        Posix();
         using var kit = new StatusKit("C1", "C2", "C3", "CR1");
         using var live = await StatusKit.HeldProcess.StartAsync();
         var gone = await StatusKit.HeldProcess.ExitedPidAsync();
@@ -350,6 +356,7 @@ public sealed class StatusVerbTests
     [Fact]
     public async Task Status_creates_nothing()
     {
+        Posix();
         using var kit = new StatusKit("C1", "CR1");
         kit.Done("C1", "1-code", "finished");
         var bare = kit.Paths("CR1");
@@ -380,6 +387,7 @@ public sealed class StatusVerbTests
     [Fact]
     public async Task The_arm_map_is_refused_as_a_map_or_by_the_road_with_exit_4_and_an_absent_map_is_every_arm_not_made()
     {
+        Posix();
         using var kit = new StatusKit("C1");
         File.WriteAllText(kit.Layout.ArmMapFile, "[1,2]");
 
@@ -414,5 +422,67 @@ public sealed class StatusVerbTests
         run.Lines.Should().Contain("  tasks: listed when the task pipeline lands (E4)");
         run.Lines.Should().Contain("  3-hreview: done (finished)");
         Regex.Matches(run.Output, "^  tasks:", RegexOptions.Multiline).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_token_inside_a_why_or_a_pid_text_is_never_printed_even_in_part()
+    {
+        using var kit = new StatusKit("C1", "C2");
+        var token = kit.Tokens[0];
+        kit.Stream("C1", "4-gate", 1);
+        kit.Put(kit.Paths("C1").Continue("4-gate"), ContinueMarkers.Write(new ContinueMarker(1, new string('x', 110) + $"/r/{token}/arm/gate.json is a link")));
+        kit.Stream("C1", "1-code", 1);
+        kit.Timing("C1", kit.Started("C1", "1-code", 1), kit.Ended("C1", "1-code", 1, "limited", limited: true), kit.Stopped("C1", "1-code", 3, new string('y', 110) + $"/r/{token}/out/1-code.a1.jsonl"));
+        kit.Put(kit.Layout.PidFile("C2"), new string('p', 10) + token);
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(0, run.Error);
+        run.Output.Should().Contain("4-gate: continuing", "the positive case: the lines were printed");
+        run.Output.Should().Contain("1-code: limited at attempt 1").And.Contain("runner unreadable");
+        foreach (var each in kit.Tokens)
+        {
+            for (var length = 8; length <= each.Length; length++)
+            {
+                run.Output.Should().NotContain(each[..length], $"a text cut at 120 or 20 characters inside a token leaves a part of it, and Scrub replaces only the whole ({each})");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_refused_timing_file_makes_every_step_a_marker_does_not_decide_unreadable()
+    {
+        Posix();
+        using var kit = new StatusKit("C1");
+        kit.Done("C1", "1-code", "finished");
+        kit.Stream("C1", "2-review", 1);
+        File.CreateSymbolicLink(kit.Paths("C1").Timing, kit.Paths("C1").Done("1-code"));
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(0, run.Error);
+        run.Lines.Should().Contain("  1-code: done (finished)", "a marker decides this step whatever the timing file is");
+        run.Lines.Should().Contain(line => line.StartsWith("  2-review: unreadable — timing.jsonl: ", StringComparison.Ordinal) && line.Contains("is a link", StringComparison.Ordinal), "an end line that cannot be read does not make an attempt look interrupted");
+        run.Lines.Should().Contain(line => line.StartsWith("  3-fix: unreadable — timing.jsonl: ", StringComparison.Ordinal), "nor a step look not started");
+        run.Lines.Should().Contain(line => line.StartsWith("  last line: unreadable — ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task What_a_file_or_a_kernel_said_is_printed_escaped_never_raw()
+    {
+        using var kit = new StatusKit("C1");
+        File.WriteAllText(kit.Layout.ArmMapFile, """{"\u001b[31mC1": "0000000000000011"}""");
+
+        var refused = await kit.RunAsync();
+
+        refused.Code.Should().Be(4, refused.Error);
+        refused.Error.Should().Contain("\\u001B").And.NotContain("\u001b", "an ESC in a map key must not reach a terminal");
+
+        File.WriteAllText(kit.Layout.ArmMapFile, ArmMap.Extend(ArmMap.Empty, ["C1"], () => [0, 0, 0, 0, 0, 0, 0, 0x11]).ToJson());
+        var reads = new StatusReads(StatusReads.Real.Read, path => path.EndsWith("made-C1", StringComparison.Ordinal) ? Outcome<bool>.Failure("a\u001b[0mb") : StatusReads.Real.Present(path));
+
+        var unknown = await kit.RunAsync(reads);
+
+        unknown.Output.Should().Contain("made unknown (a\\u001B[0mb)").And.NotContain("\u001b");
     }
 }

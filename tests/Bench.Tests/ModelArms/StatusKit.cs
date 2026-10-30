@@ -150,14 +150,22 @@ internal sealed class StatusKit : IDisposable
             fake.Rewrite(new JsonObject { ["stdoutFile"] = stream, ["holdAfterLine"] = 1, ["lineDelayMs"] = 10 });
             var process = Start(fake);
             var held = new HeldProcess(process, fake);
-            var give = Stopwatch.StartNew();
-            while (!Directory.EnumerateFiles(fake.Home, "held-*").Any())
+            try
             {
-                give.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), "the fake says it is holding within moments");
-                await Task.Delay(50, TestContext.Current.CancellationToken);
-            }
+                var give = Stopwatch.StartNew();
+                while (!Directory.EnumerateFiles(fake.Home, "held-*").Any())
+                {
+                    give.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30), "the fake says it is holding within moments");
+                    await Task.Delay(50, TestContext.Current.CancellationToken);
+                }
 
-            return held;
+                return held;
+            }
+            catch
+            {
+                held.Dispose();
+                throw;
+            }
         }
 
         /// <summary>A process that has started, run and EXITED: its pid is one nothing holds.</summary>

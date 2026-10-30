@@ -1,5 +1,6 @@
 using Bench.Domain.Trace;
 using FluentAssertions;
+using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
 using Xunit;
 
@@ -95,7 +96,7 @@ public sealed class StepStatusTests
     [MemberData(nameof(Lines))]
     public void Each_state_has_one_line_that_names_it(StepState state, string line)
     {
-        StepStatuses.Line(Stem, state).Should().Be(line);
+        StepStatuses.Line(Stem, state, text => text).Should().Be(line);
     }
 
     [Fact]
@@ -103,9 +104,36 @@ public sealed class StepStatusTests
     {
         var why = new string('a', 119) + "\U0001F600" + "tail";
 
-        var line = StepStatuses.Line(Stem, new StepState.Continuing(1, why));
+        var line = StepStatuses.Line(Stem, new StepState.Continuing(1, why), text => text);
 
         line.Should().EndWith(new string('a', 119) + "…", "the pair starts at the 120th character, so the cut falls before it, never in the middle");
         line.All(c => !char.IsSurrogate(c)).Should().BeTrue("a lone surrogate would print as a replacement character");
+    }
+
+    [Theory]
+    [InlineData(105)]
+    [InlineData(110)]
+    [InlineData(117)]
+    public void A_token_inside_a_why_is_scrubbed_before_the_cut_so_no_part_of_it_is_printed(int before)
+    {
+        const string token = "0123456789abcdef";
+        var map = ArmMap.Extend(ArmMap.Empty, ["C1"], () => Convert.FromHexString(token));
+        var why = new string('x', before) + $"/r/{token}/arm/gate.json is a link";
+
+        var continuing = StepStatuses.Line(Stem, new StepState.Continuing(1, why), map.Scrub);
+        var limited = StepStatuses.Line(Stem, new StepState.Limited(1, why), map.Scrub);
+
+        foreach (var line in new[] { continuing, limited })
+        {
+            for (var length = 4; length <= token.Length; length++)
+            {
+                line.Should().NotContain(token[..length], $"a cut inside {token} would leave its first {length} characters, and Scrub replaces only a whole token");
+            }
+        }
+
+        if (before <= 110)
+        {
+            continuing.Should().Contain("/r/<token>", "the positive case: a token that fits before the cut is shown, scrubbed");
+        }
     }
 }

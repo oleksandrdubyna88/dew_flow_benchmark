@@ -37,7 +37,7 @@ public static class StatusVerb
 
     private static int Refused(ExperimentInput input, string reason)
     {
-        input.Verb.Error.WriteLine($"{Name}: arms.map.json is refused: {reason}");
+        input.Verb.Error.WriteLine($"{Name}: arms.map.json is refused: {string.Join('\n', reason.Split('\n').Select(ExecutableRule.Printable))}");
         return ExitCodes.Configuration;
     }
 
@@ -83,5 +83,5 @@ public static class StatusVerb
 
     /// <summary><c>yes</c> or <c>no</c> for a marker by name; a kernel that cannot say is <c>unknown (why)</c> — never a <c>no</c> read off a failure.</summary>
     internal static string Marker(StatusReads reads, string path) =>
-        reads.Present(path).Match(there => there ? "yes" : "no", reason => $"unknown ({reason})");
+        reads.Present(path).Match(there => there ? "yes" : "no", reason => $"unknown ({ExecutableRule.Printable(reason)})");
 }

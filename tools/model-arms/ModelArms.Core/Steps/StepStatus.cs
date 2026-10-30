@@ -96,29 +96,25 @@ public static class StepStatuses
         evidence.Streams > 0 ? new StepState.Resumable(NoEndLine, evidence.Streams) : new StepState.NotStarted();
 
     /// <summary>The step's one line: <c>1-code: done (finished)</c> · <c>2-review: done — ended on its deadline</c> · <c>4-gate: continuing — blocked after attempt N: &lt;why&gt;</c> · <c>resumable — &lt;state&gt; at attempt N</c> · <c>limited at attempt N — &lt;why&gt;</c> ·
-    /// <c>not started</c> · <c>unreadable — &lt;reason&gt;</c>. A reason or a why another program wrote is printed escaped (<see cref="ExecutableRule.Printable"/>) and cut at <see cref="WhyCharacters"/> characters, the cut marked.</summary>
-    public static string Line(string stem, StepState state) =>
+    /// <c>not started</c> · <c>unreadable — &lt;reason&gt;</c>. A reason or a why another program wrote is printed escaped (<see cref="ExecutableRule.Printable"/>); a why is scrubbed by <paramref name="scrub"/> and then cut at <see cref="WhyCharacters"/> characters, the cut marked. Pure: the scrub is handed in.</summary>
+    public static string Line(string stem, StepState state, Func<string, string> scrub) =>
         stem + ": " + state switch
         {
             StepState.Done done when done.End == DeadlineWord => "done — ended on its deadline",
             StepState.Done done => $"done ({ExecutableRule.Printable(done.End)})",
-            StepState.Continuing continuing => $"continuing — blocked after attempt {continuing.After}: {Cut(continuing.Why)}",
+            StepState.Continuing continuing => $"continuing — blocked after attempt {continuing.After}: {Cut(continuing.Why, scrub)}",
             StepState.Resumable resumable => $"resumable — {ExecutableRule.Printable(resumable.End)} at attempt {resumable.Attempt}",
             StepState.Limited { Stop: "" } limited => $"limited at attempt {limited.Attempt}",
-            StepState.Limited limited => $"limited at attempt {limited.Attempt} — {Cut(limited.Stop)}",
+            StepState.Limited limited => $"limited at attempt {limited.Attempt} — {Cut(limited.Stop, scrub)}",
             StepState.Unreadable unreadable => "unreadable — " + ExecutableRule.Printable(unreadable.Reason),
             _ => "not started",
         };
 
-    /// <summary>The text escaped and cut at <see cref="WhyCharacters"/> characters of the ORIGINAL, never inside a surrogate pair, <c>…</c> after a cut.</summary>
-    private static string Cut(string text)
+    /// <summary>The text with <paramref name="scrub"/> applied FIRST, then cut at <see cref="WhyCharacters"/> characters (<see cref="ExecutableRule.Cut"/>) and escaped, <c>…</c> after a cut. The order is the point: a token cut in the middle is not a whole token, so the later scrub of the printed line
+    /// would leave its first characters standing.</summary>
+    private static string Cut(string text, Func<string, string> scrub)
     {
-        if (text.Length <= WhyCharacters)
-        {
-            return ExecutableRule.Printable(text);
-        }
-
-        var keep = char.IsHighSurrogate(text[WhyCharacters - 1]) ? WhyCharacters - 1 : WhyCharacters;
-        return ExecutableRule.Printable(text[..keep]) + "…";
+        var clean = scrub(text);
+        return clean.Length <= WhyCharacters ? ExecutableRule.Printable(clean) : ExecutableRule.Printable(ExecutableRule.Cut(clean, WhyCharacters)) + "…";
     }
 }

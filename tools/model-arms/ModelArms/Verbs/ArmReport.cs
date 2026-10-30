@@ -24,37 +24,41 @@ internal static class ArmReport
         }
 
         return experiment.Schemes.FirstOrDefault(each => each.Name == scheme) is { } found
-            ? Made(root, reads, arm, found, root.Arm(token))
+            ? Made(root, reads, arm, found, root.Arm(token), map)
             : [$"arm {arm}: its scheme {scheme} is not among the experiment's schemes ({string.Join(", ", experiment.Schemes.Select(each => each.Name))})"];
     }
 
-    private static IEnumerable<string> Made(RootPaths root, StatusReads reads, string arm, Scheme scheme, ArmPaths paths)
+    private static IEnumerable<string> Made(RootPaths root, StatusReads reads, string arm, Scheme scheme, ArmPaths paths, ArmMap map)
     {
-        yield return $"arm {arm} (scheme {scheme.Name}): made {StatusVerb.Marker(reads, root.Made(arm))}, checked {StatusVerb.Marker(reads, root.ObjectiveMarker(arm))}, runner {Runner(reads, root.PidFile(arm))}";
+        yield return $"arm {arm} (scheme {scheme.Name}): made {StatusVerb.Marker(reads, root.Made(arm))}, checked {StatusVerb.Marker(reads, root.ObjectiveMarker(arm))}, runner {Runner(reads, root.PidFile(arm), map.Scrub)}";
         var timing = reads.Read(paths.Timing, TimingLimit);
         var lines = timing is BoundedRead.Bytes bytes ? TimingLines.Read(Encoding.UTF8.GetString(bytes.Value)) : [];
         foreach (var entry in scheme.Entries)
         {
-            yield return entry is SchemeEntry.Step step ? "  " + StepStatuses.Line(step.Name, StepStatuses.Of(Evidence(reads, paths, step.Name, lines))) : "  tasks: listed when the task pipeline lands (E4)";
+            yield return entry is SchemeEntry.Step step ? "  " + StepStatuses.Line(step.Name, Decided(StepStatuses.Of(Evidence(reads, paths, step.Name, lines)), timing), map.Scrub) : "  tasks: listed when the task pipeline lands (E4)";
         }
 
         yield return "  last line: " + LastLine(timing);
     }
 
+    /// <summary>A refused <c>timing.jsonl</c> is NOT an absent one: a step that no marker decided (not <c>unreadable</c>, <c>continuing</c> or <c>done</c>) is read from end lines nobody could read, so it is <c>unreadable — timing.jsonl: why</c> rather than <i>interrupted</i> or <i>not started</i>.</summary>
+    private static StepState Decided(StepState state, BoundedRead timing) =>
+        timing is BoundedRead.Refused refused && state is not (StepState.Unreadable or StepState.Continuing or StepState.Done) ? new StepState.Unreadable("timing.jsonl: " + refused.Reason) : state;
+
     /// <summary><c>none recorded</c> (no pid file), <c>pid N alive</c>, <c>pid N gone</c>, or <c>unreadable — why</c> (a link, a FIFO, too big, or text that is no pid).</summary>
-    private static string Runner(StatusReads reads, string path) =>
+    private static string Runner(StatusReads reads, string path, Func<string, string> scrub) =>
         reads.Read(path, PidLimit) switch
         {
             BoundedRead.Absent => "none recorded",
             BoundedRead.Refused refused => "unreadable — " + ExecutableRule.Printable(refused.Reason),
-            BoundedRead.Bytes bytes => Pid(Encoding.UTF8.GetString(bytes.Value).Trim()),
+            BoundedRead.Bytes bytes => Pid(Encoding.UTF8.GetString(bytes.Value).Trim(), scrub),
             _ => "none recorded",
         };
 
-    private static string Pid(string text) =>
+    private static string Pid(string text, Func<string, string> scrub) =>
         text.Length > 0 && text.All(char.IsAsciiDigit) && int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var pid) && pid > 0
             ? $"pid {pid} " + (WorkerLiveness.ProcessIsAlive(pid) ? "alive" : "gone")
-            : $"unreadable — the pid file holds '{ExecutableRule.Printable(text.Length > 20 ? text[..20] : text)}', not a pid";
+            : $"unreadable — the pid file holds '{ExecutableRule.Printable(ExecutableRule.Cut(scrub(text), 20))}', not a pid";
 
     private static StepEvidence Evidence(StatusReads reads, ArmPaths paths, string stem, IReadOnlyList<TimingLine> timing)
     {
