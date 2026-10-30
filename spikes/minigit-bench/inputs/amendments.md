@@ -5,3 +5,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 
 2026-10-30 | instrument | harness:c825944d587d | instrument: TS toolchain and own box paths were flagged as outside-path (pilot 9804fc); hits persisted; aa-verdicts added (E3b.S4)
 2026-10-30 | instrument | harness:500e09206354 | instrument: G-8 TS toolchain/own box paths false positive fixed, skeleton narrowed (B1), box home (M1); aa-verdicts G-6/G-12 per contract (E3b.S4)
+2026-10-30 | instrument | harness:ee66350f9112 | instrument: G-8 contamination scan follows a symbolic link a walk goes through (link-out, link-walk); on top of the line before (E3b.S4)
