@@ -4,7 +4,7 @@
 //
 //   1 stop: alias drift   2 stop: security   3 stop: auth (†: an UPSTREAM 401 / 403 as the final request)   4 void: contaminated   (hand verdict -> void: harness)
 //   5 void: harness       6 void: harness (interrupted | disposed) (†)   6b void: harness (the broker's own path | body | busy refusal as the final request) (†)
-//   7 killed: cap   8 void: rate limit   9 void: upstream (†: the final request's 5xx / transport error, or an envelope status >= 500)
+//   7 killed: cap   8 void: rate limit   9 void: upstream (†: the final request's 5xx or transport error (a 2xx that reset mid-stream too), or an envelope status >= 500)
 //   10 killed: wall | stall   11 completed   12 crashed: <subtype>          († = a registered extension of parent §11.1)
 import { rateLimitSignal } from '../../policy-ab-quick/lib/ratelimit.mjs';
 import { stopRuleFigure } from './spend-gate.mjs';
@@ -95,7 +95,8 @@ const RULES = [
     return limit.void && (!envelope || envelope.is_error === true) ? result('void: rate limit', { detail: { via: limit.via, status: limit.status, message: limit.message } }) : null;
   },
   ({ envelope, final }) => {
-    const finalFailed = final?.kind === 'status' && (final.status >= 500 || (final.status === null && final.error));
+    // the final request failed upstream: a 5xx / 529, or a transport error whatever the status line said (a 200 that then reset mid-stream; review N1, contract section 2 row 9)
+    const finalFailed = final?.kind === 'status' && (final.status >= 500 || Boolean(final.error));
     const status = finalFailed ? final.status : envelopeStatus(envelope);
     return endedInError(envelope) && (finalFailed || status >= 500) ? result('void: upstream', { detail: { status, error: finalFailed ? final.error : null } }) : null;
   },

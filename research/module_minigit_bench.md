@@ -620,7 +620,7 @@ by a scorer fault.
 | 6b | an error ending whose final request was the broker's own refusal (`path`, `body`, `busy`, or no reason), answered 403 / 403 / 503 | `void: harness` † (the reason names the refusal) | no |
 | 7 | `stopped = cost`, the CLI's `error_max_budget_usd`, or the final failed request a broker refusal with `reason: 'cap'` | `killed: cap`, censored at the stop-rule figure | yes |
 | 8 | `rateLimitSignal` AND the session ended in an error | `void: rate limit` | no |
-| 9 | the final request was an upstream 5xx / 529 (or a transport error), or the envelope's `api_error_status` is 500 or more | `void: upstream` † | no |
+| 9 | the final request was an upstream 5xx / 529, or ended in a transport `error` whatever its status line said (a 200 that then reset mid-stream; review N1), or the envelope's `api_error_status` is 500 or more | `void: upstream` † | no |
 | 10 | `stopped = wall` or `stall` | `killed: wall \| stall`, censored | yes |
 | 11 | envelope `success`, not an error | `completed` | yes |
 | 12 | anything else after the model answered | `crashed: <subtype>` | yes |

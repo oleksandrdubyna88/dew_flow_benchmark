@@ -191,3 +191,20 @@ test('The_fallback_flag_is_a_flag_never_a_class', () => {
   assert.equal(r.class, 'completed');
   assert.ok(r.flags.includes('model_refusal_fallback'));
 });
+
+test('A_final_request_answered_2xx_that_then_broke_off_with_a_transport_error_is_an_upstream_void', () => {
+  // the broker's line for a mid-stream reset: the upstream answered 200, then the connection failed (`error` set); the CLI ends in an error envelope with no status of its own
+  const broke = (error, over = {}) => bareOutcome(base({
+    events: [envelope({ subtype: 'error_during_execution', is_error: true, result: 'the stream ended early' })],
+    brokerLines: [...ok2xx(1, 0), forwarding(2, 9), settled(2, 40, { status: 200, error, usage: null, chargedUsd: 0, ...over })],
+  }));
+  for (const error of ['ECONNRESET', 'aborted', 'ETIMEDOUT']) {
+    const r = broke(error);
+    assert.equal(r.class, 'void: upstream', `status 200 and error ${error}: the provider, not the stack, ended the session`);
+    assert.equal(r.data, false);
+    assert.equal(r.detail.error, error);
+  }
+  assert.equal(bareOutcome(base({ events: [envelope({ subtype: 'error_during_execution', is_error: true })], brokerLines: [...ok2xx(1, 0), forwarding(2, 9), settled(2, 40, { status: 200, usage: null, chargedUsd: 0 })] })).class, 'crashed: error_during_execution',
+    'control: the same ending with no transport error stays a crash (data), as before');
+  assert.equal(bareOutcome(base({ brokerLines: [...ok2xx(1, 0), forwarding(2, 9), settled(2, 40, { status: 200, error: 'ECONNRESET' })] })).class, 'completed', 'control: a session that ended in success is never voided by a reset on its last request');
+});
