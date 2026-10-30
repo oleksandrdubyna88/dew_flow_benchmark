@@ -41,6 +41,8 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.Executables), Paths.Executables, At("chain/executables.txt")),
         (nameof(RootPaths.GateLock), Paths.GateLock, At(".gate.lock")),
         (nameof(RootPaths.LockedModes), Paths.LockedModes, At(".locked-modes")),
+        (nameof(RootPaths.LockedModesApplied), Paths.LockedModesApplied, At(".locked-modes.applied")),
+        (nameof(RootPaths.RunMarker), Paths.RunMarker("part6", RunStage.Locked), At("chain/part6/locked")),
         (nameof(RootPaths.LockLog), Paths.LockLog, At("lock.log")),
         (nameof(RootPaths.LockedModesRestored), Paths.LockedModesRestored("20261029T101500Z"), At(".locked-modes.restored-20261029T101500Z")),
         (nameof(RootPaths.KeepAwakeLog), Paths.KeepAwakeLog, At("keep-awake.log")),
@@ -192,7 +194,7 @@ public sealed class ArmPathsTests
         }
 
         var method = type.GetMethod(member)!;
-        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : p.ParameterType == typeof(OutputBinding) ? new OutputBinding("X", "notes/t1.md") : "t1").ToArray();
+        var arguments = method.GetParameters().Select(p => p.ParameterType == typeof(int) ? (object)3 : p.ParameterType == typeof(OutputBinding) ? new OutputBinding("X", "notes/t1.md") : p.ParameterType == typeof(RunStage) ? RunStage.Locked : "t1").ToArray();
         return (string)method.Invoke(target, arguments)!;
     }
 }

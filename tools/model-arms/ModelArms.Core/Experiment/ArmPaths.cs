@@ -47,6 +47,13 @@ public sealed record RootPaths(string Root)
 
     public string LockedModes => Path.Combine(Root, ".locked-modes");
 
+    /// <summary>The second immutable file of D11's two-file state (<c>{"run","digest","verifiedAt"}</c>): present beside <see cref="LockedModes"/> with the same run and digest, the snapshot is <i>applied</i>. Spelled here for the readers (E3.S4, §8 item 2); E5.S1 writes it.</summary>
+    public string LockedModesApplied => Path.Combine(Root, ".locked-modes.applied");
+
+    /// <summary>One run's stage marker, <c>chain/&lt;run&gt;/locked|unlocked|arms-done</c> (D27). The root-level <see cref="Locked"/>, <see cref="Unlocked"/> and <see cref="ArmsDone"/> are E5.S4's to remove.</summary>
+    public string RunMarker(string run, RunStage stage) =>
+        Path.Combine(Root, "chain", ArmPaths.Segment(run, "run"), stage switch { RunStage.Locked => "locked", RunStage.Unlocked => "unlocked", _ => "arms-done" });
+
     public string LockLog => Path.Combine(Root, "lock.log");
 
     /// <summary>Where <c>unlock</c> moves <see cref="LockedModes"/> to once it has restored the modes; the stamp is UTC, like <c>20261029T101500Z</c>.</summary>
@@ -75,6 +82,9 @@ public sealed record RootPaths(string Root)
         return true;
     }
 }
+
+/// <summary>The three stages of a run the chain marks (D27).</summary>
+public enum RunStage { Locked, Unlocked, ArmsDone }
 
 /// <summary>Every path under one arm's folder, <c>r/&lt;token&gt;</c>, spelled once — the shell harness's
 /// spelling, plus the files its helper scripts wrote that the first sketch of the layout missed.</summary>

@@ -1581,4 +1581,44 @@ that `File.GetUnixFileMode` reads the file the link judgement saw; `EACCES` on `
 
 ## status (E3.S4)
 
+`status --experiment <root>` (`Verbs/Status.cs`, `Verbs/StatusArm.cs`, E3.S4) says where every arm stands and changes nothing. It prints, in this order — the root; `isolation: <IsolationLine>`; one line per run of the experiment (`run part6: locked yes, unlocked no, arms done no`, from `chain/<run>/locked|unlocked|arms-done`); then every arm: the arms of the map in its order, then the arms of the runs that the map lacks (`arm C2 (scheme C): not made`). A mapped arm prints `arm C1 (scheme C): made yes, checked no, runner pid 4312 alive`, one line per step of its scheme (`  1-code: done (finished)`; a `tasks` entry is `  tasks: listed when the task pipeline lands (E4)` until E4.S3), and `  last line: <the arm's last timing line>`. Exit 0 once printed; **4 when `arms.map.json` is refused** — by the road (a link, a FIFO, a file past 1 MiB) or as a map. A root with no map yet is every arm `not made` and exit 0: before `make` that is the answer.
+
+```mermaid
+flowchart TD
+    G["ExperimentGate: root, trust, experiment.json (verb 'status' needs nothing more)"] --> M["StatusReads.Read(arms.map.json, 1 MiB): absent = empty map, refused or not a map = 4"]
+    M --> H["print: root, isolation line (IsolationFiles: .locked-modes, .locked-modes.applied → LockSnapshots → IsolationLine), each run's three markers"]
+    H --> A["per arm: made / checked markers, pid file (64 B) and WorkerLiveness"]
+    A --> S["per step: Present(Stream(stem, n)) for n = 1, 2, … until absent; .done and .continue (4 KiB each); StepStatuses.Of → Line"]
+    S --> L["last line: the last non-blank line of timing.jsonl (16 MiB) as recorded"]
+    L --> P["every line through ArmMap.Scrub, then the writer"]
+```
+
+**By name, and no way to list.** `StatusReads(Read, Present)` is the verb's only door to the file system: `Read` is `BoundedFile.Read(path, limit, PlatformFactsReader.CurrentRoad)` (C16) and `Present` is `KernelFacts.Present`; the record has **no member that lists a folder**, so nothing holding it can. Attempts are counted by probing `ArmPaths.Stream(stem, n)` until one is absent. That is the whole of F0: the isolation leaves `r/`, `pids/` and `chain/` at mode 300 (traversable, never listable) and a verb that listed one would fail in the one state it is wanted — the part-6 harness's one break was an operator's glob over `pids/*.log`. The live test closes those three folders and each arm's `out/` at mode 300 and compares the output with the open run's byte for byte; a structural pair scans `Status.cs` and `StatusArm.cs` for `Enumerate`, `GetFiles`, `GetDirectories` and `DirectoryInfo`, and the same scan still FINDS the one live listing of the adapters (`ArmFiles`' staged-file sweep) so it cannot pass by matching nothing.
+
+**One step, one line** (`ModelArms.Core.Steps.StepStatuses`, pure; the first row that holds):
+
+| row | evidence | state | line |
+|---|---|---|---|
+| 1 | a marker the road or the reader refused | `Unreadable(reason)` | `unreadable — <reason>` |
+| 2 | `.continue` present and its `after` is the last attempt (the number of streams) | `Continuing(after, why)` | `continuing — blocked after attempt N: <why, 120 characters>` |
+| 3 | `.done` present | `Done(end or "not recorded", attempts)` | `done (finished)` · `done — ended on its deadline` |
+| 4 | the step's last `end` line, when it is for the last attempt: `limited` / any other state | `Limited(attempt, the why of a LATER stopped line of the step, else "")` / `Resumable(state, attempt)` | `limited at attempt N — <why>` · `resumable — <state> at attempt N` |
+| 5 | a stream and no end line of its own | `Resumable("interrupted (no end line)", last attempt)` | `resumable — interrupted (no end line) at attempt N` |
+| 6 | nothing | `NotStarted` | `not started` |
+
+A `.continue` for an older attempt than the last stream is stale and decides nothing (D7 — the rule `StepRecovery` enters a step by). A marker that is a link, a FIFO or past 4 KiB is **unreadable, never done**: a step whose marker nobody can trust must not pass as finished. A `why` is printed escaped (`ExecutableRule.Printable`) and cut at 120 characters of the original, never inside a surrogate pair, a cut marked `…`. A **deadline is visible apart from a finish** (E2 §8 item 32, F1/F4): `done — ended on its deadline` is a different line from `done (finished)`, and the last timing line is printed **as recorded** — the runner's own text, its `"deadline":"23:12 UTC (00:12 +01:00)"` and its key order untouched, never parsed and written again.
+
+**The isolation snapshot is read, never restored** (D11, E3 §8 item 2). `IsolationFiles.State(root, read)` reads `.locked-modes` and `.locked-modes.applied` by name (1 MiB) and `LockSnapshots.State(Read<string>, Read<string>)` decides: neither — *no isolation snapshot*; the snapshot alone — `Applying(run, since)`, *a lock was interrupted — run `lock <run>` or `unlock`*; both with one run and digest — `Applied(run, verifiedAt)`, *isolation applied for <run> since <utc>*; anything else — `Inconsistent(reason)`: a file refused or not parsing, an applied file with no snapshot, two files of different runs or digests. `status` prints that one line, as `make` and `checks` will (E3.S3, E3.S5 — `IsolationFiles.State` takes the read function, so each verb passes its own seam), and **no verb but `lock` and `unlock` ever restores a mode**. `RootPaths` gained `LockedModesApplied` and `RunMarker(run, RunStage)`; E5.S1 and E5.S4 write the files and remove the root-level `Locked`/`Unlocked`/`ArmsDone` (§8 item 2, as proposed, not yet answered by the owner — the fallback is in E3 S4's section).
+
+**No token, nothing created.** Every line goes through `ArmMap.Scrub` in one place; a refusal that names `r/<token>/out/…` prints `r/<token>/out/…`. The test greps the output for every token of the map. The verb creates and writes no file and no folder: the root's whole tree (names, kinds, modes, bytes) is equal before and after, and an arm without `out/` still has none.
+
+### Tests (E3.S4)
+
+`StatusVerbTests` (20 cases: the story's twelve — its by-name row split into three methods, the names asked, the live mode-300 run and the scan — and the console's dispatch, the arm map refused or absent, a scheme the experiment lacks and a task entry), `StepStatusTests` (the table as a theory of 19 rows, every state of the closed set produced, every line, the surrogate cut), `LockSnapshotTests` (17 file pairs, the two states' times, the lines, an escaped run name, the path spellings) over `StatusKit` (the example's root, the arms by hand, a held and an exited process from the fake CLI). `BoundedFileTests` and `GateStatusTests` run unedited. Break-its, planted in the finished code, seen red, restored: `done` for every `.done` — the deadline line; `File.ReadAllText` for the markers — the hang past the test's 10 s wall on the FIFO; an enumeration of `out/` to count attempts — `UnauthorizedAccessException` at mode 300, the scan, and the recorded names; `ArmMap.Scrub` removed — *no line holds a token of the map*; a re-spelt last line; `ArmFiles.Prepare` in the arm report — the tree changed; the run arms dropped — `not made`; the stale `.continue` guard removed; the digest comparison removed.
+
+### Not proven (said, not hidden)
+
+A root a real `lock` isolated — E5.S1 writes the two files; here they are written by hand to D11's shape, and the member `verifiedAt` is this story's choice (§8 item 2). The Portable bounded road on macOS and FreeBSD (`BoundedFileTests` hands it in; the live mode-300 test runs on Linux). A pid file's process being the arm's: `status` says a process with that pid is alive, and a recycled pid reads *alive* (the same limit as the gate lock's holder note, which also asks the start time — a pid file carries none). A `timing.jsonl` that is refused: the arm's last line says so, and its steps are then read from their streams and markers alone, so an end line that cannot be read does not make a step look finished — it can make a finished step look interrupted. The task pipeline's steps (E4.S3), cost (E3 touches none), the gate lock's holder (`gate-lock status` says it).
+
+
 ## checks, M2 and the key check (E3.S5)

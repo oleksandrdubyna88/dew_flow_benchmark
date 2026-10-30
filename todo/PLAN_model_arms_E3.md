@@ -1056,6 +1056,25 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     `BoundedFile` answers a path it cannot look at as `Refused`, never absent and never a throw, and its portable ceiling covers the path's own check and
     the folder test too; `GateHolderNote.Describe` takes the lock's `PlatformRoad` and reads the note on it; `KernelFacts.ReadSmall` has one structural
     caller; the gate and `HostFactsReader` read the root's own files through `BoundedFile` (1 MiB); `LockProbe`'s inert failure names the folder.
+30. **E3.S4's reading of the decision table where the story is silent (2026-10-30; behaviour inside the spec's rows).** (a) The step's last `end` line decides rows 4/5 only when
+    it is for the LAST attempt (its `attempt` is not below the number of streams): attempt 3 begun after a `limited` attempt 2 and never ended is `resumable — interrupted (no end line)
+    at attempt 3`, not `limited at attempt 2` — read literally ("the step's last `end` line") the limited line would outlive the attempt that replaced it. (b) The `why` of the
+    `limited` row is the LAST `stopped` line of the step after that end line; a `why` and a refusal are printed through `ExecutableRule.Printable` and a `why` is cut at 120
+    characters of the original with a `…`, never inside a surrogate pair. (c) A `.done` whose `end` is empty (a shell marker) reads `done (not recorded)`, and an end line with no
+    state `resumable — not recorded at attempt N`. (d) A `timing.jsonl` the road refused leaves the steps read from their streams and markers alone and the arm's `last line:`
+    says `unreadable — <why>`; the residual (a finished step can read as interrupted) is in the module doc.
+31. **E3.S4's decisions about what the files do not say.** (a) `Applied(run, since)`'s `since` is the applied file's `verifiedAt` (the moment the isolation was observed to hold),
+    `Applying`'s is the snapshot's own `since` — the story names the member `verifiedAt` (§8 item 2) and the line says *applied since*. (b) An ABSENT `arms.map.json` is an empty
+    map — every arm of every run is `not made`, exit 0 — and only a map that is there and refused (the road, or as a map) is exit 4, as the story says. (c) A marker presence the kernel
+    cannot answer prints `unknown (<why>)`, never `no`; a `Streams` probe it cannot answer makes that step `unreadable`. (d) `isolation:` and `IsolationLine` both start with the word
+    (*isolation: isolation applied for part7 since …*), as the story's layout and the line's spelling give it; `make` and `checks` print the line alone. (e) The live mode-300 test
+    also closes each arm's `out/` — stronger than the lock, which lists only `r/`, `pids/` and `chain/` — so a verb that counted attempts by listing `out/` is red live as well as by
+    the scan. The by-name test of the story is three methods (names asked, live run, scan).
+32. **E3.S4 stands beside E3.S3 and does not wait for it.** `RunArms.Of` (C15) and `BaseCopy.cs` are E3.S3's, built in parallel and absent from this branch: `status` derives the arms
+    of the runs privately (`StatusVerb.ArmsOf`, the map's arms then each run's, once) — replace it by `RunArms.Of` when S3 lands — and the by-name scan's companion finds the live
+    `EnumerateFiles` of `ArmFiles.cs` where the story names `EnumerateFileSystemInfos` in `BaseCopy.cs`; repoint it then (the scan only needs ONE known instance). `status` reads the
+    pid file as the decimal text of a pid and asks `WorkerLiveness`; nothing in this repository writes a pid file yet (E4's `run-all`), so the format is the story's `pids/<arm>.pid` and
+    nothing more.
 
 ## 9. Growth
 

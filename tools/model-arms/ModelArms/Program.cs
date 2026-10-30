@@ -89,7 +89,7 @@ public static class Program
             "run-all" => NotBuilt(input, "E4.S3"),
             "chain" => NotBuilt(input, "E4.S5"),
             "checks" => NotBuilt(input, "E5.S2"),
-            "status" => NotBuilt(input, "E4.S4"),
+            "status" => ExperimentGate.RunAsync(input, StatusVerb.RunAsync),
             "gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync),
             "version" => Help.Version(input),
             "help" => Help.Usage(input),

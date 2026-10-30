@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
+using ModelArms.Core.Isolation;
 using ModelArms.Core.Launch;
 using ModelArms.Core.Steps;
 using Xunit;
@@ -78,6 +79,7 @@ public sealed class ModelArmsArchitectureTests
         // E3.S3
 
         // E3.S4
+        typeof(StepStatuses), typeof(LockSnapshots), typeof(IsolationLine),
 
         // E3.S5
 
