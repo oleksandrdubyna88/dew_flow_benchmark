@@ -1,5 +1,5 @@
 // `inputs/amendments.md` read by code (E3b.S3 header; S4, S5 and the resume check use it). Two kinds of dated line, and nothing else counts:
-//   a by-hand verdict   YYYY-MM-DD | G-<n> | holds|refuted|explained | <rid> | <evidence path> | <who>
+//   a by-hand verdict   YYYY-MM-DD | G-<n> | holds|refuted|explained | <rid> | <evidence path> | <who>   (it applies to the series its evidence path names, `appliesToSeries`; a path that names none applies by rid alone)
 //   an instrument line  YYYY-MM-DD | instrument | harness:<12 hex of the accepted identity> | <reason, with its G-id>
 //   an input amendment YYYY-MM-DD | instrument | input:<file>:<12 hex of the sha256 of the new content> | <reason, with its G-id>   (quiet.json, package-flags.json only; the guard checks it)
 //   a budget raise     YYYY-MM-DD | budget-raise | pair:<k> | n:<re-runs> | usd:<amount> | <reason>      (the ONE permitted raise of the $40; `bare-limits.mjs` checks the amount)
@@ -65,5 +65,15 @@ export function parseAmendments(text) {
   };
 }
 
-/** The valid by-hand verdicts about one session: the `handVerdicts` input of `bareOutcome`. */
-export const handVerdictsFor = (text, rid) => parseAmendments(text).verdicts.filter(v => v.rid === rid);
+// The registered verdict line is `date | G-n | verdict | rid | evidence | who`: its positions are fixed, so it cannot take a series field. A new series reuses the registered seed, so its rids equal an earlier series' rids, and a
+// line about rid X must not decide the same rid of another series. The SERIES the evidence path names (`~/rsd/minigit/<series>/handcheck/...`) is the line's series: a line applies to the series it names; a line whose evidence names none applies by rid alone.
+const SERIES_ID = /(?<![\w-])s-\d{8}-[0-9a-f]{4}(?![\w-])/g;
+
+/** Whether a by-hand verdict applies to a session of the series `series`: its evidence names that series, or names none (a series asked for as `undefined` matches only a line that names none). */
+export function appliesToSeries(verdict, series) {
+  const named = verdict.evidence.match(SERIES_ID) ?? [];
+  return named.length === 0 || named.includes(series);
+}
+
+/** The valid by-hand verdicts about one session of the series `series`: the `handVerdicts` input of `bareOutcome`. */
+export const handVerdictsFor = (text, rid, series) => parseAmendments(text).verdicts.filter(v => v.rid === rid && appliesToSeries(v, series));

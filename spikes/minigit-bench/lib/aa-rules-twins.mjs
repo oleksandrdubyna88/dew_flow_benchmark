@@ -1,6 +1,7 @@
 // The G rows read from the twins, the rehearsal and the dated by-hand lines (contract section 10): G-4, G-7, G-9, G-10, G-12, G-13, G-14, and the T3 rule (section 11). `ctx.aa` are the twins' facts,
 // `ctx.pilot` the Node pilot's, `ctx.smoke` the committed smoke fixture's B-T1 (`{ ok, cli, fixture, observed }`, or null).
 import { combine, fromStatus, holds, latestOf, leaf, lineFor, needPilot, perSession, refuted, unknown } from './aa-check.mjs';
+import { isCharged } from './ledger.mjs';
 
 const mean = list => (list.length === 0 ? null : list.reduce((a, b) => a + b, 0) / list.length);
 
@@ -44,7 +45,7 @@ function kindsOf(f, ctx) {
   return {
     stream: (l?.events ?? []).length > 0, envelope: (l?.events ?? []).some(e => e.type === 'result'), O: (l?.sink ?? []).length > 0, T: (l?.transcripts ?? []).length > 0, audit: (l?.audit ?? []).length > 0,
     broker: (l?.brokerLines ?? []).length > 0, egress: leaf(f.record, 'egress')?.bytesCaptured === true, cpuSamples: f.samples.length > 0, spin: known(f, 'run', 'spin'), packages: known(f, 'packages'),
-    score: f.hasScore && quality.length > 0 && quality.every(q => q.known === true), ledger: ctx.ledger.some(line => line.rid === f.rid),
+    score: f.hasScore && quality.length > 0 && quality.every(q => q.known === true), ledger: isCharged(ctx.ledger, f.rid),
   };
 }
 

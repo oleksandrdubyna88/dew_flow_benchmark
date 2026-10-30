@@ -123,3 +123,10 @@ test('G7_a_missing_alias_record_or_an_alias_the_baseline_lacks_is_NO_GO_and_only
   assert.equal(drift.verdict, 'STOP', 'drift stays a stop');
   assert.equal(drift.verdict === 'STOP' && rowOf(drift, 'G-7').stop, true);
 });
+
+test('A_dated_line_whose_evidence_names_another_series_does_not_cover_this_series', () => {
+  const gap = { seriesId: 's-20261030-b82e', records: { aa0001: partition({ build_test: 6000, model_api: 40000, other_tool: 100, unattributed: 100 }, 100, 46202) } };
+  const line = series => `2026-10-30 | G-6 | explained | aa0001 | /home/u/rsd/minigit/${series}/handcheck/G-6.txt | operator`;
+  assert.equal(rowOf(report(makeSeries(gap), [...GOOD_LINES, line('s-20261030-bf89')]), 'G-6').verdict, 'refuted', 'the same rid in series bf89 is another session');
+  assert.equal(rowOf(report(makeSeries(gap), [...GOOD_LINES, line('s-20261030-b82e')]), 'G-6').verdict, 'explained', 'its own series');
+});

@@ -433,6 +433,18 @@ test('A_crash_between_the_ledger_line_and_the_run_map_transition_does_not_charge
   assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.rid === r0).length, 1, 'and is charged once: the ledger line that was already there stands');
 });
 
+test('A_series_charges_its_own_sessions_when_the_ledger_holds_an_earlier_series_lines_for_the_same_rids', async () => {
+  const t = harness();
+  const { appendLedger } = await import('../lib/ledger.mjs');
+  const rids = [rid('csharp', 'v1', 1), rid('node', 'v1', 1)];
+  for (const r of rids) appendLedger(t.ctx.ledgerFile, { kind: 'data', usd: 0.5, what: 'completed', rid: r, t: '2026-10-30T10:00:00.000Z', fromSeries: 's-20261029-aaaa' }); // what `init` carried: the earlier series' sessions, the same registered seed
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  const lines = readLedger(t.ctx.ledgerFile).filter(l => rids.includes(l.rid));
+  assert.equal(lines.filter(l => l.fromSeries !== undefined).length, 2, 'the carried lines stand');
+  assert.deepEqual(lines.filter(l => l.fromSeries === undefined).map(l => l.rid).sort(), [...rids].sort(), 'and this series charged each of its own sessions once');
+});
+
 test('The_record_of_a_v2_session_lists_which_directories_its_workspace_left_out_per_stack', async () => {
   const t = harness();
   const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });

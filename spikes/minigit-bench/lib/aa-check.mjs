@@ -1,5 +1,7 @@
 // The small vocabulary of `aa-verdicts` (E3b.S4): a per-session CHECK is `{ rid, status: 'holds' | 'refuted' | 'unknown' | 'explained', note }`, and a ROW of the G table is the combination of the checks of
 // the sessions it reads. A leaf of a record is `{ known: true, value }` or `{ known: false, why }`; an unknown is never a hold and never a refutation: it is `not exercised`.
+import { appliesToSeries } from './amendments.mjs';
+
 export const holds = note => ({ status: 'holds', note });
 export const refuted = note => ({ status: 'refuted', note });
 export const unknown = note => ({ status: 'unknown', note });
@@ -40,8 +42,8 @@ export const perSession = (sessions, fn) => sessions.map(f => ({ rid: f.rid, ...
 /** The line with the latest date (a later date wins; the file's order breaks a tie), or `undefined`: never the last one in the file. */
 export const latestOf = lines => lines.toSorted((a, b) => a.date.localeCompare(b.date)).at(-1);
 
-/** The latest valid dated by-hand line for a G and a session, or `undefined`. */
-export const lineFor = (ctx, g, rid) => latestOf(ctx.amendments.verdicts.filter(v => v.g === g && v.rid === rid));
+/** The latest valid dated by-hand line for a G and a session of THIS series (`ctx.series`: a line whose evidence names another series is about another session), or `undefined`. */
+export const lineFor = (ctx, g, rid) => latestOf(ctx.amendments.verdicts.filter(v => v.g === g && v.rid === rid && appliesToSeries(v, ctx.series)));
 
 /** A refuted check that a dated `explained` line for the session (naming `needle` in its evidence, when given) turns into `explained`. */
 export function withExplain(check, { ctx, g, needle = '' }) {

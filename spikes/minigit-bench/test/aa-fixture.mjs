@@ -76,7 +76,7 @@ export function makeSeries(over = {}) {
   const root = tmpDir('aa');
   const rows = over.sessions ?? SESSIONS;
   const map = {
-    seriesId: 's-test', harnessIdentity: 'e'.repeat(64), pins: { claude: '2.1.310' }, caps: { capUsd: 6, wallMs: 3600000, stallMs: 2700000 }, bareBudgetUsd: 40, stopped: null,
+    seriesId: over.seriesId ?? 's-test', harnessIdentity: 'e'.repeat(64), pins: { claude: '2.1.310' }, caps: { capUsd: 6, wallMs: 3600000, stallMs: 2700000 }, bareBudgetUsd: 40, stopped: null,
     sessions: Object.fromEntries(rows.map(r => [r.rid, { rid: r.rid, pair: 0, stack: r.stack, phase: 'v1', attempt: 1, kind: r.kind, label: 'paired', mask: r.mask, twin: r.twin, status: 'scored', class: 'completed', data: true }])),
   };
   writeFileSync(dir(root, 'run-map.json'), `${JSON.stringify(map)}\n`);

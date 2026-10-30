@@ -45,3 +45,26 @@ test('An_input_amendment_line_is_parsed_and_a_malformed_one_is_reported', () => 
   assert.deepEqual(parsed.inputs, [{ date: '2026-11-02', file: 'quiet.json', hash12: '0123456789ab', reason: 'the sampler window (G-11)' }]);
   assert.equal(parsed.malformed.length, 2);
 });
+
+// A new series reuses the registered seed, so its rids equal an earlier series' rids: a verdict line about rid X must not apply to the same rid of another series. The registered line is `date | G-n | verdict | rid | evidence | who`
+// and cannot take a series field (the positions are fixed), so the SERIES the evidence path names (`~/rsd/minigit/<series>/...`) decides: a line applies to the series it names, a line naming none applies by rid alone.
+const SERIES_TEXT = `2026-10-30 | G-1 | refuted | abc123 | /home/u/rsd/minigit/s-20261030-b82e/handcheck/readback-pair1.txt | judge
+2026-10-30 | G-13 | holds | abc123 | /home/u/rsd/minigit/s-20261030-bf89/handcheck/G-13.txt | lead
+2026-10-30 | G-10 | holds | abc123 | scratch/by-hand.txt | lead
+2026-10-30 | G-12 | holds | abc123 | /home/u/rsd/minigit/s-20261030-b82e/handcheck/a.txt and /home/u/rsd/minigit/s-20261030-bf89/handcheck/b.txt | lead
+`;
+
+test('A_verdict_line_whose_evidence_names_one_series_does_not_apply_to_the_same_rid_of_another_series', () => {
+  const gs = series => handVerdictsFor(SERIES_TEXT, 'abc123', series).map(v => v.g);
+  assert.deepEqual(gs('s-20261030-b82e'), ['G-1', 'G-10', 'G-12']);
+  assert.deepEqual(gs('s-20261030-bf89'), ['G-13', 'G-10', 'G-12']);
+  assert.deepEqual(gs('s-20261030-0c1a'), ['G-10'], 'a series no line names gets only the line that names none');
+  assert.deepEqual(handVerdictsFor(SERIES_TEXT, 'abc123').map(v => v.g), ['G-10'], 'no series asked: only a line that names none');
+  assert.deepEqual(handVerdictsFor(SERIES_TEXT, 'zzzzzz', 's-20261030-b82e'), []);
+});
+
+test('A_series_id_inside_a_longer_word_is_not_a_series_the_evidence_names', () => {
+  const text = '2026-10-30 | G-1 | holds | abc123 | /x/xs-20261030-b82e/y and /x/s-20261030-b82e0/y | me';
+  assert.deepEqual(handVerdictsFor(text, 'abc123', 's-20261030-b82e').map(v => v.g), ['G-1'], 'neither is a series id, so the line names none');
+  assert.deepEqual(handVerdictsFor(text, 'abc123', 's-20261030-bf89').map(v => v.g), ['G-1']);
+});

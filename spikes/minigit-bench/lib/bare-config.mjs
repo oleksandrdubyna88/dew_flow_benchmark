@@ -145,7 +145,7 @@ function contextOf({ seriesDir, map, kind, pair, args, home, inputsDir, got, abo
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
     caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: got.budget.bareBudgetUsd, harnessIdentity: got.identity, preregTag: map.preregTag, spin: map.spin,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),
-    handVerdictsFor: rid => handVerdictsFor(got.amendmentsText, rid),
+    handVerdictsFor: rid => handVerdictsFor(got.amendmentsText, rid, map.seriesId),
     abortReason: () => abort.reason, abortExit: () => abort.exit, inputsDir,
     inputHashes: { quietSha256: sha('quiet.json'), packageFlagsSha256: sha('package-flags.json') }, // the thresholds that applied to every session of this run
   };

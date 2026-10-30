@@ -40,7 +40,7 @@ export function aaVerdicts({ seriesDir, inputsDir, smoke = null, now = () => new
   const read = readSeriesFacts({ seriesDir, inputsDir });
   if (!read.ok) return read;
   const f = read.value;
-  const ctx = { map: f.map, ledger: f.ledger, baseline: f.baseline, rehearsal: f.rehearsal, quiet: f.quiet, amendments: f.amendments, aa: f.subjects.aa, pilot: f.subjects.pilot, all: [...f.subjects.aa, ...f.subjects.pilot], smoke };
+  const ctx = { series: f.map.seriesId, map: f.map, ledger: f.ledger, baseline: f.baseline, rehearsal: f.rehearsal, quiet: f.quiet, amendments: f.amendments, aa: f.subjects.aa, pilot: f.subjects.pilot, all: [...f.subjects.aa, ...f.subjects.pilot], smoke };
   const rows = ROWS.map(rule => finish(rule(ctx)));
   const g4Row = rows.find(r => r.id === 'G-4');
   return ok({
