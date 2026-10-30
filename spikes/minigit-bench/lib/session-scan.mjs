@@ -14,7 +14,7 @@ import { statSync } from 'node:fs';
 import path from 'node:path';
 import { MAX_AGENT_FILE_BYTES, agentEntries, readAgentFileUnder, scanAgentFileWindows } from './agent-files.mjs';
 import { classifyLink } from './link-class.mjs';
-import { tokenHits } from './token-scan.mjs';
+import { ownValueHits, tokenHits } from './token-scan.mjs';
 
 export const MAX_SCAN_BYTES = MAX_AGENT_FILE_BYTES;
 /** The limits of one scan: a file up to `maxScanBytes` is read whole; above it, in windows of `windowBytes` (+ `overlapBytes`) up to `maxStreamBytes`. */
@@ -23,10 +23,14 @@ export const SCAN_LIMITS = Object.freeze({ maxScanBytes: MAX_SCAN_BYTES, windowB
 /** Every entry under `root` that is not a directory, as `{ rel, size, kind }` (`file`, `symlink` or `other`); links and devices are listed, not followed. */
 export const filesUnder = agentEntries;
 
-/** Pure: `texts` with the dummy masked (same length), scanned for `real` and every credential shape. `[{ source, kind, offset }]`. */
+/**
+ * Pure: `texts` with the dummy masked (same length), scanned for `real` and every credential shape. `[{ source, kind, offset }]`. A hit where the real token itself stands is `own-value` even
+ * when the token has the shape of a credential (it does: `sk-ant-`, and a shape wins the span in `tokenHits`); every other hit is its shape (review N8: only the real token is the security stop).
+ */
 export function realTokenHits(texts, { real, dummy = null }) {
   const masked = texts.map(t => ({ source: t.source, text: dummy ? String(t.text).replaceAll(dummy, '#'.repeat(dummy.length)) : String(t.text) }));
-  return tokenHits(masked, [real]);
+  const own = new Set(ownValueHits(masked, [real]).map(h => `${h.source}\u0000${h.offset}`));
+  return tokenHits(masked, [real]).map(h => (own.has(`${h.source}\u0000${h.offset}`) ? { ...h, kind: 'own-value' } : h));
 }
 
 /** The hits of one file read whole, or null when it was not a regular file any more (a swap after the listing). `scanText(text)` -> `[{ kind, offset, ... }]`. */

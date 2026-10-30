@@ -612,9 +612,9 @@ by a scorer fault.
 | # | Evidence | Class | Data? |
 |---|---|---|---|
 | 1 | `checkAliases` says stop | `stop: alias drift` | no |
-| 2 | the real token counted by a sampler or the session scan | `stop: security` | no |
+| 2 | the real token counted by a sampler or the session scan (its OWN value only: a hit of any other credential shape goes to row 4; review N8) | `stop: security` | no |
 | 3 | the final request answered 401 or 403 by the UPSTREAM (a `settled` broker line; never the broker's own 403 for a refused path or body) | `stop: auth` † | no |
-| 4 | a high contamination hit, a canary, a token-shape hit (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` | no |
+| 4 | a high contamination hit, a canary, a token-shape hit in any file of the session directory, or a file no scan could read (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` | no |
 | 5 | `stopped = readback`, or no settled 2xx broker line with parsed usage | `void: harness` | no |
 | 6 | `stopped = cancelled` (the abort reason recorded) or `disposed`, or the state file retired by `retireStale` | `void: harness (interrupted \| disposed)` † | no |
 | 6b | an error ending whose final request was the broker's own refusal (`path`, `body`, `busy`, or no reason), answered 403 / 403 / 503 | `void: harness` † (the reason names the refusal) | no |

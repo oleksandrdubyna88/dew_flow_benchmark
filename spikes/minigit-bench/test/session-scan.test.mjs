@@ -84,3 +84,16 @@ test('scanFiles_runs_any_text_scan_over_whole_and_windowed_files_with_one_hit_pe
   const swapped = scanFiles(dir, ['big.txt'], () => [], { ...LIMITS, maxStreamBytes: 100 });
   assert.equal(swapped.unreadable.length, 1, 'a file no scan can read is reported, never skipped');
 });
+
+test('The_real_token_is_an_own_value_hit_even_when_it_has_the_shape_of_a_credential_and_another_credential_of_that_shape_is_not', () => {
+  const real = `sk-ant-oat01-${'Zq8Lm2Xv'.repeat(8)}`;
+  const dir = tmpDir('scan-own');
+  write(dir, 'a.txt', filled(400, [10, real], [200, `sk-ant-api03-${'Ab9Cd8Ef'.repeat(8)}`], [300, `x\n${real.slice(0, 20)}\n${real.slice(20)}`]));
+  const scan = scanSessionDir(dir, { real });
+  assert.deepEqual(scan.hits.map(h => [h.kind, h.offset]), [['own-value', 10], ['anthropic', 200], ['own-value', 302]], 'the real token (whole, and split by a newline) is the own value; the other credential is only a shape');
+  for (const limits of [LIMITS]) {
+    const big = tmpDir('scan-own-big');
+    write(big, 'b.txt', filled(4000, [250, real]));
+    assert.deepEqual(scanSessionDir(big, { real, limits }).hits.map(h => [h.kind, h.offset]), [['own-value', 250]], 'in windows too');
+  }
+});

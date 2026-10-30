@@ -192,7 +192,7 @@ test('A_canary_and_a_credential_shape_in_evidence_files_are_still_found_by_the_o
     assert.equal(collect(withCanary, { canaryTokens: [canary], scanLimits }).outcome.class, 'void: contaminated', `a canary in the stream (${scanLimits ? 'windows' : 'whole'})`);
     const shape = sessionFromFixture();
     writeFileSync(path.join(shape.work, 'note.txt'), `ghp_${'a1B2'.repeat(9)}\n`);
-    assert.notEqual(collect(shape, { scanLimits }).outcome.class, 'completed', `a credential shape in box/work is found (${scanLimits ? 'windows' : 'whole'})`);
+    assert.equal(collect(shape, { scanLimits }).outcome.class, 'void: contaminated', `a credential shape in box/work is found (${scanLimits ? 'windows' : 'whole'})`);
     assert.equal(collect(sessionFromFixture(), { canaryTokens: [canary], scanLimits }).outcome.class, 'completed', 'control: no canary, no shape');
   }
 });
@@ -208,4 +208,20 @@ test('A_T3_or_T5_breach_under_policy_stop_is_a_series_stop_like_T1_and_T2_and_un
   const r = collect(tampered('t3'), { policy: { ...policy, t3: 'stop', t2: 'stop' } });
   assert.ok(r.outcome.flags.includes('T3 breach'), 'the session keeps its class and gets the flag');
   assert.equal(r.outcome.class, 'completed');
+});
+
+test('Only_the_real_tokens_own_value_is_a_stop_security_and_any_other_credential_shape_is_a_contaminated_void', () => {
+  // the real token has the SHAPE of an Anthropic credential, as the operator's does: a shape wins the span in the generic scan, so the collector must still know it is the real one
+  const realistic = `sk-ant-oat01-${'Zq8Lm2Xv'.repeat(8)}`;
+  const own = sessionFromFixture();
+  appendFileSync(own.files.stderr, `${realistic}\n`);
+  assert.equal(collect(own, { plan: { token: realistic, dummy: DUMMY } }).outcome.class, 'stop: security', 'the real token, whatever shape it has');
+  const another = sessionFromFixture();
+  appendFileSync(another.files.stderr, `sk-ant-api03-${'Ab9Cd8Ef'.repeat(8)}\n`);
+  const r = collect(another, { plan: { token: realistic, dummy: DUMMY } });
+  assert.equal(r.outcome.class, 'void: contaminated', 'a credential of the same shape that is not the real token is a token-shape hit (row 4), not the security stop (row 2)');
+  assert.equal(r.outcome.detail.tokenHits, 1);
+  const github = sessionFromFixture();
+  writeFileSync(path.join(github.dir, 'box', 'config-note.txt'), `ghp_${'a1B2'.repeat(9)}\n`); // a file that is not evidence (outside stream, transcripts, box/out, box/work)
+  assert.equal(collect(github, { plan: { token: realistic, dummy: DUMMY } }).outcome.class, 'void: contaminated', 'a shape in any file of the session dir is a hit, not only in the evidence files');
 });
