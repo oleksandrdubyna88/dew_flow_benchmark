@@ -334,14 +334,14 @@ The table — every row explicit, no catch-all (`common.platform-limits`): a POS
 |---|---|---|---|---|---|
 | Linux x86-64, `statx` | Kernel | Kernel | ProcTicks | yes | — (the line is empty) |
 | Linux, another architecture, `statx` | Kernel | Portable | ProcTicks | yes | `the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a 5 s ceiling), and a link swapped in between the path's check and the open is followed` |
-| Linux without `statx` | Portable | by architecture | ProcTicks | yes | the three trust clauses below, plus the bounded clause when Portable |
+| Linux without `statx` | Portable | Portable | ProcTicks | yes | the three trust clauses below, plus the bounded clause (`ReadSmall` judges its descriptor by `statx`, so the kernel reader needs Linux AND x86-64 AND a working `statx` — consult on 3.0) |
 | macOS; FreeBSD | Portable | Portable | ProcessStartTime | yes | `the owner of the root, experiment.json and scenarios.json (no probed kernel reader on <platform>; their mode WAS judged)`; `whether each is a regular file (a FIFO or a device is not told from a file)`; `the inode and change time between the trust check and the read (the length and write time were compared instead)`; `the gate lock's held file against its path after the open`; the bounded clause; `a lock holder's start is believed within 2 s of its note, not by the kernel's tick` |
 | any other POSIX | Portable | Portable | ProcessStartTime | yes | as macOS, naming `Description` |
 | Windows | NotPerformed | Portable | None | no | — (the line is empty: Windows prints its own *not performed* lines where it does today; unchanged) |
 
 Adapter `ModelArms.Adapters.PlatformFactsReader.Current()`: `OperatingSystem.IsWindows/IsLinux/IsMacOS/IsFreeBSD`,
 `RuntimeInformation.ProcessArchitecture == Architecture.X64`, `StatxAvailable` = `KernelFacts.StatxIsAvailable` (Linux: one `statx` of `/`
-that throws neither `EntryPointNotFoundException` nor `DllNotFoundException`; false elsewhere), `RuntimeInformation.OSDescription`.
+that throws neither `EntryPointNotFoundException` nor `DllNotFoundException` AND returns 0 — a `-1` (`ENOSYS` under a seccomp filter, an old kernel) is unavailable too, its words kept for the line; false elsewhere), `RuntimeInformation.OSDescription`.
 `PlatformRoads.Current` is computed once per process (`Lazy<PlatformRoad>`) and handed to every adapter below AS A PARAMETER — an adapter
 never reads the static back, so a test hands the Mac's road on this host. `HostKinds` is unchanged (macOS and FreeBSD stay `OtherPosix`; D23's
 refusals — `isolation` on Windows, `awake: wsl` off WSL — are not touched).
@@ -372,7 +372,7 @@ refusals — `isolation` on Windows, `awake: wsl` off WSL — are not touched).
    on every road but `NotPerformed` (unchanged there).
 4. **The effective uid** — `geteuid` through libc on Linux, macOS and FreeBSD (no layout; E1.S10 decision 2): unchanged, and unused by
    the judgement on the portable road.
-5. **`Present`** — unchanged (`statx` on Linux; `Path.Exists` elsewhere: a dangling link is there, `EACCES` reads absent — the stated gap
+5. **`Present`** — `statx` on Linux when `StatxAvailable` (as today); `Path.Exists` elsewhere, a statx-less Linux included: a dangling link is there, `EACCES` reads absent — the stated gap
    stays stated in the module doc, not in the line, because it is not a check).
 6. **The exclusive root** — `KernelFacts.MakeFolder`: libc `mkdir(path, 0700)` on Linux, macOS and FreeBSD — the one POSIX call, no
    struct, a path and a mode (`mode_t` is 16 bits on Darwin and FreeBSD; `0700` fits and the upper bits are zero); a non-zero answer is
@@ -387,7 +387,10 @@ refusals — `isolation` on Windows, `awake: wsl` off WSL — are not touched).
    observed on this host at this start (11 on Linux, the witness test; `EAGAIN` 35 on Darwin and FreeBSD by their headers, which the probe
    does not need to know); the second open SUCCEEDS → `Failure("file locking is inert in <folder>: a second open of one file succeeded — no
    gate lock is attempted here")` (exit 3 through `Create`, the road `Refusal` takes today); any other exception → `Failure(the words)`.
-   `LockProbe.Decide(Exception? secondOpen)` is the pure half (`null` = the open succeeded), `Measure` the live one. Growth: one 0-byte file
+   **The released control** (consult on 3.0): after the conflict is seen, the holder is disposed and a THIRD open `Open | ReadWrite |
+   FileShare.None` must succeed — else `Failure("the probe's second open failed for a reason other than the lock: <its words>")`, so an
+   `EIO` or a descriptor limit is never taken for the conflict code and later accepted as "honoured"; the probe file is then deleted.
+   `LockProbe.Decide(Exception? secondOpen, Exception? released)` is the pure half (`null` = the open succeeded), `Measure` the live one. Growth: one 0-byte file
    per construction, deleted on close; a crash leaves at most one per start in the temp folder, named for what it is.
    **The held file is verified honoured** (off Windows): after `Verified` (the Linux inode comparison; on the portable road not performed —
    the line says so), a second open of the lock path with `FileShare.None` must throw the measured code; a stream comes back → both are
@@ -443,7 +446,7 @@ Mac is unobserved (§8 item 25). `MacRoad` = `PlatformRoads.Of(new(false, false,
 
 | Test | Given / When / Then | Red (the assertion seen first, against the stub) |
 |---|---|---|
-| `PlatformRoadsTests.Each_host_takes_its_declared_roads_and_names_what_it_does_not_verify` | theory over the table's rows (Linux x64 statx; Linux arm64 statx; Linux x64 no statx; macOS arm64; FreeBSD x64; Windows) → `Trust`, `Bounded`, `Holder`, `LibcMkdir` as the table says; `Line` empty for Linux x64 and Windows; the Mac's line names `the owner`, `regular file`, `inode and change time`, `5 s ceiling`, `swapped in`, `2 s` and `macOS` | stub every road `Kernel`: `Expected road.Trust to be Portable, but found Kernel.` |
+| `PlatformRoadsTests.Each_host_takes_its_declared_roads_and_names_what_it_does_not_verify` | theory over the table's rows (Linux x64 statx; Linux arm64 statx; Linux x64 no statx — `Bounded` Portable; macOS arm64; FreeBSD x64; Windows) → `Trust`, `Bounded`, `Holder`, `LibcMkdir` as the table says; `Line` empty for Linux x64 and Windows; the Mac's line names `the owner`, `regular file`, `inode and change time`, `5 s ceiling`, `swapped in`, `2 s` and `macOS` | stub every road `Kernel`: `Expected road.Trust to be Portable, but found Kernel.` |
 | `PlatformRoadsTests.No_host_is_refused_for_want_of_a_reader` | every row, and an unnamed POSIX (`Description = "Illumos"`) → a road, never a throw or a failure; `Portable` on every road for the unnamed one, its line naming `Illumos` | stub throws for the unnamed host: `Expected no exception` |
 | `PortableFactsTests.The_portable_reader_gives_the_mode_the_kind_and_the_witness_and_never_the_owner` | live: a file `640`, a folder `755` → `Read`: `Mode` the set mode, `Kind` `Unknown` / `Directory`, `OwnerUid` null, `Source` `Portable`, `Witness.Length` the bytes written, `WriteTicks` within a minute of now | stub `Unread("not built")`: `Expected Read, but found Unread` |
 | `PortableFactsTests.A_link_is_reported_as_a_link_and_nothing_is_read_through_it` | live: a link to a `777` file → `Kind` `Link`, `Mode` `None`; `RootFacts.ReadFacts(link, MacRoad)` → `Refused` naming the target (E1.S8's sentence) | stub follows the link: `Expected Kind to be Link, but found Unknown` |
@@ -456,7 +459,8 @@ Mac is unobserved (§8 item 25). `MacRoad` = `PlatformRoads.Of(new(false, false,
 | `InitVerbTests.Init_on_the_portable_road_prints_its_line_first_and_makes_the_root_owner_only` | `InitVerb.RunAsync(input, KernelFacts.MakeFolder, MacRoad)` → exit 0, the root `700`, the files `600`, stderr's FIRST line the road's; the Windows line absent | stub prints nothing: `Expected stderr's first line to contain "NOT verified"` |
 | `KernelFactsTests.Mkdir_refuses_a_taken_name_by_its_presence_not_by_an_errno_and_names_the_words_of_any_other_failure` | live: a folder, a file, a dangling link at the name → `AlreadyThere` each, untouched; a parent that is a file → `Failed` naming `Not a directory`; an absent parent → `Failed` naming `No such file`; the structural half: `KernelFacts.cs` holds no `AlreadyExists` and no `== 17` | green by construction on Linux (the errno road answers the same) — its teeth are B6; the structural half red against the current file |
 | `LockProbeTests.The_measured_conflict_code_is_the_runtimes_EWOULDBLOCK_on_linux` | live (skip off Linux): `LockProbe.Measure(temp)` → `Ok(11)`; the probe file gone after; `FileGateLock.Create` → `Ok` | stub `Failure("not built")`: `Expected Ok(11)` |
-| `LockProbeTests.A_second_open_that_succeeds_is_inert_and_any_other_fault_carries_its_words` | pure: `Decide(null)` → `Failure` naming `inert`; `Decide(new IOException("x") { HResult = 35 })` → `Ok(35)`; `Decide(new FileNotFoundException())` (a subclass) → `Failure`; `Decide(new UnauthorizedAccessException("denied"))` → `Failure` naming `denied` | stub `Ok(ex?.HResult ?? 0)`: `Expected Failure, but found Ok(0)` |
+| `LockProbeTests.A_conflict_that_outlives_the_holders_release_is_not_the_lock` | pure: `Decide(new IOException("x") { HResult = 5 }, released: new IOException("io") { HResult = 5 })` → `Failure` naming `other than the lock`; `released: null` → `Ok(5)` | stub ignores `released`: `Expected Failure, but found Ok(5)` |
+| `LockProbeTests.A_second_open_that_succeeds_is_inert_and_any_other_fault_carries_its_words` | pure (`released: null` throughout): `Decide(null, null)` → `Failure` naming `inert`; `Decide(new IOException("x") { HResult = 35 }, null)` → `Ok(35)`; `Decide(new FileNotFoundException(), null)` (a subclass) → `Failure`; `Decide(new UnauthorizedAccessException("denied"), null)` → `Failure` naming `denied` | stub `Ok(ex?.HResult ?? 0)`: `Expected Failure, but found Ok(0)` |
 | `FileGateLockTests.A_held_lock_whose_file_system_lets_a_second_open_through_is_released_and_refused` | `new FileGateLock(clock, poll) { SecondOpen = _ => new FileStream(<another temp file>, …) }` → `Take(path, true, true)` → `Unread` naming `not honoured`; no holder note left; the lock file openable afterwards (released); with the real `SecondOpen` → `Held` | stub ignores `SecondOpen`: `Expected Unread, but found Held` |
 | `FileGateLockTests.The_conflict_code_is_measured_not_tabled_off_windows` | structural: `FileGateLock.cs` holds no `LinuxWouldBlock` and no bare `11`; `ConflictCodes` calls `LockProbe`; the two Windows literals remain (unchanged) | the scan red against the current file |
 | `GateLockHolderTests.A_note_is_believed_by_the_kernels_ticks_on_linux_and_by_its_start_second_within_two_seconds_elsewhere` | pure theory over `GateHolderNote.Believe(raw, alive, liveTicks, liveStart, road)`: `ProcTicks` equal → true, differ → false, null → false; `ProcessStartTime` `Δ = 0, 2` → true, `3` → false, null → false; `None` → false whatever the facts | stub believes on `ProcTicks` only: `Expected True (ProcessStartTime, Δ 2 s), but found False` |
@@ -469,7 +473,7 @@ Mac is unobserved (§8 item 25). `MacRoad` = `PlatformRoads.Of(new(false, false,
 mode is judged and the owner is not*, and the gate test's `775` row (no refusal); B2 `Changes` compares identities on portable facts →
 *compare kind, mode, length* (`[]` for a longer file); B3 the line printed inside `Judge` (twice: the root, then `scenarios.json`) → *prints
 its line once*; B4 the ceiling removed from the portable open → *within its ceiling* (the wall); B5 the honour check skipped → *released and
-refused*; B6 every mkdir failure `Failed` → *refuses a taken name*; B7 `LockProbe.Decide(null)` → `Ok(0)` → *inert*.
+refused*; B6 every mkdir failure `Failed` → *refuses a taken name*; B7 `LockProbe.Decide(null, null)` → `Ok(0)` → *inert*.
 
 **Commands.** `--filter-class "*PlatformRoadsTests"`, `"*PortableFactsTests"`, `"*BoundedFileTests"`, `"*LockProbeTests"`, `"*RootTrustTests"`,
 `"*FactsReadTests"`, `"*KernelFactsTests"`, `"*InitVerbTests"`, `"*FileGateLockTests"`, `"*GateLockHolderTests"`, `"*GateLockPathTests"`,
