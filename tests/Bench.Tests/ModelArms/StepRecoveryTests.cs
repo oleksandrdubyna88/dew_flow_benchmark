@@ -83,7 +83,8 @@ public sealed class StepRecoveryTests
         Decide(Facts(last: 1, lastEnd: new StepEnd.Limited("x"), transcript: false)).Should().Be(new StepEntry.Fresh(2, 1800));
         Decide(Facts(last: 1, lastEnd: new StepEnd.Limited("x"), session: Outcome<Guid>.Failure("no session file"))).Should().Be(
             new StepEntry.Fresh(2, 1800), "a session that cannot be read cannot be resumed");
-        Decide(Facts(last: 0, lastEnd: new StepEnd.NotStarted("nothing ran"), timing: [])).Should().Be(new StepEntry.Fresh(1, 2400), "the first entry of a step is a fresh launch of attempt 1");
+        Decide(Facts(last: 0, lastEnd: new StepEnd.NotStarted("nothing ran"), timing: [], session: Outcome<Guid>.Failure("no session file"), transcript: false)).Should().Be(
+            new StepEntry.Fresh(1, 2400), "the first entry of a step is a fresh launch of attempt 1 with the whole budget");
     }
 
     [Fact]
@@ -167,7 +168,9 @@ public sealed class StepRecoveryTests
     {
         Decide(Facts(last: 2, lastEnd: new StepEnd.Finished(), marker: Outcome<ContinueMarker>.Failure("no marker"))).Should().Be(new StepEntry.RecoveredDone(new StepEnd.Finished(), 2));
         Decide(Facts(done: true, last: 2, lastEnd: new StepEnd.Finished(), marker: Outcome<ContinueMarker>.Failure("no marker"))).Should().BeOfType<StepEntry.Skip>();
-        Decide(Facts(last: 0, lastEnd: new StepEnd.NotStarted("x"), timing: [], marker: Marker(0))).Should().BeOfType<StepEntry.Fresh>("a marker that names attempt 0 is no order: nothing finished");
+        Decide(Facts(last: 0, lastEnd: new StepEnd.NotStarted("x"), timing: [], marker: Marker(0), session: Outcome<Guid>.Failure("no session file"), transcript: false)).Should().Be(
+            new StepEntry.Fresh(1, 2400), "a marker that names attempt 0 is no order: nothing finished, so nothing is continued");
+        Decide(Facts(done: true, last: 0, lastEnd: new StepEnd.NotStarted("x"), timing: [], marker: Marker(0))).Should().BeOfType<StepEntry.Skip>("the same marker beside a .done is still no order");
     }
 
     [Fact]
