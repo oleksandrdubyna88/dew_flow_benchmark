@@ -33,11 +33,37 @@ public static class GateLockVerb
         return Task.FromResult(ExitCodes.Environment);
     }
 
+    /// <summary>Looks and creates nothing: a root with no lock file is free; a lock somebody has is <c>held</c> and, when the holder's note names a live process, <c>by pid N since &lt;utc&gt;</c>. A path the lock may not use is refused (4), a read the host could not make is exit 3.</summary>
     private static Task<int> Status(ExperimentInput input, FileGateLock gateLock)
     {
-        using var taken = gateLock.TryAcquire(input.Root.GateLock);
-        input.Verb.Output.WriteLine(taken is null ? $"{Name}: held" : $"{Name}: free");
-        return Task.FromResult(ExitCodes.Pass);
+        var path = input.Root.GateLock;
+        var code = gateLock.Take(path, create: false, note: false) switch
+        {
+            GateLockAnswer.Held held => Free(input, held),
+            GateLockAnswer.Absent => Free(input, null),
+            GateLockAnswer.Refused refused => Stopped(input, refused.Reason, ExitCodes.Configuration),
+            GateLockAnswer.Unread unread => Stopped(input, unread.Reason, ExitCodes.Environment),
+            _ => Said(input, $"{Name}: held {FileGateLock.WhoHolds(path)}"),
+        };
+        return Task.FromResult(code);
+    }
+
+    private static int Free(ExperimentInput input, GateLockAnswer.Held? taken)
+    {
+        taken?.Handle.Dispose();
+        return Said(input, $"{Name}: free");
+    }
+
+    private static int Said(ExperimentInput input, string line)
+    {
+        input.Verb.Output.WriteLine(line);
+        return ExitCodes.Pass;
+    }
+
+    private static int Stopped(ExperimentInput input, string reason, int code)
+    {
+        input.Verb.Error.WriteLine($"{Name}: {reason}");
+        return code;
     }
 
     private static async Task<int> HoldAsync(ExperimentInput input, FileGateLock gateLock, TimeSpan waitCeiling)
@@ -45,39 +71,38 @@ public static class GateLockVerb
         var seconds = input.Verb.Flags.Int("seconds", 0);
         if (seconds is < 1 or > MaxSeconds)
         {
-            input.Verb.Error.WriteLine($"{Name}: gate-lock hold takes --seconds N, from 1 to {MaxSeconds}");
-            return ExitCodes.Configuration;
+            return Stopped(input, $"gate-lock hold takes --seconds N, from 1 to {MaxSeconds}", ExitCodes.Configuration);
         }
 
-        var held = await AcquiredAsync(input, gateLock, waitCeiling);
-        if (held is null)
-        {
-            input.Verb.Error.WriteLine($"{Name}: gate-lock hold: the lock was not free within {waitCeiling.TotalSeconds:0.###} s — `gate-lock status` says who has it");
-            return ExitCodes.Environment;
-        }
-
-        await KeptAsync(input, held, seconds);
-        input.Verb.Output.WriteLine($"{Name}: released");
-        return ExitCodes.Pass;
+        return await Ended(input, await AcquiredAsync(input, gateLock, waitCeiling), waitCeiling, seconds);
     }
 
-    /// <summary>The lock, or <c>null</c> when the ceiling ran out first. The ceiling is OURS: it is told apart from the operator's stop by that token's state, and only the stop travels up as a cancellation.</summary>
-    private static async Task<IDisposable?> AcquiredAsync(ExperimentInput input, FileGateLock gateLock, TimeSpan waitCeiling)
+    private static Task<int> Ended(ExperimentInput input, GateLockAnswer answer, TimeSpan waitCeiling, int seconds) =>
+        answer switch
+        {
+            GateLockAnswer.Held held => KeptAsync(input, held.Handle, seconds),
+            GateLockAnswer.Refused refused => Task.FromResult(Stopped(input, refused.Reason, ExitCodes.Configuration)),
+            GateLockAnswer.Unread unread => Task.FromResult(Stopped(input, unread.Reason, ExitCodes.Environment)),
+            _ => Task.FromResult(Stopped(input, $"gate-lock hold: the lock was not free within {waitCeiling.TotalSeconds:0.###} s — `gate-lock status` says who has it", ExitCodes.Environment)),
+        };
+
+    /// <summary>The lock, the refusal that ended the wait, or <c>Busy</c> when the ceiling ran out first. The ceiling is OURS: it is told apart from the operator's stop by that token's state, and only the stop travels up as a cancellation.</summary>
+    private static async Task<GateLockAnswer> AcquiredAsync(ExperimentInput input, FileGateLock gateLock, TimeSpan waitCeiling)
     {
         using var ceiling = CancellationTokenSource.CreateLinkedTokenSource(input.Verb.Stopping);
         ceiling.CancelAfter(waitCeiling);
         try
         {
-            return await gateLock.AcquireAsync(input.Root.GateLock, ceiling.Token);
+            return await gateLock.AcquireAnswerAsync(input.Root.GateLock, ceiling.Token);
         }
         catch (OperationCanceledException) when (!input.Verb.Stopping.IsCancellationRequested)
         {
-            return null;
+            return new GateLockAnswer.Busy();
         }
     }
 
-    /// <summary>Holds for <paramref name="seconds"/>, then lets go BEFORE the caller says so: the lock is free when <c>released</c> is printed. A stop while holding releases through the <c>using</c> as it unwinds.</summary>
-    private static async Task KeptAsync(ExperimentInput input, IDisposable held, int seconds)
+    /// <summary>Holds for <paramref name="seconds"/>, then lets go BEFORE it says so: the lock is free when <c>released</c> is printed. A stop while holding releases through the <c>using</c> as it unwinds.</summary>
+    private static async Task<int> KeptAsync(ExperimentInput input, IDisposable held, int seconds)
     {
         using (held)
         {
@@ -85,5 +110,7 @@ public static class GateLockVerb
             input.Verb.Output.Flush();
             await Task.Delay(TimeSpan.FromSeconds(seconds), TimeProvider.System, input.Verb.Stopping);
         }
+
+        return Said(input, $"{Name}: released");
     }
 }

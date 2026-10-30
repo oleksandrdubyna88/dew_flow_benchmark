@@ -50,7 +50,7 @@ public sealed class FileGateLockTests
         (acquiredAt - heldAt).Should().BeGreaterThan(TimeSpan.FromSeconds(3), "the holder keeps the lock four seconds after it printed held; the wait ended only when it let go");
         (await holder.ExitAsync(Fast)).Should().Be(0);
         holder.Printed().Should().EndWith("model-arms gate-lock: released", "the lock was freed before the holder said so");
-        (await StatusAsync(root)).Should().Be("model-arms gate-lock: held", "the handle AcquireAsync returned really holds it: a second process sees it held");
+        (await StatusAsync(root)).Should().StartWith("model-arms gate-lock: held", "the handle AcquireAsync returned really holds it: a second process sees it held");
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class FileGateLockTests
         var waiting = () => Lock().AcquireAsync(LockOf(root), cancelled.Token);
 
         await waiting.Should().ThrowAsync<OperationCanceledException>("the caller gave up: that is a cancellation, not a lock");
-        (await StatusAsync(root)).Should().Be("model-arms gate-lock: held", "the holder still has it: nothing was taken from it and nothing was broken");
+        (await StatusAsync(root)).Should().StartWith("model-arms gate-lock: held", "the holder still has it: nothing was taken from it and nothing was broken");
         holder.Attempt.IsCompleted.Should().BeFalse("the holder is untouched by the waiter's cancellation");
     }
 
@@ -112,7 +112,7 @@ public sealed class FileGateLockTests
         using var root = new ExperimentRoot();
         await using var holder = ModelArmsBinary.Start(root, "gate-lock", "hold", "--seconds", "60");
         await holder.LineAsync("model-arms gate-lock: held", Fast);
-        (await StatusAsync(root)).Should().Be("model-arms gate-lock: held");
+        (await StatusAsync(root)).Should().StartWith("model-arms gate-lock: held");
 
         await holder.KillAsync();
 
@@ -132,7 +132,9 @@ public sealed class FileGateLockTests
         held!.Dispose();
 
         free.Should().Be((0, "model-arms gate-lock: free", string.Empty));
-        whileHeld.Should().Be((0, "model-arms gate-lock: held", string.Empty));
+        whileHeld.Code.Should().Be(0);
+        whileHeld.Output.Should().StartWith("model-arms gate-lock: held", "the lock is held by this very process: the sidecar names it");
+        whileHeld.Error.Should().BeEmpty();
         (await RunInProcessAsync(root, "gate-lock", "status")).Output.Should().Be("model-arms gate-lock: free", "status takes the lock only to look and gives it back at once");
     }
 
@@ -217,6 +219,10 @@ public sealed class FileGateLockTests
     [InlineData("false", true, false)]
     [InlineData("yes", null, false)]
     [InlineData("yes", true, true)]
+    [InlineData(" 1", false, false)]
+    [InlineData("1 ", false, false)]
+    [InlineData(" 0", true, true)]
+    [InlineData("0 ", true, true)]
     [InlineData("", true, true)]
     [InlineData("", null, false)]
     [InlineData(null, true, true)]

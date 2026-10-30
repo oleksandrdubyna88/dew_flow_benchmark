@@ -26,7 +26,10 @@ public static class McpConfig
 {
     public const string VaultKeyVariable = "COAI_CREDS_KEY";
 
-    /// <summary>JSON.stringify writes non-ASCII and <c>&lt; &amp; &gt;</c> as they are and escapes the quote, the backslash and control characters; the relaxed encoder does the same.</summary>
+    /// <summary>The relaxed encoder keeps printable ASCII and printable BMP text as it is (<c>&lt; &amp; &gt; '</c>, accented letters), which is what <c>JSON.stringify</c> writes. It ESCAPES what <c>JSON.stringify</c> writes raw —
+    /// characters outside the BMP (an emoji becomes a surrogate-pair escape), DEL, C1 controls, U+2028 and U+2029, U+FEFF and unassigned code points (all observed on .NET 10.0.14) — and replaces a lone surrogate with U+FFFD, where
+    /// <c>JSON.stringify</c> writes it as an escape. So the PARSED value equals the input for every well-formed string, and the BYTES equal <c>JSON.stringify</c>'s only for printable BMP text; a lone surrogate is refused (<see cref="Text"/>),
+    /// because the replacement would be a different command or a different key.</summary>
     private static readonly JsonWriterOptions Stringify = new()
     {
         Indented = true,
@@ -35,6 +38,8 @@ public static class McpConfig
         NewLine = "\n",
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    private static readonly UTF8Encoding Strict = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>The empty server list, compact as the shell's <c>echo</c> wrote it.</summary>
     public static string None() => """{"mcpServers":{}}""";
@@ -50,13 +55,27 @@ public static class McpConfig
         return Written(writer => Server(writer, coai, ServerEnvironment(coai, paths, harnessEnvironment)));
     }
 
+    /// <summary>The text itself, or an <see cref="ArgumentException"/> naming <paramref name="field"/> when it holds a lone surrogate (half of an emoji): JSON text cannot hold one, the writer would put U+FFFD in its place.</summary>
+    private static string Text(string value, string field)
+    {
+        try
+        {
+            Strict.GetByteCount(value);
+            return value;
+        }
+        catch (EncoderFallbackException)
+        {
+            throw new ArgumentException($"the {field} holds a lone surrogate (half of a character outside the BMP) and cannot be written as JSON — it would become U+FFFD, a different value", field);
+        }
+    }
+
     private static IEnumerable<(string Name, string Value)> ServerEnvironment(CoaiFacts coai, ArmPaths paths, IReadOnlyDictionary<string, string> harnessEnvironment)
     {
-        yield return ("COAI_DATA_DIR", paths.CoaiData);
-        yield return ("COAI_DATA_SIDE", coai.Side);
+        yield return ("COAI_DATA_DIR", Text(paths.CoaiData, "COAI_DATA_DIR"));
+        yield return ("COAI_DATA_SIDE", Text(coai.Side, "COAI_DATA_SIDE"));
         if (harnessEnvironment.GetValueOrDefault(VaultKeyVariable, string.Empty) is { Length: > 0 } key)
         {
-            yield return (VaultKeyVariable, key);
+            yield return (VaultKeyVariable, Text(key, VaultKeyVariable));
         }
     }
 
@@ -66,7 +85,7 @@ public static class McpConfig
         writer.WriteStartObject("mcpServers");
         writer.WriteStartObject("coai");
         writer.WriteString("type", "stdio");
-        writer.WriteString("command", coai.Binary);
+        writer.WriteString("command", Text(coai.Binary, "command"));
         writer.WriteStartArray("args");
         writer.WriteEndArray();
         writer.WriteStartObject("env");

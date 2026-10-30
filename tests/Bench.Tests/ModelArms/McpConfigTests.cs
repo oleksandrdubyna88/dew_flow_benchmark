@@ -104,6 +104,30 @@ public sealed class McpConfigTests
     }
 
     [Fact]
+    public void Mcp_coai_json_writes_a_character_outside_the_BMP_as_an_escape_that_parses_back_to_the_same_value()
+    {
+        var emoji = new CoaiFacts("/c/" + char.ConvertFromUtf32(0x1F600) + "/coai-mcp", "/v/settings.json", "wsl-ubuntu");
+
+        var text = McpConfig.Coai(emoji, Paths, Env());
+
+        Server(text)["command"]!.GetValue<string>().Should().Be(emoji.Binary, "the PARSED value is the input; the bytes are JSON.stringify's only for printable BMP text (the encoder escapes the rest)");
+    }
+
+    [Theory]
+    [InlineData("command")]
+    [InlineData(McpConfig.VaultKeyVariable)]
+    public void A_lone_surrogate_cannot_be_written_as_JSON_and_is_refused_naming_the_field(string field)
+    {
+        var lone = "a" + (char)0xD83D;
+        var facts = field == "command" ? new CoaiFacts(lone, "/v/settings.json", "wsl-ubuntu") : Coai;
+        var harness = field == "command" ? Env() : Env((McpConfig.VaultKeyVariable, lone));
+
+        var act = () => McpConfig.Coai(facts, Paths, harness);
+
+        act.Should().Throw<ArgumentException>().Which.Message.Should().Contain(field, "the refusal names the field; a lone half (an emoji cut in two) would be written as U+FFFD, a different command or a different key");
+    }
+
+    [Fact]
     public void A_gate_less_experiment_has_no_coai_config_to_write()
     {
         var act = () => McpConfig.Coai(CoaiFacts.None, Paths, Env());

@@ -36,7 +36,23 @@ internal static class ModelArmsBinary
 
     /// <summary>The binary started as a task, its stdout lines kept as they arrive with the instant each came. <see cref="IAsyncDisposable.DisposeAsync"/> kills the child's tree if it still lives and waits for it, so no test
     /// leaves a process behind.</summary>
-    public static Child Start(ExperimentRoot root, params string[] arguments) => new(root, arguments);
+    public static Child Start(ExperimentRoot root, params string[] arguments) =>
+        new(ExperimentRoot.ConsoleBinary, [.. arguments, "--experiment", root.Root], root.Temp, EnvironmentOf(root));
+
+    /// <summary>The test-only gate holder (<c>tests/GateHolder</c>), found in its own output folder as <c>FakeCli.Executable</c> finds the fake: the configuration and framework are read off the test assembly's folder.</summary>
+    public static string HolderExecutable
+    {
+        get
+        {
+            var testBin = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var tests = testBin.Parent!.Parent!.Parent!.Parent!.FullName;
+            return Path.Combine(tests, "GateHolder", "bin", testBin.Parent.Name, testBin.Name, OperatingSystem.IsWindows() ? "gate-holder.exe" : "gate-holder");
+        }
+    }
+
+    /// <summary>The gate holder started as a task: it takes <paramref name="lockPath"/>, starts <paramref name="childExecutable"/> with <paramref name="childArguments"/> and prints <c>held &lt;pid&gt;</c> and <c>child &lt;pid&gt;</c>.</summary>
+    public static Child StartHolder(ExperimentRoot root, string lockPath, string childExecutable, params string[] childArguments) =>
+        new(HolderExecutable, [lockPath, childExecutable, .. childArguments], root.Temp, EnvironmentOf(root));
 
     internal sealed class Child : IAsyncDisposable
     {
@@ -44,10 +60,9 @@ internal static class ModelArmsBinary
         private readonly List<(DateTimeOffset At, string Line)> _lines = [];
         private readonly CancellationTokenSource _stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
-        public Child(ExperimentRoot root, string[] arguments)
+        public Child(string executable, IReadOnlyList<string> arguments, string workingDirectory, IReadOnlyDictionary<string, string> environment)
         {
-            Attempt = ProcessRunner.RunAsync(
-                ExperimentRoot.ConsoleBinary, [.. arguments, "--experiment", root.Root], root.Temp, Short, string.Empty, EnvironmentOf(root), Record, stderrLine: null, _stop.Token);
+            Attempt = ProcessRunner.RunAsync(executable, arguments, workingDirectory, Short, string.Empty, environment, Record, stderrLine: null, _stop.Token);
         }
 
         public Task<ProcessAttempt> Attempt { get; }

@@ -22,6 +22,7 @@ internal static class KernelFacts
 {
     private const int AtFdCwd = -100;
     private const int AtSymlinkNoFollow = 0x100;
+    private const int AtEmptyPath = 0x1000;
     private const uint StatxBasicStats = 0x7ff;
 
     // The facts the module uses and the statx mask bit that says the kernel reported each (STATX_TYPE, _MODE, _UID, _INO, _CTIME).
@@ -47,6 +48,25 @@ internal static class KernelFacts
         try
         {
             return Statx(full, out var buffer) == 0 ? Decode(full, Answer(buffer)) : new FactsRead.Unread($"{full}: {Marshal.GetLastPInvokeErrorMessage()}");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return new FactsRead.Unread($"statx is not available in this libc ({ex.Message}) — refused rather than assumed (D17)");
+        }
+    }
+
+    /// <summary>The facts of the file an OPEN descriptor holds (<c>statx</c> with <c>AT_EMPTY_PATH</c>, <c>fstat</c>'s question): which inode the handle really is, whatever the path now names. <paramref name="label"/> is the path the descriptor was
+    /// opened by, for the words of a failure.</summary>
+    public static FactsRead ReadOpen(int fd, string label)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return new FactsRead.Unread($"the inode behind the open handle of {label} cannot be read on this platform: no probed kernel reader — refused rather than assumed (D17)");
+        }
+
+        try
+        {
+            return StatxCall(fd, string.Empty, AtEmptyPath, StatxBasicStats, out var buffer) == 0 ? Decode(label, Answer(buffer)) : new FactsRead.Unread($"{label}: {Marshal.GetLastPInvokeErrorMessage()}");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
