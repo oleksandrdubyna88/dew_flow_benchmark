@@ -92,7 +92,7 @@ public sealed class FakeCliByCallTests
     {
         using var temp = new TempFolder();
         using var fake = new FakeCli();
-        var cwd = temp.Folder("r", "abc", "arm");
+        var cwd = temp.Folder("r", "ab-1.x_y", "arm"); // a digit, a dot, an underscore and a hyphen: every kind of character the slug rule meets
         var home = temp.Folder("home");
         var stream = temp.File("stream\n", "f.ndjson");
         fake.Rewrite(new JsonObject { ["transcripts"] = true, ["stdoutFile"] = stream });
@@ -112,6 +112,24 @@ public sealed class FakeCliByCallTests
         await LaunchAsync(fake, cwd, Environment(fake, home, config), "--session-id", relocated.ToString("D"));
         File.Exists(Transcript(config, SeenCwd(fake), relocated)).Should().BeTrue("CLAUDE_CONFIG_DIR relocates ~/.claude, as it does for claude");
         File.Exists(Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), relocated)).Should().BeFalse("the relocated home is the only one written");
+    }
+
+    [Fact]
+    public async Task A_resumed_session_keeps_the_transcript_it_already_has()
+    {
+        using var temp = new TempFolder();
+        using var fake = new FakeCli();
+        var cwd = temp.Folder("r", "abc", "arm");
+        var home = temp.Folder("home");
+        fake.Rewrite(new JsonObject { ["transcripts"] = true, ["stdoutFile"] = temp.File("stream\n", "f.ndjson") });
+        var session = Guid.NewGuid();
+
+        await LaunchAsync(fake, cwd, Environment(fake, home), "--session-id", session.ToString("D"));
+        var file = Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), session);
+        await File.WriteAllTextAsync(file, "the conversation so far\n", Ct);
+        await LaunchAsync(fake, cwd, Environment(fake, home), "--resume", session.ToString("D"));
+
+        (await File.ReadAllTextAsync(file, Ct)).Should().Be("the conversation so far\n", "a resume continues the transcript; it does not start it over");
     }
 
     [Fact]

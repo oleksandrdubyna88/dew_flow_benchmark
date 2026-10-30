@@ -27,6 +27,7 @@ public static class Program
 
         var prompt = PromptOf(args, Console.IsInputRedirected ? new StreamReader(Console.OpenStandardInput(), utf8).ReadToEnd() : string.Empty);
         var call = Events.Record(ModelOf(args), args, prompt);
+        Transcripts.Leave(script, args);
 
         return new Behaviour(script, args, prompt, call).Run();
     }
@@ -112,6 +113,16 @@ public sealed class Script
     /// <summary>A file whose bytes the fake prints on stdout VERBATIM instead of composing an answer — how a test replays a LIVE
     /// transcript (<c>tests/Bench.Tests/Fixtures/probes/</c>) through the real runner; empty = compose.</summary>
     public string StdoutFile => Text("stdoutFile", string.Empty);
+
+    /// <summary>The replay file for THIS call of the model — <c>stdoutByCall.&lt;n&gt;</c>, n being the call number the log gave this launch
+    /// (per model, 1-based) — so one test scripts a step's attempts in order: a limited attempt, then its resume (model arms E2.S3). Chosen
+    /// before every other replay; a call with no entry falls through to them, exactly as before.</summary>
+    public string StdoutForCall(int call) =>
+        (Node("stdoutByCall") as JsonObject)?[call.ToString(CultureInfo.InvariantCulture)]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>When set, a launch whose argv carries <c>--session-id &lt;id&gt;</c> or <c>--resume &lt;id&gt;</c> leaves the empty transcript file claude
+    /// leaves for a session, before it answers (model arms E2.S3, E2 §8 item 36); absent = false, and the fake writes nothing of the kind.</summary>
+    public bool Transcripts => Bool("transcripts", false);
 
     /// <summary>The replay file for THIS prompt — <c>stdoutByPrompt.&lt;sha256 of the prompt&gt;</c> — so every scout cell, all launched
     /// <c>--model opus</c>, replays its own recorded stream; falls back to <see cref="StdoutFile"/>.</summary>
@@ -220,6 +231,11 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
         if (script.Assessor && Assessor.LastMessageFile(args) is { Length: > 0 } lastMessage)
         {
             return Assessor.Answer(script, prompt, lastMessage);
+        }
+
+        if (script.StdoutForCall(call) is { Length: > 0 } byCall)
+        {
+            return Replay(byCall);
         }
 
         if (script.StdoutFor(prompt) is { Length: > 0 } replay)
@@ -555,6 +571,46 @@ public static class Grammar
     }
 
     private static string Line(JsonObject o) => o.ToJsonString() + "\n";
+}
+
+/// <summary>The transcript claude leaves for a session (model arms E2.S3, E2 §8 item 36): an EMPTY <c>&lt;home&gt;/projects/&lt;slug&gt;/&lt;id&gt;.jsonl</c>, <c>home</c>
+/// being <c>CLAUDE_CONFIG_DIR</c> when it is set and non-empty, else <c>~/.claude</c>, and <c>slug</c> this process's working directory with every character
+/// outside <c>[A-Za-z0-9]</c> replaced by <c>-</c>. The rule of the module's own path spelling, written a second time on purpose: the fake references
+/// nothing of the module, so a disagreement between the two shows in a test instead of cancelling out. An existing file is left as it is — a
+/// resumed session's transcript is appended to, never truncated.</summary>
+public static class Transcripts
+{
+    public static void Leave(Script script, string[] args)
+    {
+        if (script.Transcripts && SessionOf(args) is { } session)
+        {
+            var file = Path.Combine(Home(), "projects", Slug(Directory.GetCurrentDirectory()), $"{session:D}.jsonl");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.AppendAllText(file, string.Empty);
+        }
+    }
+
+    /// <summary>The id after <c>--session-id</c> or <c>--resume</c>, when it is a guid (claude refuses anything else, so the fake leaves nothing for it).</summary>
+    public static Guid? SessionOf(string[] args)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] is "--session-id" or "--resume")
+            {
+                return Guid.TryParse(args[i + 1], out var session) ? session : null;
+            }
+        }
+
+        return null;
+    }
+
+    private static string Home() =>
+        Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured
+            ? configured
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
+
+    private static string Slug(string workingDirectory) => Regex.Replace(workingDirectory, "[^A-Za-z0-9]", "-");
 }
 
 /// <summary>Where a model's script and call log live when no environment variable names them: a folder per MODEL ID under the
