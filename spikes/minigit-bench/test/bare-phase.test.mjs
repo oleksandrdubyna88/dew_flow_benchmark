@@ -94,3 +94,14 @@ test('The_masked_spawn_stamps_once_per_call_and_prefixes_the_argv', () => {
   assert.deepEqual(calls[0].opts.env, { E: '1' });
   assert.equal(stamps.length, 1);
 });
+
+test('A_phase_whose_workspace_fails_after_the_claim_releases_its_own_layout_so_it_can_be_tried_again', async () => {
+  const ctx = context();
+  const wrong = { ...ctx, hashes: ctx.hashes.map(h => ({ ...h, sha256: '0'.repeat(64) })) };
+  const first = await launchPhase({ ctx: wrong, items: items(ctx), deps: { launchSession: async () => { throw new Error('never launched'); }, listProjectDirs: () => [] } });
+  assert.equal(first.ok, false);
+  assert.match(first.reason, /do not match hashes\.txt/);
+  for (const i of items(ctx)) assert.equal(existsSync(path.join(ctx.sessionsRoot, i.rid)), false, 'the layout this attempt claimed is removed: nothing paid had started');
+  const again = await launchPhase({ ctx, items: items(ctx), deps: { spawn: () => ({}), maskCheckMs: 5, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => [], launchSession: async plan => ({ ok: true, value: { meta: { rid: plan.layout.rid }, exit: { code: 0 } } }) } });
+  assert.equal(again.ok, true, `the second attempt claims the same rids (no EEXIST): ${again.reason}`);
+});

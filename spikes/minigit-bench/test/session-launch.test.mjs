@@ -8,9 +8,9 @@ import { test } from 'node:test';
 import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { EGRESS_HOSTS } from '../lib/egress-hosts.mjs';
 import { cellProcesses, endCell, endSurvivors, realProcApi } from '../lib/janitor.mjs';
-import { launchSession } from '../lib/session-launch.mjs';
+import { holdsPaidWork, launchSession } from '../lib/session-launch.mjs';
 import { scanSessionDir } from '../lib/session-scan.mjs';
-import { dummyToken } from '../lib/sandbox.mjs';
+import { dummyToken, sessionLayout } from '../lib/sandbox.mjs';
 import { apiAttrs, otlpPayload } from './synth.mjs';
 import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
 import { newSession, nodeDir, sleep } from './box-helpers.mjs';
@@ -318,4 +318,15 @@ test('The_spawn_env_has_the_dummy_and_never_the_real_token_and_the_argv_has_neit
   assert.equal(JSON.stringify(env).includes(plan.token), false);
   assert.equal(argv.join('\0').includes(plan.token) || argv.join('\0').includes(plan.dummy), false);
   assert.equal(argv.includes('--setenv'), false);
+});
+
+test('A_directory_is_paid_work_once_the_broker_forwarded_a_request_even_before_any_stream_byte', () => {
+  const made = sessionLayout(tmpDir('claimed'), 'aaaaaa');
+  assert.equal(made.ok, true, made.reason);
+  const { layout } = { layout: made.value };
+  assert.equal(holdsPaidWork(layout), false, 'a claimed layout with nothing in it is unpaid');
+  writeFileSync(layout.files.brokerLog, `${JSON.stringify({ seq: 1, event: 'refused', reason: 'path' })}\n`);
+  assert.equal(holdsPaidWork(layout), false, 'a refusal never reached the provider: nothing was paid');
+  writeFileSync(layout.files.brokerLog, `${JSON.stringify({ seq: 1, event: 'refused', reason: 'path' })}\n${JSON.stringify({ seq: 2, event: 'forwarding' })}\n`);
+  assert.equal(holdsPaidWork(layout), true, 'a forwarded request is paid (or reserved) whether or not a stream line was written');
 });

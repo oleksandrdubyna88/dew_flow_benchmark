@@ -2,8 +2,9 @@
 // step goes through the gates (pre-registration guard, stale retirement, preflight, quiet check, spend gate), then `launchPhase`, then each session is classified
 // and charged; a SCORE step runs the scorer on each data session in `firstStack` order. The run-map is persisted after every transition, so a crash resumes
 // from what the files say. Exit codes: 0 done, 2 a series stop or the budget, 3 a resumable halt, 4 configuration (the guard), 5 the runner or the scorer failed.
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { assertRemovable } from '../../policy-ab-quick/lib/safe-rm.mjs';
 import { firstStack, maskFor, ridOf } from './bare-plan.mjs';
 import { launchPhase, unplantAll } from './bare-phase.mjs';
 import { collectSession } from './bare-collect.mjs';
@@ -212,6 +213,13 @@ export function dirFacts(ctx, rid) {
 
 const manifestsOf = ctx => (existsSync(path.join(ctx.seriesDir, 'canaries')) ? readdirSync(path.join(ctx.seriesDir, 'canaries')).map(f => path.join(ctx.seriesDir, 'canaries', f)) : []);
 
+/** Remove the claimed directory of a session that provably never paid (`dirFacts.paidWork` false: no stream, no OTel, nothing in box/out, no `forwarding` line in the broker log). */
+function removeUnpaidDir(ctx, rid) {
+  const layout = layoutPaths(ctx.sessionsRoot, rid);
+  if (!existsSync(layout.dir) || holdsPaidWork(layout)) return;
+  if (assertRemovable(layout.dir, ctx.sessionsRoot)) rmSync(layout.dir, { recursive: true, force: true });
+}
+
 /** A void session that ended (`ran`, no data) has its record written at settle time; a crash between the transition and that write is repaired here, before the schedule advances. */
 function rebuildMissingRecords({ ctx, h, plan, say }) {
   for (const a of plan.filter(x => x.action === 'rebuild-record')) {
@@ -235,7 +243,12 @@ export async function reconcile({ ctx, deps, map, say = () => {} }) {
   rebuildMissingRecords({ ctx, h, plan, say });
   const actions = plan.filter(a => a.action === 'adopt' || a.action === 'void-interrupted' || a.action === 'reset');
   for (const a of actions) {
-    if (a.action === 'reset') { h.apply(transition(h.get(), a.rid, 'planned')); say(`${a.rid}: ${a.reason}`); continue; }
+    if (a.action === 'reset') {
+      removeUnpaidDir(ctx, a.rid); // the claim is non-recursive (a rid is never reused): the same rid cannot be launched again over a leftover directory
+      h.apply(transition(h.get(), a.rid, 'planned'));
+      say(`${a.rid}: ${a.reason}; its claimed directory was removed`);
+      continue;
+    }
     const entry = h.get().sessions[a.rid];
     const layout = layoutPaths(ctx.sessionsRoot, a.rid);
     const launched = a.action === 'adopt' ? ok({ meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) }) : null;

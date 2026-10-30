@@ -323,3 +323,36 @@ test('Resume_writes_the_record_of_a_void_session_that_ended_but_whose_record_was
   assert.equal(existsSync(record), true, 'a crash between the transition and the record write is repaired before the schedule advances');
   assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.rid === rid('csharp', 'v1', 1)).length, 1, 'and nothing is charged twice');
 });
+
+test('Resume_clears_a_claimed_layout_that_never_paid_so_the_same_rid_can_be_launched_again', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  let map = t.map;
+  for (const stack of ['csharp', 'node']) map = planSession(map, { rid: rid(stack, 'v1', 1), pair: 1, stack, phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', dummy: 'sk-ant-oat01-dummy-resume' }).value;
+  for (const stack of ['csharp', 'node']) map = transition(map, rid(stack, 'v1', 1), 'launching').value;
+  // a crash between the layout claim and the first stream byte: the directory exists, holds nothing paid and has no meta.json
+  const { sessionLayout } = await import('../lib/sandbox.mjs');
+  for (const stack of ['csharp', 'node']) assert.equal(sessionLayout(t.ctx.sessionsRoot, rid(stack, 'v1', 1)).ok, true);
+  assert.equal(sessionLayout(t.ctx.sessionsRoot, rid('csharp', 'v1', 1)).ok, false, 'the stale claim is what a relaunch would hit (EEXIST)');
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.ok(['csharp', 'node'].every(s => settled.value.sessions[rid(s, 'v1', 1)].status === 'planned'));
+  assert.equal(readLedger(t.ctx.ledgerFile).length, 0, 'nothing was paid: nothing is charged');
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: settled.value });
+  assert.equal(r.exit, EXIT.done, `the same rids launch after the reset: ${r.message}`);
+});
+
+test('Resume_keeps_a_directory_whose_broker_forwarded_a_request_and_charges_it', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  let map = planSession(t.map, { rid: rid('csharp', 'v1', 1), pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', dummy: 'sk-ant-oat01-dummy-resume' }).value;
+  map = transition(map, rid('csharp', 'v1', 1), 'launching').value;
+  const { sessionLayout } = await import('../lib/sandbox.mjs');
+  const made = sessionLayout(t.ctx.sessionsRoot, rid('csharp', 'v1', 1));
+  writeFileSync(made.value.files.brokerLog, `${JSON.stringify({ t: '2026-10-30T10:00:00Z', seq: 1, event: 'forwarding' })}\n`);
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.match(settled.value.sessions[rid('csharp', 'v1', 1)].class, /^void: harness/);
+  assert.equal(readLedger(t.ctx.ledgerFile).length, 1, 'a forwarded request was reserved against the budget: charged');
+  assert.ok(readLedger(t.ctx.ledgerFile)[0].usd > 0);
+});

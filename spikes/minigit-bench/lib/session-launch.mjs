@@ -41,10 +41,16 @@ const DEFAULT_DEPS = Object.freeze({
   spawnBox: (argv, env) => spawn(argv[0], argv.slice(1), { env, stdio: ['pipe', 'pipe', 'pipe'], detached: true }),
 });
 
-/** Whether the dir holds anything paid: a stream line, an OTel record, or anything in box/out or box/config/projects. */
+/** Whether the broker's log holds a `forwarding` line: a request went (or was about to go) to the provider, so it was reserved against the budget whether or not anything came back. */
+function brokerForwarded(layout) {
+  if (!existsSync(layout.files.brokerLog)) return false;
+  return readFileSync(layout.files.brokerLog, 'utf8').split('\n').some(line => /"event"\s*:\s*"forwarding"/.test(line));
+}
+
+/** Whether the dir holds anything paid: a stream line, an OTel record, anything in box/out or box/config/projects, or a request the broker forwarded. */
 export function holdsPaidWork(layout) {
   const nonEmpty = p => existsSync(p) && (statSync(p).isDirectory() ? readdirSync(p).length > 0 : statSync(p).size > 0);
-  return [layout.files.stream, path.join(layout.otel, 'otel.ndjson'), layout.out, path.join(layout.config, 'projects')].some(nonEmpty);
+  return [layout.files.stream, path.join(layout.otel, 'otel.ndjson'), layout.out, path.join(layout.config, 'projects')].some(nonEmpty) || brokerForwarded(layout);
 }
 
 // ---- startup --------------------------------------------------------------------------------------------------------------------

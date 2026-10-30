@@ -33,11 +33,12 @@ function prepare({ ctx, item, d }) {
   if (!made.ok) return made;
   const layout = made.value;
   const { stack, phase } = item.session;
+  const release = failure => { rmSync(layout.dir, { recursive: true, force: true }); return failure; }; // this attempt claimed the dir and nothing is paid yet: a retry claims the same rid again
   const filled = phase === 'v1' ? fillV1({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, work: layout.work })
     : fillV2({ inputsRoot: ctx.inputsRoot, hashes: ctx.hashes, v1Work: ctx.v1WorkOf(item.session), work: layout.work, stack });
-  if (!filled.ok) return filled;
+  if (!filled.ok) return release(filled);
   const seeded = seedCaches({ layout, snapshots: ctx.snapshots });
-  return seeded.ok ? ok({ ...item, layout, workspace: filled.value, seeded: seeded.value }) : seeded;
+  return seeded.ok ? ok({ ...item, layout, workspace: filled.value, seeded: seeded.value }) : release(seeded);
 }
 
 /** One canary per operator project folder and one in the partner's config dir; the manifest lists them BEFORE any file exists. -> `{ manifest, tokens }`. */
