@@ -56,3 +56,36 @@ they are applied.
 | 4 | The coai gate's first code round finds ≥ 3 findings in every arm; the blind judge rates at least half of all coai findings real; in at least 2 of the 3 schemes coai finds a real defect the Opus review did not name. |
 | 5 | Absolute judge: C and CR 7–8 in every arm; SRS 6.5–8. |
 | 6 | Scenarios by exact name: C and CR ≥ 40 of 43 in every arm; SRS ≥ 38. |
+
+---
+
+# Part 7 — CHH: classic with two focused Haiku reviewers (owner's request, 2026-10-29)
+
+**Scheme CHH** (3 arms, CHH1–CHH3, run at the same time): Sonnet codes (180 min, brief `1-code`) → **Haiku A**, read-only,
+the decision tracer (40 min, `hA-trace`: each plan decision at every site — subclasses, callers, readers/writers, the
+issue's sample data, mixes and orders, failure paths) → **Haiku B**, read-only, test truth (40 min, `hB-tests`: scenario
+names, does each test fail if its decision breaks, does it pass on every CI job — Linux, Windows, macOS) → **Sonnet fixes
+both** (60 min, `hfix`) → Opus reviews (40, `2-review`) → Sonnet fixes (60, `3-fix`) → the coai code gate (150, `gate`).
+Same task, plan (`6786582e`), base, budgets for the shared steps, isolation and limit handling as Part 6.
+
+**Why these two focuses.** coai's code gate ran four roles in Part 6 (Conventions, Architecture, Security & Reliability,
+UX-DX & Performance). The real defects it and the Opus review missed fell into two kinds no role names: a plan decision not
+held at one site (a subclass inheriting a default, an order of results, real sample data), and a test that does not test
+what it claims or fails on another CI system.
+
+**Bias, stated before the run.** The two focuses were chosen after seeing Part 6's misses ON THIS SAME TASK. The briefs
+name no Part 6 defect and no file, but CHH has a hindsight advantage over C, CR and SRS. A fair test of the focuses needs
+another task.
+
+**Changes to the runner.** Read-only steps now refuse the Agent/Task tools (Part 6: SRS3's Haiku step started Opus and
+Sonnet subagents). The C, CR and SRS arms are not re-run. The lock also closes (000) every Part 6 result: the nine arm
+folders, the judges and hand-check, the mutation runs, the metrics, the logs, this file and the write-up worktree.
+
+**Predictions (written before the run).**
+- P7-1: Haiku A reports at least one finding that the later judge rates real in at least 2 of 3 arms.
+- P7-2: Haiku B reports at least one CI-portability or no-teeth test finding in at least 2 of 3 arms.
+- P7-3: the Opus review after the fix finds 0–1 blocking+major per arm (CR in Part 6: 1 / 2 / 2).
+- P7-4: the blind judge scores every CHH arm 8 or more in both runs, with no hand-checked major in at least 2 of 3 arms.
+- P7-5: Claude-only cost per arm $17–21 (CR: $15.88–17.49); active time 170–210 min (CR: 119–166).
+- P7-6: the coai gate's findings stay mostly not real (judge's score 2–4 per arm).
+- P7-7: the mutation checks kill 8 of 8 in every arm (no separation, as in Part 6).

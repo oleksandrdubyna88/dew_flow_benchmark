@@ -49,7 +49,8 @@ import { dirname, join, basename } from 'node:path';
 
 const E = '/home/jinx/git/coai-exp2';
 const FROZEN = '2026-10-29';
-const ARMS = ['C1', 'C2', 'C3', 'CR1', 'CR2', 'CR3', 'SRS1', 'SRS2', 'SRS3'];
+const ARMS = ['C1', 'C2', 'C3', 'CR1', 'CR2', 'CR3', 'SRS1', 'SRS2', 'SRS3',
+  'CHH1', 'CHH2', 'CHH3']; // Part 7 arms, added 2026-10-30 (see the CHH note after MUTANTS)
 const env = Object.fromEntries(readFileSync(`${E}/exp.env`, 'utf8').split('\n').map((l) => l.match(/^([A-Z_]+)=(\S*)$/)).filter(Boolean).map((m) => [m[1], m[2]]));
 const BASE = env.BASE;
 const MAP = JSON.parse(readFileSync(env.MAP, 'utf8'));
@@ -192,6 +193,46 @@ const MUTANTS = [
     },
   },
 ];
+
+// ── CHH anchors added 2026-10-30, before any CHH result; the mutants unchanged ─────────────────────────────────────────────
+// Part 7 (CHH1–CHH3: Sonnet codes, two read-only Haiku reviewers, Sonnet fixes, Opus review, Sonnet fix, coai gate). Each anchor
+// below was found by reading the arm's HEAD before anything was built or run against it. The decisions, the replacements, the
+// intended scenarios and the test-scope rule are those of the frozen list above; M1 and M4 apply to the CHH arms through the
+// generic `same(...)` / `strictStanding('FilePath')` entries (ARMS now names them). Second places noted, left unmutated as in Part 6:
+// - M2: CHH1 and CHH2 re-read the sentence from the REASON text inside AntigravityRuntime.ReadResetAsync (CHH1 `explicitly`,
+//   CHH2 `AgyError.SaysSpent(reason)`) to decide parking; the classification site (AgyError, the plan's D2 contract) is mutated.
+// - M8: CHH1's RosterBuilder/SecurityRoster change only rewords the reason of a row CanRun refused; CanRun is the one gate.
+const CHH = {
+  'M2-exhausted-alone-is-spent': {
+    CHH1: [orTrue(`${R}/AgyError.cs`, 'Message.Contains(IndividualQuota, StringComparison.Ordinal)')],
+    CHH2: [orTrue(`${R}/AgyError.cs`, 'Message.Contains(IndividualQuota, StringComparison.OrdinalIgnoreCase)')],
+    CHH3: [orTrue(`${R}/AgyError.cs`, 'Message.Contains(IndividualQuota, StringComparison.OrdinalIgnoreCase)')],
+  },
+  'M3-argon-keyed-as-gemini': {
+    CHH1: argonRowToGemini(`${R}/AgyQuotaReport.cs`), CHH2: argonDictToGemini(`${R}/AgyQuotaReport.cs`), CHH3: argonDictToGemini(`${R}/AgyQuotaReport.cs`),
+  },
+  'M5-ok-does-not-lift': {
+    CHH1: [e(`${R}/QuotaCooldowns.cs`, 'else if (key.Any(result => result.Outcome is ReviewerOutcome.Ok))', `else if (key.Any(result => result.Outcome is ReviewerOutcome.Ok) && ${NEVER})`)],
+    CHH2: [e(`${R}/QuotaCooldownRound.cs`, 'rows.Any(row => row.Outcome is ReviewerOutcome.Ok) ? new LiftDecision(key) : null;', `rows.Any(row => row.Outcome is ReviewerOutcome.Ok) && ${NEVER} ? new LiftDecision(key) : null;`)],
+    CHH3: [e(`${R}/QuotaCooldowns.cs`, 'var answered = rows.Any(row => row.Outcome is ReviewerOutcome.Ok);', `var answered = rows.Any(row => row.Outcome is ReviewerOutcome.Ok) && ${NEVER};`)],
+  },
+  'M6-ok-beats-spent': {
+    CHH1: [e(`${R}/QuotaCooldowns.cs`, 'if (refusal.Invocation is not null)', 'if (refusal.Invocation is not null && !key.Any(result => result.Outcome is ReviewerOutcome.Ok))')],
+    CHH2: [e(`${R}/QuotaCooldownRound.cs`, 'if (refusal is null)', 'if (refusal is null || rows.Any(row => row.Outcome is ReviewerOutcome.Ok))')],
+    CHH3: [e(`${R}/QuotaCooldowns.cs`, 'return chosen.Outcome is ReviewerOutcome.RateLimited limited', 'return !answered && chosen.Outcome is ReviewerOutcome.RateLimited limited')],
+  },
+  'M7-earlier-reset-wins': {
+    CHH1: [e(`${R}/AgyQuotaReport.cs`, 'known.Max(bucket => bucket.ResetTime!.Value)', 'known.Min(bucket => bucket.ResetTime!.Value)')],
+    CHH2: [e(`${R}/AgyQuotaReport.cs`, 'known.Max(bucket => bucket.ResetTime)!.Value', 'known.Min(bucket => bucket.ResetTime)!.Value')],
+    CHH3: [e(`${R}/AgyQuotaReport.cs`, 'known.Max(b => b.ResetTime!.Value)', 'known.Min(b => b.ResetTime!.Value)')],
+  },
+  'M8-cooling-row-still-runs': {
+    CHH1: [e(PANEL, 'RowRefusal(provider).Length == 0 && Cooling(provider) is null;', `RowRefusal(provider).Length == 0 && (Cooling(provider) is null || ${ALWAYS});`)],
+    CHH2: [e(PANEL, 'RowRefusal(provider).Length == 0 && !IsCooling(provider);', `RowRefusal(provider).Length == 0 && (!IsCooling(provider) || ${ALWAYS});`)],
+    CHH3: [e(PANEL, 'RowRefusal(provider).Length == 0 && CoolingOf(provider) is null;', `RowRefusal(provider).Length == 0 && (CoolingOf(provider) is null || ${ALWAYS});`)],
+  },
+};
+for (const m of MUTANTS) Object.assign(m.edits, CHH[m.id] ?? {});
 
 // ── helpers ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', maxBuffer: 1 << 28 });

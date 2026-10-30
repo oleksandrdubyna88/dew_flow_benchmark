@@ -4,6 +4,8 @@
 #   C   = Sonnet codes → Opus reviews → Sonnet fixes → the coai gate (Sonnet)
 #   CR  = Sonnet codes → a fresh Haiku reviews + fixes → Opus reviews → Sonnet fixes → the coai gate
 #   SRS = Sonnet splits → Haiku codes each task → a fresh Haiku reviews + fixes → Opus reviews → Sonnet fixes → the coai gate
+#   CHH (Part 7) = Sonnet codes → Haiku A (decision tracer, read-only) → Haiku B (test truth, read-only) → Sonnet fixes both
+#         → Opus reviews → Sonnet fixes → the coai gate
 # ISOLATION: an arm lives under r/<random token>/ (its clone, notes, work, results, temp, coai data dir); the folders above
 # cannot be listed while arms run, every arm is on the same branch name, and no brief names the scheme or another arm.
 # RESUMABLE: a step with <step>.done is skipped; an interrupted step resumes ITS OWN session with the time left of its budget.
@@ -43,7 +45,8 @@ fill() { # template deadline notes -> filled brief on stdout (no arm id, no sche
     let s=fs.readFileSync(tpl,"utf8");
     const v={BRANCH:branch,DEADLINE:deadline,NOTES:notes,PLAN:plan,BASE:base,SCEN_COUNT:scen,
       REVIEW:`${R}/notes/review.json`,CODE_NOTES:`${R}/notes/code.md`,HREVIEW_NOTES:`${R}/notes/hreview.md`,
-      FIX_NOTES:`${R}/notes/fix.md`,WORK:`${R}/work`,GATE_JSON:`${R}/notes/gate.json`};
+      FIX_NOTES:`${R}/notes/fix.md`,WORK:`${R}/work`,GATE_JSON:`${R}/notes/gate.json`,
+      HA_JSON:`${R}/notes/hA.json`,HB_JSON:`${R}/notes/hB.json`};
     s=s.replace(/{{([A-Z_]+)}}/g,(m,k)=>v[k]??process.env["TPL_"+k]??m);
     if(/{{[A-Z_]+}}/.test(s)) { console.error("unfilled: "+s.match(/{{[A-Z_]+}}/g).join(" ")); process.exit(1); }
     process.stdout.write(s);' "$1" "$2" "$3" "$R" "$BRANCH" "$PLAN" "$BASE" "$SCEN_COUNT"
@@ -84,7 +87,8 @@ step() { # name model minutes template notes mode(write|read|gate)
     used=$(used_seconds "$name"); remaining=$(( minutes * 60 - used )); [ $remaining -lt 300 ] && remaining=300
     deadline="$(date -u -d "@$((t0 + remaining))" '+%H:%M UTC') ($(date -d "@$((t0 + remaining))" '+%H:%M %Z'))"
     local tools=("${WRITE_TOOLS[@]}") extra=(--permission-mode acceptEdits) mcp=$R/mcp-none.json
-    [ "$mode" = read ] && { tools=("${READ_TOOLS[@]}"); extra=(--permission-mode default --disallowedTools Edit Write NotebookEdit "${DENY[@]}"); }
+    # read steps start no subagent (Part 7: SRS3's Haiku step started Opus and Sonnet subagents in Part 6)
+    [ "$mode" = read ] && { tools=("${READ_TOOLS[@]}"); extra=(--permission-mode default --disallowedTools Edit Write NotebookEdit Agent Task "${DENY[@]}"); }
     [ "$mode" != read ] && extra+=(--disallowedTools "${DENY[@]}")
     [ "$mode" = gate ] && { tools+=("${GATE_TOOLS[@]}"); mcp=$R/mcp-coai.json; }
     local session_args prompt_file=$OUT/$name.a$attempt.prompt.md
@@ -125,13 +129,14 @@ EOF
   done
 }
 
-review_json() { # the review's final message is the JSON; keep it where the fixer reads it
-  [ -s "$NOTES/review.json" ] && return 0
+review_json() { # step [dest] — the review's final message is the JSON; keep it where the fixer reads it
+  local dest=${2:-$NOTES/review.json}
+  [ -s "$dest" ] && return 0
   node -e '
     const fs=require("fs"); const f=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).stream;
     const r=fs.readFileSync(f,"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(x=>x&&x.type==="result").pop();
     const text=r?.result??""; const m=text.match(/\{[\s\S]*\}/);
-    fs.writeFileSync(process.argv[2], m?m[0]:JSON.stringify({verdict:"unparsed",raw:text}));' "$OUT/$1.done" "$NOTES/review.json"
+    fs.writeFileSync(process.argv[2], m?m[0]:JSON.stringify({verdict:"unparsed",raw:text}));' "$OUT/$1.done" "$dest"
 }
 
 hreview_step() { # name — a FRESH Haiku session reviews the whole stories and fixes what it found; its diff is kept
@@ -181,7 +186,21 @@ case $ARM in
     source "$E/t-lib.sh"; run_t_arm
     gate_step 6-gate
     ;;
-  *) echo "usage: run-arm.sh C<n>|CR<n>|SRS<n>" >&2; exit 1 ;;
+  CHH[0-9]*)   # Part 7: two fresh read-only Haiku reviewers with focuses coai's roles lack, then Sonnet fixes both
+    step 1-code sonnet 180 "$E/briefs/1-code.template.md" "$NOTES/code.md" write
+    [ -f "$OUT/2-hA.before" ] || git -C "$DIR" rev-parse HEAD > "$OUT/2-hA.before"
+    step 2-hA haiku 40 "$E/briefs/hA-trace.template.md" "-" read
+    review_json 2-hA "$NOTES/hA.json"
+    step 3-hB haiku 40 "$E/briefs/hB-tests.template.md" "-" read
+    review_json 3-hB "$NOTES/hB.json"
+    step 4-hfix sonnet 60 "$E/briefs/hfix.template.md" "$NOTES/hfix.md" write
+    [ -f "$OUT/4-hfix.diff" ] || git -C "$DIR" diff "$(cat "$OUT/2-hA.before")" HEAD > "$OUT/4-hfix.diff"
+    step 5-review opus 40 "$E/briefs/2-review.template.md" "-" read
+    review_json 5-review
+    step 6-fix sonnet 60 "$E/briefs/3-fix.template.md" "$NOTES/fix.md" write
+    gate_step 7-gate
+    ;;
+  *) echo "usage: run-arm.sh C<n>|CR<n>|SRS<n>|CHH<n>" >&2; exit 1 ;;
 esac
 echo "{\"kind\":\"arm-done\",\"arm\":\"$ARM\",\"done_utc\":\"$(date -u +%FT%TZ)\"}" >> "$OUT/timing.jsonl"
 log "arm done"

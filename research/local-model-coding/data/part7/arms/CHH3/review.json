@@ -1,0 +1,12 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "line": 232,
+   "summary": "A valid JSON file with a null entry ({\"v\":1,\"entries\":[null]}) makes `entry.Key` throw NullReferenceException. Read() catches only JsonException, IOException and UnauthorizedAccessException, so the exception gets out of Standing into CanRun, ExcludedFrom and ProvidersAsync. This breaks D4's rule that every read fails open.",
+   "fix": "Filter out null elements before reading Key (`entries.OfType<QuotaCooldownEntry>()` or `entry is not null && ...`). Add that file shape as a second case to ATornFile_ParksNobody_AndSaysSoOnce."},
+  {"id": "R2", "severity": "minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "line": 150,
+   "summary": "One OperationCanceledException from any key's /quota probe throws away the whole round's list of changes. A park or lift already decided for another key in the same round is lost: for example, a Claude spend-limit park, or a codex lift after its answer. This happens when the round's token fires, which includes the round's own deadline. D5 and S42 only say that the cancelled probe itself parks nothing.",
+   "fix": "Catch the cancellation for each key in Decided/Parked so that this key gives no change. Then still Mutate the changes already collected for the other keys. Add a test: a Claude spent result plus an agy result whose probe is cancelled → `claude` stands and `antigravity/gemini` does not."},
+  {"id": "R3", "severity": "minor", "file": "research/module_tests.md", "line": 5842,
+   "summary": "The 'NOT covered' paragraph says the RoundEngine call site is not covered and is proved only by the build. The table above lists ARoundThatEndsOnASpentQuotaParksItTests, which covers that call through a real PanelService round. The catalogue contradicts itself.",
+   "fix": "Remove the RoundEngine call-site clause from the 'NOT covered' paragraph, or reword it to name ARoundThatEndsOnASpentQuotaParksItTests as the test that covers it."}
+ ]}

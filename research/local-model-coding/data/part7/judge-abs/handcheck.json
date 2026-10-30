@@ -1,0 +1,61 @@
+{
+ "checked_utc": "2026-10-29",
+ "by": "main session, against the arm code",
+ "majors": [
+  {
+   "arm": "C1",
+   "runs": "run1+run2",
+   "finding": "DeepseekRuntime inherits CodexRuntime's virtual QuotaKeyOf = codex",
+   "verdict": "real",
+   "severity": "major",
+   "evidence": "C1 ReviewerRuntime.cs:620 virtual 'codex'; DeepseekRuntime (:829) has no override; the other 8 arms override it (C2,C3,CR*,SRS1) or key on ProviderOverrides (SRS2,SRS3)."
+  },
+  {
+   "arm": "C1",
+   "runs": "run2",
+   "finding": "TZ-based time-zone test fails on Windows",
+   "verdict": "real",
+   "severity": "major",
+   "evidence": "AnAgyResetWithoutAnOffsetIsReadAsUtcTests sets TZ and asserts BaseUtcOffset == +9h with no OS guard; ci.yml has a windows-latest job running CoaiMcp.Tests.exe; .NET on Windows ignores TZ."
+  },
+  {
+   "arm": "SRS1",
+   "runs": "run1+run2",
+   "finding": "plan deviation says a partial class in two files; the diff has one 409-line file",
+   "verdict": "real",
+   "severity": "minor",
+   "evidence": "QuotaCooldowns.cs is 409 lines and not partial; plan line 835 claims QuotaCooldowns.Round.cs. A false record and 9 lines over the split rule; no behaviour defect."
+  },
+  {
+   "arm": "SRS2",
+   "runs": "run2",
+   "finding": "FirstOf picks asking[0] when no refusal has Spent==true; a text-classified hopeless refusal behind a transient one is not read",
+   "verdict": "real",
+   "severity": "major (edge case)",
+   "evidence": "QuotaCooldownsRound.cs:89-94; Codex refusals carry Spent==null and the default ReadResetAsync (ReviewerRuntime.cs:545) decides hopeless from the one reason it is given, so [transient, hopeless] → NoPark, then LiftIfAnswered."
+  }
+ ],
+ "part7": {
+  "checked_utc": "2026-10-30",
+  "by": "main session",
+  "majors": [
+   {
+    "arm": "CHH3",
+    "runs": "run1+run2",
+    "finding": "the full MCP suite is red: HeldFileInheritableOnLinuxTests.ATakeWhoseStreamCannotBeMade_ClosesItsDescriptor_AndLeavesTheFileFree failed in the objective check; the judge suspects a fork race with CHH3 new git-starting end-to-end test",
+    "verdict": "not confirmed",
+    "severity": "none (flaky under host load)",
+    "evidence": "the class alone passed 6/6 three times; CHH3 does not touch HeldFile code; two more whole-suite runs of CHH3: run 1 13888 total 0 failed, run 2 16 failed while the mutation checks and two coders loaded the host; the failure is load-dependent and not reproducible on a quiet run, so it is not attributed to CHH3"
+   }
+  ],
+  "renamed": [
+   {
+    "arm": "CHH1",
+    "scenario": "S33",
+    "plan": "TheModelsCard_CarriesTheCooldownLine_AndTheBadge — read off the RUNNING page; nothing for a row that is not cooling",
+    "code": "TheModelsCard_CarriesTheCooldownLine_AndTheBadge — nothing for a row that is not cooling (src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts:64)",
+    "note": "the objective check needs the exact name, so it reads absent; whether the test still reads the RUNNING page is for the write-up to check"
+   }
+  ]
+ }
+}

@@ -1,0 +1,33 @@
+{
+  "redactions": {
+    "CHH1": 2,
+    "CHH2": 3,
+    "CHH3": 4
+  },
+  "sessions": {
+    "D-ac36b6": {
+      "arm": "CHH1",
+      "run": "run1"
+    },
+    "D-3e5d1f": {
+      "arm": "CHH1",
+      "run": "run2"
+    },
+    "D-da0248": {
+      "arm": "CHH2",
+      "run": "run1"
+    },
+    "D-40bdcc": {
+      "arm": "CHH2",
+      "run": "run2"
+    },
+    "D-d8154b": {
+      "arm": "CHH3",
+      "run": "run1"
+    },
+    "D-d5b6b4": {
+      "arm": "CHH3",
+      "run": "run2"
+    }
+  }
+}

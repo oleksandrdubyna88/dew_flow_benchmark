@@ -9,7 +9,8 @@ E=/home/jinx/git/coai-exp2; S=$E/.locked-modes
 case ${1:-} in
   lock)
     [ -s "$S" ] && { echo "already locked"; exit 1; }
-    closed=(/home/jinx/git/coai-exp)
+    # Part 7: also every Part 6 result an arm could learn from (EXTRA_CLOSED, space-separated paths)
+    closed=(/home/jinx/git/coai-exp ${EXTRA_CLOSED:-})
     unlisted=("$E" "$E/r" "$E/pids" "$HOME/.claude/projects" "$HOME/.claude/file-history" "$HOME/.claude/session-env" "$HOME/.claude/shell-snapshots")
     for p in "${closed[@]}" "${unlisted[@]}"; do stat -c '%a	%n' "$p"; done > "$S"
     chmod 000 "${closed[@]}" && chmod 300 "${unlisted[@]}" && echo "locked: closed ${#closed[@]}, unlisted ${#unlisted[@]}" ;;
