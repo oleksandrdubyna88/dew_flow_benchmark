@@ -315,14 +315,14 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   is not `"custom"` (every server tool: `web_search_*`, `web_fetch_*`, `code_execution_*`, `computer_*`, `bash_*`, `text_editor_*`, `memory_*`, and any
   type added later: the rule is closed on what is present, not a list of known names); the body has `mcp_servers` or `container`; an image or
   document `source` is of `type: "url"` anywhere in `messages` or `system` (the API would fetch it); the body is not UTF-8, not one JSON object, or
-  repeats a key at any depth (two parsers could read it differently); or it carries a `content-encoding`. A refused body holds no reservation. The
+  repeats a key at any depth (two parsers could read it differently); or it carries a `content-encoding`. A refused body holds no reservation. **The bytes of bodies held in memory at once are bounded across every request in flight** (64 MiB, `MAX_BUFFERED_BYTES`): a declared length is held before a byte is read, an undeclared one as it arrives, and the bytes are given back when the body is on the upstream socket, the request is refused, or the client leaves. A request that would pass the bound is answered `503` at once (`overloaded_error`, `retry-after: 1`), not queued, as a `refused` line with `reason: "busy"` (a fourth word of `refusedByReason`, no reservation held); the smoke's B-S2 requires 0 of them for the CLI's own requests. The worst case of a single request stays 8 MiB; and the session scan's worst case is an 8 GiB file read in windows with no time cap (a slow scan is not a wrong one). The
   broker signs with the account's token, so a server tool in a forwarded body would give a prompt-injected agent the API's reach (web search, a
   fetch of an attacker URL carrying data in its query) through a door the proxy never sees. **What the bare arm sends:** the box launches the CLI with
   `--tools Agent,Bash,Read,Edit,Write,Glob,Grep,TodoWrite` and the init read-back refuses any other tool (a test adds `WebFetch` and sees the
   mismatch), so `WebSearch` and `WebFetch` are not available to the bare agent and nothing in `lib/launch.mjs` needed removing; the smoke's B-S2 now
   also requires 0 `body` refusals, so a CLI request carrying a server tool shows as a refuted verdict, not as a silent hole. The process arm (E2.S3)
   adds `ToolSearch`: whether that is a client tool or a server `tool_search_*` type has to be read from its first smoke. A budget refusal is a
-  `refused` line with `reason: "cap"` (`429`, an API-shaped `rate_limit_error`); the summary and `brokerView` keep `refusedByReason` beside the
+  `refused` line with `reason: "cap"` (`429`, an API-shaped `rate_limit_error`); the summary and `brokerView` keep `refusedByReason` (`cap`, `path`, `body`, `busy`) beside the
   total, never one bare count. It holds the cell's own budget: a request reserves the larger of the floor (0.05) and the largest charge
   settled so far in the cell (never sized from `max_tokens`, which the CLI sets to 32k-128k), is admitted while spend plus reservations plus
   its own stays within the cap, and settles priced from the parsed usage with `asTheCliBills`. The reservation is the charge only when nothing
@@ -441,6 +441,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | `loadSmoke` reads through the one reader: a link among a smoke directory's files or transcripts is refused and its target is not read (before: `readFileSync` followed it) | `agent-files-sites.test.mjs` |
 | An extra environment key that differs from a base key only in case (`https_proxy`, `path`, `claude_code_oauth_token`) is refused, naming the base key | `agent-env.test.mjs` |
 | `brokerView` over a sealed ledger with an unsettled reservation equals the seal's `spentUsd` and `lowerBound` (before: it summed the settled lines and said 0) | `broker.test.mjs` |
+| The bytes of request bodies buffered across concurrent requests are bounded: a request over the bound is `503` with `reason: "busy"`, nothing forwarded, no reservation; a client that leaves gives its bytes back | `broker-body.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only when every directory the kernel traverses to its target is lstat-verified not a link and the target stays in the link's bind (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader); the npm `.bin/tsc -> ../typescript/bin/tsc` shape and a relative link inside the box `/tmp` are `inside` | `link-class.test.mjs` |
 

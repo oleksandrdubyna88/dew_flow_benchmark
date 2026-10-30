@@ -60,6 +60,8 @@ test('B_S2_is_refuted_when_the_broker_refused_a_body_of_the_CLIs_own_because_tha
   const r = verdictOf('B-S2', s => ({ ...s, brokerLines: [...s.brokerLines, refusedBody] }));
   assert.equal(r.verdict, 'refuted');
   assert.match(r.observed, /"body":1/);
+  const busy = verdictOf('B-S2', s => ({ ...s, brokerLines: [...s.brokerLines, { ...refusedBody, seq: 100, reason: 'busy' }] }));
+  assert.equal(busy.verdict, 'refuted', 'a busy refusal of the CLI\'s own request is refuted too');
   assert.equal(verdictOf('B-S2', s => s).verdict, 'holds', 'control: the committed fixture has none');
 });
 

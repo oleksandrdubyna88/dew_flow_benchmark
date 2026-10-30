@@ -61,10 +61,10 @@ test('A_request_off_the_list_is_answered_403_logged_as_a_refusal_with_reason_pat
     assert.ok(refused.every(l => typeof l.method === 'string' && typeof l.path === 'string' && Array.isArray(l.headerNames)));
     assert.equal(b.lines.some(l => l.event === 'forwarding'), false);
     assert.equal(b.broker.summary().upstreamRequests, 0);
-    assert.deepEqual(b.broker.summary().refusedByReason, { cap: 0, path: 7, body: 0 });
+    assert.deepEqual(b.broker.summary().refusedByReason, { cap: 0, path: 7, body: 0, busy: 0 });
     assert.equal(b.broker.summary().refused, 7, 'the total is the sum of the reasons');
     assert.equal(b.broker.summary().reservedUsd, 0, 'a path refusal holds no reservation');
-    assert.deepEqual(brokerView(b.lines).refusedByReason, { cap: 0, path: 7, body: 0 });
+    assert.deepEqual(brokerView(b.lines).refusedByReason, { cap: 0, path: 7, body: 0, busy: 0 });
     assert.equal(JSON.stringify(b.lines).includes(b.token), false);
   } finally {
     await b.close();

@@ -69,11 +69,11 @@ export const sseAnswer = (chunks, gapMs, writes = []) => async (_req, res) => {
 };
 
 /** A broker over a stub upstream in a fresh short dir; `lines` collects every log line. */
-export async function startBroker({ stub, token = fakeToken(), capUsd = 0.2, reserveUsd = 0.05, cliVersion = '2.1.310' } = {}) {
+export async function startBroker({ stub, token = fakeToken(), capUsd = 0.2, reserveUsd = 0.05, cliVersion = '2.1.310', ...more } = {}) {
   const dir = tmpDir('bk');
   const socketPath = path.join(dir, 'api.sock');
   const lines = [];
-  const broker = await brokerServer({ socketPath, token, upstream: stub.upstream, budget: { capUsd, reserveUsd }, prices: prices(), cliVersion, log: l => lines.push(l) });
+  const broker = await brokerServer({ socketPath, token, upstream: stub.upstream, budget: { capUsd, reserveUsd }, prices: prices(), cliVersion, log: l => lines.push(l), ...more });
   return { broker, socketPath, lines, token, stub, dir, close: () => broker.close() };
 }
 

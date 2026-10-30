@@ -12,6 +12,8 @@ import { routeDecision } from './broker-routes.mjs';
 import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from './budget.mjs';
 
 export const DRAIN_MS = 120_000;
+/** The most bytes of request bodies the broker holds in memory at once, across every request in flight: a request that would pass it is refused at once (503, `busy`). */
+export const MAX_BUFFERED_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_UPSTREAM = Object.freeze({ host: 'api.anthropic.com', port: 443, tls: true });
 const UPSTREAM_IDLE_MS = 120_000;
 /**
@@ -78,8 +80,8 @@ const unbilledAnswer = (status, apiError, countTokens) => {
 };
 const isCountTokens = url => String(url).split('?')[0] === '/v1/messages/count_tokens';
 
-/** Refusals by their fixed reason word: `cap` (the cell's budget), `path` (off the route list) and `body` (a body that would make the API reach the network). A line with another reason is counted under it. */
-export const REFUSAL_REASONS = Object.freeze(['cap', 'path', 'body']);
+/** Refusals by their fixed reason word: `cap` (the cell's budget), `path` (off the route list) and `body` (a body that would make the API reach the network) and `busy` (the bytes of request bodies held at once would pass the bound). A line with another reason is counted under it. */
+export const REFUSAL_REASONS = Object.freeze(['cap', 'path', 'body', 'busy']);
 const refusedByReason = lines => lines.filter(l => l.event === 'refused')
   .reduce((acc, l) => ({ ...acc, [l.reason]: (acc[l.reason] ?? 0) + 1 }), Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])));
 
@@ -111,6 +113,7 @@ export function brokerView(lines) {
 }
 
 const PATH_ERROR = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: 'broker: this request is not on the broker\'s route list' } });
+const BUSY_ERROR = JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message: 'broker: busy, too many request bytes are held at once; retry' } });
 const BODY_ERROR = why => JSON.stringify({ type: 'error', error: { type: 'permission_error', message: `broker: this request body is not forwarded (${why})` } });
 const API_ERROR = cap => JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: `broker: the cell's budget (${cap} USD) is spent` } });
 const hostHeader = u => (u.port === 443 || u.port === 80 ? u.host : `${u.host}:${u.port}`);
@@ -141,11 +144,11 @@ function makeLedger({ budget, prices, cliVersion, log }) {
       emit({ seq, event: 'refused', reason: 'path', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why });
       return seq;
     },
-    /** A body the broker will not forward: counted and logged with its own seq (the offending key or type, never a value), no reservation -> the seq. */
-    refuseBody(req, names, { why, offending = null }) {
+    /** A body the broker will not forward (`body`), or has no room for (`busy`): counted and logged with its own seq (the offending key or type, never a value), no reservation -> the seq. */
+    refuseBody(req, names, { why, offending = null }, reason = 'body') {
       seq += 1;
-      refuse('body');
-      emit({ seq, event: 'refused', reason: 'body', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why, ...(offending === null ? {} : { offending }) });
+      refuse(reason);
+      emit({ seq, event: 'refused', reason, method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why, ...(offending === null ? {} : { offending }) });
       return seq;
     },
     /** Admit or refuse the next request -> `{ entry } | { refusal: { seq, why } }`. An admitted one holds a reservation until it settles. */
@@ -183,20 +186,42 @@ function makeLedger({ budget, prices, cliVersion, log }) {
   };
 }
 
-/** The request's whole body, at most `limit` bytes -> `{ body } | { tooLarge: true } | { aborted: true }`. Over the limit stops reading. */
-function readBody(req, limit) {
+/** The bytes of request bodies held at once, across every request in flight, against one bound. */
+function makeByteGate(limit) {
+  let held = 0;
+  return {
+    tryHold(n) { if (held + n > limit) return false; held += n; return true; },
+    release(n) { held = Math.max(0, held - n); },
+  };
+}
+
+/**
+ * The request's whole body, at most `limit` bytes -> `{ body, release } | { tooLarge: true } | { busy: true } | { aborted: true }`. A declared length is held in `gate` at once
+ * (a body that does not fit is `busy`, before a byte is read); an undeclared one is held as it arrives. `release()` gives the bytes back, once: the caller calls it when the body
+ * has been handed on (or refused); every other answer has already given them back.
+ */
+function readBody(req, limit, gate) {
   return new Promise(resolve => {
-    if (Number(req.headers['content-length']) > limit) return resolve({ tooLarge: true });
+    const declared = Number(req.headers['content-length']);
+    if (declared > limit) return resolve({ tooLarge: true });
+    let held = 0;
+    if (Number.isFinite(declared) && declared > 0) {
+      if (!gate.tryHold(declared)) return resolve({ busy: true });
+      held = declared;
+    }
+    const give = () => { gate.release(held); held = 0; };
     const chunks = [];
     let size = 0;
-    const done = r => { req.off('data', onData); resolve(r); };
+    const done = r => { req.off('data', onData); if (!r.body) give(); resolve(r); };
     const onData = chunk => {
       size += chunk.length;
       if (size > limit) return done({ tooLarge: true });
+      if (size > held && !gate.tryHold(size - held)) return done({ busy: true });
+      held = Math.max(held, size);
       chunks.push(chunk);
     };
     req.on('data', onData);
-    req.once('end', () => done({ body: Buffer.concat(chunks) }));
+    req.once('end', () => done({ body: Buffer.concat(chunks), release: give }));
     req.once('error', () => done({ aborted: true }));
     req.once('close', () => { if (!req.complete) done({ aborted: true }); });
   });
@@ -209,7 +234,7 @@ function refusalOf(req, body) {
 }
 
 /** Forward one admitted request to the upstream, signed, and relay the answer. */
-function relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, body) {
+function relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, body, release) {
   const { entry } = opened;
   const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}`, 'content-length': String(body.length) };
   ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
@@ -217,7 +242,8 @@ function relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, n
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
     upRes => answer(upRes, res, entry, ledger, progress, isCountTokens(req.url)));
   live.add(up);
-  up.on('close', () => live.delete(up));
+  up.on('close', () => { live.delete(up); release(); });
+  up.on('finish', release); // the body is on the socket: its bytes are no longer held here
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
   let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
   up.on('finish', () => { sent = true; });
@@ -300,9 +326,10 @@ function answer(upRes, res, entry, ledger, progress, countTokens) {
  * whatever the client does, so a collector must wait for it before it records what the cell spent; `seal()` then ends the ledger (see there), and `close()` seals if the collector did not. `token` is a value; `budget` is `{ capUsd, reserveUsd }`; `prices` a loaded table;
  * `log(line)` receives every ledger line. `upstream` is injectable so tests run a local stub; the smoke runs the real one.
  */
-export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTREAM, budget, prices, cliVersion, log, timeoutMs = UPSTREAM_IDLE_MS }) {
+export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTREAM, budget, prices, cliVersion, log, timeoutMs = UPSTREAM_IDLE_MS, maxBufferedBytes = MAX_BUFFERED_BYTES }) {
   const ledger = makeLedger({ budget, prices, cliVersion, log });
   const live = new Set(); // the upstream requests in flight
+  const gate = makeByteGate(maxBufferedBytes);
   const server = http.createServer(async (req, res) => {
     // a client that resets mid-write makes the response emit `error` (a write to a destroyed socket before it closed); unhandled it would end the broker, and with
     // it the cell's budget. `answer` also marks the client gone; the upstream is billed either way and stays read to its end.
@@ -316,10 +343,17 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
       res.end(PATH_ERROR);
       return;
     }
-    const read = await readBody(req, MAX_BODY_BYTES);
+    const read = await readBody(req, MAX_BODY_BYTES, gate);
     if (read.aborted) { ledger.emit({ event: 'body-aborted', method: req.method, path: req.url }); return; }
+    if (read.busy) {
+      ledger.refuseBody(req, names, { why: `the broker already holds request body bytes up to its bound (${maxBufferedBytes}): this request was not read` }, 'busy');
+      res.writeHead(503, { 'content-type': 'application/json', connection: 'close', 'retry-after': '1' });
+      res.end(BUSY_ERROR, () => req.destroy());
+      return;
+    }
     const verdict = read.tooLarge ? { allow: false, why: `the body is over ${MAX_BODY_BYTES} bytes` } : refusalOf(req, read.body);
     if (!verdict.allow) {
+      read.release?.();
       ledger.refuseBody(req, names, verdict);
       res.writeHead(read.tooLarge ? 413 : 403, { 'content-type': 'application/json', connection: 'close' });
       res.end(BODY_ERROR(verdict.why), () => (read.tooLarge ? req.destroy() : undefined));
@@ -327,12 +361,13 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
     }
     const opened = ledger.open();
     if (opened.refusal) {
+      read.release();
       ledger.emit({ ...opened.refusal, event: 'refused', method: req.method, path: req.url, headerNames: names });
       res.writeHead(429, { 'content-type': 'application/json', connection: 'close' });
       res.end(API_ERROR(budget.capUsd));
       return;
     }
-    relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, read.body);
+    relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, read.body, read.release);
   });
   rmSync(socketPath, { force: true });
   await listen(server, socketPath);
