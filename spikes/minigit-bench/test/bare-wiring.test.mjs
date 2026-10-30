@@ -145,7 +145,7 @@ test('Every_run_checks_the_run_map_caps_and_budgets_against_the_registered_value
 });
 
 const RAISE = '2026-11-05 | budget-raise | pair:1 | n:2 | usd:13.2 | the two v1 voids of pair 1 are re-run';
-const startedPair1 = { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', status: 'ran', data: false } } };
+const startedPair1 = { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', status: 'ran', data: false }, bbbbbb: { rid: 'bbbbbb', pair: 1, stack: 'node', phase: 'v1', attempt: 1, kind: 'data', status: 'ran', data: false } } }; // the two v1 voids RAISE re-runs
 
 async function budgetOf({ amendments, map = startedPair1, pair = 1 }) {
   const w = await wiring({ amendments, map });

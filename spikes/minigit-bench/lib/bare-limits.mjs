@@ -1,6 +1,6 @@
 // The registered limits of the series, checked at every paid run (E3b review m2): the caps ($6, 60 min wall, 45 min stall), the bare budget ($40) and the ceiling ($500) in the
 // run-map must be the registered values, and the bare budget may be raised ONCE (analysis contract section 9, item 3): only to finish the re-runs of a pair already started,
-// only by their worst case (n x 1.1 x the cap), as a dated `budget-raise` line of amendments.md. The raise applies to the run of THAT pair only. Pure over values.
+// only by their worst case (n x 1.1 x the cap, n being exactly the re-runs still left for the pair), as a dated `budget-raise` line of amendments.md written before those re-runs start. The raise applies to the run of THAT pair only. Pure over values.
 import { parseAmendments } from './amendments.mjs';
 import { BARE_CAPS } from './bare-plan.mjs';
 import { OVER_CAP_FACTOR } from './budget.mjs';
@@ -31,5 +31,25 @@ export function effectiveBudget({ map, amendmentsText, pair }) {
   if (raise.n < 1 || round2(raise.usd) !== worst) return fail(`the budget-raise line of ${raise.date} asks for $${raise.usd}: only the worst case of the re-runs, ${raise.n} x ${OVER_CAP_FACTOR} x $${BARE_CAPS.capUsd} = $${worst}`);
   const started = Object.values(map.sessions ?? {}).some(s => s.kind === 'data' && s.pair === raise.pair);
   if (!started) return fail(`the budget-raise line of ${raise.date} names pair ${raise.pair}, which has not already started: a raise only finishes the re-runs of a pair already started`);
-  return ok({ bareBudgetUsd: raise.pair === pair ? round2(map.bareBudgetUsd + worst) : map.bareBudgetUsd, raise });
+  if (raise.pair !== pair) return ok({ bareBudgetUsd: map.bareBudgetUsd, raise });
+  const owed = rerunsOwed({ map, raise });
+  if (!owed.ok) return owed;
+  if (raise.n !== owed.value) return fail(`the budget-raise line of ${raise.date} says n:${raise.n}, but ${owed.value} re-run(s) are left for pair ${raise.pair}: n is exactly the re-runs still to be run (those already run under the line included), because the raise is their worst case and nothing more`);
+  return ok({ bareBudgetUsd: round2(map.bareBudgetUsd + worst), raise });
+}
+
+const dayOf = iso => String(iso).slice(0, 10);
+
+/**
+ * The re-runs the raise of `pair` covers (review N14): every void `a1` of the pair is re-run once; the ones whose `a2` has not run yet are LEFT, and the ones that ran on or after the line's date ran under it (so a resume
+ * in the middle of the re-runs still sees the n the line was written with). A re-run that started BEFORE the line's date refuses it: the line must be dated before the re-runs start. -> `ok(count)` | `fail`.
+ */
+function rerunsOwed({ map, raise }) {
+  const mine = Object.values(map.sessions ?? {}).filter(s => s.kind === 'data' && s.pair === raise.pair);
+  const voids = mine.filter(s => s.attempt === 1 && ['ran', 'scored'].includes(s.status) && s.data === false);
+  const reruns = voids.map(v => mine.find(s => s.stack === v.stack && s.phase === v.phase && s.attempt === 2));
+  const early = reruns.find(r => r?.startedAt && dayOf(r.startedAt) < raise.date);
+  if (early) return fail(`the budget-raise line of ${raise.date} is dated ${raise.date}, not before the re-runs start: the re-run a2 of ${early.stack} ${early.phase} (${early.rid}) started on ${dayOf(early.startedAt)}. The line must be dated before the re-runs it pays for start`);
+  const owed = reruns.filter(r => !r?.startedAt || r.status === 'planned' || dayOf(r.startedAt) >= raise.date).length;
+  return owed === 0 ? fail(`the budget-raise line of ${raise.date} names pair ${raise.pair}, but no re-run is left for it: a raise only finishes the re-runs of a pair already started`) : ok(owed);
 }
