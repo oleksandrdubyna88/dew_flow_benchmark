@@ -231,7 +231,7 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
   const state = { quiet: null, sampler: null, v1Quiet: h.get().pairs?.[ctx.pair]?.v1Quiet ?? null };
   for (let guard = 0; guard < 60; guard += 1) {
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };
-    if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched`), map: h.get() };
+    if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched. A stop is final for its series: fix the named cause and start a new series (init, then an A/A that is GO)`), map: h.get() };
     applyHandVerdicts({ ctx, h, say });
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get());
     if (step.action === 'done') {

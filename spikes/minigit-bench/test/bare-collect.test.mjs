@@ -225,3 +225,14 @@ test('Only_the_real_tokens_own_value_is_a_stop_security_and_any_other_credential
   writeFileSync(path.join(github.dir, 'box', 'config-note.txt'), `ghp_${'a1B2'.repeat(9)}\n`); // a file that is not evidence (outside stream, transcripts, box/out, box/work)
   assert.equal(collect(github, { plan: { token: realistic, dummy: DUMMY } }).outcome.class, 'void: contaminated', 'a shape in any file of the session dir is a hit, not only in the evidence files');
 });
+
+test('A_T2_breach_carries_one_flag_per_cause_T2_breach_under_the_stop_policy_and_otel_incomplete_under_the_registered_one', () => {
+  const { policy } = ctx();
+  const flagsOf = over => { const layout = sessionFromFixture(); lay(layout, 't2'); return collect(layout, { policy: { ...policy, ...over } }).outcome.flags; };
+  const stopped = flagsOf({ t2: 'stop' });
+  assert.ok(stopped.includes('T2 breach'));
+  assert.equal(stopped.includes('otel incomplete'), false, 'not both: the T2 breach is the cause, once');
+  const registered = flagsOf({});
+  assert.ok(registered.includes('otel incomplete'));
+  assert.equal(registered.includes('T2 breach'), false, 'control: under t2: otel-incomplete the flag is `otel incomplete` alone');
+});

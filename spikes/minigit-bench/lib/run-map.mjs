@@ -93,7 +93,7 @@ function harnessAccepted({ map, current, acceptHarness, amendments }) {
  * only through `acceptHarness` and a dated amendment line (an identity accepted before, in `map.harnessAccepted`, needs no flag again). -> `ok({ accepted })` (`accepted` is the harness acceptance for the ledger, or null).
  */
 export function checkResumable({ map, current, acceptHarness = null, amendments = '' }) {
-  if (map.stopped) return fail(`the series is stopped (${map.stopped.rule}): resume is refused until the named fix and, for a stop of the first four, a new A/A`);
+  if (map.stopped) return fail(`the series is stopped (${map.stopped.rule}): resume is refused for good: a series stop is final for its series. Fix the named cause and start a NEW series (init, then an A/A that is GO)`);
   const field = PINNED_FIELDS.find(f => !same(map[f], current[f]));
   if (field) return fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`);
   const inputs = inputsAccepted({ map, current, amendments });

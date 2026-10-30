@@ -127,7 +127,10 @@ test('A_harness_change_is_accepted_only_with_a_flag_and_a_dated_amendment_line_n
   assert.equal(checkResumable({ map, current: changed, acceptHarness: { identity: '9'.repeat(64), amendmentDate: '2026-11-03' }, amendments }).ok, false, 'no line of that date');
   assert.equal(checkResumable({ map, current: changed, acceptHarness: { identity: '8'.repeat(64), amendmentDate: '2026-11-02' }, amendments }).ok, false, 'the flag names another identity than the one running');
   assert.equal(checkResumable({ map, current: changed, acceptHarness: { identity: '9'.repeat(64), amendmentDate: '2026-11-02' }, amendments: '# header only\n' }).ok, false, 'no amendment line at all');
-  assert.equal(checkResumable({ map: markStopped(map, { rule: 'stop: auth', reason: 'x', at: 't' }), current: current() }).ok, false, 'a series stop is not passed by resume');
+  const stoppedRun = checkResumable({ map: markStopped(map, { rule: 'stop: auth', reason: 'x', at: 't' }), current: current() });
+  assert.equal(stoppedRun.ok, false, 'a series stop is not passed by resume');
+  assert.match(stoppedRun.reason, /start a NEW series/, 'it says what to do: the stop is final for its series (contract section 9)');
+  assert.doesNotMatch(stoppedRun.reason, /until the named fix/, 'no promise that a fix lets this series go on');
 });
 
 // ---- input amendments (contract section 10; review N5) ------------------------------------------------------------------------------

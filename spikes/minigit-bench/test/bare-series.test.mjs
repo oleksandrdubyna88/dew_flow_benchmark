@@ -408,6 +408,7 @@ test('The_runner_refuses_to_start_a_stopped_series', async () => {
   await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
   const again = await runLoop({ ctx: t.ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value });
   assert.equal(again.exit, EXIT.stop);
+  assert.match(again.message, /new series/, 'the loop says a new series is needed');
   assert.equal(t.launched.length, 2, 'a stopped series launches nothing more');
 });
 
@@ -466,7 +467,8 @@ test('A_T2_breach_stops_the_series_when_the_policy_makes_t2_the_stop_and_only_th
   assert.match(r.message, /T2 breach/);
   assert.equal(readRunMap(armed.ctx.runMapFile).value.stopped.rule, 'T2 breach', 'the pre-registered fallback: when T\'s coverage is not established, T2 is the stop');
   const rec = JSON.parse(readFileSync(path.join(armed.ctx.sessionsRoot, rid('node', 'v1', 1), 'record.json'), 'utf8'));
-  assert.ok(rec.flags.includes('T2 breach') && rec.flags.includes('otel incomplete'));
+  assert.ok(rec.flags.includes('T2 breach'), 'the cause of the stop is the flag');
+  assert.equal(rec.flags.includes('otel incomplete'), false, 'one flag per cause: under t2: stop a T2 breach is `T2 breach` and not also `otel incomplete`');
   assert.equal(armed.launched.length, 2, 'nothing launches after the stop');
   const registered = harness({ variants: { [rid('node', 'v1', 1)]: 't2' } });
   const r2 = await runLoop({ ctx: registered.ctx, deps: registered.deps, map: registered.map });

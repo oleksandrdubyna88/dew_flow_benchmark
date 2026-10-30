@@ -58,7 +58,8 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   // a check whose policy is `stop` and that breaches is a SERIES stop beside the class (T1, T2, T3 and T5 alike: registered, review M4 and N3): the class is how the session ended and stays, the flag says why the series stopped
   const seriesStops = seriesStopsOf(views.c);
   const t2 = views.c.t2;
-  const t2Incomplete = t2.status === 'breach' || (t2.status === 'unchecked' && /otel|lower bound/.test(t2.why ?? '')); // T2: O is not the envelope, or is incomplete: a flag, never a class; the cell stays and is marked
+  // T2: O is not the envelope, or is incomplete: the flag `otel incomplete`, never a class; the cell stays and is marked. One flag per cause (review N10): when T2 IS the series stop, `T2 breach` is the flag and this one is not added
+  const t2Incomplete = !seriesStops.some(x => x.check === 'T2') && (t2.status === 'breach' || (t2.status === 'unchecked' && /otel|lower bound/.test(t2.why ?? '')));
   const figure = stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null });
   const measured = stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: null }); // the broker figure of a session with no meta is a synthetic 0 (`disposedMeta`)
   // A spend of 0 is a MEASUREMENT only when some basis exists: a figure, or a broker ledger that saw no request. With neither, 0 is a gap in the evidence and is flagged, never silent.
