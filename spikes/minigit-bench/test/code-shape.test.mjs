@@ -11,7 +11,14 @@ import { spikeDir } from './helpers.mjs';
  * The files E3b owns: the runner and everything the bare arm added around it. Each is measured whole, with no exemption. A file joins the list in the commit that splits its last function.
  * Files NOT listed are owned by E1 or E2 (the counters, the broker, the egress proxy, the box, the launch, the smoke, the held-out suite) and are left as they are.
  */
-const E3B_FILES = ['bare-runner.mjs', 'lib/bare-series.mjs', 'lib/bare-exit.mjs', 'lib/bare-gates.mjs', 'lib/bare-settle.mjs', 'lib/bare-resume.mjs', 'lib/bare-collect.mjs', 'lib/bare-records-io.mjs', 'lib/bare-record.mjs', 'lib/bare-reclass.mjs', 'lib/bare-pins.mjs', 'lib/bare-limits.mjs', 'lib/bare-schedule.mjs', 'lib/bare-outcome.mjs', 'lib/amendments.mjs', 'lib/alias-store.mjs', 'lib/seed.mjs', 'lib/quiet.mjs', 'lib/cpu-sampler.mjs', 'lib/cache-snapshot.mjs', 'lib/packages.mjs', 'lib/rehearsal.mjs', 'lib/score-run.mjs', 'lib/prereg-guard.mjs', 'lib/run-map.mjs', 'lib/bare-init.mjs', 'lib/bare-phase.mjs', 'lib/bare-config.mjs'];
+const E3B_FILES = [
+  'bare-runner.mjs',
+  'lib/bare-config.mjs', 'lib/bare-collect.mjs', 'lib/bare-exit.mjs', 'lib/bare-gates.mjs', 'lib/bare-init.mjs', 'lib/bare-limits.mjs', 'lib/bare-outcome.mjs', 'lib/bare-phase.mjs', 'lib/bare-pins.mjs', 'lib/bare-plan.mjs',
+  'lib/bare-reclass.mjs', 'lib/bare-record.mjs', 'lib/bare-records-io.mjs', 'lib/bare-resume.mjs', 'lib/bare-schedule.mjs', 'lib/bare-series.mjs', 'lib/bare-settle.mjs',
+  'lib/run-map.mjs', 'lib/series-lock.mjs', 'lib/spend-gate.mjs', 'lib/ledger.mjs', 'lib/amendments.mjs', 'lib/alias-store.mjs', 'lib/seed.mjs', 'lib/prereg-guard.mjs', 'lib/prereg-consistency.mjs',
+  'lib/quiet.mjs', 'lib/cpu-sampler.mjs', 'lib/cache-snapshot.mjs', 'lib/packages.mjs', 'lib/workspace.mjs', 'lib/loc.mjs', 'lib/canary-plan.mjs', 'lib/rehearsal.mjs', 'lib/stub-cli.mjs', 'lib/stub-upstream.mjs', 'lib/score-run.mjs',
+  'prereg/blocks.mjs', 'prereg/cli.mjs', 'prereg/extract-contract.mjs', 'prereg/extract-prediction.mjs', 'prereg/extract-prompts.mjs', 'prereg/heldout-prereg.mjs', 'prereg/parent.mjs', 'prereg/spend-prior.mjs',
+];
 
 test('The_shape_scanner_counts_decisions_in_code_and_not_words_in_messages', () => {
   const sample = [

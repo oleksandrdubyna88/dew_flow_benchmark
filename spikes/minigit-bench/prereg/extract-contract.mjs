@@ -5,9 +5,9 @@
 // Exit 0 written | 4 usage | 5 a quoted block is missing at that commit.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { blockAt } from './blocks.mjs';
+import { parseParentFlags } from './cli.mjs';
 import { fullSha, readAtCommit } from './parent.mjs';
 import { fail, ok } from '../lib/result.mjs';
 
@@ -43,21 +43,34 @@ export function renderQuotes({ quotes, commit }) {
 }
 
 /** The text of an existing contract below the marker (what the script keeps), or ''. */
-export const keptTail = existing => (existing.includes(MARKER) ? existing.slice(existing.indexOf(MARKER) + MARKER.length).replace(/^\n/, '') : '');
+export function keptTail(existing) {
+  const at = existing.indexOf(MARKER);
+  return at < 0 ? '' : existing.slice(at + MARKER.length).replace(/^\n/, '');
+}
+
+/** The quotes of the parent plan at `commit`: `ok([{ name, section, lines }])`, or a `fail` that says whether the plan or a block was unreadable. */
+async function readQuotes({ repo, commit }) {
+  const text = await readAtCommit({ repo, commit });
+  if (!text.ok) return fail(`cannot read the parent plan: ${text.reason}`);
+  return extractQuotes(text.value);
+}
+
+/** Write the quote half over `out`, keeping what the file holds below the marker. */
+function writeContract({ out, quotes, commit }) {
+  const tail = existsSync(out) ? keptTail(readFileSync(out, 'utf8')) : '';
+  writeFileSync(out, `${renderQuotes({ quotes, commit })}${tail}`);
+}
 
 export async function main(argv, write = line => process.stdout.write(`${line}\n`)) {
-  let values;
-  try { values = parseArgs({ args: argv, options: { 'parent-commit': { type: 'string' }, out: { type: 'string' } } }).values; } catch (e) { write(`usage error: ${e.message}`); return 4; }
-  if (!values['parent-commit']) { write('usage error: --parent-commit <sha on origin/main> is required'); return 4; }
+  const flags = parseParentFlags(argv);
+  if (!flags.ok) { write(flags.reason); return 4; }
+  const commit = flags.value['parent-commit'];
   const repo = path.resolve(SPIKE, '..', '..');
-  const text = await readAtCommit({ repo, commit: values['parent-commit'] });
-  if (!text.ok) { write(`cannot read the parent plan: ${text.reason}`); return 5; }
-  const quotes = extractQuotes(text.value);
+  const quotes = await readQuotes({ repo, commit });
   if (!quotes.ok) { write(quotes.reason); return 5; }
-  const sha = await fullSha({ repo, commit: values['parent-commit'] });
-  const out = values.out ?? path.join(SPIKE, 'inputs', 'analysis-contract.md');
-  const tail = existsSync(out) ? keptTail(readFileSync(out, 'utf8')) : '';
-  writeFileSync(out, `${renderQuotes({ quotes: quotes.value, commit: sha.ok ? sha.value : values['parent-commit'] })}${tail}`);
+  const sha = await fullSha({ repo, commit });
+  const out = flags.value.out ?? path.join(SPIKE, 'inputs', 'analysis-contract.md');
+  writeContract({ out, quotes: quotes.value, commit: sha.ok ? sha.value : commit });
   write(`written ${out}`);
   return 0;
 }

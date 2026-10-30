@@ -15,12 +15,15 @@ const FIXTURES = 'spikes/minigit-bench/test/fixtures/real';
 const MODULE_DOC = 'research/module_minigit_bench.md';
 
 /** The text of the section whose heading line matches `heading`, up to the next heading of the same or a higher level; null when there is none. */
+const HEADING_LINE = /^#{1,6} /;
+const levelOf = line => /^#+/.exec(line)[0].length;
+const endsSection = (line, i, start, level) => i > start && HEADING_LINE.test(line) && levelOf(line) <= level;
+
 export function sectionOf(text, heading) {
   const lines = text.split('\n');
-  const start = lines.findIndex(l => /^#{1,6} /.test(l) && heading.test(l));
+  const start = lines.findIndex(l => HEADING_LINE.test(l) && heading.test(l));
   if (start === -1) return null;
-  const level = /^#+/.exec(lines[start])[0].length;
-  const end = lines.findIndex((l, i) => i > start && /^#{1,6} /.test(l) && /^#+/.exec(l)[0].length <= level);
+  const end = lines.findIndex((l, i) => endsSection(l, i, start, levelOf(lines[start])));
   return lines.slice(start, end === -1 ? undefined : end).join('\n');
 }
 

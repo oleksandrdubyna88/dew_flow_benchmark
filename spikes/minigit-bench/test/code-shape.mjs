@@ -42,6 +42,7 @@ export function codeOnly(source) {
     out.push(' ');
     i += 1;
   };
+  while (source.startsWith('#!') && i < source.length && source[i] !== '\n') { out.push(' '); i += 1; } // the shebang line is not code
   while (i < source.length) {
     const c = source[i];
     const two = source.slice(i, i + 2);

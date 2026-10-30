@@ -13,6 +13,13 @@ import { fail, ok } from '../lib/result.mjs';
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
+/** The sentence for an archive hash the three sources disagree on (suite.enc.sha256, hashes.txt, the archive itself), or null. */
+function archiveProblem({ read, archiveSha256, hashes }) {
+  const listed = hashes.find(h => h.path === 'heldout/suite.enc')?.sha256;
+  if (listed !== archiveSha256) return `the archive hash differs: suite.enc.sha256 says ${archiveSha256}, hashes.txt says ${listed}`;
+  return sha256(read('heldout/suite.enc')) === archiveSha256 ? null : 'heldout/suite.enc does not hash to suite.enc.sha256';
+}
+
 /** `{ spike }` -> `ok(object)` | `fail` when the three sources disagree about the archive's hash or the counts. */
 export function heldoutPrereg(spike = SPIKE) {
   const read = p => readFileSync(path.join(spike, p));
@@ -22,9 +29,8 @@ export function heldoutPrereg(spike = SPIKE) {
   const archiveSha256 = read('heldout/suite.enc.sha256').toString('utf8').split(/\s+/)[0];
   const hashes = parseHashes(read('inputs/hashes.txt').toString('utf8'));
   if (!hashes.ok) return hashes;
-  const listed = hashes.value.find(h => h.path === 'heldout/suite.enc')?.sha256;
-  if (listed !== archiveSha256) return fail(`the archive hash differs: suite.enc.sha256 says ${archiveSha256}, hashes.txt says ${listed}`);
-  if (sha256(read('heldout/suite.enc')) !== archiveSha256) return fail('heldout/suite.enc does not hash to suite.enc.sha256');
+  const problem = archiveProblem({ read, archiveSha256, hashes: hashes.value });
+  if (problem) return fail(problem);
   const counts = ['n1', 'n2', 'm'].find(k => manifest[k] !== calibration[k]);
   if (counts) return fail(`the manifest and the calibration disagree on ${counts}: ${manifest[counts]} against ${calibration[counts]}`);
   return ok({

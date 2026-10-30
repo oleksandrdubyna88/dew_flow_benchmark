@@ -5,9 +5,9 @@
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { fail, ok } from '../lib/result.mjs';
+import { parseParentFlags } from './cli.mjs';
 import { fullSha, readAtCommit } from './parent.mjs';
 
 const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -33,18 +33,23 @@ export function buildPrompts({ extracted, commit }) {
   return { source: { file: 'todo/PLAN_minigit_stack_bench.md', commit, section: '4.3' }, templates: extracted.templates, slots, prompts };
 }
 
+/** The prompts of the parent plan at `commit`: `ok(extracted)` | `fail`. */
+async function readPrompts({ repo, commit }) {
+  const text = await readAtCommit({ repo, commit });
+  if (!text.ok) return fail(`cannot read the parent plan: ${text.reason}`);
+  return extractPrompts(text.value);
+}
+
 export async function main(argv, write = line => process.stdout.write(`${line}\n`)) {
-  let values;
-  try { values = parseArgs({ args: argv, options: { 'parent-commit': { type: 'string' }, out: { type: 'string' } } }).values; } catch (e) { write(`usage error: ${e.message}`); return 4; }
-  if (!values['parent-commit']) { write('usage error: --parent-commit <sha on origin/main> is required'); return 4; }
+  const flags = parseParentFlags(argv);
+  if (!flags.ok) { write(flags.reason); return 4; }
+  const commit = flags.value['parent-commit'];
   const repo = path.resolve(SPIKE, '..', '..');
-  const text = await readAtCommit({ repo, commit: values['parent-commit'] });
-  if (!text.ok) { write(`cannot read the parent plan: ${text.reason}`); return 5; }
-  const extracted = extractPrompts(text.value);
+  const extracted = await readPrompts({ repo, commit });
   if (!extracted.ok) { write(extracted.reason); return 5; }
-  const sha = await fullSha({ repo, commit: values['parent-commit'] });
-  const out = values.out ?? path.join(SPIKE, 'inputs', 'prompts-bare.json');
-  writeFileSync(out, `${JSON.stringify(buildPrompts({ extracted: extracted.value, commit: sha.ok ? sha.value : values['parent-commit'] }), null, 2)}\n`);
+  const sha = await fullSha({ repo, commit });
+  const out = flags.value.out ?? path.join(SPIKE, 'inputs', 'prompts-bare.json');
+  writeFileSync(out, `${JSON.stringify(buildPrompts({ extracted: extracted.value, commit: sha.ok ? sha.value : commit }), null, 2)}\n`);
   write(`written ${out}`);
   return 0;
 }
