@@ -238,16 +238,21 @@ const STOPPING_CHECKS = Object.freeze(['t1', 't2', 't3', 't5']);
 /** The series-stop rule names of the checks, as the run-map's `stopped.rule` and the flags carry them: `T<n> breach`, then `T<n> unchecked`. */
 export const CHECK_STOP_RULES = Object.freeze([...STOPPING_CHECKS.map(k => `${k.toUpperCase()} breach`), ...STOPPING_CHECKS.map(k => `${k.toUpperCase()} unchecked`)]);
 
+/** The class prefixes that NAME an ending (review MINOR-7): a session that ended as one of these and wrote no envelope has no evidence to be missing. `crashed: no result` names no ending and is not one. */
+const NAMED_ENDINGS = /^(killed|void|stop):/;
+
 /**
  * `[{ rule, check, detail }]` for every check of `c` (the `crosscheck` result) that stops the series under `policy` (`crosscheck-policy.json`): a breach under a `stop` policy (verdict `stop`), and
  * FAIL CLOSED (review N11) a check whose policy is `stop` that could not run for want of evidence (`unchecked`: no OTel, a transcript gap, no broker ledger). Not a stop: an unchecked check whose
- * session ended with no envelope (`enveloped` false: killed, never answered, cancelled; its class says how it ended and there is no evidence to be missing) or whose gap the ending explains (`byEnding`).
+ * session ended with no envelope (`enveloped` false) AND whose class `ended` is one of `killed:*`, `void:*` and `stop:*` (killed, never answered, cancelled: the class says how it ended and there is
+ * no evidence to be missing; `crashed: no result` is not exempt), or whose gap the ending explains (`byEnding`).
  */
-export const seriesStopsOf = (c, policy = {}, { enveloped = true } = {}) => STOPPING_CHECKS.flatMap(k => {
+export const seriesStopsOf = (c, policy = {}, { enveloped = true, ended = '' } = {}) => STOPPING_CHECKS.flatMap(k => {
   const check = c[k];
   const id = k.toUpperCase();
   if (check?.verdict === 'stop' && check.status === 'breach') return [{ rule: `${id} breach`, check: id, detail: check.detail }];
-  const missing = check?.status === 'unchecked' && policy[k] === 'stop' && enveloped && check.byEnding !== true;
+  const explained = !enveloped && NAMED_ENDINGS.test(ended);
+  const missing = check?.status === 'unchecked' && policy[k] === 'stop' && !explained && check.byEnding !== true;
   return missing ? [{ rule: `${id} unchecked`, check: id, detail: check.detail }] : [];
 });
 

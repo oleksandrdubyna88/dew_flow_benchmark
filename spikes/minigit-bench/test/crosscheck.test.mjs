@@ -357,7 +357,9 @@ test('A_check_that_could_not_run_for_want_of_evidence_is_a_stop_under_a_stop_pol
   const rules = (policy, opts) => seriesStopsOf(c, policy, opts).map(x => x.rule);
   assert.deepEqual(rules(STOP_ALL, { enveloped: true }), ['T1 unchecked', 'T2 unchecked', 'T3 unchecked', 'T5 unchecked'], 'fail closed: evidence that is missing is not a pass (T4 has no policy)');
   assert.deepEqual(rules({ ...STOP_ALL, t2: 'otel-incomplete', t3: 'investigate', t5: 'investigate' }, { enveloped: true }), ['T1 unchecked'], 'only the checks whose policy is stop');
-  assert.deepEqual(rules(STOP_ALL, { enveloped: false }), [], 'a session that ended with no envelope (killed, never answered) has no evidence to be missing: its class says how it ended');
+  for (const ended of ['killed: wall', 'killed: cap', 'void: harness (interrupted)', 'void: upstream', 'stop: auth']) assert.deepEqual(rules(STOP_ALL, { enveloped: false, ended }), [], `a session that ended with no envelope as '${ended}' has no evidence to be missing: its class says how it ended`);
+  assert.deepEqual(rules(STOP_ALL, { enveloped: false, ended: 'crashed: no result' }), ['T1 unchecked', 'T2 unchecked', 'T3 unchecked', 'T5 unchecked'], 'a crash with no result is not exempt (review MINOR-7): only killed:*, void:* and stop:* name an ending');
+  assert.deepEqual(rules(STOP_ALL, { enveloped: false }), ['T1 unchecked', 'T2 unchecked', 'T3 unchecked', 'T5 unchecked'], 'no class given: not exempt either');
   const midRequest = { ...c, t5: unchecked('T5', '1 request(s) never settled', { byEnding: true }) };
   assert.deepEqual(seriesStopsOf(midRequest, { t5: 'stop' }, { enveloped: true }).map(x => x.rule), [], 'a request the cut-short session never settled is how it ended');
   assert.equal(seriesStopsOf({ t2: unchecked('T2', 'no otel') }, STOP_ALL, { enveloped: true })[0].detail, 'no otel', 'the detail says what was missing');

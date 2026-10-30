@@ -250,10 +250,19 @@ test('An_unchecked_check_under_a_stop_policy_stops_the_series_when_the_session_h
   const registered = collect(noOtel(), { policy });
   assert.deepEqual(registered.seriesStops, [], 'control: under the registered t2: otel-incomplete the missing evidence is a flag');
   assert.ok(registered.outcome.flags.includes('otel incomplete'));
-  // a session with no envelope at all (killed before it wrote one) has no evidence to be missing
-  const cut = sessionFromFixture();
-  const lines = readFileSync(cut.files.stream, 'utf8').split('\n').filter(Boolean).filter(l => JSON.parse(l).type !== 'result');
-  writeFileSync(cut.files.stream, `${lines.join('\n')}\n`);
-  const killed = collect(cut, { policy: { ...policy, t1: 'stop', t2: 'stop', t3: 'stop', t5: 'stop' } });
-  assert.deepEqual(killed.seriesStops, [], 'no envelope: nothing is a stop for want of evidence');
+  // a session with no envelope at all: only an ending the class NAMES (killed, void, stop) explains the missing evidence (review MINOR-7); `crashed: no result` explains nothing
+  const noEnvelope = meta => {
+    const cut = sessionFromFixture();
+    const lines = readFileSync(cut.files.stream, 'utf8').split('\n').filter(Boolean).filter(l => JSON.parse(l).type !== 'result');
+    writeFileSync(cut.files.stream, `${lines.join('\n')}\n`);
+    writeFileSync(cut.files.meta, JSON.stringify({ ...JSON.parse(readFileSync(cut.files.meta, 'utf8')), ...meta }));
+    return collect(cut, { policy: { ...policy, t1: 'stop', t2: 'stop', t3: 'stop', t5: 'stop' } });
+  };
+  const killed = noEnvelope({ stopped: 'wall' });
+  assert.equal(killed.outcome.class, 'killed: wall');
+  assert.deepEqual(killed.seriesStops, [], 'a killed session with no envelope: nothing is a stop for want of evidence, its class says how it ended');
+  const crashed = noEnvelope({});
+  assert.equal(crashed.outcome.class, 'crashed: no result');
+  assert.ok(crashed.seriesStops.map(x => x.rule).includes('T1 unchecked'), 'a crash with no result is not an ending that explains the gap: fail closed');
+  assert.ok(crashed.outcome.flags.includes('T1 unchecked'));
 });
