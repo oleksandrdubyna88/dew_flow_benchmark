@@ -163,7 +163,7 @@ public sealed record ArmPaths(string Root, string Token)
 
     /// <summary>Whether <paramref name="relativePath"/> (under the arm folder, forward slashes) is a file the task pipeline writes: <c>work/tasks.json</c>, <c>work/batches.json</c>, a task's
     /// brief or its notes. The shapes are read from the members that spell them (<see cref="TasksJson"/>, <see cref="BatchesJson"/>, <see cref="TaskBrief"/>, <see cref="TaskNotes"/>) with a
-    /// stand-in task id, so a path spelled there once is spelled nowhere else. Compared without regard to case, so it fails closed on a host whose file system ignores it.</summary>
+    /// stand-in task id, so a path spelled there once is spelled nowhere else; the id in the stand-in's place is one <see cref="TaskIds"/> accepts (<c>t1</c>), so <c>work/summary.md</c> is not a task's. Compared without regard to case, so it fails closed on a host whose file system ignores it.</summary>
     public static bool IsPipelineFile(string relativePath) =>
         PipelineNames.Contains(relativePath, StringComparer.OrdinalIgnoreCase) || PipelineShapes.Any(shape => shape.Matches(relativePath));
 
@@ -182,9 +182,10 @@ public sealed record ArmPaths(string Root, string Token)
     {
         public static PipelineShape Of(string spelled) => new(spelled[..spelled.IndexOf(StandIn, StringComparison.Ordinal)], spelled[(spelled.IndexOf(StandIn, StringComparison.Ordinal) + StandIn.Length)..]);
 
+        /// <summary>The path is the prefix, a task id (<see cref="TaskIds.Pattern"/>) and the suffix. Compared as the destination rule compares, without regard to case, so <c>notes/T1-code.md</c> is a pipeline file too.</summary>
         public bool Matches(string path) =>
             path.Length > Prefix.Length + Suffix.Length && path.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && path.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase)
-            && !path[Prefix.Length..^Suffix.Length].Contains('/', StringComparison.Ordinal);
+            && TaskIds.IsTaskId(path[Prefix.Length..^Suffix.Length].ToLowerInvariant());
     }
 
     /// <summary>A name that is exactly one path segment; anything else is a caller's bug, not an operator's mistake.</summary>

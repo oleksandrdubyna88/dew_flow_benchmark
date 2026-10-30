@@ -79,7 +79,7 @@ internal static partial class FlowSection
 
     private static Scheme Scheme(StrictJson json, string name, JsonNode? node, IReadOnlyDictionary<StepId, StepSpec> steps)
     {
-        var where = $"schemes.{name}";
+        var where = $"schemes.{ExecutableRule.Printable(name)}";
         if (!SchemeName().IsMatch(name))
         {
             json.Add($"{where} — a scheme name is letters only, because an arm is the scheme name and a number (C1, SRS2)");

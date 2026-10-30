@@ -2191,7 +2191,7 @@ it was taken. **These are the stories document written as the epic starts, not e
     the test helper `BriefExample`. (5) The not-found template row is a step whose brief stem exists nowhere (exit 4, the template, the step id and the position named); the unknown-field test is renamed.
     (6) Decisions of the review the spec left open: a binding cannot be named like a fact or a fixed field; a `notes` never names a verdict; `tasks.splitFix` is not `tasks.split`; `diffFrom` inside one tasks entry
     follows the block's order; a path segment has no control or format character and no edge space (`Printable` escapes them); a closed arm is an arm of an EARLIER run only (R8); a `taskCode` step is placed only
-    through a tasks entry (R9); a scheme that runs the pipeline refuses a binding of its files (R11); a refused binding is kept by name so nothing says it twice (R13).
+    through a tasks entry (R9); a scheme that runs the pipeline refuses a binding of its files (R11: `work/tasks.json`, `work/batches.json`, `work/t<n>.md`, `notes/t<n>-code.md`, the id being `TaskIds.Pattern` `^t[0-9]+\z`, defined once in Core for E4's `tasks.json` checker to reuse; U+2028, U+2029 and non-ASCII spaces are refused in a segment, and a scheme or run name is printed escaped); a refused binding is kept by name so nothing says it twice (R13).
 
 ## 9. Growth
 

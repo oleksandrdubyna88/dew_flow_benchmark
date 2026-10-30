@@ -26,14 +26,14 @@ internal static class SchemeChecks
     private static IEnumerable<string> Placement(Scheme scheme) =>
     [
         .. scheme.Entries.OfType<SchemeEntry.Step>().GroupBy(step => step.Name, StringComparer.Ordinal).Where(group => group.Count() > 1)
-            .Select(group => $"schemes.{scheme.Name} — '{group.Key}' is placed twice"),
-        .. scheme.Entries.OfType<SchemeEntry.Tasks>().Skip(1).Take(1).Select(_ => $"schemes.{scheme.Name} — tasks is placed twice"),
+            .Select(group => $"schemes.{ExecutableRule.Printable(scheme.Name)} — '{group.Key}' is placed twice"),
+        .. scheme.Entries.OfType<SchemeEntry.Tasks>().Skip(1).Take(1).Select(_ => $"schemes.{ExecutableRule.Printable(scheme.Name)} — tasks is placed twice"),
     ];
 
     /// <summary>The task coder is launched per task in its worktree by the pipeline: placed as a plain entry it would run once in the arm's clone, as a session that is not one.</summary>
     private static IEnumerable<string> TaskCodeAlone(Scheme scheme, SchemeEntry entry, int index, IReadOnlyDictionary<StepId, StepSpec> steps) =>
         entry is SchemeEntry.Step step && steps.TryGetValue(step.Id, out var spec) && spec.Kind == StepKind.TaskCode
-            ? [$"schemes.{scheme.Name}[{index}] ({step.Name}): a taskCode step runs only inside a tasks entry"]
+            ? [$"schemes.{ExecutableRule.Printable(scheme.Name)}[{index}] ({step.Name}): a taskCode step runs only inside a tasks entry"]
             : [];
 
     private static IEnumerable<string> Position(Scheme scheme, PlacedStep placed, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, IReadOnlySet<string> noteable) =>
@@ -41,7 +41,7 @@ internal static class SchemeChecks
             ? [.. Notes(scheme, placed, spec, steps, tasks, noteable), .. DiffFrom(scheme, placed, spec, steps, tasks)]
             : [];
 
-    private static string Where(Scheme scheme, PlacedStep placed) => $"schemes.{scheme.Name}[{placed.Position}] ({placed.Label}):";
+    private static string Where(Scheme scheme, PlacedStep placed) => $"schemes.{ExecutableRule.Printable(scheme.Name)}[{placed.Position}] ({placed.Label}):";
 
     private static IEnumerable<string> Notes(Scheme scheme, PlacedStep placed, StepSpec spec, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, IReadOnlySet<string> noteable)
     {
@@ -70,7 +70,7 @@ internal static class SchemeChecks
         var placed = SchemePositions.Outputs(scheme, steps, tasks);
         return placed.SelectMany((first, index) => placed.Skip(index + 1)
             .Where(second => second.Producer != first.Producer && string.Equals(second.Binding.RelativePath, first.Binding.RelativePath, StringComparison.OrdinalIgnoreCase))
-            .Select(second => $"schemes.{scheme.Name} — {first.Binding.RelativePath} is written by two of its producers: {first.Producer} ({first.Binding.Field}) and {second.Producer} ({second.Binding.Field})"));
+            .Select(second => $"schemes.{ExecutableRule.Printable(scheme.Name)} — {first.Binding.RelativePath} is written by two of its producers: {first.Producer} ({first.Binding.Field}) and {second.Producer} ({second.Binding.Field})"));
     }
 
     /// <summary>A scheme that runs the task pipeline leaves it its files (<see cref="ArmPaths.IsPipelineFile"/>): a binding that names one would have the model, or the runner, write over what the pipeline reads.</summary>
@@ -78,7 +78,7 @@ internal static class SchemeChecks
         !scheme.Entries.OfType<SchemeEntry.Tasks>().Any()
             ? []
             : SchemePositions.Outputs(scheme, steps, tasks).Where(placed => ArmPaths.IsPipelineFile(placed.Binding.RelativePath))
-                .Select(placed => $"schemes.{scheme.Name} — {placed.Binding.RelativePath} is a file of the task pipeline, which writes it: {placed.Producer} ({placed.Binding.Field}) cannot bind it");
+                .Select(placed => $"schemes.{ExecutableRule.Printable(scheme.Name)} — {placed.Binding.RelativePath} is a file of the task pipeline, which writes it: {placed.Producer} ({placed.Binding.Field}) cannot bind it");
 
     /// <summary>The tasks block's own outputs may repeat a step's field only where no scheme places both (the example's <c>CODE_NOTES</c>): a scheme placing both is refused.</summary>
     private static IEnumerable<string> FieldsBoundTwice(Scheme scheme, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks) =>
@@ -86,5 +86,5 @@ internal static class SchemeChecks
             ? []
             : tasks.Outputs.SelectMany(own => SchemePositions.Steps(scheme, tasks).Select(placed => placed.Id).Distinct()
                 .Where(id => steps.TryGetValue(id, out var spec) && spec.Outputs.Any(binding => binding.Field == own.Field))
-                .Select(id => $"schemes.{scheme.Name} — {own.Field} is bound by step {id} and by the tasks block"));
+                .Select(id => $"schemes.{ExecutableRule.Printable(scheme.Name)} — {own.Field} is bound by step {id} and by the tasks block"));
 }

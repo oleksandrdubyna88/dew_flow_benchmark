@@ -60,7 +60,7 @@ public static class BriefRehearsal
         var spec = experiment.Steps[placed.Id];
         var name = BriefTemplates.NameOf(spec.Brief).Match(file => file, _ => spec.Brief);
         var fields = BriefFields.For(spec, SchemePositions.Visible(scheme, placed.Position, placed.Id, experiment.Steps, experiment.Tasks), experiment.Tasks, paths, facts);
-        var where = $"{name} at schemes.{scheme.Name}[{placed.Position}] ({placed.Label}):";
+        var where = $"{name} at schemes.{ExecutableRule.Printable(scheme.Name)}[{placed.Position}] ({placed.Label}):";
         return templates.GetValueOrDefault(spec.Brief) switch
         {
             Outcome<string>.Ok template when BriefFiller.Fill(template.Value, fields, guard, name) is Outcome<string>.Fail fail => $"{where} {fail.Reason}",

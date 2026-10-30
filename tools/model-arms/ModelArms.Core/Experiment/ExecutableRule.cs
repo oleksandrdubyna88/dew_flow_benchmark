@@ -1,3 +1,4 @@
+using System.Globalization;
 namespace ModelArms.Core.Experiment;
 
 /// <summary>D17's static half: which executables a command may name. A harness never runs a file an arm could write, so an executable
@@ -53,9 +54,14 @@ public static class ExecutableRule
     /// Every sentence that echoes input the operator typed goes through this.</summary>
     public static string Printable(string text) => string.Concat(text.Select(Escaped));
 
-    /// <summary>A NUL is <c>\0</c>; any other control or format character (a newline, a tab, U+200B) is <c>\uXXXX</c>, so a sentence stays one line and shows what it refused.</summary>
+    /// <summary>A NUL is <c>\0</c>; any other <see cref="IsInvisible"/> character (a newline, a tab, U+200B, U+2028, U+00A0) is <c>\uXXXX</c>, so a sentence stays one line and shows what it refused.</summary>
     private static string Escaped(char c) =>
-        c == '\0' ? "\\0" : char.IsControl(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format ? $"\\u{(int)c:X4}" : c.ToString();
+        c == '\0' ? "\\0" : IsInvisible(c) ? $"\\u{(int)c:X4}" : c.ToString();
+
+    /// <summary>A character a person cannot see as what it is: a control or format character (a newline, U+200B), a line or paragraph separator (U+2028, U+2029) and every space but U+0020 (U+00A0).
+    /// One answer for the sentences that echo it and for the reader that refuses it.</summary>
+    internal static bool IsInvisible(char c) =>
+        char.IsControl(c) || char.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator || (char.IsWhiteSpace(c) && c != ' ');
 
     /// <summary>A forbidden root as a sentence names it. A root holding a NUL cannot be compared, so it counts as containing the executable (fail closed)
     /// and the sentence says that, rather than printing a root that looks ordinary.</summary>

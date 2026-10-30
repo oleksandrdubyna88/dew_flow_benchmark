@@ -81,11 +81,11 @@ internal static partial class RunSection
         return
         [
             .. runs.SelectMany(run => Arms(run).GroupBy(arm => arm, StringComparer.Ordinal).Where(group => group.Count() > 1)
-                .Select(group => $"runs.{run.Name}.rounds — arm {group.Key} is named twice")),
+                .Select(group => $"runs.{ExecutableRule.Printable(run.Name)}.rounds — arm {group.Key} is named twice")),
             .. runs.SelectMany((run, index) => Arms(run).Distinct(StringComparer.Ordinal)
                 .Select(arm => (Arm: arm, Earlier: runs.Take(index).Where(earlier => Arms(earlier).Contains(arm, StringComparer.Ordinal)).Take(1).ToList()))
                 .Where(found => found.Earlier.Count > 0)
-                .Select(found => $"runs.{run.Name} — arm {found.Arm} is already in run {found.Earlier[0].Name}")),
+                .Select(found => $"runs.{ExecutableRule.Printable(run.Name)} — arm {found.Arm} is already in run {ExecutableRule.Printable(found.Earlier[0].Name)}")),
             .. runs.SelectMany((run, index) => run.ClosedArms.Select((arm, at) => ClosedProblem(runs, run, index, arm, at)).Where(problem => problem.Length > 0)),
         ];
     }
@@ -93,13 +93,13 @@ internal static partial class RunSection
     /// <summary>A run closes the arms of EARLIER runs: the folders its own arms' work could otherwise reach. An arm of this run or of a later one is no such folder yet; an arm no run names is none.</summary>
     private static string ClosedProblem(IReadOnlyList<RunSpec> runs, RunSpec run, int index, string arm, int at)
     {
-        var where = $"runs.{run.Name}.closedArms[{at}] names '{arm}'";
+        var where = $"runs.{ExecutableRule.Printable(run.Name)}.closedArms[{at}] names '{arm}'";
         return runs.Take(index).Any(earlier => Arms(earlier).Contains(arm, StringComparer.Ordinal))
             ? string.Empty
             : Arms(run).Contains(arm, StringComparer.Ordinal)
                 ? $"{where}, an arm of this run"
                 : runs.Skip(index + 1).FirstOrDefault(later => Arms(later).Contains(arm, StringComparer.Ordinal)) is { } owner
-                    ? $"{where}, an arm of a later run {owner.Name}"
+                    ? $"{where}, an arm of a later run {ExecutableRule.Printable(owner.Name)}"
                     : $"{where}, which no run names";
     }
 

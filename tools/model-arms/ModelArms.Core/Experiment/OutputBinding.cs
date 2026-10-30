@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
 using Bench.Domain;
 
@@ -13,8 +12,8 @@ public sealed partial record OutputBinding(string Field, string RelativePath)
 
     /// <summary>The binding the two texts spell, or why they are none. The field is capitals and underscores — the filler's own <c>{{NAME}}</c>, so a name the filler cannot
     /// match is a binding no template can use. The path is relative to the arm folder, written with forward slashes, under exactly <c>notes</c> or <c>work</c> (the two folders a launch
-    /// grants — <c>Notes</c> is another folder on a case-sensitive host, one no launch grants), with no empty, <c>.</c> or <c>..</c> segment, no control or format character (NUL, a
-    /// newline, U+200B) and no space at either end of a segment.</summary>
+    /// grants — <c>Notes</c> is another folder on a case-sensitive host, one no launch grants), with no empty, <c>.</c> or <c>..</c> segment, no control, format, line-separator or non-ASCII-space character (NUL, a
+    /// newline, U+200B, U+2028, U+00A0) and no space at either end of a segment.</summary>
     public static Outcome<OutputBinding> Parse(string field, string path) =>
         !FieldPattern().IsMatch(field)
             ? Outcome<OutputBinding>.Failure($"{ExecutableRule.Printable(field)} is not a field name — capitals and underscores, as a template's {{{{NAME}}}}")
@@ -32,7 +31,7 @@ public sealed partial record OutputBinding(string Field, string RelativePath)
     private static bool IsUsable(string segment) => segment.Length > 0 && segment is not ("." or "..") && IsClean(segment);
 
     private static bool IsClean(string segment) =>
-        segment[0] != ' ' && segment[^1] != ' ' && !segment.Any(c => char.IsControl(c) || char.GetUnicodeCategory(c) == UnicodeCategory.Format);
+        segment[0] != ' ' && segment[^1] != ' ' && !segment.Any(ExecutableRule.IsInvisible);
 
     [GeneratedRegex(@"^[A-Z_]+\z", RegexOptions.CultureInvariant)]
     private static partial Regex FieldPattern();
