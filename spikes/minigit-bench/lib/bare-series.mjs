@@ -14,7 +14,7 @@ import { nextStep } from './bare-schedule.mjs';
 import { appendChargeOnce, appendLedger, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
-import { ownerAlive, stateOf } from './session-state.mjs';
+import { ownerAlive, readState, stateOf } from './session-state.mjs';
 import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
 import { layoutPaths } from './sandbox.mjs';
 import { spendGate } from './spend-gate.mjs';
@@ -254,7 +254,8 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
 export function dirFacts(ctx, rid) {
   const layout = layoutPaths(ctx.sessionsRoot, rid);
   if (!existsSync(layout.dir)) return { exists: false, hasMeta: false, retired: false, paidWork: false, ownerLive: false };
-  const state = existsSync(layout.files.state) ? JSON.parse(readFileSync(layout.files.state, 'utf8')) : null;
+  const read = readState(layout.files.state); // a state file nobody can read is `malformed`: no live owner, never a crash of the resume
+  const state = read.ok ? read.value : null;
   return { exists: true, hasMeta: existsSync(layout.files.meta), retired: state?.phase === 'retired', paidWork: holdsPaidWork(layout), ownerLive: state !== null && stateOf(state, { ownerAlive }) === 'live' };
 }
 
@@ -277,34 +278,53 @@ function rebuildMissingRecords({ ctx, h, plan, say }) {
   }
 }
 
+/** The session directories of the series (`s/<rid>`, in the map or not) whose `state.json` names an owner that is alive now (pid and start time): another runner is still going. */
+function liveOwners(ctx) {
+  const root = ctx.sessionsRoot;
+  const rids = existsSync(root) ? readdirSync(root, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name).sort() : [];
+  return rids.filter(rid => dirFacts(ctx, rid).ownerLive);
+}
+
+/** A live owner is looked for FIRST (review coai-3): unplanting the canaries and `retireStale` act on the series' directories and would end or strip a session that a runner is still running. -> a `fail` or null. */
+function liveOwnerRefusal({ ctx, map }) {
+  const owned = liveOwners(ctx);
+  return owned.length === 0 ? null
+    : fail(`${owned.join(', ')}: the state.json of the session directory names an owner that is still running (alive by pid and start time): nothing was unplanted, retired, removed or settled. Wait for that process to end, or stop it`, { exit: EXIT.halt, map });
+}
+
+/** Settle one session the resume found `launching` (adopt, charge and void, or plan again). -> a `fail` to return, or null. */
+async function settleLaunching({ ctx, deps, h, a, settleOnly, say }) {
+  if (a.action === 'reset') {
+    removeUnpaidDir(ctx, a.rid); // the claim is non-recursive (a rid is never reused): the same rid cannot be launched again over a leftover directory
+    h.apply(transition(h.get(), a.rid, 'planned'));
+    say(`${a.rid}: ${a.reason}; its claimed directory was removed`);
+    return null;
+  }
+  const entry = h.get().sessions[a.rid];
+  const layout = layoutPaths(ctx.sessionsRoot, a.rid);
+  const launched = a.action === 'adopt' ? ok({ meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) }) : null;
+  const item = { rid: a.rid, session: { stack: entry.stack, phase: entry.phase, attempt: entry.attempt }, layout, plan: { token: ctx.token, dummy: entry.dummy }, launched, canary: { tokens: entry.canaryTokens ?? [] }, workspace: { flags: entry.workspaceFlags ?? [] }, mask: entry.mask, maskObserved: null, stampMs: entry.run?.spawnStampMs ?? null };
+  const stopped = await settleSessions({ ctx: { ...ctx, abortExit: () => EXIT.halt, abortReason: () => null }, deps, h, phase: { sessions: [item], startSkewMs: null }, state: { quiet: null, sampler: null }, signal: null, say });
+  // settle-only on a stopped series: the stop is known, the charge is the point
+  return stopped && !(settleOnly && stopped.exit === EXIT.stop) ? fail(stopped.message, { exit: stopped.exit, map: h.get() }) : null;
+}
+
 /**
- * Before a resumed run continues (step 11): unplant every canary of the manifests first, retire stale sessions, then settle each `launching` session by what its directory
+ * Before a resumed run continues (step 11): look for a live session owner first and refuse if there is one, then unplant every canary of the manifests, retire stale sessions, then settle each `launching` session by what its directory
  * says (adopt a finished launch, charge and void a cut-short one, plan again one that never paid). `settleOnly` (resume --settle-only, review N12) tolerates a stopped series. -> `ok(map)` | `fail`.
  */
 export async function reconcile({ ctx, deps, map, say = () => {}, settleOnly = false }) {
+  const refused = liveOwnerRefusal({ ctx, map });
+  if (refused) return refused;
   unplantAll({ manifests: manifestsOf(ctx), home: ctx.home, roots: [ctx.sessionsRoot] });
   await deps.retireStale();
   const h = holder({ ctx, map });
   const dirs = Object.fromEntries(Object.keys(map.sessions).map(rid => [rid, dirFacts(ctx, rid)]));
   const plan = resumePlan(map, dirs);
-  // a directory whose state.json names an owner that is ALIVE belongs to a runner that is still going: resume would remove or settle what that runner is running (review N13)
-  const owned = Object.values(map.sessions).filter(x => x.status === 'launching' && dirs[x.rid].ownerLive).map(x => x.rid);
-  if (owned.length > 0) return fail(`${owned.join(', ')}: the state.json of the session directory names an owner that is still running (alive by pid and start time): not removed and not settled. Wait for that process to end, or stop it`, { exit: EXIT.halt, map });
   rebuildMissingRecords({ ctx, h, plan, say });
-  const actions = plan.filter(a => a.action === 'adopt' || a.action === 'void-interrupted' || a.action === 'reset');
-  for (const a of actions) {
-    if (a.action === 'reset') {
-      removeUnpaidDir(ctx, a.rid); // the claim is non-recursive (a rid is never reused): the same rid cannot be launched again over a leftover directory
-      h.apply(transition(h.get(), a.rid, 'planned'));
-      say(`${a.rid}: ${a.reason}; its claimed directory was removed`);
-      continue;
-    }
-    const entry = h.get().sessions[a.rid];
-    const layout = layoutPaths(ctx.sessionsRoot, a.rid);
-    const launched = a.action === 'adopt' ? ok({ meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) }) : null;
-    const item = { rid: a.rid, session: { stack: entry.stack, phase: entry.phase, attempt: entry.attempt }, layout, plan: { token: ctx.token, dummy: entry.dummy }, launched, canary: { tokens: entry.canaryTokens ?? [] }, workspace: { flags: entry.workspaceFlags ?? [] }, mask: entry.mask, maskObserved: null, stampMs: entry.run?.spawnStampMs ?? null };
-    const stopped = await settleSessions({ ctx: { ...ctx, abortExit: () => EXIT.halt, abortReason: () => null }, deps, h, phase: { sessions: [item], startSkewMs: null }, state: { quiet: null, sampler: null }, signal: null, say });
-    if (stopped && !(settleOnly && stopped.exit === EXIT.stop)) return fail(stopped.message, { exit: stopped.exit, map: h.get() }); // settle-only on a stopped series: the stop is known, the charge is the point
+  for (const a of plan.filter(x => x.action === 'adopt' || x.action === 'void-interrupted' || x.action === 'reset')) {
+    const failed = await settleLaunching({ ctx, deps, h, a, settleOnly, say });
+    if (failed) return failed;
   }
   return ok(h.get());
 }

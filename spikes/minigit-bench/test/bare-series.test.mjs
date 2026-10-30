@@ -647,6 +647,44 @@ test('Resume_never_removes_or_settles_a_session_directory_whose_state_file_names
   assert.equal(existsSync(layout.dir), false);
 });
 
+test('Resume_looks_for_a_live_session_owner_before_it_unplants_a_canary_or_retires_anything_and_refuses_without_touching_the_directory', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  const { sessionLayout } = await import('../lib/sandbox.mjs');
+  const { processStartTime } = await import('../lib/session-state.mjs');
+  const projectDir = path.join(t.ctx.home, '.claude', 'projects', 'p1');
+  mkdirSync(path.join(t.ctx.seriesDir, 'canaries'), { recursive: true });
+  const leftover = path.join(projectDir, 'scratch-note-cafe0001.md');
+  writeFileSync(leftover, 'token\n');
+  writeFileSync(path.join(t.ctx.seriesDir, 'canaries', 'live.json'), JSON.stringify({ planted: [{ dir: projectDir, path: leftover, token: 'x', status: 'planted' }] }));
+  const calls = [];
+  t.deps.retireStale = async () => { calls.push('retireStale'); };
+  const done = rid('csharp', 'v1', 1);
+  const running = rid('node', 'v1', 1);
+  let map = t.map;
+  for (const [id, stack] of [[done, 'csharp'], [running, 'node']]) map = planSession(map, { rid: id, pair: 1, stack, phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', dummy: 'sk-ant-oat01-dummy-resume' }).value;
+  map = transition(map, done, 'launching').value;
+  map = transition(map, done, 'ran', { class: 'completed', data: true, usd: 1 }).value; // a session of the map that is NOT launching: it still has a live owner (another runner)
+  const live = sessionLayout(t.ctx.sessionsRoot, done).value;
+  const stateText = `${JSON.stringify({ phase: 'running', hostPid: process.pid, hostStartTime: processStartTime(process.pid), cell: `cell-${done}`, startedAt: 't', heartbeatAt: 't' })}\n`;
+  writeFileSync(live.files.state, stateText);
+  const refused = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(refused.ok, false, 'a live owner anywhere in the series: resume would race it');
+  assert.equal(refused.exit, EXIT.halt);
+  assert.match(refused.reason, new RegExp(done));
+  assert.deepEqual(calls, [], 'retireStale did not run: it would end the cell of a live session');
+  assert.equal(existsSync(leftover), true, 'no canary was unplanted: a live session may be using the planted files');
+  assert.equal(readFileSync(live.files.state, 'utf8'), stateText, 'the live session directory was not touched');
+});
+
+test('A_session_directory_with_a_state_file_nobody_can_read_is_no_live_owner_and_does_not_stop_the_resume', async () => {
+  const t = harness();
+  mkdirSync(path.join(t.ctx.sessionsRoot, 'strayrid'), { recursive: true });
+  writeFileSync(path.join(t.ctx.sessionsRoot, 'strayrid', 'state.json'), '{ not json');
+  const r = await reconcile({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.ok, true, r.reason);
+});
+
 // ---- the fixed lists and the rehearsal (review N15) ---------------------------------------------------------------------------------------
 
 test('A_fixed_list_run_launches_only_the_sessions_of_its_own_kind', async () => {
