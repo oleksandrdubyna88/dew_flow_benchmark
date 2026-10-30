@@ -1049,6 +1049,13 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     too and the line must say so. (f) The E2 callers that the story keeps unedited (`FileGateLock(clock, poll)`, `GateStatusFile.Read(path)`,
     `GateHolderNote.Describe(path)`) default to this host's road; the new overloads take the road as a parameter. (g) The ceiling's seconds are one Core
     constant, `PlatformRoads.BoundedCeilingSeconds`, which `BoundedFile` waits by and the printed line names.
+    (h) A null owner on the Kernel road is refused as "owned by uid unknown" (not captured is not the operator's). (i) `FactsRead`'s words for an untold
+    kind are "a file whose type was not told" (the old "a type stat did not name" was false for a portable read). (j) `PortableFacts`' absent-entry and
+    denied-folder words are the runtime's own, prefixed by the path. (k) The first scenario theory's line-content checks (the Mac's line names the owner,
+    the file kind, the inode, the ceiling, the swap, the tick, the host) were split out of the table theory into their own tests. (l) The review's fixes:
+    `BoundedFile` answers a path it cannot look at as `Refused`, never absent and never a throw, and its portable ceiling covers the path's own check and
+    the folder test too; `GateHolderNote.Describe` takes the lock's `PlatformRoad` and reads the note on it; `KernelFacts.ReadSmall` has one structural
+    caller; the gate and `HostFactsReader` read the root's own files through `BoundedFile` (1 MiB); `LockProbe`'s inert failure names the folder.
 
 ## 9. Growth
 

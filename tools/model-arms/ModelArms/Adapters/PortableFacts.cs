@@ -37,7 +37,8 @@ internal static class PortableFacts
         return (int)attributes != -1 && attributes.HasFlag(FileAttributes.ReparsePoint);
     }
 
-    /// <summary>The mode is read FIRST, so a folder the user may not search is the runtime's own denial (its attributes would read as "nothing there"); then the kind and the witness.</summary>
+    /// <summary>The mode, then the kind and the witness. A folder the user may not search makes the runtime THROW (<see cref="UnauthorizedAccessException"/>) from the attribute read in <see cref="Read"/> or from the mode read here — <see cref="Read"/>'s catch turns either into an
+    /// <see cref="FactsRead.Unread"/> carrying the runtime's words; only a path that is simply not there reads as attributes <c>-1</c>, which is the "no such file" branch below (a race: the mode read had just succeeded).</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private static FactsRead Judged(string full, FileInfo info)
     {
