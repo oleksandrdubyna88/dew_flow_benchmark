@@ -387,6 +387,7 @@ public sealed class StepContractTests
         root => root["steps"]!["2bad"] = Step(root, "code").DeepClone(),
         root => Step(root, "code").Remove("kind"),
         root => Step(root, "code")["subagents"] = "no",
+        root => Step(root, "code")["brief"] = "a/b",
         root => Scheme(root, "C")[1] = "2-review:reviewer",
         root => Scheme(root, "C")[1] = "2 review:review",
         root => Scheme(root, "C").Add("2-review:review"),

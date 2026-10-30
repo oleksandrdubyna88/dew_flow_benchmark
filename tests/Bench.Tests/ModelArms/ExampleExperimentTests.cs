@@ -117,6 +117,14 @@ public sealed partial class ExampleExperimentTests
             ["known", "target.planBranch", "steps.code.model", "coai.side", "steps.code.brief", "steps.code.outputs.CODE_NOTES", "runs.part6.rounds[0][0]", "tasks.split"],
             "the scan must still reach the fields no other rule rejects, and the v2 members: a brief stem, an output path, an arm name and a step id");
         unfilled.Where(path => !lines.Any(line => Names(line, path))).Should().BeEmpty("a <fill me> the reader lets through is a template that validates as filled");
+
+        // The four v2 members the reader has a sentence of its own for. UnfilledValues.Refuse is the net under every path, and it names a path no sentence of the reader's names — so a
+        // refusal that lost its dotted prefix would still leave the line above green; here the net's own words are not accepted for these four.
+        foreach (var path in new[] { "steps.code.brief", "steps.code.outputs.CODE_NOTES", "runs.part6.rounds[0][0]", "tasks.split" })
+        {
+            lines.Where(line => Names(line, path)).Should().NotBeEmpty($"{path} is named").And.OnlyContain(
+                line => !line.Contains("is still the template's", StringComparison.Ordinal), $"{path} is named by the reader's own sentence, not by the net under it");
+        }
     }
 
     private static string Refusal(string json) =>
