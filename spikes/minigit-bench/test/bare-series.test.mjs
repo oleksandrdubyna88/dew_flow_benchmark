@@ -18,6 +18,9 @@ import { FIXTURE, SCORE, lay } from './bare-fixture.mjs';
 import { SEED, context, sleep } from './bare-ctx.mjs';
 import { spikeDir } from './helpers.mjs';
 
+/** The policy BEHAVIOUR tests run under an explicit policy (t3 investigate), never under the registered file, which the T3 commit set to t3 = stop on purpose (`crosscheck.test.mjs` pins it). */
+const POLICY = Object.freeze({ t1: 'stop', t2: 'otel-incomplete', t3: 'investigate', t5: 'investigate', t3OutputSource: 'transcript', join: 'request_id' });
+
 function harness(over = {}) {
   const base = context();
   const parsed = crosscheckPolicyFrom(spikeDir, {});
@@ -461,7 +464,7 @@ test('A_record_rebuilt_later_keeps_the_run_maps_class_and_reports_a_new_hand_ver
 });
 
 test('A_T2_breach_stops_the_series_when_the_policy_makes_t2_the_stop_and_only_then', async () => {
-  const armed = harness({ variants: { [rid('node', 'v1', 1)]: 't2' }, ctx: { policy: { ...harness().ctx.policy, t2: 'stop' } } });
+  const armed = harness({ variants: { [rid('node', 'v1', 1)]: 't2' }, ctx: { policy: { ...POLICY, t2: 'stop' } } });
   const r = await runLoop({ ctx: armed.ctx, deps: armed.deps, map: armed.map });
   assert.equal(r.exit, EXIT.stop, r.message);
   assert.match(r.message, /T2 breach/);
@@ -470,9 +473,9 @@ test('A_T2_breach_stops_the_series_when_the_policy_makes_t2_the_stop_and_only_th
   assert.ok(rec.flags.includes('T2 breach'), 'the cause of the stop is the flag');
   assert.equal(rec.flags.includes('otel incomplete'), false, 'one flag per cause: under t2: stop a T2 breach is `T2 breach` and not also `otel incomplete`');
   assert.equal(armed.launched.length, 2, 'nothing launches after the stop');
-  const registered = harness({ variants: { [rid('node', 'v1', 1)]: 't2' } });
+  const registered = harness({ variants: { [rid('node', 'v1', 1)]: 't2' }, ctx: { policy: POLICY } });
   const r2 = await runLoop({ ctx: registered.ctx, deps: registered.deps, map: registered.map });
-  assert.equal(r2.exit, EXIT.done, 'control: under the registered policy (t2 otel-incomplete) the same breach is a flag and the cell stays');
+  assert.equal(r2.exit, EXIT.done, 'control: under the explicit policy (t2 otel-incomplete) the same breach is a flag and the cell stays');
 });
 
 test('A_series_stop_is_not_persisted_while_a_session_of_the_phase_is_unsettled_and_is_persisted_once_the_last_one_is_charged', async () => {
@@ -533,13 +536,13 @@ test('A_rate_limit_void_is_a_resumable_halt_after_the_phase_is_settled_and_the_r
 });
 
 test('A_T3_breach_under_the_t3_stop_policy_stops_the_series_with_the_rule_T3_breach', async () => {
-  const t = harness({ variants: { [rid('node', 'v1', 1)]: 't3' }, ctx: { policy: { ...harness().ctx.policy, t3: 'stop', t2: 'stop' } } });
+  const t = harness({ variants: { [rid('node', 'v1', 1)]: 't3' }, ctx: { policy: { ...POLICY, t3: 'stop', t2: 'stop' } } });
   const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
   assert.equal(r.exit, EXIT.stop, r.message);
   assert.equal(readRunMap(t.ctx.runMapFile).value.stopped.rule, 'T3 breach');
   assert.equal(t.launched.length, 2, 'nothing launches after the stop');
-  const lenient = harness({ variants: { [rid('node', 'v1', 1)]: 't3' } });
-  assert.equal((await runLoop({ ctx: lenient.ctx, deps: lenient.deps, map: lenient.map })).exit, EXIT.done, 'control: under the registered policy (t3 investigate) the same breach does not stop');
+  const lenient = harness({ variants: { [rid('node', 'v1', 1)]: 't3' }, ctx: { policy: POLICY } });
+  assert.equal((await runLoop({ ctx: lenient.ctx, deps: lenient.deps, map: lenient.map })).exit, EXIT.done, 'control: under the explicit policy (t3 investigate) the same breach does not stop');
 });
 
 // ---- a dated `refuted` hand verdict reclassifies a session that already ended (review N4) -----------------------------------------------

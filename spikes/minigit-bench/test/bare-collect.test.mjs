@@ -31,6 +31,8 @@ function sessionFromFixture() {
   mkdirSync(layout.work, { recursive: true });
   return layout;
 }
+/** The policy BEHAVIOUR tests below run under an explicit policy (the one before the T3 commit: t3 investigate), never under the registered file, which the T3 commit changed on purpose (`crosscheck.test.mjs` pins it). */
+const POLICY = Object.freeze({ t1: 'stop', t2: 'otel-incomplete', t3: 'investigate', t5: 'investigate', t3OutputSource: 'transcript', join: 'request_id' });
 const ctx = () => { const r = crosscheckPolicyFrom(spikeDir, {}); assert.equal(r.ok, true, r.reason); return r.value; };
 const baselineOf = layout => { const rec = aliasRecord({ events: loadSessionDir(layout.dir).value.events }); return { aliases: rec.value.aliases, internal: rec.value.internal }; };
 const collect = (layout, over = {}) => {
@@ -198,7 +200,7 @@ test('A_canary_and_a_credential_shape_in_evidence_files_are_still_found_by_the_o
 });
 
 test('A_T3_or_T5_breach_under_policy_stop_is_a_series_stop_like_T1_and_T2_and_under_investigate_is_not', () => {
-  const { policy } = ctx();
+  const policy = POLICY;
   const tampered = variant => { const layout = sessionFromFixture(); lay(layout, variant); return layout; };
   const stops = (variant, over) => collect(tampered(variant), { policy: { ...policy, ...over } }).seriesStops.map(x => x.rule);
   assert.deepEqual(stops('t3', { t3: 'stop', t2: 'stop' }), ['T3 breach'], 'T3 under t3: stop (contract section 11, chosen for the data cells)');
@@ -227,7 +229,7 @@ test('Only_the_real_tokens_own_value_is_a_stop_security_and_any_other_credential
 });
 
 test('A_T2_breach_carries_one_flag_per_cause_T2_breach_under_the_stop_policy_and_otel_incomplete_under_the_registered_one', () => {
-  const { policy } = ctx();
+  const policy = POLICY;
   const flagsOf = over => { const layout = sessionFromFixture(); lay(layout, 't2'); return collect(layout, { policy: { ...policy, ...over } }).outcome.flags; };
   const stopped = flagsOf({ t2: 'stop' });
   assert.ok(stopped.includes('T2 breach'));
@@ -238,7 +240,7 @@ test('A_T2_breach_carries_one_flag_per_cause_T2_breach_under_the_stop_policy_and
 });
 
 test('An_unchecked_check_under_a_stop_policy_stops_the_series_when_the_session_has_an_envelope_and_not_when_it_has_none', () => {
-  const { policy } = ctx();
+  const policy = POLICY;
   const stop = { ...policy, t2: 'stop' };
   const noOtel = () => { const layout = sessionFromFixture(); rmSync(path.join(layout.otel, 'otel-raw.ndjson'), { force: true }); return layout; };
   const r = collect(noOtel(), { policy: stop });
