@@ -95,7 +95,18 @@ public static class ChecksVerb
 
     /// <summary><c>--parse-only</c>: no stage runs; the exits are <c>stages.json</c>'s (absent: four exits nobody recorded; refused: exit 4), the four logs and the CTRF are read by their paths through the bounded road, and git is asked as in a full run.</summary>
     private static Task<Passage<int>> ParseOnlyAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git) =>
-        Task.FromResult(StagesOf(plan)).ThenAsync(runs => ReadAsync(plan, seams, git, runs));
+        Task.FromResult(FolderJudged(plan)).Then(StagesOf).ThenAsync(runs => ReadAsync(plan, seams, git, runs));
+
+    /// <summary>A re-read goes through <c>out/objective</c> as a PARENT folder of five files, and the bounded road judges only the last component of a path: a link planted at the folder's name after a full run would be followed. So the folder is judged first — when it is there, it must be a real folder (a link, or anything else, is exit 4); an arm never checked has none, and its files read as absent.</summary>
+    private static Passage<ChecksPlan> FolderJudged(ChecksPlan plan) =>
+        KernelFacts.Present(plan.Paths.ObjectiveFolder).Match(
+            present => present ? Folder(plan) : new Passage<ChecksPlan>.Through(plan),
+            reason => Passage<ChecksPlan>.Stop(ExitCodes.Environment, $"{Name} {plan.Arm}: cannot tell whether out/objective is there: {reason}"));
+
+    private static Passage<ChecksPlan> Folder(ChecksPlan plan) =>
+        ObjectiveFolder.Take(plan.Paths.ObjectiveFolder, PlatformFactsReader.CurrentRoad).Match(
+            _ => new Passage<ChecksPlan>.Through(plan),
+            reason => Passage<ChecksPlan>.Stop(ExitCodes.Configuration, $"{Name} {plan.Arm}: out/objective is refused for --parse-only — a link or not a folder, nothing under it is read: {reason}"));
 
     private static async Task<Passage<int>> ReadAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git, StageRuns runs)
     {

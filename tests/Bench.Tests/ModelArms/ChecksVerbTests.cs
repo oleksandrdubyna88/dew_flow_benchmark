@@ -122,6 +122,34 @@ public sealed class ChecksVerbTests
         node["mcp"]!["total"]!.GetValue<int>().Should().Be(12, "the logs are still read");
     }
 
+    [Theory]
+    [InlineData("a link to a folder holding forged logs")]
+    [InlineData("a plain file")]
+    public async Task Parse_only_refuses_an_objective_folder_that_is_a_link_or_not_a_folder(string kind)
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        (await kit.RunAsync()).Code.Should().Be(0);
+        var report = File.ReadAllBytes(kit.Paths.Objective);
+        var forged = kit.Root.Scratch("forged-objective");
+        File.WriteAllText(Path.Combine(forged, "mcp-tests.log"), "  total: 99\n  failed: 0\n");
+        File.WriteAllText(Path.Combine(forged, "mcp.ctrf.json"), """{"results":{"tests":[{"name":"Tgt.Tests.Forged.A_scenario","status":"passed"}]}}""");
+        Directory.Move(kit.Paths.ObjectiveFolder, kit.Paths.ObjectiveFolder + ".aside");
+        if (kind.Contains("link", StringComparison.Ordinal))
+        {
+            File.CreateSymbolicLink(kit.Paths.ObjectiveFolder, forged);
+        }
+        else
+        {
+            File.WriteAllText(kit.Paths.ObjectiveFolder, "not a folder");
+        }
+
+        var run = await kit.RunAsync(parseOnly: true);
+
+        run.Code.Should().Be(4, $"{kind}: BoundedFile judges the LAST component only, so a link as a parent folder would have been followed\n{run.Error}");
+        run.Error.Should().Contain("out/objective").And.Contain("--parse-only");
+        File.ReadAllBytes(kit.Paths.Objective).Should().Equal(report, "the report a full run wrote is not rewritten from what the arm's code put at the folder's name");
+    }
+
     [Fact]
     public async Task Format_runs_only_over_the_cs_files_changed_since_base_and_passes_when_none_changed()
     {
