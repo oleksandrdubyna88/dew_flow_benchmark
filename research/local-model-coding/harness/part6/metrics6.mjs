@@ -16,16 +16,27 @@ const out = {};
 for (const [arm, tok] of Object.entries(map)) {
   const dir = `r/${tok}/out`;
   const steps = {};
+  const timing = fs.readFileSync(`${dir}/timing.jsonl`, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  // 2026-10-30: a RESUMED attempt's result carries the SESSION's cumulative cost and usage (measured: CHH1 6-fix a2, one turn,
+  // reports a1's tokens exactly; a14 reports a1's plus its own). So a step costs, per session, the result of its LAST attempt,
+  // summed over its sessions — never the sum of every attempt (the first version of this script did that and over-counted every
+  // resumed step, Part 6's included).
+  const sessionOf = Object.fromEntries(timing.filter(t => t.kind === 'start').map(t => [`${t.step}.a${t.attempt}`, t.session]));
+  const lastPerSession = {};
   for (const f of fs.readdirSync(dir).filter(f => /\.a\d+\.jsonl$/.test(f))) {
-    const step = f.replace(/\.a\d+\.jsonl$/, '');
-    const s = steps[step] ??= { kind: kind(step), cost: 0, byModel: {}, attempts: 0, wall_s: 0, model: null };
+    const step = f.replace(/\.a\d+\.jsonl$/, ''); const attempt = +f.match(/\.a(\d+)\.jsonl$/)[1];
+    const s = steps[step] ??= { kind: kind(step), cost: 0, byModel: {}, attempts: 0, sessions: 0, wall_s: 0, model: null };
     s.attempts++;
     const last = results(`${dir}/${f}`).pop();
     if (!last) continue;
+    const key = `${step}|${sessionOf[`${step}.a${attempt}`] ?? f}`;
+    if (!lastPerSession[key] || lastPerSession[key].attempt < attempt) lastPerSession[key] = { step, attempt, last };
+  }
+  for (const { step, last } of Object.values(lastPerSession)) {
+    const s = steps[step]; s.sessions++;
     s.cost += last.total_cost_usd ?? 0;
     for (const [m, u] of Object.entries(last.modelUsage ?? {})) s.byModel[short(m)] = (s.byModel[short(m)] ?? 0) + (u.costUSD ?? 0);
   }
-  const timing = fs.readFileSync(`${dir}/timing.jsonl`, 'utf8').trim().split('\n').map(l => JSON.parse(l));
   for (const t of timing) {
     if (t.kind === 'start' && steps[t.step]) steps[t.step].model = t.model;
     if (t.kind === 'end' && steps[t.step]) steps[t.step].wall_s += t.wall_s ?? 0;
@@ -45,7 +56,7 @@ for (const [arm, tok] of Object.entries(map)) {
 }
 fs.writeFileSync('metrics6.json', JSON.stringify(out, null, 2));
 
-const kinds = ['split', 'code', 't-code', 'hreview', 'review', 'fix', 'gate'];
+const kinds = ['split', 'code', 't-code', 'hreview', 'hA', 'hB', 'hfix', 'review', 'fix', 'gate'];
 console.log(['arm', 'cost$', 'active m', 'span m', 'att', ...kinds.map(k => k + ' $/m')].join('\t'));
 for (const [arm, a] of Object.entries(out)) {
   const cell = k => {
