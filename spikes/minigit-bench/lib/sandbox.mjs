@@ -29,12 +29,19 @@ export const dummyToken = rand => `sk-ant-oat01-dummy-${rand}`;
 /** The one literal key list of the agent's environment (a test diffs it against `agentEnv`'s keys; `extra` adds its own). */
 export const AGENT_ENV_KEYS = Object.freeze([
   'ANTHROPIC_BASE_URL', 'BENCH_CELL', 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', 'CLAUDE_CODE_ENABLE_TELEMETRY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR',
-  'DISABLE_AUTOUPDATER', 'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_CLI_USE_MSBUILD_SERVER', 'DOTNET_NOLOGO',
+  'DISABLE_AUTOUPDATER', 'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO',
   'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_NAME', 'GIT_COMMITTER_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'GIT_TERMINAL_PROMPT',
-  'HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'LANG', 'MSBUILDDISABLENODEREUSE', 'NO_PROXY', 'NUGET_PACKAGES',
+  'HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'LANG', 'NO_PROXY', 'NUGET_PACKAGES',
   'OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_PROTOCOL', 'OTEL_LOGS_EXPORTER', 'OTEL_LOGS_EXPORT_INTERVAL', 'OTEL_LOG_TOOL_DETAILS', 'OTEL_LOG_USER_PROMPTS',
-  'OTEL_METRICS_EXPORTER', 'OTEL_METRIC_EXPORT_INTERVAL', 'PATH', 'TMPDIR', 'UseSharedCompilation', 'npm_config_cache',
+  'OTEL_METRICS_EXPORTER', 'OTEL_METRIC_EXPORT_INTERVAL', 'PATH', 'TMPDIR', 'npm_config_cache',
 ]);
+
+/**
+ * The three build-server keys, OFF. NOT in the base environment (E3b seam 2): banteg's bare cells ran with the .NET defaults (servers and node reuse on), and the reason to
+ * switch them off, that no cell builds on its partner's node, is already met by the box's own pid and ipc namespaces. An arm that wants them off passes this through `extra`
+ * (the process arm decides in E3; parent section 8). A server left running ends with the box: bwrap's init exits with the command and the pid namespace takes the rest.
+ */
+export const BUILD_SERVERS_OFF = Object.freeze({ DOTNET_CLI_USE_MSBUILD_SERVER: '0', MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false' });
 
 const RID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -92,8 +99,8 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', DISABLE_AUTOUPDATER: '1',
     ...otelEnv(BOX_OTEL_PORT),
     HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NO_PROXY: '127.0.0.1,localhost',
-    DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_CLI_USE_MSBUILD_SERVER: '0',
-    MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
+    DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1',
+    NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
   };
   // compared in lower case: `https_proxy` is read by curl and others next to `HTTPS_PROXY`, so a different spelling of a base key replaces it as well
