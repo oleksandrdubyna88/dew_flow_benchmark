@@ -12,7 +12,7 @@ namespace ModelArms.Verbs;
 /// The root is made where the module would later accept it, by the module's own rules and not a second set: the existence check is
 /// <see cref="RootRequirements"/>'s, the placement (outside this repository and every git checkout, asked of where the root REALLY is) is
 /// <see cref="ExperimentFile.Placement"/>'s, and every question about a link or a kind of file goes through <see cref="RootFacts"/>. The root is made EXCLUSIVELY
-/// (<c>mkdir(2)</c> through <see cref="KernelFacts"/>: anything already at the name is exit 4 and is left as it was), then its modes are SET — <c>0700</c> for the folders,
+/// (libc's <c>mkdir</c> through <see cref="KernelFacts"/> on every POSIX host: anything already at the name is exit 4 and is left as it was), then its modes are SET — <c>0700</c> for the folders,
 /// <c>0600</c> for the files, whatever the umask — so the gate's trust check (the operator's own, closed to group and others) passes on the first <c>validate</c>.
 /// </para>
 /// <para>
@@ -23,7 +23,7 @@ namespace ModelArms.Verbs;
 /// </para>
 /// <para>
 /// Exit 0 created; 4 a refusal of the configuration (the root exists, its parent does not, it is inside a checkout, a link is in the way); 3 the host could not do it (a
-/// folder it may not write in, a file that cannot be made, the example missing, a platform whose <c>mkdir</c> is not probed). A stop signal is honoured once, before anything
+/// folder it may not write in, a file that cannot be made, the example missing). A stop signal is honoured once, before anything
 /// is made: a root half-made by a stop would be refused as existing by the same command run again.
 /// </para>
 /// <para>
@@ -43,23 +43,38 @@ public static class InitVerb
     /// <summary>The root and the template text, once every refusal has been passed.</summary>
     private sealed record Plan(string Root, string Template);
 
-    public static Task<int> RunAsync(VerbInput input) => RunAsync(input, MakeRootFolder);
+    public static Task<int> RunAsync(VerbInput input) => RunAsync(input, root => MakeRootFolder(root, PlatformFactsReader.CurrentRoad));
 
     /// <summary>The same with the making of the root handed in: the only way a test can put a folder at the name between the existence check and the <c>mkdir</c>.</summary>
-    internal static Task<int> RunAsync(VerbInput input, Func<string, FolderMade> makeRoot)
+    internal static Task<int> RunAsync(VerbInput input, Func<string, FolderMade> makeRoot) => RunAsync(input, makeRoot, PlatformFactsReader.CurrentRoad);
+
+    /// <summary>The same with the road handed in too (E3.S0): the road decides how the folders are judged and says, first of all, what this host does not verify.</summary>
+    internal static Task<int> RunAsync(VerbInput input, Func<string, FolderMade> makeRoot, PlatformRoad road)
     {
         input.Stopping.ThrowIfCancellationRequested();
-        var made = Decided(input).Bind(root => Templated(input, root)).Bind(plan => Made(input, plan, makeRoot));
+        var made = Decided(input, road).Bind(root => Templated(input, root)).Bind(plan => Made(input, plan, makeRoot, road));
         return Task.FromResult(made.Match(plan => Created(input, plan), stop => Stopped(input, stop)));
     }
 
-    /// <summary>Every refusal of the configuration, in the order the spec gives: the root exists, its parent does not, it is placed inside a checkout, a link is in the way.</summary>
-    private static Passage<string> Decided(VerbInput input) =>
-        NamedRoot(input)
+    /// <summary>The road's line first — what this host does NOT verify, once, before anything is made and before any refusal it qualifies — then every refusal of the configuration, in the order the spec gives: the root exists, its parent does not, it is placed inside a
+    /// checkout, a link is in the way.</summary>
+    private static Passage<string> Decided(VerbInput input, PlatformRoad road) =>
+        Said(input, road)
+            .Bind(_ => NamedRoot(input))
             .Bind(root => Absent(input, root))
             .Bind(root => ParentExists(root))
             .Bind(root => Placed(input, root))
-            .Bind(root => Judged(ParentOf(root)).Map(_ => root));
+            .Bind(root => Judged(ParentOf(root), road).Map(_ => root));
+
+    private static Passage<string> Said(VerbInput input, PlatformRoad road)
+    {
+        if (road.Line is { Length: > 0 } line)
+        {
+            input.Error.WriteLine(line);
+        }
+
+        return new Passage<string>.Through(string.Empty);
+    }
 
     private static Passage<string> NamedRoot(VerbInput input)
     {
@@ -99,12 +114,12 @@ public static class InitVerb
 
     private static string ParentOf(string root) => Path.GetDirectoryName(root) ?? string.Empty;
 
-    /// <summary>The folder is a real directory — not a symbolic link, not another kind of file — judged by the kernel's own answer. Off Windows only: there the check is declared not performed.</summary>
-    private static Passage<string> Judged(string folder) =>
-        OperatingSystem.IsWindows() ? new Passage<string>.Through(folder) : JudgedByTheKernel(folder);
+    /// <summary>The folder is a real directory — not a symbolic link, not another kind of file — judged on the road's facts (the kernel's answer or the runtime's). Where the road performs no check (Windows) nothing is judged: the check is declared not performed.</summary>
+    private static Passage<string> Judged(string folder, PlatformRoad road) =>
+        road.Trust == TrustRoad.NotPerformed ? new Passage<string>.Through(folder) : JudgedOnTheRoad(folder, road);
 
-    private static Passage<string> JudgedByTheKernel(string folder) =>
-        RootFacts.ReadFacts(folder, FileKind.Directory) switch
+    private static Passage<string> JudgedOnTheRoad(string folder, PlatformRoad road) =>
+        RootFacts.ReadFacts(folder, FileKind.Directory, road) switch
         {
             FactsRead.Read => new Passage<string>.Through(folder),
             FactsRead.Refused refused => Passage<string>.Stop(ExitCodes.Configuration, $"{Name} init: {refused.Reason}"),
@@ -127,11 +142,11 @@ public static class InitVerb
 
     /// <summary>Makes the root exclusively, judges it again (a link swapped in since is refused before a file goes through it), sets its mode, then fills it. A name that is taken is
     /// exit 4 and nothing is touched; a host that will not do any of it is exit 3, saying whether a part-made root is left to remove.</summary>
-    private static Passage<Plan> Made(VerbInput input, Plan plan, Func<string, FolderMade> makeRoot)
+    private static Passage<Plan> Made(VerbInput input, Plan plan, Func<string, FolderMade> makeRoot, PlatformRoad road)
     {
         try
         {
-            return RootMade(input, plan.Root, makeRoot).Bind(root => Judged(root)).Bind(root => OwnerOnly(root, OwnerOnlyFolder)).Bind(_ => Filled(plan));
+            return RootMade(input, plan.Root, makeRoot).Bind(root => Judged(root, road)).Bind(root => OwnerOnly(root, OwnerOnlyFolder)).Bind(_ => Filled(plan));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -148,10 +163,10 @@ public static class InitVerb
             _ => throw new InvalidOperationException("unreachable"),
         };
 
-    /// <summary>The kernel's exclusive <c>mkdir</c> off Windows; on Windows there are no modes and no probed call, so the folder is made by the runtime (the existence check has just passed).</summary>
-    private static FolderMade MakeRootFolder(string root)
+    /// <summary>libc's exclusive <c>mkdir</c> where the road has it (every POSIX host); on Windows there are no modes and no such call, so the folder is made by the runtime (the existence check has just passed).</summary>
+    private static FolderMade MakeRootFolder(string root, PlatformRoad road)
     {
-        if (!OperatingSystem.IsWindows())
+        if (road.LibcMkdir)
         {
             return KernelFacts.MakeFolder(root);
         }

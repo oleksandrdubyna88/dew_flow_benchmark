@@ -139,4 +139,27 @@ public sealed class KernelFactsTests
         facts.Identity.Inode.Should().Be(ulong.MaxValue);
         facts.Identity.Device.Should().Be(ulong.MaxValue);
     }
+
+    [Fact]
+    public void Mkdir_refuses_a_taken_name_by_its_presence_not_by_an_errno_and_names_the_words_of_any_other_failure()
+    {
+        Linux();
+        using var temp = new TempFolder();
+        var folder = temp.Folder("folder");
+        var file = temp.File("kept", "file");
+        var dangling = temp.Combine("dangling");
+        File.CreateSymbolicLink(dangling, temp.Combine("nowhere"));
+
+        KernelFacts.MakeFolder(folder).Should().BeOfType<FolderMade.AlreadyThere>();
+        KernelFacts.MakeFolder(file).Should().BeOfType<FolderMade.AlreadyThere>();
+        KernelFacts.MakeFolder(dangling).Should().BeOfType<FolderMade.AlreadyThere>("a dangling link is an entry: the name is taken");
+        File.ReadAllText(file).Should().Be("kept", "a taken name is left exactly as it was");
+        new FileInfo(dangling).LinkTarget.Should().Be(temp.Combine("nowhere"));
+        KernelFacts.MakeFolder(Path.Combine(file, "child")).Should().BeOfType<FolderMade.Failed>().Which.Reason.Should().Contain("Not a directory");
+        KernelFacts.MakeFolder(Path.Combine(temp.Path, "absent", "child")).Should().BeOfType<FolderMade.Failed>().Which.Reason.Should().Contain("No such file");
+
+        var source = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms", "Adapters", "KernelFacts.cs"));
+        source.Should().Contain("Classified(", "the scan must still find the classification it forbids the errno read in favour of");
+        source.Should().NotContain("AlreadyExists").And.NotContain("== 17", "mkdir's failure is classified by the entry's presence, not by EEXIST's number");
+    }
 }
