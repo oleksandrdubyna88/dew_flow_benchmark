@@ -20,9 +20,9 @@ internal sealed record RunArmSeams(TimeProvider Clock, Func<TimeSpan, Cancellati
 /// <b>An exit 5 is never repeated by this verb.</b> A relaunch of an attempt that ended without a verdict costs one paid attempt (E2 §8 item 56): the verb returns, and the operator — or <c>run-all</c> — decides.
 /// </para>
 /// <para>
-/// <b>The gate lock's ceiling (E2 §8 item 59) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> over the arms of <c>arms.map.json</c> and the longest gate step of the experiment — (arms − 1) × (that step's minutes plus the kill grace),
-/// never less than one such span — so a queue of gates that each hold the lock for their wall never passes it. It does NOT cover a usage limit waited out WHILE the lock is held (the runner waits inside the gate step: up to the step's minutes plus tries × waitSeconds — hours in the example), nor the closed arms of earlier runs that <c>arms.map.json</c> still lists (they count as queued); a wedged holder is told apart only when the ceiling runs out. E4's <c>run-all</c> must size its own from the largest round of its run (a gate's wall plus its limit waits, for the arms of that run only), or replace the
-/// total time with a heartbeat (the holder is alive and its stream grows).
+/// <b>The gate lock's ceiling (E2 §8 items 59 and 61) is a total time, and this verb names it:</b> <see cref="GateLockCeiling"/> — for each of the other arms of the arm's own round (the largest round of the run that names it; every arm of
+/// <c>arms.map.json</c> only when no run does, and the log says so), the longest gate step's minutes plus the kill grace plus the usage-limit waits the runner may spend under the lock (<c>limits.tries</c> × <c>limits.waitSeconds</c>); never less than
+/// one such span. What remains is a wedged holder, which only a heartbeat (E4) tells from a slow one: it is told apart only when the ceiling runs out. E4's <c>run-all</c> sizes its own the same way from the round it starts, or builds the heartbeat.
 /// </para>
 /// <para>
 /// What this does NOT do: detach (E4); run the objective checks (E5).
@@ -57,6 +57,7 @@ public static class RunArmVerb
     private static async Task<int> RunAsync(ArmPlan plan, RunArmWalk walk)
     {
         PrintExecutables(plan);
+        walk.SayQueue();
         var stopped = await walk.RunAsync(plan.Input.Verb.Stopping);
         if (stopped is not null)
         {

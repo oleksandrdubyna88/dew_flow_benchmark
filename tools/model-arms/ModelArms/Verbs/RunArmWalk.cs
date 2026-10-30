@@ -37,12 +37,25 @@ internal sealed class RunArmWalk
         _gate = new GateStep(_runner, gateLock, seams.Clock, seams.Wait, input.Verb.Output, plan.Map, Ceiling(plan));
     }
 
-    /// <summary>The gate lock's ceiling for this arm (E2 §8 item 59): the arms of the map that can queue ahead of it, each for the longest gate step of the experiment and its kill grace.</summary>
+    /// <summary>The gate lock's ceiling for this arm (E2 §8 items 59 and 61): each holder's wall, kill grace and limit waits under the lock, for the other arms of the arm's own round; see <see cref="GateLockCeiling"/>.</summary>
     internal static TimeSpan Ceiling(ArmPlan plan)
     {
         var experiment = plan.Input.Experiment;
         var longestGate = experiment.Steps.Values.Where(spec => spec.Kind == StepKind.Gate).Select(spec => spec.Minutes).DefaultIfEmpty(0).Max();
-        return GateLockCeiling.For(plan.Map.Entries.Count, longestGate, experiment.Limits.KillGraceSeconds, GateStep.MaxLockCeiling);
+        var limits = experiment.Limits;
+        return GateLockCeiling.For(Queue(plan).Arms, longestGate, limits.KillGraceSeconds, limits.Tries, limits.WaitSeconds, GateStep.MaxLockCeiling);
+    }
+
+    private static GateQueue Queue(ArmPlan plan) => GateLockCeiling.QueueOf(plan.Input.Experiment.Runs, plan.Arm, plan.Map.Entries.Count);
+
+    /// <summary>Said once, before the first launch: an arm no run names is sized from every arm of the map, which may include closed arms of earlier runs.</summary>
+    public void SayQueue()
+    {
+        var queue = Queue(_plan);
+        if (!queue.FromRound)
+        {
+            _log.Line($"{_plan.Arm} is in no run — the gate lock's wait is sized from the {queue.Arms.ToString(System.Globalization.CultureInfo.InvariantCulture)} arms of arms.map.json, closed arms of earlier runs included");
+        }
     }
 
     /// <summary>The scheme in order. Null when every step is done; else the step that stopped the arm — its exit code and reason (D16).</summary>

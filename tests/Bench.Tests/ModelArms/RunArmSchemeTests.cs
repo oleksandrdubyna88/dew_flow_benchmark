@@ -553,6 +553,25 @@ public sealed class RunArmSchemeTests
     }
 
     [Fact]
+    public async Task An_arm_in_no_run_sizes_the_gate_lock_ceiling_from_the_arms_of_the_map_and_says_so()
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C4", fake);
+        await root.MakeArmAsync("C5", fake);
+        Replay(fake, "result-success.jsonl");
+        using var stopping = new CancellationTokenSource();
+        var output = new StopOnLine("waiting at most", stopping);
+        var seams = new ModelArmsApp.Verbs.RunArmSeams(TimeProvider.System, (span, ct) => Task.Delay(span, ct), new BusyGateLock());
+
+        var code = await RunWithSeamsAsync(root, "C4", seams, output, stopping.Token);
+
+        code.Should().Be(5);
+        output.ToString().Should().Contain("C4 is in no run").And.Contain("2 arms of arms.map.json", "the fallback is said in the log");
+        output.ToString().Should().Contain("waiting at most 611 min", "one arm ahead: 1 minute + 600 s + 40 × 900 s = 36 660 s");
+    }
+
+    [Fact]
     public async Task A_stopped_line_after_arm_done_does_not_earn_the_arm_a_second_arm_done()
     {
         using var root = new ExperimentRoot();
@@ -576,6 +595,7 @@ public sealed class RunArmSchemeTests
         await root.MakeArmAsync("C1", fake);
         await root.MakeArmAsync("C2", fake);
         await root.MakeArmAsync("C3", fake);
+        await root.MakeArmAsync("C4", fake); // made, named by no run: it is not queued behind C1's round
         Replay(fake, "result-success.jsonl");
         using var stopping = new CancellationTokenSource();
         var output = new StopOnLine("waiting at most", stopping);
@@ -584,7 +604,8 @@ public sealed class RunArmSchemeTests
         var code = await RunWithSeamsAsync(root, "C1", seams, output, stopping.Token);
 
         code.Should().Be(5, "the operator's stop while the gate waits for its lock");
-        output.ToString().Should().Contain("waiting at most 22 min", "three arms are made: two can queue ahead of this one, each for the gate's 1 minute (the fixture) plus the 600 s kill grace");
+        output.ToString().Should().Contain("waiting at most 1222 min", "C1 is in a round of three in the example's run part6 (a fourth arm is made but named by no run): two can queue ahead of this one, each for the gate's 1 minute (the fixture) plus the 600 s kill grace plus 40 × 900 s of limit waits it may spend under the lock");
+        output.ToString().Should().NotContain("is in no run", "the arm is named by a run: the size of its round is what counts");
         fake.Calls().Select(call => BriefOf(call)).Should().Equal("1-code", "2-review", "3-fix");
     }
 }
