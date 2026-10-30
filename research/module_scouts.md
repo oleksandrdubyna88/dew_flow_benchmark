@@ -364,6 +364,9 @@ four claude options — `SessionId` (`--session-id`) and `ResumeSessionId` (`--r
 and `PermittedTools` (`--allowedTools`, the permission patterns, distinct from `AllowedTools`, which is `--tools`) — refused by name on codex, agy and
 gemini; a session id beside a session to resume, and a permission mode beside the read-only sandbox, are refused on every CLI. The module document
 of the arms describes the per-mode use.
+Since model arms E2.S3 the shared core awaits BOTH readers to their end on every path out of the wait — completed, timed out, the caller's cancellation, a
+sink's fault — so a launch never returns or throws while a sink it started is still running, and the fault it rethrows is the stdout reader's if that faulted,
+else the stderr reader's (the other is observed and dropped).
 
 ### The trees and the grant guard (§3.2, §3.11, §3.13)
 
