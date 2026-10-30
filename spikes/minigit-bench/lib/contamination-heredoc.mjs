@@ -16,23 +16,32 @@ const markersOf = line => (runsBody(line) ? [] : [...line.matchAll(MARKER)].map(
 const closes = (line, marker) => (marker.tabs ? line.replace(/^\t+/, '') : line).trimEnd() === marker.word;
 const withoutHereStrings = line => (runsBody(line) ? line : line.replace(HERE_STRING, ' '));
 
-const flush = acc => ({ ...acc, out: [...acc.out, placeholder(acc.data.length)], data: [...acc.data, acc.body.join('\n')], body: [] });
+// The accumulator is built inside `stripData` and appended to in place: a copy of it per line would make a 20,000-line heredoc quadratic. Nothing outside the call is touched; the result is new.
+function flush(acc) {
+  acc.out.push(placeholder(acc.data.length));
+  acc.data.push(acc.body.join('\n'));
+  acc.body = [];
+}
 
 /** A line outside any body: kept (less its here-strings); the heredocs it opens are pending. */
-const open = (acc, line) => ({ ...acc, out: [...acc.out, withoutHereStrings(line)], pending: markersOf(line) });
+function openLine(acc, line) {
+  acc.out.push(withoutHereStrings(line));
+  acc.pending = markersOf(line);
+}
 
 /** A line inside a body: it is the data, or the terminator of the first pending heredoc (the body is closed when the last one ends). */
-function inside(acc, line) {
-  const ends = closes(line, acc.pending[0]);
-  const next = { ...acc, pending: ends ? acc.pending.slice(1) : acc.pending, body: ends ? acc.body : [...acc.body, line] };
-  return next.pending.length === 0 ? flush(next) : next;
+function bodyLine(acc, line) {
+  if (closes(line, acc.pending[0])) acc.pending = acc.pending.slice(1);
+  else acc.body.push(line);
+  if (acc.pending.length === 0) flush(acc);
 }
 
 /**
  * `{ text, data }`: the command without its heredoc bodies (each one placeholder line) and without its here-string operands, and the bodies' texts by placeholder number. A body with no terminator runs to the end, as in a shell.
  */
 export function stripData(text) {
-  const done = text.split('\n').reduce((acc, line) => (acc.pending.length === 0 ? open(acc, line) : inside(acc, line)), { out: [], pending: [], body: [], data: [] });
-  const last = done.pending.length === 0 ? done : flush(done);
-  return { text: last.out.join('\n'), data: last.data };
+  const acc = { out: [], pending: [], body: [], data: [] };
+  for (const line of text.split('\n')) (acc.pending.length === 0 ? openLine : bodyLine)(acc, line);
+  if (acc.pending.length > 0) flush(acc);
+  return { text: acc.out.join('\n'), data: acc.data };
 }

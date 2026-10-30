@@ -119,3 +119,13 @@ test('A_walk_of_a_glob_is_a_walk_of_the_globs_fixed_prefix_and_a_plain_listing_o
   assert.deepEqual(high('grep -rn "a /* b" src'), [], 'a comment mark in a quoted string is still text');
   assert.deepEqual(hitsOf('ls /*').map(h => h.severity), ['low'], 'a plain listing of the glob stays low');
 });
+
+test('A_20000_line_heredoc_is_stripped_in_linear_time', () => {
+  const body = Array.from({ length: 20000 }, (_, i) => `const line${i} = ${i}; // a comment`).join('\n');
+  const started = performance.now();
+  const { text, data } = stripData(`cat > big.ts <<'EOF'\n${body}\nEOF\nls`);
+  const ms = performance.now() - started;
+  assert.deepEqual(text.split('\n'), ["cat > big.ts <<'EOF'", '\u0001DATA0\u0001', 'ls']);
+  assert.equal(data[0].split('\n').length, 20000);
+  assert.ok(ms < 500, `${ms.toFixed(0)} ms: copying the lines again at every line is quadratic`);
+});
