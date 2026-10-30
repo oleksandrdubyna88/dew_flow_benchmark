@@ -9,33 +9,58 @@ const VERDICTS = Object.freeze(['holds', 'refuted', 'explained']);
 
 const candidate = line => /^\d/.test(line) || /^G-\d+ \|/.test(line);
 
+const rest = (f, from) => f.slice(from).join(' | ');
+const bad = malformed => ({ malformed });
+
+/** An input amendment line: the file and the 12 hex are in `input`; it needs a reason. */
+const parseInput = (f, input) => (f[3] ? { input: { date: f[0], file: input[1], hash12: input[2], reason: rest(f, 3) } } : bad('an input line is: date | instrument | input:<file>:<12 hex> | reason'));
+
+/** `date | instrument | input:<file>:<12 hex> | reason`, or `date | instrument | harness:<12 hex> | reason`. */
+function parseInstrument(f) {
+  const input = /^input:([A-Za-z0-9_.-]+):([0-9a-f]{12})$/.exec(f[2] ?? '');
+  if (input) return parseInput(f, input);
+  const identity = /^harness:([0-9a-f]{12})$/.exec(f[2] ?? '')?.[1];
+  return identity && f[3] ? { instrument: { date: f[0], identity, reason: rest(f, 3) } } : bad('an instrument line is: date | instrument | harness:<12 hex> | reason, or date | instrument | input:<file>:<12 hex> | reason');
+}
+
+/** `date | budget-raise | pair:<1-3> | n:<re-runs> | usd:<amount> | reason`. */
+function parseRaise(f) {
+  const [pair, n, usd] = [/^pair:([1-3])$/.exec(f[2] ?? ''), /^n:(\d+)$/.exec(f[3] ?? ''), /^usd:(\d+(?:\.\d+)?)$/.exec(f[4] ?? '')];
+  return [pair, n, usd, f[5]].every(Boolean) ? { raise: { date: f[0], pair: Number(pair[1]), n: Number(n[1]), usd: Number(usd[1]), reason: rest(f, 5) } } : bad('a budget raise is: date | budget-raise | pair:<1-3> | n:<re-runs> | usd:<amount> | reason');
+}
+
+const sixFields = f => f.length >= 6 && f.slice(3, 6).every(x => x !== '');
+
+/** The sentence for a by-hand verdict line that is not valid, or null. */
+function verdictProblem(f) {
+  if (!/^G-\d+$/.test(f[1] ?? '')) return `the second field must be G-<n>, 'instrument' or 'budget-raise', got '${f[1] ?? ''}'`;
+  if (!VERDICTS.includes(f[2])) return `the verdict must be one of ${VERDICTS.join(', ')}, got '${f[2] ?? ''}'`;
+  return sixFields(f) ? null : 'a verdict line has six fields: date | G-n | verdict | rid | evidence | who';
+}
+
+/** `date | G-<n> | holds|refuted|explained | rid | evidence | who`. */
+function parseVerdict(f) {
+  const problem = verdictProblem(f);
+  return problem ? bad(problem) : { verdict: { date: f[0], g: f[1], verdict: f[2], rid: f[3], evidence: f[4], who: f[5] } };
+}
+
+/** The line kinds by their second field; anything else is a verdict line. */
+const KINDS = { instrument: parseInstrument, 'budget-raise': parseRaise };
+
 function parseLine(line) {
   const f = line.split(' | ').map(x => x.trim());
-  if (!DATE.test(f[0])) return { malformed: 'the line has no valid YYYY-MM-DD date' };
-  if (f[1] === 'instrument') {
-    const input = /^input:([A-Za-z0-9_.-]+):([0-9a-f]{12})$/.exec(f[2] ?? '');
-    if (input) return f[3] ? { input: { date: f[0], file: input[1], hash12: input[2], reason: f.slice(3).join(' | ') } } : { malformed: 'an input line is: date | instrument | input:<file>:<12 hex> | reason' };
-    const identity = /^harness:([0-9a-f]{12})$/.exec(f[2] ?? '')?.[1];
-    return identity && f[3] ? { instrument: { date: f[0], identity, reason: f.slice(3).join(' | ') } } : { malformed: 'an instrument line is: date | instrument | harness:<12 hex> | reason, or date | instrument | input:<file>:<12 hex> | reason' };
-  }
-  if (f[1] === 'budget-raise') {
-    const [pair, n, usd] = [/^pair:([1-3])$/.exec(f[2] ?? ''), /^n:(\d+)$/.exec(f[3] ?? ''), /^usd:(\d+(?:\.\d+)?)$/.exec(f[4] ?? '')];
-    return pair && n && usd && f[5] ? { raise: { date: f[0], pair: Number(pair[1]), n: Number(n[1]), usd: Number(usd[1]), reason: f.slice(5).join(' | ') } } : { malformed: 'a budget raise is: date | budget-raise | pair:<1-3> | n:<re-runs> | usd:<amount> | reason' };
-  }
-  if (!/^G-\d+$/.test(f[1] ?? '')) return { malformed: `the second field must be G-<n>, 'instrument' or 'budget-raise', got '${f[1] ?? ''}'` };
-  if (!VERDICTS.includes(f[2])) return { malformed: `the verdict must be one of ${VERDICTS.join(', ')}, got '${f[2] ?? ''}'` };
-  if (f.length < 6 || f.slice(3, 6).some(x => x === '')) return { malformed: 'a verdict line has six fields: date | G-n | verdict | rid | evidence | who' };
-  return { verdict: { date: f[0], g: f[1], verdict: f[2], rid: f[3], evidence: f[4], who: f[5] } };
+  if (!DATE.test(f[0])) return bad('the line has no valid YYYY-MM-DD date');
+  return (Object.hasOwn(KINDS, f[1]) ? KINDS[f[1]] : parseVerdict)(f);
 }
+
+/** The values of `key` of the parsed lines that carry it. */
+const pick = (parsed, key) => parsed.flatMap(p => (p[key] ? [p[key]] : []));
 
 /** The text -> `{ verdicts, instrument, raises, malformed: [{ line, why }] }`. */
 export function parseAmendments(text) {
   const parsed = text.split('\n').map(l => l.trim()).filter(candidate).map(line => ({ line, ...parseLine(line) }));
   return {
-    verdicts: parsed.flatMap(p => (p.verdict ? [p.verdict] : [])),
-    instrument: parsed.flatMap(p => (p.instrument ? [p.instrument] : [])),
-    inputs: parsed.flatMap(p => (p.input ? [p.input] : [])),
-    raises: parsed.flatMap(p => (p.raise ? [p.raise] : [])),
+    verdicts: pick(parsed, 'verdict'), instrument: pick(parsed, 'instrument'), inputs: pick(parsed, 'input'), raises: pick(parsed, 'raise'),
     malformed: parsed.flatMap(p => (p.malformed ? [{ line: p.line, why: p.malformed }] : [])),
   };
 }

@@ -30,14 +30,12 @@ function walk(root, rel = '') {
 }
 
 /** The hash of a tree (see the header). Stable under mtimes and write order; changed by a byte, a mode (execute/read bits), a name, a link target or an empty directory. */
+const bodyOf = (full, stat) => (stat.isSymbolicLink() ? readlinkSync(full) : stat.isFile() ? sha256(readFileSync(full)) : '');
+const typeOf = stat => (stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : 'f');
+
 export function treeHash(root) {
   const h = createHash('sha256');
-  for (const { rel, stat } of walk(root)) {
-    const full = path.join(root, rel);
-    const body = stat.isSymbolicLink() ? readlinkSync(full) : stat.isFile() ? sha256(readFileSync(full)) : '';
-    const type = stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : 'f';
-    h.update(`${type}\0${rel}\0${(stat.mode & NOT_WRITE).toString(8)}\0${body}\n`);
-  }
+  for (const { rel, stat } of walk(root)) h.update(`${typeOf(stat)}\0${rel}\0${(stat.mode & NOT_WRITE).toString(8)}\0${bodyOf(path.join(root, rel), stat)}\n`);
   return h.digest('hex');
 }
 
@@ -75,9 +73,13 @@ export function seedCaches({ layout, snapshots }) {
 // ---- the recipe -----------------------------------------------------------------------------------------------------------------
 
 /** `inputs/cache-recipe.json` -> `ok(recipe)` | `fail` naming what is wrong (an unknown host list names the legal ones). */
+const validStep = x => Array.isArray(x.argv) && x.argv.length > 0;
+const hasSteps = s => Array.isArray(s.steps) && s.steps.length > 0 && s.steps.every(validStep);
+const validStack = s => hasSteps(s) && Object.keys(s.capture ?? {}).length > 0;
+
 export function loadRecipe(json) {
   if (!Object.hasOwn(EGRESS_HOSTS, json?.hosts)) return fail(`cache-recipe: hosts '${json?.hosts}' must be one of ${Object.keys(EGRESS_HOSTS).join(', ')}`);
-  const bad = Object.entries(json.stacks ?? {}).find(([, s]) => !Array.isArray(s.steps) || s.steps.length === 0 || !s.steps.every(x => Array.isArray(x.argv) && x.argv.length > 0) || Object.keys(s.capture ?? {}).length === 0);
+  const bad = Object.entries(json.stacks ?? {}).find(([, s]) => !validStack(s));
   if (!json.stacks || bad) return fail(`cache-recipe: stack '${bad?.[0] ?? '(none)'}' needs at least one step with an argv and a capture`);
   return ok(json);
 }
@@ -95,15 +97,28 @@ const fill = (argv, resolved) => argv.map(a => a.replace(/\{([A-Z_]+)\}/g, (m, n
 const unresolved = argv => argv.find(a => /\{[A-Z_]+\}/.test(a));
 
 /** Run one command in the box (the layout, the proxy and the env of a session, nothing of the model's). -> `ok({ code, stdout, stderr })` | `fail`. */
-async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {} }) {
-  const argv = agentBoxArgv({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, command });
-  let env;
-  try { env = agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir, extra }); } catch (e) { return fail(`the recipe's environment is refused: ${e.message}`); }
-  const r = await runBounded(argv[0], argv.slice(1), { env, timeoutMs });
+/** The environment of a step: the allow-list, the dummy token and the recipe's own variables; a variable the allow-list refuses is a `fail`. */
+function boxEnv({ layout, name, nodeDir, extra }) {
+  try {
+    return ok(agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir, extra }));
+  } catch (e) {
+    return fail(`the recipe's environment is refused: ${e.message}`);
+  }
+}
+
+/** The result of a step run in the box: its output, or the sentence saying how it failed (not run, timed out, a non-zero exit). */
+function boxResult(r, command, timeoutMs) {
   if (!r.ok) return r;
   if (r.value.timedOut) return fail(`\`${command.join(' ')}\` timed out after ${timeoutMs} ms`);
   const tail = `${r.value.stderr}\n${r.value.stdout}`.trim().slice(-600); // dotnet writes its errors to stdout
   return r.value.code === 0 ? ok(r.value) : fail(`\`${command.join(' ')}\` exited ${r.value.code}: ${tail}`);
+}
+
+async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {} }) {
+  const env = boxEnv({ layout, name, nodeDir, extra });
+  if (!env.ok) return env;
+  const argv = agentBoxArgv({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, command });
+  return boxResult(await runBounded(argv[0], argv.slice(1), { env: env.value, timeoutMs }), command, timeoutMs);
 }
 
 async function resolveAll({ spec = {}, ...box }) {
@@ -137,11 +152,17 @@ const sizeOf = root => walk(root).reduce((a, { stat }) => a + (stat.isFile() ? s
  * egress proxy, capture, hash, name `cache-<stack>-<hash12>` under `out`, make it read-only. -> `ok({ dir, treeSha256, parts, sizeBytes, packages, resolved, steps })` | `fail`.
  * A failing step leaves nothing in `out` (the work session stays under `root` for diagnosis).
  */
+/** The first free layout `snapshot-<stack>-<n>` under `root` (a claim is exclusive and never reused), or the last refusal. */
+function claimLayout(root, stack) {
+  let made = fail('no layout');
+  for (let n = 1; n < 10 && !made.ok; n += 1) made = sessionLayout(root, `snapshot-${stack}-${n}`);
+  return made;
+}
+
 export async function makeSnapshot({ stack, recipe, root, out, nodeDir = path.dirname(path.dirname(process.execPath)) }) {
   const spec = recipe.stacks[stack];
   if (!spec) return fail(`the recipe has no stack '${stack}' (it has ${Object.keys(recipe.stacks).join(', ')})`);
-  let made = fail('no layout');
-  for (let n = 1; n < 10 && !made.ok; n += 1) made = sessionLayout(root, `snapshot-${stack}-${n}`);
+  const made = claimLayout(root, stack);
   if (!made.ok) return made;
   const layout = made.value;
   copyFileSync(path.join(SPIKE, 'harness', 'box-init.mjs'), layout.files.boxInit);
@@ -153,20 +174,33 @@ export async function makeSnapshot({ stack, recipe, root, out, nodeDir = path.di
   }
 }
 
+/** The step a pinned `expectStdout` refuses, as a sentence, or null. */
+const pinProblem = (step, command, printed) => (step.expectStdout !== undefined && printed !== step.expectStdout
+  ? `the step \`${command.join(' ')}\` printed '${printed.slice(0, 80)}', the recipe pins '${step.expectStdout}': the toolchain is not the pinned one` : null);
+
+const stepRecord = ({ step, command, ran, printed }) => ({ argv: command, code: ran.value.code, stdout: step.expectStdout === undefined ? null : printed.slice(0, 200) });
+
+/** Run one step of the recipe in the box. -> `ok({ argv, code, stdout })` | `fail`. Only a pinned step's output is kept: the rest names the operator's home. */
+async function runStep({ step, resolved, box }) {
+  const command = fill(step.argv, resolved);
+  const open = unresolved(command);
+  if (open) return fail(`the step \`${step.argv.join(' ')}\` still holds ${open} after resolution`);
+  const ran = await inBox({ ...box, command });
+  if (!ran.ok) return ran;
+  const printed = ran.value.stdout.trim();
+  const problem = pinProblem(step, command, printed);
+  return problem ? fail(problem) : ok(stepRecord({ step, command, ran, printed }));
+}
+
 async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
   const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid, env: spec.env ?? {} };
   const resolved = await resolveAll({ ...box, spec: spec.resolve });
   if (!resolved.ok) return resolved;
   const steps = [];
   for (const step of spec.steps) {
-    const command = fill(step.argv, resolved.value);
-    const open = unresolved(command);
-    if (open) return fail(`the step \`${step.argv.join(' ')}\` still holds ${open} after resolution`);
-    const ran = await inBox({ ...box, command });
+    const ran = await runStep({ step, resolved: resolved.value, box });
     if (!ran.ok) return ran;
-    const printed = ran.value.stdout.trim();
-    if (step.expectStdout !== undefined && printed !== step.expectStdout) return fail(`the step \`${command.join(' ')}\` printed '${printed.slice(0, 80)}', the recipe pins '${step.expectStdout}': the toolchain is not the pinned one`);
-    steps.push({ argv: command, code: ran.value.code, stdout: step.expectStdout === undefined ? null : printed.slice(0, 200) }); // only a pinned step's output is kept: the rest names the operator's home
+    steps.push(ran.value);
   }
   return finishSnapshot({ stack, spec, layout, out, resolved: resolved.value, steps });
 }

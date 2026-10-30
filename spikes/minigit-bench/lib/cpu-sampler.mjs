@@ -48,12 +48,11 @@ export function hostBusy(prev, cur) {
 
 const basename = p => String(p ?? '').split('/').at(-1);
 
+const matchesExeOrPath = (argv, p) => (p.exe ?? []).includes(basename(argv[0])) || (p.pathIncludes ?? []).some(m => argv.slice(0, 2).some(a => String(a).includes(m)));
+const argsMatch = (args, p) => (p.argAny === undefined || p.argAny.some(a => args.includes(a))) && (p.argAll === undefined || p.argAll.every(a => args.includes(a)));
+
 function matchesPattern(argv, p) {
-  const byExe = (p.exe ?? []).includes(basename(argv[0]));
-  const byPath = (p.pathIncludes ?? []).some(s => argv.slice(0, 2).some(a => String(a).includes(s)));
-  if (!byExe && !byPath) return false;
-  const args = argv.slice(1);
-  return (p.argAny === undefined || p.argAny.some(a => args.includes(a))) && (p.argAll === undefined || p.argAll.every(a => args.includes(a)));
+  return matchesExeOrPath(argv, p) && argsMatch(argv.slice(1), p);
 }
 
 const carriesCell = (environ, cellIds) => Array.isArray(environ) && cellIds.some(id => environ.includes(`BENCH_CELL=${id}`));
@@ -85,6 +84,33 @@ export function foreignCpu({ procs, cellIds, harnessPids, prev, dtMs, clockTicks
 /** The median spin time over `ratio` x the calibrated idle median. */
 export const spinMedianRatio = (spinMs, calibratedMs) => median(spinMs) / calibratedMs;
 
+/** What the window measured: the foreign CPU per sample, the spin ratio, the foreign agents, the lowest MemAvailable and the live sessions. */
+function windowFacts(samples, t) {
+  return {
+    foreign: samples.map(s => Math.max(0, s.hostCpus - s.harnessCpus)), ratio: spinMedianRatio(samples.map(s => s.spinMs), t.calibratedMs), agents: samples.flatMap(s => s.foreignAgents),
+    lowestMem: Math.min(...samples.map(s => s.memAvailablePct)), live: [...new Set(samples.flatMap(s => s.liveSessions))],
+  };
+}
+
+const hostCpuFailures = ({ foreign }, t) => [
+  ...(mean(foreign) > t.meanCpuMax ? [{ condition: 'host-cpu', detail: `mean foreign CPU ${mean(foreign).toFixed(2)} over ${t.meanCpuMax}` }] : []),
+  ...(Math.max(...foreign) > t.sampleCpuMax ? [{ condition: 'host-cpu', detail: `a sample of ${Math.max(...foreign).toFixed(2)} CPU over ${t.sampleCpuMax}` }] : []),
+];
+const agentAndMemoryFailures = ({ agents, lowestMem }, t) => [
+  ...(agents.length > 0 ? [{ condition: 'foreign-agent', detail: [...new Set(agents.map(a => a.cmdline))].join(' | ') }] : []),
+  ...(lowestMem < t.memAvailMinPct ? [{ condition: 'memory', detail: `MemAvailable ${lowestMem}% under ${t.memAvailMinPct}%` }] : []),
+];
+const liveAndSpinFailures = ({ live, ratio }, t) => [
+  ...(live.length > 0 ? [{ condition: 'live-session', detail: live.join(', ') }] : []),
+  ...(ratio > t.spinMaxRatio ? [{ condition: 'spin', detail: `spin median ${ratio.toFixed(2)} x idle, limit ${t.spinMaxRatio}` }] : []),
+];
+
+/** One failure per condition, its details joined. */
+function mergeByCondition(failures) {
+  const unique = failures.filter((f, i) => failures.findIndex(g => g.condition === f.condition) === i);
+  return unique.map(f => ({ ...f, detail: failures.filter(g => g.condition === f.condition).map(g => g.detail).join('; ') }));
+}
+
 /**
  * The pre-start verdict over a window of samples `{ hostCpus, harnessCpus, foreignAgents, memAvailablePct, liveSessions, spinMs }`:
  * (a) host CPU minus the harness's own: mean <= meanCpuMax and no sample over sampleCpuMax; (b) no foreign agent; (c) MemAvailable >= the
@@ -92,22 +118,9 @@ export const spinMedianRatio = (spinMs, calibratedMs) => median(spinMs) / calibr
  * -> `{ quiet, failures: [{ condition, detail }], numbers }`. Every failure is named; the foreign cmdlines are already masked.
  */
 export function quietVerdict(samples, t) {
-  const foreign = samples.map(s => Math.max(0, s.hostCpus - s.harnessCpus));
-  const ratio = spinMedianRatio(samples.map(s => s.spinMs), t.calibratedMs);
-  const agents = samples.flatMap(s => s.foreignAgents);
-  const lowestMem = Math.min(...samples.map(s => s.memAvailablePct));
-  const live = [...new Set(samples.flatMap(s => s.liveSessions))];
-  const failures = [
-    ...(mean(foreign) > t.meanCpuMax ? [{ condition: 'host-cpu', detail: `mean foreign CPU ${mean(foreign).toFixed(2)} over ${t.meanCpuMax}` }] : []),
-    ...(Math.max(...foreign) > t.sampleCpuMax ? [{ condition: 'host-cpu', detail: `a sample of ${Math.max(...foreign).toFixed(2)} CPU over ${t.sampleCpuMax}` }] : []),
-    ...(agents.length > 0 ? [{ condition: 'foreign-agent', detail: [...new Set(agents.map(a => a.cmdline))].join(' | ') }] : []),
-    ...(lowestMem < t.memAvailMinPct ? [{ condition: 'memory', detail: `MemAvailable ${lowestMem}% under ${t.memAvailMinPct}%` }] : []),
-    ...(live.length > 0 ? [{ condition: 'live-session', detail: live.join(', ') }] : []),
-    ...(ratio > t.spinMaxRatio ? [{ condition: 'spin', detail: `spin median ${ratio.toFixed(2)} x idle, limit ${t.spinMaxRatio}` }] : []),
-  ];
-  const unique = failures.filter((f, i) => failures.findIndex(g => g.condition === f.condition) === i);
-  const merged = unique.map(f => ({ ...f, detail: failures.filter(g => g.condition === f.condition).map(g => g.detail).join('; ') }));
-  return { quiet: merged.length === 0, failures: merged, numbers: { meanForeignCpus: mean(foreign), maxForeignCpus: Math.max(...foreign), spinRatio: ratio, lowestMemPct: lowestMem, samples: samples.length } };
+  const facts = windowFacts(samples, t);
+  const merged = mergeByCondition([...hostCpuFailures(facts, t), ...agentAndMemoryFailures(facts, t), ...liveAndSpinFailures(facts, t)]);
+  return { quiet: merged.length === 0, failures: merged, numbers: { meanForeignCpus: mean(facts.foreign), maxForeignCpus: Math.max(...facts.foreign), spinRatio: facts.ratio, lowestMemPct: facts.lowestMem, samples: samples.length } };
 }
 
 /**
@@ -172,18 +185,30 @@ export function cpusOfMask(mask) {
 const GONE = new Set(['ENOENT', 'ESRCH']);
 
 /** Every process the caller may read: `[{ pid, uid, argv, environ | null, ticks }]`. A process that vanishes mid-read is skipped; an unreadable environ is null. */
+/** The environment of a process as `{ value }` (`null` when it cannot be read: another user's), or `{ gone: true }` when the process ended while it was read. */
+function environOf(procApi, pid) {
+  try {
+    return { value: procApi.read(pid, 'environ').split('\0') };
+  } catch (e) {
+    return GONE.has(e.code) ? { gone: true } : { value: null };
+  }
+}
+
+/** `[proc]` for one pid (`[]` when it ended meanwhile). */
+function procOf(procApi, pid) {
+  const argv = procApi.read(pid, 'cmdline').split('\0').filter(Boolean);
+  const rest = procApi.read(pid, 'stat').split(/\)\s/).at(-1).split(' ');
+  const uid = Number(/^Uid:\s*(\d+)/m.exec(procApi.read(pid, 'status'))?.[1] ?? -1);
+  const env = environOf(procApi, pid);
+  return env.gone ? [] : [{ pid: String(pid), uid, argv, environ: env.value, ticks: Number(rest[11]) + Number(rest[12]) }];
+}
+
 function readProcs(procApi) {
   return procApi.pids().flatMap(pid => {
     try {
-      const argv = procApi.read(pid, 'cmdline').split('\0').filter(Boolean);
-      const rest = procApi.read(pid, 'stat').split(/\)\s/).at(-1).split(' ');
-      const uid = Number(/^Uid:\s*(\d+)/m.exec(procApi.read(pid, 'status'))?.[1] ?? -1);
-      let environ = null;
-      try { environ = procApi.read(pid, 'environ').split('\0'); } catch (e) { if (GONE.has(e.code)) return []; }
-      return [{ pid: String(pid), uid, argv, environ, ticks: Number(rest[11]) + Number(rest[12]) }];
-    } catch (e) {
-      if (GONE.has(e.code)) return [];
-      return [];
+      return procOf(procApi, pid);
+    } catch {
+      return []; // a process that ended while it was read (or whose files are not ours to read) is not a process of the table
     }
   });
 }
@@ -244,29 +269,37 @@ export function liveSessionDirs(rsdRoot) {
  * loop and is recorded in `error` (the phase itself is never touched: a lost sample is a lost measurement, not a reason to stop a paid session).
  * `stop()` -> `{ samples, flags, error }`; the flags are `phaseFlags` over every sample taken.
  */
+/** One sample, appended to the file. -> `{ error }` for a sample that threw: a lost sample is a lost measurement, never a reason to stop a paid session. */
+async function takeSample({ sample, taken, file }) {
+  try {
+    const s = await sample();
+    taken.push(s);
+    appendFileSync(file, `${JSON.stringify(s)}\n`);
+    return {};
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+/** The sampling loop: one `takeSample` per `intervalMs` until `state.running` is false or a sample fails. */
+async function sampleLoop({ state, taken, sample, file, intervalMs, sleep }) {
+  while (state.running) {
+    await sleep(intervalMs); // the first reading is one interval in: the sampler's own baseline was taken when it started
+    if (!state.running) return;
+    const result = await takeSample({ sample, taken, file });
+    if ('error' in result) { state.error = result.error; return; }
+  }
+}
+
 export function startPhaseSampler({ sample, file, intervalMs, thresholds, sleep }) {
   const taken = [];
-  let running = true;
-  let error = null;
-  const loop = (async () => {
-    while (running) {
-      await sleep(intervalMs); // the first reading is one interval in: the sampler's own baseline was taken when it started
-      if (!running) return;
-      try {
-        const s = await sample();
-        taken.push(s);
-        appendFileSync(file, `${JSON.stringify(s)}\n`);
-      } catch (e) {
-        error = e.message;
-        return;
-      }
-    }
-  })();
+  const state = { running: true, error: null };
+  const loop = sampleLoop({ state, taken, sample, file, intervalMs, sleep });
   return {
     async stop() {
-      running = false;
+      state.running = false;
       await loop;
-      return { samples: taken.length, flags: taken.length > 0 ? phaseFlags(taken, thresholds) : [], error };
+      return { samples: taken.length, flags: taken.length > 0 ? phaseFlags(taken, thresholds) : [], error: state.error };
     },
   };
 }

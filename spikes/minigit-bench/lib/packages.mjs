@@ -42,7 +42,9 @@ export function flagRules(rules) {
   });
 }
 
-const matches = (rule, p) => (rule.ecosystem === 'any' || rule.ecosystem === p.ecosystem) && rule.name.test(p.name) && (rule.versionNot === null || !rule.versionNot.test(p.version));
+const ecosystemMatches = (rule, p) => rule.ecosystem === 'any' || rule.ecosystem === p.ecosystem;
+const versionAllowed = (rule, p) => rule.versionNot === null || !rule.versionNot.test(p.version);
+const matches = (rule, p) => ecosystemMatches(rule, p) && rule.name.test(p.name) && versionAllowed(rule, p);
 const idOf = p => `${p.ecosystem}:${p.name}@${p.version}`;
 
 /**

@@ -16,6 +16,22 @@ export function codeOnly(source) {
     out.push(' ');
     i += 1;
   };
+  /** A `/` starts a regex literal after an operator or an opening bracket, never after a name, a number or a closing bracket (where it divides). */
+  const regexAllowed = made => /[(,=:[!&|?{};+\-*%<>~^]$/.test(made.join('').trimEnd().slice(-1)) || made.join('').trimEnd() === '';
+  const skipRegex = () => {
+    out.push(' ');
+    i += 1;
+    let inClass = false;
+    while (i < source.length && (source[i] !== '/' || inClass) && source[i] !== '\n') {
+      if (source[i] === '[') inClass = true;
+      if (source[i] === ']') inClass = false;
+      out.push(' ');
+      i += source[i] === '\\' ? 2 : 1;
+    }
+    out.push(' ');
+    i += 1;
+    while (/[a-z]/.test(source[i] ?? '')) { out.push(' '); i += 1; } // the flags
+  };
   const template = (fresh = true) => {
     if (fresh) { out.push(' '); i += 1; }
     while (i < source.length && source[i] !== '`') {
@@ -35,6 +51,7 @@ export function codeOnly(source) {
       i += 2;
     } else if (c === '\'' || c === '"') skipQuoted(c);
     else if (c === '`') template();
+    else if (c === '/' && regexAllowed(out)) skipRegex();
     else if (c === '}' && stack.length > 0 && stack.at(-1) === depth - 1) { stack.pop(); depth -= 1; out.push(' '); i += 1; template(false); } else {
       if (c === '{') depth += 1;
       if (c === '}') depth -= 1;

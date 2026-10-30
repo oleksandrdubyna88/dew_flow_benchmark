@@ -29,6 +29,26 @@ function readScore(session) {
   try { return ok(JSON.parse(readFileSync(file, 'utf8'))); } catch (e) { return fail(`${file} is unreadable: ${e.message}`, { kind: 'failed' }); }
 }
 
+const scoredResult = (value, session) => {
+  const score = readScore(session);
+  return score.ok ? { kind: 'scored', score: score.value, trace: value.stdout } : { kind: 'failed', reason: score.reason };
+};
+
+/** What a finished scorer process means: `{ result }` ends the scoring (it scored, or failed), `{ last }` is an environment fault (exit 3) worth a retry. */
+function exitOutcome(value, session) {
+  if (value.code === 0) return { result: scoredResult(value, session) };
+  const last = why(value.stdout);
+  return value.code === 3 ? { last } : { result: { kind: 'failed', reason: `the scorer exited ${value.code}: ${last}` } };
+}
+
+/** One attempt: the scorer run bounded as a whole. -> `{ result }` or `{ last }` (see `exitOutcome`). */
+async function attemptScore({ argv, session, outerTimeoutMs }) {
+  const r = await runBounded('taskset', argv, { timeoutMs: outerTimeoutMs });
+  if (!r.ok) return { result: { kind: 'failed', reason: r.reason } };
+  if (r.value.timedOut) return { result: { kind: 'scorer-timeout', reason: `the scorer did not finish within ${Math.round(outerTimeoutMs / 1000)} s and its process group was killed` } };
+  return exitOutcome(r.value, session);
+}
+
 /**
  * -> `{ kind: 'scored', score, trace }` | `{ kind: 'environment' | 'failed' | 'scorer-timeout', reason }`. `sleep` is injected so a test does not wait a minute.
  * `scorer` and `cpus` are parameters for the same reason (a stub scorer; the real default is the whole machine).
@@ -38,15 +58,9 @@ export async function scoreSession({ session, source, stack, phase, toolchains, 
   let last = null;
   for (let attempt = 0; attempt <= ENV_RETRIES; attempt += 1) {
     if (attempt > 0) await sleep(ENV_WAIT_MS);
-    const r = await runBounded('taskset', argv, { timeoutMs: outerTimeoutMs });
-    if (!r.ok) return { kind: 'failed', reason: r.reason };
-    if (r.value.timedOut) return { kind: 'scorer-timeout', reason: `the scorer did not finish within ${Math.round(outerTimeoutMs / 1000)} s and its process group was killed` };
-    if (r.value.code === 0) {
-      const score = readScore(session);
-      return score.ok ? { kind: 'scored', score: score.value, trace: r.value.stdout } : { kind: 'failed', reason: score.reason };
-    }
-    last = why(r.value.stdout);
-    if (r.value.code !== 3) return { kind: 'failed', reason: `the scorer exited ${r.value.code}: ${last}` };
+    const outcome = await attemptScore({ argv, session, outerTimeoutMs });
+    if (outcome.result) return outcome.result;
+    last = outcome.last;
   }
   return { kind: 'environment', reason: `${last} (after ${ENV_RETRIES} retries, ${ENV_WAIT_MS / 1000} s apart)` };
 }

@@ -7,11 +7,14 @@ import { fail, ok } from './result.mjs';
 
 const NUMERIC = Object.freeze(['windowMs', 'intervalMs', 'meanCpuMax', 'sampleCpuMax', 'foreignCpuMax', 'memAvailMinPct', 'spinMaxRatio', 'spinIterations', 'spinCalibrationRuns', 'recheckMs', 'maxWaitMs']);
 
+const positive = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const hasPatterns = patterns => Array.isArray(patterns) && patterns.length > 0;
+
 /** `inputs/quiet.json` -> `ok(thresholds)` | `fail` naming the first field that is not what it must be. */
 export function loadQuiet(json) {
-  const bad = NUMERIC.find(k => !(typeof json?.[k] === 'number' && Number.isFinite(json[k]) && json[k] > 0));
+  const bad = NUMERIC.find(k => !positive(json?.[k]));
   if (bad) return fail(`quiet.json: '${bad}' must be a positive number (the numeric fields are ${NUMERIC.join(', ')})`);
-  if (!Array.isArray(json.agentPatterns) || json.agentPatterns.length === 0) return fail('quiet.json: agentPatterns must list at least one agent pattern');
+  if (!hasPatterns(json.agentPatterns)) return fail('quiet.json: agentPatterns must list at least one agent pattern');
   return ok(Object.freeze({ ...json }));
 }
 
@@ -26,6 +29,13 @@ export async function quietWindow({ thresholds, sampleOnce, sleep, windowMs = th
   return quietVerdict(samples, thresholds);
 }
 
+/** How the wait ends after a check, or null to go on: cancelled, quiet, or out of time. */
+function waitEnd({ verdict, waitedMs, signal, maxWaitMs }) {
+  if (signal?.aborted) return { quiet: false, aborted: true, waitedMs, verdict };
+  if (verdict.quiet) return { quiet: true, waitedMs, verdict };
+  return waitedMs >= maxWaitMs ? { quiet: false, gaveUp: true, waitedMs, verdict } : null;
+}
+
 /**
  * Check, and re-check after `recheckMs`, until quiet or `maxWaitMs` is spent. `check()` runs one window and resolves to its verdict.
  * `onRetry({ attempt, verdict, waitedMs, nextCheckInMs })` is called before each sleep, so a long wait is never silent (review G4).
@@ -38,19 +48,21 @@ export async function waitForQuiet({ check, maxWaitMs, recheckMs, now, sleep, on
   for (;;) {
     const verdict = await check();
     const waitedMs = now() - start;
-    if (signal?.aborted) return { quiet: false, aborted: true, waitedMs, verdict };
-    if (verdict.quiet) return { quiet: true, waitedMs, verdict };
-    if (waitedMs >= maxWaitMs) return { quiet: false, gaveUp: true, waitedMs, verdict };
+    const end = waitEnd({ verdict, waitedMs, signal, maxWaitMs });
+    if (end) return end;
     attempt += 1;
     onRetry({ attempt, verdict, waitedMs, nextCheckInMs: recheckMs });
     await sleep(recheckMs);
   }
 }
 
+const blank = reason => typeof reason !== 'string' || reason.trim() === '';
+const secondHalfOfQuietCell = (phase, v1Quiet) => phase === 'v2' && v1Quiet === true;
+
 /** `--accept-noisy <reason>` -> `ok({ flags: ['started not quiet'], reason })`; refused without a reason and for a v2 phase whose v1 started quiet. */
 export function noisyOverride({ phase, v1Quiet, reason }) {
-  if (typeof reason !== 'string' || reason.trim() === '') return fail('--accept-noisy needs a reason');
-  if (phase === 'v2' && v1Quiet === true) return fail('--accept-noisy is refused for a v2 phase whose v1 was quiet: the cell would hold one quiet and one loaded phase');
+  if (blank(reason)) return fail('--accept-noisy needs a reason');
+  if (secondHalfOfQuietCell(phase, v1Quiet)) return fail('--accept-noisy is refused for a v2 phase whose v1 was quiet: the cell would hold one quiet and one loaded phase');
   return ok({ flags: ['started not quiet'], reason: reason.trim() });
 }
 
