@@ -65,9 +65,9 @@ public sealed class GateStepTests
         second.WhenWaiting(bench, _ => bench.WriteStatus("proceed"));
         var outcome = await second.Gate(bench).RunAsync(context, Ct);
 
-        outcome.IsDone().Skipped.Should().Be(skipped);
         bench.Fake.Calls().Should().HaveCount(calls, "a gate that was blocked is judged again whatever the runner's .done says");
-        bench.Waits.Recorded.Should().HaveCount(waitsInGateTwo, skipped ? "the spent tries are counted from the file: nothing is waited again" : "one wait, then the gate proceeds");
+        bench.Waits.Recorded.Should().HaveCount(waitsInGateTwo, skipped ? "the second round was already decided before the death: the spent tries are counted from the file, nothing is waited again" : "one wait, then the gate proceeds");
+        outcome.IsDone().Skipped.Should().Be(skipped);
         bench.GateWaits().Should().HaveCount(linesInAll);
         File.Exists(bench.Paths.Continue(GateName)).Should().BeFalse();
         File.Exists(bench.Paths.Diff(GateName)).Should().BeTrue();
@@ -96,9 +96,9 @@ public sealed class GateStepTests
 
         var again = await new GateRig().Gate(bench).RunAsync(bench.GateContext(), Ct);
 
-        again.IsDone().Skipped.Should().BeTrue("the gate finished; a restart does not give it fresh tries");
-        bench.Fake.Calls().Should().HaveCount(3);
+        bench.Fake.Calls().Should().HaveCount(3, "the gate finished: a restart does not give it fresh tries");
         bench.Waits.Recorded.Should().HaveCount(2);
+        again.IsDone().Skipped.Should().BeTrue();
         bench.LogLines.Last().Should().EndWith("gate status blocked — after 2 waits, finished as the shell did");
         File.Exists(bench.Paths.Diff(GateName)).Should().BeTrue();
 
@@ -356,8 +356,10 @@ public sealed class GateStepTests
         await holder.LineAsync("held", TimeSpan.FromSeconds(30));
         var real = new FileGateLock(TimeProvider.System, TimeSpan.FromMilliseconds(50));
 
+        using var backstop = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        backstop.CancelAfter(TimeSpan.FromSeconds(20));
         var started = TimeProvider.System.GetTimestamp();
-        var outcome = await new GateRig().Gate(bench, gateLock: real, ceiling: TimeSpan.FromMilliseconds(400)).RunAsync(bench.GateContext(), Ct);
+        var outcome = await new GateRig().Gate(bench, gateLock: real, ceiling: TimeSpan.FromMilliseconds(400)).RunAsync(bench.GateContext(), backstop.Token);
         var waited = TimeProvider.System.GetElapsedTime(started);
 
         outcome.IsStopped(5).Why.Should().Contain("held by pid").And.Contain("400 ms");
