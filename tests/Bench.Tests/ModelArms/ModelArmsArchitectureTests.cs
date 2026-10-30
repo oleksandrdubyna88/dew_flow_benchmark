@@ -57,6 +57,7 @@ public sealed class ModelArmsArchitectureTests
         // E2.S4
 
         // E2.S5
+        typeof(ReviewAnswer),
 
         // E2.S6
 

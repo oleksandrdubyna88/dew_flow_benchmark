@@ -231,8 +231,28 @@ public sealed class ClaudeResultEnvelopeTests
         attributes.Should().Contain(line => line.Trim() == "tests/Bench.Tests/Fixtures/model-arms/** -text", "a checkout that converts line endings would change the bytes the sha256 values pin");
     }
 
+    /// <summary>R2 of the E2.S5 fix round. A string that holds an ESCAPED lone surrogate cannot be read by <c>GetString</c>; the reader then decodes it itself — every escape as a JSON parser reads it, a well-formed
+    /// pair kept, a lone half written as U+FFFD — so the text is what node's <c>JSON.parse</c> gives minus the lone half, never the escaped raw text. Each row is a whole result line (a built string, so the escapes
+    /// are the line's own).</summary>
+    [Theory]
+    [InlineData("""\ud83d""", "\uFFFD")]
+    [InlineData("""\ude00""", "\uFFFD")]
+    [InlineData("""a \ud83d b""", "a \uFFFD b")]
+    [InlineData("""\ud83d\ud83d\ude00""", "\uFFFD\U0001F600")]
+    [InlineData("""\ude00\ud83d""", "\uFFFD\uFFFD")]
+    [InlineData("""\ud83d\ud83d""", "\uFFFD\uFFFD")]
+    [InlineData("""x \\ud83d y \ud83d""", "x \\ud83d y \uFFFD")]
+    [InlineData("""\"q\" \\ \/ \b\f\n\r\t \u00e9 \ud83d""", "\"q\" \\ / \b\f\n\r\t \u00e9 \uFFFD")]
+    [InlineData("""\ud83d\ude00 \ud800""", "\U0001F600 \uFFFD")]
+    public void A_string_with_an_escaped_lone_surrogate_is_decoded_with_the_lone_half_as_U_FFFD(string escaped, string expected)
+    {
+        var line = "{\"type\":\"result\",\"is_error\":false,\"result\":\"" + escaped + "\"}";
+
+        ClaudeResultEnvelope.LastOf(line).Ok().Result.Should().Be(expected, "the escapes are decoded like JSON.parse does, the lone half becomes U+FFFD, and nothing is left escaped");
+    }
+
     /// <summary>The product's codex lesson in this reader: <c>GetString</c> on a number throws <c>InvalidOperationException</c>, not <c>JsonException</c>, and this runs on the path of an
-    /// attempt that has ALREADY failed. The last row is well-formed JSON whose string holds a lone surrogate escape: <c>GetString</c> throws on it too, and the reader reads it as its raw text.</summary>
+    /// attempt that has ALREADY failed. The last row is well-formed JSON whose string holds a lone surrogate escape: <c>GetString</c> throws on it too, and the reader decodes the string itself with the lone half replaced by U+FFFD (what node's JSON.parse gives, minus the lone half).</summary>
     [Theory]
     [InlineData("""{"type":"result","is_error":true}""", true, "", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"result":42}""", true, "", "", "", "")]
@@ -244,7 +264,7 @@ public sealed class ClaudeResultEnvelopeTests
     [InlineData("""{"type":"result","result":"no is_error at all"}""", false, "no is_error at all", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"errors":["rate limit exceeded",7,null,{"a":1}]}""", true, "", "", "rate limit exceeded", "the words 'rate limit' in the result — an error result with no text")]
     [InlineData("""{"type":"result","errors":"x","api_error":5}""", false, "", "", "", "")]
-    [InlineData("""{"type":"result","is_error":true,"result":"\ud800"}""", true, "\\ud800", "", "", "")]
+    [InlineData("""{"type":"result","is_error":true,"result":"\ud800"}""", true, "\uFFFD", "", "", "")]
     public void An_odd_field_in_a_result_object_reads_as_its_safe_default_and_nothing_throws(string line, bool isError, string result, string apiError, string errors, string limitedReason)
     {
         var read = () => ClaudeResultEnvelope.LastOf(line);

@@ -149,8 +149,8 @@ public sealed record ClaudeResultEnvelope(bool IsError, CapturedCount ApiErrorSt
             : [];
 
     /// <summary>The text of an element that IS a string. A JSON string holding a lone surrogate escape (<c>"\ud800"</c>) is well-formed JSON whose <c>GetString</c> throws
-    /// <see cref="InvalidOperationException"/>; that one string is read as its raw JSON text without the quotes — the words in it still count — so a result line with such a value is
-    /// still a result.</summary>
+    /// <see cref="InvalidOperationException"/>; that one string is decoded by <see cref="JsonStringText"/> — every escape as a JSON parser reads it, a lone half as U+FFFD — so a result line with such a value is
+    /// still a result, its words still count, and a review verdict in the same text is still a verdict (the E2.S5 fix round, R2: the first version read the escaped raw text, which turned a valid verdict into an <c>unparsed</c>).</summary>
     private static string StringOf(JsonElement value)
     {
         try
@@ -159,7 +159,7 @@ public sealed record ClaudeResultEnvelope(bool IsError, CapturedCount ApiErrorSt
         }
         catch (InvalidOperationException)
         {
-            return value.GetRawText()[1..^1];
+            return JsonStringText.Decode(value.GetRawText()[1..^1]);
         }
     }
 }
