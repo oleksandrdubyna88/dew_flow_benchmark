@@ -401,6 +401,25 @@ test('Close_destroys_an_in_flight_upstream_request_and_a_clean_seal_is_not_a_low
   }
 });
 
+test('Drain_that_wakes_early_leaves_no_timer_behind_so_the_ceiling_never_holds_the_event_loop', async () => {
+  const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 4), 80));
+  const b = await startBroker({ stub });
+  const timers = () => process.getActiveResourcesInfo().filter(t => t === 'Timeout').length;
+  try {
+    const before = timers();
+    viaSocket(b.socketPath, { abortAfterFirstChunk: true }).catch(() => {});
+    await sleep(40);
+    const started = Date.now();
+    const drained = await b.broker.drain(120_000);
+    assert.equal(drained.drained, true);
+    assert.ok(Date.now() - started < 3000, 'it woke when the request settled, not at the ceiling');
+    assert.equal(timers(), before, 'the 120 s ceiling timer was cleared when it woke early');
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('A_response_from_a_model_the_table_does_not_know_is_charged_at_the_dearest_rates_and_the_cell_record_says_so', async () => {
   const unknown = { id: 'm', model: 'claude-unknown-9', usage: { input_tokens: 1000, output_tokens: 1000 } }; // dearest: 1000 x 10 + 1000 x 50 = 0.06
   const stub = await stubUpstream((_q, res) => json(res, 200, unknown));
