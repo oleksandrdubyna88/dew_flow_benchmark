@@ -556,6 +556,10 @@ It fixes the data rids, pair 1's masks and the launch and scoring order. The pro
 **Commands.** `node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what aa`, `--what rehearse-v2`, `--what
 pilot-node`; `… aa-verdicts --series <dir>`; the policy commit; `… seed-reveal`.
 
+**Built (deviations).** `lib/aa-verdicts.mjs` and its helpers (`aa-rules.mjs`, `aa-rules-twins.mjs`, `aa-check.mjs`, `aa-facts.mjs`, `aa-smoke.mjs`) compute the table; the command writes `<series>/aa-verdicts.json` (JSON, not `AA.md`: `AA.md` is
+rendered from it by hand, with the replacing evidence named) and prints the table; exit 0 GO, 2 NO GO or STOP, 4 a refusal. G-12's replacing evidence is a dated `G-12 | holds | <rid> | <evidence path> | <who>` line (the budget tests green at
+the run's harness identity cannot be computed offline). G-4's subagent half is the committed smoke fixture's B-T1, recomputed on the pinned CLI. A ‡ row with no Node pilot is `not exercised`. Tests: `test/aa-verdicts.test.mjs`.
+
 **Done when.** `AA.md` says GO; `amendments.md`, `crosscheck-policy.json` and `seed.txt` committed and pushed as dated changes;
 the pilot spend in the ledger.
 

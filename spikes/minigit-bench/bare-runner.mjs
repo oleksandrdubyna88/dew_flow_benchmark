@@ -9,6 +9,7 @@
 //   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> [--what ...] [--accept-harness <identity> --amendment <date>] [--after-stop <rule> --reason <text>]
 //   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> --settle-only                          settles and charges what a stopped series left launching; launches nothing
 //   node spikes/minigit-bench/bare-runner.mjs status --series <dir>
+//   node spikes/minigit-bench/bare-runner.mjs aa-verdicts --series <dir>                                   the G table of the A/A computed (E3b.S4): <series>/aa-verdicts.json; exit 0 GO | 2 NO GO or STOP | 4 refusal
 //
 // Exit codes: 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet, the preflight, a scorer environment failure or timeout) | 4 usage or
 // configuration (the pre-registration guard) | 5 the runner or the scorer failed | 130 / 143 cancelled by SIGINT / SIGTERM.
@@ -20,6 +21,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { aaVerdicts, exitOf, renderTable, writeReport } from './lib/aa-verdicts.mjs';
+import { smokeFixture } from './lib/aa-smoke.mjs';
 import { spinProbe } from './lib/cpu-sampler.mjs';
 import { EXIT, reconcile, runLoop } from './lib/bare-series.mjs';
 import { applyInit, describePlan, initPlan } from './lib/bare-init.mjs';
@@ -400,9 +403,21 @@ function cmdSeedReveal(v, write) {
   return r.ok ? EXIT.done : EXIT.config;
 }
 
+/** `aa-verdicts --series <dir>`: the G table computed (E3b.S4), written to `<series>/aa-verdicts.json` and printed. Exit 0 GO, 2 NO GO or STOP, 4 a refusal. `seams.smoke` is for tests. */
+function cmdAaVerdicts(v, write, seams = {}) {
+  const series = readSeries(v);
+  if (!series.ok) return refuse(write, series.reason);
+  const report = aaVerdicts({ seriesDir: series.value.seriesDir, inputsDir: inputsDirOf(v), smoke: seams.smoke === undefined ? smokeFixture() : seams.smoke });
+  if (!report.ok) return refuse(write, `aa-verdicts: ${report.reason}`);
+  const file = writeReport(series.value.seriesDir, report.value);
+  renderTable(report.value).forEach(write);
+  write(`written: ${file}`);
+  return exitOf(report.value);
+}
+
 /** The commands, each `(values, write, seams) -> exit code`. */
 const COMMANDS = {
-  init: cmdInit, snapshot: cmdSnapshot, status: cmdStatus, 'seed-commit': cmdSeedCommit, 'seed-reveal': cmdSeedReveal,
+  init: cmdInit, snapshot: cmdSnapshot, status: cmdStatus, 'aa-verdicts': cmdAaVerdicts, 'seed-commit': cmdSeedCommit, 'seed-reveal': cmdSeedReveal,
   run: (v, write, seams) => cmdRun(v, write, { resume: false }, seams), resume: (v, write, seams) => cmdRun(v, write, { resume: true }, seams),
 };
 
