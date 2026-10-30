@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Bench.Infrastructure.Process;
 using Bench.Tests.Probes.Driver;
 using FluentAssertions;
+using ModelArms.Core.Steps;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -12,9 +13,9 @@ namespace Bench.Tests.ModelArms;
 /// (<c>transcripts: true</c>), so a re-entry through <c>run-arm</c> finds one and resumes. Every launch goes through the shared launcher
 /// to the fake; nothing paid is called.
 /// <para>
-/// What this does NOT prove: that the transcript path is the one <c>SessionTranscripts.PathOf</c> spells — that type is E2.S2's and does not exist yet, so the
-/// path here is written out a second time (the slug rule, on purpose: the fake references nothing of the module); once it lands, E2.S2 adds the
-/// comparison (E2 §8 item 50). Nor does it prove where a real claude puts its transcript on a host this was not measured on.
+/// What this does NOT prove: where a real claude puts its transcript on a host this was not measured on. The path the fake writes is written out a second time here
+/// (the slug rule, on purpose: the fake references nothing of the module), and <c>A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked</c> also
+/// asserts that <c>SessionTranscripts.PathOf</c> names the same file for the cwd the launcher was handed (E2 §8 item 50).
 /// </para></summary>
 public sealed class FakeCliByCallTests
 {
@@ -63,9 +64,9 @@ public sealed class FakeCliByCallTests
     private static string Slug(string cwd) => Regex.Replace(cwd, "[^A-Za-z0-9]", "-");
 
     /// <summary>The cwd the fake logged for its call: what the process itself reports (a symbolic link in the temp folder's path would differ from the
-    /// path the launcher was handed, and claude slugs the one it sees). NOTE: this HIDES a gap — the module's runner will compute its transcript path from the cwd the
-    /// LAUNCHER was given, and on a host whose temp folder is a link (macOS <c>/var</c> → <c>/private/var</c>) the two differ. Closing it is E2 §8 item 50's, once
-    /// <c>SessionTranscripts.PathOf</c> exists.</summary>
+    /// path the launcher was handed, and claude slugs the one it sees). NOTE: this HIDES a gap — the module's runner computes its transcript path from the cwd the
+    /// LAUNCHER was given, and on a host whose temp folder is a link (macOS <c>/var</c> → <c>/private/var</c>) the two differ. The gap is closed for the first test only, by
+    /// asserting <c>SessionTranscripts.PathOf</c> over the cwd handed to <c>RunAsync</c> (E2 §8 item 50); the tests that use this keep the note: on such a host they would read the resolved path.</summary>
     private static string SeenCwd(FakeCli fake) => fake.Calls()[^1].Cwd;
 
     private static string Transcript(string home, string cwd, Guid session) => Path.Combine(home, "projects", Slug(cwd), $"{session:D}.jsonl");
@@ -109,6 +110,8 @@ public sealed class FakeCliByCallTests
         var freshFile = Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), fresh);
         File.Exists(freshFile).Should().BeTrue($"claude leaves {freshFile} for a session it was given with --session-id");
         new FileInfo(freshFile).Length.Should().Be(0, "the file is empty: the fake has no conversation to record");
+        SessionTranscripts.PathOf(Path.Combine(home, ".claude"), cwd, fresh).Should().Be(
+            freshFile, "the module's own spelling, over the cwd the LAUNCHER was handed (not the one the process reports), names the file the fake left");
 
         await LaunchAsync(fake, cwd, Environment(fake, home), "--resume", fresh.ToString("D"));
         File.Exists(freshFile).Should().BeTrue("a session that exists can be resumed, and its transcript stays");
@@ -116,7 +119,8 @@ public sealed class FakeCliByCallTests
         var config = temp.Combine("cfg");
         var relocated = Guid.NewGuid();
         await LaunchAsync(fake, cwd, Environment(fake, home, config), "--session-id", relocated.ToString("D"));
-        File.Exists(Transcript(config, SeenCwd(fake), relocated)).Should().BeTrue("CLAUDE_CONFIG_DIR relocates ~/.claude, as it does for claude");
+        File.Exists(SessionTranscripts.PathOf(config, cwd, relocated)).Should().BeTrue("CLAUDE_CONFIG_DIR relocates ~/.claude, as it does for claude — the module's path over the cwd handed to the launcher");
+        SessionTranscripts.ClaudeHome(Environment(fake, home, config)).Should().Be(config, "the module reads the same relocation from the environment the child receives");
         File.Exists(Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), relocated)).Should().BeFalse("the relocated home is the only one written");
     }
 

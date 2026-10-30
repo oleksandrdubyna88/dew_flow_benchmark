@@ -249,10 +249,58 @@ public sealed class TimingLineTests
         SessionTranscripts.ClaudeHome(new Dictionary<string, string> { ["HOME"] = string.Empty }).Should().BeEmpty();
     }
 
-    /// <summary>E2.S3's item (E2 §8 item 49), written against the slug rule claude uses because the fake CLI's <c>transcripts: true</c> flag lands with E2.S3 and is not on this branch.
-    /// <b>To be widened to the fake when E2.S3 lands:</b> run the fake with <c>--session-id g</c> and <c>transcripts: true</c> in the working directory the launcher is handed and
-    /// assert <c>PathOf(home/.claude, thatDirectory, g)</c> names the file it left. The rule itself was measured on this host: this session's own working directory
-    /// <c>/home/jinx/git/dew_flow_conventions</c> is the folder <c>~/.claude/projects/-home-jinx-git-dew-flow-conventions</c>.</summary>
+    public static TheoryData<string, string> LongPaths => new()
+    {
+        { "/" + new string('a', 199), "-" + new string('a', 199) },
+        { "/" + new string('a', 200), "-" + new string('a', 199) + "-b6ymvl" },
+        { "/home/" + string.Concat(Enumerable.Repeat("dir.a_b/", 30)), "-home-" + string.Concat(Enumerable.Repeat("dir-a-b-", 24)) + "di-ked71z" },
+        { "/" + string.Concat(Enumerable.Repeat("\U0001F600", 101)), new string('-', 200) + "-csymf6" },
+    };
+
+    /// <summary>claude's rule for a long working directory, READ from the claude 2.1.310 binary (its function <c>FH</c>), not measured with a real session: the slug is the path with every character outside
+    /// <c>[a-zA-Z0-9]</c> replaced by <c>-</c>; when that is longer than 200 it is cut to its first 200 and <c>-</c> plus <c>Math.abs(h).toString(36)</c> is appended, <c>h</c> being the 31-multiplier hash of the ORIGINAL
+    /// path over its UTF-16 units (<c>h = (h &lt;&lt; 5) - h + charCodeAt | 0</c>). The expected values were computed with node from the same JS:
+    /// <c>node -e 'const h=t=&gt;{let e=0;for(let n=0;n&lt;t.length;n++)e=(e&lt;&lt;5)-e+t.charCodeAt(n)|0;return e};const FH=e=&gt;{const n=e.replace(/[^a-zA-Z0-9]/g,"-");return n.length&lt;=200?n:`${n.slice(0,200)}-${Math.abs(h(e)).toString(36)}`};console.log(FH(process.argv[1]))' "&lt;the path&gt;"</c>.
+    /// Rows: 200 characters (kept whole), 201 (cut and hashed), a mixed path that is hashed from its ORIGINAL text, and 101 astral characters (203 UTF-16 units, so 202 dashes before the cut).</summary>
+    [Theory]
+    [MemberData(nameof(LongPaths))]
+    public void A_working_directory_longer_than_200_characters_is_cut_and_hashed_as_claude_does(string cwd, string slug)
+    {
+        var id = Guid.Parse("d62b4ad4-8535-46c6-8289-1ccf2c45322d");
+
+        SessionTranscripts.PathOf("/h/.claude", cwd, id).Should().Be(Path.Combine("/h/.claude", "projects", slug, "d62b4ad4-8535-46c6-8289-1ccf2c45322d.jsonl"));
+    }
+
+    [Fact]
+    public void Without_a_claude_home_there_is_no_transcript_path_and_never_a_relative_one()
+    {
+        var id = Guid.NewGuid();
+
+        SessionTranscripts.PathOf(string.Empty, "/home/op/arm", id).Should().BeEmpty(
+            "with neither HOME nor CLAUDE_CONFIG_DIR there is nothing to name; claude may fall back to the passwd home (assumed, not measured), so a run that cannot say starts fresh — the safe side");
+        SessionTranscripts.PathOf(SessionTranscripts.ClaudeHome(new Dictionary<string, string>()), "/home/op/arm", id).Should().BeEmpty();
+    }
+
+    /// <summary>The part-5 fill steps (<c>2a-fill</c>, <c>2b-fill</c> of the Q arms, 16 recorded start lines) wrote <c>"how":"script"</c> and no <c>budget_s</c>, <c>session</c> or <c>deadline</c>: no claude ran, so no budget, session or
+    /// deadline exists. They are a NAMED exception: this reader keeps them as <c>Other</c> with the raw bytes, and an analysis must not count a fill script's start through <c>Read</c>. Two of the recorded lines, byte for byte.</summary>
+    [Fact]
+    public void The_part_5_fill_script_start_lines_are_kept_as_other_with_their_bytes()
+    {
+        string[] recorded =
+        [
+            "{\"kind\":\"start\",\"arm\":\"Q1\",\"step\":\"2a-fill\",\"attempt\":1,\"how\":\"script\",\"model\":\"qwen (vLLM)\",\"start_utc\":\"2026-10-26T09:59:26Z\",\"head\":\"8a683844\",\"stream\":\"\"}",
+            "{\"kind\":\"start\",\"arm\":\"Q1\",\"step\":\"2b-fill\",\"attempt\":1,\"how\":\"script\",\"model\":\"qwen (vLLM)\",\"start_utc\":\"2026-10-26T10:01:55Z\",\"head\":\"ee34604c\",\"stream\":\"\"}",
+        ];
+
+        var lines = TimingLines.Read(string.Join("\n", recorded) + "\n");
+
+        lines.Should().AllBeOfType<TimingLine.Other>("a fill script's start has no budget_s, so it is not a claude attempt's start");
+        lines.Cast<TimingLine.Other>().Select(other => other.Raw).Should().Equal(recorded);
+    }
+
+    /// <summary>The short-path slug rule, measured on this host: this session's own working directory <c>/home/jinx/git/dew_flow_conventions</c> is the folder
+    /// <c>~/.claude/projects/-home-jinx-git-dew-flow-conventions</c>. The comparison with the file the fake CLI leaves for <c>--session-id g</c> (E2 §8 item 50) is
+    /// <c>FakeCliByCallTests.A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked</c>, which asserts <c>PathOf(&lt;home&gt;/.claude, &lt;the cwd handed to RunAsync&gt;, g)</c> names it.</summary>
     [Fact]
     public void The_transcript_path_replaces_every_character_outside_letters_and_digits_with_a_dash()
     {
