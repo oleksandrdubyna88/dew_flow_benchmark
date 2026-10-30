@@ -441,7 +441,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | `loadSmoke` reads through the one reader: a link among a smoke directory's files or transcripts is refused and its target is not read (before: `readFileSync` followed it) | `agent-files-sites.test.mjs` |
 | An extra environment key that differs from a base key only in case (`https_proxy`, `path`, `claude_code_oauth_token`) is refused, naming the base key | `agent-env.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
-| A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
+| A link is `inside` only when every directory the kernel traverses to its target is lstat-verified not a link and the target stays in the link's bind (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader); the npm `.bin/tsc -> ../typescript/bin/tsc` shape and a relative link inside the box `/tmp` are `inside` | `link-class.test.mjs` |
 
 #### The first re-smoke (2026-10-30, after the review fixes; NOT the committed fixture)
 
@@ -490,15 +490,19 @@ fail-closed sanitised copy (no token, no account or organisation id, no operator
 **Dated note on B-S3 and links (2026-10-30, run `20261030T004243Z`).** The first scan of this run refuted B-S3 on one symlink, made by the CLI
 itself: `/tmp/claude-<uid>/<box-work>/<session>/tasks/<agent id>.output` -> the subagent's own transcript under `box/config/projects/…/subagents/`.
 "Any link in the agent-writable tree is a finding" was too blunt for a link the CLI makes per subagent. A link is now classified from its target
-STRING and an `lstat` of its path (`lib/link-class.mjs`), never by following it. A link is **`inside`** only when ALL hold: (1) the target
-string has **no `..` segment** (the kernel resolves `..` after following the links before it, so `sub/../etc/passwd` with `sub -> /tmp` is
-`/etc/passwd`, not `<dir>/etc/passwd`; the first version of this rule normalised `..` lexically and classed that link `inside`, found by the review of
-2026-10-30); (2) **no component of the target path before the last is itself a link** (each `lstat`ed from the host side); (3) the target maps, through the
-box's own bind table (`writableBinds` in `sandbox.mjs`, the one table the argv binds from), under a read-write bind whose **box path and host path
-are the same path** (`work`, `home`, `config`, `nuget`, `npm`, `out`): the box's `/tmp` is `box/tmp` on the host, and an absolute `/tmp/...` target is the
-HOST's `/tmp` for a reader on the host, so it is never `inside`; (4) the target exists. A relative target is resolved against the link's own box
-directory first. **Everything else is `high`**: a `..`, a target below a link, a target under the box `/tmp`, a target outside every bind or mapping to none,
-a dangling one, and any pipe, socket or device. The CLI's own link (`tasks/<id>.output` -> an absolute path under `config/projects/`) meets all four.
+STRING and an `lstat` of the directories on its way (`lib/link-class.mjs`), never by following it. The kernel resolves `..` after following the links before
+it, so a lexical reading equals the kernel's only when no directory the kernel traverses is a link; every verdict rests on lstat-verifying exactly those
+directories (the first version normalised `..` lexically and classed `sub -> /tmp`, `evil -> sub/../etc/passwd` as `inside`, found by the review of 2026-10-30).
+An **absolute** target is `inside` only when it has no `..`, maps under a read-write bind whose box path and host path are the same path (`work`, `home`,
+`config`, `nuget`, `npm`, `out`; the box's `/tmp` is `box/tmp` on the host, so an absolute `/tmp/...` target is the HOST's `/tmp` for a host reader and is
+never `inside`), has no link among the components before the last, and exists. A **relative** target may hold `..`: it is resolved from the link's own
+directory and is `inside` only when every directory above the link and every directory the walk steps through (a `..` is taken only from a verified
+directory) is a real directory, every step stays within the SAME bind the link lies in, and the target exists. That holds in the box's `/tmp` bind too: a
+relative link and its target move together between the box path and the host path, so the host reads what the box reads (the decision, and its test). The
+reason for allowing `..`: `npm install` writes `node_modules/.bin/tsc -> ../typescript/bin/tsc`, and a TypeScript session must not get a high finding for it
+while a C# session does not. **Everything else is `high`**: a `..` that leaves the bind, a directory on the way that is a link, an absolute target with a `..`
+or under the box `/tmp`, a target outside every bind or mapping to none, a dangling one, and any pipe, socket or device. The CLI's own link
+(`tasks/<id>.output` -> an absolute path under `config/projects/`) and the npm `.bin` shape are `inside`.
 `inside` links are listed in the scan (`insideLinks`) and in `checks.json` as box-path pairs and do
 not refute B-S3; **every host-side reader still refuses every link** (`O_NOFOLLOW`), so the classification changes only the verdict, never what is
 read. The run was re-scanned from its raw directory (no new paid session) and the fixture replaced with it.
