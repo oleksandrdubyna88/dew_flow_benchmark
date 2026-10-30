@@ -82,6 +82,7 @@ export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, ali
       mask: known(run.mask), maskObserved: run.maskObserved === undefined ? notCaptured('the sampler did not observe the mask') : known(run.maskObserved), spawnStampMs: maybe(run.spawnStampMs, 'no spawn was stamped: the launch ended before the box was spawned'),
       startSkewMs: maybe(run.startSkewMs, 'a session run alone has no partner to skew against'), quiet: maybe(run.quiet, 'no quiet record'), spin: maybe(run.spin, 'no spin record'),
       harnessIdentity: known(run.harnessIdentity), preregTag: known(run.preregTag), cliVersion: known(run.cliVersion),
+      inputs: maybe(run.inputs, 'the run recorded no hash of quiet.json and package-flags.json'),
     },
     cost: { ...costPart({ outcome, views, cost, meta }), aliases: aliasRecord?.ok ? known({ ...aliasRecord.value, check: aliasCheck }) : notCaptured(aliasRecord?.reason ?? 'no alias record') },
     time: timePart({ views, meta }),

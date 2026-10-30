@@ -24,7 +24,7 @@ async function localTags(repo) {
 }
 
 /**
- * The fields the run-map pinned, as the disk holds them NOW: `{ pins, stacksSha256, pricesSha256, snapshots, preregTag, seedSha256, harnessIdentity }`. A file that is absent reads
+ * The fields the run-map pinned, as the disk holds them NOW: `{ pins, stacksSha256, pricesSha256, quietSha256, packageFlagsSha256, snapshots, preregTag, seedSha256, harnessIdentity }`. A file that is absent reads
  * as null (a difference), never as the map's own value.
  */
 export async function currentFromDisk({ map, inputsDir, repo }) {
@@ -39,6 +39,8 @@ export async function currentFromDisk({ map, inputsDir, repo }) {
     pins: stacks === null ? null : JSON.parse(stacks.toString('utf8')).pins ?? null,
     stacksSha256: stacks === null ? null : sha256(stacks),
     pricesSha256: map.pricesFile ? hashOf(file(map.pricesFile)) : null,
+    quietSha256: hashOf(file('quiet.json')),
+    packageFlagsSha256: hashOf(file('package-flags.json')),
     snapshots: Object.fromEntries(Object.keys(map.snapshots ?? {}).map(stack => [stack, snapshots[stack]?.treeSha256 ?? null])),
     preregTag: tags.includes(map.preregTag) ? map.preregTag : tags.join(', ') || null,
     seedSha256: seed === null ? null : seed.toString('utf8').trim(),
@@ -56,8 +58,21 @@ function recordAcceptance({ map, accepted, runMapFile, ledgerFile, now }) {
 }
 
 /**
+ * Write the instrument inputs a dated `input:` line just accepted (review N5) into the run-map (`inputsAccepted`: file, content hash, the line's date and reason) and one `accept-input` event line each
+ * into the ledger, so a record can name the thresholds that applied. Nothing new means nothing written. -> the new map.
+ */
+function recordInputs({ map, inputs, runMapFile, ledgerFile, now }) {
+  if (inputs.length === 0) return map;
+  const at = new Date(now()).toISOString();
+  const next = Object.freeze({ ...map, inputsAccepted: [...(map.inputsAccepted ?? []), ...inputs.map(i => ({ ...i, at }))] });
+  writeRunMap(runMapFile, next);
+  for (const i of inputs) appendLedger(ledgerFile, { event: 'accept-input', file: i.file, sha256: i.sha256, amendment: i.date, reason: i.reason, t: at });
+  return next;
+}
+
+/**
  * The pin check of a run or a resume: the run-map's caps and budgets against the registered ones (review m2); what is on disk against the run-map; a series stop refuses; a changed harness is accepted only through `acceptHarness` and a dated
- * amendment line, and then recorded. -> `ok({ map, current })` | `fail(reason)`.
+ * amendment line, and then recorded; a changed quiet.json or package-flags.json likewise through a dated `input:` line, before any data session (review N5). -> `ok({ map, current })` | `fail(reason)`.
  */
 export async function checkPins({ map, inputsDir, repo, acceptHarness = null, runMapFile, ledgerFile, now = Date.now }) {
   const limits = limitsProblem(map);
@@ -66,8 +81,8 @@ export async function checkPins({ map, inputsDir, repo, acceptHarness = null, ru
   const amendments = readIf(path.join(inputsDir, 'amendments.md'))?.toString('utf8') ?? '';
   const checked = checkResumable({ map, current, acceptHarness, amendments });
   if (!checked.ok) return fail(checked.reason);
-  const next = checked.value.accepted ? recordAcceptance({ map, accepted: checked.value.accepted, runMapFile, ledgerFile, now }) : map;
-  return ok({ map: next, current });
+  const harness = checked.value.accepted ? recordAcceptance({ map, accepted: checked.value.accepted, runMapFile, ledgerFile, now }) : map;
+  return ok({ map: recordInputs({ map: harness, inputs: checked.value.inputs ?? [], runMapFile, ledgerFile, now }), current });
 }
 
 /**

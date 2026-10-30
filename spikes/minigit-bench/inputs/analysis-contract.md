@@ -267,7 +267,11 @@ identity. A by-hand G (G-10, G-13) without a dated line is `not exercised`, is n
 **Stops:** G-2, G-8 or G-12 refuted, or alias drift, stop the series until fixed and an A/A is GO. A second NO GO on the same G-id goes to the operator before a third A/A is paid for.
 
 **After the A/A only the instrument may change** (the harness, the scorer, the counters, the read-back, the sampler, the quiet thresholds, the evidence reading of the outcome table): a
-dated `amendments.md` line with its reason and G-id, committed and pushed before pair 1, named by `--accept-harness`. **Frozen:** the prompts, cap, wall, model, effort, tools and
+dated `amendments.md` line with its reason and G-id, committed and pushed before pair 1, named by `--accept-harness`.
+A change to `inputs/quiet.json` or `inputs/package-flags.json` (the sampler, the quiet thresholds, the counters' flag rules) is an instrument change by the dated line
+`YYYY-MM-DD | instrument | input:<file>:<12 hex of the sha256 of the new content> | <reason, with its G-id>` (one file and one content per line). `init` pins the sha256 of both files in the run-map; a run or a resume accepts a
+changed one only through such a line and only while the series holds **no data session** (the A/A, the pilot and the rehearsal are not data sessions): after pair 1 starts the line is refused and a new series is needed. What was accepted is written to the run-map (`inputsAccepted`)
+and to the ledger (an `accept-input` line), and each session's record names the hashes of the files that applied (`run.inputs`), so a record says which thresholds it was run under. **Frozen:** the prompts, cap, wall, model, effort, tools and
 allow-list, toolchain pins, cache snapshots, build-server setting, egress host list and workspace contents. A change to any of them applies to both stacks and needs another bare pilot
 **pair** (C# v1 with TS v1), paid from the $40.
 

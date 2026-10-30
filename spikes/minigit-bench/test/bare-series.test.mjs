@@ -590,3 +590,16 @@ test('A_refuted_line_never_reclassifies_a_stop_or_a_contaminated_void_and_never_
   const holds = reclassifyByHand({ map: before, handVerdictsFor: id => [{ g: 'G-13', verdict: 'holds', rid: id, evidence: 'x', who: 'me', date: '2026-11-03' }] });
   assert.equal(holds.changes.length, 0, 'only refuted reclassifies');
 });
+
+test('A_session_record_names_the_hashes_of_the_quiet_and_package_flag_files_that_applied', async () => {
+  const inputHashes = { quietSha256: 'a1'.repeat(32), packageFlagsSha256: 'b2'.repeat(32) };
+  const t = harness({ ctx: { inputHashes } });
+  await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  const rec = JSON.parse(readFileSync(path.join(t.ctx.sessionsRoot, rid('csharp', 'v1', 1), 'record.json'), 'utf8'));
+  assert.deepEqual(rec.run.inputs, { known: true, value: inputHashes });
+  const bare = harness();
+  await runLoop({ ctx: bare.ctx, deps: bare.deps, map: bare.map });
+  const none = JSON.parse(readFileSync(path.join(bare.ctx.sessionsRoot, rid('csharp', 'v1', 1), 'record.json'), 'utf8'));
+  assert.equal(none.run.inputs.known, false, 'a run that recorded none says so with a reason, never a blank');
+  assert.ok(none.run.inputs.why);
+});

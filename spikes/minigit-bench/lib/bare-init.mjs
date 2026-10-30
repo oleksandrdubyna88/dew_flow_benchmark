@@ -37,7 +37,7 @@ function snapshotsOf({ inputsDir, toolchainsDir, verify }) {
 export function initPlan({ inputsDir, seriesRoot, seriesId, versionsDir, toolchainsDir, facts, verifySnapshots = true }) {
   if (!SERIES.test(seriesId)) return fail(`series id '${seriesId}' must look like s-yyyymmdd-<4 hex>`);
   const stacksFile = path.join(inputsDir, 'stacks.json');
-  const absent = ['stacks.json', 'spend-prior.json', 'prices-2026-10-29.json'].find(f => !existsSync(path.join(inputsDir, f)));
+  const absent = ['stacks.json', 'spend-prior.json', 'prices-2026-10-29.json', 'quiet.json', 'package-flags.json'].find(f => !existsSync(path.join(inputsDir, f)));
   if (absent) return fail(`${path.join(inputsDir, absent)} does not exist`);
   const stacks = readJson(stacksFile);
   const pin = stacks.pins.claude;
@@ -53,6 +53,7 @@ export function initPlan({ inputsDir, seriesRoot, seriesId, versionsDir, toolcha
   const runMap = openSeries({
     seriesId, seedSha256: readFileSync(seedFile, 'utf8').trim(), harnessIdentity: facts.harnessIdentity, preregTag: facts.preregTag, preregCommit: facts.preregCommit, pins: stacks.pins,
     stacksSha256: sha256File(stacksFile), pricesFile: prices, pricesSha256: sha256File(path.join(inputsDir, prices)),
+    quietSha256: sha256File(path.join(inputsDir, 'quiet.json')), packageFlagsSha256: sha256File(path.join(inputsDir, 'package-flags.json')),
     snapshots: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.treeSha256])), snapshotDirs: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.dir])),
     claude: { path: copy.to, sha256: copy.sha256, version: pin }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: null,
   });

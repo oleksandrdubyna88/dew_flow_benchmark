@@ -1,6 +1,7 @@
 // `init` (E3b.S1 step 1): everything the series is pinned to, and a dry run that writes nothing.
 import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -14,7 +15,7 @@ const put = (p, t) => { mkdirSync(path.dirname(p), { recursive: true }); writeFi
 
 function setup() {
   const inputsDir = tmpDir('inputs');
-  for (const f of ['stacks.json', 'prices-2026-10-29.json', 'spend-prior.json']) cpSync(path.join(spikeDir, 'inputs', f), path.join(inputsDir, f));
+  for (const f of ['stacks.json', 'prices-2026-10-29.json', 'spend-prior.json', 'quiet.json', 'package-flags.json']) cpSync(path.join(spikeDir, 'inputs', f), path.join(inputsDir, f));
   writeFileSync(path.join(inputsDir, 'seed.sha256'), `${'b'.repeat(64)}\n`);
   const toolchainsDir = tmpDir('toolchains');
   const registered = {};
@@ -51,6 +52,7 @@ test('Init_pins_the_cli_copy_and_dry_run_writes_nothing', () => {
   const map = readRunMap(path.join(s.seriesRoot, s.seriesId, 'run-map.json')).value;
   assert.deepEqual([map.seriesId, map.seedSha256, map.pins.claude, map.spin.medianMs, map.stopped], ['s-20261030-ab12', 'b'.repeat(64), '2.1.310', 20, null]);
   assert.equal(map.claude.sha256.length, 64);
+  for (const [field, file] of [['quietSha256', 'quiet.json'], ['packageFlagsSha256', 'package-flags.json']]) assert.equal(map[field], createHash('sha256').update(readFileSync(path.join(s.inputsDir, file))).digest('hex'), `${field} is pinned at init: the thresholds that applied are named by the run-map`);
   assert.deepEqual(Object.keys(map.snapshots).sort(), ['csharp', 'node']);
   assert.deepEqual([map.caps.capUsd, map.bareBudgetUsd, map.ceilingUsd], [6, 40, 500]);
   const ledger = readLedger(path.join(s.seriesRoot, s.seriesId, 'ledger.ndjson'));

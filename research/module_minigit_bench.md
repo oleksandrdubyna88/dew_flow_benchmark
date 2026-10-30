@@ -600,7 +600,7 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 | Scoring | `lib/score-run.mjs` | `score-session.mjs` as a child under `taskset -c 0-13`, bounded as a whole |
 | Caches | `lib/cache-snapshot.mjs`, `lib/packages.mjs`, `inputs/cache-recipe.json`, `inputs/package-flags.json` | the two hashed snapshots and the package list with its flags |
 | Guard | `lib/prereg-guard.mjs`, `lib/prereg-consistency.mjs` | the pre-registration guard and `harnessIdentity`; the C# prompt's SDK against the pin |
-| Pins | `lib/bare-pins.mjs` | what the disk holds NOW against the run-map (stacks file and its pins, prices file, registered snapshots, prereg tag, seed hash, harness identity); records an accepted harness |
+| Pins | `lib/bare-pins.mjs` | what the disk holds NOW against the run-map (stacks file and its pins, prices file, `quiet.json` and `package-flags.json` hashes, registered snapshots, prereg tag, seed hash, harness identity); records an accepted harness and an accepted input amendment (review N5: a dated `input:<file>:<12 hex>` line, refused once any data session exists; run-map `inputsAccepted`, a ledger `accept-input` line, and `run.inputs` in every session record name the thresholds that applied) |
 | Quiet | `lib/cpu-sampler.mjs`, `lib/quiet.mjs`, `inputs/quiet.json` | the machine-quiet check, the phase sampler, the spin probe |
 
 **Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`, or a `void: rate limit` once its phase is settled and charged: review N2, contract section 9; the re-run is planned by the resume, never launched in the window that ran out) |

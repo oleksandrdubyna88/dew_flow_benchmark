@@ -10,7 +10,7 @@ const PINS = { claude: '2.1.310', node: '26.12.1', dotnetSdk: '10.0.113', typesc
 const identity = 'a'.repeat(64);
 const series = () => openSeries({
   seriesId: 's-20261030-ab12', seedSha256: 'b'.repeat(64), harnessIdentity: identity, preregTag: 'prereg/minigit-bare-20261030', preregCommit: 'c'.repeat(40), pins: PINS,
-  stacksSha256: 'd'.repeat(64), pricesSha256: 'e'.repeat(64), snapshots: { csharp: 'f'.repeat(64), node: '1'.repeat(64) }, caps: { capUsd: 6, wallMs: 3_600_000, stallMs: 2_700_000 },
+  stacksSha256: 'd'.repeat(64), pricesSha256: 'e'.repeat(64), quietSha256: '2'.repeat(64), packageFlagsSha256: '3'.repeat(64), snapshots: { csharp: 'f'.repeat(64), node: '1'.repeat(64) }, caps: { capUsd: 6, wallMs: 3_600_000, stallMs: 2_700_000 },
   bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 },
 });
 const session = (rid, over = {}) => ({ rid, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', ...over });
@@ -100,14 +100,14 @@ test('A_ran_session_whose_directory_is_gone_is_lost_never_silently_re_run', () =
 
 // ---- the refusal -----------------------------------------------------------------------------------------------------------------
 
-const current = () => ({ pins: PINS, stacksSha256: 'd'.repeat(64), pricesSha256: 'e'.repeat(64), snapshots: { csharp: 'f'.repeat(64), node: '1'.repeat(64) }, preregTag: 'prereg/minigit-bare-20261030', seedSha256: 'b'.repeat(64), harnessIdentity: identity });
+const current = () => ({ pins: PINS, stacksSha256: 'd'.repeat(64), pricesSha256: 'e'.repeat(64), quietSha256: '2'.repeat(64), packageFlagsSha256: '3'.repeat(64), snapshots: { csharp: 'f'.repeat(64), node: '1'.repeat(64) }, preregTag: 'prereg/minigit-bare-20261030', seedSha256: 'b'.repeat(64), harnessIdentity: identity });
 
 test('Resume_refuses_a_changed_pin_snapshot_or_seed_hash', () => {
   const map = series();
   assert.equal(checkResumable({ map, current: current() }).ok, true);
   const changes = {
     pins: { ...PINS, claude: '2.1.311' }, stacksSha256: '0'.repeat(64), pricesSha256: '0'.repeat(64), snapshots: { csharp: '0'.repeat(64), node: '1'.repeat(64) },
-    preregTag: 'prereg/minigit-bare-20261101', seedSha256: '0'.repeat(64),
+    preregTag: 'prereg/minigit-bare-20261101', seedSha256: '0'.repeat(64), quietSha256: '0'.repeat(64), packageFlagsSha256: '0'.repeat(64),
   };
   for (const [field, value] of Object.entries(changes)) {
     const r = checkResumable({ map, current: { ...current(), [field]: value } });
@@ -128,4 +128,40 @@ test('A_harness_change_is_accepted_only_with_a_flag_and_a_dated_amendment_line_n
   assert.equal(checkResumable({ map, current: changed, acceptHarness: { identity: '8'.repeat(64), amendmentDate: '2026-11-02' }, amendments }).ok, false, 'the flag names another identity than the one running');
   assert.equal(checkResumable({ map, current: changed, acceptHarness: { identity: '9'.repeat(64), amendmentDate: '2026-11-02' }, amendments: '# header only\n' }).ok, false, 'no amendment line at all');
   assert.equal(checkResumable({ map: markStopped(map, { rule: 'stop: auth', reason: 'x', at: 't' }), current: current() }).ok, false, 'a series stop is not passed by resume');
+});
+
+// ---- input amendments (contract section 10; review N5) ------------------------------------------------------------------------------
+
+const NEW_QUIET = '7'.repeat(64);
+const inputLine = (file, sha, date = '2026-11-02') => `${date} | instrument | input:${file}:${sha.slice(0, 12)} | the sampler window (G-11)\n`;
+
+test('A_changed_quiet_or_package_flags_file_is_accepted_only_by_a_dated_input_line_naming_its_content_and_only_before_any_data_session', () => {
+  const map = series();
+  const changed = { ...current(), quietSha256: NEW_QUIET };
+  const bare = checkResumable({ map, current: changed });
+  assert.equal(bare.ok, false, 'no line: it is a pin that differs');
+  assert.match(bare.reason, /quietSha256 differs/);
+  const wrongContent = checkResumable({ map, current: changed, amendments: inputLine('quiet.json', '8'.repeat(64)) });
+  assert.equal(wrongContent.ok, false, 'a line that names another content');
+  const wrongFile = checkResumable({ map, current: changed, amendments: inputLine('package-flags.json', NEW_QUIET) });
+  assert.equal(wrongFile.ok, false, 'a line that names another file');
+  const accepted = checkResumable({ map, current: changed, amendments: inputLine('quiet.json', NEW_QUIET) });
+  assert.equal(accepted.ok, true, accepted.reason);
+  assert.deepEqual(accepted.value.inputs.map(i => [i.file, i.sha256, i.hash12, i.date]), [['quiet.json', NEW_QUIET, NEW_QUIET.slice(0, 12), '2026-11-02']], 'recorded for the run-map and the ledger');
+  const flags = checkResumable({ map, current: { ...current(), packageFlagsSha256: NEW_QUIET }, amendments: inputLine('package-flags.json', NEW_QUIET) });
+  assert.equal(flags.ok, true, flags.reason);
+  // once a data session exists in the series the same line is refused: the instrument may change after the A/A and BEFORE pair 1
+  const started = must(planSession(map, session('aaaaaa')));
+  const late = checkResumable({ map: started, current: changed, amendments: inputLine('quiet.json', NEW_QUIET) });
+  assert.equal(late.ok, false);
+  assert.match(late.reason, /data session/);
+  assert.match(late.reason, /before pair 1/);
+  // an A/A twin is not a data session
+  const aa = must(planSession(map, session('bbbbbb', { kind: 'aa', pair: 0 })));
+  assert.equal(checkResumable({ map: aa, current: changed, amendments: inputLine('quiet.json', NEW_QUIET) }).ok, true, 'the A/A and the pilot are instrument checks');
+  // what was accepted before the data sessions stays accepted afterwards
+  const acceptedEarlier = { ...started, inputsAccepted: [{ file: 'quiet.json', sha256: NEW_QUIET, hash12: NEW_QUIET.slice(0, 12), date: '2026-11-02', reason: 'r', at: 't' }] };
+  const again = checkResumable({ map: acceptedEarlier, current: changed, amendments: inputLine('quiet.json', NEW_QUIET) });
+  assert.equal(again.ok, true, again.reason);
+  assert.deepEqual(again.value.inputs, [], 'nothing new to record');
 });

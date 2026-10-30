@@ -43,6 +43,7 @@ async function wiring({ map: over = {}, amendments = AMENDMENTS, quiet = {} } = 
   const map = { ...openSeries({
     seriesId: 's-20261030-ab12', seedSha256: sha256(SEED), harnessIdentity: (await harnessIdentity(repo.repo)).value, preregTag: TAG, preregCommit: repo.sha, pins: stacks.pins,
     stacksSha256: sha256(text(path.join(inputs, 'stacks.json'))), pricesFile: 'prices-2026-10-29.json', pricesSha256: sha256(text(path.join(inputs, 'prices-2026-10-29.json'))),
+    quietSha256: sha256(text(path.join(inputs, 'quiet.json'))), packageFlagsSha256: sha256(text(path.join(inputs, 'package-flags.json'))),
     snapshots: { csharp: SNAPSHOTS.csharp.treeSha256, node: SNAPSHOTS.node.treeSha256 }, snapshotDirs: { csharp: base.snapshots.csharp.dir, node: base.snapshots.node.dir },
     claude: { path: '/nowhere/claude-2.1.310', sha256: 'x', version: '2.1.310' }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 }, ...fields,
   }), sessions };
@@ -65,6 +66,8 @@ test('A_resume_compares_the_run_map_with_what_is_on_disk_now', async () => {
     snapshots: w => writeFileSync(path.join(w.inputs, 'cache-snapshots.json'), JSON.stringify({ ...SNAPSHOTS, node: { ...SNAPSHOTS.node, treeSha256: '2'.repeat(64) } })),
     seedSha256: w => writeFileSync(path.join(w.inputs, 'seed.sha256'), `${sha256('mg-ffffffffffffffff')}\n`),
     pins: w => writeFileSync(path.join(w.inputs, 'stacks.json'), text(path.join(w.inputs, 'stacks.json')).replace('"2.1.310"', '"2.1.311"')),
+    quietSha256: w => writeFileSync(path.join(w.inputs, 'quiet.json'), `${text(path.join(w.inputs, 'quiet.json'))} `),
+    packageFlagsSha256: w => writeFileSync(path.join(w.inputs, 'package-flags.json'), `${text(path.join(w.inputs, 'package-flags.json'))} `),
   };
   for (const [field, change] of Object.entries(drifts)) {
     const w = await wiring();
@@ -266,4 +269,41 @@ test('A_paid_build_with_the_operators_real_home_is_refused_by_the_token_reader_b
   const fake = await build(w.home);
   assert.equal(fake.ok, false, 'control: the fake home has no token file');
   assert.match(fake.reason, /no token/);
+});
+
+// ---- an input amendment through the real wiring (contract section 10; review N5) --------------------------------------------------------
+
+const editQuiet = w => { const file = path.join(w.inputs, 'quiet.json'); writeFileSync(file, `${JSON.stringify({ ...JSON.parse(text(file)), recheckMs: 30_000 }, null, 2)}\n`); return sha256(text(file)); };
+
+test('An_amended_quiet_file_is_accepted_through_resume_once_recorded_in_the_run_map_and_the_ledger_and_named_by_every_record', async () => {
+  const w = await wiring();
+  const sha = editQuiet(w);
+  const refused = await resume(w);
+  assert.equal(refused.code, 4);
+  assert.match(refused.out, /resume refused: quietSha256 differs from the run-map/);
+  assert.match(refused.out, new RegExp(`input:quiet\\.json:${sha.slice(0, 12)}`), 'the refusal prints the line to add');
+  writeFileSync(path.join(w.inputs, 'amendments.md'), `${AMENDMENTS}2026-11-02 | instrument | input:quiet.json:${sha.slice(0, 12)} | the sampler window was too tight (G-11)\n`);
+  const first = await resume(w);
+  assert.doesNotMatch(first.out, /resume refused/, first.out);
+  const map = readRunMap(w.runMapFile).value;
+  assert.deepEqual(map.inputsAccepted.map(i => [i.file, i.sha256, i.date]), [['quiet.json', sha, '2026-11-02']], 'the run-map says which thresholds applied');
+  assert.notEqual(map.quietSha256, sha, 'the pin itself stays the init value; the accepted content is listed beside it');
+  const events = readLedger(w.ledgerFile).filter(l => l.event === 'accept-input');
+  assert.deepEqual(events.map(e => [e.file, e.sha256, e.amendment]), [['quiet.json', sha, '2026-11-02']]);
+  await resume(w);
+  assert.equal(readLedger(w.ledgerFile).filter(l => l.event === 'accept-input').length, 1, 'accepting the same content twice writes one line');
+  // the run's context names the thresholds that applied; a session record carries them
+  const built = await buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home } });
+  assert.equal(built.ok, true, built.reason);
+  assert.equal(built.value.ctx.inputHashes.quietSha256, sha, 'the quiet.json that applied to the sessions of this run');
+});
+
+test('An_input_amendment_after_a_data_session_exists_is_refused_by_resume', async () => {
+  const w = await wiring({ map: { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', status: 'planned' } } } });
+  const sha = editQuiet(w);
+  writeFileSync(path.join(w.inputs, 'amendments.md'), `${AMENDMENTS}2026-11-02 | instrument | input:quiet.json:${sha.slice(0, 12)} | the sampler window (G-11)\n`);
+  const r = await resume(w);
+  assert.equal(r.code, 4);
+  assert.match(r.out, /data session exists.*before pair 1/s);
+  assert.equal(readRunMap(w.runMapFile).value.inputsAccepted, undefined, 'a refused amendment writes nothing');
 });

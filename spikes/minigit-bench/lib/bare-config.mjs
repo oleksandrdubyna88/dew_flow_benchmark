@@ -1,6 +1,7 @@
 // The real wiring of a bare run (E3b.S1): the fixed configuration `runLoop` takes (`ctx`) and its edges (`deps`), built from the run-map, the registered inputs and the host.
 // Everything here is an I/O edge or a lookup; the decisions live in the modules it hands to. The real token is read ONCE, from its mode-600 file, and goes only into `ctx.token`,
 // which `launchPhase` hands to the credential broker (never to a box, an argv or a record).
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,6 +36,7 @@ const abortableSleep = (ms, signal) => new Promise(resolve => {
   signal?.addEventListener('abort', done, { once: true });
 });
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
+const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
 
 /** One real sampler of this machine (no series cells, this process as the harness), for `init`'s calibration window. -> `async () => sample`. */
 export async function sampleOnceFor({ thresholds, probe }) {
@@ -121,6 +123,7 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams =
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),
     handVerdictsFor: rid => handVerdictsFor(amendmentsText, rid),
     abortReason: () => abort.reason, abortExit: () => abort.exit, inputsDir,
+    inputHashes: { quietSha256: sha256File(path.join(inputsDir, 'quiet.json')), packageFlagsSha256: sha256File(path.join(inputsDir, 'package-flags.json')) }, // the thresholds that applied to every session of this run
   };
   const mach = machine({ map, thresholds: quiet.value, seriesDir, rsdRoot, acceptNoisy: args.acceptNoisy, now: Date.now, procApi: seams.procApi });
   const deps = {
