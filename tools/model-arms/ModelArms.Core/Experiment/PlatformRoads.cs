@@ -27,8 +27,11 @@ public sealed record PlatformRoad(string Platform, TrustRoad Trust, BoundedRoad 
 /// </para></summary>
 public static class PlatformRoads
 {
-    private const string BoundedClause =
-        "the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a 5 s ceiling), and a link swapped in between the path's check and the open is followed";
+    /// <summary>The ceiling of a bounded read on the portable road, in seconds: the ONE number <c>BoundedFile</c> waits by and the printed line names.</summary>
+    public const int BoundedCeilingSeconds = 5;
+
+    private static readonly string BoundedClause =
+        $"the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a {BoundedCeilingSeconds} s ceiling), and a link swapped in between the path's check and the open is followed";
 
     private const string RegularClause = "whether each is a regular file (a FIFO or a device is not told from a file)";
 

@@ -15,9 +15,8 @@ internal readonly record struct StatxAnswer(uint Mask, uint Uid, ushort Mode, ul
 /// <b>Linux</b> reads <c>statx(2)</c> with <c>AT_SYMLINK_NOFOLLOW</c>. <c>struct statx</c> is defined once for every architecture (<c>include/uapi/linux/stat.h</c>: 256 bytes,
 /// explicitly padded) — the reason <c>statx</c> exists over <c>struct stat</c>, whose layout differs by architecture and glibc version. The offsets below are that contract;
 /// they were probed on this host (x86_64, glibc 2.43, kernel 6.18) against <c>lstat(2)</c> and <c>stat -c</c>, and <c>KernelFactsTests</c> keeps the probe. The answer's mask must
-/// carry every fact the module uses, else the file is unread — not captured is not zero. <b>macOS and FreeBSD</b> are refused as unprobed: nothing here has run on a Mac (CI
-/// is <c>ubuntu-latest</c>), a Mac needs a probed <c>lstat</c> layout (144 bytes, 64-bit inode: plain <c>lstat</c> on arm64, <c>lstat$INODE64</c> on x86_64), and a text reader of
-/// <c>stat -f</c> would be a second reader nobody observed. <b>Windows</b> has no POSIX facts; the gate declares the check not performed.
+/// carry every fact the module uses, else the file is unread — not captured is not zero. <b>The reader no longer refuses a platform it is not asked on</b> (E3.S0): the ROAD (<c>PlatformRoads</c>) decides which reader a host is asked, so a Mac or FreeBSD is
+/// read by <c>PortableFacts</c> and never reaches the kernel's layout — a <c>lstat</c> offset nobody probed would read a WRONG owner or mode without an error. <b>Windows</b> has no POSIX facts; the gate declares the check not performed.
 /// </para></summary>
 internal static class KernelFacts
 {
@@ -35,23 +34,40 @@ internal static class KernelFacts
     // The facts the module uses and the statx mask bit that says the kernel reported each (STATX_TYPE, _MODE, _UID, _INO, _CTIME).
     private static readonly (uint Bit, string Name)[] Needed = [(0x1, "type"), (0x2, "mode"), (0x8, "owner"), (0x100, "inode"), (0x80, "ctime")];
 
-    // The two errno POSIX defines as "no such entry along the path"; the same on every Linux architecture (asm-generic/errno-base.h). The one place the module reads an errno number.
+    // The two errno POSIX defines as "no such entry along the path"; the same on every Linux architecture (asm-generic/errno-base.h). Read by Present alone — the one place the module reads an errno number.
     private const int NoSuchEntry = 2;
     private const int NotADirectory = 20;
-    private const int AlreadyExists = 17;
     private const uint OwnerOnlyFolder = 0x1C0; // 0700
 
     public static int EffectiveUid() => IsUnixLike() ? (int)Geteuid() : -1;
 
-    /// <summary>The facts of the file at the NORMALISED <paramref name="full"/> path itself (a link is reported as a link).</summary>
-    public static FactsRead Read(string full)
+    /// <summary>Whether <c>statx</c> works on this host: one <c>statx</c> of <c>/</c> that throws neither <see cref="EntryPointNotFoundException"/> nor <see cref="DllNotFoundException"/> AND returns 0. A <c>-1</c> (<c>ENOSYS</c> under a seccomp filter, an
+    /// old kernel) is unavailable too: the entry point being THERE says nothing about the kernel answering. Failure carries the words for the road's printed line. Linux only; elsewhere the call is never made.</summary>
+    public static Outcome<bool> StatxProbe()
     {
         if (!OperatingSystem.IsLinux())
         {
-            return new FactsRead.Unread(
-                $"the owner and mode of {full} cannot be read on this platform: no probed kernel reader (a Mac needs a probed lstat layout: 144 bytes, 64-bit inode — plain lstat on arm64, lstat$INODE64 on x86_64) — refused rather than assumed (D17)");
+            return Outcome<bool>.Failure("statx is Linux's");
         }
 
+        try
+        {
+            return Statx("/", out _) == 0 ? Outcome<bool>.Success(true) : Outcome<bool>.Failure($"statx of / failed: {Marshal.GetLastPInvokeErrorMessage()}");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return Outcome<bool>.Failure($"statx is not in this libc: {ex.Message}");
+        }
+    }
+
+    /// <summary>Whether <c>statx</c> works here, asked once per process.</summary>
+    public static bool StatxIsAvailable() => StatxHere.Value;
+
+    private static readonly Lazy<bool> StatxHere = new(() => StatxProbe().Match(available => available, _ => false));
+
+    /// <summary>The facts of the file at the NORMALISED <paramref name="full"/> path itself (a link is reported as a link).</summary>
+    public static FactsRead Read(string full)
+    {
         try
         {
             return Statx(full, out var buffer) == 0 ? Decode(full, Answer(buffer)) : new FactsRead.Unread($"{full}: {Marshal.GetLastPInvokeErrorMessage()}");
@@ -66,11 +82,6 @@ internal static class KernelFacts
     /// opened by, for the words of a failure.</summary>
     public static FactsRead ReadOpen(int fd, string label)
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return new FactsRead.Unread($"the inode behind the open handle of {label} cannot be read on this platform: no probed kernel reader — refused rather than assumed (D17)");
-        }
-
         try
         {
             return StatxCall(fd, string.Empty, AtEmptyPath, StatxBasicStats, out var buffer) == 0 ? Decode(label, Answer(buffer)) : new FactsRead.Unread($"{label}: {Marshal.GetLastPInvokeErrorMessage()}");
@@ -81,22 +92,13 @@ internal static class KernelFacts
         }
     }
 
-    /// <summary>Whether <see cref="ReadSmall"/> can run here: Linux on x86-64, the one platform whose open flags were probed.</summary>
-    public static bool CanReadSmall => OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64;
-
     /// <summary>The bytes of a SMALL regular file, read without ever waiting and without ever reading more than <paramref name="limit"/> bytes: the file is opened with <c>O_NOFOLLOW</c> (a link fails at the open with <c>ELOOP</c>: nothing outside the folder is opened, so a link to a FIFO with a blocked writer does not release it), <c>O_NONBLOCK</c> (a FIFO opens at once instead of waiting for a
     /// writer), <c>O_NOCTTY</c> and <c>O_CLOEXEC</c>; its kind is judged from the DESCRIPTOR's facts (<see cref="ReadOpen"/>: a FIFO, a device, a folder is refused before a byte is read), the path must still name the same inode (the same device-and-inode comparison the gate lock makes after its open, for a swap made AFTER the open), and the read stops at <c>limit + 1</c> bytes: a file bigger than the limit is refused, never read whole. A failure is a value; nothing here throws what the library below it throws.
     /// <para>
-    /// Linux on x86-64 only: <c>O_NONBLOCK</c> (<c>0x800</c>) and <c>O_CLOEXEC</c> (<c>0x80000</c>) are the values probed on this host (kernel 6.18, x86-64), and they are not assumed for another architecture — any other platform is refused, so the
-    /// caller says "unknown" and never reads.
+    /// The open flags are the values probed on this host (Linux x86-64, kernel 6.18); they are NOT valid for another architecture or platform, and this method no longer refuses to run there — <c>BoundedFile</c> asks it only on the <see cref="BoundedRoad.Kernel"/> road, which <c>PlatformRoads</c> grants to Linux x86-64 with a working <c>statx</c> alone.
     /// </para></summary>
     public static Outcome<byte[]> ReadSmall(string path, int limit)
     {
-        if (!CanReadSmall)
-        {
-            return Outcome<byte[]>.Failure($"{path}: no probed non-blocking open on this platform — refused rather than assumed");
-        }
-
         try
         {
             var fd = OpenCall(path, OpenSmallFile);
@@ -137,10 +139,14 @@ internal static class KernelFacts
     }
 
     /// <summary>Whether a directory entry is there under <paramref name="path"/>: a dangling link is (true), nothing by that name is not (false), and a kernel that cannot say
-    /// (a folder the user may not search, an I/O error) is a failure carrying its words. Off Linux: <c>Path.Exists</c>, true for a dangling link, never a failure — a stated gap.</summary>
-    public static Outcome<bool> Present(string path)
+    /// (a folder the user may not search, an I/O error) is a failure carrying its words. Asked by <c>statx</c> where it works; elsewhere (macOS, FreeBSD, a Linux without <c>statx</c>) by <c>Path.Exists</c>: true for a dangling link, never a failure, and an
+    /// <c>EACCES</c> reads as absent — a stated gap (the module doc), not a check.</summary>
+    public static Outcome<bool> Present(string path) => Present(path, StatxIsAvailable());
+
+    /// <summary><see cref="Present(string)"/> with the question of which road handed in, so a test can take the runtime's road on a host where <c>statx</c> works.</summary>
+    internal static Outcome<bool> Present(string path, bool statx)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!statx)
         {
             return Outcome<bool>.Success(Path.Exists(path));
         }
@@ -155,28 +161,33 @@ internal static class KernelFacts
         }
     }
 
-    /// <summary>Makes ONE new folder, exclusively: <c>mkdir(2)</c> answers <c>EEXIST</c> for anything at the name — a folder, a file, a link live or dangling — and the answer is
-    /// <see cref="FolderMade.AlreadyThere"/>, so a folder someone else made between the caller's existence check and this call is never adopted (<c>Directory.CreateDirectory</c> adopts it
-    /// silently). The mode asked for is <c>0700</c>, which the umask may narrow: the caller sets the mode explicitly afterwards. Linux only; any other platform is refused as unprobed.</summary>
+    /// <summary>Makes ONE new folder, exclusively: <c>mkdir(2)</c> through libc — a path and a mode, no struct (<c>mode_t</c> is 16 bits on Darwin and FreeBSD; <c>0700</c> fits) — fails for anything already at the name, and a failure is classified by a STATE,
+    /// not by an errno number: <see cref="Present"/> says an entry is there (a folder, a file, a link live or dangling) → <see cref="FolderMade.AlreadyThere"/>, so a folder someone else made between the caller's existence check and this call is never adopted
+    /// (<c>Directory.CreateDirectory</c> adopts it silently); no entry → <see cref="FolderMade.Failed"/> with the operating system's words for the <c>mkdir</c> failure (read BEFORE the presence check can overwrite them). The mode asked for is <c>0700</c>, which the umask may
+    /// narrow: the caller sets the mode explicitly afterwards. Windows has no libc <c>mkdir</c>: its caller makes the folder by the runtime.</summary>
     public static FolderMade MakeFolder(string path)
     {
-        if (!OperatingSystem.IsLinux())
+        if (OperatingSystem.IsWindows())
         {
-            return new FolderMade.Failed("no probed kernel mkdir on this platform — refused rather than assumed (D17)");
+            return new FolderMade.Failed("libc mkdir is POSIX; the folder is made by the runtime on Windows");
         }
 
         try
         {
-            return MkdirCall(path, OwnerOnlyFolder) == 0 ? new FolderMade.Made() : Refused(path, Marshal.GetLastPInvokeError());
+            return MkdirCall(path, OwnerOnlyFolder) == 0 ? new FolderMade.Made() : Classified(path, Marshal.GetLastPInvokeError());
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
-            return new FolderMade.Failed($"mkdir is not available in this libc ({ex.Message}) — refused rather than assumed (D17)");
+            return new FolderMade.Failed($"mkdir is not available in this libc ({ex.Message})");
         }
     }
 
-    private static FolderMade Refused(string path, int errno) =>
-        errno == AlreadyExists ? new FolderMade.AlreadyThere() : new FolderMade.Failed($"'{path}': {Marshal.GetPInvokeErrorMessage(errno)}");
+    private static FolderMade Classified(string path, int errno) =>
+        Present(path).Match<FolderMade>(
+            there => there ? new FolderMade.AlreadyThere() : Failed(path, errno),
+            _ => Failed(path, errno));
+
+    private static FolderMade Failed(string path, int errno) => new FolderMade.Failed($"'{path}': {Marshal.GetPInvokeErrorMessage(errno)}");
 
     /// <summary>Pure over the seven fields: the mask check, the permission and type bits of the mode, the device as one comparison key (<c>major &lt;&lt; 32 | minor</c> — not
     /// <c>makedev</c>'s encoding), the change time to the nanosecond.</summary>
