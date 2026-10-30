@@ -1,0 +1,26 @@
+[
+  {
+    "date": "2026-10-29",
+    "what": "E1.S3 capture session (one tiny session on an unrelated task)",
+    "usd": 0.18095759999999997,
+    "evidence": "spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/meta.json"
+  },
+  {
+    "date": "2026-10-29",
+    "what": "E2.S2 design run (one bare session, real token in the box)",
+    "usd": 0.1119485,
+    "evidence": "todo/PLAN_minigit_stack_bench_E2.md (the design run paragraph)"
+  },
+  {
+    "date": "2026-10-29",
+    "what": "E2.S2 credential-broker proof sessions",
+    "usd": 0.018452,
+    "evidence": "todo/PLAN_minigit_stack_bench_E2.md (the credential broker section: paid total)"
+  },
+  {
+    "date": "2026-10-29",
+    "what": "E2.S2 bare-session smoke through the broker",
+    "usd": 0.11484459999999999,
+    "evidence": "spikes/minigit-bench/test/fixtures/real/claude-2.1.310-bare-smoke/meta.json"
+  }
+]

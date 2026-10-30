@@ -1,6 +1,6 @@
 // The pre-registration's generated files (E3b.S3): quoted text is verbatim from a commit of origin/main, derived files equal their script's output, the seed is a hash only.
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PREREG_FILES } from '../lib/prereg-guard.mjs';
@@ -8,6 +8,7 @@ import { buildPrompts, extractPrompts } from '../prereg/extract-prompts.mjs';
 import { QUOTES, MARKER, extractQuotes, keptTail, renderQuotes } from '../prereg/extract-contract.mjs';
 import { extractPrediction, extractWeakenings, renderPrediction } from '../prereg/extract-prediction.mjs';
 import { heldoutPrereg } from '../prereg/heldout-prereg.mjs';
+import { spendPrior } from '../prereg/spend-prior.mjs';
 import { unwrap } from '../prereg/blocks.mjs';
 import { fullSha, readAtCommit } from '../prereg/parent.mjs';
 import { keyGate, spikeDir, tmpDir } from './helpers.mjs';
@@ -117,4 +118,17 @@ test('The_prereg_names_no_heldout_case', t => {
   if (!keyGate(t)) return;
   const r = spawnSync(process.execPath, [path.join(spikeDir, 'heldout-tool.mjs'), 'leakcheck', '--range', 'origin/main..HEAD'], { cwd: REPO, encoding: 'utf8', timeout: 300_000 });
   assert.equal(r.status, 0, `leakcheck exit ${r.status}: ${r.stdout.slice(-300)}`);
+});
+
+test('The_prior_spend_is_read_from_its_evidence_and_adds_up_to_about_43_cents', () => {
+  const derived = spendPrior();
+  assert.equal(derived.ok, true, derived.reason);
+  assert.deepEqual(JSON.parse(read('spend-prior.json')), derived.value);
+  const total = derived.value.reduce((a, e) => a + e.usd, 0);
+  assert.ok(Math.abs(total - 0.4262) < 0.001, `the plan says about 0.43: ${total}`);
+  for (const e of derived.value) {
+    assert.match(e.date, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(e.usd > 0 && e.what && e.evidence, JSON.stringify(e));
+    assert.equal(existsSync(path.join(REPO, e.evidence.split(' (')[0])), true, `${e.evidence} exists`);
+  }
 });
