@@ -41,7 +41,14 @@ function linkOf(words, cwd, ctx) {
   return { linkAbs, targetAbs: absOf(operands.target, posix.dirname(linkAbs), ctx) };
 }
 
-const madeBy = (words, cwd, ctx) => (makesLink(words) ? [linkOf(words, cwd, ctx)].filter(Boolean) : []);
+/** The links a Node or Python snippet makes, `symlinkSync('<target>', '<link>')` or `os.symlink(...)`, from the directory the command is in at that point. */
+const scriptLinksOf = (segment, cwd, ctx) => [...segment.matchAll(SCRIPT_LINK)].map(m => {
+  const linkAbs = absOf(m[4], cwd, ctx);
+  return { linkAbs, targetAbs: absOf(m[2], posix.dirname(linkAbs), ctx) };
+});
+
+/** The links one simple command makes: `ln -s`, `cp -s` or a script's symlink call, all resolved from the same working directory. */
+const madeBy = (segment, words, cwd, ctx) => [...(makesLink(words) ? [linkOf(words, cwd, ctx)].filter(Boolean) : []), ...scriptLinksOf(segment, cwd, ctx)];
 const walkedBy = (segment, words, cwd, ctx) => (WALKS.test(` ${segment}`) ? words.filter(w => !w.startsWith('-') && resolvable(w)).map(w => absOf(w, cwd, ctx)) : []);
 
 /** A `cd` moves the working directory and is itself a walk target (what is below it is read next). */
@@ -55,19 +62,13 @@ function cdStep(state, word, ctx) {
 function step(state, segment, ctx) {
   const words = wordsOf(segment.trim());
   if (words[0] === 'cd') return cdStep(state, words[1], ctx);
-  return { ...state, links: [...state.links, ...madeBy(words, state.cwd, ctx)], walks: [...state.walks, ...walkedBy(segment, words, state.cwd, ctx)] };
+  return { ...state, links: [...state.links, ...madeBy(segment, words, state.cwd, ctx)], walks: [...state.walks, ...walkedBy(segment, words, state.cwd, ctx)] };
 }
 
 const shellState = (text, ctx) => text.split(SEGMENT).reduce((state, segment) => step(state, segment, ctx), { cwd: ctx.treeRoot, links: [], walks: [] });
 
-/** The links a Node or Python call makes: `symlinkSync('<target>', '<link>')`, `os.symlink(...)`. */
-const scriptLinks = (text, ctx) => [...text.matchAll(SCRIPT_LINK)].map(m => {
-  const linkAbs = absOf(m[4], ctx.treeRoot, ctx);
-  return { linkAbs, targetAbs: absOf(m[2], posix.dirname(linkAbs), ctx) };
-});
-
 const commandOf = call => String(call.input?.command ?? '');
-const linksOfCall = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? [...shellState(commandOf(call), ctx).links, ...scriptLinks(commandOf(call), ctx)] : []);
+const linksOfCall = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? shellState(commandOf(call), ctx).links : []);
 
 /** Every link the calls create, `{ at: index of the call, linkAbs, targetAbs }`: what a later call of the same session may walk through, even when the link is gone by the end. */
 export const createdLinks = (calls, ctx) => calls.flatMap((call, at) => linksOfCall(call, ctx).map(l => ({ at, ...l })));

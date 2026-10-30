@@ -68,3 +68,14 @@ test('A_link_to_a_system_path_outside_the_home_is_low_on_the_same_scale_as_a_pla
   assert.deepEqual(rulesIn([bash('ln -s /home/u/rsd x')]), ['link-out:high'], 'under the operator\'s home and not on the allow list');
   assert.deepEqual(rulesIn([bash('ln -s /srv/partner/box p')], { partnerPaths: ['/srv/partner'] }), ['link-out:high'], 'a partner dir');
 });
+
+test('A_script_link_is_resolved_from_the_directory_a_preceding_cd_of_the_same_command_moved_to', () => {
+  const py = (cwd, target, link) => bash(`cd ${cwd} && python3 -c "import os; os.symlink('${target}', '${link}')"`);
+  // the tree is 9 directories deep, src/ 10: nine `../` and `u` from src/ is /home/u, from the tree root it is /u (not the home)
+  const climb = `${'../'.repeat(9)}u`;
+  assert.deepEqual(rulesIn([py('src', climb, 'x'), bash('grep -r . src/x')]), ['link-out:high', 'link-walk:high']);
+  assert.deepEqual(rulesIn([bash(`cd src && node -e "require('fs').symlinkSync('${climb}', 'x')"`), bash('find src/x')]), ['link-out:high', 'link-walk:high']);
+  assert.deepEqual(rulesIn([py('src', 'lib.ts', 'y'), bash('find src/y')]), [], 'control: a target inside the tree');
+  assert.deepEqual(rulesIn([py('src', '../lib', 'z'), bash('find src/z')]), [], 'control: ../lib from src/ is the tree\'s lib');
+  assert.deepEqual(rulesIn([bash(`python3 -c "import os; os.symlink('${climb}', 'x')"`)]), ['link-out:low'], 'no cd: from the tree root it is /u, not the home');
+});
