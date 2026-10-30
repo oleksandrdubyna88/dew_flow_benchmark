@@ -2,6 +2,7 @@ using Bench.Cli;
 using Bench.Domain;
 using ModelArms.Core.Briefs;
 using ModelArms.Core.Experiment;
+using ModelArms.Verbs;
 
 namespace ModelArms.Adapters;
 
@@ -26,7 +27,7 @@ internal static class HostFactsReader
         var experiment = input.Experiment;
         var environment = input.Verb.Environment;
         var host = HostKinds.From(OperatingSystem.IsWindows(), environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
-        var entries = PathEntries(environment);
+        var entries = LaunchAdmission.PathEntries(environment);
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
         var executables = Executables(experiment, host, entries, roots);
         var refusals = PathRefusals(entries, roots);
@@ -68,10 +69,6 @@ internal static class HostFactsReader
         [.. HostChecks.NeededExecutables(experiment, host).Select(needed => new ResolvedExecutable(
             needed,
             ExecutableResolution.Resolve(needed.Name, entries, roots, RootFacts.Host, OperatingSystem.IsWindows())))];
-
-    /// <summary>The PATH of the environment map split into its entries, an empty one included; none when the map has no PATH at all.</summary>
-    private static IReadOnlyList<string> PathEntries(IReadOnlyDictionary<string, string> environment) =>
-        environment.TryGetValue("PATH", out var path) ? [.. path.Split(Path.PathSeparator)] : [];
 
     private static IReadOnlyList<string> PathRefusals(IReadOnlyList<string> entries, IReadOnlyList<string> roots) =>
         [.. entries.Select(entry => ExecutableResolution.PathEntryRefusal(entry, roots, RootFacts.Host)).Where(refusal => refusal.Length > 0).Distinct(StringComparer.Ordinal)];

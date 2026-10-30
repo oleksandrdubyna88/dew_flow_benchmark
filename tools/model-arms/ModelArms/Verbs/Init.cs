@@ -43,7 +43,7 @@ public static class InitVerb
     /// <summary>The root and the template text, once every refusal has been passed.</summary>
     private sealed record Plan(string Root, string Template);
 
-    public static Task<int> RunAsync(VerbInput input) => RunAsync(input, root => MakeRootFolder(root, PlatformFactsReader.CurrentRoad));
+    public static Task<int> RunAsync(VerbInput input) => RunAsync(input, root => ExclusiveFolder.Make(root, PlatformFactsReader.CurrentRoad));
 
     /// <summary>The same with the making of the root handed in: the only way a test can put a folder at the name between the existence check and the <c>mkdir</c>.</summary>
     internal static Task<int> RunAsync(VerbInput input, Func<string, FolderMade> makeRoot) => RunAsync(input, makeRoot, PlatformFactsReader.CurrentRoad);
@@ -162,18 +162,6 @@ public static class InitVerb
             FolderMade.Failed failed => Passage<string>.Stop(ExitCodes.Environment, $"{Name} init: cannot create {root}: {failed.Reason}"),
             _ => throw new InvalidOperationException("unreachable"),
         };
-
-    /// <summary>libc's exclusive <c>mkdir</c> where the road has it (every POSIX host); on Windows there are no modes and no such call, so the folder is made by the runtime (the existence check has just passed).</summary>
-    private static FolderMade MakeRootFolder(string root, PlatformRoad road)
-    {
-        if (road.LibcMkdir)
-        {
-            return KernelFacts.MakeFolder(root);
-        }
-
-        Directory.CreateDirectory(root);
-        return new FolderMade.Made();
-    }
 
     private static Passage<Plan> Filled(Plan plan)
     {

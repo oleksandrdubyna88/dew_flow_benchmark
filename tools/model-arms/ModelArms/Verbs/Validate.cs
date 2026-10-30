@@ -5,7 +5,7 @@ using ModelArms.Core.Experiment;
 
 namespace ModelArms.Verbs;
 
-/// <summary><c>validate</c> (D23) and the guard in front of <c>prep-base</c> (D18): the experiment is read by the gate; this reads the HOST and says, in one
+/// <summary><c>validate</c> (D23) and the checks <c>prep-base</c> runs first (D18): the experiment is read by the gate; this reads the HOST and says, in one
 /// answer, everything that stops the experiment running on it. Exit 0 valid; 4 when any finding is a wrong configuration; 3 when every finding is the host
 /// not being ready (a CLI it lacks, D16). The resolved executables are printed first, each as the REAL path the harness will launch (D17 c).</summary>
 public static class ValidateVerb
@@ -19,24 +19,14 @@ public static class ValidateVerb
         CheckedAsync(input, seams, facts =>
         {
             input.Verb.Output.WriteLine($"{Name} validate: {input.Root.Root} is valid on this host ({facts.Host})");
-            return ExitCodes.Pass;
+            return Task.FromResult(ExitCodes.Pass);
         });
 
-    /// <summary><c>prep-base</c>'s guard: the same checks, printed the same way. Passing them is not yet a baseline — that measurement is story E4.S4 — so the
-    /// verb says so and exits 4.</summary>
-    public static Task<int> PrepBaseGuardAsync(ExperimentInput input) => PrepBaseGuardAsync(input, GateSeams.Real);
-
-    internal static Task<int> PrepBaseGuardAsync(ExperimentInput input, GateSeams seams) =>
-        CheckedAsync(input, seams, _ =>
-        {
-            input.Verb.Error.WriteLine($"{Name} prep-base: validated; the baseline measurement is not built yet — story E4.S4 of todo/PLAN_model_arms.md");
-            return ExitCodes.Configuration;
-        });
-
-    private static async Task<int> CheckedAsync(ExperimentInput input, GateSeams seams, Func<HostFacts, int> whenValid)
+    /// <summary>The checks of D23 over the host, run for any verb that needs them: the resolved executables printed first, every problem printed, and — only when there is none — <paramref name="whenValid"/>. <c>prep-base</c> goes through here (D18: it is refused until validate passes), then launches what these resolved.</summary>
+    internal static async Task<int> CheckedAsync(ExperimentInput input, GateSeams seams, Func<HostFacts, Task<int>> whenValid)
     {
         var read = await HostFactsReader.ReadAsync(input, seams);
-        return read.Match(facts => Judged(input, facts, whenValid), stop => Stopped(input, stop));
+        return await read.Match(facts => Judged(input, facts, whenValid), stop => Task.FromResult(Stopped(input, stop)));
     }
 
     private static int Stopped(ExperimentInput input, Passage<HostFacts>.Stopped stop)
@@ -49,7 +39,7 @@ public static class ValidateVerb
         return stop.ExitCode;
     }
 
-    private static int Judged(ExperimentInput input, HostFacts facts, Func<HostFacts, int> whenValid)
+    private static Task<int> Judged(ExperimentInput input, HostFacts facts, Func<HostFacts, Task<int>> whenValid)
     {
         PrintExecutables(input.Verb.Output, facts);
         var problems = HostChecks.Decide(input.Experiment, facts);
@@ -64,7 +54,7 @@ public static class ValidateVerb
             input.Verb.Error.WriteLine($"  - {problem.Text}");
         }
 
-        return problems.Any(problem => !problem.Environment) ? ExitCodes.Configuration : ExitCodes.Environment;
+        return Task.FromResult(problems.Any(problem => !problem.Environment) ? ExitCodes.Configuration : ExitCodes.Environment);
     }
 
     /// <summary>The executables that resolved, each as <c>name → real path</c>: the path the harness launches, never the name that was configured.</summary>

@@ -60,7 +60,10 @@ public sealed class ArmFiles(ArmPaths paths)
     }
 
     /// <summary>A file that is written once: <c>.before</c>, <c>.done</c>, the verdict file, <c>.diff</c> — never the prompt. An existing file is an <see cref="IOException"/>.</summary>
-    public void WriteOnce(string path, string text)
+    public void WriteOnce(string path, string text) => WriteFileOnce(path, text);
+
+    /// <summary><see cref="WriteOnce"/> for a file that is not under an arm — the root's own <c>baseline.json</c>: staged beside the name and renamed, an existing file (or link) at the name refused with an <see cref="IOException"/>.</summary>
+    public static void WriteFileOnce(string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         try

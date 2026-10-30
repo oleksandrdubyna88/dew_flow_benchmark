@@ -81,7 +81,7 @@ public static class Program
         {
             "init" => InitVerb.RunAsync(input),
             "validate" => ExperimentGate.RunAsync(input, ValidateVerb.RunAsync),
-            "prep-base" => ExperimentGate.RunAsync(input, ValidateVerb.PrepBaseGuardAsync),
+            "prep-base" => ExperimentGate.RunAsync(input, PrepBaseVerb.RunAsync),
             "make" => NotBuilt(input, "E4.S4"),
             "lock" => NotBuilt(input, "E4.S1"),
             "unlock" => NotBuilt(input, "E4.S1"),
