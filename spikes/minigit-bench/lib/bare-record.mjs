@@ -31,16 +31,17 @@ const costPart = ({ outcome, views, cost, meta }) => {
 const timePart = ({ views, meta }) => {
   const E = views.E;
   const part = views.part;
-  const modelApi = E.known ? E.durationApiMs : null;
+  // the registered `model_api` is the partition's model category (the O api_request spans), which exists for a killed session too; the envelope's `duration_api_ms` is descriptive only
+  const modelApi = part.known ? part.categories.model_api : null;
   const active = part.known ? part.active : null;
   const assistant = new Set(views.S.messages.filter(m => m.source === 'main').map(m => m.id)).size;
   return {
     wallMs: maybe(meta.wallMs, 'the launch recorded no wall'),
-    modelApiMs: maybe(modelApi, 'no envelope: no model_api'),
+    modelApiMs: maybe(modelApi, part.known ? 'the partition has no model_api category' : part.why),
     activeMs: maybe(active, part.known ? '' : part.why),
-    activeMinusModelApiMs: finite(active) && finite(modelApi) ? known(active - modelApi) : notCaptured('needs the partition and the envelope'),
+    activeMinusModelApiMs: finite(active) && finite(modelApi) ? known(active - modelApi) : notCaptured('needs the partition'),
     partition: part.known ? known({ categories: part.categories, unattributed: part.unattributed, waits: part.waits }) : notCaptured(part.why),
-    descriptive: part.known ? known({ build_test: part.categories.build_test, other_tool: part.categories.other_tool, note: 'descriptive only: a chained Bash call counts as its highest category (V16)' }) : notCaptured(part.why),
+    descriptive: part.known ? known({ build_test: part.categories.build_test, other_tool: part.categories.other_tool, durationApiMs: E.known ? maybe(E.durationApiMs, 'the envelope carries no duration_api_ms') : notCaptured(E.why), note: 'descriptive only: a chained Bash call counts as its highest category (V16)' }) : notCaptured(part.why),
     turns: E.known ? known({ envelope: E.numTurns, assistantMessages: assistant, agree: E.numTurns === assistant }) : notCaptured(E.why),
     children: known({ launched: views.agents.length, perModel: Object.fromEntries(Object.entries(Object.groupBy(views.agents, a => a.resolvedModel ?? a.requestedModel ?? 'unresolved')).map(([m, l]) => [m, l.length])) }),
   };

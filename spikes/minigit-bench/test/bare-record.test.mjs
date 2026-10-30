@@ -150,3 +150,18 @@ test('The_loc_count_separates_product_from_test_by_path_and_says_it_is_a_heurist
   const c = countLoc([{ path: 'src/a.ts', text: '1\n2\n3\n' }, { path: 'src/a.test.ts', text: '1\n2\n' }, { path: 'test-v1.sh', text: 'x\n' }, { path: 'SPEC-v1.txt', text: 'long\nlong\n' }, { path: 'obj/x.cs', text: '1\n' }]);
   assert.deepEqual([c.product, c.test], [3, 2], 'the pinned test script and the spec are not source');
 });
+
+test('model_api_is_the_partitions_model_category_so_a_killed_session_without_an_envelope_keeps_its_time_bounds', () => {
+  const views = smokeViewsOf();
+  assert.equal(views.part.known, true, 'the fixture has a partition');
+  const killed = smokeRecord({ views: { ...views, E: { known: false, why: 'the session was killed: no result envelope' } } });
+  assert.equal(killed.time.modelApiMs.known, true, 'the partition does not need the envelope');
+  assert.equal(killed.time.modelApiMs.value, views.part.categories.model_api, 'the registered measure is the partition model category');
+  assert.equal(killed.time.activeMinusModelApiMs.known, true);
+  assert.equal(killed.time.activeMinusModelApiMs.value, views.part.active - views.part.categories.model_api);
+  assert.equal(killed.time.descriptive.value.durationApiMs.known, false, 'the envelope\'s duration_api_ms is descriptive only, and unknown here');
+  const whole = smokeRecord();
+  assert.equal(whole.time.modelApiMs.value, views.part.categories.model_api, 'with an envelope it is still the partition, never duration_api_ms');
+  assert.equal(whole.time.descriptive.value.durationApiMs.known, true);
+  assert.equal(whole.time.descriptive.value.durationApiMs.value, views.E.durationApiMs);
+});
