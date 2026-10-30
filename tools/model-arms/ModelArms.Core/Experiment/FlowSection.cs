@@ -8,15 +8,26 @@ namespace ModelArms.Core.Experiment;
 /// step are <see cref="StepSection"/>'s, those of one scheme <see cref="SchemeChecks"/>'.</summary>
 internal static partial class FlowSection
 {
+    /// <summary>The steps, keyed by identity, each read by <see cref="StepSection"/>; then the one rule across them: a field is bound by at most one step.</summary>
     public static IReadOnlyDictionary<StepId, StepSpec> Steps(StrictJson json, JsonObject top)
     {
         var steps = new Dictionary<StepId, StepSpec>();
         foreach (var (key, node) in json.MapMember(top, string.Empty, "steps"))
         {
-            if (StepId.Parse(key) is Outcome<StepId>.Ok id)
+            switch (StepId.Parse(key))
             {
-                steps[id.Value] = StepSection.Read(json, id.Value, node);
+                case Outcome<StepId>.Ok id:
+                    steps[id.Value] = StepSection.Read(json, id.Value, node);
+                    break;
+                case Outcome<StepId>.Fail fail:
+                    json.Add($"steps.{ExecutableRule.Printable(key)}: {fail.Reason}");
+                    break;
             }
+        }
+
+        foreach (var problem in FieldsBoundTwice(steps))
+        {
+            json.Add(problem);
         }
 
         return steps;
@@ -25,10 +36,42 @@ internal static partial class FlowSection
     public static IReadOnlyList<Scheme> Schemes(StrictJson json, JsonObject top, IReadOnlyDictionary<StepId, StepSpec> steps) =>
         [.. json.MapMember(top, string.Empty, "schemes").Select(member => Scheme(json, member.Key, member.Value, steps))];
 
-    /// <summary>The rules that need more than one step or a whole scheme, recorded once the members are read.</summary>
-    public static void Check(StrictJson json, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, IReadOnlyList<Scheme> schemes)
+    /// <summary>The rules that need more than one step or a whole scheme, recorded once the members are read: the ids of the tasks block (checked when the block is declared or a scheme
+    /// has a tasks entry), a <c>notes</c> or a <c>diffFrom</c> that names nothing, and each scheme's own rules.</summary>
+    public static void Check(StrictJson json, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, bool tasksDeclared, IReadOnlyList<Scheme> schemes)
     {
+        var usesBlock = tasksDeclared || schemes.Any(scheme => scheme.Entries.OfType<SchemeEntry.Tasks>().Any());
+        IEnumerable<string> problems =
+        [
+            .. usesBlock ? TaskSection.Problems(tasks, steps) : [],
+            .. steps.Values.SelectMany(spec => Unbound(spec, SchemeChecks.AllFields(steps, tasks), steps)),
+            .. schemes.SelectMany(scheme => SchemeChecks.Problems(scheme, steps, tasks)),
+        ];
+        foreach (var problem in problems)
+        {
+            json.Add(problem);
+        }
     }
+
+    private static IEnumerable<string> FieldsBoundTwice(IReadOnlyDictionary<StepId, StepSpec> steps) =>
+        steps.Values.SelectMany(spec => spec.Outputs.Select(binding => (spec.Id, binding.Field)))
+            .GroupBy(bound => bound.Field, StringComparer.Ordinal)
+            .SelectMany(group => group.Skip(1).Select(later => $"steps.{later.Id}.outputs — {group.Key} is already bound by step {group.First().Id}"));
+
+    /// <summary>A <c>notes</c> no step and no tasks block binds, and a <c>diffFrom</c> that is no step id. Whether either holds at the position a scheme places the step is the scheme's.</summary>
+    private static IEnumerable<string> Unbound(StepSpec spec, IReadOnlyList<string> fields, IReadOnlyDictionary<StepId, StepSpec> steps) =>
+    [
+        .. UnboundNotes(spec, fields),
+        .. UndefinedDiffFrom(spec, steps),
+    ];
+
+    private static IEnumerable<string> UnboundNotes(StepSpec spec, IReadOnlyList<string> fields) =>
+        spec.Notes.Length > 0 && !fields.Contains(spec.Notes) ? [$"steps.{spec.Id}.notes is '{spec.Notes}' — no step binds it"] : [];
+
+    private static IEnumerable<string> UndefinedDiffFrom(StepSpec spec, IReadOnlyDictionary<StepId, StepSpec> steps) =>
+        spec.DiffFrom.Length > 0 && !steps.ContainsKey(new StepId(spec.DiffFrom))
+            ? [$"steps.{spec.Id}.diffFrom is '{spec.DiffFrom}' — not a step id defined under steps ({string.Join(", ", steps.Keys)})"]
+            : [];
 
     private static Scheme Scheme(StrictJson json, string name, JsonNode? node, IReadOnlyDictionary<StepId, StepSpec> steps)
     {
@@ -67,7 +110,14 @@ internal static partial class FlowSection
             return null;
         }
 
-        return new SchemeEntry.Step(match.Groups["name"].Value, new StepId(match.Groups["id"].Value));
+        var id = new StepId(match.Groups["id"].Value);
+        if (!steps.ContainsKey(id))
+        {
+            json.Add($"{where} is '{text}' — step id '{id}' is not defined under steps (defined: {string.Join(", ", steps.Keys)})");
+            return null;
+        }
+
+        return new SchemeEntry.Step(match.Groups["name"].Value, id);
     }
 
     [GeneratedRegex("^[A-Za-z]+$")]

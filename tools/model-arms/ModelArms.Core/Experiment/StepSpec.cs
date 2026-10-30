@@ -35,9 +35,15 @@ public static class StepKinds
 public sealed partial record StepId(string Value)
 {
     /// <summary>The id the text spells, or why it is none.</summary>
-    public static Outcome<StepId> Parse(string text) => Outcome<StepId>.Success(new StepId(text));
+    public static Outcome<StepId> Parse(string text) =>
+        Pattern().IsMatch(text)
+            ? Outcome<StepId>.Success(new StepId(text))
+            : Outcome<StepId>.Failure($"'{ExecutableRule.Printable(text)}' is not a step id — letters and digits, starting with a letter (hA, splitFix)");
 
     public override string ToString() => Value;
+
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9]*\z", RegexOptions.CultureInvariant)]
+    private static partial Regex Pattern();
 }
 
 /// <summary>One step as the experiment configures it (D25): its identity and kind, the model alias, the budget in minutes, the tool mode, whether it may start a
@@ -66,10 +72,16 @@ public sealed record StepSpec(
 {
     /// <summary>What the MODEL is briefed to write: <see cref="Outputs"/> minus the verdict, which the runner derives from the last result. The runner never requires
     /// one of these; it records its absence (E2.S4).</summary>
-    public IReadOnlyList<OutputBinding> ModelWritten => Outputs;
+    public IReadOnlyList<OutputBinding> ModelWritten => [.. Outputs.Where(binding => !string.Equals(binding.Field, Verdict, StringComparison.Ordinal))];
 
     /// <summary>The bound relative path of <paramref name="field"/>, or a failure naming the field and the step.</summary>
-    public Outcome<string> OutputPath(string field) => Outcome<string>.Failure("stub");
+    public Outcome<string> OutputPath(string field) =>
+        Outputs.FirstOrDefault(binding => string.Equals(binding.Field, field, StringComparison.Ordinal)) is { } found
+            ? Outcome<string>.Success(found.RelativePath)
+            : Outcome<string>.Failure($"{field} is not an output of step {Id} (outputs: {FieldList})");
+
+    /// <summary>The fields of <see cref="Outputs"/> as a refusal lists them: comma-separated, or <c>none</c>.</summary>
+    internal string FieldList => Outputs.Count == 0 ? "none" : string.Join(", ", Outputs.Select(binding => binding.Field));
 
     public bool Equals(StepSpec? other) =>
         other is not null && Identity == other.Identity && Outputs.SequenceEqual(other.Outputs);

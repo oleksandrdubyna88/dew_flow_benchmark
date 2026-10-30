@@ -151,7 +151,7 @@ public sealed record ArmPaths(string Root, string Token)
 
     /// <summary>The file a binding stands for (<c>notes/hA.json</c>), under the arm folder. The reader refused a climbing, empty or rooted segment, so a throw here is a
     /// caller's bug, caught by <see cref="Segment"/> as it is for every other member.</summary>
-    public string NotesFile(OutputBinding binding) => Path.Combine([Folder, .. binding.RelativePath.Split('/')]);
+    public string NotesFile(OutputBinding binding) => Path.Combine([Folder, .. binding.RelativePath.Split('/').Select(segment => Segment(segment, "output segment"))]);
 
     public string TaskNotes(string id) => Under("notes", Segment(id, "id") + "-code.md");
 

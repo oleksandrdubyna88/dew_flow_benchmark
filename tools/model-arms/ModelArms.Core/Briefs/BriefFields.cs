@@ -20,8 +20,21 @@ public sealed record BriefFacts(string Plan, string Base, string Branch, int Sce
 /// of a field is not an error: the shell passed every path to every template, and so does this.</summary>
 public static class BriefFields
 {
-    public static IReadOnlyDictionary<string, string> For(StepSpec spec, IReadOnlyList<OutputBinding> visible, TaskLimits tasks, ArmPaths paths, BriefFacts facts) =>
-        Facts(paths, facts).ToDictionary(field => field.Key, field => field.Value);
+    /// <summary>The fields of the brief of <paramref name="spec"/>: one per visible binding, then the facts and <c>NOTES</c> and the fields of a task or of a split fix. The facts
+    /// come last and win: a binding named like a fact would otherwise silently replace it.</summary>
+    public static IReadOnlyDictionary<string, string> For(StepSpec spec, IReadOnlyList<OutputBinding> visible, TaskLimits tasks, ArmPaths paths, BriefFacts facts)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var field in Bound(visible, paths).Concat(Facts(paths, facts)).Append(Field("NOTES", NotesOf(spec, visible, paths, facts.Task))).Concat(Extra(spec, tasks, facts)))
+        {
+            fields[field.Key] = field.Value;
+        }
+
+        return fields;
+    }
+
+    private static IEnumerable<KeyValuePair<string, string>> Bound(IReadOnlyList<OutputBinding> visible, ArmPaths paths) =>
+        visible.Select(binding => Field(binding.Field, paths.NotesFile(binding)));
 
     private static IEnumerable<KeyValuePair<string, string>> Facts(ArmPaths paths, BriefFacts facts) =>
     [
@@ -32,8 +45,25 @@ public static class BriefFields
         Field("DEADLINE", facts.Deadline),
         Field("KNOWN", facts.Known),
         Field("WORK", paths.Work),
-        Field("NOTES", "-"),
     ];
+
+    private static IEnumerable<KeyValuePair<string, string>> Extra(StepSpec spec, TaskLimits tasks, BriefFacts facts) =>
+        spec.Kind == StepKind.TaskCode
+            ?
+            [
+                Field("TASK", facts.Task.Id),
+                Field("TASK_BRIEF", facts.Task.Brief),
+                Field("TASK_FILES", facts.Task.Files),
+                Field("BEFORE", facts.Task.Before),
+            ]
+            : spec.Id == tasks.SplitFix ? [Field("PROBLEMS", facts.Problems)] : [];
+
+    /// <summary>The file a step's notes go to: a task coder's per-task notes, the dash the shell passed a step that writes none, else the visible binding <c>notes</c> names — which the
+    /// reader guaranteed is one, and exactly one.</summary>
+    private static string NotesOf(StepSpec spec, IReadOnlyList<OutputBinding> visible, ArmPaths paths, TaskFacts task) =>
+        spec.Kind == StepKind.TaskCode
+            ? paths.TaskNotes(task.Id)
+            : spec.Notes.Length == 0 ? "-" : paths.NotesFile(visible.Single(binding => binding.Field == spec.Notes));
 
     private static KeyValuePair<string, string> Field(string name, string value) => new(name, value);
 }

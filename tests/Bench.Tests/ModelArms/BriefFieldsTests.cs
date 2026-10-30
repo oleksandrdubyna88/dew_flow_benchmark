@@ -86,8 +86,8 @@ public sealed class BriefFieldsTests
         {
             var hfix2 = root["steps"]!["hfix"]!.DeepClone().AsObject();
             hfix2.Remove("diffFrom");
-            hfix2["outputs"] = new JsonObject { ["HFIX2_NOTES"] = "notes/hfix2.md" };
-            hfix2["notes"] = "HFIX2_NOTES";
+            hfix2["outputs"] = new JsonObject { ["HFIXTWO_NOTES"] = "notes/hfix2.md" };
+            hfix2["notes"] = "HFIXTWO_NOTES";
             root["steps"]!["hfix2"] = hfix2;
             root["schemes"]!["X"] = new JsonArray("1-code:code", "4-hfix:hfix2", "2-hA:hA", "3-hB:hB");
         });

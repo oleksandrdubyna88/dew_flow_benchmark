@@ -10,6 +10,10 @@ public static class ExperimentFile
 {
     public const string Schema = "model-arms/experiment-v2";
 
+    private const string SchemaV1 = "model-arms/experiment-v1";
+
+    private const string V1Moves = $"schema is '{SchemaV1}' — this build reads '{Schema}': steps are keyed by a step id and carry kind, brief and outputs; the notes files are bindings; rounds moved to runs.<name>.rounds";
+
     private static readonly string[] Required =
         ["schema", "target", "scenarios", "baseline", "known", "steps", "schemes", "runs", "limits", "tools", "awake"];
 
@@ -73,10 +77,11 @@ public static class ExperimentFile
     {
         json.Object(top, string.Empty, Known, Required);
         CheckSchema(json, top);
+        MovedMembers(json, top);
         var steps = FlowSection.Steps(json, top);
         var tasks = TaskSection.Read(json, top);
         var schemes = FlowSection.Schemes(json, top, steps);
-        FlowSection.Check(json, steps, tasks, schemes);
+        FlowSection.Check(json, steps, tasks, top.ContainsKey("tasks"), schemes);
         return new Experiment(
             location.Root,
             TargetSection.Read(json, top, location),
@@ -94,12 +99,22 @@ public static class ExperimentFile
             json.Choice(top, string.Empty, "awake", AwakeChoices, AwakeChoice.Auto));
     }
 
+    /// <summary>The schema is exactly <see cref="Schema"/>. A v1 file is told what moved, so the operator edits instead of guessing.</summary>
     private static void CheckSchema(StrictJson json, JsonObject top)
     {
         var schema = json.Text(top, string.Empty, "schema");
         if (schema.Length > 0 && schema != Schema)
         {
-            json.Add($"schema is '{schema}' — this build reads exactly '{Schema}'");
+            json.Add(schema == SchemaV1 ? V1Moves : $"schema is '{schema}' — this build reads exactly '{Schema}'");
+        }
+    }
+
+    /// <summary><c>rounds</c> is a known member only so the refusal can say where it went: into each run, as <c>runs.&lt;name&gt;.rounds</c>.</summary>
+    private static void MovedMembers(StrictJson json, JsonObject top)
+    {
+        if (top.ContainsKey("rounds"))
+        {
+            json.Add("rounds — moved to runs.<name>.rounds (schema v2)");
         }
     }
 
