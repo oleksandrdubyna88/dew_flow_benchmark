@@ -53,7 +53,10 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
   fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p', { recursive: true });
   fs.writeFileSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p/stub-session.jsonl', '{"type":"assistant"}\\n');
   say({ type: 'assistant', message: { id: 'm1', model: 'claude-sonnet-5-5', usage: { input_tokens: 2, output_tokens: 4 } } });
-  say({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.009232, result: 'status ' + r.status });
+  // a COMPLETE envelope (usage and modelUsage, the numbers the stub upstream answers with): T1 can run on it, so the series' fail-closed rule (review MINOR-7: a completed session with an unreadable envelope stops a series whose t1 policy is stop) has nothing to stop on
+  say({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.009232, duration_ms: 50, duration_api_ms: 46, num_turns: 1, result: 'status ' + r.status,
+    usage: { input_tokens: 2, output_tokens: 4, cache_read_input_tokens: 0, cache_creation_input_tokens: 2297, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 2297 } },
+    modelUsage: { 'claude-sonnet-5-5': { inputTokens: 2, outputTokens: 4, cacheReadInputTokens: 0, cacheCreationInputTokens: 2297, costUSD: 0.009232 } } });
 })();
 `;
 
