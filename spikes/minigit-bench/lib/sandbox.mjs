@@ -9,6 +9,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FIXED_GIT } from '../../policy-ab-quick/lib/env.mjs';
+import { otelEnv } from './otel-receiver.mjs';
 import { bind, chdir, devProc, hiddenPaths, isolation, roBind, roRoot, tmpfs } from './bwrap.mjs';
 import { fail, ok } from './result.mjs';
 
@@ -80,7 +81,7 @@ export function sessionLayout(root, rid) {
 
 /**
  * The environment the agent runs with (the same for every arm; the process arm adds its own keys through `extra`): a fixed allow-list, never the parent's. `PATH` is constructed, so no `/mnt` entry and no WSL
- * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot.
+ * interop variable can exist. The credential is the DUMMY; the real token is not a parameter of this function. `extra` is the process arm's slot: it may add keys, never replace one of the base (that throws).
  */
 export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = null, extra = {} }) {
   const proxy = `http://127.0.0.1:${BOX_PROXY_PORT}`;
@@ -89,14 +90,14 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     HOME: layout.home, TMPDIR: '/tmp', LANG: 'C.UTF-8',
     CLAUDE_CODE_OAUTH_TOKEN: dummy, ANTHROPIC_BASE_URL: `http://127.0.0.1:${BOX_API_PORT}`, CLAUDE_CONFIG_DIR: layout.config,
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1', DISABLE_AUTOUPDATER: '1',
-    CLAUDE_CODE_ENABLE_TELEMETRY: '1', OTEL_LOGS_EXPORTER: 'otlp', OTEL_METRICS_EXPORTER: 'otlp', OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
-    OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${BOX_OTEL_PORT}`, OTEL_LOGS_EXPORT_INTERVAL: '1000', OTEL_METRIC_EXPORT_INTERVAL: '1000',
-    OTEL_LOG_TOOL_DETAILS: '1', OTEL_LOG_USER_PROMPTS: '0',
+    ...otelEnv(BOX_OTEL_PORT),
     HTTPS_PROXY: proxy, HTTP_PROXY: proxy, NO_PROXY: '127.0.0.1,localhost',
     DOTNET_CLI_HOME: layout.home, DOTNET_NOLOGO: '1', DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_CLI_USE_MSBUILD_SERVER: '0',
     MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
   };
+  const clash = Object.keys(extra).filter(k => k in base);
+  if (clash.length > 0) throw new Error(`agentEnv: extra may only ADD keys; ${clash.join(', ')} ${clash.length === 1 ? 'is' : 'are'} already set by the base environment (the dummy credential, the proxy and the exporter wiring are not an arm's to replace)`);
   return Object.freeze({ ...base, ...extra });
 }
 
