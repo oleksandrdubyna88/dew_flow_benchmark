@@ -1,5 +1,6 @@
 using System.Reflection;
 using FluentAssertions;
+using ModelArms.Core.Checks;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Launch;
 using ModelArms.Core.Steps;
@@ -72,6 +73,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(PlatformRoads),
 
         // E3.S1
+        typeof(TestLogSummary), typeof(TsTestLog), typeof(CtrfScenarios), typeof(DiffStats), typeof(ObjectiveReport),
 
         // E3.S2
 
