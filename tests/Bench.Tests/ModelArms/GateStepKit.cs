@@ -36,6 +36,14 @@ internal sealed class RecordingGateLock(List<string> events) : IGateLock
     }
 }
 
+/// <summary>A lock that refuses its path, as the real one does for a link, a folder or a FIFO (D17).</summary>
+internal sealed class RefusingGateLock : IGateLock
+{
+    public IDisposable? TryAcquire(string path) => throw new GateLockRefusedException($"{path} is a link — refused (D17)");
+
+    public Task<IDisposable> AcquireAsync(string path, CancellationToken cancellationToken) => throw new GateLockRefusedException($"{path} is a link — refused (D17)");
+}
+
 /// <summary>The runner's probe that notes every launch as an event.</summary>
 internal sealed class LaunchEvents(List<string> events) : StepProbe
 {

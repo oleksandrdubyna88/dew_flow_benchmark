@@ -344,6 +344,19 @@ public sealed class GateStepTests
     }
 
     [Fact]
+    public async Task A_lock_path_the_lock_refuses_stops_the_gate_with_exit_4_and_launches_nothing()
+    {
+        using var bench = new StepBench();
+        bench.Replays("result-success.jsonl");
+
+        var outcome = await new GateRig().Gate(bench, gateLock: new RefusingGateLock()).RunAsync(bench.GateContext(), Ct);
+
+        outcome.IsStopped(4).Why.Should().Contain("refused (D17)");
+        bench.Fake.Calls().Should().BeEmpty();
+        bench.LastStopped().Exit.Should().Be(4);
+    }
+
+    [Fact]
     public async Task A_lock_held_by_another_process_is_waited_for_at_most_the_ceiling_the_wait_is_said_and_the_stop_names_the_holder()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "the holder helper and its note are Linux's");
