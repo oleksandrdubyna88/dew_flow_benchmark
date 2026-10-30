@@ -32,14 +32,21 @@ internal static class GateStatusFile
 
     public static Answer Read(string path) => Judged(path) ?? (KernelFacts.CanReadSmall ? Decoded(KernelFacts.ReadSmall(path, LimitBytes)) : Opened(path, LimitBytes));
 
-    /// <summary>The portable road: the same three answers from what <see cref="FileInfo"/> can see — a link target refuses, a folder or a reparse point is not a regular file, and at most <paramref name="limit"/> + 1 bytes are read, shared with a writer.</summary>
+    /// <summary>The portable road: the same three answers from what <see cref="FileInfo"/> can see — a link refuses, a folder or a reparse point is not a regular file, and at most <paramref name="limit"/> + 1 bytes are read, shared with a writer.</summary>
     internal static Answer ReadFallback(string path, int limit) => Judged(path) ?? Opened(path, limit);
 
     /// <summary>The answer the path alone decides, or <c>null</c> when the file must be opened: a link is refused (nothing it names is read), a path that names nothing is absent.</summary>
     private static Answer? Judged(string path) =>
-        new FileInfo(path).LinkTarget is not null ? new Answer.Refused($"{path} is a link — its target is not read (D17)")
+        IsLink(path) ? new Answer.Refused($"{path} is a link — what it names is not read (D17)")
         : !Path.Exists(path) ? new Answer.Absent()
         : null;
+
+    /// <summary>True for a symbolic link, a dangling one included: the file's own attributes say so (<c>ReparsePoint</c>) without reading what it names — the module reads a link's text in one place only (<c>RootFacts</c>). A path that names nothing reads as <c>-1</c>, which is no link.</summary>
+    private static bool IsLink(string path)
+    {
+        var attributes = new FileInfo(path).Attributes;
+        return attributes != (FileAttributes)(-1) && attributes.HasFlag(FileAttributes.ReparsePoint);
+    }
 
     private static Answer Decoded(Bench.Domain.Outcome<byte[]> bytes) => bytes.Match(read => (Answer)new Answer.Text(Encoding.UTF8.GetString(read)), reason => new Answer.Refused(reason));
 
