@@ -246,7 +246,7 @@ public sealed class ReviewAnswerTests
         var answer = AnswerFor(text).Ok();
 
         ShouldBeUnparsedWith(answer, text);
-        answer.Should().Contain("It's <done> & ").And.Contain("é · 日本 😀", "the file is read by a person");
+        answer.Should().Contain("It's <done> & ").And.Contain("é · 日本 ", "the file is read by a person (a character outside the basic plane, the emoji, is escaped as a surrogate pair — valid JSON that reads back)");
         answer.Should().NotContain("\\u0027").And.NotContain("\\u003C");
     }
 
