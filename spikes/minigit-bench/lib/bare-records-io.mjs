@@ -21,27 +21,38 @@ const writeJson = (file, value) => {
 /** Cache bytes after the session minus the registered snapshot bytes (nuget + npm + the dotnet first-run part): the cross-check of the download bytes. `null` when the run knows no snapshot size. */
 const cacheGrowthOf = ({ ctx, layout }) => (ctx.snapshotBytes == null ? null : treeSize(layout.nuget) + treeSize(layout.npm) + treeSize(path.join(layout.home, '.dotnet')) - ctx.snapshotBytes);
 
-/** Rebuild and write one session's record from its directory. -> `ok(record)` | the collect's `fail`. `entry` is the run-map entry; `score` the session's score.json or null. */
-export function writeSessionRecord({ ctx, entry, score }) {
-  const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
-  const collected = collectSession({
+/** The evidence of a session collected again from its directory, with the hand verdicts known now. */
+function collectAgain({ ctx, entry, layout }) {
+  return collectSession({
     layout, plan: { token: ctx.token, dummy: entry.dummy }, launched: null, canaryTokens: entry.canaryTokens ?? [], aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(entry.rid),
     retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], table: ctx.table, policy: ctx.policy, home: ctx.home,
   });
-  if (!collected.ok) return collected;
-  const c = collected.value;
-  const packages = packagesOf({ npm: readNpmPackages(layout.npm), nuget: readNugetPackages(layout.nuget), snapshot: ctx.snapshotPackages, rules: ctx.packageRules });
-  // The class is the RUN-MAP's (decided when the session ended, from the evidence and the dated lines of that time): a record rebuilt later never re-classifies it. A recomputation that
-  // disagrees (a hand verdict dated since) is reported as a discrepancy beside the class and flagged, for the operator to act on through the schedule.
-  const discrepancies = entry.class !== undefined && entry.class !== c.outcome.class
-    ? [{ kind: 'class', runMap: entry.class, recomputed: c.outcome.class, why: c.outcome.detail?.reason ?? 'the evidence now reads differently' }] : [];
-  const outcome = {
+}
+
+/** The class is the RUN-MAP's (decided when the session ended, from the evidence and the dated lines of that time): a record rebuilt later never re-classifies it. A recomputation that
+ * disagrees (a hand verdict dated since) is reported as a discrepancy beside the class and flagged, for the operator to act on through the schedule. */
+const discrepanciesOf = (entry, c) => (entry.class !== undefined && entry.class !== c.outcome.class
+  ? [{ kind: 'class', runMap: entry.class, recomputed: c.outcome.class, why: c.outcome.detail?.reason ?? 'the evidence now reads differently' }] : []);
+
+/** The outcome of a rebuilt record: the run-map's class and data, and every flag the run-map, the workspace, the score, the packages and a discrepancy add. */
+function recordOutcome({ entry, c, packages, discrepancies }) {
+  return {
     ...c.outcome, class: entry.class ?? c.outcome.class, data: entry.data ?? c.outcome.data,
     flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : []), ...(entry.reclassified ? ['reclassified by hand'] : [])],
   };
+}
+
+/** Rebuild and write one session's record from its directory. -> `ok(record)` | the collect's `fail`. `entry` is the run-map entry; `score` the session's score.json or null. */
+export function writeSessionRecord({ ctx, entry, score }) {
+  const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
+  const collected = collectAgain({ ctx, entry, layout });
+  if (!collected.ok) return collected;
+  const c = collected.value;
+  const packages = packagesOf({ npm: readNpmPackages(layout.npm), nuget: readNugetPackages(layout.nuget), snapshot: ctx.snapshotPackages, rules: ctx.packageRules });
+  const discrepancies = discrepanciesOf(entry, c);
   const record = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
-    outcome, run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
+    outcome: recordOutcome({ entry, c, packages, discrepancies }), run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
     views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, discrepancies, reclassified: entry.reclassified ?? null, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);

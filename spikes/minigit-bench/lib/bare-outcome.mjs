@@ -21,9 +21,15 @@ const settledLater = (a, b) => {
  * The last request the broker finished, BY SETTLE TIME (a concurrent request opened later can settle earlier, so the highest seq is not the last answer):
  * `null` | `{ kind: 'ok' }` | `{ kind: 'refused', reason }` | `{ kind: 'status', status, error }`.
  */
+const lastSettled = brokerLines => brokerLines.filter(l => l.event === 'settled' || l.event === 'refused').reduce((a, l) => (a === null || settledLater(l, a) ? l : a), null);
+
 export function finalRequest(brokerLines) {
-  const last = brokerLines.filter(l => l.event === 'settled' || l.event === 'refused').reduce((a, l) => (a === null || settledLater(l, a) ? l : a), null);
-  if (last === null) return null;
+  const last = lastSettled(brokerLines);
+  return last === null ? null : describeFinal(last);
+}
+
+/** The broker line that settled last, as `{ kind: 'ok' | 'refused' | 'status', ... }`. */
+function describeFinal(last) {
   if (last.event === 'refused') return { kind: 'refused', reason: last.reason ?? 'unknown', seq: last.seq };
   if (is2xx(last.status) && !last.error) return { kind: 'ok', seq: last.seq };
   return { kind: 'status', status: last.status ?? null, error: last.error ?? null, seq: last.seq };
@@ -32,12 +38,15 @@ export function finalRequest(brokerLines) {
 const answered = brokerLines => brokerLines.some(l => l.event === 'settled' && is2xx(l.status) && l.usage);
 
 /** Earlier CAP refusals the session survived (review N7: `reason: 'cap'` only; a path, body or busy refusal, or one with no reason, is the harness's own door and no budget wait), with their summed backoff: from each refusal to the next admitted request. */
+/** The wait from a refusal to the next request the broker admitted, or none when no request followed. */
+function waitAfter(brokerLines, refusal) {
+  const next = brokerLines.find(l => l.event === 'forwarding' && l.seq > refusal.seq);
+  return next ? [Date.parse(next.t) - Date.parse(refusal.t)] : [];
+}
+
 function refusalsSurvived(brokerLines, final) {
   const refusals = brokerLines.filter(l => l.event === 'refused' && l.reason === 'cap' && l.seq !== final?.seq);
-  const waits = refusals.flatMap(r => {
-    const next = brokerLines.find(l => l.event === 'forwarding' && l.seq > r.seq);
-    return next ? [Date.parse(next.t) - Date.parse(r.t)] : [];
-  });
+  const waits = refusals.flatMap(r => waitAfter(brokerLines, r));
   return { count: waits.length, backoffMs: waits.reduce((a, b) => a + b, 0) };
 }
 
@@ -50,10 +59,12 @@ function flagsOf({ brokerLines, final, aliasCheck, meta }) {
   return [
     ...(refusals.count > 0 ? [`broker refused ${refusals.count}`] : []),
     ...(n429 > 0 ? [`upstream 429 ${n429}`] : []),
-    ...(aliasCheck.verdict === 'flag' ? ['model_refusal_fallback'] : []),
-    ...(meta.broker?.overCap ? ['over cap'] : []),
+    ...factFlags({ aliasCheck, meta }),
   ];
 }
+
+/** The flags that are facts of the alias check and of the broker's meta. */
+const factFlags = ({ aliasCheck, meta }) => [...(aliasCheck.verdict === 'flag' ? ['model_refusal_fallback'] : []), ...(meta.broker?.overCap ? ['over cap'] : [])];
 
 const result = (cls, { data = false, stop = false, censoredAtUsd = null, detail = {} } = {}) => ({ class: cls, data, stop, censoredAtUsd, detail });
 

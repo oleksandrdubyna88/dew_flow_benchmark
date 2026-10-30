@@ -56,7 +56,13 @@ const defaults = () => {
 };
 
 const PAIR = /^pair:([1-3])$/;
-export const parseWhat = what => (what === 'rehearse-v2' ? { kind: 'rehearsal' } : what === 'aa' || what === 'pilot-node' ? { kind: what === 'aa' ? 'aa' : 'pilot' } : PAIR.test(what ?? '') ? { kind: 'data', pair: Number(PAIR.exec(what)[1]) } : null);
+const FIXED_WHAT = { aa: { kind: 'aa' }, 'pilot-node': { kind: 'pilot' }, 'rehearse-v2': { kind: 'rehearsal' } };
+/** `--what` as `{ kind, pair? }`, or null for anything the runner does not know. */
+export function parseWhat(what) {
+  if (Object.hasOwn(FIXED_WHAT, what ?? '')) return { ...FIXED_WHAT[what] };
+  const pair = PAIR.exec(what ?? '');
+  return pair ? { kind: 'data', pair: Number(pair[1]) } : null;
+}
 
 /** The fixed sessions of the A/A (two identical bare C# v1 twins on masks 0-5 and 8-13) or the Node pilot (one bare Node v1), planned once. */
 function planFixed(map, kind, random = () => randomBytes(4).toString('hex')) {

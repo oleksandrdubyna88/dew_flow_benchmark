@@ -52,19 +52,19 @@ function* v1Phase(st) {
   return [{ stack: y, v1: 1, v2Done: true }, ...(dataOf(at(st, x, 'v1', 2)) ? [{ stack: x, v1: 2 }] : [])];
 }
 
+const labelOf = stacks => (stacks.length === 2 ? 'paired' : 'ran unpaired');
+
+/** The launch and the score of the v2 sessions of `stacks` at `attempt`; nothing for no stack. */
+function* v2Step(stacks, attempt) {
+  if (stacks.length === 0) return;
+  const step = launch(stacks.map(s => ref(s, 'v2', attempt)), labelOf(stacks));
+  yield step;
+  yield scoreStep(step);
+}
+
 function* v2Phase(st, eligible) {
-  const todo = eligible.filter(e => !e.v2Done).map(e => e.stack);
-  if (todo.length > 0) {
-    const step = launch(todo.map(s => ref(s, 'v2', 1)), todo.length === 2 ? 'paired' : 'ran unpaired');
-    yield step;
-    yield scoreStep(step);
-  }
-  const voids = eligible.map(e => e.stack).filter(s => voidOf(at(st, s, 'v2', 1)));
-  if (voids.length > 0) {
-    const again = launch(voids.map(s => ref(s, 'v2', 2)), voids.length === 2 ? 'paired' : 'ran unpaired');
-    yield again;
-    yield scoreStep(again);
-  }
+  yield* v2Step(eligible.filter(e => !e.v2Done).map(e => e.stack), 1);
+  yield* v2Step(eligible.map(e => e.stack).filter(s => voidOf(at(st, s, 'v2', 1))), 2);
 }
 
 function* plan(st) {
@@ -75,24 +75,34 @@ function* plan(st) {
 /** A score step names only the data sessions still unscored: a void has nothing to score. */
 const unscored = (step, st) => ({ ...step, sessions: step.sessions.filter(r => { const s = at(st, r.stack, r.phase, r.attempt); return s?.data === true && s.status !== 'scored'; }) });
 
-/** The next thing to do: `{ action: 'launch' | 'score', sessions: [{ stack, phase, attempt }], label? }`, `{ action: 'halt', reason }` or `{ action: 'done' }`. */
-export function nextStep(state) {
+/** A `stop:` class halts everything. */
+function haltOf(state) {
   const stopped = state.sessions.find(s => ended(s) && String(s.class).startsWith('stop:'));
-  if (stopped) return { action: 'halt', reason: `${stopped.class} in ${stopped.stack} ${stopped.phase} a${stopped.attempt}: the series stops` };
+  return stopped ? { action: 'halt', reason: `${stopped.class} in ${stopped.stack} ${stopped.phase} a${stopped.attempt}: the series stops` } : null;
+}
+
+/** The first step of the plan that is not complete, or null. */
+function pendingStep(state) {
   for (const step of plan(state)) {
     if (!complete(step, state)) return step.action === 'score' ? unscored(step, state) : step;
   }
-  return { action: 'done' };
+  return null;
+}
+
+/** The next thing to do: `{ action: 'launch' | 'score', sessions: [{ stack, phase, attempt }], label? }`, `{ action: 'halt', reason }` or `{ action: 'done' }`. */
+export const nextStep = state => haltOf(state) ?? pendingStep(state) ?? { action: 'done' };
+
+const dead = (state, stack, phase) => voidOf(at(state, stack, phase, 1)) && voidOf(at(state, stack, phase, 2));
+
+/** The cells of one stack that are `missing`, and why. */
+function missingOf(state, stack) {
+  if (dead(state, stack, 'v1')) return [{ stack, phase: 'v1', why: 'a second void' }, { stack, phase: 'v2', why: 'its v1 is missing' }];
+  return dead(state, stack, 'v2') ? [{ stack, phase: 'v2', why: 'a second void' }] : [];
 }
 
 /** What the pair holds for its record: the cells that are `missing` and why, and the stacks that hold a `ran unpaired` session. */
 export function pairSummary(state) {
-  const missing = STACKS.flatMap(stack => {
-    const v1Dead = voidOf(at(state, stack, 'v1', 1)) && voidOf(at(state, stack, 'v1', 2));
-    const v2Dead = voidOf(at(state, stack, 'v2', 1)) && voidOf(at(state, stack, 'v2', 2));
-    if (v1Dead) return [{ stack, phase: 'v1', why: 'a second void' }, { stack, phase: 'v2', why: 'its v1 is missing' }];
-    return v2Dead ? [{ stack, phase: 'v2', why: 'a second void' }] : [];
-  });
+  const missing = STACKS.flatMap(stack => missingOf(state, stack));
   const unpairedStacks = [...new Set(state.sessions.filter(s => s.label === 'ran unpaired').map(s => s.stack))];
   return { missing, unpairedStacks };
 }

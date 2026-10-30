@@ -47,17 +47,34 @@ export function codeOnly(source) {
 
 const DECISIONS = /\bif\b|\bfor\b|\bwhile\b|\bcase\b|\bcatch\b|&&|\|\||(?<!\?)\?(?![.?])/g;
 
-/** `{ name, lines, complexity }` of every top-level function of `source` (a declaration that starts at column 0 and ends at the next `}` at column 0). */
+const FUNCTION_HEAD = /^(?:export )?(?:async )?function\*? ([A-Za-z0-9_$]+)\(/;
+const ARROW_HEAD = /^(?:export )?const ([A-Za-z0-9_$]+) = (?:async )?(?:\([^)]*\)|[A-Za-z0-9_$]+) =>/;
+
+/** The last line of the statement that starts at `start`: the first line after it where every bracket is closed and the line ends with `;` or `}`. */
+function statementEnd(code, start) {
+  let depth = 0;
+  for (let n = start; n < code.length; n += 1) {
+    for (const ch of code[n]) depth += '({['.includes(ch) ? 1 : ')}]'.includes(ch) ? -1 : 0;
+    if (depth <= 0 && /[;}]\s*$/.test(code[n])) return n;
+  }
+  return code.length - 1;
+}
+
+/**
+ * `{ name, lines, complexity }` of every top-level function of `source`: a `function` declaration, and a `const name = (...) =>` arrow function, that starts at column 0. A declaration ends at the next `}` at column 0 (or on its own line);
+ * an arrow ends where its brackets are closed and the line ends with `;`.
+ */
 export function functionShapes(source) {
   const lines = source.split('\n');
   const code = codeOnly(source).split('\n');
   const shapes = [];
   for (let start = 0; start < lines.length; start += 1) {
-    const head = /^(?:export )?(?:async )?function\*? ([A-Za-z0-9_$]+)\(/.exec(lines[start]);
+    const declared = FUNCTION_HEAD.exec(lines[start]);
+    const head = declared ?? ARROW_HEAD.exec(lines[start]);
     if (!head) continue;
     const count = (text, ch) => text.split(ch).length - 1;
     const oneLiner = count(code[start], '{') > 0 && count(code[start], '{') === count(code[start], '}');
-    const end = oneLiner ? start : code.findIndex((_, n) => n > start && /^}/.test(lines[n]));
+    const end = declared && !oneLiner ? code.findIndex((_, n) => n > start && /^}/.test(lines[n])) : statementEnd(code, start);
     const body = code.slice(start, end + 1).join('\n');
     shapes.push({ name: head[1], lines: end - start + 1, complexity: 1 + (body.match(DECISIONS) ?? []).length });
   }

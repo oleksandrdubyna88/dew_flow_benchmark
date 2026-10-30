@@ -23,29 +23,45 @@ async function localTags(repo) {
   return r.ok && r.value.code === 0 ? r.value.stdout.split('\n').filter(Boolean) : [];
 }
 
+const parsed = bytes => JSON.parse(bytes.toString('utf8'));
+const hashOrNull = bytes => (bytes === null ? null : sha256(bytes));
+const trimmedOrNull = bytes => (bytes === null ? null : bytes.toString('utf8').trim());
+const pinsOf = stacks => (stacks === null ? null : parsed(stacks).pins ?? null);
+
+/** The pinned inputs as files hold them: the stacks file and its pins, the prices, the two instrument inputs, the seed hash. A file that is absent reads as null. */
+function fileFacts({ map, file }) {
+  const stacks = readIf(file('stacks.json'));
+  return {
+    pins: pinsOf(stacks),
+    stacksSha256: hashOrNull(stacks),
+    pricesSha256: map.pricesFile ? hashOf(file(map.pricesFile)) : null,
+    quietSha256: hashOf(file('quiet.json')),
+    packageFlagsSha256: hashOf(file('package-flags.json')),
+    seedSha256: trimmedOrNull(readIf(file('seed.sha256'))),
+  };
+}
+
+/** The tree hash of every registered snapshot of the run-map, as `cache-snapshots.json` holds it now (null for one that is not there). */
+function snapshotFacts({ map, file }) {
+  const registered = readIf(file('cache-snapshots.json'));
+  const snapshots = registered === null ? {} : parsed(registered);
+  return { snapshots: Object.fromEntries(Object.keys(map.snapshots ?? {}).map(stack => [stack, snapshots[stack]?.treeSha256 ?? null])) };
+}
+
+/** The prereg tag (the run-map's own when it is there, else what the tags are) and the harness identity as the repository holds them now. */
+async function gitFacts({ map, repo }) {
+  const tags = await localTags(repo);
+  const identity = await harnessIdentity(repo);
+  return { preregTag: tags.includes(map.preregTag) ? map.preregTag : tags.join(', ') || null, harnessIdentity: identity.ok ? identity.value : `unreadable: ${identity.reason}` };
+}
+
 /**
  * The fields the run-map pinned, as the disk holds them NOW: `{ pins, stacksSha256, pricesSha256, quietSha256, packageFlagsSha256, snapshots, preregTag, seedSha256, harnessIdentity }`. A file that is absent reads
  * as null (a difference), never as the map's own value.
  */
 export async function currentFromDisk({ map, inputsDir, repo }) {
   const file = name => path.join(inputsDir, name);
-  const stacks = readIf(file('stacks.json'));
-  const registered = readIf(file('cache-snapshots.json'));
-  const snapshots = registered === null ? {} : JSON.parse(registered.toString('utf8'));
-  const seed = readIf(file('seed.sha256'));
-  const tags = await localTags(repo);
-  const identity = await harnessIdentity(repo);
-  return {
-    pins: stacks === null ? null : JSON.parse(stacks.toString('utf8')).pins ?? null,
-    stacksSha256: stacks === null ? null : sha256(stacks),
-    pricesSha256: map.pricesFile ? hashOf(file(map.pricesFile)) : null,
-    quietSha256: hashOf(file('quiet.json')),
-    packageFlagsSha256: hashOf(file('package-flags.json')),
-    snapshots: Object.fromEntries(Object.keys(map.snapshots ?? {}).map(stack => [stack, snapshots[stack]?.treeSha256 ?? null])),
-    preregTag: tags.includes(map.preregTag) ? map.preregTag : tags.join(', ') || null,
-    seedSha256: seed === null ? null : seed.toString('utf8').trim(),
-    harnessIdentity: identity.ok ? identity.value : `unreadable: ${identity.reason}`,
-  };
+  return { ...fileFacts({ map, file }), ...snapshotFacts({ map, file }), ...await gitFacts({ map, repo }) };
 }
 
 /** Write the accepted identity into the run-map and one `accept-harness` line into the ledger; an identity accepted before is not written again. -> the new map. */

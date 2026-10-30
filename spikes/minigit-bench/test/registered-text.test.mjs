@@ -16,7 +16,7 @@ const section = (text, from, to) => { const start = text.indexOf(from); assert.o
 // ---- the flags table of section 2 (T3) ---------------------------------------------------------------------------------------------------
 
 /** The files that put a flag on a session or a pair, and the pattern of the flag literals in them: a one-element array of a lowercase literal (`? ['over cap'] : []`) or of a template (`[`broker refused ${n}`]`). */
-const EMITTERS = ['bare-outcome.mjs', 'bare-collect.mjs', 'bare-series.mjs', 'bare-records-io.mjs', 'quiet.mjs', 'workspace.mjs', 'cpu-sampler.mjs'];
+const EMITTERS = ['bare-outcome.mjs', 'bare-collect.mjs', 'bare-series.mjs', 'bare-settle.mjs', 'bare-records-io.mjs', 'quiet.mjs', 'workspace.mjs', 'cpu-sampler.mjs'];
 const SOURCE_FLAG = /\[\s*(?:'([a-z][^'\]]*)'|`([a-z][^`\]]*)`)\s*\]/g;
 /** `broker refused ${n}` and `broker refused k` are one flag; so are `T1 breach`, `T<n> breach`, and `package: ${rule}` and `package: <rule id>`. */
 const shape = flag => flag.replace(/\$\{[^}]*\}/g, '<x>').replace(/<[^>]*>/g, '<x>').replace(/ k$/, ' <x>').replace(/^T\d /, 'T<x> ');
