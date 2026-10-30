@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The module's console (todo/PLAN_model_arms.md D1, D2): the only project that touches the world — files,
+       processes, the clock, the environment. Its decisions live in ModelArms.Core, which stays pure. Nothing under
+       src/ or hosts/ references this project or its core; ModelArmsArchitectureTests says so. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>model-arms</AssemblyName>
+    <RootNamespace>ModelArms</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The tests stand inside the gate's race window and inside the dispatch through two seams that production code must not be able to build: a
+         GateSeams that reads other facts than the host's would skip the trust check. They are internal; only the test assembly sees them. -->
+    <InternalsVisibleTo Include="Bench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ModelArms.Core\ModelArms.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Bench.Infrastructure\Bench.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Bench.Hosting\Bench.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The shipped briefs and the worked example travel beside the binary. Declared once, as globs, so no later
+         story edits this file to add a template or an example. -->
+    <Content Include="..\briefs\*.template.md" Link="briefs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\examples\*.json" Link="examples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

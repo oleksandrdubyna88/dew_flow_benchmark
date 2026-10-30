@@ -29,6 +29,11 @@
     <ProjectReference Include="../../src/Bench.Ui/Bench.Ui.csproj" />
     <ProjectReference Include="..\..\src\Bench.ServiceDefaults\Bench.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\hosts\Cli\Cli.csproj" />
+    <!-- The model-arms module (tools/model-arms): ordinary references, so its assemblies are in this output folder for
+         ModelArmsArchitectureTests to read — a guard that inspects what happens to be present is only as strong as
+         what arrives, and here the arrival is on purpose. -->
+    <ProjectReference Include="..\..\tools\model-arms\ModelArms.Core\ModelArms.Core.csproj" />
+    <ProjectReference Include="..\..\tools\model-arms\ModelArms\ModelArms.csproj" />
     <!-- The fake coai-mcp: built first, NOT referenced as an assembly — the tests launch it from its own output
          folder, so its deployment set is its own and the product pin hashes a folder of the product's shape. -->
     <ProjectReference Include="..\FakeCoai\FakeCoai.csproj" ReferenceOutputAssembly="false" />

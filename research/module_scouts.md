@@ -356,6 +356,15 @@ its pipes as UTF-8 regardless of the console's code page — the stream carries 
 `—` as `ΓÇö` (found red by `ScoutLaunchProcessTests`). The buffered launch keeps the platform default every earlier caller was measured
 under.
 
+**The stderr sink (model arms E1.S5).** The 9-parameter `ProcessRunner.RunAsync(…, stdoutLine, stderrLine, …)` and `AgentAsk.ErrorOutput` do for
+stderr what the line sink does for stdout: each line reaches the sink as it arrives while the child runs, the whole stderr is still returned
+(`StandardError`, and merged into `Output`), a sink that throws kills the child's tree exactly as a stdout sink does, and either sink makes the
+launch read UTF-8; every earlier overload delegates with no stderr sink, so the buffered launch is unchanged. Beside it `AgentAskOptions` gained
+four claude options — `SessionId` (`--session-id`) and `ResumeSessionId` (`--resume`), `PermissionMode` (`--permission-mode default|acceptEdits|plan`)
+and `PermittedTools` (`--allowedTools`, the permission patterns, distinct from `AllowedTools`, which is `--tools`) — refused by name on codex, agy and
+gemini; a session id beside a session to resume, and a permission mode beside the read-only sandbox, are refused on every CLI. The module document
+of the arms describes the per-mode use.
+
 ### The trees and the grant guard (§3.2, §3.11, §3.13)
 
 `ScoutTrees` builds `<trees root>/<task id>`: `git archive --format=zip P` from the bare mirror `GitCheckoutProvider.EnsureMirrorAsync`

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The CLI hosts' shared plumbing — the flag parser, the exit-code contract, the root cancellation
+       token. Moved out of hosts/Cli (todo/PLAN_model_arms.md D3) because two hosts need them and an exe
+       may not reference an exe. The namespace stays Bench.Cli so no using changed. -->
+
+  <PropertyGroup>
+    <RootNamespace>Bench.Cli</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -37,9 +37,14 @@ public sealed record AgentAsk(
     /// <summary>Where stdout goes AS IT ARRIVES, line by line — <see cref="AgentOutputSink.None"/> for every caller before the scouts, whose
     /// launch is unchanged; the scouts' runner writes each line to the artefact root the moment it is read (plan §3.10).</summary>
     public AgentOutputSink Output { get; init; } = AgentOutputSink.None;
+
+    /// <summary>Where stderr goes AS IT ARRIVES, line by line — <see cref="AgentOutputSink.None"/> for every existing caller, whose launch is
+    /// unchanged. A step that is paid for while it runs keeps the CLI's warnings on disk the moment they are printed (model arms E1.S5); the
+    /// whole stderr is still returned in the transcript.</summary>
+    public AgentOutputSink ErrorOutput { get; init; } = AgentOutputSink.None;
 }
 
-/// <summary>A line-by-line stdout sink for one launch. Two states rather than a nullable delegate, so "no sink" is a word. A sink that
+/// <summary>A line-by-line sink for one launch's stdout or stderr. Two states rather than a nullable delegate, so "no sink" is a word. A sink that
 /// throws ends the launch: the child's process tree is killed and the exception is the caller's.</summary>
 public sealed record AgentOutputSink
 {
@@ -92,6 +97,17 @@ public enum AgentSandbox
 
     /// <summary>It may read, and it may not write, anywhere: the blinded assessor's launch.</summary>
     ReadOnly,
+}
+
+/// <summary>claude <c>--permission-mode</c>: what the CLI does with a tool call that needs permission. <see cref="NotAsked"/> leaves the
+/// CLI's default and spells nothing; <see cref="Plan"/> is the same word <see cref="AgentSandbox.ReadOnly"/> already spells, which is why
+/// the two are refused together.</summary>
+public enum AgentPermissionMode
+{
+    NotAsked,
+    Default,
+    AcceptEdits,
+    Plan,
 }
 
 /// <summary>The guarantees a launch asks the CLI for, beyond "answer once": the blinded assessor's needs, spelled per
@@ -167,6 +183,22 @@ public sealed record AgentAskOptions
     /// <c>enabledPlugins</c> — how the scouts keep <c>feature-dev:code-explorer</c> while no user settings file is loaded.</summary>
     public IReadOnlyList<string> PluginDirectories { get; init; } = [];
 
+    /// <summary>claude <c>--session-id &lt;guid&gt;</c>: the launch starts a session under an id the harness minted, so a later launch can
+    /// resume it (<see cref="ResumeSessionId"/>) by that id. <see cref="Guid.Empty"/> asks for none.</summary>
+    public Guid SessionId { get; init; }
+
+    /// <summary>claude <c>--resume &lt;guid&gt;</c>: the launch continues the session started under that id. <see cref="Guid.Empty"/> asks for none;
+    /// asked beside <see cref="SessionId"/> it is refused — a launch starts a session or resumes one.</summary>
+    public Guid ResumeSessionId { get; init; }
+
+    /// <summary>claude <c>--permission-mode</c>: <c>default</c>, <c>acceptEdits</c> or <c>plan</c>. Refused beside a read-only
+    /// <see cref="Sandbox"/>, which already spells <c>--permission-mode plan</c>.</summary>
+    public AgentPermissionMode PermissionMode { get; init; } = AgentPermissionMode.NotAsked;
+
+    /// <summary>claude <c>--allowedTools &lt;pattern&gt;…</c>: the PERMISSION allow-list (<c>Bash(git *)</c>, <c>mcp__coai__open</c>), each pattern
+    /// its own argument. Distinct from <see cref="AllowedTools"/>, which is <c>--tools</c>, the built-in set the CLI offers at all.</summary>
+    public IReadOnlyList<string> PermittedTools { get; init; } = [];
+
     /// <summary>Nothing asked beyond "answer once" — the launch every caller before the assessor made.</summary>
     public bool IsNone =>
         Sandbox == AgentSandbox.Default && OutputSchemaFile.Length == 0 && LastMessageFile.Length == 0
@@ -174,7 +206,8 @@ public sealed record AgentAskOptions
         && WebSearch == AgentWebSearch.Default && AddDirectories.Count == 0 && !JsonEvents
         && !AllowedTools.Asked && !Restricted && !ForwardSubagentText && MaxBudgetUsd == 0m
         && McpConfigFile.Length == 0 && !NoSessionPersistence
-        && !SettingSources.Asked && SettingsFile.Length == 0 && PluginDirectories.Count == 0;
+        && !SettingSources.Asked && SettingsFile.Length == 0 && PluginDirectories.Count == 0
+        && SessionId == Guid.Empty && ResumeSessionId == Guid.Empty && PermissionMode == AgentPermissionMode.NotAsked && PermittedTools.Count == 0;
 }
 
 /// <summary>Which settings files a launch asks the CLI to load: not asked (the CLI's default — every source), or ONLY these — where an EMPTY
