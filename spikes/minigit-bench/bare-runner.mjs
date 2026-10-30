@@ -33,7 +33,7 @@ import { rehearsalRefusal, rehearseV2, twinOf } from './lib/rehearsal.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
 import { planSession, readRunMap } from './lib/run-map.mjs';
-import { ok } from './lib/result.mjs';
+import { fail, ok } from './lib/result.mjs';
 import { commitSeed, revealSeed } from './lib/seed.mjs';
 import { spendGate, spendTotals } from './lib/spend-gate.mjs';
 import { runBounded } from './lib/run.mjs';
@@ -84,29 +84,67 @@ function dryRunLines({ map, ctx, what }) {
 
 // ---- commands -------------------------------------------------------------------------------------------------------------------
 
-async function cmdInit(v, write) {
-  const inputsDir = v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs');
+/** The operator's `--inputs-dir`, or this repository's own inputs folder. */
+const inputsDirOf = v => (v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs'));
+
+/** `ok(tag)` when exactly one `prereg/minigit-bare-*` tag exists, else `fail` saying so. */
+async function initTag() {
   const tag = await runBounded('git', ['tag', '--list', 'prereg/minigit-bare-*'], { cwd: REPO, timeoutMs: 30_000 });
   const tags = tag.ok ? tag.value.stdout.split('\n').filter(Boolean) : [];
-  if (tags.length !== 1) { write(`init: expected exactly one prereg/minigit-bare-* tag, found ${tags.length}: tag the pre-registration commit first`); return EXIT.config; }
-  const commit = await runBounded('git', ['rev-parse', `${tags[0]}^{commit}`], { cwd: REPO, timeoutMs: 30_000 });
+  return tags.length === 1 ? ok(tags[0]) : fail(`init: expected exactly one prereg/minigit-bare-* tag, found ${tags.length}: tag the pre-registration commit first`);
+}
+
+/** `ok(sha)`: the commit the tag points at. */
+async function tagCommit(tag) {
+  const commit = await runBounded('git', ['rev-parse', `${tag}^{commit}`], { cwd: REPO, timeoutMs: 30_000 });
+  return commit.ok && commit.value.code === 0 ? ok(commit.value.stdout.trim()) : fail(`init: cannot read the tag or the harness identity: ${commit.reason ?? commit.value.stderr}`);
+}
+
+/** `ok({ preregTag, preregCommit, harnessIdentity })` from git and the harness's own files, or `fail` naming what could not be read. */
+async function initFacts() {
+  const tag = await initTag();
+  if (!tag.ok) return tag;
+  const commit = await tagCommit(tag.value);
+  if (!commit.ok) return commit;
   const identity = await harnessIdentity(REPO);
-  if (!commit.ok || commit.value.code !== 0 || !identity.ok) { write(`init: cannot read the tag or the harness identity: ${commit.reason ?? identity.reason ?? commit.value.stderr}`); return EXIT.config; }
+  return identity.ok ? ok({ preregTag: tag.value, preregCommit: commit.value, harnessIdentity: identity.value }) : fail(`init: cannot read the tag or the harness identity: ${identity.reason}`);
+}
+
+/** The plan of `init`, written nowhere: `ok({ plan, inputsDir })` | `fail(sentence)`. */
+async function prepareInit(v) {
+  const inputsDir = inputsDirOf(v);
+  const facts = await initFacts();
+  if (!facts.ok) return facts;
   const plan = initPlan({
     inputsDir, seriesRoot: path.resolve(v['series-root'] ?? defaults().seriesRoot), seriesId: v['series-id'] ?? makeSeriesId({ date: new Date(), rand: randomBytes(2).toString('hex') }),
-    versionsDir: v['versions-dir'] ?? defaults().versionsDir, toolchainsDir: v['toolchains-dir'] ?? defaults().toolchainsDir, facts: { preregTag: tags[0], preregCommit: commit.value.stdout.trim(), harnessIdentity: identity.value },
+    versionsDir: v['versions-dir'] ?? defaults().versionsDir, toolchainsDir: v['toolchains-dir'] ?? defaults().toolchainsDir, facts: facts.value,
   });
-  if (!plan.ok) { write(`init: ${plan.reason}`); return EXIT.config; }
-  describePlan(plan.value).forEach(write);
-  if (v['dry-run']) { write('dry run: nothing was written'); return EXIT.done; }
+  return plan.ok ? ok({ plan: plan.value, inputsDir }) : fail(`init: ${plan.reason}`);
+}
+
+/** The spin probe's calibration on a quiet machine: `ok({ calibration })` | `fail`. */
+async function calibrateInit(inputsDir) {
   const quiet = loadQuiet(JSON.parse(readFileSync(path.join(inputsDir, 'quiet.json'), 'utf8')));
   const probe = async i => { const r = await spinProbe({ iterations: quiet.value.spinIterations, cpu: quiet.value.spinCpus[i % 2] }); if (!r.ok) throw new Error(r.reason); return r.value; };
-  const calibrated = await calibrateIfQuiet({ thresholds: quiet.value, sampleOnce: await sampleOnceFor({ thresholds: quiet.value, probe }), sleep: ms => new Promise(r => setTimeout(r, ms)), probe });
+  return calibrateIfQuiet({ thresholds: quiet.value, sampleOnce: await sampleOnceFor({ thresholds: quiet.value, probe }), sleep: ms => new Promise(r => setTimeout(r, ms)), probe });
+}
+
+/** Calibrate, then write the series. */
+async function finishInit({ plan, inputsDir, write }) {
+  const calibrated = await calibrateInit(inputsDir);
   if (!calibrated.ok) { write(`init: ${calibrated.reason}`); return EXIT.halt; }
   const cal = calibrated.value.calibration;
-  const done = applyInit({ plan: plan.value, spin: cal });
-  write(done.ok ? `init done: ${plan.value.seriesDir}; spin median ${cal.medianMs.toFixed(2)} ms (spread ${cal.spreadMs.toFixed(2)} ms over ${cal.runs} runs)` : `init: ${done.reason}`);
+  const done = applyInit({ plan, spin: cal });
+  write(done.ok ? `init done: ${plan.seriesDir}; spin median ${cal.medianMs.toFixed(2)} ms (spread ${cal.spreadMs.toFixed(2)} ms over ${cal.runs} runs)` : `init: ${done.reason}`);
   return done.ok ? EXIT.done : EXIT.config;
+}
+
+async function cmdInit(v, write) {
+  const prepared = await prepareInit(v);
+  if (!prepared.ok) return refuse(write, prepared.reason);
+  describePlan(prepared.value.plan).forEach(write);
+  if (v['dry-run']) { write('dry run: nothing was written'); return EXIT.done; }
+  return finishInit({ ...prepared.value, write });
 }
 
 async function cmdSnapshot(v, write) {
@@ -123,11 +161,21 @@ async function cmdSnapshot(v, write) {
   return registered.ok ? EXIT.done : EXIT.config;
 }
 
+/** A usage or configuration refusal: the sentence is written and the exit code is 4. */
+const refuse = (write, reason) => { write(reason); return EXIT.config; };
+const verbOf = resume => (resume ? 'resume' : 'run');
+
+/** What `run` and `resume` take of the series for the lock: none for a dry run, a missing series or a missing run-map (those are refused later, with their own sentence). */
+function lockFor(v) {
+  const seriesDir = path.resolve(v.series ?? '');
+  const free = v['dry-run'] === true || !v.series || !existsSync(path.join(seriesDir, 'run-map.json'));
+  return free ? ok(null) : acquireSeriesLock({ seriesDir });
+}
+
 /** `run`, `resume` and `resume --settle-only` hold the series lock for the whole command (review N13); a dry run writes nothing and takes none. */
 async function cmdRun(v, write, { resume }, seams = {}) {
-  const seriesDir = path.resolve(v.series ?? '');
-  const lock = v['dry-run'] === true || !v.series || !existsSync(path.join(seriesDir, 'run-map.json')) ? ok(null) : acquireSeriesLock({ seriesDir });
-  if (!lock.ok) { write(`${resume ? 'resume' : 'run'}: ${lock.reason}`); return EXIT.config; }
+  const lock = lockFor(v);
+  if (!lock.ok) return refuse(write, `${verbOf(resume)}: ${lock.reason}`);
   try {
     return await runCommand(v, write, { resume }, seams);
   } finally {
@@ -135,69 +183,147 @@ async function cmdRun(v, write, { resume }, seams = {}) {
   }
 }
 
-async function runCommand(v, write, { resume }, seams = {}) {
-  const early = resume ? afterStopRefusal(v) : null;
-  if (early) { write(early); return EXIT.config; }
-  const settleOnly = v['settle-only'] === true;
-  if (settleOnly && !resume) { write('usage error: --settle-only belongs to resume: it settles and charges the sessions a stopped series left launching, and launches nothing'); return EXIT.config; }
+const SETTLE_USAGE = 'usage error: --settle-only belongs to resume: it settles and charges the sessions a stopped series left launching, and launches nothing';
+/** The usage errors of the flags alone, in order; each takes `(v, resume)` and returns a sentence or null. */
+const USAGE_CHECKS = [
+  (v, resume) => (resume ? afterStopRefusal(v) : null),
+  (v, resume) => (v['settle-only'] === true && !resume ? SETTLE_USAGE : null),
+];
+const usageProblem = (v, resume) => USAGE_CHECKS.map(check => check(v, resume)).find(Boolean) ?? null;
+
+/** `ok({ seriesDir, map })` when `--series` holds a readable run-map, else `fail(usage error)`. */
+function readSeries(v) {
   const seriesDir = path.resolve(v.series ?? '');
   const read = readRunMap(path.join(seriesDir, 'run-map.json'));
-  if (!v.series || !read.ok) { write(`usage error: --series <dir> with a run-map.json (${read.reason ?? 'missing'})`); return EXIT.config; }
-  const what = parseWhat(v.what ?? whatOfMap(read.value)) ?? (settleOnly ? { kind: 'aa', pair: 0 } : null); // settle-only launches nothing: its `--what` decides nothing
-  if (!what) { write('usage error: --what aa | pilot-node | rehearse-v2 | pair:<1-3>'); return EXIT.config; }
-  const dry = v['dry-run'] === true;
-  const rehearsing = what.kind === 'rehearsal';
-  if (rehearsing && rehearsalRefusal(read.value)) { write(rehearsalRefusal(read.value)); return EXIT.config; }
-  const inputsDir = v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs');
-  // a PAID run reads the registered inputs of THIS repository and no copy of them (review N17): the guard compares the repository's blobs with the tag, so a folder it does not look at could carry other thresholds
-  if (!dry && !rehearsing && v['inputs-dir'] && !sameFolder(inputsDir, seams.ownInputs ?? path.join(SPIKE, 'inputs'))) {
-    write(`${resume ? 'resume' : 'run'} refused: --inputs-dir ${inputsDir} is not the repository's own inputs folder (${seams.ownInputs ?? path.join(SPIKE, 'inputs')}): a paid run reads the registered inputs of this repository only; --inputs-dir is for dry runs and tests`);
-    return EXIT.config;
-  }
-  let map = read.value;
-  if (!dry) {
-    // the pins are read from DISK now and compared with the run-map (step 11), at every paid run and resume, before anything is built or read
-    const pins = await checkPins({
-      map, inputsDir, repo: seams.repo ?? REPO, acceptHarness: v['accept-harness'] ? { identity: v['accept-harness'], amendmentDate: v.amendment } : null,
-      settleOnly,
-      runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'),
-    });
-    if (!pins.ok) { write(`${resume ? 'resume' : 'run'} refused: ${pins.reason}`); return EXIT.config; }
-    map = pins.value.map;
-    if (resume) map = recordAfterStop({ map, rule: v['after-stop'], reason: v.reason, runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson') });
-  }
-  const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry && !rehearsing, seams }); // a rehearsal never reads the token file
-  if (!built.ok) { write(`cannot start: ${built.reason}`); return EXIT.config; }
-  const { ctx, deps, abort } = built.value;
-  if (dry && rehearsing) { write(`rehearse-v2: would rehearse the v2 path on the tree of twin ${twinOf(map).rid} for BOTH stacks (C#: bin/ obj/ node_modules/ left out; TypeScript: node_modules/ only): a v2 workspace per stack filled from it, a stub CLI in the real box behind the real broker (a loopback stub upstream, a fake token), the real scorer at phase v2, then G-14; nothing is paid and no real token is read`); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
-  if (dry) { dryRunLines({ map, ctx, what }).forEach(write); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
-  const ctl = new AbortController();
+  return !v.series || !read.ok ? fail(`usage error: --series <dir> with a run-map.json (${read.reason ?? 'missing'})`) : ok({ seriesDir, map: read.value });
+}
+
+/** `--what`, or the one the run-map says is open; a settle-only launches nothing, so its `--what` decides nothing. */
+const whatOf = (v, map, settleOnly) => parseWhat(v.what ?? whatOfMap(map)) ?? (settleOnly ? { kind: 'aa', pair: 0 } : null);
+
+/** `ok(what)`, or a `fail` for an unknown `--what` and for a rehearsal the run-map refuses. */
+function chooseWhat(v, map, settleOnly) {
+  const what = whatOf(v, map, settleOnly);
+  if (!what) return fail('usage error: --what aa | pilot-node | rehearse-v2 | pair:<1-3>');
+  const refusal = what.kind === 'rehearsal' ? rehearsalRefusal(map) : null;
+  return refusal ? fail(refusal) : ok(what);
+}
+
+/** Step 1, from the flags and the run-map alone: `ok({ seriesDir, map, settleOnly, what, dry, rehearsing, resume })` | `fail(sentence)`. */
+function parseRun(v, resume) {
+  const problem = usageProblem(v, resume);
+  if (problem) return fail(problem);
+  const series = readSeries(v);
+  if (!series.ok) return series;
+  const settleOnly = v['settle-only'] === true;
+  const what = chooseWhat(v, series.value.map, settleOnly);
+  return what.ok ? ok({ ...series.value, settleOnly, what: what.value, dry: v['dry-run'] === true, rehearsing: what.value.kind === 'rehearsal', resume }) : what;
+}
+
+/** A PAID series reads the registered inputs of THIS repository and no copy of them (review N17): the guard compares the repository's blobs with the tag, so a folder it does not look at could carry other thresholds. -> a sentence or null. */
+function foreignInputsRefusal({ v, verb, seams }) {
+  const own = seams.ownInputs ?? path.join(SPIKE, 'inputs');
+  const foreign = v['inputs-dir'] && !sameFolder(inputsDirOf(v), own);
+  return foreign ? `${verb} refused: --inputs-dir ${inputsDirOf(v)} is not the repository's own inputs folder (${own}): a paid run reads the registered inputs of this repository only; --inputs-dir is for dry runs and tests` : null;
+}
+
+/** The refusal of a foreign `--inputs-dir` for a run or resume that pays (a dry run and a rehearsal pay nothing and read no registered input as a rule of the run). */
+const inputsRefusal = ({ v, state, seams }) => (state.dry || state.rehearsing ? null : foreignInputsRefusal({ v, verb: verbOf(state.resume), seams }));
+
+/** Step 11: the pins read from DISK now and compared with the run-map, at every paid run and resume, before anything is built or read; a resume then records its `--after-stop`. -> `ok(state)` with the pinned map | `fail`. */
+async function pinStep({ v, state, seams }) {
+  const { map, seriesDir, resume, settleOnly } = state;
+  const runMapFile = path.join(seriesDir, 'run-map.json');
+  const ledgerFile = path.join(seriesDir, 'ledger.ndjson');
+  const pins = await checkPins({
+    map, inputsDir: inputsDirOf(v), repo: seams.repo ?? REPO, acceptHarness: v['accept-harness'] ? { identity: v['accept-harness'], amendmentDate: v.amendment } : null, settleOnly, runMapFile, ledgerFile,
+  });
+  if (!pins.ok) return fail(`${verbOf(resume)} refused: ${pins.reason}`);
+  return ok({ ...state, map: resume ? recordAfterStop({ map: pins.value.map, rule: v['after-stop'], reason: v.reason, runMapFile, ledgerFile }) : pins.value.map });
+}
+
+/** Everything before the build: the flags, the inputs folder and the pins. -> `ok(state)` | `fail(sentence)`. */
+async function prepareRun({ v, resume, seams }) {
+  const parsed = parseRun(v, resume);
+  if (!parsed.ok) return parsed;
+  const refused = inputsRefusal({ v, state: parsed.value, seams });
+  if (refused) return fail(refused);
+  return parsed.value.dry ? parsed : pinStep({ v, state: parsed.value, seams });
+}
+
+/** The dry run of a rehearsal or a pair, a fixed list: what would start; nothing is claimed, started or spent. */
+function dryRun({ state, built, write }) {
+  const lines = state.rehearsing
+    ? [`rehearse-v2: would rehearse the v2 path on the tree of twin ${twinOf(state.map).rid} for BOTH stacks (C#: bin/ obj/ node_modules/ left out; TypeScript: node_modules/ only): a v2 workspace per stack filled from it, a stub CLI in the real box behind the real broker (a loopback stub upstream, a fake token), the real scorer at phase v2, then G-14; nothing is paid and no real token is read`]
+    : dryRunLines({ map: state.map, ctx: built.ctx, what: state.what });
+  [...lines, 'dry run: nothing was claimed, started or spent'].forEach(write);
+  return EXIT.done;
+}
+
+/** SIGINT and SIGTERM abort the run: the reason and the exit code are recorded for the loop, then the controller aborts. */
+function armSignals(abort, ctl) {
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { abort.reason = sig; abort.exit = code; ctl.abort(); });
-  if (resume) {
-    const waiting = Object.values(map.sessions).filter(s => s.status === 'launching').map(s => s.rid);
-    const settled = await reconcile({ ctx, deps, map, say: write, settleOnly });
-    if (!settled.ok) { write(`resume: ${settled.reason}`); return settled.exit ?? EXIT.failed; }
-    map = settled.value;
-    if (settleOnly) {
-      write(`settle-only: ${waiting.length === 0 ? 'no session was launching' : `settled ${waiting.map(rid => `${rid} (${map.sessions[rid].status}${map.sessions[rid].class ? `, ${map.sessions[rid].class}` : ''})`).join(', ')}`}; nothing was launched${map.stopped ? `; the series remains stopped (${map.stopped.rule}): start a new series` : ''}`);
-      return EXIT.done;
-    }
-  }
-  if (rehearsing) {
-    const rehearsed = await rehearseV2({ ctx, deps, map, signal: ctl.signal, say: write });
-    write(`${rehearsed.exit === EXIT.done ? 'done' : 'halted'}: ${rehearsed.message}`);
-    return rehearsed.exit;
-  }
-  if (what.kind !== 'data' && Object.values(map.sessions).every(s => s.kind !== what.kind)) map = planFixed(map, what.kind);
-  const r = await runLoop({ ctx, deps: { ...deps, phase: deps.phase }, map, signal: ctl.signal, say: write });
+}
+
+/** `rid (status, class)` of one settled session. */
+const settledOf = (map, rid) => `${rid} (${map.sessions[rid].status}${map.sessions[rid].class ? `, ${map.sessions[rid].class}` : ''})`;
+
+/** The one line `resume --settle-only` ends with. */
+const settleLine = ({ waiting, map }) => `settle-only: ${waiting.length === 0 ? 'no session was launching' : `settled ${waiting.map(rid => settledOf(map, rid)).join(', ')}`}; nothing was launched${map.stopped ? `; the series remains stopped (${map.stopped.rule}): start a new series` : ''}`;
+
+/** A resume settles what the last run left before it continues. -> `{ exit }` (done, or a refusal) | `{ map }` (the settled map, to continue with). */
+async function settleStep({ state, built, write }) {
+  const waiting = Object.values(state.map.sessions).filter(s => s.status === 'launching').map(s => s.rid);
+  const settled = await reconcile({ ctx: built.ctx, deps: built.deps, map: state.map, say: write, settleOnly: state.settleOnly });
+  if (!settled.ok) { write(`resume: ${settled.reason}`); return { exit: settled.exit ?? EXIT.failed }; }
+  if (!state.settleOnly) return { map: settled.value };
+  write(settleLine({ waiting, map: settled.value }));
+  return { exit: EXIT.done };
+}
+
+/** The last line of a run: `done` or `halted`, and the loop's message. -> the loop's exit code. */
+function reportLoop(write, r) {
   write(`${r.exit === EXIT.done ? 'done' : 'halted'}: ${r.message}`);
   return r.exit;
 }
 
+/** The v2 rehearsal, or the loop over the fixed list (planned once) or the pair. */
+async function driveRun({ state, built, map, write, ctl }) {
+  const { ctx, deps } = built;
+  if (state.rehearsing) return reportLoop(write, await rehearseV2({ ctx, deps, map, signal: ctl.signal, say: write }));
+  const { kind } = state.what;
+  const planned = kind !== 'data' && Object.values(map.sessions).every(s => s.kind !== kind) ? planFixed(map, kind) : map;
+  return reportLoop(write, await runLoop({ ctx, deps: { ...deps, phase: deps.phase }, map: planned, signal: ctl.signal, say: write }));
+}
+
+/** Arm the signals, settle (a resume), then drive. */
+async function executeRun({ state, built, write }) {
+  const ctl = new AbortController();
+  armSignals(built.abort, ctl);
+  const settled = state.resume ? await settleStep({ state, built, write }) : { map: state.map };
+  return settled.exit ?? driveRun({ state, built, map: settled.map, write, ctl });
+}
+
+/** The run's configuration and edges; a rehearsal never reads the token file. */
+function buildFor({ v, state, seams }) {
+  const { seriesDir, map, what } = state;
+  return buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDirOf(v) : undefined, acceptNoisy: v['accept-noisy'] }, paid: !state.dry && !state.rehearsing, seams });
+}
+
+async function runCommand(v, write, { resume }, seams = {}) {
+  const prepared = await prepareRun({ v, resume, seams });
+  if (!prepared.ok) return refuse(write, prepared.reason);
+  const state = prepared.value;
+  const built = await buildFor({ v, state, seams });
+  if (!built.ok) return refuse(write, `cannot start: ${built.reason}`);
+  return state.dry ? dryRun({ state, built: built.value, write }) : executeRun({ state, built: built.value, write });
+}
+
+const WHAT_OF = { data: s => `pair:${s.pair}`, aa: () => 'aa', pilot: () => 'pilot-node' };
 /** `--what` for a resume without one: the first fixed list or pair with a session not yet scored. */
 function whatOfMap(map) {
   const open = Object.values(map.sessions).find(s => s.status !== 'scored' && !(s.status === 'ran' && s.data === false));
-  return open ? (open.kind === 'data' ? `pair:${open.pair}` : open.kind === 'aa' ? 'aa' : 'pilot-node') : undefined;
+  return open ? (WHAT_OF[open.kind] ?? WHAT_OF.pilot)(open) : undefined;
 }
 
 /** `--after-stop <rule> --reason <text>` passes a HALT; the series stops of section 5 cannot be passed this way, and a pass without a reason is refused. */
@@ -209,10 +335,9 @@ export function afterStopRefusal(v) {
 }
 
 function cmdStatus(v, write) {
-  const seriesDir = path.resolve(v.series ?? '');
-  const read = readRunMap(path.join(seriesDir, 'run-map.json'));
-  if (!v.series || !read.ok) { write(`usage error: --series <dir> with a run-map.json (${read.reason ?? 'missing'})`); return EXIT.config; }
-  const map = read.value;
+  const series = readSeries(v);
+  if (!series.ok) return refuse(write, series.reason);
+  const { seriesDir, map } = series.value;
   const allowed = /^Cpus_allowed_list:\s*(\S+)/m.exec(readFileSync('/proc/self/status', 'utf8'))?.[1];
   write(`harness core: Cpus_allowed_list ${allowed} (re-exec marker ${process.env.BENCH_RUNNER_PINNED === '1' ? 'set' : 'not set'})`);
   write(`series ${map.seriesId}${map.stopped ? `, STOPPED: ${map.stopped.rule}` : ''}; prereg ${map.preregTag}; harness ${map.harnessIdentity.slice(0, 12)}`);
