@@ -4,6 +4,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpDir } from './helpers.mjs';
 
+/** The 12 hex of the fixture series' harness identity (the run-map's is `'e'.repeat(64)`): what a G-12 replacing line must name. */
+export const RUN_IDENTITY = 'e'.repeat(12);
 export const T0 = Date.parse('2026-10-30T10:00:00Z');
 const WALL_MS = 46200;
 export const known = value => ({ known: true, value });
@@ -104,7 +106,7 @@ export const GOOD_LINES = Object.freeze([
   '2026-10-30 | G-10 | holds | aa0001 | scratch/aa0001-by-hand.txt | operator',
   '2026-10-30 | G-10 | holds | pi0001 | scratch/pi0001-by-hand.txt | operator',
   ...['aa0001', 'aa0002', 'pi0001'].map(rid => `2026-10-30 | G-13 | holds | ${rid} | scratch/${rid}-class.txt | operator`),
-  '2026-10-30 | G-12 | holds | aa0001 | test/broker.test.mjs P-6 and test/budget.test.mjs green at the run identity | operator',
+  `2026-10-30 | G-12 | holds | aa0001 | test/broker.test.mjs P-6 and test/budget.test.mjs green at harness ${RUN_IDENTITY} | operator`,
 ]);
 
 /** The smoke seam: B-T1 holds on the same CLI. */

@@ -37,8 +37,11 @@ export function combine(checks) {
 /** The checks of `sessions` (the facts of each), tagged with the session's rid. */
 export const perSession = (sessions, fn) => sessions.map(f => ({ rid: f.rid, ...fn(f) }));
 
-/** The latest valid dated by-hand line for a G and a session (a later date wins; the file's order breaks a tie), or `undefined`. */
-export const lineFor = (ctx, g, rid) => ctx.amendments.verdicts.filter(v => v.g === g && v.rid === rid).toSorted((a, b) => a.date.localeCompare(b.date)).at(-1);
+/** The line with the latest date (a later date wins; the file's order breaks a tie), or `undefined`: never the last one in the file. */
+export const latestOf = lines => lines.toSorted((a, b) => a.date.localeCompare(b.date)).at(-1);
+
+/** The latest valid dated by-hand line for a G and a session, or `undefined`. */
+export const lineFor = (ctx, g, rid) => latestOf(ctx.amendments.verdicts.filter(v => v.g === g && v.rid === rid));
 
 /** A refuted check that a dated `explained` line for the session (naming `needle` in its evidence, when given) turns into `explained`. */
 export function withExplain(check, { ctx, g, needle = '' }) {

@@ -36,3 +36,49 @@ test('G6_holds_within_one_ms_of_the_wall_and_a_dated_explained_line_covers_a_gap
   const over = report(makeSeries({ records: { aa0001: partition({ build_test: 6000, model_api: 41000, other_tool: 100, unattributed: 100 }, 100, sum) } }));
   assert.equal(rowOf(over, 'G-6').verdict, 'refuted', 'a partition longer than the wall is not the wall either');
 });
+
+// ---- G-12 -------------------------------------------------------------------------------------------------------------------------
+
+const withG12 = lines => [...GOOD_LINES.filter(l => !l.includes('| G-12 |')), ...lines];
+const overCap = { cost: { stopRuleUsd: known(6.2), cliTotalUsd: known(6.2), brokerUsd: known(6.2) } };
+
+test('G12_is_refuted_and_a_stop_when_a_session_reached_the_cap_and_was_not_killed_by_it', () => {
+  const rep = report(makeSeries({ records: { aa0001: overCap } }));
+  const g12 = rowOf(rep, 'G-12');
+  assert.equal(g12.verdict, 'refuted', JSON.stringify(g12));
+  assert.match(g12.observed, /aa0001.*\$6\.2.*cap \$6.*completed/);
+  assert.equal(g12.stop, true);
+  assert.equal(rep.verdict, 'STOP');
+  const killed = report(makeSeries({ records: { aa0001: { ...overCap, class: 'killed: cap', cost: { ...overCap.cost, censoredAtUsd: known(6.2) } } } }));
+  assert.equal(rowOf(killed, 'G-12').verdict, 'holds', 'a session that reached the cap and was killed by it, at settled spend of at least the cap');
+  assert.equal(rowOf(report(makeSeries({ records: { aa0001: { cost: { stopRuleUsd: known(5.99) } } } })), 'G-12').verdict, 'not exercised', 'under the cap');
+});
+
+test('G12_applies_a_dated_refuted_line_and_picks_the_latest_line_by_date_not_by_file_order', () => {
+  const refutedLine = '2026-10-30 | G-12 | refuted | aa0001 | scratch/g12-over.txt | operator';
+  const rep = report(makeSeries(), withG12([refutedLine]));
+  assert.equal(rowOf(rep, 'G-12').verdict, 'refuted');
+  assert.equal(rep.verdict, 'STOP');
+  const holdsLater = `2026-10-31 | G-12 | holds | aa0001 | test/broker.test.mjs P-6 green at ${'e'.repeat(12)} | operator`;
+  assert.equal(rowOf(report(makeSeries(), withG12([holdsLater, refutedLine])), 'G-12').verdict, 'not exercised', 'the refuted line is the older: the file order does not decide');
+  assert.equal(rowOf(report(makeSeries(), withG12([refutedLine, holdsLater])), 'G-12').verdict, 'not exercised');
+  const refutedLater = '2026-11-01 | G-12 | refuted | aa0001 | scratch/g12-over.txt | operator';
+  assert.equal(rowOf(report(makeSeries(), withG12([refutedLater, holdsLater])), 'G-12').verdict, 'refuted', 'the refuted line is the latest, though it comes first in the file');
+});
+
+test('G12_replacing_evidence_names_P6_and_the_harness_identity_the_run_is_at', () => {
+  const at = identity => `2026-10-30 | G-12 | holds | aa0001 | test/broker.test.mjs P-6 and test/budget.test.mjs green at ${identity} | operator`;
+  const row = lines => rowOf(report(makeSeries(), withG12(lines)), 'G-12');
+  assert.match(row([at('e'.repeat(12))]).replacing, /P-6/, 'P-6 and the series identity: evidence');
+  assert.equal(row([`2026-10-30 | G-12 | holds | aa0001 | test/budget.test.mjs green at ${'e'.repeat(12)} | operator`]).replacing, null, 'no P-6');
+  assert.equal(row(['2026-10-30 | G-12 | holds | aa0001 | test/broker.test.mjs P-6 green at the run identity | operator']).replacing, null, 'no 12-hex identity');
+  const other = row([at('a'.repeat(12))]);
+  assert.equal(other.replacing, null, 'another identity');
+  assert.match(other.observed, /harness identity eeeeeeeeeeee/, 'the row says which identity it wanted');
+  const amended = (line) => rowOf(report(makeSeries(), [...withG12([line]), '2026-10-30 | instrument | harness:bbbbbbbbbbbb | instrument: a fix (G-8)']), 'G-12');
+  assert.equal(amended(at('e'.repeat(12))).replacing, null, 'an instrument line moved the run to bbbbbbbbbbbb: the old identity is not the run\'s');
+  assert.match(amended(at('b'.repeat(12))).replacing, /P-6/);
+  assert.equal(report(makeSeries(), withG12([at('a'.repeat(12))])).verdict, 'NO GO');
+  const dated = rowOf(report(makeSeries(), withG12([at('e'.repeat(12)).replace('2026-10-30', '2026-10-29'), at('a'.repeat(12))])), 'G-12');
+  assert.equal(dated.replacing, null, 'the latest line by date names another identity, the older one is not used');
+});

@@ -1,6 +1,6 @@
 // The G rows read from the twins, the rehearsal and the dated by-hand lines (contract section 10): G-4, G-7, G-9, G-10, G-12, G-13, G-14, and the T3 rule (section 11). `ctx.aa` are the twins' facts,
 // `ctx.pilot` the Node pilot's, `ctx.smoke` the committed smoke fixture's B-T1 (`{ ok, cli, fixture, observed }`, or null).
-import { combine, fromStatus, holds, leaf, lineFor, needPilot, perSession, refuted, unknown } from './aa-check.mjs';
+import { combine, fromStatus, holds, latestOf, leaf, lineFor, needPilot, perSession, refuted, unknown } from './aa-check.mjs';
 
 const mean = list => (list.length === 0 ? null : list.reduce((a, b) => a + b, 0) / list.length);
 
@@ -119,18 +119,49 @@ const capCheck = cap => f => {
   return typeof at === 'number' && at >= cap ? holds(`stopped at $${at} (cap $${cap})`) : refuted(`stopped at ${at ?? 'an unknown figure'} (cap $${cap})`);
 };
 
-/** The replacing evidence of a G-12 nobody exercised: the latest dated G-12 `holds` line (with its evidence path), or null. */
+/** A dated by-hand `refuted` line for the session (the latest by date): the cap failed, as read by hand. */
+const handRefusal = (f, ctx) => {
+  const line = lineFor(ctx, 'G-12', f.rid);
+  return line?.verdict === 'refuted' ? refuted(`refuted by hand: ${line.evidence}`) : null;
+};
+
+/** A session whose stop-rule figure reached the cap and whose class is not `killed: cap`: the cap did not stop it. */
+const overCap = (f, cap) => {
+  const figure = leaf(f.record, 'cost', 'stopRuleUsd');
+  return typeof figure === 'number' && figure >= cap ? refuted(`the stop-rule figure $${figure} reached the cap $${cap} but the class is ${f.record?.class}, not killed: cap`) : null;
+};
+
+/** The check of a session that reached the cap (or that a dated line refutes), or null for a session that did not reach it. */
+const capSession = (f, ctx, cap) => handRefusal(f, ctx) ?? (f.record?.class === 'killed: cap' ? capCheck(cap)(f) : overCap(f, cap));
+
+const HEX12 = /(?<![0-9a-f])[0-9a-f]{12}(?![0-9a-f])/g;
+
+/** The harness identity (12 hex) the run is at: the latest accepted instrument line, else the series' own. */
+const runIdentity = ctx => latestOf(ctx.amendments.instrument)?.identity ?? ctx.map.harnessIdentity?.slice(0, 12);
+
+/**
+ * The replacing evidence of a G-12 nobody exercised (contract section 10: E2.S2's broker proof P-6 and the budget tests green at the run's harness identity): the latest dated G-12 `holds` line by DATE, whose evidence names
+ * P-6 and the 12-hex harness identity the run is at. `{ replacing }` (the sentence) or `{ replacing: null, why }`.
+ */
 function capEvidence(ctx) {
-  const line = ctx.amendments.verdicts.filter(v => v.g === 'G-12' && v.verdict === 'holds').at(-1);
-  return line ? `dated G-12 line for ${line.rid}: ${line.evidence}` : null;
+  const line = latestOf(ctx.amendments.verdicts.filter(v => v.g === 'G-12' && v.verdict === 'holds'));
+  if (!line) return { replacing: null, why: 'no dated G-12 holds line' };
+  const identity = runIdentity(ctx);
+  const problems = [...(/\bP-6\b/.test(line.evidence) ? [] : ['it does not name P-6']), ...((line.evidence.match(HEX12) ?? []).includes(identity) ? [] : [`it does not name the run's harness identity ${identity}`])];
+  return problems.length === 0 ? { replacing: `dated G-12 line for ${line.rid}: ${line.evidence}` } : { replacing: null, why: `the latest dated G-12 line (${line.date}, ${line.rid}) is no evidence: ${problems.join(' and ')}` };
 }
 
-/** G-12: a session that reached the cap was stopped at settled spend of at least the cap; with none, `not exercised` and the replacing evidence is a dated G-12 line. */
+/**
+ * G-12: a session whose stop-rule figure reached the cap must have been `killed: cap`, at settled spend of at least the cap; one that did not is refuted (a STOP), as is one a dated `refuted` line names. With no session at the cap
+ * the row is `not exercised`, and its replacing evidence is the latest dated G-12 line (`capEvidence`).
+ */
 export function g12(ctx) {
-  const killed = [...ctx.aa, ...ctx.pilot].filter(f => f.record?.class === 'killed: cap');
+  const cap = ctx.map.caps?.capUsd;
   const row = { id: 'G-12', title: 'the cap stops a session that reaches it at settled spend >= the cap', stopIfRefuted: true };
-  if (killed.length === 0) return { ...row, verdict: 'not exercised', observed: 'no session reached the cap', replacing: capEvidence(ctx) };
-  return { ...row, ...combine(perSession(killed, capCheck(ctx.map.caps?.capUsd))) };
+  const checks = [...ctx.aa, ...ctx.pilot].flatMap(f => { const c = capSession(f, ctx, cap); return c ? [{ rid: f.rid, ...c }] : []; });
+  if (checks.length > 0) return { ...row, ...combine(checks) };
+  const { replacing, why } = capEvidence(ctx);
+  return { ...row, verdict: 'not exercised', observed: `no session reached the cap${why ? `; ${why}` : ''}`, replacing };
 }
 
 // ---- G-14 ---------------------------------------------------------------------------------------------------------------------
