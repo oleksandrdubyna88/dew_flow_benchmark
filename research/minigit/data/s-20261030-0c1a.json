@@ -1,0 +1,1450 @@
+{
+ "extractedFrom": {
+  "runsRoot": "~/rsd/minigit",
+  "sources": {
+   "run-map.json": "3c293d8341ba381ded17a9c4fb9694659c2840dc7d37cd0fb279e92ed58e384d",
+   "ledger.ndjson": "8051bb9923e932108d920e1b296b3d186a3370e629397e65af2efa96257bc135",
+   "aa-verdicts.json": "b9fb65eb3037bb6f473a967ac47e53d4d05b3e34eacf1e34f945669dc47c45a8",
+   "rehearsal-v2.json": "734a81b264fbe46ad4990c9536386b09fd73ebd5f0b297a561d2819570d1be8b"
+  },
+  "tool": "research/minigit/tools/extract.mjs"
+ },
+ "series": {
+  "seriesId": "s-20261030-0c1a",
+  "preregTag": "prereg/minigit-bare-20261030",
+  "preregCommit": "41395f72984e75c87d58145ea3ce5c92e0d752ac",
+  "seedSha256": "3db710721bd55640f192b7b2280f2aeb88d6e73bc5eec44932ac2e4583521307",
+  "harnessIdentityAtInit": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+  "harnessAccepted": [],
+  "pins": {
+   "claude": "2.1.310",
+   "node": "26.12.1",
+   "dotnetSdk": "10.0.114",
+   "typescript": "7.0.2"
+  },
+  "claude": {
+   "version": "2.1.310",
+   "sha256": "b73676430af12f97316a798b8371f81d640f90a58bdcb8f3ce56a835bb47df56"
+  },
+  "caps": {
+   "capUsd": 6,
+   "wallMs": 3600000,
+   "stallMs": 2700000
+  },
+  "bareBudgetUsd": 40,
+  "ceilingUsd": 500,
+  "spin": {
+   "runs": 30,
+   "medianMs": 21.8385025,
+   "minMs": 21.061914,
+   "maxMs": 24.520966,
+   "spreadMs": 3.459052
+  },
+  "stopped": null,
+  "pricesFile": "prices-2026-10-29.json",
+  "snapshots": {
+   "csharp": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8",
+   "node": "39dbc8f2aaf4f873512c0ef2376992dfaae27c38daa775883003f4bb456b4158"
+  },
+  "stacksSha256": "4c8b875a51ea562233581b6fc601914778ae9ae804ec2314b04201f3228de223",
+  "quietSha256": "2651b7e6045460ffb850cea5678d677c2a8891f22ac64e02ddfadfcd188ac3f6",
+  "packageFlagsSha256": "f24978faeb7d158622ef31104ecdc8d713ddc9414155b7358981047a7d1cb3a4",
+  "pairBarriers": {
+   "0": {
+    "v1Quiet": true,
+    "barrierAtMs": 1793380030984
+   }
+  }
+ },
+ "sessions": [
+  {
+   "rid": "58d1fa",
+   "kind": "aa",
+   "stack": "csharp",
+   "phase": "v1",
+   "attempt": 1,
+   "pair": 0,
+   "label": "paired",
+   "status": "scored",
+   "class": "completed",
+   "data": true,
+   "mapFlags": [],
+   "startedAt": "2026-10-30T17:05:18.928Z",
+   "runMapUsd": 0.207687,
+   "recorded": true,
+   "flags": [],
+   "discrepancies": [],
+   "reclassified": null,
+   "cost": {
+    "headlineUsd": 0.207687,
+    "headlineExact": true,
+    "headlineBasis": "published list prices (2026-10-29); tokens from the result envelope; 5m/1h split from transcripts",
+    "eUsd": 0.207687,
+    "bUsd": 0.207687,
+    "oUsd": 0.207687,
+    "stopRuleUsd": 0.207687,
+    "censoredAtUsd": null,
+    "firstTurnCacheRead": 0,
+    "checks": {
+     "t1": "pass",
+     "t2": "pass",
+     "t3": "pass",
+     "t4": "pass",
+     "t5": "pass"
+    },
+    "perModel": {
+     "claude-opus-5-5": {
+      "usd": 0.207687,
+      "exact": true,
+      "share1h": 1
+     }
+    }
+   },
+   "tokens": {
+    "claude-opus-5-5": {
+     "input": 6,
+     "output": 3525,
+     "cacheRead": 22335,
+     "cacheWrite": 16587,
+     "cacheWrite1h": 16587,
+     "cacheWrite5m": 0
+    }
+   },
+   "time": {
+    "wallMs": 46255,
+    "modelApiMs": 36978,
+    "activeMs": 42626,
+    "activeMinusModelApiMs": 5648,
+    "buildTestMs": 5449,
+    "otherToolMs": 118,
+    "hooksMs": 81,
+    "unattributedMs": 71,
+    "partitionSumMs": 42697,
+    "durationApiMs": 36986,
+    "turns": 3,
+    "turnsAgree": true,
+    "subagentsLaunched": 0
+   },
+   "quality": {
+    "scored": true,
+    "notScoredWhy": null,
+    "buildOk": true,
+    "visible": [
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "failed": 0,
+      "expectedTotal": 11
+     }
+    ],
+    "heldout": {
+     "percent": 100,
+     "defects": 0,
+     "blocked": 0,
+     "failed": 0,
+     "total": 29,
+     "primary100": true
+    },
+    "upstreamOriginal": [
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "expectedTotal": 11
+     }
+    ],
+    "latency": {
+     "command": "log",
+     "runs": 100,
+     "medianMs": 46.9,
+     "boxBaselineMedianMs": 10.01
+    }
+   },
+   "host": {
+    "mask": "0-5",
+    "maskObserved": true,
+    "startSkewMs": 6,
+    "quietBefore": {
+     "quiet": true,
+     "flags": [],
+     "meanForeignCpus": 0.1503302192554553,
+     "maxForeignCpus": 0.26997335189414867,
+     "spinRatio": 1.014494194370699,
+     "lowestMemPct": 80.62508760330111,
+     "samples": 12
+    },
+    "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+    "loc": {
+     "product": 152,
+     "test": 0,
+     "files": 1
+    },
+    "egress": {
+     "allowed": {},
+     "refused": {
+      "api.anthropic.com": 13
+     },
+     "nonConnect": 0,
+     "bytes": {},
+     "cacheGrowthBytes": 6819
+    },
+    "packages": {
+     "total": 4,
+     "added": [],
+     "flagged": []
+    },
+    "workspaceExcluded": null,
+    "voidDetail": null
+   },
+   "meta": {
+    "startedAt": "2026-10-30T17:05:19.286Z",
+    "exitedAt": null,
+    "endedAt": "2026-10-30T17:06:05.541Z",
+    "wallMs": 46255,
+    "exitCode": 0,
+    "stopped": null,
+    "envelopeCostUsd": 0.207687,
+    "receiverUsd": 0.207687,
+    "receiverRequests": 3,
+    "realTokenSeen": 0,
+    "samplerSamples": 43,
+    "overCap": false,
+    "unsettledAtClose": 0
+   },
+   "broker": {
+    "forwarded": 3,
+    "refused": 0,
+    "refusedByReason": {
+     "cap": 0,
+     "path": 0,
+     "body": 0,
+     "busy": 0
+    },
+    "unsettled": 0,
+    "spentUsd": 0.207687,
+    "lowerBound": false,
+    "settledCount": 3,
+    "statuses": [
+     200
+    ],
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "tokens": {
+     "input": 6,
+     "output": 3525,
+     "cacheRead": 22335,
+     "cacheWrite": 16587,
+     "cacheWrite5m": 0,
+     "cacheWrite1h": 16587
+    }
+   }
+  },
+  {
+   "rid": "a4fddc",
+   "kind": "aa",
+   "stack": "csharp",
+   "phase": "v1",
+   "attempt": 1,
+   "pair": 0,
+   "label": "paired",
+   "status": "scored",
+   "class": "completed",
+   "data": true,
+   "mapFlags": [],
+   "startedAt": "2026-10-30T17:05:18.929Z",
+   "runMapUsd": 0.2225572,
+   "recorded": true,
+   "flags": [],
+   "discrepancies": [],
+   "reclassified": null,
+   "cost": {
+    "headlineUsd": 0.2225572,
+    "headlineExact": true,
+    "headlineBasis": "published list prices (2026-10-29); tokens from the result envelope; 5m/1h split from transcripts",
+    "eUsd": 0.2225572,
+    "bUsd": 0.2225572,
+    "oUsd": 0.2225572,
+    "stopRuleUsd": 0.2225572,
+    "censoredAtUsd": null,
+    "firstTurnCacheRead": 0,
+    "checks": {
+     "t1": "pass",
+     "t2": "pass",
+     "t3": "pass",
+     "t4": "pass",
+     "t5": "pass"
+    },
+    "perModel": {
+     "claude-opus-5-5": {
+      "usd": 0.2225572,
+      "exact": true,
+      "share1h": 1
+     }
+    }
+   },
+   "tokens": {
+    "claude-opus-5-5": {
+     "input": 8,
+     "output": 3862,
+     "cacheRead": 39226,
+     "cacheWrite": 17180,
+     "cacheWrite1h": 17180,
+     "cacheWrite5m": 0
+    }
+   },
+   "time": {
+    "wallMs": 43860,
+    "modelApiMs": 32526,
+    "activeMs": 40222,
+    "activeMinusModelApiMs": 7696,
+    "buildTestMs": 7468,
+    "otherToolMs": 117,
+    "hooksMs": 111,
+    "unattributedMs": 89,
+    "partitionSumMs": 40311,
+    "durationApiMs": 32537,
+    "turns": 4,
+    "turnsAgree": true,
+    "subagentsLaunched": 0
+   },
+   "quality": {
+    "scored": true,
+    "notScoredWhy": null,
+    "buildOk": true,
+    "visible": [
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "failed": 0,
+      "expectedTotal": 11
+     }
+    ],
+    "heldout": {
+     "percent": 100,
+     "defects": 0,
+     "blocked": 0,
+     "failed": 0,
+     "total": 29,
+     "primary100": true
+    },
+    "upstreamOriginal": [
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "expectedTotal": 11
+     }
+    ],
+    "latency": {
+     "command": "log",
+     "runs": 100,
+     "medianMs": 47.27,
+     "boxBaselineMedianMs": 10.02
+    }
+   },
+   "host": {
+    "mask": "8-13",
+    "maskObserved": true,
+    "startSkewMs": 6,
+    "quietBefore": {
+     "quiet": true,
+     "flags": [],
+     "meanForeignCpus": 0.1503302192554553,
+     "maxForeignCpus": 0.26997335189414867,
+     "spinRatio": 1.014494194370699,
+     "lowestMemPct": 80.62508760330111,
+     "samples": 12
+    },
+    "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+    "loc": {
+     "product": 156,
+     "test": 0,
+     "files": 1
+    },
+    "egress": {
+     "allowed": {},
+     "refused": {
+      "api.anthropic.com": 13
+     },
+     "nonConnect": 0,
+     "bytes": {},
+     "cacheGrowthBytes": 6819
+    },
+    "packages": {
+     "total": 4,
+     "added": [],
+     "flagged": []
+    },
+    "workspaceExcluded": null,
+    "voidDetail": null
+   },
+   "meta": {
+    "startedAt": "2026-10-30T17:05:19.290Z",
+    "exitedAt": null,
+    "endedAt": "2026-10-30T17:06:03.150Z",
+    "wallMs": 43860,
+    "exitCode": 0,
+    "stopped": null,
+    "envelopeCostUsd": 0.2225572,
+    "receiverUsd": 0.2225572,
+    "receiverRequests": 4,
+    "realTokenSeen": 0,
+    "samplerSamples": 40,
+    "overCap": false,
+    "unsettledAtClose": 0
+   },
+   "broker": {
+    "forwarded": 4,
+    "refused": 0,
+    "refusedByReason": {
+     "cap": 0,
+     "path": 0,
+     "body": 0,
+     "busy": 0
+    },
+    "unsettled": 0,
+    "spentUsd": 0.2225572,
+    "lowerBound": false,
+    "settledCount": 4,
+    "statuses": [
+     200
+    ],
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "tokens": {
+     "input": 8,
+     "output": 3862,
+     "cacheRead": 39226,
+     "cacheWrite": 17180,
+     "cacheWrite5m": 0,
+     "cacheWrite1h": 17180
+    }
+   }
+  },
+  {
+   "rid": "a164d6",
+   "kind": "rehearsal",
+   "stack": "csharp",
+   "phase": "v2",
+   "attempt": 1,
+   "pair": 0,
+   "label": "paired",
+   "status": "scored",
+   "class": "completed",
+   "data": true,
+   "mapFlags": [],
+   "startedAt": "2026-10-30T17:07:10.984Z",
+   "runMapUsd": 0.009232,
+   "recorded": true,
+   "flags": [
+    "otel incomplete"
+   ],
+   "discrepancies": [],
+   "reclassified": null,
+   "cost": {
+    "headlineUsd": 0.0057865,
+    "headlineExact": false,
+    "headlineBasis": "published list prices (2026-10-29); tokens from the result envelope; 5m/1h split from transcripts",
+    "eUsd": 0.009232,
+    "bUsd": 0.009232,
+    "oUsd": 0.01,
+    "stopRuleUsd": 0.009232,
+    "censoredAtUsd": null,
+    "firstTurnCacheRead": null,
+    "checks": {
+     "t1": "pass",
+     "t2": "breach",
+     "t3": "unchecked",
+     "t4": "unchecked",
+     "t5": "pass"
+    },
+    "perModel": {
+     "claude-sonnet-5-5": {
+      "usd": 0.0057865,
+      "exact": false,
+      "share1h": null
+     }
+    }
+   },
+   "tokens": {
+    "claude-sonnet-5-5": {
+     "input": 2,
+     "output": 4,
+     "cacheRead": 0,
+     "cacheWrite": 2297,
+     "cacheWrite1h": null,
+     "cacheWrite5m": null
+    }
+   },
+   "time": {
+    "wallMs": 661,
+    "modelApiMs": 0,
+    "activeMs": 0,
+    "activeMinusModelApiMs": 0,
+    "buildTestMs": 0,
+    "otherToolMs": 0,
+    "hooksMs": 0,
+    "unattributedMs": 60,
+    "partitionSumMs": 60,
+    "durationApiMs": 46,
+    "turns": 1,
+    "turnsAgree": true,
+    "subagentsLaunched": 0
+   },
+   "quality": {
+    "scored": true,
+    "notScoredWhy": null,
+    "buildOk": true,
+    "visible": [
+     {
+      "script": "test-v2.sh",
+      "passed": 12,
+      "failed": 18,
+      "expectedTotal": 30
+     },
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "failed": 0,
+      "expectedTotal": 11
+     }
+    ],
+    "heldout": {
+     "percent": 51.7,
+     "defects": 17,
+     "blocked": 11,
+     "failed": 17,
+     "total": 58,
+     "primary100": false
+    },
+    "upstreamOriginal": [
+     {
+      "script": "test-v2.sh",
+      "passed": 0,
+      "expectedTotal": 30
+     },
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "expectedTotal": 11
+     }
+    ],
+    "latency": {
+     "command": "log",
+     "runs": 100,
+     "medianMs": 47.28,
+     "boxBaselineMedianMs": 10.06
+    }
+   },
+   "host": {
+    "mask": "0-5",
+    "maskObserved": null,
+    "startSkewMs": 5,
+    "quietBefore": null,
+    "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+    "loc": {
+     "product": 152,
+     "test": 0,
+     "files": 1
+    },
+    "egress": {
+     "allowed": {},
+     "refused": {},
+     "nonConnect": 0,
+     "bytes": {},
+     "cacheGrowthBytes": 0
+    },
+    "packages": {
+     "total": 4,
+     "added": [],
+     "flagged": []
+    },
+    "workspaceExcluded": [
+     "bin",
+     "obj",
+     "node_modules"
+    ],
+    "voidDetail": null
+   },
+   "meta": {
+    "startedAt": "2026-10-30T17:07:11.312Z",
+    "exitedAt": null,
+    "endedAt": "2026-10-30T17:07:11.973Z",
+    "wallMs": 661,
+    "exitCode": 0,
+    "stopped": null,
+    "envelopeCostUsd": 0.009232,
+    "receiverUsd": 0.01,
+    "receiverRequests": 1,
+    "realTokenSeen": 0,
+    "samplerSamples": 0,
+    "overCap": false,
+    "unsettledAtClose": 0
+   },
+   "broker": {
+    "forwarded": 1,
+    "refused": 0,
+    "refusedByReason": {
+     "cap": 0,
+     "path": 0,
+     "body": 0,
+     "busy": 0
+    },
+    "unsettled": 0,
+    "spentUsd": 0.009232,
+    "lowerBound": false,
+    "settledCount": 1,
+    "statuses": [
+     200
+    ],
+    "models": [
+     "claude-sonnet-5-5"
+    ],
+    "tokens": {
+     "input": 2,
+     "output": 4,
+     "cacheRead": 0,
+     "cacheWrite": 2297,
+     "cacheWrite5m": 0,
+     "cacheWrite1h": 2297
+    }
+   }
+  },
+  {
+   "rid": "ebe7f5",
+   "kind": "rehearsal",
+   "stack": "node",
+   "phase": "v2",
+   "attempt": 1,
+   "pair": 0,
+   "label": "paired",
+   "status": "scored",
+   "class": "completed",
+   "data": true,
+   "mapFlags": [],
+   "startedAt": "2026-10-30T17:07:10.985Z",
+   "runMapUsd": 0.009232,
+   "recorded": true,
+   "flags": [
+    "otel incomplete"
+   ],
+   "discrepancies": [],
+   "reclassified": null,
+   "cost": {
+    "headlineUsd": 0.0057865,
+    "headlineExact": false,
+    "headlineBasis": "published list prices (2026-10-29); tokens from the result envelope; 5m/1h split from transcripts",
+    "eUsd": 0.009232,
+    "bUsd": 0.009232,
+    "oUsd": 0.01,
+    "stopRuleUsd": 0.009232,
+    "censoredAtUsd": null,
+    "firstTurnCacheRead": null,
+    "checks": {
+     "t1": "pass",
+     "t2": "breach",
+     "t3": "unchecked",
+     "t4": "unchecked",
+     "t5": "pass"
+    },
+    "perModel": {
+     "claude-sonnet-5-5": {
+      "usd": 0.0057865,
+      "exact": false,
+      "share1h": null
+     }
+    }
+   },
+   "tokens": {
+    "claude-sonnet-5-5": {
+     "input": 2,
+     "output": 4,
+     "cacheRead": 0,
+     "cacheWrite": 2297,
+     "cacheWrite1h": null,
+     "cacheWrite5m": null
+    }
+   },
+   "time": {
+    "wallMs": 665,
+    "modelApiMs": 0,
+    "activeMs": 0,
+    "activeMinusModelApiMs": 0,
+    "buildTestMs": 0,
+    "otherToolMs": 0,
+    "hooksMs": 0,
+    "unattributedMs": 57,
+    "partitionSumMs": 57,
+    "durationApiMs": 46,
+    "turns": 1,
+    "turnsAgree": true,
+    "subagentsLaunched": 0
+   },
+   "quality": {
+    "scored": true,
+    "notScoredWhy": null,
+    "buildOk": true,
+    "visible": [
+     {
+      "script": "test-v2.sh",
+      "passed": 12,
+      "failed": 18,
+      "expectedTotal": 30
+     },
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "failed": 0,
+      "expectedTotal": 11
+     }
+    ],
+    "heldout": {
+     "percent": 51.7,
+     "defects": 17,
+     "blocked": 11,
+     "failed": 17,
+     "total": 58,
+     "primary100": false
+    },
+    "upstreamOriginal": [
+     {
+      "script": "test-v2.sh",
+      "passed": 0,
+      "expectedTotal": 30
+     },
+     {
+      "script": "test-v1.sh",
+      "passed": 11,
+      "expectedTotal": 11
+     }
+    ],
+    "latency": {
+     "command": "log",
+     "runs": 100,
+     "medianMs": 47.29,
+     "boxBaselineMedianMs": 10.39
+    }
+   },
+   "host": {
+    "mask": "8-13",
+    "maskObserved": null,
+    "startSkewMs": 5,
+    "quietBefore": null,
+    "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+    "loc": {
+     "product": 152,
+     "test": 0,
+     "files": 1
+    },
+    "egress": {
+     "allowed": {},
+     "refused": {},
+     "nonConnect": 0,
+     "bytes": {},
+     "cacheGrowthBytes": 0
+    },
+    "packages": {
+     "total": 4,
+     "added": [],
+     "flagged": []
+    },
+    "workspaceExcluded": [
+     "node_modules"
+    ],
+    "voidDetail": null
+   },
+   "meta": {
+    "startedAt": "2026-10-30T17:07:11.314Z",
+    "exitedAt": null,
+    "endedAt": "2026-10-30T17:07:11.979Z",
+    "wallMs": 665,
+    "exitCode": 0,
+    "stopped": null,
+    "envelopeCostUsd": 0.009232,
+    "receiverUsd": 0.01,
+    "receiverRequests": 1,
+    "realTokenSeen": 0,
+    "samplerSamples": 0,
+    "overCap": false,
+    "unsettledAtClose": 0
+   },
+   "broker": {
+    "forwarded": 1,
+    "refused": 0,
+    "refusedByReason": {
+     "cap": 0,
+     "path": 0,
+     "body": 0,
+     "busy": 0
+    },
+    "unsettled": 0,
+    "spentUsd": 0.009232,
+    "lowerBound": false,
+    "settledCount": 1,
+    "statuses": [
+     200
+    ],
+    "models": [
+     "claude-sonnet-5-5"
+    ],
+    "tokens": {
+     "input": 2,
+     "output": 4,
+     "cacheRead": 0,
+     "cacheWrite": 2297,
+     "cacheWrite5m": 0,
+     "cacheWrite1h": 2297
+    }
+   }
+  },
+  {
+   "rid": "c9b413",
+   "kind": "pilot",
+   "stack": "node",
+   "phase": "v1",
+   "attempt": 1,
+   "pair": 0,
+   "label": "paired",
+   "status": "ran",
+   "class": "void: contaminated",
+   "data": false,
+   "mapFlags": [],
+   "startedAt": "2026-10-30T17:09:28.126Z",
+   "runMapUsd": 0.2284358,
+   "recorded": true,
+   "flags": [],
+   "discrepancies": [],
+   "reclassified": null,
+   "cost": {
+    "headlineUsd": 0.2284358,
+    "headlineExact": true,
+    "headlineBasis": "published list prices (2026-10-29); tokens from the result envelope; 5m/1h split from transcripts",
+    "eUsd": 0.2284358,
+    "bUsd": 0.2284358,
+    "oUsd": 0.2284358,
+    "stopRuleUsd": 0.2284358,
+    "censoredAtUsd": null,
+    "firstTurnCacheRead": 5790,
+    "checks": {
+     "t1": "pass",
+     "t2": "pass",
+     "t3": "pass",
+     "t4": "pass",
+     "t5": "pass"
+    },
+    "perModel": {
+     "claude-opus-5-5": {
+      "usd": 0.2284358,
+      "exact": true,
+      "share1h": 1
+     }
+    }
+   },
+   "tokens": {
+    "claude-opus-5-5": {
+     "input": 10,
+     "output": 5547,
+     "cacheRead": 61159,
+     "cacheWrite": 13153,
+     "cacheWrite1h": 13153,
+     "cacheWrite5m": 0
+    }
+   },
+   "time": {
+    "wallMs": 63605,
+    "modelApiMs": 56072,
+    "activeMs": 59970,
+    "activeMinusModelApiMs": 3898,
+    "buildTestMs": 1997,
+    "otherToolMs": 1751,
+    "hooksMs": 150,
+    "unattributedMs": 93,
+    "partitionSumMs": 60063,
+    "durationApiMs": 56083,
+    "turns": 6,
+    "turnsAgree": false,
+    "subagentsLaunched": 0
+   },
+   "quality": {
+    "scored": false,
+    "notScoredWhy": "the session was not scored",
+    "buildOk": null,
+    "visible": [],
+    "heldout": null,
+    "upstreamOriginal": [],
+    "latency": null
+   },
+   "host": {
+    "mask": "0-5",
+    "maskObserved": true,
+    "startSkewMs": null,
+    "quietBefore": {
+     "quiet": true,
+     "flags": [],
+     "meanForeignCpus": 0.18404136304917998,
+     "maxForeignCpus": 0.4330627577721075,
+     "spinRatio": 0.9892385020447257,
+     "lowestMemPct": 79.89576799955826,
+     "samples": 12
+    },
+    "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+    "loc": {
+     "product": 175,
+     "test": 0,
+     "files": 2
+    },
+    "egress": {
+     "allowed": {},
+     "refused": {
+      "api.anthropic.com": 24
+     },
+     "nonConnect": 0,
+     "bytes": {},
+     "cacheGrowthBytes": 0
+    },
+    "packages": {
+     "total": 4,
+     "added": [],
+     "flagged": []
+    },
+    "workspaceExcluded": null,
+    "voidDetail": {
+     "high": 1,
+     "canary": 0,
+     "tokenHits": 0,
+     "hits": [
+      {
+       "rule": "outside-path",
+       "source": "call",
+       "where": "main:Bash",
+       "excerpt": "/"
+      }
+     ]
+    }
+   },
+   "meta": {
+    "startedAt": "2026-10-30T17:09:28.306Z",
+    "exitedAt": null,
+    "endedAt": "2026-10-30T17:10:31.911Z",
+    "wallMs": 63605,
+    "exitCode": 0,
+    "stopped": null,
+    "envelopeCostUsd": 0.2284358,
+    "receiverUsd": 0.2284358,
+    "receiverRequests": 5,
+    "realTokenSeen": 0,
+    "samplerSamples": 60,
+    "overCap": false,
+    "unsettledAtClose": 0
+   },
+   "broker": {
+    "forwarded": 5,
+    "refused": 0,
+    "refusedByReason": {
+     "cap": 0,
+     "path": 0,
+     "body": 0,
+     "busy": 0
+    },
+    "unsettled": 0,
+    "spentUsd": 0.2284358,
+    "lowerBound": false,
+    "settledCount": 5,
+    "statuses": [
+     200
+    ],
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "tokens": {
+     "input": 10,
+     "output": 5547,
+     "cacheRead": 61159,
+     "cacheWrite": 13153,
+     "cacheWrite5m": 0,
+     "cacheWrite1h": 13153
+    }
+   }
+  }
+ ],
+ "pairs": [],
+ "summary": null,
+ "perStack": null,
+ "quality": {
+  "csharp-v1": {
+   "sessions": 0,
+   "scored": 0,
+   "unscored": [],
+   "percentMedian": null,
+   "percentMin": null,
+   "defectsMedian": null,
+   "defectsMax": null,
+   "accepted": 0
+  },
+  "csharp-v2": {
+   "sessions": 0,
+   "scored": 0,
+   "unscored": [],
+   "percentMedian": null,
+   "percentMin": null,
+   "defectsMedian": null,
+   "defectsMax": null,
+   "accepted": 0
+  },
+  "node-v1": {
+   "sessions": 0,
+   "scored": 0,
+   "unscored": [],
+   "percentMedian": null,
+   "percentMin": null,
+   "defectsMedian": null,
+   "defectsMax": null,
+   "accepted": 0
+  },
+  "node-v2": {
+   "sessions": 0,
+   "scored": 0,
+   "unscored": [],
+   "percentMedian": null,
+   "percentMin": null,
+   "defectsMedian": null,
+   "defectsMax": null,
+   "accepted": 0
+  }
+ },
+ "pairCrosscheck": [],
+ "aa": {
+  "present": true,
+  "harnessIdentity": "de9091b54e2b2133bcde60d36099e03877fd8217efffd048dcf13e9f38e6fb53",
+  "computedAt": "2026-10-30T17:10:47.988Z",
+  "verdict": "STOP",
+  "stops": [
+   "G-8"
+  ],
+  "t3Rule": "stop",
+  "rows": [
+   {
+    "id": "G-1",
+    "title": "the read-back is ok on every init field",
+    "verdict": "holds",
+    "observed": "58d1fa: the read-back is ok on every init field; a4fddc: the read-back is ok on every init field; c9b413: the read-back is ok on every init field",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-2",
+    "title": "T1",
+    "verdict": "holds",
+    "observed": "58d1fa: T1 pass; a4fddc: T1 pass; c9b413: T1 pass",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-3",
+    "title": "T2 per model and kind",
+    "verdict": "holds",
+    "observed": "58d1fa: T2 pass; a4fddc: T2 pass; c9b413: T2 pass",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-4",
+    "title": "T3 and T4 over matched sources: main and subagent",
+    "verdict": "not exercised",
+    "observed": "58d1fa: T3 and T4 pass; a4fddc: T3 and T4 pass; no twin launched a subagent",
+    "replacing": "the subagent half: the E2.S2 smoke fixture's B-T1 on CLI 2.1.310 (test/fixtures/real/claude-2.1.310-bare-smoke): 1 main and 1 subagent transcript file(s); T3 pass, T4 pass",
+    "recorded": null
+   },
+   {
+    "id": "G-5",
+    "title": "T5: B = E within $0.000001",
+    "verdict": "holds",
+    "observed": "58d1fa: T5 pass; a4fddc: T5 pass; c9b413: T5 pass",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-6",
+    "title": "partition sum = wall and unattributed < 5 % (or explained)",
+    "verdict": "refuted",
+    "observed": "58d1fa: the categories sum to 42697 ms, the registered wall is 46255 ms: a gap of 3558 ms (counted as unattributed), unattributed is 7.8 % of the wall (limit 5 %); a4fddc: the categories sum to 40311 ms, the registered wall is 43860 ms: a gap of 3549 ms (counted as unattributed), unattributed is 8.3 % of the wall (limit 5 %); c9b413: the categories sum to 60063 ms, the registered wall is 63605 ms: a gap of 3542 ms (counted as unattributed), unattributed is 5.7 % of the wall (limit 5 %)",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-7",
+    "title": "the same record kinds for each twin; aliases per D12",
+    "verdict": "holds",
+    "observed": "both twins carry stream, envelope, O, T, audit, broker, egress with bytes, CPU and spin samples, packages, a score with every step known and a ledger line; every alias resolves to the baseline",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-8",
+    "title": "isolation: hosts, the real token 0, no contamination",
+    "verdict": "refuted",
+    "observed": "c9b413: 1 high contamination hit(s) (class void: contaminated)",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-9",
+    "title": "the twin spread, recorded, never gating",
+    "verdict": "recorded",
+    "observed": "58d1fa against a4fddc: {\"costRatio\":1.0715990890137563,\"wallRatio\":1.0546055631554947,\"modelApiRatio\":1.1368751152923815,\"activeMinusModelApiRatio\":1.3626062322946175,\"heldoutPercentDiff\":0,\"heldoutDefectsDiff\":0,\"cpuPerMask\":{\"0-5\":0.052685896887211967,\"8-13\":0.05230654989692062}}",
+    "replacing": null,
+    "recorded": {
+     "costRatio": 1.0715990890137563,
+     "wallRatio": 1.0546055631554947,
+     "modelApiRatio": 1.1368751152923815,
+     "activeMinusModelApiRatio": 1.3626062322946175,
+     "heldoutPercentDiff": 0,
+     "heldoutDefectsDiff": 0,
+     "cpuPerMask": {
+      "0-5": 0.052685896887211967,
+      "8-13": 0.05230654989692062
+     }
+    }
+   },
+   {
+    "id": "G-10",
+    "title": "the scorer by hand on a twin tree and the Node tree",
+    "verdict": "not exercised",
+    "observed": "58d1fa: no dated G-10 line for 58d1fa; c9b413: no dated G-10 line for c9b413",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-11",
+    "title": "quiet check, sampler, spin probe, mask observed",
+    "verdict": "holds",
+    "observed": "58d1fa: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed; a4fddc: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed; c9b413: the quiet check passed, the sampler and the spin probe wrote every interval, the mask was observed",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-12",
+    "title": "the cap stops a session that reaches it at settled spend >= the cap",
+    "verdict": "not exercised",
+    "observed": "no session reached the cap; no dated G-12 holds line",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-13",
+    "title": "each session's class read by hand",
+    "verdict": "not exercised",
+    "observed": "58d1fa: no dated G-13 line for 58d1fa; a4fddc: no dated G-13 line for a4fddc; c9b413: no dated G-13 line for c9b413",
+    "replacing": null,
+    "recorded": null
+   },
+   {
+    "id": "G-14",
+    "title": "the v2 rehearsal for both stacks",
+    "verdict": "holds",
+    "observed": "csharp holds; node holds",
+    "replacing": null,
+    "recorded": null
+   }
+  ]
+ },
+ "rehearsalV2": {
+  "twin": "58d1fa",
+  "rids": {
+   "csharp": "a164d6",
+   "node": "ebe7f5"
+  },
+  "holds": true,
+  "stacks": {
+   "csharp": {
+    "holds": true,
+    "checks": [
+     {
+      "id": "workspace",
+      "ok": true,
+      "detail": "13 file(s): the twin's tree minus bin/ obj/ node_modules/ plus SPEC-v2.txt, test-v2.sh"
+     },
+     {
+      "id": "record",
+      "ok": true,
+      "detail": "every field is known, not captured with a reason, or n/a (bare)"
+     },
+     {
+      "id": "score",
+      "ok": true,
+      "detail": "build, visible v2 and v1, held-out and upstream are all known"
+     }
+    ]
+   },
+   "node": {
+    "holds": true,
+    "checks": [
+     {
+      "id": "workspace",
+      "ok": true,
+      "detail": "38 file(s): the twin's tree minus node_modules/ plus SPEC-v2.txt, test-v2.sh"
+     },
+     {
+      "id": "record",
+      "ok": true,
+      "detail": "every field is known, not captured with a reason, or n/a (bare)"
+     },
+     {
+      "id": "score",
+      "ok": true,
+      "detail": "build, visible v2 and v1, held-out and upstream are all known"
+     }
+    ]
+   }
+  },
+  "checks": [
+   {
+    "id": "csharp workspace",
+    "ok": true,
+    "detail": "13 file(s): the twin's tree minus bin/ obj/ node_modules/ plus SPEC-v2.txt, test-v2.sh"
+   },
+   {
+    "id": "csharp record",
+    "ok": true,
+    "detail": "every field is known, not captured with a reason, or n/a (bare)"
+   },
+   {
+    "id": "csharp score",
+    "ok": true,
+    "detail": "build, visible v2 and v1, held-out and upstream are all known"
+   },
+   {
+    "id": "node workspace",
+    "ok": true,
+    "detail": "38 file(s): the twin's tree minus node_modules/ plus SPEC-v2.txt, test-v2.sh"
+   },
+   {
+    "id": "node record",
+    "ok": true,
+    "detail": "every field is known, not captured with a reason, or n/a (bare)"
+   },
+   {
+    "id": "node score",
+    "ok": true,
+    "detail": "build, visible v2 and v1, held-out and upstream are all known"
+   }
+  ],
+  "at": "2026-10-30T17:08:31.030Z"
+ },
+ "cpu": [
+  {
+   "file": "p0-v1-cpu.ndjson",
+   "samples": 21,
+   "meanForeignCpus": 0.100024,
+   "maxForeignCpus": 0.144269,
+   "foreignAgentSamples": 0,
+   "maxSpinMs": 23.477268,
+   "perSession": {
+    "58d1fa": {
+     "samples": 9,
+     "meanForeignCpus": 0.100432,
+     "maxForeignCpus": 0.144269,
+     "foreignAgentSamples": 0,
+     "maxSpinMs": 23.477268
+    },
+    "a4fddc": {
+     "samples": 8,
+     "meanForeignCpus": 0.102142,
+     "maxForeignCpus": 0.144269,
+     "foreignAgentSamples": 0,
+     "maxSpinMs": 23.477268
+    },
+    "c9b413": {
+     "samples": 12,
+     "meanForeignCpus": 0.099718,
+     "maxForeignCpus": 0.130461,
+     "foreignAgentSamples": 0,
+     "maxSpinMs": 22.954616
+    }
+   }
+  }
+ ],
+ "handcheck": [],
+ "ledger": {
+  "lines": [
+   {
+    "kind": "prior",
+    "usd": 0.18095759999999997,
+    "what": "E1.S3 capture session (one tiny session on an unrelated task)",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-29"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.01,
+    "what": "token check (one small claude -p call to check the subscription token; approximate)",
+    "rid": null,
+    "fromSeries": null,
+    "approx": true,
+    "date": "2026-10-29"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.1119485,
+    "what": "E2.S2 design run (one bare session, real token in the box)",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-29"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.018452,
+    "what": "E2.S2 credential-broker proof sessions",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-29"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.114845,
+    "what": "E2.S2 bare-session smoke through the broker (the first one)",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.171801,
+    "what": "E2.S2 first re-smoke after the review fixes",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.109323,
+    "what": "E2.S2 second re-smoke",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30"
+   },
+   {
+    "kind": "prior",
+    "usd": 0.10893829999999999,
+    "what": "E2.S2 third re-smoke, the committed fixture",
+    "rid": null,
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30"
+   },
+   {
+    "kind": "aa",
+    "usd": 0.2228268,
+    "what": "completed",
+    "rid": "d3f571",
+    "fromSeries": "s-20261030-92a9",
+    "approx": false,
+    "date": "2026-10-30T14:27:53.911Z"
+   },
+   {
+    "kind": "aa",
+    "usd": 0.2636632,
+    "what": "completed",
+    "rid": "433bf6",
+    "fromSeries": "s-20261030-92a9",
+    "approx": false,
+    "date": "2026-10-30T14:28:00.970Z"
+   },
+   {
+    "kind": "rehearsal",
+    "usd": 0,
+    "what": "completed",
+    "rid": "555233",
+    "fromSeries": "s-20261030-92a9",
+    "approx": false,
+    "date": "2026-10-30T14:30:16.630Z"
+   },
+   {
+    "kind": "rehearsal",
+    "usd": 0,
+    "what": "completed",
+    "rid": "bd4a53",
+    "fromSeries": "s-20261030-92a9",
+    "approx": false,
+    "date": "2026-10-30T14:30:25.776Z"
+   },
+   {
+    "kind": "pilot",
+    "usd": 0.2121264,
+    "what": "void: contaminated",
+    "rid": "9804fc",
+    "fromSeries": "s-20261030-92a9",
+    "approx": false,
+    "date": "2026-10-30T14:33:59.382Z"
+   },
+   {
+    "kind": "aa",
+    "usd": 0.207687,
+    "what": "completed",
+    "rid": "58d1fa",
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30T17:06:16.602Z"
+   },
+   {
+    "kind": "aa",
+    "usd": 0.2225572,
+    "what": "completed",
+    "rid": "a4fddc",
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30T17:06:22.882Z"
+   },
+   {
+    "kind": "rehearsal",
+    "usd": 0,
+    "what": "completed",
+    "rid": "a164d6",
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30T17:07:22.616Z"
+   },
+   {
+    "kind": "rehearsal",
+    "usd": 0,
+    "what": "completed",
+    "rid": "ebe7f5",
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30T17:07:28.710Z"
+   },
+   {
+    "kind": "pilot",
+    "usd": 0.2284358,
+    "what": "void: contaminated",
+    "rid": "c9b413",
+    "fromSeries": null,
+    "approx": false,
+    "date": "2026-10-30T17:10:41.188Z"
+   }
+  ],
+  "events": [],
+  "priorUsd": 0.826265,
+  "priorSessions": 8,
+  "ownBareUsd": 0.65868,
+  "ownByKind": {
+   "aa": 0.430244,
+   "rehearsal": 0,
+   "pilot": 0.228436
+  },
+  "bareUsdIncludingCarried": 1.357296,
+  "bareByKind": {
+   "aa": 0.916734,
+   "rehearsal": 0,
+   "pilot": 0.440562
+  },
+  "ceilingUsdSpent": 2.183562
+ }
+}
