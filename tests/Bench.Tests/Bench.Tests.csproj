@@ -40,6 +40,8 @@
     <!-- The fake CLI the probe runner and campaign tests launch (S2): the same arrangement — built first, launched from its
          own output folder, pinned by the real ProductPinReader. -->
     <ProjectReference Include="..\FakeCli\FakeCli.csproj" ReferenceOutputAssembly="false" />
+    <!-- The test-only holder of the gate lock (model arms E2.S6): launched from its own output folder, never referenced as an assembly. -->
+    <ProjectReference Include="..\GateHolder\GateHolder.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

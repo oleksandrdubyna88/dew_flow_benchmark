@@ -90,7 +90,7 @@ public static class Program
             "chain" => NotBuilt(input, "E4.S5"),
             "checks" => NotBuilt(input, "E5.S2"),
             "status" => NotBuilt(input, "E4.S4"),
-            "gate-lock" => NotBuilt(input, "E2.S6"),
+            "gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync),
             "version" => Help.Version(input),
             "help" => Help.Usage(input),
             _ => Help.Unknown(input),

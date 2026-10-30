@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using Bench.Domain;
 using ModelArms.Core.Experiment;
 
@@ -22,6 +23,13 @@ internal static class KernelFacts
 {
     private const int AtFdCwd = -100;
     private const int AtSymlinkNoFollow = 0x100;
+    private const int AtEmptyPath = 0x1000;
+    // x86-64 Linux, probed (octal in asm-generic: O_NOCTTY 0400, O_NONBLOCK 04000, O_NOFOLLOW 0400000, O_CLOEXEC 02000000). aarch64's O_NOFOLLOW differs (0100000), which the X64-only gate in ReadSmall refuses.
+    private const int OpenNoCtty = 0x100;
+    private const int OpenNonBlock = 0x800;
+    private const int OpenNoFollow = 0x20000;
+    private const int OpenCloseOnExec = 0x80000;
+    private const int OpenSmallFile = OpenNoCtty | OpenNonBlock | OpenNoFollow | OpenCloseOnExec;
     private const uint StatxBasicStats = 0x7ff;
 
     // The facts the module uses and the statx mask bit that says the kernel reported each (STATX_TYPE, _MODE, _UID, _INO, _CTIME).
@@ -52,6 +60,77 @@ internal static class KernelFacts
         {
             return new FactsRead.Unread($"statx is not available in this libc ({ex.Message}) — refused rather than assumed (D17)");
         }
+    }
+
+    /// <summary>The facts of the file an OPEN descriptor holds (<c>statx</c> with <c>AT_EMPTY_PATH</c>, <c>fstat</c>'s question): which inode the handle really is, whatever the path now names. <paramref name="label"/> is the path the descriptor was
+    /// opened by, for the words of a failure.</summary>
+    public static FactsRead ReadOpen(int fd, string label)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return new FactsRead.Unread($"the inode behind the open handle of {label} cannot be read on this platform: no probed kernel reader — refused rather than assumed (D17)");
+        }
+
+        try
+        {
+            return StatxCall(fd, string.Empty, AtEmptyPath, StatxBasicStats, out var buffer) == 0 ? Decode(label, Answer(buffer)) : new FactsRead.Unread($"{label}: {Marshal.GetLastPInvokeErrorMessage()}");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return new FactsRead.Unread($"statx is not available in this libc ({ex.Message}) — refused rather than assumed (D17)");
+        }
+    }
+
+    /// <summary>The bytes of a SMALL regular file, read without ever waiting and without ever reading more than <paramref name="limit"/> bytes: the file is opened with <c>O_NOFOLLOW</c> (a link fails at the open with <c>ELOOP</c>: nothing outside the folder is opened, so a link to a FIFO with a blocked writer does not release it), <c>O_NONBLOCK</c> (a FIFO opens at once instead of waiting for a
+    /// writer), <c>O_NOCTTY</c> and <c>O_CLOEXEC</c>; its kind is judged from the DESCRIPTOR's facts (<see cref="ReadOpen"/>: a FIFO, a device, a folder is refused before a byte is read), the path must still name the same inode (the same device-and-inode comparison the gate lock makes after its open, for a swap made AFTER the open), and the read stops at <c>limit + 1</c> bytes: a file bigger than the limit is refused, never read whole. A failure is a value; nothing here throws what the library below it throws.
+    /// <para>
+    /// Linux on x86-64 only: <c>O_NONBLOCK</c> (<c>0x800</c>) and <c>O_CLOEXEC</c> (<c>0x80000</c>) are the values probed on this host (kernel 6.18, x86-64), and they are not assumed for another architecture — any other platform is refused, so the
+    /// caller says "unknown" and never reads.
+    /// </para></summary>
+    public static Outcome<byte[]> ReadSmall(string path, int limit)
+    {
+        if (!OperatingSystem.IsLinux() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
+        {
+            return Outcome<byte[]>.Failure($"{path}: no probed non-blocking open on this platform — refused rather than assumed");
+        }
+
+        try
+        {
+            var fd = OpenCall(path, OpenSmallFile);
+            return fd < 0 ? Outcome<byte[]>.Failure($"{path}: {Marshal.GetLastPInvokeErrorMessage()}") : ReadDescriptor(fd, path, limit);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return Outcome<byte[]>.Failure($"open is not available in this libc ({ex.Message})");
+        }
+    }
+
+    private static Outcome<byte[]> ReadDescriptor(int fd, string path, int limit)
+    {
+        using var handle = new SafeFileHandle(fd, ownsHandle: true);
+        return SameRegularInode(ReadOpen(fd, path), Read(path))
+            ? Bounded(handle, path, limit)
+            : Outcome<byte[]>.Failure($"{path} is not a regular file of its own (a FIFO, a device, a folder, or swapped while it was opened)");
+    }
+
+    /// <summary>Both reads are of a regular file and of the same file: equal device and inode.</summary>
+    private static bool SameRegularInode(FactsRead held, FactsRead named) =>
+        held is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } open }
+        && named is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } there }
+        && open.Device == there.Device
+        && open.Inode == there.Inode;
+
+    /// <summary>At most <paramref name="limit"/> bytes: the read asks for one byte more, and a file that gives it is refused as too big — the file is never read past <c>limit + 1</c> bytes whatever its size.</summary>
+    private static Outcome<byte[]> Bounded(SafeFileHandle handle, string path, int limit)
+    {
+        var buffer = new byte[limit + 1];
+        var total = 0;
+        while (total < buffer.Length && RandomAccess.Read(handle, buffer.AsSpan(total), total) is var n and > 0)
+        {
+            total += n;
+        }
+
+        return total > limit ? Outcome<byte[]>.Failure($"{path} is bigger than {limit} bytes") : Outcome<byte[]>.Success(buffer.AsSpan(0, total).ToArray());
     }
 
     /// <summary>Whether a directory entry is there under <paramref name="path"/>: a dangling link is (true), nothing by that name is not (false), and a kernel that cannot say
@@ -153,6 +232,9 @@ internal static class KernelFacts
 
     [DllImport("libc", EntryPoint = "statx", SetLastError = true)]
     private static extern int StatxCall(int dirfd, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags, uint mask, out StatxBuffer buffer);
+
+    [DllImport("libc", EntryPoint = "open", SetLastError = true)]
+    private static extern int OpenCall([MarshalAs(UnmanagedType.LPUTF8Str)] string path, int flags);
 
     [DllImport("libc", EntryPoint = "mkdir", SetLastError = true)]
     private static extern int MkdirCall([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);

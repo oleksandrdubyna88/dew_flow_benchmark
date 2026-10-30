@@ -100,6 +100,9 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string CoaiSettings(string side) => Under("coai-data", Segment(side, "side"), "settings.json");
 
+    /// <summary>The folder <c>COAI_DATA_DIR</c> names for the arm's coai server (<c>after6.sh:34</c>); <see cref="CoaiSettings"/> lives under it.</summary>
+    public string CoaiData => Under("coai-data");
+
     public string McpNone => Under("mcp-none.json");
 
     public string McpCoai => Under("mcp-coai.json");

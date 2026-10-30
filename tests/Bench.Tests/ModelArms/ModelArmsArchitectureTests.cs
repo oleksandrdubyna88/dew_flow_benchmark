@@ -61,6 +61,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(ReviewAnswer),
 
         // E2.S6
+        typeof(GateStatus), typeof(McpConfig),
 
         // E2.S7
 
