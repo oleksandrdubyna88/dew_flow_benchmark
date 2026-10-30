@@ -743,6 +743,43 @@ test('A_pair_whose_first_session_ended_and_whose_partner_was_reset_launches_only
   assert.equal(t.launched[0], ids[1], 'only its partner is launched in the v1 phase');
 });
 
+/** Pair 1 complete: both stacks, both phases, scored (every session data). */
+async function pairOneScored(map) {
+  const { planSession } = await import('../lib/run-map.mjs');
+  let m = map;
+  for (const [stack, phase] of [['csharp', 'v1'], ['node', 'v1'], ['csharp', 'v2'], ['node', 'v2']]) {
+    const id = rid(stack, phase, 1);
+    m = planSession(m, { rid: id, pair: 1, stack, phase, attempt: 1, kind: 'data', label: 'paired', mask: '0-5' }).value;
+    for (const to of ['launching', 'ran', 'scored']) m = transition(m, id, to, to === 'ran' ? { class: 'completed', data: true, usd: 1 } : {}).value;
+  }
+  return m;
+}
+
+test('A_pair_runs_only_when_every_earlier_pair_is_done_and_a_late_refuted_verdict_on_an_earlier_pair_halts_resumably', async () => {
+  const none = harness();
+  none.ctx.pair = 2;
+  const skipped = await runLoop({ ctx: none.ctx, deps: none.deps, map: none.map });
+  assert.equal(skipped.exit, EXIT.halt, skipped.message);
+  assert.match(skipped.message, /pair 1/);
+  assert.match(skipped.message, /pair:1/, 'it names the command that runs the earlier pair');
+  assert.deepEqual(none.launched, [], 'pair 2 launched nothing while pair 1 has not run');
+  const ok = harness();
+  ok.ctx.pair = 2;
+  const control = await runLoop({ ctx: ok.ctx, deps: ok.deps, map: await pairOneScored(ok.map) });
+  assert.equal(control.exit, EXIT.done, `control: with pair 1 done, pair 2 runs (${control.message})`);
+  const late = harness();
+  late.ctx.pair = 2;
+  const refuted = rid('csharp', 'v1', 1);
+  mkdirSync(path.join(late.ctx.sessionsRoot, refuted), { recursive: true });
+  lay(layoutPaths(late.ctx.sessionsRoot, refuted), undefined); // the record of a reclassified session is rewritten from its directory
+  late.ctx.handVerdictsFor = id => (id === refuted ? [{ verdict: 'refuted', g: 'G-13', date: '2026-11-05', evidence: 'scratch/read-back.md', who: 'op' }] : []);
+  const halted = await runLoop({ ctx: late.ctx, deps: late.deps, map: await pairOneScored(late.map) });
+  assert.equal(halted.exit, EXIT.halt, halted.message);
+  assert.match(halted.message, /pair 1 is not done/);
+  assert.deepEqual(late.launched, [], 'the refuted v1 needs pair 1\'s re-run first: pair 2 does not start');
+  assert.equal(readRunMap(late.ctx.runMapFile).value.sessions[refuted].class, 'void: harness', 'and the reclassification itself was recorded');
+});
+
 // ---- the fixed lists and the rehearsal (review N15) ---------------------------------------------------------------------------------------
 
 test('A_fixed_list_run_launches_only_the_sessions_of_its_own_kind', async () => {

@@ -227,6 +227,22 @@ function applyHandVerdicts({ ctx, h, say }) {
 // ---- the loop -------------------------------------------------------------------------------------------------------------------
 
 /**
+ * Pairs run in order (contract section 9: a pair is not skipped, repeated or re-ordered): while any pair j below this one has a next step (it never ran, or a hand verdict that arrived later made it need a
+ * re-run), the run halts, resumably, and names the command that runs pair j first (review MINOR-6). -> a sentence or null; never for the A/A, the pilot or the rehearsal.
+ */
+function earlierPairNotDone({ ctx, map }) {
+  if (ctx.kind !== 'data') return null;
+  const behind = Array.from({ length: ctx.pair - 1 }, (_, i) => i + 1).find(j => nextStep(pairState(map, j)).action !== 'done');
+  return behind === undefined ? null : `pair ${behind} is not done (its next step is ${describeStep(nextStep(pairState(map, behind)))}): run --what pair:${behind} first, then pair ${ctx.pair}. Pairs run in order, and a dated refuted line on an earlier pair needs its re-run before the next pair starts`;
+}
+
+/** A schedule step in words. */
+function describeStep(step) {
+  if (step.action === 'launch') return `to launch ${step.sessions.map(r => `${r.stack} ${r.phase} a${r.attempt}`).join(', ')}`;
+  return step.action === 'score' ? 'to score' : step.reason;
+}
+
+/**
  * Drive the run to its end or its first halt. `ctx` is the fixed configuration of the run, `deps` its edges (see `bare-runner.mjs`), `map` the run-map.
  * -> `{ exit, message, map }`.
  */
@@ -240,6 +256,8 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
     recordWaitingStop({ h, deps });
     if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched. A stop is final for its series: fix the named cause and start a new series (init, then an A/A that is GO)`), map: h.get() };
     applyHandVerdicts({ ctx, h, say });
+    const behind = earlierPairNotDone({ ctx, map: h.get() });
+    if (behind) return { ...done(EXIT.halt, behind), map: h.get() };
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get(), ctx.kind);
     if (step.action === 'done') {
       if (ctx.kind === 'data') writePairRecord({ ctx, map: h.get(), pair: ctx.pair });
