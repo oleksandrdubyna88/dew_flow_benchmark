@@ -681,11 +681,13 @@ To re-quote from a later commit of main: `node spikes/minigit-bench/prereg/extra
 
 **Snapshots made on this machine (2026-10-30), registered in `inputs/cache-snapshots.json`.** C#: `cache-csharp-0a5733e2d4f1`, 1,025 bytes, tree sha256 `0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8`,
 made under dotnet SDK 10.0.114 (the recipe pins it: `expectStdout`); its NuGet cache is EMPTY (a .NET 10 console app restores from the SDK's own packs) and its dotnet part holds only the first-run sentinels and the
-workload-advertising files. Node: `cache-node-6b2e045ff624`, 40,072,459 bytes (TypeScript 7.0.2, `@typescript/typescript-linux-x64` 7.0.2, `@types/node` 26.6.6 resolved at snapshot time, `undici-types` 8.9.0), made under node v26.12.1.
+workload-advertising files. Node: `cache-node-39dbc8f2aaf4`, 40,095,863 bytes, tree sha256 `39dbc8f2aaf4…` (remade 2026-10-30 through the current recipe, which pins `node --version` = v26.12.1 as a step, so its record carries `steps`; TypeScript 7.0.2, `@typescript/typescript-linux-x64` 7.0.2, `@types/node` 26.6.6 resolved at snapshot time, `undici-types` 8.9.0), made under node v26.12.1.
 **Reproducibility.** The first C# recipe runs differed in two files: an ASP.NET development certificate generated at random and a build server's shared-memory file. The recipe sets `DOTNET_GENERATE_ASPNET_CERTIFICATE=false` and the
 build-server-off keys for ITS steps only (`stacks.csharp.env`, added to the box environment through `agentEnv`'s `extra`); nothing is excluded from the hash, and two runs hash identically. Session boxes keep the defaults. The Node
-snapshot is not reproducible (npm's cache index carries timestamps), so a registered hash identifies one run; it was made before the node pin step was added to the recipe, so its record has no `steps`. A snapshot is registered once
-(`registerSnapshot`); a stack is never replaced.
+snapshot is not reproducible (npm's cache index carries timestamps), so a registered hash identifies ONE run and nothing reproduces it: three runs of the same recipe the same day gave `6b2e045ff624` (the first registration, made before the recipe had the node pin step, so its
+record had no `steps`; withdrawn), `60cf1606bd68` (a check run, not registered) and `39dbc8f2aaf4` (registered), all with the same four packages and the same size class. What is pinned is the package list and the
+versions, not the bytes; the registered hash is what every session's seeded copy is re-hashed against. A snapshot is registered once (`registerSnapshot` never replaces a stack): the replacement was a dated withdrawal
+commit, then a new registration (review m7). The directories of the other two runs stay under `~/rsd/minigit/toolchains/` unused.
 
 **Seams of E2's files, after the E2 merge.** Seam 2: `BUILD_SERVERS_OFF` is exported from `sandbox.mjs` and no longer part of `agentEnv`'s base or `AGENT_ENV_KEYS`; the bare box runs with the build servers at their defaults
 (`test/build-servers.test.mjs`, including an effect test that a background process ends with the box). Seam 3: a piped tunnel writes one `closed` line `{ host, port, bytesUp, bytesDown }`, `egressSummary` sums them per host in `bytes`,

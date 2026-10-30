@@ -39,5 +39,66 @@
       }
     ],
     "madeOn": "2026-10-30"
+  },
+  "node": {
+    "treeSha256": "39dbc8f2aaf4f873512c0ef2376992dfaae27c38daa775883003f4bb456b4158",
+    "parts": {
+      "npm": "d68577dc39c125ebf1774d64153791b9203394a0f12ba67949c298ea8b1a702b"
+    },
+    "sizeBytes": 40095863,
+    "packages": [
+      {
+        "ecosystem": "npm",
+        "name": "@typescript/typescript-linux-x64",
+        "version": "7.0.2"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "@types/node",
+        "version": "26.6.6"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "typescript",
+        "version": "7.0.2"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "undici-types",
+        "version": "8.9.0"
+      }
+    ],
+    "resolved": {
+      "TYPES_NODE": "26.6.6"
+    },
+    "steps": [
+      {
+        "argv": [
+          "node",
+          "--version"
+        ],
+        "stdout": "v26.12.1"
+      },
+      {
+        "argv": [
+          "npm",
+          "init",
+          "-y"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "npm",
+          "install",
+          "--no-audit",
+          "--no-fund",
+          "typescript@7.0.2",
+          "@types/node@26.6.6"
+        ],
+        "stdout": null
+      }
+    ],
+    "madeOn": "2026-10-30"
   }
 }
