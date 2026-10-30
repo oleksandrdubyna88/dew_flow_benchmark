@@ -33,3 +33,9 @@ test('Only_the_verdicts_of_one_session_reach_its_outcome_and_prose_is_ignored', 
   assert.deepEqual(handVerdictsFor(TEXT, 'zzzzzz'), []);
   assert.deepEqual(parseAmendments('# only a header\n\nsome prose that is not a line\n').malformed, []);
 });
+
+test('A_budget_raise_line_is_parsed_and_a_malformed_one_is_reported', () => {
+  const parsed = parseAmendments('2026-11-05 | budget-raise | pair:2 | n:2 | usd:13.2 | the re-runs of pair 2\n2026-11-05 | budget-raise | pair:9 | n:2 | usd:13.2 | x\n2026-11-05 | budget-raise | pair:1 | n:2 | 13.2 | x');
+  assert.deepEqual(parsed.raises, [{ date: '2026-11-05', pair: 2, n: 2, usd: 13.2, reason: 'the re-runs of pair 2' }]);
+  assert.equal(parsed.malformed.length, 2, 'a pair outside 1-3 and a missing usd: field are reported, never counted');
+});

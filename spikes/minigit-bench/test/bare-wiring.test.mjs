@@ -32,12 +32,13 @@ async function wiring({ map: over = {}, amendments = AMENDMENTS } = {}) {
   const home = tmpDir('home');
   const seriesDir = path.join(tmpDir('rsd'), 's-20261030-ab12');
   mkdirSync(seriesDir, { recursive: true });
-  const map = openSeries({
+  const { sessions = {}, ...fields } = over;
+  const map = { ...openSeries({
     seriesId: 's-20261030-ab12', seedSha256: sha256(SEED), harnessIdentity: (await harnessIdentity(repo.repo)).value, preregTag: TAG, preregCommit: repo.sha, pins: stacks.pins,
     stacksSha256: sha256(text(path.join(inputs, 'stacks.json'))), pricesFile: 'prices-2026-10-29.json', pricesSha256: sha256(text(path.join(inputs, 'prices-2026-10-29.json'))),
     snapshots: { csharp: SNAPSHOTS.csharp.treeSha256, node: SNAPSHOTS.node.treeSha256 }, snapshotDirs: { csharp: '/nowhere/cs', node: '/nowhere/nd' },
-    claude: { path: '/nowhere/claude-2.1.310', sha256: 'x', version: '2.1.310' }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 }, ...over,
-  });
+    claude: { path: '/nowhere/claude-2.1.310', sha256: 'x', version: '2.1.310' }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 }, ...fields,
+  }), sessions };
   writeRunMap(path.join(seriesDir, 'run-map.json'), map);
   return { ...repo, inputs, home, seriesDir, map, runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson') };
 }
@@ -108,4 +109,54 @@ test('A_changed_harness_without_an_accepting_amendment_line_is_refused', async (
   assert.match(r.out, /amendments\.md has no line dated 2026-11-02 that names harness:/);
   assert.equal(readRunMap(w.runMapFile).value.harnessAccepted, undefined, 'a refused acceptance writes nothing');
   assert.equal(existsSync(w.ledgerFile), false);
+});
+
+// ---- the limits of the series (review m2) -------------------------------------------------------------------------------------------
+
+const run = async (w, extra = []) => {
+  const lines = [];
+  const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home });
+  return { code, out: lines.join('\n') };
+};
+
+test('Every_run_checks_the_run_map_caps_and_budgets_against_the_registered_values', async () => {
+  const control = await run(await wiring());
+  assert.doesNotMatch(control.out, /refused/, `control: the registered values pass: ${control.out}`);
+  const tampered = {
+    'caps differ': { caps: { ...BARE_CAPS, capUsd: 60 } },
+    'bareBudgetUsd is 400': { bareBudgetUsd: 400 },
+    'ceilingUsd is 5000': { ceilingUsd: 5000 },
+  };
+  for (const [why, map] of Object.entries(tampered)) {
+    const r = await run(await wiring({ map }));
+    assert.equal(r.code, 4, why);
+    assert.match(r.out, /run refused: the run-map .*registered/, `${why}: ${r.out}`);
+  }
+});
+
+const RAISE = '2026-11-05 | budget-raise | pair:1 | n:2 | usd:13.2 | the two v1 voids of pair 1 are re-run';
+const startedPair1 = { sessions: { aaaaaa: { rid: 'aaaaaa', pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', status: 'ran', data: false } } };
+
+async function budgetOf({ amendments, map = startedPair1, pair = 1 }) {
+  const w = await wiring({ amendments, map });
+  return buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home } });
+}
+
+test('The_bare_budget_is_raised_once_by_the_worst_case_of_the_re_runs_of_a_pair_already_started_as_a_dated_line', async () => {
+  const plain = await budgetOf({});
+  assert.equal(plain.value.ctx.bareBudgetUsd, 40, 'no line, no raise');
+  const raised = await budgetOf({ amendments: `${AMENDMENTS}${RAISE}\n` });
+  assert.equal(raised.ok, true, raised.reason);
+  assert.equal(raised.value.ctx.bareBudgetUsd, 53.2, '40 + 2 re-runs x 1.1 x $6');
+  const other = await budgetOf({ amendments: `${AMENDMENTS}${RAISE}\n`, pair: 2 });
+  assert.equal(other.value.ctx.bareBudgetUsd, 40, 'the raise finishes the re-runs of ITS pair only');
+  const wrong = await budgetOf({ amendments: `${AMENDMENTS}2026-11-05 | budget-raise | pair:1 | n:2 | usd:30 | more room\n` });
+  assert.equal(wrong.ok, false);
+  assert.match(wrong.reason, /budget-raise.*13\.2/, 'only the worst case of the re-runs, never a free amount');
+  const twice = await budgetOf({ amendments: `${AMENDMENTS}${RAISE}\n2026-11-06 | budget-raise | pair:1 | n:1 | usd:6.6 | once more\n` });
+  assert.equal(twice.ok, false);
+  assert.match(twice.reason, /raised once/, 'the $40 is raised ONCE');
+  const notStarted = await budgetOf({ amendments: `${AMENDMENTS}${RAISE}\n`, map: {} });
+  assert.equal(notStarted.ok, false);
+  assert.match(notStarted.reason, /already started/, 'a pair that has not started has no re-runs to finish');
 });

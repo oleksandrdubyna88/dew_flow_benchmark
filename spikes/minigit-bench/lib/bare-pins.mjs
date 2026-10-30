@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { limitsProblem } from './bare-limits.mjs';
 import { appendLedger } from './ledger.mjs';
 import { harnessIdentity } from './prereg-guard.mjs';
 import { fail, ok } from './result.mjs';
@@ -55,10 +56,12 @@ function recordAcceptance({ map, accepted, runMapFile, ledgerFile, now }) {
 }
 
 /**
- * The pin check of a run or a resume: what is on disk against the run-map; a series stop refuses; a changed harness is accepted only through `acceptHarness` and a dated
+ * The pin check of a run or a resume: the run-map's caps and budgets against the registered ones (review m2); what is on disk against the run-map; a series stop refuses; a changed harness is accepted only through `acceptHarness` and a dated
  * amendment line, and then recorded. -> `ok({ map, current })` | `fail(reason)`.
  */
 export async function checkPins({ map, inputsDir, repo, acceptHarness = null, runMapFile, ledgerFile, now = Date.now }) {
+  const limits = limitsProblem(map);
+  if (limits) return fail(limits);
   const current = await currentFromDisk({ map, inputsDir, repo });
   const amendments = readIf(path.join(inputsDir, 'amendments.md'))?.toString('utf8') ?? '';
   const checked = checkResumable({ map, current, acceptHarness, amendments });

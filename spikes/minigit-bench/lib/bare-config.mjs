@@ -11,6 +11,7 @@ import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasStore } from './alias-store.mjs';
 import { handVerdictsFor } from './amendments.mjs';
 import { createSampler, liveSessionDirs, spinProbe, startPhaseSampler } from './cpu-sampler.mjs';
+import { effectiveBudget } from './bare-limits.mjs';
 import { fetchInputs } from './fetch-inputs.mjs';
 import { loadStacks } from './host-checks.mjs';
 import { endCell, realProcApi } from './janitor.mjs';
@@ -91,6 +92,9 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams =
   if (!quiet.ok) return quiet;
   const token = paid ? readSecretFile({ home, parts: TOKEN_FILE_PARTS, label: 'token' }) : ok('not read in a dry run');
   if (!token.ok) return token;
+  const amendmentsText = existsSync(path.join(inputsDir, 'amendments.md')) ? readFileSync(path.join(inputsDir, 'amendments.md'), 'utf8') : '';
+  const budget = effectiveBudget({ map, amendmentsText, pair });
+  if (!budget.ok) return budget;
   const registered = readJson(path.join(inputsDir, 'cache-snapshots.json'));
   const snapshots = Object.fromEntries(Object.entries(map.snapshotDirs).map(([s, dir]) => [s, { dir, parts: registered[s].parts }]));
   const seedFile = path.join(inputsDir, 'seed.txt');
@@ -102,9 +106,9 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams =
     packageRules: readJson(path.join(inputsDir, 'package-flags.json')).rules, claudeBinary: map.claude.path, cliVersion: map.pins.claude, nodeDir: path.dirname(path.dirname(process.execPath)),
     tsDir: path.join(home, ...stacks.value.typescriptToolchainDir), token: token.value, prices: policy.value.table, table: policy.value.table, policy: policy.value.policy,
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
-    caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: map.bareBudgetUsd, harnessIdentity: identity.value, preregTag: map.preregTag, spin: map.spin,
+    caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: budget.value.bareBudgetUsd, harnessIdentity: identity.value, preregTag: map.preregTag, spin: map.spin,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),
-    handVerdictsFor: rid => handVerdictsFor(existsSync(path.join(inputsDir, 'amendments.md')) ? readFileSync(path.join(inputsDir, 'amendments.md'), 'utf8') : '', rid),
+    handVerdictsFor: rid => handVerdictsFor(amendmentsText, rid),
     abortReason: () => abort.reason, abortExit: () => abort.exit, inputsDir,
   };
   const mach = machine({ map, thresholds: quiet.value, seriesDir, rsdRoot, acceptNoisy: args.acceptNoisy, now: Date.now });
