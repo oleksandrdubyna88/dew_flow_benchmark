@@ -95,9 +95,19 @@ test('No_prefix_or_default_row_stands_in_for_an_id', () => {
   assert.equal(priceFor(t, 'claude-opus-5-5').known, true);
 });
 
+test('The_opus_4_8_row_is_the_refusal_fallbacks_price_and_reproduces_the_re_smokes_own_figure', () => {
+  // the CLI falls back to claude-opus-4-8 when a model refuses (stream subtype model_refusal_fallback). The re-smoke 20261030T002834Z reported
+  // modelUsage claude-opus-4-8 costUSD 0.116565 for 2 input, 1009 output and 9133 one-hour cache-write tokens: 2 x 5 + 1009 x 25 + 9133 x 10 per MTok.
+  const row = priceFor(table(), 'claude-opus-4-8');
+  assert.equal(row.known, true);
+  assert.deepEqual([row.value.input, row.value.output, row.value.cacheRead, row.value.cacheWrite5m, row.value.cacheWrite1h], [5, 25, 0.5, 6.25, 10]);
+  near(priceUsage(row.value, { input: 2, output: 1009, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 9133 }), 0.116565, 1e-9);
+  assert.match(dated.notes.join(' '), /claude-opus-4-8.*2026-10-30/);
+});
+
 test('The_dated_table_loads_and_carries_the_fable_row', () => {
   const t = table();
-  assert.equal(t.models.size, 4);
+  assert.equal(t.models.size, 5, 'opus 5.5, sonnet 5.5, haiku 4.5, fable 5.1 and the opus 4.8 refusal fallback');
   assert.equal(t.readOn, '2026-10-29');
   const fable = priceFor(t, 'claude-fable-5-1').value;
   assert.deepEqual(

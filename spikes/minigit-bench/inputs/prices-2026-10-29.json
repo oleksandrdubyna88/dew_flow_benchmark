@@ -5,13 +5,15 @@
     { "modelId": "claude-opus-5-5", "input": 4, "output": 20, "cacheRead": 0.20, "cacheWrite5m": 5, "cacheWrite1h": 8 },
     { "modelId": "claude-sonnet-5-5", "input": 2, "output": 10, "cacheRead": 0.10, "cacheWrite5m": 2.50, "cacheWrite1h": 4 },
     { "modelId": "claude-haiku-4-5-20251001", "input": 1, "output": 5, "cacheRead": 0.10, "cacheWrite5m": 1.25, "cacheWrite1h": 2 },
-    { "modelId": "claude-fable-5-1", "input": 10, "output": 50, "cacheRead": 0.25, "cacheWrite5m": 12.50, "cacheWrite1h": 20 }
+    { "modelId": "claude-fable-5-1", "input": 10, "output": 50, "cacheRead": 0.25, "cacheWrite5m": 12.50, "cacheWrite1h": 20 },
+    { "modelId": "claude-opus-4-8", "input": 5, "output": 25, "cacheRead": 0.50, "cacheWrite5m": 6.25, "cacheWrite1h": 10 }
   ],
   "cliRates": [
     { "modelId": "claude-sonnet-5-5", "cliVersion": "2.1.289", "cacheRead": 0.20, "observed": "pilot run 01a13812, the B2 cell on the OpenHands pilot task, 2026-10-14: claude 2.1.289 reported Sonnet 5.5 at $1.10243, exactly its tokens with a cache hit at $0.20/M; the pricing page, re-read the same night, says $0.10/M (0.05x input, footnote 2)" },
     { "modelId": "claude-sonnet-5-5", "cliVersion": "2.1.310", "cacheRead": 0.10, "observed": "E1.S3 capture, 2026-10-29, claude 2.1.310: the Sonnet child's modelUsage costUSD 0.0168287 equals the published rate ($0.10/M cache read) and not the $0.20 view (0.0173619); the 2.1.289 observation does not carry over to this version" }
   ],
   "notes": [
+    "The claude-opus-4-8 row ($5 in / $25 out / $0.50 read / $6.25 5m write / $10 1h write) was added on 2026-10-30, read from https://platform.claude.com/docs/en/about-claude/pricing (row 'Claude Opus 4.8'). It is the model the CLI falls back to when a model refuses (stream subtype model_refusal_fallback, fallback_model claude-opus-4-8). Checked against the E2.S2 re-smoke 20261030T002834Z: modelUsage claude-opus-4-8 costUSD 0.116565 = 2 x 5 + 1009 x 25 + 9133 one-hour writes x 10 per MTok, exactly. The file name stays (it is the pinned name); readOn stays the day the table was first read.",
     "The Opus 5.5, Sonnet 5.5 and Haiku 4.5 rows are the rows of research/scout-calibration/prices.json as read on 2026-10-12; they were NOT re-read on 2026-10-29.",
     "The claude-fable-5-1 row ($10 in / $50 out / $0.25 read / $12.50 5m write / $20 1h write) was read from the pricing page on 2026-10-29 (parent plan section 9).",
     "cliRates are scoped to the CLI version they were observed on: the 2.1.289 entry is research/scout-calibration/prices.json:10 unchanged (the pilot), the 2.1.310 entry is the E1.S3 capture (A-P1 refuted the old rate for that version). A CLI version with no entry is billed as published.",
