@@ -1,12 +1,13 @@
 // The credential broker (E2.S2 D-16, D-17): the only road from the agent's box to the API. It listens on a unix socket the box reaches as
 // plain HTTP on its own loopback; it replaces `Authorization` with the REAL token (read by the harness, held here, never in the box),
 // forwards every other request header (an open list: anthropic-beta carries the OAuth capability), streams the answer back as it arrives,
-// follows no redirect, and enforces the cell's own budget (budget.mjs) so a Bash call that POSTs at the door cannot spend past the cap.
+// follows no redirect, reads the JSON body first and refuses one that makes the API reach the network for the agent (broker-body.mjs), and enforces the cell's own budget (budget.mjs) so a Bash call that POSTs at the door cannot spend past the cap.
 // The log names header NAMES and counts; it never carries a header value, a body or the token.
 import { chmodSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import { StringDecoder } from 'node:string_decoder';
+import { MAX_BODY_BYTES, bodyDecision, encodingDecision } from './broker-body.mjs';
 import { routeDecision } from './broker-routes.mjs';
 import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from './budget.mjs';
 
@@ -65,8 +66,8 @@ function readJsonBody(chunks) {
 /** The reason a finished answer was not billed, or null: an error status with the API's JSON error body (an overloaded or rate-limited call is free). */
 const unbilledAnswer = (status, apiError) => (status >= 400 && apiError ? 'upstream error' : null);
 
-/** Refusals by their fixed reason word: `cap` (the cell's budget) and `path` (off the route list). A line with another reason is counted under it. */
-export const REFUSAL_REASONS = Object.freeze(['cap', 'path']);
+/** Refusals by their fixed reason word: `cap` (the cell's budget), `path` (off the route list) and `body` (a body that would make the API reach the network). A line with another reason is counted under it. */
+export const REFUSAL_REASONS = Object.freeze(['cap', 'path', 'body']);
 const refusedByReason = lines => lines.filter(l => l.event === 'refused')
   .reduce((acc, l) => ({ ...acc, [l.reason]: (acc[l.reason] ?? 0) + 1 }), Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])));
 
@@ -91,6 +92,7 @@ export function brokerView(lines) {
 }
 
 const PATH_ERROR = JSON.stringify({ type: 'error', error: { type: 'permission_error', message: 'broker: this request is not on the broker\'s route list' } });
+const BODY_ERROR = why => JSON.stringify({ type: 'error', error: { type: 'permission_error', message: `broker: this request body is not forwarded (${why})` } });
 const API_ERROR = cap => JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: `broker: the cell's budget (${cap} USD) is spent` } });
 const hostHeader = u => (u.port === 443 || u.port === 80 ? u.host : `${u.host}:${u.port}`);
 const listen = (server, socketPath) => new Promise((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
@@ -114,6 +116,13 @@ function makeLedger({ budget, prices, cliVersion, log }) {
       seq += 1;
       refuse('path');
       emit({ seq, event: 'refused', reason: 'path', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why });
+      return seq;
+    },
+    /** A body the broker will not forward: counted and logged with its own seq (the offending key or type, never a value), no reservation -> the seq. */
+    refuseBody(req, names, { why, offending = null }) {
+      seq += 1;
+      refuse('body');
+      emit({ seq, event: 'refused', reason: 'body', method: String(req.method).slice(0, 20), path: String(req.url).slice(0, 200), headerNames: names, why, ...(offending === null ? {} : { offending }) });
       return seq;
     },
     /** Admit or refuse the next request -> `{ entry } | { refusal: { seq, why } }`. An admitted one holds a reservation until it settles. */
@@ -151,10 +160,35 @@ function makeLedger({ budget, prices, cliVersion, log }) {
   };
 }
 
+/** The request's whole body, at most `limit` bytes -> `{ body } | { tooLarge: true } | { aborted: true }`. Over the limit stops reading. */
+function readBody(req, limit) {
+  return new Promise(resolve => {
+    if (Number(req.headers['content-length']) > limit) return resolve({ tooLarge: true });
+    const chunks = [];
+    let size = 0;
+    const done = r => { req.off('data', onData); resolve(r); };
+    const onData = chunk => {
+      size += chunk.length;
+      if (size > limit) return done({ tooLarge: true });
+      chunks.push(chunk);
+    };
+    req.on('data', onData);
+    req.once('end', () => done({ body: Buffer.concat(chunks) }));
+    req.once('error', () => done({ aborted: true }));
+    req.once('close', () => { if (!req.complete) done({ aborted: true }); });
+  });
+}
+
+/** `{ allow: true } | { allow: false, why, offending? }`: the encoding, then the body. */
+function refusalOf(req, body) {
+  const enc = encodingDecision(req.headers);
+  return enc.allow ? bodyDecision(body) : enc;
+}
+
 /** Forward one admitted request to the upstream, signed, and relay the answer. */
-function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) {
+function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names, body) {
   const { entry } = opened;
-  const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}` };
+  const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}`, 'content-length': String(body.length) };
   ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
   const progress = { partial: null }; // set once the answer has started: reads what the usage parser has so far
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
@@ -168,8 +202,7 @@ function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) 
     if (!res.headersSent) res.writeHead(502, { connection: 'close' });
     res.end();
   });
-  req.on('error', () => up.destroy());
-  req.pipe(up);
+  up.end(body); // the exact bytes that were read and checked
 }
 
 /**
@@ -224,7 +257,7 @@ function answer(upRes, res, entry, ledger, progress) {
  */
 export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTREAM, budget, prices, cliVersion, log, timeoutMs = UPSTREAM_IDLE_MS }) {
   const ledger = makeLedger({ budget, prices, cliVersion, log });
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const names = Object.keys(req.headers).sort();
     const route = routeDecision(req.method, req.url);
     if (!route.allow) {
@@ -234,15 +267,23 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
       res.end(PATH_ERROR);
       return;
     }
+    const read = await readBody(req, MAX_BODY_BYTES);
+    if (read.aborted) { ledger.emit({ event: 'body-aborted', method: req.method, path: req.url }); return; }
+    const verdict = read.tooLarge ? { allow: false, why: `the body is over ${MAX_BODY_BYTES} bytes` } : refusalOf(req, read.body);
+    if (!verdict.allow) {
+      ledger.refuseBody(req, names, verdict);
+      res.writeHead(read.tooLarge ? 413 : 403, { 'content-type': 'application/json', connection: 'close' });
+      res.end(BODY_ERROR(verdict.why), () => (read.tooLarge ? req.destroy() : undefined));
+      return;
+    }
     const opened = ledger.open();
     if (opened.refusal) {
       ledger.emit({ ...opened.refusal, event: 'refused', method: req.method, path: req.url, headerNames: names });
-      req.resume();
       res.writeHead(429, { 'content-type': 'application/json', connection: 'close' });
       res.end(API_ERROR(budget.capUsd));
       return;
     }
-    relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names);
+    relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names, read.body);
   });
   rmSync(socketPath, { force: true });
   await listen(server, socketPath);

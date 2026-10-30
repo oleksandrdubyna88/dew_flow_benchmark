@@ -55,6 +55,14 @@ const withChecks = over => s => ({ ...s, checks: { ...s.checks, ...over } });
 const withSamplers = over => s => ({ ...s, meta: { ...s.meta, samplers: { ...s.meta.samplers, ...over } } });
 const CLEAN_SCAN = { scanned: 3, hits: [], tooLarge: [], links: [] };
 
+test('B_S2_is_refuted_when_the_broker_refused_a_body_of_the_CLIs_own_because_that_means_the_CLI_sends_a_server_tool', () => {
+  const refusedBody = { t: '2026-10-30T00:00:00.000Z', seq: 99, event: 'refused', reason: 'body', offending: 'tools[3].type=web_search_20250305' };
+  const r = verdictOf('B-S2', s => ({ ...s, brokerLines: [...s.brokerLines, refusedBody] }));
+  assert.equal(r.verdict, 'refuted');
+  assert.match(r.observed, /"body":1/);
+  assert.equal(verdictOf('B-S2', s => s).verdict, 'holds', 'control: the committed fixture has none');
+});
+
 test('B_S3_holds_only_with_enough_samples_no_real_token_in_cmdline_or_environ_the_positive_control_and_a_clean_scan_with_no_link', () => {
   const holds = mutate => verdictOf('B-S3', mutate);
   const base = s => withChecks({ realTokenScan: CLEAN_SCAN })(withSamplers({ samples: 9, realInCmdline: 0, realInEnviron: 0, dummyInEnviron: 3 })(s));

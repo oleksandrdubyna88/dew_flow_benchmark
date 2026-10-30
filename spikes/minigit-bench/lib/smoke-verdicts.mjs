@@ -20,7 +20,7 @@ export const SMOKE_ASSUMPTIONS = Object.freeze([
   ['B-R2', 'init.tools lacks exactly INIT_UNREPORTED'],
   ['B-N1', 'every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report'],
   ['B-N2', 'the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box\'s own loopback'],
-  ['B-S2', 'every API call went through the broker: broker.ndjson holds every api_request O saw, and api.anthropic.com was never allowed'],
+  ['B-S2', 'every API call went through the broker: broker.ndjson holds every api_request O saw, the broker refused none of the CLI\'s own bodies (0 `body` refusals: it sends no server tool), and api.anthropic.com was never allowed'],
   ['B-S3', 'the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree'],
   ['B-S3b', 'the in-box half: the CLI\'s own environ, read by the session\'s Bash, held the dummy (RETIRED: not exercised by design, see its row)'],
   ['B-$1', 'B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O\'s usd'],
@@ -74,7 +74,8 @@ const ruleN1 = v => {
 const ruleS2 = v => {
   const o = liveSumOf(v.apiRecords.map(r => ({ ...r, receivedAt: 0 }))).requests;
   const apiAllowed = Object.keys(v.egress.allowed).includes('api.anthropic.com');
-  return verdictOf(o > 0 && v.B.forwarded >= o && !apiAllowed, `O saw ${o} api_request record(s); the broker forwarded ${v.B.forwarded} and settled ${v.B.settled.length}; api.anthropic.com allowed at the proxy: ${apiAllowed}`);
+  const bodyRefused = v.B.refusedByReason.body;
+  return verdictOf(o > 0 && v.B.forwarded >= o && !apiAllowed && bodyRefused === 0, `O saw ${o} api_request record(s); the broker forwarded ${v.B.forwarded} and settled ${v.B.settled.length}; refused by reason ${JSON.stringify(v.B.refusedByReason)} (a \`body\` refusal is the CLI's own request carrying a server tool, a connector or a URL source); api.anthropic.com allowed at the proxy: ${apiAllowed}`);
 };
 
 const tokenTxtWord = t => {

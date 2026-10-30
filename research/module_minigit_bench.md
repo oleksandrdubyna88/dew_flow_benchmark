@@ -304,7 +304,19 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   OAuth capability), drops `accept-encoding` so the usage parser reads plain SSE, streams the answer back chunk by chunk, follows no
   redirect (`502`). **It forwards and signs only `POST /v1/messages` and `POST /v1/messages/count_tokens`** (a query is allowed; the match is
   on the raw request line, origin-form only, so `..`, an encoded slash, another case, a trailing slash or an absolute-form target is off the
-  list); anything else is `403`, is never forwarded or signed, and is a `refused` ledger line with `reason: "path"`. A budget refusal is a
+  list); anything else is `403`, is never forwarded or signed, and is a `refused` ledger line with `reason: "path"`. **It also reads the JSON body first**
+  (`lib/broker-body.mjs`; at most 8 MiB, over that is `413`) and forwards the exact bytes it read, with their own `content-length`. A request is refused
+  (`403`, a `refused` line with `reason: "body"` and the offending key or type, never a value) when: a `tools[]` entry has a `type` that is present and
+  is not `"custom"` (every server tool: `web_search_*`, `web_fetch_*`, `code_execution_*`, `computer_*`, `bash_*`, `text_editor_*`, `memory_*`, and any
+  type added later: the rule is closed on what is present, not a list of known names); the body has `mcp_servers` or `container`; an image or
+  document `source` is of `type: "url"` anywhere in `messages` or `system` (the API would fetch it); the body is not UTF-8, not one JSON object, or
+  repeats a key at any depth (two parsers could read it differently); or it carries a `content-encoding`. A refused body holds no reservation. The
+  broker signs with the account's token, so a server tool in a forwarded body would give a prompt-injected agent the API's reach (web search, a
+  fetch of an attacker URL carrying data in its query) through a door the proxy never sees. **What the bare arm sends:** the box launches the CLI with
+  `--tools Agent,Bash,Read,Edit,Write,Glob,Grep,TodoWrite` and the init read-back refuses any other tool (a test adds `WebFetch` and sees the
+  mismatch), so `WebSearch` and `WebFetch` are not available to the bare agent and nothing in `lib/launch.mjs` needed removing; the smoke's B-S2 now
+  also requires 0 `body` refusals, so a CLI request carrying a server tool shows as a refuted verdict, not as a silent hole. The process arm (E2.S3)
+  adds `ToolSearch`: whether that is a client tool or a server `tool_search_*` type has to be read from its first smoke. A budget refusal is a
   `refused` line with `reason: "cap"` (`429`, an API-shaped `rate_limit_error`); the summary and `brokerView` keep `refusedByReason` beside the
   total, never one bare count. It holds the cell's own budget: a request reserves the larger of the floor (0.05) and the largest charge
   settled so far in the cell (never sized from `max_tokens`, which the CLI sets to 32k-128k), is admitted while spend plus reservations plus
@@ -405,6 +417,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | An abandoned request is drained and priced before the ledger is read (before: recorded as 0 spent) | `broker.test.mjs`, `session-launch.test.mjs` |
 | A link planted at `box/out/audit.ndjson` is refused at every host-side read (before: its target was copied as the audit) | `agent-files-sites.test.mjs`, `agent-files.test.mjs` |
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
+| A body with a `web_search_*` (or any other non-`custom`) tool, `mcp_servers`, `container`, a URL source, a duplicate key or a content-encoding is `403` with `reason: "body"`, never forwarded, signed or reserved; an allowed body is forwarded byte for byte | `broker-body.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
