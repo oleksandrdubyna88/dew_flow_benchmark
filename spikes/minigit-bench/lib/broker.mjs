@@ -117,11 +117,15 @@ function makeLedger({ budget, prices, cliVersion, log }) {
   const counts = { upstreamRequests: 0, refusedByReason: Object.fromEntries(REFUSAL_REASONS.map(r => [r, 0])) };
   const refusedTotal = () => Object.values(counts.refusedByReason).reduce((a, n) => a + n, 0);
   const refuse = reason => { counts.refusedByReason = { ...counts.refusedByReason, [reason]: (counts.refusedByReason[reason] ?? 0) + 1 }; };
+  let sealed = false;
   const emit = line => {
+    if (sealed) return; // after the seal no ledger line is written: the collector has read the ledger and written broker.json from it
     try { log({ t: new Date().toISOString(), ...line }); } catch (e) { process.stderr.write(`broker: the log sink failed: ${e.message}\n`); }
   };
   return {
     emit,
+    /** From now on `emit` writes nothing; state still moves, so a late settlement cannot throw, it just stays out of the record. */
+    seal() { sealed = true; },
     summary: () => ({ ...counts, refused: refusedTotal(), ...state, ...capStatus({ spentUsd: state.spentUsd, capUsd: budget.capUsd }), capUsd: budget.capUsd, overCapFactor: OVER_CAP_FACTOR }),
     /** A request off the route list: counted and logged with its own seq, no reservation, nothing forwarded -> the seq. */
     refusePath(req, names, why) {
@@ -198,13 +202,15 @@ function refusalOf(req, body) {
 }
 
 /** Forward one admitted request to the upstream, signed, and relay the answer. */
-function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names, body) {
+function relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, body) {
   const { entry } = opened;
   const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}`, 'content-length': String(body.length) };
   ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
   const progress = { partial: null }; // set once the answer has started: reads what the usage parser has so far
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
     upRes => answer(upRes, res, entry, ledger, progress, isCountTokens(req.url)));
+  live.add(up);
+  up.on('close', () => live.delete(up));
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
   let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
   up.on('finish', () => { sent = true; });
@@ -263,12 +269,13 @@ function answer(upRes, res, entry, ledger, progress, countTokens) {
 }
 
 /**
- * Start the broker -> `{ server, summary(), drain(timeoutMs), close() }`. `drain` waits until nothing is in flight: the upstream bills a request
- * whatever the client does, so a collector must wait for it before it records what the cell spent. `token` is a value; `budget` is `{ capUsd, reserveUsd }`; `prices` a loaded table;
+ * Start the broker -> `{ server, summary(), drain(timeoutMs), seal(), close() }`. `drain` waits until nothing is in flight: the upstream bills a request
+ * whatever the client does, so a collector must wait for it before it records what the cell spent; `seal()` then ends the ledger (see there), and `close()` seals if the collector did not. `token` is a value; `budget` is `{ capUsd, reserveUsd }`; `prices` a loaded table;
  * `log(line)` receives every ledger line. `upstream` is injectable so tests run a local stub; the smoke runs the real one.
  */
 export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTREAM, budget, prices, cliVersion, log, timeoutMs = UPSTREAM_IDLE_MS }) {
   const ledger = makeLedger({ budget, prices, cliVersion, log });
+  const live = new Set(); // the upstream requests in flight
   const server = http.createServer(async (req, res) => {
     const names = Object.keys(req.headers).sort();
     const route = routeDecision(req.method, req.url);
@@ -295,18 +302,37 @@ export async function brokerServer({ socketPath, token, upstream = DEFAULT_UPSTR
       res.end(API_ERROR(budget.capUsd));
       return;
     }
-    relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names, read.body);
+    relay({ ledger, upstream, token, timeoutMs, live }, req, res, opened, names, read.body);
   });
   rmSync(socketPath, { force: true });
   await listen(server, socketPath);
   chmodSync(socketPath, 0o600);
   let closed = false;
+  let sealedAs = null;
+  const round9 = n => Math.round(n * 1e9) / 1e9;
+  /**
+   * The end of the ledger: what was settled, and what is still in flight at the drain limit counted at its reservation, so B = settled spend + unsettled
+   * reservations and `lowerBound` says it may be more (the API bills what it read of a request nobody waited for). The summary line is the last line written;
+   * then the ledger is silent and every request still in flight is destroyed, so nothing settles into a record that was already written.
+   */
+  const seal = () => {
+    if (sealedAs !== null) return sealedAs;
+    const s = ledger.summary();
+    const unsettled = { count: s.inFlight, reservedUsd: s.reservedUsd };
+    const boundUsd = round9(s.spentUsd + s.reservedUsd);
+    const summary = { ...s, spentUsd: boundUsd, ...capStatus({ spentUsd: boundUsd, capUsd: budget.capUsd }) };
+    ledger.emit({ event: 'summary', ...summary, settledUsd: s.spentUsd, unsettled, lowerBound: unsettled.count > 0, sealed: true });
+    ledger.seal();
+    live.forEach(up => up.destroy());
+    sealedAs = Object.freeze({ unsettled, summary, lowerBound: unsettled.count > 0 });
+    return sealedAs;
+  };
   return {
-    server, summary: ledger.summary, drain: ledger.drain,
+    server, summary: ledger.summary, drain: ledger.drain, seal,
     close: async () => {
       if (closed) return;
       closed = true;
-      ledger.emit({ event: 'summary', ...ledger.summary() });
+      seal();
       await new Promise(resolve => { server.close(() => resolve()); server.closeAllConnections(); });
       rmSync(socketPath, { force: true });
     },

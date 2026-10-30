@@ -173,7 +173,9 @@ const INIT = over => ({
 const RESULT = { type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.01 };
 
 /** Fake deps. Each server pushes its name to `order` when closed; `script(child, layout)` plays the box. */
-function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null, drain = async () => ({ drained: true, inFlight: 0, reservedUsd: 0 }) } = {}) {
+function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null, drain = async () => ({ drained: true, inFlight: 0, reservedUsd: 0 }), unsettled = null } = {}) {
+  const count = unsettled?.count ?? 0;
+  const seal = () => ({ unsettled: unsettled ?? { count: 0, reservedUsd: 0 }, lowerBound: count > 0, summary: { spentUsd: unsettled?.reservedUsd ?? 0, reservedUsd: unsettled?.reservedUsd ?? 0, upstreamRequests: 0, refused: 0, overCap: false, overshootUsd: 0 } });
   const server = (name, extra = {}) => ({ ...extra, close: async () => { order.push(name); if (closeThrows === name) throw new Error(`${name} close failed`); } });
   const child = fakeChild();
   const spawned = [];
@@ -181,7 +183,7 @@ function fakeDeps(order, layout, { script, throwOn = {}, closeThrows = null, dra
     spawned, child,
     deps: {
       startReceiver: async () => { if (throwOn.receiver) throw new Error('listen EADDRINUSE: receiver'); return server('receiver', { port: 1, misconfigured: 0, undecodable: 0, liveSum: () => { if (throwOn.liveSum) throw new Error('liveSum threw'); return { usd: 0, requests: 0, lastAt: 0 }; } }); },
-      brokerServer: async () => server('broker', { drain, summary: () => ({ spentUsd: 0, reservedUsd: 0, upstreamRequests: 0, refused: 0, overCap: false, overshootUsd: 0 }) }),
+      brokerServer: async () => server('broker', { drain, seal, summary: () => ({ spentUsd: 0, reservedUsd: 0, upstreamRequests: 0, refused: 0, overCap: false, overshootUsd: 0 }) }),
       egressProxy: async () => { if (throwOn.proxy) throw new Error('listen EADDRINUSE: proxy socket'); return server('proxy'); },
       spawnBox: (argv, env) => { spawned.push({ argv, env }); setImmediate(() => script(child, layout)); return child; },
       endCell: async a => { order.push('endCell'); child.finish(143, null); return { cellId: a.cellId }; },
@@ -229,12 +231,14 @@ test('The_collection_drains_the_broker_before_it_writes_broker_json_and_records_
   const seen = [];
   const drain = async ms => { seen.push({ ms, brokerJsonYet: existsSync(layout.files.broker) }); return { drained: false, inFlight: 2, reservedUsd: 0.1 }; };
   const order = [];
-  const fake = fakeDeps(order, layout, { script: (c, l) => { say(c, goodInit(l), RESULT); c.finish(0); }, drain });
+  const fake = fakeDeps(order, layout, { script: (c, l) => { say(c, goodInit(l), RESULT); c.finish(0); }, drain, unsettled: { count: 2, reservedUsd: 0.1 } });
   const result = await launchSession(planFor(layout, { settleMs: 0, drainMs: 777 }), fake.deps);
   assert.equal(result.ok, true, result.reason);
   assert.deepEqual(seen, [{ ms: 777, brokerJsonYet: false }], 'drained once, with the plan\'s ceiling, before broker.json existed');
   assert.deepEqual(result.value.meta.unsettledAtClose, { count: 2, reservedUsd: 0.1 });
   assert.deepEqual(JSON.parse(readFileSync(layout.files.broker, 'utf8')).unsettledAtClose, { count: 2, reservedUsd: 0.1 });
+  assert.equal(JSON.parse(readFileSync(layout.files.broker, 'utf8')).lowerBound, true, 'B with an unsettled request is a lower bound');
+  assert.equal(result.value.meta.broker.lowerBound, true);
   assert.equal(order.includes('broker'), true, 'and the broker was closed after (the disposers run after the collection)');
 });
 
@@ -250,6 +254,32 @@ test('A_request_the_cli_abandoned_is_settled_before_the_meta_is_written', async 
   assert.equal(meta.broker.spentUsd, 0.009232, 'the abandoned request was drained and priced, not left as 0 spent');
   assert.deepEqual(meta.unsettledAtClose, { count: 0, reservedUsd: 0 });
   assert.equal(JSON.parse(readFileSync(layout.files.broker, 'utf8')).unsettled, 0);
+});
+
+test('A_request_still_streaming_at_the_drain_limit_is_reported_as_a_lower_bound_and_nothing_is_written_to_the_ledger_after_the_meta', async t => {
+  if (!sandboxGate(t)) return;
+  const layout = newSession();
+  const marks = {};
+  const stub = await stubUpstream(async (_q, res) => { // ~3 s of stream for a client that is gone; the drain limit is 100 ms
+    res.on('close', () => { marks.closedAt = Date.now(); });
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    for (const c of chunksOf(sseBody(), 6)) { if (res.destroyed) return; res.write(c); await sleep(500); }
+    res.end();
+  });
+  t.after(() => stub.close());
+  const plan = planFor(layout, { claudeBinary: stubClaude(tmpDir('stub-lb')), upstream: stub.upstream, envExtra: { STUB_ABANDON: '1' }, settleMs: 50, drainMs: 100 });
+  const result = await launchSession(plan, {});
+  assert.equal(result.ok, true, result.reason);
+  const { meta } = result.value;
+  assert.deepEqual(meta.unsettledAtClose, { count: 1, reservedUsd: 0.05 });
+  assert.equal(meta.broker.lowerBound, true);
+  assert.equal(meta.broker.spentUsd, 0.05, 'B is the settled spend (0) plus the unsettled reservation');
+  const linesAfter = readFileSync(layout.files.brokerLog, 'utf8').split('\n').filter(Boolean).length;
+  const brokerJson = JSON.parse(readFileSync(layout.files.broker, 'utf8'));
+  assert.equal(brokerJson.lowerBound, true);
+  await sleep(1200);
+  assert.equal(readFileSync(layout.files.brokerLog, 'utf8').split('\n').filter(Boolean).length, linesAfter, 'no ledger line was written after the meta');
+  assert.ok(marks.closedAt !== undefined, 'the upstream request was destroyed at the seal: its 3 s stream was not finished 1.2 s after the meta');
 });
 
 test('A_disposer_that_throws_does_not_stop_the_next_and_its_failure_is_in_meta_cleanup', async () => {

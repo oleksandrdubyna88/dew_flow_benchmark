@@ -341,6 +341,66 @@ test('Drain_returns_at_once_when_nothing_is_in_flight_and_at_the_ceiling_when_so
   }
 });
 
+/** A stub answer that streams slowly and records when its response is closed (by the broker destroying the request, or by its own end). */
+const slowStream = (marks, gapMs = 400) => async (_q, res) => {
+  res.on('close', () => { marks.closedAt = Date.now(); });
+  res.writeHead(200, { 'content-type': 'text/event-stream' });
+  for (const c of chunksOf(sseBody(), 6)) { if (res.destroyed) return; res.write(c); await sleep(gapMs); }
+  res.end();
+};
+
+test('Sealing_after_the_drain_limit_reports_settled_plus_reservations_as_a_lower_bound_destroys_the_upstream_request_and_writes_no_ledger_line_after', async () => {
+  const marks = {};
+  const stub = await stubUpstream(slowStream(marks));
+  const b = await startBroker({ stub, capUsd: 10 });
+  try {
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    const drained = await b.broker.drain(250);
+    assert.equal(drained.drained, false, 'the limit passed with the request unsettled');
+    const sealedAt = Date.now();
+    const sealed = b.broker.seal();
+    assert.deepEqual(sealed.unsettled, { count: 1, reservedUsd: 0.05 });
+    assert.equal(sealed.lowerBound, true);
+    assert.equal(sealed.summary.spentUsd, 0.05, 'B is the settled spend (0) plus the unsettled reservation');
+    const written = b.lines.length;
+    assert.equal(b.lines.at(-1).event, 'summary', 'the summary is the last line the ledger writes');
+    await sleep(900);
+    assert.ok(marks.closedAt !== undefined && marks.closedAt - sealedAt < 300, 'the upstream request was destroyed at the seal, not read to its end');
+    assert.equal(b.lines.length, written, 'no ledger line after the seal: the late settlement is silent');
+    assert.deepEqual(b.broker.seal(), sealed, 'sealing twice is the same answer');
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
+test('Close_destroys_an_in_flight_upstream_request_and_a_clean_seal_is_not_a_lower_bound', async () => {
+  const marks = {};
+  const stub = await stubUpstream(slowStream(marks, 500));
+  const b = await startBroker({ stub, capUsd: 10 });
+  try {
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    const closedAt = Date.now();
+    await b.close();
+    await sleep(300);
+    assert.ok(marks.closedAt !== undefined && marks.closedAt - closedAt < 300, 'closing the broker ended the upstream request at once');
+    assert.equal(b.lines.some(l => l.event === 'settled' && Date.parse(l.t) > closedAt), false, 'and no settlement line was written after the close');
+  } finally {
+    await stub.close();
+  }
+  const idle = await stubUpstream((_q, res) => json(res, 200, OK_JSON));
+  const clean = await startBroker({ stub: idle });
+  try {
+    await viaSocket(clean.socketPath);
+    const sealed = clean.broker.seal();
+    assert.deepEqual([sealed.lowerBound, sealed.unsettled], [false, { count: 0, reservedUsd: 0 }]);
+    assert.equal(sealed.summary.spentUsd, clean.broker.summary().spentUsd, 'with nothing unsettled B is the settled spend');
+  } finally {
+    await clean.close();
+    await idle.close();
+  }
+});
+
 test('A_response_from_a_model_the_table_does_not_know_is_charged_at_the_dearest_rates_and_the_cell_record_says_so', async () => {
   const unknown = { id: 'm', model: 'claude-unknown-9', usage: { input_tokens: 1000, output_tokens: 1000 } }; // dearest: 1000 x 10 + 1000 x 50 = 0.06
   const stub = await stubUpstream((_q, res) => json(res, 200, unknown));
