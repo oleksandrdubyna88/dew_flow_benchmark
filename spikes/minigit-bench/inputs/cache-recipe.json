@@ -6,7 +6,7 @@
   "stacks": {
     "csharp": {
       "steps": [
-        { "argv": ["dotnet", "new", "console", "--force", "--name", "snapshotapp"] },
+        { "argv": ["dotnet", "new", "console", "--force", "--output", ".", "--name", "snapshotapp"] },
         { "argv": ["dotnet", "build", "--nologo"] }
       ],
       "capture": { "nuget": "box/nuget", "dotnet": "box/home/.dotnet" }

@@ -101,7 +101,8 @@ async function inBox({ layout, nodeDir, command, timeoutMs, name }) {
   const r = await runBounded(argv[0], argv.slice(1), { env, timeoutMs });
   if (!r.ok) return r;
   if (r.value.timedOut) return fail(`\`${command.join(' ')}\` timed out after ${timeoutMs} ms`);
-  return r.value.code === 0 ? ok(r.value) : fail(`\`${command.join(' ')}\` exited ${r.value.code}: ${r.value.stderr.trim().slice(-300)}`);
+  const tail = `${r.value.stderr}\n${r.value.stdout}`.trim().slice(-600); // dotnet writes its errors to stdout
+  return r.value.code === 0 ? ok(r.value) : fail(`\`${command.join(' ')}\` exited ${r.value.code}: ${tail}`);
 }
 
 async function resolveAll({ spec = {}, ...box }) {
