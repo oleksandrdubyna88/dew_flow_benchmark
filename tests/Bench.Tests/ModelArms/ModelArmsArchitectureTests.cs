@@ -77,6 +77,7 @@ public sealed class ModelArmsArchitectureTests
         typeof(TestLogSummary), typeof(TsTestLog), typeof(CtrfScenarios), typeof(DiffStats), typeof(ObjectiveReport),
 
         // E3.S2
+        typeof(TargetEnvironment), typeof(TargetArgv), typeof(TargetWalls), typeof(GitModules),
 
         // E3.S3
 

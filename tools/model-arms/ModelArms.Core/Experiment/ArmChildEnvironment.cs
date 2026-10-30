@@ -38,8 +38,13 @@ public static class ArmChildEnvironment
     private static bool Stripped(string name) =>
         IsThisRepositorys(name) || IsSecretNotClaudes(name) || Pinned.Contains(name, StringComparer.OrdinalIgnoreCase);
 
-    private static bool IsThisRepositorys(string name) =>
+    /// <summary>This repository's own variables — <c>BENCH_*</c>, <c>COAI_*</c>, <c>ConnectionStrings__*</c> — which no child of the module inherits; <see cref="Launch.TargetEnvironment"/> asks the same question.</summary>
+    internal static bool IsThisRepositorys(string name) =>
         CoaiEnvironment.IsHarnessVariable(name) || name.StartsWith("ConnectionStrings__", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The two scout flags, whatever their value (a measured subject must not be handed them).</summary>
+    internal static bool IsScoutFlag(string name) =>
+        name.Equals(ProbeChildEnvironment.ModelGuardVariable, StringComparison.OrdinalIgnoreCase) || name.Equals(ProbeChildEnvironment.BackgroundTasksVariable, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSecretNotClaudes(string name) =>
         CoaiEnvironment.IsSecretName(name) && !ClaudesOwnPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));

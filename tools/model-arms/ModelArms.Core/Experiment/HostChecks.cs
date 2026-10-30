@@ -85,7 +85,8 @@ public static class HostChecks
     private const string PowerShell = "pwsh.exe";
 
     /// <summary>The executables the experiment will start, each name once (the first role that asked for it kept), in the order the harness reaches for them:
-    /// the three it always needs, the first word of each configured command, PowerShell when the awake keeper uses it, and the coai binary when a step is a gate step.</summary>
+    /// the three it always needs, the first word of each configured command, <c>npm</c> when <c>nodeModules</c> names a folder to restore (<c>prep-base</c> runs <c>npm ci</c> whatever the extension's command is — E3 §8 item 7), PowerShell when the awake keeper uses it, and the coai binary
+    /// when a step is a gate step.</summary>
     public static IReadOnlyList<NeededExecutable> NeededExecutables(Experiment experiment, HostKind host) =>
     [
         .. new NeededExecutable[]
@@ -97,6 +98,7 @@ public static class HostChecks
                 new("target.build[0]", First(experiment.Target.Build)),
                 new("target.suite.command[0]", First(experiment.Target.Suite.Command)),
                 new("target.extension.command[0]", First(experiment.Target.Extension.Command)),
+                new("target.nodeModules", experiment.Target.NodeModules.Count > 0 ? "npm" : string.Empty),
                 new("awake", KeepsAwakeWithPowerShell(experiment.Awake, host) ? PowerShell : string.Empty),
                 new("coai.binary", HasGateStep(experiment) ? experiment.Coai.Binary : string.Empty),
             }

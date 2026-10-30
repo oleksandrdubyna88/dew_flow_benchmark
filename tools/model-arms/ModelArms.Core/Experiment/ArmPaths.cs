@@ -61,6 +61,24 @@ public sealed record RootPaths(string Root)
 
     public string KeepAwakeLog => Path.Combine(Root, "keep-awake.log");
 
+    /// <summary>What <c>prep-base</c> writes at the root (<c>prep-base.sh:5</c>, <c>:14-17</c>): a line per stage, and each tool's log. An earlier attempt's copies are moved aside into <see cref="PrepBasePrevious"/> before the next attempt creates its own.</summary>
+    public string PrepBaseLog => Path.Combine(Root, "prep-base.log");
+
+    public string BaseBuildLog => Path.Combine(Root, "base-build.log");
+
+    /// <summary>The log of the <paramref name="n"/>th <c>npm ci</c> of the attempt (1-based, the rules submodule's first).</summary>
+    public string BaseNpmLog(int n) => Path.Combine(Root, "base-npm-" + n.ToString(CultureInfo.InvariantCulture) + ".log");
+
+    public string BaseSuiteLog => Path.Combine(Root, "base-test.log");
+
+    public string BaseExtensionLog => Path.Combine(Root, "base-ts-test.log");
+
+    /// <summary>The folder the main suite writes its results into (<c>--results-directory</c>).</summary>
+    public string BaseResults => Path.Combine(Root, "base-results");
+
+    /// <summary>Where an earlier attempt's <c>prep-base.log</c>, <c>base-*.log</c> and <c>base-results</c> are moved to (kept, never followed); the stamp is UTC, like <c>20261030T101500Z</c>.</summary>
+    public string PrepBasePrevious(string stamp) => Path.Combine(Root, "prep-base.prev-" + ArmPaths.Segment(stamp, "stamp"));
+
     /// <summary>A file the operator named in the experiment file, resolved inside the root; a rooted name or any
     /// <c>..</c> segment would leave it and is refused.</summary>
     public Outcome<string> Of(string relative) =>

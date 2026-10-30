@@ -54,7 +54,7 @@ internal static class TargetSection
         var suite = json.ObjectMember(target, "target", "suite", SuiteMembers, SuiteMembers);
         return new SuiteFacts(
             Command(json, suite, "target.suite", "command", forbidden),
-            json.Text(suite, "target.suite", "ctrfFile"),
+            PathFields.FileName(json, suite, "target.suite", "ctrfFile"),
             json.Text(suite, "target.suite", "namePrefix"));
     }
 

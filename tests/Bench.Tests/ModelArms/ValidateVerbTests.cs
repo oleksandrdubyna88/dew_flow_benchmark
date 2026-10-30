@@ -122,6 +122,30 @@ public sealed class ValidateVerbTests
         neither.Output.Should().Contain("resolved executables:", "the guard runs the same checks and prints them the same way");
     }
 
+    /// <summary>D23 names <c>npm</c> and <c>prep-base</c> runs <c>npm ci</c> whenever <c>nodeModules</c> is set — whatever the extension's own command is (E3 §8 item 7).</summary>
+    [Fact]
+    public async Task Npm_is_needed_when_node_modules_are_configured()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.Edit(top => top["target"]!["extension"]!["command"] = new JsonArray("node", "--test"));
+        File.Delete(Path.Combine(Bin(root), "npm"));
+
+        var missing = await RunAsync(root);
+
+        missing.Code.Should().Be(3, "an npm the host lacks is the environment (D16)");
+        missing.Error.Should().Contain("target.nodeModules npm");
+
+        root.Executable("bin", "npm");
+        root.Edit(top => top["target"]!["nodeModules"] = new JsonArray());
+        File.Delete(Path.Combine(Bin(root), "npm"));
+
+        var unneeded = await RunAsync(root);
+
+        unneeded.Code.Should().Be(0, "no node_modules to restore, no npm to resolve");
+        unneeded.Error.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Every_configured_executable_resolves_on_this_host_or_is_refused_by_name()
     {

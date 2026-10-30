@@ -46,6 +46,13 @@ public sealed class ArmPathsTests
         (nameof(RootPaths.LockLog), Paths.LockLog, At("lock.log")),
         (nameof(RootPaths.LockedModesRestored), Paths.LockedModesRestored("20261029T101500Z"), At(".locked-modes.restored-20261029T101500Z")),
         (nameof(RootPaths.KeepAwakeLog), Paths.KeepAwakeLog, At("keep-awake.log")),
+        (nameof(RootPaths.PrepBaseLog), Paths.PrepBaseLog, At("prep-base.log")),
+        (nameof(RootPaths.BaseBuildLog), Paths.BaseBuildLog, At("base-build.log")),
+        (nameof(RootPaths.BaseNpmLog), Paths.BaseNpmLog(2), At("base-npm-2.log")),
+        (nameof(RootPaths.BaseSuiteLog), Paths.BaseSuiteLog, At("base-test.log")),
+        (nameof(RootPaths.BaseExtensionLog), Paths.BaseExtensionLog, At("base-ts-test.log")),
+        (nameof(RootPaths.BaseResults), Paths.BaseResults, At("base-results")),
+        (nameof(RootPaths.PrepBasePrevious), Paths.PrepBasePrevious("20261030T101500Z"), At("prep-base.prev-20261030T101500Z")),
     ];
 
     private static readonly (string Member, string Actual, string Expected)[] ArmTable =
@@ -163,6 +170,7 @@ public sealed class ArmPathsTests
             () => Arm.CoaiSettings("."),
             () => Paths.PidFile("../C1"),
             () => Paths.LockedModesRestored("a/b"),
+            () => Paths.PrepBasePrevious("../x"),
             () => Paths.Arm("a/b"),
             () => _ = new ArmPaths(Root, "..").Folder,
         };
