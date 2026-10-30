@@ -23,7 +23,8 @@ const post = (url, body, headers) => new Promise((resolve, reject) => { const u 
   const tools = process.argv[process.argv.indexOf('--tools') + 1].split(',').filter(t => t !== 'TodoWrite').map(t => (t === 'Agent' ? 'Task' : t));
   say({ type: 'system', subtype: 'init', cwd: process.cwd(), session_id: 'stub', tools, mcp_servers: [], model: 'claude-sonnet-5-5', permissionMode: 'default', apiKeySource: 'none', claude_code_version: '2.1.310', memory_paths: { auto: process.env.CLAUDE_CONFIG_DIR + '/projects/-p/memory/' } });
   await post(process.env.ANTHROPIC_BASE_URL + '/v1/messages', '{}', { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN });
-  fs.writeFileSync('token.txt', process.env.CLAUDE_CODE_OAUTH_TOKEN + '\\n');
+  fs.writeFileSync('token.txt', 'CLAUDE_CODE_OAUTH_TOKEN=' + process.env.CLAUDE_CODE_OAUTH_TOKEN + '\\n');
+  await new Promise(r => setTimeout(r, 1500)); // long enough for the sampler to take its five samples
   fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p', { recursive: true });
   fs.writeFileSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p/s.jsonl', '{}\\n');
   say({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.009232, result: 'DONE' });
@@ -42,7 +43,7 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   const inputs = { token: real, claudeBinary: stubBin, prices: prices(), tsDir: TS_DIR, stacks: { pins: { claude: '2.1.310' } } };
   const r = await runSmoke({
     out, inputs, preflightFn: async () => ({ ok: true, value: {} }), deps: {},
-    over: { upstream: upstream.upstream, settleMs: 200, tickMs: 200, sampleMs: 100, toolchains: [] },
+    over: { upstream: upstream.upstream, settleMs: 200, tickMs: 200, sampleMs: 50, toolchains: [] },
   });
   assert.equal(r.ok, true, r.reason);
   const { layout, plan, result } = r.value;
@@ -50,6 +51,8 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   const checks = JSON.parse(readFileSync(path.join(layout.dir, 'checks.json'), 'utf8'));
   assert.equal(checks.tokenTxt.equalsDummy, true, 'the session persisted its token on purpose: token.txt holds the dummy');
   assert.deepEqual(checks.realTokenScan.hits, []);
+  assert.deepEqual(checks.realTokenScan.links, [], 'no link or pipe in the agent-written tree');
+  assert.ok(checks.positiveControl.dummyInEnviron >= 1 && checks.positiveControl.samples >= 5, `the positive control is recorded: ${JSON.stringify(checks.positiveControl)}`);
   assert.equal(checks.survivors, 0);
   assert.equal(checks.statePhase, 'closed');
   assert.equal(checks.socketsLeft, 0);
@@ -79,7 +82,8 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   }
   const byId = Object.fromEntries(rows.map(x => [x.id, x]));
   assert.equal(byId['B-R1'].verdict, 'holds', byId['B-R1'].observed);
-  assert.equal(byId['B-S3'].verdict, smoke.value.meta.samplers.samples >= 5 ? 'holds' : 'refuted', 'B-S3 needs at least 5 samples: the rule is strict about a short session');
+  assert.equal(byId['B-S3'].verdict, 'holds', byId['B-S3'].observed);
+  assert.equal(byId['B-S3b'].verdict, 'holds', byId['B-S3b'].observed);
   assert.equal(byId['B-K2'].verdict, 'not exercised');
   const md = renderSmoke({ meta: smoke.value.meta, rows, command: 'x' });
   assert.equal(verdictBlockOf(md), renderVerdicts(rows));

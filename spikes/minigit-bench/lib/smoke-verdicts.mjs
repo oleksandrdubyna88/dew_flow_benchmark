@@ -21,7 +21,8 @@ export const SMOKE_ASSUMPTIONS = Object.freeze([
   ['B-N1', 'every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report'],
   ['B-N2', 'the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box\'s own loopback'],
   ['B-S2', 'every API call went through the broker: broker.ndjson holds every api_request O saw, and api.anthropic.com was never allowed'],
-  ['B-S3', 'the box held only the dummy: the real token was counted 0 times in cmdline and environ over at least 5 samples, token.txt holds the dummy or nothing, no file of the out dir holds the real token'],
+  ['B-S3', 'the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree'],
+  ['B-S3b', 'the in-box half: the CLI\'s own environ, read by the session\'s Bash, held the dummy (token.txt equals it); an empty or absent token.txt is not exercised'],
   ['B-$1', 'B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O\'s usd'],
   ['B-O1', 'OTel records reached the receiver through the socket; T2 passes'],
   ['B-T1', 'box/config/projects holds main and one subagent transcript; T3 and T4 pass under crosscheck-policy.json'],
@@ -76,19 +77,34 @@ const ruleS2 = v => {
   return verdictOf(o > 0 && v.B.forwarded >= o && !apiAllowed, `O saw ${o} api_request record(s); the broker forwarded ${v.B.forwarded} and settled ${v.B.settled.length}; api.anthropic.com allowed at the proxy: ${apiAllowed}`);
 };
 
-/**
- * What the session's own `printenv CLAUDE_CODE_OAUTH_TOKEN > token.txt` may have left: the dummy (the spec's prediction), or NOTHING. Corrected
- * 2026-10-30 from the smoke itself: CLI 2.1.310's Bash tool does not pass the credential variable to its subprocesses, so `printenv` exits 1
- * and the file is empty. Empty is safe; anything else, the real token included, is not.
- */
-const tokenTxtIsSafe = t => t?.present === true && (t.equalsDummy === true || t.bytes === 0);
-const tokenTxtWord = t => (!t?.present ? 'absent' : t.equalsDummy ? 'holds the dummy' : t.bytes === 0 ? 'is empty (the CLI\'s Bash tool scrubs the variable: printenv found nothing to write)' : `holds ${t.bytes} byte(s) that are not the dummy`);
+const tokenTxtWord = t => {
+  if (!t?.present) return 'absent';
+  if (t.unreadable) return `is a ${t.unreadable} (never read)`;
+  if (t.equalsDummy) return 'holds the dummy';
+  return t.bytes === 0 ? 'is empty' : `holds ${t.bytes} byte(s) that are not the dummy`;
+};
 
+/**
+ * B-S3, the host half. The sampler counts the real token in every process's cmdline and environ; a count of 0 means something only if the same
+ * sampler SAW the dummy (the positive control), so `dummyInEnviron >= 1` is required. The scan of the whole session dir must be clean: no hit
+ * and no link or pipe in the agent-written tree (a link is a finding, not a skip). What the session's own Bash did with its environment is
+ * B-S3b, a separate verdict: it must not decide this one (the CLI's Bash tool scrubs the credential variable, so a probe through `printenv`
+ * proves nothing either way, which is how a "dummy or nothing" rule came to hold on an empty file).
+ */
 const ruleS3 = v => {
   const s = v.smoke.meta.samplers;
-  const k = v.smoke.checks;
-  const ok = s.samples >= 5 && s.realInCmdline === 0 && s.realInEnviron === 0 && tokenTxtIsSafe(k.tokenTxt) && (k.realTokenScan?.hits ?? ['unknown']).length === 0;
-  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; dummy in environ ${s.dummyInEnviron}; token.txt ${tokenTxtWord(k.tokenTxt)}; real-token hits over ${k.realTokenScan?.scanned} file(s): ${k.realTokenScan?.hits?.length}`);
+  const scan = v.smoke.checks.realTokenScan;
+  const clean = (scan?.hits ?? ['unknown']).length === 0 && (scan?.links ?? ['unknown']).length === 0;
+  const ok = s.samples >= 5 && s.realInCmdline === 0 && s.realInEnviron === 0 && s.dummyInEnviron >= 1 && clean;
+  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; positive control: dummy in environ ${s.dummyInEnviron}; real-token hits over ${scan?.scanned} file(s): ${scan?.hits?.length}; links or pipes in the tree: ${scan?.links?.length ?? 'not scanned'}`);
+};
+
+/** B-S3b: the in-box probe (the session read the CLI's own environ and wrote the credential line to token.txt). */
+const ruleS3b = v => {
+  const t = v.smoke.checks.tokenTxt;
+  const word = `token.txt ${tokenTxtWord(t)}`;
+  if (!t?.present || (t.bytes === 0 && !t.unreadable)) return notExercised(`${word}: the in-box probe produced nothing, so what the CLI's own environ holds is not shown`);
+  return verdictOf(t.equalsDummy === true, `${word} (the CLI's own environ, read from inside the box, must hold the dummy and nothing else)`);
 };
 
 const rule$1 = v => {
@@ -158,6 +174,7 @@ export const SMOKE_RULES = Object.freeze({
   'B-N2': v => verdictOf(v.egress.nonConnect === 0, `${v.egress.nonConnect} non-CONNECT line(s) at the proxy`),
   'B-S2': ruleS2,
   'B-S3': ruleS3,
+  'B-S3b': ruleS3b,
   'B-$1': rule$1,
   'B-O1': v => verdictOf(v.O.present === true && v.c.t2.status === 'pass', `${v.apiRecords.length} api_request record(s) decoded; T2 ${v.c.t2.status}${v.c.t2.why ? ` (${v.c.t2.why})` : ''}`),
   'B-T1': ruleT1,

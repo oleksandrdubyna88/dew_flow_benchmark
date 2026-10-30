@@ -13,7 +13,9 @@ import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts } from '../lib/smoke-verdicts.m
 import { hostLacks, spikeDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
-const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-S3', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
+// B-S3 and B-S3b are NOT here on purpose: this fixture is the 2026-10-30 smoke, taken before the link scan and the in-box probe existed, so its
+// checks.json has no `links` (B-S3: 'not scanned') and its token.txt is empty (B-S3b: 'not exercised'). The re-smoke that replaces it must hold both.
+const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
 
 function verdicts(mutate = s => s) {
   const smoke = loadSmoke(FIXTURE);
@@ -29,6 +31,9 @@ test('The_real_bare_smoke_holds', () => {
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
   for (const id of REQUIRED_HOLDS) assert.equal(byId[id].verdict, 'holds', `${id}: ${byId[id].observed}`);
   assert.equal(byId['B-K2'].verdict, 'not exercised', 'the smoke ended by itself');
+  assert.equal(byId['B-S3'].verdict, 'refuted', 'the old fixture has no link scan, and a scan that did not look is not clean');
+  assert.match(byId['B-S3'].observed, /not scanned/);
+  assert.equal(byId['B-S3b'].verdict, 'not exercised', 'token.txt is empty in the old fixture');
   for (const id of ['B-A2', 'B-H1']) assert.ok(['holds', 'refuted'].includes(byId[id].verdict), `${id} is recorded either way: ${byId[id].verdict}`);
   const md = readFileSync(path.join(FIXTURE, 'SMOKE.md'), 'utf8');
   assert.equal(verdictBlockOf(md), renderVerdicts(rows), 'SMOKE.md is the computed table, byte for byte');
@@ -45,16 +50,40 @@ test('The_smoke_rests_on_the_numbers_the_spec_asks_for', () => {
   assert.ok(t.every((x, i) => i === 0 || x >= t[i - 1]), 'stamps increase');
 });
 
-test('A_token_file_with_anything_but_the_dummy_or_nothing_refutes_B_S3', () => {
-  const withTokenTxt = tokenTxt => verdicts(s => ({ ...s, checks: { ...s.checks, tokenTxt } })).find(r => r.id === 'B-S3');
-  assert.equal(withTokenTxt({ present: true, equalsDummy: true, bytes: 40 }).verdict, 'holds', 'the dummy');
-  assert.equal(withTokenTxt({ present: true, equalsDummy: false, bytes: 0 }).verdict, 'holds', 'empty: the CLI\'s Bash tool scrubbed the variable');
-  assert.equal(withTokenTxt({ present: true, equalsDummy: false, bytes: 41 }).verdict, 'refuted', 'anything else');
-  assert.equal(withTokenTxt({ present: false }).verdict, 'refuted', 'no file at all: the probe did not run');
-  const fewSamples = verdicts(s => ({ ...s, meta: { ...s.meta, samplers: { ...s.meta.samplers, samples: 4 } } })).find(r => r.id === 'B-S3');
-  assert.equal(fewSamples.verdict, 'refuted', 'fewer than 5 samples');
-  const hit = verdicts(s => ({ ...s, checks: { ...s.checks, realTokenScan: { scanned: 3, hits: [{ source: 'x', kind: 'own-value', offset: 1 }] } } })).find(r => r.id === 'B-S3');
-  assert.equal(hit.verdict, 'refuted', 'a real-token hit');
+const verdictOf = (id, mutate) => verdicts(mutate).find(r => r.id === id);
+const withChecks = over => s => ({ ...s, checks: { ...s.checks, ...over } });
+const withSamplers = over => s => ({ ...s, meta: { ...s.meta, samplers: { ...s.meta.samplers, ...over } } });
+const CLEAN_SCAN = { scanned: 3, hits: [], tooLarge: [], links: [] };
+
+test('B_S3_holds_only_with_enough_samples_no_real_token_in_cmdline_or_environ_the_positive_control_and_a_clean_scan_with_no_link', () => {
+  const holds = mutate => verdictOf('B-S3', mutate);
+  const base = s => withChecks({ realTokenScan: CLEAN_SCAN })(withSamplers({ samples: 9, realInCmdline: 0, realInEnviron: 0, dummyInEnviron: 3 })(s));
+  assert.equal(holds(base).verdict, 'holds');
+  assert.match(holds(base).observed, /dummy in environ 3/);
+  assert.equal(holds(s => withSamplers({ samples: 4 })(base(s))).verdict, 'refuted', 'fewer than 5 samples');
+  assert.equal(holds(s => withSamplers({ realInCmdline: 1 })(base(s))).verdict, 'refuted', 'the real token in a cmdline');
+  assert.equal(holds(s => withSamplers({ realInEnviron: 2 })(base(s))).verdict, 'refuted', 'the real token in an environ');
+  assert.equal(holds(s => withSamplers({ dummyInEnviron: 0 })(base(s))).verdict, 'refuted', 'no positive control: a sampler that never saw the dummy proves nothing about the real token');
+  assert.equal(holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, hits: [{ source: 'x', kind: 'own-value', offset: 1 }] } })(base(s))).verdict, 'refuted', 'a real-token hit');
+  assert.equal(holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, links: [{ rel: 'box/out/audit.ndjson', kind: 'symlink', severity: 'high' }] } })(base(s))).verdict, 'refuted', 'a link anywhere in the tree');
+  assert.equal(holds(s => withChecks({ realTokenScan: { scanned: 3, hits: [], tooLarge: [] } })(base(s))).verdict, 'refuted', 'a scan that did not look for links is not clean');
+});
+
+test('B_S3_does_not_read_the_in_box_token_file_at_all_because_that_half_is_B_S3b', () => {
+  const clean = s => withChecks({ realTokenScan: CLEAN_SCAN })(withSamplers({ samples: 9, realInCmdline: 0, realInEnviron: 0, dummyInEnviron: 3 })(s));
+  for (const tokenTxt of [{ present: false }, { present: true, equalsDummy: false, bytes: 41 }, { present: true, equalsDummy: true, bytes: 40 }]) {
+    assert.equal(verdictOf('B-S3', s => withChecks({ tokenTxt })(clean(s))).verdict, 'holds', JSON.stringify(tokenTxt));
+  }
+});
+
+test('B_S3b_holds_only_when_the_in_box_probe_wrote_the_dummy_and_is_not_exercised_when_it_wrote_nothing', () => {
+  const b = tokenTxt => verdictOf('B-S3b', withChecks({ tokenTxt }));
+  assert.equal(b({ present: true, equalsDummy: true, bytes: 70 }).verdict, 'holds', 'the dummy');
+  assert.equal(b({ present: true, equalsDummy: false, bytes: 0 }).verdict, 'not exercised', 'empty: the probe read nothing');
+  assert.equal(b({ present: false, equalsDummy: false }).verdict, 'not exercised', 'no file: the probe did not run');
+  assert.equal(b({ present: true, equalsDummy: false, bytes: 41 }).verdict, 'refuted', 'anything else, the real token included');
+  assert.equal(b({ present: true, unreadable: 'symlink', equalsDummy: false }).verdict, 'refuted', 'a link is never the dummy');
+  assert.match(b({ present: true, equalsDummy: true, bytes: 70 }).observed, /dummy/);
 });
 
 test('The_committed_smoke_fixture_holds_neither_the_real_token_nor_the_session_dummy', t => {

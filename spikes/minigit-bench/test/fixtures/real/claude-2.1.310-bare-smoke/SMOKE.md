@@ -6,7 +6,7 @@ One bare session through the agent box, the egress proxy and the credential brok
 - Session id: eded342a-9aab-4cb4-90b5-30b3098ea22c
 - Envelope cost: $0.11484459999999999 - listed as pilot spend (parent plan section 13); the broker's ledger: $0.1148446
 - Outcome: ok; wall 17375 ms; stopped: no
-- Verdicts: 16 holds, 1 not exercised
+- Verdicts: 15 holds, 1 refuted, 2 not exercised
 
 ## Verdicts
 
@@ -18,7 +18,8 @@ One bare session through the agent box, the egress proxy and the credential brok
 | B-N1 | every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report | holds | allowed: {}; refused: {"api.anthropic.com":14}; allowed outside the bare list: none; refused outside KNOWN_REFUSED: none |
 | B-N2 | the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box's own loopback | holds | 0 non-CONNECT line(s) at the proxy |
 | B-S2 | every API call went through the broker: broker.ndjson holds every api_request O saw, and api.anthropic.com was never allowed | holds | O saw 5 api_request record(s); the broker forwarded 5 and settled 5; api.anthropic.com allowed at the proxy: false |
-| B-S3 | the box held only the dummy: the real token was counted 0 times in cmdline and environ over at least 5 samples, token.txt holds the dummy or nothing, no file of the out dir holds the real token | holds | 14 samples: real in cmdline 0, in environ 0; dummy in environ 56; token.txt is empty (the CLI's Bash tool scrubs the variable: printenv found nothing to write); real-token hits over 32 file(s): 0 |
+| B-S3 | the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree | refuted | 14 samples: real in cmdline 0, in environ 0; positive control: dummy in environ 56; real-token hits over 32 file(s): 0; links or pipes in the tree: not scanned |
+| B-S3b | the in-box half: the CLI's own environ, read by the session's Bash, held the dummy (token.txt equals it); an empty or absent token.txt is not exercised | not exercised | token.txt is empty: the in-box probe produced nothing, so what the CLI's own environ holds is not shown |
 | B-$1 | B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O's usd | holds | T5 pass: the broker's ledger 0.1148446 against total_cost_usd 0.1148446 (limit 0.000001); 5 request(s) forwarded, 0 refused; B 0.11484459999999999, O 0.11484459999999999 |
 | B-O1 | OTel records reached the receiver through the socket; T2 passes | holds | 5 api_request record(s) decoded; T2 pass |
 | B-T1 | box/config/projects holds main and one subagent transcript; T3 and T4 pass under crosscheck-policy.json | holds | 1 main and 1 subagent transcript file(s); T3 pass, T4 pass |
