@@ -437,3 +437,22 @@ test('The_record_of_a_v2_session_lists_which_directories_its_workspace_left_out_
   assert.equal(record('csharp', 'v1').workspace.known, false, 'a v1 workspace is filled from the pinned inputs: nothing was left out');
   assert.match(record('csharp', 'v1').workspace.why, /pinned inputs/);
 });
+
+test('A_record_rebuilt_later_keeps_the_run_maps_class_and_reports_a_new_hand_verdict_as_a_discrepancy', async () => {
+  const t = harness();
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  const entry = readRunMap(t.ctx.runMapFile).value.sessions[rid('csharp', 'v1', 1)];
+  assert.equal(entry.class, 'completed');
+  const later = { ...t.ctx, handVerdictsFor: id => (id === entry.rid ? [{ g: 'G-1', verdict: 'refuted', rid: id, evidence: 'x', who: 'me', date: '2026-11-03' }] : []) };
+  const rebuilt = writeSessionRecord({ ctx: later, entry, score: null });
+  assert.equal(rebuilt.ok, true, rebuilt.reason);
+  assert.equal(rebuilt.value.class, 'completed', 'the class is the run-map\'s: a record never re-classifies a session on its own');
+  assert.equal(rebuilt.value.data, true);
+  assert.equal(rebuilt.value.discrepancies.length, 1);
+  assert.deepEqual([rebuilt.value.discrepancies[0].runMap, rebuilt.value.discrepancies[0].recomputed], ['completed', 'void: harness']);
+  assert.match(rebuilt.value.discrepancies[0].why, /hand verdict refuted G-1/);
+  assert.ok(rebuilt.value.flags.includes('class discrepancy'));
+  const plain = writeSessionRecord({ ctx: t.ctx, entry, score: null });
+  assert.deepEqual(plain.value.discrepancies, [], 'control: nothing to report when the recomputed class is the run-map\'s');
+});

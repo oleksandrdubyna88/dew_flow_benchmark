@@ -30,11 +30,18 @@ export function writeSessionRecord({ ctx, entry, score }) {
   if (!collected.ok) return collected;
   const c = collected.value;
   const packages = packagesOf({ npm: readNpmPackages(layout.npm), nuget: readNugetPackages(layout.nuget), snapshot: ctx.snapshotPackages, rules: ctx.packageRules });
-  const outcome = { ...c.outcome, flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags] };
+  // The class is the RUN-MAP's (decided when the session ended, from the evidence and the dated lines of that time): a record rebuilt later never re-classifies it. A recomputation that
+  // disagrees (a hand verdict dated since) is reported as a discrepancy beside the class and flagged, for the operator to act on through the schedule.
+  const discrepancies = entry.class !== undefined && entry.class !== c.outcome.class
+    ? [{ kind: 'class', runMap: entry.class, recomputed: c.outcome.class, why: c.outcome.detail?.reason ?? 'the evidence now reads differently' }] : [];
+  const outcome = {
+    ...c.outcome, class: entry.class ?? c.outcome.class, data: entry.data ?? c.outcome.data,
+    flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : [])],
+  };
   const record = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
     outcome, run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
-    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
+    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, discrepancies, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);
   return ok(record);
