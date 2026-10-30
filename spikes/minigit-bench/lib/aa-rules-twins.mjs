@@ -96,6 +96,7 @@ export function g9(ctx) {
 const lineCheck = (ctx, g, f) => {
   const line = lineFor(ctx, g, f.rid);
   if (!line) return unknown(`no dated ${g} line for ${f.rid}`);
+  if (line.verdict === 'explained') return unknown(`the dated ${g} line for ${f.rid} says explained: only G-6, G-5 and a refused host of G-8 may be explained (contract section 10), a by-hand G needs holds or refuted`);
   return line.verdict === 'refuted' ? refuted(`refuted by hand: ${line.evidence}`) : holds(`${line.verdict} by hand: ${line.evidence}`);
 };
 

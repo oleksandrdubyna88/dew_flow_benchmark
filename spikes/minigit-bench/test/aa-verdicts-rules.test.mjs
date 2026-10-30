@@ -82,3 +82,15 @@ test('G12_replacing_evidence_names_P6_and_the_harness_identity_the_run_is_at', (
   const dated = rowOf(report(makeSeries(), withG12([at('e'.repeat(12)).replace('2026-10-30', '2026-10-29'), at('a'.repeat(12))])), 'G-12');
   assert.equal(dated.replacing, null, 'the latest line by date names another identity, the older one is not used');
 });
+
+// ---- G-10, G-13: `explained` is not a hold --------------------------------------------------------------------------------------
+
+test('An_explained_line_is_no_hold_for_G10_and_G13_the_contract_allows_it_only_for_G6_G5_and_G8_refused_hosts', () => {
+  const asExplained = (g, rid) => GOOD_LINES.map(l => (l.includes(`| ${g} |`) && l.includes(`| ${rid} |`) ? l.replace('| holds |', '| explained |') : l));
+  for (const [g, rid] of [['G-10', 'pi0001'], ['G-13', 'aa0002']]) {
+    const rep = report(makeSeries(), asExplained(g, rid));
+    assert.equal(rowOf(rep, g).verdict, 'not exercised', g);
+    assert.match(rowOf(rep, g).observed, new RegExp(`${rid}.*explained`), 'the row says why');
+    assert.equal(rep.verdict, 'NO GO', g);
+  }
+});
