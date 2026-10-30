@@ -422,4 +422,22 @@ public sealed class StepEndTests
         End(Read("result-400-model-unsupported.jsonl").TrimEnd('\n') + "\n" + cut).Should().BeOfType<StepEnd.Errored>("an earlier error stands");
         End(Read("result-success.jsonl") + "\n" + cut + "\n" + """{"type":"assistant"}""").Should().Be(new StepEnd.Finished(), "only the LAST non-blank line is asked");
     }
+
+    /// <summary>Order is part of the guarantee: <c>api_error</c> decides before the words are searched, so a pathological result text (the words search has a 1000 ms timeout that CAN fire on
+    /// <c>hit your </c> repeated 20,000 times) cannot turn a limit that the structured field names into an exception.</summary>
+    [Fact]
+    public void An_api_error_that_names_a_limit_decides_before_the_words_are_searched()
+    {
+        var pathological = string.Concat(Enumerable.Repeat("hit your ", 20_000));
+        var line = Edited(Limit429, o =>
+        {
+            o.Remove("api_error_status");
+            o["result"] = pathological;
+        });
+
+        var read = () => End(line);
+
+        read.Should().NotThrow("the api_error field decides first and the words are never searched");
+        read().Should().Be(new StepEnd.Limited("api_error 'usage_limit_reached' — " + pathological[..200] + "…"));
+    }
 }
