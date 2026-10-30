@@ -6,7 +6,7 @@
 //     check and the read; a pipe opens without blocking), then fstat must say regular file, and its size is capped;
 //   - a listing reports links and other non-regular entries as entries (`kind`), never skips them.
 // Returns follow the older reader's contract (`Buffer | null | { unreadable }`) so score-deps keeps its callers.
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 
@@ -16,11 +16,11 @@ const OPEN_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const ABSENT = new Set(['ENOENT', 'ENOTDIR']);
 
 /**
- * `Buffer` of a regular file of at most `maxBytes`; `null` when absent; `{ unreadable: why }` for a link, a pipe, a device, a directory, an oversize file, or (with
+ * Open `file` for a read: `{ fd, size }` (a regular file; the caller closes `fd`), `null` when absent, `{ unreadable }` for a link, a pipe, a device, a directory, or (with
  * `expectedReal`, the real path the file must have) a file the open reached by another path: the agent can swap a parent directory for a link after a caller's
  * check, and `O_NOFOLLOW` covers only the last component, so the descriptor's own path is compared with the expected one before a byte is read.
  */
-export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES, expectedReal = null) {
+function openChecked(file, expectedReal) {
   let fd;
   try {
     fd = openSync(file, OPEN_FLAGS);
@@ -29,14 +29,45 @@ export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES, expectedRea
     if (e.code === 'ELOOP') return { unreadable: 'symlink' };
     throw e;
   }
+  const refuse = why => { closeSync(fd); return { unreadable: why }; };
+  if (expectedReal !== null && descriptorPath(fd) !== expectedReal) return refuse('the open resolved to another path than the one checked (a parent directory was swapped for a link)');
+  const st = fstatSync(fd);
+  return st.isFile() ? { fd, size: st.size } : refuse('not a regular file');
+}
+
+/** `Buffer` of a regular file of at most `maxBytes`; `null` when absent; `{ unreadable: why }` otherwise (see `openChecked`; an oversize file is `larger than N bytes`). */
+export function readAgentFile(file, maxBytes = MAX_AGENT_FILE_BYTES, expectedReal = null) {
+  const opened = openChecked(file, expectedReal);
+  if (opened === null || opened.unreadable) return opened;
   try {
-    if (expectedReal !== null && descriptorPath(fd) !== expectedReal) return { unreadable: 'the open resolved to another path than the one checked (a parent directory was swapped for a link)' };
-    const st = fstatSync(fd);
-    if (!st.isFile()) return { unreadable: 'not a regular file' };
-    if (st.size > maxBytes) return { unreadable: `larger than ${maxBytes} bytes` };
-    return readFileSync(fd);
+    return opened.size > maxBytes ? { unreadable: `larger than ${maxBytes} bytes` } : readFileSync(opened.fd);
   } finally {
-    closeSync(fd);
+    closeSync(opened.fd);
+  }
+}
+
+/**
+ * Read `<root>/<rel>` in overlapping windows, however big it is, holding one window at a time: `visit(bytes, { base, ownBytes })` is called for each, where
+ * `bytes` is at most `windowBytes + overlapBytes` long, starts at file offset `base`, and only its first `ownBytes` bytes are its OWN (the rest is the next
+ * window's start, shown again so a token that straddles the boundary is whole in one of them). The last window owns all it has. -> `{ size }` (bytes read),
+ * `null` when absent, or `{ unreadable }` (same checks as `readAgentFileUnder`, and a file that grows past `maxBytes` while it is read).
+ */
+export function scanAgentFileWindows(root, rel, { windowBytes, overlapBytes, maxBytes }, visit) {
+  const link = linkAmong(root, rel);
+  if (link !== null) return { unreadable: `a link among the directories of the path (${link})` };
+  const opened = openChecked(path.join(root, rel), path.join(realpathSync(root), rel));
+  if (opened === null || opened.unreadable) return opened;
+  try {
+    const buf = Buffer.alloc(windowBytes + overlapBytes);
+    for (let base = 0; ; base += windowBytes) {
+      if (base > maxBytes) return { unreadable: `larger than ${maxBytes} bytes (it grew while it was read)` };
+      const n = readSync(opened.fd, buf, 0, buf.length, base);
+      const last = n < buf.length;
+      if (n > 0 || base === 0) visit(buf.subarray(0, n), { base, ownBytes: last ? n : windowBytes });
+      if (last) return { size: base + n };
+    }
+  } finally {
+    closeSync(opened.fd);
   }
 }
 

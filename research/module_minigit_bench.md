@@ -356,8 +356,12 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   `lib/transcripts.mjs`, `hiddenPaths()`, `startReceiver({ socketPath })` (a second listener over the same handler, mode 600, removed on
   `close()`), `lib/disposers.mjs`, `lib/proc-sampler.mjs` (counts of the real token and the dummy in every cmdline and environ, once a
   second; counts only, never a value), `lib/stream-tap.mjs` (every stdout line stamped `{ t, line }`, decoded with a `StringDecoder`),
-  `lib/session-scan.mjs` (every file of a session dir through `tokenHits` with the real token as an own secret; a link or pipe in the tree is
-  a high-severity finding), `lib/agent-files.mjs` (below), `lib/token-txt.mjs`, `lib/smoke-load.mjs` (`stageSmoke`: the session dir into the
+  `lib/session-scan.mjs` (every file of a session dir through `tokenHits` with the real token as an own secret, **one file at a time**, keeping
+  only hits and counters; the dummy is masked by a mask of its own length, so offsets are true; **a file over 64 MiB is not skipped**: it is read in
+  windows of 8 MiB that overlap by 1 MiB, each reporting only the hits that start in its own part, so a token on a boundary is found once, and it is
+  listed in `streamed`; a file over 8 GiB, or one that grew past that while it was read, is a high-severity finding of kind `unscanned` that refutes
+  B-S3 and stays in `tooLarge`; the one thing a window cannot see is a token broken by more whitespace than the overlap; a link or pipe in the tree
+  is a high-severity finding), `lib/agent-files.mjs` (below), `lib/token-txt.mjs`, `lib/smoke-load.mjs` (`stageSmoke`: the session dir into the
   capture-shaped layout, `loadSmoke`: a staged or sanitised directory as the verdict rules read it) and `lib/smoke-run.mjs` (`runSmoke`: the
   preflight, the layout, one launch and `checks.json`; the CLI `smoke-session.mjs` wraps it).
 - **What the agent can write, and what is host-owned** (review of 2026-10-30). The agent is a process that can run arbitrary code in the box,
@@ -432,6 +436,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A hello sent before the upstream connected reaches it whole (before: the bytes between the CONNECT headers and the dial were dropped); a client that never completes its header block, and an upstream that never connects, are cut off by their timeouts | `egress.test.mjs` |
 | A `server_name` list with more than one entry, or any entry type other than `host_name`, is refused (the reviewer's probe: another type first, then the allowed name) | `tls-hello.test.mjs` |
 | A parent directory swapped for a link between the lstat walk and the open is caught by the descriptor's path, in the reader and in the session scan (before: the file outside the tree was read) | `agent-files.test.mjs`, `agent-files-sites.test.mjs` |
+| A token in a file over the whole-read limit is found at its exact offset once, on a window boundary too (before: the file was listed in `tooLarge`, the scan was clean and B-S3 could hold); a file nobody can scan is a high finding; the scan keeps one file at a time | `session-scan.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
