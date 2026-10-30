@@ -89,7 +89,7 @@ median and "in k of n pairs", each also without `ran unpaired` cells and without
 
 **Classification by how a session ended.** A session is classed by its ending, never by the exit code: a transient cap refusal or upstream 429 that the session survived is a flag, not a
 class. Three endings parent §11.1 does not name are **registered extensions of §11.1**, each with its reason in `analysis-contract.md`, section 3: `void: upstream` (the provider ended
-the session), `void: harness (interrupted | disposed)` (the harness or the host ended it), and `stop: auth` (a 401 or 403: the credential, not the stack, so the series stops).
+the session), `void: harness (interrupted | disposed)` (the harness or the host ended it), and `stop: auth` (an upstream 401 or 403: the credential, not the stack, so the series stops). A fourth ending, the broker's own refusal of the final request, is a `void: harness` (row 6b).
 
 ## 7. What n = 3 licenses
 

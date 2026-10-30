@@ -69,20 +69,21 @@ through a dated line of `inputs/amendments.md`, and after the A/A only the instr
 
 ### 2. How a session ended: the outcome classes
 
-`lib/bare-outcome.mjs` classifies each session by how it ENDED. The first row that matches wins. The exit code never decides a class, and a scorer fault never voids a session.
+`lib/bare-outcome.mjs` classifies each session by how it ENDED. The first row that matches wins. **The final request is the last one to SETTLE** (by the time of its broker line, a tie by `seq`): a concurrent request that opened later can settle earlier. The exit code never decides a class, and a scorer fault never voids a session.
 "Data" says whether the session is a data point. A row marked † is a registered extension of §11.1 (section 3).
 
 | # | Evidence | Class | Data |
 |---|---|---|---|
 | 1 | `checkAliases` says stop: an alias the session used resolved to another id than the series baseline (D12) | `stop: alias drift` | no |
 | 2 | the real token counted by a sampler or by the session scan | `stop: security` | no |
-| 3 | the final failed request was answered 401 or 403 (the broker log, or the envelope's `api_error_status`) | `stop: auth` † | no |
+| 3 | the final request was answered 401 or 403 BY THE UPSTREAM (a `settled` line of the broker log; the broker's own 403 for a refused path or body is never this row) | `stop: auth` † | no |
 | 4 | a high-severity contamination hit, a canary found, or a token-shape hit | `void: contaminated` | no |
 | 5 | `meta.stopped = 'readback'`, or no broker `settled` line with a 2xx status and parsed usage (the model never answered) | `void: harness` | no |
 | 6 | `meta.stopped = 'cancelled'` (the abort reason is recorded), or `'disposed'` (a box ended with no recorded reason), or the session's state file retired by `retireStale` | `void: harness (interrupted \| disposed)` † | no |
+| 6b | the session ended in an error or without an envelope, and its final request was a broker refusal of its own, `reason` `path`, `body` or `busy` (or no reason): the broker answers those 403 / 403 / 503, which are not the credential and not the provider | `void: harness` † (the reason names the refusal) | no |
 | 7 | `meta.stopped = 'cost'` (settled spend ≥ cap), or the envelope's `subtype: 'error_max_budget_usd'` (the CLI's own cap), or the session ended in an error and its final request was a broker refusal with `reason: 'cap'` | `killed: cap` | yes, censored |
 | 8 | `rateLimitSignal` says void AND the session ended in an error or without an envelope | `void: rate limit` | no |
-| 9 | the session ended in an error or without an envelope, and its final request was an upstream 5xx or 529, or a transport error, after the CLI's own retries | `void: upstream` † | no |
+| 9 | the session ended in an error or without an envelope, and its final request was an upstream 5xx or 529, or a transport error, after the CLI's own retries (or the envelope's `api_error_status` is 500 or more) | `void: upstream` † | no |
 | 10 | `meta.stopped = 'wall'` or `'stall'` | `killed: wall` or `killed: stall` | yes, censored |
 | 11 | the envelope says `subtype: 'success'` and `is_error` false | `completed` | yes |
 | 12 | anything else after the model answered | `crashed: <subtype>` | yes |
@@ -121,7 +122,8 @@ arm adopts or declines them in E3.S3.
 - `void: harness (interrupted | disposed)` — **registered extension of §11.1.** Reason: the harness or the host ended the session, not the agent. §11.1's `harness` void covers only
   a crash before the model's first turn; a session aborted by SIGINT or SIGTERM (the reason is recorded), a box the harness disposed of with no recorded reason, or a launch retired by
   `retireStale` after a crash can end after the model answered. Its partial cost, time and tree measure the interruption, not the stack. It is re-run once like every void.
-- `stop: auth` — **registered extension of §11.1.** Reason: a 401 or 403 is the credential failing (the subscription token expired, was revoked, or lost a capability), not the stack.
+- `void: harness` for the broker's own refusal (row 6b) — **registered extension of §11.1.** Reason: the harness's own door refused the last request (a path or body the broker does not allow, or its byte bound), so the harness ended the session. Its 403 is not the credential failing and its 503 is not the provider.
+- `stop: auth` — **registered extension of §11.1.** Reason: an UPSTREAM 401 or 403 is the credential failing (the subscription token expired, was revoked, or lost a capability), not the stack.
   It would fail every later session in the same way, so it stops the series instead of voiding one cell, and it is never a data point. Resume needs the credential fixed and a new A/A.
 
 These three classes, and the rule that a session is classed by how it ENDED (a transient cap refusal or upstream 429 is a flag), are parent §11.1's "Registered extensions, bare arm (D20)".

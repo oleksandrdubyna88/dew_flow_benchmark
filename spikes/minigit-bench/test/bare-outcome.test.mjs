@@ -43,14 +43,53 @@ test('A_final_cap_refusal_is_a_cap_kill_not_a_rate_limit_void', () => {
 });
 
 test('A_path_refusal_is_not_a_cap', () => {
-  const events = [envelope({ is_error: true, api_error_status: 404, result: 'not found' })];
-  const r = bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), refused(2, 60, 'path')] }));
-  assert.notEqual(r.class, 'killed: cap');
-  assert.equal(r.class, 'crashed: success', 'an error envelope the other rows do not name');
-  // every refusal reason the broker writes, except the cap itself
-  for (const reason of [...REFUSAL_REASONS.filter(r => r !== 'cap'), 'unknown', undefined]) {
-    assert.notEqual(bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), { ...refused(2, 60), reason }] })).class, 'killed: cap', `reason ${reason}`);
+  // The broker's REAL answers to the CLI (lib/broker.mjs): a path or body refusal is HTTP 403, a busy refusal 503, a cap refusal 429. The CLI's envelope carries that status.
+  const answered = { path: 403, body: 403, busy: 503 };
+  for (const reason of REFUSAL_REASONS.filter(r => r !== 'cap')) {
+    const events = [envelope({ is_error: true, api_error_status: answered[reason], result: `API Error: ${answered[reason]}` })];
+    const r = bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), refused(2, 60, reason)] }));
+    assert.notEqual(r.class, 'killed: cap', `reason ${reason}`);
+    assert.notEqual(r.class, 'stop: auth', `the broker's own ${answered[reason]} is not the credential failing (reason ${reason})`);
+    assert.notEqual(r.class, 'void: upstream', `the broker's own ${answered[reason]} is not the provider (reason ${reason})`);
+    assert.equal(r.class, 'void: harness', `reason ${reason}`);
+    assert.equal(r.data, false);
+    assert.match(r.detail.reason, new RegExp(`the broker itself refused .*${reason}`), 'the void says which refusal ended the session');
   }
+  for (const reason of ['unknown', undefined]) {
+    const events = [envelope({ is_error: true, api_error_status: 403, result: 'API Error: 403' })];
+    const r = bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), { ...refused(2, 60), reason }] }));
+    assert.equal(r.class, 'void: harness', `a refusal without a known reason is never a cap and never auth (${reason})`);
+  }
+  // a refusal the session SURVIVED is a flag, not a class
+  assert.equal(bareOutcome(base({ brokerLines: [refused(1, 0, 'path'), ...ok2xx(2, 4)] })).class, 'completed');
+});
+
+test('The_credential_failing_is_an_upstream_401_or_403_and_only_that', () => {
+  const upstream = status => bareOutcome(base({ events: [envelope({ is_error: true, api_error_status: status, result: `API Error ${status}` })], brokerLines: [...ok2xx(1, 0), forwarding(2, 9), settled(2, 10, { status, usage: null, chargedUsd: 0 })] }));
+  assert.equal(upstream(401).class, 'stop: auth');
+  assert.equal(upstream(403).class, 'stop: auth');
+  // control: the same envelope status with the broker's own refusal as the last request is not auth
+  const own = bareOutcome(base({ events: [envelope({ is_error: true, api_error_status: 403 })], brokerLines: [...ok2xx(1, 0), refused(2, 9, 'path')] }));
+  assert.notEqual(own.class, 'stop: auth');
+  // an envelope that says 403 while the broker's log shows no failed request at all is not read as the credential failing
+  assert.notEqual(bareOutcome(base({ events: [envelope({ is_error: true, api_error_status: 403 })] })).class, 'stop: auth');
+});
+
+test('The_final_request_is_the_last_to_settle_not_the_last_to_open', () => {
+  const T = { is_error: true, subtype: 'error_during_execution' };
+  // the main request (seq 5) opens first and is answered 529 at 40 s; a concurrent haiku request (seq 6) opens later and settles 200 at 12 s
+  const lines = [...ok2xx(1, 0), forwarding(5, 10), forwarding(6, 11), settled(6, 12), settled(5, 40, { status: 529, usage: null, chargedUsd: 0 })];
+  assert.equal(bareOutcome(base({ events: [envelope({ ...T, api_error_status: 529 })], brokerLines: lines })).class, 'void: upstream', 'by settle time the 529 is last; by seq the 200 would have been');
+  // the reverse: the later-opened request fails first, the earlier-opened one is answered 200 last: the session ended on a success
+  const reverse = [...ok2xx(1, 0), forwarding(5, 10), forwarding(6, 11), settled(6, 12, { status: 529, usage: null, chargedUsd: 0 }), settled(5, 40)];
+  assert.equal(bareOutcome(base({ brokerLines: reverse })).class, 'completed');
+});
+
+test('An_envelope_that_says_5xx_is_an_upstream_void_even_when_the_broker_log_is_not_conclusive', () => {
+  const r = bareOutcome(base({ events: [envelope({ is_error: true, subtype: 'error_during_execution', api_error_status: 529 })], brokerLines: ok2xx(1, 0) }));
+  assert.equal(r.class, 'void: upstream');
+  assert.equal(r.detail.status, 529);
+  assert.equal(r.data, false);
 });
 
 test('The_CLIs_own_budget_stop_is_a_cap_kill', () => {

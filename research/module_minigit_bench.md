@@ -605,18 +605,19 @@ by a scorer fault.
 |---|---|---|---|
 | 1 | `checkAliases` says stop | `stop: alias drift` | no |
 | 2 | the real token counted by a sampler or the session scan | `stop: security` | no |
-| 3 | the final failed request answered 401 or 403 | `stop: auth` † | no |
+| 3 | the final request answered 401 or 403 by the UPSTREAM (a `settled` broker line; never the broker's own 403 for a refused path or body) | `stop: auth` † | no |
 | 4 | a high contamination hit, a canary, a token-shape hit (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` | no |
 | 5 | `stopped = readback`, or no settled 2xx broker line with parsed usage | `void: harness` | no |
 | 6 | `stopped = cancelled` (the abort reason recorded) or `disposed`, or the state file retired by `retireStale` | `void: harness (interrupted \| disposed)` † | no |
+| 6b | an error ending whose final request was the broker's own refusal (`path`, `body`, `busy`, or no reason), answered 403 / 403 / 503 | `void: harness` † (the reason names the refusal) | no |
 | 7 | `stopped = cost`, the CLI's `error_max_budget_usd`, or the final failed request a broker refusal with `reason: 'cap'` | `killed: cap`, censored at the stop-rule figure | yes |
 | 8 | `rateLimitSignal` AND the session ended in an error | `void: rate limit` | no |
-| 9 | the final failed request was an upstream 5xx / 529 (or a transport error) | `void: upstream` † | no |
+| 9 | the final request was an upstream 5xx / 529 (or a transport error), or the envelope's `api_error_status` is 500 or more | `void: upstream` † | no |
 | 10 | `stopped = wall` or `stall` | `killed: wall \| stall`, censored | yes |
 | 11 | envelope `success`, not an error | `completed` | yes |
 | 12 | anything else after the model answered | `crashed: <subtype>` | yes |
 
-Row 7 comes before row 8 on purpose: the broker answers its cap refusal with HTTP 429 `rate_limit_error`, which `rateLimitSignal` alone would void and pay for twice (the test
+The final request is the last to SETTLE (broker line time, tie by `seq`), not the highest `seq`: a concurrent request that opened later can settle earlier (review M5). Row 7 comes before row 8 on purpose: the broker answers its cap refusal with HTTP 429 `rate_limit_error`, which `rateLimitSignal` alone would void and pay for twice (the test
 `A_final_cap_refusal_is_a_cap_kill_not_a_rate_limit_void` was watched failing on exactly that reading). Row 7 reads the `reason` field of the broker's refused lines that the E2.S2 review
 adds; a refusal without it is `unknown` and never a cap. Flags, never classes: `broker refused k` (with the summed backoff), `upstream 429 k`, `model_refusal_fallback`, `over cap`,
 `v1 inputs changed`, `start skew` (over 5 s), `foreign load`, `harness core contended`, `started not quiet`, `scored under load`, and the package flags.
