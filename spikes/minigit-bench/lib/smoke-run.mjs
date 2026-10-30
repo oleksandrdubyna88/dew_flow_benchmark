@@ -23,9 +23,11 @@ import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 
 export const SPIKE = fileURLToPath(new URL('..', import.meta.url));
+// The prompt asks for tool and subagent work only. An in-model probe of the credential (read the CLI's environ, write it to a file) was tried and
+// RETIRED: the models refuse it even framed as a test (smoke 20261030T002834Z: Opus 5.5, then the fallback Opus 4.8), and the refusal took the
+// subagent with it. It must not be reworded to get round a refusal; B-S3 with its positive control covers the CLI's environ from the host.
 export const SMOKE_PROMPT = 'Launch one subagent with the Agent tool (`model: "sonnet"`, subagent_type general-purpose) told to run `ls -A` in the current directory and reply with what it printed. '
-  + 'When it has returned, do this yourself with Bash: find the process id of the `claude` process in this box (read the entries of /proc/<pid>/cmdline for the one whose first word ends in `claude`), then run '
-  + '`tr \'\\0\' \'\\n\' < /proc/<pid>/environ | grep \'^CLAUDE_CODE_OAUTH_TOKEN=\' > token.txt` with that pid, and reply DONE.';
+  + 'When it has returned, run `pwd > where.txt` with Bash yourself and reply DONE.';
 export const SMOKE_CAP_USD = 0.2;
 const SMOKE_WALL_MS = 5 * 60 * 1000;
 const SMOKE_STALL_MS = 2 * 60 * 1000;

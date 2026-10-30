@@ -22,7 +22,7 @@ export const SMOKE_ASSUMPTIONS = Object.freeze([
   ['B-N2', 'the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box\'s own loopback'],
   ['B-S2', 'every API call went through the broker: broker.ndjson holds every api_request O saw, and api.anthropic.com was never allowed'],
   ['B-S3', 'the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree'],
-  ['B-S3b', 'the in-box half: the CLI\'s own environ, read by the session\'s Bash, held the dummy (token.txt equals it); an empty or absent token.txt is not exercised'],
+  ['B-S3b', 'the in-box half: the CLI\'s own environ, read by the session\'s Bash, held the dummy (RETIRED: not exercised by design, see its row)'],
   ['B-$1', 'B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O\'s usd'],
   ['B-O1', 'OTel records reached the receiver through the socket; T2 passes'],
   ['B-T1', 'box/config/projects holds main and one subagent transcript; T3 and T4 pass under crosscheck-policy.json'],
@@ -99,13 +99,13 @@ const ruleS3 = v => {
   return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; positive control: dummy in environ ${s.dummyInEnviron}; real-token hits over ${scan?.scanned} file(s): ${scan?.hits?.length}; links or pipes in the tree: ${scan?.links?.length ?? 'not scanned'}`);
 };
 
-/** B-S3b: the in-box probe (the session read the CLI's own environ and wrote the credential line to token.txt). */
-const ruleS3b = v => {
-  const t = v.smoke.checks.tokenTxt;
-  const word = `token.txt ${tokenTxtWord(t)}`;
-  if (!t?.present || (t.bytes === 0 && !t.unreadable)) return notExercised(`${word}: the in-box probe produced nothing, so what the CLI's own environ holds is not shown`);
-  return verdictOf(t.equalsDummy === true, `${word} (the CLI's own environ, read from inside the box, must hold the dummy and nothing else)`);
-};
+/**
+ * B-S3b is RETIRED and `not exercised` by design. The probe (the session reads the CLI's own environ and writes the credential line to a file)
+ * was refused by the models even framed as a test; rewording it to get round a refusal is not an option. B-S3's positive control covers the
+ * CLI's environ from the host. A `token.txt` that shows up anyway is still reported, never trusted.
+ */
+export const S3B_RETIRED = 'models refuse the probe (smoke 20261030T002834Z, Opus 5.5 then fallback Opus 4.8); B-S3 with its positive control covers the CLI\'s environ from the host';
+const ruleS3b = v => notExercised(`${S3B_RETIRED}; token.txt ${tokenTxtWord(v.smoke.checks.tokenTxt)}`);
 
 const rule$1 = v => {
   const oUsd = liveSumOf(v.apiRecords.map(r => ({ ...r, receivedAt: 0 }))).usd;

@@ -83,7 +83,8 @@ test('The_smoke_machinery_runs_stages_sanitises_and_computes_a_verdict_for_every
   const byId = Object.fromEntries(rows.map(x => [x.id, x]));
   assert.equal(byId['B-R1'].verdict, 'holds', byId['B-R1'].observed);
   assert.equal(byId['B-S3'].verdict, 'holds', byId['B-S3'].observed);
-  assert.equal(byId['B-S3b'].verdict, 'holds', byId['B-S3b'].observed);
+  assert.equal(byId['B-S3b'].verdict, 'not exercised', 'retired by design');
+  assert.match(byId['B-S3b'].observed, /models refuse the probe/);
   assert.equal(byId['B-K2'].verdict, 'not exercised');
   const md = renderSmoke({ meta: smoke.value.meta, rows, command: 'x' });
   assert.equal(verdictBlockOf(md), renderVerdicts(rows));

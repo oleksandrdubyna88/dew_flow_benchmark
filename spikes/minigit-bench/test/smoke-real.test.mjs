@@ -13,8 +13,8 @@ import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts } from '../lib/smoke-verdicts.m
 import { hostLacks, spikeDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
-// B-S3 and B-S3b are NOT here on purpose: this fixture is the 2026-10-30 smoke, taken before the link scan and the in-box probe existed, so its
-// checks.json has no `links` (B-S3: 'not scanned') and its token.txt is empty (B-S3b: 'not exercised'). The re-smoke that replaces it must hold both.
+// B-S3 is NOT here on purpose: the committed fixture may be the 2026-10-30 first smoke, taken before the link scan existed, so its checks.json has
+// no `links` (B-S3: 'not scanned'). B-S3b is retired and 'not exercised' by design in every fixture.
 const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
 
 function verdicts(mutate = s => s) {
@@ -76,14 +76,13 @@ test('B_S3_does_not_read_the_in_box_token_file_at_all_because_that_half_is_B_S3b
   }
 });
 
-test('B_S3b_holds_only_when_the_in_box_probe_wrote_the_dummy_and_is_not_exercised_when_it_wrote_nothing', () => {
+test('B_S3b_is_retired_and_not_exercised_by_design_whatever_token_txt_holds', () => {
   const b = tokenTxt => verdictOf('B-S3b', withChecks({ tokenTxt }));
-  assert.equal(b({ present: true, equalsDummy: true, bytes: 70 }).verdict, 'holds', 'the dummy');
-  assert.equal(b({ present: true, equalsDummy: false, bytes: 0 }).verdict, 'not exercised', 'empty: the probe read nothing');
-  assert.equal(b({ present: false, equalsDummy: false }).verdict, 'not exercised', 'no file: the probe did not run');
-  assert.equal(b({ present: true, equalsDummy: false, bytes: 41 }).verdict, 'refuted', 'anything else, the real token included');
-  assert.equal(b({ present: true, unreadable: 'symlink', equalsDummy: false }).verdict, 'refuted', 'a link is never the dummy');
-  assert.match(b({ present: true, equalsDummy: true, bytes: 70 }).observed, /dummy/);
+  for (const tokenTxt of [{ present: true, equalsDummy: true, bytes: 70 }, { present: true, equalsDummy: false, bytes: 0 }, { present: false }, { present: true, equalsDummy: false, bytes: 41 }]) {
+    const r = b(tokenTxt);
+    assert.equal(r.verdict, 'not exercised', JSON.stringify(tokenTxt));
+    assert.match(r.observed, /models refuse the probe \(smoke 20261030T002834Z, Opus 5\.5 then fallback Opus 4\.8\); B-S3 with its positive control covers the CLI's environ from the host/);
+  }
 });
 
 test('The_committed_smoke_fixture_holds_neither_the_real_token_nor_the_session_dummy', t => {
