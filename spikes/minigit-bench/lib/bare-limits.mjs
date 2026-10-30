@@ -29,7 +29,7 @@ export function effectiveBudget({ map, amendmentsText, pair }) {
   const [raise] = raises;
   const worst = round2(raise.n * OVER_CAP_FACTOR * BARE_CAPS.capUsd);
   if (raise.n < 1 || round2(raise.usd) !== worst) return fail(`the budget-raise line of ${raise.date} asks for $${raise.usd}: only the worst case of the re-runs, ${raise.n} x ${OVER_CAP_FACTOR} x $${BARE_CAPS.capUsd} = $${worst}`);
-  const started = Object.values(map.sessions ?? {}).some(s => s.kind === 'data' && s.pair === raise.pair);
+  const started = Object.values(map.sessions ?? {}).some(s => s.kind === 'data' && s.pair === raise.pair && s.status !== 'planned'); // a pair has started when a session of it left `planned`
   if (!started) return fail(`the budget-raise line of ${raise.date} names pair ${raise.pair}, which has not already started: a raise only finishes the re-runs of a pair already started`);
   if (raise.pair !== pair) return ok({ bareBudgetUsd: map.bareBudgetUsd, raise });
   const owed = rerunsOwed({ map, raise });

@@ -11,8 +11,8 @@ const PINNED_FIELDS = Object.freeze(['pins', 'stacksSha256', 'pricesSha256', 'sn
 /** The two instrument inputs the run pins by hash, and the file each is. They may change after the A/A (contract section 10) only through a dated `input:` line, before any data session. */
 const INPUT_FIELDS = Object.freeze({ quietSha256: 'quiet.json', packageFlagsSha256: 'package-flags.json' });
 
-/** Does the series hold a data session (any status)? From then on the instrument is frozen: the A/A, the pilot and the rehearsal are instrument checks, not data. */
-export const hasDataSession = map => Object.values(map.sessions ?? {}).some(s => s.kind === 'data');
+/** Has the series STARTED a data session (any status but `planned`)? From then on the instrument is frozen (contract section 10: "after pair 1 starts"): the A/A, the pilot and the rehearsal are instrument checks, not data, and a data session that is only planned has paid nothing (the loop plans a pair's sessions before its gates run, so a halt there leaves them planned). */
+export const hasDataSession = map => Object.values(map.sessions ?? {}).some(s => s.kind === 'data' && s.status !== 'planned');
 
 /** A new series' map: its pins, caps and budgets as given, no stop, no session. */
 export const openSeries = fields => Object.freeze({ ...fields, stopped: null, sessions: Object.freeze({}) });

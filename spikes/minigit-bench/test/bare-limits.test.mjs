@@ -63,3 +63,12 @@ test('The_re_run_count_and_the_date_are_checked_for_the_run_of_the_raised_pair_o
   assert.equal(afterWards.ok, true, 'a later pair is not refused because the raised pair has nothing left');
   assert.equal(check(map(...TWO_VOIDS), raise(2), null).ok, true, 'the A/A and the pilot have no pair');
 });
+
+test('A_pair_whose_sessions_are_all_only_planned_has_not_started_so_a_raise_for_it_is_refused', () => {
+  const planned = [entry('a1', 'csharp', 'v1', 1, { status: 'planned', data: undefined }), entry('b1', 'node', 'v1', 1, { status: 'planned', data: undefined })];
+  const refused = check(map(...planned), raise(1));
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /has not already started/, 'the loop plans a pair before its gates: a halt there leaves it planned and paid nothing');
+  const begun = check(map(...planned, entry('c1', 'csharp', 'v1', 2, { status: 'launching', data: undefined }), entry('d1', 'node', 'v1', 1, { data: false, status: 'ran' })), raise(1));
+  assert.equal(begun.ok === true || !/has not already started/.test(begun.reason), true, 'control: a session that left planned is a started pair');
+});

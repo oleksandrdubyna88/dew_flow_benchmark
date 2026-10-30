@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { checkResumable, markStopped, openSeries, planSession, readRunMap, resumePlan, transition, writeRunMap } from '../lib/run-map.mjs';
+import { checkResumable, hasDataSession, markStopped, openSeries, planSession, readRunMap, resumePlan, transition, writeRunMap } from '../lib/run-map.mjs';
 import { tmpDir } from './helpers.mjs';
 
 const PINS = { claude: '2.1.310', node: '26.12.1', dotnetSdk: '10.0.113', typescript: '7.0.2' };
@@ -154,7 +154,7 @@ test('A_changed_quiet_or_package_flags_file_is_accepted_only_by_a_dated_input_li
   const flags = checkResumable({ map, current: { ...current(), packageFlagsSha256: NEW_QUIET }, amendments: inputLine('package-flags.json', NEW_QUIET) });
   assert.equal(flags.ok, true, flags.reason);
   // once a data session exists in the series the same line is refused: the instrument may change after the A/A and BEFORE pair 1
-  const started = must(planSession(map, session('aaaaaa')));
+  const started = must(transition(must(planSession(map, session('aaaaaa'))), 'aaaaaa', 'launching')); // pair 1 STARTS when its first session leaves `planned` (contract section 10: "after pair 1 starts")
   const late = checkResumable({ map: started, current: changed, amendments: inputLine('quiet.json', NEW_QUIET) });
   assert.equal(late.ok, false);
   assert.match(late.reason, /data session/);
@@ -197,7 +197,7 @@ test('A_harness_change_after_a_data_session_exists_is_refused_even_with_its_line
   const line = `# header\n2026-11-02 | instrument | harness:${id.slice(0, 12)} | the sampler fix (G-11)\n`;
   const acceptHarness = { identity: id, amendmentDate: '2026-11-02' };
   const changed = { ...current(), harnessIdentity: id };
-  const started = must(planSession(series(), session('aaaaaa')));
+  const started = must(transition(must(planSession(series(), session('aaaaaa'))), 'aaaaaa', 'launching'));
   const late = checkResumable({ map: started, current: changed, acceptHarness, amendments: line });
   assert.equal(late.ok, false);
   assert.match(late.reason, /data session/);
@@ -222,4 +222,19 @@ test('Settle_only_is_allowed_on_a_stopped_series_and_does_not_need_the_harness_t
   assert.deepEqual([moved.value.accepted, moved.value.inputs], [null, []], 'and it accepts nothing');
   assert.equal(checkResumable({ map: stopped, current: { ...current(), pricesSha256: '0'.repeat(64) }, settleOnly: true }).ok, false, 'the prices still must be the pinned ones: they decide what the session cost');
   assert.equal(checkResumable({ map: stopped, current: { ...current(), seedSha256: '0'.repeat(64) }, settleOnly: true }).ok, false, 'every other pin is still checked');
+});
+
+test('A_data_session_that_is_only_planned_is_not_pair_1_started_and_an_instrument_line_is_still_accepted', () => {
+  const planned = must(planSession(series(), session('aaaaaa'))); // the loop plans the pair's sessions before its gates run: a halt there paid nothing
+  assert.equal(hasDataSession(planned), false, 'planned is not started');
+  assert.equal(hasDataSession(must(transition(planned, 'aaaaaa', 'launching'))), true, 'launching is');
+  const id = '9'.repeat(64);
+  const changed = { ...current(), harnessIdentity: id, quietSha256: NEW_QUIET };
+  const lines = `2026-11-02 | instrument | harness:${id.slice(0, 12)} | the preflight fix (G-1)\n${inputLine('quiet.json', NEW_QUIET)}`;
+  const r = checkResumable({ map: planned, current: changed, acceptHarness: { identity: id, amendmentDate: '2026-11-02' }, amendments: lines });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.value.accepted.to, id, 'the harness change and the input change are both accepted: the pair halted at its gates before any session started');
+  assert.equal(r.value.inputs.length, 1);
+  const reset = must(transition(must(transition(planned, 'aaaaaa', 'launching')), 'aaaaaa', 'planned')); // launching -> planned when nothing was paid
+  assert.equal(hasDataSession(reset), false, 'a session that went back to planned never ran');
 });
