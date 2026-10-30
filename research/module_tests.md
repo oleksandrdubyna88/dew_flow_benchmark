@@ -111,7 +111,7 @@ The module under `tools/model-arms` is its own console (`model-arms`), driven he
 | `model-arms chain` | not covered | — | not built yet, story E4.S5 |
 | `model-arms checks` | not covered | — | not built yet, story E5.S2 |
 | `model-arms status` | not covered | — | not built yet, story E4.S4 |
-| `model-arms gate-lock` | covered | `FileGateLockTests` | the console's own binary as a second process: a holder makes a waiter wait, a waiter's cancellation breaks nothing, a killed holder frees the lock, `status` says free and held, `hold` refuses a bad `--seconds` (4), gives up at its ceiling (3) and releases on a stop; the lock's residual (Windows, a file system without `flock`, a holder that dies while its child lives) is in `research/module_model_arms.md`. Invisible to the catalogue test until E5.S3 |
+| `model-arms gate-lock` | covered | `FileGateLockTests` | the console's own binary as a second process: a holder makes a waiter wait, a waiter's cancellation breaks nothing, a killed holder frees the lock, `status` says free and held (and who holds: `GateLockHolderTests`), `hold` refuses a bad `--seconds` (4), gives up at its ceiling (3) and releases on a stop; `GateLockPathTests` refuses a link, a folder, a FIFO and `/dev/null` as the lock path (4); a test-only holder (`tests/GateHolder`) proves a killed holder's live child does not keep the lock; the lock's residual (Windows, NFS/CIFS and any file system without `flock`, a wedged holder) is in `research/module_model_arms.md`. Invisible to the catalogue test until E5.S3 |
 
 ### API — `bench-api` and `bench-collector` routes (`src/Bench.Api`)
 

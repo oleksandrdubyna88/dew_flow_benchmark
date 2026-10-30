@@ -100,7 +100,7 @@ public sealed class McpConfigTests
         var text = McpConfig.Coai(odd, Paths, Env());
 
         Server(text)["command"]!.GetValue<string>().Should().Be(odd.Binary);
-        text.Should().Contain("ünï").And.Contain("<&>", "JSON.stringify writes non-ASCII and < & > as they are; only the quote and the backslash are escaped");
+        text.Should().Contain("ünï").And.Contain("<&>", "printable BMP text — accents, < & > — is written as it is, as JSON.stringify writes it");
     }
 
     [Fact]

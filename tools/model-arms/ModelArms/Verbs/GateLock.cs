@@ -4,9 +4,10 @@ using ModelArms.Adapters;
 namespace ModelArms.Verbs;
 
 /// <summary><c>gate-lock status|hold</c> (D10): the other process of the two-process proof, and the operator's way to see the lock (<c>.gate.lock</c> of the root; D11's <c>.isolation.lock</c> is a different lock).
-/// <c>status</c> takes the lock to look and gives it back at once: <c>free</c> or <c>held</c>, exit 0. <c>hold --seconds N</c> waits for the lock — at most <see cref="WaitCeiling"/>, then exit 3 in its own words — prints <c>held &lt;path&gt;</c>
-/// and flushes, keeps the lock N seconds, releases it, and prints <c>released</c> (exit 0); a stop while holding releases it and travels up as every verb's stop (5). N must be 1 to <see cref="MaxSeconds"/> (a day): a bigger one
-/// is no probe, and <c>Task.Delay</c> itself refuses what is past about 49 days. A runtime that cannot lock refuses with 3 before anything is taken.</summary>
+/// <c>status</c> looks and creates nothing: <c>free</c>, or <c>held by pid N since &lt;utc&gt;</c> / <c>held (holder unknown)</c> from the holder's note (the kernel's lock is the truth, the note a hint), exit 0.
+/// <c>hold --seconds N</c> waits for the lock — at most <see cref="WaitCeiling"/>, then exit 3 in its own words — prints <c>held &lt;path&gt;</c> and flushes, keeps the lock N seconds, releases it, and prints <c>released</c> (exit 0); a stop
+/// while holding releases it and travels up as every verb's stop (5). N must be 1 to <see cref="MaxSeconds"/> (a day): a bigger one is no probe, and <c>Task.Delay</c> itself refuses what is past about 49 days. A lock path that is not a regular
+/// file of the root's own is refused by both with exit 4 (D17); a runtime that cannot lock, or a host read that failed, is exit 3 before anything is taken.</summary>
 public static class GateLockVerb
 {
     private const string Name = "model-arms gate-lock";
