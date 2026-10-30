@@ -90,12 +90,12 @@ function expectedInit(plan, settings) {
   return { cwd: plan.layout.work, tools: plan.tools ?? BARE_TOOLS, mcpServers: 0, cliVersion: plan.cliVersion, configDir: plan.layout.config, priced: m => m !== undefined && priceFor(plan.prices, m).known, settings };
 }
 
-/** The costs the watchdog reads: the broker's (settled + reserved), O's live sum, the stream meter; `null` = silent, never zero. */
+/** The costs the watchdog reads: the broker's SETTLED spend, O's live sum, the stream meter; `null` = silent, never zero. */
 function costsNow(plan, rec, events) {
   const b = rec.broker.summary();
   const live = rec.receiver.liveSum();
   const meter = streamMeterUsd(streamView(events), plan.prices, { outputFloor: METER_OUTPUT_FLOOR });
-  return { brokerUsd: b.spentUsd + b.reservedUsd, liveUsd: live.requests > 0 ? live.usd : null, meterUsd: meter.usd ?? null };
+  return { brokerSpentUsd: b.spentUsd, liveUsd: live.requests > 0 ? live.usd : null, meterUsd: meter.usd ?? null };
 }
 
 function lastOtelAt(plan) {

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { watchdogDecision } from '../lib/watchdogs.mjs';
 
 const T0 = 1_000_000;
-const base = { now: T0 + 60_000, startedAt: T0, lastStreamAt: T0 + 59_000, lastOtelAt: null, lastBrokerAt: null, cpuTicks: 10, prevCpuTicks: 10, liveUsd: null, brokerUsd: null, meterUsd: null, capUsd: 0.2, wallMs: 300_000, stallMs: 120_000 };
+const base = { now: T0 + 60_000, startedAt: T0, lastStreamAt: T0 + 59_000, lastOtelAt: null, lastBrokerAt: null, cpuTicks: 10, prevCpuTicks: 10, liveUsd: null, brokerSpentUsd: null, meterUsd: null, capUsd: 0.2, wallMs: 300_000, stallMs: 120_000 };
 const decide = over => watchdogDecision({ ...base, ...over });
 
 test('Watchdogs_kill_for_wall_cost_and_stall_and_only_then', () => {
@@ -11,9 +11,9 @@ test('Watchdogs_kill_for_wall_cost_and_stall_and_only_then', () => {
     ['a healthy session', {}, { kill: false }],
     ['wall reached', { now: T0 + 300_000, lastStreamAt: T0 + 299_000 }, { kill: true, reason: 'wall' }],
     ['one ms before the wall', { now: T0 + 299_999, lastStreamAt: T0 + 299_000 }, { kill: false }],
-    ['the broker at the cap (settled + reserved)', { brokerUsd: 0.2 }, { kill: true, reason: 'cost' }],
-    ['the broker under the cap', { brokerUsd: 0.19 }, { kill: false }],
-    ['the broker over the cap while O is silent', { brokerUsd: 0.25, liveUsd: null }, { kill: true, reason: 'cost' }],
+    ['settled spend at the cap', { brokerSpentUsd: 0.2 }, { kill: true, reason: 'cost' }],
+    ['settled spend under the cap', { brokerSpentUsd: 0.19 }, { kill: false }],
+    ['settled spend over the cap while O is silent', { brokerSpentUsd: 0.25, liveUsd: null }, { kill: true, reason: 'cost' }],
     ['O over 1.1 x the cap with no broker figure', { liveUsd: 0.221 }, { kill: true, reason: 'cost' }],
     ['O between the cap and 1.1 x it', { liveUsd: 0.21 }, { kill: false }],
     ['the meter over 1.1 x the cap when broker and O are silent', { meterUsd: 0.23 }, { kill: true, reason: 'cost' }],
@@ -24,8 +24,8 @@ test('Watchdogs_kill_for_wall_cost_and_stall_and_only_then', () => {
     ['a stall reset by CPU growth alone', { lastStreamAt: T0, now: T0 + 130_000, cpuTicks: 11, prevCpuTicks: 10 }, { kill: false }],
     ['no CPU growth is not growth', { lastStreamAt: T0, now: T0 + 130_000, cpuTicks: 10, prevCpuTicks: 10 }, { kill: true, reason: 'stall' }],
     ['a session that never spoke stalls from its start', { lastStreamAt: null, now: T0 + 130_000 }, { kill: true, reason: 'stall' }],
-    ['wall beats cost beats stall', { now: T0 + 400_000, lastStreamAt: T0, brokerUsd: 9 }, { kill: true, reason: 'wall' }],
-    ['cost beats stall', { now: T0 + 130_000, lastStreamAt: T0, brokerUsd: 9 }, { kill: true, reason: 'cost' }],
+    ['wall beats cost beats stall', { now: T0 + 400_000, lastStreamAt: T0, brokerSpentUsd: 9 }, { kill: true, reason: 'wall' }],
+    ['cost beats stall', { now: T0 + 130_000, lastStreamAt: T0, brokerSpentUsd: 9 }, { kill: true, reason: 'cost' }],
   ];
   for (const [name, over, expected] of rows) {
     const d = decide(over);
@@ -35,8 +35,17 @@ test('Watchdogs_kill_for_wall_cost_and_stall_and_only_then', () => {
 });
 
 test('A_decision_carries_the_figures_it_rests_on_for_the_watchdog_log', () => {
-  const d = decide({ brokerUsd: 0.25 });
+  const d = decide({ brokerSpentUsd: 0.25 });
   assert.equal(d.kill, true);
-  assert.match(d.detail, /broker 0\.25/);
+  assert.match(d.detail, /broker spent 0\.25/);
   assert.equal(typeof decide({}).detail, 'string');
+});
+
+test('Four_requests_in_flight_that_together_only_reserve_the_cap_are_not_a_cost_breach', () => {
+  // the broker admits four 0.05 reservations under a 0.2 cap; nothing is settled yet. Admission already stops NEW spend and D-17a allows the
+  // 1.1 x overshoot, so a reservation is not spend: a healthy session must not be killed for it (the watchdog is not even given the figure)
+  const inFlight = decide({ brokerSpentUsd: 0 });
+  assert.equal(inFlight.kill, false, inFlight.detail);
+  assert.equal(decide({ brokerSpentUsd: 0.2 }).kill, true, 'control: the same total as SETTLED spend is a breach');
+  assert.equal(decide({ brokerSpentUsd: 0.199 }).kill, false);
 });
