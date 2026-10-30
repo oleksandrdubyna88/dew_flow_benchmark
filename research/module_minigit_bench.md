@@ -643,8 +643,10 @@ adds; a refusal without it is `unknown` and never a cap. Flags, never classes: `
 The registered SERIES STOPS (`run-map.stopped`; resume and a new run are refused; `--after-stop` cannot pass them) are `stop: alias drift`, `stop: security`, `stop: auth` (classes), a **T1 breach** under the crosscheck policy `t1: stop`
 (the class is how the session ended and stays; the session gets the flag `T1 breach` and a record; rule `T1 breach`), a **T2 breach** under `t2: stop` (parent section 9's pre-registered fallback when the A/A cannot establish T's coverage:
 the same shape, rule `T2 breach`; under the registered `t2: otel-incomplete` it is only the flag `otel incomplete`) and the **second `void: contaminated`** of the series (rule `second void: contaminated`), all implemented in `settleSessions` (review M4).
-A `stop:` class halts the series; the session is kept. Every session of the phase is collected, charged and recorded BEFORE the loop acts on a stop (the partner of a stopped session was paid for too; review M8). A session whose
-evidence cannot be read (a corrupt stream, say) does not block its partner: it stays `launching`, uncharged, the run exits 5 naming it, and `resume` adopts it once the cause is fixed (review G1); `resume` also rebuilds the record of an
+A `stop:` class halts the series; the session is kept. Every session of the phase is collected, charged and recorded BEFORE the loop acts on a stop (the partner of a stopped session was paid for too; review M8). A series stop is persisted
+ONLY when no session of the run-map is still `launching` (review C1): a stopped series refuses resume, so a stop written while a partner is unread would leave that partner paid for, uncharged and unsettleable. Each settled session carries its
+stop rules in the run-map (`stopRules`), so the resume that settles the last session finds the stop again and records it then. A session whose
+evidence cannot be read (a corrupt stream, say) does not block its partner: it stays `launching`, uncharged, the run exits 5 naming it and the stop that is waiting, and `resume` adopts it once the cause is fixed (review G1); `resume` also rebuilds the record of an
 ended void session whose record write a crash cut off. A void session is not scored (there is nothing to score); the barrier waits only for data sessions.
 
 **Resume** (`bare-runner.mjs resume`). First every canary of the manifests is unplanted, then `retireStale` runs, then each `launching` session is settled by what its directory says: `meta.json`

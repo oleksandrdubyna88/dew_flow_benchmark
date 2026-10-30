@@ -230,6 +230,8 @@ number of accepted sessions per stack and phase is reported. Acceptance is a lab
 `void: contaminated` of the series. **Resumable halts** (exit 3): `void: rate limit` (the subscription's usage window), the quiet wait timing out, a scorer environment failure, and
 `scorer-timeout`.
 
+A series stop is recorded in the run-map only after every session of its phase is collected, charged and recorded; while a session of the phase is unsettled (its evidence could not be read), the run returns that failure (exit 5, resumable) and names the stop that is waiting, and the resume that settles the last session records it.
+
 **Pairs 1–3 run unless a named stop fires.** The operator's go for a pair chooses WHEN it runs, never WHETHER. A pair is not skipped, repeated or re-ordered because of an earlier
 pair's numbers.
 

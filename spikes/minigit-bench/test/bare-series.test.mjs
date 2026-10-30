@@ -471,3 +471,41 @@ test('A_T2_breach_stops_the_series_when_the_policy_makes_t2_the_stop_and_only_th
   const r2 = await runLoop({ ctx: registered.ctx, deps: registered.deps, map: registered.map });
   assert.equal(r2.exit, EXIT.done, 'control: under the registered policy (t2 otel-incomplete) the same breach is a flag and the cell stays');
 });
+
+test('A_series_stop_is_not_persisted_while_a_session_of_the_phase_is_unsettled_and_is_persisted_once_the_last_one_is_charged', async () => {
+  const first = firstStack({ seed: SEED, pair: 1, phase: 'v1' });
+  const partner = first === 'csharp' ? 'node' : 'csharp';
+  const t = harness({ variants: { [rid(first, 'v1', 1)]: 'auth', [rid(partner, 'v1', 1)]: 'corrupt' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.failed, `the collection failure is returned, and it is resumable: ${r.message}`);
+  assert.match(r.message, new RegExp(rid(partner, 'v1', 1)));
+  assert.match(r.message, /stop: auth/, 'the pending stop is named, so the operator knows what the resume will end with');
+  let map = readRunMap(t.ctx.runMapFile).value;
+  assert.equal(map.stopped, null, 'no stop is persisted while a session is still unsettled: a stopped series refuses resume, and that session could never be charged');
+  assert.equal(map.sessions[rid(partner, 'v1', 1)].status, 'launching');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid), [rid(first, 'v1', 1)], 'the settled one is charged, the unread one is not yet');
+  lay(layoutPaths(t.ctx.sessionsRoot, rid(partner, 'v1', 1)), undefined); // the evidence is repaired
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, false, 'the resume settles the last session, and only then the stop that was pending is recorded');
+  assert.equal(settled.exit, EXIT.stop);
+  map = readRunMap(t.ctx.runMapFile).value;
+  assert.equal(map.stopped.rule, 'stop: auth');
+  assert.equal(map.sessions[rid(partner, 'v1', 1)].status, 'ran');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort(), 'both sessions are charged');
+  const again = await runLoop({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(again.exit, EXIT.stop);
+  assert.equal(t.launched.length, 2, 'nothing launched after the stop');
+});
+
+test('A_series_stop_of_a_check_survives_a_failed_collection_of_the_partner_the_same_way', async () => {
+  const first = firstStack({ seed: SEED, pair: 1, phase: 'v1' });
+  const partner = first === 'csharp' ? 'node' : 'csharp';
+  const t = harness({ variants: { [rid(first, 'v1', 1)]: 't1', [rid(partner, 'v1', 1)]: 'corrupt' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.failed, r.message);
+  assert.equal(readRunMap(t.ctx.runMapFile).value.stopped, null);
+  lay(layoutPaths(t.ctx.sessionsRoot, rid(partner, 'v1', 1)), undefined);
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value });
+  assert.equal(settled.exit, EXIT.stop, 'the T1 breach of the settled session is remembered by the run-map, not recomputed from nothing');
+  assert.equal(readRunMap(t.ctx.runMapFile).value.stopped.rule, 'T1 breach');
+});

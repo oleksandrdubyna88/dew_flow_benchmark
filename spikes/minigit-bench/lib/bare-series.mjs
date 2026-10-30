@@ -121,14 +121,24 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
   return settleSessions({ ctx, deps, h, phase: phase.value, state, signal, say });
 }
 
+/** The series stops the settled sessions of the map carry (`stopRules`, written with the session's `ran` transition), plus the second `void: contaminated`: `[{ rid, rule, detail }]`. */
+function pendingStops(map) {
+  const carried = Object.values(map.sessions).flatMap(s => (s.stopRules ?? []).map(x => ({ rid: s.rid, ...x })));
+  if (carried.length === 0 && contaminatedVoids(map) >= 2) return [{ rid: Object.values(map.sessions).filter(s => s.class === 'void: contaminated').map(s => s.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(map) } }];
+  return carried;
+}
+
+const unsettledOf = map => Object.values(map.sessions).filter(s => s.status === 'launching').map(s => s.rid);
+
 /**
- * Classify, charge and persist EVERY session of a finished phase, then act: a `stop:` class ends the series only after all of them are settled (the partner of a stopped session was
- * paid for too), and a session whose evidence cannot be read does not block the others: it stays `launching`, uncharged, and `reconcile` adopts it on resume (review M8, G1).
+ * Classify, charge and persist EVERY session of a finished phase, then act. A series stop is persisted ONLY when no session of the map is still `launching` (review C1): a stopped
+ * series refuses resume, so a stop written while a session of its phase is unread would leave that session paid for, uncharged and unsettleable. Each settled session carries its stop
+ * rules in the run-map (`stopRules`), so the stop is found again by the resume that settles the last one. A session whose evidence cannot be read does not block the others: it stays
+ * `launching`, uncharged, and `reconcile` adopts it on resume (review M8, G1); the loop then returns the collection failure (exit 5, resumable) naming the stop that is waiting.
  */
 async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
   const flags = [...(state.quiet?.flags ?? []), ...(state.sampler?.flags ?? []), ...(phase.startSkewMs > 5000 ? ['start skew'] : [])];
   const failures = [];
-  const stops = [];
   for (const s of phase.sessions) {
     let collected;
     try {
@@ -145,20 +155,22 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
     appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd: ctx.kind === 'rehearsal' ? 0 : usd, what: outcome.class, rid: s.rid, costCaptured, t: new Date(deps.now()).toISOString() });
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity };
-    h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [], workspaceExcluded: s.workspace.excludedDirs ?? null }));
+    const stopRules = [...(outcome.stop ? [{ rule: outcome.class, detail: outcome.detail }] : []), ...collected.value.seriesStops];
+    h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [], workspaceExcluded: s.workspace.excludedDirs ?? null, ...(stopRules.length > 0 ? { stopRules } : {}) }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);
-    if (!outcome.data || collected.value.seriesStops.length > 0) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null }); // a void has nothing to score; a session that stops the series is kept as it is
-    if (outcome.stop) stops.push({ rid: s.rid, rule: outcome.class, detail: outcome.detail });
-    for (const stop of collected.value.seriesStops) stops.push({ rid: s.rid, ...stop });
+    if (!outcome.data || stopRules.length > 0) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null }); // a void has nothing to score; a session that stops the series is kept as it is
   }
-  if (stops.length === 0 && contaminatedVoids(h.get()) >= 2) stops.push({ rid: phase.sessions.map(x => x.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(h.get()) } });
-  const unread = failures.length > 0 ? `; ${failures.join('; ')} (those sessions stay launching and are settled by resume)` : '';
-  if (stops.length > 0) {
+  const stops = pendingStops(h.get());
+  const waiting = unsettledOf(h.get());
+  if (stops.length > 0 && waiting.length === 0 && !h.get().stopped) {
     const [first] = stops;
     h.commit(markStopped(h.get(), { rule: first.rule, reason: JSON.stringify(first.detail), at: new Date(deps.now()).toISOString() }));
-    return done(EXIT.stop, `${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}: the series stops${unread}`);
   }
-  if (failures.length > 0) return done(EXIT.failed, failures.join('; '));
+  if (h.get().stopped && waiting.length === 0) return done(EXIT.stop, `${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}: the series stops${failures.length > 0 ? `; ${failures.join('; ')}` : ''}`);
+  if (failures.length > 0) {
+    const pending = stops.length > 0 ? `; a series stop is waiting (${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}): it is recorded when every session is settled, so resume settles ${waiting.join(', ')} first` : '';
+    return done(EXIT.failed, `${failures.join('; ')}${pending}`);
+  }
   return signal?.aborted ? done(ctx.abortExit(), 'cancelled; the sessions that ran are recorded as interrupted harness voids') : null;
 }
 
