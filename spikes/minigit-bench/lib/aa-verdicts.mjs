@@ -49,9 +49,8 @@ export function aaVerdicts({ seriesDir, inputsDir, smoke = null, now = () => new
   });
 }
 
-const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
-
-const rowLines = r => [`${r.id.padEnd(5)} ${r.verdict.padEnd(13)} ${r.title}`, `        ${clip(r.observed, 400)}`, ...(r.replacing ? [`        replacing evidence: ${clip(r.replacing, 220)}`] : [])];
+/** One row, whole: an observation or a replacing evidence is never cut (a clipped line would hide the very session or alias a refusal names). */
+const rowLines = r => [`${r.id.padEnd(5)} ${r.verdict.padEnd(13)} ${r.title}`, `        ${r.observed}`, ...(r.replacing ? [`        replacing evidence: ${r.replacing}`] : [])];
 
 /** The printed table: one line per G (and its observation), then the T3 rule, the stops, the lines that were not valid and the verdict. */
 export function renderTable(report) {

@@ -152,17 +152,18 @@ test('The_cap_row_and_the_sampler_row_read_the_sessions_own_evidence', () => {
 
 test('The_command_writes_the_json_prints_the_table_and_exits_0_on_GO_2_on_NO_GO_and_4_on_a_refusal', async () => {
   const series = makeSeries();
-  const out = [];
-  const run = async (dir, lines, extra = []) => { out.length = 0; return main(['aa-verdicts', '--series', dir, '--inputs-dir', makeInputs(lines), ...extra], l => out.push(l), { smoke: SMOKE_OK }); };
-  assert.equal(await run(series, GOOD_LINES), 0);
-  assert.match(out.join('\n'), /G-1\b.*holds/);
-  assert.match(out.join('\n'), /GO/);
+  const run = async (dir, lines) => { const out = []; const code = await main(['aa-verdicts', '--series', dir, '--inputs-dir', makeInputs(lines)], l => out.push(l), { smoke: SMOKE_OK }); return { code, text: out.join('\n') }; };
+  const first = await run(series, GOOD_LINES);
+  assert.equal(first.code, 0);
+  assert.match(first.text, /G-1\b.*holds/);
+  assert.match(first.text, /GO/);
   const written = JSON.parse(readFileSync(path.join(series, 'aa-verdicts.json'), 'utf8'));
   assert.equal(written.verdict, 'GO');
   assert.equal(written.rows.length, 14);
-  assert.equal(await run(series, []), 2, 'no by-hand line: NO GO');
+  assert.equal((await run(series, [])).code, 2, 'no by-hand line: NO GO');
   assert.equal(JSON.parse(readFileSync(path.join(series, 'aa-verdicts.json'), 'utf8')).verdict, 'NO GO');
-  assert.equal(await run(path.join(series, 'nowhere'), GOOD_LINES), 4, 'no run-map: a refusal');
+  assert.equal((await run(path.join(series, 'nowhere'), GOOD_LINES)).code, 4, 'no run-map: a refusal');
+  const out = [];
   assert.equal(await main(['aa-verdicts'], l => out.push(l), {}), 4, 'no --series');
 });
 
@@ -173,4 +174,12 @@ test('The_command_reads_the_series_and_changes_nothing_but_its_own_json', async 
   for (const [f, text] of watched) assert.equal(readFileSync(path.join(series, f), 'utf8'), text, f);
   assert.ok(renderTable(report(series)).length > 14, 'the table has a line per G and a verdict line');
   writeFileSync(path.join(series, 'aa-verdicts.json'), '{}');
+});
+
+test('The_printed_table_never_clips_an_observation_or_a_replacing_evidence', () => {
+  const long = `${'a long observation '.repeat(40)}END`;
+  const rep = report(makeSeries());
+  const lines = renderTable({ ...rep, rows: rep.rows.map(r => (r.id === 'G-1' ? { ...r, observed: long, replacing: long } : r)) });
+  assert.ok(lines.filter(l => l.includes(long)).length === 2, 'both are printed whole');
+  assert.ok(!lines.some(l => l.includes('…')), 'nothing is cut with an ellipsis');
 });
