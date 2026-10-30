@@ -480,6 +480,18 @@ naming the length. Its boundary tests are 108 (accepted), 109 (refused) and 108 
 | B-K2 | (only when a session was stopped by `endCell`) an `api_request` record or a broker `settled` line for the in-flight request arrived after the SIGTERM | the grace flushes a killed session's last price | `not exercised` on a clean smoke; `refuted` → B is the price of a killed session and D-14 says so |
 | B-C1 | `contaminationHits` and `tokenHits` over the smoke: none | — | read by hand |
 
+**Amendment 2026-10-30 (B-S3, after the E2.S2 review and two smokes).** B-S3 is split. **B-S3** (host side) holds only when
+the samplers took ≥ 5 samples, counted the real token 0 times in cmdline and environ, counted the dummy ≥ 1 time (the
+positive control), and `tokenHits` over the out dir, links included, is clean. **B-S3b** (in-box) was "`token.txt` equals
+the dummy". Two smokes refuted the probe, not the box: in `20261029T233033Z` the Bash tool of CLI 2.1.310 did not pass
+`CLAUDE_CODE_OAUTH_TOKEN` to its subprocess (empty file); in `20261030T002834Z` a prompt that read the CLI's own
+`/proc/<pid>/environ` was refused by Opus 5.5 and by the CLI's refusal fallback, Opus 4.8. The probe is not reworded to get
+round a refusal: B-S3b is retired from the model smoke and recorded `not exercised` by design. The box-side fact stays
+proven by the effect tests (`printenv` in the box with a positive control) and by B-S3's positive control. The same smoke
+showed that `model_refusal_fallback` puts a second model (`claude-opus-4-8`) into a session: its prices row was read from
+the pricing page on 2026-10-30, and the broker prices any unknown model at the dearest known rates, flagged, so it never
+undercounts.
+
 ### Test scenarios
 
 Effect tests run the real `bwrap` (`sandboxGate`, E1 `test/helpers.mjs:48`) with E1's `probe`/`withoutPair` shape: every "cannot"
