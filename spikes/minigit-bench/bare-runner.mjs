@@ -24,6 +24,7 @@ import { EXIT, reconcile, runLoop } from './lib/bare-series.mjs';
 import { applyInit, describePlan, initPlan } from './lib/bare-init.mjs';
 import { maskFor, pilotRid, ridOf, seriesId as makeSeriesId } from './lib/bare-plan.mjs';
 import { buildRun, REPO, sampleOnceFor, SPIKE } from './lib/bare-config.mjs';
+import { CHECK_STOP_RULES } from './lib/crosscheck.mjs';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
 import { checkPins, recordAfterStop } from './lib/bare-pins.mjs';
@@ -40,7 +41,8 @@ const OPTIONS = {
   'after-stop': { type: 'string' }, reason: { type: 'string' }, stack: { type: 'string' }, 'series-id': { type: 'string' }, 'series-root': { type: 'string' }, 'versions-dir': { type: 'string' },
   'toolchains-dir': { type: 'string' }, register: { type: 'boolean' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
 };
-const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', 'T1 breach', 'T2 breach', 'second void: contaminated']);
+/** The series stops `--after-stop` cannot pass: the stop classes, a breach of any check under a `stop` policy (one list with `collectSession`'s, review N3) and the second contaminated void. */
+const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', ...CHECK_STOP_RULES, 'second void: contaminated']);
 /** The operator's default folders, read from the CURRENT home at each call (never captured when the module loads, so a test's fake HOME is honoured). */
 const defaults = () => {
   const home = os.homedir();

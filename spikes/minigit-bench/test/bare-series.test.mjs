@@ -528,3 +528,13 @@ test('A_rate_limit_void_is_a_resumable_halt_after_the_phase_is_settled_and_the_r
   assert.equal(again.exit, EXIT.done, again.message);
   assert.deepEqual(t.launched.slice(2), [rid('node', 'v2', 1), rid('csharp', 'v1', 2), rid('csharp', 'v2', 1)]);
 });
+
+test('A_T3_breach_under_the_t3_stop_policy_stops_the_series_with_the_rule_T3_breach', async () => {
+  const t = harness({ variants: { [rid('node', 'v1', 1)]: 't3' }, ctx: { policy: { ...harness().ctx.policy, t3: 'stop', t2: 'stop' } } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.stop, r.message);
+  assert.equal(readRunMap(t.ctx.runMapFile).value.stopped.rule, 'T3 breach');
+  assert.equal(t.launched.length, 2, 'nothing launches after the stop');
+  const lenient = harness({ variants: { [rid('node', 'v1', 1)]: 't3' } });
+  assert.equal((await runLoop({ ctx: lenient.ctx, deps: lenient.deps, map: lenient.map })).exit, EXIT.done, 'control: under the registered policy (t3 investigate) the same breach does not stop');
+});

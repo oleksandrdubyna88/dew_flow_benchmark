@@ -1,6 +1,6 @@
 // The bare-smoke fixture laid into a session's directory (and variants of it) and a fake score: what a stub `launchSession` leaves behind, shared by the tests that drive the
 // runner's loop without a model.
-import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { STAGED } from '../lib/smoke-load.mjs';
 import { spikeDir } from './helpers.mjs';
@@ -40,6 +40,17 @@ export function lay(layout, variant) {
     const file = path.join(layout.otel, 'otel-raw.ndjson');
     const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean);
     writeFileSync(file, `${rows.slice(0, Math.ceil(rows.length / 2)).join('\n')}\n`);
+  }
+  if (variant === 't3' || variant === 't3-t5') { // a transcript message is longer than the OTel record that names it: T at the CLI's rates disagrees with O (T3), and the broker's ledger disagrees with the envelope (T5)
+    const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+    const main = walk(layout.transcripts).find(f => f.endsWith('.jsonl') && !f.includes(`${path.sep}subagents${path.sep}`));
+    writeFileSync(main, readFileSync(main, 'utf8').replace(/"output_tokens":(\d+)/, (m, n) => `"output_tokens":${Number(n) + 50000}`));
+  }
+  if (variant === 't5') { // the broker's sealed ledger says it spent more than the envelope reports: B is not E
+    const lines = readFileSync(layout.files.brokerLog, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+    const i = lines.findLastIndex(l => l.event === 'summary' && l.sealed === true); // the sealed summary is what the ledger's view reads as B
+    lines[i] = { ...lines[i], spentUsd: lines[i].spentUsd + 0.5 };
+    writeFileSync(layout.files.brokerLog, `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
   }
   if (variant === 'corrupt') writeFileSync(layout.files.stream, 'this is not json\n'); // a collection that cannot read its evidence
   if (variant === 'auth') {

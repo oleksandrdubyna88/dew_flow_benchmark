@@ -230,6 +230,16 @@ function t5(E, B, policy) {
   });
 }
 
+// ---- series stops -----------------------------------------------------------------------------------------------------------
+
+/** The checks whose policy value can be `stop` (T4 has no policy: it only investigates). One rule for all of them (review N3): a breach under `stop` is a SERIES stop. */
+const STOPPING_CHECKS = Object.freeze(['t1', 't2', 't3', 't5']);
+/** The series-stop rule names of the checks, as the run-map's `stopped.rule` and the flags carry them. */
+export const CHECK_STOP_RULES = Object.freeze(STOPPING_CHECKS.map(k => `${k.toUpperCase()} breach`));
+
+/** `[{ rule: 'T<n> breach', check, detail }]` for every check of `c` (the `crosscheck` result) whose verdict is `stop`, i.e. a breach under a `stop` policy. */
+export const seriesStopsOf = c => STOPPING_CHECKS.flatMap(k => (c[k]?.verdict === 'stop' && c[k].status === 'breach' ? [{ rule: `${k.toUpperCase()} breach`, check: k.toUpperCase(), detail: c[k].detail }] : []));
+
 /** The five checks and the join that fed T3/T4. `cliVersion` selects the CLI-billed rates (none = published). `B` is the broker's ledger (optional). */
 export function crosscheck({ E, O, T, B = null, table, policy, cliVersion }) {
   const M = matchTO(T, O, policy.join);

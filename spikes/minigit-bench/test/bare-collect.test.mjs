@@ -10,6 +10,7 @@ import { collectSession } from '../lib/bare-collect.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
 import { STAGED, loadSessionDir } from '../lib/smoke-load.mjs';
 
+import { lay } from './bare-fixture.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
@@ -194,4 +195,17 @@ test('A_canary_and_a_credential_shape_in_evidence_files_are_still_found_by_the_o
     assert.notEqual(collect(shape, { scanLimits }).outcome.class, 'completed', `a credential shape in box/work is found (${scanLimits ? 'windows' : 'whole'})`);
     assert.equal(collect(sessionFromFixture(), { canaryTokens: [canary], scanLimits }).outcome.class, 'completed', 'control: no canary, no shape');
   }
+});
+
+test('A_T3_or_T5_breach_under_policy_stop_is_a_series_stop_like_T1_and_T2_and_under_investigate_is_not', () => {
+  const { policy } = ctx();
+  const tampered = variant => { const layout = sessionFromFixture(); lay(layout, variant); return layout; };
+  const stops = (variant, over) => collect(tampered(variant), { policy: { ...policy, ...over } }).seriesStops.map(x => x.rule);
+  assert.deepEqual(stops('t3', { t3: 'stop', t2: 'stop' }), ['T3 breach'], 'T3 under t3: stop (contract section 11, chosen for the data cells)');
+  assert.deepEqual(stops('t5', { t5: 'stop' }), ['T5 breach'], 'T5 under t5: stop');
+  assert.deepEqual(stops('t3', {}), [], 'control: t3 investigate is investigated');
+  assert.deepEqual(stops('t5', {}), [], 'control: t5 investigate is investigated');
+  const r = collect(tampered('t3'), { policy: { ...policy, t3: 'stop', t2: 'stop' } });
+  assert.ok(r.outcome.flags.includes('T3 breach'), 'the session keeps its class and gets the flag');
+  assert.equal(r.outcome.class, 'completed');
 });

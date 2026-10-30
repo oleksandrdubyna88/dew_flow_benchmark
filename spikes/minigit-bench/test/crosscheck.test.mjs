@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { envelopeView, transcriptView } from '../lib/claude-usage.mjs';
-import { crosscheck, loadPolicy, matchTO } from '../lib/crosscheck.mjs';
+import { CHECK_STOP_RULES, crosscheck, loadPolicy, matchTO, seriesStopsOf } from '../lib/crosscheck.mjs';
 import { apiRequests, decodeOtlpLogs, otelView } from '../lib/otel-decode.mjs';
 import { asTheCliBills, loadPrices, priceFor, priceUsage } from '../lib/prices.mjs';
 import { spikeDir } from './helpers.mjs';
@@ -333,4 +333,18 @@ test('T5_is_unchecked_without_a_ledger_without_an_envelope_or_with_an_unsettled_
   const killed = run({ B: ledger(0.31, { unsettled: 1 }) });
   assert.equal(killed.t5.status, 'unchecked');
   assert.match(killed.t5.why, /1 request.*never settled.*0\.31/, 'B is then the price of what the session did spend, and says so');
+});
+
+// ---- series stops: one generic rule over every check whose policy is `stop` (review N3) --------------------------------------------
+
+test('Every_check_whose_policy_is_stop_and_that_breaches_is_a_series_stop_and_no_other_verdict_is', () => {
+  const check = (id, verdict, status = 'breach') => ({ id, status, verdict, detail: `${id} says ${verdict}` });
+  const all = { t1: check('T1', 'stop'), t2: check('T2', 'stop'), t3: check('T3', 'stop'), t4: check('T4', 'investigate'), t5: check('T5', 'stop') };
+  assert.deepEqual(seriesStopsOf(all).map(x => x.rule), ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach'], 'T1, T2, T3 and T5 alike; T4 has no policy and only investigates');
+  assert.deepEqual(seriesStopsOf(all).map(x => x.detail), ['T1 says stop', 'T2 says stop', 'T3 says stop', 'T5 says stop']);
+  const lenient = { t1: check('T1', 'investigate'), t2: check('T2', 'otel incomplete'), t3: check('T3', 'investigate'), t4: check('T4', 'investigate'), t5: check('T5', 'investigate') };
+  assert.deepEqual(seriesStopsOf(lenient), [], 'a breach under any other policy is investigated or flagged, never a stop');
+  const passing = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, { ...v, status: 'pass', verdict: 'ok' }]));
+  assert.deepEqual(seriesStopsOf(passing), []);
+  assert.deepEqual([...CHECK_STOP_RULES], ['T1 breach', 'T2 breach', 'T3 breach', 'T5 breach'], 'the rules the runner refuses to pass with --after-stop are derived from the same list');
 });

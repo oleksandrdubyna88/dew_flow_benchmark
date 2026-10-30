@@ -6,6 +6,7 @@ import path from 'node:path';
 import { checkAliases, aliasRecord } from './aliases.mjs';
 import { bareOutcome } from './bare-outcome.mjs';
 import { contaminationHits } from './contamination.mjs';
+import { seriesStopsOf } from './crosscheck.mjs';
 import { emptyCounts } from './proc-sampler.mjs';
 import { ok } from './result.mjs';
 import { loadSessionDir } from './smoke-load.mjs';
@@ -53,11 +54,8 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   };
   const recomputeUsd = cost.known ? cost.usd : null;
   const classed = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
-  // T1 (the envelope disagrees with itself) under policy `stop` is a SERIES stop beside the class (registered, review M4): the class is how the session ended and stays, the flag says why the series stopped
-  const t1Stop = views.c.t1.verdict === 'stop' ? { rule: 'T1 breach', detail: views.c.t1.detail } : null;
-  // T2 under policy `stop` (the pre-registered fallback when the A/A cannot establish T's coverage, parent section 9) is the same kind of series stop; under `otel-incomplete` it is a flag
-  const t2Stop = views.c.t2.verdict === 'stop' ? { rule: 'T2 breach', detail: views.c.t2.detail } : null;
-  const seriesStops = [t1Stop, t2Stop].filter(Boolean);
+  // a check whose policy is `stop` and that breaches is a SERIES stop beside the class (T1, T2, T3 and T5 alike: registered, review M4 and N3): the class is how the session ended and stays, the flag says why the series stopped
+  const seriesStops = seriesStopsOf(views.c);
   const t2 = views.c.t2;
   const t2Incomplete = t2.status === 'breach' || (t2.status === 'unchecked' && /otel|lower bound/.test(t2.why ?? '')); // T2: O is not the envelope, or is incomplete: a flag, never a class; the cell stays and is marked
   const figure = stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null });
