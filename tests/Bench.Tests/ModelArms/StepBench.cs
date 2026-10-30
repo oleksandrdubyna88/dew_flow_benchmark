@@ -214,6 +214,9 @@ internal sealed class StepBench : IDisposable
         await GitAsync(target, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message);
     }
 
+    /// <summary>The object name <paramref name="revision"/> resolves to in the clone.</summary>
+    public async Task<string> RevParseAsync(string revision) => (await GitAsync(Paths.CloneFolder, "rev-parse", revision)).Trim();
+
     /// <summary>A second repository of one commit, its HEAD different from the clone's.</summary>
     public async Task<string> NewRepositoryAsync(string name)
     {

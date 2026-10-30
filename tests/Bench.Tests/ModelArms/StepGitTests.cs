@@ -57,7 +57,7 @@ public sealed class StepGitTests
         const string Hardened = " -c core.fsmonitor=false";
         runs.Should().Contain(bench.Git + Hardened + " rev-parse HEAD").And.Contain(bench.Git + Hardened + " rev-parse --short HEAD")
             .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv {head} HEAD");
-        runs.Should().NotContain(line => line.StartsWith("GIT_", StringComparison.Ordinal), "git runs without a GIT_* variable of the parent's");
+        runs.Where(line => line.StartsWith("GIT_", StringComparison.Ordinal)).Distinct().Should().Equal(["GIT_NO_LAZY_FETCH=1"], "git runs without any GIT_* variable of the parent's; the one it is given is the harness's own (no lazy fetch from a promisor remote)");
         head.Should().Be(await bench.HeadAsync());
     }
 
@@ -137,6 +137,37 @@ public sealed class StepGitTests
         diff.Should().Contain("+hello").And.NotContain("PLANTED", "the .diff is the plain patch");
     }
 
+    /// <summary>A partial clone names a promisor remote and a program to run for it (<c>remote.origin.uploadpack</c>); a blob the model deleted makes git fetch it lazily — and run that program — unless lazy fetching is switched off.</summary>
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_diff_over_a_missing_blob_runs_no_program_the_clones_promisor_remote_names_and_stops_resumable_without_a_done_marker()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the planted program is a shell script");
+        using var bench = new StepBench();
+        var marker = bench.Combine("markers", "promisor");
+        Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+        var upload = bench.ShimScript(bench.Combine("bin", "upload"), $"echo fetched >> '{marker}'\nexit 1\n");
+        bench.Replays("result-success.jsonl");
+        var plant = new ProbeAt(StepPoint.Launched, () => PlantMissingBlobAsync(bench, upload).GetAwaiter().GetResult());
+
+        var outcome = await bench.Runner(plant).RunAsync(bench.Context("CR", 1), Ct);
+
+        (File.Exists(marker) ? File.ReadAllText(marker) : string.Empty).Should().BeEmpty("git did not fetch the blob, so it ran no program the clone's config names");
+        outcome.IsStopped(5).Why.Should().Contain("2-hreview");
+        File.Exists(bench.Paths.Done("2-hreview")).Should().BeFalse();
+        File.Exists(bench.Paths.Diff("2-hreview")).Should().BeFalse();
+    }
+
+    private static async Task PlantMissingBlobAsync(StepBench bench, string upload)
+    {
+        await bench.CommitFileAsync("work.txt", "hello\n", "the arm's work");
+        var blob = await bench.RevParseAsync("HEAD:work.txt");
+        File.Delete(Path.Combine(bench.Paths.CloneFolder, ".git", "objects", blob[..2], blob[2..]));
+        await File.AppendAllTextAsync(
+            Path.Combine(bench.Paths.CloneFolder, ".git", "config"),
+            $"[core]\n\trepositoryformatversion = 1\n[extensions]\n\tpartialClone = origin\n[remote \"origin\"]\n\turl = {bench.Paths.CloneFolder}\n\tpromisor = true\n\tuploadpack = {upload}\n");
+    }
+
     [Fact]
     public async Task A_review_whose_last_result_is_a_limit_stops_resumable_and_writes_no_file()
     {
@@ -191,12 +222,14 @@ public sealed class StepGitTests
 
         first.IsStopped(5).Why.Should().Contain("no verdict to read");
         File.Exists(bench.Paths.Done("2-review")).Should().BeFalse();
+        bench.Log.ToString().Should().NotContain("finished without a verdict", "the first entry has nothing to resume");
         bench.Replays("result-success.jsonl");
 
         var second = await bench.Runner().RunAsync(bench.Context("C", 1), Ct);
 
         second.IsDone().Should().Match<StepOutcome.Done>(done => !done.Skipped && !done.Recovered);
         bench.Fake.Calls().Should().HaveCount(2, "a review that said nothing is asked again, not recovered as done");
+        bench.Log.ToString().Should().Contain("2-review: attempt 1 finished without a verdict — resuming it", "the relaunch costs a paid attempt and says why");
         bench.Fake.Calls()[1].After("--resume").Should().Be(bench.Fake.Calls()[0].After("--session-id"));
         File.ReadAllText(bench.NotesFile("notes/review.json")).Should().Be("""{"verdict":"ready","findings":[]}""");
     }

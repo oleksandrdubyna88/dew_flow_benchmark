@@ -78,7 +78,14 @@ internal sealed class StepRun
     private StepEntry Decide(RecoveryFacts facts)
     {
         var entry = StepRecovery.Decide(_step, facts, _spec, _context.Experiment.Limits);
-        return entry is StepEntry.RecoveredDone done && VerdictInputMissing() ? StepRecovery.Decide(_step, Unfinished(facts, done.Attempt), _spec, _context.Experiment.Limits) : entry;
+        return entry is StepEntry.RecoveredDone done && VerdictInputMissing() ? Relaunch(facts, done.Attempt) : entry;
+    }
+
+    /// <summary>Each such entry costs one paid attempt: it is said in the log.</summary>
+    private StepEntry Relaunch(RecoveryFacts facts, int attempt)
+    {
+        _log.Line($"{_step}: attempt {attempt.ToString(CultureInfo.InvariantCulture)} finished without a verdict — resuming it");
+        return StepRecovery.Decide(_step, Unfinished(facts, attempt), _spec, _context.Experiment.Limits);
     }
 
     /// <summary>True when the step derives a verdict, has none, and the last result cannot give one. The other derived outputs' inputs are declared present, so only the verdict can answer.</summary>
@@ -87,11 +94,11 @@ internal sealed class StepRun
         && StepOutputs.Reconcile(_spec, DerivedOutputs.FactsOf(_context, _files) with { BeforeExists = true, TaskBeforeExists = true }) is OutputAnswer.Resumable;
 
     /// <summary>The facts as they are, except that attempt <paramref name="attempt"/> did not finish: its stream reads as interrupted and its end line no longer says <c>hard-deadline</c> (its wall still counts against the budget).</summary>
-    private static RecoveryFacts Unfinished(RecoveryFacts facts, int attempt) =>
+    private RecoveryFacts Unfinished(RecoveryFacts facts, int attempt) =>
         facts with
         {
             LastEnd = new StepEnd.Interrupted("its verdict could not be read"),
-            Timing = [.. facts.Timing.Select(line => line is TimingLine.End end && end.Attempt == attempt && end.State == new StepEnd.HardDeadline().Word ? end with { State = string.Empty } : line)],
+            Timing = [.. facts.Timing.Select(line => line is TimingLine.End end && end.Step == _step && end.Attempt == attempt && end.State == new StepEnd.HardDeadline().Word ? end with { State = string.Empty } : line)],
         };
 
     private RecoveryFacts Facts()
