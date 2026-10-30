@@ -71,8 +71,12 @@ function readJsonBody(chunks) {
   }
 }
 
-/** The reason a finished answer was not billed, or null: an error status with the API's JSON error body (an overloaded or rate-limited call is free). */
-const unbilledAnswer = (status, apiError) => (status >= 400 && apiError ? 'upstream error' : null);
+/** The reason a finished answer was not billed, or null: an error status with the API's JSON error body (an overloaded or rate-limited call is free), or a 2xx from the free token counter. */
+const unbilledAnswer = (status, apiError, countTokens) => {
+  if (status >= 400 && apiError) return 'upstream error';
+  return countTokens && status >= 200 && status < 300 ? 'count_tokens is free' : null;
+};
+const isCountTokens = url => String(url).split('?')[0] === '/v1/messages/count_tokens';
 
 /** Refusals by their fixed reason word: `cap` (the cell's budget), `path` (off the route list) and `body` (a body that would make the API reach the network). A line with another reason is counted under it. */
 export const REFUSAL_REASONS = Object.freeze(['cap', 'path', 'body']);
@@ -200,7 +204,7 @@ function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names, 
   ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
   const progress = { partial: null }; // set once the answer has started: reads what the usage parser has so far
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
-    upRes => answer(upRes, res, entry, ledger, progress));
+    upRes => answer(upRes, res, entry, ledger, progress, isCountTokens(req.url)));
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
   let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
   up.on('finish', () => { sent = true; });
@@ -224,7 +228,7 @@ function settleOnError(ledger, entry, progress, note, waive = null) {
 }
 
 /** Relay the upstream's answer: a 3xx is refused (502); otherwise status, headers and body as they arrive, usage parsed on the way. */
-function answer(upRes, res, entry, ledger, progress) {
+function answer(upRes, res, entry, ledger, progress, countTokens) {
   const status = upRes.statusCode ?? 0;
   if (status >= 300 && status < 400) {
     ledger.emit({ seq: entry.seq, event: 'redirect-refused', status, location: upRes.headers.location ?? null });
@@ -248,7 +252,7 @@ function answer(upRes, res, entry, ledger, progress) {
   upRes.on('end', () => {
     if (!clientClosedEarly) res.end();
     const { model, usage, apiError = false } = sse ? parser.result() : readJsonBody(chunks);
-    ledger.settle(entry, model, usage, { status, sse, clientClosedEarly }, unbilledAnswer(status, apiError));
+    ledger.settle(entry, model, usage, { status, sse, clientClosedEarly }, unbilledAnswer(status, apiError, countTokens));
   });
   const failed = e => {
     settleOnError(ledger, entry, progress, { status, error: e.code ?? e.message, clientClosedEarly });

@@ -398,6 +398,25 @@ test('An_upgrade_request_reaches_the_upstream_without_the_upgrade_headers', asyn
   }
 });
 
+test('A_count_tokens_answer_is_free_and_the_ledger_says_why_while_a_messages_answer_with_the_same_body_is_not', async () => {
+  const stub = await stubUpstream((_q, res) => json(res, 200, { input_tokens: 1234 }));
+  const b = await startBroker({ stub, capUsd: 10 });
+  try {
+    assert.equal((await viaSocket(b.socketPath, { path: '/v1/messages/count_tokens?beta=true' })).status, 200);
+    const line = b.lines.find(l => l.event === 'settled');
+    assert.equal(line.chargedUsd, 0, 'count_tokens is not billed');
+    assert.deepEqual(line.priced, { known: true, usd: 0, why: 'count_tokens is free' });
+    assert.equal(b.broker.summary().spentUsd, 0);
+    assert.equal(b.broker.summary().reservedUsd, 0);
+    // control: the same answer from /v1/messages carries no usage and keeps the reservation
+    assert.equal((await viaSocket(b.socketPath, { path: '/v1/messages' })).status, 200);
+    assert.equal(b.broker.summary().spentUsd, 0.05);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('The_sse_usage_feeder_handles_events_split_across_chunks_and_crlf', () => {
   const f = parseSseUsage();
   const body = sseBody().replaceAll('\n', '\r\n');

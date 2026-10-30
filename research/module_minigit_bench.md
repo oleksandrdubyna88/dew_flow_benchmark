@@ -324,7 +324,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   parsed on a 2xx, or a connection dropped before any answer after the request was sent. **A stream cut or reset after the answer began is charged the
   usage already parsed** (`parser.result()`), priced (at the dearest known rates when the model is unknown or absent), and **never less than the
   reservation** (`budget.settle` with `floor`; before: the parsed usage was thrown away, and 200k Sonnet input tokens followed by a reset cost 0.05 instead of 0.40); **an upstream error answer (status >= 400 with the API's
-  JSON `type: "error"` body) and a dial that failed before the request was sent charge 0** (`priced: { known: true, usd: 0, why }`), so four
+  JSON `type: "error"` body), a `2xx` from `count_tokens` (it is free: `why: "count_tokens is free"`) and a dial that failed before the request was sent charge 0** (`priced: { known: true, usd: 0, why }`), so four
   `529` answers do not use the cap. A disconnecting client is still charged: `drain(timeoutMs)` waits (ceiling 120 s) until nothing is in
   flight, and the collection calls it before it writes `broker.json` and `meta.json`, recording `unsettledAtClose { count, reservedUsd }`. The
   cap is **soft** (D-17a): a session over 1.1 x the cap is flagged. The ledger line names header NAMES, never a value, a body or the token.
@@ -419,6 +419,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
 | A body with a `web_search_*` (or any other non-`custom`) tool, `mcp_servers`, `container`, a URL source, a duplicate key or a content-encoding is `403` with `reason: "body"`, never forwarded, signed or reserved; an allowed body is forwarded byte for byte | `broker-body.test.mjs` |
 | No hop-by-hop header reaches the upstream, including `upgrade`, `http2-settings` and every name listed in `Connection` | `broker.test.mjs` |
+| A `2xx` `count_tokens` answer is charged 0 with the reason in the ledger line (before: the 0.05 reservation) | `broker.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
