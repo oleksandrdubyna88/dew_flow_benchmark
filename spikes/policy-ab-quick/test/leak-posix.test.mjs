@@ -78,3 +78,11 @@ test('A_dot_dot_after_a_link_is_not_resolved_lexically_because_the_real_parent_i
   assert.deepEqual(outside([call('Bash', { command: 'ls /srv/tc/typescript-7.0.2/../claude-2.1.310' })], { allow: ['/srv/tc/claude-2.1.310'], isLink: () => false }), [], 'no component is a link: lexical');
   assert.equal(outside([call('Bash', { command: 'cd /srv/me/box/work/up/../x' })], { isLink: p => p.endsWith('/up') }).length, 1, 'a link inside the tree does not make the climb out of it safe');
 });
+
+test('A_call_may_name_the_directory_its_relative_paths_are_taken_from_and_paths_it_extracted_itself', () => {
+  const at = (cwd, command, paths) => outside([{ agent: 'main', tool: 'Bash', input: { command }, cwd, paths }]).map(h => h.resolved);
+  assert.deepEqual(at('/srv/other', 'cat ../x', ['rel/y']), ['/srv/x', '/srv/other/rel/y'], 'a `..` chain and a given path from the call\'s own directory, not the tree');
+  assert.deepEqual(at('/srv/me/box/work/src', 'cat ../a', ['b']), [], 'inside the tree from a subdirectory');
+  assert.deepEqual(at(undefined, 'cat ../../other', []), ['/srv/me/other'], 'no cwd: the tree, as ever');
+  assert.deepEqual(at(null, 'cat ../x /abs/y ~/z', ['rel/y', '/abs/w']), ['/abs/y', '/home/u/z', '/abs/w'], 'an unknown directory: a relative path is skipped, a rooted one is not');
+});

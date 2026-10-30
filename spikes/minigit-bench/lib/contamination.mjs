@@ -5,10 +5,9 @@
 // A rule is a named entry of CONTAMINATION_RULES, so a test iterates them and a new rule cannot be added unexercised. A hit is
 // { severity: 'high' | 'low', rule, source, where, excerpt }: the excerpt is at most 120 characters, and a credential in it is
 // masked (token-scan.mjs) before anything else looks at the text. At most one hit per rule per record.
-import { findOutsideAccesses } from '../../policy-ab-quick/lib/leak.mjs';
 import { EGRESS_HOSTS } from './egress-hosts.mjs';
 import { escapeRe, firstMatch, foreignPr, foreignRunRef, isHit, lower, upstreamSolutions } from './contamination-refs.mjs';
-import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, walksDown } from './contamination-reach.mjs';
+import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, reachesOf, walksDown } from './contamination-reach.mjs';
 import { createdLinks, linkOut, linkWalk } from './contamination-links.mjs';
 import { maskTokens } from './token-scan.mjs';
 
@@ -70,13 +69,13 @@ function web(text, ctx, call) {
 
 function outsidePath(text, ctx, call) {
   const skeleton = new Set(ctx.skeleton ?? []); // a directory that only holds the box's binds: an exact reach for it shows nothing the box does not expose
-  const found = findOutsideAccesses([call], { treeRoot: ctx.treeRoot, home: ctx.boxHome ?? ctx.home, flavour: 'posix', allow: ctx.allow ?? [], isLink: ctx.isLink }).filter(f => !skeleton.has(f.resolved));
+  const walks = walksDown(text, call);
+  const found = reachesOf(call, ctx, walks).filter(f => !skeleton.has(f.resolved)); // a shell command: each word from the directory the `cd` segments before it left (contamination-reach.mjs)
   if (found.length === 0) return null;
   const roots = [...(ctx.partnerPaths ?? []), ...(ctx.harnessPaths ?? []), ctx.home].filter(Boolean);
-  const walks = walksDown(text, call);
   const high = found.find(f => isHigh(f.resolved, roots, walks));
   const first = high ?? found[0];
-  return { ...at(Math.max(0, text.indexOf(first.path)), high ? 'high' : 'low'), excerpt: first.resolved };
+  return { ...at(Math.max(0, text.indexOf(first.path)), high ? 'high' : 'low'), excerpt: first.excerpt ?? first.resolved };
 }
 
 /** The rules, in report order. `find(text, ctx, call)` returns `{ index, severity?, excerpt? }` or null; `scope` says what it reads. */

@@ -95,17 +95,22 @@ function outsideWin32(calls, { treeRoot, home }) {
   }));
 }
 
+const ROOTED = /^(?:\/|\$\{?HOME\}?(?:\/|$)|~(?:\/|$))/;
+/** The raw paths of a call, with those the caller already extracted (`call.paths`); a relative one is dropped when the call's directory is unknown (`call.cwd === null`). */
+const rawPathsOf = c => [...candidatePaths(c.tool, c.input, posixPathsIn), ...(c.paths ?? [])].filter(raw => c.cwd !== null || ROOTED.test(raw));
+
 function outsidePosix(calls, { treeRoot, home, allow, isLink }) {
   const root = posix.resolve(treeRoot);
-  return calls.flatMap(c => candidatePaths(c.tool, c.input, posixPathsIn).flatMap(raw => {
-    const resolved = resolvePosix(raw, { treeRoot: root, home, isLink });
+  return calls.flatMap(c => rawPathsOf(c).flatMap(raw => {
+    const resolved = resolvePosix(raw, { treeRoot: c.cwd ?? root, home, isLink }); // a relative path is taken from the call's own directory (`call.cwd`), else from the tree
     const known = !keepsDotDot(resolved);
     return known && (isInsidePosix(resolved, root) || allowedPosix(resolved, allow)) ? [] : [hit(c, raw, resolved)];
   }));
 }
 
 /**
- * calls: [{agent, tool, input}] (audit summaries or raw tool_use inputs). `flavour` is 'win32' (default) or 'posix'; `allow` is the
+ * calls: [{agent, tool, input}] (audit summaries or raw tool_use inputs); posix only: `cwd` = the absolute directory a relative path is taken from (default the tree; null = unknown, a relative path is then skipped) and `paths` = raw paths the caller
+ * extracted itself, judged with the ones read from the input. `flavour` is 'win32' (default) or 'posix'; `allow` is the
  * POSIX allowed prefixes, always passed by the caller (a default would hide a reach); the win32 flavour keeps its own list. `isLink(path)` (posix only, optional) says whether a path is a symbolic link:
  * a `..` after one is not resolved lexically (see `resolvePosix`).
  */

@@ -18,7 +18,7 @@ const bash = command => sev('Bash', { command });
 const above = path.dirname(home);
 
 test('A_walk_from_the_root_or_from_a_dir_above_the_home_is_high', () => {
-  const walks = ['find / -name settings.json', 'cd / && cat home/x/rsd/minigit/s/9804fc/harness/settings.json', 'grep -r token /', 'grep -rn token /', 'ls -R /', 'ls -laR /', 'tar cf - / | wc -c', 'du -a /', 'tree /',
+  const walks = ['find / -name settings.json', `cd / && cat ${path.relative('/', path.join(layout.harness, 'settings.json'))}`, 'grep -r token /', 'grep -rn token /', 'ls -R /', 'ls -laR /', 'tar cf - / | wc -c', 'du -a /', 'tree /',
     `find ${above} -name audit.mjs`, `cd ${above} && cat ${path.basename(home)}/rsd/minigit/s-20261030-92a9/s/9804fc/harness/audit.mjs`, 'grep --recursive token /'];
   for (const command of walks) assert.equal(bash(command), 'high', command);
   assert.equal(sev('Grep', { pattern: 'token', path: '/' }), 'high', 'the Grep tool searches below its path');

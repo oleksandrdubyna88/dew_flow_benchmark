@@ -2,22 +2,16 @@
 // reads the harness and the home, while the path scan sees only the word `up`. Two layers, both lexical (the target is resolved from the link's own directory, never followed on the host):
 //   link-out  - a call that CREATES a link (`ln -s`, `cp -s`, a Node or Python `symlink`) whose target is outside the work tree and outside what the box binds on purpose: high when the target is under a protected root
 //               (the same scale as `outside-path`; a link to /etc or /usr/bin/python3 is low), whatever happens next;
-//   link-walk - a walk (grep -r, find, tar, du, cp -r, rsync, tree, `cd`, the Grep and Glob tools) whose path, or any component of it, is a link that leaves them: a link this session's calls created (also one it deleted
-//               afterwards), or one the work tree holds at collection (`ctx.readLink`, an `lstat` + `readlink` on the host).
-// A word the scan cannot resolve (a variable, a glob, a substitution) is skipped, and relative paths are taken from the work tree, moved by a `cd` of the same command: the same approximation as leak.mjs.
+//   link-walk - a walk (grep -r, find, tar, du, cp -r, rsync, tree, the Grep and Glob tools) whose path, or any component of it, is a link that leaves them, or a `cd` into one (the directory is then inside the link's target): a link this
+//               session's calls created (also one it deleted afterwards), or one the work tree holds at collection (`ctx.readLink`, an `lstat` + `readlink` on the host).
+// A word the scan cannot resolve (a variable, a glob, a substitution) is skipped, and relative paths are taken from the directory the `cd` segments of the same command moved to (contamination-cwd.mjs, one ordered pass for every
+// rule): the same approximation as leak.mjs. A directory the scan cannot place (`cd -`, `$OLDPWD`) leaves the relative words after it unplaced, and they are skipped.
 import path from 'node:path';
-import { SEARCH_TOOLS, SHELL_TOOLS, WALKS, isHigh, under, walksDown } from './contamination-reach.mjs';
+import { absOf, resolvable, shellSteps } from './contamination-cwd.mjs';
+import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, segmentWalks, under } from './contamination-reach.mjs';
 
 const posix = path.posix;
-const SEGMENT = /[;&|\n]+/;
-const OPAQUE = /[$*?[\]{}`()]/;
 const SCRIPT_LINK = /symlink(?:Sync)?\(\s*(["'`])(.+?)\1\s*,\s*(["'`])(.+?)\3/g;
-
-const unquote = w => w.replace(/^(["'`])(.*)\1$/, '$2');
-const wordsOf = segment => (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map(unquote);
-const homeOf = ctx => ctx.boxHome ?? ctx.home ?? '/';
-const absOf = (word, cwd, ctx) => posix.resolve(cwd, word.replace(/^(\$\{?HOME\}?|~)(?=\/|$)/, homeOf(ctx)));
-const resolvable = w => w !== undefined && !OPAQUE.test(w);
 
 /** Whether a simple command creates a symbolic link: `ln -s`, `ln -sf`, `ln --symbolic`, `cp -s`, `cp --symbolic-link`. */
 const makesLink = words => ['ln', 'cp'].includes(words[0]) && words.slice(1).some(w => /^-[A-Za-z]*s[A-Za-z]*$/.test(w) || /^--symbolic(?:-link)?$/.test(w));
@@ -33,42 +27,36 @@ const linkPathOf = ({ target, named }) => {
   return named.endsWith('/') ? `${named}${posix.basename(target)}` : named;
 };
 
-/** `{ linkAbs, targetAbs }` of a link command: the target is resolved from the link's own directory. */
+/** `{ linkAbs, targetAbs }` of a link command: the target is resolved from the link's own directory. Null when the link's own path cannot be placed (a relative word in an unknown directory). */
 function linkOf(words, cwd, ctx) {
   const operands = operandsOf(words);
-  if (!operands) return null;
-  const linkAbs = absOf(linkPathOf(operands), cwd, ctx);
-  return { linkAbs, targetAbs: absOf(operands.target, posix.dirname(linkAbs), ctx) };
+  const linkAbs = operands ? absOf(linkPathOf(operands), cwd, ctx) : null;
+  return linkAbs === null ? null : { linkAbs, targetAbs: absOf(operands.target, posix.dirname(linkAbs), ctx) };
 }
 
 /** The links a Node or Python snippet makes, `symlinkSync('<target>', '<link>')` or `os.symlink(...)`, from the directory the command is in at that point. */
-const scriptLinksOf = (segment, cwd, ctx) => [...segment.matchAll(SCRIPT_LINK)].map(m => {
+const scriptLinksOf = (segment, cwd, ctx) => [...segment.matchAll(SCRIPT_LINK)].flatMap(m => {
   const linkAbs = absOf(m[4], cwd, ctx);
-  return { linkAbs, targetAbs: absOf(m[2], posix.dirname(linkAbs), ctx) };
+  return linkAbs === null ? [] : [{ linkAbs, targetAbs: absOf(m[2], posix.dirname(linkAbs), ctx) }];
 });
 
 /** The links one simple command makes: `ln -s`, `cp -s` or a script's symlink call, all resolved from the same working directory. */
-const madeBy = (segment, words, cwd, ctx) => [...(makesLink(words) ? [linkOf(words, cwd, ctx)].filter(Boolean) : []), ...scriptLinksOf(segment, cwd, ctx)];
-const walkedBy = (segment, words, cwd, ctx) => (WALKS.test(` ${segment}`) ? words.filter(w => !w.startsWith('-') && resolvable(w)).map(w => absOf(w, cwd, ctx)) : []);
+const madeBy = (step, ctx) => [...(makesLink(step.words) ? [linkOf(step.words, step.cwd, ctx)].filter(Boolean) : []), ...scriptLinksOf(step.segment, step.cwd, ctx)];
 
-/** A `cd` moves the working directory and is itself a walk target (what is below it is read next). */
-function cdStep(state, word, ctx) {
-  if (!resolvable(word)) return state;
-  const cwd = absOf(word, state.cwd, ctx);
-  return { ...state, cwd, walks: [...state.walks, cwd] };
+/** The paths a walking simple command names, resolved from the directory it runs in. */
+const namedBy = (step, ctx) => step.words.filter(w => !w.startsWith('-') && resolvable(w)).map(w => absOf(w, step.cwd, ctx)).filter(p => p !== null);
+
+/** A `cd` is no walk, but the directory it moves to is where the next relative words go: a `cd` INTO a link that leaves the tree is a link-walk. */
+const cdWalk = step => (step.cd.to === null ? [] : [step.cd.to]);
+
+function walkedBy(step, ctx) {
+  if (step.cd) return cdWalk(step);
+  return segmentWalks(step.segment) ? namedBy(step, ctx) : [];
 }
-
-/** The state after one simple command: a `cd`, a link command (adds its link), a walking command (adds the paths it names). */
-function step(state, segment, ctx) {
-  const words = wordsOf(segment.trim());
-  if (words[0] === 'cd') return cdStep(state, words[1], ctx);
-  return { ...state, links: [...state.links, ...madeBy(segment, words, state.cwd, ctx)], walks: [...state.walks, ...walkedBy(segment, words, state.cwd, ctx)] };
-}
-
-const shellState = (text, ctx) => text.split(SEGMENT).reduce((state, segment) => step(state, segment, ctx), { cwd: ctx.treeRoot, links: [], walks: [] });
 
 const commandOf = call => String(call.input?.command ?? '');
-const linksOfCall = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? shellState(commandOf(call), ctx).links : []);
+const stepsOf = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? shellSteps(commandOf(call), ctx) : []);
+const linksOfCall = (call, ctx) => stepsOf(call, ctx).flatMap(step => madeBy(step, ctx));
 
 /** Every link the calls create, `{ at: index of the call, linkAbs, targetAbs }`: what a later call of the same session may walk through, even when the link is gone by the end. */
 export const createdLinks = (calls, ctx) => calls.flatMap((call, at) => linksOfCall(call, ctx).map(l => ({ at, ...l })));
@@ -114,11 +102,10 @@ export function linkOut(text, ctx, call) {
   return bad ? shown(bad, ctx) : null;
 }
 
-const walkTargets = (call, ctx) => (SEARCH_TOOLS.has(call.tool) ? [absOf(String(call.input?.path ?? '.'), ctx.treeRoot, ctx)] : shellState(commandOf(call), ctx).walks);
+const walkTargets = (call, ctx) => (SEARCH_TOOLS.has(call.tool) ? [absOf(String(call.input?.path ?? '.'), ctx.treeRoot, ctx)] : stepsOf(call, ctx).flatMap(step => walkedBy(step, ctx)));
 
 /** link-walk: a walk whose path, or a component of it, is a link that leaves the work tree and the binds. `ctx.links` are the links the session's calls made up to this one. */
-export function linkWalk(text, ctx, call) {
-  if (!walksDown(text, call)) return null;
+export function linkWalk(_text, ctx, call) {
   const bad = walkTargets(call, ctx).map(t => leavingLink(t, ctx)).find(Boolean);
   return bad ? shown(bad, ctx) : null;
 }
