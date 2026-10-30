@@ -657,17 +657,23 @@ those added over the snapshot, and the flags of `inputs/package-flags.json`.
 **The pre-registration files** (`inputs/`, written by scripts in `prereg/`, never typed): `prompts-bare.json`, `prediction.md` and the quote half of `analysis-contract.md` are quoted from parent plan commit
 `85c54b7` (an ancestor of origin/main); `heldout-prereg.json` is derived from the manifest, the archive hash and the ids-only calibration with no key read; `spend-prior.json` is read from the capture and
 smoke meta files and the two figures of the E2 plan. `seed-commit` writes only the seed's sha256 to `inputs/seed.sha256` (the seed itself, mode 600, outside git); `seed-reveal` writes `inputs/seed.txt` after
-the A/A and refuses a seed that does not hash to the committed value. Not written by code: `statement.md`, the operationalizations below the marker of `analysis-contract.md`, `checklist.json` (Opus text);
-`cache-snapshots.json` (from the real snapshots) and `seed.sha256` (the operator runs the command).
+the A/A and refuses a seed that does not hash to the committed value. Written by Opus, not by code: `statement.md`, the operationalizations below the marker of `analysis-contract.md`, `checklist.json`. `seed.sha256` is made when the operator runs `seed-commit`.
+To re-quote from a later commit of main: `node spikes/minigit-bench/prereg/extract-prompts.mjs --parent-commit <sha>`, `…/extract-prediction.mjs --parent-commit <sha>`, `…/extract-contract.mjs --parent-commit <sha>` (the tests read the commit from the files).
 
-**Snapshots made on this machine (2026-10-30).** Node: `cache-node-6b2e045ff624`, 40,072,459 bytes (TypeScript 7.0.2, `@typescript/typescript-linux-x64` 7.0.2, `@types/node` 26.6.6 resolved at snapshot time, `undici-types` 8.9.0), registered in `inputs/cache-snapshots.json`.
-The C# snapshot's NuGet cache is EMPTY (a .NET 10 console app restores from the SDK's own packs) and its dotnet first-run state is not reproducible (two runs of one recipe hashed differently), so a
-registered hash is of one run. **The C# snapshot is not registered**: the host's dotnet SDK was upgraded by apt to 10.0.114 at 06:19 on 2026-10-30, the recipe pins 10.0.113 (`expectStdout`) and the tool refuses; the
-pinned-toolchain preflight and `The_box_can_run_dotnet_and_reports_the_one_pinned_sdk` fail for the same reason. Either the 10.0.113 SDK is restored or the pin is changed by a dated amendment (an operator decision), then
-`snapshot --stack csharp --register` is run again.
+**Snapshots made on this machine (2026-10-30), registered in `inputs/cache-snapshots.json`.** C#: `cache-csharp-0a5733e2d4f1`, 1,025 bytes, tree sha256 `0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8`,
+made under dotnet SDK 10.0.114 (the recipe pins it: `expectStdout`); its NuGet cache is EMPTY (a .NET 10 console app restores from the SDK's own packs) and its dotnet part holds only the first-run sentinels and the
+workload-advertising files. Node: `cache-node-6b2e045ff624`, 40,072,459 bytes (TypeScript 7.0.2, `@typescript/typescript-linux-x64` 7.0.2, `@types/node` 26.6.6 resolved at snapshot time, `undici-types` 8.9.0), made under node v26.12.1.
+**Reproducibility.** The first C# recipe runs differed in two files: an ASP.NET development certificate generated at random and a build server's shared-memory file. The recipe sets `DOTNET_GENERATE_ASPNET_CERTIFICATE=false` and the
+build-server-off keys for ITS steps only (`stacks.csharp.env`, added to the box environment through `agentEnv`'s `extra`); nothing is excluded from the hash, and two runs hash identically. Session boxes keep the defaults. The Node
+snapshot is not reproducible (npm's cache index carries timestamps), so a registered hash identifies one run; it was made before the node pin step was added to the recipe, so its record has no `steps`. A snapshot is registered once
+(`registerSnapshot`); a stack is never replaced.
 
-**Not built, or waiting.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). Waiting on the E2.S2 review fixes in the broker, the egress proxy and `sandbox.mjs`: the broker's `reason` on refused
-lines (row 7 needs it), seam 2 (`BUILD_SERVERS_OFF`: the bare box still runs with the build servers off until the three keys leave `agentEnv`'s fixed list) and seam 3 (bytes per tunnel in the egress log).
+**Seams of E2's files, after the E2 merge.** Seam 2: `BUILD_SERVERS_OFF` is exported from `sandbox.mjs` and no longer part of `agentEnv`'s base or `AGENT_ENV_KEYS`; the bare box runs with the build servers at their defaults
+(`test/build-servers.test.mjs`, including an effect test that a background process ends with the box). Seam 3: a piped tunnel writes one `closed` line `{ host, port, bytesUp, bytesDown }`, `egressSummary` sums them per host in `bytes`,
+and the session record's `egress` leaf carries `bytes`, `bytesCaptured` and `cacheGrowthBytes`. `callsOf` lives in `lib/stream-calls.mjs`; the session loader is `loadSessionDir` in `lib/smoke-load.mjs` (one loader, every read through
+`lib/agent-files.mjs`, nothing required). Row 7 reads the broker's `reason`: only `cap` makes `killed: cap`; `path`, `body`, `busy` and a missing reason do not.
+
+**Not built.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). The prior spend (`inputs/spend-prior.json`) is $0.8218 over seven paid instrument sessions, not the plan's about $0.43.
 
 ## Entry points
 
