@@ -10,15 +10,18 @@ import { BARE_RESERVE_USD, OVER_CAP_FACTOR } from './budget.mjs';
 export const LEDGER_KINDS = Object.freeze(['prior', 'rehearsal', 'aa', 'pilot', 'data', 'void']);
 
 const sum = lines => lines.reduce((a, l) => a + l.usd, 0);
+/** A ledger line that is an EVENT (`{ event, ... }`: a harness acceptance, an `--after-stop`) carries no spend and is never summed. */
+const spendLines = ledger => ledger.filter(l => l.event === undefined);
 
 function assertKinds(ledger) {
-  const bad = ledger.find(l => !LEDGER_KINDS.includes(l.kind));
+  const bad = spendLines(ledger).find(l => !LEDGER_KINDS.includes(l.kind));
   if (bad) throw new Error(`ledger line of kind '${bad.kind}': the legal kinds are ${LEDGER_KINDS.join(', ')}`);
 }
 
 /** `{ ceilingUsd, bareUsd }`: what the ledger holds against each limit. */
-export function spendTotals(ledger) {
-  assertKinds(ledger);
+export function spendTotals(all) {
+  assertKinds(all);
+  const ledger = spendLines(all);
   return { ceilingUsd: sum(ledger), bareUsd: sum(ledger.filter(l => l.kind !== 'prior')) };
 }
 

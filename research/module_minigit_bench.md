@@ -591,7 +591,8 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 | State | `lib/run-map.mjs`, `lib/amendments.mjs`, `lib/alias-store.mjs` | the run-map and its transitions, the dated amendment lines, the D12 baseline |
 | Scoring | `lib/score-run.mjs` | `score-session.mjs` as a child under `taskset -c 0-13`, bounded as a whole |
 | Caches | `lib/cache-snapshot.mjs`, `lib/packages.mjs`, `inputs/cache-recipe.json`, `inputs/package-flags.json` | the two hashed snapshots and the package list with its flags |
-| Guard | `lib/prereg-guard.mjs` | the pre-registration guard and `harnessIdentity` |
+| Guard | `lib/prereg-guard.mjs`, `lib/prereg-consistency.mjs` | the pre-registration guard and `harnessIdentity`; the C# prompt's SDK against the pin |
+| Pins | `lib/bare-pins.mjs` | what the disk holds NOW against the run-map (stacks file and its pins, prices file, registered snapshots, prereg tag, seed hash, harness identity); records an accepted harness |
 | Quiet | `lib/cpu-sampler.mjs`, `lib/quiet.mjs`, `inputs/quiet.json` | the machine-quiet check, the phase sampler, the spin probe |
 
 **Exit codes.** 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet for 30 min, the preflight, a scorer environment failure or `scorer-timeout`) |
@@ -634,8 +635,12 @@ A `stop:` class halts the series; the session is kept. A void session is not sco
 
 **Resume** (`bare-runner.mjs resume`). First every canary of the manifests is unplanted, then `retireStale` runs, then each `launching` session is settled by what its directory says: `meta.json`
 present means the launch ended (adopted), paid work without it is a `void: harness` charged its settled spend plus unsettled requests at the reservation, nothing paid means planned
-again under the same rid. A changed pin, stacks file, prices file, snapshot hash, prereg tag or seed hash refuses the resume naming it; a changed harness identity is accepted only with
-`--accept-harness <identity> --amendment <date>` and a dated line of `inputs/amendments.md` that names `harness:<12 hex>`; a series stop is never passed (`--after-stop` refuses it).
+again under the same rid. Every paid `run` and every `resume` first reads the pins FROM DISK (`lib/bare-pins.mjs`: `currentFromDisk`) and compares them with the run-map (review M2; the first version compared
+the map with itself, so no drift could show). A changed pin, stacks file, prices file, registered snapshot hash, prereg tag or seed hash refuses the run naming the field (exit 4); a changed harness identity is accepted only with
+`--accept-harness <identity> --amendment <date>` and a dated line of `inputs/amendments.md` that names `harness:<12 hex>`. An accepted identity is written to the run-map (`harnessAccepted`) and as ONE ledger line
+`{ event: 'accept-harness', from, to, amendment, t }` (an event line carries no spend and is never summed; accepting the same identity again writes nothing). The guard reads the run-map from disk at every call, so it sees the
+acceptance, and `ctx.harnessIdentity` is the identity on disk now; each session's `run.harnessIdentity` is the identity that LAUNCHED it and a rebuilt record keeps it. A series stop is never passed (`--after-stop` refuses it).
+A dry run skips the check (it claims and spends nothing). `main(argv, write, seams)` and `buildRun({ …, seams })` take `{ repo, home }` for tests only: the operator's token is never read in a test.
 
 **The pre-registration guard** (`preregGuard`, before every launch): the tag `prereg/minigit-bare-<date>` is on origin and peels to the run-map's commit; every registered file at HEAD is its
 tagged blob (the plan's S3 table plus `stacks.json`, `prices-2026-10-29.json` and `hashes.txt`, which the run reads and which decide the toolchain, the money and the inputs: review M3), except `amendments.md` (append-only), `seed.txt` (absent at the tag, hashing to `seed.sha256`, required for a data pair) and `crosscheck-policy.json` (free only in `t2`, `t3` and

@@ -8,6 +8,7 @@ import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
 import { ridOf } from '../lib/bare-plan.mjs';
 import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
+import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
 import { openSeries, readRunMap, transition } from '../lib/run-map.mjs';
 import { STAGED } from '../lib/smoke-load.mjs';
@@ -237,4 +238,15 @@ test('Resume_unplants_canaries_first_and_settles_a_cut_short_launch_by_what_its_
   assert.equal(r.value.sessions[rid('csharp', 'v1', 1)].class, 'completed', 'the finished launch is adopted, not re-run');
   assert.equal(r.value.sessions[rid('node', 'v1', 1)].status, 'planned', 'nothing was paid: planned again under the same rid');
   assert.equal(readLedger(t.ctx.ledgerFile).length, 1, 'only the adopted session is charged');
+});
+
+test('A_record_carries_the_harness_identity_that_ran_the_session_even_when_it_is_rebuilt_under_another', async () => {
+  const t = harness();
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.done, r.message);
+  const entry = readRunMap(t.ctx.runMapFile).value.sessions[rid('csharp', 'v1', 1)];
+  assert.equal(entry.run.harnessIdentity, t.ctx.harnessIdentity, 'the run-map holds the identity at the launch');
+  const rebuilt = writeSessionRecord({ ctx: { ...t.ctx, harnessIdentity: 'b'.repeat(64) }, entry, score: null });
+  assert.equal(rebuilt.ok, true, rebuilt.reason);
+  assert.equal(rebuilt.value.run.harnessIdentity.value, t.ctx.harnessIdentity, 'a later harness (an accepted fix) does not rewrite what ran then');
 });

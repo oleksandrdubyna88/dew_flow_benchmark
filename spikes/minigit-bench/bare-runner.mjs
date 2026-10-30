@@ -13,7 +13,7 @@
 // The runner re-executes itself under `taskset -c 6,7` (an env marker stops a loop), so its broker, receiver, proxy and sampler sit on core 3, the harness's (parent 4.1).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -25,9 +25,10 @@ import { maskFor, pilotRid, ridOf, seriesId as makeSeriesId } from './lib/bare-p
 import { buildRun, REPO, sampleOnceFor, SPIKE } from './lib/bare-config.mjs';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
+import { checkPins } from './lib/bare-pins.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
-import { checkResumable, planSession, readRunMap } from './lib/run-map.mjs';
+import { planSession, readRunMap } from './lib/run-map.mjs';
 import { commitSeed, revealSeed } from './lib/seed.mjs';
 import { spendGate, spendTotals } from './lib/spend-gate.mjs';
 import { runBounded } from './lib/run.mjs';
@@ -112,7 +113,7 @@ async function cmdSnapshot(v, write) {
   return registered.ok ? EXIT.done : EXIT.config;
 }
 
-async function cmdRun(v, write, { resume }) {
+async function cmdRun(v, write, { resume }, seams = {}) {
   const early = resume ? afterStopRefusal(v) : null;
   if (early) { write(early); return EXIT.config; }
   const seriesDir = path.resolve(v.series ?? '');
@@ -121,15 +122,21 @@ async function cmdRun(v, write, { resume }) {
   const what = parseWhat(v.what ?? whatOfMap(read.value));
   if (!what) { write('usage error: --what aa | pilot-node | pair:<1-3>'); return EXIT.config; }
   const dry = v['dry-run'] === true;
-  const built = await buildRun({ seriesDir, map: read.value, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? path.resolve(v['inputs-dir']) : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry });
+  const inputsDir = v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs');
+  let map = read.value;
+  if (!dry) {
+    // the pins are read from DISK now and compared with the run-map (step 11), at every paid run and resume, before anything is built or read
+    const pins = await checkPins({
+      map, inputsDir, repo: seams.repo ?? REPO, acceptHarness: v['accept-harness'] ? { identity: v['accept-harness'], amendmentDate: v.amendment } : null,
+      runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'),
+    });
+    if (!pins.ok) { write(`${resume ? 'resume' : 'run'} refused: ${pins.reason}`); return EXIT.config; }
+    map = pins.value.map;
+  }
+  const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry, seams });
   if (!built.ok) { write(`cannot start: ${built.reason}`); return EXIT.config; }
   const { ctx, deps, abort } = built.value;
-  if (dry) { dryRunLines({ map: read.value, ctx, what }).forEach(write); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
-  let map = read.value;
-  if (resume) {
-    const refused = resumeRefusal({ v, map, ctx });
-    if (refused) { write(refused); return EXIT.config; }
-  }
+  if (dry) { dryRunLines({ map, ctx, what }).forEach(write); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
   const ctl = new AbortController();
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { abort.reason = sig; abort.exit = code; ctl.abort(); });
   if (resume) {
@@ -157,16 +164,6 @@ export function afterStopRefusal(v) {
   return v.reason ? null : `--after-stop ${rule}: needs --reason <text>`;
 }
 
-/** The resume checks (step 11): the pins, the harness (accepted only by flag and amendment), a series stop, and a halt passed by `--after-stop`. */
-function resumeRefusal({ v, map, ctx }) {
-  const amendments = existsSync(path.join(ctx.inputsDir, 'amendments.md')) ? readFileSync(path.join(ctx.inputsDir, 'amendments.md'), 'utf8') : '';
-  const checked = checkResumable({
-    map, current: { pins: map.pins, stacksSha256: map.stacksSha256, pricesSha256: map.pricesSha256, snapshots: map.snapshots, preregTag: map.preregTag, seedSha256: map.seedSha256, harnessIdentity: ctx.harnessIdentity },
-    acceptHarness: v['accept-harness'] ? { identity: v['accept-harness'], amendmentDate: v.amendment } : null, amendments,
-  });
-  return checked.ok ? null : `resume refused: ${checked.reason}`;
-}
-
 function cmdStatus(v, write) {
   const seriesDir = path.resolve(v.series ?? '');
   const read = readRunMap(path.join(seriesDir, 'run-map.json'));
@@ -181,13 +178,13 @@ function cmdStatus(v, write) {
   return EXIT.done;
 }
 
-/** The whole command; `write` receives each output line. Resolves to the exit code. */
-export async function main(argv, write = line => process.stdout.write(`${line}\n`)) {
+/** The whole command; `write` receives each output line. `seams` (`{ repo, home }`) are for tests only: a run uses this repository and the operator's home. Resolves to the exit code. */
+export async function main(argv, write = line => process.stdout.write(`${line}\n`), seams = {}) {
   const [command, ...rest] = argv;
   let values;
   try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { write(`usage error: ${e.message}`); return EXIT.config; }
   const table = {
-    init: () => cmdInit(values, write), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }), resume: () => cmdRun(values, write, { resume: true }),
+    init: () => cmdInit(values, write), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }, seams), resume: () => cmdRun(values, write, { resume: true }, seams),
     'seed-commit': () => { const r = commitSeed({ seedFile: values['seed-file'] ?? defaults.seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${values['seed-file'] ?? defaults.seedFile} (mode 600)` : `seed-commit: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
     'seed-reveal': () => { const r = revealSeed({ seedFile: values['seed-file'] ?? defaults.seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
   };

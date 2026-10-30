@@ -78,13 +78,13 @@ function harnessAccepted({ map, current, acceptHarness, amendments }) {
 /**
  * May this series resume with what is on disk NOW (`current`: the same fields the map pinned)? A series stop is never passed this way; a pin, the
  * stacks file, the prices, a snapshot, the prereg tag or the seed hash that differs is a refusal naming it; a changed harness identity is accepted
- * only through `acceptHarness` and a dated amendment line. -> `ok({ accepted })` (`accepted` is the harness acceptance for the ledger, or null).
+ * only through `acceptHarness` and a dated amendment line (an identity accepted before, in `map.harnessAccepted`, needs no flag again). -> `ok({ accepted })` (`accepted` is the harness acceptance for the ledger, or null).
  */
 export function checkResumable({ map, current, acceptHarness = null, amendments = '' }) {
   if (map.stopped) return fail(`the series is stopped (${map.stopped.rule}): resume is refused until the named fix and, for a stop of the first four, a new A/A`);
   const field = PINNED_FIELDS.find(f => !same(map[f], current[f]));
   if (field) return fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`);
-  if (map.harnessIdentity === current.harnessIdentity) return ok({ accepted: null });
+  if (map.harnessIdentity === current.harnessIdentity || (map.harnessAccepted ?? []).includes(current.harnessIdentity)) return ok({ accepted: null });
   const accepted = harnessAccepted({ map, current, acceptHarness, amendments });
   return accepted.ok ? ok({ accepted: accepted.value }) : accepted;
 }

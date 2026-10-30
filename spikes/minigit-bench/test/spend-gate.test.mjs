@@ -1,7 +1,7 @@
 // The spend gate (E3b.S1 T-G1): two limits, both through spendDecision; the stop-rule figure; what an interrupted session cost.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { reservationOf, sessionSpendUsd, spendGate, stopRuleFigure } from '../lib/spend-gate.mjs';
+import { reservationOf, sessionSpendUsd, spendGate, spendTotals, stopRuleFigure } from '../lib/spend-gate.mjs';
 
 const near = (a, b, why) => assert.ok(Math.abs(a - b) < 1e-9, `${why ?? ''} ${a} is not ${b}`);
 const ledger = [{ kind: 'prior', usd: 0.43 }, { kind: 'data', usd: 30 }];
@@ -46,4 +46,11 @@ test('An_interrupted_session_is_charged_its_unsettled_reservations', () => {
   near(sessionSpendUsd(lines), 0.6 + 2 * 0.3);
   assert.equal(reservationOf([forwarding(1)]), 0.05, 'nothing settled: the floor');
   near(sessionSpendUsd([forwarding(1), settled(1, 0.01), forwarding(2)]), 0.01 + 0.05);
+});
+
+test('An_event_line_of_the_ledger_carries_no_spend', () => {
+  const lines = [{ kind: 'prior', usd: 0.43 }, { kind: 'aa', usd: 3 }];
+  const withEvent = [...lines, { event: 'accept-harness', to: 'a'.repeat(64) }, { event: 'after-stop', rule: 'void: rate limit' }];
+  assert.deepEqual(spendTotals(withEvent), spendTotals(lines), 'a harness acceptance or an --after-stop is recorded in the ledger and never summed');
+  assert.throws(() => spendTotals([{ kind: 'bogus', usd: 1 }]), /legal kinds/, 'a spend line of an unknown kind still stops the series');
 });

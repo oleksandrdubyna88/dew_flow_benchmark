@@ -15,11 +15,12 @@ import { fetchInputs } from './fetch-inputs.mjs';
 import { loadStacks } from './host-checks.mjs';
 import { endCell, realProcApi } from './janitor.mjs';
 import { preflight } from './preflight.mjs';
-import { preregGuard } from './prereg-guard.mjs';
+import { harnessIdentity, preregGuard } from './prereg-guard.mjs';
 import { quietWindow, loadQuiet, noisyOverride, waitForQuiet } from './quiet.mjs';
 import { fail, ok } from './result.mjs';
 import { readSecretFile } from './secrets.mjs';
 import { scoreSession } from './score-run.mjs';
+import { readRunMap } from './run-map.mjs';
 import { retireStale } from './session-state.mjs';
 
 export const SPIKE = fileURLToPath(new URL('..', import.meta.url));
@@ -70,11 +71,15 @@ function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now }) {
 }
 
 /**
- * `{ seriesDir, what, args }` -> `ok({ ctx, deps, map })` | `fail`. `what` is `pair:<k>`, `aa` or `pilot-node`. Reads the run-map, the registered inputs and the fetched inputs
- * cache; the token only when `paid`.
+ * `{ seriesDir, map, kind, pair, args, paid, seams }` -> `ok({ ctx, deps, abort })` | `fail`. `kind` is `data`, `aa` or `pilot`. Reads the registered inputs and the fetched inputs
+ * cache; the token only when `paid`. `seams` (`{ repo, home }`) are for tests: a run uses this repository and the operator's home. The identity in `ctx` is the one the
+ * harness has on DISK now, and the guard reads the run-map from disk at every call, so an acceptance written after this call is seen.
  */
-export async function buildRun({ seriesDir, map, kind, pair, args, paid }) {
-  const home = os.homedir();
+export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams = {} }) {
+  const home = seams.home ?? os.homedir();
+  const repo = seams.repo ?? REPO;
+  const identity = await harnessIdentity(repo);
+  if (!identity.ok) return identity;
   const inputsDir = args.inputsDir ?? path.join(SPIKE, 'inputs');
   const stacks = loadStacks(readJson(path.join(inputsDir, 'stacks.json')));
   if (!stacks.ok) return stacks;
@@ -97,14 +102,14 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid }) {
     packageRules: readJson(path.join(inputsDir, 'package-flags.json')).rules, claudeBinary: map.claude.path, cliVersion: map.pins.claude, nodeDir: path.dirname(path.dirname(process.execPath)),
     tsDir: path.join(home, ...stacks.value.typescriptToolchainDir), token: token.value, prices: policy.value.table, table: policy.value.table, policy: policy.value.policy,
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },
-    caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: map.bareBudgetUsd, harnessIdentity: map.harnessIdentity, preregTag: map.preregTag, spin: map.spin,
+    caps: map.caps, ceilingUsd: map.ceilingUsd, bareBudgetUsd: map.bareBudgetUsd, harnessIdentity: identity.value, preregTag: map.preregTag, spin: map.spin,
     runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'), aliasStore: aliasStore(path.join(seriesDir, 'aliases.json')),
     handVerdictsFor: rid => handVerdictsFor(existsSync(path.join(inputsDir, 'amendments.md')) ? readFileSync(path.join(inputsDir, 'amendments.md'), 'utf8') : '', rid),
     abortReason: () => abort.reason, abortExit: () => abort.exit, inputsDir,
   };
   const mach = machine({ map, thresholds: quiet.value, seriesDir, rsdRoot, acceptNoisy: args.acceptNoisy, now: Date.now });
   const deps = {
-    guard: ({ paid: p, requireSeed }) => preregGuard({ repo: REPO, runMap: map, paid: p, requireSeed }),
+    guard: ({ paid: p, requireSeed }) => preregGuard({ repo, runMap: readRunMap(ctx.runMapFile).value ?? map, paid: p, requireSeed }),
     retireStale: () => retireStale({ root: ctx.sessionsRoot, now: Date.now(), endCell: a => endCell({ ...a, killTree, procApi: realProcApi }) }),
     preflight: async () => {
       const r = await preflight({ home, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, claudeBinary: ctx.claudeBinary, stacks: stacks.value, install: false });
