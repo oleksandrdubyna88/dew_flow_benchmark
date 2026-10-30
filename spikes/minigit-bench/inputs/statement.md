@@ -6,7 +6,7 @@ Quotes of the parent plan are from `todo/PLAN_minigit_stack_bench.md` at `85c54b
 
 **Frozen by the tag.** These files are committed in one commit, and the annotated tag `prereg/minigit-bare-<yyyymmdd>` is put on that commit and pushed to origin before the A/A's first
 launch. The tag is never moved or deleted. `init` records the tag and its commit in `run-map.json`, and the pre-registration guard refuses every paid launch whose registered files
-differ from the tagged ones (the exceptions are `amendments.md`, append-only; `seed.txt`, revealed after the A/A; and `crosscheck-policy.json`, changed only by the dated T3 commit).
+differ from the tagged ones (the exceptions are `amendments.md`, append-only; `seed.txt`, revealed after the A/A; `crosscheck-policy.json`, changed only by the dated T3 commit; and `quiet.json` and `package-flags.json`, changed only through a dated `input:` line of `amendments.md`, before any data session starts: `analysis-contract.md`, section 10).
 
 ## 1. The question
 

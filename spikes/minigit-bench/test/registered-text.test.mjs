@@ -52,3 +52,12 @@ test('The_ceiling_of_section_9_counts_every_bare_spend_and_the_prior_spend_as_sp
   assert.doesNotMatch(item, /settled data \+ void \+ pilot spend/, 'the earlier wording left the A/A out');
 });
 
+test('The_statement_names_every_file_that_may_change_after_the_tag_and_how', () => {
+  const text = squash(read('statement.md'));
+  const frozen = /the exceptions are (.*?)\)\./.exec(text)?.[1];
+  assert.ok(frozen, 'the frozen-by-the-tag paragraph lists the exceptions');
+  for (const file of ['amendments.md', 'seed.txt', 'crosscheck-policy.json', ...AMENDABLE_INPUTS]) assert.ok(frozen.includes(`\`${file}\``), `the exceptions name ${file}`);
+  assert.match(frozen, /through a dated `input:` line/, 'quiet.json and package-flags.json change only through a dated input: line of amendments.md');
+  assert.match(frozen, /section 10/);
+});
+
