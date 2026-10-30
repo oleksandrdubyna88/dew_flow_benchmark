@@ -629,7 +629,7 @@ by a scorer fault.
 The final request is the last to SETTLE (broker line time, tie by `seq`), not the highest `seq`: a concurrent request that opened later can settle earlier (review M5). Row 7 comes before row 8 on purpose: the broker answers its cap refusal with HTTP 429 `rate_limit_error`, which `rateLimitSignal` alone would void and pay for twice (the test
 `A_final_cap_refusal_is_a_cap_kill_not_a_rate_limit_void` was watched failing on exactly that reading). Row 7 reads the `reason` field of the broker's refused lines that the E2.S2 review
 adds; a refusal without it is `unknown` and never a cap. Flags, never classes: `broker refused k` (cap refusals only, with the summed backoff; review N7), `upstream 429 k`, `model_refusal_fallback`, `over cap`,
-`v1 inputs changed`, `start skew` (over 5 s), `foreign load`, `harness core contended`, `started not quiet`, `scored under load`, and the package flags.
+`v1 inputs changed`, `start skew` (over 5 s), `foreign load`, `harness core contended`, `started not quiet`, `scored under load`, `package: <rule id>`, `cost not captured`, `T<n> breach`, `T<n> unchecked`, `otel incomplete`, `reclassified by hand`, `class discrepancy` and, on the pair record, `v2 from refuted v1`. The contract's flags table has a row for each, and `test/registered-text.test.mjs` derives the emitted list from the emitting files and the cross-check rules and fails when a flag has no row or a row has no emitter (the cost view's own basis notes, in the headline cost of a record, are not session flags).
 
 **The schedule** (`nextStep`; a void is re-run once, attempt `a2`, fresh rid; re-runs come after the pair's own phases and before the next pair):
 

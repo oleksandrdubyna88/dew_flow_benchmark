@@ -115,7 +115,14 @@ through a dated line of `inputs/amendments.md`, and after the A/A only the instr
 | `harness core contended` | during a phase, the 60 s spin-probe median over `spinMaxRatio` × the calibrated idle median |
 | `started not quiet` | the phase was started with `--accept-noisy <reason>` |
 | `scored under load` | the check before scoring was not quiet (latency is load-sensitive) |
-| package flags | the rules of `inputs/package-flags.json`; each one is read by hand in the pair-1 read-back |
+| `package: <rule id>` | a rule of `inputs/package-flags.json` matched a package the session pulled; each one is read by hand in the pair-1 read-back |
+| `cost not captured` | the session's spend has no basis: no cost figure of any kind and no broker ledger, so a `0` is a gap in the evidence and not a measurement |
+| `T<n> breach` | T1, T2, T3 or T5, whose policy in `crosscheck-policy.json` is `stop`, breached: the session keeps its class, and this is also the series stop of section 9 (one flag per cause) |
+| `T<n> unchecked` | the same check, under a `stop` policy, could not run for want of evidence and the session is not exempt (section 9): the series stop, fail closed |
+| `otel incomplete` | T2: O is not the envelope, or lacks a token field or `cost_usd`, under the registered `t2: otel-incomplete` (a flag, never a class; the cell stays and is marked). Under `t2: stop` the flag is `T2 breach` alone |
+| `reclassified by hand` | a dated `refuted` line reclassified the session to `void: harness` (what it was and which line are in the record) |
+| `class discrepancy` | a record rebuilt later reads the evidence as another class than the run-map's (a hand verdict dated since); the class stays the run-map's |
+| `v2 from refuted v1` | a PAIR flag, in the pair record: a v2 session ran from a v1 tree that a later line refuted, and has no refuted line of its own (its session is listed in the pair record); the operator refutes it by its own line, and the flag alone does not remove the pair from line (c) of section 7 |
 
 ### 3. The registered extensions of §11.1
 

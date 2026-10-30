@@ -61,3 +61,15 @@ test('The_statement_names_every_file_that_may_change_after_the_tag_and_how', () 
   assert.match(frozen, /section 10/);
 });
 
+test('Every_flag_the_code_emits_is_a_row_of_the_flags_table_and_every_row_is_emitted', () => {
+  const emitted = emittedFlags();
+  const table = new Set(tableFlags());
+  assert.ok(emitted.size >= 18, `the scan found ${emitted.size} flags: the emitting files still hold their literals`);
+  assert.deepEqual([...emitted].filter(f => !table.has(f)).sort(), [], 'a flag the code puts on a session or a pair has no row in the contract: add the row, with its meaning');
+  assert.deepEqual([...table].filter(f => !emitted.has(f)).sort(), [], 'a row of the flags table that no code emits is a row that lies');
+  for (const flag of ['cost not captured', 'T<x> breach', 'T<x> unchecked', 'otel incomplete', 'class discrepancy', 'reclassified by hand', 'v2 from refuted v1']) assert.ok(table.has(flag), `the table names '${flag}'`);
+});
+
+// ---- section 9 -----------------------------------------------------------------------------------------------------------------------------
+
+
