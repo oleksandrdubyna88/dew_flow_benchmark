@@ -54,6 +54,9 @@ function fixedStep(map) {
 /** The cell ids of every session the live run-map holds: what the sampler must count as ours (the map the run started from holds none of the sessions planned since). */
 const cellIdsOf = h => Object.keys(h.get().sessions).map(rid => `cell-${rid}`);
 
+/** The `void: contaminated` sessions of the whole series: the second one stops it (registered series stop; analysis contract section 9). */
+const contaminatedVoids = map => Object.values(map.sessions).filter(s => s.class === 'void: contaminated').length;
+
 function ledgerKind(ctx, outcome) {
   if (ctx.kind !== 'data') return ctx.kind;
   return outcome.data ? 'data' : 'void';
@@ -143,14 +146,16 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity };
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [] }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);
-    if (!outcome.data) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null });
-    if (outcome.stop) stops.push({ rid: s.rid, outcome });
+    if (!outcome.data || collected.value.t1Stop) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null }); // a void has nothing to score; a session that stops the series is kept as it is
+    if (outcome.stop) stops.push({ rid: s.rid, rule: outcome.class, detail: outcome.detail });
+    if (collected.value.t1Stop) stops.push({ rid: s.rid, ...collected.value.t1Stop });
   }
+  if (stops.length === 0 && contaminatedVoids(h.get()) >= 2) stops.push({ rid: phase.sessions.map(x => x.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(h.get()) } });
   const unread = failures.length > 0 ? `; ${failures.join('; ')} (those sessions stay launching and are settled by resume)` : '';
   if (stops.length > 0) {
     const [first] = stops;
-    h.commit(markStopped(h.get(), { rule: first.outcome.class, reason: JSON.stringify(first.outcome.detail), at: new Date(deps.now()).toISOString() }));
-    return done(EXIT.stop, `${stops.map(x => `${x.outcome.class} in ${x.rid}`).join(', ')}: the series stops${unread}`);
+    h.commit(markStopped(h.get(), { rule: first.rule, reason: JSON.stringify(first.detail), at: new Date(deps.now()).toISOString() }));
+    return done(EXIT.stop, `${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}: the series stops${unread}`);
   }
   if (failures.length > 0) return done(EXIT.failed, failures.join('; '));
   return signal?.aborted ? done(ctx.abortExit(), 'cancelled; the sessions that ran are recorded as interrupted harness voids') : null;
@@ -188,6 +193,7 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
   const state = { quiet: null, sampler: null, v1Quiet: h.get().pairs?.[ctx.pair]?.v1Quiet ?? null };
   for (let guard = 0; guard < 60; guard += 1) {
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };
+    if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched`), map: h.get() };
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get());
     if (step.action === 'done') {
       if (ctx.kind === 'data') writePairRecord({ ctx, map: h.get(), pair: ctx.pair });

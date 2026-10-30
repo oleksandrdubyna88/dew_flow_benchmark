@@ -1,7 +1,7 @@
 // The bare runner's loop (E3b.S1): the schedule driven for real over the run-map, with a fake launch that lays the bare-smoke fixture into each session's directory
 // (and variants of it) and a fake scorer. The gates, the barrier, the voids and the re-run, the stops, the spend gate, the scorer's halts and the resume are what is under test.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
@@ -355,4 +355,56 @@ test('Resume_keeps_a_directory_whose_broker_forwarded_a_request_and_charges_it',
   assert.match(settled.value.sessions[rid('csharp', 'v1', 1)].class, /^void: harness/);
   assert.equal(readLedger(t.ctx.ledgerFile).length, 1, 'a forwarded request was reserved against the budget: charged');
   assert.ok(readLedger(t.ctx.ledgerFile)[0].usd > 0);
+});
+
+// ---- the registered series stops: a T1 breach and the second contaminated void (review M4) ------------------------------------------------
+
+/** A launch that also writes the session's own planted canary token into its stream: what a session that read an operator's file leaves behind. */
+function contaminating(t, rids) {
+  const original = t.deps.phase.launchSession;
+  t.deps.phase.launchSession = async (plan, d, opts) => {
+    const r = await original(plan, d, opts);
+    if (rids.includes(plan.layout.rid)) {
+      const manifest = JSON.parse(readFileSync(path.join(t.ctx.seriesDir, 'canaries', `${plan.layout.rid}.json`), 'utf8'));
+      const token = manifest.planted.find(p => p.status === 'planted').token;
+      appendFileSync(plan.layout.files.stream, `${JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: `read ${token}` }] } })}\n`);
+    }
+    return r;
+  };
+}
+
+test('A_T1_breach_under_policy_stop_stops_the_series_and_under_investigate_does_not', async () => {
+  const t = harness({ variants: { [rid('node', 'v1', 1)]: 't1' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.stop, r.message);
+  assert.match(r.message, /T1 breach/);
+  assert.equal(readRunMap(t.ctx.runMapFile).value.stopped.rule, 'T1 breach');
+  assert.equal(t.launched.length, 2, 'nothing launches after the stop');
+  const rec = JSON.parse(readFileSync(path.join(t.ctx.sessionsRoot, rid('node', 'v1', 1), 'record.json'), 'utf8').toString());
+  assert.ok(rec.flags.includes('T1 breach'));
+  const lenient = harness({ variants: { [rid('node', 'v1', 1)]: 't1' }, ctx: { policy: { ...harness().ctx.policy, t1: 'investigate' } } });
+  const r2 = await runLoop({ ctx: lenient.ctx, deps: lenient.deps, map: lenient.map });
+  assert.equal(r2.exit, EXIT.done, 'control: the same breach under t1 = investigate is investigated, not a stop');
+});
+
+test('The_second_contaminated_void_of_the_series_stops_it_and_the_first_does_not', async () => {
+  const one = harness();
+  contaminating(one, [rid('csharp', 'v1', 1)]);
+  const r1 = await runLoop({ ctx: one.ctx, deps: one.deps, map: one.map });
+  assert.equal(r1.exit, EXIT.done, `one contaminated void is a void, re-run once: ${r1.message}`);
+  assert.equal(readRunMap(one.ctx.runMapFile).value.stopped, null);
+  const two = harness();
+  contaminating(two, [rid('csharp', 'v1', 1), rid('node', 'v1', 1)]);
+  const r2 = await runLoop({ ctx: two.ctx, deps: two.deps, map: two.map });
+  assert.equal(r2.exit, EXIT.stop, r2.message);
+  assert.equal(readRunMap(two.ctx.runMapFile).value.stopped.rule, 'second void: contaminated');
+  assert.equal(two.launched.length, 2, 'the re-run pair is not launched: the series is stopped');
+});
+
+test('The_runner_refuses_to_start_a_stopped_series', async () => {
+  const t = harness({ variants: { [rid('node', 'v1', 1)]: 't1' } });
+  await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  const again = await runLoop({ ctx: t.ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value });
+  assert.equal(again.exit, EXIT.stop);
+  assert.equal(t.launched.length, 2, 'a stopped series launches nothing more');
 });

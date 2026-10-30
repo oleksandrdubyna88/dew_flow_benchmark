@@ -50,7 +50,10 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
     tokenHits: realTokenHits(texts, { real: plan.token, dummy: plan.dummy }),
   };
   const recomputeUsd = cost.known ? cost.usd : null;
-  const outcome = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
+  const classed = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
+  // T1 (the envelope disagrees with itself) under policy `stop` is a SERIES stop beside the class (registered, review M4): the class is how the session ended and stays, the flag says why the series stopped
+  const t1Stop = views.c.t1.verdict === 'stop' ? { rule: 'T1 breach', detail: views.c.t1.detail } : null;
+  const outcome = t1Stop ? { ...classed, flags: [...classed.flags, 'T1 breach'] } : classed;
   const usd = Math.max(stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null }) ?? 0, sessionSpendUsd(brokerLines));
-  return ok({ loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } });
+  return ok({ loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, t1Stop, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } });
 }
