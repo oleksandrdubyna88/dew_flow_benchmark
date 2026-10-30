@@ -2,7 +2,7 @@
 // The thin bare-arm runner (E3b.S1): one command runs one bare PAIR (or the A/A, or the Node pilot), v1 then v2, barrier, $6 cap, scoring, voids and the one re-run, resume, records.
 //
 //   node spikes/minigit-bench/bare-runner.mjs init --series-id s-yyyymmdd-xxxx [--dry-run]       pins the series (CLI copy, run-map, ledger)
-//   node spikes/minigit-bench/bare-runner.mjs snapshot --stack csharp|node                      makes one cache snapshot (registries only, free)
+//   node spikes/minigit-bench/bare-runner.mjs snapshot --stack csharp|node [--register]         makes one cache snapshot (registries only, free); --register writes its record into inputs/cache-snapshots.json
 //   node spikes/minigit-bench/bare-runner.mjs seed-commit | seed-reveal                         the bare seed as commit-reveal
 //   node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what aa|pilot-node|pair:<k> [--dry-run] [--accept-noisy <reason>]    SPENDS MONEY (unless --dry-run)
 //   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> [--what ...] [--accept-harness <identity> --amendment <date>] [--after-stop <rule> --reason <text>]
@@ -23,7 +23,7 @@ import { EXIT, reconcile, runLoop } from './lib/bare-series.mjs';
 import { applyInit, describePlan, initPlan } from './lib/bare-init.mjs';
 import { maskFor, pilotRid, ridOf, seriesId as makeSeriesId } from './lib/bare-plan.mjs';
 import { buildRun, REPO, SPIKE } from './lib/bare-config.mjs';
-import { loadRecipe, makeSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
+import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { loadQuiet } from './lib/quiet.mjs';
@@ -35,7 +35,7 @@ import { runBounded } from './lib/run.mjs';
 const OPTIONS = {
   series: { type: 'string' }, what: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'accept-noisy': { type: 'string' }, 'accept-harness': { type: 'string' }, amendment: { type: 'string' },
   'after-stop': { type: 'string' }, reason: { type: 'string' }, stack: { type: 'string' }, 'series-id': { type: 'string' }, 'series-root': { type: 'string' }, 'versions-dir': { type: 'string' },
-  'toolchains-dir': { type: 'string' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
+  'toolchains-dir': { type: 'string' }, register: { type: 'boolean' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
 };
 const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', 'T1', 'contaminated']);
 const home = os.homedir();
@@ -103,7 +103,10 @@ async function cmdSnapshot(v, write) {
   if (!made.ok) { write(`snapshot: ${made.reason}`); return EXIT.failed; }
   const s = made.value;
   write(`snapshot ${v.stack}: ${s.dir}\n  tree sha256 ${s.treeSha256}\n  size ${s.sizeBytes} bytes\n  parts ${JSON.stringify(s.parts)}\n  packages ${s.packages.length}\n  record ${JSON.stringify(snapshotRecord(s))}`);
-  return EXIT.done;
+  if (!v.register) return EXIT.done;
+  const registered = registerSnapshot({ file: path.join(SPIKE, 'inputs', 'cache-snapshots.json'), stack: v.stack, record: snapshotRecord(s), madeOn: new Date().toISOString().slice(0, 10) });
+  write(registered.ok ? 'registered in inputs/cache-snapshots.json (commit it with the pre-registration)' : `register: ${registered.reason}`);
+  return registered.ok ? EXIT.done : EXIT.config;
 }
 
 async function cmdRun(v, write, { resume }) {

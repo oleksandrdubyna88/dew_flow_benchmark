@@ -5,7 +5,7 @@
 // The hash (`treeHash`): sha256 over every entry in sorted order -- type, relative path, mode WITHOUT its write bits, and the content hash (a link's target).
 // Write bits are left out on purpose: the snapshot is read-only and its copy must be writable, and both are the same tree. mtimes are never in it.
 import { createHash } from 'node:crypto';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { egressProxy } from './egress.mjs';
@@ -184,3 +184,15 @@ function finishSnapshot({ stack, spec, layout, out, resolved, steps }) {
 
 /** The one place a snapshot description is turned into the JSON `inputs/cache-snapshots.json` holds (no path of the operator's home in it). */
 export const snapshotRecord = s => ({ treeSha256: s.treeSha256, parts: s.parts, sizeBytes: s.sizeBytes, packages: s.packages, resolved: s.resolved });
+
+/**
+ * Register a snapshot in `inputs/cache-snapshots.json` (the pre-registered hashes and sizes, S3): the file keeps one record per stack and a stack is registered ONCE, because the tag
+ * freezes the file. -> `ok(file content)` | `fail` for a stack that is already there.
+ */
+export function registerSnapshot({ file, stack, record, madeOn }) {
+  const current = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  if (current[stack]) return fail(`${stack} is already registered in ${file} (${current[stack].treeSha256.slice(0, 12)}): a registered snapshot is never replaced`);
+  const next = { ...current, [stack]: { ...record, madeOn } };
+  writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
+  return ok(next);
+}

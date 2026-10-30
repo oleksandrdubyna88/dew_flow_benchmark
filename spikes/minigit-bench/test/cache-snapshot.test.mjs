@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { loadRecipe, makeSnapshot, makeWritable, pickHighest, seedCaches, treeHash } from '../lib/cache-snapshot.mjs';
+import { loadRecipe, makeSnapshot, makeWritable, pickHighest, registerSnapshot, seedCaches, treeHash } from '../lib/cache-snapshot.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
 import { homeDir, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
 
@@ -125,4 +125,18 @@ test('A_step_that_fails_makes_no_snapshot', async t => {
   assert.equal(r.ok, false);
   assert.match(r.reason, /exit 7|exited 7/);
   assert.deepEqual(readdirSync(out), [], 'nothing half-made is left in the output directory');
+});
+
+test('A_snapshot_is_registered_once_per_stack_and_never_replaced', () => {
+  const file = path.join(tmpDir('reg'), 'cache-snapshots.json');
+  const record = { treeSha256: 'a'.repeat(64), parts: { nuget: 'b'.repeat(64) }, sizeBytes: 10, packages: [], resolved: {} };
+  const first = registerSnapshot({ file, stack: 'csharp', record, madeOn: '2026-10-30' });
+  assert.equal(first.ok, true, first.reason);
+  const second = registerSnapshot({ file, stack: 'node', record: { ...record, treeSha256: 'c'.repeat(64) }, madeOn: '2026-10-30' });
+  assert.equal(second.ok, true);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, 'utf8'))).sort(), ['csharp', 'node'], 'one record per stack');
+  const again = registerSnapshot({ file, stack: 'csharp', record: { ...record, treeSha256: 'd'.repeat(64) }, madeOn: '2026-10-31' });
+  assert.equal(again.ok, false);
+  assert.match(again.reason, /never replaced/);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).csharp.treeSha256, 'a'.repeat(64), 'the registered value is untouched');
 });
