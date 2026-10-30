@@ -145,6 +145,12 @@ const HEX12 = /(?<![0-9a-f])[0-9a-f]{12}(?![0-9a-f])/g;
 /** The harness identity (12 hex) the run is at: the latest accepted instrument line, else the series' own. */
 const runIdentity = ctx => latestOf(ctx.amendments.instrument)?.identity ?? ctx.map.harnessIdentity?.slice(0, 12);
 
+const namesP6 = text => /\bP-6\b/.test(text);
+const namesIdentity = (text, identity) => (text.match(HEX12) ?? []).includes(identity);
+
+/** What a G-12 replacing line lacks: P-6, the 12-hex harness identity the run is at. */
+const evidenceProblems = (line, identity) => [...(namesP6(line.evidence) ? [] : ['it does not name P-6']), ...(namesIdentity(line.evidence, identity) ? [] : [`it does not name the run's harness identity ${identity}`])];
+
 /**
  * The replacing evidence of a G-12 nobody exercised (contract section 10: E2.S2's broker proof P-6 and the budget tests green at the run's harness identity): the latest dated G-12 `holds` line by DATE, whose evidence names
  * P-6 and the 12-hex harness identity the run is at. `{ replacing }` (the sentence) or `{ replacing: null, why }`.
@@ -152,8 +158,7 @@ const runIdentity = ctx => latestOf(ctx.amendments.instrument)?.identity ?? ctx.
 function capEvidence(ctx) {
   const line = latestOf(ctx.amendments.verdicts.filter(v => v.g === 'G-12' && v.verdict === 'holds'));
   if (!line) return { replacing: null, why: 'no dated G-12 holds line' };
-  const identity = runIdentity(ctx);
-  const problems = [...(/\bP-6\b/.test(line.evidence) ? [] : ['it does not name P-6']), ...((line.evidence.match(HEX12) ?? []).includes(identity) ? [] : [`it does not name the run's harness identity ${identity}`])];
+  const problems = evidenceProblems(line, runIdentity(ctx));
   return problems.length === 0 ? { replacing: `dated G-12 line for ${line.rid}: ${line.evidence}` } : { replacing: null, why: `the latest dated G-12 line (${line.date}, ${line.rid}) is no evidence: ${problems.join(' and ')}` };
 }
 
