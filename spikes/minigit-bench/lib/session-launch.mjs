@@ -149,6 +149,7 @@ function supervise({ plan, d, stack, rec, signal }) {
     const child = d.spawnBox(argv, env);
     rec.child = child;
     let closed = false;
+    let settled = false;
     let stopping = null;
     const stop = reason => {
       if (rec.stopped === null) { rec.stopped = reason; rec.stoppedAtMs = d.now(); } // the first stop names the reason and the instant
@@ -167,14 +168,22 @@ function supervise({ plan, d, stack, rec, signal }) {
     stack.push('timers', () => timers.forEach(clearInterval));
     stack.push('box', () => (closed ? undefined : stop(rec.stopped ?? 'disposed')));
     const onAbort = () => stop('cancelled');
+    /** The one finalizer: the first of `error` and `close` settles the supervision (every timer cleared, the abort listener removed) and then runs `finish`; a later event does nothing. */
+    const settle = finish => {
+      if (settled) return;
+      settled = true;
+      timers.forEach(clearInterval);
+      signal?.removeEventListener('abort', onAbort);
+      finish();
+    };
     if (signal) { if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }
     child.stdout.on('data', c => tap.push(c));
     child.stderr.on('data', c => appendFileSync(layout.files.stderr, c));
     child.stdin.on('error', () => {});
     child.stdin.end(plan.prompt);
-    child.on('error', e => reject(new Error(`could not start the box: ${e.message}`)));
-    child.on('exit', () => { rec.exitedAtMs ??= d.now(); }); // the process's own exit: the end of the wall. `close` (below) waits for the pipes and is the fallback stamp
-    child.on('close', (code, sig) => { rec.exitedAtMs ??= d.now(); closed = true; timers.forEach(clearInterval); tap.flush(); resolve({ code, signal: sig }); });
+    child.on('error', e => settle(() => reject(new Error(`could not start the box: ${e.message}`)))); // no exit instant: a box that never ran has no wall (`exitedAt` is not captured)
+    child.on('exit', () => { if (!settled) rec.exitedAtMs ??= d.now(); }); // the process's own exit: the end of the wall. `close` (below) waits for the pipes and is the fallback stamp
+    child.on('close', (code, sig) => { if (settled) return; rec.exitedAtMs ??= d.now(); closed = true; settle(() => { tap.flush(); resolve({ code, signal: sig }); }); });
   });
 }
 
@@ -210,11 +219,11 @@ function attempt(rec, what, fn, fallback) {
 
 function metaOf({ plan, d, rec, exit, collected, cleanup }) {
   const live = attempt(rec, 'receiver.liveSum', () => rec.receiver.liveSum(), { usd: null, requests: null });
-  const exitedAtMs = rec.exitedAtMs ?? d.now(); // set by the child's exit; the fallback is for a child that never reported one
+  if (rec.exitedAtMs === null) rec.errors.push('the exit instant of the box was not captured: exitedAt and wallMs are null'); // absent is not zero, and not the harness's own end either
   return {
     // `startedAt` is the spawn, `exitedAt` the exit of the CLI process (a killed session: the exit after the kill) and `wallMs` is their difference, the registered wall. `endedAt` is the end of the harness's
     // own work (the settle, the drain, the seal) and is in no wall.
-    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), exitedAt: new Date(exitedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: exitedAtMs - rec.startedAtMs,
+    rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), exitedAt: rec.exitedAtMs === null ? null : new Date(rec.exitedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: rec.exitedAtMs === null ? null : rec.exitedAtMs - rec.startedAtMs,
     exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,

@@ -175,6 +175,23 @@ test('Every_exit_path_runs_every_disposer_once', async () => {
   }
 });
 
+test('A_box_that_fails_to_start_stops_every_supervision_timer_at_once_and_the_cleanup_runs_once', async () => {
+  const layout = newSession();
+  const order = [];
+  let pidCalls = 0;
+  const atError = { pidCalls: null };
+  const fake = fakeDeps(order, layout, { script: c => setTimeout(() => { atError.pidCalls = pidCalls; c.emit('error', new Error('spawn bwrap ENOENT')); }, 150) }); // the child emits `error` and never `exit` or `close`
+  const procApi = { ...fake.deps.procApi, pids: () => { pidCalls += 1; return []; } };
+  const slowStop = async a => { order.push('endCell'); await new Promise(r => setTimeout(r, 250)); return { cellId: a.cellId }; }; // a stop that takes time: the timers must not tick during it
+  const result = await launchSession(planFor(layout, { settleMs: 0, tickMs: 30, sampleMs: 30 }), { ...fake.deps, procApi, endCell: slowStop });
+  assert.equal(result.ok, false, 'the launch failed: the box could not start');
+  assert.match(result.reason, /could not start the box: spawn bwrap ENOENT/);
+  assert.ok(atError.pidCalls > 0, 'the timers ran before the error');
+  assert.equal(pidCalls, atError.pidCalls, 'no timer callback fired after the error');
+  assert.equal(order.filter(o => o === 'endCell').length, 1, 'the cleanup ran exactly once');
+  assert.deepEqual(order.filter(o => ['receiver', 'broker', 'proxy'].includes(o)), ['proxy', 'broker', 'receiver'], 'each server closed once');
+});
+
 test('The_collection_drains_the_broker_before_it_writes_broker_json_and_records_what_stayed_unsettled', async () => {
   const layout = newSession();
   const seen = [];
