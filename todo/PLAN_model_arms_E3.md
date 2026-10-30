@@ -1038,6 +1038,17 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     two fields read back equal, else the portable road — so a wrong offset refuses itself instead of passing. **Checked: nothing** — no Mac
     or FreeBSD host was reachable on 2026-10-30; the offsets above are from the headers, not a probe, and are written here so the next
     reader sees the edges of the search. Owned by nobody until a host exists; S0's line names the gap on every run until then.
+26. **E3.S0's deviations from its own spec, found while building it (2026-10-30; each keeps the spec's behaviour).** (a) `PlatformRoads.Current` lives in the
+    adapter (`PlatformFactsReader.CurrentRoad`, a `Lazy<PlatformRoad>`): `PlatformRoads` is in `ModelArms.Core`, which stays pure and cannot ask the host.
+    (b) `BoundedFile.Read` takes a `BoundedRoad` (C16's text says `PlatformRoad`); an overload takes the `PlatformRoad` and an internal one a ceiling, so a
+    test that plants a FIFO does not wait the production 5 s each time. (c) `LockProbe.Measure` does not open its holder with `DeleteOnClose`: the file would be
+    gone when the holder is released and the third open (`Open`) would fail for the wrong reason; the probe file is deleted in `finally` after the control.
+    (d) The portable trust reader tells a link by its `ReparsePoint` attribute, not by `FileInfo.LinkTarget`: the architecture scan keeps every read of a link's
+    text in `RootFacts` (`The_module_reads_links_only_through_RootFacts_RealPathOf`), and the attribute names a dangling link too. (e) The Linux-without-`statx`
+    row names the held-file clause as well as the three trust clauses: `FileGateLock`'s inode comparison asks `statx` (`ReadOpen`), so it is unavailable there
+    too and the line must say so. (f) The E2 callers that the story keeps unedited (`FileGateLock(clock, poll)`, `GateStatusFile.Read(path)`,
+    `GateHolderNote.Describe(path)`) default to this host's road; the new overloads take the road as a parameter. (g) The ceiling's seconds are one Core
+    constant, `PlatformRoads.BoundedCeilingSeconds`, which `BoundedFile` waits by and the printed line names.
 
 ## 9. Growth
 
