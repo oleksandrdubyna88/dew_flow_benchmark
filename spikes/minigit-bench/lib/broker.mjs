@@ -6,6 +6,7 @@
 import { chmodSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+import { StringDecoder } from 'node:string_decoder';
 import { routeDecision } from './broker-routes.mjs';
 import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from './budget.mjs';
 
@@ -24,6 +25,7 @@ export function forwardHeaders(headers, upstreamHost) {
  * input side and the model; `message_delta` carries the cumulative output (and, on newer APIs, the input side again). Unreadable events are skipped.
  */
 export function parseSseUsage() {
+  const decoder = new StringDecoder('utf8'); // a character split across two chunks is held back, not decoded as two U+FFFD
   let rest = '';
   const acc = { model: null, usage: null };
   const take = ev => {
@@ -36,7 +38,7 @@ export function parseSseUsage() {
   const dataOf = block => block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
   return {
     feed(chunk) {
-      rest = (rest + chunk.toString('utf8')).replaceAll('\r\n', '\n');
+      rest = (rest + (typeof chunk === 'string' ? chunk : decoder.write(chunk))).replaceAll('\r\n', '\n');
       for (let i = rest.indexOf('\n\n'); i >= 0; i = rest.indexOf('\n\n')) {
         const block = rest.slice(0, i);
         rest = rest.slice(i + 2);
