@@ -18,8 +18,10 @@ namespace ModelArms.Adapters;
 /// holders open two different files.
 /// </para>
 /// <para>
-/// <b>An inherited handle.</b> The runtime opens the descriptor close-on-exec, so a child launched while the lock is held (the gate step starts the arm's claude under the lock) does not keep it after its owner lets go;
-/// <c>FileShare.Inheritable</c> is never passed, because on Linux it turns the lock into a SHARED one (<c>LOCK_SH</c>) and lets a child inherit it — D10's warning. <c>A_child_launched_while_the_lock_is_held_does_not_keep_it</c> watches this.
+/// <b>An inherited handle.</b> The runtime opens the descriptor close-on-exec, so a child launched while the lock is held (the gate step starts the arm's claude under the lock) does not receive it;
+/// <c>FileShare.Inheritable</c> is never passed, because on Linux it makes the runtime take <c>LOCK_SH</c> instead (measured by a break-it: the lock then conflicts with nobody) — D10's warning. What the test
+/// <c>A_child_launched_while_the_lock_is_held_does_not_keep_it</c> shows is the release by <see cref="IDisposable.Dispose"/> with a child alive; it cannot see the close-on-exec flag itself: measured on .NET 10.0.14, with the flag
+/// CLEARED by <c>fcntl</c> and a child alive, the lock was still free after <c>Dispose</c>, because the runtime unlocks explicitly on release. The case the flag protects — a holder that DIES while its child lives — is argued, not tested.
 /// </para>
 /// <para>
 /// <b>The residual, stated.</b> (1) The lock is advisory on Linux: only a process that asks for it respects it. (2) A file system that does not support <c>flock</c> (some network mounts) makes the runtime IGNORE the lock silently

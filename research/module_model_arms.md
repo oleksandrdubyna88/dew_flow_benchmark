@@ -1168,6 +1168,100 @@ That a megabyte is fast on a slow machine: the test asserts the answer, not a ti
 
 ## The gate lock and the MCP configs (E2.S6)
 
+Four pieces, all small, all read by the gate step (E2.S7) and by `make` (E4.S4): the lock one gate step at a time takes (`FileGateLock`, `gate-lock`), what `gate.json` said (`GateStatus`), and the two MCP configuration files (`McpConfig`). The gate lock is
+`<root>/.gate.lock`; **D11's lock (`.isolation.lock`, held by `lock` and `unlock`) is a different lock** with different holders and is not touched here.
+
+### The lock (`Adapters/FileGateLock.cs`, D10)
+
+**The atomic operation it rests on** (common.reliability): the kernel's own open-with-no-sharing. `TryAcquire(path)` opens the file `OpenOrCreate`, `ReadWrite`, `FileShare.None`, through .NET — **never through `flock(1)`**: nothing the module starts is looked up
+by name (the bare-name scan of `ModelArmsArchitectureTests` sees no launch here), and a lock against a non-.NET holder is out of bounds (parent §9). On Linux the runtime takes `flock(LOCK_EX | LOCK_NB)` on the descriptor; a conflict surfaces as an `IOException`
+**of exactly that type** whose `HResult` is the raw errno 11 (`EWOULDBLOCK`) — observed on .NET 10.0.14; a missing folder, a refused permission and every other IO fault are NOT conflicts and fly. On Windows the share mode is enforced by the file system and the exception carries
+`ERROR_SHARING_VIOLATION` or `ERROR_LOCK_VIOLATION` (`0x80070020`, `0x80070021`; from the Win32 documentation, **not observed — nothing here ran on Windows**). The conflict code is an explicit platform → value mapping resolved at construction, with no catch-all: any other
+platform is refused (`FileGateLock.Create` → `Failure`; the constructor throws) rather than handed a number nobody probed (common.platform-limits). A conflict is `null`; the stream is the held lock and `Dispose` releases it. The file is created once and never deleted: one empty
+file per root.
+
+`AcquireAsync(path, ct)` loops `ct.ThrowIfCancellationRequested()`, `TryAcquire`, `Task.Delay(poll, clock, ct)`. The token is looked at before every try, so a waiter told to stop **never takes the lock** (`A_cancelled_token_acquires_nothing_even_when_the_lock_is_free`); a poll of zero is
+refused (a retry loop has a pause). **Every wait has a ceiling — the caller's**: the lock cannot know how long a gate step may queue, so the token carries it (the verb gives one, 15 minutes; the gate step gives its own).
+
+**When the holder dies — and why there is no heartbeat and no fencing.** The lock belongs to the open file description, not to a record anybody wrote. On **Linux** the kernel closes a dead process's descriptors, so a holder that exits, crashes or is killed frees the lock at the same
+instant: observed with `SIGKILL` on this host (the holder killed, the next try succeeded; `A_holder_that_is_killed_frees_the_lock_and_a_waiter_gets_it` runs it through the console and the shared launcher's tree kill). There is nothing stale to expire and nothing to fence. On **Windows** the system
+closes the handle when the process ends, which frees the share mode the same way — documented, **not observed**. The residual race of the primitive: advisory on Linux (only a process that asks respects it); a file system that does not support `flock` makes the runtime ignore the lock silently (the
+runtime's source: "the only error we care about is EWOULDBLOCK"), and the experiment root is a local folder by D17's trust check, but no other file system was probed.
+
+**The switch that turns the lock off** (the story's instruction: confirm the name and quote the source). Construction **refuses** a runtime with file locking switched off — *"file locking is disabled in this runtime — the gate lock would be inert"* (exit 3 in the verb). Checked: the names
+`System.IO.DisableFileLocking` (the `AppContext` switch, also a `runtimeconfig.json` property) and `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` (the variable) are in `System.Private.CoreLib.dll` 10.0.14 on this host (`strings`), and in the runtime's source, `SafeFileHandle.Unix.cs` of dotnet/runtime `main`, read
+2026-10-30 through a page fetch: `AppContextConfigHelper.GetBooleanConfig("System.IO.DisableFileLocking", "DOTNET_SYSTEM_IO_DISABLEFILELOCKING", …)`, `if (DisableFileLocking) return false;` in `CanLockTheFile`, and the comment *"Lock the file if requested via FileShare. This is only advisory locking. FileShare.None
+implies an exclusive lock on the file and all other modes use a shared lock."* **The Microsoft documentation page for `FileShare` does not mention the switch** (checked: that one page; other documentation pages were not searched). So the rule the refusal uses is the one MEASURED on 10.0.14 (Linux), by a probe that opens the same file twice in one process:
+the variable decides when it reads as a boolean (`1`, `true`, `TRUE` off; `0`, `false` on), any other value (`yes`, empty) leaves the decision to the switch, and neither set means locking is on — **a variable set to `0` beats a switch set to true, and a variable `1` beats a switch set to false**.
+`File_locking_switched_off_in_the_runtime_is_refused_as_the_runtime_reads_it` pins those thirteen rows. Not observed: Windows (the switch is read in the Unix file code; the refusal there is stricter than needed, as the story asked).
+
+**An inherited handle (D10's warning).** The runtime opens the descriptor close-on-exec; `FileShare.Inheritable` is never passed — it makes the runtime take `LOCK_SH` instead (a break-it: the lock then conflicts with nobody, five tests red). `A_child_launched_while_the_lock_is_held_does_not_keep_it` shows that a live child (the fake CLI in `hang` mode) does not keep
+the lock after `Dispose`. **It cannot see the close-on-exec flag itself**: measured with a probe, with the flag CLEARED by `fcntl` and a child alive, the lock was still free after `Dispose`, because the runtime unlocks explicitly on release; so a plant that clears the flag leaves that test green. The case the flag protects — a holder
+that DIES while its child lives — is argued, not tested (see *Not proven*).
+
+### The verb (`Verbs/GateLock.cs`)
+
+`model-arms gate-lock status` takes the lock to look and gives it back at once: `model-arms gate-lock: free` or `model-arms gate-lock: held`, exit 0. `gate-lock hold --seconds N` waits for the lock (at most 15 minutes; then, in its own words, `the lock was not free within … s`, exit 3 — a distinct message, never a cancellation, and the
+operator's stop during the wait stays a stop, 5), prints `model-arms gate-lock: held <path>` and flushes, keeps the lock N seconds, **releases it, then** prints `model-arms gate-lock: released`, exit 0; a stop while holding releases through the `using` and travels up as every verb's stop (5). `N` is
+1 to 86400: absent or outside → exit 4, `gate-lock hold takes --seconds N, from 1 to 86400` (the upper bound is added: `Task.Delay` itself refuses about 49 days, and a longer hold is no probe). The verb arrives through `ExperimentGate`, so the root is trusted before anything is taken. The dispatch arm is
+`"gate-lock" => ExperimentGate.RunAsync(input, GateLockVerb.RunAsync)`.
+
+### `GateStatus` (`Launch/GateStatus.cs`, C9)
+
+`Read(Outcome<string>)` over the text of `gate.json` (`run-arm.sh:153`, `:156`): no file, text that is not a JSON object or has no string `status` → `("missing", "")`; else `(status, why)` with `why` `""` when it is not a string. It reuses `JsonRow` (E2.S2), so a model's lone surrogate (an emoji cut in two) in either
+member is not text and nothing throws. `WaitAgain(reading, waitsSoFar, gateTries)` = blocked and fewer waits spent than allowed (`:154`). **`WaitsSoFar(timing, step)`** counts the `GateWait` lines of that step in the parsed `timing.jsonl` — the durable count a restart reads back (E2 §8 item 44); a start
+line, a line of another step and a line the reader kept as `Other` are not waits.
+
+### `McpConfig` (`Launch/McpConfig.cs`, E1 §8 item 16 decided)
+
+`None()` is `{"mcpServers":{}}`; `Coai(coai, paths, harnessEnvironment)` is the shell's object (`after6.sh:34`) indented one space as `JSON.stringify(…, null, 1)` does (`type: stdio`, `command`, `args: []`, `env: {COAI_DATA_DIR: <paths.CoaiData>, COAI_DATA_SIDE: <side>}`), non-ASCII and `< & >` kept as they are. **Neither text ends in a newline**
+(the shell's `echo` and `console.log` added one; the writer, `make`, adds it). **When the harness's own environment holds a non-empty `COAI_CREDS_KEY`, that one variable is added to `env`** — and nothing else of the harness's environment is. A configuration with no binary is a caller's bug (`ArgumentException`).
+
+*Why this and nothing wider.* The coai server reads its one vault key from its layered configuration, the copied settings file first and its own environment over it (`KeyVault.cs:35`, `:76-95`); under the shell claude inherited the harness's whole environment and handed it on, so an exported key reached the server;
+under D19 the arm's claude never sees `COAI_*` or a secret-named variable, so the key must travel in the one place the server's environment is written — this file's `env` — and never by widening the arm's environment. Providers that sign in through their own CLI homes (codex, agy, vibe in part 6) need nothing. Rejected:
+forwarding every `*_KEY` (a provider list nobody wrote down), and `${VAR}` expansion (claude expands from its own environment, which D19 stripped).
+
+*The consequence, stated.* An exported key is written into `r/<token>/mcp-coai.json`: `make` (E4.S4) writes it with mode `0600` — the same exposure as the copied settings file the panel already writes the key into (`after6.sh:32`) — and the experiment's published record must never carry it (E5.S5 excludes
+`mcp-coai.json` and `coai-data/`). The key's value is never logged or printed: it exists only in the returned text.
+
+**What this guarantees, exactly (E2 §8 item 34): the config REQUESTS the delivery.** `McpConfigTests` prove that the text carries the key as a member of the coai server's `env` (and cannot be made to add or replace another member by a key with quotes in it), and that `ArmChildEnvironment.Of` never lets `COAI_CREDS_KEY` into the arm's own environment.
+Whether claude hands a stdio server the `env` member of its config is claude's behaviour; no test here starts claude. **The proof is milestone M2's key check (E3.S5)**: the real `claude` over a generated `mcp-coai.json`, `providers` asked, the key absent from the copied settings file so the `env` member is the only road, and
+the fallback named if the key does not arrive (the copied settings file — the shell's own road, `after6.sh:32`).
+
+### Tests
+
+| Class | Tests | What each holds |
+|---|---|---|
+| `FileGateLockTests` (28 incl. rows) | `A_second_process_holding_the_lock_makes_the_first_wait` | a child `gate-lock hold --seconds 4` holds; `TryAcquire` is `null`; `AcquireAsync` returns more than 3 s after the child printed `held`; the child printed `released` and exited 0; the returned handle makes another child's `status` say `held` |
+| | `Cancellation_while_waiting_releases_nothing_and_surfaces_as_cancelled`, `A_cancelled_token_acquires_nothing_even_when_the_lock_is_free` | the cancelled waiter throws; the holder is untouched; a cancelled token takes nothing from a free lock |
+| | `A_child_launched_while_the_lock_is_held_does_not_keep_it`, `A_holder_that_is_killed_frees_the_lock_and_a_waiter_gets_it` | the inherited-handle scenario; the killed holder |
+| | `Status_says_free_and_held_in_process`, `Gate_lock_hold_needs_its_seconds` (4 rows), `A_stop_while_holding_…`, `A_stop_while_waiting_…`, `A_hold_that_cannot_get_the_lock_within_its_ceiling_…` | the verb's lines, exits and the stop-versus-ceiling distinction |
+| | `File_locking_switched_off_in_the_runtime_is_refused_as_the_runtime_reads_it` (13 rows), `A_runtime_with_locking_off_…`, `A_poll_of_zero_…` | the refusal rule and its construction |
+| `GateStatusTests` (10) | the story's two plus the no-file, the not-text reason and the lone-surrogate rows | |
+| `McpConfigTests` (6) | the story's three plus a key with quotes, a path with `"`, `<&>` and non-ASCII, and the gate-less refusal | |
+| `ArmPathsTests` | `CoaiData` → `/e/r/abc/coai-data` | |
+| `ModelArmsArchitectureTests` | `GateStatus` and `McpConfig` named in the pure list | |
+
+The two-process tests start the console's apphost (`ExperimentRoot.ConsoleBinary`, through `ModelArmsBinary`) — a real process, never a double of the subject — and kill and wait for every child they start (`await using`). Temp folders are `testsToDelete-modelarms-…` (`TempFolder`).
+
+**Break-its**, each planted in the finished code, observed red, restored (`git checkout`, `git diff` empty): `GateStatus.Read` with an unguarded `GetString()` — `{"status":3}` red as `InvalidOperationException … requires an element of type 'String'`, `[]` likewise; the key never yielded — the named McpConfig test red (`Expected env.ToJsonString() to be …`); `Indented = false` — the shape test red;
+`ArmChildEnvironment`'s strip of `COAI_*` and secret names removed — the named test red (`Expected ArmChildEnvironment.Of(harness, Paths).Keys {"COAI_CREDS_KEY", "HOME", "TMPDIR"} to not have any items matching …`); `FileShare.ReadWrite` — five red (the two-process wait: `Expected gateLock.TryAcquire(…) to be <null> … but found System.IO.FileStream`); `FileShare.None | Inheritable` — the same five; the
+`ThrowIfCancellationRequested` before a try removed — the cancelled-token test red; the `when (!Stopping.IsCancellationRequested)` of the ceiling's catch removed — `A_stop_while_waiting_…` red. **Not red:** clearing close-on-exec (above).
+
+### Not proven (said, not hidden)
+
+The lock on Windows and macOS (no code of the story ran there; the Windows conflict codes are documentation, the mapping fails closed elsewhere); a file system without `flock`; a holder that dies while its child lives (the close-on-exec flag's own case); a non-.NET holder; that claude hands the coai server the `env` member of `mcp-coai.json` (M2, E3.S5); and the verb on CI's Linux runner — it ran only on this WSL host.
+
+### Deviations from the story (also E2 §8 item 57)
+
+1. `ModelArmsBinary` runs the console's **apphost** (`ExperimentRoot.ConsoleBinary`, as the scenario tests do) rather than `dotnet model-arms.dll` located through the bin folder: it reuses what exists, is an absolute path, and keeps `dotnet` out of a launch by name. It adds the child handling (line sink with arrival instants, kill and reap).
+2. `A_second_process_…` asserts the wait by the instants (the acquisition came more than 3 s after `held`, the child printed `released` and exited 0) and not by `acquiredAt >= releasedAt`: the lock is freed BEFORE `released` is printed, so the parent can acquire before the line is read, and that comparison would be a race.
+3. The construction refusal is an `Outcome` (`FileGateLock.Create`) as well as a throwing constructor, and its rule is the one measured (env boolean beats the switch), not "variable truthy or switch set" — see above. The platform mapping fails closed (Linux and Windows only).
+4. `hold` has a 15-minute wait ceiling (exit 3, its own words) and `--seconds` an upper bound of 86400; both added by common.reliability and the clamp rule; the story had neither.
+5. Added scenarios: a cancelled token on a free lock; the killed holder; `status` in process; a stop while waiting versus the ceiling; the ceiling itself; the refusal table; the poll of zero; `GateStatus` no-file and lone-surrogate rows; `McpConfig` hostile key, odd path, gate-less refusal.
+6. `WorkerLiveness` (listed under *Uses*) is not used: the lock needs no pid — the kernel is the liveness.
+7. The close-on-exec plant is not red (above); the scenario keeps its place as the release-with-a-live-child check, and its header says so.
+
 ## The gate step (E2.S7)
 
 ## run-arm (E2.S8)
