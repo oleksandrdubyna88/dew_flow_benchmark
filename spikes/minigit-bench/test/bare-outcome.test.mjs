@@ -220,3 +220,11 @@ test('The_broker_refused_flag_counts_cap_refusals_only_as_the_contract_says', ()
   assert.equal(mixed.detail.brokerRefused.count, 2);
   assert.equal(mixed.detail.brokerRefused.backoffMs, 16000, 'each cap refusal to the next ADMITTED request: 12 s + 4 s');
 });
+
+test('A_contaminated_void_keeps_the_high_hits_themselves_not_only_their_count', () => {
+  const high = [{ severity: 'high', rule: 'outside-path', source: 'call', where: 'main:Bash', excerpt: '/srv/partner/box/work' }];
+  const r = bareOutcome(base({ contamination: { high, canary: [], tokenHits: [] } }));
+  assert.equal(r.class, 'void: contaminated');
+  assert.equal(r.detail.high, 1);
+  assert.deepEqual(r.detail.contamination, { high });
+});

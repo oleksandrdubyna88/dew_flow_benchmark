@@ -247,6 +247,10 @@ Pure over records; the writers are `policy-ab-quick`'s hook and process launcher
   `harness-name`, `outside-path`, `web`). A hit is `{ severity, rule, source, where, excerpt }`, at most one per rule per record,
   with a 120-character excerpt in which credentials are masked. An edit or write is judged by its path, never its content; an
   `mcp__` call by its whole input. `outside-path` is `policy-ab-quick/lib/leak.mjs` with `flavour: 'posix'`.
+  `outside-path` does not flag what the agent's box exposes on purpose (E3b, after the Node pilot 9804fc was voided for its own pinned TypeScript toolchain): `ctx.allow` is
+  `boxReachable` of `lib/sandbox.mjs` (the node dir, the toolchains and the claude binary the box binds read-only, and the session's own box dirs, taken from `writableBinds`; the
+  harness and net dirs stay protected) and `ctx.skeleton` is `boxSkeleton` (the directories that only hold those binds: an EXACT reach for one lists nothing the box does not expose).
+  A partner's dir, the operator's other files, another series and a toolchain the box does not bind stay high. `test/bare-collect-allow.test.mjs` replays the pilot's commands.
 - **`lib/token-scan.mjs`** — `tokenHits(texts, ownSecrets)`: GitHub and Anthropic credential shapes plus the session's own
   secrets (8 characters or more). A hit is `{ source, kind, offset }`, never the text or a prefix of it; `maskTokens` is the
   same scan as a replacement.
@@ -615,7 +619,7 @@ by a scorer fault.
 | 1 | `checkAliases` says stop | `stop: alias drift` | no |
 | 2 | the real token counted by a sampler or the session scan (its OWN value only: a hit of any other credential shape goes to row 4; review N8) | `stop: security` | no |
 | 3 | the final request answered 401 or 403 by the UPSTREAM (a `settled` broker line; never the broker's own 403 for a refused path or body) | `stop: auth` † | no |
-| 4 | a high contamination hit, a canary, a token-shape hit in any file of the session directory, or a file no scan could read (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` | no |
+| 4 | a high contamination hit, a canary, a token-shape hit in any file of the session directory, or a file no scan could read (a refuted by-hand verdict then reclassifies to `void: harness`, never to anything else) | `void: contaminated` (`detail.contamination.high` keeps the hits: rule, source, where and a masked excerpt, not only the count) | no |
 | 5 | `stopped = readback`, or no settled 2xx broker line with parsed usage | `void: harness` | no |
 | 6 | `stopped = cancelled` (the abort reason recorded) or `disposed`, or the state file retired by `retireStale` | `void: harness (interrupted \| disposed)` † | no |
 | 6b | an error ending whose final request was the broker's own refusal (`path`, `body`, `busy`, or no reason), answered 403 / 403 / 503 | `void: harness` † (the reason names the refusal) | no |

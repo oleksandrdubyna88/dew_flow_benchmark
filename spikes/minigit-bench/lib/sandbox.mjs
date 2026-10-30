@@ -127,6 +127,26 @@ export const writableBinds = (layout, extraRw = []) => Object.freeze([
 ]);
 
 /**
+ * The host paths the agent's box exposes ON PURPOSE, for the contamination scan's `allow`: the node dir, the toolchains and the claude binary it binds read-only, any extra read-only
+ * bind, and the writable binds (the session's own box dirs: `writableBinds` is the one table, never retyped). NOT the harness and net dirs the box binds read-only as well: those stay
+ * protected (a reach for the harness's files is contamination whatever the box shows). A test diffs this list against the binds `agentBoxPrefix` really builds.
+ */
+export const boxReachable = ({ layout, nodeDir, toolchains = [], claudeBinary, extraRo = [], extraRw = [] }) => Object.freeze([
+  ...[nodeDir, ...toolchains, claudeBinary, ...extraRo].filter(Boolean),
+  ...writableBinds(layout, extraRw).map(b => b.host),
+]);
+
+/** Every proper ancestor directory of the paths, nearest last, `/` left out: `['/a/b/c']` -> `['/a', '/a/b']`. */
+const ancestorsOf = paths => paths.flatMap(p => path.dirname(p).split(path.sep).filter(Boolean).map((_, i, parts) => `/${parts.slice(0, i + 1).join('/')}`));
+
+/**
+ * The directories that only HOLD the box's binds: bwrap makes the parent of every bind point, and inside the box it lists nothing but the binds (the operator's home is an empty tmpfs). A
+ * listing of one (`ls <toolchains folder>`) shows what the box exposes and nothing else, so the scan does not flag an EXACT match on one; a path below one that is not itself bound stays
+ * a reach. Derived from every bind, the harness and net dirs included.
+ */
+export const boxSkeleton = opts => Object.freeze([...new Set(ancestorsOf([...boxReachable(opts), opts.layout.harness, opts.layout.net]))]);
+
+/**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
  * host's `/tmp`. Its own network, pid and ipc namespaces. No `--setenv`, no `--clearenv`: the environment is the spawn's `env`.

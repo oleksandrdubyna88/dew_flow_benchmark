@@ -69,7 +69,8 @@ function web(text, ctx, call) {
 }
 
 function outsidePath(text, ctx, call) {
-  const found = findOutsideAccesses([call], { treeRoot: ctx.treeRoot, home: ctx.home, flavour: 'posix', allow: ctx.allow ?? [] });
+  const skeleton = new Set(ctx.skeleton ?? []); // a directory that only holds the box's binds: an exact reach for it shows nothing the box does not expose
+  const found = findOutsideAccesses([call], { treeRoot: ctx.treeRoot, home: ctx.home, flavour: 'posix', allow: ctx.allow ?? [] }).filter(f => !skeleton.has(f.resolved));
   if (found.length === 0) return null;
   const protectedRoots = [...(ctx.partnerPaths ?? []), ...(ctx.harnessPaths ?? []), ctx.home].filter(Boolean);
   const high = found.find(f => protectedRoots.some(root => f.resolved === root || f.resolved.startsWith(root.endsWith('/') ? root : `${root}/`)));
@@ -119,7 +120,7 @@ function hitsOf(record, ctx) {
  * Pure. `calls` = `[{ agent, tool, input, source? }]` (the stream's tool_use blocks, main and forwarded children, and the audit);
  * `mcpResults` = the text of every tool_result whose tool_use named an `mcp__` tool (a string, or `{ text, where? }`);
  * `ctx` = { rid, runId, runIdPattern, ownPrefix, ownOrigin, ownPrs, otherStack, partnerPaths, harnessPaths, treeRoot, home,
- * allow, arm?, ownSecrets? }. `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
+ * allow, skeleton?, arm?, ownSecrets? }. `allow` = directory prefixes the box exposes on purpose; `skeleton` = directories that only hold them (exact match). `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
  */
 export function contaminationHits({ calls = [], mcpResults = [], ctx }) {
   const fromCalls = calls.map(call => ({ text: callText(call), call, source: call.source ?? 'call', where: `${call.agent ?? 'main'}:${call.tool}` }));

@@ -80,7 +80,7 @@ const RULES = [
   // The credential failing is the UPSTREAM answering 401 / 403 to the final request. The broker answers 403 to its own path and body refusals, so the envelope's status alone cannot say.
   ({ final }) => (final?.kind === 'status' && AUTH.has(final.status) ? result('stop: auth', { stop: true, detail: { status: final.status } }) : null),
   ({ contamination }) => (contamination.high.length + contamination.canary.length + contamination.tokenHits.length > 0
-    ? result('void: contaminated', { detail: { high: contamination.high.length, canary: contamination.canary.length, tokenHits: contamination.tokenHits.length } }) : null),
+    ? result('void: contaminated', { detail: { high: contamination.high.length, canary: contamination.canary.length, tokenHits: contamination.tokenHits.length, contamination: { high: contamination.high } } }) : null),
   ({ handVerdicts }) => {
     const refuted = handVerdicts.filter(v => v.verdict === 'refuted');
     return refuted.length > 0 ? result('void: harness', { detail: { reason: `hand verdict refuted ${refuted.map(v => v.g).join(', ')}` } }) : null;
