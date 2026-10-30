@@ -9,6 +9,7 @@ import { ridOf, maskFor } from '../lib/bare-plan.mjs';
 import { openSeries, writeRunMap } from '../lib/run-map.mjs';
 import { appendLedger } from '../lib/ledger.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
+import { promptsText, stacksText } from './prereg-fixtures.mjs';
 
 const SEED = 'mg-0123456789abcdef';
 const RUNNER = path.join(spikeDir, 'bare-runner.mjs');
@@ -106,6 +107,8 @@ test('A_series_stop_cannot_be_passed_with_after_stop_and_a_halt_needs_a_reason',
 
 test('The_seed_commands_write_the_hash_to_inputs_and_the_seed_outside_git', async () => {
   const inputs = tmpDir('inputs');
+  writeFileSync(path.join(inputs, 'stacks.json'), stacksText('10.0.114'));
+  writeFileSync(path.join(inputs, 'prompts-bare.json'), promptsText('10.0.114'));
   const seedFile = path.join(tmpDir('seeds'), 'bare.seed');
   const c = await run(['seed-commit', '--seed-file', seedFile, '--inputs-dir', inputs]);
   assert.equal(c.code, 0, c.out);

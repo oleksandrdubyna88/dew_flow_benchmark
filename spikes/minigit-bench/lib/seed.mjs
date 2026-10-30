@@ -4,6 +4,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { sdkCheckOfTexts } from './prereg-consistency.mjs';
 import { fail, ok } from './result.mjs';
 
 export const SEED_SHAPE = /^mg-[0-9a-f]{16}$/;
@@ -14,6 +15,11 @@ export function commitSeed({ seedFile, inputsDir, random = () => randomBytes(8).
   const hashFile = path.join(inputsDir, 'seed.sha256');
   if (existsSync(seedFile)) return fail(`${seedFile} already exists: a seed is committed once`);
   if (existsSync(hashFile)) return fail(`${hashFile} already exists: the committed hash is frozen by the pre-registration tag`);
+  const files = ['prompts-bare.json', 'stacks.json'].map(f => path.join(inputsDir, f));
+  const absent = files.find(f => !existsSync(f));
+  if (absent) return fail(`${absent} does not exist: the seed is committed last, with every other registered file in place`);
+  const consistent = sdkCheckOfTexts({ promptsText: readFileSync(files[0], 'utf8'), stacksText: readFileSync(files[1], 'utf8') });
+  if (!consistent.ok) return fail(`${consistent.reason} (seed-commit is the last step before the tag)`);
   const seed = `mg-${random()}`;
   mkdirSync(path.dirname(seedFile), { recursive: true, mode: 0o700 });
   writeFileSync(seedFile, `${seed}\n`, { mode: 0o600, flag: 'wx' });

@@ -76,7 +76,7 @@ The exact prompt bytes per stack and phase, with their sha256, are `prompts-bare
   its prompt said `C#`; `typescript` has no `prompt_name`, so its prompt said `lang.capitalize`, which is `Typescript`. banteg had no `extra_prompt` for either language.
 - **What ours says.** Parent §4.3 change (1) makes the label `TypeScript`, deliberately: the product's own spelling. Change (2) puts a stack sentence into upstream's own
   `extra_prompt` slot, as `{STACK_SENTENCE}`, because it pins the toolchain under test (upstream's TypeScript ran `tsx`). The sentences are, verbatim:
-  - C#: *"Use C# 14 on .NET 10 (SDK 10.0.113 is installed)."*
+  - C#: *"Use C# 14 on .NET 10 (SDK 10.0.114 is installed)."*
   - TypeScript: *"Use TypeScript run directly by Node 26 (native type stripping, no build step), with `tsc --noEmit` as the type check."*
 - Changes (3) and (4) of §4.3 are the same for both stacks: "the v1 implementation" instead of "a passing v1 implementation", and banteg's v2 wording, not mame's.
 

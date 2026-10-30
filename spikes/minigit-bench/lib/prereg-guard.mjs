@@ -4,10 +4,12 @@
 //   the blobs    every PREREG_FILES blob at HEAD equals its blob at the tagged commit, except `amendments.md` (the tag's text must be a prefix),
 //                `seed.txt` (absent at the tag; when present it must hash to `seed.sha256`; required when `requireSeed`) and `crosscheck-policy.json`
 //                (may differ only in t2, t3 and their dated reason: S4's T3 commit)
+//   consistency  a C# prompt names the SDK that stacks.json pins (`prereg-consistency.mjs`)
 //   paid only    `git status --porcelain -- spikes/` is empty (untracked included) and `harnessIdentity` is the run-map's or an accepted one
 // `harnessIdentity` hashes git TREE ids, never HEAD: committing an amendment or the seed leaves it alone, a code change does not.
 import { createHash } from 'node:crypto';
 import { fail, ok } from './result.mjs';
+import { sdkCheckOfTexts } from './prereg-consistency.mjs';
 import { runBounded } from './run.mjs';
 
 const INPUTS = 'spikes/minigit-bench/inputs';
@@ -75,6 +77,14 @@ async function seedProblem(repo, commit, requireSeed) {
   return hash !== null && sha256(head.trim()) === hash.trim() ? null : 'seed.txt does not hash to seed.sha256';
 }
 
+/** The registered files must not contradict each other: today, the SDK a C# prompt names against the pin. */
+async function consistencyProblems(repo) {
+  const [promptsText, stacksText] = await Promise.all([textAt(repo, 'HEAD', 'prompts-bare.json'), textAt(repo, 'HEAD', 'stacks.json')]);
+  if (promptsText === null || stacksText === null) return [];
+  const r = sdkCheckOfTexts({ promptsText, stacksText });
+  return r.ok ? [] : [r.reason];
+}
+
 async function blobProblems(repo, commit, requireSeed) {
   const special = new Set(['amendments.md', 'crosscheck-policy.json']);
   const plain = await Promise.all(PREREG_FILES.filter(f => !special.has(f)).map(async f => {
@@ -82,7 +92,7 @@ async function blobProblems(repo, commit, requireSeed) {
     if (tagged === null) return `${f} is missing at the tagged commit`;
     return head === tagged ? null : `${f} ${head === null ? 'is deleted at HEAD' : 'differs from the tagged commit'}`;
   }));
-  return [...plain, await amendmentsProblem(repo, commit), await policyProblem(repo, commit), await seedProblem(repo, commit, requireSeed)].filter(Boolean);
+  return [...plain, await amendmentsProblem(repo, commit), await policyProblem(repo, commit), await seedProblem(repo, commit, requireSeed), ...await consistencyProblems(repo)].filter(Boolean);
 }
 
 async function paidProblems(repo, runMap) {

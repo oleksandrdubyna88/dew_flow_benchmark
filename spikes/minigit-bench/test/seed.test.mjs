@@ -6,8 +6,14 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { SEED_SHAPE, commitSeed, revealSeed } from '../lib/seed.mjs';
 import { tmpDir } from './helpers.mjs';
+import { promptsText, stacksText } from './prereg-fixtures.mjs';
 
-const setup = () => ({ inputsDir: tmpDir('inputs'), seedFile: path.join(tmpDir('seeds'), 'bare.seed') });
+const setup = ({ promptSdk = '10.0.114', pin = '10.0.114' } = {}) => {
+  const inputsDir = tmpDir('inputs');
+  writeFileSync(path.join(inputsDir, 'stacks.json'), stacksText(pin));
+  writeFileSync(path.join(inputsDir, 'prompts-bare.json'), promptsText(promptSdk));
+  return { inputsDir, seedFile: path.join(tmpDir('seeds'), 'bare.seed') };
+};
 
 test('The_seed_is_committed_as_a_hash_in_inputs_and_a_mode_600_file_outside_git', () => {
   const s = setup();
@@ -47,4 +53,13 @@ test('The_revealed_seed_must_match_its_hash', () => {
   assert.equal(existsSync(path.join(t.inputsDir, 'seed.txt')), false, 'nothing is written for a seed that does not match');
   const u = setup();
   assert.match(revealSeed(u).reason, /nothing to reveal/);
+});
+
+test('A_seed_is_not_committed_while_the_csharp_prompt_names_another_sdk_than_the_pin', () => {
+  const s = setup({ promptSdk: '10.0.113', pin: '10.0.114' });
+  const r = commitSeed(s);
+  assert.equal(r.ok, false, 'the last step before the tag refuses a prompt the pin contradicts');
+  assert.match(r.reason, /prompts-bare\.json names SDK 10\.0\.113.*10\.0\.114/);
+  assert.equal(existsSync(s.seedFile), false, 'no seed was drawn');
+  assert.equal(existsSync(path.join(s.inputsDir, 'seed.sha256')), false);
 });

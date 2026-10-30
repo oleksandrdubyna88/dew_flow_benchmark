@@ -7,13 +7,14 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PREREG_FILES, harnessIdentity, preregGuard } from '../lib/prereg-guard.mjs';
+import { sdkCheckOfTexts, sdkProblem } from '../lib/prereg-consistency.mjs';
 import { tmpDir } from './helpers.mjs';
+import { promptsText, stacksText } from './prereg-fixtures.mjs';
 
 const TAG = 'prereg/minigit-bare-20261030';
 const INPUTS = 'spikes/minigit-bench/inputs';
 const sha256 = text => createHash('sha256').update(text).digest('hex');
 const SEED = 'mg-0123456789abcdef';
-
 function git(cwd, ...args) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
@@ -23,13 +24,13 @@ const write = (repo, rel, text) => { mkdirSync(path.dirname(path.join(repo, rel)
 const commit = (repo, msg) => { git(repo, 'add', '-A'); git(repo, 'commit', '-q', '-m', msg); return git(repo, 'rev-parse', 'HEAD'); };
 
 /** A repo with every registered file, harness code, one commit, an annotated tag on it and a bare origin holding both. */
-function fixture({ push = true } = {}) {
+function fixture({ push = true, sdk = '10.0.114', pin = sdk } = {}) {
   const remote = tmpDir('remote');
   git(remote, 'init', '-q', '--bare');
   const repo = tmpDir('repo');
   git(repo, 'init', '-q', '-b', 'main');
   git(repo, 'remote', 'add', 'origin', remote);
-  for (const f of PREREG_FILES) write(repo, `${INPUTS}/${f}`, f === 'seed.sha256' ? `${sha256(SEED)}\n` : f === 'crosscheck-policy.json' ? '{"t1":"stop","t2":"otel-incomplete","t3":"investigate","t5":"investigate","join":"request_id","t3OutputSource":"transcript","decidedOn":"2026-10-29","reason":"a"}\n' : f === 'amendments.md' ? '# Dated amendments\n' : `registered ${f}\n`);
+  for (const f of new Set([...PREREG_FILES, 'stacks.json'])) write(repo, `${INPUTS}/${f}`, f === 'seed.sha256' ? `${sha256(SEED)}\n` : f === 'crosscheck-policy.json' ? '{"t1":"stop","t2":"otel-incomplete","t3":"investigate","t5":"investigate","join":"request_id","t3OutputSource":"transcript","decidedOn":"2026-10-29","reason":"a"}\n' : f === 'amendments.md' ? '# Dated amendments\n' : f === 'stacks.json' ? stacksText(pin) : f === 'prompts-bare.json' ? promptsText(sdk) : `registered ${f}\n`);
   for (const d of ['lib', 'harness', 'capture', 'prereg']) write(repo, `spikes/minigit-bench/${d}/x.mjs`, `// ${d}\n`);
   write(repo, 'spikes/minigit-bench/top.mjs', '// top\n');
   for (const d of ['lib', 'hooks']) write(repo, `spikes/policy-ab-quick/${d}/y.mjs`, `// ${d}\n`);
@@ -155,4 +156,21 @@ test('Harness_identity_ignores_inputs_and_follows_code', async () => {
     commit(f.repo, `change ${rel}`);
     assert.notEqual((await harnessIdentity(f.repo)).value, h, `${rel} is part of the harness`);
   }
+});
+
+test('The_guard_refuses_a_csharp_prompt_that_names_another_sdk_than_the_pin', async () => {
+  const same = await pinned(fixture());
+  assert.equal((await guard(same)).ok, true, 'control: the prompt names the pinned SDK');
+  const f = await pinned(fixture({ sdk: '10.0.113', pin: '10.0.114' }));
+  const refused = await guard(f);
+  assert.equal(refused.ok, false, 'the prompt says 10.0.113 and stacks.json pins 10.0.114');
+  assert.match(refused.reason, /prompts-bare\.json names SDK 10\.0\.113.*10\.0\.114/);
+});
+
+test('The_sdk_check_reads_every_sentence_of_the_csharp_prompts_and_ignores_the_node_ones', () => {
+  const pin = { pins: { dotnetSdk: '10.0.114' } };
+  assert.equal(sdkProblem({ prompts: JSON.parse(promptsText('10.0.114')), stacks: pin }), null);
+  assert.match(sdkProblem({ prompts: JSON.parse(promptsText('10.0.113')), stacks: pin }), /names SDK 10\.0\.113 but stacks\.json pins 10\.0\.114/);
+  assert.match(sdkProblem({ prompts: JSON.parse(promptsText('10.0.114')), stacks: {} }), /no pins\.dotnetSdk/, 'a missing pin is a refusal, never a pass');
+  assert.equal(sdkCheckOfTexts({ promptsText: 'not json', stacksText: stacksText('10.0.114') }).ok, false);
 });

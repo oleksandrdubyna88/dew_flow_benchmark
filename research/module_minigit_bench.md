@@ -640,7 +640,9 @@ again under the same rid. A changed pin, stacks file, prices file, snapshot hash
 **The pre-registration guard** (`preregGuard`, before every launch): the tag `prereg/minigit-bare-<date>` is on origin and peels to the run-map's commit; every registered file at HEAD is its
 tagged blob, except `amendments.md` (append-only), `seed.txt` (absent at the tag, hashing to `seed.sha256`, required for a data pair) and `crosscheck-policy.json` (free only in `t2`, `t3` and
 their dated reason); a paid run also needs `git status --porcelain -- spikes/` empty and the harness identity (sha256 over git TREE ids of `lib`, `harness`, `capture`, `prereg`, the spike's top-level
-`*.mjs` and `policy-ab-quick`'s `lib` and `hooks`, never HEAD) to be the pinned or an accepted one.
+`*.mjs` and `policy-ab-quick`'s `lib` and `hooks`, never HEAD) to be the pinned or an accepted one. It also refuses when the SDK a C# prompt names ("SDK 10.0.113 is installed") is not the SDK `stacks.json` pins (`lib/prereg-consistency.mjs`; `seed-commit`, the last step before the
+tag, runs the same check and draws no seed on a mismatch). **State at review fix B1:** the quoted prompts still name 10.0.113 while the pin is 10.0.114, so the real files FAIL this check until they are re-quoted
+from a main commit that holds the parent §4.3 amendment (it waits for PR #118); `statement.md` already says 10.0.114.
 
 **The machine-quiet check** (`inputs/quiet.json`). Before a phase, a 60 s window of 5 s samples must show: host CPU minus the harness's own ticks, mean at most 0.5 CPU and no sample over 1.5;
 no foreign `claude -p` / `codex exec` (another user's process counts); `MemAvailable` at least 25 %; no live session of any series under `~/rsd/minigit/*/s/`; and the spin probe median within 1.30 x
