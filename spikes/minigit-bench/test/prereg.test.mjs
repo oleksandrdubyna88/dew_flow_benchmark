@@ -76,6 +76,37 @@ test('The_committed_quote_half_is_what_the_script_writes_and_the_tail_is_kept', 
   assert.equal(extractQuotes('nothing here').ok, false);
 });
 
+// The registered extensions of parent §11.1 (E3b.S3): the three classes the plan's scenario names. Each must be a list item of the operationalizations that carries the
+// marker and a reason, and the outcome table's † rows must be exactly those items: a class marked in one place and not the other is the defect this test catches.
+const EXTENSION_MARKER = '**registered extension of §11.1.**';
+const EXTENSIONS = ['stop: auth', 'void: harness (interrupted | disposed)', 'void: upstream'];
+
+/** The operationalizations' extension items: `- \`<class>\` — **registered extension of §11.1.** Reason: <text>` (the item may wrap) -> `[{ cls, reason }]`. */
+const extensionItems = tail => tail.split(/\n(?=- )/).flatMap(item => {
+  const m = /^- `([^`]+)` — (.+)$/s.exec(item.split(/\n\s*\n/)[0]);
+  if (!m || !m[2].startsWith(EXTENSION_MARKER)) return [];
+  const reason = /Reason: (.+)$/s.exec(m[2])?.[1] ?? '';
+  return [{ cls: m[1], reason: unwrap(reason) }];
+});
+
+/** The classes of the outcome table's rows marked †, with the table's `\|` unescaped. */
+const daggerRows = tail => tail.split('\n').filter(l => /^\| \d+ \|/.test(l) && l.includes('†'))
+  .flatMap(l => [...l.replaceAll('\\|', '|').matchAll(/`([^`]+)` †/g)].map(m => m[1]));
+
+test('The_extensions_are_marked_as_registered', () => {
+  const tail = keptTail(read('analysis-contract.md'));
+  const items = extensionItems(tail);
+  assert.deepEqual(items.map(i => i.cls).sort(), [...EXTENSIONS].sort(), 'each extension is an item under the registered-extension marker, and nothing else is');
+  for (const { cls, reason } of items) assert.ok(reason.length >= 40, `${cls} carries a reason: '${reason}'`);
+  assert.deepEqual([...daggerRows(tail)].sort(), [...EXTENSIONS].sort(), 'the outcome table marks exactly the registered extensions with †');
+  // companions: the parser does see an item, and an item without the marker or without a reason is not counted as registered
+  const known = `- \`void: upstream\` — ${EXTENSION_MARKER} Reason: the provider, not the stack, ended the session after the CLI's own retries.`;
+  assert.deepEqual(extensionItems(known).map(i => i.cls), ['void: upstream']);
+  assert.deepEqual(extensionItems(known.replace(EXTENSION_MARKER, 'an extension.')), []);
+  assert.equal(extensionItems(known.replace(/Reason: .+$/, ''))[0].reason, '');
+  assert.deepEqual(daggerRows('| 9 | a final 5xx | `void: upstream` † | no |'), ['void: upstream']);
+});
+
 test('The_heldout_prereg_is_derived_not_typed', () => {
   const derived = heldoutPrereg();
   assert.equal(derived.ok, true, derived.reason);
