@@ -232,6 +232,56 @@ public sealed class ProcessRunnerStderrSinkTests
         await GoneAsync(fake.Calls().Single().Pid);
     }
 
+    /// <summary>The caller's cancellation outranks a reader's fault: a stderr sink that cancels the caller and THEN throws leaves the launch with the caller's own
+    /// cancellation — the token the caller handed in, not the linked one the wait used — and not with the sink's <see cref="IOException"/>.</summary>
+    [Fact]
+    public async Task A_cancellation_the_caller_asked_for_outranks_the_sinks_fault()
+    {
+        using var fake = new FakeCli();
+        Replay(fake, 20, new JsonObject { ["lineDelayMs"] = 50, ["holdAfterLine"] = 10 });
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+
+        var launch = () => ProcessRunner.RunAsync(
+            FakeCli.Executable, Argv(fake), Cwd, TimeSpan.FromMinutes(1), "prompt",
+            environment: null,
+            stdoutLine: null,
+            stderrLine: _ =>
+            {
+                caller.Cancel();
+                throw new IOException("disk full");
+            },
+            caller.Token);
+
+        var thrown = await Record.ExceptionAsync(launch);
+
+        thrown.Should().BeAssignableTo<OperationCanceledException>("the caller asked to stop, so its cancellation is the answer, not the sink's fault")
+            .Which.CancellationToken.Should().Be(caller.Token, "it is the caller's own token");
+        await GoneAsync(fake.Calls().Single().Pid);
+    }
+
+    /// <summary>One form on every path: the plain cancellation (no sink, no fault) is also a <see cref="OperationCanceledException"/> carrying the caller's own token,
+    /// with the wait's own cancellation kept as its inner exception.</summary>
+    [Fact]
+    public async Task A_plainly_cancelled_launch_throws_the_callers_own_token()
+    {
+        using var fake = new FakeCli();
+        Replay(fake, 20, new JsonObject { ["lineDelayMs"] = 50, ["holdAfterLine"] = 10 });
+        using var caller = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var launch = ProcessRunner.RunAsync(FakeCli.Executable, Argv(fake), Cwd, TimeSpan.FromMinutes(1), "prompt", caller.Token);
+
+        for (var i = 0; i < 100 && fake.Calls().Count == 0; i++)
+        {
+            await Task.Delay(50, Ct);
+        }
+
+        await caller.CancelAsync();
+        var thrown = await Record.ExceptionAsync(() => launch);
+
+        thrown.Should().BeAssignableTo<OperationCanceledException>().Which.CancellationToken.Should().Be(caller.Token, "the caller gets its own token back on the plain path too");
+        thrown!.InnerException.Should().BeAssignableTo<OperationCanceledException>("the wait's own cancellation stays as the inner exception");
+        await GoneAsync(fake.Calls().Single().Pid);
+    }
+
     /// <summary>Both readers fault; the one the caller sees is the stdout reader's (task order, never "whichever came first") and the other is OBSERVED
     /// before the launch ends — an unobserved faulted task is raised by the finalizer, long after the test that caused it (common.reliability).</summary>
     [Fact]

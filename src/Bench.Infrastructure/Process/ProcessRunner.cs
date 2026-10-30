@@ -51,6 +51,13 @@ public abstract record ProcessAttempt
 /// </para></summary>
 public static class ProcessRunner
 {
+    /// <summary>How long a launch waits, AFTER it has killed the child's tree, for the two readers to reach the end of their pipes (model arms E2.S3).
+    /// A reader ends when every holder of the pipe's write end has closed it; a descendant that escaped the tree kill (a new session, a double fork) holds
+    /// it for as long as it lives, so an unbounded wait would hold a cancelled or timed-out launch for as long as that descendant does
+    /// (common.reliability: every wait has a ceiling). Past the bound the launch returns or throws as the path does, with what the readers had ended with;
+    /// the readers are left to end by themselves and their faults are observed all the same.</summary>
+    public static readonly TimeSpan DrainAfterKill = TimeSpan.FromSeconds(10);
+
     public static Task<ProcessAttempt> RunAsync(
         string executable,
         IReadOnlyList<string> arguments,

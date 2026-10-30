@@ -22,10 +22,16 @@ public sealed class FakeCliByCallTests
 
     private static string[] Argv(FakeCli fake, params string[] extra) => ["-p", "--model", fake.Model, .. extra];
 
-    private static async Task<string> LaunchAsync(FakeCli fake, string cwd, IReadOnlyDictionary<string, string>? environment = null, params string[] extra)
+    private static async Task<ProcessResult> RunAsync(FakeCli fake, string cwd, IReadOnlyDictionary<string, string>? environment = null, params string[] extra)
     {
         var attempt = await ProcessRunner.RunAsync(FakeCli.Executable, Argv(fake, extra), cwd, TimeSpan.FromMinutes(1), "prompt", environment, Ct);
-        var result = attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+        return attempt.Should().BeOfType<ProcessAttempt.Completed>(attempt.Describe).Subject.Result;
+    }
+
+    /// <summary>A launch that must be accepted: exit 0, and what it printed on stdout.</summary>
+    private static async Task<string> LaunchAsync(FakeCli fake, string cwd, IReadOnlyDictionary<string, string>? environment = null, params string[] extra)
+    {
+        var result = await RunAsync(fake, cwd, environment, extra);
         result.ExitCode.Should().Be(0, result.Output);
         return result.StandardOutput;
     }
@@ -62,30 +68,29 @@ public sealed class FakeCliByCallTests
 
     private static string Transcript(string home, string cwd, Guid session) => Path.Combine(home, "projects", Slug(cwd), $"{session:D}.jsonl");
 
-    private static IReadOnlyDictionary<string, string> Environment(FakeCli fake, string home, string? configDir = null)
+    /// <summary>A replaced environment: <paramref name="home"/> as <c>HOME</c> (none = no <c>HOME</c> at all), <paramref name="configDir"/> as <c>CLAUDE_CONFIG_DIR</c> when given.</summary>
+    private static IReadOnlyDictionary<string, string> Environment(FakeCli fake, string? home, string? configDir = null)
     {
         var environment = new Dictionary<string, string>
         {
-            ["HOME"] = home,
             ["PATH"] = System.Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
             ["FAKE_CLI_HOME"] = fake.Home,
         };
 
-        foreach (var name in new[] { "DOTNET_ROOT", "DOTNET_ROOT_X64" })
+        foreach (var (name, value) in new[] { ("HOME", home), ("CLAUDE_CONFIG_DIR", configDir) }.Concat(InheritedDotnetRoots()))
         {
-            if (System.Environment.GetEnvironmentVariable(name) is { Length: > 0 } value)
+            if (value is not null)
             {
                 environment[name] = value;
             }
         }
 
-        if (configDir is not null)
-        {
-            environment["CLAUDE_CONFIG_DIR"] = configDir;
-        }
-
         return environment;
     }
+
+    /// <summary>The runtime's own location variables, copied from this process when it has them: the fake is an apphost and a replaced environment would hide where dotnet lives.</summary>
+    private static IEnumerable<(string Name, string? Value)> InheritedDotnetRoots() =>
+        new[] { "DOTNET_ROOT", "DOTNET_ROOT_X64" }.Select(name => (name, System.Environment.GetEnvironmentVariable(name))).Where(pair => pair.Item2 is { Length: > 0 });
 
     [Fact]
     public async Task A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked()
@@ -103,9 +108,8 @@ public sealed class FakeCliByCallTests
         File.Exists(freshFile).Should().BeTrue($"claude leaves {freshFile} for a session it was given with --session-id");
         new FileInfo(freshFile).Length.Should().Be(0, "the file is empty: the fake has no conversation to record");
 
-        var resumed = Guid.NewGuid();
-        await LaunchAsync(fake, cwd, Environment(fake, home), "--resume", resumed.ToString("D"));
-        File.Exists(Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), resumed)).Should().BeTrue("a resumed session has its transcript too");
+        await LaunchAsync(fake, cwd, Environment(fake, home), "--resume", fresh.ToString("D"));
+        File.Exists(freshFile).Should().BeTrue("a session that exists can be resumed, and its transcript stays");
 
         var config = temp.Combine("cfg");
         var relocated = Guid.NewGuid();
@@ -160,5 +164,70 @@ public sealed class FakeCliByCallTests
 
         Directory.EnumerateDirectories(temp.Path, "projects", SearchOption.AllDirectories).Should().BeEmpty("a launch with no session id has no transcript to leave");
         fake.Calls().Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task A_resume_of_a_session_with_no_transcript_is_refused_with_claudes_own_sentence()
+    {
+        using var temp = new TempFolder();
+        using var fake = new FakeCli();
+        var home = temp.Folder("home");
+        fake.Rewrite(new JsonObject { ["transcripts"] = true, ["stdoutFile"] = temp.File("stream\n", "f.ndjson") });
+        var unknown = Guid.NewGuid();
+
+        var result = await RunAsync(fake, temp.Folder("r", "abc", "arm"), Environment(fake, home), "--resume", unknown.ToString("D"));
+
+        result.ExitCode.Should().Be(1, "claude exits 1 for a session it has no conversation for");
+        result.StandardError.Should().Be($"No conversation found with session ID: {unknown:D}");
+        result.StandardOutput.Should().BeEmpty("a refused resume answers nothing");
+        Directory.EnumerateDirectories(temp.Path, "projects", SearchOption.AllDirectories).Should().BeEmpty("a refused resume creates no transcript");
+    }
+
+    [Fact]
+    public async Task A_launch_the_fake_refuses_leaves_no_transcript()
+    {
+        using var temp = new TempFolder();
+        using var fake = new FakeCli();
+        var home = temp.Folder("home");
+        fake.Rewrite(new JsonObject { ["transcripts"] = true, ["refuseArgvContaining"] = "--session-id" });
+
+        var result = await RunAsync(fake, temp.Folder("r", "abc", "arm"), Environment(fake, home), "--session-id", Guid.NewGuid().ToString("D"));
+
+        result.ExitCode.Should().Be(2, "the refusal is the fake's usual one");
+        Directory.EnumerateDirectories(temp.Path, "projects", SearchOption.AllDirectories).Should().BeEmpty("a launch claude would refuse starts no session");
+    }
+
+    /// <summary>With neither <c>CLAUDE_CONFIG_DIR</c> nor <c>HOME</c> the fake has no home to write under: it says so and writes nothing. The real home — what the
+    /// platform would answer for the user — is never reached for, so a test that forgot to give the fake a home cannot pollute the developer's own <c>~/.claude</c>.</summary>
+    [Fact]
+    public async Task A_launch_with_neither_a_config_dir_nor_a_home_leaves_nothing_and_says_so()
+    {
+        using var temp = new TempFolder();
+        using var fake = new FakeCli();
+        var cwd = temp.Folder("r", "abc", "arm");
+        fake.Rewrite(new JsonObject { ["transcripts"] = true, ["stdoutFile"] = temp.File("stream\n", "f.ndjson") });
+        var session = Guid.NewGuid();
+        var realHome = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        string? polluted = null;
+
+        try
+        {
+            var result = await RunAsync(fake, cwd, Environment(fake, home: null), "--session-id", session.ToString("D"));
+
+            polluted = Transcript(Path.Combine(realHome, ".claude"), SeenCwd(fake), session);
+            result.ExitCode.Should().Be(0, "the launch is answered all the same");
+            result.StandardError.Should().Contain("neither CLAUDE_CONFIG_DIR nor HOME is set");
+            File.Exists(polluted).Should().BeFalse($"the real home ({realHome}) is never reached for when the environment gives none");
+            Directory.EnumerateDirectories(temp.Path, "projects", SearchOption.AllDirectories).Should().BeEmpty();
+        }
+        finally
+        {
+            // A fake that DID write there must not leave it: this test would otherwise pollute the developer's own transcripts on the day it fails.
+            if (polluted is not null && File.Exists(polluted))
+            {
+                File.Delete(polluted);
+                Directory.Delete(Path.GetDirectoryName(polluted)!);
+            }
+        }
     }
 }
