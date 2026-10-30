@@ -361,4 +361,65 @@ public sealed class StepEndTests
         end.Should().Be(new StepEnd.Errored(new string('a', 199) + "…"), "the pair that straddles character 200 is dropped whole, never halved");
         end.Should().BeOfType<StepEnd.Errored>().Subject.Text.Any(char.IsSurrogate).Should().BeFalse("no half of a pair survives");
     }
+
+    /// <summary>The safe side of the incident's direction (E2 §8, the fix round): a captured 429 or 529 is a limit whatever <c>is_error</c> says — the shell took any truthy is_error as
+    /// an error, and the failure that cost nine steps was a false "done".</summary>
+    [Fact]
+    public void A_captured_429_or_529_is_limited_whatever_is_error_says()
+    {
+        var limited = new StepEnd.Limited("api_error_status 429 — " + LimitText);
+
+        End(Edited(Limit429, o => o["is_error"] = false)).Should().Be(limited, "is_error false beside a captured 429 is not a success");
+        End(Edited(Limit429, o => o.Remove("is_error"))).Should().Be(limited, "no is_error beside a captured 429 is not a success");
+        End("""{"type":"result","is_error":false,"api_error_status":529,"result":"API Error: 529 Overloaded"}""").Should().Be(new StepEnd.Limited("api_error_status 529 — API Error: 529 Overloaded"));
+        End("""{"type":"result","is_error":false,"api_error_status":"429","result":"ok"}""").Should().Be(new StepEnd.Limited("api_error_status 429 — ok"));
+        End("""{"type":"result","is_error":false,"api_error_status":null,"result":"ok"}""").Should().Be(new StepEnd.Finished(), "an uncaptured status says nothing");
+        End("""{"type":"result","is_error":false,"api_error_status":400,"result":"ok"}""").Should().Be(new StepEnd.Finished(), "only 429 and 529 are limits");
+    }
+
+    /// <summary>Only the literal <c>false</c>, or no <c>is_error</c> at all, reads as success.</summary>
+    [Theory]
+    [InlineData("\"is_error\":\"true\",", "Errored")]
+    [InlineData("\"is_error\":1,", "Errored")]
+    [InlineData("\"is_error\":0,", "Errored")]
+    [InlineData("\"is_error\":null,", "Errored")]
+    [InlineData("\"is_error\":\"false\",", "Errored")]
+    [InlineData("\"is_error\":{},", "Errored")]
+    [InlineData("\"is_error\":true,", "Errored")]
+    [InlineData("\"is_error\":false,", "Finished")]
+    [InlineData("", "Finished")]
+    public void An_is_error_that_is_not_the_literal_false_reads_as_an_error(string isError, string expected)
+    {
+        var end = End("{\"type\":\"result\"," + isError + "\"result\":\"oops\"}");
+
+        end.GetType().Name.Should().Be(expected, "only the literal false or an absent is_error reads as success");
+        if (expected == "Errored")
+        {
+            end.Should().Be(new StepEnd.Errored("oops"));
+        }
+
+        End("{\"type\":\"result\"," + isError + "\"result\":\"rate limit exceeded\"}").Should().Be(
+            expected == "Errored" ? new StepEnd.Limited("the words 'rate limit' in the result — rate limit exceeded") : new StepEnd.Finished(),
+            "the words are read only from an error, and a non-boolean is_error is one");
+    }
+
+    /// <summary>R7 of the fix round: the last non-blank line is a result line that was cut off. An earlier SUCCESS must not stand for it — the cut line may have been the real,
+    /// failing, last word — so the end is Interrupted and the step resumes. An earlier limit or error stands: nothing that follows can make it a success.</summary>
+    [Fact]
+    public void A_success_followed_by_a_cut_result_line_is_interrupted_and_an_earlier_limit_or_error_stands()
+    {
+        var cut = Limit429.TrimEnd('\n')[..1300];
+        var interrupted = new StepEnd.Interrupted("the last line of the stream is a result line that could not be read — an earlier success is not trusted");
+
+        End(Read("result-success.jsonl") + "\n" + cut).Should().Be(interrupted, "the earlier success is not the last word");
+        End(Read("result-success.jsonl") + "\n" + cut, string.Empty, Killed).Should().Be(interrupted, "a cut line is read the same under the wall");
+        End(Read("result-success.jsonl") + "\n" + cut, "rate limit").Should().Be(interrupted, "stderr is read only when there is no result");
+
+        var three = Read("stream-2026-10-28-review-three-results.jsonl").Split('\n');
+        var lastCut = three[2][..2100]; // the line is 2155 characters and holds its type key at 2001
+        End(string.Join('\n', three[0], three[1], lastCut)).Should().Be(new StepEnd.Limited("api_error_status 429 — " + LimitText), "an earlier limit stands when the last line is cut");
+        End(string.Join('\n', three[0], lastCut)).Should().Be(interrupted, "line 1 is a success: it becomes interrupted");
+        End(Read("result-400-model-unsupported.jsonl").TrimEnd('\n') + "\n" + cut).Should().BeOfType<StepEnd.Errored>("an earlier error stands");
+        End(Read("result-success.jsonl") + "\n" + cut + "\n" + """{"type":"assistant"}""").Should().Be(new StepEnd.Finished(), "only the LAST non-blank line is asked");
+    }
 }

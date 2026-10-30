@@ -150,19 +150,23 @@ public sealed class ClaudeResultEnvelopeTests
         Sha(File.ReadAllBytes(ModelArmsFixtures.Path(Limit429))).Should().Be("895d7980445470e7ad4588cbdea7a0b7878b47582544b58b82d008c59df52a52");
     }
 
-    /// <summary>Every shape here is a line that was seen, or could be seen, in a real stream: none is a result, and none may hide the real one or throw.</summary>
+    /// <summary>Every shape here is a line that was seen, or could be seen, in a real stream: none is a readable result, and none may hide the real one or throw. The last
+    /// column is the flag: a result line that could not be read, as the stream's LAST line, is not trusted past — an earlier result is flagged <c>FollowedByUnreadResult</c>. The
+    /// two escaped-surrogate rows are well-formed JSON whose key or <c>type</c> value makes <c>TryGetProperty</c> / <c>ValueEquals</c> throw <c>InvalidOperationException</c>.</summary>
     [Theory]
-    [InlineData("""["is_error",true]""")]
-    [InlineData("""{"type":"result","is_error":true,"resu""")]
-    [InlineData("Error: something went wrong before any JSON")]
-    [InlineData("""{"type":"assistant","message":{}}""")]
-    [InlineData("""{"type":42}""")]
-    [InlineData("""{"type":null}""")]
-    [InlineData("""{"is_error":true,"result":"no type"}""")]
-    [InlineData("""{"type":"result_x","result":"a decoy"}""")]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Every_shape_that_is_not_a_result_object_is_skipped_and_nothing_throws(string shape)
+    [InlineData("""["is_error",true]""", false)]
+    [InlineData("""{"type":"result","is_error":true,"resu""", true)]
+    [InlineData("Error: something went wrong before any JSON", false)]
+    [InlineData("""{"type":"assistant","message":{}}""", false)]
+    [InlineData("""{"type":42}""", false)]
+    [InlineData("""{"type":null}""", false)]
+    [InlineData("""{"is_error":true,"result":"no type"}""", false)]
+    [InlineData("""{"type":"result_x","result":"a decoy"}""", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("""{"\ud800k":1,"type":"result","is_error":true,"result":"x"}""", true)]
+    [InlineData("""{"type":"result\ud800"}""", false)]
+    public void Every_shape_that_is_not_a_result_object_is_skipped_and_nothing_throws(string shape, bool unreadResult)
     {
         var before = () => ClaudeResultEnvelope.LastOf(shape + "\n" + Success);
         var after = () => ClaudeResultEnvelope.LastOf(Success + "\n" + shape);
@@ -175,9 +179,56 @@ public sealed class ClaudeResultEnvelopeTests
         var envelope = before().Ok();
         envelope.LineNumber.Should().Be(2);
         envelope.Result.Should().Be("Reviewed.\n{\"verdict\":\"ready\",\"findings\":[]}");
+        envelope.FollowedByUnreadResult.Should().BeFalse("a bad line BEFORE the real last result is of no consequence");
 
-        after().Ok().LineNumber.Should().Be(1, "a bad LAST line never hides the real last result");
+        var trailing = after().Ok();
+        trailing.LineNumber.Should().Be(1, "a bad LAST line never hides the real last result");
+        trailing.FollowedByUnreadResult.Should().Be(unreadResult, "only a result line that could not be read puts the earlier result in doubt");
         alone().Failed().Should().BeTrue("a shape that is not a result is not one alone either");
+    }
+
+    /// <summary>A RAW lone surrogate in a line makes <c>JsonDocument.Parse(string)</c> throw <c>ArgumentException</c>, not <c>JsonException</c>. Built in code, not in an attribute: a
+    /// lone surrogate in test data is not safe to hand to a test runner's serialiser.</summary>
+    [Fact]
+    public void A_raw_lone_surrogate_in_a_line_never_throws_and_never_hides_the_result()
+    {
+        var other = "{\"type\":\"assistant\",\"text\":\"" + '\uD800' + "\"}";
+        var inResult = "{\"type\":\"result\",\"is_error\":false,\"result\":\"" + '\uD800' + "\"}";
+
+        var after = () => ClaudeResultEnvelope.LastOf(Success + "\n" + other);
+        var before = () => ClaudeResultEnvelope.LastOf(other + "\n" + Success);
+        var alone = () => ClaudeResultEnvelope.LastOf(inResult);
+
+        after.Should().NotThrow();
+        before.Should().NotThrow();
+        alone.Should().NotThrow();
+        after().Ok().LineNumber.Should().Be(1);
+        after().Ok().FollowedByUnreadResult.Should().BeFalse("the unreadable line holds no result marker");
+        before().Ok().LineNumber.Should().Be(2);
+        alone().Failed().Should().BeTrue("a result line that cannot be read is no result");
+    }
+
+    /// <summary>The last non-blank line, cut inside a result object (the marker <c>"type":"result"</c> is in it), flags the earlier result. A cut BEFORE the marker is not detectable
+    /// — the line holds nothing that says it was a result — and that is a stated limit, not a pass.</summary>
+    [Fact]
+    public void A_last_line_cut_inside_a_result_flags_the_earlier_result_as_not_the_last_word()
+    {
+        var limit = Read(Limit429).TrimEnd('\n');
+
+        ClaudeResultEnvelope.LastOf(Success + "\n" + limit[..1300]).Ok().FollowedByUnreadResult.Should().BeTrue("the cut line holds the marker");
+        ClaudeResultEnvelope.LastOf(Success + "\n" + limit[..1300] + "\n\n  \n").Ok().FollowedByUnreadResult.Should().BeTrue("blank lines after it do not matter");
+        ClaudeResultEnvelope.LastOf(Success + "\n" + limit[..500]).Ok().FollowedByUnreadResult.Should().BeFalse("a cut before the marker cannot be told from noise — a stated limit");
+        ClaudeResultEnvelope.LastOf(Success + "\n" + limit[..1300] + "\n" + """{"type":"assistant"}""").Ok().FollowedByUnreadResult.Should().BeFalse("only the LAST non-blank line is asked");
+        ClaudeResultEnvelope.LastOf(Success + "\n" + limit).Ok().LineNumber.Should().Be(2, "an intact last result is the result");
+        ClaudeResultEnvelope.LastOf(limit[..1300]).Failed().Should().BeTrue("a cut line alone is no result");
+    }
+
+    [Fact]
+    public void The_fixtures_are_exempt_from_line_ending_conversion_because_their_bytes_are_pinned()
+    {
+        var attributes = File.ReadAllLines(System.IO.Path.Combine(Cli.Repository.Root, ".gitattributes"));
+
+        attributes.Should().Contain(line => line.Trim() == "tests/Bench.Tests/Fixtures/model-arms/** -text", "a checkout that converts line endings would change the bytes the sha256 values pin");
     }
 
     /// <summary>The product's codex lesson in this reader: <c>GetString</c> on a number throws <c>InvalidOperationException</c>, not <c>JsonException</c>, and this runs on the path of an
@@ -185,7 +236,11 @@ public sealed class ClaudeResultEnvelopeTests
     [Theory]
     [InlineData("""{"type":"result","is_error":true}""", true, "", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"result":42}""", true, "", "", "", "")]
-    [InlineData("""{"type":"result","is_error":"true","result":"a string that says true is not a boolean"}""", false, "a string that says true is not a boolean", "", "", "")]
+    [InlineData("""{"type":"result","is_error":"true","result":"a string that says true is not a boolean"}""", true, "a string that says true is not a boolean", "", "", "")]
+    [InlineData("""{"type":"result","is_error":1,"result":"a number is not the literal false"}""", true, "a number is not the literal false", "", "", "")]
+    [InlineData("""{"type":"result","is_error":null,"result":"null is not the literal false"}""", true, "null is not the literal false", "", "", "")]
+    [InlineData("""{"type":"result","is_error":"false","result":"the string false is not the literal false"}""", true, "the string false is not the literal false", "", "", "")]
+    [InlineData("""{"type":"result","is_error":false,"result":"the literal false"}""", false, "the literal false", "", "", "")]
     [InlineData("""{"type":"result","result":"no is_error at all"}""", false, "no is_error at all", "", "", "")]
     [InlineData("""{"type":"result","is_error":true,"errors":["rate limit exceeded",7,null,{"a":1}]}""", true, "", "", "rate limit exceeded", "the words 'rate limit' in the result — an error result with no text")]
     [InlineData("""{"type":"result","errors":"x","api_error":5}""", false, "", "", "", "")]
@@ -198,7 +253,7 @@ public sealed class ClaudeResultEnvelopeTests
         var envelope = read().Ok();
 
         envelope.LineNumber.Should().Be(1, "the object is the stream's one line");
-        envelope.IsError.Should().Be(isError, "only the JSON literal true is an error");
+        envelope.IsError.Should().Be(isError, "only the literal false, or no is_error at all, reads as success; any other value reads as an error (the safe side)");
         envelope.Result.Should().Be(result);
         envelope.ApiError.Should().Be(apiError);
         envelope.Subtype.Should().BeEmpty();

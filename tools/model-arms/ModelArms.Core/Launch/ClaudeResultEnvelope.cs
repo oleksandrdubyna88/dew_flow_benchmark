@@ -22,6 +22,10 @@ namespace ModelArms.Core.Launch;
 /// <param name="LineNumber">The 1-based line of the stream the result was read from.</param>
 public sealed record ClaudeResultEnvelope(bool IsError, CapturedCount ApiErrorStatus, string ApiError, string Result, IReadOnlyList<string> Errors, string Subtype, int LineNumber)
 {
+    /// <summary>True when the stream's last non-blank line is a result line that could not be read (cut off, or unreadable), so this envelope — an EARLIER result — is not the
+    /// stream's last word: a classifier may stand by an earlier limit or error, and must not call an earlier success finished (E2 §8, the E2.S1 fix round).</summary>
+    public bool FollowedByUnreadResult { get; init; }
+
     private static readonly JsonDocumentOptions Tolerant = new() { AllowDuplicateProperties = true, AllowTrailingCommas = true };
 
     /// <summary>Reads the LAST line of <paramref name="stream"/> that is a JSON object whose <c>type</c> is the string <c>result</c>, wherever the key sits in the line.
