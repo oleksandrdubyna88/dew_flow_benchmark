@@ -403,6 +403,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | An abandoned request is drained and priced before the ledger is read (before: recorded as 0 spent) | `broker.test.mjs`, `session-launch.test.mjs` |
 | A link planted at `box/out/audit.ndjson` is refused at every host-side read (before: its target was copied as the audit) | `agent-files-sites.test.mjs`, `agent-files.test.mjs` |
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
+| A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
 #### The first re-smoke (2026-10-30, after the review fixes; NOT the committed fixture)
 
@@ -439,10 +440,16 @@ real-token hits over 33 files, 0 links or pipes in the tree, and 1 link inside t
 **Dated note on B-S3 and links (2026-10-30, run `20261030T004243Z`).** The first scan of this run refuted B-S3 on one symlink, made by the CLI
 itself: `/tmp/claude-<uid>/<box-work>/<session>/tasks/<agent id>.output` -> the subagent's own transcript under `box/config/projects/…/subagents/`.
 "Any link in the agent-writable tree is a finding" was too blunt for a link the CLI makes per subagent. A link is now classified from its target
-STRING only (`lib/link-class.mjs`), never by following it: the target (a relative one resolved against the link's own box directory, `..`
-normalised lexically) is mapped through the box's own bind table (`writableBinds` in `sandbox.mjs`, the one table the argv binds from). **`inside`**
-= the target maps into a read-write bind of this session; **everything else stays `high`**: a target outside every bind, one that maps to no
-bind, a dangling one, and any pipe, socket or device. `inside` links are listed in the scan (`insideLinks`) and in `checks.json` as box-path pairs and do
+STRING and an `lstat` of its path (`lib/link-class.mjs`), never by following it. A link is **`inside`** only when ALL hold: (1) the target
+string has **no `..` segment** (the kernel resolves `..` after following the links before it, so `sub/../etc/passwd` with `sub -> /tmp` is
+`/etc/passwd`, not `<dir>/etc/passwd`; the first version of this rule normalised `..` lexically and classed that link `inside`, found by the review of
+2026-10-30); (2) **no component of the target path before the last is itself a link** (each `lstat`ed from the host side); (3) the target maps, through the
+box's own bind table (`writableBinds` in `sandbox.mjs`, the one table the argv binds from), under a read-write bind whose **box path and host path
+are the same path** (`work`, `home`, `config`, `nuget`, `npm`, `out`): the box's `/tmp` is `box/tmp` on the host, and an absolute `/tmp/...` target is the
+HOST's `/tmp` for a reader on the host, so it is never `inside`; (4) the target exists. A relative target is resolved against the link's own box
+directory first. **Everything else is `high`**: a `..`, a target below a link, a target under the box `/tmp`, a target outside every bind or mapping to none,
+a dangling one, and any pipe, socket or device. The CLI's own link (`tasks/<id>.output` -> an absolute path under `config/projects/`) meets all four.
+`inside` links are listed in the scan (`insideLinks`) and in `checks.json` as box-path pairs and do
 not refute B-S3; **every host-side reader still refuses every link** (`O_NOFOLLOW`), so the classification changes only the verdict, never what is
 read. The run was re-scanned from its raw directory (no new paid session) and the fixture replaced with it.
 

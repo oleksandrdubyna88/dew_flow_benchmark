@@ -48,10 +48,9 @@ test('A_link_to_a_file_in_the_agent_writable_tree_is_inside_and_reported_in_box_
   assert.equal(r.severity, 'inside');
   assert.equal(r.target, s.transcript);
   assert.equal(r.link, path.posix.join('/tmp', 'claude-1000', 'work', 'sid', 'tasks', 'a1.output'), 'the link is named by the path the box sees');
-  // relative targets are read from the BOX: from /tmp the transcript is reached through the root, not through the host's box/tmp
-  const relative = planted(s, 'a2.output', path.posix.relative('/tmp/claude-1000/work/sid/tasks', s.transcript));
-  assert.equal(relative.severity, 'inside', 'a relative target is resolved against the link\'s own box directory');
-  assert.equal(relative.target, s.transcript);
+  // a relative target is read from the link's own box directory; with no `..` segment the kernel and a lexical read agree
+  const down = planted(s, 'a2.output', 'sub/x.txt');
+  assert.equal(down.severity, 'high', 'a relative target that does not exist is dangling');
   const sibling = path.join(s.layout.config, 'projects', 'p', 'subagents');
   symlinkSync('agent-1.jsonl', path.join(sibling, 'agent-2.jsonl'));
   const within = classifyLink({ root: s.layout.dir, rel: path.relative(s.layout.dir, path.join(sibling, 'agent-2.jsonl')), binds: s.binds });
@@ -105,4 +104,54 @@ test('The_scan_lists_inside_links_apart_and_only_a_high_link_is_a_finding', () =
   assert.deepEqual(both.hits, [], 'nothing was read through a link');
   assert.equal(both.insideLinks.length, 1);
   assert.equal(scanSessionDir(s.layout.dir, { real }).links.length >= 3, true, 'without a bind table every link is high (the old rule)');
+});
+
+/** Plant a link at `<dir>/<name>` (a host path of the agent-writable tree) and classify it. */
+function plantedIn(s, dir, name, target) {
+  mkdirSync(dir, { recursive: true });
+  symlinkSync(target, path.join(dir, name));
+  return classifyLink({ root: s.layout.dir, rel: path.relative(s.layout.dir, path.join(dir, name)), binds: s.binds });
+}
+
+test('A_dotdot_after_a_link_is_never_inside_because_the_kernel_resolves_it_after_following_the_link', () => {
+  const s = session();
+  // the reviewer's probe: `sub` is the box /tmp (the HOST /tmp for a host reader); `sub/../etc/passwd` is work/etc/passwd lexically and
+  // /etc/passwd for the kernel, which resolves `..` after following `sub`
+  symlinkSync('/tmp', path.join(s.layout.work, 'sub'));
+  mkdirSync(path.join(s.layout.work, 'etc'));
+  writeFileSync(path.join(s.layout.work, 'etc', 'passwd'), 'decoy');
+  const r = plantedIn(s, s.layout.work, 'evil', 'sub/../etc/passwd');
+  assert.equal(r.severity, 'high', JSON.stringify(r));
+  assert.match(r.why, /\.\./);
+  // the same with no link in the way is refused as well: the rule is about the string, not about what a lexical read happens to find
+  const plain = plantedIn(s, s.layout.work, 'plain', 'etc/../etc/passwd');
+  assert.equal(plain.severity, 'high', 'no `..` segment is accepted');
+  const out = plantedIn(s, s.layout.out, 'up', '../work/etc/passwd');
+  assert.equal(out.severity, 'high', 'a relative `..` target is high');
+});
+
+test('A_target_under_the_box_tmp_is_never_inside_because_the_host_reads_an_absolute_tmp_as_its_own', () => {
+  const s = session();
+  mkdirSync(path.join(s.layout.tmp, 'claude-1000'), { recursive: true });
+  const r = plantedIn(s, s.layout.out, 'scratch', '/tmp/claude-1000');
+  assert.equal(r.severity, 'high', JSON.stringify(r));
+  assert.match(r.why, /tmp|differently|host/);
+  // an absolute /tmp target from a link inside box/tmp itself is the same case
+  const inTmp = plantedIn(s, path.join(s.layout.tmp, 'claude-1000'), 'self', '/tmp/claude-1000');
+  assert.equal(inTmp.severity, 'high');
+});
+
+test('A_target_below_a_link_is_never_inside_because_a_directory_link_in_the_path_redirects_it', () => {
+  const s = session();
+  const decoyDir = tmpDir('lc-d4');
+  writeFileSync(path.join(decoyDir, 'secret.txt'), 'HOST-ONLY\n');
+  symlinkSync(decoyDir, path.join(s.layout.work, 'door')); // the door is itself a (high) link out
+  const through = plantedIn(s, s.layout.out, 'via-door', path.join(s.layout.work, 'door', 'secret.txt'));
+  assert.equal(through.severity, 'high', JSON.stringify(through));
+  assert.match(through.why, /link/);
+  // the same target string with the door a real directory is inside
+  mkdirSync(path.join(s.layout.work, 'real'));
+  writeFileSync(path.join(s.layout.work, 'real', 'f.txt'), 'x');
+  const direct = plantedIn(s, s.layout.out, 'direct', path.join(s.layout.work, 'real', 'f.txt'));
+  assert.equal(direct.severity, 'inside', JSON.stringify(direct));
 });
