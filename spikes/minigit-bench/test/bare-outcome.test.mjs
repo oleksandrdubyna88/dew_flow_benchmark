@@ -208,3 +208,15 @@ test('A_final_request_answered_2xx_that_then_broke_off_with_a_transport_error_is
     'control: the same ending with no transport error stays a crash (data), as before');
   assert.equal(bareOutcome(base({ brokerLines: [...ok2xx(1, 0), forwarding(2, 9), settled(2, 40, { status: 200, error: 'ECONNRESET' })] })).class, 'completed', 'control: a session that ended in success is never voided by a reset on its last request');
 });
+
+test('The_broker_refused_flag_counts_cap_refusals_only_as_the_contract_says', () => {
+  const flags = lines => bareOutcome(base({ brokerLines: lines })).flags.filter(f => f.startsWith('broker refused'));
+  assert.deepEqual(flags([refused(1, 0, 'cap'), ...ok2xx(2, 4)]), ['broker refused 1'], 'control: a cap refusal the session survived');
+  for (const reason of ['path', 'body', 'busy']) assert.deepEqual(flags([refused(1, 0, reason), ...ok2xx(2, 4)]), [], `a survived ${reason} refusal is the harness's door, not a budget refusal: no flag`);
+  const noReason = { t: at(0), seq: 1, event: 'refused' };
+  assert.deepEqual(flags([noReason, ...ok2xx(2, 4)]), [], 'a refusal with no reason is unknown and is never a cap');
+  const mixed = bareOutcome(base({ brokerLines: [refused(1, 0, 'cap'), refused(2, 5, 'body'), refused(3, 8, 'cap'), ...ok2xx(4, 12)] }));
+  assert.ok(mixed.flags.includes('broker refused 2'), mixed.flags.join());
+  assert.equal(mixed.detail.brokerRefused.count, 2);
+  assert.equal(mixed.detail.brokerRefused.backoffMs, 16000, 'each cap refusal to the next ADMITTED request: 12 s + 4 s');
+});

@@ -31,9 +31,9 @@ export function finalRequest(brokerLines) {
 
 const answered = brokerLines => brokerLines.some(l => l.event === 'settled' && is2xx(l.status) && l.usage);
 
-/** Earlier cap refusals the session survived, with their summed backoff: from each refusal to the next admitted request. */
+/** Earlier CAP refusals the session survived (review N7: `reason: 'cap'` only; a path, body or busy refusal, or one with no reason, is the harness's own door and no budget wait), with their summed backoff: from each refusal to the next admitted request. */
 function refusalsSurvived(brokerLines, final) {
-  const refusals = brokerLines.filter(l => l.event === 'refused' && l.seq !== final?.seq);
+  const refusals = brokerLines.filter(l => l.event === 'refused' && l.reason === 'cap' && l.seq !== final?.seq);
   const waits = refusals.flatMap(r => {
     const next = brokerLines.find(l => l.event === 'forwarding' && l.seq > r.seq);
     return next ? [Date.parse(next.t) - Date.parse(r.t)] : [];
