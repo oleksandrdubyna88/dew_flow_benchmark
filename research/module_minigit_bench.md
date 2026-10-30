@@ -377,10 +377,10 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 1. **`token.txt` was empty, not the dummy.** CLI 2.1.310's Bash tool does not hand `CLAUDE_CODE_OAUTH_TOKEN` to its subprocesses:
    `printenv` exited 1 (the model said so). The first fix of 2026-10-30 accepted "the dummy or nothing" for B-S3, and the review (same day)
    rejected it: an empty file proves nothing. **B-S3 is now the host half only** (>= 5 samples, the real token 0 times in every cmdline and
-   environ, `dummyInEnviron >= 1` as the positive control, a clean real-token scan with no link or pipe in the tree) and **B-S3b is the in-box
-   half** (the session reads the CLI's OWN environ, which Bash can see, and writes the credential line to `token.txt`; it holds only when
-   that equals the dummy, and an empty or absent file is `not exercised`). The committed fixture predates both: under the new rules its B-S3 is
-   refuted (no link scan) and its B-S3b `not exercised`, and `SMOKE.md` says so.
+   environ, `dummyInEnviron >= 1` as the positive control, a clean real-token scan with no link or pipe in the tree); the in-box half (B-S3b: the
+   session reads the CLI's OWN environ and writes the credential line to a file) was tried and **retired**, because the models refuse it even
+   framed as a test, so B-S3b is `not exercised` by design. The committed fixture predates the link scan: under the new rules its B-S3 is refuted
+   ('not scanned') and `SMOKE.md` says so.
 2. **B-H1 read the wrong source.** E1's `A-H1` takes hook tool-use ids from the stamp hook's file; the smoke's equivalent is the audit.
 
 #### Facts verified on this machine (E2.S2 tests; dated 2026-10-29/30)
