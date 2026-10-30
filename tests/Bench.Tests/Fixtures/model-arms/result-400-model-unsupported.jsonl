@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":true,"api_error_status":400,"num_turns":1,"result":"API Error: 400 Claude Code 2.1.258 does not support this model; version 2.1.280 or newer is required. Run 'claude update', or update the Claude desktop app, then try again.","terminal_reason":"api_error","error":null}

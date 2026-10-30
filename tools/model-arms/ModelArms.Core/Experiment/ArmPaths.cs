@@ -100,6 +100,9 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string CoaiSettings(string side) => Under("coai-data", Segment(side, "side"), "settings.json");
 
+    /// <summary>The folder <c>COAI_DATA_DIR</c> names for the arm's coai server (<c>after6.sh:34</c>); <see cref="CoaiSettings"/> lives under it.</summary>
+    public string CoaiData => Under("coai-data");
+
     public string McpNone => Under("mcp-none.json");
 
     public string McpCoai => Under("mcp-coai.json");
@@ -113,6 +116,9 @@ public sealed record ArmPaths(string Root, string Token)
     public string Prompt(string step, int n) => OutFile(step, Attempt(n, ".prompt.md"));
 
     public string Done(string step) => OutFile(step, ".done");
+
+    /// <summary>The gate's marker "attempt N finished, continue its session" (D7, D10) — spelled as <see cref="Done"/> is.</summary>
+    public string Continue(string step) => OutFile(step, ".continue");
 
     public string Before(string step) => OutFile(step, ".before");
 
@@ -149,19 +155,9 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string WorktreeBuildLog(string id) => Under("out", "wt-build-" + Segment(id, "id") + ".log");
 
-    public string CodeNotes => Under("notes", "code.md");
-
-    public string HReviewNotes => Under("notes", "hreview.md");
-
-    public string FixNotes => Under("notes", "fix.md");
-
-    public string GateNotes => Under("notes", "gate.md");
-
-    public string SplitNotes => Under("notes", "split.md");
-
-    public string ReviewJson => Under("notes", "review.json");
-
-    public string GateJson => Under("notes", "gate.json");
+    /// <summary>The file a binding stands for (<c>notes/hA.json</c>), under the arm folder. The reader refused a climbing, empty or rooted segment, so a throw here is a
+    /// caller's bug, caught by <see cref="Segment"/> as it is for every other member.</summary>
+    public string NotesFile(OutputBinding binding) => Path.Combine([Folder, .. binding.RelativePath.Split('/').Select(segment => Segment(segment, "output segment"))]);
 
     public string TaskNotes(string id) => Under("notes", Segment(id, "id") + "-code.md");
 
@@ -170,6 +166,33 @@ public sealed record ArmPaths(string Root, string Token)
     public string TaskBrief(string id) => Under("work", Segment(id, "id") + ".md");
 
     public string BatchesJson => Under("work", "batches.json");
+
+    /// <summary>Whether <paramref name="relativePath"/> (under the arm folder, forward slashes) is a file the task pipeline writes: <c>work/tasks.json</c>, <c>work/batches.json</c>, a task's
+    /// brief or its notes. The shapes are read from the members that spell them (<see cref="TasksJson"/>, <see cref="BatchesJson"/>, <see cref="TaskBrief"/>, <see cref="TaskNotes"/>) with a
+    /// stand-in task id, so a path spelled there once is spelled nowhere else; the id in the stand-in's place is one <see cref="TaskIds"/> accepts (<c>t1</c>), so <c>work/summary.md</c> is not a task's. Compared without regard to case, so it fails closed on a host whose file system ignores it.</summary>
+    public static bool IsPipelineFile(string relativePath) =>
+        PipelineNames.Contains(relativePath, StringComparer.OrdinalIgnoreCase) || PipelineShapes.Any(shape => shape.Matches(relativePath));
+
+    private const string StandIn = "{id}";
+
+    private static readonly ArmPaths Sample = new("root", "token");
+
+    private static readonly string[] PipelineNames = [Relative(Sample.TasksJson), Relative(Sample.BatchesJson)];
+
+    private static readonly PipelineShape[] PipelineShapes = [PipelineShape.Of(Relative(Sample.TaskBrief(StandIn))), PipelineShape.Of(Relative(Sample.TaskNotes(StandIn)))];
+
+    private static string Relative(string path) => Path.GetRelativePath(Sample.Folder, path).Replace('\\', '/');
+
+    /// <summary>A path with one task id in it: what comes before the id and what comes after.</summary>
+    private sealed record PipelineShape(string Prefix, string Suffix)
+    {
+        public static PipelineShape Of(string spelled) => new(spelled[..spelled.IndexOf(StandIn, StringComparison.Ordinal)], spelled[(spelled.IndexOf(StandIn, StringComparison.Ordinal) + StandIn.Length)..]);
+
+        /// <summary>The path is the prefix, a task id (<see cref="TaskIds.Pattern"/>) and the suffix. Compared as the destination rule compares, without regard to case, so <c>notes/T1-code.md</c> is a pipeline file too.</summary>
+        public bool Matches(string path) =>
+            path.Length > Prefix.Length + Suffix.Length && path.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && path.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase)
+            && TaskIds.IsTaskId(path[Prefix.Length..^Suffix.Length].ToLowerInvariant());
+    }
 
     /// <summary>A name that is exactly one path segment; anything else is a caller's bug, not an operator's mistake.</summary>
     internal static string Segment(string value, string what) =>

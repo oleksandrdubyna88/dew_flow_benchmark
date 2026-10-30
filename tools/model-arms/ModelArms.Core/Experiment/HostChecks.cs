@@ -47,7 +47,7 @@ public abstract record SourceAnswer
 /// <para>
 /// <paramref name="PathRefusals"/> are the sentences <see cref="ExecutableResolution.PathEntryRefusal"/> gave for the entries of PATH (the children inherit it),
 /// <paramref name="EnvironmentRefusals"/> the sentences <see cref="ExecutableResolution.ConfigFolderRefusal"/> gave for <c>HOME</c> and <c>XDG_CONFIG_HOME</c> (git reads its
-/// global config from there), and <paramref name="Templates"/> the brief template each step kind the schemes use was read as. All four are <c>required</c>: a caller that did not read them
+/// global config from there), and <paramref name="Templates"/> the brief template each stem the schemes use was read as. All four are <c>required</c>: a caller that did not read them
 /// must say so, not default to a host with nothing to say.
 /// </para></summary>
 public sealed record HostFacts(
@@ -62,7 +62,7 @@ public sealed record HostFacts(
 
     public required IReadOnlyList<string> EnvironmentRefusals { get; init; }
 
-    public required IReadOnlyDictionary<StepKind, Outcome<string>> Templates { get; init; }
+    public required IReadOnlyDictionary<string, Outcome<string>> Templates { get; init; }
 }
 
 /// <summary>The environment git is launched under: the verb's map minus every <c>GIT_*</c> name (ordinal, ignoring case). A parent's <c>GIT_DIR</c>,
@@ -114,7 +114,6 @@ public static class HostChecks
         .. ScenarioProblems(facts),
         .. CoaiProblems(experiment, facts),
         .. HostProblems(experiment, facts),
-        .. FlowProblems(experiment),
         .. TemplateProblems(experiment, facts),
     ];
 
@@ -125,7 +124,7 @@ public static class HostChecks
 
     private static bool HasGateStep(Experiment experiment) =>
         experiment.Schemes.SelectMany(scheme => scheme.Entries).OfType<SchemeEntry.Step>()
-            .Any(step => experiment.Steps.TryGetValue(step.Kind, out var spec) && spec.Mode == StepMode.Gate);
+            .Any(step => experiment.Steps.TryGetValue(step.Id, out var spec) && spec.Kind == StepKind.Gate);
 
     private static HostProblem Wrong(string text) => new(text, Environment: false);
 
@@ -186,19 +185,6 @@ public static class HostChecks
 
     private static string NeedsHost(string awake, HostKind needed, HostKind actual) =>
         $"awake \"{awake}\" needs a {needed} host; this host is {actual}";
-
-    private static IEnumerable<HostProblem> FlowProblems(Experiment experiment) =>
-    [
-        .. experiment.Schemes.Where(scheme => scheme.Entries.OfType<SchemeEntry.Tasks>().Any()).SelectMany(scheme => AbsentTaskSteps(experiment, scheme)),
-        .. experiment.Rounds.SelectMany(round => round).GroupBy(arm => arm, StringComparer.Ordinal).Where(arm => arm.Count() > 1)
-            .Select(arm => Wrong($"arm {arm.Key} is named twice in rounds")),
-    ];
-
-    private static IEnumerable<HostProblem> AbsentTaskSteps(Experiment experiment, Scheme scheme)
-    {
-        var absent = SchemeEntry.Tasks.Kinds.Where(kind => !experiment.Steps.ContainsKey(kind)).Select(StepKinds.Key).ToList();
-        return Only(absent.Count > 0, $"scheme {scheme.Name} has a tasks entry, and steps does not define {string.Join(", ", absent)}");
-    }
 
     /// <summary>R4 of the brief filler's review: every template the schemes use is filled once now, so a name the leak guard would refuse is found before the
     /// chain starts and not at a step's launch hours into it.</summary>

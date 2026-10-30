@@ -109,12 +109,12 @@ The module under `tools/model-arms` is its own console (`model-arms`), driven he
 | `model-arms make` | not covered | — | not built yet, story E4.S4 |
 | `model-arms lock` | not covered | — | not built yet, story E4.S1 |
 | `model-arms unlock` | not covered | — | not built yet, story E4.S1 |
-| `model-arms run-arm` | not covered | — | not built yet, story E2.S7 |
+| `model-arms run-arm` | covered | `RunArmSchemeTests` | the console's entry point over a real experiment root (E2.S8) with the fake CLI linked as `claude` and the host's git by its real path: scheme C (four steps in order, the review's tools, the gate's MCP config, every `.done`, the verdict file, the gate's snapshot and diff, one `arm-done`), CR, and CHH (two read-only reviews to two verdict files with two DISTINCT contents, a fix that is told both, a diff from the first review's snapshot); an unknown arm, an arm never made and an SRS arm refused (4) with nothing launched; a finished arm run again launches nothing and writes no second `arm-done`; the resolved `claude` and `git` printed (real paths) before the first launch, a PATH entry under the root and a `HOME` or `XDG_CONFIG_HOME` under the root or the target refused (4), a missing `claude` (3); a limit waited out and the same session resumed; a git SHIM that records every git run and no `GIT_*` of the parent's; the delegation policy on every call of a CR arm, fresh and resumed; an exit 5 never repeated by the verb; a finished arm stopped at a busy gate lock keeps one `arm-done`; the gate sharing the runner's clock, log and arm map; the gate lock's ceiling sized from the arm's own round and the holder's wall, grace and limit waits (`GateLockCeilingTests` for the number, the busy-lock scenario for the verb passing it, a fallback scenario for an arm in no run); and M1 — each scheme's arm interrupted mid-step, run again, resumed once and read by the pinned `research/local-model-coding/harness/metrics.mjs` through `PinnedConsumer`. Skips on Windows |
 | `model-arms run-all` | not covered | — | not built yet, story E4.S3 |
 | `model-arms chain` | not covered | — | not built yet, story E4.S5 |
 | `model-arms checks` | not covered | — | not built yet, story E5.S2 |
 | `model-arms status` | not covered | — | not built yet, story E4.S4 |
-| `model-arms gate-lock` | not covered | — | not built yet, story E2.S6 |
+| `model-arms gate-lock` | covered | `FileGateLockTests` | the console's own binary as a second process: a holder makes a waiter wait, a waiter's cancellation breaks nothing, a killed holder frees the lock, `status` says free and held (and who holds: `GateLockHolderTests`), `hold` refuses a bad `--seconds` (4), gives up at its ceiling (3) and releases on a stop; `GateLockPathTests` refuses a link, a folder, a FIFO and `/dev/null` as the lock path (4); a test-only holder (`tests/GateHolder`) proves a killed holder's live child does not keep the lock; the lock's residual (Windows, NFS/CIFS and any file system without `flock`, a wedged holder) is in `research/module_model_arms.md`. Invisible to the catalogue test until E5.S3 |
 
 ### API — `bench-api` and `bench-collector` routes (`src/Bench.Api`)
 
@@ -245,8 +245,8 @@ The verdict ids of the smoke (derived from `SMOKE_ASSUMPTIONS`; each is computed
 - **That the recall matcher agrees with a person** — §3.7's 19-of-20 hand-check, E2 S5.
 - **The read API and the console** for the scouts (E3 S8), and the routes above marked `not covered`.
 - **Concurrency of two harnesses on one run**: every scenario runs one campaign at a time, as the design does.
-- **The `model-arms` harness drives `init`, `validate` and `prep-base` only.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
-  ran for `validate` and `prep-base` (`init` launches nothing); a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
+- **The `model-arms` harness drives `init`, `validate`, `prep-base`, `gate-lock` and `run-arm`.** Its shims are POSIX shell scripts and its fixture's git is a link to the host's: the scenarios skip on Windows. It proves that nothing the target placed
+  ran for `validate` and `prep-base` (`init` launches nothing); `run-arm` is driven against the FAKE CLI, so it proves the verb's order, exits and files, never a real claude (the pilot, parent build order step 6, is the first real step), and its gate lock is the real file lock only in `FileGateLockTests`; a launch added by a later story is seen by the structural test (`ModelArmsArchitectureTests.The_module_launches_nothing_by_a_bare_name`), not by a scenario. macOS and FreeBSD are refused by the trust check
   as unprobed and were never run; the product's own bare `git` launches in `src` are outside it. The fixture's `claude`, `dotnet`, `node` and `npm` are empty files.
 - **Linux and macOS paths for the scouts**: the scenario runs where the suite runs; CI is ubuntu, local runs are Windows.
 

@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The brief filler and the eight templates it fills. The templates are read from the repository's
+/// <summary>The brief filler and the eleven templates it fills. The templates are read from the repository's
 /// <c>tools/model-arms/briefs</c> folder, the one the console ships beside its binary, so a template edited without
 /// its fields (or a field renamed without its template) fails here and not in the first live step.
 /// <para>
@@ -20,13 +20,13 @@ namespace Bench.Tests.ModelArms;
 /// </para></summary>
 public sealed class BriefFillerTests
 {
-    private const string Own = "00000000000000c1";
-    private const string Other = "00000000000000c2";
-    private const string Root = "/e";
+    private const string Own = BriefExample.Own;
+    private const string Other = BriefExample.Other;
+    private const string Root = BriefExample.Root;
 
     private static readonly string[] Schemes = ["C", "CR"];
 
-    private static readonly ArmPaths Paths = new(Root, Own);
+    private static readonly ArmPaths Paths = BriefExample.Paths;
 
     private static readonly BriefLeakGuard Guard = new(
         ArmMap.Read($"{{\"C1\":\"{Own}\",\"CR1\":\"{Other}\"}}").Match(map => map, reason => throw new InvalidOperationException(reason)),
@@ -34,17 +34,9 @@ public sealed class BriefFillerTests
         Schemes,
         Root);
 
-    private static readonly BriefFacts Facts = new(
-        Plan: "/e/base/todo/PLAN_x.md",
-        Base: "1111111111111111111111111111111111111111",
-        Branch: "feat/x",
-        ScenarioCount: 12,
-        Deadline: "12:30",
-        Known: "the known failures are listed in the plan",
-        Task: new TaskFacts("t3", "/e/r/" + Own + "/work/t3.md", "src/A.cs src/B.cs", "2222222222222222222222222222222222222222"),
-        Problems: "the plan splits one file across two tasks");
+    private static readonly BriefFacts Facts = BriefExample.Facts;
 
-    /// <summary>What the eight files must hash to — typed out here on purpose, once, from the part-6 harness, so the
+    /// <summary>What the eleven files must hash to — typed out here on purpose, once, from the part-6 harness, so the
     /// copies in the repository cannot quietly agree with themselves.</summary>
     private static readonly Dictionary<string, string> ShellHashes = new()
     {
@@ -56,13 +48,17 @@ public sealed class BriefFillerTests
         ["t2-coder.template.md"] = "43136bc01d61a3fc920abbbff7b7c2b9cc3c1f16fbccfeacd1f484f8d1861984",
         ["x-split-fix.template.md"] = "ce256a919da26ae3c6bcb41aa1fe903e1d6cf768f24ef951ee9adb998a8b1e2b",
         ["x-split.template.md"] = "b4790d61b816265085dc9600439582e6f7bebfa5c16fb5785d81348caa294918",
+        ["hA-trace.template.md"] = "971c664b5b29f1e4cc7778e7f5e658319ef2e8a944439cdcb5a26e595a8b862b",
+        ["hB-tests.template.md"] = "a34fbe71a0e91cc005adb464f7cc14a9a91ce4507d00af60a2275fd989662cbc",
+        ["hfix.template.md"] = "fb2ecc7c2c9611b2452cc64244ca7ecf0a9b2e6b155f292e6fe8942ba67a4b09",
     };
 
-    public static TheoryData<StepKind> Kinds => [.. Enum.GetValues<StepKind>()];
+    /// <summary>Every (scheme, position, step id) the example places: 4 + 5 + (1 × 3 + 4) + 7 = 23 fills over the eleven stems.</summary>
+    public static TheoryData<string, int, string> Placements => [.. BriefExample.Placements().Select(place => (place.Scheme, place.Position, place.Id))];
 
-    private static string ShippedFolder => System.IO.Path.Combine(Cli.Repository.Root, "tools", "model-arms", "briefs");
+    private static string ShippedFolder => BriefExample.ShippedFolder;
 
-    private static string ShippedTemplate(StepKind kind) => File.ReadAllText(System.IO.Path.Combine(ShippedFolder, BriefTemplates.NameOf(kind)));
+    private static string ShippedTemplate(string stem) => File.ReadAllText(System.IO.Path.Combine(ShippedFolder, BriefTemplates.NameOf(stem).Ok()));
 
     private static string TextOf(Outcome<string> outcome) =>
         outcome.Match(text => text, reason => throw new Xunit.Sdk.XunitException($"expected a filled brief but it was refused: {reason}"));
@@ -71,27 +67,34 @@ public sealed class BriefFillerTests
         outcome.Match(text => throw new Xunit.Sdk.XunitException($"expected a refusal but got a brief: {text}"), reason => reason);
 
     private static IReadOnlyDictionary<string, string> With(string name, string value) =>
-        new Dictionary<string, string>(BriefFields.For(StepKind.Code, Paths, Facts)) { [name] = value };
+        new Dictionary<string, string>(BriefExample.Fields("C", 0, "code")) { [name] = value };
+
+    private static string Brief(string id) => BriefExample.Experiment.Steps[new StepId(id)].Brief;
 
     [Theory]
-    [MemberData(nameof(Kinds))]
-    public void Every_shipped_template_fills_completely_with_its_steps_fields(StepKind kind)
+    [MemberData(nameof(Placements))]
+    public void Every_shipped_template_fills_completely_with_its_steps_fields(string scheme, int position, string id)
     {
-        var fields = BriefFields.For(kind, Paths, Facts);
+        var fields = BriefExample.Fields(scheme, position, id);
 
-        var text = TextOf(BriefFiller.Fill(ShippedTemplate(kind), fields, Guard));
+        var text = TextOf(BriefFiller.Fill(ShippedTemplate(Brief(id)), fields, Guard));
 
-        text.Should().NotContain("{{", $"the {kind} template must have a value for every placeholder it carries");
-        if (kind == StepKind.Code)
+        text.Should().NotContain("{{", $"the {id} template at {scheme}[{position}] must have a value for every placeholder it carries");
+        if (id == "code")
         {
             text.Should().Contain(Facts.Plan).And.Contain(System.IO.Path.Combine(Root, "r", Own, "notes", "code.md"));
+        }
+
+        if (id == "gate")
+        {
+            text.Should().Contain(System.IO.Path.Combine(Root, "r", Own, "notes", "gate.json"), "the gate's own status file is filled");
         }
     }
 
     [Fact]
     public void An_unfilled_field_is_refused_naming_it()
     {
-        var reason = ReasonOf(BriefFiller.Fill("x {{PLAN}} {{NOPE}} {{NOPE}}", BriefFields.For(StepKind.Code, Paths, Facts), Guard));
+        var reason = ReasonOf(BriefFiller.Fill("x {{PLAN}} {{NOPE}} {{NOPE}}", BriefExample.Fields("C", 0, "code"), Guard));
 
         reason.Should().EndWith("{{NOPE}}").And.Contain("unfilled");
         reason.Split("{{NOPE}}").Should().HaveCount(2, "the missing field is named once however often the template uses it");
@@ -121,10 +124,12 @@ public sealed class BriefFillerTests
         var paths = new ArmPaths(WindowsRoot, Own);
         var facts = Facts with { Plan = WindowsRoot + @"\base\todo\PLAN_x.md" };
 
-        var text = TextOf(BriefFiller.Fill(ShippedTemplate(StepKind.Code), BriefFields.For(StepKind.Code, paths, facts), guard));
+        var code = BriefExample.Fields("C", 0, "code", paths, facts);
+        code.Should().ContainKey("CODE_NOTES");
+        var text = TextOf(BriefFiller.Fill(ShippedTemplate("1-code"), code, guard));
 
-        text.Should().Contain(paths.CodeNotes, "every path field begins with the root, and the root is the operator's own");
-        var known = new Dictionary<string, string>(BriefFields.For(StepKind.Code, paths, facts)) { ["KNOWN"] = "see C:" };
+        text.Should().Contain(code["CODE_NOTES"], "every path field begins with the root, and the root is the operator's own");
+        var known = new Dictionary<string, string>(code) { ["KNOWN"] = "see C:" };
         ReasonOf(BriefFiller.Fill("{{KNOWN}}", known, guard)).Should().Contain("'C'", "only the exact root prefix is exempt, not the letter");
     }
 
@@ -139,10 +144,10 @@ public sealed class BriefFillerTests
     [Fact]
     public void A_template_naming_a_scheme_is_refused_naming_the_template()
     {
-        var reason = ReasonOf(BriefFiller.Fill("compare with the CR scheme: {{PLAN}}", BriefFields.For(StepKind.Code, Paths, Facts), Guard, "2-review.template.md"));
+        var reason = ReasonOf(BriefFiller.Fill("compare with the CR scheme: {{PLAN}}", BriefExample.Fields("C", 0, "code"), Guard, "2-review.template.md"));
 
         reason.Should().Contain("2-review.template.md").And.Contain("'CR'");
-        TextOf(BriefFiller.Fill("plain text {{PLAN}}", BriefFields.For(StepKind.Code, Paths, Facts), Guard, "x.template.md")).Should().Contain(Facts.Plan);
+        TextOf(BriefFiller.Fill("plain text {{PLAN}}", BriefExample.Fields("C", 0, "code"), Guard, "x.template.md")).Should().Contain(Facts.Plan);
     }
 
     [Fact]
@@ -157,7 +162,7 @@ public sealed class BriefFillerTests
             var broken = System.IO.Path.Combine(overrides, "1-code.template.md");
             File.WriteAllBytes(broken, [0x41, 0xFF, 0xFE, 0x42]);
 
-            var reason = ReasonOf(new BriefTemplateFiles(shipped, overrides).Read(StepKind.Code));
+            var reason = ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code"));
 
             reason.Should().Contain(broken).And.Contain("UTF-8");
         }
@@ -190,7 +195,7 @@ public sealed class BriefFillerTests
                 Assert.Skip("this account reads files whatever their mode (root), so the permission failure cannot be provoked");
             }
 
-            ReasonOf(new BriefTemplateFiles(shipped, overrides).Read(StepKind.Code)).Should().Contain(locked);
+            ReasonOf(new BriefTemplateFiles(shipped, overrides).Read("1-code")).Should().Contain(locked);
         }
         finally
         {
@@ -233,9 +238,15 @@ public sealed class BriefFillerTests
             File.WriteAllText(System.IO.Path.Combine(shipped, "2-review.template.md"), "only shipped — é");
             var files = new BriefTemplateFiles(shipped, overrides);
 
-            TextOf(files.Read(StepKind.Code)).Should().Be("B");
-            TextOf(files.Read(StepKind.Review)).Should().Be("only shipped — é");
-            ReasonOf(files.Read(StepKind.Gate)).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
+            TextOf(files.Read("1-code")).Should().Be("B");
+            TextOf(files.Read("2-review")).Should().Be("only shipped — é");
+            ReasonOf(files.Read("gate")).Should().Contain("gate.template.md").And.Contain(shipped).And.Contain(overrides);
+            File.WriteAllText(System.IO.Path.Combine(overrides, "hC-extra.template.md"), "an addition");
+            TextOf(files.Read("hC-extra")).Should().Be("an addition", "an experiment root's briefs folder may ADD a template a step names");
+            BriefTemplates.NameOf("../x").Failed().Should().BeTrue();
+            BriefTemplates.NameOf("a/b").Failed().Should().BeTrue();
+            BriefTemplates.NameOf("hA-trace").Ok().Should().Be("hA-trace.template.md");
+            BriefTemplates.NameOf("../x").Reason().Should().Be("'../x' is not a template stem — letters, digits and dashes, no separator and no '..' (hA-trace names hA-trace.template.md)");
         }
         finally
         {
@@ -244,43 +255,49 @@ public sealed class BriefFillerTests
     }
 
     [Fact]
-    public void Each_step_kind_gets_its_notes_file()
+    public void Each_placed_step_gets_its_notes_path_and_every_visible_output()
     {
-        BriefFields.For(StepKind.Review, Paths, Facts)["NOTES"].Should().Be("-", "the shell passed a dash for the review step");
-        BriefFields.For(StepKind.SplitFix, Paths, Facts)["NOTES"].Should().Be(Paths.SplitNotes);
-        BriefFields.For(StepKind.TaskCode, Paths, Facts)["NOTES"].Should().Be(Paths.TaskNotes("t3"));
-        BriefFields.For(StepKind.Code, Paths, Facts)["NOTES"].Should().Be(Paths.CodeNotes);
-        BriefFields.For(StepKind.HReview, Paths, Facts)["NOTES"].Should().Be(Paths.HReviewNotes);
-        BriefFields.For(StepKind.Fix, Paths, Facts)["NOTES"].Should().Be(Paths.FixNotes);
-        BriefFields.For(StepKind.Gate, Paths, Facts)["NOTES"].Should().Be(Paths.GateNotes);
-        BriefFields.For(StepKind.Split, Paths, Facts)["NOTES"].Should().Be(Paths.SplitNotes);
-
-        foreach (var kind in Enum.GetValues<StepKind>())
+        string At(string relative) => Paths.NotesFile(new OutputBinding("X", relative));
+        var expectedNotes = new Dictionary<string, string>
         {
-            var fields = BriefFields.For(kind, Paths, Facts);
-            fields.Should().ContainKeys("PLAN", "BASE", "BRANCH", "SCEN_COUNT", "DEADLINE", "KNOWN", "REVIEW", "CODE_NOTES", "HREVIEW_NOTES",
-                "FIX_NOTES", "WORK", "GATE_JSON", "NOTES");
-            fields.ContainsKey("PROBLEMS").Should().Be(kind == StepKind.SplitFix, $"PROBLEMS belongs to SplitFix alone, not {kind}");
-            new[] { "TASK", "TASK_BRIEF", "TASK_FILES", "BEFORE" }.Select(fields.ContainsKey).Should().AllBeEquivalentTo(kind == StepKind.TaskCode);
+            ["code"] = At("notes/code.md"),
+            ["hreview"] = At("notes/hreview.md"),
+            ["review"] = "-",
+            ["fix"] = At("notes/fix.md"),
+            ["gate"] = At("notes/gate.md"),
+            ["split"] = At("notes/split.md"),
+            ["splitFix"] = At("notes/split.md"),
+            ["taskCode"] = Paths.TaskNotes("t3"),
+            ["hA"] = "-",
+            ["hB"] = "-",
+            ["hfix"] = At("notes/hfix.md"),
+        };
+
+        var placements = BriefExample.Placements();
+        placements.Should().HaveCount(23, "the scan must still reach every placement, or it proves nothing");
+        foreach (var (scheme, position, id) in placements)
+        {
+            var fields = BriefExample.Fields(scheme, position, id);
+
+            fields["NOTES"].Should().Be(expectedNotes[id], $"{id} at {scheme}[{position}]");
+            fields.Should().ContainKeys("PLAN", "BASE", "BRANCH", "SCEN_COUNT", "DEADLINE", "KNOWN", "WORK");
+            fields.ContainsKey("PROBLEMS").Should().Be(id == "splitFix", $"PROBLEMS belongs to the split fix alone, not {id}");
+            new[] { "TASK", "TASK_BRIEF", "TASK_FILES", "BEFORE" }.Select(fields.ContainsKey).Should().AllBeEquivalentTo(id == "taskCode");
+            fields["SCEN_COUNT"].Should().Be(Facts.ScenarioCount.ToString(CultureInfo.InvariantCulture));
+            fields["WORK"].Should().Be(Paths.Work);
         }
 
-        var common = BriefFields.For(StepKind.Code, Paths, Facts);
-        common["SCEN_COUNT"].Should().Be(Facts.ScenarioCount.ToString(CultureInfo.InvariantCulture));
-        common["REVIEW"].Should().Be(Paths.ReviewJson);
-        common["WORK"].Should().Be(Paths.Work);
-        common["GATE_JSON"].Should().Be(Paths.GateJson);
-        common["HREVIEW_NOTES"].Should().Be(Paths.HReviewNotes);
-        BriefFields.For(StepKind.TaskCode, Paths, Facts).Should().Contain("TASK", "t3").And.Contain("BEFORE", Facts.Task.Before)
+        BriefExample.Fields("SRS", 0, "taskCode").Should().Contain("TASK", "t3").And.Contain("BEFORE", Facts.Task.Before)
             .And.Contain("TASK_BRIEF", Facts.Task.Brief).And.Contain("TASK_FILES", Facts.Task.Files);
-        BriefFields.For(StepKind.SplitFix, Paths, Facts).Should().Contain("PROBLEMS", Facts.Problems);
+        BriefExample.Fields("SRS", 0, "splitFix").Should().Contain("PROBLEMS", Facts.Problems);
     }
 
     [Fact]
-    public void The_eight_shipped_templates_are_the_shells_byte_for_byte()
+    public void The_eleven_shipped_templates_are_the_shells_byte_for_byte()
     {
-        BriefTemplates.All.Should().BeEquivalentTo(ShellHashes.Keys, "one template per step kind, and no kind without a hash here");
+        BriefTemplates.Shipped.Select(stem => BriefTemplates.NameOf(stem).Ok()).Should().BeEquivalentTo(ShellHashes.Keys, "one template per shipped stem, and no stem without a hash here");
         Directory.EnumerateFiles(ShippedFolder, "*.template.md").Select(System.IO.Path.GetFileName).Should().BeEquivalentTo(ShellHashes.Keys,
-            "the scan must still find the eight, and nothing beside them");
+            "the scan must still find the eleven, and nothing beside them");
 
         foreach (var (name, expected) in ShellHashes)
         {

@@ -3,34 +3,20 @@ using Bench.Domain;
 
 namespace ModelArms.Core.Experiment;
 
-/// <summary>One entry of a scheme: a named step of a kind, or the SRS pipeline's <c>tasks</c> block (the split, one fix round, the batches).</summary>
+/// <summary>One entry of a scheme: a named step of a defined identity, or the SRS pipeline's <c>tasks</c> block (the split, one fix round, the batches).</summary>
 public abstract record SchemeEntry
 {
     private SchemeEntry() { }
 
-    /// <summary>A step: its file name stem (<c>1-code</c>) and its kind.</summary>
-    public sealed record Step(string Name, StepKind Kind) : SchemeEntry;
+    /// <summary>A step: its file name stem (<c>1-code</c>) and the id of the step it runs (<c>code</c>).</summary>
+    public sealed record Step(string Name, StepId Id) : SchemeEntry;
 
-    /// <summary>The SRS pipeline's tasks block.</summary>
-    public sealed record Tasks : SchemeEntry
-    {
-        /// <summary>The step kinds the block runs: the split, its one fix round and the task coders. A scheme with the block needs all three under <c>steps</c>.</summary>
-        public static IReadOnlyList<StepKind> Kinds { get; } = [StepKind.Split, StepKind.SplitFix, StepKind.TaskCode];
-    }
+    /// <summary>The SRS pipeline's tasks block; the ids of its three steps are <see cref="TaskLimits"/>'.</summary>
+    public sealed record Tasks : SchemeEntry;
 }
 
 /// <summary>A scheme: its letters and its entries in order. An arm is a scheme name and a number (<c>SRS2</c>).</summary>
-public sealed record Scheme(string Name, IReadOnlyList<SchemeEntry> Entries)
-{
-    /// <summary>Every step kind the scheme runs, once each, in the order the entries first name them (the tasks block counts as its three).</summary>
-    public IReadOnlyList<StepKind> KindsUsed =>
-        [.. Entries.SelectMany(entry => entry switch
-        {
-            SchemeEntry.Step step => [step.Kind],
-            SchemeEntry.Tasks => SchemeEntry.Tasks.Kinds,
-            _ => [],
-        }).Distinct()];
-}
+public sealed record Scheme(string Name, IReadOnlyList<SchemeEntry> Entries);
 
 /// <summary>The one reading of an arm's name. Strict: <c>\z</c>, not <c>$</c>, so a trailing newline is not part of a name.</summary>
 public static partial class ArmNames

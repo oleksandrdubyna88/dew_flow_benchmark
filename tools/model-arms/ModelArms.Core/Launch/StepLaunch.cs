@@ -40,16 +40,19 @@ public static class StepLaunch
 {
     private const string PwdVariable = "PWD";
 
+    /// <summary>The tool that starts a subagent, under both names the CLI has used.</summary>
+    public static readonly IReadOnlyList<string> SubagentTools = ["Agent", "Task"];
+
     /// <summary>The options of a step: stream-json events, MCP servers off and the arm's notes and work folders granted, whatever the mode;
     /// then the session; then the mode's permission mode, permission list, deny list and MCP config.</summary>
-    public static AgentAskOptions Options(StepMode mode, ToolSets tools, ArmPaths paths, StepSession session) =>
-        Session(ForMode(mode, tools, paths), session);
+    public static AgentAskOptions Options(StepSpec spec, ToolSets tools, ArmPaths paths, StepSession session) =>
+        Session(Delegation(ForMode(spec.Mode, tools, paths), spec.Subagents), session);
 
     /// <summary>The question put to claude for one attempt of a step.</summary>
     public static AgentAsk Ask(StepLaunchRequest request) =>
         new(ModelRuntimeKind.CliClaude, request.ClaudeExecutable, request.Prompt, request.WorkingDirectory, request.Wall, request.Spec.Model)
         {
-            Options = Options(request.Spec.Mode, request.Tools, request.Paths, request.Session),
+            Options = Options(request.Spec, request.Tools, request.Paths, request.Session),
             Environment = AgentEnvironment.Only(ChildVariables(request)),
         };
 
@@ -98,6 +101,19 @@ public static class StepLaunch
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "not a step mode this build launches (known: Write, Read, Gate)"),
         };
     }
+
+    /// <summary>The delegation policy (E2.S0): unless the step's spec says so, no step starts a subagent. <see cref="SubagentTools"/> lead the deny list and leave the allow list, ahead of
+    /// the mode's own lists, so the policy holds whatever the file's <c>tools</c> say. It is one function of the spec, applied to every launch — a fresh one and a resume alike — so a
+    /// resume is never wider than the launch it continues. With <c>subagents: true</c> it adds nothing and removes nothing. What this sends is a request: whether the CLI honours it
+    /// is measured in the module doc (<i>The delegation policy</i>).</summary>
+    private static AgentAskOptions Delegation(AgentAskOptions options, bool subagents) =>
+        subagents
+            ? options
+            : options with
+            {
+                DisallowedTools = [.. SubagentTools, .. options.DisallowedTools],
+                PermittedTools = [.. options.PermittedTools.Where(tool => !SubagentTools.Contains(tool, StringComparer.Ordinal))],
+            };
 
     private static AgentAskOptions Session(AgentAskOptions options, StepSession session) =>
         session switch

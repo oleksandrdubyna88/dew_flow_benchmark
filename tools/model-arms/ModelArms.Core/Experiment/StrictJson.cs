@@ -21,6 +21,13 @@ internal sealed class StrictJson
 
     public void Add(string problem) => _problems.Add(problem);
 
+    private readonly HashSet<string> _refusedFields = new(StringComparer.Ordinal);
+
+    /// <summary>The names of the output bindings a refusal was already recorded for. A <c>notes</c>, <c>verdict</c> or <c>status</c> that names one says nothing more: one cause, one sentence.</summary>
+    public IReadOnlySet<string> RefusedFields => _refusedFields;
+
+    public void RefuseField(string field) => _refusedFields.Add(field);
+
     /// <summary>A stand-in for a sha that did not parse. Never observable: a file that left any problem builds nothing.</summary>
     private static readonly CommitSha Unread =
         CommitSha.Parse(new string('0', CommitSha.Length)) is Outcome<CommitSha>.Ok ok ? ok.Value : throw new InvalidOperationException("forty zeros are a sha");
@@ -237,6 +244,36 @@ internal sealed class StrictJson
         }
 
         return number;
+    }
+
+    /// <summary><c>true</c> or <c>false</c>, or <paramref name="fallback"/> when the member is absent (silent) or is anything else (recorded).</summary>
+    public bool Flag(JsonObject obj, string path, string name, bool fallback)
+    {
+        if (!obj.ContainsKey(name))
+        {
+            return fallback;
+        }
+
+        if (obj[name] is JsonValue value && value.TryGetValue(out bool flag))
+        {
+            return flag;
+        }
+
+        Add($"{Join(path, name)} must be true or false");
+        return fallback;
+    }
+
+    /// <summary>The member as a JSON object whose every value is a non-empty text, as pairs in file order. Absent: empty and silent. An EMPTY object is legal — <see cref="MapMember"/>'s
+    /// "at least one member" belongs to the maps that must hold something.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> TextMap(JsonObject parent, string path, string name)
+    {
+        if (!parent.ContainsKey(name))
+        {
+            return [];
+        }
+
+        var where = Join(path, name);
+        return [.. Map(parent[name], where).Select(member => new KeyValuePair<string, string>(member.Key, NonEmptyText(member.Value, ExecutableRule.Printable(Join(where, member.Key)))))];
     }
 
     /// <summary>An array of non-empty texts, or an empty list after recording why not. Every bad element is named by its index.

@@ -4,9 +4,12 @@ using System.Text.Json.Nodes;
 using FluentAssertions;
 using Xunit;
 using Bench.Cli;
+using Bench.Domain.Targets;
 using Bench.Infrastructure.Process;
+using Bench.Tests.Probes.Driver;
 using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
+using ModelArms.Core.Launch;
 using ModelArmsApp = ModelArms;
 
 namespace Bench.Tests.ModelArms;
@@ -87,6 +90,88 @@ internal sealed class ExperimentRoot : IDisposable
 
         _variables["PATH"] = Path.Combine(Temp, "bin");
         return this;
+    }
+
+    private byte _tokenCounter = 0xa0;
+
+    /// <summary>Makes <paramref name="arm"/> runnable by <c>run-arm</c> the way <c>make</c> will leave it (E2.S8): its token in <c>arms.map.json</c> (the counter is the byte source, so two arms never share one), <c>chain/made-&lt;arm&gt;</c>,
+    /// a completed <c>baseline.json</c>, the arm's clone <c>r/&lt;token&gt;/arm</c> as a git repository of one commit, the two MCP configs through <see cref="McpConfig"/>; every step's <c>model</c> is the fake's id and its <c>minutes</c> one;
+    /// and <c>&lt;temp&gt;/bin</c> becomes the only <c>PATH</c>, holding <c>claude</c> as a link to the fake's apphost (which resolves its own real path) and <c>git</c> as a link to the host's git. The fake is told to leave a transcript
+    /// (<c>transcripts: true</c>) so a re-entry finds one and resumes; a test that rewrites the script keeps that key (see <see cref="Script"/>). Linux only.</summary>
+    public async Task<ExperimentRoot> MakeArmAsync(string arm, FakeCli fake)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the run-arm scenarios link claude to the fake; links and POSIX paths");
+        Assert.False(RealGit.Length == 0, "a git must resolve on the test process's PATH to build the arm's clone");
+        var map = ArmMap.Extend(CurrentMap(), [arm], () => [0, 0, 0, 0, 0, 0, 0, ++_tokenCounter]);
+        Write("arms.map.json", map.ToJson());
+        Write($"chain/made-{arm}", "made\n");
+        Write("baseline.json", BaselineFile.Write(CompletedBaseline()));
+        var paths = new RootPaths(Root).Arm(map.TokenOf(arm).Ok());
+        await InitCloneAsync(paths.CloneFolder);
+        File.WriteAllText(paths.McpNone, McpConfig.None());
+        File.WriteAllText(paths.McpCoai, McpConfig.Coai(ExperimentOf().Coai, paths, _variables));
+        Edit(top =>
+        {
+            foreach (var step in top["steps"]!.AsObject())
+            {
+                step.Value!["model"] = fake.Model;
+                step.Value["minutes"] = 1;
+            }
+        });
+
+        var bin = Directory.CreateDirectory(Path.Combine(Temp, "bin")).FullName;
+        LinkTo(Path.Combine(bin, "claude"), FakeCli.Executable);
+        LinkTo(Path.Combine(bin, "git"), RealGit);
+        _variables["PATH"] = bin;
+        _variables["FAKE_CLI_HOME"] = fake.Home;
+        fake.Rewrite(Script());
+        return this;
+    }
+
+    /// <summary>The fake's script with <c>transcripts: true</c> and whatever <paramref name="more"/> adds, so a rewrite cannot lose the key a resume depends on.</summary>
+    public static JsonObject Script(JsonObject? more = null)
+    {
+        var script = more ?? [];
+        script["transcripts"] = true;
+        return script;
+    }
+
+    /// <summary>Commits a file in the arm's clone — the work a step did, as the diff sees it.</summary>
+    public async Task CommitInCloneAsync(string arm, string relative, string text)
+    {
+        var clone = PathsOf(arm).CloneFolder;
+        await File.WriteAllTextAsync(Path.Combine(clone, relative), text, TestContext.Current.CancellationToken);
+        await GitAsync(clone, "add", relative);
+        await GitAsync(clone, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "a step's work");
+    }
+
+    /// <summary>The paths of <paramref name="arm"/>, from the map the root holds.</summary>
+    public ArmPaths PathsOf(string arm) => new RootPaths(Root).Arm(CurrentMap().TokenOf(arm).Ok());
+
+    /// <summary>A folder inside the scratch folder (created), for a helper that needs a place of its own.</summary>
+    public string Scratch(params string[] parts) => _temp.Folder(parts);
+
+    private ArmMap CurrentMap() =>
+        File.Exists(Path.Combine(Root, "arms.map.json")) ? ArmMap.Read(File.ReadAllText(Path.Combine(Root, "arms.map.json"))).Ok() : ArmMap.Empty;
+
+    /// <summary>The experiment as the root's file holds it now.</summary>
+    public Experiment ExperimentOf() =>
+        ExperimentFile.Read(File.ReadAllText(Path.Combine(Root, "experiment.json")), new ExperimentLocation(Root, Path.Combine(Temp, "example", "home"), string.Empty, "/x/repo")).Ok();
+
+    private static Baseline CompletedBaseline() =>
+        BaselineFile.Compose(CommitSha.Parse("6786582e30d3e771549d05ed719478396f8099cd").Ok(), new DateTimeOffset(2026, 10, 29, 12, 30, 15, TimeSpan.Zero), "wsl-ubuntu", new SuiteRun(true, 0, [], 10), new SuiteRun(true, 0, [], 5), "fixture").Ok();
+
+    private static async Task InitCloneAsync(string clone)
+    {
+        Directory.CreateDirectory(clone);
+        await GitAsync(clone, "init", "--quiet", "--initial-branch", "main");
+        await GitAsync(clone, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty", "-m", "the arm's first commit");
+    }
+
+    private static void LinkTo(string link, string target)
+    {
+        File.Delete(link);
+        File.CreateSymbolicLink(link, target);
     }
 
     /// <summary>The host's git by its real path: what <c>&lt;temp&gt;/bin/git</c> links to, and what a shim ends in.</summary>
