@@ -112,7 +112,7 @@ public sealed class StepOutputsTests
         StepOutputs.Reconcile(Step("hreview"), Facts(before: true)).Should().Be(StepOutputs.Reconcile(Step("hreview"), Facts(before: true, final: Result("result-success.jsonl"))));
     }
 
-    /// <summary>E2 §8 item 50: the verdict's input is judged by the classifier, the predicate the review's answer uses — a .done the runner did not write must not send a limited or cut result to a regeneration.</summary>
+    /// <summary>E2 §8 item 51: the verdict's input is judged by the classifier, the predicate the review's answer uses — a .done the runner did not write must not send a limited or cut result to a regeneration.</summary>
     [Fact]
     public void A_result_the_classifier_does_not_call_finished_is_no_verdict_to_regenerate_from()
     {

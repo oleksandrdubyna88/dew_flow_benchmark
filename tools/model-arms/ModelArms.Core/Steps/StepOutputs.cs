@@ -71,7 +71,7 @@ public static class StepOutputs
         };
 
     /// <summary>True when the stream's last word is a finished attempt with text: the SAME predicate as the review's answer (<c>StepClassifier.Classify(lastResult, "", AttemptFacts.Ran)</c> is <see cref="StepEnd.Finished"/>), so the two
-    /// gates cannot disagree on a captured 429/529 whose <c>is_error</c> says false, or on an earlier success followed by a cut result line (E2 §8 item 50). An error result's text is the error, never a verdict (the repair script's finding).</summary>
+    /// gates cannot disagree on a captured 429/529 whose <c>is_error</c> says false, or on an earlier success followed by a cut result line (E2 §8 item 51; the E2.S4 follow-up is item 52). An error result's text is the error, never a verdict (the repair script's finding).</summary>
     private static bool HasVerdictText(Outcome<ClaudeResultEnvelope> result) =>
         StepClassifier.Classify(result, string.Empty, AttemptFacts.Ran) is StepEnd.Finished
         && result is Outcome<ClaudeResultEnvelope>.Ok { Value: var envelope } && !string.IsNullOrWhiteSpace(envelope.Result);
