@@ -2184,6 +2184,14 @@ it was taken. **These are the stories document written as the epic starts, not e
     stories, not the parent's decisions: D5's layout, D7, D10, D21 and D25 hold as written; the gate-wait line, the model-written class
     and the destination rule are refinements the parent's D25 and D6 leave open. So: the baseline of E2, not epoch-2 entries — one
     indented note under the parent's epoch 2 says so. In doubt, it is a change — and the doubt was checked against each decision above.
+47. **E2.S0 as built — a deviation record, not a plan change** (the coder's hand-back and the Opus review, 2026-10-30; the list is also in the module doc). (1) The output folder is EXACTLY `notes` or `work`:
+    the spec's clash scenarios used `Notes/Code.md`, the first build accepted the folder case-insensitively, and `Notes/x.md` validated though no launch grants it (review R1); the scenarios now use a case variant
+    after the folder, and only two destinations are compared without regard to case. (2) Scheme `X` of the rehearsal scenario adds `hfix2` (no `diffFrom`): `hfix`'s own `diffFrom: hA` makes the reader refuse a scheme
+    placing it first. (3) `StepSpec` and `TaskLimits` carry value `Equals`/`GetHashCode`. (4) New types: `TaskSection`, `PlacedStep`, `SchemePositions.Steps`, `BriefFields.FixedNames`, `ArmPaths.IsPipelineFile`,
+    the test helper `BriefExample`. (5) The not-found template row is a step whose brief stem exists nowhere (exit 4, the template, the step id and the position named); the unknown-field test is renamed.
+    (6) Decisions of the review the spec left open: a binding cannot be named like a fact or a fixed field; a `notes` never names a verdict; `tasks.splitFix` is not `tasks.split`; `diffFrom` inside one tasks entry
+    follows the block's order; a path segment has no control or format character and no edge space (`Printable` escapes them); a closed arm is an arm of an EARLIER run only (R8); a `taskCode` step is placed only
+    through a tasks entry (R9); a scheme that runs the pipeline refuses a binding of its files (R11); a refused binding is kept by name so nothing says it twice (R13).
 
 ## 9. Growth
 
