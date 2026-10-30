@@ -1,8 +1,40 @@
-// A stub `claude` for the bare runner's end-to-end test: a script that does what the real CLI does at its edges (the init event, one request to the broker, an OTel record,
-// a transcript, the result envelope) and nothing else. Its own copy: the launch test's stub is local to that file, which another branch is rewriting.
+// A stub `claude` and the OTLP records it posts (E3b review m4, the v2 rehearsal; also the bare runner's end-to-end test). The stub does what the real CLI does at its edges (the init event,
+// one request to the broker, an OTel record, a transcript, the result envelope) and nothing else: no model, no network but the loopback ones the box gives it, no cost. Written by the harness
+// into a directory it owns, run in the real box behind the real broker and a loopback stub upstream (`stub-upstream.mjs`).
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { apiAttrs, otlpPayload } from './synth.mjs';
+
+// ---- OTLP/HTTP JSON payloads (SYNTHETIC: the OTLP JSON encoding, with the attribute names of the plan's A-O1 row) --------------
+
+const anyValue = v => {
+  if (typeof v === 'string') return { stringValue: v };
+  if (typeof v === 'boolean') return { boolValue: v };
+  if (Number.isInteger(v)) return { intValue: String(v) };
+  return { doubleValue: v };
+};
+
+/** One OTLP log record; `attrs` is a plain object (an `undefined` value omits the attribute), `name` goes in the body, ints are encoded as strings as OTLP JSON does. */
+export function otlpRecord({ name, tsMs, attrs }) {
+  return {
+    timeUnixNano: String(BigInt(tsMs) * 1_000_000n),
+    severityNumber: 9,
+    body: { stringValue: `claude_code.${name}` },
+    attributes: [{ key: 'event.name', value: { stringValue: name } }, ...Object.entries(attrs).filter(([, v]) => v !== undefined).map(([key, v]) => ({ key, value: anyValue(v) }))],
+  };
+}
+
+export const otlpPayload = records => ({
+  resourceLogs: [{
+    resource: { attributes: [{ key: 'service.name', value: { stringValue: 'claude-code' } }] },
+    scopeLogs: [{ scope: { name: 'com.anthropic.claude_code.events' }, logRecords: records.map(otlpRecord) }],
+  }],
+});
+
+/** A complete api_request attribute set; override what a test varies. */
+export const apiAttrs = (over = {}) => ({
+  model: 'claude-opus-5-5', input_tokens: 10, output_tokens: 20, cache_read_tokens: 300, cache_creation_tokens: 40, cost_usd: 0.01,
+  duration_ms: 1500, query_source: 'main', request_id: 'req_1', 'session.id': 'sess-1', ...over,
+});
 
 const STUB = otlpBody => `#!/usr/bin/env node
 const fs = require('node:fs'); const http = require('node:http');

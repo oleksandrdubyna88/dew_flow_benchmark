@@ -15,7 +15,7 @@ import { scoreSession } from '../lib/score-run.mjs';
 import { fakeToken, prices, sseAnswer, sseBody, chunksOf, stubUpstream } from './broker-stub.mjs';
 import { SEED, context } from './bare-ctx.mjs';
 import { homeDir, inputs, keyGate, pythonGate, sandboxGate, spikeDir, tmpDir } from './helpers.mjs';
-import { stubClaude } from './stub-claude.mjs';
+import { stubClaude } from '../lib/stub-cli.mjs';
 import { TS_DIR } from './box-helpers.mjs';
 
 test('A_stub_pair_runs_end_to_end', { timeout: 1_800_000 }, async t => {
