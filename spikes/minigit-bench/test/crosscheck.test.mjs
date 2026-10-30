@@ -69,7 +69,8 @@ function oFromEnvelope(e, { without = [] } = {}) {
 const run = (over = {}) => crosscheck({ E, O: null, T: null, table, policy: policyWith(), cliVersion: CLI_VERSION, ...over });
 
 test('The_committed_policy_loads_and_an_illegal_value_names_the_legal_ones', () => {
-  assert.deepEqual([policyFile.t1, policyFile.t2, policyFile.t3, policyFile.t3OutputSource, policyFile.join], ['stop', 'otel-incomplete', 'investigate', 'transcript', 'request_id']);
+  // t3 = stop since the dated E3b.S4 T3 commit (2026-10-30: the A/A of s-20261030-bf89 + the smoke fixture showed T's coverage, contract section 11)
+  assert.deepEqual([policyFile.t1, policyFile.t2, policyFile.t3, policyFile.t3OutputSource, policyFile.join], ['stop', 'otel-incomplete', 'stop', 'transcript', 'request_id']);
   const bad = loadPolicy({ ...policyFile, join: 'guess' });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /policy\.join.*request_id, query_source/);
