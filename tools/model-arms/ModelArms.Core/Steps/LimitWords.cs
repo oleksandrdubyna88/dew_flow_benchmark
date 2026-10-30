@@ -6,8 +6,9 @@ namespace ModelArms.Core.Steps;
 /// <c>ReviewerAccountOut</c>, which refuses a plain 429 on purpose.
 /// <para>
 /// The one documented difference: .NET's <c>\w</c> and <c>\b</c> are Unicode where node's are ASCII — a superset, so nothing the shell matched is missed. The match timeout is the ceiling
-/// every wait has; it is not caught, and on a result text or a 4000-character tail it cannot fire — if it ever does the runner sees an exception rather than a silent
-/// <c>Errored</c>. <c>partial</c> only because <c>[GeneratedRegex]</c> requires it.
+/// every wait has; it is NOT caught, and it CAN fire: a pathological text (measured: <c>hit your </c> repeated 20,000 times, 180 KB) makes the search throw
+/// <see cref="RegexMatchTimeoutException"/> after about a second, where a real result or a 4000-character tail never comes near it. The exception reaches the step runner —
+/// loud, the step is never marked done — rather than being turned into a silent <c>Errored</c> or a limit. <c>partial</c> only because <c>[GeneratedRegex]</c> requires it.
 /// </para></summary>
 public static partial class LimitWords
 {
