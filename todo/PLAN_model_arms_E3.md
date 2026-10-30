@@ -11,8 +11,10 @@
 > D11/F0) and `checks` (the objective report, §4.9) — the pure readers of the target's logs and the report in
 > `tools/model-arms/ModelArms.Core/Checks/`, the target's tools as a launch boundary (`TargetTools`, `TargetArgv`, `TargetEnvironment` — D17 d,
 > D26), a bounded no-follow file road shared by every reader of a model-written file, tests under `tests/Bench.Tests/ModelArms/`, fixtures
-> under `tests/Bench.Tests/Fixtures/model-arms/objective/`, `research/module_model_arms.md` and four `research/module_tests.md` rows. Five
-> stories, E3.S1–E3.S5; **M2** — the attended pilot — and **M2's key check** — the owner's, by hand — close the epic.
+> under `tests/Bench.Tests/Fixtures/model-arms/objective/`, `research/module_model_arms.md` and four `research/module_tests.md` rows. Six
+> stories, E3.S0–E3.S5 — **E3.S0 added 2026-10-30 at `23354c6` by Fable as a SECURITY judgement** (the parent's ledger entry 2.1: the owner
+> overturned E1.S10's decision 4 — macOS and FreeBSD run, not refused, each printing what it did not verify; wave 0, it lands first);
+> **M2** — the attended pilot — and **M2's key check** — the owner's, by hand — close the epic.
 
 ## 1. Goal, before any solution
 
@@ -118,11 +120,14 @@ key by key (`src_mcp/src/Program.cs:749-763`).
 E1 §3 and E2 §3 hold unchanged (namespaces; *pure means pure*; refusals as values; red first on an ASSERTION; docs per story; fixtures in
 `tests/Bench.Tests/Fixtures/model-arms/`; time through `TimeProvider`; no tokens in this repository; the commands). For E3:
 
-- **The pure list.** E3.S1 replaces the single `// E3` marker (`ModelArmsArchitectureTests.cs:71`) with five, `// E3.S1` … `// E3.S5`, one
+- **The pure list.** E3.S0 replaces the single `// E3` marker (`ModelArmsArchitectureTests.cs:71`) with six, `// E3.S0` … `// E3.S5`, one
   per line with a blank line between; every later story writes only under its own.
-- **The module doc.** E3.S1 adds five empty headings to `research/module_model_arms.md` after the last E2 section: *The objective readers
-  and the report (E3.S1)*, *The target's tools and prep-base (E3.S2)*, *make (E3.S3)*, *status (E3.S4)*, *checks, M2 and the key check
-  (E3.S5)*. Each story writes only under its own.
+- **The module doc.** E3.S0 adds six empty headings to `research/module_model_arms.md` after the last E2 section: *The platform roads
+  (E3.S0)*, *The objective readers and the report (E3.S1)*, *The target's tools and prep-base (E3.S2)*, *make (E3.S3)*, *status (E3.S4)*,
+  *checks, M2 and the key check (E3.S5)*. Each story writes only under its own.
+- **The platform roads (C18, E3.S0).** No adapter of E3 branches on `OperatingSystem.*` for a check it then refuses: a check the host can
+  perform is performed, one it cannot is in the one line the gate (or `init`) prints per verb, and nothing is refused for want of a kernel
+  reader. Windows rows are unchanged by name (the owner's words name macOS and FreeBSD).
 - **The launch boundary, per adapter (D17 d, D26).** Every child an E3 verb starts is launched by the REAL path `ExecutableResolution`
   found in that verb (printed once as `resolved executables:` before the first launch, D17 c — `prep-base`, `make` and `checks` alike),
   never a second look-up and never a bare name; under `TargetEnvironment.Of(parent)` (C14) for the target's tools and
@@ -244,12 +249,16 @@ with `MakeOutcome = Made · Stopped(int ExitCode, string Why)`: the one arm, so 
 code. `ModelArms.Adapters.BaseCopy.Copy(string from, string to) → Outcome<long>` (files copied). `ArmFiles.ReplacePrivate(path, text)` —
 `Replace` whose staged file is created with `UnixCreateMode = 0600` (no chmod after).
 
-**C16 — reading by name** (E3.S4; read by E3.S3 and E3.S5). Adapter `ModelArms.Adapters.BoundedFile`:
+**C16 — reading by name** (E3.S0 — moved there from E3.S4 by the parent's ledger 2.1; read by E3.S3, E3.S4 and E3.S5). Adapter
+`ModelArms.Adapters.BoundedFile`:
 
 ```csharp
 public abstract record BoundedRead { Absent; Bytes(byte[] Value); Refused(string Reason); }   // closed, private constructor
-public static BoundedRead Read(string path, int limit);   // GateStatusFile's Judged + ReadSmall / Portable roads, extracted; GateStatusFile decodes on top
+public static BoundedRead Read(string path, int limit, PlatformRoad road);   // GateStatusFile's Judged + ReadSmall / Portable roads, extracted; the portable road under a 5 s ceiling (E3.S0); GateStatusFile decodes on top
 ```
+
+**C18 — the platform roads** (E3.S0; read by every adapter that used to refuse off Linux) is spelled in E3.S0's section: `TrustRoad`,
+`BoundedRoad`, `HolderRoad`, `PlatformFacts`, `PlatformRoad` (with its one `Line`) and the pure `PlatformRoads.Of`.
 
 Core, pure: `ModelArms.Core.Steps.StepState` (`NotStarted` · `Done(string End, int Attempts)` · `Continuing(int After, string Why)` ·
 `Resumable(string End, int Attempt)` · `Limited(int Attempt, string Stop)` · `Unreadable(string Reason)`) and `StepStatuses.Of(StepEvidence) →
@@ -271,10 +280,234 @@ and `ObjectivePrevious(string stamp)` (`out/objective.prev-<utc>`). Core, pure: 
 
 ## 5. Stories
 
+### E3.S0 — The platform roads: macOS, FreeBSD and a Linux without a probed reader RUN, and say what they did not verify (SECURITY JUDGEMENT — spec by Fable, 2026-10-30, the parent's ledger 2.1)
+
+**Security judgement — spec by Fable** (`model: fable`, written 2026-10-30 at `23354c6` on `feat/model-arms-e3`; outside the cornerstone
+quota, as E1.S8's and E1.S10's fix specs were): the owner overturned E1.S10's decision 4 — *"macOS and FreeBSD are fine [untested]; do not
+forbid their use"* (2026-10-30; the parent's ledger entry 2.1). Today `KernelFacts` answers `Unread`/refused off Linux (and off x86-64 for the
+bounded read), so `validate`, `init`, every gated verb, `gate-lock` and the gate step stop with exit 3 on a Mac, and `FileGateLock` refuses
+to be constructed there. This story makes those hosts run under ONE rule: **a check the host can perform is performed; a check it cannot
+is named in one printed line per verb; nothing is refused for want of a reader; nothing passes as done that was not done.** Windows keeps
+every behaviour it has (the owner named macOS and FreeBSD; the rows below say *unchanged* for Windows).
+
+- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus, naming D26 (a)–(f) for `PortableFacts`, `BoundedFile`, `LockProbe` and the widened
+  `FileGateLock`. **Depends on:** nothing in E3 (E1 and E2 landed). **Parallel with:** nothing — **wave 0, it lands first**: it changes
+  `KernelFacts`, `RootFacts`, `GateSeams`, `ExperimentGate`, `FileGateLock`, `GateHolderNote`, `GateStatusFile` and `InitVerb` — the files
+  S2 (`LaunchAdmission`) and S4 (`StatusReads`) build on — and it splits the pure-list marker S1 was to split.
+- **Owns:** the parent's ledger 2.1; D10, D17 (a) and D26 (a) as amended; C16 (`BoundedFile` — moved here from S4); C18 below; the gate lock's
+  conflict code as a MEASUREMENT; the module doc's platform sentences (E1.S8, E1.S10, E1.S11, E2.S6, E2.S7 — every *refused as unprobed*).
+  **Size:** ≈ 750 lines (≈ 300 code, 400 tests, the docs).
+
+**Why this road and not the other two.** Three ways to run were weighed. (1) *A kernel reader written from headers* — `lstat` at 144 bytes
+with `lstat$INODE64` on x86-64 Macs, FreeBSD's 224-byte `struct stat`, Darwin's `O_NONBLOCK` as `0x4` — is what decision 4 refused, and that
+reason stands: an offset nobody probed reads a WRONG uid or mode without an error, so a mis-moded root passes a check that claims to have
+looked (`common.platform-limits` §1; `common.security` — a measure you have not observed working is a comment). Nothing here runs on a Mac
+(CI is `ubuntu-latest`), so the layout would be written blind and tested blind; it is the follow-up of §8 item 25, with the self-verifying
+probe that would make it honest — not this story. (2) *`/usr/bin/stat -f` by absolute path with `LC_ALL=C`, a replaced environment and cwd
+`/`* — D17 (d)-clean, but a second reader of a text format nobody has observed, with the same false-pass shape if a `%` field is misread,
+and a process launch inside the trust check. (3) **The runtime's own portable facts** — `FileInfo.LinkTarget` and `Attributes` (lstat-level:
+a link, a directory), `File.GetUnixFileMode` (the mode, by `stat`), `Length` and `LastWriteTimeUtc` — are code the runtime ships and tests
+on macOS and FreeBSD; they give a TRUE answer for what they cover, and they cannot answer the owner, the inode, the device, the change time
+or whether a file is a FIFO — exactly the list the printed line names. **Chosen: (3), under the rule above.** Honesty weighed against
+protection: on a single-operator Mac the owner check guards against a shared or mis-moded root (parent §9); the mode half IS still judged
+there, and the owner half is SAID to be missing rather than silently skipped — more than Windows gets today, less than Linux, by name.
+
+**C18 — the platform roads** (this story; read by S2, S4 and every adapter that used to branch on the platform to refuse). Core, pure,
+`ModelArms.Core.Experiment`:
+
+```csharp
+public enum TrustRoad { Kernel, Portable, NotPerformed }        // owner + mode + identity by statx · mode + kind + witness by the runtime · Windows (unchanged)
+public enum BoundedRoad { Kernel, Portable }                     // KernelFacts.ReadSmall (Linux x86-64) · the runtime's open-and-read under a ceiling
+public enum HolderRoad { ProcTicks, ProcessStartTime, None }     // /proc field 22 · Process.StartTime within 2 s · Windows (unchanged: a holder is never named)
+public sealed record PlatformFacts(bool Windows, bool Linux, bool MacOS, bool FreeBSD, bool X64, bool StatxAvailable, string Description);
+public sealed record PlatformRoad(string Platform, TrustRoad Trust, BoundedRoad Bounded, HolderRoad Holder, bool LibcMkdir, IReadOnlyList<string> NotVerified)
+{
+    public string Line { get; }   // "" when NotVerified is empty; else "trust check on <Platform>: NOT verified — <NotVerified, joined by '; '> (D17; the roads: E3.S0)"
+}
+public static class PlatformRoads { public static PlatformRoad Of(PlatformFacts facts); }
+```
+
+The table — every row explicit, no catch-all (`common.platform-limits`): a POSIX host not named is `Portable` on every road with its
+`Description` in the line, never refused.
+
+| Host | Trust | Bounded | Holder | LibcMkdir | NotVerified (the line's clauses) |
+|---|---|---|---|---|---|
+| Linux x86-64, `statx` | Kernel | Kernel | ProcTicks | yes | — (the line is empty) |
+| Linux, another architecture, `statx` | Kernel | Portable | ProcTicks | yes | `the bounded read of model-written files is the runtime's: a FIFO or a device is not told from a file (each read runs under a 5 s ceiling)` |
+| Linux without `statx` | Portable | by architecture | ProcTicks | yes | the three trust clauses below, plus the bounded clause when Portable |
+| macOS; FreeBSD | Portable | Portable | ProcessStartTime | yes | `the owner of the root, experiment.json and scenarios.json (no probed kernel reader on <platform>; their mode WAS judged)`; `whether each is a regular file (a FIFO or a device is not told from a file)`; `the inode and change time between the trust check and the read (the length and write time were compared instead)`; `the gate lock's held file against its path after the open`; the bounded clause; `a lock holder's start is believed within 2 s of its note, not by the kernel's tick` |
+| any other POSIX | Portable | Portable | ProcessStartTime | yes | as macOS, naming `Description` |
+| Windows | NotPerformed | Portable | None | no | — (the line is empty: Windows prints its own *not performed* lines where it does today; unchanged) |
+
+Adapter `ModelArms.Adapters.PlatformFactsReader.Current()`: `OperatingSystem.IsWindows/IsLinux/IsMacOS/IsFreeBSD`,
+`RuntimeInformation.ProcessArchitecture == Architecture.X64`, `StatxAvailable` = `KernelFacts.StatxIsAvailable` (Linux: one `statx` of `/`
+that throws neither `EntryPointNotFoundException` nor `DllNotFoundException`; false elsewhere), `RuntimeInformation.OSDescription`.
+`PlatformRoads.Current` is computed once per process (`Lazy<PlatformRoad>`) and handed to every adapter below AS A PARAMETER — an adapter
+never reads the static back, so a test hands the Mac's road on this host. `HostKinds` is unchanged (macOS and FreeBSD stay `OtherPosix`; D23's
+refusals — `isolation` on Windows, `awake: wsl` off WSL — are not touched).
+
+**The fact sources, one by one** (the decision per source; the parent's D10, D17 (a) and D26 (a) are amended to this):
+
+1. **The trust facts** — `RootFacts.ReadFacts(path, road)`. `Kernel` → `KernelFacts.Read` (statx), unchanged. `Portable` →
+   `PortableFacts.Read(full)` (adapter, new): `new FileInfo(full)`; no entry (`!Exists && !Directory.Exists(full)`) → `Unread("<full>: no
+   such file or directory")`; `LinkTarget is not null` → `Read` with `Kind = Link`, `Mode = None` — nothing is read through the link, and
+   `RootFacts` refuses it naming the target as today; `Attributes.HasFlag(Directory)` → `Kind = Directory`; else `Kind = Unknown` — the
+   runtime cannot tell a regular file from a FIFO or a device, and `Unknown` says so ("not captured is not zero"); `Mode =
+   File.GetUnixFileMode(full)` (the runtime's `stat`, read AFTER the link judgement — the window between the two is the road's residual,
+   said in the doc); `OwnerUid = null`; `Identity = new FileIdentity(0, 0, kind, 0m)`; `Witness = new FileWitness(Length (0 for a directory),
+   LastWriteTimeUtc.Ticks)`; `Source = Portable`. `IOException` / `UnauthorizedAccessException` → `Unread(the words)` (exit 3), never a throw
+   (`common.platform-limits` §1.3). `NotPerformed` → as today (the gate fabricates the facts and prints the Windows line).
+   `FileFacts` becomes `FileFacts(string Path, int? OwnerUid, UnixFileMode Mode) { FileIdentity Identity = Unknown; FileWitness? Witness; FactsSource Source = Kernel }`
+   with `FileWitness(long Length, long WriteTicks)` and `enum FactsSource { Kernel, Portable }` — `null` is "not captured" (the Windows `-1`
+   sentinel goes). `KernelFacts.Read`, `ReadOpen` and `ReadSmall` lose their off-Linux refusals: the ROAD decides which reader is asked, the
+   reader no longer refuses a platform it is not asked on.
+2. **The trust judgement** — `RootTrust.Decide(TrustRoad road, int currentUid, files, root)` (the `bool posix` becomes the enum).
+   `NotPerformed` → the line, as today; `Kernel` → owner and mode, as today; `Portable` → the mode alone (`go-w` → `Refused` naming the
+   file, the octal mode and `chmod go-w`, exit 4) and the owner not looked at — `Trusted` is `Trusted` because the road's line, printed by
+   the gate BEFORE the judgement, has already said what was not verified. `FactsRead.MustBe(expected)`: on `Source = Portable` a `Kind =
+   Unknown` satisfies `Regular` (cannot say — the line says so); `Directory` wanted and `Unknown` found is refused as today (a directory
+   IS told); on `Source = Kernel` nothing changes.
+3. **The re-read comparison** — `RootTrust.Changes(before, after)`: the sources differ → `["source"]`; `Kernel` → the six facts as today;
+   `Portable` → `kind`, `mode`, `length`, `mtime` — never a silent `0 == 0` over an identity nobody captured. The gate's `StillTheSame` runs
+   on every road but `NotPerformed` (unchanged there).
+4. **The effective uid** — `geteuid` through libc on Linux, macOS and FreeBSD (no layout; E1.S10 decision 2): unchanged, and unused by
+   the judgement on the portable road.
+5. **`Present`** — unchanged (`statx` on Linux; `Path.Exists` elsewhere: a dangling link is there, `EACCES` reads absent — the stated gap
+   stays stated in the module doc, not in the line, because it is not a check).
+6. **The exclusive root** — `KernelFacts.MakeFolder`: libc `mkdir(path, 0700)` on Linux, macOS and FreeBSD — the one POSIX call, no
+   struct, a path and a mode (`mode_t` is 16 bits on Darwin and FreeBSD; `0700` fits and the upper bits are zero); a non-zero answer is
+   classified by `Present(path)`: there → `AlreadyThere` (exit 4, nothing touched); not there → `Failed(strerror)` (exit 3) — a STATE, not an
+   errno number: the `EEXIST = 17` read goes, and "the one place the module reads an errno number" shrinks to `Present`'s two. Windows →
+   `Directory.CreateDirectory`, as today (`InitVerb.MakeRootFolder`). `init`'s `Judged` runs the trust road (`Kernel`/`Portable` through
+   `RootFacts.ReadFacts`; Windows `Through`, as today) and `init` prints the road's line FIRST, before anything is made.
+7. **The gate lock's conflict code** — `FileGateLock`. On Windows the two documented codes, unchanged. Elsewhere the code is MEASURED at
+   construction by `LockProbe.Measure(folder)` (adapter, new; `folder = Path.GetTempPath()`): a file `<folder>/.model-arms-lock-probe-<8
+   random hex bytes>` opened `CreateNew | ReadWrite | FileShare.None | DeleteOnClose`, then a SECOND open of the same path `Open | ReadWrite |
+   FileShare.None`; the second open throws an `IOException` of exactly that type → `Success(ex.HResult)` — the platform's own number,
+   observed on this host at this start (11 on Linux, the witness test; `EAGAIN` 35 on Darwin and FreeBSD by their headers, which the probe
+   does not need to know); the second open SUCCEEDS → `Failure("file locking is inert in <folder>: a second open of one file succeeded — no
+   gate lock is attempted here")` (exit 3 through `Create`, the road `Refusal` takes today); any other exception → `Failure(the words)`.
+   `LockProbe.Decide(Exception? secondOpen)` is the pure half (`null` = the open succeeded), `Measure` the live one. Growth: one 0-byte file
+   per construction, deleted on close; a crash leaves at most one per start in the temp folder, named for what it is.
+   **The held file is verified honoured** (off Windows): after `Verified` (the Linux inode comparison; on the portable road not performed —
+   the line says so), a second open of the lock path with `FileShare.None` must throw the measured code; a stream comes back → both are
+   disposed and the answer is `Unread("<path>: the lock is not honoured on this file system — a second open of the held file succeeded; no
+   gate runs here (a file system without flock: NFS, CIFS?)")` (exit 3; `GateLockRefusedException` in the gate step); another exception type
+   → `Unread(the words)`. This closes the residual D10's doc records as undetected (a file system that ignores `flock` lets two holders
+   hold), at one open per acquisition, and it is the observation `common.security` asks of a delegated lock. Test seam: `internal
+   Func<string, FileStream?>? SecondOpen { get; init; }` (production: the real open); `AfterJudged` / `AfterOpened` keep their places.
+8. **The holder's note** — `GateHolderNote`: written with BOTH `start_ticks` (Linux `/proc`, as today; `null` elsewhere) and `start_unix`
+   (`Process.GetCurrentProcess().StartTime` in whole UTC seconds, every platform); believed on `ProcTicks` by equal ticks (as today), on
+   `ProcessStartTime` when the pid is alive and `|StartTime(pid) − start_unix| ≤ 2 s` (two readings of one pid differ by milliseconds —
+   E2.S6's measured flake — so whole seconds with a 2 s tolerance; a reused pid started within 2 s of the old one is not told apart: the
+   note is a hint, D10), on `None` (Windows) never, as today. Read through `BoundedFile.Read` (below) on every road — today `ReadSmall`
+   fails off Linux x86-64 and `status` never names a holder there.
+9. **The bounded no-follow read** — `BoundedFile` (C16; adapter, new, extracted from `GateStatusFile`'s `Judged` and `Portable`;
+   `GateStatusFile.Read` and `GateHolderNote.Read` delegate): `Read(path, limit, road) → BoundedRead` (`Absent · Bytes · Refused`): a link is
+   refused by the path (`ReparsePoint`, both roads), an absent path is `Absent`; `Bounded = Kernel` → `KernelFacts.ReadSmall`, as today;
+   `Portable` → the runtime's `FileStream(Open, Read, ReadWrite | Delete)` and the `limit + 1` read, the WHOLE open-and-read run on a task under
+   `OpenCeiling = 5 s`: not back in time → `Refused("<path> was not read within 5 s — a FIFO with no writer, or a stalled file system; not
+   read (D17)")` and the task is left to end when its open returns (a verb process ends it — said in the doc; the alternative is a hang no
+   wall covers, because the read is the harness's own, not a child's); a folder → `Refused`, as today; the `FileAttributes.Device` test goes
+   (the runtime never sets it on Unix — an inert measure, `common.security`; a device file is now refused past the limit or read as its
+   bytes, said).
+10. **`GateLockPath.Of`** — Windows `Unjudged`, as today; elsewhere through `RootFacts.ReadFacts(path, road)`: on the portable road a link
+    and a folder are refused, a FIFO is not told (the line).
+
+**The one line.** `ExperimentGate.Admit` prints `road.Line` to the error writer ONCE, between step 2 (`Present`) and step 3 (the trust
+judgement), when it is not empty — before any refusal it qualifies; `InitVerb` prints it first in `Decided`. No adapter prints; no verb
+prints it twice; Windows' two existing lines stay exactly where they are. The verbs reach the road through `GateSeams.Road` (default
+`PlatformRoads.Current`) and `InitVerb.RunAsync(input, makeRoot, road)`.
+
+**Files.** Core: `tools/model-arms/ModelArms.Core/Experiment/PlatformRoads.cs` (C18: the three enums, `PlatformFacts`, `PlatformRoad`,
+`PlatformRoads`), `RootTrust.cs` (`FileFacts` as above, `FileWitness`, `FactsSource`, `Decide(TrustRoad, …)`, `Changes` by source); adapters
+`tools/model-arms/ModelArms/Adapters/PortableFacts.cs` (new), `BoundedFile.cs` (new, C16), `LockProbe.cs` (new), `PlatformFactsReader.cs`
+(new), `KernelFacts.cs` (`StatxIsAvailable`; `MakeFolder` on every Unix with the `Present` classification; the off-Linux refusals of `Read`,
+`ReadOpen`, `ReadSmall` removed — the road decides), `RootFacts.cs` (`ReadFacts(path, road)`; `ReadFacts(path)` = the current road),
+`FactsRead.cs` (`MustBe` by source), `GateLockPath.cs`, `FileGateLock.cs` (the probe at construction off Windows; `SecondOpen`; the honour
+check), `GateHolderNote.cs` (`start_unix`, the two believers, `BoundedFile`), `GateStatusFile.cs` (delegates); `tools/model-arms/ModelArms/GateSeams.cs`
+(`Road`), `ExperimentGate.cs` (the line; `Judge` and `StillTheSame` by road), `Verbs/Init.cs` (the line; `Judged` by road); tests
+`tests/Bench.Tests/ModelArms/PlatformRoadsTests.cs`, `PortableFactsTests.cs`, `BoundedFileTests.cs`, `LockProbeTests.cs`, `FactsReadTests.cs`
+(new), `RootTrustTests.cs`, `KernelFactsTests.cs`, `InitVerbTests.cs`, `FileGateLockTests.cs`, `GateLockHolderTests.cs`,
+`ModelArmsProgramTests.cs` (the gate on the portable road), `RootFactsTests.cs` (`On_a_platform_without_a_probed_reader_the_facts_are_unread_naming_it`
+DELETED — the behaviour it pinned is gone), `ModelArmsArchitectureTests.cs` (the single `// E3` marker → six, `// E3.S0` … `// E3.S5`; under
+`// E3.S0`: `typeof(PlatformRoads)`); `research/module_model_arms.md` (six empty E3 headings after the last E2 section — *The platform
+roads (E3.S0)* first — and under it the table above, the ten decisions and the residuals; the sentences *macOS and FreeBSD are refused as
+unprobed* in *The root, trust and the host*, *The first run*, *The gate lock* and *The gate step* rewritten to point here);
+`research/module_tests.md` (the `init`, `validate` and `gate-lock` rows name the platform tests).
+
+**Scenarios.** On this Linux host the non-Linux roads are reached by handing the Mac's or FreeBSD's `PlatformRoad` to the gate, to `init` and
+to the lock through their seams, and by calling the portable readers directly — said in every test's header; the composition on a real
+Mac is unobserved (§8 item 25). `MacRoad` = `PlatformRoads.Of(new(false, false, true, false, false, false, "macOS 15"))`.
+
+| Test | Given / When / Then | Red (the assertion seen first, against the stub) |
+|---|---|---|
+| `PlatformRoadsTests.Each_host_takes_its_declared_roads_and_names_what_it_does_not_verify` | theory over the table's rows (Linux x64 statx; Linux arm64 statx; Linux x64 no statx; macOS arm64; FreeBSD x64; Windows) → `Trust`, `Bounded`, `Holder`, `LibcMkdir` as the table says; `Line` empty for Linux x64 and Windows; the Mac's line names `the owner`, `regular file`, `inode and change time`, `5 s ceiling`, `2 s` and `macOS` | stub every road `Kernel`: `Expected road.Trust to be Portable, but found Kernel.` |
+| `PlatformRoadsTests.No_host_is_refused_for_want_of_a_reader` | every row, and an unnamed POSIX (`Description = "Illumos"`) → a road, never a throw or a failure; `Portable` on every road for the unnamed one, its line naming `Illumos` | stub throws for the unnamed host: `Expected no exception` |
+| `PortableFactsTests.The_portable_reader_gives_the_mode_the_kind_and_the_witness_and_never_the_owner` | live: a file `640`, a folder `755` → `Read`: `Mode` the set mode, `Kind` `Unknown` / `Directory`, `OwnerUid` null, `Source` `Portable`, `Witness.Length` the bytes written, `WriteTicks` within a minute of now | stub `Unread("not built")`: `Expected Read, but found Unread` |
+| `PortableFactsTests.A_link_is_reported_as_a_link_and_nothing_is_read_through_it` | live: a link to a `777` file → `Kind` `Link`, `Mode` `None`; `RootFacts.ReadFacts(link, MacRoad)` → `Refused` naming the target (E1.S8's sentence) | stub follows the link: `Expected Kind to be Link, but found Unknown` |
+| `PortableFactsTests.An_absent_path_and_a_folder_the_user_may_not_search_are_unread_with_words` | live: `<temp>/absent` → `Unread` naming it; a `000` folder's child (skip as root) → `Unread` naming `denied` | stub lets `UnauthorizedAccessException` fly |
+| `RootTrustTests.On_the_portable_road_the_mode_is_judged_and_the_owner_is_not` | pure: `Decide(Portable, 1000, [owner null, mode 664])` → `Refused` naming `664` and `chmod go-w`; `[owner null, 600]` → `Trusted`; `Decide(Kernel, 1000, [owner 1001, 600])` → `Refused` (unchanged); `Decide(NotPerformed, …)` → `NotPerformed` (the Windows test, re-spelt from `false`) | stub treats `Portable` as `NotPerformed`: `Expected Refused, but found NotPerformed` |
+| `RootTrustTests.Portable_changes_compare_kind_mode_length_and_write_time_and_a_change_of_source_is_a_change` | pure theory: two portable facts differing in `Length` → `["length"]`; `WriteTicks` → `["mtime"]`; `Kind` → `["kind"]`; `Mode` → `["mode"]`; equal → `[]`; a kernel read against a portable one → `["source"]` | stub compares identities: `Expected changes to equal {"length"}, but found empty` |
+| `FactsReadTests.A_portable_fact_of_untold_kind_satisfies_regular_and_not_directory` | pure: `MustBe(Regular)` on `Unknown`/`Portable` → the same `Read`; `MustBe(Directory)` → `Refused` naming `not a directory`; `MustBe(Regular)` on `Unknown`/`Kernel` → `Refused` (as today) | stub refuses both: `Expected Read, but found Refused` |
+| `ModelArmsProgramTests.On_the_portable_road_the_gate_prints_its_line_once_judges_the_mode_and_compares_the_witness` | `validate` through `GateSeams.Real with { Road = MacRoad, ReadFacts = PortableFacts }` over a `700` root → the host checks run (no trust refusal); stderr holds EXACTLY ONE line containing `NOT verified` and `the owner`, before any other gate line; the same root at `775` → exit 4 naming `775`, the line still once and first; `AfterRead` replacing `experiment.json` by a longer file → exit 4 `changed between its trust check and its read (length` | stub ignores the road: `Expected stderr to contain "NOT verified"` |
+| `ModelArmsProgramTests.On_the_portable_road_a_swap_the_witness_cannot_see_is_named_as_not_verified_not_as_no_change` | `AfterRead` swapping in a file of the SAME length and write time (`File.SetLastWriteTimeUtc`) → the gate goes on (invisible to the witness) AND the printed line names `inode and change time` — the honesty assertion: what passed is said to be unchecked | stub prints no line: `Expected stderr to contain "inode and change time"` |
+| `InitVerbTests.Init_on_the_portable_road_prints_its_line_first_and_makes_the_root_owner_only` | `InitVerb.RunAsync(input, KernelFacts.MakeFolder, MacRoad)` → exit 0, the root `700`, the files `600`, stderr's FIRST line the road's; the Windows line absent | stub prints nothing: `Expected stderr's first line to contain "NOT verified"` |
+| `KernelFactsTests.Mkdir_refuses_a_taken_name_by_its_presence_not_by_an_errno_and_names_the_words_of_any_other_failure` | live: a folder, a file, a dangling link at the name → `AlreadyThere` each, untouched; a parent that is a file → `Failed` naming `Not a directory`; an absent parent → `Failed` naming `No such file`; the structural half: `KernelFacts.cs` holds no `AlreadyExists` and no `== 17` | green by construction on Linux (the errno road answers the same) — its teeth are B6; the structural half red against the current file |
+| `LockProbeTests.The_measured_conflict_code_is_the_runtimes_EWOULDBLOCK_on_linux` | live (skip off Linux): `LockProbe.Measure(temp)` → `Ok(11)`; the probe file gone after; `FileGateLock.Create` → `Ok` | stub `Failure("not built")`: `Expected Ok(11)` |
+| `LockProbeTests.A_second_open_that_succeeds_is_inert_and_any_other_fault_carries_its_words` | pure: `Decide(null)` → `Failure` naming `inert`; `Decide(new IOException("x") { HResult = 35 })` → `Ok(35)`; `Decide(new FileNotFoundException())` (a subclass) → `Failure`; `Decide(new UnauthorizedAccessException("denied"))` → `Failure` naming `denied` | stub `Ok(ex?.HResult ?? 0)`: `Expected Failure, but found Ok(0)` |
+| `FileGateLockTests.A_held_lock_whose_file_system_lets_a_second_open_through_is_released_and_refused` | `new FileGateLock(clock, poll) { SecondOpen = _ => new FileStream(<another temp file>, …) }` → `Take(path, true, true)` → `Unread` naming `not honoured`; no holder note left; the lock file openable afterwards (released); with the real `SecondOpen` → `Held` | stub ignores `SecondOpen`: `Expected Unread, but found Held` |
+| `FileGateLockTests.The_conflict_code_is_measured_not_tabled_off_windows` | structural: `FileGateLock.cs` holds no `LinuxWouldBlock` and no bare `11`; `ConflictCodes` calls `LockProbe`; the two Windows literals remain (unchanged) | the scan red against the current file |
+| `GateLockHolderTests.A_note_is_believed_by_the_kernels_ticks_on_linux_and_by_its_start_second_within_two_seconds_elsewhere` | pure theory over `GateHolderNote.Believe(raw, alive, liveTicks, liveStart, road)`: `ProcTicks` equal → true, differ → false, null → false; `ProcessStartTime` `Δ = 0, 2` → true, `3` → false, null → false; `None` → false whatever the facts | stub believes on `ProcTicks` only: `Expected True (ProcessStartTime, Δ 2 s), but found False` |
+| `GateLockHolderTests.The_note_carries_both_the_ticks_and_the_start_second` | live: a held lock's note parses with `start_ticks` = this process's field 22 and `start_unix` within 2 s of `Process.GetCurrentProcess().StartTime` | stub writes ticks only: `Expected note to have "start_unix"` |
+| `BoundedFileTests.A_link_a_fifo_a_folder_and_a_file_past_the_limit_are_refused_and_an_absent_file_is_absent` (S4's row, owned here) | live, BOTH roads handed in (`Kernel`, `Portable`): the four refusals name their reason, `Absent` for nothing; `GateStatusTests`, `GateStepTests`, `GateLockHolderTests` unedited and green through the delegation | stub `Absent`: `Expected Refused, but found Absent` |
+| `BoundedFileTests.The_portable_road_answers_a_fifo_with_no_writer_within_its_ceiling_instead_of_waiting` | live: `mkfifo`; `BoundedFile.Read(fifo, 4096, PortableRoad)` → `Refused` naming `5 s` in under 8 s (the test's wall 20 s); a FIFO WITH a writer that sends nothing → the same; a regular file → `Bytes` at once | a stub without the ceiling: the test's wall — the symptom IS the hang, said in the test |
+| `BoundedFileTests.A_portable_read_follows_no_link_and_reads_at_most_the_limit` | live: a link to a 10-byte file → `Refused` naming `link`; a `limit + 1`-byte file → `Refused` naming `bigger`; a `limit`-byte file → `Bytes` of `limit` | stub reads through: `Expected Refused` |
+
+**Break-its** (plant, watch the named test go red with the real symptom, restore): B1 `Decide(Portable)` returns `NotPerformed` → *the
+mode is judged and the owner is not*, and the gate test's `775` row (no refusal); B2 `Changes` compares identities on portable facts →
+*compare kind, mode, length* (`[]` for a longer file); B3 the line printed inside `Judge` (twice: the root, then `scenarios.json`) → *prints
+its line once*; B4 the ceiling removed from the portable open → *within its ceiling* (the wall); B5 the honour check skipped → *released and
+refused*; B6 every mkdir failure `Failed` → *refuses a taken name*; B7 `LockProbe.Decide(null)` → `Ok(0)` → *inert*.
+
+**Commands.** `--filter-class "*PlatformRoadsTests"`, `"*PortableFactsTests"`, `"*BoundedFileTests"`, `"*LockProbeTests"`, `"*RootTrustTests"`,
+`"*FactsReadTests"`, `"*KernelFactsTests"`, `"*InitVerbTests"`, `"*FileGateLockTests"`, `"*GateLockHolderTests"`, `"*GateLockPathTests"`,
+`"*GateStatusTests"`, `"*GateStepTests"`, `"*ModelArmsProgramTests"`, `"*ValidateVerbTests"`, `"*RunArmSchemeTests"`,
+`"*ModelArmsArchitectureTests"`; the whole suite.
+
+**Done when.** The twenty-one green on Linux with the live rows RUN; every red seen (the two "green by construction" rows have their
+structural red and their break-it); the seven break-its observed; `RootFactsTests.On_a_platform_without_a_probed_reader_…` gone; E2's
+suites unedited and green (`GateStatusTests`, `GateStepTests`, `GateLockHolderTests` — the delegation moved nothing); the review names D26
+(a)–(f) for the four adapters; the module doc's platform paragraphs say what this story says and name §8 item 25 as the unobserved
+composition.
+
+**What it does NOT prove** (in the module doc under *The platform roads*, and in the test headers): any road COMPOSED on a real macOS or
+FreeBSD host — the units run here (`PortableFacts`, `BoundedFile`'s portable road, `LockProbe`, the holder's start second, libc `mkdir`'s
+classification) on Linux, and the Mac's road is handed in through seams; `Process.StartTime` on macOS and FreeBSD; libc `geteuid` and
+`mkdir` on them (POSIX, no layout — not observed); `flock` on APFS, UFS and ZFS (the probe and the honour check observe it at the first
+run there — that IS the proof, when it runs); that `File.GetUnixFileMode` reads the file the link judgement saw (a link made in the window
+between the two is the road's residual); `EACCES` on `Present` reading as absent off Linux; a thread left behind by the ceiling until its
+open returns; a swap that keeps the length and the write time (named as unverified, by design). Linux x86-64 behaves as before, by test.
+
+**Out of bounds.** A self-verifying `lstat` reader for Darwin and FreeBSD (§8 item 25 — the follow-up a Mac run can take); the Windows
+rows (unchanged by the owner's words); E5's POSIX adapters on a Mac (`PosixFolderIsolation`, `SetsidLauncher` — E5.S1 and E5.S3 say
+*unobserved on macOS and FreeBSD* in their *not proven*; the roads give them nothing to branch on); D23's host refusals (`isolation`,
+`awake` untouched); `HostKinds`; the research doc's E1/E2 sections beyond the sentences named in *Files*.
+
+**Brief for the coder** (sonnet; this section is the brief — the order): (1) C18 and its two pure tests; `PlatformFactsReader.Current()`;
+the pure-list marker split and the six doc headings. (2) `FileFacts`/`FileWitness`/`FactsSource`, `RootTrust.Decide(TrustRoad, …)`,
+`Changes` by source, `MustBe` by source, their tests — every existing `Decide(true/false, …)` call re-spelt (`Kernel`/`NotPerformed`);
+build green. (3) `PortableFacts`, `RootFacts.ReadFacts(path, road)`, `GateSeams.Road`, the gate's line and road switches, `GateLockPath`,
+the two program tests. (4) `KernelFacts.MakeFolder` on every Unix with the `Present` classification, `InitVerb`'s road and line, the init
+test. (5) `BoundedFile` extracted with the ceiling; `GateStatusFile` and `GateHolderNote` delegate; E2's suites green unedited. (6)
+`LockProbe`, `FileGateLock`'s construction and honour check, `SecondOpen`; the holder's `start_unix` and `Believe`. (7) The docs. Never: a
+kernel layout for Darwin or FreeBSD; a `stat` or `id` process; a change to a Windows branch; a `static` road an adapter reads back (hand
+it in); a line printed by an adapter; a refusal whose reason is "this platform".
+
 ### E3.S1 — The objective readers and `ObjectiveReport`: the shell's shape, proven by the shell's own reader
 
-- **Coder:** sonnet · **Spec:** Opus (this section) · **Review:** Opus. **Depends on:** E1.S8 (`Scenario`, `Baseline`) — merged.
-  **Parallel with:** E3.S4.
+- **Coder:** sonnet · **Spec:** Opus (this section) · **Review:** Opus. **Depends on:** E1.S8 (`Scenario`, `Baseline`) — merged; E3.S0
+  (the marker split and the doc headings). **Parallel with:** E3.S4.
 - **Owns:** §4.9's pure half; D8's `stepsOnDeadline` member; D28's judges' half (the round trip stands for `judge-abs.sh` and
   `judge-coai.sh`, which read only `objective.json`). **Size:** ≈ 750 lines.
 
@@ -286,9 +519,9 @@ of the real `skipped` lines, said in the test), `node.log` (real lines of C1's `
 lines, plus two `✖` lines in the real shape — one printed twice), `ctrf.json` (C1's CTRF envelope with twelve of its tests and four written
 for the scenarios: all passed, one failed, mixed), `objective-part6-C1.json` (C1's `out/objective.json`, copied as it is — no token in it,
 checked; its sha256 recorded in the test), `objective-checks-reader.mjs` (the heredoc of `objective-checks.sh:27-67` VERBATIM — the
-pinned file's sha256 is the parent's §2; the extract's own sha256 is asserted by the test); the pure list (`// E3` → five markers; under
-`// E3.S1`: `typeof(TestLogSummary), typeof(TsTestLog), typeof(CtrfScenarios), typeof(DiffStats), typeof(ObjectiveReport)`); the module doc's
-five headings and *The objective readers and the report*.
+pinned file's sha256 is the parent's §2; the extract's own sha256 is asserted by the test); the pure list (under `// E3.S1`, the marker S0
+made: `typeof(TestLogSummary), typeof(TsTestLog), typeof(CtrfScenarios), typeof(DiffStats), typeof(ObjectiveReport)`); the module doc's
+*The objective readers and the report* (the heading S0 made).
 
 **Contracts.** C13 exactly. `ObjectiveReport.Write` builds the members in the shell's order (`:54-64`): `arm`, `head`, `commits`,
 `uncommittedFiles`, `build`, `format`, `mcp {exit, total, passed, skipped, failedNew, failedBaseline}`, `ts {exit, total, failedNew}`,
@@ -398,8 +631,8 @@ D26 (a)–(f) for `TargetTools` and `ArmGit`.
 
 ### E3.S3 — `make`: the arms, copied, branched, built, with their MCP files; the map extended
 
-- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus, naming D26 (a)–(f) for `ArmMaker` and `BaseCopy`. **Depends on:** E3.S2
-  (`TargetTools`, `LaunchAdmission`, `ArmGit`), E3.S4 (`BoundedFile`, the isolation line; `status` for the read-back scenario).
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus, naming D26 (a)–(f) for `ArmMaker` and `BaseCopy`. **Depends on:** E3.S0
+  (`BoundedFile`), E3.S2 (`TargetTools`, `LaunchAdmission`, `ArmGit`), E3.S4 (the isolation line; `status` for the read-back scenario).
   **Parallel with:** E3.S5 (its code).
 - **Owns:** §4.1's `make` row; D4 (the map extended, never re-minted); D5 (a made arm's layout); E2 §8 item 14 (`mcp-coai.json` at `0600`);
   D27 (the arms of every run); the parent's E3.S3 Done-when (a made arm reads back by `status`). **Size:** ≈ 750 lines.
@@ -459,17 +692,19 @@ the whole suite.
 
 ### E3.S4 — `status`: every arm, by name, never enumerating; the deadline and the continuing gate; the snapshot read, never restored
 
-- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S2 (`TimingLines`, `DoneMarkers`, `ContinueMarkers`) — merged.
-  **Parallel with:** E3.S1.
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S2 (`TimingLines`, `DoneMarkers`, `ContinueMarkers`) — merged;
+  E3.S0 (`BoundedFile`, C16 — the road `StatusReads` wraps). **Parallel with:** E3.S1.
 - **Owns:** F0 (address by name), F1/F4 (a deadline visible apart from a finish), D11's reading half (the line, no restore), E2 §8 item 32
-  (the recorded deadline text printed as recorded), the shared `BoundedFile` road (C16), the parent's §4.1 `status` row. **Size:** ≈ 800 lines.
+  (the recorded deadline text printed as recorded), the parent's §4.1 `status` row; it CONSUMES the shared `BoundedFile` road (C16, S0's).
+  **Size:** ≈ 700 lines.
 
 **Files.** Core: `ModelArms.Core/Steps/StepStatus.cs` (`StepState`, `StepEvidence`, `Read<T>`, `StepStatuses`),
 `ModelArms.Core/Isolation/LockSnapshot.cs` (`LockState`, `LockSnapshots`, `IsolationLine`), `ArmPaths.cs` (`RootPaths.LockedModesApplied`,
-`RunMarker(run, stage)` — §8 item 2); adapters `ModelArms/Adapters/BoundedFile.cs` (extracted), `GateStatusFile.cs` (delegates),
-`IsolationFiles.cs` (the two snapshot files → `LockState`); `ModelArms/Verbs/Status.cs` (`StatusVerb`, `StatusReads` — the seam: `Read(path,
-limit) → BoundedRead`, `Present(path) → Outcome<bool>`; production = `BoundedFile` + `KernelFacts.Present`; there is no enumerating member);
-`Program.cs` (the `status` arm only); tests `StatusVerbTests.cs`, `StepStatusTests.cs`, `LockSnapshotTests.cs`, `BoundedFileTests.cs`; under
+`RunMarker(run, stage)` — §8 item 2); adapters `IsolationFiles.cs` (the two snapshot files → `LockState`) — `BoundedFile.cs` and the
+delegating `GateStatusFile.cs` are S0's; `ModelArms/Verbs/Status.cs` (`StatusVerb`, `StatusReads` — the seam: `Read(path,
+limit) → BoundedRead`, `Present(path) → Outcome<bool>`; production = `BoundedFile.Read(path, limit, PlatformRoads.Current)` +
+`KernelFacts.Present`; there is no enumerating member);
+`Program.cs` (the `status` arm only); tests `StatusVerbTests.cs`, `StepStatusTests.cs`, `LockSnapshotTests.cs`; under
 `// E3.S4` `typeof(StepStatuses), typeof(LockSnapshots), typeof(IsolationLine)`; the module doc's *status*; `research/module_tests.md`
 (`status`: `covered`, `StatusVerbTests`).
 
@@ -519,7 +754,7 @@ printed, `isolation:` says *not read — E5 adds it*, `Status_reports_the_isolat
 | `StatusVerbTests.An_arm_of_a_run_that_is_not_in_the_map_is_listed_as_not_made` | runs name C2, the map does not → `arm C2 … not made` | stub skips it |
 | `StepStatusTests.Each_row_of_the_decision_table_gives_its_state` | pure theory, one row per line of the table above (a stale continue marker included: it decides nothing) | stub `NotStarted`: `Expected state to be Done …` |
 | `LockSnapshotTests.The_state_is_none_applying_applied_or_inconsistent_by_the_two_files` | pure, every pair of `Read<string>` | stub `None` |
-| `BoundedFileTests.A_link_a_fifo_a_folder_and_a_file_past_the_limit_are_refused_and_an_absent_file_is_absent` | the four refusals name their reason; `GateStatusFileTests` (E2.S6/E2.S7) run unedited and green | stub `Absent` |
+| `BoundedFileTests.A_link_a_fifo_a_folder_and_a_file_past_the_limit_are_refused_and_an_absent_file_is_absent` (S0's; S4 runs it unedited) | the four refusals name their reason; `GateStatusTests` (E2.S6/E2.S7) run unedited and green | — (green from S0) |
 
 **Break-its.** `done` for every `.done` → *deadline*; `File.ReadAllText` for markers → *link, fifo*; an enumeration to count attempts →
 *by name* (live and structural); `ArmMap.Scrub` removed → *never prints a token*.
@@ -536,7 +771,8 @@ cost (§3); the task pipeline's steps (E4.S3 extends `status`).
 
 - **Coder:** sonnet (the verb) · **Spec:** Opus · **Review:** Opus, naming D26 (a)–(f) for the objective run (a trust-boundary finding →
   Fable's fix spec, as in S2). **The pilot:** the main session, attended, by hand. **The key check:** the OWNER, by hand (the owner's key
-  never passes through an agent). **Depends on:** E3.S1, E3.S2, E3.S4 (the verb); E3.S3 (the pilot). **Parallel with:** E3.S3 (the verb).
+  never passes through an agent). **Depends on:** E3.S0 (`BoundedFile`), E3.S1, E3.S2, E3.S4 (the verb); E3.S3 (the pilot). **Parallel
+  with:** E3.S3 (the verb).
 - **Owns:** §4.9's verb half; D8 (`stepsOnDeadline` written); D17 (c) for `checks`; §6 step 3 (M2 and the key check); E2 §8 item 34; the
   remaining `NotBuilt` story ids. **Size:** ≈ 850 lines plus the pilot's log.
 
@@ -646,8 +882,11 @@ worktree (E4).
 
 ```mermaid
 flowchart LR
+    S0[E3.S0 platform roads + BoundedFile + LockProbe] --> S1
+    S0 --> S4
+    S0 --> S2
     S1[E3.S1 readers + ObjectiveReport] --> S2[E3.S2 TargetTools + LaunchAdmission + prep-base]
-    S4[E3.S4 status + BoundedFile + snapshot reader] --> S3[E3.S3 make]
+    S4[E3.S4 status + snapshot reader] --> S3[E3.S3 make]
     S2 --> S3
     S1 --> S5[E3.S5 checks]
     S2 --> S5
@@ -658,22 +897,28 @@ flowchart LR
 
 | Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
 |---|---|---|
-| A | **E3.S1**, **E3.S4** | `ModelArmsArchitectureTests.cs` (S1 splits the marker first — S4 rebases onto it); the module doc (S1's five headings; S4 its own); `ArmPaths.cs` (S4 only) |
+| 0 | **E3.S0** — alone, first | `KernelFacts.cs`, `RootFacts.cs`, `FileGateLock.cs`, `GateHolderNote.cs`, `GateStatusFile.cs`, `ExperimentGate.cs`, `Init.cs`, `RootTrust.cs`; `ModelArmsArchitectureTests.cs` (the marker split into six); the module doc (the six headings) — the files S2 and S4 build on, so nothing is built beside it |
+| A | **E3.S1**, **E3.S4** | the module doc (own headings); `ArmPaths.cs` (S4 only) |
 | B | **E3.S2** | `ArmPaths.cs`, `HostChecks.cs`, `TargetSection.cs`, `ArmGit.cs`, `RunArmAdmission.cs`, `Validate.cs`, `Program.cs` (its arm) |
 | C | **E3.S3**, **E3.S5** (the verb) | `Program.cs` (one arm each; S5 also the four E5 messages); `ArmFiles.cs` (S3 only); `ArmPaths.cs` (S5 only); `RootRequirements.cs` (S3 only); `research/module_tests.md` (own rows) |
 | D | **M2's pilot**, then **M2's key check** (by hand) | the module doc (*checks, M2 and the key check*) |
 
-Parallel coders work in worktrees branched from `feat/model-arms-e3` and land one at a time (rebase). S1 lands its marker split before S4's
-coder adds under `// E3.S4`.
+Parallel coders work in worktrees branched from `feat/model-arms-e3` and land one at a time (rebase). S0 lands whole — its marker split
+and the six headings included — before wave A branches.
 
 ## 7. Test plan (maps to the parent's §7, E3)
 
 Every class and method of the parent's E3 list is here under its exact name: `PrepBaseTests` (4 of the parent's + 4), `MakeVerbTests` (4 + 7),
 `StatusVerbTests` (4 + 8), `ObjectiveParsersTests` (5 + 3), `ObjectiveReportTests` (2 + 3), `ChecksVerbTests` (2 + 12). Added classes:
-`TargetEnvironmentTests` (1), `TargetArgvTests` (2), `BaseCopyTests` (3), `StepStatusTests` (1), `LockSnapshotTests` (1), `BoundedFileTests` (1),
+`PlatformRoadsTests` (2), `PortableFactsTests` (3), `BoundedFileTests` (3), `LockProbeTests` (2), `FactsReadTests` (1) — E3.S0, with rows in
+`RootTrustTests` (2), `KernelFactsTests` (1), `InitVerbTests` (1), `FileGateLockTests` (2), `GateLockHolderTests` (2), `ModelArmsProgramTests`
+(2), and one E1 test deleted (`RootFactsTests.On_a_platform_without_a_probed_reader_…`, the refusal it pinned is gone);
+`TargetEnvironmentTests` (1), `TargetArgvTests` (2), `BaseCopyTests` (3), `StepStatusTests` (1), `LockSnapshotTests` (1),
 `StageRecordTests` (1), `DeadlineStepsTests` (1); one test each in `ValidateVerbTests` and `ExperimentFileTests`; rows in `ArmPathsTests` and
 `RootRequirementsTests`. Fixtures: S1's five under `Fixtures/model-arms/objective/`. The red of every test is an assertion against a stub with
-the final signature; the break-its are listed per story (twenty, four each).
+the final signature; the break-its are listed per story (twenty-seven: seven for S0, four each for the rest). On this Linux host the
+non-Linux roads of S0 are reached through seams (the Mac's `PlatformRoad` handed to the gate, `init` and the lock) and by calling the
+portable readers directly; their composition on a real Mac or FreeBSD host is unobserved and said so (§8 item 25).
 
 **The parent's fixture named `objective-arm-C.json` (a copy of `research/local-model-coding/data/arms/C/objective.json`) is NOT used**: that file
 is the parts 1–5 shape. The round trip uses part 6's C1 report and the shell's own reader as the oracle (§8 item 3).
@@ -681,8 +926,8 @@ is the parts 1–5 shape. The round trip uses part 6's C1 report and the shell's
 What E3's suite does not prove, said in `research/module_tests.md`: a real target's build and suite (the scratch target's tools are shims;
 the pilot uses node scripts); `npm ci` against a registry; a real `dotnet format`; the vault key's delivery (M2's key check is the
 observation); a `checks` that a malicious arm's code cannot defeat (it runs that code by design, §8 item 17); the bounded road off Linux x86-64
-(the portable fallback cannot tell a FIFO, `GateStatusFile`'s residual); Windows (the shims are POSIX: the verb scenarios skip there with the
-reason printed).
+on a real host (the portable road cannot tell a FIFO — it answers one within its ceiling, observed here with a Linux FIFO through the
+portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there with the reason printed); macOS and FreeBSD composed (S0).
 
 ## 8. Deviations from the parent, decisions it left open, and contradictions found
 
@@ -754,6 +999,17 @@ reason printed).
     code, and each arm gets a byte copy (`BaseCopy`), so no arm shares a file with the operator's checkout.
 23. **The parent's E3 section** gains a `**Stories:**` line linking this document (`common.planning-docs`: the epic links its stories) —
     a reference, not a decision.
+24. **The owner's decision of 2026-10-30 — the parent's ledger entry 2.1 (kinds `approach, contract`), carried by E3.S0.** The owner
+    overturned E1.S10's decision 4 ("macOS and FreeBSD are fine [untested]; do not forbid their use"). What moved: `BoundedFile` (C16) and
+    the pure-list marker split from S4/S1 to S0, which is wave 0; S1, S2, S4 and S5 depend on it. S4 shrinks by the extraction (≈ 100
+    lines). Not a second change: the owner's one cause, recorded once in the parent; this document keeps no ledger.
+25. **The follow-up S0 leaves open — a kernel reader for Darwin and FreeBSD, self-verified at runtime.** A reader that could judge the
+    owner and the inode on a Mac needs `lstat`'s layout (Darwin: 144 bytes, `st_mode` u16 @4, `st_ino` u64 @8, `st_uid` u32 @16 — plain
+    `lstat` on arm64, `lstat$INODE64` on x86-64; FreeBSD ≥ 12: 224 bytes, `st_ino` u64 @8, `st_mode` u16 @24, `st_uid` u32 @28), and the
+    honest shape is one that PROVES its layout at start — `lstat` of a file it just made with a known mode and the `geteuid` it knows, the
+    two fields read back equal, else the portable road — so a wrong offset refuses itself instead of passing. **Checked: nothing** — no Mac
+    or FreeBSD host was reachable on 2026-10-30; the offsets above are from the headers, not a probe, and are written here so the next
+    reader sees the edges of the search. Owned by nobody until a host exists; S0's line names the gap on every run until then.
 
 ## 9. Growth
 
@@ -779,11 +1035,19 @@ No table, no database, no process that outlives its verb. Tests: every root, tar
 3. **E3.S2 — `TargetTools` and `prep-base`**: four new executables across the D17 (d)/D26 boundary (the lowering wrapper handed a real
    path, `npm` newly resolved), the environment that keeps secrets from model-written code, and a baseline that must never claim "no
    failures" for a suite that did not complete.
+4. **E3.S0 — the platform roads**: a portable road that lets a check PASS it did not make (the owner on a Mac, a swapped inode), a line
+   printed twice or not at all, a lock whose conflict code the probe got wrong (a real fault read as "busy", looped to the ceiling), a
+   ceiling that abandons a thread per read, and an honour check that refuses a healthy lock.
 
 ## 11. Definition of Done — epic E3
 
-- [ ] E3.S1–E3.S5 landed on `feat/model-arms-e3`, each with its tests watched red on an assertion first (the messages in its summary) and
-      its break-its observed.
+- [ ] E3.S0 landed first, then E3.S1–E3.S5, on `feat/model-arms-e3`, each with its tests watched red on an assertion first (the messages
+      in its summary) and its break-its observed.
+- [ ] **The platform roads (ledger 2.1):** `PlatformRoadsTests` green; the Mac's road through the gate and `init` prints ONE line naming the
+      owner as not verified and judges the mode; `LockProbeTests` measure 11 on Linux; the FIFO ceiling observed; no verb exits 3 on a POSIX
+      host for want of a kernel reader (`RootFactsTests.On_a_platform_without_a_probed_reader_…` deleted); the module doc's *The platform
+      roads* says what is unobserved (§8 item 25); the review names D26 (a)–(f) for `PortableFacts`, `BoundedFile`, `LockProbe` and
+      `FileGateLock`.
 - [ ] The parent's E3 tests of §7 exist under their exact names and are green; the added ones of §7 here too.
 - [ ] `ObjectiveReportTests.The_report_of_a_real_arm_round_trips_the_shells_shape` green against the shell's own reader, byte for byte.
 - [ ] `PrepBaseTests.Every_target_tool_is_launched_by_its_resolved_path_under_a_built_environment`, the same scenario of `MakeVerbTests`,
