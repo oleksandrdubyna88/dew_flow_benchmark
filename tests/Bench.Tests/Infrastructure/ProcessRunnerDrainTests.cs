@@ -10,8 +10,8 @@ namespace Bench.Tests.Infrastructure;
 /// descendant that ESCAPES the tree kill: <c>setsid</c> gives it a session of its own, and it holds the stdout and stderr pipes the readers read to the end of for as long
 /// as it lives. Posix only (the shell, <c>setsid</c>); every launch is by absolute path.
 /// <para>
-/// What this does NOT prove: Windows (a job object is how an escaped descendant would be held there); that the abandoned readers end once the descendant dies — they are
-/// left to, and their faults are observed by a continuation, which no test here can see being skipped.
+/// What this does NOT prove: Windows (a job object is how an escaped descendant would be held there); the case of an abandoned STDERR reader's fault (the continuation treats the two
+/// alike, and only stdout's is exercised).
 /// </para></summary>
 public sealed class ProcessRunnerDrainTests
 {
@@ -139,7 +139,7 @@ public sealed class ProcessRunnerDrainTests
     /// <summary>The abandoned readers' work happens after the launch has returned, so it is watched from the outside: the descendant writes a line at 14 s (the bound is 10 s, the
     /// cancellation comes at 1 s) and the abandoned stdout pump's sink throws on it. Once the descendant has gone and the finalizers have run, that fault must have been OBSERVED (by the
     /// continuation that also disposes the budget — an unobserved faulted task is raised by the finalizer) and the pump's catch must never have cancelled a DISPOSED budget (a first-chance
-    /// <see cref="ObjectDisposedException"/> out of <c>PumpAsync</c>). Both hooks are process-wide, so they are filtered to this test's own id and to the pump's own frame.</summary>
+    /// <see cref="ObjectDisposedException"/> thrown while <c>PumpAsync</c> is on the stack — the handler reads the CURRENT stack, since the exception's own trace holds only its throw site). Both hooks are process-wide, so they are filtered to this test's own id and to the pump's own frame.</summary>
     [Fact]
     public async Task An_abandoned_readers_fault_is_observed_and_the_budget_outlives_it()
     {
@@ -161,7 +161,7 @@ public sealed class ProcessRunnerDrainTests
 
         void FirstChance(object? _, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
         {
-            if (e.Exception is ObjectDisposedException && e.Exception.StackTrace?.Contains("PumpAsync", StringComparison.Ordinal) == true)
+            if (e.Exception is ObjectDisposedException && Environment.StackTrace.Contains("PumpAsync", StringComparison.Ordinal))
             {
                 lock (seen)
                 {

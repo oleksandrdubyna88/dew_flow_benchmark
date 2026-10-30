@@ -590,7 +590,8 @@ public static class Grammar
 /// <para>
 /// The fake accepts no more than claude does: <c>--resume &lt;id&gt;</c> for a session with no transcript is refused with claude's own sentence
 /// (<c>No conversation found with session ID: &lt;id&gt;</c>, exit 1), so a runner that resumes a session it never started goes red here as it would live. A launch the
-/// fake refuses for another reason (<c>refuseArgvContaining</c>) leaves nothing. An existing transcript is left as it is — a resumed session's file is appended to,
+/// fake refuses for another reason (<c>refuseArgvContaining</c>) leaves nothing. The other half, MEASURED on claude 2.1.310 on 2026-10-30: <c>--session-id &lt;id&gt;</c> for an id
+/// whose transcript already exists exits 1 with <c>Error: Session ID &lt;id&gt; is already in use.</c> and writes nothing. An existing transcript is left as it is — a resumed session's file is appended to,
 /// never truncated.
 /// </para></summary>
 public static class Transcripts
@@ -615,13 +616,16 @@ public static class Transcripts
         return Admit(request, Path.Combine(home, "projects", Slug(Directory.GetCurrentDirectory()), $"{request.Id:D}.jsonl"));
     }
 
-    private static string Admit(Request request, string file)
-    {
-        if (request.Resume && !File.Exists(file))
+    private static string Admit(Request request, string file) =>
+        (request.Resume, File.Exists(file)) switch
         {
-            return $"No conversation found with session ID: {request.Id:D}";
-        }
+            (true, false) => $"No conversation found with session ID: {request.Id:D}",
+            (false, true) => $"Error: Session ID {request.Id:D} is already in use.",
+            _ => Leave(file),
+        };
 
+    private static string Leave(string file)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.AppendAllText(file, string.Empty);
         return string.Empty;
