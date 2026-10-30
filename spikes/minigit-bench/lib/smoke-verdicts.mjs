@@ -32,7 +32,7 @@ export const SMOKE_ASSUMPTIONS = Object.freeze([
   ['B-A3', 'every O api_request carries effort, the child\'s (by agent_id) is high, and SubagentStart carries the same agent_id'],
   ['B-H1', 'hook events still carry no timestamp (E1 A-H1)'],
   ['B-K1', 'after exit no host process carries the cell marker, the janitor ended 0, state.json.phase is closed, no socket file is left'],
-  ['B-K2', '(only when a session was stopped by endCell) a record for the in-flight request arrived after the SIGTERM'],
+  ['B-K2', '(only when a session was stopped by endCell) an OTel record for the in-flight request arrived after the SIGTERM (the broker\'s settlement is a separate fact, not this claim)'],
   ['B-C1', 'contaminationHits and tokenHits over the smoke: none'],
 ]);
 
@@ -163,9 +163,11 @@ const ruleK2 = v => {
   const inFlight = inFlightAt(v.smoke.brokerLines, stopMs);
   const settledAfter = v.smoke.brokerLines.filter(l => l.event === 'settled' && Date.parse(l.t) > stopMs).length;
   const otelAfter = v.decoded.filter(x => x.line.receivedAt > stopMs && x.d.ok).reduce((n, x) => n + x.d.value.filter(r => r.name === 'api_request').length, 0);
-  const seen = `${settledAfter} broker settled line(s) and ${otelAfter} O api_request record(s) after the SIGTERM`;
+  // the grace claim is about the CLI: it kept running long enough after SIGTERM to export the record of the request in flight. The broker is on the host and reads the
+  // upstream to its end whatever the CLI does, so its settlement after the stop shows nothing about the CLI and is recorded apart, never in the verdict
+  const seen = `${otelAfter} O api_request record(s) after the SIGTERM; separate fact, not part of the verdict: ${settledAfter} broker settled line(s) after the stop`;
   if (inFlight === 0) return notExercised(`stopped by ${stopped}, but no request was in flight at the stop, so a record after it proves nothing (${seen})`);
-  return verdictOf(settledAfter + otelAfter > 0, `stopped by ${stopped}; ${inFlight} request(s) in flight at the stop; ${seen}`);
+  return verdictOf(otelAfter > 0, `stopped by ${stopped}; ${inFlight} request(s) in flight at the stop; ${seen}`);
 };
 
 export const SMOKE_RULES = Object.freeze({

@@ -29,6 +29,6 @@ One bare session through the agent box, the egress proxy and the credential brok
 | B-A3 | every O api_request carries effort, the child's (by agent_id) is high, and SubagentStart carries the same agent_id | holds | 5 api_request record(s), efforts high; 2 from a subagent (by agent_id); SubagentStart records 1; every child joined: true |
 | B-H1 | hook events still carry no timestamp (E1 A-H1) | holds | 16 hook event(s), 0 with a timestamp; 3 hook tool_use_id(s), 0 not in the stream |
 | B-K1 | after exit no host process carries the cell marker, the janitor ended 0, state.json.phase is closed, no socket file is left | holds | processes carrying the marker after exit 0; janitor ended 0; state.json.phase closed; socket files left 0 |
-| B-K2 | (only when a session was stopped by endCell) a record for the in-flight request arrived after the SIGTERM | not exercised | the smoke ended by itself: no endCell, so no SIGTERM to measure |
+| B-K2 | (only when a session was stopped by endCell) an OTel record for the in-flight request arrived after the SIGTERM (the broker's settlement is a separate fact, not this claim) | not exercised | the smoke ended by itself: no endCell, so no SIGTERM to measure |
 | B-C1 | contaminationHits and tokenHits over the smoke: none | holds | contaminationHits 0, tokenHits 0 |
 <!-- verdicts:end -->

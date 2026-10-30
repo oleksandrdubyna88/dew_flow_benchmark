@@ -342,7 +342,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   outcome of a session is the envelope's (`is_error`, `api_error_status`, `subtype`), never the exit code: a 403 exits 0. Watchdogs
   (pure `watchdogDecision`: wall, cost from the broker's SETTLED spend then O then the stream meter, stall) tick every 5 s; reservations are not
   spend (admission already stops new spend and D-17a allows the overshoot), so four requests in flight do not kill a healthy session. The
-  first stop writes `meta.stoppedAt`; B-K2 counts what arrived after it.
+  first stop writes `meta.stoppedAt`; B-K2's grace claim rests on the OTel `api_request` records that arrived after it, and on those only: the broker's settlement after the stop is recorded in the verdict's text as a separate fact (the broker is on the host and reads the upstream to its end whatever the CLI does, so a settlement after the SIGTERM shows nothing about the CLI's grace).
 - **The stop** (D-14, `endCell`). SIGTERM to every INNER process of the cell (a host pid whose `environ` holds `BENCH_CELL=<cell>`
   exactly, `argv[0]` not `bwrap`), a grace, then `killTree(bwrapPid)`, then the janitor ends any survivor by marker, never by name. A
   signal to the process GROUP is never step 1: under `--new-session` the group holds only the outer `bwrap`, which dies on it and takes
@@ -437,6 +437,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A `server_name` list with more than one entry, or any entry type other than `host_name`, is refused (the reviewer's probe: another type first, then the allowed name) | `tls-hello.test.mjs` |
 | A parent directory swapped for a link between the lstat walk and the open is caught by the descriptor's path, in the reader and in the session scan (before: the file outside the tree was read) | `agent-files.test.mjs`, `agent-files-sites.test.mjs` |
 | A token in a file over the whole-read limit is found at its exact offset once, on a window boundary too (before: the file was listed in `tooLarge`, the scan was clean and B-S3 could hold); a file nobody can scan is a high finding; the scan keeps one file at a time | `session-scan.test.mjs` |
+| B-K2 holds only on an O record after the stop; a broker settlement after it is reported apart and never makes the verdict | `smoke-k2.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
