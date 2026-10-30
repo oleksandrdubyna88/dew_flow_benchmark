@@ -182,7 +182,9 @@ public sealed class PrepBaseTests
         git.Select(call => call.Executable).Should().OnlyContain(path => path == printed["git"]);
         foreach (var call in git)
         {
-            call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).Should().Equal(["GIT_NO_LAZY_FETCH"], "git runs without any GIT_* of the parent's; the one it is given is the harness's own");
+            var gitNames = call.EnvironmentNames.Where(name => name.StartsWith("GIT_", StringComparison.Ordinal)).ToList();
+            gitNames.Should().Contain("GIT_NO_LAZY_FETCH", "git runs with the harness's own switch");
+            gitNames.Except(["GIT_NO_LAZY_FETCH"]).Where(name => !System.Text.RegularExpressions.Regex.IsMatch(name, @"^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$")).Should().BeEmpty("no GIT_* of the parent's reaches git; the rest are the harness's own driver neutralisation");
             call.EnvironmentNames.Should().NotContain(["BENCH_DB", "GITHUB_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "COAI_CREDS_KEY"]);
         }
     }

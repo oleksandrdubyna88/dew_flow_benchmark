@@ -15,9 +15,6 @@ internal sealed record PrepBaseRun(ExperimentInput Input, HostFacts Facts, ToolP
 
     public RootPaths Root => Input.Root;
 
-    /// <summary>The environment git runs under: the target's, with no <c>GIT_*</c> either way.</summary>
-    public IReadOnlyDictionary<string, string> GitEnvironment => Core.Experiment.GitEnvironment.Of(ToolEnvironment);
-
     public void Say(string text) => Input.Verb.Output.WriteLine($"model-arms prep-base: {text}");
 }
 
@@ -48,7 +45,7 @@ public static class PrepBaseVerb
         var run = new PrepBaseRun(input, facts, tools, seams, environment);
         var passage = await Task.FromResult(Unresolved(run))
             .Then(_ => Cleaned(run))
-            .ThenAsync(_ => BaseCheckout.MakeAsync(run.Target, input.Root.Root, input.Root.Base, tools.Git, run.GitEnvironment, input.Verb.Stopping))
+            .ThenAsync(_ => BaseCheckout.MakeAsync(run.Target, input.Root.Root, input.Root.Base, tools.Git, run.ToolEnvironment, input.Verb.Stopping))
             .ThenAsync(head => StagedAsync(run, head));
         return passage.Match(done => done, stop => stop.Print(input.Verb.Error));
     }

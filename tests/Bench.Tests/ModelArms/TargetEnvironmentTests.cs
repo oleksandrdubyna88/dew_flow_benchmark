@@ -8,7 +8,7 @@ namespace Bench.Tests.ModelArms;
 
 /// <summary>The environment the target's tools run under (plan D17 d, E3 §8 item 8): the parent's variables minus this repository's, every secret-named one, every <c>GIT_*</c> and the scout flags, nothing added.
 /// <para>
-/// What this does NOT prove: that a target's own test that needs a secret then fails or skips as it would in the arm's checks — it does, in both (§8 item 8), which is the point, and no test here holds a target; or a secret under an innocent NAME (the rule is by name).
+/// What this does NOT prove: that a target's own test that needs a secret then fails or skips as it would in the arm's checks — it does, in both (§8 item 8), which is the point, and no test here holds a target; that <c>HOME</c>'s files are unreadable — they are not, by design (E3 §8 item 17); or a secret under an innocent NAME, or one whose name the suffix list misses (the rule is by name).
 /// </para></summary>
 public sealed class TargetEnvironmentTests
 {
@@ -23,7 +23,7 @@ public sealed class TargetEnvironmentTests
             ("HOME", "/home/op"), ("PATH", "/usr/bin:/bin"), ("TMPDIR", "/tmp/op"), ("KEEP_ME", "yes"), ("DOTNET_ROOT", "/dotnet"), ("NUGET_PACKAGES", "/nuget"),
             ("BENCH_DB", "Host=db;Password=x"), ("bench_artifact_root", "/a"), ("ConnectionStrings__bench", "Host=db"), ("COAI_PROVIDERS", "all"),
             ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-value"), ("ANTHROPIC_API_KEY", "key-value"), ("GITHUB_TOKEN", "ghp_value"), ("DB_PASSWORD", "pw"), ("NPM_SECRET", "s"),
-            ("GIT_DIR", "/elsewhere/.git"), ("git_work_tree", "/elsewhere"), ("GIT_CONFIG_COUNT", "1"),
+            ("SSH_AUTH_SOCK", "/run/user/1000/keyring/ssh"), ("GIT_DIR", "/elsewhere/.git"), ("git_work_tree", "/elsewhere"), ("GIT_CONFIG_COUNT", "1"),
             (ProbeChildEnvironment.ModelGuardVariable, "1"), (ProbeChildEnvironment.BackgroundTasksVariable, "1"),
         ];
 
