@@ -454,6 +454,12 @@ smoke meta files and the two figures of the E2 plan. `seed-commit` writes only t
 the A/A and refuses a seed that does not hash to the committed value. Not written by code: `statement.md`, the operationalizations below the marker of `analysis-contract.md`, `checklist.json` (Opus text);
 `cache-snapshots.json` (from the real snapshots) and `seed.sha256` (the operator runs the command).
 
+**Snapshots made on this machine (2026-10-30).** Node: `cache-node-6b2e045ff624`, 40,072,459 bytes (TypeScript 7.0.2, `@typescript/typescript-linux-x64` 7.0.2, `@types/node` 26.6.6 resolved at snapshot time, `undici-types` 8.9.0), registered in `inputs/cache-snapshots.json`.
+The C# snapshot's NuGet cache is EMPTY (a .NET 10 console app restores from the SDK's own packs) and its dotnet first-run state is not reproducible (two runs of one recipe hashed differently), so a
+registered hash is of one run. **The C# snapshot is not registered**: the host's dotnet SDK was upgraded by apt to 10.0.114 at 06:19 on 2026-10-30, the recipe pins 10.0.113 (`expectStdout`) and the tool refuses; the
+pinned-toolchain preflight and `The_box_can_run_dotnet_and_reports_the_one_pinned_sdk` fail for the same reason. Either the 10.0.113 SDK is restored or the pin is changed by a dated amendment (an operator decision), then
+`snapshot --stack csharp --register` is run again.
+
 **Not built, or waiting.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). Waiting on the E2.S2 review fixes in the broker, the egress proxy and `sandbox.mjs`: the broker's `reason` on refused
 lines (row 7 needs it), seam 2 (`BUILD_SERVERS_OFF`: the bare box still runs with the build servers off until the three keys leave `agentEnv`'s fixed list) and seam 3 (bytes per tunnel in the egress log).
 
