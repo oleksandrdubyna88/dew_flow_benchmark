@@ -1,7 +1,11 @@
 # PLAN — E2 stories: the step of the model-arms module — classify, recover, run, gate
 
 > Status: **plan only, nothing implemented yet — rewritten to the re-review's split on 2026-10-30; the parent's epoch 2 is OPEN
-> (approved 2026-10-30 by the coai document gate, interim path, six findings taken — gate finding 0 and 4 reach C12 here), so E2 may start.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
+> (approved 2026-10-30 by the coai document gate, interim path, six findings taken — gate finding 0 and 4 reach C12 here), so E2 may start;
+> E2's own plan round (`mcp__coai__review_plan` on `feat/model-arms-e2` at `431e759`, 2026-10-30 — the round `common.plan-change-control`
+> § *Reviewing the revised plan* orders for an epic not yet started) said PROCEED, five findings taken (§8 items 31–36: E2.S0 strictly
+> first; the deadline as a UTC offset; an interruption scenario per scheme; the MCP key guarantee narrowed to a request with M2's check;
+> an output field bound once) — the re-review's baseline for E2, never ledger entries.** Epic E2 of [PLAN_model_arms.md](PLAN_model_arms.md) (§3 D6–D10, D16, D21, D25, D27; §4.2, §4.4,
 > §4.5, §4.10; §7's E2 tests). Written at `a208d75` on `feat/model-arms`, where E1.S1–E1.S7 had landed; E1 is complete at `24e8e8f`.
 >
 > Scope: the step's state machine in `tools/model-arms/ModelArms.Core/Steps/` and `…/Launch/` (the result envelope, the classifier,
@@ -285,6 +289,7 @@ public static class StepBudget
     public static int RemainingSeconds(int minutes, IReadOnlyList<TimingLine> timing, string step, int floorSeconds);
     public static TimeSpan Wall(int remainingSeconds, int killGraceSeconds);
     public static string Deadline(DateTimeOffset startUtc, int remainingSeconds, TimeZoneInfo local);
+    // "HH:mm UTC (HH:mm ±hh:mm)" of start + remaining — the local clock and the zone's UTC OFFSET at that instant, never %Z or the zone's id (§8 item 32)
 }
 public static class ResumeNotice { public static string For(string baseSha, string deadline); }
 public static class SessionTranscripts
@@ -410,9 +415,10 @@ the scenarios (Given/When/Then and the expected red of each), the red stubs and 
 the acceptance criteria below are the re-review's; they are the baseline the spec makes exact. Area: the step contract (parent
 `## Epics`, E2; parent D25, D27, D4, D15). The parent's ledger reads `Cornerstones: 3 of 3 — E1.S5, E2.S0, E2.S1`.
 
-- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Depends on:** nothing in E2 (E1 landed whole). **Parallel with:** E2.S1,
-  E2.S3. **Before:** E2.S2 (`StepOutputs` over the bindings), E2.S4, E2.S5, E2.S7, E2.S8 — every story that reads a step's identity,
-  brief or outputs.
+- **Coder:** sonnet · **Spec:** Fable · **Review:** Opus. **Depends on:** nothing in E2 (E1 landed whole). **Parallel with:** nothing —
+  **it lands first, strictly before every other E2 story** (E2's plan round, 2026-10-30, §8 item 31): it rewrites `StepSpec`, `SchemeEntry`,
+  `Experiment`, the step's identity and the bindings (C12) and the launch options, which C6 and C8 read, so a story built beside it would
+  be built against E1's contracts and rebased onto different files. **Before:** E2.S1–E2.S8, all of them (§6, wave 0).
 - **Owns:** parent D25 (the step contract), D27's file half (`runs`), D4's v2, D15's eleven templates, C12 here; the parent's §4.2,
   §4.4 and §4.10 as revised; the correction of E1.S3, E1.S4, E1.S6, E1.S7, E1.S10 and E1.S11's example and template — **forward, on
   E1's landed code, never a rewrite of E1's history** (`common.plan-change-control` step 6). **Size:** ≈ 1100 changed lines (≈ 350
@@ -425,7 +431,8 @@ the acceptance criteria below are the re-review's; they are the baseline the spe
   retired — `CodeNotes`, `HReviewNotes`, `FixNotes`, `GateNotes`, `SplitNotes`, `ReviewJson`, `GateJson`; `TaskNotes(id)` stays),
   `…/Experiment/HostChecks.cs` (the rehearsal per scheme position; the `tasks` block's kinds; `diffFrom`'s placement),
   `…/Briefs/BriefTemplates.cs` (`NameOf(stem)` — a stem rule, no kind table), `…/Briefs/BriefFields.cs` (`For(scheme, position, paths,
-  facts)`), `…/Briefs/BriefRehearsal.cs`, `…/Launch/StepLaunch.cs` (`Options(StepSpec, …)`, `SubagentTools`, `Delegation`),
+  facts)`), `…/Briefs/BriefRehearsal.cs` (the rehearsal per scheme position; its `Deadline` stand-in takes C6's shape,
+  `"00:00 UTC (00:00 +00:00)"`, §8 item 32), `…/Launch/StepLaunch.cs` (`Options(StepSpec, …)`, `SubagentTools`, `Delegation`),
   `tools/model-arms/ModelArms/Adapters/BriefTemplateFiles.cs` (`Read(stem)`), `tools/model-arms/briefs/hA-trace.template.md`,
   `hB-tests.template.md`, `hfix.template.md` (byte for byte, parent §2's sums), `tools/model-arms/examples/part6.experiment.json`
   (v2, every step of §4.2, the CHH scheme, the two runs), the `init` template by derivation (`ExperimentTemplate` — a map value is
@@ -450,6 +457,7 @@ public sealed record OutputBinding(string Field, string RelativePath);   // "HA_
 public sealed record StepSpec(StepId Id, StepKind Kind, string Model, int Minutes, StepMode Mode, bool Subagents, string Brief,
     IReadOnlyList<OutputBinding> Outputs, string Notes, string Verdict, string Status, bool Snapshot, string DiffFrom)
 {   // Notes / Verdict / Status name one of Outputs' fields or are ""; DiffFrom is a StepId's value or ""; Brief is a template stem
+    // a field name is bound ONCE within a step and by at most ONE step of the whole map (§8 item 35)
     public Outcome<string> OutputPath(string field);                // the bound relative path, or a failure naming the field and the step
 }
 public abstract record SchemeEntry { public sealed record Step(string Name, StepId Id) : SchemeEntry; public sealed record Tasks : SchemeEntry; }
@@ -491,7 +499,13 @@ no `..`).
    any other kind, a `verdict`/`status` naming a field not in the step's own `outputs`, a `notes` naming a field neither the step nor an
    earlier step of the scheme binds (gate finding 4: an earlier step's output may be named — the split fix appends to `SPLIT_NOTES`), an output path that is absolute, holds
    `..` or is outside `notes/` and `work/`, a `diffFrom` naming an id the scheme does not place at or before this step or that has no
-   `snapshot` — each a problem sentence collected with the rest (E1 §8 item 6), never the first alone.
+   `snapshot` — each a problem sentence collected with the rest (E1 §8 item 6), never the first alone. **An output field is bound once**
+   (§8 item 35): a field name bound by two steps of the `steps` map is refused naming both steps and the field (`steps.fix.outputs —
+   CODE_NOTES is already bound by step code`); a field bound twice inside one step's `outputs` is a duplicate JSON key, which `StrictJson`
+   already refuses at the parse (`StrictJson.cs:58`, `AllowDuplicateProperties = false`) with the parser's sentence naming the member and
+   its line — the scenario pins that sentence, since the walker never sees the duplicate; the `tasks` block's `outputs` may repeat a
+   step's field only where no scheme places both (the example's `CODE_NOTES`, gate finding 0), and a scheme placing both is refused
+   naming the scheme, the step and the field. The example stays accepted.
 2. `runs` is a map; every round names arms of defined schemes; no arm in two runs; `closedArms` name arms of some run; `rounds` at the
    top level is refused as *moved to runs.<name>.rounds*; `schema` v1 is refused naming the three moves.
 3. `BriefFields.For` at CHH's `4-hfix` yields `HA_JSON`, `HB_JSON`, `CODE_NOTES` and no `REVIEW`; at C's `2-review` yields
@@ -509,7 +523,8 @@ no `..`).
    new deciders under `// E2.S0`; `The_module_launches_nothing_by_a_bare_name` green; nothing under `src/` changes.
 
 **Break-its** (the spec names each red): the rehearsal skipped for one scheme → criterion 3's third scenario green on the stub, red
-on the plant; `Delegation` removed → criterion 5; `diffFrom` placement unchecked → criterion 1's last clause.
+on the plant; `Delegation` removed → criterion 5; `diffFrom` placement unchecked → criterion 1's `diffFrom` clause; the cross-step
+uniqueness check removed → criterion 1's bound-once scenario (two steps binding `CODE_NOTES` read as the later one winning, silently).
 
 **Commands.** `--filter-class "*StepContractTests"`, `"*BriefFieldsTests"`, `"*ExperimentFileTests"`, `"*ArmPathsTests"`,
 `"*StepLaunchTests"`, `"*BriefFillerTests"`, `"*ValidateVerbTests"`, `"*ExampleExperimentTests"`, `"*InitVerbTests"`,
@@ -530,7 +545,9 @@ happened: nine steps marked done in seconds because a limit was read by its word
 acceptance criteria and the verified facts are the judge's; **the scenarios (Given/When/Then and the expected red of each), the red
 stubs and the brief are Fable's**, written into this section before the coder starts.
 
-- **Coder:** sonnet · **Spec:** fable · **Review:** Opus. **Depends on:** E1.S2 (the projects; landed). **Parallel with:** E2.S3.
+- **Coder:** sonnet · **Spec:** fable · **Review:** Opus. **Depends on:** E1.S2 (the projects; landed); E2.S0 landed (§8 item 31 — nothing
+  of C5 reads the step contract, but the eight markers of `PureDeciders` and the module doc's headings are written over S0's lines, and
+  the parent's build order puts the contract first). **Parallel with:** E2.S3.
 - **Owns:** D6 (the classifier and its words), the fixtures of the parent's §7, the E2 markers and headings of §3. **Size:** ≈ 650
   changed lines (≈ 200 code, 400 tests, the fixtures) — the spec's count; the judge's estimate was 500.
 - **Files.** `tools/model-arms/ModelArms.Core/Launch/ClaudeResultEnvelope.cs` · `tools/model-arms/ModelArms.Core/Steps/StepEnd.cs` (`StepEnd`,
@@ -884,7 +901,10 @@ outputs table).
   takes the shell's marker (no `end` → `State = ""`) and refuses a non-object, naming it.
 - `StepBudget.UsedSeconds` — Σ of `End.WallSeconds.Value` over `End` lines of `step` whose `Limited` is false and whose wall was captured;
   `RemainingSeconds` = `max(minutes·60 − used, floorSeconds)` (`run-arm.sh:84`); `Wall(r, g)` = `TimeSpan.FromSeconds(r + g)` (D8);
-  `Deadline(start, r, local)` = `"HH:mm UTC (HH:mm <local.Id>)"` of `start + r` (§8 item 6: the zone's id, not its abbreviation).
+  `Deadline(start, r, local)` = `"HH:mm UTC (HH:mm ±hh:mm)"` of `start + r` — the UTC clock, then the local clock with
+  `local.GetUtcOffset(start + r)` spelled `+01:00` / `-04:00` / `+00:00` (§8 item 32: the shell's `%Z` printed `CET`; .NET has no portable
+  abbreviation and `TimeZoneInfo.Local.Id` differs by host — `Europe/Paris` on Linux, `Romance Standard Time` on Windows — so the offset
+  is the one spelling every host writes the same and every reader can add; the divergence from the shell is deliberate).
 - `ResumeNotice.For(base, deadline)` — the shell's text (`run-arm.sh:93-97`) with `$BASE` and `$deadline` substituted, its line breaks
   kept, ending with a newline.
 - `SessionTranscripts.ClaudeHome(env)` — `CLAUDE_CONFIG_DIR` when non-empty (claude's own relocation of `~/.claude`; the child receives
@@ -950,8 +970,8 @@ therefore resumable, not done — §8 item 3.)
 | `TimingLineTests.Every_line_kind_round_trips_in_the_shells_key_order` (added) | one value of each kind (an `End` with `Recovered`, one without, one with an `Unavailable` exit) → `Write` produces exactly the expected literal (keys in the order above, `null` for the uncaptured) and `Read(Write(x))` equals `x` | `Expected string to be "{\"kind\":\"start\",…", but "" …` |
 | `TimingLineTests.A_shell_end_line_reads_without_an_end_state` (added) | the two recorded 2026-10-28 `2-review` lines (start and end, quoted in the test; they carry `limited` and no `end`) → `End.Limited == false` (as recorded), `State == ""`, `WallSeconds.Value == 888`, `Exit.Value == 1` | `Expected … to be of type End, but found Other.` |
 | `TimingLineTests.A_done_marker_round_trips_and_the_shells_marker_reads` (added) | `Write` of `(2, Number(0), "/e/out/2-review.a2.jsonl", "finished", false)` is `{"attempts":2,"exit":0,"stream":"/e/out/2-review.a2.jsonl","end":"finished"}`; the recorded shell marker reads with `State == ""`; `"[]"` is refused | `Expected string to be "{\"attempts\":2,…", but "".` |
-| `TimingLineTests.The_deadline_is_spelled_in_utc_and_in_the_local_zone` (added) | `Deadline(2026-10-28T21:32:38Z, 2400, Europe/Paris)` = `"22:12 UTC (23:12 Europe/Paris)"` — the recorded line's minutes (`"22:12 UTC (23:12 CET)"`), the zone by id | `Expected "" to be "22:12 UTC (23:12 Europe/Paris)".` |
-| `TimingLineTests.The_resume_notice_is_the_shells_text_with_the_base_and_the_deadline` (added) | `For("6786582e…", "09:10 UTC (10:10 Europe/Paris)")` equals the shell's four lines with both substituted (the literal in the test) | `Expected "" to be "This session was interrupted …".` |
+| `TimingLineTests.The_deadline_is_spelled_in_utc_and_as_the_local_offset` (added; renamed and widened by §8 item 32) | `[Theory]`: `Deadline(2026-10-28T21:32:38Z, 2400, Europe/Paris)` = `"22:12 UTC (23:12 +01:00)"` — the recorded line's minutes (`"22:12 UTC (23:12 CET)"`), the offset where the shell wrote `%Z`; `Deadline(2026-07-01T10:00:00Z, 600, Europe/Paris)` = `"10:10 UTC (12:10 +02:00)"` (summer — what `CET` could not say); `Deadline(2026-10-28T21:32:38Z, 2400, America/New_York)` = `"22:12 UTC (18:12 -04:00)"`; `Deadline(2026-10-28T21:32:38Z, 2400, TimeZoneInfo.Utc)` = `"22:12 UTC (22:12 +00:00)"`; `Deadline(2026-10-28T23:50:00Z, 1200, Europe/Paris)` = `"00:10 UTC (01:10 +01:00)"` (the clock, never the date — the shell's shape); the zones by `TimeZoneInfo.FindSystemTimeZoneById` with the IANA id, which .NET resolves on every host | `Expected "" to be "22:12 UTC (23:12 +01:00)".` |
+| `TimingLineTests.The_resume_notice_is_the_shells_text_with_the_base_and_the_deadline` (added) | `For("6786582e…", "09:10 UTC (10:10 +01:00)")` equals the shell's four lines with both substituted (the literal in the test) | `Expected "" to be "This session was interrupted …".` |
 | `TimingLineTests.The_transcript_path_is_the_working_directory_slug_under_the_claude_home` (added) | `PathOf("/h/.claude", "/home/op/git/coai_exp/r/abc/arm", g)` = `/h/.claude/projects/-home-op-git-coai-exp-r-abc-arm/<g:D>.jsonl`; `ClaudeHome({HOME:/h})` = `/h/.claude`; `ClaudeHome({HOME:/h, CLAUDE_CONFIG_DIR:/c})` = `/c`; neither → `""` | `Expected "" to be "/h/.claude/projects/…".` |
 
 **Red stub.** `Decide` → `new StepEntry.Fresh(1, 0)`; `Reconcile` → `Complete`; `Of` → `[]`; `Read` → `[]`; `Write`/`DoneMarkers.Write`/`ContinueMarkers.Write` →
@@ -967,8 +987,9 @@ is a byte copy (`cmp` in the summary); the module doc's tables equal the two abo
 
 ### E2.S3 — The launcher's follow-ups: `stdoutByCall` in the fake, both readers observed in `ProcessRunner`
 
-- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** nothing in E2 (E1.S5 landed). **Parallel with:** E2.S1, E2.S2.
-- **Owns:** the parent's E2.S3 (`stdoutByCall`, D9's test means), E1 §8 item 15 (R1 and R2). **Size:** ≈ 230 lines.
+- **Coder:** sonnet · **Spec:** Opus · **Review:** Opus. **Depends on:** E2.S0 landed (§8 item 31 — every E2 story follows it; E1.S5 landed).
+  **Parallel with:** E2.S1.
+- **Owns:** the parent's E2.S3 (`stdoutByCall` and `transcripts`, D9's test means), E1 §8 item 15 (R1 and R2). **Size:** ≈ 280 lines.
 
 **Files.** `tests/FakeCli/Program.cs`; `src/Bench.Infrastructure/Process/ProcessRunner.cs`;
 `tests/Bench.Tests/Infrastructure/ProcessRunnerStderrSinkTests.cs` (two tests appended, one doc sentence); `tests/Bench.Tests/ModelArms/FakeCliByCallTests.cs`
@@ -989,7 +1010,15 @@ public string StdoutForCall(int call) =>
 ```
 
 In `Answer()` (`:218`), after the assessor branch and before `StdoutFor(prompt)`: `if (script.StdoutForCall(call) is { Length: > 0 }
-byCall) { return Replay(byCall); }`. Nothing else in the fake changes; every existing script omits the field.
+byCall) { return Replay(byCall); }`. Every existing script omits the field.
+
+**The fake, additive (2) — the transcript claude would leave** (§8 item 36). A script flag `transcripts: true` (absent = false; every
+existing script unchanged): when set and the argv carries `--session-id <id>` or `--resume <id>`, the fake creates — before it answers —
+the empty file claude leaves for a session, `<CLAUDE_CONFIG_DIR, else $HOME/.claude>/projects/<slug>/<id>.jsonl`, `slug` being its cwd
+with every character outside `[A-Za-z0-9]` replaced by `-` (the rule of C6's `SessionTranscripts.PathOf`, written a second time on purpose:
+the fake references nothing of the module), folders created as needed. Why: through `run-arm` the runner's `ISessionTranscripts` is the
+real `ClaudeSessionTranscripts`, and a fake that leaves no transcript makes every re-entry `Fresh` with a new id — the `--resume`
+assertions of E2.S8 could never go green. Nothing else in the fake changes.
 
 **The launcher, exact (E1 §8 item 15, R1).** The core `AwaitAsync` (`:261-300`) keeps its wait, its wall, its kill and its two result
 shapes; what changes is that **no path out of it leaves a reader running**:
@@ -1015,17 +1044,18 @@ wrong."*
 | Test | Given / When / Then | Red (an assertion message) |
 |---|---|---|
 | `FakeCliByCallTests.Each_call_replays_its_own_file_and_an_unlisted_call_falls_back` | **Given** a `FakeCli` whose script is `{ stdoutByCall: { "1": a, "3": c }, stdoutFile: f }` (three files with distinct one-line contents); **when** the fake is launched four times through `ProcessRunner.RunAsync(FakeCli.Executable, ["-p","--model",fake.Model], cwd, 1 min, "prompt", ct)`; **then** the four stdouts are `a`, `f`, `c`, `f` and `fake.Calls()` numbers them 1–4 | the field is unread: `Expected stdouts to be equal to {"a", "f", "c", "f"}, but {"f", "f", "f", "f"} differs at index 0.` |
+| `FakeCliByCallTests.A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked` (added, §8 item 36) | **Given** a `FakeCli` with `{ transcripts: true, stdoutFile: f }` launched with `["-p","--model",fake.Model,"--session-id",<g>]` from cwd `<temp>/r/abc/arm` with `HOME = <temp>/home` in a replaced environment; **then** `<temp>/home/.claude/projects/<slug of the cwd>/<g:D>.jsonl` exists and is empty, and `SessionTranscripts.PathOf("<temp>/home/.claude", cwd, g)` names that file; the same with `--resume <g>`; with `CLAUDE_CONFIG_DIR = <temp>/cfg` the file is under `<temp>/cfg/projects/…`; **and** without the flag no `projects` folder appears | `Expected File.Exists("…/projects/-…-r-abc-arm/<g>.jsonl") to be true, but found False.` |
 | `ProcessRunnerStderrSinkTests.A_launch_never_returns_while_a_sink_is_still_running` (added) | **Given** `Replay(fake, 20, { lineDelayMs: 50, holdAfterLine: 10 })` (stderr line i is written before stdout line i); a stdout sink that throws `InvalidOperationException("stdout refused <guid>")` on its first line; a stderr sink that, on its FIRST call, sets `entered` and blocks on `release` (at most 20 s), then returns; **when** the launch is started as a task, the test waits for `entered` (≤ 10 s), waits 1 s more, records `releasedAt = Stopwatch` and sets `release`, then awaits the launch; **then** it throws the stdout sink's exception and `threwAt >= releasedAt` | today the core rethrows from `await stdout` while the stderr sink is blocked: `Expected threwAt to be greater than or equal to <releasedAt> because a launch never returns while a sink it started is still running, but found <earlier>.` |
 | `ProcessRunnerStderrSinkTests.When_both_sinks_throw_the_stdout_readers_fault_surfaces_and_the_other_is_observed` (added) | **Given** the same replay; both sinks throw on their first line (`"stdout refused <guid>"`, `"stderr refused <guid>"`); `TaskScheduler.UnobservedTaskException` recorded (filtered by `<guid>`, or an `ObjectDisposedException` whose stack holds `PumpAsync`); **when** the launch is awaited, then `GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();`; **then** the exception is the stdout's, and nothing was recorded | `Expected unobserved to be empty because a reader's fault is observed before the launch returns, but found {System.InvalidOperationException: stderr refused …}` — finalizer-driven, so if 5 runs in a row do not show it red, the red is a plant (await only stdout in `BothAsync`) and the summary says which |
 
 **Commands.** `--filter-class "*FakeCliByCallTests"`, `"*ProcessRunnerStderrSinkTests"`, `"*ProcessRunner*"`, `"*ScoutLaunchProcessTests"`,
 `"*CliAgentRuntimeTests"`; `--filter-namespace "Bench.Tests.Probes"`, `"Bench.Tests.Scouts"`; the whole suite.
 
-**Done when.** The three green, each seen red; `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests` and the
+**Done when.** The four green, each seen red; `ProcessRunnerTests`, `ProcessRunnerCancellationTests`, `ScoutLaunchProcessTests` and the
 probes' and scouts' suites unedited and green (`git diff --stat` on them empty).
 
-**Out of bounds.** Any other script field of the fake; the order of the fake's replay fallbacks after `stdoutByCall`; `PumpAsync`'s
-behaviour; the `StreamAsync` byte reader beyond what the shared core does for it.
+**Out of bounds.** Any script field of the fake beyond `stdoutByCall` and `transcripts`; the order of the fake's replay fallbacks after
+`stdoutByCall`; `PumpAsync`'s behaviour; the `StreamAsync` byte reader beyond what the shared core does for it.
 
 ### E2.S4 — `StepRunner`, `ArmFiles`, `ArmGit`, `ClaudeSessionTranscripts`: one step, end to end
 
@@ -1160,7 +1190,7 @@ folder, `Guard = new BriefLeakGuard(map {C1: tok…}, "C1", ["C","CR","SRS"], ro
 | `Stderr_is_on_disk_before_the_process_ends` | `stdoutFile: stream-no-result.jsonl`, `stderrBeforeLines: ["warn 1","warn 2"]`, `holdAfterLine: 2`, timing pre-written with an unlimited end of 55 s (budget 5 s, wall 6 s); the run is started as a task; the test polls `1-code.a1.err` until it holds `warn 2` WHILE `held-<pid>` exists in `Fake.Home` and the pid is alive; then awaits the run | `Expected the .err file to hold "warn 2" while the CLI runs, but it was empty until the process ended.` |
 | `Still_limited_after_every_wait_exits_3` | `stdoutFile: result-429-usage-limit-reached.jsonl`, `tries: 2` → `Stopped(3)`; 3 calls; `Waits` = `[900 s, 900 s]`; last line `stopped` exit 3 `still limited after 2 waits` | `Expected outcome to be of type Stopped, but found Done.` |
 | `Ctrl_c_during_the_wait_exits_5_resumable` | `stdoutFile: …429…`; `Waits` cancels a `CancellationTokenSource` linked as `stopping` and throws `OperationCanceledException` → `Stopped(5)`; no `.done`; `.session` intact; last line `stopped` exit 5 `stopped by the operator`; a second runner over the same bench with `stdoutFile: result-success.jsonl` resumes `--resume <same id>` and ends `Done(Finished)` | `Expected outcome to be of type Stopped …` |
-| `The_resume_notice_names_the_new_deadline_and_the_base_commit` | the limited-then-success set-up with the bench's clock (`2026-10-28T21:32:38Z`, Europe/Paris, not advanced) → call 2's prompt equals `ResumeNotice.For(<example base>, "21:33 UTC (22:33 Europe/Paris)")` (budget 60 s) | `Expected prompt to be "This session was interrupted …", but "" …` |
+| `The_resume_notice_names_the_new_deadline_and_the_base_commit` | the limited-then-success set-up with the bench's clock (`2026-10-28T21:32:38Z`, Europe/Paris, not advanced) → call 2's prompt equals `ResumeNotice.For(<example base>, "21:33 UTC (22:33 +01:00)")` (budget 60 s; the offset, §8 item 32) | `Expected prompt to be "This session was interrupted …", but "" …` |
 | `The_session_file_is_written_before_the_launch` | a `StepProbe` that, at `Launched`, records whether `.session` exists and equals the `--session-id` the fake will see → recorded true. Break-it: move `ReplaceSession` after the launch → red | `Expected sessionBeforeLaunch to be True, but found False.` |
 | `A_runner_killed_between_the_result_line_and_review_json_writes_the_review_on_the_next_entry` | step `2-review` (kind Review), `stdoutFile: result-success.jsonl`; runner 1 with a probe that throws `IOException("killed")` at `Classified` → the exception propagates; `review.json` and `.done` absent; runner 2 (no probe), same bench → `Done(Finished, false, Recovered: true)`, NO new call (`Calls()` still 1), `review.json` equals the bytes a clean run writes in a second bench (`{"verdict":"ready","findings":[]}`), `.done` has `"recovered":true` | `Expected File.Exists(".../notes/review.json") to be true …` |
 | `Every_launch_carries_the_arms_environment_and_no_scout_flag` | the finished set-up → the call's `EnvironmentNames` contain `TMPDIR`, `HOME`, `PATH`, `FAKE_CLI_HOME`, `PWD`; contain none of `BENCH_DB`, `SUBAGENT_MODEL_GUARD`, `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`, `OLDPWD`; `SubagentModelGuard == ""` | `Expected names to contain "TMPDIR".` |
@@ -1267,7 +1297,12 @@ in through their own CLI homes (codex, agy, vibe in part 6) need nothing. **The 
 written into `r/<token>/mcp-coai.json`, which `make` (E4.S4) writes with mode `0600` — the same exposure as the copied settings file the
 panel already writes the key into (`after6.sh:32`), and like it, a file the experiment's published record must never carry (E5.S5
 excludes `mcp-coai.json` and `coai-data/`). Rejected: forwarding every `*_KEY` (a provider list nobody wrote down), and `${VAR}` expansion
-in the config (claude expands from its own environment, which D19 stripped).
+in the config (claude expands from its own environment, which D19 stripped). **What this guarantees, exactly (E2's plan round, finding 4;
+§8 item 34): the config REQUESTS the delivery.** `McpConfigTests` prove that the written file carries the key and that the arm's own
+environment does not; whether claude hands a stdio server the `env` member of its config is claude's behaviour, which no test here
+starts — the proof is **M2's key check** (the parent's §6 step 3, E3.S5): the real `claude` over a generated `mcp-coai.json`,
+`providers` asked, with the key absent from the copied settings file so the `env` member is the only road, and the fallback named if
+the key does not arrive (the copied settings file — the shell's own road, `after6.sh:32`).
 
 **`ModelArmsBinary`** (test helper) — `Dll` = `<Repository.Root>/tools/model-arms/ModelArms/bin/<configuration>/<framework>/model-arms.dll`,
 the configuration and framework read off `AppContext.BaseDirectory` as `FakeCli.Executable` does (`FakeCli.cs:31-43`); launched as
@@ -1283,7 +1318,7 @@ the configuration and framework read off `AppContext.BaseDirectory` as `FakeCli.
 | `FileGateLockTests.Gate_lock_hold_needs_its_seconds` (added) | `ArmsProgram.RunAsync(["gate-lock","hold","--experiment",root])` → 4, error contains `--seconds` | `Expected 0 to be 4.` |
 | `GateStatusTests.A_blocked_status_and_its_reason_are_read` (added) | `{"status":"blocked","why":"every provider rate-limited"}` → `("blocked", "every provider rate-limited")`, `IsBlocked`; `WaitAgain(r, 7, 8)` true, `WaitAgain(r, 8, 8)` false; `{"status":"proceed"}` → not blocked, `WaitAgain` false | stub `("missing","")`: `Expected "missing" to be "blocked".` |
 | `GateStatusTests.A_missing_unreadable_or_statusless_file_reads_as_missing` (added) | `Failure("no file")`, `"not json"`, `"[]"`, `{"status":3}`, `{}` → each `("missing", "")` | passes on the stub — the plant: read `status` with `GetString()` unguarded → `InvalidOperationException` on `{"status":3}` |
-| `McpConfigTests.The_coai_server_receives_the_vault_key_through_mcp_coai_json_and_the_arm_never_sees_it` (added — E1 §8 item 16) | harness env `{COAI_CREDS_KEY: k, HOME: /h}`; `Coai(new CoaiFacts("/c/coai-mcp", "/v/settings.json", "wsl-ubuntu"), ArmPaths("/e","tok"), env)` parsed → `mcpServers.coai.env` = `{COAI_DATA_DIR: /e/r/tok/coai-data, COAI_DATA_SIDE: wsl-ubuntu, COAI_CREDS_KEY: k}`; **and** `ArmChildEnvironment.Of(env, paths)` has no `COAI_CREDS_KEY`; without the key in `env` → exactly the two names | stub `None()` text: `Expected node["mcpServers"]["coai"] not to be <null>.` |
+| `McpConfigTests.Mcp_coai_json_requests_the_vault_key_for_the_coai_server_and_the_arm_never_sees_it` (added — E1 §8 item 16; renamed by §8 item 34: the file is a request, M2's key check is the proof) | harness env `{COAI_CREDS_KEY: k, HOME: /h}`; `Coai(new CoaiFacts("/c/coai-mcp", "/v/settings.json", "wsl-ubuntu"), ArmPaths("/e","tok"), env)` parsed → `mcpServers.coai.env` = `{COAI_DATA_DIR: /e/r/tok/coai-data, COAI_DATA_SIDE: wsl-ubuntu, COAI_CREDS_KEY: k}`; **and** `ArmChildEnvironment.Of(env, paths)` has no `COAI_CREDS_KEY`; without the key in `env` → exactly the two names | stub `None()` text: `Expected node["mcpServers"]["coai"] not to be <null>.` |
 | `McpConfigTests.Mcp_coai_json_is_the_shells_shape` (added) | the parsed object equals the shell's (`type: stdio`, `command`, `args: []`, the env) and the text is indented one space | as above |
 | `McpConfigTests.Mcp_none_is_an_empty_server_list` (added) | `None()` = `{"mcpServers":{}}` | `Expected "" to be "{\"mcpServers\":{}}".` |
 
@@ -1368,8 +1403,10 @@ and `why`.
   (the fake's call log shows `hA-trace` and `hB-tests` briefs, `notes/hA.json` and `notes/hB.json` written from each review's last result,
   `4-hfix`'s prompt carrying both paths, `out/4-hfix.diff` from `out/2-hA.before`); `The_opus_review_and_the_haiku_reviews_are_launched_without_the_agent_tool_fresh_and_resumed`;
   `A_sequential_arm_leaves_the_files_the_example_binds_and_the_consumers_read_them` — M1: `research/local-model-coding/harness/metrics.mjs`
-  run as `node` + script (by its resolved path, D17 d) over the fake arm's root, exit 0 and its output naming the arm's steps (the
-  sequential half of the parent's D28; E6 runs every reader over every scheme). The steps below read `spec = Experiment.Steps[id]` and
+  run as `node` + script (by its resolved path, D17 d) over the fake arm's root through `PinnedConsumer` (below), exit 0 and its output
+  naming the arm's steps (the sequential half of the parent's D28; E6 runs every reader over every scheme); and (E2's plan round, §8
+  item 33) `An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme` — M1's
+  "resumed once after an interruption", a theory over C, CR and CHH, in the table. The steps below read `spec = Experiment.Steps[id]` and
   `BriefTemplateFiles.Read(spec.Brief)` where they say `kind`.
 
 **Files.** `tools/model-arms/ModelArms/Verbs/RunArm.cs` (`RunArmVerb`); `tools/model-arms/ModelArms/Program.cs` (the `run-arm` arm only:
@@ -1409,8 +1446,23 @@ source), `chain/made-<arm>`, a `baseline.json` (`BaselineFile.Write` of a comple
 table), creates `r/<token>/arm` as a git repository with one commit, writes `mcp-none.json` / `mcp-coai.json` through `McpConfig`; rewrites
 every `steps.*.model` to `fake.Model` and `minutes` to 1; puts `<temp>/bin/claude` as a symbolic link to `FakeCli.Executable` (the
 apphost resolves its own real path), `git` as a link to the process's `git`, `Environment["PATH"] = <temp>/bin` and
-`Environment["FAKE_CLI_HOME"] = fake.Home`. Linux only (`Assert.SkipWhen(OperatingSystem.IsWindows(), "the run-arm scenarios link
+`Environment["FAKE_CLI_HOME"] = fake.Home`; sets the fake's `transcripts: true` (E2.S3, §8 item 36) so a re-entry finds the transcript
+under the root's `HOME` and resumes. Linux only (`Assert.SkipWhen(OperatingSystem.IsWindows(), "the run-arm scenarios link
 claude to the fake; links and POSIX paths")`).
+
+**`PinnedConsumer`** (test helper, `tests/Bench.Tests/ModelArms/PinnedConsumer.cs`; E6.S1 reuses it for the four readers). The checked-in
+`research/local-model-coding/harness/metrics.mjs` (sha256 `63d668b0399dbbef22da7b9ba2105a144118715ec2abea8793f4067786146add`, read
+2026-10-30) is parts 1–5's and binds its root and its arms in the file: line 11 `const E = '/home/jinx/git/coai-exp'`; line 12 a fixed
+`ARMS` list filtered by the existence of `${E}/results/<arm>/timing.jsonl` — it holds `C`, `CR1` and `CH1`, not `C1` or `CHH1`; each
+attempt's stream is read from the start line's `stream` (the module's absolute path, so only `timing.jsonl` needs the shell's layout);
+an attempt without a result is read from `ls $HOME/.claude/projects/*/<session>.jsonl` (absent → nothing counted, `complete: false`,
+`cost: null` — its own header: never guessed). So `Metrics(root, arm)`: copies the script to `<temp>/metrics.mjs` with line 11 rewritten
+to `<temp>` (exactly one `const E = ` line replaced, else the helper fails naming the pinned file — a reshaped script is seen, not
+silently read); lays `<temp>/results/<listed>/timing.jsonl` as a symbolic link to the arm's `out/timing.jsonl`, `<listed>` being the
+list's name for the scheme (C1 → `C`, CR1 → `CR1`, CHH1 → `CH1`); runs node by its resolved path (D17 d) as `node <copy> --json` with
+`HOME = <temp>` under `ProcessRunner` (60 s); returns the exit code and the parsed `report[<listed>]`. The pinned file is never edited
+(D28); the copy is a test artefact under the test's temp folder. `A_sequential_arm_leaves_the_files_the_example_binds_and_the_consumers_read_them`
+reads through it too.
 
 **Scenarios** (`RunArmSchemeTests`; through `ArmsProgram.RunAsync(["run-arm", arm, "--experiment", root.Root], out, err, root.Environment, ct)`).
 
@@ -1425,14 +1477,16 @@ claude to the fake; links and POSIX paths")`).
 | `A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes` (added) | `stdoutByCall: {2: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1` → 0; 5 calls; the review resumed `--resume <its id>`; `review.json` from call 3's success | `Expected 4 to be 0.` |
 | `Run_arm_launches_the_git_it_resolved_and_never_the_process_git` (amended, added) | **Given** `MakeArmAsync("C1", fake)` with `<temp>/bin/git` as a SHIM instead of a link (`root.ShimScript`: append `"$0 $*"` and `env \| grep '^GIT_'` to `root.MarkerFile("git")`, then `exec '<RealGit>' "$@"`), `root.WithVariables(("GIT_DIR", "/nowhere"), ("GIT_WORK_TREE", "/nowhere"))`; **when** `run-arm C1` → **then** 0; the output's `git → ` line names `<temp>/bin/git`'s REAL path; the marker holds every git run of the arm — at least `rev-parse HEAD` (the gate's `.before`), `rev-parse --short HEAD` (each start and end line) and `diff <sha> HEAD` — and no line starting `GIT_`; `4-gate.before` is the clone's HEAD | `Expected the git shim to have recorded at least 3 runs, but found 0.` (the process's git answered through `GitCommand`) |
 | `The_opus_review_and_the_haiku_review_are_launched_without_the_agent_tool_fresh_and_resumed` (amended, added — E2.S0's policy seen through a real launch) | **Given** `MakeArmAsync("CR1", fake)`, `stdoutByCall: {2: result-429-usage-limit-reached.jsonl, 4: result-429-usage-limit-reached.jsonl}`, `limits.waitSeconds: 1`; **when** `run-arm CR1` → **then** 0; 7 calls — `1-code`, `2-hreview` (haiku, write: call 2 fresh, call 3 `--resume`), `3-review` (opus, read: call 4 fresh, call 5 `--resume`), `4-fix`, `5-gate`; for EVERY call the argv's `--disallowedTools` group starts `Agent`, `Task` and its `--allowedTools` group holds neither; calls 2–5 are asserted by name in the message (`2-hreview fresh`, `2-hreview resumed`, `3-review fresh`, `3-review resumed`); call 2's `--model` is the fake's id standing for haiku (the bench rewrites every model — the test reads the step name from the prompt's first line instead) | `Expected 4 to be 0.` on the `NotBuilt` stub; against E2.S0's break-it (no `Delegation`): `Expected the argv of call 2 (2-hreview, fresh) to carry "--disallowedTools" followed by "Agent", "Task", but found "--disallowedTools" followed by "Read(//…/.claude/**)"` |
+| `An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme` (added — E2's plan round, finding 3, §8 item 33; `[Theory]` over `("C","C1","2-review",2)`, `("CR","CR1","2-hreview",2)`, `("CHH","CHH1","4-hfix",4)`: a review kind, a snapshotting session kind, and the step whose diff spans three steps) | **Given** `MakeArmAsync(arm, fake)` with `stdoutFile: result-success.jsonl` and `stdoutByCall: {<call>: stream-no-result.jsonl}` (the fake prints two lines and exits without a result — the attempt is `Interrupted`, §4's table); **when** `run-arm <arm>` → **then** exit 5; the output names `<step> INTERRUPTED`; every earlier step has its `.done`, `<step>.done` is absent, `<step>.session` holds the id of call `<call>`'s `--session-id`; the last timing line is `stopped` exit 5; for C no `notes/review.json`, for CHH no `out/4-hfix.diff` (nothing derived from an attempt that did not end); **and when** `run-arm <arm>` runs again on the same root (nothing rewritten) → **then** 0; exactly one new call, `--resume <that id>` with the resume notice as its prompt and the tool groups of the first; the earlier steps launched nothing again; every step `.done`; `<step>.done` says `"attempts":2`; the timing of `<step>` reads start a1, end a1 `"end":"interrupted"`, `stopped`, start a2 `"how":"resume"` with `budget_s` ≤ 60 − a1's `wall_s` (floored at 1), end a2 `"end":"finished"`; exactly one `arm-done`; for C `notes/review.json` = `{"verdict":"ready","findings":[]}` from call 3's result, for CR `2-hreview.diff` exists, for CHH `out/4-hfix.diff` is from `out/2-hA.before`; **and** `PinnedConsumer.Metrics(root, arm)` exits 0 and its report names every step of the scheme, with `<step>` as two attempts — the first `complete: false` with `cost: null`, the second `complete: true` | `Expected 4 to be 0.` on the `NotBuilt` stub; against a runner that re-enters `Fresh` (no transcript — §8 item 36): `Expected the argv of call <call+1> to contain "--resume", but found "--session-id".` |
 
 **Commands.** `--filter-class "*RunArmSchemeTests"`, `"*ModelArmsProgramTests"`, `"*ModuleTestsCatalogTests"`; the whole suite. By hand once,
 on a scratch root with the fake as `claude`: `./tools/model-arms/ModelArms/bin/Release/net10.0/model-arms run-arm C1 --experiment <root>`,
 quoted in the module doc.
 
-**Done when.** The nine green on this host (not skipped), each seen red; `Every_verb_the_command_line_accepts_has_a_dispatch_arm` and the
-catalogue test green; `grep -rn "GitCommand" tools/model-arms --include=*.cs` finds nothing (D17 d); the module doc walks one C arm's
-files after a run and shows the `resolved executables:` lines.
+**Done when.** The twelve green on this host (not skipped; the interruption theory's three cases counted once), each seen red;
+`Every_verb_the_command_line_accepts_has_a_dispatch_arm` and the catalogue test green; `grep -rn "GitCommand" tools/model-arms --include=*.cs`
+finds nothing (D17 d); the module doc walks one C arm's files after a run and shows the `resolved executables:` lines, and walks the
+interrupted-and-resumed arm once (M1's record).
 
 **Out of bounds.** SRS (E4.S3); `make`, `run-all`, detaching, pid files (E4); the objective checks (E5); keep-awake.
 
@@ -1440,9 +1494,12 @@ files after a run and shows the `resolved executables:` lines.
 
 ```mermaid
 flowchart LR
-    S0[E2.S0 step contract — Fable spec first] --> S2
+    S0[E2.S0 step contract — Fable spec first; lands ALONE, before every other story] --> S1
+    S0 --> S3
+    S0 --> S2
     S0 --> S4
     S0 --> S5
+    S0 --> S6
     S0 --> S7
     S0 --> S8
     S1[E2.S1 envelope + StepEnd — Fable spec first] --> S2[E2.S2 timing, budget, recovery, outputs]
@@ -1461,21 +1518,22 @@ flowchart LR
 
 | Wave | Stories, in parallel | Shared files (each story writes only its own lines) |
 |---|---|---|
-| A | **E2.S0** (after Fable commits its spec here — it touches E1's files, so it lands before anything that reads them), **E2.S1** (after Fable commits its spec here), **E2.S3** | the module doc (S0 its own *The step contract* section, S1 its own eight headings — disjoint); `PureDeciders` (own markers) |
-| B | **E2.S2**, **E2.S5**, **E2.S6** (S2 and S5 after S0 landed — they read the bindings; E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
+| 0 | **E2.S0** alone (after Fable commits its spec here) — **nothing else of E2 starts until it has landed** (§8 item 31: it rewrites the contracts every other story reads) | E1's files; the module doc (*The step contract*); `PureDeciders` (`// E2.S0`) |
+| A | **E2.S1** (after Fable commits its spec here), **E2.S3** | the module doc (S1's eight headings); `PureDeciders` (own marker); `tests/FakeCli` (S3 alone) |
+| B | **E2.S2**, **E2.S5**, **E2.S6** (E1.S9 has landed) | `ModelArmsArchitectureTests.cs` (own marker); the module doc (own heading) |
 | C | **E2.S4** | the module doc (own heading) |
 | D | **E2.S7** | — |
 | E | **E2.S8** (needs E1.S8 and E1.S9) | `Program.cs` (its own arm line); `research/module_tests.md` (its own row) |
 
-Parallel coders work in separate worktrees branched from `feat/model-arms` and land one at a time (rebase). E2.S6 and E2.S8 each
-replace exactly one `NotBuilt` arm of E1.S9's `Dispatch`, so they never edit the same line. If E1.S9 has not landed when wave B starts,
-E2.S6 waits and wave B is S2 ∥ S5; nothing else in E2 needs E1.S8–S11 before E2.S8.
+Parallel coders work in separate worktrees branched from `feat/model-arms-e2` (E2's own branch from `main` at `431e759`, the parent's
+§6 step 0) and land one at a time (rebase). E2.S6 and E2.S8 each replace exactly one `NotBuilt` arm of E1.S9's `Dispatch`, so they
+never edit the same line. E1 landed whole (`431e759`), so no wave waits on E1.
 
 ## 7. Test plan (maps to the parent's §7, E2)
 
 Every class and method of the parent's E2 list is here under its exact name. Added, in the same style: `ClaudeResultEnvelopeTests` (2) and
 `StepEndTests` (5) — E2.S1, for Fable to specify; `StepRecoveryTests` (4), `StepOutputsTests` (1), `TimingLineTests` (7, a new class) — E2.S2;
-`FakeCliByCallTests` (1, new) and two in `ProcessRunnerStderrSinkTests` — E2.S3; `StepRunnerTests` (7) — E2.S4; `ReviewAnswerTests` (1) —
+`FakeCliByCallTests` (2, new) and two in `ProcessRunnerStderrSinkTests` — E2.S3; `StepRunnerTests` (7) — E2.S4; `ReviewAnswerTests` (1) —
 E2.S5; `FileGateLockTests` (2), `GateStatusTests` (2, new), `McpConfigTests` (3, new) — E2.S6; `GateStepTests` (5) — E2.S7;
 `RunArmSchemeTests` (6) — E2.S8; and (amended) `StepLaunchTests` (1 amended, 2 added), `ExperimentFileTests` (1), `ExampleExperimentTests`
 (1) — E2.S0. Fixtures: the nine of E2.S1 and `timing-arm-C.jsonl` (E2.S2) — the parent's list less
@@ -1491,10 +1549,18 @@ gains the two continue-marker scenarios by name; `StepOutputsTests`' names say *
 `The_continue_marker_is_written_before_done_is_removed`; `RunArmSchemeTests` gains the three scenarios named in E2.S8. Fixtures: the three
 part-7 templates (shipped, sums asserted).
 
+Plan-gate additions (E2's own plan round on `feat/model-arms-e2`, 2026-10-30; §8 items 31–36): `StepContractTests.An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step`
+(E2.S0); `TimingLineTests.The_deadline_is_spelled_in_utc_and_as_the_local_offset` (renamed, a theory of five) and the two resume-notice
+literals re-spelled `+01:00` (E2.S2, E2.S4); `FakeCliByCallTests.A_launch_with_a_session_id_leaves_the_transcript_claude_would_when_asked`
+(E2.S3); `McpConfigTests.Mcp_coai_json_requests_the_vault_key_for_the_coai_server_and_the_arm_never_sees_it` (renamed, E2.S6);
+`RunArmSchemeTests.An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme` (a theory over
+C, CR and CHH, through `PinnedConsumer`, E2.S8).
+
 What E2's suite does not prove: that claude 2.1.x honours `--resume` after a 429 the way the shell observed (the pilot, parent build order
 step 6); that `CLAUDE_CONFIG_DIR` relocates the projects folder (read, not measured — part 6 ran without it); a lock against `flock(1)`;
 the coai server reading `COAI_CREDS_KEY` from `mcp-coai.json`'s `env` (the product's code says it layers the environment over the file;
-nothing here starts the real server — the pilot's gate step is the observation).
+nothing here starts the real server — **M2's key check**, the parent's §6 step 3, is the observation, and until it has run the config
+is a request, §8 item 34).
 
 ## 8. Deviations from the parent, and contradictions found in the code
 
@@ -1515,8 +1581,8 @@ nothing here starts the real server — the pilot's gate step is the observation
 5. **`exit` of a killed attempt.** The shell wrote `timeout`'s 124/137 (`run-arm.sh:120`); the port writes `null` in the end line and the
    marker whenever the process returned no code (wall, not started, stopped by the operator), and the `end` field says why
    (*absent is not zero*; `research/local-model-coding/harness/metrics.mjs:100` passes `exit` through and reads `null` already).
-6. **The deadline's zone.** The shell printed `%Z` (`CET`); .NET has no portable abbreviation, so the brief and the start line say the zone's
-   id (`23:12 Europe/Paris`). The minutes are the shell's.
+6. **The deadline's zone.** The shell printed `%Z` (`CET`); .NET has no portable abbreviation. First settled as the zone's id
+   (`23:12 Europe/Paris`); re-settled by E2's plan round as the UTC offset (`23:12 +01:00`) — item 32. The minutes are the shell's.
 7. **`ReviewAnswer`'s span.** The parent says "the first `{…}` block"; the shell takes the greedy first-`{`-to-last-`}` span
    (`run-arm.sh:133`) and wrote it whether or not it was JSON. **Settled (E2.S5):** the shell's span, written only when it parses as a JSON
    object, else `unparsed` with the raw text.
@@ -1537,7 +1603,7 @@ nothing here starts the real server — the pilot's gate step is the observation
 14. **Vault key on disk.** E1 §8 item 16 asked for the key to reach the server through `mcp-coai.json`'s `env`. That puts an exported
     `COAI_CREDS_KEY` into a file under the arm's folder; E2.S6 states the consequence (mode `0600` by `make`, never in the published record)
     and binds E4.S4 and E5.S5 to it. If the owner's key lives only in the panel's settings file (the product's normal place, `KeyVault.cs:76-95`),
-    nothing is written.
+    nothing is written. Narrowed by E2's plan round: the file is a REQUEST for the delivery, proven only by M2's key check — item 34.
 15. **The `Interrupted` state carries its reason** (`Interrupted(string Why)`); the parent's D6 lists it bare. The log and the `stopped` line
     need to say whether the operator stopped it or the process ended without a result.
 16. **E1.S8–E1.S11 have not landed** (`Program.cs:6-8` is the stub): E2.S6 waits for E1.S9, E2.S8 for E1.S8 and E1.S9; S1–S5 and S7 do not.
@@ -1607,6 +1673,39 @@ Found by the re-review of 2026-10-30 (Fable; the parent's `## Plan changes` reco
     example's bindings (`REVIEW`, `GATE_JSON`) resolved by `NotesFile`. The shell's names are unchanged on disk; only the spelling in
     code moves from a member to a binding.
 
+Found by E2's own plan round (`mcp__coai__review_plan` on `feat/model-arms-e2` at `431e759`, 2026-10-30 — verdict proceed; five of six
+findings accepted and verified by Fable against the E1 code at `431e759`; the sixth rejected: that reviewer had read a truncated copy of
+this document). The round is the one `common.plan-change-control` § *Reviewing the revised plan* orders for an epic not yet started, so
+what it changes is the re-review's baseline for E2 (the parent's `## Plan changes`, the note under epoch 2), not a ledger entry:
+
+31. **E2.S0 marked parallel with S1 and S3 would have let two stories build against E1's contracts.** S0 rewrites `StepSpec`, `SchemeEntry`,
+    `Experiment`, `FlowSection`, `StepLaunch.Options` and the bindings (C12); C6 and C8 read them. **Settled:** S0 lands first, alone
+    (§6, wave 0); every other story depends on it; the graph and the table say so.
+32. **`HH:mm <local.Id>` is not what the shell printed, and not the same on two hosts.** `TimeZoneInfo.Local.Id` is `Europe/Paris` on
+    Linux and `Romance Standard Time` on Windows; the shell's `%Z` was `CET` (and `CEST` in summer); `StandardName` is a localized long
+    name. **Settled (C6, S2):** `StepBudget.Deadline` = `HH:mm UTC (HH:mm ±hh:mm)`, the local zone's offset at the deadline instant —
+    one spelling on every host, unambiguous across the DST switch, arithmetic a reader can do. The divergence from the shell is
+    deliberate; the minutes are the shell's. Every consumer expects it: the brief's `DEADLINE`, the start line's `deadline` (text;
+    `metrics.mjs` never reads it), the resume notice, `status` (E3.S4 prints the recorded text and never re-spells it), the rehearsal's
+    stand-in (S0), and the three test literals re-spelled.
+33. **M1 promised an interruption resumed for C, CR and CHH, and no scenario did it.** `Ctrl_c_during_the_wait_exits_5_resumable` (S4) is
+    one step through the runner, not an arm through the verb. **Settled (S8):** the theory over the three schemes — the fake stops without
+    a result mid-arm, the verb exits 5, a second `run-arm` resumes the same session, the scheme completes, and `metrics.mjs` reads the
+    files through `PinnedConsumer`.
+34. **`McpConfigTests` could not prove the coai server receives the key.** They inspect the written `mcp-coai.json`; whether claude hands a
+    stdio server its `env` member is claude's behaviour. **Settled (S6; the parent's §6 step 3 and E3.S5):** the guarantee is that the
+    config *requests* the delivery; the proof is M2's key check with the real `claude` — attended, logged, with its fallback (the copied
+    settings file, the shell's own road) named.
+35. **Nothing refused one field name bound twice.** `BriefFields.For` builds field → path; a later step rebinding an earlier step's field
+    would shadow it silently, and `notes`, `verdict` and `status` by field would be ambiguous. **Settled (S0, criterion 1):** a field is
+    bound once within a step (the parser's duplicate-key refusal, `StrictJson.cs:58`) and by at most one step of the map; the `tasks`
+    block's `outputs` may share a step's field only where no scheme places both (the example's `CODE_NOTES`) — refused per scheme otherwise.
+36. **Found while placing item 33: through `run-arm` the fake left no transcript, so no re-entry could ever `Resume`.** `ClaudeSessionTranscripts`
+    probes the real path; the fake wrote nothing; S8's `--resume` assertions (the limited review, the Opus and Haiku reviews resumed) were
+    unbuildable as written. **Settled (S3):** the fake's `transcripts: true` flag leaves the empty file claude would, at the path
+    `SessionTranscripts.PathOf` spells; `MakeArmAsync` sets it. A fix that makes the scenarios as written possible, not a change of what
+    they assert.
+
 ## 9. Growth
 
 Nothing here adds a table, a database or a process that outlives its verb. What E2 writes is the parent's §4.11 rows (streams, `.err`,
@@ -1623,11 +1722,16 @@ recovery: a `.session` without a stream starts fresh or resumes, a stream withou
 
 - [x] The parent's `## Plan changes` re-review for epoch 2 has passed (2026-10-30, epoch 2 open) and the parent's status no longer says *stopped for re-review*
       — E2.S0 and the amended stories are built against the re-approved baseline, never during the stop (`common.plan-change-control`).
-- [ ] E2.S0–E2.S8 landed on `feat/model-arms`, each with its tests watched red on an assertion first (the messages in its summary).
+- [ ] E2.S0–E2.S8 landed on `feat/model-arms-e2`, each with its tests watched red on an assertion first (the messages in its summary).
 - [ ] E2.S0's and E2.S1's scenarios and briefs were written by Fable into their sections before their coders started; the parent's ledger
-      reads `3 of 3`; E2.S0 landed before any story that reads a step's identity, brief or outputs.
+      reads `3 of 3`; E2.S0 landed before any other E2 story (§8 item 31).
 - [ ] (re-review) `StepContractTests` and `BriefFieldsTests` green; `RunArmSchemeTests.Scheme_CHH_…` green — a scheme configured, not coded;
-      M1 ran: a fake arm of C, CR and CHH, each resumed once after a limit and once after an interruption, read by `metrics.mjs`.
+      M1 ran: a fake arm of C, CR and CHH, each resumed once after a limit (`A_limited_step_inside_an_arm_waits_and_the_arm_still_finishes`,
+      the Opus/Haiku theory) and once after an interruption (`An_arm_interrupted_mid_step_is_resumed_by_the_next_run_arm_and_completes_for_every_sequential_scheme`),
+      read by `metrics.mjs` through `PinnedConsumer`.
+- [ ] (E2's plan round) `StepBudget.Deadline` spelled `HH:mm UTC (HH:mm ±hh:mm)` in every consumer and test (§8 item 32);
+      `McpConfigTests` state a request and M2's key check is named in E3 (§8 item 34);
+      `An_output_field_is_bound_by_at_most_one_step_and_once_within_a_step` green with the example still accepted (§8 item 35).
 - [ ] (amended) `GateStepTests.A_blocked_status_removes_done_waits_and_resumes_up_to_the_tries` and
       `A_runner_killed_between_the_continue_marker_and_the_resume_resumes_on_the_next_entry` green; `The_module_launches_nothing_by_a_bare_name`
       green with `ArmGit.cs` present and `GitCommand` absent from `tools/model-arms`; every launch of `RunArmSchemeTests` carries
