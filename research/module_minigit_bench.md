@@ -293,7 +293,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   answered 200 through the proxy, because a CDN edge routes by the TLS SNI and the proxy piped raw bytes): after the `200` the proxy holds
   the client's first bytes, reads the whole ClientHello (a pure parser, `lib/tls-hello.mjs`: it spans records and chunks, 16 KiB cap, 10 s
   read timeout) and pipes only when the SNI equals the CONNECT host (case-insensitive, otherwise exact: a trailing dot is a mismatch).
-  A hello carrying `encrypted_client_hello` (0xfe0d) or the legacy `encrypted_server_name` (0xffce) is refused, because with ECH the real
+  The `server_name` list must hold **exactly one entry, of type `host_name` (0)**: a list with another entry or any other type is refused as `not-tls` (before: an entry of another type was ignored, so `[type 1 evil.example, host_name registry.npmjs.org]` passed while a server reading the first entry saw `evil.example`). A hello carrying `encrypted_client_hello` (0xfe0d) or the legacy `encrypted_server_name` (0xffce) is refused, because with ECH the real
   name is hidden and no SNI check means anything. A refusal closes both sides before the upstream saw a byte and logs `tls-refused` with a
   `reason`: `sni-mismatch`, `sni-missing`, `ech-refused` or `not-tls`; the `allowed` line is written only after the hello passed and carries
   the SNI. Effect tests in the box: another name over the npm edge fails, the same edge under its own name succeeds, and an HTTP/2
@@ -425,6 +425,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A `drain` that wakes early leaves no timer behind (with the `clearTimeout` removed the test fails: the 120 s ceiling timer stays) | `broker.test.mjs` |
 | A request the upstream reset after part of its body was written is charged the reservation, not waived; only a socket that never connected is free | `broker.test.mjs` |
 | A hello sent before the upstream connected reaches it whole (before: the bytes between the CONNECT headers and the dial were dropped); a client that never completes its header block, and an upstream that never connects, are cut off by their timeouts | `egress.test.mjs` |
+| A `server_name` list with more than one entry, or any entry type other than `host_name`, is refused (the reviewer's probe: another type first, then the allowed name) | `tls-hello.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 

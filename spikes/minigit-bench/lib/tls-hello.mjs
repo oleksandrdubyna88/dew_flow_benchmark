@@ -80,7 +80,9 @@ function hostNameOf(body) {
     const type = entries.u8();
     const name = entries.vec16();
     if (type === null || name === null) return { refusal: NOT_TLS('a server_name entry is cut short') };
-    if (type === HOST_NAME) names.push(name.toString('latin1'));
+    // RFC 6066: one entry per name type, and host_name is the only type defined. A type this proxy does not read could be read by the server, so any other type is a refusal
+    if (type !== HOST_NAME) return { refusal: NOT_TLS(`the server_name list holds an entry of type ${type}: only one host_name entry is read the same way by every server`) };
+    names.push(name.toString('latin1'));
   }
   if (names.length !== 1) return { refusal: names.length === 0 ? refuse('sni-missing', 'the server_name extension names no host') : NOT_TLS('the server_name extension names several hosts') };
   return { sni: names[0] };

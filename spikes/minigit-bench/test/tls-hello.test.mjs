@@ -99,6 +99,26 @@ test('Two_server_name_extensions_or_two_names_in_one_are_refused_because_the_ser
   assert.equal(inspectClientHello(twoNames).reason, 'not-tls');
 });
 
+test('A_server_name_list_holds_one_host_name_entry_and_nothing_else_so_a_type_the_proxy_ignores_cannot_hide_a_name', () => {
+  const base = realHello('node-registry.npmjs.org');
+  const u16 = n => Buffer.from([n >> 8, n & 0xff]);
+  const entry = (type, name) => Buffer.concat([Buffer.from([type]), u16(name.length), Buffer.from(name, 'latin1')]);
+  const row = (...entries) => { const list = Buffer.concat(entries); return extension(0, Buffer.concat([u16(list.length), list])); };
+  const hello = r => withExtensions(base, extensionsOf(base).map(x => (x.type === 0 ? r : x)));
+  // the reviewer's probe: an entry of another name type FIRST, then the host_name the proxy checks. A server that reads the first entry sees `evil.example`.
+  const mixed = inspectClientHello(hello(row(entry(1, 'evil.example'), entry(0, 'registry.npmjs.org'))));
+  assert.equal(mixed.status, 'refused', JSON.stringify(mixed));
+  assert.equal(mixed.reason, 'not-tls');
+  assert.match(mixed.why, /server_name/);
+  const rows = {
+    'a host_name then another type': row(entry(0, 'registry.npmjs.org'), entry(7, 'evil.example')),
+    'only an entry of another type': row(entry(1, 'registry.npmjs.org')),
+    'two host_names': row(entry(0, 'registry.npmjs.org'), entry(0, 'registry.npmjs.org')),
+  };
+  for (const [name, r] of Object.entries(rows)) assert.equal(inspectClientHello(hello(r)).status, 'refused', name);
+  assert.deepEqual(inspectClientHello(hello(row(entry(0, 'registry.npmjs.org')))), { status: 'ok', sni: 'registry.npmjs.org', ech: false, esni: false }, 'control: the one host_name entry passes');
+});
+
 test('The_name_is_returned_as_sent_so_the_caller_compares_it_exactly', () => {
   const base = realHello('node-registry.npmjs.org');
   for (const name of ['REGISTRY.npmjs.org', 'registry.npmjs.org.', 'registry.npmjs.org\0.evil.example']) {
