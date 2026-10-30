@@ -149,7 +149,7 @@ public sealed class TimingLineTests
 
         var written = TimingLines.Write(stopped);
 
-        written.Should().Contain("cut \uFFFD here", "no UTF-8 encoding can hold a lone surrogate, and a model's reason may carry one");
+        written.Should().Contain("cut \uFFFD here", "a lone surrogate is written as the character U+FFFD, not left to the serializer's escape — the line stays text a reader can grep");
         One(written).Should().ContainSingle().Which.Should().Be(stopped with { Why = "cut \uFFFD here" });
         One("{\"kind\":\"stopped\",\"arm\":\"C1\",\"step\":\"x\",\"exit\":5,\"why\":\"a\\ud800b\",\"at_utc\":\"2026-10-28T21:47:26Z\"}")
             .Should().ContainSingle().Which.Should().BeOfType<TimingLine.Other>("a line that carries a lone surrogate escape is kept as it is, never a throw");
@@ -208,8 +208,11 @@ public sealed class TimingLineTests
         { "2026-10-28T21:32:38Z", 2400, "America/New_York", "22:12 UTC (18:12 -04:00)" },
         { "2026-10-28T21:32:38Z", 2400, "UTC", "22:12 UTC (22:12 +00:00)" },
         { "2026-10-28T23:50:00Z", 1200, "Europe/Paris", "00:10 UTC (01:10 +01:00)" },
+        { "2026-10-25T00:30:00Z", 1800, "Europe/Paris", "01:00 UTC (02:00 +01:00)" },
     };
 
+    /// <summary>The last row starts under summer time and ends under winter time (the clocks went back at 01:00 UTC on 2026-10-25): the offset is the zone's at the DEADLINE instant, which is the one the
+    /// reader of the brief will see on their clock then.</summary>
     [Theory]
     [MemberData(nameof(Deadlines))]
     public void The_deadline_is_spelled_in_utc_and_as_the_local_offset(string start, int remaining, string zone, string expected)

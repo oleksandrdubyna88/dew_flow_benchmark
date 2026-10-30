@@ -25,9 +25,9 @@ public static class DoneMarkers
     /// <summary>The marker <paramref name="json"/> holds: the shell's own (no <c>end</c> reads as <c>State = ""</c>; no or null <c>exit</c> is not captured) or this build's. A non-object, a torn file or an
     /// <c>attempts</c> that is neither a whole number nor the previous generation's word <c>"recovered"</c> is refused naming what was wrong — never a throw.</summary>
     public static Outcome<DoneMarker> Read(string json) =>
-        Row.Parse(json, "a done marker").Match(Of, Outcome<DoneMarker>.Failure);
+        JsonRow.Parse(json, "a done marker").Match(Of, Outcome<DoneMarker>.Failure);
 
-    private static Outcome<DoneMarker> Of(Row row)
+    private static Outcome<DoneMarker> Of(JsonRow row)
     {
         var previous = row.Is("attempts", RecoveredWord);
         var marker = new DoneMarker(previous ? 0 : row.Int("attempts"), row.Count("exit"), row.Text("stream"), row.Text("end"), previous || row.Flag("recovered"));

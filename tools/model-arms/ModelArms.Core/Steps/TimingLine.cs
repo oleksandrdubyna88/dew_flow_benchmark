@@ -69,9 +69,9 @@ public static class TimingLines
         [.. text.Split('\n').Select(raw => raw.TrimEnd('\r')).Where(raw => !string.IsNullOrWhiteSpace(raw)).Select(ReadLine)];
 
     private static TimingLine ReadLine(string raw) =>
-        Row.Parse(raw, "a timing line").Match(row => Typed(row) ?? new TimingLine.Other(raw), _ => new TimingLine.Other(raw));
+        JsonRow.Parse(raw, "a timing line").Match(row => Typed(row) ?? new TimingLine.Other(raw), _ => new TimingLine.Other(raw));
 
-    private static TimingLine? Typed(Row row)
+    private static TimingLine? Typed(JsonRow row)
     {
         TimingLine? line = row.Text("kind", required: true) switch
         {
@@ -85,21 +85,21 @@ public static class TimingLines
         return row.Problem.Length == 0 ? line : null;
     }
 
-    private static TimingLine.Start ReadStart(Row row) =>
+    private static TimingLine.Start ReadStart(JsonRow row) =>
         new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("attempt"), row.Text("how"), row.Text("session"), row.Text("model"), row.Utc("start_utc"), row.Int("budget_s"),
             row.Text("deadline"), row.Text("head"), row.Text("stream"));
 
-    private static TimingLine.End ReadEnd(Row row) =>
+    private static TimingLine.End ReadEnd(JsonRow row) =>
         new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("attempt"), row.Utc("end_utc"), row.Count("wall_s"), row.Count("exit"), row.Flag("result"), row.Flag("limited"),
             row.Text("head"), row.Text("end"), row.Flag("recovered"))
         {
             Missing = row.Texts("missing"),
         };
 
-    private static TimingLine.GateWait ReadGateWait(Row row) =>
+    private static TimingLine.GateWait ReadGateWait(JsonRow row) =>
         new(row.Text("arm", required: true), row.Text("step", required: true), row.Int("after"), row.Int("wait"), row.Text("why"), row.Utc("at_utc"));
 
-    private static TimingLine.Stopped ReadStopped(Row row) =>
+    private static TimingLine.Stopped ReadStopped(JsonRow row) =>
         new(row.Text("arm", required: true), row.Text("step"), row.Int("exit"), row.Text("why"), row.Utc("at_utc"));
 
     private static string WriteStart(TimingLine.Start start) =>
