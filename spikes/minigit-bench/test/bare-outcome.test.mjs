@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { rateLimitSignal } from '../../policy-ab-quick/lib/ratelimit.mjs';
 import { bareOutcome } from '../lib/bare-outcome.mjs';
+import { REFUSAL_REASONS } from '../lib/broker.mjs';
 
 const T0 = Date.parse('2026-10-30T10:00:00Z');
 const at = s => new Date(T0 + s * 1000).toISOString();
@@ -46,7 +47,8 @@ test('A_path_refusal_is_not_a_cap', () => {
   const r = bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), refused(2, 60, 'path')] }));
   assert.notEqual(r.class, 'killed: cap');
   assert.equal(r.class, 'crashed: success', 'an error envelope the other rows do not name');
-  for (const reason of ['unknown', 'headers', undefined]) {
+  // every refusal reason the broker writes, except the cap itself
+  for (const reason of [...REFUSAL_REASONS.filter(r => r !== 'cap'), 'unknown', undefined]) {
     assert.notEqual(bareOutcome(base({ events, brokerLines: [...ok2xx(1, 0), { ...refused(2, 60), reason }] })).class, 'killed: cap', `reason ${reason}`);
   }
 });
