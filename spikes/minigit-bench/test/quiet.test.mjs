@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { cpusOfMask, createSampler, liveSessionDirs, phaseFlags } from '../lib/cpu-sampler.mjs';
+import { cpusOfMask, createSampler, liveSessionDirs, phaseFlags, startPhaseSampler } from '../lib/cpu-sampler.mjs';
 import { loadQuiet, noisyOverride, quietWindow, waitForQuiet } from '../lib/quiet.mjs';
 import { processStartTime, writeState } from '../lib/session-state.mjs';
 import { tmpDir } from './helpers.mjs';
@@ -131,4 +131,37 @@ test('A_session_of_any_series_with_a_living_owner_is_live_and_a_dead_owner_is_no
   put('s-2', 'cccccc', { ...base, phase: 'closed', hostPid: process.pid, hostStartTime: processStartTime(process.pid) });
   mkdirSync(path.join(root, 'toolchains'), { recursive: true }); // not a series: no s/ directory
   assert.deepEqual(liveSessionDirs(root), [path.join(root, 's-1', 's', 'aaaaaa')]);
+});
+
+/** A sleep that advances the fake clock AND yields to the event loop (a loop of bare microtasks would starve the test's own polling). */
+const yielding = c => async ms => { c.advance(ms); await new Promise(r => setImmediate(r)); };
+
+// ---- the phase sampler loop ------------------------------------------------------------------------------------------------------
+
+test('The_phase_sampler_appends_a_line_per_interval_and_reports_its_flags_when_stopped', async () => {
+  const dir = tmpDir('cpulog');
+  const file = path.join(dir, 'p1-cpu.ndjson');
+  const c = clock();
+  let n = 0;
+  const sample = async () => { n += 1; return { t: c.now(), hostCpus: 3, foreignCpus: 2, foreignAgents: [], spinMs: 20, perCpu: [0.5, 0.5], psiSomeAvg10: 1 }; };
+  const sampler = startPhaseSampler({ sample, file, intervalMs: 5000, thresholds: { foreignCpuMax: 1.0, spinMaxRatio: 1.3, calibratedMs: 20 }, sleep: yielding(c) });
+  while (n < 14) await new Promise(r => setImmediate(r));
+  const done = await sampler.stop();
+  const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+  assert.ok(lines.length >= 14, `${lines.length} lines`);
+  assert.equal(lines[0].foreignCpus, 2);
+  assert.deepEqual(done.flags, ['foreign load'], 'twelve samples of 2 CPU foreign load: a loaded minute');
+  assert.equal(done.samples, lines.length);
+  assert.equal(done.error, null);
+});
+
+test('A_sampler_that_throws_is_recorded_and_never_stops_the_phase', async () => {
+  const c = clock();
+  let n = 0;
+  const sampler = startPhaseSampler({ sample: async () => { n += 1; throw new Error('proc vanished'); }, file: path.join(tmpDir('cpulog'), 'x.ndjson'), intervalMs: 5000, thresholds: { foreignCpuMax: 1, spinMaxRatio: 1.3, calibratedMs: 20 }, sleep: yielding(c) });
+  while (n < 1) await new Promise(r => setImmediate(r));
+  const done = await sampler.stop();
+  assert.match(done.error, /proc vanished/);
+  assert.equal(done.samples, 0);
+  assert.deepEqual(done.flags, [], 'no sample, no flag; the record says the sampler failed');
 });

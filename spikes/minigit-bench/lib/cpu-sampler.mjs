@@ -6,7 +6,7 @@
 //
 // The harness's own ticks are not foreign load: the runner, its broker, receiver, proxy and sampler run on core 3 (CPUs 6-7).
 // The foreign-CPU figure is a LOWER bound: a process born and dead between two samples is never seen.
-import { existsSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fail, ok } from './result.mjs';
 import { runBounded } from './run.mjs';
@@ -236,4 +236,35 @@ export function liveSessionDirs(rsdRoot) {
     const read = readState(path.join(dir, 'state.json'));
     return read.ok && stateOf(read.value, { ownerAlive }) === 'live';
   }).sort();
+}
+
+/**
+ * The sampler of a phase: one `sample()` per `intervalMs`, each appended to `file` as a line (`pairs/p<k>-cpu.ndjson`), until `stop()`. A sample that throws ends the
+ * loop and is recorded in `error` (the phase itself is never touched: a lost sample is a lost measurement, not a reason to stop a paid session).
+ * `stop()` -> `{ samples, flags, error }`; the flags are `phaseFlags` over every sample taken.
+ */
+export function startPhaseSampler({ sample, file, intervalMs, thresholds, sleep }) {
+  const taken = [];
+  let running = true;
+  let error = null;
+  const loop = (async () => {
+    while (running) {
+      try {
+        const s = await sample();
+        taken.push(s);
+        appendFileSync(file, `${JSON.stringify(s)}\n`);
+      } catch (e) {
+        error = e.message;
+        return;
+      }
+      await sleep(intervalMs);
+    }
+  })();
+  return {
+    async stop() {
+      running = false;
+      await loop;
+      return { samples: taken.length, flags: taken.length > 0 ? phaseFlags(taken, thresholds) : [], error };
+    },
+  };
 }
