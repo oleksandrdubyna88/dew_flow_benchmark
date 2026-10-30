@@ -11,3 +11,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | instrument | harness:965745a2adcc | instrument: G-8 cd is no reach; relative paths resolve from the cd target for every rule (pilot c9b413); on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:47bbc9f8f642 | instrument: G-8 heredoc bodies are data, walks are judged per simple command, rm is no walk, a comment mark in a quoted string is no path (A/A twin d3f571); on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:7aacd09cee84 | instrument: G-8 a walk of a glob is judged as a walk of its fixed prefix (grep -r token /*); on top of the line before (E3b.S4)
+2026-10-30 | instrument | harness:3129eeadfa8d | instrument: G-8 a wrapped walker is judged by its pipe's producer; the scan builds steps and heredoc bodies in linear time (coai); on top of the line before (E3b.S4)
