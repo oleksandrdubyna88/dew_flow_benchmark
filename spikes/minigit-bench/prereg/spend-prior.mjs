@@ -14,18 +14,34 @@ const E2_PLAN = 'todo/PLAN_minigit_stack_bench_E2.md';
 const FIXTURES = 'spikes/minigit-bench/test/fixtures/real';
 const MODULE_DOC = 'research/module_minigit_bench.md';
 
+/** The text of the section whose heading line matches `heading`, up to the next heading of the same or a higher level; null when there is none. */
+export function sectionOf(text, heading) {
+  const lines = text.split('\n');
+  const start = lines.findIndex(l => /^#{1,6} /.test(l) && heading.test(l));
+  if (start === -1) return null;
+  const level = /^#+/.exec(lines[start])[0].length;
+  const end = lines.findIndex((l, i) => i > start && /^#{1,6} /.test(l) && /^#+/.exec(l)[0].length <= level);
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
 const json = rel => JSON.parse(readFileSync(path.join(REPO, rel), 'utf8'));
-const number = (text, re, what, file = E2_PLAN) => { const m = re.exec(text); return m ? ok(Number(m[1])) : fail(`${file} no longer says ${what}`); };
+/** The first capture of `re` INSIDE the section `heading` names: a mention of the same words in another paragraph is never read. */
+const number = (text, heading, re, what, file = E2_PLAN) => {
+  const section = sectionOf(text, heading);
+  if (section === null) return fail(`${file} no longer has a section headed ${heading} (for ${what})`);
+  const m = re.exec(section);
+  return m ? ok(Number(m[1])) : fail(`${file} no longer says ${what} in its section ${heading}`);
+};
 
 /** -> `ok([{ date, what, usd, evidence }])` | `fail` naming the evidence that could not be read. */
 export function spendPrior(repo = REPO) {
   const e2 = readFileSync(path.join(repo, E2_PLAN), 'utf8');
-  const design = number(e2, /cost \*\*\$([0-9.]+), 13\.7 s wall/, 'the design run cost');
-  const proof = number(e2, /paid total \$([0-9.]+)\)/, 'the broker proof paid total');
+  const design = number(e2, /^### The network decision/, /cost \*\*\$([0-9.]+), 13\.7 s wall/, 'the design run cost');
+  const proof = number(e2, /^### The credential broker, and what was run to prove it/, /paid total \$([0-9.]+)\)/, 'the broker proof paid total');
   const doc = readFileSync(path.join(repo, MODULE_DOC), 'utf8');
-  const first = number(doc, /FIRST smoke's \(envelope \$([0-9.]+)\)/, 'the first smoke\'s envelope', MODULE_DOC);
-  const resmoke1 = number(doc, /first re-smoke[\s\S]{0,400}?envelope \*\*\$([0-9.]+)\*\*/, 'the first re-smoke\'s envelope', MODULE_DOC);
-  const resmoke2 = number(doc, /second re-smoke[\s\S]{0,400}?envelope \*\*\$([0-9.]+)\*\*/, 'the second re-smoke\'s envelope', MODULE_DOC);
+  const first = number(doc, /^#### The bare-session smoke/, /FIRST smoke's \(envelope \$([0-9.]+)\)/, 'the first smoke\'s envelope', MODULE_DOC);
+  const resmoke1 = number(doc, /^#### The first re-smoke/, /envelope \*\*\$([0-9.]+)\*\*/, 'the first re-smoke\'s envelope', MODULE_DOC);
+  const resmoke2 = number(doc, /^#### The second re-smoke/, /envelope \*\*\$([0-9.]+)\*\*/, 'the second re-smoke\'s envelope', MODULE_DOC);
   const bad = [design, proof, first, resmoke1, resmoke2].find(r => !r.ok);
   if (bad) return bad;
   const capture = json(`${FIXTURES}/claude-2.1.310-capture/meta.json`);

@@ -691,7 +691,7 @@ snapshot is not reproducible (npm's cache index carries timestamps), so a regist
 and the session record's `egress` leaf carries `bytes`, `bytesCaptured` and `cacheGrowthBytes`. `callsOf` lives in `lib/stream-calls.mjs`; the session loader is `loadSessionDir` in `lib/smoke-load.mjs` (one loader, every read through
 `lib/agent-files.mjs`, nothing required). Row 7 reads the broker's `reason`: only `cap` makes `killed: cap`; `path`, `body`, `busy` and a missing reason do not.
 
-**Not built.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). The prior spend (`inputs/spend-prior.json`) is $0.8218 over seven paid instrument sessions, not the plan's about $0.43.
+**Not built.** `--what rehearse-v2`, `aa-verdicts` and `report` (E3b.S4 and S5). The prior spend (`inputs/spend-prior.json`) is $0.8163 over seven paid instrument sessions, not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The review also asked for the "token check" session: no research/ or E1 plan text gives its figure, so it is NOT in the file and nothing was invented; if it was paid, its evidence is needed.
 
 ## Entry points
 

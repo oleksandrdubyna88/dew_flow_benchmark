@@ -1,6 +1,6 @@
 // The pre-registration's generated files (E3b.S3): quoted text is verbatim from a commit of origin/main, derived files equal their script's output, the seed is a hash only.
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { BEYOND_PLAN_TABLE, PREREG_FILES } from '../lib/prereg-guard.mjs';
@@ -185,4 +185,23 @@ test('The_registered_workspace_rule_names_each_stacks_exclusion_exactly_as_imple
   const contract = read('analysis-contract.md');
   assert.ok(contract.indexOf('G-14') > contract.indexOf('OPERATIONALIZATIONS'), 'the rule is in the pre-registration\'s own half, below the marker');
   assert.match(read('analysis-contract.md').replace(/\s+/g, ' '), /a Node project's `bin\/` .* source/, 'the reason for the asymmetry is written down');
+});
+
+test('The_prior_spend_reads_each_figure_from_its_own_section_not_from_a_mention_elsewhere', () => {
+  const real = spendPrior().value.map(e => [e.what, e.usd]);
+  assert.equal(real.find(([w]) => /second re-smoke/.test(w))[1], 0.109323, 'the second re-smoke cost $0.109323 (its envelope), not the first smoke\'s $0.114845 that an earlier mention of it sits next to');
+  // a decoy: an earlier paragraph mentions the second re-smoke beside another figure; the figure of the section is the one that counts
+  const repo = tmpDir('prior-repo');
+  for (const rel of ['todo', 'research', 'spikes/minigit-bench/test/fixtures/real']) mkdirSync(path.join(repo, rel), { recursive: true });
+  cpSync(path.join(REPO, 'spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/meta.json'), path.join(repo, 'spikes/minigit-bench/test/fixtures/real/claude-2.1.310-capture/meta.json'), { recursive: true });
+  cpSync(path.join(REPO, 'spikes/minigit-bench/test/fixtures/real/claude-2.1.310-bare-smoke/meta.json'), path.join(repo, 'spikes/minigit-bench/test/fixtures/real/claude-2.1.310-bare-smoke/meta.json'), { recursive: true });
+  writeFileSync(path.join(repo, 'todo/PLAN_minigit_stack_bench_E2.md'), '### The network decision\ncost **$0.5, 13.7 s wall\n### The credential broker, and what was run to prove it (paid total $0.25)\nx\n');
+  writeFileSync(path.join(repo, 'research/module_minigit_bench.md'), [
+    '#### The bare-session smoke (2026-10-30)', "> the FIRST smoke's (envelope $0.1)", 'a later mention: the second re-smoke is below, and the first re-smoke too, envelope **$9.99** was the decoy',
+    '#### The first re-smoke (2026-10-30)', 'envelope **$0.2**', '#### The second re-smoke (2026-10-30)', 'envelope **$0.3**', '#### The third re-smoke', 'envelope **$0.4**', ''].join('\n'));
+  const derived = spendPrior(repo);
+  assert.equal(derived.ok, true, derived.reason);
+  assert.deepEqual(derived.value.filter(e => /re-smoke/.test(e.what)).slice(0, 2).map(e => e.usd), [0.2, 0.3], 'each figure comes from the section its heading names');
+  writeFileSync(path.join(repo, 'research/module_minigit_bench.md'), '#### The bare-session smoke\n> the FIRST smoke\'s (envelope $0.1)\n');
+  assert.match(spendPrior(repo).reason, /no longer has a section|no longer says/, 'a section that is gone is a refusal, not a figure read from somewhere else');
 });
