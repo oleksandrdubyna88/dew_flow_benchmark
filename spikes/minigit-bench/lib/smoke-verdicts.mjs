@@ -96,7 +96,7 @@ const ruleS3 = v => {
   const scan = v.smoke.checks.realTokenScan;
   const clean = (scan?.hits ?? ['unknown']).length === 0 && (scan?.links ?? ['unknown']).length === 0;
   const ok = s.samples >= 5 && s.realInCmdline === 0 && s.realInEnviron === 0 && s.dummyInEnviron >= 1 && clean;
-  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; positive control: dummy in environ ${s.dummyInEnviron}; real-token hits over ${scan?.scanned} file(s): ${scan?.hits?.length}; links or pipes in the tree: ${scan?.links?.length ?? 'not scanned'}`);
+  return verdictOf(ok, `${s.samples} samples: real in cmdline ${s.realInCmdline}, in environ ${s.realInEnviron}; positive control: dummy in environ ${s.dummyInEnviron}; real-token hits over ${scan?.scanned} file(s): ${scan?.hits?.length}; links or pipes in the tree: ${scan?.links?.length ?? 'not scanned'}; ${scan?.insideLinks?.length ?? 0} link(s) inside the agent-writable tree (not a finding)`);
 };
 
 /**

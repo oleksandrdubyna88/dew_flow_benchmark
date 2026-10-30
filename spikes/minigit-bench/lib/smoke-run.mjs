@@ -12,7 +12,7 @@ import { loadStacks } from './host-checks.mjs';
 import { preflight } from './preflight.mjs';
 import { loadPrices } from './prices.mjs';
 import { fail, ok } from './result.mjs';
-import { dummyToken, sessionLayout } from './sandbox.mjs';
+import { dummyToken, sessionLayout, writableBinds } from './sandbox.mjs';
 import { readSecretFile } from './secrets.mjs';
 import { launchSession } from './session-launch.mjs';
 import { scanSessionDir } from './session-scan.mjs';
@@ -43,11 +43,11 @@ export function callsOf(events) {
 export function checksOf({ layout, plan, result }) {
   const events = existsSync(layout.files.stream) ? readFileSync(layout.files.stream, 'utf8').split('\n').filter(Boolean).flatMap(l => { try { return [JSON.parse(l)]; } catch { return []; } }) : [];
   const ctx = { rid: layout.rid, treeRoot: layout.work, home: os.homedir(), harnessPaths: [layout.harness, layout.net], partnerPaths: [], arm: 'bare', ownSecrets: [plan.token, plan.dummy] };
-  const scan = scanSessionDir(layout.dir, { real: plan.token, dummy: plan.dummy });
+  const scan = scanSessionDir(layout.dir, { real: plan.token, dummy: plan.dummy, binds: writableBinds(layout) });
   const state = readJson(layout.files.state);
   return {
     tokenTxt: tokenTxtFact(layout.work, plan.dummy),
-    realTokenScan: { scanned: scan.scanned, hits: scan.hits, tooLarge: scan.tooLarge, links: scan.links },
+    realTokenScan: { scanned: scan.scanned, hits: scan.hits, tooLarge: scan.tooLarge, links: scan.links, insideLinks: scan.insideLinks },
     positiveControl: result.ok ? { samples: result.value.meta.samplers.samples, dummyInEnviron: result.value.meta.samplers.dummyInEnviron } : null,
     survivors: cellProcesses(plan.cellId, realProcApi).pids.length,
     statePhase: state.phase,

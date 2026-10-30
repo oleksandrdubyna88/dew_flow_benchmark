@@ -1,0 +1,108 @@
+// A link in the agent-writable tree is classified from its target STRING only, mapped through the box's own bind table (box path -> host path),
+// lexically normalised; the link is never followed. `inside` = the target lies in the session's agent-writable tree; everything else stays `high`.
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { classifyLink } from '../lib/link-class.mjs';
+import { agentBoxPrefix, sessionLayout, writableBinds } from '../lib/sandbox.mjs';
+import { scanSessionDir } from '../lib/session-scan.mjs';
+import { fakeToken } from './broker-stub.mjs';
+import { boxOptions } from './box-helpers.mjs';
+import { tmpDir } from './helpers.mjs';
+
+/** A real layout under a temp root with the CLI's shape on disk: a subagent transcript in box/config and the tasks dir in box/tmp. */
+function session() {
+  const made = sessionLayout(tmpDir('lc'), 's1');
+  assert.equal(made.ok, true, made.reason);
+  const layout = made.value;
+  const transcript = path.join(layout.config, 'projects', 'p', 'subagents', 'agent-1.jsonl');
+  mkdirSync(path.dirname(transcript), { recursive: true });
+  writeFileSync(transcript, '{}\n');
+  const tasks = path.join(layout.tmp, 'claude-1000', 'work', 'sid', 'tasks');
+  mkdirSync(tasks, { recursive: true });
+  return { layout, transcript, tasks, binds: writableBinds(layout) };
+}
+/** Plant a link at `<tasks>/<name>` with `target` (the string the CLI wrote) and classify it. */
+function planted(s, name, target) {
+  symlinkSync(target, path.join(s.tasks, name));
+  return classifyLink({ root: s.layout.dir, rel: path.relative(s.layout.dir, path.join(s.tasks, name)), binds: s.binds });
+}
+
+test('The_bind_table_is_what_the_box_argv_binds_read_write', () => {
+  const { layout } = session();
+  const argv = agentBoxPrefix(boxOptions(layout));
+  for (const { box, host } of writableBinds(layout)) {
+    const i = argv.findIndex((a, j) => a === '--bind' && argv[j + 1] === host);
+    assert.ok(i >= 0, `${host} is bound`);
+    assert.equal(argv[i + 2], box, `at ${box}`);
+  }
+  assert.ok(writableBinds(layout).some(b => b.box === '/tmp' && b.host === layout.tmp), 'the box /tmp is box/tmp');
+});
+
+test('A_link_to_a_file_in_the_agent_writable_tree_is_inside_and_reported_in_box_paths', () => {
+  const s = session();
+  // the CLI's own shape: tasks/<id>.output -> subagents/agent-<id>.jsonl, the target an absolute box path
+  const r = planted(s, 'a1.output', s.transcript);
+  assert.equal(r.severity, 'inside');
+  assert.equal(r.target, s.transcript);
+  assert.equal(r.link, path.posix.join('/tmp', 'claude-1000', 'work', 'sid', 'tasks', 'a1.output'), 'the link is named by the path the box sees');
+  // relative targets are read from the BOX: from /tmp the transcript is reached through the root, not through the host's box/tmp
+  const relative = planted(s, 'a2.output', path.posix.relative('/tmp/claude-1000/work/sid/tasks', s.transcript));
+  assert.equal(relative.severity, 'inside', 'a relative target is resolved against the link\'s own box directory');
+  assert.equal(relative.target, s.transcript);
+  const sibling = path.join(s.layout.config, 'projects', 'p', 'subagents');
+  symlinkSync('agent-1.jsonl', path.join(sibling, 'agent-2.jsonl'));
+  const within = classifyLink({ root: s.layout.dir, rel: path.relative(s.layout.dir, path.join(sibling, 'agent-2.jsonl')), binds: s.binds });
+  assert.deepEqual([within.severity, within.target], ['inside', s.transcript], 'a relative link inside one bind');
+});
+
+test('Every_other_link_stays_high', () => {
+  const s = session();
+  const decoy = path.join(tmpDir('lc-decoy'), 'host-file.txt');
+  writeFileSync(decoy, 'HOST-ONLY\n');
+  const rows = {
+    'a .. escape that leaves every bind': '../../../../../../../../etc/passwd',
+    'a relative link out through the tmp root': '../../../../../../../tmp-sibling/x',
+    'an absolute host path': decoy,
+    'a host path of the session\'s own harness dir': path.join(s.layout.harness, 'box-init.mjs'),
+    'the host path of box/tmp, which the box does not see': path.join(s.layout.tmp, 'claude-1000'),
+    'a path no bind maps': '/proc/1/environ',
+    'a dangling target inside a bind': path.join(s.layout.config, 'projects', 'p', 'subagents', 'agent-gone.jsonl'),
+    'a dangling relative target': 'nothing-here.jsonl',
+  };
+  for (const [name, target] of Object.entries(rows)) {
+    const r = planted(s, `l${Object.keys(rows).indexOf(name)}.output`, target);
+    assert.equal(r.severity, 'high', `${name}: ${JSON.stringify(r)}`);
+    assert.equal(typeof r.why, 'string');
+  }
+});
+
+test('The_target_of_a_link_is_never_read_or_followed_to_classify_it', () => {
+  const s = session();
+  const decoy = path.join(tmpDir('lc-d2'), 'secret.txt');
+  writeFileSync(decoy, `HOST ${fakeToken()}\n`);
+  const r = planted(s, 'x.output', decoy);
+  assert.equal(JSON.stringify(r).includes('HOST'), false);
+  assert.equal(r.severity, 'high');
+});
+
+test('The_scan_lists_inside_links_apart_and_only_a_high_link_is_a_finding', () => {
+  const s = session();
+  const real = fakeToken();
+  const decoy = path.join(tmpDir('lc-d3'), 'host.txt');
+  writeFileSync(decoy, `x ${real}`);
+  symlinkSync(s.transcript, path.join(s.tasks, 'in.output'));
+  const alone = scanSessionDir(s.layout.dir, { real, binds: s.binds });
+  assert.deepEqual(alone.links, [], 'an inside link is not a finding');
+  assert.equal(alone.insideLinks.length, 1);
+  assert.deepEqual(alone.insideLinks[0], { link: '/tmp/claude-1000/work/sid/tasks/in.output', target: s.transcript });
+  symlinkSync(decoy, path.join(s.tasks, 'out.output'));
+  assert.equal(spawnSync('mkfifo', [path.join(s.layout.tmp, 'pipe')]).status, 0);
+  const both = scanSessionDir(s.layout.dir, { real, binds: s.binds });
+  assert.deepEqual(both.links.map(l => [l.rel.split(path.sep).at(-1), l.severity]).sort(), [['out.output', 'high'], ['pipe', 'high']], 'a host link and a pipe stay high');
+  assert.deepEqual(both.hits, [], 'nothing was read through a link');
+  assert.equal(both.insideLinks.length, 1);
+  assert.equal(scanSessionDir(s.layout.dir, { real }).links.length >= 3, true, 'without a bind table every link is high (the old rule)');
+});

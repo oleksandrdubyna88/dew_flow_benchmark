@@ -13,9 +13,8 @@ import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts } from '../lib/smoke-verdicts.m
 import { hostLacks, spikeDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
-// B-S3 is NOT here on purpose: the committed fixture may be the 2026-10-30 first smoke, taken before the link scan existed, so its checks.json has
-// no `links` (B-S3: 'not scanned'). B-S3b is retired and 'not exercised' by design in every fixture.
-const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
+// B-S3b is retired and 'not exercised' by design in every fixture (asserted below); B-K2 is not exercised because the smoke ended by itself.
+const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-S3', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
 
 function verdicts(mutate = s => s) {
   const smoke = loadSmoke(FIXTURE);
@@ -31,9 +30,10 @@ test('The_real_bare_smoke_holds', () => {
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
   for (const id of REQUIRED_HOLDS) assert.equal(byId[id].verdict, 'holds', `${id}: ${byId[id].observed}`);
   assert.equal(byId['B-K2'].verdict, 'not exercised', 'the smoke ended by itself');
-  assert.equal(byId['B-S3'].verdict, 'refuted', 'the old fixture has no link scan, and a scan that did not look is not clean');
-  assert.match(byId['B-S3'].observed, /not scanned/);
-  assert.equal(byId['B-S3b'].verdict, 'not exercised', 'token.txt is empty in the old fixture');
+  assert.match(byId['B-S3'].observed, /1 link\(s\) inside the agent-writable tree/, 'the CLI\'s own tasks/<id>.output link is listed, not a finding');
+  assert.match(byId['B-S3'].observed, /links or pipes in the tree: 0/);
+  assert.match(byId['B-S3'].observed, /positive control: dummy in environ [1-9]/);
+  assert.equal(byId['B-S3b'].verdict, 'not exercised', 'retired by design');
   for (const id of ['B-A2', 'B-H1']) assert.ok(['holds', 'refuted'].includes(byId[id].verdict), `${id} is recorded either way: ${byId[id].verdict}`);
   const md = readFileSync(path.join(FIXTURE, 'SMOKE.md'), 'utf8');
   assert.equal(verdictBlockOf(md), renderVerdicts(rows), 'SMOKE.md is the computed table, byte for byte');
@@ -67,6 +67,11 @@ test('B_S3_holds_only_with_enough_samples_no_real_token_in_cmdline_or_environ_th
   assert.equal(holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, hits: [{ source: 'x', kind: 'own-value', offset: 1 }] } })(base(s))).verdict, 'refuted', 'a real-token hit');
   assert.equal(holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, links: [{ rel: 'box/out/audit.ndjson', kind: 'symlink', severity: 'high' }] } })(base(s))).verdict, 'refuted', 'a link anywhere in the tree');
   assert.equal(holds(s => withChecks({ realTokenScan: { scanned: 3, hits: [], tooLarge: [] } })(base(s))).verdict, 'refuted', 'a scan that did not look for links is not clean');
+  const inside = [{ link: '/tmp/claude-1000/w/s/tasks/a.output', target: '/home/user/rsd/s/box/config/projects/p/subagents/agent-a.jsonl' }];
+  const withInside = holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, insideLinks: inside } })(base(s)));
+  assert.equal(withInside.verdict, 'holds', 'a link whose target is inside the agent-writable tree is listed, not a refutation (the CLI makes one per subagent)');
+  assert.match(withInside.observed, /1 link\(s\) inside the agent-writable tree/);
+  assert.equal(holds(s => withChecks({ realTokenScan: { ...CLEAN_SCAN, insideLinks: inside, links: [{ rel: 'box/tmp/x', kind: 'symlink', severity: 'high', why: 'dangling' }] } })(base(s))).verdict, 'refuted', 'an inside link does not excuse a high one');
 });
 
 test('B_S3_does_not_read_the_in_box_token_file_at_all_because_that_half_is_B_S3b', () => {
@@ -88,11 +93,10 @@ test('B_S3b_is_retired_and_not_exercised_by_design_whatever_token_txt_holds', ()
 test('The_committed_smoke_fixture_holds_neither_the_real_token_nor_the_session_dummy', t => {
   const token = readSecretFile({ home: os.homedir(), parts: TOKEN_FILE_PARTS, label: 'token' });
   if (!token.ok) return hostLacks(t, `the operator's token file is unusable on this host (${token.reason}): the scan for it cannot run`);
-  const smoke = loadSmoke(FIXTURE).value;
-  const dummyHash = smoke.checks.tokenTxt.dummySha256;
-  assert.match(dummyHash, /^[0-9a-f]{64}$/);
+  // (no dummy hash is asserted any more: the in-model probe that produced token.txt is retired, so the fixture has no token.txt to hash)
   const scan = scanSessionDir(FIXTURE, { real: token.value });
   assert.deepEqual(scan.hits, [], 'no file of the fixture holds the real token or any credential shape');
+  assert.deepEqual(scan.links, [], 'and the fixture holds no link or pipe');
   assert.ok(scan.scanned >= 10, `${scan.scanned} files scanned`);
   assert.equal(existsSync(path.join(FIXTURE, 'transcripts')), true);
 });

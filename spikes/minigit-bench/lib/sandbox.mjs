@@ -106,6 +106,17 @@ export const forwarderSpecs = layout => Object.freeze([
   `${BOX_PROXY_PORT}:${layout.sockets.proxy}`, `${BOX_API_PORT}:${layout.sockets.api}`, `${BOX_OTEL_PORT}:${layout.sockets.otel}`,
 ]);
 
+const bindPair = b => ['--bind', b.host, b.box];
+
+/**
+ * The read-write binds of the agent's box as `{ box, host }` pairs (the box's `/tmp` is `box/tmp`; the rest sit at the same path inside as
+ * outside): the one table `agentBoxPrefix` binds from and the link classifier maps a link's target through.
+ */
+export const writableBinds = (layout, extraRw = []) => Object.freeze([
+  { box: '/tmp', host: layout.tmp },
+  ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].map(p => ({ box: p, host: p })),
+]);
+
 /**
  * The argv prefix (ending in `--`) of the agent's box: the filesystem read-only; the shared hide list replaced by empty tmpfs; then ONLY an
  * explicit list bound back in, AFTER the tmpfs so it shows. The box's `/tmp` is `box/tmp`, bound before anything else that may live under the
@@ -115,10 +126,10 @@ export function agentBoxPrefix({ layout, arm, toolchains = [], claudeBinary, nod
   return Object.freeze([
     'bwrap', ...roRoot(), ...devProc(),
     ...hiddenPaths({ operatorHome, exists }).flatMap(tmpfs),
-    '--bind', layout.tmp, '/tmp',
+    ...bindPair(writableBinds(layout)[0]),
     ...[nodeDir, ...toolchains, layout.harness, layout.net, ...extraRo].flatMap(roBind),
     ...roBind(claudeBinary),
-    ...[layout.work, layout.home, layout.config, layout.nuget, layout.npm, layout.out, ...extraRw].flatMap(bind),
+    ...writableBinds(layout, extraRw).slice(1).map(b => b.host).flatMap(bind),
     ...(arm === 'bare' ? GH_PATHS.filter(p => exists(p)).flatMap(p => ['--ro-bind', '/dev/null', p]) : []),
     ...isolation(), '--unshare-ipc', ...chdir(layout.work), '--',
   ]);

@@ -1,15 +1,23 @@
 {
   "tokenTxt": {
-    "present": true,
-    "equalsDummy": false,
-    "bytes": 0,
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "dummySha256": "0bb8d6608664896f82e746e1da1b0f89ef1ddf1235376849a189f421ea34ffe7"
+    "present": false,
+    "equalsDummy": false
   },
   "realTokenScan": {
-    "scanned": 32,
+    "scanned": 33,
     "hits": [],
-    "tooLarge": []
+    "tooLarge": [],
+    "links": [],
+    "insideLinks": [
+      {
+        "link": "/tmp/claude-1000/-home-user-rsd-minigit-smoke-20261030T004243Z-box-work/a4a25228-6d5a-407b-bbaa-5ec7f9b11e63/tasks/a1e2c2da446a22040.output",
+        "target": "/home/user/rsd/minigit/smoke/20261030T004243Z/box/config/projects/-home-user-rsd-minigit-smoke-20261030T004243Z-box-work/a4a25228-6d5a-407b-bbaa-5ec7f9b11e63/subagents/agent-a1e2c2da446a22040.jsonl"
+      }
+    ]
+  },
+  "positiveControl": {
+    "samples": 8,
+    "dummyInEnviron": 32
   },
   "survivors": 0,
   "statePhase": "closed",
