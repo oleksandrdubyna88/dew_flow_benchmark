@@ -1,0 +1,43 @@
+{
+  "source": {
+    "file": "todo/PLAN_minigit_stack_bench.md",
+    "commit": "85c54b790a37479a32fc88b7b0b4353652fed601",
+    "section": "4.3"
+  },
+  "templates": {
+    "v1": "Implement minigit as described in SPEC-v1.txt using {STACK}. The executable must be named 'minigit' and be runnable as ./minigit. For compiled languages, include a Makefile or build script. For interpreted languages, ensure the minigit file has a proper shebang line and is executable. Verify your implementation passes all tests by running: bash test-v1.sh {STACK_SENTENCE}",
+    "v2": "You are in a workspace copied from the v1 implementation. Read SPEC-v2.txt and modify the existing minigit implementation in place to satisfy the full v2 spec while preserving all v1 behavior. Do not start over unless it is strictly necessary. Verify your implementation passes all tests by running: bash test-v2.sh {STACK_SENTENCE}"
+  },
+  "slots": {
+    "csharp": {
+      "STACK": "C#",
+      "STACK_SENTENCE": "Use C# 14 on .NET 10 (SDK 10.0.113 is installed)."
+    },
+    "node": {
+      "STACK": "TypeScript",
+      "STACK_SENTENCE": "Use TypeScript run directly by Node 26 (native type stripping, no build step), with `tsc --noEmit` as the type check."
+    }
+  },
+  "prompts": {
+    "csharp": {
+      "v1": {
+        "text": "Implement minigit as described in SPEC-v1.txt using C#. The executable must be named 'minigit' and be runnable as ./minigit. For compiled languages, include a Makefile or build script. For interpreted languages, ensure the minigit file has a proper shebang line and is executable. Verify your implementation passes all tests by running: bash test-v1.sh Use C# 14 on .NET 10 (SDK 10.0.113 is installed).",
+        "sha256": "dc66d95a6073b0659bd939abfcdc55a198c7e1c4bd1fd503365aa94f3cd85f8b"
+      },
+      "v2": {
+        "text": "You are in a workspace copied from the v1 implementation. Read SPEC-v2.txt and modify the existing minigit implementation in place to satisfy the full v2 spec while preserving all v1 behavior. Do not start over unless it is strictly necessary. Verify your implementation passes all tests by running: bash test-v2.sh Use C# 14 on .NET 10 (SDK 10.0.113 is installed).",
+        "sha256": "17ef74b5c58ec16dd0e41c931e29f53d22978583804659f24ec28100b0fa6d10"
+      }
+    },
+    "node": {
+      "v1": {
+        "text": "Implement minigit as described in SPEC-v1.txt using TypeScript. The executable must be named 'minigit' and be runnable as ./minigit. For compiled languages, include a Makefile or build script. For interpreted languages, ensure the minigit file has a proper shebang line and is executable. Verify your implementation passes all tests by running: bash test-v1.sh Use TypeScript run directly by Node 26 (native type stripping, no build step), with `tsc --noEmit` as the type check.",
+        "sha256": "2e354d8e24b99b7fe423346177ab6aeecc1cd7bffe2d60faab738bf55f91b963"
+      },
+      "v2": {
+        "text": "You are in a workspace copied from the v1 implementation. Read SPEC-v2.txt and modify the existing minigit implementation in place to satisfy the full v2 spec while preserving all v1 behavior. Do not start over unless it is strictly necessary. Verify your implementation passes all tests by running: bash test-v2.sh Use TypeScript run directly by Node 26 (native type stripping, no build step), with `tsc --noEmit` as the type check.",
+        "sha256": "976ac2b6c390a9027173d4fa7076c224ebbf2be06c08b597916a396dd2354480"
+      }
+    }
+  }
+}
