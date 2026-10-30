@@ -207,8 +207,9 @@ public sealed class RunArmSchemeTests
 
         run.Code.Should().Be(0, run.Error + run.Output);
         run.Output.Should().Contain($"  git → {Path.GetFullPath(shim)}", "the shim is a regular file: its real path is its own");
-        var runs = File.ReadAllLines(root.MarkerFile("git"));
+        var runs = File.Exists(root.MarkerFile("git")) ? File.ReadAllLines(root.MarkerFile("git")) : [];
         var asked = runs.Where(line => line.StartsWith(shim, StringComparison.Ordinal)).ToList();
+        asked.Should().HaveCountGreaterThanOrEqualTo(3, "the git shim should have recorded the arm's git runs: the gate's .before, the heads and the diff");
         asked.Count(line => line.Contains("rev-parse HEAD", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(1, "the gate's .before");
         asked.Count(line => line.Contains("rev-parse --short HEAD", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(8, "every start and end line");
         asked.Count(line => line.Contains(" diff ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(1, "the diff of the gate");
