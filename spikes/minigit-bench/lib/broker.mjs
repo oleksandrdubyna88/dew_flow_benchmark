@@ -86,19 +86,26 @@ const refusedByReason = lines => lines.filter(l => l.event === 'refused')
 /** A settled line whose model the price table did not hold: it was charged at the dearest known rates, and says so. */
 const isUnpriced = l => l.priced?.known === false && l.priced?.usd !== undefined;
 
-/** The ledger read out of `broker.ndjson` lines: the 4th cost view `B`, beside E, O and T. */
+/**
+ * The ledger read out of `broker.ndjson` lines: the 4th cost view `B`, beside E, O and T. A ledger that ends with the sealed `summary` line (`seal()`) is read as the seal
+ * reported it: `spentUsd` is the settled spend plus the unsettled reservations and `lowerBound` says it may be more, the same two figures as `broker.json` and
+ * `meta.broker`. Without one, `spentUsd` is the sum of the settled lines and an unsettled request makes it a lower bound.
+ */
 export function brokerView(lines) {
   const settled = lines.filter(l => l.event === 'settled');
   const forwarded = lines.filter(l => l.event === 'forwarding');
   const done = new Set(settled.map(l => l.seq));
+  const sealed = lines.findLast(l => l.event === 'summary' && l.sealed === true);
+  const unsettled = forwarded.filter(l => !done.has(l.seq)).length;
   return {
     present: lines.length > 0,
     forwarded: forwarded.length,
     refused: lines.filter(l => l.event === 'refused').length,
     refusedByReason: refusedByReason(lines),
     unpricedModels: [...new Set(settled.filter(isUnpriced).map(l => l.model))],
-    unsettled: forwarded.filter(l => !done.has(l.seq)).length,
-    spentUsd: settled.reduce((a, l) => a + l.chargedUsd, 0),
+    unsettled,
+    spentUsd: sealed === undefined ? settled.reduce((a, l) => a + l.chargedUsd, 0) : sealed.spentUsd,
+    lowerBound: sealed === undefined ? unsettled > 0 : sealed.lowerBound === true,
     settled: settled.map(l => ({ seq: l.seq, model: l.model, usage: l.usage, chargedUsd: l.chargedUsd, status: l.status, clientClosedEarly: l.clientClosedEarly, ...(isUnpriced(l) ? { unpriced: true } : {}) })),
   };
 }

@@ -396,6 +396,37 @@ test('Sealing_after_the_drain_limit_reports_settled_plus_reservations_as_a_lower
   }
 });
 
+test('Replaying_a_sealed_ledger_gives_the_same_spend_and_lower_bound_as_the_seal_with_an_unsettled_reservation_counted', async () => {
+  const stub = await stubUpstream(slowStream({}));
+  const b = await startBroker({ stub, capUsd: 10 });
+  try {
+    await viaSocket(b.socketPath, { abortAfterFirstChunk: true });
+    assert.equal((await b.broker.drain(150)).drained, false);
+    const sealed = b.broker.seal();
+    const replay = brokerView(b.lines);
+    assert.equal(sealed.lowerBound, true);
+    assert.equal(replay.spentUsd, sealed.summary.spentUsd, 'the replay of the ledger is the sealed B, reservation included (0.05), not the settled 0');
+    assert.equal(replay.spentUsd, 0.05);
+    assert.equal(replay.lowerBound, sealed.lowerBound);
+    assert.equal(replay.unsettled, 1);
+    // a clean sealed ledger: nothing unsettled, not a lower bound, spend equals the settled sum
+    const idle = await stubUpstream((_q, res) => json(res, 200, OK_JSON));
+    const clean = await startBroker({ stub: idle });
+    try {
+      await viaSocket(clean.socketPath);
+      const s2 = clean.broker.seal();
+      const r2 = brokerView(clean.lines);
+      assert.deepEqual([r2.spentUsd, r2.lowerBound], [s2.summary.spentUsd, false]);
+    } finally {
+      await clean.close();
+      await idle.close();
+    }
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('Close_destroys_an_in_flight_upstream_request_and_a_clean_seal_is_not_a_lower_bound', async () => {
   const marks = {};
   const stub = await stubUpstream(slowStream(marks, 500));
@@ -568,6 +599,7 @@ test('brokerView_reads_the_ledger_lines', () => {
   assert.deepEqual(v.refusedByReason, { cap: 1, path: 2, body: 0 });
   assert.equal(v.spentUsd, 0.1);
   assert.equal(v.unsettled, 1, 'seq 3 never settled');
+  assert.equal(v.lowerBound, true, 'with no sealed summary, an unsettled request means the settled spend is a floor');
   assert.deepEqual(v.settled, [{ seq: 1, model: 'm', usage: { a: 1 }, chargedUsd: 0.1, status: 200, clientClosedEarly: false }]);
-  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, refusedByReason: { cap: 0, path: 0, body: 0 }, unpricedModels: [], unsettled: 0, spentUsd: 0, settled: [] });
+  assert.deepEqual(brokerView([]), { present: false, forwarded: 0, refused: 0, refusedByReason: { cap: 0, path: 0, body: 0 }, unpricedModels: [], unsettled: 0, spentUsd: 0, lowerBound: false, settled: [] });
 });
