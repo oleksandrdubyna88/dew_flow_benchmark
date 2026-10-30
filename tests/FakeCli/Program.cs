@@ -133,6 +133,11 @@ public sealed class Script
     /// and sleeps until it is killed — a CLI hung mid-stream, or a cell a test kills at a deterministic point.</summary>
     public int HoldAfterLine => Int("holdAfterLine", 0);
 
+    /// <summary>A replay writes these to STDERR, the n-th (flushed) just before its n-th stdout line — a CLI that warns while it streams, for a
+    /// test watching stderr arrive beside stdout (model arms E1.S5). Empty, the default, writes no stderr, as before; a replay holding any
+    /// leaves the one-write fast path and goes line by line.</summary>
+    public IReadOnlyList<string> StderrBeforeLines => [.. (Node("stderrBeforeLines") as JsonArray ?? []).Select(n => n?.GetValue<string>() ?? string.Empty)];
+
     /// <summary>The fake plays the scouts' claim ASSESSOR (codex <c>-o</c>): it reads the blinded rows out of the prompt and writes one verdict
     /// per row to the last-message file — <see cref="AssessVerdicts"/> maps a substring of a row to its verdict (first match wins), anything
     /// else gets <see cref="AssessDefault"/>, and a row matching <see cref="AssessSkip"/> is left out of the answer (an unanswered id).</summary>
@@ -250,7 +255,7 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
     {
         var text = File.ReadAllText(file).Replace("__CWD__", JsonEscaped(Directory.GetCurrentDirectory()), StringComparison.Ordinal);
 
-        if (script.LineDelayMs == 0 && script.HoldAfterLine == 0)
+        if (script.LineDelayMs == 0 && script.HoldAfterLine == 0 && script.StderrBeforeLines.Count == 0)
         {
             using var stdout = Console.OpenStandardOutput();
             stdout.Write(Encoding.UTF8.GetBytes(text));
@@ -259,6 +264,7 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
         }
 
         var lines = text.Split('\n');
+        var stderr = script.StderrBeforeLines;
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -266,6 +272,12 @@ public sealed class Behaviour(Script script, string[] args, string prompt, int c
             {
                 File.WriteAllText(Path.Combine(FakeHome.Of(Program.ModelOf(args)), $"held-{Environment.ProcessId}"), i.ToString(CultureInfo.InvariantCulture));
                 return Hang();
+            }
+
+            if (i < stderr.Count)
+            {
+                Console.Error.Write(stderr[i] + "\n");
+                Console.Error.Flush();
             }
 
             Console.Out.Write(lines[i] + (i < lines.Length - 1 ? "\n" : string.Empty));

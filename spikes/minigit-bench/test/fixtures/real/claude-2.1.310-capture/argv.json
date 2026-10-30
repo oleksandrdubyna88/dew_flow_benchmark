@@ -1,0 +1,42 @@
+{
+  "exe": "claude",
+  "argv": [
+    "-p",
+    "--model",
+    "opus",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--forward-subagent-text",
+    "--include-hook-events",
+    "--setting-sources",
+    "project",
+    "--settings",
+    "/cap/settings.json",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "/cap/mcp.json",
+    "--max-budget-usd",
+    "1.5",
+    "--tools",
+    "Agent,Bash,Read,Glob"
+  ],
+  "envKeys": [
+    "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS",
+    "CLAUDE_CODE_ENABLE_TELEMETRY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CONFIG_DIR",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "LANG",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_PROTOCOL",
+    "OTEL_LOGS_EXPORTER",
+    "OTEL_LOGS_EXPORT_INTERVAL",
+    "OTEL_LOG_TOOL_DETAILS",
+    "OTEL_LOG_USER_PROMPTS",
+    "OTEL_METRICS_EXPORTER",
+    "OTEL_METRIC_EXPORT_INTERVAL",
+    "PATH"
+  ]
+}

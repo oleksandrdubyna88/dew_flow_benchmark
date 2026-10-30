@@ -182,7 +182,7 @@ A completed cell resets the lane breaker. `LegDrain`'s tally sets `Consecutive =
     the bench-before-requeue order closes.
   - **A resume after the account is back** (the switch removed) settles the requeued cells at attempt 2, in fresh
     directories.
-- **CLI.** `FinishAsync` maps `AccountOut` to exit 3 (`ExitCodes.Environment`, `hosts/Cli/ExitCodes.cs:21`) and
+- **CLI.** `FinishAsync` maps `AccountOut` to exit 3 (`ExitCodes.Environment`, `src/Bench.Hosting/ExitCodes.cs:21`) and
   leaves the run `Running`.
 - **Whole suite.** Run it after the change.
 

@@ -1,0 +1,3 @@
+# The eight brief templates are the part-6 shell harness's bytes, pinned by SHA-256 in BriefFillerTests.
+# A checkout that converts line endings would change them and make the pin fail (or, worse, pass on a different file).
+tools/model-arms/briefs/*.template.md -text

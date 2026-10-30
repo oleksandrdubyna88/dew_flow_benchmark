@@ -1,0 +1,10 @@
+{"t":1793294179499,"hook_event_name":"PreToolUse","tool_name":"Agent","tool_use_id":"toolu_01PctevvwTH2jvos18UETJvj","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294181060,"hook_event_name":"PreToolUse","tool_name":"Agent","tool_use_id":"toolu_018cvLcY5zRsWHnpWyRxv4U1","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294182505,"hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_01L2qAAHVD3vLzXa2C6kiUFb","agent_id":"a92c946339690ef15","session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294182641,"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"toolu_01L2qAAHVD3vLzXa2C6kiUFb","agent_id":"a92c946339690ef15","session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294183594,"hook_event_name":"PostToolUse","tool_name":"Agent","tool_use_id":"toolu_018cvLcY5zRsWHnpWyRxv4U1","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294189029,"hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_01FwKCb89rgEfeBBx1j1Lec8","agent_id":"a1686e8a78e616d8a","session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294189080,"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"toolu_01FwKCb89rgEfeBBx1j1Lec8","agent_id":"a1686e8a78e616d8a","session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294190163,"hook_event_name":"PostToolUse","tool_name":"Agent","tool_use_id":"toolu_01PctevvwTH2jvos18UETJvj","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294193662,"hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_01YVi5gQPLUL5SpA2ayk13or","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
+{"t":1793294193727,"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"toolu_01YVi5gQPLUL5SpA2ayk13or","agent_id":null,"session_id":"b416bd6c-dddc-49de-b648-4aea5d61ba9a"}
