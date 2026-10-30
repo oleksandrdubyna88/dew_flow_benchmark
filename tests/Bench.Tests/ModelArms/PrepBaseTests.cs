@@ -296,7 +296,9 @@ public sealed class PrepBaseTests
 
         code.Should().Be(0, error);
         File.Exists(stale).Should().BeFalse("a half-made base is removed whole and made again");
-        File.ReadAllText(kept).Should().Be("the operator's file", "a link inside is removed, never followed");
+        File.Exists(kept).Should().BeTrue("a link inside is removed, never followed: the file it pointed at is the operator's");
+        File.Exists(folderFile).Should().BeTrue("and so is a file in the folder a link pointed at");
+        File.ReadAllText(kept).Should().Be("the operator's file");
         File.ReadAllText(folderFile).Should().Be("a file in the operator's folder");
         Directory.GetFileSystemEntries(outside).Should().HaveCount(2);
         File.Exists(bench.BaselineFile).Should().BeTrue();

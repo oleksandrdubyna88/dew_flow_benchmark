@@ -12,7 +12,7 @@ using VerbInput = ModelArms.VerbInput;
 
 namespace Bench.Tests.ModelArms;
 
-/// <summary>The <c>validate</c> verb and <c>prep-base</c>'s guard (D16, D17 c, D18, D23): every check a root must pass on this host, printed once, with
+/// <summary>The <c>validate</c> verb and the checks <c>prep-base</c> runs first (D16, D17 c, D18, D23): every check a root must pass on this host, printed once, with
 /// every refused member named, and the executables printed as the REAL paths the harness will launch.
 /// <para>
 /// What this does NOT prove: that the fabricated <c>git</c>, <c>claude</c>, <c>dotnet</c>, <c>node</c> and <c>npm</c> of the fixture run (they are empty
@@ -117,9 +117,9 @@ public sealed class ValidateVerbTests
         File.Delete(baseline);
         var neither = await RunAsync(root, "prep-base");
 
-        neither.Code.Should().Be(4);
-        neither.Error.Should().Contain("E4.S4");
-        neither.Output.Should().Contain("resolved executables:", "the guard runs the same checks and prints them the same way");
+        neither.Code.Should().Be(4, "the checks pass and prep-base goes on: the fixture's target has no rules submodule, a wrong configuration (the baseline itself is PrepBaseTests')");
+        neither.Error.Should().Contain("target.rulesSubmodule .agents/conventions is not a submodule of the target at");
+        neither.Output.Should().Contain("resolved executables:", "prep-base runs the same checks and prints them the same way");
     }
 
     /// <summary>D23 names <c>npm</c> and <c>prep-base</c> runs <c>npm ci</c> whenever <c>nodeModules</c> is set — whatever the extension's own command is (E3 §8 item 7).</summary>
