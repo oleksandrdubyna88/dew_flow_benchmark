@@ -25,29 +25,35 @@ internal static class ChecksReport
     /// <summary>Step 6: the questions of the report, asked one after the other; the first git cannot answer ends them — the sentence is the verb's exit 3.</summary>
     public static async Task<Outcome<GitFacts>> GitAsync(ChecksPlan plan, ArmGit git, CancellationToken ct)
     {
-        var target = plan.Input.Experiment.Target;
-        var baseSha = target.Base.Value;
+        var baseSha = plan.Input.Experiment.Target.Base.Value;
         var head = await git.HeadShortAsync(ct);
         var uncommitted = await git.UncommittedCountAsync(ct);
         var commits = await git.CountSinceAsync(baseSha, ct);
         var numstat = await git.NumstatAsync(baseSha, ct);
         var shortstat = await git.ShortstatAsync(baseSha, ct);
+        var present = await PresentAsync(plan, git, ct);
+        var unanswered = new[] { Reason(head), Reason(uncommitted), Reason(commits), Reason(numstat), Reason(shortstat), Reason(present) }.FirstOrDefault(reason => reason.Length > 0);
+        return unanswered is not null
+            ? Outcome<GitFacts>.Failure($"git cannot answer: {unanswered}")
+            : Outcome<GitFacts>.Success(new GitFacts(Value(head), Value(commits), Value(uncommitted), Value(numstat), Value(shortstat), Value(present)));
+    }
+
+    /// <summary>Whether the target's tests name each scenario (<c>git grep -l -F -e &lt;name&gt; -- &lt;testGlobs&gt;</c>), keyed by id; the first question git cannot answer ends the asking.</summary>
+    private static async Task<Outcome<IReadOnlyDictionary<string, bool>>> PresentAsync(ChecksPlan plan, ArmGit git, CancellationToken ct)
+    {
         var present = new Dictionary<string, bool>(StringComparer.Ordinal);
         foreach (var scenario in plan.Scenarios)
         {
-            var mentions = await git.MentionsAsync(scenario.Name, target.TestGlobs, ct);
+            var mentions = await git.MentionsAsync(scenario.Name, plan.Input.Experiment.Target.TestGlobs, ct);
             if (mentions is not Outcome<bool>.Ok { Value: var named })
             {
-                return Outcome<GitFacts>.Failure($"git cannot say whether the tests name scenario {scenario.Id}: {Reason(mentions)}");
+                return Outcome<IReadOnlyDictionary<string, bool>>.Failure($"whether the tests name scenario {scenario.Id}: {Reason(mentions)}");
             }
 
             present[scenario.Id] = named;
         }
 
-        var unanswered = new[] { Reason(head), Reason(uncommitted), Reason(commits), Reason(numstat), Reason(shortstat) }.FirstOrDefault(reason => reason.Length > 0);
-        return unanswered is not null
-            ? Outcome<GitFacts>.Failure($"git cannot answer: {unanswered}")
-            : Outcome<GitFacts>.Success(new GitFacts(Value(head), Value(commits), Value(uncommitted), Value(numstat), Value(shortstat), present));
+        return Outcome<IReadOnlyDictionary<string, bool>>.Success(present);
     }
 
     /// <summary>Step 7's CTRF: <c>out/objective/&lt;ctrfFile&gt;</c> through the bounded road (64 MiB — the real one is 11.7 MB), as text; why it cannot be read otherwise — absent, a link, a FIFO, past the limit, not a CTRF object. (The name is a plain file name: the experiment reader refuses a separator or a climbing segment in <c>suite.ctrfFile</c>.) The caller reads a failure as no tests and says why.</summary>

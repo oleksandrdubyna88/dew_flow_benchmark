@@ -48,54 +48,15 @@ internal sealed class ObjectiveRun : IDisposable
     public string KeptAside { get; }
 
     /// <summary>Step 5's beginning: the earlier folder aside, the new one made exclusively and its identity taken, the four logs created. Any failure leaves nothing held.</summary>
-    public static Outcome<ObjectiveRun> Begin(ArmPaths paths, string stamp, PlatformRoad road)
-    {
-        var aside = Aside(paths, stamp);
-        if (aside is not Outcome<string>.Ok { Value: var kept })
-        {
-            return Outcome<ObjectiveRun>.Failure(Reason(aside));
-        }
-
-        var made = Made(paths, road);
-        if (made is not Outcome<FolderIdentity>.Ok { Value: var identity })
-        {
-            return Outcome<ObjectiveRun>.Failure(Reason(made));
-        }
-
-        var logs = Logs(paths);
-        return logs is Outcome<ToolLog[]>.Ok { Value: var held }
-            ? Outcome<ObjectiveRun>.Success(new ObjectiveRun(paths, road, identity, kept, held))
-            : Outcome<ObjectiveRun>.Failure(Reason(logs));
-    }
+    public static Outcome<ObjectiveRun> Begin(ArmPaths paths, string stamp, PlatformRoad road) =>
+        Aside(paths, stamp).Bind(kept => Made(paths, road).Bind(identity => Logs(paths).Map(logs => new ObjectiveRun(paths, road, identity, kept, logs))));
 
     /// <summary>The four stages in the shell's order. A tool that did not START ends the run with the sentence saying so; a tool that exits non-zero, or is killed at its wall, is a RESULT. A stop travels up as the cancellation it is.</summary>
-    public async Task<Outcome<StageRuns>> RunAsync(ObjectiveStages stages, CancellationToken ct)
-    {
-        var build = await OneAsync(stages, TargetArgv.Build(stages.Target, stages.Paths, stages.CloneFolder), _build, ct);
-        if (build is not Outcome<StageRun>.Ok { Value: var built })
-        {
-            return Outcome<StageRuns>.Failure(Reason(build));
-        }
-
-        var suite = await OneAsync(stages, TargetArgv.Suite(stages.Target, stages.Paths, stages.CloneFolder, stages.Results), _suite, ct);
-        if (suite is not Outcome<StageRun>.Ok { Value: var tested })
-        {
-            return Outcome<StageRuns>.Failure(Reason(suite));
-        }
-
-        var format = await FormatAsync(stages, ct);
-        if (format is not Outcome<StageRun>.Ok { Value: var formatted })
-        {
-            return Outcome<StageRuns>.Failure(Reason(format));
-        }
-
-        var extension = await OneAsync(stages, TargetArgv.Extension(stages.Target, stages.Paths, stages.CloneFolder), _extension, ct);
-        return extension is Outcome<StageRun>.Ok { Value: var extended }
-            ? Outcome<StageRuns>.Success(new StageRuns(built, tested, formatted, extended))
-            : Outcome<StageRuns>.Failure(Reason(extension));
-    }
-
-    private static string Reason<T>(Outcome<T> failed) => ((Outcome<T>.Fail)failed).Reason;
+    public Task<Outcome<StageRuns>> RunAsync(ObjectiveStages stages, CancellationToken ct) =>
+        OneAsync(stages, TargetArgv.Build(stages.Target, stages.Paths, stages.CloneFolder), _build, ct).BindAsync(built =>
+            OneAsync(stages, TargetArgv.Suite(stages.Target, stages.Paths, stages.CloneFolder, stages.Results), _suite, ct).BindAsync(tested =>
+                FormatAsync(stages, ct).BindAsync(formatted =>
+                    OneAsync(stages, TargetArgv.Extension(stages.Target, stages.Paths, stages.CloneFolder), _extension, ct).MapAsync(extended => new StageRuns(built, tested, formatted, extended)))));
 
     /// <summary>Step 7: the empty text while <c>out/objective</c> is still the folder made; otherwise the sentence saying what it is now.</summary>
     public string StillTheFolderMade() => ObjectiveFolder.Changed(_paths.ObjectiveFolder, _made, _road);
@@ -127,14 +88,12 @@ internal sealed class ObjectiveRun : IDisposable
         }
     }
 
-    private static Outcome<string> Aside(ArmPaths paths, string stamp)
-    {
-        var present = KernelFacts.Present(paths.ObjectiveFolder);
-        if (present is not Outcome<bool>.Ok { Value: true })
-        {
-            return present.Match(_ => Outcome<string>.Success(string.Empty), Outcome<string>.Failure);
-        }
+    /// <summary>An earlier <c>out/objective</c> — a folder, a file or a link, a dangling one too — renamed to <c>objective.prev-&lt;stamp&gt;</c>, as what it is; the empty text when there was none.</summary>
+    private static Outcome<string> Aside(ArmPaths paths, string stamp) =>
+        KernelFacts.Present(paths.ObjectiveFolder).Bind(present => present ? Moved(paths, stamp) : Outcome<string>.Success(string.Empty));
 
+    private static Outcome<string> Moved(ArmPaths paths, string stamp)
+    {
         var kept = paths.ObjectivePrevious(stamp);
         if (KernelFacts.Present(kept) is not Outcome<bool>.Ok { Value: false })
         {
@@ -193,13 +152,15 @@ internal sealed class ObjectiveRun : IDisposable
     private async Task<Outcome<StageRun>> FormatAsync(ObjectiveStages stages, CancellationToken ct)
     {
         var changed = await stages.ChangedCs(ct);
-        if (changed is Outcome<IReadOnlyList<string>>.Fail failed)
-        {
-            return Outcome<StageRun>.Failure($"git cannot name the .cs files changed since the base: {failed.Reason}");
-        }
+        return await changed.Match(
+            files => FormatVerbsAsync(stages, TargetArgv.Format(stages.Target, stages.Paths, stages.CloneFolder, files), ct),
+            reason => Task.FromResult(Outcome<StageRun>.Failure($"git cannot name the .cs files changed since the base: {reason}")));
+    }
 
+    private async Task<Outcome<StageRun>> FormatVerbsAsync(ObjectiveStages stages, IReadOnlyList<ToolCommand> commands, CancellationToken ct)
+    {
         var last = new StageRun(Bench.Domain.Trace.CapturedCount.Number(0), 0, Killed: false);
-        foreach (var command in TargetArgv.Format(stages.Target, stages.Paths, stages.CloneFolder, ((Outcome<IReadOnlyList<string>>.Ok)changed).Value))
+        foreach (var command in commands)
         {
             var one = await OneAsync(stages, command, _format, ct);
             if (one is not Outcome<StageRun>.Ok { Value: var ran })

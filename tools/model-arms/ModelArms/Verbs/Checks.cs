@@ -46,16 +46,13 @@ public static class ChecksVerb
     }
 
     /// <summary>Full mode (step 5, then 6–9): the folder made and the logs held, the four stages, git's facts, the folder's identity, <c>stages.json</c>, the held logs read back, the report. A stop travels up as the cancellation it is; every other failure is exit 3 and no report.</summary>
-    private static async Task<Passage<int>> FullAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git)
-    {
-        var ct = plan.Input.Verb.Stopping;
-        var stamp = BaseLeftovers.Stamp(seams.Clock.GetUtcNow());
-        var began = ObjectiveRun.Begin(plan.Paths, stamp, PlatformFactsReader.CurrentRoad);
-        if (began is not Outcome<ObjectiveRun>.Ok { Value: var run })
-        {
-            return Stopped(plan, ((Outcome<ObjectiveRun>.Fail)began).Reason);
-        }
+    private static Task<Passage<int>> FullAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git) =>
+        ObjectiveRun.Begin(plan.Paths, BaseLeftovers.Stamp(seams.Clock.GetUtcNow()), PlatformFactsReader.CurrentRoad).Match(
+            run => MeasuredAsync(plan, seams, git, run),
+            reason => Task.FromResult(Stopped(plan, reason)));
 
+    private static async Task<Passage<int>> MeasuredAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git, ObjectiveRun run)
+    {
         using (run)
         {
             if (run.KeptAside.Length > 0)
@@ -66,23 +63,22 @@ public static class ChecksVerb
             var target = plan.Input.Experiment.Target;
             var tools = new TargetTools(TargetEnvironment.Of(plan.Input.Verb.Environment), seams.Clock);
             var stages = new ObjectiveStages(tools, target, plan.Tools, plan.Paths.CloneFolder, plan.Paths.ObjectiveFolder, seams.Walled, token => git.ChangedCsAsync(target.Base.Value, token));
-            var ran = await run.RunAsync(stages, ct);
-            if (ran is not Outcome<StageRuns>.Ok { Value: var runs })
-            {
-                return Stopped(plan, ((Outcome<StageRuns>.Fail)ran).Reason);
-            }
-
-            var facts = await ChecksReport.GitAsync(plan, git, ct);
-            if (facts is not Outcome<GitFacts>.Ok { Value: var gathered })
-            {
-                return Stopped(plan, ((Outcome<GitFacts>.Fail)facts).Reason);
-            }
-
-            return Replaced(plan, run) is { Length: > 0 } changed
-                ? Stopped(plan, $"out/objective was replaced while the arm's code ran — no report ({changed})", reportWord: false)
-                : Published(plan, seams, run, runs, gathered);
+            var ran = await run.RunAsync(stages, plan.Input.Verb.Stopping);
+            return await ran.Match(runs => GatheredAsync(plan, seams, git, run, runs), reason => Task.FromResult(Stopped(plan, reason)));
         }
     }
+
+    private static async Task<Passage<int>> GatheredAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git, ObjectiveRun run, StageRuns runs)
+    {
+        var facts = await ChecksReport.GitAsync(plan, git, plan.Input.Verb.Stopping);
+        return facts.Match(gathered => Settled(plan, seams, run, runs, gathered), reason => Stopped(plan, reason));
+    }
+
+    /// <summary>The folder is looked at once more, after every child — the arm's code and git alike — has ended: a name that now reaches another folder ends the verb before anything is read through it or written into it.</summary>
+    private static Passage<int> Settled(ChecksPlan plan, ChecksSeams seams, ObjectiveRun run, StageRuns runs, GitFacts git) =>
+        run.StillTheFolderMade() is { Length: > 0 } changed
+            ? Stopped(plan, $"out/objective was replaced while the arm's code ran — no report ({changed})", reportWord: false)
+            : Published(plan, seams, run, runs, git);
 
     /// <summary>Everything after the folder is known to be the one made: <c>stages.json</c> staged and renamed over its name, the two logs read back from the handles, the report.</summary>
     private static Passage<int> Published(ChecksPlan plan, ChecksSeams seams, ObjectiveRun run, StageRuns runs, GitFacts git)
@@ -97,26 +93,21 @@ public static class ChecksVerb
         return ChecksReport.Publish(plan, ChecksReport.Facts(plan, runs, git, suite, extension), seams);
     }
 
-    private static string Replaced(ChecksPlan plan, ObjectiveRun run) => run.StillTheFolderMade();
-
     /// <summary><c>--parse-only</c>: no stage runs; the exits are <c>stages.json</c>'s (absent: four exits nobody recorded; refused: exit 4), the four logs and the CTRF are read by their paths through the bounded road, and git is asked as in a full run.</summary>
-    private static async Task<Passage<int>> ParseOnlyAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git)
+    private static Task<Passage<int>> ParseOnlyAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git) =>
+        Task.FromResult(StagesOf(plan)).ThenAsync(runs => ReadAsync(plan, seams, git, runs));
+
+    private static async Task<Passage<int>> ReadAsync(ChecksPlan plan, ChecksSeams seams, ArmGit git, StageRuns runs)
     {
-        var recorded = StagesOf(plan);
-        if (recorded is not Passage<StageRuns>.Through { Value: var runs })
-        {
-            return new Passage<int>.Stopped(((Passage<StageRuns>.Stopped)recorded).ExitCode, ((Passage<StageRuns>.Stopped)recorded).Lines);
-        }
-
         var facts = await ChecksReport.GitAsync(plan, git, plan.Input.Verb.Stopping);
-        if (facts is not Outcome<GitFacts>.Ok { Value: var gathered })
-        {
-            return Stopped(plan, ((Outcome<GitFacts>.Fail)facts).Reason);
-        }
+        return facts.Match(gathered => ParsedPublished(plan, seams, runs, gathered), reason => Stopped(plan, reason));
+    }
 
+    private static Passage<int> ParsedPublished(ChecksPlan plan, ChecksSeams seams, StageRuns runs, GitFacts git)
+    {
         var suite = ChecksReport.LogByPath(plan, plan.Paths.ObjectiveSuiteLog);
         var extension = ChecksReport.LogByPath(plan, plan.Paths.ObjectiveExtensionLog);
-        return ChecksReport.Publish(plan, ChecksReport.Facts(plan, runs, gathered, suite, extension), seams);
+        return ChecksReport.Publish(plan, ChecksReport.Facts(plan, runs, git, suite, extension), seams);
     }
 
     private const int StagesLimit = 64 * 1024;

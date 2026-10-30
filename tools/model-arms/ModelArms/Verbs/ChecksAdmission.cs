@@ -56,28 +56,30 @@ internal static class ChecksAdmission
     /// <summary>Step 2: the PATH and the two configuration folders judged, then each executable resolved ONCE to the real path that is printed and launched (D17 c, d); the isolation line printed — nothing is restored.</summary>
     private static Passage<Resolved> Equip(ExperimentInput input, Located placed)
     {
-        var environment = input.Verb.Environment;
         var roots = ExecutableRule.ForbiddenRoots(input.Experiment.Target.Source, input.Experiment.Root);
-        var refusal = LaunchAdmission.FirstRefusal(environment, roots);
-        if (refusal.Length > 0)
-        {
-            return Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}");
-        }
-
+        var refusal = LaunchAdmission.FirstRefusal(input.Verb.Environment, roots);
         var parseOnly = input.Verb.Flags.Has("parse-only");
+        return refusal.Length > 0
+            ? Passage<Resolved>.Stop(ExitCodes.Configuration, $"{Name}: {refusal}")
+            : Resolve(input, roots, Needed(input.Experiment.Target, parseOnly)).Bind(resolved => Printed(input, placed, resolved, parseOnly));
+    }
+
+    /// <summary>Each name resolved in turn, once; the first that does not resolve ends the walk with its sentence (exit 3 absent, 4 refused).</summary>
+    private static Passage<Dictionary<string, string>> Resolve(ExperimentInput input, IReadOnlyList<string> roots, IEnumerable<string> names)
+    {
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in Needed(input.Experiment.Target, parseOnly))
+        foreach (var name in names)
         {
-            var answer = LaunchAdmission.Resolve(Verb, name, environment, roots);
+            var answer = LaunchAdmission.Resolve(Verb, name, input.Verb.Environment, roots);
             if (answer is Passage<string>.Stopped stop)
             {
-                return new Passage<Resolved>.Stopped(stop.ExitCode, stop.Lines);
+                return new Passage<Dictionary<string, string>>.Stopped(stop.ExitCode, stop.Lines);
             }
 
             resolved[name] = ((Passage<string>.Through)answer).Value;
         }
 
-        return Printed(input, placed, resolved, parseOnly);
+        return new Passage<Dictionary<string, string>>.Through(resolved);
     }
 
     private static Passage<Resolved> Printed(ExperimentInput input, Located placed, Dictionary<string, string> resolved, bool parseOnly)
