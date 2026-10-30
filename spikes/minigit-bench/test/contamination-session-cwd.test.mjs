@@ -1,7 +1,7 @@
 // The Bash tool KEEPS the shell's working directory between calls and resets it to the project dir (the session's box/work) when a call leaves it (data session ebd0b0, series bf89: call 3 `cd src && ...`, call 4
 // `cd .. && bash test-v2.sh`; the scan began call 4 at the tree root, so `cd ..` landed in box/ and `box/test-v2.sh` was a high outside-path hit, a false `void: contaminated`). The scan models the directory across the
 // calls of one session, in call order, per agent (lib/contamination-session-cwd.mjs): the directory a call ends in begins the next Bash call of the same agent; outside the work tree it is the work tree (the CLI's
-// reset); a tool result that says "Shell cwd was reset to <dir>" is the evidence; an unknown end is an unknown start. A path under the session's own box dir that is no bind is low, never high.
+// reset); an unknown end is an unknown start; the printed "Shell cwd was reset to <dir>" line is never used to choose a start (a command can print it). A path under the session's own box dir that is no bind is low, never high.
 import './fake-home.mjs'; // first: the scan reads os.homedir() as the protected home
 import assert from 'node:assert/strict';
 import os from 'node:os';
@@ -41,8 +41,8 @@ test('The_data_session_ebd0b0_cd_src_then_cd_dotdot_ends_in_the_work_tree_and_is
 test('A_cd_into_the_tree_stays_for_every_later_call_until_a_call_leaves_the_tree', () => {
   const events = session([['cd src', 'ok'], ['ls', 'ok'], ['cd ..', 'ok'], ['cat test-v2.sh', 'ok']]);
   assert.deepEqual(hitsOf(events), []);
-  assert.deepEqual(hitsOf(session([['cd ../..', 'ok'], ['cat test-v2.sh', 'ok']])), [], 'no evidence needed: an end directory outside the tree is the work tree for the next call');
-  assert.deepEqual(hitsOf(session([['cd ../..', `ok${reset}`], ['cat test-v2.sh', 'ok']])), [], 'with the evidence the same');
+  assert.deepEqual(hitsOf(session([['cd ../..', 'ok'], ['cat test-v2.sh', 'ok']])), [], 'an end directory outside the tree is the work tree for the next call');
+  assert.deepEqual(hitsOf(session([['cd ../..', `ok${reset}`], ['cat test-v2.sh', 'ok']])), [], 'a printed reset line changes nothing');
 });
 
 test('A_directory_a_call_left_outside_the_tree_resets_the_next_call_to_the_work_tree', () => {
@@ -51,18 +51,19 @@ test('A_directory_a_call_left_outside_the_tree_resets_the_next_call_to_the_work_
   assert.deepEqual(high(session([['cd /tmp', ''], ['cat ../../harness/settings.json', '']])).length, 1, 'from the work tree two levels up is the session dir: judged as ever');
 });
 
-test('A_tool_result_that_says_the_shell_cwd_was_reset_is_the_evidence_when_the_end_is_unknown', () => {
-  const unknownEnd = 'cd "$(mktemp -d)" && ls';
-  assert.deepEqual(high(session([[unknownEnd, 'a'], ['grep -r token .', 'b']])), ['outside-path:main:Bash'], 'no evidence: the directory is unknown and a walk of it is high, as today');
-  assert.deepEqual(high(session([[unknownEnd, `a${reset}`], ['grep -r token .', 'b']])), [], 'the CLI said it was reset to the work tree');
-  assert.deepEqual(high(session([['cd -', `a${reset}`], ['cat ../../harness/settings.json', 'b']])).length, 1, 'the next call starts at the work tree, and two levels up is the session dir');
+test('A_printed_reset_line_never_chooses_a_start_an_end_outside_the_tree_is_the_work_tree', () => {
+  const crafted = 'cat ../../harness/settings.json'; // from the work tree: the session dir's harness (high); from src/: box/harness, which hides it
+  const fake = `\nShell cwd was reset to ${path.join(layout.work, 'src')}`;
+  assert.deepEqual(high(session([['cd /tmp && echo "Shell cwd was reset to x"', `a${fake}`], [crafted, 'b']])), ['outside-path:main:Bash'], 'the end is /tmp: the next call starts at the work tree root, whatever the output says');
+  assert.deepEqual(high(session([['cd ../..', `a${fake}`], [crafted, 'b']])), ['outside-path:main:Bash']);
+  assert.deepEqual(high(session([['cd ../..', `a${reset}`], [crafted, 'b']])), ['outside-path:main:Bash'], 'the true reset line changes nothing either');
 });
 
-test('A_reset_line_that_names_a_directory_outside_the_work_tree_is_no_evidence', () => {
-  const stray = `\nShell cwd was reset to ${home}`;
-  assert.deepEqual(high(session([['cd "$(mktemp -d)"', `a${stray}`], ['grep -r token .', 'b']])), ['outside-path:main:Bash'], 'the directory stays unknown');
-  const mid = `Shell cwd was reset to ${layout.work}\nmore output`;
-  assert.deepEqual(high(session([['cd "$(mktemp -d)"', mid], ['grep -r token .', 'b']])), ['outside-path:main:Bash'], 'only the last line of a result is the CLI\'s');
+test('An_unknown_end_with_a_printed_reset_line_is_still_an_unknown_start', () => {
+  for (const line of [reset, `\nShell cwd was reset to ${home}`, `\nShell cwd was reset to ${path.join(layout.work, 'src')}`]) {
+    assert.deepEqual(high(session([['cd "$(mktemp -d)" && ls', `a${line}`], ['grep -r token .', 'b']])), ['outside-path:main:Bash'], 'a walk of an unknown directory is high');
+    assert.deepEqual(high(session([['cd -', `a${line}`], ['cat ../../harness/settings.json', 'b']])), [], 'a plain relative word is skipped while the directory is unknown');
+  }
 });
 
 test('An_unknown_end_directory_is_an_unknown_start_until_a_call_names_a_known_one', () => {

@@ -1,7 +1,7 @@
 // The stream's tool_use blocks as the contamination scan's `calls`: `[{ agent: 'main' | 'child', agentId?, id?, tool, input, reset? }]`. One definition, shared by the smoke (smoke-run.mjs) and
 // the bare runner (bare-collect.mjs); moved out of smoke-run.mjs in E3b after E2.S2 merged.
 // The scan also reads the Bash tool's working directory across calls (contamination-session-cwd.mjs), so a call carries what places it: `agentId` (the stream's `parent_tool_use_id`: each subagent keeps its own shell
-// directory) and `reset` (the directory the CLI reset the shell to, when the call's result ends in "Shell cwd was reset to <dir>": the evidence). A field the stream does not hold is absent.
+// directory) and `reset` (the directory the call's result says the CLI reset the shell to: RECORDED for the report only, never read by a judgement: a command can print that line). A field the stream does not hold is absent.
 
 const RESET = /(?:^|\n)Shell cwd was reset to ([^\n]+?)\s*$/;
 
