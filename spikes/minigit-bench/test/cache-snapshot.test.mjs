@@ -140,3 +140,17 @@ test('A_snapshot_is_registered_once_per_stack_and_never_replaced', () => {
   assert.match(again.reason, /never replaced/);
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).csharp.treeSha256, 'a'.repeat(64), 'the registered value is untouched');
 });
+
+test('A_step_that_prints_another_version_than_the_recipe_pins_makes_no_snapshot', async t => {
+  if (!sandboxGate(t)) return;
+  const out = homeDir('snap-out');
+  const recipe = { hosts: 'bare', stepTimeoutMs: 60_000, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'echo 10.0.114'], expectStdout: '10.0.113' }], capture: { nuget: 'box/nuget' } } } };
+  const r = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /10\.0\.114.*pins '10\.0\.113'/);
+  assert.deepEqual(readdirSync(out), []);
+  const ok = await makeSnapshot({ stack: 'csharp', recipe: { ...recipe, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && echo 10.0.113'], expectStdout: '10.0.113' }], capture: { nuget: 'box/nuget' } } } }, root: homeDir('snap-root'), out });
+  t.after(() => makeWritable(out));
+  assert.equal(ok.ok, true, ok.reason);
+  assert.equal(ok.value.steps[0].stdout, '10.0.113', 'the version a step printed is kept in the record');
+});

@@ -6,6 +6,7 @@
   "stacks": {
     "csharp": {
       "steps": [
+        { "argv": ["dotnet", "--version"], "expectStdout": "10.0.113" },
         { "argv": ["dotnet", "new", "console", "--force", "--output", ".", "--name", "snapshotapp"] },
         { "argv": ["dotnet", "build", "--nologo"] }
       ],
@@ -14,6 +15,7 @@
     "node": {
       "resolve": { "TYPES_NODE": { "argv": ["npm", "view", "@types/node@26", "version", "--json"], "pick": "highest" } },
       "steps": [
+        { "argv": ["node", "--version"], "expectStdout": "v26.12.1" },
         { "argv": ["npm", "init", "-y"] },
         { "argv": ["npm", "install", "--no-audit", "--no-fund", "typescript@7.0.2", "@types/node@{TYPES_NODE}"] }
       ],

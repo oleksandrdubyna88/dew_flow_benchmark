@@ -160,7 +160,9 @@ async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
     if (open) return fail(`the step \`${step.argv.join(' ')}\` still holds ${open} after resolution`);
     const ran = await inBox({ ...box, command });
     if (!ran.ok) return ran;
-    steps.push({ argv: command, code: ran.value.code });
+    const printed = ran.value.stdout.trim();
+    if (step.expectStdout !== undefined && printed !== step.expectStdout) return fail(`the step \`${command.join(' ')}\` printed '${printed.slice(0, 80)}', the recipe pins '${step.expectStdout}': the toolchain is not the pinned one`);
+    steps.push({ argv: command, code: ran.value.code, stdout: printed.slice(0, 200) });
   }
   return finishSnapshot({ stack, spec, layout, out, resolved: resolved.value, steps });
 }
@@ -184,7 +186,7 @@ function finishSnapshot({ stack, spec, layout, out, resolved, steps }) {
 }
 
 /** The one place a snapshot description is turned into the JSON `inputs/cache-snapshots.json` holds (no path of the operator's home in it). */
-export const snapshotRecord = s => ({ treeSha256: s.treeSha256, parts: s.parts, sizeBytes: s.sizeBytes, packages: s.packages, resolved: s.resolved });
+export const snapshotRecord = s => ({ treeSha256: s.treeSha256, parts: s.parts, sizeBytes: s.sizeBytes, packages: s.packages, resolved: s.resolved, steps: s.steps.map(x => ({ argv: x.argv, stdout: x.stdout })) });
 
 /**
  * Register a snapshot in `inputs/cache-snapshots.json` (the pre-registered hashes and sizes, S3): the file keeps one record per stack and a stack is registered ONCE, because the tag

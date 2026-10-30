@@ -1,15 +1,4 @@
 {
-  "csharp": {
-    "treeSha256": "d8d97dda944142666e3817acb7f6a0fd066619927fcb9e391cc0bef015157515",
-    "parts": {
-      "nuget": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "dotnet": "45a7d7ab4c6fee94f2e8aa8bda65119b1e75b57bb4ec17e387b10ccd8e7c2d4d"
-    },
-    "sizeBytes": 3748,
-    "packages": [],
-    "resolved": {},
-    "madeOn": "2026-10-30"
-  },
   "node": {
     "treeSha256": "6b2e045ff624b61ee25d165b7bd47c683f23d453a3807f92aa878cea0cf7e088",
     "parts": {
