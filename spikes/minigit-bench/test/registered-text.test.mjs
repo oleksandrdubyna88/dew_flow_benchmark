@@ -95,3 +95,14 @@ test('The_amendments_header_lists_every_line_format_the_runner_reads_including_t
   const header = squash(read('amendments.md'));
   for (const part of ['By-hand verdicts: `YYYY-MM-DD | G-<n> | holds|refuted|explained | <rid> | <evidence path> | <who>`', 'Instrument lines: `YYYY-MM-DD | instrument | harness:', 'Input lines', '`YYYY-MM-DD | budget-raise | pair:<k> | n:<re-runs> | usd:<n x 1.1 x 6> | <reason>`']) assert.ok(header.includes(part), `the header has ${part}`);
 });
+test('Section_9_says_what_the_runner_does_with_the_exempt_endings_a_waiting_stop_pair_order_and_init', () => {
+  const text = section9();
+  assert.match(text, /AND its class is `killed:\*`, `void:\*` or `stop:\*`/, 'the N11 exemption names the three class families');
+  assert.match(text, /`crashed: no result` is not one of these/, 'and says a crash with no result is not exempt (MINOR-7)');
+  assert.match(text, /recorded at the top of every pass of the loop and at the end of a resume's settling/, 'a waiting stop is recorded before any launch (MINOR-2)');
+  assert.match(text, /Pairs run in order/, 'pair order (MINOR-6)');
+  assert.match(text, /`init` also refuses while an earlier series holds a session left `launching`/, 'init and an earlier series (MINOR-5)');
+  const section10 = squash(section(read('analysis-contract.md'), '### 10. The A/A', '### 11.'));
+  assert.match(section10, /no started data session.*has left `planned`/, 'a data session counts once it left planned, as hasDataSession reads it (MAJOR-1)');
+});
+
