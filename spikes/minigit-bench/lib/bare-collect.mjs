@@ -55,7 +55,7 @@ function contaminationPart({ scan, events, layout, plan, home, partnerDirs, argv
   // `allow` and `skeleton` = what the box exposed on purpose (the toolchains it bound, the session's own box dirs), read from the session's OWN argv.json (never a plan or a context: a re-collection has neither the C# nor the
   // TypeScript box in hand): a reach for those is none. The partner's dirs, the harness's, the operator's other files stay protected; a session with no readable argv.json allows nothing.
   const view = boxView({ argv: argv?.bwrap ?? [], layout, home });
-  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: view.allow, skeleton: view.skeleton, maps: view.maps, isLink: isLinkOnHost, readLink: readLinkOnHost };
+  const ctx = { rid: layout.rid, treeRoot: layout.work, home, boxHome: layout.home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy], allow: view.allow, skeleton: view.skeleton, boxDir: view.boxDir, maps: view.maps, isLink: isLinkOnHost, readLink: readLinkOnHost };
   return {
     realHits: scan.hits.filter(h => h.kind === 'own-value'),
     contamination: {

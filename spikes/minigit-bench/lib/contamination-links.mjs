@@ -55,7 +55,7 @@ function walkedBy(step, ctx) {
 }
 
 const commandOf = call => String(call.input?.command ?? '');
-const stepsOf = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? shellSteps(commandOf(call), ctx) : []);
+const stepsOf = (call, ctx) => (SHELL_TOOLS.has(call.tool) ? shellSteps(commandOf(call), ctx, call.startCwd) : []);
 const linksOfCall = (call, ctx) => stepsOf(call, ctx).flatMap(step => madeBy(step, ctx));
 
 /** Every link the calls create, `{ at: index of the call, linkAbs, targetAbs }`: what a later call of the same session may walk through, even when the link is gone by the end. */

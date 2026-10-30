@@ -149,6 +149,7 @@ export function boxView({ argv, layout, home }) {
   return Object.freeze({
     allow: Object.freeze([...new Set(binds.map(b => b.host).filter(h => !protectedDirs.includes(h)))]),
     skeleton: Object.freeze([...new Set(ancestorsOf(binds.map(b => b.box)))].filter(holdsOnlyBinds)),
+    boxDir: path.join(layout.dir, 'box'), // the session's own box skeleton dir: under it, what is no bind is nothing the box shows (the scan reads it low, never high)
     maps: Object.freeze(binds.filter(b => b.box !== b.host).map(b => Object.freeze({ host: b.host, box: b.box }))), // the box's `/tmp` is a host dir: a path the agent names there is judged at its host path
   });
 }

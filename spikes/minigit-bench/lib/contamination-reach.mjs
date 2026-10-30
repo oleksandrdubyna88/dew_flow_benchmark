@@ -84,6 +84,6 @@ function pipedReaches(steps, i, call, opts) {
 export function reachesOf(call, ctx) {
   const opts = { treeRoot: ctx.treeRoot, home: ctx.boxHome ?? ctx.home, flavour: 'posix', allow: ctx.allow ?? [], isLink: ctx.isLink };
   if (!SHELL_TOOLS.has(call.tool)) return findOutsideAccesses([call], opts).map(f => ({ ...f, walks: SEARCH_TOOLS.has(call.tool) }));
-  const steps = shellSteps(String(call.input?.command ?? ''), ctx);
+  const steps = shellSteps(String(call.input?.command ?? ''), ctx, call.startCwd);
   return steps.flatMap((step, i) => [...ownReaches(step, call, opts), ...pipedReaches(steps, i, call, opts)]);
 }

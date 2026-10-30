@@ -1,5 +1,6 @@
 // The pre-registration's generated files (E3b.S3): quoted text is verbatim from a commit of origin/main, derived files equal their script's output, the seed is a hash only.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -17,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 
 const REPO = path.resolve(spikeDir, '..', '..');
 const INPUTS = path.join(spikeDir, 'inputs');
+const hashOf = seed => createHash('sha256').update(seed).digest('hex'); // as lib/seed.mjs commits it
 const read = name => readFileSync(path.join(INPUTS, name), 'utf8');
 // The source commit is the one the committed files NAME (all three must agree): regenerating from a later main commit changes the files and needs no change here.
 const PARENT_COMMIT = /at `([0-9a-f]{40})`/.exec(readFileSync(path.join(INPUTS, 'prediction.md'), 'utf8'))[1];
@@ -127,11 +129,13 @@ test('The_registered_prompts_are_what_the_script_derives_from_the_parent', async
 test('The_seed_is_committed_as_a_hash_only', () => {
   const inputsFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? inputsFiles(path.join(dir, e.name)) : [path.join(dir, e.name)]));
   const files = inputsFiles(INPUTS);
-  assert.equal(files.some(f => path.basename(f) === 'seed.txt'), false, 'the seed is revealed AFTER the tag');
-  const seeds = files.filter(f => /mg-[0-9a-f]{16}/.test(readFileSync(f, 'utf8')));
-  assert.deepEqual(seeds.map(f => path.basename(f)), [], 'no seed-shaped string in any registered input');
   const hash = files.find(f => path.basename(f) === 'seed.sha256');
   if (hash) assert.match(readFileSync(hash, 'utf8').trim(), /^[0-9a-f]{64}$/);
+  // commit-reveal (lib/seed.mjs): after the GO A/A `seed.txt` is revealed, and then it is the seed the committed hash names; nothing else holds a seed-shaped string
+  const revealed = files.find(f => path.basename(f) === 'seed.txt');
+  if (revealed) assert.equal(hashOf(readFileSync(revealed, 'utf8').trim()), readFileSync(hash, 'utf8').trim(), 'a revealed seed hashes to the seed.sha256 committed before it');
+  const seeds = files.filter(f => f !== revealed && /mg-[0-9a-f]{16}/.test(readFileSync(f, 'utf8')));
+  assert.deepEqual(seeds.map(f => path.basename(f)), [], 'no seed-shaped string in any registered input');
   // companion: the scan does see a seed in a file
   const dir = tmpDir('inputs');
   const planted = path.join(dir, 'x.md');

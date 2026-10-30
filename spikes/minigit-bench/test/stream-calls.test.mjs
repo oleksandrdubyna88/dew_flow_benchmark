@@ -11,7 +11,7 @@ const use = (name, input, parent) => ({ type: 'assistant', ...(parent ? { parent
 
 test('Calls_are_the_tool_uses_of_the_assistant_events_main_or_child', () => {
   const calls = callsOf([{ type: 'system' }, use('Bash', { command: 'ls' }), use('Read', { file_path: '/a' }, 'toolu_1'), { type: 'user' }, use('Glob', undefined)]);
-  assert.deepEqual(calls, [{ agent: 'main', tool: 'Bash', input: { command: 'ls' } }, { agent: 'child', tool: 'Read', input: { file_path: '/a' } }, { agent: 'main', tool: 'Glob', input: {} }]);
+  assert.deepEqual(calls, [{ agent: 'main', tool: 'Bash', input: { command: 'ls' } }, { agent: 'child', agentId: 'toolu_1', tool: 'Read', input: { file_path: '/a' } }, { agent: 'main', tool: 'Glob', input: {} }]);
   assert.deepEqual(callsOf([]), []);
 });
 

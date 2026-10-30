@@ -1,4 +1,4 @@
-// The working directory of a shell command, simple command by simple command: the one ordered pass the contamination scan's path rules (`outside-path`, contamination-reach.mjs) and its link rules
+// The working directory of a shell command, simple command by simple command (and the directory it ends in, which the next call of the session begins in: contamination-session-cwd.mjs): the one ordered pass the contamination scan's path rules (`outside-path`, contamination-reach.mjs) and its link rules
 // (contamination-links.mjs) both read. A `cd` reads nothing: it only moves the directory every LATER relative path word is resolved from. Lexical (nothing is followed on the host), and
 // the same approximation as leak.mjs for what it cannot see: a command is split at `;`, `&`, `|` and a newline, quotes ignored. A heredoc body or here-string is DATA, not commands (contamination-heredoc.mjs): it
 // is no step of its own but one `data` step (`{ segment: '', words: [], data }`), whose text only the link rule reads (a script's `symlink(` call).
@@ -75,18 +75,22 @@ function pieces(commands) {
 }
 
 /**
- * Every simple command of `text`, in order, each with the directory the commands before it left: the tree root to begin with (`ctx.treeRoot`). The heredoc bodies and here-string operands are not commands
- * (contamination-heredoc.mjs): a body is one `data` step.
+ * Every simple command of `text` and the directory the whole command line ends in: `{ steps, end }`. Each step has the directory the commands before it left, `start` to begin with: the tree root, or (a call of a
+ * session after the first, contamination-session-cwd.mjs) the directory the Bash tool kept from the call before, null when that is unknown. The heredoc bodies and here-string operands are not commands
+ * (contamination-heredoc.mjs): a body is one `data` step. `end` is null when the scan cannot place it.
  */
-export function shellSteps(text, ctx) {
+export function shellRun(text, ctx, start = ctx.treeRoot) {
   const { text: commands, data } = stripData(text);
   const steps = []; // built here and appended to in place: a copy per segment would make a command of 30,000 segments quadratic; the result is a new array, nothing outside is touched
-  let state = { cwd: ctx.treeRoot, saved: [] };
+  let state = { cwd: start, saved: [] };
   for (const { segment, piped } of pieces(commands)) {
     const body = PLACEHOLDER.exec(segment.trim());
     const next = body ? dataStep(state, data[Number(body[1])]) : stepOf(state, segment, ctx);
     state = next.state;
     steps.push({ ...next.step, piped });
   }
-  return steps;
+  return { steps, end: state.cwd };
 }
+
+/** Every simple command of `text`, each with the directory the commands before it left (`shellRun`): `start` is the tree root unless the caller names the directory the call began in. */
+export const shellSteps = (text, ctx, start = ctx.treeRoot) => shellRun(text, ctx, start).steps;

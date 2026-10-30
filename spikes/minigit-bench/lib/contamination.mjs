@@ -7,7 +7,8 @@
 // masked (token-scan.mjs) before anything else looks at the text. At most one hit per rule per record.
 import { EGRESS_HOSTS } from './egress-hosts.mjs';
 import { escapeRe, firstMatch, foreignPr, foreignRunRef, isHit, lower, upstreamSolutions } from './contamination-refs.mjs';
-import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, reachesOf } from './contamination-reach.mjs';
+import { SEARCH_TOOLS, SHELL_TOOLS, isHigh, reachesOf, under } from './contamination-reach.mjs';
+import { startDirs } from './contamination-session-cwd.mjs';
 import { createdLinks, linkOut, linkWalk } from './contamination-links.mjs';
 import { maskTokens } from './token-scan.mjs';
 
@@ -67,12 +68,15 @@ function web(text, ctx, call) {
   return null;
 }
 
+/** A path under the session's own box dir (`ctx.boxDir`, `s/<rid>/box`) that is no bind: inside the box that dir holds only the binds (a tmpfs), so it reaches nothing. The binds themselves are `allow`ed and never found. */
+const inOwnBox = (resolved, ctx) => ctx.boxDir !== undefined && under(resolved, ctx.boxDir);
+
 function outsidePath(text, ctx, call) {
   const skeleton = new Set(ctx.skeleton ?? []); // a directory that only holds the box's binds: an exact reach for it shows nothing the box does not expose
   const found = reachesOf(call, ctx).filter(f => !skeleton.has(f.resolved)); // a shell command: each simple command on its own, its words from the directory the `cd` segments before it left, no heredoc body (contamination-reach.mjs)
   if (found.length === 0) return null;
   const roots = [...(ctx.partnerPaths ?? []), ...(ctx.harnessPaths ?? []), ctx.home].filter(Boolean);
-  const high = found.find(f => isHigh(f.resolved, roots, f.walks));
+  const high = found.find(f => !inOwnBox(f.resolved, ctx) && isHigh(f.resolved, roots, f.walks));
   const first = high ?? found[0];
   return { ...at(Math.max(0, text.indexOf(first.path)), high ? 'high' : 'low'), excerpt: first.excerpt ?? first.resolved };
 }
@@ -121,11 +125,13 @@ function hitsOf(record, ctx) {
  * Pure. `calls` = `[{ agent, tool, input, source? }]` (the stream's tool_use blocks, main and forwarded children, and the audit);
  * `mcpResults` = the text of every tool_result whose tool_use named an `mcp__` tool (a string, or `{ text, where? }`);
  * `ctx` = { rid, runId, runIdPattern, ownPrefix, ownOrigin, ownPrs, otherStack, partnerPaths, harnessPaths, treeRoot, home, boxHome,
- * allow, skeleton?, isLink?, readLink?, maps?, arm?, ownSecrets? }. `readLink(path)` is the target of a symbolic link on the host, or null (no link; never followed), `maps` the `{ host, box }` binds whose paths differ (the box's `/tmp`): the link rules (contamination-links.mjs). `isLink(path)` says whether a path is a symbolic link on the host: a `..` after one is not resolved lexically (leak.mjs). `home` = the OPERATOR's home (a protected root); `boxHome` = the agent's own HOME inside the box, what its `~`, `$HOME` and `${HOME}` mean (absent: `home`). `allow` = directory prefixes the box exposes on purpose; `skeleton` = directories that only hold them (exact match). `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
+ * allow, skeleton?, boxDir?, isLink?, readLink?, maps?, arm?, ownSecrets? }. `readLink(path)` is the target of a symbolic link on the host, or null (no link; never followed), `maps` the `{ host, box }` binds whose paths differ (the box's `/tmp`): the link rules (contamination-links.mjs). `isLink(path)` says whether a path is a symbolic link on the host: a `..` after one is not resolved lexically (leak.mjs). `home` = the OPERATOR's home (a protected root); `boxHome` = the agent's own HOME inside the box, what its `~`, `$HOME` and `${HOME}` mean (absent: `home`). `allow` = directory prefixes the box exposes on purpose; `skeleton` = directories that only hold them (exact match); `boxDir` = the session's own box dir: a path under it that is no bind is low, never high. A shell call is read from the directory the calls before it of the same agent left the Bash tool in (`calls[i].agentId` names a subagent, `calls[i].reset` is the stream's "Shell cwd was reset to" evidence: stream-calls.mjs). `arm` picks the egress list the `web` rule reads; absent means the registries every arm shares.
  */
 export function contaminationHits({ calls = [], mcpResults = [], ctx }) {
-  const made = createdLinks(calls, ctx); // a link a call made is known to it and to every later call, though it is deleted by the end
-  const fromCalls = calls.map((call, i) => ({ text: callText(call), call, links: made.filter(l => l.at <= i), source: call.source ?? 'call', where: `${call.agent ?? 'main'}:${call.tool}` }));
+  const starts = startDirs(calls, ctx); // the Bash tool keeps its directory between calls (contamination-session-cwd.mjs): each shell call is read from where the calls before it left the shell
+  const placed = calls.map((call, i) => ({ ...call, startCwd: starts[i] }));
+  const made = createdLinks(placed, ctx); // a link a call made is known to it and to every later call, though it is deleted by the end
+  const fromCalls = placed.map((call, i) => ({ text: callText(call), call, links: made.filter(l => l.at <= i), source: call.source ?? 'call', where: `${call.agent ?? 'main'}:${call.tool}` }));
   const fromResults = mcpResults.map((r, i) => {
     const text = typeof r === 'string' ? r : String(r?.text ?? '');
     return { text, call: null, source: 'mcp', where: typeof r === 'object' && r?.where ? r.where : `mcp:${i}` };
