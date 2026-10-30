@@ -132,11 +132,23 @@ const ruleK1 = v => {
   return verdictOf(ok, `processes carrying the marker after exit ${k.survivors}; janitor ended ${v.smoke.meta.janitorEnded}; state.json.phase ${k.statePhase}; socket files left ${k.socketsLeft}`);
 };
 
+/** Requests the broker had forwarded and not yet settled at `stopMs` (its ledger lines carry ISO `t`). */
+const inFlightAt = (lines, stopMs) => {
+  const settledBefore = new Set(lines.filter(l => l.event === 'settled' && Date.parse(l.t) <= stopMs).map(l => l.seq));
+  return lines.filter(l => l.event === 'forwarding' && Date.parse(l.t) <= stopMs && !settledBefore.has(l.seq)).length;
+};
+
 const ruleK2 = v => {
-  if (v.smoke.meta.stopped === null) return notExercised('the smoke ended by itself: no endCell, so no SIGTERM to measure');
-  const stopAt = v.smoke.checks.stoppedAt ?? null;
-  const after = stopAt === null ? 0 : v.smoke.brokerLines.filter(l => l.event === 'settled' && Date.parse(l.t) > stopAt).length;
-  return verdictOf(after > 0, `stopped by ${v.smoke.meta.stopped}; broker settled lines after the SIGTERM: ${after}`);
+  const { stopped, stoppedAt } = v.smoke.meta;
+  if (stopped === null) return notExercised('the smoke ended by itself: no endCell, so no SIGTERM to measure');
+  const stopMs = Date.parse(stoppedAt ?? '');
+  if (!Number.isFinite(stopMs)) return notExercised(`stopped by ${stopped} but no stop time was recorded in meta.json: what arrived after the SIGTERM cannot be told`);
+  const inFlight = inFlightAt(v.smoke.brokerLines, stopMs);
+  const settledAfter = v.smoke.brokerLines.filter(l => l.event === 'settled' && Date.parse(l.t) > stopMs).length;
+  const otelAfter = v.decoded.filter(x => x.line.receivedAt > stopMs && x.d.ok).reduce((n, x) => n + x.d.value.filter(r => r.name === 'api_request').length, 0);
+  const seen = `${settledAfter} broker settled line(s) and ${otelAfter} O api_request record(s) after the SIGTERM`;
+  if (inFlight === 0) return notExercised(`stopped by ${stopped}, but no request was in flight at the stop, so a record after it proves nothing (${seen})`);
+  return verdictOf(settledAfter + otelAfter > 0, `stopped by ${stopped}; ${inFlight} request(s) in flight at the stop; ${seen}`);
 };
 
 export const SMOKE_RULES = Object.freeze({

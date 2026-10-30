@@ -143,7 +143,7 @@ function supervise({ plan, d, stack, rec, signal }) {
     let closed = false;
     let stopping = null;
     const stop = reason => {
-      rec.stopped ??= reason;
+      if (rec.stopped === null) { rec.stopped = reason; rec.stoppedAtMs = d.now(); } // the first stop names the reason and the instant
       stopping ??= d.endCell({ cellId: plan.cellId, bwrapPid: child.pid, graceMs: plan.graceMs, killTree: d.killTree, procApi: d.procApi });
       return stopping;
     };
@@ -200,7 +200,7 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
   const live = attempt(rec, 'receiver.liveSum', () => rec.receiver.liveSum(), { usd: null, requests: null });
   return {
     rid: plan.layout.rid, cell: plan.cellId, startedAt: new Date(rec.startedAtMs).toISOString(), endedAt: new Date(d.now()).toISOString(), wallMs: d.now() - rec.startedAtMs,
-    exit, stopped: rec.stopped, outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
+    exit, stopped: rec.stopped, stoppedAt: rec.stoppedAtMs === null ? null : new Date(rec.stoppedAtMs).toISOString(), outcome: rec.stopped === 'readback' ? { ok: false, label: 'void: harness', detail: 'the init read-back mismatched; see readback.json' } : collected.outcome,
     cliVersion: rec.init?.claude_code_version ?? null, sessionId: rec.init?.session_id ?? rec.result?.session_id ?? null, envelopeCostUsd: rec.result?.total_cost_usd ?? null,
     samplers: rec.samplers, janitorEnded: collected.survivorsEnded, transcripts: collected.transcripts.length, transcriptsProblem: collected.transcriptsProblem,
     broker: { spentUsd: collected.broker.spentUsd, upstreamRequests: collected.broker.upstreamRequests, refused: collected.broker.refused, refusedByReason: collected.broker.refusedByReason, overCap: collected.broker.overCap, overshootUsd: collected.broker.overshootUsd },
@@ -214,7 +214,7 @@ function metaOf({ plan, d, rec, exit, collected, cleanup }) {
 
 const newRecord = (plan, d) => ({
   state: { phase: 'starting', hostPid: process.pid, hostStartTime: processStartTime(process.pid), cell: plan.cellId, startedAt: new Date(d.now()).toISOString(), heartbeatAt: new Date(d.now()).toISOString() },
-  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null,
+  finalPhase: 'closed', startedAtMs: d.now(), lastStreamAt: null, lastBrokerAt: null, cpuTicks: 0, init: null, result: null, readback: null, stopped: null, stoppedAtMs: null,
   samplers: emptyCounts(), errors: [], receiver: null, broker: null, proxy: null, child: null, settings: null, settingsSha256: null, mcpSha256: null,
 });
 

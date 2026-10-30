@@ -102,6 +102,7 @@ test('The_launch_stamps_every_line_and_collects_what_E1_reads', async t => {
   assert.equal(meta.broker.spentUsd, 0.009232);
   assert.equal(meta.janitorEnded, 0);
   assert.equal(meta.stopped, null);
+  assert.equal(meta.stoppedAt, null, 'nothing stopped it: no stop time');
   assert.deepEqual(meta.cleanup, []);
   assert.deepEqual(readdirSync(layout.net), [], 'the sockets are removed');
   await assert.rejects(new Promise((resolve, reject) => net.connect(layout.sockets.otel).once('connect', resolve).once('error', reject)), /ENOENT|ECONNREFUSED/);
@@ -267,6 +268,7 @@ test('A_read_back_mismatch_stops_the_session_through_endCell_and_names_the_field
   const result = await launchSession(planFor(layout, { settleMs: 0 }), fake.deps);
   assert.equal(result.ok, true, result.reason);
   assert.equal(result.value.meta.stopped, 'readback');
+  assert.ok(Date.parse(result.value.meta.stoppedAt) >= Date.parse(result.value.meta.startedAt), 'the stop time is in meta, as an ISO instant');
   assert.equal(result.value.meta.outcome.label, 'void: harness');
   const rb = JSON.parse(readFileSync(layout.files.readback, 'utf8'));
   assert.equal(rb.ok, false);
