@@ -15,7 +15,7 @@
 // The runner re-executes itself under `taskset -c 6,7` (an env marker stops a loop), so its broker, receiver, proxy and sampler sit on core 3, the harness's (parent 4.1).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -33,9 +33,11 @@ import { rehearsalRefusal, rehearseV2, twinOf } from './lib/rehearsal.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
 import { planSession, readRunMap } from './lib/run-map.mjs';
+import { ok } from './lib/result.mjs';
 import { commitSeed, revealSeed } from './lib/seed.mjs';
 import { spendGate, spendTotals } from './lib/spend-gate.mjs';
 import { runBounded } from './lib/run.mjs';
+import { acquireSeriesLock } from './lib/series-lock.mjs';
 
 const OPTIONS = {
   series: { type: 'string' }, what: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'accept-noisy': { type: 'string' }, 'accept-harness': { type: 'string' }, amendment: { type: 'string' },
@@ -121,7 +123,19 @@ async function cmdSnapshot(v, write) {
   return registered.ok ? EXIT.done : EXIT.config;
 }
 
+/** `run`, `resume` and `resume --settle-only` hold the series lock for the whole command (review N13); a dry run writes nothing and takes none. */
 async function cmdRun(v, write, { resume }, seams = {}) {
+  const seriesDir = path.resolve(v.series ?? '');
+  const lock = v['dry-run'] === true || !v.series || !existsSync(path.join(seriesDir, 'run-map.json')) ? ok(null) : acquireSeriesLock({ seriesDir });
+  if (!lock.ok) { write(`${resume ? 'resume' : 'run'}: ${lock.reason}`); return EXIT.config; }
+  try {
+    return await runCommand(v, write, { resume }, seams);
+  } finally {
+    lock.value?.release();
+  }
+}
+
+async function runCommand(v, write, { resume }, seams = {}) {
   const early = resume ? afterStopRefusal(v) : null;
   if (early) { write(early); return EXIT.config; }
   const settleOnly = v['settle-only'] === true;

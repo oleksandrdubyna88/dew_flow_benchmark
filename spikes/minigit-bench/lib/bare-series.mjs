@@ -14,6 +14,7 @@ import { nextStep } from './bare-schedule.mjs';
 import { appendChargeOnce, appendLedger, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
+import { ownerAlive, stateOf } from './session-state.mjs';
 import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
 import { layoutPaths } from './sandbox.mjs';
 import { spendGate } from './spend-gate.mjs';
@@ -249,12 +250,12 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
 
 // ---- resume ---------------------------------------------------------------------------------------------------------------------
 
-/** What a session directory holds, for `resumePlan`: `{ exists, hasMeta, retired, paidWork }`. */
+/** What a session directory holds, for `resumePlan`: `{ exists, hasMeta, retired, paidWork, ownerLive }`. `ownerLive`: its state file names an owner (pid + start time) that is running now. */
 export function dirFacts(ctx, rid) {
   const layout = layoutPaths(ctx.sessionsRoot, rid);
-  if (!existsSync(layout.dir)) return { exists: false, hasMeta: false, retired: false, paidWork: false };
+  if (!existsSync(layout.dir)) return { exists: false, hasMeta: false, retired: false, paidWork: false, ownerLive: false };
   const state = existsSync(layout.files.state) ? JSON.parse(readFileSync(layout.files.state, 'utf8')) : null;
-  return { exists: true, hasMeta: existsSync(layout.files.meta), retired: state?.phase === 'retired', paidWork: holdsPaidWork(layout) };
+  return { exists: true, hasMeta: existsSync(layout.files.meta), retired: state?.phase === 'retired', paidWork: holdsPaidWork(layout), ownerLive: state !== null && stateOf(state, { ownerAlive }) === 'live' };
 }
 
 const manifestsOf = ctx => (existsSync(path.join(ctx.seriesDir, 'canaries')) ? readdirSync(path.join(ctx.seriesDir, 'canaries')).map(f => path.join(ctx.seriesDir, 'canaries', f)) : []);
@@ -286,6 +287,9 @@ export async function reconcile({ ctx, deps, map, say = () => {}, settleOnly = f
   const h = holder({ ctx, map });
   const dirs = Object.fromEntries(Object.keys(map.sessions).map(rid => [rid, dirFacts(ctx, rid)]));
   const plan = resumePlan(map, dirs);
+  // a directory whose state.json names an owner that is ALIVE belongs to a runner that is still going: resume would remove or settle what that runner is running (review N13)
+  const owned = Object.values(map.sessions).filter(x => x.status === 'launching' && dirs[x.rid].ownerLive).map(x => x.rid);
+  if (owned.length > 0) return fail(`${owned.join(', ')}: the state.json of the session directory names an owner that is still running (alive by pid and start time): not removed and not settled. Wait for that process to end, or stop it`, { exit: EXIT.halt, map });
   rebuildMissingRecords({ ctx, h, plan, say });
   const actions = plan.filter(a => a.action === 'adopt' || a.action === 'void-interrupted' || a.action === 'reset');
   for (const a of actions) {

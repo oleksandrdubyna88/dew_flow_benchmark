@@ -3,7 +3,7 @@
 // and the guard were missed because the tests stubbed exactly this layer.
 import { realHome } from './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../bare-runner.mjs';
@@ -326,4 +326,27 @@ test('Resume_settle_only_is_not_refused_on_a_stopped_series_launches_nothing_and
   const misuse = await run(['--settle-only']);
   assert.equal(misuse.code, 4, '--settle-only belongs to resume');
   assert.match(misuse.out, /--settle-only/);
+});
+
+// ---- one runner per series (review N13) ---------------------------------------------------------------------------------------------
+
+test('A_run_or_resume_takes_the_series_lock_refuses_while_it_is_held_and_leaves_none_behind', async () => {
+  const w = await wiring();
+  const lock = path.join(w.seriesDir, 'series.lock');
+  const { processStartTime } = await import('../lib/session-state.mjs');
+  writeFileSync(lock, `${JSON.stringify({ pid: process.pid, startTime: processStartTime(process.pid), at: 't' })}\n`); // another runner, alive
+  for (const verb of ['run', 'resume']) {
+    const lines = [];
+    const code = await main([verb, '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs], l => lines.push(l), { repo: w.repo, home: w.home });
+    assert.equal(code, 4, verb);
+    assert.match(lines.join('\n'), new RegExp(`${verb}: the series ${path.basename(w.seriesDir)} is in use .*pid ${process.pid}`), verb);
+  }
+  const dry = await run(w, ['--dry-run']);
+  assert.equal(dry.code, 0, 'a dry run writes nothing and takes no lock');
+  const status = [];
+  assert.equal(await main(['status', '--series', w.seriesDir], l => status.push(l)), 0, 'status only reads');
+  rmSync(lock);
+  const free = await run(w);
+  assert.doesNotMatch(free.out, /is in use/, free.out);
+  assert.equal(existsSync(lock), false, 'the lock is released when the command ends, whatever it ended with');
 });

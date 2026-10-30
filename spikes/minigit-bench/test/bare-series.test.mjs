@@ -622,3 +622,27 @@ test('Settle_only_settles_and_charges_a_session_left_launching_in_a_stopped_seri
   assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort(), 'both sessions are charged: the $40 and the $500 see all of it');
   assert.equal(t.launched.length, 2, 'nothing was launched');
 });
+
+test('Resume_never_removes_or_settles_a_session_directory_whose_state_file_names_an_owner_that_is_alive', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  const { sessionLayout } = await import('../lib/sandbox.mjs');
+  const { processStartTime } = await import('../lib/session-state.mjs');
+  const id = rid('csharp', 'v1', 1);
+  let map = planSession(t.map, { rid: id, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', dummy: 'sk-ant-oat01-dummy-resume' }).value;
+  map = transition(map, id, 'launching').value;
+  const layout = sessionLayout(t.ctx.sessionsRoot, id).value; // claimed, nothing paid, no meta.json: what a reset would remove
+  const state = owner => writeFileSync(layout.files.state, `${JSON.stringify({ phase: 'running', hostPid: owner.pid, hostStartTime: owner.startTime, cell: `cell-${id}`, startedAt: 't', heartbeatAt: 't' })}\n`);
+  state({ pid: process.pid, startTime: processStartTime(process.pid) }); // another runner of this series, alive
+  const refused = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(refused.ok, false, 'a live owner: resume would race it');
+  assert.equal(refused.exit, EXIT.halt);
+  assert.match(refused.reason, new RegExp(`${id}.*still running|${id}.*alive`));
+  assert.equal(existsSync(layout.dir), true, 'the directory was not removed');
+  assert.equal(readRunMap(t.ctx.runMapFile).value?.sessions?.[id]?.status ?? 'launching', 'launching', 'and the session was not touched');
+  state({ pid: 2 ** 22 - 1, startTime: '123' }); // the owner is gone
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.equal(settled.value.sessions[id].status, 'planned', 'control: with a dead owner the unpaid claim is cleared as before');
+  assert.equal(existsSync(layout.dir), false);
+});
