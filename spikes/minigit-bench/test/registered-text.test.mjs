@@ -73,3 +73,11 @@ test('Every_flag_the_code_emits_is_a_row_of_the_flags_table_and_every_row_is_emi
 // ---- section 9 -----------------------------------------------------------------------------------------------------------------------------
 
 
+test('Settle_only_is_described_as_the_code_does_it', () => {
+  const text = section9();
+  assert.match(text, /refused when no session is `launching`/, 'settle-only is refused with nothing launching (MINOR-4)');
+  assert.match(text, /On a STOPPED series it does not compare the harness identity/);
+  assert.match(text, /on a series that is not stopped the harness identity is compared/);
+  assert.match(text, /It accepts no harness change and no input amendment/);
+});
+
