@@ -120,10 +120,11 @@ test('The_T3_rule_arms_only_on_established_coverage', () => {
 });
 
 test('A_twin_difference_is_recorded_not_refuted', () => {
-  const rep = report(makeSeries({ records: { aa0002: { class: 'killed: cap', cost: { censoredAtUsd: known(6.1), stopRuleUsd: known(6.1), cliTotalUsd: known(6.1), brokerUsd: known(6.1) }, time: { wallMs: known(90000) }, quality: { heldout: known({ percent: 80, defects: 2 }) } } } }));
+  const rep = report(makeSeries({ records: { aa0002: { class: 'killed: cap', cost: { censoredAtUsd: known(6.1), stopRuleUsd: known(6.1), cliTotalUsd: known(6.1), brokerUsd: known(6.1) }, time: { wallMs: known(90000) }, quality: { heldout: known({ percent: 80, defects: { count: 2, clauses: { c1: 2 } } }) } } } }));
   const g9 = rowOf(rep, 'G-9');
   assert.equal(g9.verdict, 'recorded', 'G-9 never gates');
   assert.ok(g9.recorded.costRatio > 20 && g9.recorded.heldoutPercentDiff === 20, JSON.stringify(g9.recorded));
+  assert.equal(g9.recorded.heldoutDefectsDiff, 2, 'the defects of the real record are { count, clauses }: the difference is of the counts');
   assert.equal(rowOf(rep, 'G-12').verdict, 'holds', 'a twin that reached the cap was stopped at settled spend >= $6');
   assert.ok(!refutedIds(rep).includes('G-9'));
 });

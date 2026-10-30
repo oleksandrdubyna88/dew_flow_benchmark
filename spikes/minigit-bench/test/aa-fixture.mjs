@@ -35,7 +35,7 @@ export const goodRecord = ({ rid, stack = 'csharp', kind = 'aa' }) => ({
     partition: known({ categories: { build_test: 6000, model_api: 40000, other_tool: 100, unattributed: 100 }, unattributed: 100, waits: 0 }),
     children: known({ launched: 0, maxConcurrent: 0, openEnded: 0, unknownStart: 0, perModel: {} }),
   },
-  quality: { buildOk: known(true), visible: known([{ script: 'test-v1.sh', passed: 11, failed: 0, expectedTotal: 11, hundredPercent: true }]), heldout: known({ percent: 100, defects: 0 }), upstreamOriginal: known([]), latency: known({ medianMs: 5 }) },
+  quality: { buildOk: known(true), visible: known([{ script: 'test-v1.sh', passed: 11, failed: 0, expectedTotal: 11, hundredPercent: true }]), heldout: known({ percent: 100, defects: { count: 0, clauses: {} } }), upstreamOriginal: known([]), latency: known({ medianMs: 5 }) },
   egress: known({ allowed: {}, refused: { 'api.anthropic.com': 12 }, nonConnect: 0, tlsRefused: {}, bytes: {}, bytesCaptured: true, cacheGrowthBytes: 1 }),
   packages: known({ packages: [], added: [], flagged: [] }), loc: known({ product: 100, test: 0, files: 1 }),
 });

@@ -85,7 +85,7 @@ export function g9(ctx) {
   const recorded = {
     costRatio: spread(pick(a, 'cost', 'stopRuleUsd'), pick(b, 'cost', 'stopRuleUsd')), wallRatio: spread(pick(a, 'time', 'wallMs'), pick(b, 'time', 'wallMs')),
     modelApiRatio: spread(pick(a, 'time', 'modelApiMs'), pick(b, 'time', 'modelApiMs')), activeMinusModelApiRatio: spread(pick(a, 'time', 'activeMinusModelApiMs'), pick(b, 'time', 'activeMinusModelApiMs')),
-    heldoutPercentDiff: diff(pick(a, 'quality', 'heldout')?.percent, pick(b, 'quality', 'heldout')?.percent), heldoutDefectsDiff: diff(pick(a, 'quality', 'heldout')?.defects, pick(b, 'quality', 'heldout')?.defects),
+    heldoutPercentDiff: diff(pick(a, 'quality', 'heldout')?.percent, pick(b, 'quality', 'heldout')?.percent), heldoutDefectsDiff: diff(pick(a, 'quality', 'heldout')?.defects?.count, pick(b, 'quality', 'heldout')?.defects?.count),
     cpuPerMask: Object.fromEntries(ctx.aa.map(f => [f.entry.mask, cpuOfMask(f)])),
   };
   return { ...row, verdict: 'recorded', recorded, observed: `${a.rid} against ${b.rid}: ${JSON.stringify(recorded)}` };
