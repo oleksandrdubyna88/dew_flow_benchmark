@@ -14,12 +14,20 @@ import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, 
 export const DRAIN_MS = 120_000;
 export const DEFAULT_UPSTREAM = Object.freeze({ host: 'api.anthropic.com', port: 443, tls: true });
 const UPSTREAM_IDLE_MS = 120_000;
-/** Request headers never forwarded: the credential (replaced), the hop-by-hop ones, and accept-encoding (so the usage parser reads plain SSE). */
-const DROPPED = Object.freeze(new Set(['authorization', 'x-api-key', 'host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding']));
+/**
+ * Request headers never forwarded: the credential (replaced), `host` and `content-length` (set from the upstream and the body read), `accept-encoding` (so the usage parser reads
+ * plain SSE), and every HOP-BY-HOP header (RFC 9110 7.6.1 and the legacy ones): they are about the client's connection to the broker, not about the request, and `upgrade` /
+ * `http2-settings` would try to switch the upstream connection's protocol. A name the `Connection` header lists is hop-by-hop for that message and is dropped too.
+ */
+const DROPPED = Object.freeze(new Set([
+  'authorization', 'x-api-key', 'host', 'content-length', 'accept-encoding',
+  'connection', 'keep-alive', 'proxy-connection', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'http2-settings',
+]));
 
-/** The headers to forward: the request's minus the closed DROPPED list, `host` set to the upstream. A new object. */
+/** The headers to forward: the request's minus the closed DROPPED list and every name its `Connection` header lists, `host` set to the upstream. A new object. */
 export function forwardHeaders(headers, upstreamHost) {
-  return { ...Object.fromEntries(Object.entries(headers).filter(([k]) => !DROPPED.has(k.toLowerCase()))), host: upstreamHost };
+  const listed = new Set(String(headers.connection ?? headers.Connection ?? '').split(',').map(n => n.trim().toLowerCase()).filter(Boolean));
+  return { ...Object.fromEntries(Object.entries(headers).filter(([k]) => !DROPPED.has(k.toLowerCase()) && !listed.has(k.toLowerCase()))), host: upstreamHost };
 }
 
 /**

@@ -301,7 +301,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   rests on the edge's behaviour and is not a property the proxy provides).
 - **The broker** (`lib/broker.mjs`, `lib/broker-routes.mjs`, `lib/budget.mjs`). On `net/api.sock`: replaces `Authorization` with the real
   token (read by the harness through `lib/secrets.mjs`), forwards every other request header (an open list: `anthropic-beta` carries the
-  OAuth capability), drops `accept-encoding` so the usage parser reads plain SSE, streams the answer back chunk by chunk, follows no
+  OAuth capability), drops `accept-encoding` so the usage parser reads plain SSE and every hop-by-hop header (`connection`, `keep-alive`, `proxy-connection`, `proxy-authenticate`, `proxy-authorization`, `te`, `trailer`, `transfer-encoding`, `upgrade`, `http2-settings`, and each name the `Connection` header lists; before, an `Upgrade: h2c` reached the upstream), streams the answer back chunk by chunk, follows no
   redirect (`502`). **It forwards and signs only `POST /v1/messages` and `POST /v1/messages/count_tokens`** (a query is allowed; the match is
   on the raw request line, origin-form only, so `..`, an encoded slash, another case, a trailing slash or an absolute-form target is off the
   list); anything else is `403`, is never forwarded or signed, and is a `refused` ledger line with `reason: "path"`. **It also reads the JSON body first**
@@ -418,6 +418,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A link planted at `box/out/audit.ndjson` is refused at every host-side read (before: its target was copied as the audit) | `agent-files-sites.test.mjs`, `agent-files.test.mjs` |
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
 | A body with a `web_search_*` (or any other non-`custom`) tool, `mcp_servers`, `container`, a URL source, a duplicate key or a content-encoding is `403` with `reason: "body"`, never forwarded, signed or reserved; an allowed body is forwarded byte for byte | `broker-body.test.mjs` |
+| No hop-by-hop header reaches the upstream, including `upgrade`, `http2-settings` and every name listed in `Connection` | `broker.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 

@@ -376,6 +376,28 @@ test('forwardHeaders_drops_the_closed_list_and_rewrites_the_host', () => {
   assert.deepEqual(out, { 'anthropic-beta': 'b', 'x-new-header': 'n', host: 'api.anthropic.com' });
 });
 
+test('forwardHeaders_drops_every_hop_by_hop_header_and_every_name_the_connection_header_lists', () => {
+  const hop = { upgrade: 'h2c', te: 'trailers', 'keep-alive': 'timeout=5', 'proxy-connection': 'keep-alive', trailer: 'x', 'http2-settings': 'AAMAAABk', connection: 'close' };
+  const out = forwardHeaders({ ...hop, 'anthropic-beta': 'b', 'x-private': 'p', 'X-Other': 'o', 'x-kept': 'k' }, 'h');
+  assert.deepEqual(out, { 'anthropic-beta': 'b', 'x-private': 'p', 'X-Other': 'o', 'x-kept': 'k', host: 'h' }, 'no hop header: control, the end-to-end ones stay');
+  const named = forwardHeaders({ connection: 'Keep-Alive, X-Private , x-other', 'x-private': 'p', 'X-Other': 'o', 'x-kept': 'k', 'anthropic-beta': 'b' }, 'h');
+  assert.deepEqual(named, { 'x-kept': 'k', 'anthropic-beta': 'b', host: 'h' }, 'a header the Connection header names is hop-by-hop for that message: dropped, whatever its case');
+});
+
+test('An_upgrade_request_reaches_the_upstream_without_the_upgrade_headers', async () => {
+  const stub = await stubUpstream((_q, res) => json(res, 200, OK_JSON));
+  const b = await startBroker({ stub });
+  try {
+    const r = await viaSocket(b.socketPath, { headers: { connection: 'Upgrade, HTTP2-Settings, x-private', upgrade: 'h2c', 'http2-settings': 'AAMAAABk', te: 'trailers', 'x-private': 'p' } });
+    assert.equal(r.status, 200);
+    const seen = stub.seen[0].headers;
+    for (const name of ['upgrade', 'http2-settings', 'te', 'x-private', 'keep-alive', 'proxy-connection', 'trailer']) assert.equal(name in seen, false, `${name} was not forwarded`);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('The_sse_usage_feeder_handles_events_split_across_chunks_and_crlf', () => {
   const f = parseSseUsage();
   const body = sseBody().replaceAll('\n', '\r\n');
