@@ -23,7 +23,7 @@ internal static class KernelFacts
     private const int AtFdCwd = -100;
     private const int AtSymlinkNoFollow = 0x100;
     private const int AtEmptyPath = 0x1000;
-    // x86-64 Linux, probed (octal in asm-generic: O_NOCTTY 0400, O_NONBLOCK 04000, O_NOFOLLOW 0400000, O_CLOEXEC 02000000). aarch64's O_NOFOLLOW differs (0100000), which the X64-only gate in ReadSmall refuses.
+    // x86-64 Linux, probed (octal in asm-generic: O_NOCTTY 0400, O_NONBLOCK 04000, O_NOFOLLOW 0400000, O_CLOEXEC 02000000). These are NOT the values of another architecture — on aarch64 O_NOFOLLOW is 0100000 and 0x20000 is O_LARGEFILE, so a caller there would FOLLOW a link. ReadSmall no longer refuses to run elsewhere: its only caller is BoundedFile, and only on BoundedRoad.Kernel (Linux x86-64 with a working statx), a structural test keeps it so.
     private const int OpenNoCtty = 0x100;
     private const int OpenNonBlock = 0x800;
     private const int OpenNoFollow = 0x20000;

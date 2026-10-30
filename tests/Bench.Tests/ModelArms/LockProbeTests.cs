@@ -43,4 +43,15 @@ public sealed class LockProbeTests
         LockProbe.Decide(new FileNotFoundException(), null).Should().BeOfType<Outcome<int>.Fail>("a subclass of IOException is not the conflict");
         LockProbe.Decide(new UnauthorizedAccessException("denied"), null).Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain("denied");
     }
+
+    [Fact]
+    public void A_folder_where_a_second_open_gets_through_is_named_as_the_one_where_locking_is_inert()
+    {
+        using var temp = new TempFolder();
+
+        var answer = LockProbe.Measure(temp.Path, _ => null);
+
+        answer.Should().BeOfType<Outcome<int>.Fail>().Which.Reason.Should().Contain($"inert in {temp.Path}").And.Contain("no gate lock is attempted");
+        Directory.EnumerateFileSystemEntries(temp.Path).Should().BeEmpty("the probe file is removed on this road too");
+    }
 }

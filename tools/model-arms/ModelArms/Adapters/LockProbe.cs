@@ -14,7 +14,10 @@ namespace ModelArms.Adapters;
 internal static class LockProbe
 {
     /// <summary>The conflict code this host's runtime reports, or why it cannot be measured: the folder is not writable, locking is inert there, or the second open failed for another reason.</summary>
-    public static Outcome<int> Measure(string folder)
+    public static Outcome<int> Measure(string folder) => Measure(folder, SecondOpen);
+
+    /// <summary>The same with what a second open does handed in: the only way a test can see a folder where locking is inert, which the real runtime on a healthy file system never shows.</summary>
+    internal static Outcome<int> Measure(string folder, Func<string, Exception?> secondOpen)
     {
         var path = Path.Combine(folder, $".model-arms-lock-probe-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8))}");
         try
@@ -22,10 +25,10 @@ internal static class LockProbe
             Exception? second;
             using (new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
             {
-                second = SecondOpen(path);
+                second = secondOpen(path);
             }
 
-            return Decide(second, second is null ? null : SecondOpen(path));
+            return Decide(second, second is null ? null : secondOpen(path), folder);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -38,10 +41,10 @@ internal static class LockProbe
     }
 
     /// <summary>What the two opens decided, pure: <paramref name="secondOpen"/> is what the second open threw (<c>null</c> = it succeeded), <paramref name="released"/> what the third open — after the holder let go — threw (<c>null</c> = it succeeded, as it must).</summary>
-    public static Outcome<int> Decide(Exception? secondOpen, Exception? released) =>
+    public static Outcome<int> Decide(Exception? secondOpen, Exception? released, string folder = "the probe folder") =>
         secondOpen switch
         {
-            null => Outcome<int>.Failure("file locking is inert in this folder: a second open of one file succeeded — no gate lock is attempted here"),
+            null => Outcome<int>.Failure($"file locking is inert in {folder}: a second open of one file succeeded — no gate lock is attempted here"),
             IOException conflict when conflict.GetType() == typeof(IOException) => released is null
                 ? Outcome<int>.Success(conflict.HResult)
                 : Outcome<int>.Failure($"the probe's second open failed for a reason other than the lock: {released.Message}"),

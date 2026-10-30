@@ -223,6 +223,28 @@ public sealed class ModelArmsArchitectureTests
         LaunchByName.IsMatch(text).Should().BeFalse();
     }
 
+    /// <summary><c>KernelFacts.ReadSmall</c> opens with Linux x86-64's flag values and no longer refuses another platform or architecture (on arm64 <c>0x20000</c> is <c>O_LARGEFILE</c>, so a direct caller would FOLLOW a link): the only caller is <c>BoundedFile</c>, and only on
+    /// <c>BoundedRoad.Kernel</c>, which <c>PlatformRoads</c> grants to Linux x86-64 with a working <c>statx</c> alone. A second caller would walk past the road.
+    /// <para>
+    /// What this does NOT prove: that <c>BoundedFile</c> asks only on the kernel road (its own tests do); a call spelled differently from <c>ReadSmall(</c>.
+    /// </para></summary>
+    [Fact]
+    public void ReadSmall_is_asked_by_BoundedFile_alone_and_only_on_the_kernel_road()
+    {
+        var adapters = Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms");
+        var callers = Directory.EnumerateFiles(adapters, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
+            .Where(path => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(path), @"\bReadSmall\s*\("))
+            .Select(Path.GetFileName)
+            .Cast<string>()
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        callers.Should().Contain("BoundedFile.cs", "the scan must still find the one sanctioned caller — a scan that matches nothing passes forever");
+        callers.Should().BeSubsetOf(["BoundedFile.cs", "KernelFacts.cs"], "no other adapter may call the kernel-road reader: it is the road's, not a utility");
+        File.ReadAllText(Path.Combine(adapters, "Adapters", "BoundedFile.cs")).Should().Contain("road == BoundedRoad.Kernel ?", "the call sits behind the kernel road");
+    }
+
     private static IReadOnlyList<string> FilesLaunchingByName(string folder) =>
         [.. Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(segment => segment is "bin" or "obj"))
