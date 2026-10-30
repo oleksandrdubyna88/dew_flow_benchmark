@@ -324,11 +324,11 @@ async function runCommand(v, write, { resume }, seams = {}) {
   return state.dry ? dryRun({ state, built: built.value, write }) : executeRun({ state, built: built.value, write });
 }
 
-const WHAT_OF = { data: s => `pair:${s.pair}`, aa: () => 'aa', pilot: () => 'pilot-node' };
-/** `--what` for a resume without one: the first fixed list or pair with a session not yet scored. */
-function whatOfMap(map) {
+const WHAT_OF = { data: s => `pair:${s.pair}`, aa: () => 'aa', pilot: () => 'pilot-node', rehearsal: () => 'rehearse-v2' };
+/** `--what` for a resume without one: the first fixed list, rehearsal or pair with a session not yet scored. */
+export function whatOfMap(map) {
   const open = Object.values(map.sessions).find(s => s.status !== 'scored' && !(s.status === 'ran' && s.data === false));
-  return open ? (WHAT_OF[open.kind] ?? WHAT_OF.pilot)(open) : undefined;
+  return open ? WHAT_OF[open.kind](open) : undefined;
 }
 
 /** `--after-stop <rule> --reason <text>` passes a HALT; the series stops of section 5 cannot be passed this way, and a pass without a reason is refused. */

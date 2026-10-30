@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { afterStopRefusal, foreignInputsRefusal, main, parseWhat } from '../bare-runner.mjs';
+import { afterStopRefusal, foreignInputsRefusal, main, parseWhat, whatOfMap } from '../bare-runner.mjs';
 import { ridOf, maskFor } from '../lib/bare-plan.mjs';
 import { openSeries, writeRunMap } from '../lib/run-map.mjs';
 import { appendLedger } from '../lib/ledger.mjs';
@@ -134,4 +134,16 @@ test('Init_of_a_real_series_refuses_an_inputs_dir_that_is_not_the_repositorys_ow
   assert.equal(foreignInputsRefusal({ v: { 'inputs-dir': link }, verb: 'init', seams: { ownInputs: own } }), null, 'a link that resolves to the own folder is the own folder (a real init is not run here: the rule is asked directly)');
   assert.equal(foreignInputsRefusal({ v: {}, verb: 'init', seams: { ownInputs: own } }), null, 'no --inputs-dir is the own folder');
   assert.match(foreignInputsRefusal({ v: { 'inputs-dir': copy }, verb: 'resume', seams: { ownInputs: own } }), /^resume refused: --inputs-dir/, 'one rule for init, run and resume');
+});
+
+test('A_resume_without_what_maps_each_kind_of_open_session_to_its_own_command_and_an_open_rehearsal_to_rehearse_v2', () => {
+  const entry = (kind, status, over = {}) => ({ rid: `${kind}${status}`, pair: kind === 'data' ? 2 : 0, kind, status, ...over });
+  const mapOf = (...list) => ({ sessions: Object.fromEntries(list.map(s => [s.rid, s])) });
+  assert.equal(whatOfMap(mapOf(entry('data', 'planned'))), 'pair:2');
+  assert.equal(whatOfMap(mapOf(entry('aa', 'launching'))), 'aa');
+  assert.equal(whatOfMap(mapOf(entry('pilot', 'planned'))), 'pilot-node');
+  assert.equal(whatOfMap(mapOf(entry('rehearsal', 'planned'))), 'rehearse-v2', 'an open rehearsal is resumed as the rehearsal, never as the Node pilot');
+  assert.equal(whatOfMap(mapOf(entry('rehearsal', 'launching'))), 'rehearse-v2');
+  assert.equal(parseWhat(whatOfMap(mapOf(entry('rehearsal', 'planned')))).kind, 'rehearsal');
+  assert.equal(whatOfMap(mapOf(entry('aa', 'scored'), entry('rehearsal', 'ran', { data: false }))), undefined, 'nothing open');
 });
