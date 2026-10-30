@@ -8,7 +8,7 @@ const ctx = Object.freeze({
   rid: 'ab12', runId: 'RUN-00000001', runIdPattern: /RUN-\d{8}/, ownPrefix: 'run/ab12/', ownOrigin: 'oleksandrdubyna88/minigit-bench', ownPrs: [3],
   otherStack: 'csharp', partnerPaths: ['/srv/partner'], harnessPaths: ['/srv/harness'], treeRoot: '/srv/me/box/work', home: '/home/u',
   allow: ['/usr/', '/bin/', '/etc/', '/dev/null', '/proc/self/'], arm: 'bare', ownSecrets: [],
-  readLink: p => (p === '/srv/me/box/work/up' ? '../..' : null), // a link `up` -> ../.. that the work tree holds
+  readLink: p => (p === '/srv/me/box/work/up' ? '../../../partner' : null), // a link `up` -> the partner's dir that the work tree holds
 });
 const bash = command => ({ agent: 'main', tool: 'Bash', input: { command } });
 const hits = (calls, extra = {}) => contaminationHits({ calls, mcpResults: [], ctx: { ...ctx, ...extra } });
@@ -24,7 +24,7 @@ const SHAPES = Object.freeze({
   'minigit-elsewhere': [bash('git remote add x https://github.com/x/minigit'), 'high'],
   'harness-name': [bash('ls dew_flow_benchmark'), 'high'],
   'outside-path': [{ agent: 'main', tool: 'Read', input: { file_path: '/srv/partner/box/work/a.cs' } }, 'high'],
-  'link-out': [bash('ln -s /srv/me/box b'), 'high', { skeleton: ['/srv/me/box'] }], // outside the tree; the path scan takes a directory that only holds the box's binds as no reach
+  'link-out': [bash('ln -s /srv/harness h'), 'high', { skeleton: ['/srv/harness'] }], // the path scan takes a directory that only holds the box's binds as no reach; the link to the harness is high
   'link-walk': [bash('grep -r token up'), 'high'],
   web: [bash('curl https://example.com'), 'low'],
 });

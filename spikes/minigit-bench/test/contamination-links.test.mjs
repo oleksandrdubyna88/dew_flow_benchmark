@@ -58,3 +58,13 @@ test('Links_inside_the_tree_npms_own_bin_links_and_links_to_what_the_box_binds_s
   assert.deepEqual(rulesIn([bash('ln -s "$PWD/x" y; ln -s $X y'), bash('ls -la')]), [], 'a word the scan cannot resolve is skipped');
   assert.deepEqual(rulesIn([bash('ln -s ~/.nuget n')]), [], '~ is the box home, a dir of the session');
 });
+
+test('A_link_to_a_system_path_outside_the_home_is_low_on_the_same_scale_as_a_plain_reach_for_it', () => {
+  assert.deepEqual(rulesIn([bash('ln -s /etc/hostname h'), bash('ln -s /usr/bin/python3 py')]), ['link-out:low'], '/usr is on the allow list of this ctx: no hit; /etc is outside it: low');
+  assert.deepEqual(rulesIn([bash('ln -s /etc/hostname h && cat h'), bash('ln -s /etc e && find e')]), ['link-out:low', 'link-out:low', 'link-walk:low']);
+  assert.deepEqual(rulesIn([bash('grep -r x e')], on([`${TREE}/e`, '/etc'])), ['link-walk:low'], 'a link the work tree holds');
+  assert.deepEqual(rulesIn([bash('ln -s /var/tmp v')]), ['link-out:low']);
+  assert.deepEqual(rulesIn([bash('ln -s / r && find r')]), ['link-out:high', 'link-walk:high'], 'the root holds the home: a walk from it reaches the harness');
+  assert.deepEqual(rulesIn([bash('ln -s /home/u/rsd x')]), ['link-out:high'], 'under the operator\'s home and not on the allow list');
+  assert.deepEqual(rulesIn([bash('ln -s /srv/partner/box p')], { partnerPaths: ['/srv/partner'] }), ['link-out:high'], 'a partner dir');
+});
