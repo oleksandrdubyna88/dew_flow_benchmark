@@ -237,3 +237,23 @@ test('A_cancel_during_the_quiet_wait_of_the_real_wiring_ends_it_at_once', async 
   assert.equal(r.ok, false);
   assert.match(r.reason, /cancelled/);
 });
+
+test('A_halt_passed_with_after_stop_is_recorded_in_the_run_map_and_the_ledger_once', async () => {
+  const w = await wiring();
+  const args = ['--after-stop', 'void: rate limit', '--reason', 'the subscription window reset at 05:00'];
+  const first = await resume(w, args);
+  assert.doesNotMatch(first.out, /resume refused|needs --reason/, first.out);
+  const stops = () => readRunMap(w.runMapFile).value.afterStops ?? [];
+  assert.equal(stops().length, 1);
+  assert.equal(stops()[0].rule, 'void: rate limit');
+  assert.equal(stops()[0].reason, 'the subscription window reset at 05:00');
+  const events = () => readLedger(w.ledgerFile).filter(l => l.event === 'after-stop');
+  assert.equal(events().length, 1);
+  assert.equal(events()[0].rule, 'void: rate limit');
+  await resume(w, args);
+  assert.equal(stops().length, 1, 'the same pass repeated (a crash, a retry) is recorded once');
+  assert.equal(events().length, 1);
+  const refused = await resume(w, ['--after-stop', 'stop: auth', '--reason', 'it was a typo']);
+  assert.match(refused.out, /series stop cannot be passed/);
+  assert.equal(stops().length, 1, 'a refused pass writes nothing');
+});

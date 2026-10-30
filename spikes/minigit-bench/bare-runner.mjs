@@ -25,7 +25,7 @@ import { maskFor, pilotRid, ridOf, seriesId as makeSeriesId } from './lib/bare-p
 import { buildRun, REPO, sampleOnceFor, SPIKE } from './lib/bare-config.mjs';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
-import { checkPins } from './lib/bare-pins.mjs';
+import { checkPins, recordAfterStop } from './lib/bare-pins.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
 import { planSession, readRunMap } from './lib/run-map.mjs';
@@ -132,6 +132,7 @@ async function cmdRun(v, write, { resume }, seams = {}) {
     });
     if (!pins.ok) { write(`${resume ? 'resume' : 'run'} refused: ${pins.reason}`); return EXIT.config; }
     map = pins.value.map;
+    if (resume) map = recordAfterStop({ map, rule: v['after-stop'], reason: v.reason, runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson') });
   }
   const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry, seams });
   if (!built.ok) { write(`cannot start: ${built.reason}`); return EXIT.config; }

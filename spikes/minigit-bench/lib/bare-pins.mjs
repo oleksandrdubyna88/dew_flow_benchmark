@@ -69,3 +69,16 @@ export async function checkPins({ map, inputsDir, repo, acceptHarness = null, ru
   const next = checked.value.accepted ? recordAcceptance({ map, accepted: checked.value.accepted, runMapFile, ledgerFile, now }) : map;
   return ok({ map: next, current });
 }
+
+/**
+ * A halt passed with `--after-stop <rule> --reason <text>` is recorded in the run-map (`afterStops`) and as one `after-stop` event line of the ledger (review m8); the same rule and reason
+ * recorded before are not written again. The series stops of section 5 never get here (`afterStopRefusal` refuses them). -> the new map.
+ */
+export function recordAfterStop({ map, rule, reason, runMapFile, ledgerFile, now = Date.now }) {
+  if (!rule || (map.afterStops ?? []).some(x => x.rule === rule && x.reason === reason)) return map;
+  const at = new Date(now()).toISOString();
+  const next = Object.freeze({ ...map, afterStops: [...(map.afterStops ?? []), { rule, reason, at }] });
+  writeRunMap(runMapFile, next);
+  appendLedger(ledgerFile, { event: 'after-stop', rule, reason, t: at });
+  return next;
+}

@@ -10,7 +10,7 @@ import { launchPhase, unplantAll } from './bare-phase.mjs';
 import { collectSession } from './bare-collect.mjs';
 import { finalSession, readSessionRecord, writePairRecord, writeSessionRecord } from './bare-records-io.mjs';
 import { nextStep } from './bare-schedule.mjs';
-import { appendLedger, readLedger } from './ledger.mjs';
+import { appendChargeOnce, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
 import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
@@ -142,7 +142,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     if (!collected.ok) { failures.push(`collecting ${s.rid} failed: ${collected.reason}`); continue; }
     const { outcome, usd } = collected.value;
     if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
-    appendLedger(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd, what: outcome.class, rid: s.rid, t: new Date(deps.now()).toISOString() });
+    appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd, what: outcome.class, rid: s.rid, t: new Date(deps.now()).toISOString() });
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity };
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [] }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);

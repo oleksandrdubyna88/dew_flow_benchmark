@@ -408,3 +408,21 @@ test('The_runner_refuses_to_start_a_stopped_series', async () => {
   assert.equal(again.exit, EXIT.stop);
   assert.equal(t.launched.length, 2, 'a stopped series launches nothing more');
 });
+
+test('A_crash_between_the_ledger_line_and_the_run_map_transition_does_not_charge_the_session_twice', async () => {
+  const t = harness();
+  const { planSession } = await import('../lib/run-map.mjs');
+  const r0 = rid('csharp', 'v1', 1);
+  let map = planSession(t.map, { rid: r0, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1, kind: 'data', label: 'paired', mask: '0-5', dummy: 'sk-ant-oat01-dummy-resume' }).value;
+  map = transition(map, r0, 'launching').value;
+  const layout = layoutPaths(t.ctx.sessionsRoot, r0);
+  mkdirSync(layout.dir, { recursive: true });
+  lay(layout, undefined);
+  // the process died after appending the charge and before the run-map was written: the ledger knows the session, the map says launching
+  const { appendLedger } = await import('../lib/ledger.mjs');
+  appendLedger(t.ctx.ledgerFile, { kind: 'data', usd: 3.1, what: 'completed', rid: r0, t: '2026-10-30T10:00:00.000Z' });
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.equal(settled.value.sessions[r0].status, 'ran', 'the session moves on');
+  assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.rid === r0).length, 1, 'and is charged once: the ledger line that was already there stands');
+});
