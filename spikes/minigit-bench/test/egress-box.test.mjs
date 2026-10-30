@@ -38,10 +38,48 @@ test('The_proxy_allows_only_the_listed_hosts_on_443', async t => {
     const [allowed, example, anthropic] = r.out.trim().split('\n');
     assert.match(allowed, /^200 rc=0$/, r.out);
     for (const refused of [example, anthropic]) assert.match(refused, /^000 rc=(7|56)$/, `a refused host fails the CONNECT: ${refused}`);
-    assert.deepEqual(egressSummary(lines), { allowed: { 'api.nuget.org': 1 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 0 });
+    assert.deepEqual(egressSummary(lines), { allowed: { 'api.nuget.org': 1 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 0, tlsRefused: {} });
     assert.ok(lines.filter(l => l.verdict === 'refused').every(l => l.status === 403));
   });
 });
+
+/** One curl in the box: `code=<http code> rc=<exit code>`. */
+const curlLine = args => `curl -s -o /dev/null -m 25 -w 'code=%{http_code}' ${args}; echo " rc=$?"`;
+
+test('Another_server_name_sent_to_the_edge_of_an_allowed_host_is_refused_and_the_control_succeeds', async t => {
+  if (!sandboxGate(t)) return;
+  if (!await hostHasNetwork()) return hostLacks(t, 'the host cannot reach https://api.nuget.org: the positive control of an allowed host is unavailable');
+  await withProxy(EGRESS_HOSTS.bare, async ({ layout, lines }) => {
+    const other = host => curlLine(`--connect-to ${host}:443:registry.npmjs.org:443 https://${host}/`);
+    const r = await probeInit(layout, [curlLine('https://registry.npmjs.org/'), other('www.cloudflare.com'), other('stackoverflow.com')].join('\n'));
+    const [control, cloudflare, stackoverflow] = r.out.trim().split('\n');
+    assert.match(control, /^code=200 rc=0$/, `the control: the same edge, its own name: ${r.out}`);
+    for (const refused of [cloudflare, stackoverflow]) assert.match(refused, /^code=000 rc=(35|56|60)$/, `the connection ended before any HTTP answer: ${refused}`);
+    const summary = egressSummary(lines);
+    assert.deepEqual(summary.tlsRefused, { 'sni-mismatch': 2 });
+    assert.deepEqual(summary.allowed, { 'registry.npmjs.org': 1 }, 'only the control was ever called allowed');
+    assert.deepEqual(lines.filter(l => l.verdict === 'tls-refused').map(l => l.sni).sort(), ['stackoverflow.com', 'www.cloudflare.com']);
+    assert.ok(lines.filter(l => l.verdict === 'allowed').every(l => l.sni.toLowerCase() === l.host), 'no allowed line carries an SNI other than its host');
+  });
+}, { timeout: 120_000 });
+
+test('An_http2_authority_of_another_host_over_an_npm_server_name_gets_no_content', async t => {
+  if (!sandboxGate(t)) return;
+  if (!await hostHasNetwork()) return hostLacks(t, 'the host cannot reach https://api.nuget.org: the positive control of an allowed host is unavailable');
+  await withProxy(EGRESS_HOSTS.bare, async ({ layout, lines }) => {
+    const script = [
+      "curl -s -m 25 --http2 -H 'Host: www.cloudflare.com' -o /tmp/body.txt -w 'code=%{http_code} ver=%{http_version} size=%{size_download}' https://registry.npmjs.org/; echo \" rc=$?\"",
+      'cat /tmp/body.txt',
+    ].join('\n');
+    const r = await probeInit(layout, script);
+    const status = /code=(\d+) ver=(\S+) size=(\d+) rc=(\d+)/.exec(r.out);
+    assert.ok(status, r.out);
+    assert.equal(status[2], '2', `the request really went over HTTP/2, so the :authority was sent (the control): ${r.out}`);
+    assert.ok(['403', '421'].includes(status[1]), `another authority over the npm name is answered 403/421, not served: ${r.out}`);
+    assert.ok(Number(status[3]) < 300 && /<title>(403 Forbidden|421 [^<]*)<\/title>/.test(r.out), `the body is the edge's short error page, not content: ${r.out}`);
+    assert.deepEqual(egressSummary(lines).allowed, { 'registry.npmjs.org': 1 }, 'the tunnel itself is the allowed one: the gate is the SNI, the authority is the edge\'s');
+  });
+}, { timeout: 120_000 });
 
 test('Plain_HTTP_is_refused_and_the_restore_does_not_need_it', async t => {
   if (!sandboxGate(t)) return;
