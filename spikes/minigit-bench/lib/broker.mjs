@@ -7,7 +7,7 @@ import { chmodSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import { routeDecision } from './broker-routes.mjs';
-import { OVER_CAP_FACTOR, admit, capStatus, openState, reserve, settle } from './budget.mjs';
+import { OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from './budget.mjs';
 
 export const DEFAULT_UPSTREAM = Object.freeze({ host: 'api.anthropic.com', port: 443, tls: true });
 const UPSTREAM_IDLE_MS = 120_000;
@@ -111,14 +111,15 @@ function makeLedger({ budget, prices, cliVersion, log }) {
     /** Admit or refuse the next request -> `{ entry } | { refusal: { seq, why } }`. An admitted one holds a reservation until it settles. */
     open() {
       seq += 1;
-      const verdict = admit({ ...state, reserveUsd: budget.reserveUsd, capUsd: budget.capUsd });
+      const reserveUsd = reservationFor(state, budget.reserveUsd);
+      const verdict = admit({ ...state, reserveUsd, capUsd: budget.capUsd });
       if (!verdict.admit) {
         refuse('cap');
         return { refusal: { seq, reason: 'cap', why: verdict.why, spentUsd: state.spentUsd, reservedUsd: state.reservedUsd } };
       }
-      state = reserve(state, budget.reserveUsd);
+      state = reserve(state, reserveUsd);
       counts.upstreamRequests += 1;
-      return { entry: { seq, reserveUsd: budget.reserveUsd, startedAt: Date.now(), settled: false }, inFlight: state.inFlight, reservedUsd: state.reservedUsd };
+      return { entry: { seq, reserveUsd, startedAt: Date.now(), settled: false }, inFlight: state.inFlight, reservedUsd: state.reservedUsd };
     },
     /** Settle once; a second call for the same entry is a no-op. */
     settle(entry, model, usage, note, waive = null) {
@@ -135,7 +136,7 @@ function makeLedger({ budget, prices, cliVersion, log }) {
 function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) {
   const { entry } = opened;
   const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}` };
-  ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
+  ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
     upRes => answer(upRes, res, entry, ledger));
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));

@@ -133,6 +133,29 @@ test('Three_concurrent_requests_hold_three_reservations', async () => {
   }
 });
 
+test('The_reservation_grows_to_the_largest_charge_settled_so_far_and_does_not_read_max_tokens', async () => {
+  const big = { id: 'm', model: 'claude-sonnet-5-5', usage: { input_tokens: 0, output_tokens: 7000 } }; // 0.07
+  const release = [];
+  let answerBig = true;
+  const stub = await stubUpstream((_q, res) => { if (answerBig) { answerBig = false; json(res, 200, big); } else release.push(() => json(res, 200, OK_JSON)); });
+  const b = await startBroker({ stub, capUsd: 0.2, reserveUsd: 0.05 });
+  try {
+    const huge = JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 128000, messages: [] });
+    assert.equal((await viaSocket(b.socketPath, { body: huge })).status, 200);
+    assert.equal(b.lines.find(l => l.event === 'forwarding').reserveUsd, 0.05, 'a 128k max_tokens does not raise the first reservation');
+    const held = viaSocket(b.socketPath, { body: huge });
+    await sleep(150);
+    assert.equal(release.length, 1, 'the second request is admitted: spent 0.07 + its reservation 0.07 = 0.14');
+    assert.deepEqual(b.lines.filter(l => l.event === 'forwarding').map(l => l.reserveUsd), [0.05, 0.07], 'it reserved what the dearest settled request cost');
+    assert.equal((await viaSocket(b.socketPath, { body: huge })).status, 429, 'a third in flight would be 0.07 + 0.07 + 0.07 over the 0.2 cap');
+    release.splice(0).forEach(f => f());
+    await held;
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
 test('A_client_that_disconnects_is_still_charged', async () => {
   const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 6), 80));
   const b = await startBroker({ stub });

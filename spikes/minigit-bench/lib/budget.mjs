@@ -1,6 +1,7 @@
 // The cell's own budget, held by the credential broker (E2.S2 D-17). Pure: state in, state out.
 // A request is admitted only while settled spend + every in-flight reservation + its own reservation stays within the cap; it reserves
-// `reserveUsd` until it settles; settlement prices the parsed usage with the SAME table E1's views use (asTheCliBills), so a disagreement
+// `reservationFor(state, floor)` (the floor, or the largest charge settled so far in the cell: never sized from the request's max_tokens, which the CLI
+// sets to 32k-128k and which would make admission refuse and the CLI retry) until it settles; settlement prices the parsed usage with the SAME table E1's views use (asTheCliBills), so a disagreement
 // between the broker's ledger and the envelope is a bug report. Nothing parsed or priced charges the reservation, never 0 - except a request
 // the broker KNOWS was not billed (`waive`: an API error answer, or a dial that failed before a byte was sent), which charges 0 and says why.
 // The cap is SOFT (D-17a): the real cost is known only at settlement, so concurrent requests can settle above the cap; the overshoot is
@@ -12,7 +13,10 @@ export const OVER_CAP_FACTOR = 1.1;
 const EPSILON = 1e-9;
 const round9 = n => Math.round(n * 1e9) / 1e9;
 
-export const openState = () => Object.freeze({ spentUsd: 0, reservedUsd: 0, inFlight: 0 });
+export const openState = () => Object.freeze({ spentUsd: 0, reservedUsd: 0, inFlight: 0, largestChargeUsd: 0 });
+
+/** What the next request reserves: the floor, or the largest charge settled so far in this cell if that is more. */
+export const reservationFor = (state, floorUsd) => Math.max(floorUsd, state.largestChargeUsd);
 
 /** Admit a request? `{ admit: true } | { admit: false, why }`. */
 export function admit({ spentUsd, reservedUsd, reserveUsd, capUsd }) {
@@ -66,6 +70,7 @@ export function settle({ state, entry, usage, model, table, cliVersion, waive = 
   const chargedUsd = priced.known ? priced.usd : entry.reserveUsd;
   const next = Object.freeze({
     spentUsd: round9(state.spentUsd + chargedUsd), reservedUsd: Math.max(0, round9(state.reservedUsd - entry.reserveUsd)), inFlight: Math.max(0, state.inFlight - 1),
+    largestChargeUsd: Math.max(state.largestChargeUsd, chargedUsd),
   });
   return { state: next, line: { model, usage, priced, chargedUsd, spentUsd: next.spentUsd } };
 }

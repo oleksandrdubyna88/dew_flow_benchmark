@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { BARE_RESERVE_USD, OVER_CAP_FACTOR, admit, capStatus, openState, reserve, settle } from '../lib/budget.mjs';
+import { BARE_RESERVE_USD, OVER_CAP_FACTOR, admit, capStatus, openState, reservationFor, reserve, settle } from '../lib/budget.mjs';
 import { loadPrices } from '../lib/prices.mjs';
 import { spikeDir } from './helpers.mjs';
 
@@ -36,7 +36,7 @@ test('A_settlement_prices_the_parsed_usage_at_the_table_the_cli_bills', () => {
   assert.equal(r.line.priced.known, true);
   assert.equal(r.state.spentUsd, 0.009232);
   assert.deepEqual([r.state.reservedUsd, r.state.inFlight], [0, 0], 'the reservation is released');
-  assert.deepEqual(state, { spentUsd: 0, reservedUsd: 0.05, inFlight: 1 }, 'the argument state is untouched');
+  assert.deepEqual(state, { spentUsd: 0, reservedUsd: 0.05, inFlight: 1, largestChargeUsd: 0 }, 'the argument state is untouched');
 });
 
 test('Nothing_parsed_or_priced_is_charged_the_reservation_never_zero', () => {
@@ -59,9 +59,26 @@ test('A_waived_settlement_charges_nothing_releases_the_reservation_and_says_why'
   const r = settle({ state, entry: { reserveUsd: 0.05 }, usage: null, model: null, table, cliVersion: '2.1.310', waive: 'upstream error' });
   assert.deepEqual(r.line.priced, { known: true, usd: 0, why: 'upstream error' });
   assert.equal(r.line.chargedUsd, 0);
-  assert.deepEqual(r.state, { spentUsd: 0, reservedUsd: 0, inFlight: 0 });
+  assert.deepEqual(r.state, { spentUsd: 0, reservedUsd: 0, inFlight: 0, largestChargeUsd: 0 });
   const unwaived = settle({ state, entry: { reserveUsd: 0.05 }, usage: null, model: null, table, cliVersion: '2.1.310' });
   assert.equal(unwaived.line.chargedUsd, 0.05, 'control: the same settlement without a waiver still charges the reservation');
+});
+
+test('A_reservation_is_the_floor_or_the_largest_charge_settled_so_far_in_the_cell_and_never_sized_from_max_tokens', () => {
+  // the refuted approach: max_tokens x the output price. The CLI sends 32k-128k, so one Opus request would reserve $1-3, admission would refuse
+  // under a $6 cap and the CLI would back off and retry: the stacks' wall time would change. The body is never read.
+  assert.equal(reservationFor(openState(), 0.05), 0.05, 'a fresh cell reserves the floor');
+  let state = openState();
+  const spend = outputTokens => settle({ state, entry: { reserveUsd: 0.05 }, usage: { input_tokens: 0, output_tokens: outputTokens, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 0 } }, model: 'claude-sonnet-5-5', table, cliVersion: '2.1.310' });
+  state = reserve(state, 0.05);
+  state = spend(500).state; // 0.005
+  assert.equal(state.largestChargeUsd, 0.005);
+  assert.equal(reservationFor(state, 0.05), 0.05, 'a charge under the floor leaves the floor');
+  state = spend(7000).state; // 0.07 (a second settlement: the reservation arithmetic is not the point here, the largest charge is)
+  assert.equal(state.largestChargeUsd, 0.07);
+  assert.equal(reservationFor(state, 0.05), 0.07, 'the next request reserves what the dearest one cost');
+  state = spend(1000).state;
+  assert.equal(state.largestChargeUsd, 0.07, 'a cheaper settlement does not lower it');
 });
 
 test('An_unsplit_cache_write_is_charged_at_the_upper_bound', () => {
