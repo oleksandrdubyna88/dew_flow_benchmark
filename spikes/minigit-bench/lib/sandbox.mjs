@@ -96,8 +96,10 @@ export function agentEnv({ layout, dummyToken: dummy, cellId, nodeDir, tsDir = n
     MSBUILDDISABLENODEREUSE: '1', UseSharedCompilation: 'false', NUGET_PACKAGES: layout.nuget, npm_config_cache: layout.npm,
     BENCH_CELL: cellId, GIT_CONFIG_GLOBAL: layout.files.gitconfig, ...FIXED_GIT,
   };
-  const clash = Object.keys(extra).filter(k => k in base);
-  if (clash.length > 0) throw new Error(`agentEnv: extra may only ADD keys; ${clash.join(', ')} ${clash.length === 1 ? 'is' : 'are'} already set by the base environment (the dummy credential, the proxy and the exporter wiring are not an arm's to replace)`);
+  // compared in lower case: `https_proxy` is read by curl and others next to `HTTPS_PROXY`, so a different spelling of a base key replaces it as well
+  const baseByLower = new Map(Object.keys(base).map(k => [k.toLowerCase(), k]));
+  const clash = Object.keys(extra).filter(k => baseByLower.has(k.toLowerCase()));
+  if (clash.length > 0) throw new Error(`agentEnv: extra may only ADD keys; ${clash.map(k => (baseByLower.get(k.toLowerCase()) === k ? k : `${k} (the base key ${baseByLower.get(k.toLowerCase())}, in another case)`)).join(', ')} ${clash.length === 1 ? 'is' : 'are'} already set by the base environment (the dummy credential, the proxy and the exporter wiring are not an arm's to replace)`);
   return Object.freeze({ ...base, ...extra });
 }
 

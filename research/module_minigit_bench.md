@@ -279,7 +279,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   toolchains and the `claude` file read-only). The session directory itself is never bound: it also holds the instruments. Its own
   network, pid and ipc namespaces; the bare arm puts `/dev/null` over `gh`. There is no `--setenv` and no `--clearenv`: the environment
   travels in the spawn's `env`, so no value is ever on an argv (`--setenv` is in `/proc/<pid>/cmdline`, readable by every user; a test
-  shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`), `PATH` is constructed (no `/mnt`), and the credential in it is a
+  shows it). `agentEnv` is a fixed allow-list (`AGENT_ENV_KEYS`; the process arm's `extra` may only ADD keys, and a key is a clash when it equals a base key in ANY case, because `https_proxy` is read by curl beside `HTTPS_PROXY`), `PATH` is constructed (no `/mnt`), and the credential in it is a
   **dummy**; the real token is not a parameter of anything in the box's path. `sessionLayout` claims `<runs root>/<rid>/` with a
   non-recursive `mkdir` and refuses a socket path over 108 bytes (UTF-8 bytes; 109 refused with `EINVAL` on this kernel).
 - **The supervisor** (`harness/box-init.mjs`, node builtins only, copied into `harness/`). Starts a loopback forwarder per
@@ -439,6 +439,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A token in a file over the whole-read limit is found at its exact offset once, on a window boundary too (before: the file was listed in `tooLarge`, the scan was clean and B-S3 could hold); a file nobody can scan is a high finding; the scan keeps one file at a time | `session-scan.test.mjs` |
 | B-K2 holds only on an O record after the stop; a broker settlement after it is reported apart and never makes the verdict | `smoke-k2.test.mjs` |
 | `loadSmoke` reads through the one reader: a link among a smoke directory's files or transcripts is refused and its target is not read (before: `readFileSync` followed it) | `agent-files-sites.test.mjs` |
+| An extra environment key that differs from a base key only in case (`https_proxy`, `path`, `claude_code_oauth_token`) is refused, naming the base key | `agent-env.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
