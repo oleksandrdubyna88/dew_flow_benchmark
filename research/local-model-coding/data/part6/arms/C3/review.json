@@ -1,0 +1,18 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/runners/Reviewers/AgyQuotaProbe.cs", "line": 37,
+   "summary": "D5 says a cancelled probe parks nothing and is logged, but the real ProcessLauncher never throws on cancellation: it kills the child and returns TimedOut=true, Cancelled=true (ProcessLauncher.cs:527, :570). ReadAsync ignores result.Cancelled, so in production a round ended by its deadline or by a person still starts a new agy process. A vendor-called-spent refusal is then parked on the stated/guess road with the false note 'could not check /quota: timed out after 30 s'. S42 passes only because its WaitsForItsToken fake throws, which the real launcher does not.",
+   "fix": "In AgyQuotaProbe.ReadAsync, call ct.ThrowIfCancellationRequested() before launching, and throw OperationCanceledException when result.Cancelled is true. Rewrite S42's fake to return new ProcessResult(..., TimedOut: true) { Cancelled = true }, as the real launcher does, so the test exercises the production contract."},
+  {"id": "R2", "severity": "major", "file": "src_mcp/tests/AStructuredVerdictOutranksTheWordScanTests.cs", "line": 76,
+   "summary": "S3 cannot fail for the plan's reason. Its first case uses the AGY_1_3_3 reason, which states 'Resets in 88h49m9s', so RetryLadder.ResetOutlasts makes it hopeless whatever Spent says. Under the plan's tempting break (Hopeless wired as limited.Spent == true || ResetOutlasts) it still launches once, and the red the plan names ('Expected 1, but found 4') can never appear. §12.12 admits S3 was not seen red.",
+   "fix": "For the first case use a reason with a spent word and no stated reset, for example \"RESOURCE_EXHAUSTED (code 429): quota exhausted\" or codex's \"You've hit your usage limit\". Confirm the test goes red with limited.Spent == true, then restore."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs", "line": 127,
+   "summary": "When the gauge answers SpentWithoutReset, the code calls QuotaReset.FromText whatever `spent` is, so an UNDECIDED refusal (Spent == null) is parked on a guess. D5 classes a spent bucket without reset_time as 'cannot check', and D10 says 'nothing parked for an undecided refusal' in that case. The deviation is not recorded in §12 and no test covers it.",
+   "fix": "Route the arm through Undecided(spent, $\"/quota reads {name} as spent but names no reset time\", reason, consecutive, nowUtc). If parking is wanted instead, record the deviation in §12 and add a test for it."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs", "line": 27,
+   "summary": "An OperationCanceledException from one key's probe leaves ChangesAsync before Mutate runs, so every key's decision for the round is lost. That includes codex, claude and kimi parks and lifts already decided, which need no probe. This becomes reachable once R1 makes the probe throw on cancellation.",
+   "fix": "Catch cancellation per key in ChangesAsync and drop only that key's change, then still write the other keys' aggregate. Alternatively, record in D5's deviation that a cancelled probe voids the whole round's aggregate."},
+  {"id": "R5", "severity": "minor", "file": "src_vs_code/src/providers.ts", "line": 296,
+   "summary": "cooldownOf's ternary is mis-formatted: four spaces and '? {' sit on the condition's line, where the file's other ternaries put each branch on its own line. Lint does not catch it.",
+   "fix": "Break the line so '? { cooldown: … }' and ': {}' each sit on their own indented line, matching warningOf and markerOf."}
+ ]}

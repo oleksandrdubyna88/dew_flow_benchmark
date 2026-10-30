@@ -1,7 +1,8 @@
 // The pinned inputs' bookkeeping: the sha256sum-format list, the check of files against it, the expected test count.
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { readAgentFile } from './agent-files.mjs';
 import { fail, ok } from './result.mjs';
 
 const LINE = /^([0-9a-f]{64}) {2}(\S.*)$/;
@@ -39,22 +40,10 @@ export const MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 /**
  * For a path inside an agent-written tree: the bytes of a REGULAR file of at most `maxBytes`, `null` when absent, or
- * `{ unreadable: why }` for a symlink, a device, a pipe, a directory or an oversize file. lstat first, so a link to /dev/zero is
- * never opened. Anything unreadable counts as tampered by the caller.
+ * `{ unreadable: why }` for a symlink, a device, a pipe, a directory or an oversize file. The one reader is lib/agent-files.mjs: it opens
+ * with O_NOFOLLOW and checks the opened descriptor, so a link swapped in after a check is not followed either.
  */
-export function readRegularFile(file, maxBytes = MAX_INPUT_BYTES) {
-  let st;
-  try {
-    st = lstatSync(file);
-  } catch (e) {
-    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return null;
-    throw e;
-  }
-  if (st.isSymbolicLink()) return { unreadable: 'symlink' };
-  if (!st.isFile()) return { unreadable: 'not a regular file' };
-  if (st.size > maxBytes) return { unreadable: `larger than ${maxBytes} bytes` };
-  return readFileSync(file);
-}
+export const readRegularFile = (file, maxBytes = MAX_INPUT_BYTES) => readAgentFile(file, maxBytes);
 
 /** Per entry { path, expected, actual, ok }. A missing file is `actual: null`; an unreadable one is `actual: 'unreadable: <why>'`. Never ok. */
 export function verifyFiles(root, entries, readFile = readRegularFile) {

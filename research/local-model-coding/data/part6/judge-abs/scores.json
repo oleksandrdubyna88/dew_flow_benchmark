@@ -1,0 +1,786 @@
+{
+  "C1": [
+    {
+      "run": "run1",
+      "label": "D-e304c9",
+      "correctness": 7,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 7,
+      "overall": 7,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "`CodexRuntime.QuotaKeyOf` is virtual and returns `codex`, and only `CustomCodexRuntime` overrides it. `DeepseekRuntime` (also a `CodexRuntime`, and registered by default) therefore files its refusals under `codex`, so a DeepSeek 'insufficient balance' refusal (a hopeless phrase) parks every Codex row with 'its Codex usage limit is spent', and a spent Codex quota parks DeepSeek rows in turn."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "The locked write runs through `Task.Run(..., ct)` with the round's token. A round ended by its deadline or a stop therefore drops even parks that needed no probe (Claude, Codex, Kimi), and the log calls this 'the quota probe was cancelled', which is wrong. The plan only says that a cancelled probe parks nothing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+          "summary": "S33 checks the card's cooldown line against a date/time regex. The scenario asks for the exact S31 line."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+          "summary": "S40 checks each edge-case verdict by the prefix of its record's `ToString()`, not by its type and value, so it asserts on text where behaviour is meant."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/CooldownWords.cs",
+          "summary": "The cooldown file writes its instants with `ServerNotice.Iso` (milliseconds) but the wire and the sentence use a new `CooldownWords.Iso` (seconds), so one feature has two ISO formatters."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AgySamples.cs",
+          "summary": "AGY_OLD is copied into a constant instead of being read from `fixtures/antigravity/consult-quota.stderr.txt`, which the plan names as its source. The bytes match today, but the copy can drift."
+        }
+      ],
+      "summary": "All of the plan's decisions are built and wired, with build, format and both suites green, and 42 scenarios passing by exact name plus S14 under a recorded longer name. They include the structured verdict, the agy readers keyed by bucket id, the locked fail-open cooldown file, aggregation per key after the round, roster exclusion, the providers member and the card; the deviations are recorded honestly, and an extra test runs a real round end to end. The main flaw is that DeepSeek inherits Codex's `codex` quota key, so either vendor's spent quota can keep the other's rows out; the remaining findings are a cancellation edge and some text-based or duplicated test details."
+    },
+    {
+      "run": "run2",
+      "label": "D-1ff9e9",
+      "correctness": 7,
+      "tests": 7,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 6,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "CodexRuntime.QuotaKeyOf answers \"codex\" as a virtual member and only CustomCodexRuntime overrides it, so DeepseekRuntime (also a CodexRuntime subclass, a separate API-key account) inherits the codex key: a DeepSeek refusal parks every codex row, and a DeepSeek answer lifts a real codex cooldown, which breaks D3's rule that a key belongs to one sign-in."
+        },
+        {
+          "severity": "major",
+          "file": "src_mcp/tests/AnAgyResetWithoutAnOffsetIsReadAsUtcTests.cs",
+          "summary": "The test changes the zone by setting the TZ environment variable and asserts TimeZoneInfo.Local.BaseUtcOffset == +9 h, but .NET on Windows ignores TZ, so this test fails in ci.yml's windows-latest job, which runs the whole MCP suite (the objective run was Linux only)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "The locked write runs as Task.Run(() => Apply(changes), ct) with the round's token, so a round that ends on its deadline or is cancelled also drops the codex, Claude and Kimi parks that needed no probe, where D5 makes only a cancelled probe park nothing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+          "summary": "For an agy model the table does not know, an undecided RESOURCE_EXHAUSTED (Spent == null) goes to QuotaReset.FromText, whose word scan calls it hopeless and parks it on a guess, although D5/D10 say an undetermined agy refusal is never a parked row."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "The guess-doubling count is worked out twice, once before the lock in ParkAsync and again under the lock in Change.Park.Applied, and CooldownWords.Iso repeats ServerNotice.Iso with a different precision."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+          "summary": "S40's theory checks verdicts by ToString().StartWith rather than by value, and S33 checks the cooldown line with a regex instead of the exact S31 line."
+        }
+      ],
+      "summary": "All four stories are delivered: the structured verdict, the AGY_ERROR and /quota readers with every edge case, the locked fail-open cooldown file, the per-key aggregation after the round, the roster exclusion, the wire member and the card; all 43 scenarios are present (S14 renamed) and pass, and the deviations are recorded carefully and match the code. Two major defects hold the score down: DeepseekRuntime inherits the codex quota key, so one account's refusal parks the other's rows, and a new TZ-based test will fail on the Windows CI job; the other findings are minor."
+    }
+  ],
+  "CR1": [
+    {
+      "run": "run1",
+      "label": "D-a93f00",
+      "correctness": 9,
+      "tests": 9,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 9,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "`Qualifies` filters agy's undecided refusals (`Spent == null`) through `RateLimit.Hopeless(reason)` before the gauge is asked, but D5 says the gauge decides agy's undecided case. An undecided `RESOURCE_EXHAUSTED` whose message has no spent word would never be probed or parked; every observed shape carries the status word, so this is latent."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "The file is 463 lines, and the story-2 card says to split it into two once it passes 400 lines; §12 does not record this."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "`DeepseekRuntime` overrides `QuotaKeyOf` to empty, which departs from D3 (`CodexRuntime` → `codex`, which it would otherwise inherit). The choice is sensible and tested, but §12 does not list it."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S35 asserts that B waits on the lock with `Thread.Sleep(300)` followed by `IsCompleted == false`. That is a timing-based check that can pass when it should fail, though the final both-keys assertion still catches an unlocked read-modify-write."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ARoundThatFindsAQuotaSpentParksItForTheNextTests.cs",
+          "summary": "Its temp folders come from `Directory.CreateTempSubdirectory(\"coai-park-…\")` rather than `TempDir.For(\"testsToDelete-quota-\")`, which the plan's test rules require (existing tests do the same)."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "§12 says the plan's wording on `consecutive` made the doubling 'unreachable'. It overstates: that wording only delays the doubling by one park, which still justifies the change S39 needs."
+        }
+      ],
+      "summary": "All 43 scenarios are present and green, build, both suites and format are clean, and the core rules are delivered faithfully: the three-valued spent verdict, both agy error shapes, the measured agy group table with Argon on its own key, the /quota edge cases, the locked fail-open cooldown file with refusals raised as notices, one aggregated write per round, the roster exclusion with this side's sentence, and the card's viewer-zone line. The findings are all minor: a latent gap where agy's undecided case is filtered by text before the gauge is asked, a file past its 400-line split threshold, one unrecorded Deepseek deviation, and small test-hygiene points; the tests assert the scenarios' Then and add useful extra cases, including a full round that parks a quota and a refused write when the file cannot be read under the lock."
+    },
+    {
+      "run": "run2",
+      "label": "D-ae628e",
+      "correctness": 9,
+      "tests": 9,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "ParkAndLiftAsync awaits each key's probe inside one loop under one catch, so a single cancelled agy /quota probe (for example a round ended by its deadline token) also throws away the decisions already reached for other keys, such as a codex or claude park or a lift."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "The §12 deviation 'Not driven by a scenario: the RoundEngine call to AfterRoundAsync inside a whole round' is false, because the diff adds ARoundThatFindsAQuotaSpentParksItForTheNextTests, which drives exactly that through PanelService.ReviewPlanAsync."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "Two real scope additions are not in the plan's §12 deviations: DeepseekRuntime overrides QuotaKeyOf to empty (D3 names only CustomCodexRuntime), and an agy row with no model is keyed by DefaultModel."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "The 'standing on a guess → Consecutive + 1' rule is computed twice, once in ParkedAsync for the wait and again in Parked for the stored entry, instead of once."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ARoundThatFindsAQuotaSpentParksItForTheNextTests.cs",
+          "summary": "Its temp folders use Directory.CreateTempSubdirectory(\"coai-park-…\") instead of the testsToDelete- prefix the plan's stories require on every temp folder."
+        }
+      ],
+      "summary": "All 43 scenarios are present and green, both suites and the build pass, and the code follows D1–D12 closely: the three-value Spent verdict, the AGY_ERROR reader in both shapes, the measured agy group table, the /quota reader with every edge case, a fail-open cooldown file whose writes go through HeldFile's lock (no unlocked fallback), per-key aggregation where a spent refusal beats a sibling Ok, and the roster exclusion, providers answer and card all wired; the tests assert behaviour and add a whole-round integration test and a break-it third case for S3. The findings are all minor: a cancelled probe drops the other keys' decisions, one §12 deviation is stale, two small scope additions are unrecorded, and there is a little duplicated logic."
+    }
+  ],
+  "SRS1": [
+    {
+      "run": "run1",
+      "label": "D-7119e8",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "Deviation 2 says QuotaCooldowns is a partial class split into QuotaCooldowns.cs and QuotaCooldowns.Round.cs, but the diff adds one non-partial 409-line QuotaCooldowns.cs, so the deviation record is false and the plan's 'split if it passes 400 lines' rule is broken."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheRoundParksAndLiftsTheQuotaTests.cs",
+          "summary": "S34's round half ends the Gemini row Ok instead of the plan's two spent rows, so it no longer shows that a spent Gemini refusal stays unparked; this is recorded, but the conflict with S41 that forced the change is not explained."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+          "summary": "The S40 row for remaining_fraction 2 expects GroupMissing (with the weekly bucket disabled) instead of the plan's Available; this tests the rule better, but the change is not in §12."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S36 does not assert that no write happened outside the lock, and S37 asserts the onRefused callback rather than a notice reaching the notice writer (an EndToEnd test covers that part separately)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "DeepseekRuntime gets an empty QuotaKeyOf override (correct, since it inherits codex's key) that neither the plan nor the §12 deviations mention."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+          "summary": "The Available note always reads 'the gauge read Available while the refusal said spent', even for an undecided refusal, where that sentence is wrong (it only reaches the log there)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AClaudeSpendLimitIsASpentQuotaTests.cs",
+          "summary": "The test copies the SpendLimit and OldCliNewModel envelopes instead of reusing AClaudeReasonInItsEnvelopeTests' constants as the plan's CLAUDE_SPEND names them; the Serilog sink and Watching helpers are also duplicated across two test classes, and JSON Child/StringOf helpers across AgyError and AgyQuotaReport."
+        }
+      ],
+      "summary": "D-7119e8 delivers every decision: the three-valued Spent verdict, the agy AGY_ERROR and /quota readers with the exact table and edge cases, the locked fail-open cooldown file, per-key aggregation after the round with one probe per key, the roster exclusion with this side's sentence, the wire member and the card. All 43 scenarios pass, and end-to-end tests cover the engine and notice wiring. The main finding is a false deviation record (a file split that did not happen, with the file over the plan's 400-line limit); the rest are small test changes left unrecorded and some duplicated helpers."
+    },
+    {
+      "run": "run2",
+      "label": "D-ad440a",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "Deviation §12 item 2 says QuotaCooldowns is a partial class split into QuotaCooldowns.cs and QuotaCooldowns.Round.cs, but the diff has one non-partial 409-line QuotaCooldowns.cs and no Round.cs, so the recorded deviation is false and the plan's split-past-400-lines instruction was not followed."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S36 checks Standing after each run and that B waited, but not the plan's 'the hook counted no write outside the lock'."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "DeepseekRuntime overrides QuotaKeyOf to empty, which is correct and tested but missing from the plan's deviation list (item 6 names only CustomCodexRuntime)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "RateLimited parses stdout as JSON for every launch, successful ones included, before it checks the exit code; checking ExitCode first would avoid the extra parse."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AClaudeSpendLimitIsASpentQuotaTests.cs",
+          "summary": "The CLAUDE_SPEND and OldCliNewModel envelopes are copied from AClaudeReasonInItsEnvelopeTests instead of being shared, even though the same diff made KimiMonthlyQuotaTests.Kimi() internal for reuse."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+          "summary": "An agy model outside the table still triggers a /quota probe whose answer can only be GroupMissing, which costs a 30 s-bounded child process for nothing."
+        }
+      ],
+      "summary": "All 43 scenarios are present and green and the build, both suites and format are clean; the structured verdict, the agy readers with every edge case, the locked fail-open cooldown file, the per-key aggregation that wins over a sibling Ok, the roster exclusion, the wire member and the card all match the plan, with extra tests for the Deepseek key, an unreadable file under the lock, a partial cancel and a real refused-write notice. The main finding is a deviation record that claims a two-file partial split that does not exist; the rest is minor (one unasserted S36 clause, an unrecorded Deepseek override, a little duplication and extra plumbing)."
+    }
+  ],
+  "C2": [
+    {
+      "run": "run1",
+      "label": "D-86888e",
+      "correctness": 8,
+      "tests": 9,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AntigravityRuntime.cs",
+          "summary": "Gauged sends AgyQuotaGauge.SpentWithoutReset to QuotaReset.FromText whatever `spent` is, so an undecided agy refusal (Spent == null) gets parked on stated/guess, although D10 and D5 list 'no reset_time' as cannot-check, which parks nothing for an undecided refusal."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+          "summary": "IsActive also skips any bucket whose window is not exactly 'weekly' or '5h', so a new window name turns a spent group into GroupMissing; D6 does not have this rule and the deviations list does not record it."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaReset.cs",
+          "summary": "'Does not park' is encoded as a fourth source string \"none\" with DateTimeOffset.MinValue, a sentinel inside the parking record instead of a separate case, and callers must remember to check Parks."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "The spend limit is detected by matching WhyItFailed's composed text (the phrase plus EndsWith \"(HTTP 429)\") instead of reading api_error_status from the envelope, which ties the structured verdict to a display format."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Kimi/KimiRuntime.cs",
+          "summary": "Kimi uses the default ReadResetAsync, which runs CooldownParser.StatedReset on its reason, so a Kimi line with a parseable clause would be parked as 'stated', against the Kimi plan's D3 (its clause is never parsed) that D5 says still holds."
+        }
+      ],
+      "summary": "A complete and faithful build: all 43 scenarios exist under their exact names and pass, the build, both test suites and format are green, and the structured verdict, the agy readers, the locked fail-open cooldown file with its refusal notice, the per-key aggregation, the roster exclusion, the providers member and the card all match the decisions. The plan's own contradictions (S25's past date, S34 against S41, S3's sample) are recorded truthfully as deviations, and an extra end-to-end test covers the engine wiring; what remains is a few small edge cases and design choices, chiefly an undecided agy refusal parked when the gauge names no reset."
+    },
+    {
+      "run": "run2",
+      "label": "D-a5b37e",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 9,
+      "simplicity": 8,
+      "overall": 9,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+          "summary": "AgyQuotaProbe.Judged throws OperationCanceledException on a Cancelled result even when the round's token was not cancelled; QuotaRound's `when (ct.IsCancellationRequested)` filter then lets it through, and AfterRoundAsync's catch drops every key's park or lift for that round, not only agy's."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "The spend-limit verdict checks WhyItFailed's formatted text, ending in \"(HTTP 429)\" and containing the phrase, instead of reading the envelope's is_error and api_error_status fields, so it breaks if that sentence's wording changes."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S35 decides that B waited on the lock from `second.IsCompleted` after a fixed 300 ms Task.Delay, a timing check (S36's write-order and in-lock assertions are sounder)."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaRound.cs",
+          "summary": "The consecutive count is computed twice, from a read outside the lock in ParkedAsync and again from the locked re-read in QuotaChange.Park, so the guess's wait and the stored count can disagree under a concurrent writer."
+        }
+      ],
+      "summary": "Every decision in the plan is implemented closely: the three-valued Spent verdict, the agy error reader for both shapes, the explicit group table and the /quota reader with its edge cases, the fail-open cooldown file under its cross-process lock with refusals raised as notices, aggregate-then-write per key, roster exclusion with this side's words, the wire member and the card line and badge; the build and both suites are green, and all 43 scenarios exist by name and pass, plus an end-to-end round test. Each deviation from the plan (the S3 reason, the S25 date, S34's undecided Gemini row, the extra `spent` parameter of ReadResetAsync, the notice callback) is recorded truthfully in §12 and is justified; only small robustness and test-timing points remain."
+    }
+  ],
+  "CR2": [
+    {
+      "run": "run1",
+      "label": "D-6d665c",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 9,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "When the agy probe is cancelled, AfterRoundAsync `break`s out of the per-key loop. Later keys (Claude, Codex, Kimi), whose ReadResetAsync never checks the token, are then left undecided, so on a stopped or deadline-ended round their park depends on the order of the results."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "A torn file is warned about once per QuotaCooldowns instance, but D4 says once per process; this is documented in module_runners.md but not listed in the plan's §12."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "§12 item 7 admits that for stories 2–4 the code came before the tests and the reds were seen only against stubs written afterwards, so most red messages differ from §4. This is honestly recorded, but the plan's red-first rule was not followed."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs",
+          "summary": "Two closed unions carry the same failure (AgyQuotaReading.Unreadable, re-wrapped as AgyQuotaVerdict.CannotCheck), and QuotaReset uses an empty Source as its 'parks nothing' sentinel, which adds a little indirection to the reader."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "Some additions go beyond the plan: a 256 KiB size guard, a Windows-only sharing-retry test, and extra test classes for an unreadable file and DeepSeek. All are reasonable hardening, but they make the change larger than the plan's estimate."
+        }
+      ],
+      "summary": "Every decision D1–D12 is implemented faithfully: the three-valued Spent verdict, AGY_ERROR in both shapes, Claude's spend envelope, the measured agy table with Argon kept separate, the bucket-id /quota reader with every edge case, the locked fail-open cooldown file with refused writes sent out as notices, per-key aggregation after the round, the CanRun exclusion with this side's wording, the wire member and the card. All 43 scenarios are present and green, and both suites, the build and the format check pass. The remaining findings are minor: a cancellation path that is sensitive to result order, a test-first process that was admitted not followed, and some additions beyond scope. The deviations in §12 are true and justified, including the plan's own S25/S34 contradictions and the DeepSeek key."
+    },
+    {
+      "run": "run2",
+      "label": "D-e935fd",
+      "correctness": 9,
+      "tests": 9,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 9,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "AfterRoundAsync only treats an undecided (Spent == null) agy refusal as a candidate when RateLimit.Hopeless(reason) is true, so an older-shape AGY_ERROR whose message lacks a spent word never asks the /quota gauge, although D5 says the gauge decides every undecided agy case."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "The public `Now` property is never used anywhere in the change; PanelService reads its own `_clock` instead."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyError.cs",
+          "summary": "The doc comment cites `research/PLAN_a_spent_quota_cools_the_model_down.md`, but the plan lives under `todo/`, which is where every other new file points."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "A file with a version other than 1 is read as empty even under the lock, so the next park silently replaces a file from a newer writer instead of refusing the write."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S37's 'one notice handed to the notice writer' is checked through the onRefused callback only; nothing tests the PanelService wiring to QuotaNotices/NoticeWriter (recorded as deviation 2)."
+        }
+      ],
+      "summary": "A complete, faithful implementation: all 43 scenarios exist and pass, build and both suites are green, and the structured verdict, agy error and /quota readers, the D3 table, the locked fail-open cooldown file, per-key aggregation, roster exclusion, wire member and card all follow D1–D12, with sensible extra guards (DeepSeek and custom codex keys left empty, a file unreadable under the lock refuses the write, a stated reset already past parks nothing). The plan's §12 records the deviations honestly and they hold up when checked (the extra `spent` parameter, S25's clock because CooldownParser keeps a past July date as-is, S34's undecided rows); what remains are minor gaps: an undecided agy edge case, a dead member and a wrong doc path."
+    }
+  ],
+  "SRS2": [
+    {
+      "run": "run1",
+      "label": "D-6a5188",
+      "correctness": 9,
+      "tests": 9,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "A `null` element in the file's `entries` array deserialises to a null wire, and `Entry(wire)` then throws a NullReferenceException out of `Standing`, so `CanRun`, `ExcludedFrom` and the providers answer throw instead of failing open as D4 requires."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "The spend-limit verdict (and agy's `Exhausted` verdict) carries `Usage.None`, so the launch's billed usage that the old `NonZeroExit` path recorded through `UsageOf` is now dropped, although the verdict's own doc says a structured verdict should carry the adapter's own usage."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "`IsSpendLimit` detects the 429 by matching the text \"(HTTP 429)\" at the end of `WhyItFailed`'s formatted sentence instead of reading the envelope's `api_error_status` field, which ties the structured verdict to presentation text."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyResets.cs",
+          "summary": "`AgyResets.Iso` re-implements the UTC ISO formatter that `QuotaCooldowns.Iso` already exposes publicly."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Kimi/KimiRuntime.cs",
+          "summary": "Kimi overrides `ReadResetAsync` and repeats the default's spent/hopeless condition (the plan asked for a one-line `QuotaKeyOf`), and neither this nor `AgyQuotaProbe.ReadAsync`'s extra `key`/`nowUtc` parameters is listed in §12's deviations."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S35 checks that B waited only through a snapshot taken after a 200 ms `Thread.Sleep`, not through the in-lock stage order, so the red it promises depends on timing."
+        },
+        {
+          "severity": "minor",
+          "file": "research/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "The promoted status line and §12 speak of \"seven tasks t1–t7\" and \"the judge's split\", which are pipeline internals that match neither the plan's four stories nor anything a reader can check."
+        }
+      ],
+      "summary": "Every decision D1–D12 is carried out faithfully: a three-valued `Spent`, the `AGY_ERROR` reader (including the pretty-printed form), a table-driven agy key with Argon on its own key, a `/quota` reader that follows the edge-case rules, a locked fail-open store with refusals written as notices, per-key aggregation after the round with cancellation contained, plus the roster exclusion, the wire member and the card; build, both suites and all 43 scenarios are green, and some tests are stronger than the plan asked (S3's discriminating case, a real-round test through the engine). What remains are small findings: a null-entry gap in fail-open, launch usage dropped on the new structured verdicts, one duplicated formatter, a couple of unrecorded signature deviations, and one timing-based check in S35."
+    },
+    {
+      "run": "run2",
+      "label": "D-047ec9",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "major",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs",
+          "summary": "FirstOf asks for the reset only from the first Spent==true refusal, or failing that from asking[0]. For a text-classified key (codex, claude, kimi), if a transient Spent==null refusal comes before a hopeless one, the default ReadResetAsync answers NoPark and a sibling Ok then lifts the key. That breaks D5's rule that a key is parked when any of its outcomes qualifies, and that a spent outcome wins over a sibling Ok."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyResets.cs",
+          "summary": "AgyResets.Iso is a private copy of QuotaCooldowns.Iso (same format, same culture) instead of reusing it, and §12 records the copy as a deviation instead of removing it."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/AgyResets.cs",
+          "summary": "D4 puts this side's sentence first and the vendor's sentence second, but the gauge note SpentNote puts the vendor's reason first, while QuotaReset.FromText uses this side's clause first, so the stored notes are ordered inconsistently."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/QuotaNotices.cs",
+          "summary": "The refused-write notice stamps itself from DateTimeOffset.UtcNow, while the PanelService that builds it now has an injected TimeProvider."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S35 checks that B waited only with a 200 ms Thread.Sleep and a file peek, not with the recorded in-lock stage order, so on a slow host an unlocked writer could still pass."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S39 rebuilds the consecutive-count lookup in a test helper (GuessedPark) instead of driving AfterRoundAsync/ResetOfAsync, so the product path that passes Standing().Consecutive to ReadResetAsync is not what the test exercises."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Product doc comments carry pipeline task ids (\"the launcher t5's round runs through\"), and the plan's §12 refers to \"the judge's split\": process detail leaking into code and docs."
+        },
+        {
+          "severity": "minor",
+          "file": "research/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "§12 does not list QuotaReset.cs or QuotaNotices.cs as files added beyond the plan's three new runner files."
+        }
+      ],
+      "summary": "The plan is delivered whole: all 43 scenario tests are present and passing, both suites and the build are green, and the structured verdict, the agy readers, the locked fail-open file, the roster exclusion, the wire member and the card follow D1–D12, with real deviations recorded truthfully. The main finding is a narrow aggregation gap: a transient refusal that comes first can mask a text-hopeless sibling on the same non-agy key. The rest is small duplication and a few weak test seams."
+    }
+  ],
+  "C3": [
+    {
+      "run": "run1",
+      "label": "D-22425b",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "When the probe launcher throws on a refusal agy itself called spent (Spent == true), DecidedOrNullAsync drops the key and parks nothing; D5 sends a failed /quota call down the 'cannot check' road, which still parks on stated/guess with the failure named, and the extra test pins the non-park."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "Qualifying sends every undecided agy RateLimited to the /quota probe, including a plain text-read '429 Too Many Requests', where D2 limits 'undecided' to RESOURCE_EXHAUSTED without the quota sentence; this costs an extra agy child on an ordinary throttle."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/AStructuredVerdictOutranksTheWordScanTests.cs",
+          "summary": "S3 uses a constructed 'quota exhausted' reason instead of the AGY_1_3_3 sample the plan names, which is justified because the stated reset alone would end the ladder, but §12 does not record the change and the Agy133Reason constant is left unused."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "§12 admits that some scenarios were not seen red first, against the Definition of Done, and leaves the extra touched files unrecorded: modelsTab.ts, resetWords.ts with spanOf exported, and architecture.md."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/CooldownSentences.cs",
+          "summary": "The refusal notice stamps itself with DateTimeOffset.UtcNow instead of the injected clock, and no test drives the PanelService wiring to Noticing.Offered: S37 checks only the onRefused callback."
+        }
+      ],
+      "summary": "All 43 scenarios are present and green with both suites, the build and format clean. The structured spent verdict, the agy table reader, the locked and fail-open cooldown file, the per-key aggregation after the round, the roster exclusion, the wire member and the card all follow D1–D12 closely, and the real plan contradictions (S25's past date, S34 against S41) are resolved and recorded honestly in §12. Remaining findings are minor: a thrown probe on a spent refusal parks nothing, undecided-agy probing is broader than D2, one scenario deviation and a few touched files are not recorded, and red-first was not fully kept."
+    },
+    {
+      "run": "run2",
+      "label": "D-1b5088",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.Round.cs",
+          "summary": "Qualifying treats every undecided agy RateLimited as a gauge case, including a plain text '429 Too Many Requests' that never carried RESOURCE_EXHAUSTED, so every transient agy throttle starts a /quota probe of up to 30 s before the summary."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Inside the lock, a read that fails with an IO or access error answers Empty, and the write that follows then replaces every other process's standing entries instead of refusing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "QuotaReset.NotParked uses a Parks flag with a meaningless MinValue instant and a 'guess' source; a separate result case would model 'do not park' more clearly."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "The spend-limit 429 is found by checking that WhyItFailed's rendered sentence ends with '(HTTP 429)', not by reading api_error_status itself."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/CooldownSentences.cs",
+          "summary": "CooldownNotices stamps the notice with DateTimeOffset.UtcNow instead of the injected clock, and the class sits in a file named for another class."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S37 checks the refusal notice only through the onRefused callback, so PanelService's wiring to Noticing is untested; S36 also does not prove that B actually waited on the lock rather than starting late."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheRoundParksAndLiftsTheQuotaTests.cs",
+          "summary": "The fixture-loading and bucket-mutation helpers are copied between two test classes, and a new QuotaTestLog sink was added although the internal ListSink already exists."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "The DeepseekRuntime override leaves two consecutive blank lines."
+        },
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "The DoD requires every scenario to be seen red first; deviation 12 admits several were not, and the S3 change of its Given reason is noted only in passing."
+        }
+      ],
+      "summary": "This delivers all four stories faithfully: all 43 scenarios are present and pass, the build, both test suites and the format check are green, and the code does what D1–D11 ask (structured verdict, both AGY_ERROR shapes, the measured group table, the locked fail-open file, per-key aggregation, roster exclusion, wire member and card), with sound deviations recorded truthfully in §12. The findings are all minor: an eager probe on transient agy throttles, a couple of edge cases in the fail-open contract, a few indirect detections, some duplicated test helpers, and scenario reds that were not all seen first."
+    }
+  ],
+  "CR3": [
+    {
+      "run": "run1",
+      "label": "D-4d4dee",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ClaudeRuntime.cs",
+          "summary": "The new RateLimited override returns Usage.None for the monthly spend-limit envelope. Before, that launch was a NonZeroExit and its usage came from ReadUsage, so the envelope's measured total_cost_usd is now recorded as not captured."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Applied() re-reads the file under the lock through the fail-open ReadEntries, which answers an empty set on any IOException or UnauthorizedAccessException. A passing read failure inside a write therefore overwrites the file and drops every other key's park, instead of refusing the write."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Refusal() treats any agy RateLimited with Spent == null as the undecided case, so a plain word-scan throttle such as '429 Too Many Requests' also launches a /quota probe. D2 defines the undecided case as a RESOURCE_EXHAUSTED without the sentence."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+          "summary": "S40's rows for a fraction of -1 or 2 make both Gemini buckets unreadable and expect GroupMissing. The plan's row makes one bucket unreadable and expects Available; this is a stronger test, but the change is not in §12."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+          "summary": "S33 reads the card with pageTree instead of the runPageHtml run the plan names, and matches the cooldown line with a regex instead of the exact S31 line. Neither change is recorded."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ARoundThatEndsSpentParksTheQuotaTests.cs",
+          "summary": "This extra end-to-end test creates its folders with Directory.CreateTempSubdirectory('coai-quota-e2e-…'), which breaks the plan's rule that every temp folder is made with TempDir.For and the testsToDelete- prefix."
+        }
+      ],
+      "summary": "All 43 scenarios are present and pass, the build and both suites are green, and every decision from D1 to D12 is implemented closely: the three-valued Spent, the agy error and /quota readers with D3's table, the locked fail-open cooldown file, the per-key aggregation after the round, and the roster exclusion, providers answer and card. A real deviation record (§12) explains the plan's own contradictions (S25's past July date, S34 against S41). The findings are all minor: a measured cost dropped on Claude's spend-limit launch, a write path that can lose other keys after a transient read failure, and a few test changes the record does not mention."
+    },
+    {
+      "run": "run2",
+      "label": "D-855317",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 8,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "If one agy probe is cancelled or throws inside DecidedAsync, the whole round's aggregate is dropped, including codex, claude and kimi decisions that needed no probe; D5 only says a cancelled probe parks nothing."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs",
+          "summary": "The default ReadResetAsync runs CooldownParser.StatedReset on Kimi's reason, but D5 and the Kimi plan's D3 say Kimi's reset clause is never parsed and Kimi always parks on a guess; this holds only because today's sample line has nothing the parser can read."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+          "summary": "S33 builds the page with the static pageTree parser instead of runPageHtml as the scenario says, and checks the cooldown line with a loose regex instead of the exact S31 line."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheAgyQuotaReportPicksTheResetTests.cs",
+          "summary": "S40's negative and above-one fraction rows edit both Gemini buckets and expect GroupMissing, while the plan's case edits one bucket and expects Available; this makes the test stronger, but the change is not in §12."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/RetryLadder.cs",
+          "summary": "Product comments cite research/PLAN_a_spent_quota_cools_the_model_down.md, a path that does not exist (the plan is still in todo/), while other new files cite the todo/ path."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/modelsTab.ts",
+          "summary": "modelsTab.ts is changed outside the plan's file list, and unlike the catalogCss and teamServerTab changes it is not recorded among the deviations."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/TheRoundParksAndLiftsTheQuotaTests.cs",
+          "summary": "The test classes repeat helpers instead of sharing them: JsonSetup and SpentWithoutReset beside the report tests' Edited and Spend, and Now, Fixture and Agy133Reason defined again although QuotaSamples already has them."
+        }
+      ],
+      "summary": "This is a full and faithful build of D1–D12: the build, both suites, format and all 43 scenarios are green. The three-valued verdict, the agy readers and the D3 table, the locked fail-open cooldown file, the per-key aggregation, the roster exclusion, the providers member and the card all match the spec, and §12 records every substantive deviation truthfully (S25's date and S34's split are needed fixes for contradictions inside the plan). The findings are all minor: on cancellation the whole round's aggregate is dropped, Kimi's reset clause can in principle be parsed, S33 uses a weaker harness than the scenario names, S40 departs from the plan without a record, plus some comment-path drift and duplicated test helpers."
+    }
+  ],
+  "SRS3": [
+    {
+      "run": "run1",
+      "label": "D-61b066",
+      "correctness": 8,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 7,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "The §12 deviation list says QuotaCooldowns is a partial class split into QuotaCooldowns.cs and QuotaCooldowns.Round.cs, but the diff adds a separate internal class QuotaRound in QuotaRound.cs and QuotaCooldowns is not partial, so that entry is false."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/PanelService.cs",
+          "summary": "The refused-write notice calls `_noticing.Offer(...)` directly instead of going through the `Noticing.Offered(() => ...)` boundary, so an offer the writer does not accept is lost without the 'not accepted' warning the codebase's convention guarantees."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaRound.cs",
+          "summary": "The probes run under one Task.WhenAll, so one cancelled agy probe (for example a round that ended on its deadline, whose token is already cancelled) throws away every key's park and lift for that round, codex, claude and kimi included."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S39 passes the until instant to Park itself and asserts only the Consecutive counter, so the plan's red (30 min rather than 60 after a gap) is never checked through the guess road that QuotaRound actually takes."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+          "summary": "S33 asserts the claude card has no reset-line but never checks that the same snapshot would draw one without the cooldown, so that assertion may pass for no reason."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ACoolingRowStaysOutOfTheRoundTests.cs",
+          "summary": "S37's 'one notice handed to the notice writer' is proven only through the store's callback plus a separate test of the notice builder; no test covers PanelService's wiring of a refused write to a server notice."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Product and test comments name internal pipeline tasks ('t2 owns…', 't4's record', 't6 turns it into a server notice', 'Epic t2') that mean nothing to a reader of the repository."
+        }
+      ],
+      "summary": "Delivers every story: build, both suites and format are green, all 43 scenarios exist and pass, and D1–D11 are followed closely, including the structured spent verdict, the exact agy group table and edge cases, the locked fail-open store that refuses out loud, aggregation per key where a spent refusal wins, the roster exclusion with this side's sentence, the wire member and the card. Recording the unreachable lift (R6) and the S34/S25 corrections is to its credit. The findings are all minor: one false deviation entry, the notice offered past the codebase's boundary, a cancellation that drops every key's moves, and a few tests that assert less than their scenario's red."
+    },
+    {
+      "run": "run2",
+      "label": "D-a3e63b",
+      "correctness": 9,
+      "tests": 8,
+      "conventions": 7,
+      "simplicity": 8,
+      "overall": 8,
+      "defects": [
+        {
+          "severity": "minor",
+          "file": "todo/PLAN_a_spent_quota_cools_the_model_down.md",
+          "summary": "§12 says QuotaCooldowns is a partial class split into QuotaCooldowns.cs and QuotaCooldowns.Round.cs, but no such file or partial class exists: the split is into separate classes in QuotaRound.cs and QuotaReset.cs, so a recorded deviation is untrue."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaRound.cs",
+          "summary": "MovesAsync awaits every key's move with Task.WhenAll, and RoundEngine passes the round's token, which the round deadline also cancels; when a deadline-ended round has a spent agy key, its cancelled probe throws through WhenAll and also discards the park or lift moves of codex, Claude and Kimi keys, which need no probe."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/tests/ASpentQuotaIsRememberedUntilItsResetTests.cs",
+          "summary": "S39 parks with until-instants the test chooses itself and asserts only the Consecutive counter, so the plan's Then (30 min after a gap rather than 60) is never checked through ReadResetAsync and AfterRoundAsync."
+        },
+        {
+          "severity": "minor",
+          "file": "src_vs_code/src/test/aCoolingRowSaysWhenItIsBack.test.ts",
+          "summary": "S33 asserts that the cooling card has no .reset-line but never shows that its roundsSnapshot would draw one on a card that is not cooling, so the INSTEAD rule is not proved to have changed anything."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs",
+          "summary": "Comments and test docs name internal task labels (t2, t4, t6, 'Epic t2') that a plan without epics does not define, and the unreadable-file warning is once per QuotaCooldowns instance rather than once per process as D4 says."
+        },
+        {
+          "severity": "minor",
+          "file": "src_mcp/src/Server/PanelService.cs",
+          "summary": "The refused-write notice calls _noticing.Offer directly instead of going through Noticing.Offered, the boundary that exists so a notice that fails to land is still logged."
+        }
+      ],
+      "summary": "All 43 scenarios are present and green, the build and both suites pass, and the code delivers D1–D11 closely: the three-valued Spent, the AGY_ERROR reader for both shapes, the explicit table of agy quota groups, the /quota reader with its edge cases, the file under its lock with fail-open reads and refusals reported out loud, the per-key aggregation, the roster exclusion and the card. The findings are all minor: one untrue line in the deviation record, a deadline-cancelled round that can drop every key's parks, two scenario tests that check less than their Then, and some leaked internal task labels in comments."
+    }
+  ]
+}

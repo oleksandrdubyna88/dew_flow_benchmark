@@ -1,0 +1,21 @@
+{
+  "decidedOn": "2026-10-29",
+  "reason": "The toolchain every bare session runs on, pinned (E2.S2 D-9, D-10). Each pin is checked INSIDE the agent box by the preflight, with the probe argv below, before any paid session starts. The TypeScript toolchain is installed once under toolchainDir and made read-only; the box binds it read-only.",
+  "amendments": [
+    {
+      "on": "2026-10-30",
+      "pin": "dotnetSdk",
+      "from": "10.0.113",
+      "to": "10.0.114",
+      "why": "Unattended apt upgraded the .NET SDK package at 2026-10-30 06:19:43 (/var/log/apt/history.log, Start-Date 2026-10-30  06:19:43, Commandline /usr/bin/unattended-upgrade, which also upgraded the runtime to 10.0.14); /usr/lib/dotnet/sdk now holds only 10.0.114. It is the newest .NET 10 SDK on this host, which is the experiment's aim (latest .NET 10). The preflight refuses a session when the SDK differs from the pin, so an upgrade during the series stops it: the operator is asked to hold the dotnet packages."
+    }
+  ],
+  "pins": { "claude": "2.1.310", "node": "26.12.1", "dotnetSdk": "10.0.114", "typescript": "7.0.2" },
+  "probes": {
+    "claude": ["claude", "--version"],
+    "node": ["node", "--version"],
+    "dotnetSdks": ["dotnet", "--list-sdks"],
+    "tsc": ["tsc", "--version"]
+  },
+  "typescriptToolchainDir": ["rsd", "minigit", "toolchains", "typescript-7.0.2"]
+}

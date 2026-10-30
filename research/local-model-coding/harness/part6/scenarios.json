@@ -1,0 +1,217 @@
+[
+ {
+  "id": "S1",
+  "kind": "cs",
+  "name": "ASpentVerdict_IsHopeless_WhateverTheWordsSay"
+ },
+ {
+  "id": "S2",
+  "kind": "cs",
+  "name": "ATransientVerdict_ClimbsTheLadder_EvenWhenTheTextSaysExhausted"
+ },
+ {
+  "id": "S3",
+  "kind": "cs",
+  "name": "AnUndecidedVerdict_ReadsTheTextAsBefore"
+ },
+ {
+  "id": "S4",
+  "kind": "cs",
+  "name": "TheIndividualQuotaLine_IsASpentVerdict"
+ },
+ {
+  "id": "S5",
+  "kind": "cs",
+  "name": "TheOlderErrorShape_IsReadToo"
+ },
+ {
+  "id": "S6",
+  "kind": "cs",
+  "name": "WithoutTheQuotaSentence_NothingIsSpent"
+ },
+ {
+  "id": "S7",
+  "kind": "cs",
+  "name": "TheMonthlySpendLimitEnvelope_IsASpentRateLimit"
+ },
+ {
+  "id": "S8",
+  "kind": "cs",
+  "name": "AnotherEnvelope_IsStillAnExit"
+ },
+ {
+  "id": "S9",
+  "kind": "cs",
+  "name": "GeminiWeeklySpent_FiveHourDisabled_BlocksUntilTheWeeklyReset_AndThe3pGroupIsAvailable"
+ },
+ {
+  "id": "S10",
+  "kind": "cs",
+  "name": "ClaudeAndGptWeeklySpent_UsesThe3pWeeklyBucket"
+ },
+ {
+  "id": "S11",
+  "kind": "cs",
+  "name": "WeeklyAvailable_FiveHourSpent_UsesTheFiveHourReset"
+ },
+ {
+  "id": "S12",
+  "kind": "cs",
+  "name": "BothActiveBucketsSpent_TheLaterResetWins_AndBothAreNamed"
+ },
+ {
+  "id": "S13",
+  "kind": "cs",
+  "name": "ASpentBucketWithoutResetTime_IsUnknown_NeverADate"
+ },
+ {
+  "id": "S14",
+  "kind": "cs",
+  "name": "AnUnknownModel_HasNoGroup"
+ },
+ {
+  "id": "S15",
+  "kind": "cs",
+  "name": "AProbeThatFails_IsCannotCheck_AndTheCommandIsTheOwners"
+ },
+ {
+  "id": "S16",
+  "kind": "cs",
+  "name": "AParkedKey_StandsUntilItsReset_ThenIsBackOnItsOwn"
+ },
+ {
+  "id": "S17",
+  "kind": "cs",
+  "name": "TheRecordSurvivesANewStore"
+ },
+ {
+  "id": "S18",
+  "kind": "cs",
+  "name": "AnAnsweredLaunch_LiftsTheCooldown"
+ },
+ {
+  "id": "S19",
+  "kind": "cs",
+  "name": "ATornFile_ParksNobody_AndSaysSoOnce"
+ },
+ {
+  "id": "S20",
+  "kind": "cs",
+  "name": "AnExpiredEntry_IsDroppedAtTheNextWrite_AndTheFileStaysSmall"
+ },
+ {
+  "id": "S21",
+  "kind": "cs",
+  "name": "TheGuess_DoublesPerConsecutivePark_AndStopsAtFiveHours"
+ },
+ {
+  "id": "S22",
+  "kind": "cs",
+  "name": "ASpentAgyRefusal_AsksQuotaOnce_AndParksTheGroupUntilTheReset"
+ },
+ {
+  "id": "S23",
+  "kind": "cs",
+  "name": "WhenQuotaCannotBeRead_TheStatedResetIsAnEstimate"
+ },
+ {
+  "id": "S24",
+  "kind": "cs",
+  "name": "AnUndecidedExhaustion_IsParkedOnlyWhenTheGaugeSaysSpent"
+ },
+ {
+  "id": "S25",
+  "kind": "cs",
+  "name": "ACodexSpentAllowance_IsParkedOnItsStatedDate_AndAnAnswerLiftsIt"
+ },
+ {
+  "id": "S26",
+  "kind": "cs",
+  "name": "ACoolingAgyRow_IsExcluded_WithThisSidesSentence"
+ },
+ {
+  "id": "S27",
+  "kind": "cs",
+  "name": "AnotherGroupOnTheSameCli_StillRuns"
+ },
+ {
+  "id": "S28",
+  "kind": "cs",
+  "name": "WhenTheResetHasPassed_TheRowRunsAgain_WithoutAnyWrite"
+ },
+ {
+  "id": "S29",
+  "kind": "cs",
+  "name": "TheProvidersAnswer_CarriesTheCooldown_AndNothingForARowThatIsNotCooling"
+ },
+ {
+  "id": "S30",
+  "kind": "node",
+  "name": "TheParser_ReadsTheCooldown — present when the server sends it, absent for an older server and for a half"
+ },
+ {
+  "id": "S31",
+  "kind": "node",
+  "name": "AQuotaReset_IsSaidAsDateTimeAndTimeLeft — 2026-10-14T07:19:16Z is 14.10.2026 09:19 in Europe/Paris, 63 h left"
+ },
+ {
+  "id": "S32",
+  "kind": "node",
+  "name": "AnEstimateAndAGuess_SayWhatTheyAre — about … from the error text; reset time unknown, next try"
+ },
+ {
+  "id": "S33",
+  "kind": "node",
+  "name": "TheModelsCard_CarriesTheCooldownLine_AndTheBadge — read off the RUNNING page; nothing for a row that is not cooling"
+ },
+ {
+  "id": "S34",
+  "kind": "cs",
+  "name": "ArgonSpent_WithOrdinaryGeminiAvailable_ParksOnlyArgon"
+ },
+ {
+  "id": "S35",
+  "kind": "cs",
+  "name": "TwoWriters_InterleavedUnderTheLock_LoseNeitherKey"
+ },
+ {
+  "id": "S36",
+  "kind": "cs",
+  "name": "AParkAndALift_InterleavedUnderTheLock_EndWhereTheLastWriteSays"
+ },
+ {
+  "id": "S37",
+  "kind": "cs",
+  "name": "AWriteThatCannotHappen_IsRefusedOutLoud_AndParksNothingUnlocked"
+ },
+ {
+  "id": "S38",
+  "kind": "cs",
+  "name": "AProvidersAnswerWithACooldown_SerialisesThroughTheGeneratedContext"
+ },
+ {
+  "id": "S39",
+  "kind": "cs",
+  "name": "AGapPastExpiry_RestartsTheGuessAtThirtyMinutes"
+ },
+ {
+  "id": "S40",
+  "kind": "cs",
+  "name": "TheEdgeCases_AreDecidedAsWritten"
+ },
+ {
+  "id": "S41",
+  "kind": "cs",
+  "name": "ASpentRefusalWinsOverASiblingAnswer_InEitherOrder_AndOverAnAvailableGauge"
+ },
+ {
+  "id": "S42",
+  "kind": "cs",
+  "name": "ACancelledProbe_ParksNothing_AndTheResultsAreStillTheRounds"
+ },
+ {
+  "id": "S43",
+  "kind": "cs",
+  "name": "TheRealAnswer_ReadsThreeGroups_AllAvailable"
+ }
+]

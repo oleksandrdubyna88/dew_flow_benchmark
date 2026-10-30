@@ -8,8 +8,9 @@ import { findCalls, findNames, importViolations, importedNames, localGraph, sour
 import { spikeDir, tmpDir } from './helpers.mjs';
 
 const FORBIDDEN = ['costFromMessages', 'CostMeter', 'summarize', 'parallelism', 'childCosts', 'OUTPUT_FLOOR_PER_MESSAGE'];
-// the spec's list, plus initInfo (pure, aliases.mjs) and assertRemovable (safe-rm's guard, beside removeUnder)
-const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder', 'assertRemovable'];
+// the spec's list, plus initInfo (pure, aliases.mjs), assertRemovable (safe-rm's guard, beside removeUnder) and PINNED_EFFORT (a pure constant:
+// the effort block launch.mjs writes into the session's settings, one source with the older spike)
+const ALLOWED_FROM_POLICY_AB = ['resultEnvelope', 'initInfo', 'agentTimeline', 'sweepSpans', 'drawOrder', 'rateLimitSignal', 'spendDecision', 'removeUnder', 'assertRemovable', 'killTree', 'canaryTargets', 'findOutsideAccesses', 'FIXED_GIT', 'PINNED_EFFORT'];
 const rel = f => path.relative(spikeDir, f).split(path.sep).join('/');
 const production = () => sourceFiles(spikeDir, ['test', 'node_modules']);
 const policyLib = file => path.resolve(spikeDir, '..', 'policy-ab-quick', 'lib', file);

@@ -48,9 +48,9 @@ export function splitTopLevel(command) {
   return segments;
 }
 
-const wordsOf = segment => (segment.trim().replace(KEYWORDS, '').replace(/[)}]+\s*$/, '').match(/"[^"]*"|'[^']*'|\S+/g) ?? []);
+export const wordsOf = segment => (segment.trim().replace(KEYWORDS, '').replace(/[)}]+\s*$/, '').match(/"[^"]*"|'[^']*'|\S+/g) ?? []);
 const isLauncher = word => /(^|\/)low-priority\.mjs$/.test(word);
-const unquote = word => (/^(["']).*\1$/s.test(word ?? '') ? word.slice(1, -1) : word);
+export const unquote = word => (/^(["']).*\1$/s.test(word ?? '') ? word.slice(1, -1) : word);
 
 /** Drop leading option words (and the value words of those that take one); an `--opt=value` is one word. */
 function skipOptions(words, valueOptions = []) {

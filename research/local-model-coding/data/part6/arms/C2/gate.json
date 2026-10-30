@@ -1,0 +1,25 @@
+{"status": "proceed",
+ "why": "plan round 1 and code round 1 both reached proceed; one code finding accepted and fixed (ddd12695), ten rejected with reasons",
+ "rounds": [
+  {"stage": "plan", "round": 1, "verdict": "proceed", "asked": 2, "answered": 2,
+   "findings": [
+    {"severity": "Major", "file": "plan", "summary": "no live check of the server-to-extension cooldown contract", "decision": "reject", "reason": "plan frozen for this change", "fixedIn": null},
+    {"severity": "Minor", "file": "plan", "summary": "30 s lock wait can delay delivery of results", "decision": "reject", "reason": "plan frozen (D4 fixes the wait)", "fixedIn": null},
+    {"severity": "Blocking", "file": "plan", "summary": "a cooling row never runs, so an answered launch can never lift it", "decision": "reject", "reason": "plan frozen (D12: manual try-now out of scope; expiry ends it)", "fixedIn": null},
+    {"severity": "Major", "file": "plan", "summary": "doubling restarts after expiry so never advances past 30 min", "decision": "reject", "reason": "plan frozen (D5/S39 decided it)", "fixedIn": null},
+    {"severity": "Major", "file": "plan", "summary": "unit tests call AfterRoundAsync directly and mask the unreachable lift", "decision": "reject", "reason": "plan frozen; the engine-level test exists", "fixedIn": null},
+    {"severity": "Minor", "file": "plan", "summary": "en-GB formats with slashes, not dots", "decision": "reject", "reason": "plan frozen; code joins formatToParts with dots, no defect", "fixedIn": null}]},
+  {"stage": "code", "round": 1, "verdict": "proceed", "asked": 8, "answered": 8,
+   "findings": [
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs", "summary": "quota keys and sources travel as untyped strings", "decision": "reject", "reason": "D3 fixes the string interface; plan frozen", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "a hand-edited far-future entry parks a quota indefinitely", "decision": "reject", "reason": "coai's own file; a hand edit is a deliberate park; no bound asked by the plan", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaRound.cs", "summary": "quota probes run serially", "decision": "reject", "reason": "D5 asks one call per key, not concurrency; worst case needs three spent groups all timing out", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "PanelService resolves quota keys via ephemeral runtime instances", "decision": "reject", "reason": "RuntimeFor is the existing pattern; D9 prescribes it; runtimes stateless", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "uncached disk reads in Standing", "decision": "reject", "reason": "D4: no cache, and a cache would hide other processes' parks", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "model family parsing strips fixed suffixes", "decision": "reject", "reason": "D3: one explicit measured table, unknown family has its own key", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "a null element in entries throws NullReferenceException out of ReadFile", "decision": "accept", "reason": "reproduced by a failing test; breaks the fail-open contract of D4", "fixedIn": "ddd12695"},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaRound.cs", "summary": "the cancellation filter lets a probe's OperationCanceledException abort other keys", "decision": "reject", "reason": "ProcessResult.Cancelled is set only when ct is cancelled (ProcessLauncher.cs:570) and ReadAsync throws on ct first, so the filter always matches", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "cooldown file re-read per provider on roster and status paths", "decision": "reject", "reason": "duplicate of the uncached-read finding; D4", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "AgyError.Parse allocates a split array of stderr", "decision": "reject", "reason": "stderr is bounded, error path runs once per launch", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/src/Server/CooldownWords.cs", "summary": "TimeLeft shows 1 min when the span is non-positive", "decision": "reject", "reason": "Standing returns only unexpired entries; Math.Max(1, ..) is the deliberate round-up", "fixedIn": null}]}
+ ]}

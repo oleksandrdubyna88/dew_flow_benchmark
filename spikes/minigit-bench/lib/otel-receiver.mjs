@@ -1,7 +1,7 @@
 // The OTLP/HTTP JSON receiver for a live session: 127.0.0.1 only, JSON only, bounded. The one I/O module besides capture/*.
 // It keeps every body raw (`otel-raw.ndjson`, the file sink's line shape), the decoded records (`otel.ndjson`) and a running cost
 // sum that E2's cost watchdog reads: `cost_usd` per request is final and includes children.
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, chmodSync, mkdirSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { isJson, rawBodyLine, readBody } from './http-body.mjs';
@@ -74,26 +74,50 @@ function makeHandler({ append, counters, store }) {
   };
 }
 
-/** Start the receiver in `dir`. `port` 0 = any free one. Resolves once listening. */
-export async function startReceiver({ dir, port = 0 }) {
+/** Listen on a unix socket too (mode 600), removing a stale file first: the box reaches the receiver through a bound socket (E2.S2 D-5). */
+async function listenOnSocket(server, socketPath) {
+  rmSync(socketPath, { force: true });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
+  chmodSync(socketPath, 0o600);
+}
+
+/**
+ * Start the receiver in `dir`. `port` 0 = any free one. When `socketPath` is given a second `http.Server` over the SAME handler also
+ * listens there (mode 600) and `close()` removes the file. Resolves once listening.
+ */
+export async function startReceiver({ dir, port = 0, socketPath = null }) {
   mkdirSync(dir, { recursive: true });
   const counters = { misconfigured: 0, undecodable: 0, rejectedRecords: 0 };
   const store = { records: [] };
   const append = (name, obj) => appendFileSync(path.join(dir, name), `${JSON.stringify(obj)}\n`);
   const handle = makeHandler({ append, counters, store });
-  const server = http.createServer((req, res) => {
+  const serve = () => http.createServer((req, res) => {
     handle(req, res).catch(e => {
       process.stderr.write(`otel-receiver: ${e.stack}\n`);
       if (!res.headersSent) reply(res, 500, { error: 'receiver failure' });
     });
   });
+  const server = serve();
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, HOST, resolve); });
+  const socketServer = socketPath ? serve() : null;
+  if (socketServer) {
+    try {
+      await listenOnSocket(socketServer, socketPath);
+    } catch (e) {
+      await new Promise(resolve => { server.close(() => resolve()); });
+      throw e;
+    }
+  }
+  const stop = s => new Promise(resolve => { s.close(() => resolve()); s.closeAllConnections(); });
   return {
-    server, port: server.address().port, dir,
+    server, port: server.address().port, dir, socketPath,
     liveSum: () => liveSumOf(store.records),
     get misconfigured() { return counters.misconfigured; },
     get undecodable() { return counters.undecodable; },
     get rejectedRecords() { return counters.rejectedRecords; },
-    close: () => new Promise(resolve => { server.close(() => resolve()); server.closeAllConnections(); }),
+    close: async () => {
+      await Promise.all([stop(server), socketServer ? stop(socketServer) : null]);
+      if (socketPath) rmSync(socketPath, { force: true });
+    },
   };
 }

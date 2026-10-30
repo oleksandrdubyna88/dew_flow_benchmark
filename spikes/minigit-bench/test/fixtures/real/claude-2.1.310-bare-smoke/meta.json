@@ -1,0 +1,58 @@
+{
+  "rid": "20261030T051710Z",
+  "cell": "smoke-cqvb3dns",
+  "startedAt": "2026-10-30T05:17:17.528Z",
+  "endedAt": "2026-10-30T05:17:33.201Z",
+  "wallMs": 15673,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stopped": null,
+  "stoppedAt": null,
+  "outcome": {
+    "ok": true,
+    "label": "ok",
+    "detail": ""
+  },
+  "cliVersion": "2.1.310",
+  "sessionId": "58c84da7-01db-4212-8770-753c821372e8",
+  "envelopeCostUsd": 0.10893829999999999,
+  "samplers": {
+    "samples": 12,
+    "realInCmdline": 0,
+    "realInEnviron": 0,
+    "dummyInCmdline": 0,
+    "dummyInEnviron": 48,
+    "unreadable": 516
+  },
+  "janitorEnded": 0,
+  "transcripts": 2,
+  "transcriptsProblem": null,
+  "broker": {
+    "spentUsd": 0.1089383,
+    "lowerBound": false,
+    "upstreamRequests": 5,
+    "refused": 0,
+    "refusedByReason": {
+      "cap": 0,
+      "path": 0,
+      "body": 0
+    },
+    "unpricedModels": [],
+    "overCap": false,
+    "overshootUsd": 0
+  },
+  "unsettledAtClose": {
+    "count": 0,
+    "reservedUsd": 0
+  },
+  "receiver": {
+    "usd": 0.10893829999999999,
+    "requests": 5,
+    "misconfigured": 0,
+    "undecodable": 0
+  },
+  "errors": [],
+  "cleanup": []
+}

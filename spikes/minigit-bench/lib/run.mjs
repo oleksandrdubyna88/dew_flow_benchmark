@@ -1,6 +1,7 @@
 // One external process, exe + argv (never a shell), always with a timeout that kills the whole process group.
 // Expected failures come back as values (result.mjs): ok(value) | fail(reason).
 import { spawn } from 'node:child_process';
+import { killTree } from '../../policy-ab-quick/lib/proc.mjs';
 import { fail, ok } from './result.mjs';
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -24,12 +25,8 @@ function collector(max) {
   };
 }
 
-/** Signal the child's process group, then the child itself (the group may be gone already). */
-function killGroup(child) {
-  for (const target of [-child.pid, child.pid]) {
-    try { process.kill(target, 'SIGKILL'); } catch (e) { if (e.code !== 'ESRCH') throw e; }
-  }
-}
+/** Signal the child's process group, then the child itself (the one kill implementation of the spikes: policy-ab-quick/lib/proc.mjs). */
+const killGroup = child => killTree(child.pid, { log: line => process.stderr.write(`runBounded: ${line}\n`) });
 
 /**
  * Run `exe args` and resolve with { code, signal, stdout, stderr, timedOut, truncated, ms }. A launch failure is
