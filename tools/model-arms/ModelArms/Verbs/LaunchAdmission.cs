@@ -9,19 +9,15 @@ namespace ModelArms.Verbs;
 /// <see cref="HostChecks"/> judge the same things for <c>prep-base</c> — reads the same entries. The judgement is by the environment map the verb was handed, never the process's.</summary>
 internal static class LaunchAdmission
 {
-    /// <summary>The PATH of the map split into its entries, an empty one included; none when the map has no PATH at all.</summary>
-    public static IReadOnlyList<string> PathEntries(IReadOnlyDictionary<string, string> environment) =>
-        environment.TryGetValue("PATH", out var path) ? [.. path.Split(Path.PathSeparator)] : [];
-
     /// <summary>The first refusal of what the children inherit: a PATH entry, then <c>HOME</c> or <c>XDG_CONFIG_HOME</c> (D26 c), else the empty text. The PATH is judged before any executable is looked up in it: git and claude look their own helpers up there for hours.</summary>
     public static string FirstRefusal(IReadOnlyDictionary<string, string> environment, IReadOnlyList<string> forbiddenRoots) =>
-        PathEntries(environment).Select(entry => ExecutableResolution.PathEntryRefusal(entry, forbiddenRoots, RootFacts.Host)).FirstOrDefault(sentence => sentence.Length > 0)
+        ExecutableResolution.PathEntries(environment).Select(entry => ExecutableResolution.PathEntryRefusal(entry, forbiddenRoots, RootFacts.Host)).FirstOrDefault(sentence => sentence.Length > 0)
         ?? ConfigFolders.Refusals(environment, forbiddenRoots).Select(home => home.Refusal).FirstOrDefault()
         ?? string.Empty;
 
     /// <summary>The REAL path of <paramref name="name"/> on the map's PATH: found → the path; absent → exit 3 (the host lacks the program); refused → exit 4 (D17 names a wrong configuration). The sentence is prefixed <c>model-arms &lt;verb&gt;:</c>.</summary>
     public static Passage<string> Resolve(string verb, string name, IReadOnlyDictionary<string, string> environment, IReadOnlyList<string> forbiddenRoots) =>
-        ExecutableResolution.Resolve(name, PathEntries(environment), forbiddenRoots, RootFacts.Host, OperatingSystem.IsWindows()) switch
+        ExecutableResolution.Resolve(name, ExecutableResolution.PathEntries(environment), forbiddenRoots, RootFacts.Host, OperatingSystem.IsWindows()) switch
         {
             ExecutableAnswer.Found found => new Passage<string>.Through(found.Real),
             ExecutableAnswer.Absent absent => Passage<string>.Stop(ExitCodes.Environment, $"model-arms {verb}: {absent.Reason}"),

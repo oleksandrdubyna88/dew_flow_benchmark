@@ -12,7 +12,13 @@ using PrepBaseVerb = ModelArms.Verbs.PrepBaseVerb;
 namespace Bench.Tests.ModelArms;
 
 /// <summary>One call a shim or the wrapper recorded: which tool, the <c>$0</c> it was started as (the executable's path as launched), its arguments, the folder it started in and the NAMES (never the values) of its environment.</summary>
-internal sealed record RecordedCall(string Tool, string Executable, IReadOnlyList<string> Arguments, string Cwd, IReadOnlyList<string> EnvironmentNames);
+internal sealed record RecordedCall(string Tool, string Executable, IReadOnlyList<string> Arguments, string Cwd, IReadOnlyList<string> EnvironmentNames)
+{
+    /// <summary>For a wrapper call: how the node that ran it was started (<c>process.argv0</c>, the path the launcher gave) and where that node really is (<c>process.execPath</c>); empty for a shim.</summary>
+    public string NodeStartedAs { get; init; } = string.Empty;
+
+    public string NodeExecPath { get; init; } = string.Empty;
+}
 
 /// <summary>The scratch target of the E3 verbs (E3 §3): a rules repository holding <c>tools/low-priority.mjs</c> — a node script that records its own argv, folder and environment names and then starts its argument — a target repository whose <c>.agents/conventions</c> is that repository as a
 /// submodule, with the plan and an <c>src_vs_code</c> folder at <c>base</c>, and three shims in the experiment's only PATH entry: <c>dotnet</c> and <c>npm</c> (shell scripts that record <c>$0</c>, argv, cwd and the environment's names, then print the canned MTP or node-runner lines and exit with the canned code — the suite shim writes its
@@ -164,7 +170,7 @@ internal sealed class TargetBench : IDisposable
         string Value(string key) => block.FirstOrDefault(line => line.StartsWith(key + " ", StringComparison.Ordinal))?[(key.Length + 1)..] ?? string.Empty;
         IEnumerable<string> Values(string key) => block.Where(line => line.StartsWith(key + " ", StringComparison.Ordinal)).Select(line => line[(key.Length + 1)..]);
 
-        return new RecordedCall(Value("CALL"), Value("ARG0"), [.. Values("ARG")], Value("CWD"), [.. Values("ENV")]);
+        return new RecordedCall(Value("CALL"), Value("ARG0"), [.. Values("ARG")], Value("CWD"), [.. Values("ENV")]) { NodeStartedAs = Value("NODE0"), NodeExecPath = Value("NODEX") };
     }
 
     private async Task MakeRepositoriesAsync(bool planBranchAhead, bool extensionFolder)
@@ -223,7 +229,7 @@ internal sealed class TargetBench : IDisposable
         import { spawnSync } from 'node:child_process';
         import { appendFileSync } from 'node:fs';
         const [, script, tool, ...rest] = process.argv;
-        const lines = ['CALL wrapper', 'ARG0 ' + script, 'ARG ' + tool, ...rest.map((a) => 'ARG ' + a), 'CWD ' + process.cwd(), ...Object.keys(process.env).map((k) => 'ENV ' + k), 'END', ''];
+        const lines = ['CALL wrapper', 'NODE0 ' + process.argv0, 'NODEX ' + process.execPath, 'ARG0 ' + script, 'ARG ' + tool, ...rest.map((a) => 'ARG ' + a), 'CWD ' + process.cwd(), ...Object.keys(process.env).map((k) => 'ENV ' + k), 'END', ''];
         appendFileSync({{JsonSerializer.Serialize(Calls)}}, lines.join('\n'));
         const run = spawnSync(tool, rest, { stdio: 'inherit' });
         process.exit(run.status ?? 1);

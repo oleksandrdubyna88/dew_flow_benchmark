@@ -29,15 +29,7 @@ public static class ValidateVerb
         return await read.Match(facts => Judged(input, facts, whenValid), stop => Task.FromResult(Stopped(input, stop)));
     }
 
-    private static int Stopped(ExperimentInput input, Passage<HostFacts>.Stopped stop)
-    {
-        foreach (var line in stop.Lines)
-        {
-            input.Verb.Error.WriteLine(line);
-        }
-
-        return stop.ExitCode;
-    }
+    private static int Stopped(ExperimentInput input, Passage<HostFacts>.Stopped stop) => stop.Print(input.Verb.Error);
 
     private static Task<int> Judged(ExperimentInput input, HostFacts facts, Func<HostFacts, Task<int>> whenValid)
     {

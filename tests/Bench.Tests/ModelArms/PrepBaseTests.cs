@@ -167,6 +167,8 @@ public sealed class PrepBaseTests
 
         var wrapped = calls.Where(call => call.Tool == "wrapper").ToList();
         wrapped.Should().HaveCount(3, "the build, the suite and the extension are lowered; npm and git are not");
+        wrapped.Select(call => call.NodeStartedAs).Should().OnlyContain(path => path == printed["node"], "the node that runs the target's wrapper is started by the REAL path validate printed, never by the name `node` (the runtime would look that up itself)");
+        wrapped.Select(call => call.NodeExecPath).Should().OnlyContain(path => path == printed["node"]);
         wrapped.Select(call => call.Executable).Should().OnlyContain(path => path == script, "the wrapper is the target's own script, absolute under the clone");
         wrapped.Select(call => call.Arguments[0]).Should().OnlyContain(path => path == printed["dotnet"] || path == printed["npm"], "the wrapper is handed the resolved executable, not its name");
         foreach (var call in calls.Where(call => call.Tool is "wrapper" or "dotnet" or "npm"))
@@ -361,9 +363,18 @@ public sealed class PrepBaseTests
         using var bench = await TargetBench.CreateAsync();
         bench.Say("suite.sleep", "30\n");
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        stop.CancelAfter(TimeSpan.FromSeconds(3));
+        var running = ModelArmsApp.Program.RunAsync(["prep-base", "--experiment", bench.Root.Root], new StringWriter(), new StringWriter(), bench.Root.Environment, stop.Token);
 
-        var act = () => ModelArmsApp.Program.RunAsync(["prep-base", "--experiment", bench.Root.Root], new StringWriter(), new StringWriter(), bench.Root.Environment, stop.Token);
+        // The stop lands when the suite shim has STARTED (it recorded itself, then sleeps), not on a timer a loaded machine can beat.
+        var started = DateTime.UtcNow;
+        while (!bench.Recorded().Any(call => IsSuite(call)) && DateTime.UtcNow - started < TimeSpan.FromSeconds(120))
+        {
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        bench.Recorded().Should().Contain(call => IsSuite(call), "the suite must have started before the stop, or the test proves another stop");
+        await stop.CancelAsync();
+        var act = () => running;
 
         await act.Should().ThrowAsync<OperationCanceledException>("the stop travels up to Main, which says to run the same command again");
         File.Exists(bench.BaselineFile).Should().BeFalse("a baseline exists only from two suites that completed");

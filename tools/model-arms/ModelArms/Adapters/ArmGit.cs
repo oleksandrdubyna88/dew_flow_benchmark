@@ -12,7 +12,7 @@ namespace ModelArms.Adapters;
 /// <para>
 /// <b>Residual.</b> Git still READS the clone's config, which the model under test writes. Checked and closed: <c>diff.external</c> and <c>diff.&lt;driver&gt;.command</c> (<c>-c diff.external=</c>, <c>--no-ext-diff</c>), <c>diff.&lt;driver&gt;.textconv</c>
 /// (<c>--no-textconv</c>) and <c>core.fsmonitor</c> (<c>-c core.fsmonitor=false</c>, on every question), and a promisor remote's program run by a lazy fetch of a blob the model deleted (<c>GIT_NO_LAZY_FETCH=1</c> in the environment: planted, observed); a pager is not started for a piped stdout; a commit-to-commit diff runs no clean or smudge filter. Not checked: any other key that can name a program
-/// on a path these three questions do not take (they are the only ones asked), or a key a later git version adds — the first line of defence is the arm's clone being the model's own, the second that nothing here asks git for more than a hash and a diff.
+/// on a path the questions of E2 (a hash, a short hash, a plain diff) do not take, or a key a later git version adds. E3 added questions that DO take other paths — <c>status</c>, a <c>grep</c> over the worktree, <c>clone</c>, <c>checkout</c> and <c>submodule update</c>, listed below — and each is hardened only as far as its own paragraph says. The first line of defence is the arm's clone being the model's own, the second that the questions below are the only ones asked and each answers a count, a name, a hash or a diff.
 /// </para>
 /// <para>
 /// A question git cannot answer is a <see cref="Outcome{T}"/> failure carrying git's first stderr line, or how the attempt ended (<c>exit 128</c>, <c>timed out</c>, <c>not found</c>).

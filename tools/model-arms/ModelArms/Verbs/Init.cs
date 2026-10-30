@@ -227,13 +227,5 @@ public static class InitVerb
         return ExitCodes.Pass;
     }
 
-    private static int Stopped(VerbInput input, Passage<Plan>.Stopped stop)
-    {
-        foreach (var line in stop.Lines)
-        {
-            input.Error.WriteLine(line);
-        }
-
-        return stop.ExitCode;
-    }
+    private static int Stopped(VerbInput input, Passage<Plan>.Stopped stop) => stop.Print(input.Error);
 }

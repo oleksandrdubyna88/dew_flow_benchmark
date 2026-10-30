@@ -2,7 +2,6 @@ using Bench.Cli;
 using Bench.Domain;
 using ModelArms.Core.Briefs;
 using ModelArms.Core.Experiment;
-using ModelArms.Verbs;
 
 namespace ModelArms.Adapters;
 
@@ -27,7 +26,7 @@ internal static class HostFactsReader
         var experiment = input.Experiment;
         var environment = input.Verb.Environment;
         var host = HostKinds.From(OperatingSystem.IsWindows(), environment.GetValueOrDefault("WSL_DISTRO_NAME", string.Empty), await ProcVersionAsync(input.Verb.Stopping));
-        var entries = LaunchAdmission.PathEntries(environment);
+        var entries = ExecutableResolution.PathEntries(environment);
         var roots = ExecutableRule.ForbiddenRoots(experiment.Target.Source, experiment.Root);
         var executables = Executables(experiment, host, entries, roots);
         var refusals = PathRefusals(entries, roots);

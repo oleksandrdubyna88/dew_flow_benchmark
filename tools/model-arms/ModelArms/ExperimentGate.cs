@@ -54,15 +54,7 @@ public static class ExperimentGate
             .Then(admitted => Needed(admitted))
             .Then(admitted => TrustedScenarios(admitted, seams));
 
-    private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop)
-    {
-        foreach (var line in stop.Lines)
-        {
-            input.Error.WriteLine(line);
-        }
-
-        return Task.FromResult(stop.ExitCode);
-    }
+    private static Task<int> Report(VerbInput input, Passage<ExperimentInput>.Stopped stop) => Task.FromResult(stop.Print(input.Error));
 
     /// <summary>Step 1: the root from <c>--experiment</c>, else from <c>MODEL_ARMS_EXPERIMENT</c>, made absolute and normalised.</summary>
     private static Passage<string> NamedRoot(VerbInput input)
