@@ -318,7 +318,10 @@ public sealed class RunArmSchemeTests
         second.Code.Should().Be(0, second.Error + second.Output);
         var calls = fake.Calls();
         calls[call].After("--resume").Should().Be(session, "the next run resumes the cut session");
-        calls[call].Prompt.Should().NotBe(calls[call - 1].Prompt, "a resume's prompt is the resume notice, not the brief again");
+        var notice = ResumeNotice.For(root.ExperimentOf().Target.Base.Value, "@@").Split("@@");
+        calls[call].Prompt.Should().StartWith(notice[0]).And.EndWith(notice[1], "a resume's prompt IS the resume notice, with the deadline of what is left, not the brief again");
+        calls[call].Group("--allowedTools").Should().Equal(calls[call - 1].Group("--allowedTools"), "a resume is never wider than the launch it continues: the same allowed tools");
+        calls[call].Group("--disallowedTools").Should().Equal(calls[call - 1].Group("--disallowedTools"), "and the same denied tools, Agent and Task first");
         var later = steps.Count - earlier.Count - 1;
         calls.Should().HaveCount(call + 1 + later, "one resume of the cut step, then one fresh launch for each step after it — the earlier steps launched nothing again");
         calls.Skip(call + 1).Should().OnlyContain(each => each.Argv.Contains("--session-id"), "the steps after the cut one start fresh");
@@ -469,6 +472,65 @@ public sealed class RunArmSchemeTests
         output.ToString().Should().Contain("the gate was blocked", "the gate writes to the verb's one log");
     }
 
+    [Theory]
+    [InlineData("HOME", "root")]
+    [InlineData("XDG_CONFIG_HOME", "target")]
+    public async Task A_config_folder_under_the_experiment_root_or_the_target_stops_run_arm_with_exit_4_before_any_launch(string variable, string under)
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        var folder = under == "root" ? Path.Combine(root.Root, "h") : Path.Combine(root.Temp, "example", "target", "x");
+        root.WithVariables((variable, folder));
+
+        var run = await RunAsync(root, "C1");
+
+        run.Code.Should().Be(4, run.Output + run.Error);
+        run.Error.Should().Contain(variable).And.Contain(folder, "git reads its global config from there, and a claude its settings: an arm could write a file there (D26 c)");
+        run.Output.Should().NotContain("resolved executables:", "nothing is printed once admission refuses");
+        fake.Calls().Should().BeEmpty();
+        root.TimingOf("C1").Should().BeEmpty("nothing was launched, not even a git");
+    }
+
+    [Fact]
+    public async Task A_finished_arm_whose_rerun_is_stopped_at_the_busy_gate_lock_keeps_exactly_one_arm_done()
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        (await RunAsync(root, "C1")).Code.Should().Be(0);
+        using var stopping = new CancellationTokenSource();
+        var seams = new ModelArmsApp.Verbs.RunArmSeams(TimeProvider.System, (span, ct) => Task.Delay(span, ct), new BusyGateLock());
+
+        var stopped = await RunWithSeamsAsync(root, "C1", seams, new StopOnLine("waiting at most", stopping), stopping.Token);
+
+        stopped.Should().Be(5, "the operator's stop while the gate waits for a lock somebody else holds is still exit 5");
+        root.TimingOf("C1").Last().Should().BeOfType<TimingLine.ArmDone>("the arm stays done: a stop while waiting for the lock of a gate that is final writes no stopped line");
+        var again = await RunAsync(root, "C1");
+
+        again.Code.Should().Be(0, again.Error);
+        root.ArmDones("C1").Should().ContainSingle("a rerun of a finished arm adds nothing, whatever a stop left after the arm-done");
+        fake.Calls().Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task A_stopped_line_after_arm_done_does_not_earn_the_arm_a_second_arm_done()
+    {
+        using var root = new ExperimentRoot();
+        using var fake = new FakeCli();
+        await root.MakeArmAsync("C1", fake);
+        Replay(fake, "result-success.jsonl");
+        (await RunAsync(root, "C1")).Code.Should().Be(0);
+        File.AppendAllText(root.PathsOf("C1").Timing, TimingLines.Write(new TimingLine.Stopped("C1", "4-gate", 5, "stopped by the operator", DateTimeOffset.UtcNow)) + "\n");
+
+        var again = await RunAsync(root, "C1");
+
+        again.Code.Should().Be(0, again.Error);
+        root.ArmDones("C1").Should().ContainSingle("the dedupe is 'no arm-done after the last start or gate-wait line', not 'the last line is not an arm-done'");
+    }
+
     [Fact]
     public async Task The_gate_lock_ceiling_is_the_one_sized_from_the_queue_and_not_the_default_six_hours()
     {
@@ -481,9 +543,8 @@ public sealed class RunArmSchemeTests
         using var stopping = new CancellationTokenSource();
         var output = new StopOnLine("waiting at most", stopping);
         var seams = new ModelArmsApp.Verbs.RunArmSeams(TimeProvider.System, (span, ct) => Task.Delay(span, ct), new BusyGateLock());
-        var input = new ModelArmsApp.VerbInput("run-arm", ["C1"], CommandLine.Parse(["--experiment", root.Root]), output, new StringWriter(), root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping.Token);
 
-        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
+        var code = await RunWithSeamsAsync(root, "C1", seams, output, stopping.Token);
 
         code.Should().Be(5, "the operator's stop while the gate waits for its lock");
         output.ToString().Should().Contain("waiting at most 22 min", "three arms are made: two can queue ahead of this one, each for the gate's 1 minute (the fixture) plus the 600 s kill grace");

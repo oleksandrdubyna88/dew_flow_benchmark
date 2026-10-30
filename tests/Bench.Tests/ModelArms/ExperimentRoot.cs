@@ -154,7 +154,8 @@ internal sealed class ExperimentRoot : IDisposable
     private ArmMap CurrentMap() =>
         File.Exists(Path.Combine(Root, "arms.map.json")) ? ArmMap.Read(File.ReadAllText(Path.Combine(Root, "arms.map.json"))).Ok() : ArmMap.Empty;
 
-    private Experiment ExperimentOf() =>
+    /// <summary>The experiment as the root's file holds it now.</summary>
+    public Experiment ExperimentOf() =>
         ExperimentFile.Read(File.ReadAllText(Path.Combine(Root, "experiment.json")), new ExperimentLocation(Root, Path.Combine(Temp, "example", "home"), string.Empty, "/x/repo")).Ok();
 
     private static Baseline CompletedBaseline() =>

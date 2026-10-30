@@ -56,6 +56,13 @@ internal static class RunArmKit
         return new ArmRun(code, output.ToString(), error.ToString());
     }
 
+    /// <summary><c>run-arm</c> through the gate with the verb's seams handed in (a fixed clock, a recording wait, a busy lock) and the writer and stop token of the test's choosing.</summary>
+    public static async Task<int> RunWithSeamsAsync(ExperimentRoot root, string arm, ModelArmsApp.Verbs.RunArmSeams seams, TextWriter output, CancellationToken stopping)
+    {
+        var input = new ModelArmsApp.VerbInput("run-arm", [arm], Bench.Cli.CommandLine.Parse(["--experiment", root.Root]), output, new StringWriter(), root.Environment, ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), stopping);
+        return await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.RunArmVerb.RunAsync(admitted, seams), ModelArmsApp.GateSeams.Real);
+    }
+
     /// <summary>The fake replays <paramref name="fixture"/> on every call, except the calls <paramref name="byCall"/> names; the key that makes it leave a transcript stays.</summary>
     public static void Replay(FakeCli fake, string fixture, params (int Call, string File)[] byCall)
     {
