@@ -36,12 +36,12 @@ export function writeSessionRecord({ ctx, entry, score }) {
     ? [{ kind: 'class', runMap: entry.class, recomputed: c.outcome.class, why: c.outcome.detail?.reason ?? 'the evidence now reads differently' }] : [];
   const outcome = {
     ...c.outcome, class: entry.class ?? c.outcome.class, data: entry.data ?? c.outcome.data,
-    flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : [])],
+    flags: [...c.outcome.flags, ...(entry.run?.flags ?? []), ...(entry.workspaceFlags ?? []), ...(entry.scoreFlags ?? []), ...packages.flags, ...(discrepancies.length > 0 ? ['class discrepancy'] : []), ...(entry.reclassified ? ['reclassified by hand'] : [])],
   };
   const record = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
     outcome, run: { ...entry.run, harnessIdentity: entry.run?.harnessIdentity ?? ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
-    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, discrepancies, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
+    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta, discrepancies, reclassified: entry.reclassified ?? null, workspace: entry.workspaceExcluded ? { phase: entry.phase, excludedDirs: entry.workspaceExcluded } : null,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);
   return ok(record);

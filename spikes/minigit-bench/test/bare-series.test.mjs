@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
 import { firstStack, ridOf } from '../lib/bare-plan.mjs';
+import { reclassifyByHand } from '../lib/bare-reclass.mjs';
 import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
@@ -537,4 +538,55 @@ test('A_T3_breach_under_the_t3_stop_policy_stops_the_series_with_the_rule_T3_bre
   assert.equal(t.launched.length, 2, 'nothing launches after the stop');
   const lenient = harness({ variants: { [rid('node', 'v1', 1)]: 't3' } });
   assert.equal((await runLoop({ ctx: lenient.ctx, deps: lenient.deps, map: lenient.map })).exit, EXIT.done, 'control: under the registered policy (t3 investigate) the same breach does not stop');
+});
+
+// ---- a dated `refuted` hand verdict reclassifies a session that already ended (review N4) -----------------------------------------------
+
+const refutedBy = (...rids) => id => (rids.includes(id) ? [{ g: 'G-13', verdict: 'refuted', rid: id, evidence: 'scratch/read-back.md', who: 'operator', date: '2026-11-03' }] : []);
+
+test('A_dated_refuted_line_reclassifies_an_ended_session_on_the_next_run_records_it_and_lets_the_schedule_plan_the_one_re_run', async () => {
+  const t = harness();
+  const first = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(first.exit, EXIT.done, first.message);
+  assert.equal(t.launched.length, 4);
+  const victim = rid('csharp', 'v1', 1);
+  // the operator reads the pair by hand, refutes G-13 for the C# v1 session, and resumes: the line is read at the start of the run
+  const ctx = { ...t.ctx, handVerdictsFor: refutedBy(victim) };
+  const lines = [];
+  const again = await runLoop({ ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value, say: l => lines.push(l) });
+  assert.equal(again.exit, EXIT.done, again.message);
+  const map = readRunMap(t.ctx.runMapFile).value;
+  const entry = map.sessions[victim];
+  assert.deepEqual([entry.class, entry.data, entry.status], ['void: harness', false, 'scored'], 'a refuted line reclassifies to void: harness and to nothing else; the session was scored, and stays so');
+  assert.deepEqual([entry.reclassified.from.class, entry.reclassified.from.data, entry.reclassified.g, entry.reclassified.date], ['completed', true, 'G-13', '2026-11-03']);
+  assert.ok(lines.some(l => l.includes(victim) && /reclassified/.test(l)), 'the run says so');
+  assert.deepEqual(t.launched.slice(4), [rid('csharp', 'v1', 2)], 'the schedule plans the one re-run: C# v1 a2, alone (its partner was not voided)');
+  assert.equal(map.sessions[rid('csharp', 'v1', 2)].label, 'ran unpaired');
+  const event = readLedger(t.ctx.ledgerFile).filter(l => l.event === 'reclassify');
+  assert.equal(event.length, 1, 'one ledger event line');
+  assert.deepEqual([event[0].rid, event[0].from, event[0].to, event[0].g], [victim, 'completed', 'void: harness', 'G-13']);
+  const spend = readLedger(t.ctx.ledgerFile).filter(l => l.event === undefined);
+  assert.equal(spend.filter(l => l.rid === victim).length, 1, 'the session is still charged once');
+  const rec = JSON.parse(readFileSync(path.join(t.ctx.sessionsRoot, victim, 'record.json'), 'utf8'));
+  assert.deepEqual([rec.class, rec.data], ['void: harness', false]);
+  assert.equal(rec.reclassified.from.class, 'completed', 'the record shows the reclassification');
+  assert.ok(rec.flags.includes('reclassified by hand'));
+  assert.deepEqual(rec.discrepancies, []);
+  // run again: nothing is reclassified twice and nothing is launched twice
+  const launchedBefore = t.launched.length;
+  const third = await runLoop({ ctx, deps: t.deps, map, say: () => {} });
+  assert.equal(third.exit, EXIT.done);
+  assert.equal(t.launched.length, launchedBefore, 'the re-run was planned once');
+  assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.event === 'reclassify').length, 1);
+});
+
+test('A_refuted_line_never_reclassifies_a_stop_or_a_contaminated_void_and_never_an_unlisted_rid', async () => {
+  const t = harness({ variants: { [rid('node', 'v1', 1)]: 'auth' } });
+  await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  const before = readRunMap(t.ctx.runMapFile).value;
+  const reclassified = reclassifyByHand({ map: before, handVerdictsFor: refutedBy(rid('node', 'v1', 1), 'no-such-rid') });
+  assert.equal(reclassified.changes.length, 0, 'rows 1 to 4 of the outcome table come before the hand verdict');
+  assert.equal(reclassified.map.sessions[rid('node', 'v1', 1)].class, 'stop: auth');
+  const holds = reclassifyByHand({ map: before, handVerdictsFor: id => [{ g: 'G-13', verdict: 'holds', rid: id, evidence: 'x', who: 'me', date: '2026-11-03' }] });
+  assert.equal(holds.changes.length, 0, 'only refuted reclassifies');
 });

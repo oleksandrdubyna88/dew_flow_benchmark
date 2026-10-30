@@ -75,9 +75,9 @@ const qualityPart = score => {
 };
 
 /** One session's record. `discrepancies` lists where a recomputation disagrees with the class the run-map decided (the record never re-classifies). `run` carries what the runner observed (mask, spawn stamp, skew, quiet, spin, harness identity, prereg tag, CLI version). */
-export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null, workspace = null, discrepancies = [] }) {
+export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null, workspace = null, discrepancies = [], reclassified = null }) {
   return {
-    ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail, discrepancies,
+    ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail, discrepancies, reclassified,
     run: {
       mask: known(run.mask), maskObserved: run.maskObserved === undefined ? notCaptured('the sampler did not observe the mask') : known(run.maskObserved), spawnStampMs: maybe(run.spawnStampMs, 'no spawn was stamped: the launch ended before the box was spawned'),
       startSkewMs: maybe(run.startSkewMs, 'a session run alone has no partner to skew against'), quiet: maybe(run.quiet, 'no quiet record'), spin: maybe(run.spin, 'no spin record'),

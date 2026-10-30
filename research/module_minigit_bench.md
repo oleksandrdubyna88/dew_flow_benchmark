@@ -650,6 +650,11 @@ stop rules in the run-map (`stopRules`), so the resume that settles the last ses
 evidence cannot be read (a corrupt stream, say) does not block its partner: it stays `launching`, uncharged, the run exits 5 naming it and the stop that is waiting, and `resume` adopts it once the cause is fixed (review G1); `resume` also rebuilds the record of an
 ended void session whose record write a crash cut off. A void session is not scored (there is nothing to score); the barrier waits only for data sessions.
 
+**A hand verdict that arrives after the session ended** (`lib/bare-reclass.mjs`, review N4). `collectSession` applies the dated `refuted` lines known when a session ends; a line dated later (the pair-1 read-back) is applied by `runLoop` at the start of EVERY pass, a run
+or a resume, before `nextStep`: a session that is `ran` or `scored`, whose class is not a stop or `void: contaminated` (rows 1 to 4 come first) and not already `void: harness`, becomes `void: harness`, data false, with `reclassified: { from, g, date, evidence, who }` in the run-map; one
+`{ event: 'reclassify', rid, from, to, g, verdictDate, evidence, t }` line goes to the ledger (no spend: the session stays charged once); its record is rewritten (`reclassified`, the flag `reclassified by hand`); the run prints it. The schedule then plans the one re-run by its registered
+rule. A line names ONE session, so the v2 session of a cell that ran from a refuted v1 is not reclassified with it: the run names it and the operator refutes it by its own line.
+
 **Resume** (`bare-runner.mjs resume`). First every canary of the manifests is unplanted, then `retireStale` runs, then each `launching` session is settled by what its directory says: `meta.json`
 present means the launch ended (adopted), paid work without it is a `void: harness` charged its settled spend plus unsettled requests at the reservation, nothing paid means planned
 again under the same rid, after its claimed directory is REMOVED (review M9: the layout claim is a non-recursive mkdir, so a leftover directory would make the relaunch fail with EEXIST; the directory is removed, not voided,

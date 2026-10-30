@@ -96,7 +96,9 @@ through a dated line of `inputs/amendments.md`, and after the A/A only the instr
   would pay for the same cap twice. A broker refusal without a `reason` field is `unknown` and is never a cap.
 - **A watchdog kill is a data point** (§11.1: "killed on wall, cap or stall"), whatever `sessionOutcome`'s `void: stopped` label says.
 - **A by-hand verdict** (a dated `refuted` line of `amendments.md`, for example the pair-1 read-back) can reclassify a session to `void: harness` and to nothing else. It is applied after
-  row 4 and before row 5.
+  row 4 and before row 5, and at the start of every run and resume to the sessions that already ended (a stop and a `void: contaminated` keep their class): the run-map and the session's record show the
+  reclassification (what the class was, which line), the ledger gets a `reclassify` event line, the session's charge is unchanged, and the schedule plans the one re-run by its registered rule (section 4). A line names one session:
+  the v2 session of a cell that ran from a refuted v1 is refuted by its own line.
 - A `stop:` class halts the series (section 9). The session is kept and is not a data point.
 
 **Flags, never classes.** A flag never changes a class; it is shown with the session and used by the "without flagged pairs" line (section 7).

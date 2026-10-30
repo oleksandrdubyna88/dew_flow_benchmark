@@ -7,10 +7,11 @@ import path from 'node:path';
 import { assertRemovable } from '../../policy-ab-quick/lib/safe-rm.mjs';
 import { firstStack, maskFor, ridOf } from './bare-plan.mjs';
 import { launchPhase, unplantAll } from './bare-phase.mjs';
+import { reclassifyByHand } from './bare-reclass.mjs';
 import { collectSession } from './bare-collect.mjs';
 import { finalSession, readSessionRecord, writePairRecord, writeSessionRecord } from './bare-records-io.mjs';
 import { nextStep } from './bare-schedule.mjs';
-import { appendChargeOnce, readLedger } from './ledger.mjs';
+import { appendChargeOnce, appendLedger, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { holdsPaidWork } from './session-launch.mjs';
 import { planSession, markStopped, resumePlan, transition, writeRunMap } from './run-map.mjs';
@@ -197,6 +198,26 @@ async function runScore({ ctx, deps, h, step, say, signal }) {
   return null;
 }
 
+// ---- hand verdicts that arrive after a session ended -------------------------------------------------------------------------------
+
+const scoreOf = layout => { try { return JSON.parse(readFileSync(path.join(layout.dir, 'score', 'score.json'), 'utf8')); } catch { return null; } };
+
+/**
+ * Apply the dated `refuted` lines to the sessions that already ended (review N4): the run-map is changed, one `reclassify` event line goes to the ledger, the session's record is rewritten to show it,
+ * and the run says so. Done at the start of every pass, before `nextStep`, so the schedule plans the one re-run. A session's charge is untouched (it is charged once, by its rid).
+ */
+function applyHandVerdicts({ ctx, h, say }) {
+  const { map, changes } = reclassifyByHand({ map: h.get(), handVerdictsFor: ctx.handVerdictsFor });
+  if (changes.length === 0) return;
+  h.commit(map);
+  for (const c of changes) {
+    appendLedger(ctx.ledgerFile, { event: 'reclassify', rid: c.rid, from: c.from.class, to: c.to.class, g: c.g, verdictDate: c.date, evidence: c.evidence, t: new Date().toISOString() });
+    const layout = layoutPaths(ctx.sessionsRoot, c.rid);
+    writeSessionRecord({ ctx, entry: map.sessions[c.rid], score: scoreOf(layout) });
+    say(`${c.rid} was ${c.from.class}${c.from.data ? ' (data)' : ''} and is reclassified to ${c.to.class}: the hand verdict of ${c.date} refuted ${c.g}${c.dependents.length > 0 ? `; its cell's v2 session ${c.dependents.join(', ')} ran from this v1 tree: refute it by its own dated line if it must be re-run` : ''}`);
+  }
+}
+
 // ---- the loop -------------------------------------------------------------------------------------------------------------------
 
 /**
@@ -211,6 +232,7 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
   for (let guard = 0; guard < 60; guard += 1) {
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };
     if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched`), map: h.get() };
+    applyHandVerdicts({ ctx, h, say });
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get());
     if (step.action === 'done') {
       if (ctx.kind === 'data') writePairRecord({ ctx, map: h.get(), pair: ctx.pair });
