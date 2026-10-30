@@ -28,7 +28,10 @@ public abstract record ProcessAttempt
     public sealed record Completed(ProcessResult Result) : ProcessAttempt;
 
     /// <param name="StandardOutput">What had reached stdout before the kill, alone — a probe keeps it as the attempt's artefact.</param>
-    public sealed record TimedOut(TimeSpan Budget, string Output, string StandardOutput = "", string StandardError = "") : ProcessAttempt;
+    /// <param name="ReadersAbandoned">True when a pipe was STILL OPEN <see cref="ProcessRunner.DrainAfterKill"/> after the kill (a descendant escaped the tree
+    /// kill and holds it): the texts are then what was read up to that moment, and what the child printed after it is missing. False, the default, is the
+    /// whole of what the child printed. An empty text with this set is "nothing arrived yet", not "nothing was printed".</param>
+    public sealed record TimedOut(TimeSpan Budget, string Output, string StandardOutput = "", string StandardError = "", bool ReadersAbandoned = false) : ProcessAttempt;
 
     public sealed record NotFound(string Executable) : ProcessAttempt;
 

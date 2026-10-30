@@ -185,6 +185,29 @@ public sealed class FakeCliByCallTests
         Directory.EnumerateDirectories(temp.Path, "projects", SearchOption.AllDirectories).Should().BeEmpty("a refused resume creates no transcript");
     }
 
+    /// <summary>MEASURED on claude 2.1.310, 2026-10-30: <c>claude -p --session-id &lt;an id whose transcript exists&gt;</c> exits 1 with <c>Error: Session ID &lt;id&gt; is already in use.</c> —
+    /// a runner that starts a session it already started (instead of resuming it) goes red against the fake as it would live.</summary>
+    [Fact]
+    public async Task A_session_id_that_already_has_a_transcript_is_refused_with_claudes_own_sentence()
+    {
+        using var temp = new TempFolder();
+        using var fake = new FakeCli();
+        var cwd = temp.Folder("r", "abc", "arm");
+        var home = temp.Folder("home");
+        fake.Rewrite(new JsonObject { ["transcripts"] = true, ["stdoutFile"] = temp.File("stream\n", "f.ndjson") });
+        var session = Guid.NewGuid();
+        await LaunchAsync(fake, cwd, Environment(fake, home), "--session-id", session.ToString("D"));
+        var file = Transcript(Path.Combine(home, ".claude"), SeenCwd(fake), session);
+        await File.WriteAllTextAsync(file, "the conversation so far\n", Ct);
+
+        var result = await RunAsync(fake, cwd, Environment(fake, home), "--session-id", session.ToString("D"));
+
+        result.ExitCode.Should().Be(1, "claude exits 1 for a session id that is in use");
+        result.StandardError.Should().Be($"Error: Session ID {session:D} is already in use.");
+        result.StandardOutput.Should().BeEmpty("a refused launch answers nothing");
+        (await File.ReadAllTextAsync(file, Ct)).Should().Be("the conversation so far\n", "nothing is written by a refused launch");
+    }
+
     [Fact]
     public async Task A_launch_the_fake_refuses_leaves_no_transcript()
     {
