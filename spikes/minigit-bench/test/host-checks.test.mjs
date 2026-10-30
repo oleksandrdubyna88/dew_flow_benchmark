@@ -6,11 +6,11 @@ import { bwrapFacts, loadStacks, toolchainFacts, toolchainInstallPlan } from '..
 import { spikeDir } from './helpers.mjs';
 
 const stacks = loadStacks(JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8')));
-const good = { claude: '2.1.310 (Claude Code)\n', node: 'v26.12.1\n', dotnetSdks: '10.0.113 [/usr/lib/dotnet/sdk]\n', tsc: 'Version 7.0.2\n' };
+const good = { claude: '2.1.310 (Claude Code)\n', node: 'v26.12.1\n', dotnetSdks: '10.0.114 [/usr/lib/dotnet/sdk]\n', tsc: 'Version 7.0.2\n' };
 
 test('The_committed_pins_load_and_name_the_probe_of_each_tool', () => {
   assert.equal(stacks.ok, true, stacks.reason);
-  assert.deepEqual(stacks.value.pins, { claude: '2.1.310', node: '26.12.1', dotnetSdk: '10.0.113', typescript: '7.0.2' });
+  assert.deepEqual(stacks.value.pins, { claude: '2.1.310', node: '26.12.1', dotnetSdk: '10.0.114', typescript: '7.0.2' });
   assert.deepEqual(Object.keys(stacks.value.probes).sort(), ['claude', 'dotnetSdks', 'node', 'tsc']);
   assert.equal(loadStacks({}).ok, false);
   assert.equal(loadStacks({ ...stacks.value, pins: { ...stacks.value.pins, node: undefined } }).ok, false);
@@ -19,10 +19,10 @@ test('The_committed_pins_load_and_name_the_probe_of_each_tool', () => {
 
 test('The_toolchain_is_probed_inside_the_box_and_installed_when_absent', () => {
   const pins = stacks.value.pins;
-  assert.deepEqual(toolchainFacts(good, pins), { ok: true, facts: { claude: '2.1.310', node: '26.12.1', dotnetSdks: ['10.0.113'], typescript: '7.0.2' }, mismatches: [] });
+  assert.deepEqual(toolchainFacts(good, pins), { ok: true, facts: { claude: '2.1.310', node: '26.12.1', dotnetSdks: ['10.0.114'], typescript: '7.0.2' }, mismatches: [] });
   const rows = [
-    ['two SDK lines', { dotnetSdks: '9.0.100 [/a]\n10.0.113 [/a]\n' }, 'dotnetSdk', /exactly one/],
-    ['another SDK', { dotnetSdks: '10.0.200 [/a]\n' }, 'dotnetSdk', /10\.0\.113/],
+    ['two SDK lines', { dotnetSdks: '9.0.100 [/a]\n10.0.114 [/a]\n' }, 'dotnetSdk', /exactly one/],
+    ['another SDK', { dotnetSdks: '10.0.200 [/a]\n' }, 'dotnetSdk', /10\.0\.114/],
     ['node 25', { node: 'v25.1.0\n' }, 'node', /26\.12\.1/],
     ['tsc 6', { tsc: 'Version 6.0.3\n' }, 'typescript', /7\.0\.2/],
     ['claude 2.1.311', { claude: '2.1.311 (Claude Code)\n' }, 'claude', /2\.1\.310/],

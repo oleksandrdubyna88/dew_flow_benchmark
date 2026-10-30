@@ -7,7 +7,7 @@ import { TOKEN_FILE_PARTS } from '../capture/capture-env.mjs';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { TS_DIR, boxOptions, envFor, hostHas, newSession, probe, probeArgv } from './box-helpers.mjs';
-import { homeDir, hostLacks, sandboxGate } from './helpers.mjs';
+import { homeDir, hostLacks, sandboxGate, spikeDir } from './helpers.mjs';
 
 test('The_agent_box_has_no_operator_home_and_no_key', async t => {
   if (!sandboxGate(t)) return;
@@ -106,6 +106,7 @@ test('The_box_can_run_dotnet_and_reports_the_one_pinned_sdk', async t => {
   if (!hostHas('dotnet')) return hostLacks(t, 'dotnet is not on PATH on this host');
   const layout = newSession();
   const r = await probe(layout, 'dotnet --list-sdks');
-  assert.match(r.out, /^10\.0\.113 \[/m);
+  const pin = JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'stacks.json'), 'utf8')).pins.dotnetSdk; // the pin is read from stacks.json, never typed here
+  assert.ok(r.out.split('\n').some(l => l.startsWith(`${pin} [`)), `the box reports the pinned SDK ${pin}: ${r.out}`);
   assert.equal(r.out.trim().split('\n').length, 1, 'exactly one SDK');
 });

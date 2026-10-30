@@ -383,8 +383,17 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   session scan. (`holdsPaidWork` only asks whether an entry exists and is unchanged.)
 - **Preflight** (`lib/preflight.mjs`, `lib/host-checks.mjs`, `inputs/stacks.json`). `bwrap` and user namespaces; the TypeScript toolchain
   installed read-only when asked and absent (`npm install --prefix`, `chmod -R a-w`); then the pins (`claude` 2.1.310, node 26.12.1, dotnet
-  SDK 10.0.113 and exactly one, `tsc` 7.0.2) probed INSIDE a box with no proxy and no broker; the token file's status. **E3's runner must reuse `lib/preflight.mjs`** (it is the one place the
+  SDK 10.0.114 (amended 2026-10-30 from 10.0.113, below) and exactly one, `tsc` 7.0.2) probed INSIDE a box with no proxy and no broker; the token file's status. **E3's runner must reuse `lib/preflight.mjs`** (it is the one place the
   pins are probed inside a box and the token file is checked; a second copy in the runner would drift from it).
+
+**Dated note: the .NET SDK pin is 10.0.114 (2026-10-30).** The pin in `inputs/stacks.json` was 10.0.113. Unattended apt upgraded the .NET packages at
+2026-10-30 06:19:43 (`/var/log/apt/history.log`: `Start-Date: 2026-10-30  06:19:43`, `Commandline: /usr/bin/unattended-upgrade`; the runtime went to
+10.0.14 as well), and `/usr/lib/dotnet/sdk` now holds only 10.0.114. 10.0.114 is the newest .NET 10 SDK on this host, which is the experiment's aim
+("latest .NET 10"), so the pin was moved (`stacks.json` carries an `amendments` entry with the same facts) rather than the host held back. Two tests failed
+on the mismatch before the change (`The_box_can_run_dotnet_and_reports_the_one_pinned_sdk`, `The_preflight_reads_the_pinned_toolchain_…`); the first now reads
+the pin from `stacks.json` instead of typing it. **Standing risk:** the preflight refuses a session when the SDK differs from the pin, so an unattended
+upgrade during the series stops it; the operator is asked to hold the `dotnet-*` packages (`apt-mark hold`) for the length of the series. Rows below that
+quote `10.0.113` are measurements of 2026-10-29 and are left as they were taken.
 
 #### The bare-session smoke (2026-10-30, CLI 2.1.310)
 
@@ -529,7 +538,7 @@ Copied from the spec's section *The network decision* (`todo/PLAN_minigit_stack_
 | N-12 | Hooks run inside the box, persistence is on, the subagent tool works | 8 hook records over `PreToolUse`, `PostToolUse`, `SubagentStart`, `SubagentStop` (the last two carry `agent_id`); a main transcript and `subagents/agent-a0dd13317fcbe4120.jsonl`; one `Agent` call, two `Bash` calls | smoke 1 (first smoke, 2026-10-30; fixture since replaced): B-T1 and B-A1 hold. smoke 2 (2026-10-30, not committed): not re-verified (no tool or subagent ran) |
 | N-13 | Effort of a CHILD is readable | `effort: "high"` on every record, main (`query_source: sdk`) and child (`agent:builtin:general-purpose`, `agent_id` set); `subagent_completed` names the child's model. **B-A3 is answered by O, not by the audit** | smoke 1 (first smoke, 2026-10-30; fixture since replaced): B-A3 holds. smoke 2 (2026-10-30, not committed): not re-verified (no subagent ran) |
 | N-14 | The init read-back | `cwd` = `box/work`; `mcp_servers: []`; `permissionMode: default`; `apiKeySource: none`; `claude_code_version: 2.1.310`; `memory_paths.auto` under `box/config`; `messaging_socket_path: /tmp/cc-socks/9.sock` (the box's own `/tmp`, pid 9 of the pid namespace); **`tools` = `Task, Bash, Edit, Glob, Grep, Read, Write` — `TodoWrite` was passed in `--tools` and is not reported** | smoke 1 (first smoke, 2026-10-30; fixture since replaced), smoke 2 (2026-10-30, not committed): B-R1 and B-R2 hold |
-| N-15 | The bare box's other barriers, no model | `gh --version` → `Permission denied` (`/dev/null` over `/usr/bin/gh`); `/mnt` empty; `/run/WSL` absent; `WSL_INTEROP` empty; a copy of `/mnt/c/Windows/System32/whoami.exe` executed in `box/work` → the WSL interop handler starts and dies at `UtilGetPpid` on `/proc/1/stat` (pid 1 is `bwrap`), **no Windows process, no name printed** (control outside: `jinx\strug`); the operator home shows only the bound dirs, the token file is absent; `tsc` 7.0.2 from the read-only toolchain; `touch` into the toolchain → `Read-only file system`; `node t.ts` strips types; `dotnet --list-sdks` → `10.0.113` | tests in `agent-box-fs.test.mjs` |
+| N-15 | The bare box's other barriers, no model | `gh --version` → `Permission denied` (`/dev/null` over `/usr/bin/gh`); `/mnt` empty; `/run/WSL` absent; `WSL_INTEROP` empty; a copy of `/mnt/c/Windows/System32/whoami.exe` executed in `box/work` → the WSL interop handler starts and dies at `UtilGetPpid` on `/proc/1/stat` (pid 1 is `bwrap`), **no Windows process, no name printed** (control outside: `jinx\strug`); the operator home shows only the bound dirs, the token file is absent; `tsc` 7.0.2 from the read-only toolchain; `touch` into the toolchain → `Read-only file system`; `node t.ts` strips types; `dotnet --list-sdks` → `10.0.113 (10.0.114 since 2026-10-30, see the pin amendment)` | tests in `agent-box-fs.test.mjs` |
 | N-16 | The TypeScript toolchain exists | installed, 31 MB, `tsc` 7.0.2; it is what N-15 bound | the preflight of smoke 1 (first smoke, 2026-10-30; fixture since replaced) and smoke 2 (2026-10-30, not committed) reads `tsc` 7.0.2 from the toolchain; test `agent-box-fs.test.mjs` |
 
 #### The credential-broker facts P-1…P-12 (observed 2026-10-29, this machine, CLI 2.1.310; paid total $0.018452 for P-1…P-9)
