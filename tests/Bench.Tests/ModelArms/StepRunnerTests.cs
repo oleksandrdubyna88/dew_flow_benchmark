@@ -323,6 +323,51 @@ public sealed class StepRunnerTests
     }
 
     [Fact]
+    public async Task An_operator_stop_before_anything_ran_leaves_a_stopped_line_not_an_exception()
+    {
+        using var bench = new StepBench();
+        bench.Replays("result-success.jsonl");
+        using var stopped = new CancellationTokenSource();
+        await stopped.CancelAsync();
+
+        var (outcome, thrown) = await TryRunAsync(bench, bench.Context("C", 0), stopped.Token);
+
+        thrown.Should().BeNull("a stop is an outcome, with its record, wherever it lands");
+        outcome?.IsStopped(5);
+        bench.LastStopped().Why.Should().Contain("stopped by the operator");
+        bench.Fake.Calls().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_operator_stop_during_the_steps_own_git_call_leaves_a_stopped_line_not_an_exception()
+    {
+        using var bench = new StepBench();
+        bench.Replays("result-success.jsonl");
+        await bench.CommitFileAsync("a.txt", "x\n", "work");
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var cut = new ProbeAt(StepPoint.Classified, () => stopping.Cancel());
+
+        var (outcome, thrown) = await TryRunAsync(bench, bench.Context("CR", 1), stopping.Token, cut);
+
+        thrown.Should().BeNull("the diff's git call was cancelled by the operator: a stop, not an exception");
+        outcome?.IsStopped(5);
+        bench.LastStopped().Exit.Should().Be(5);
+        File.Exists(bench.Paths.Done("2-hreview")).Should().BeFalse();
+    }
+
+    private static async Task<(StepOutcome? Outcome, Exception? Thrown)> TryRunAsync(StepBench bench, StepContext context, CancellationToken stopping, StepProbe? probe = null)
+    {
+        try
+        {
+            return (await bench.Runner(probe).RunAsync(context, stopping), null);
+        }
+        catch (OperationCanceledException ex)
+        {
+            return (null, ex);
+        }
+    }
+
+    [Fact]
     public async Task Recover_answers_the_entry_a_run_would_take_and_launches_nothing()
     {
         using var bench = new StepBench();

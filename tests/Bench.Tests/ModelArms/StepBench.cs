@@ -205,6 +205,15 @@ internal sealed class StepBench : IDisposable
     /// <summary>The clone's HEAD, read by the host's git.</summary>
     public async Task<string> HeadAsync(string? folder = null) => (await GitAsync(folder ?? Paths.CloneFolder, "rev-parse", "HEAD")).Trim();
 
+    /// <summary>Commits a file in the clone (or in <paramref name="folder"/>): what an arm's work looks like to the diff.</summary>
+    public async Task CommitFileAsync(string relative, string text, string message, string? folder = null)
+    {
+        var target = folder ?? Paths.CloneFolder;
+        await File.WriteAllTextAsync(Path.Combine(target, relative), text, TestContext.Current.CancellationToken);
+        await GitAsync(target, "add", relative);
+        await GitAsync(target, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message);
+    }
+
     /// <summary>A second repository of one commit, its HEAD different from the clone's.</summary>
     public async Task<string> NewRepositoryAsync(string name)
     {

@@ -54,7 +54,9 @@ public sealed class StepGitTests
         var runs = File.Exists(marker) ? File.ReadAllLines(marker) : [];
         runs.Count(line => line.StartsWith(bench.Git + " ", StringComparison.Ordinal)).Should().BeGreaterThanOrEqualTo(3, "the shim should record at least three git runs: the .before, the heads and the diff");
         var head = File.ReadAllText(bench.Paths.Before("2-hreview")).Trim();
-        runs.Should().Contain(bench.Git + " rev-parse HEAD").And.Contain(bench.Git + " rev-parse --short HEAD").And.Contain(bench.Git + $" diff {head} HEAD");
+        const string Hardened = " -c core.fsmonitor=false";
+        runs.Should().Contain(bench.Git + Hardened + " rev-parse HEAD").And.Contain(bench.Git + Hardened + " rev-parse --short HEAD")
+            .And.Contain(bench.Git + Hardened + $" -c diff.external= diff --no-ext-diff --no-textconv {head} HEAD");
         runs.Should().NotContain(line => line.StartsWith("GIT_", StringComparison.Ordinal), "git runs without a GIT_* variable of the parent's");
         head.Should().Be(await bench.HeadAsync());
     }
@@ -101,6 +103,38 @@ public sealed class StepGitTests
         outcome.IsStopped(5).Why.Should().Contain("2-hreview");
         File.Exists(bench.Paths.Done("2-hreview")).Should().BeFalse("a step whose diff could not be made is not done");
         File.Exists(bench.Paths.Diff("2-hreview")).Should().BeFalse();
+
+        var again = await bench.Runner().RunAsync(bench.Context("CR", 1), Ct);
+
+        again.IsStopped(5);
+        bench.Fake.Calls().Should().HaveCount(1, "a relaunch does not cure a snapshot git cannot diff from: that stop is permanent until the operator acts");
+    }
+
+    /// <summary>The model under test writes the clone, including its <c>.git/config</c> and <c>.gitattributes</c>: a program they name must not run in the harness's git, and the measured <c>.diff</c> must be the plain patch.</summary>
+    [Theory]
+    [InlineData("diff.external")]
+    [InlineData("textconv")]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task A_diff_is_made_without_running_a_program_the_clone_names(string plant)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the planted programs are shell scripts");
+        using var bench = new StepBench();
+        var marker = bench.Combine("markers", "planted");
+        Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+        var external = bench.ShimScript(bench.Combine("bin", "ext"), $"echo ext >> '{marker}'\necho PLANTED\n");
+        var convert = bench.ShimScript(bench.Combine("bin", "conv"), $"echo conv >> '{marker}'\necho PLANTED-TEXTCONV\n");
+        await bench.CommitFileAsync(".gitattributes", "* diff=planted\n", "attributes");
+        var config = plant == "textconv" ? $"[diff \"planted\"]\n\ttextconv = {convert}\n" : $"[diff]\n\texternal = {external}\n";
+        await File.AppendAllTextAsync(Path.Combine(bench.Paths.CloneFolder, ".git", "config"), config, Ct);
+        bench.Replays("result-success.jsonl");
+        var work = new ProbeAt(StepPoint.Launched, () => bench.CommitFileAsync("work.txt", "hello\n", "the arm's work").GetAwaiter().GetResult());
+
+        var outcome = await bench.Runner(work).RunAsync(bench.Context("CR", 1), Ct);
+
+        outcome.IsDone();
+        (File.Exists(marker) ? File.ReadAllText(marker) : string.Empty).Should().BeEmpty("a program the clone's config or attributes name never ran in the harness's git");
+        var diff = File.ReadAllText(bench.Paths.Diff("2-hreview"));
+        diff.Should().Contain("+hello").And.NotContain("PLANTED", "the .diff is the plain patch");
     }
 
     [Fact]
@@ -133,6 +167,38 @@ public sealed class StepGitTests
         File.Exists(bench.Paths.Done("2-review")).Should().BeFalse("D21 over D8: a review with no result is resumable, not done with a hole");
         File.Exists(bench.NotesFile("notes/review.json")).Should().BeFalse();
         bench.LastStopped().Exit.Should().Be(5);
+
+        // the stop is resumable: the next entry LAUNCHES — the session resumed as attempt 2 at the floor budget — and the verdict is written from its result
+        bench.Replays("result-success.jsonl");
+        var again = await bench.Runner().RunAsync(bench.Context("C", 1), Ct);
+
+        again.IsDone().Should().Match<StepOutcome.Done>(done => !done.Skipped && !done.Recovered, "the step finished by a new attempt, not by a recovery");
+        var calls = bench.Fake.Calls();
+        calls.Should().HaveCount(2, "the second entry launched");
+        calls[1].After("--resume").Should().Be(calls[0].After("--session-id"));
+        bench.Timing().OfType<TimingLine.Start>().Select(start => (start.Attempt, start.How)).Should().Equal([(1, "fresh"), (2, "resume")]);
+        File.ReadAllText(bench.NotesFile("notes/review.json")).Should().Be("""{"verdict":"ready","findings":[]}""");
+        File.Exists(bench.Paths.Done("2-review")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_review_that_finished_with_no_text_stops_resumable_and_the_next_entry_resumes_it()
+    {
+        using var bench = new StepBench();
+        bench.Script(new System.Text.Json.Nodes.JsonObject { ["stdoutFile"] = bench.Write("""{"type":"result","subtype":"success","is_error":false,"result":""}""" + "\n", "blank.jsonl") });
+
+        var first = await bench.Runner().RunAsync(bench.Context("C", 1), Ct);
+
+        first.IsStopped(5).Why.Should().Contain("no verdict to read");
+        File.Exists(bench.Paths.Done("2-review")).Should().BeFalse();
+        bench.Replays("result-success.jsonl");
+
+        var second = await bench.Runner().RunAsync(bench.Context("C", 1), Ct);
+
+        second.IsDone().Should().Match<StepOutcome.Done>(done => !done.Skipped && !done.Recovered);
+        bench.Fake.Calls().Should().HaveCount(2, "a review that said nothing is asked again, not recovered as done");
+        bench.Fake.Calls()[1].After("--resume").Should().Be(bench.Fake.Calls()[0].After("--session-id"));
+        File.ReadAllText(bench.NotesFile("notes/review.json")).Should().Be("""{"verdict":"ready","findings":[]}""");
     }
 
     [Fact]

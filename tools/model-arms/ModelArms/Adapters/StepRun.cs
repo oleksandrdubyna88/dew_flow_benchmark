@@ -39,7 +39,21 @@ internal sealed class StepRun
     /// <summary>The entry the next run would take, over the step's files; nothing is launched or written.</summary>
     public StepEntry Recover() => Decide(Facts());
 
+    /// <summary>The run, with the operator's stop absorbed wherever it lands: it is an outcome with its record (a <c>stopped</c> line, exit 5), never an exception that leaves the arm's timing without one — the step's own git
+    /// calls and its waits all carry the token.</summary>
     public async Task<StepOutcome> RunAsync(CancellationToken stopping)
+    {
+        try
+        {
+            return await LoopAsync(stopping);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            return _log.Stop(_step, 5, OperatorStop);
+        }
+    }
+
+    private async Task<StepOutcome> LoopAsync(CancellationToken stopping)
     {
         _files.Prepare();
         for (var waits = 0; ; waits++)
@@ -58,7 +72,27 @@ internal sealed class StepRun
         }
     }
 
-    private StepEntry Decide(RecoveryFacts facts) => StepRecovery.Decide(_step, facts, _spec, _context.Experiment.Limits);
+    /// <summary>Recovery's decision — except for one case recovery cannot see (E2 §8 item 56): an attempt that ended DONE (finished, or cut by its wall) but left a verdict nobody can read — no result, or a result with no text — is not done. Its stop was
+    /// "resumable", so the next entry must LAUNCH: the session is resumed as the next attempt at what is left of the budget (the floor), or started over when claude left no transcript. Recovery's table is asked again over facts in which that attempt
+    /// did not finish; a missing <c>.before</c> or a failed diff is not this case — a relaunch does not cure them, and they stay a permanent stop.</summary>
+    private StepEntry Decide(RecoveryFacts facts)
+    {
+        var entry = StepRecovery.Decide(_step, facts, _spec, _context.Experiment.Limits);
+        return entry is StepEntry.RecoveredDone done && VerdictInputMissing() ? StepRecovery.Decide(_step, Unfinished(facts, done.Attempt), _spec, _context.Experiment.Limits) : entry;
+    }
+
+    /// <summary>True when the step derives a verdict, has none, and the last result cannot give one. The other derived outputs' inputs are declared present, so only the verdict can answer.</summary>
+    private bool VerdictInputMissing() =>
+        _context.DeriveOutputs
+        && StepOutputs.Reconcile(_spec, DerivedOutputs.FactsOf(_context, _files) with { BeforeExists = true, TaskBeforeExists = true }) is OutputAnswer.Resumable;
+
+    /// <summary>The facts as they are, except that attempt <paramref name="attempt"/> did not finish: its stream reads as interrupted and its end line no longer says <c>hard-deadline</c> (its wall still counts against the budget).</summary>
+    private static RecoveryFacts Unfinished(RecoveryFacts facts, int attempt) =>
+        facts with
+        {
+            LastEnd = new StepEnd.Interrupted("its verdict could not be read"),
+            Timing = [.. facts.Timing.Select(line => line is TimingLine.End end && end.Attempt == attempt && end.State == new StepEnd.HardDeadline().Word ? end with { State = string.Empty } : line)],
+        };
 
     private RecoveryFacts Facts()
     {
