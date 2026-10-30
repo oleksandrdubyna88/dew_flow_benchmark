@@ -87,3 +87,30 @@ test('stripData_marks_an_interpreters_body_as_code_and_pathLiterals_reads_its_ab
   assert.deepEqual(pathLiterals(`a = "/home/u/x y"; b = '/'; c = "//d"; d = '/etc/hosts'; e = "/"; f = \`/tpl\``), ['/home/u/x y', '/etc/hosts']);
   assert.deepEqual(pathLiterals('s = "it\'s /x"'), [], 'a quote of the other kind inside a string does not start a literal');
 });
+
+// An interpreter or a shell launched through a wrapper (`env`, `timeout`, `nice`, `command`, `exec`, `nohup`, `sudo`) or by its path is the same interpreter or shell: the word is found anywhere on the line, as a command word at the
+// end of a path, and the body is classified exactly as for the bare word. A word that is the target of a redirection (`> node`) runs nothing.
+const WRAPPED = ['env python3 -', 'env -i node', 'env FOO=1 BAR=2 python3 -', 'env -u X -i python3 -', 'timeout 5 node', 'timeout -k 2 5s node', 'nice -n 5 python3 -', 'nice python3 -', 'command python3 -', 'exec node', 'nohup python3 -',
+  'sudo python3 -', 'sudo -u root python3 -', 'stdbuf -oL python3 -', 'time python3 -', '/usr/bin/env python3 -', 'env /usr/bin/python3 -', '/usr/bin/python3 -', '/usr/local/bin/node -', './node_modules/.bin/tsx -'];
+const WRAPPED_SHELLS = ['env bash', 'env -i sh', 'timeout 5 bash', 'nice -n 5 zsh', 'command dash', 'exec bash', 'nohup sh', 'sudo bash', '/bin/bash', '/usr/bin/env bash', 'env /bin/sh'];
+
+test('A_wrapped_or_path_named_interpreter_reads_its_body_like_the_bare_one', () => {
+  for (const opener of WRAPPED) {
+    assert.deepEqual(high(heredoc(opener, 'import os', `print(open('${HOME}/.ssh/id_rsa').read())`)), ['outside-path'], `${opener}: a protected literal`);
+    assert.deepEqual(high(heredoc(opener, `require('fs').readFileSync("${HARNESS}/settings.json")`)), ['outside-path'], `${opener}: a harness literal`);
+    assert.deepEqual(high(heredoc(opener, "s = x.includes(\"/\")", 'grep -r token /', 'find / -name x', '// a comment /* block */')), [], `${opener}: the TypeScript literal "/" is no path`);
+  }
+  assert.deepEqual(high(heredoc('env python3 -', "s = x.includes(\"/\")")), []);
+});
+
+test('A_wrapped_or_path_named_shell_parses_its_body_as_shell', () => {
+  for (const opener of WRAPPED_SHELLS) {
+    assert.deepEqual(high(heredoc(opener, `grep -r token ${HOME}`)), ['outside-path'], opener);
+    assert.deepEqual(high(heredoc(opener, 'find / -name x')), ['outside-path'], opener);
+  }
+});
+
+test('A_word_named_like_an_interpreter_that_runs_nothing_leaves_the_body_data', () => {
+  for (const command of [`cat > node <<'EOF'\ncat ${HOME}/x\nEOF`, `cat >> src/python <<'EOF'\ncat ${HOME}/x\nEOF`, `cat > /tmp/bash <<'EOF'\ngrep -r token /\nEOF`, `cat > out.txt <<'EOF'\ngrep -r token /\nEOF`]) assert.deepEqual(high(command), [], command);
+  assert.deepEqual(high(`cat < /usr/bin/python3 > f <<'EOF'\nx\nEOF`), [], 'a redirection source runs nothing either way');
+});

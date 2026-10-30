@@ -8,7 +8,9 @@
 
 const MARKER = /(?<!<)<<(-?)\s*(["']?)([A-Za-z_][\w.-]*)\2/g;
 const HERE_STRING = /<<<\s*(?:"[^"]*"|'[^']*'|[^\s;&|)]+)/g;
-const COMMAND_START = '(?:^|[\\s;&|(])';
+// A command word, wherever it stands on the line (so a wrapper's launch is found: `env -i node`, `timeout 5 python3`, `nice -n 5 bash`, `sudo`, `exec`, `nohup`, `command`), with or without a directory in front of it
+// (`/usr/bin/python3`, `./node_modules/.bin/tsx`). The word that is the target of a redirection (`> node`, `>> src/python`) runs nothing.
+const COMMAND_START = '(?:^|[\\s;&|(])(?<!>\\s*)(?:[^\\s;&|()]*\\/)?';
 const COMMAND_END = '(?=[\\s;&|)]|$)';
 const SHELLS = new RegExp(`${COMMAND_START}(?:bash|sh|zsh|dash|ksh|eval|source)${COMMAND_END}`);
 const INTERPRETERS = new RegExp(`${COMMAND_START}(?:python[\\d.]*|node|nodejs|deno|bun|perl|ruby|php|tsx|ts-node)${COMMAND_END}`);
