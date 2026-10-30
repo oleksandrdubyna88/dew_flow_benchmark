@@ -108,6 +108,7 @@ test('A_phase_that_cannot_claim_a_layout_fails_before_anything_is_started', asyn
   assert.equal(r.ok, false);
   assert.match(r.reason, /already exists/);
   assert.equal(launched, 0);
+  assert.equal(existsSync(path.join(ctx.sessionsRoot, items(ctx)[0].rid)), false, 'the layout claimed before the failure is released: nothing paid was started');
 });
 
 test('The_masked_spawn_stamps_once_per_call_and_prefixes_the_argv', () => {

@@ -3,7 +3,7 @@
 // decides nothing about them (`bare-collect.mjs` classifies) and writes no run-map (`bare-series.mjs` does).
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { plantTargets, unplant } from '../../policy-ab-quick/lib/canaries.mjs';
 import { bareSessionPlan } from './bare-plan.mjs';
@@ -66,7 +66,10 @@ export async function launchPhase({ ctx, items, deps = {}, signal }) {
   const prepared = [];
   for (const item of items) {
     const p = prepare({ ctx, item, d });
-    if (!p.ok) return p;
+    if (!p.ok) {
+      prepared.forEach(x => rmSync(x.layout.dir, { recursive: true, force: true })); // nothing paid has started: the claimed layouts hold nothing worth keeping
+      return p;
+    }
     prepared.push(p.value);
   }
   const withCanaries = prepared.map(item => ({ ...item, canary: plantFor({ ctx, item, partner: prepared.find(x => x !== item), d }) }));
