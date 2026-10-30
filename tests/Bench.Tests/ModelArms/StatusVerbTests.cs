@@ -430,9 +430,9 @@ public sealed class StatusVerbTests
         using var kit = new StatusKit("C1", "C2");
         var token = kit.Tokens[0];
         kit.Stream("C1", "4-gate", 1);
-        kit.Put(kit.Paths("C1").Continue("4-gate"), ContinueMarkers.Write(new ContinueMarker(1, new string('x', 110) + $"/r/{token}/arm/gate.json is a link")));
+        kit.Put(kit.Paths("C1").Continue("4-gate"), ContinueMarkers.Write(new ContinueMarker(1, new string('x', 105) + $"/r/{token}/arm/gate.json is a link")));
         kit.Stream("C1", "1-code", 1);
-        kit.Timing("C1", kit.Started("C1", "1-code", 1), kit.Ended("C1", "1-code", 1, "limited", limited: true), kit.Stopped("C1", "1-code", 3, new string('y', 110) + $"/r/{token}/out/1-code.a1.jsonl"));
+        kit.Timing("C1", kit.Started("C1", "1-code", 1), kit.Ended("C1", "1-code", 1, "limited", limited: true), kit.Stopped("C1", "1-code", 3, new string('y', 105) + $"/r/{token}/out/1-code.a1.jsonl"));
         kit.Put(kit.Layout.PidFile("C2"), new string('p', 10) + token);
 
         var run = await kit.RunAsync();
