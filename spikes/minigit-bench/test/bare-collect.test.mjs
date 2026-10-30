@@ -1,14 +1,14 @@
 // Collecting a session back from its directory and classifying how it ended (E3b.S1 steps 5 and 7), over the bare-smoke fixture laid out as a live session dir.
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
 import { collectSession } from '../lib/bare-collect.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
-import { loadSessionDir } from '../lib/session-load.mjs';
-import { STAGED } from '../lib/smoke-load.mjs';
+import { STAGED, loadSessionDir } from '../lib/smoke-load.mjs';
+
 import { spikeDir, tmpDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
@@ -30,7 +30,7 @@ function sessionFromFixture() {
   return layout;
 }
 const ctx = () => { const r = crosscheckPolicyFrom(spikeDir, {}); assert.equal(r.ok, true, r.reason); return r.value; };
-const baselineOf = layout => { const rec = aliasRecord({ events: loadSessionDir(layout).value.events }); return { aliases: rec.value.aliases, internal: rec.value.internal }; };
+const baselineOf = layout => { const rec = aliasRecord({ events: loadSessionDir(layout.dir).value.events }); return { aliases: rec.value.aliases, internal: rec.value.internal }; };
 const collect = (layout, over = {}) => {
   const { table, policy } = ctx();
   const r = collectSession({ layout, plan: PLAN, launched: null, aliasBaseline: baselineOf(layout), table, policy, ...over });
@@ -98,4 +98,24 @@ test('An_alias_that_resolves_to_two_ids_inside_one_session_stops_the_series', ()
   assert.equal(r.ok, true, r.reason);
   assert.equal(r.value.outcome.class, 'stop: alias drift');
   assert.match(r.value.outcome.detail.reasons.join(' '), /two ids/);
+});
+
+test('A_live_session_dir_with_files_missing_loads_with_empty_lists_never_a_failure', () => {
+  const layout = layoutPaths(tmpDir('series'), 'cut123');
+  mkdirSync(layout.dir, { recursive: true });
+  writeFileSync(path.join(layout.dir, 'stream.ndjson'), `${JSON.stringify({ type: 'system', subtype: 'init' })}\n`);
+  const r = loadSessionDir(layout.dir);
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(r.value.events.length, 1);
+  assert.deepEqual([r.value.brokerLines, r.value.audit, r.value.transcripts], [[], [], []]);
+  assert.equal(r.value.meta, null, 'an absent meta.json is null, not an invented value');
+});
+
+test('A_link_in_a_session_dir_is_refused_by_the_one_loader_not_followed', () => {
+  const layout = sessionFromFixture();
+  rmSync(layout.files.brokerLog);
+  symlinkSync('/etc/hostname', layout.files.brokerLog);
+  const r = loadSessionDir(layout.dir);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /broker\.ndjson: symlink|not plain regular files/);
 });

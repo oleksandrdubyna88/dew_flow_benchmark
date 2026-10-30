@@ -8,13 +8,13 @@ import { bareOutcome } from './bare-outcome.mjs';
 import { contaminationHits } from './contamination.mjs';
 import { emptyCounts } from './proc-sampler.mjs';
 import { ok } from './result.mjs';
-import { loadSessionDir } from './session-load.mjs';
+import { loadSessionDir } from './smoke-load.mjs';
 import { filesUnder, realTokenHits, scanSessionDir } from './session-scan.mjs';
 import { sessionCost } from './session-cost.mjs';
 import { sessionSpendUsd, stopRuleFigure } from './spend-gate.mjs';
 import { tokenHits } from './token-scan.mjs';
 import { smokeViews } from './smoke-verdicts.mjs';
-import { callsOf } from './smoke-run.mjs';
+import { callsOf } from './stream-calls.mjs';
 
 /** The directories whose files the model could have written or read: what a canary or a credential could show up in (never the caches, never the harness). */
 const EVIDENCE = Object.freeze(['stream.ndjson', 'transcripts', path.join('box', 'out'), path.join('box', 'work')]);
@@ -32,7 +32,7 @@ const disposedMeta = brokerLines => ({ stopped: 'disposed', envelopeCostUsd: nul
  * -> `{ loaded, views, cost, alias, aliasCheck, outcome, usd, meta, scan }` | `fail(reason)` when the evidence cannot be read.
  */
 export function collectSession({ layout, plan, launched, canaryTokens = [], aliasBaseline, handVerdicts = [], retired = false, abortReason = null, partnerDirs = [], table, policy, home = os.homedir() }) {
-  const loaded = loadSessionDir(layout);
+  const loaded = loadSessionDir(layout.dir);
   if (!loaded.ok) return loaded;
   const { events, brokerLines } = loaded.value;
   const meta = launched?.ok ? launched.value.meta : loaded.value.meta ?? disposedMeta(brokerLines);

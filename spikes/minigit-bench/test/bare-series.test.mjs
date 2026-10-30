@@ -10,7 +10,6 @@ import { ridOf } from '../lib/bare-plan.mjs';
 import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { readLedger } from '../lib/ledger.mjs';
 import { openSeries, readRunMap, transition } from '../lib/run-map.mjs';
-import { loadSessionDir } from '../lib/session-load.mjs';
 import { STAGED } from '../lib/smoke-load.mjs';
 import { SEED, context, sleep } from './bare-ctx.mjs';
 import { spikeDir } from './helpers.mjs';
