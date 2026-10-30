@@ -146,6 +146,8 @@ public sealed class MakeVerbTests
     [InlineData("fifo")]
     [InlineData("two-megabytes")]
     [InlineData("not-json")]
+    [InlineData("not-utf8")]
+    [InlineData("start-missing-a-field")]
     public async Task An_arm_whose_timing_cannot_be_read_is_never_removed(string shape)
     {
         MakeKit.Posix();
@@ -165,6 +167,12 @@ public sealed class MakeVerbTests
                 break;
             case "two-megabytes":
                 File.WriteAllText(paths.Timing, new string('x', 2 * 1024 * 1024));
+                break;
+            case "not-utf8":
+                File.WriteAllBytes(paths.Timing, [.. System.Text.Encoding.UTF8.GetBytes(MakeKit.TimingOf("C1", "stopped").Replace("the operator", "the \u0001operator")).Select(b => b == 1 ? (byte)0xFF : b), (byte)'\n']);
+                break;
+            case "start-missing-a-field":
+                File.WriteAllText(paths.Timing, "{\"kind\":\"start\",\"arm\":\"C1\"}\n");
                 break;
             default:
                 File.WriteAllText(paths.Timing, "{not json\n");
@@ -197,6 +205,155 @@ public sealed class MakeVerbTests
                 PlatformKit.ReleaseFifo(paths.Timing);
             }
         }
+    }
+
+    [Theory]
+    [InlineData("out-dangling-link", "cannot tell whether C1 ran")]
+    [InlineData("out-link-to-folder", "cannot tell whether C1 ran")]
+    [InlineData("out-is-a-file", "cannot tell whether C1 ran")]
+    [InlineData("out-absent-with-work", "cannot tell whether C1 ran")]
+    [InlineData("end-only", "C1 has run")]
+    [InlineData("gate-wait-only", "C1 has run")]
+    [InlineData("arm-done-only", "C1 has run")]
+    public async Task An_arm_with_no_proof_that_it_never_ran_is_never_removed(string shape, string said)
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        kit.WriteMap("C1");
+        var paths = kit.Paths("C1");
+        var work = kit.Leftover("C1", "finished-work.txt", withOut: false);
+        MakeKit.Put(Path.Combine(paths.Notes, "code.md"), "the coder's notes\n");
+        var outside = kit.Root.Scratch("outside");
+        switch (shape)
+        {
+            case "out-dangling-link":
+                File.CreateSymbolicLink(paths.Out, Path.Combine(outside, "nothing-here"));
+                break;
+            case "out-link-to-folder":
+                File.CreateSymbolicLink(paths.Out, outside);
+                break;
+            case "out-is-a-file":
+                MakeKit.Put(paths.Out, "not a folder\n");
+                break;
+            case "out-absent-with-work":
+                break;
+            default:
+                MakeKit.Put(paths.Timing, MakeKit.TimingOf("C1", shape[..^5]) + "\n");
+                break;
+        }
+
+        var before = MakeKit.Describe(paths.Folder);
+
+        var run = await kit.MakeAsync();
+
+        File.Exists(work).Should().BeTrue("the folder holds work, and nothing proves the arm never ran: it is not removed");
+        run.Code.Should().Be(4, run.Everything);
+        run.Error.Should().Contain(said);
+        MakeKit.Describe(paths.Folder).Should().Equal(before);
+        File.Exists(kit.Layout.Made("C1")).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("nothing-but-the-folder")]
+    [InlineData("out-and-a-copy-in-progress")]
+    [InlineData("only-a-stopped-line")]
+    public async Task A_make_killed_before_anything_ran_is_redone_whole(string shape)
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        kit.WriteMap("C1");
+        var paths = kit.Paths("C1");
+        Directory.CreateDirectory(paths.Folder);
+        if (shape != "nothing-but-the-folder")
+        {
+            kit.Leftover("C1");
+        }
+
+        if (shape == "only-a-stopped-line")
+        {
+            MakeKit.Put(paths.Timing, MakeKit.TimingOf("C1", "stopped") + "\n");
+        }
+
+        var run = await kit.MakeAsync();
+
+        run.Code.Should().Be(0, run.Everything);
+        File.Exists(Path.Combine(paths.CloneFolder, "half.txt")).Should().BeFalse();
+        File.Exists(Path.Combine(paths.CloneFolder, ".git", "HEAD")).Should().BeTrue("the arm is made again, whole");
+        File.Exists(kit.Layout.Made("C1")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_arm_folder_that_is_a_file_is_refused_and_left_as_it_is()
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        kit.WriteMap("C1");
+        var paths = kit.Paths("C1");
+        MakeKit.Put(paths.Folder, "not a folder\n");
+
+        var run = await kit.MakeAsync();
+
+        run.Code.Should().Be(4, run.Everything);
+        run.Error.Should().Contain("is not a folder");
+        File.ReadAllText(paths.Folder).Should().Be("not a folder\n", "a file at the arm's name is neither removed nor replaced");
+    }
+
+    [Fact]
+    public async Task A_half_made_arm_that_cannot_be_removed_exits_3_and_is_left_as_it_is()
+    {
+        MakeKit.Posix();
+        Assert.SkipWhen(Environment.IsPrivilegedProcess, "a privileged user removes a folder at mode 0555");
+        using var kit = await MakeKit.CreateAsync("C1");
+        kit.WriteMap("C1");
+        var closed = Path.GetDirectoryName(MakeKit.Put(Path.Combine(kit.Paths("C1").CloneFolder, "closed", "inside.txt"), "x"))!;
+        Directory.CreateDirectory(kit.Paths("C1").Out);
+        File.SetUnixFileMode(closed, (UnixFileMode)Convert.ToInt32("555", 8));
+        try
+        {
+            var run = await kit.MakeAsync();
+
+            run.Code.Should().Be(3, run.Everything);
+            run.Error.Should().Contain("cannot remove");
+            File.Exists(Path.Combine(closed, "inside.txt")).Should().BeTrue("what the delete could not remove is left as it is");
+            File.Exists(kit.Layout.Made("C1")).Should().BeFalse();
+        }
+        finally
+        {
+            File.SetUnixFileMode(closed, (UnixFileMode)Convert.ToInt32("755", 8));
+        }
+    }
+
+    [Fact]
+    public async Task A_coai_settings_file_that_is_a_link_is_refused_and_not_followed()
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        var real = kit.SettingsFile + ".real";
+        File.Move(kit.SettingsFile, real);
+        File.CreateSymbolicLink(kit.SettingsFile, real);
+
+        var run = await kit.MakeAsync();
+
+        run.Code.Should().Be(4, run.Everything);
+        run.Error.Should().Contain("coai.settings").And.Contain("is a link");
+        File.Exists(kit.Layout.Made("C1")).Should().BeFalse();
+        File.Exists(kit.Paths("C1").McpCoai).Should().BeFalse("nothing is written from a settings file that was not read");
+    }
+
+    [Fact]
+    public async Task An_absolute_link_in_the_base_that_leads_into_it_stops_make_naming_the_link()
+    {
+        MakeKit.Posix();
+        using var kit = await MakeKit.CreateAsync("C1");
+        var objects = Path.Combine(kit.Bench.BaseFolder, "obj");
+        Directory.CreateDirectory(objects);
+        File.CreateSymbolicLink(Path.Combine(kit.Bench.BaseFolder, "objlink"), objects);
+
+        var run = await kit.MakeAsync();
+
+        run.Code.Should().Be(3, run.Everything);
+        run.Error.Should().Contain("objlink");
+        File.Exists(kit.Layout.Made("C1")).Should().BeFalse("an arm that could write into the shared base is not made");
     }
 
     [Fact]

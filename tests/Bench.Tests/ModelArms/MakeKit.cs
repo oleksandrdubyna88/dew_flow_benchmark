@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Bench.Domain.Trace;
 using FluentAssertions;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
@@ -109,11 +110,31 @@ internal sealed class MakeKit : IDisposable
             : new TimingLine.Stopped(arm, "1-code", 5, "the operator stopped it", at));
     }
 
-    /// <summary>A half-made arm: its folder, a marker-less leftover in <c>arm/</c>, and no timing — what a <c>make</c> that was killed leaves.</summary>
-    public string Leftover(string arm, string relative = "half.txt")
+    /// <summary>One timing line of the module's own writer for the kind a test names: <c>start</c>, <c>end</c>, <c>gate-wait</c>, <c>arm-done</c> or <c>stopped</c>.</summary>
+    public static string TimingOf(string arm, string kind)
     {
-        var path = Path.Combine(Paths(arm).CloneFolder, relative);
-        return Put(path, "left by a make that was killed\n");
+        var at = new DateTimeOffset(2026, 10, 30, 10, 0, 0, TimeSpan.Zero);
+        return TimingLines.Write(kind switch
+        {
+            "start" => new TimingLine.Start(arm, "1-code", 1, "fresh", "s", "m", at, 600, "23:12 UTC (00:12 +01:00)", "abc1234", "x.a1.jsonl"),
+            "end" => new TimingLine.End(arm, "1-code", 1, at, CapturedCount.Number(60), CapturedCount.Number(0), true, false, "abc1234", "finished", false),
+            "gate-wait" => new TimingLine.GateWait(arm, "4-gate", 1, 1, "every provider rate-limited", at),
+            "arm-done" => new TimingLine.ArmDone(arm, at),
+            _ => new TimingLine.Stopped(arm, "1-code", 5, "the operator stopped it", at),
+        });
+    }
+
+    /// <summary>A half-made arm as THIS make leaves one when it is killed: its folder with a real <c>out</c> (made before the copy), a marker-less leftover in <c>arm/</c>, and no timing. <paramref name="withOut"/> false leaves no <c>out</c> at all.</summary>
+    public string Leftover(string arm, string relative = "half.txt", bool withOut = true)
+    {
+        var paths = Paths(arm);
+        var path = Put(Path.Combine(paths.CloneFolder, relative), "left by a make that was killed\n");
+        if (withOut)
+        {
+            Directory.CreateDirectory(paths.Out);
+        }
+
+        return path;
     }
 
     /// <summary>Every entry under <paramref name="folder"/> as one text line each — its relative path, its kind, its mode, a link's text or a file's hash — sorted; a link is never entered. Equal text before and after is "unchanged".</summary>

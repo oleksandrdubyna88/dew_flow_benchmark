@@ -140,7 +140,7 @@ public sealed class ArmMaker(Experiment experiment, RootPaths root, ArmMap map, 
 
     /// <summary>(c) <c>base/</c> into <c>arm/</c>.</summary>
     private Passage<ArmPaths> Copied(string arm, ArmPaths paths) =>
-        BaseCopy.Copy(root.Base, paths.CloneFolder, road).Match(
+        BaseCopy.Copy(root.Base, paths.CloneFolder, road, [root.Root]).Match(
             _ => new Passage<ArmPaths>.Through(paths),
             reason => Stop<ArmPaths>(3, $"cannot copy base/ into {arm}'s clone: {reason}"));
 

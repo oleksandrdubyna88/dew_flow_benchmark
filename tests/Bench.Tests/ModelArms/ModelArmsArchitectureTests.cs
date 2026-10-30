@@ -162,9 +162,9 @@ public sealed class ModelArmsArchitectureTests
         var sites = FilesReadingLinks(Path.Combine(Cli.Repository.Root, "tools", "model-arms"));
 
         sites.Should().BeSubsetOf(["RootFacts.cs", "BaseCopy.cs"], "the module asks the kernel for a real path in one place; reading a link's text is the defect — except where a link is COPIED as the text it holds (BaseCopy)");
+        sites.Should().Contain("BaseCopy.cs", "the scan must still FIND the second sanctioned site — a scan that matches nothing passes forever");
         var copy = Directory.EnumerateFiles(Path.Combine(Cli.Repository.Root, "tools", "model-arms"), "BaseCopy.cs", SearchOption.AllDirectories).ToList();
-        copy.Should().ContainSingle("a scan that cannot see the second sanctioned site passes forever");
-        File.ReadAllText(copy[0]).Should().NotContain("ResolveLinkTarget", "BaseCopy copies the text a link holds and never resolves where it leads");
+        File.ReadAllText(copy.Single()).Should().NotContain("ResolveLinkTarget", "BaseCopy copies the text a link holds and never resolves where it leads");
     }
 
     [Fact]

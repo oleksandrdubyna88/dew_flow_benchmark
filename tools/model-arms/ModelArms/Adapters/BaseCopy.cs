@@ -5,13 +5,13 @@ namespace ModelArms.Adapters;
 
 /// <summary>The copy of <c>base/</c> into an arm's clone (C15, E3.S3, E3 §8 items 16 and 22): the replacement of the shell's <c>cp -a</c>, so no new executable is resolved and nothing is looked up by name. <b>Folders</b> are made new, one by one, EXCLUSIVELY (libc <c>mkdir</c>: an existing name is never adopted) and given the source's mode and modification time once their
 /// children are in them — a folder that cannot be written is writable only while it is filled; <b>files</b> are copied byte for byte with their mode and their modification time (the warm build that follows is incremental on those times, as <c>cp -a</c> kept them); <b>links are copied AS links</b>: their text kept as it is, never followed, a link to a folder never entered — so nothing the operator's checkout points at
-/// is ever copied into an arm, and nothing outside the copy is ever read through it; a <b>FIFO, a socket or a device</b> stops the copy naming its path under <c>base/</c> (the arm's clone would hold something a copy cannot make, and opening a FIFO waits for a writer for ever).
+/// is ever copied into an arm, and nothing outside the copy is ever read through it; and a ROOTED link that leads into the base itself or into the experiment root is REFUSED naming it (<see cref="Copy(string, string, PlatformRoad, IReadOnlyList{string})"/>), because an arm that wrote through it would write into the shared base that every later <c>make</c> copies and builds with the operator's rights; a <b>FIFO, a socket or a device</b> stops the copy naming its path under <c>base/</c> (the arm's clone would hold something a copy cannot make, and opening a FIFO waits for a writer for ever).
 /// <para>
 /// The KIND of every entry comes from the kernel where the host has a reader (<c>statx</c> with <c>AT_SYMLINK_NOFOLLOW</c>, D26 a). On a host with none (macOS, FreeBSD — E3.S0's portable road) a FIFO is not told from a file, so each file is opened once under the road's ceiling (<see cref="PlatformRoads.BoundedCeilingSeconds"/> s) before it is copied: an open that does not return is a FIFO, and
 /// the copy stops naming it. The thread that open left is a background one: it ends when something opens the FIFO or the process ends.
 /// </para>
 /// <para>
-/// What this does NOT do: copy a tree somebody is writing (the base is idle while <c>make</c> runs); keep the modification time of a LINK (the runtime has no no-follow setter; a link is made new), extended attributes, ACLs or ownership (<c>cp -a</c> kept what the user could); sparse holes (a hole is written as zeros).
+/// What this does NOT do: copy a tree somebody is writing (the base is idle while <c>make</c> runs); keep the modification time of a LINK (the runtime has no no-follow setter; a link is made new), extended attributes, ACLs or ownership (<c>cp -a</c> kept what the user could); sparse holes (a hole is written as zeros); a ROOTED link that leads into somewhere else than the base or the experiment root (an absolute link to a system folder, to the operator's checkout) is copied as it is — as <c>cp -a</c> did — and so is a RELATIVE link whose text climbs out of the clone; the portable road opens each file under a ceiling but cannot tell a CHARACTER DEVICE from a file, so a copied device node (a <c>/dev/zero</c>) is copied as its bytes up to the end the device gives, with no ceiling on the copy itself.
 /// The count it answers is the files and links copied, folders not counted.
 /// </para></summary>
 public static class BaseCopy
@@ -21,14 +21,20 @@ public static class BaseCopy
     /// <summary>The copy of <paramref name="from"/> as the NEW folder <paramref name="to"/>, on this host's road.</summary>
     public static Outcome<long> Copy(string from, string to) => Copy(from, to, PlatformFactsReader.CurrentRoad);
 
-    public static Outcome<long> Copy(string from, string to, PlatformRoad road) => Copy(from, to, road, TimeSpan.FromSeconds(PlatformRoads.BoundedCeilingSeconds));
+    public static Outcome<long> Copy(string from, string to, PlatformRoad road) => Copy(from, to, road, []);
+
+    /// <summary>The same where a ROOTED link may not lead into <paramref name="from"/> or into any of <paramref name="alsoKeepOut"/> (the experiment's root, for <c>make</c>): such a link, made new in an arm's clone, still names the SHARED folder, so an arm that wrote through it would write into the base that every later <c>make</c> copies and builds, or into another arm.</summary>
+    public static Outcome<long> Copy(string from, string to, PlatformRoad road, IReadOnlyList<string> alsoKeepOut) =>
+        Copy(from, to, road, TimeSpan.FromSeconds(PlatformRoads.BoundedCeilingSeconds), alsoKeepOut);
 
     /// <summary>The same with the ceiling of the portable road's open handed in: a test that plants a FIFO does not wait the production five seconds.</summary>
-    internal static Outcome<long> Copy(string from, string to, PlatformRoad road, TimeSpan ceiling)
+    internal static Outcome<long> Copy(string from, string to, PlatformRoad road, TimeSpan ceiling) => Copy(from, to, road, ceiling, []);
+
+    private static Outcome<long> Copy(string from, string to, PlatformRoad road, TimeSpan ceiling, IReadOnlyList<string> alsoKeepOut)
     {
         try
         {
-            return Folder(new DirectoryInfo(from), to, new Walk(from, road, ceiling));
+            return Folder(new DirectoryInfo(from), to, new Walk(from, road, ceiling, [.. new[] { from }.Concat(alsoKeepOut).Select(Normal)]));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -36,10 +42,20 @@ public static class BaseCopy
         }
     }
 
+    private static string Normal(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
     /// <summary>What one copy carries down every folder: where it started (for the names it prints), the road the kinds are told by and the ceiling of the portable open.</summary>
-    private sealed record Walk(string Root, PlatformRoad Road, TimeSpan Ceiling)
+    private sealed record Walk(string Root, PlatformRoad Road, TimeSpan Ceiling, IReadOnlyList<string> KeepOut)
     {
         public string Named(FileSystemInfo entry) => Path.GetRelativePath(Root, entry.FullName).Replace('\\', '/');
+
+        /// <summary>Whether a rooted link text, normalised as text, is one of the kept-out folders or inside one.</summary>
+        public bool Leads(string text)
+        {
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var full = Normal(text);
+            return KeepOut.Any(folder => full.Equals(folder, comparison) || full.StartsWith(folder + Path.DirectorySeparatorChar, comparison));
+        }
     }
 
     private static Outcome<long> Folder(DirectoryInfo source, string destination, Walk walk) =>
@@ -124,6 +140,11 @@ public static class BaseCopy
         if (entry.LinkTarget is not { } text)
         {
             return Outcome<long>.Failure($"{walk.Named(entry)} is a reparse point that is not a symbolic link — it cannot be copied as one");
+        }
+
+        if (Path.IsPathRooted(text) && walk.Leads(text))
+        {
+            return Outcome<long>.Failure($"{walk.Named(entry)} is a link to {text}, inside the base or the experiment root — an arm that wrote through it would write into the shared base or another arm; make it a relative link or remove it from base/");
         }
 
         new FileInfo(target).CreateAsSymbolicLink(text);

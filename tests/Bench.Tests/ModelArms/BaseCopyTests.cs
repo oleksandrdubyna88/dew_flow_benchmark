@@ -50,6 +50,45 @@ public sealed class BaseCopyTests
         new DirectoryInfo(temp.Combine("copy", "d")).LinkTarget.Should().NotBeNull("what stands at d is the LINK: a copy that followed it would have made a folder with the sentinel inside");
     }
 
+    [Theory]
+    [InlineData("into-base")]
+    [InlineData("the-base-itself")]
+    [InlineData("into-the-experiment-root")]
+    public void An_absolute_link_that_leads_into_the_base_or_the_experiment_root_is_refused_naming_it(string shape)
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.File("shared\n", "root", "base", "obj", "shared.txt");
+        temp.Folder("root", "r", "other-arm");
+        var target = shape switch
+        {
+            "into-base" => temp.Combine("root", "base", "obj"),
+            "the-base-itself" => temp.Combine("root", "base"),
+            _ => temp.Combine("root", "r", "other-arm"),
+        };
+        File.CreateSymbolicLink(temp.Combine("root", "base", "objlink"), target);
+
+        var copied = BaseCopy.Copy(temp.Combine("root", "base"), temp.Combine("copy"), PlatformKit.LinuxRoad, [temp.Combine("root")]);
+
+        copied.Should().BeOfType<Bench.Domain.Outcome<long>.Fail>("an arm that wrote through the link would write into the shared base, which every later make copies and builds").Which.Reason.Should().Contain("objlink");
+        File.ReadAllText(temp.Combine("root", "base", "obj", "shared.txt")).Should().Be("shared\n");
+    }
+
+    [Fact]
+    public void An_absolute_link_to_somewhere_else_and_a_relative_one_are_still_copied_as_links()
+    {
+        Posix();
+        using var temp = new TempFolder();
+        temp.File("x", "root", "base", "a.txt");
+        File.CreateSymbolicLink(temp.Combine("root", "base", "elsewhere"), temp.Folder("elsewhere"));
+        File.CreateSymbolicLink(temp.Combine("root", "base", "relative"), "a.txt");
+
+        var copied = BaseCopy.Copy(temp.Combine("root", "base"), temp.Combine("copy"), PlatformKit.LinuxRoad, [temp.Combine("root")]);
+
+        copied.Ok().Should().Be(3);
+        new FileInfo(temp.Combine("copy", "elsewhere")).LinkTarget.Should().Be(temp.Combine("elsewhere"));
+    }
+
     [Fact]
     public void Modes_and_modification_times_are_kept()
     {

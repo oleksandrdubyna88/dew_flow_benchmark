@@ -1,20 +1,23 @@
 using System.Text;
+using Bench.Domain;
 using ModelArms.Core.Experiment;
 using ModelArms.Core.Steps;
 
 namespace ModelArms.Adapters;
 
-/// <summary>What an earlier <c>make</c> left of an arm (E3.S3, D26 a, e): the one place the module DELETES an arm's work, so the guard is the whole class. A folder <c>r/&lt;token&gt;</c> without <c>chain/made-&lt;arm&gt;</c> is a crashed make's — and is removed whole only on POSITIVE evidence that the arm never ran. A guard that took
-/// "I cannot tell" for "no" would delete a finished arm, which is days of model work; so every doubt is an exit 4 that touches nothing:
+/// <summary>What an earlier <c>make</c> left of an arm (E3.S3, D26 a, e): the one place the module DELETES an arm's work, so the guard is the whole class. A folder <c>r/&lt;token&gt;</c> without <c>chain/made-&lt;arm&gt;</c> is a crashed make's — or an arm that RAN and lost its marker, which is days of model work. It is removed whole only on POSITIVE evidence that the arm never ran, and
+/// the absence of evidence is not that: every doubt is an exit 4 that touches nothing. A half-made arm of this <see cref="ArmMaker"/> always has a real <c>out</c> (made before the copy), so the evidence is read there:
 /// <list type="bullet">
-/// <item>the folder is not a real folder — a link (whatever it names is never entered: it is an operator's mistake or a planted one) or a file;</item>
-/// <item><c>out/timing.jsonl</c> through <see cref="BoundedFile"/> (1 MiB) is <i>refused</i> — a link, a FIFO, a folder, past the limit, not UTF-8 — or holds a line that does not read as a timing line: <c>cannot tell whether &lt;arm&gt; ran</c>;</item>
-/// <item>the timing holds a <c>start</c> line: <c>&lt;arm&gt; has run</c> — restore its marker or move its folder away; make never remakes an arm that ran.</item>
+/// <item>the folder is not a real folder — a link (never entered) or a file;</item>
+/// <item><c>out</c> is there but is not a real folder (a link, live or dangling, a file, anything else): <c>cannot tell whether &lt;arm&gt; ran</c> — the evidence may be behind the link;</item>
+/// <item><c>out</c> is absent: <i>never ran</i> ONLY when <c>arm</c>, <c>notes</c>, <c>work</c> and <c>tmp</c> are absent too, checked by name — the crash window between making <c>r/&lt;token&gt;</c> and making <c>out</c>; otherwise <i>cannot tell</i> (somebody removed <c>out</c> from an arm that has work);</item>
+/// <item><c>out/timing.jsonl</c> through <see cref="BoundedFile"/> (1 MiB) is refused — a link, a FIFO, a folder, past the limit, not UTF-8 — or holds a line that does not read as a timing line: <c>cannot tell</c>;</item>
+/// <item>the timing holds a line that is written only once an attempt ran — <c>start</c>, <c>end</c>, <c>gate-wait</c> or <c>arm-done</c>: <c>&lt;arm&gt; has run</c> — restore its marker or move its folder away; make never remakes an arm that ran.</item>
 /// </list>
-/// Only an <i>absent</i> timing file, or one whose every line reads and none is a <c>start</c> (a runner that stopped at its admission), is evidence of a make that never reached a run. The removal is <c>Directory.Delete(recursive)</c>, which unlinks a link inside the tree as a link and never descends through it (observed on this runtime, <c>MakeVerbTests</c> plants outside sentinels);
+/// Only an absent timing file, or one whose every line is a <c>stopped</c> line (a runner that stopped at its admission, before any attempt), over a real <c>out</c>, is evidence of a make that never reached a run. The removal is <c>Directory.Delete(recursive)</c>, which unlinks a link inside the tree as a link and never descends through it (observed on this runtime, <c>MakeVerbTests</c> plants outside sentinels);
 /// a folder it cannot remove (one a build left at mode 0555) is a failure, exit 3, left as it is.
 /// <para>
-/// What this does NOT prove: that the folder is the arm's and nobody else's (the token is the arm's name by the map; a folder at that name is taken to be it); a link in a PARENT of <c>timing.jsonl</c> (<c>out</c> itself a link — the bounded road's stated residual: the delete does not follow it, and a <c>start</c> line a link names still stops the removal).
+/// What this does NOT prove: that the folder is the arm's and nobody else's (the token is the arm's name by the map; a folder at that name is taken to be it); a link in a PARENT of <c>r/&lt;token&gt;</c> (the root's own, which the gate judged).
 /// </para></summary>
 internal static class ArmLeftovers
 {
@@ -50,8 +53,36 @@ internal static class ArmLeftovers
         }
 
         return attributes.HasFlag(FileAttributes.Directory)
-            ? Timing(arm, BoundedFile.Read(paths.Timing, TimingLimit, road))
+            ? Out(arm, paths, road)
             : new Verdict.Stop(4, $"{arm}'s folder {paths.Folder} is not a folder — it is not removed; move it away by hand");
+    }
+
+    /// <summary><c>out</c> by name, never followed: a real folder is where the evidence is read; absent is the crash window or somebody's removal; anything else cannot be trusted to say.</summary>
+    private static Verdict Out(string arm, ArmPaths paths, PlatformRoad road) =>
+        KernelFacts.Present(paths.Out).Match(
+            present => present
+                ? (IsRealFolder(paths.Out, road) ? Timing(arm, BoundedFile.Read(paths.Timing, TimingLimit, road)) : Cannot(arm, "out is not a real folder — a link, a file or something else"))
+                : BeforeOut(arm, paths),
+            reason => Cannot(arm, $"out cannot be looked at: {reason}"));
+
+    /// <summary>The kernel's kind where the host has a reader (<c>statx</c>, no follow), the entry's own attributes elsewhere: a folder that is not a link.</summary>
+    private static bool IsRealFolder(string path, PlatformRoad road) =>
+        road.Trust == TrustRoad.Kernel
+            ? KernelFacts.Read(path) is FactsRead.Read { Facts.Identity.Kind: FileKind.Directory }
+            : new FileInfo(path).Attributes is var attributes && attributes.HasFlag(FileAttributes.Directory) && !attributes.HasFlag(FileAttributes.ReparsePoint);
+
+    /// <summary>No <c>out</c>: the crash window of a make killed between <c>mkdir r/&lt;token&gt;</c> and <c>mkdir out</c> — nothing else exists yet. Anything that does exist is work whose <c>out</c> is gone, and nothing says it never ran.</summary>
+    private static Verdict BeforeOut(string arm, ArmPaths paths)
+    {
+        foreach (var name in new[] { paths.CloneFolder, paths.Notes, paths.Work, paths.Tmp })
+        {
+            if (KernelFacts.Present(name) is not Outcome<bool>.Ok { Value: false })
+            {
+                return Cannot(arm, $"out is missing but {Path.GetFileName(name)} is there");
+            }
+        }
+
+        return new Verdict.NeverRan();
     }
 
     private static Verdict Timing(string arm, BoundedRead timing) =>
@@ -80,9 +111,9 @@ internal static class ArmLeftovers
             return Cannot(arm, "out/timing.jsonl holds a line that does not read as a timing line");
         }
 
-        return lines.Any(line => line is TimingLine.Start)
-            ? new Verdict.Stop(4, $"{arm} has run (its timing has lines) but has no made marker — restore chain/made-{arm} or move its folder away; make never remakes an arm that ran")
-            : new Verdict.NeverRan();
+        return lines.All(line => line is TimingLine.Stopped)
+            ? new Verdict.NeverRan()
+            : new Verdict.Stop(4, $"{arm} has run (its timing has lines) but has no made marker — restore chain/made-{arm} or move its folder away; make never remakes an arm that ran");
     }
 
     private static Verdict.Stop Cannot(string arm, string reason) => new(4, $"cannot tell whether {arm} ran ({reason}) — move its folder away by hand");
