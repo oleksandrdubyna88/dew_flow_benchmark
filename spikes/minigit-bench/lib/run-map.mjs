@@ -61,14 +61,20 @@ export function pendingStops(map) {
 /** Record a series stop (`{ rule, reason, at }`): resume is refused from then on. */
 export const markStopped = (map, stop) => Object.freeze({ ...map, stopped: Object.freeze(stop) });
 
+const isUnscoredData = session => session.status === 'ran' && session.data === true;
+
+/** What resume does with a session that ended: the directory is gone, it has data to score, or only its record is rebuilt. */
+function endedAction(session, d) {
+  if (!d.exists) return { action: 'lost', reason: `the session is ${session.status} but its directory is gone` };
+  if (isUnscoredData(session)) return { action: 'score', reason: 'ended with data, not yet scored' };
+  return { action: 'rebuild-record', reason: session.status === 'scored' ? 'scored' : 'ended without data to score' };
+}
+
 /** What resume does with one session, from its status and what its directory holds (`dirs[rid] = { exists, hasMeta, retired, paidWork }`). */
 function actionFor(session, dir) {
   const d = dir ?? { exists: false, hasMeta: false, retired: false, paidWork: false };
   if (session.status === 'planned') return { action: 'launch', reason: 'never started' };
-  if (session.status === 'launching') return launchingAction(d);
-  if (!d.exists) return { action: 'lost', reason: `the session is ${session.status} but its directory is gone` };
-  if (session.status === 'ran' && session.data === true) return { action: 'score', reason: 'ended with data, not yet scored' };
-  return { action: 'rebuild-record', reason: session.status === 'scored' ? 'scored' : 'ended without data to score' };
+  return session.status === 'launching' ? launchingAction(d) : endedAction(session, d);
 }
 
 function launchingAction(d) {
@@ -82,16 +88,25 @@ export const resumePlan = (map, dirs) => Object.values(map.sessions).map(s => ({
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The sentence for an `--accept-harness` that is missing or names another identity than the harness running, or null. */
+function acceptFlagProblem({ map, current, acceptHarness }) {
+  if (!acceptHarness) return `harnessIdentity changed (${map.harnessIdentity.slice(0, 12)} -> ${current.harnessIdentity.slice(0, 12)}): a harness change needs --accept-harness <identity> --amendment <date> naming a dated amendments.md line`;
+  return acceptHarness.identity === current.harnessIdentity ? null : `--accept-harness names ${acceptHarness.identity.slice(0, 12)}, but the harness running is ${current.harnessIdentity.slice(0, 12)}`;
+}
+
 /**
  * A changed harness identity is accepted by `--accept-harness <identity> --amendment <date>` only when a valid INSTRUMENT line of amendments.md (`parseAmendments().instrument`: date, `instrument`,
  * `harness:<12 hex>`, a reason; review N6: no other kind of line and no prose counts, whatever it mentions) carries that date and the 12 hex of the identity, and only while the series holds no
  * data session: the instrument may change after the A/A and BEFORE pair 1 (contract section 10). An identity accepted earlier is in `map.harnessAccepted` and needs neither.
  */
+/** The valid instrument line of amendments.md with this date that names this 12-hex identity, or undefined. */
+const instrumentLine = (amendments, date, identity) => parseAmendments(amendments ?? '').instrument.find(i => i.date === date && i.identity === identity);
+
 function harnessAccepted({ map, current, acceptHarness, amendments }) {
-  if (!acceptHarness) return fail(`harnessIdentity changed (${map.harnessIdentity.slice(0, 12)} -> ${current.harnessIdentity.slice(0, 12)}): a harness change needs --accept-harness <identity> --amendment <date> naming a dated amendments.md line`);
-  if (acceptHarness.identity !== current.harnessIdentity) return fail(`--accept-harness names ${acceptHarness.identity.slice(0, 12)}, but the harness running is ${current.harnessIdentity.slice(0, 12)}`);
+  const problem = acceptFlagProblem({ map, current, acceptHarness });
+  if (problem) return fail(problem);
   const identity = current.harnessIdentity.slice(0, 12);
-  const line = parseAmendments(amendments ?? '').instrument.find(i => i.date === acceptHarness.amendmentDate && i.identity === identity);
+  const line = instrumentLine(amendments, acceptHarness.amendmentDate, identity);
   if (!line) return fail(`amendments.md has no instrument line dated ${acceptHarness.amendmentDate} that names harness:${identity} (a line \`YYYY-MM-DD | instrument | harness:<12 hex> | <reason, with its G-id>\`; a verdict, input or budget line, or prose, does not count)`);
   if (hasDataSession(map)) return fail(`the harness changed (${map.harnessIdentity.slice(0, 12)} -> ${identity}) after a data session exists in this series: the instrument may change after the A/A and before pair 1 (contract section 10), so the acceptance is refused. Start a new series`);
   return ok({ from: map.harnessIdentity, to: current.harnessIdentity, amendmentDate: acceptHarness.amendmentDate });
@@ -102,17 +117,28 @@ function harnessAccepted({ map, current, acceptHarness, amendments }) {
  * stacks file, the prices, a snapshot, the prereg tag or the seed hash that differs is a refusal naming it; a changed quiet.json or package-flags.json only through a dated `input:` line and before any data session; a changed harness identity is accepted
  * only through `acceptHarness` and a dated amendment line (an identity accepted before, in `map.harnessAccepted`, needs no flag again). -> `ok({ accepted })` (`accepted` is the harness acceptance for the ledger, or null).
  */
-export function checkResumable({ map, current, acceptHarness = null, amendments = '', settleOnly = false }) {
-  if (settleOnly) return settleCheck({ map, current });
+/** The `fail` for a stopped series, or a pin, the stacks file, the prices, a snapshot, the prereg tag or the seed hash that differs; null when none does. */
+function drift({ map, current }) {
   if (map.stopped) return fail(`the series is stopped (${map.stopped.rule}): resume is refused for good: a series stop is final for its series. Fix the named cause and start a NEW series (init, then an A/A that is GO)`);
   const field = PINNED_FIELDS.find(f => !same(map[f], current[f]));
-  if (field) return fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`);
+  return field ? fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`) : null;
+}
+
+const harnessKnown = (map, current) => map.harnessIdentity === current.harnessIdentity || (map.harnessAccepted ?? []).includes(current.harnessIdentity);
+
+/** `ok(null)` when the harness is the pinned (or an accepted) one, else the acceptance `harnessAccepted` gives. */
+const harnessResult = a => (harnessKnown(a.map, a.current) ? ok(null) : harnessAccepted(a));
+
+function resumable({ map, current, acceptHarness, amendments }) {
+  const refused = drift({ map, current });
+  if (refused) return refused;
   const inputs = inputsAccepted({ map, current, amendments });
   if (!inputs.ok) return inputs;
-  if (map.harnessIdentity === current.harnessIdentity || (map.harnessAccepted ?? []).includes(current.harnessIdentity)) return ok({ accepted: null, inputs: inputs.value });
-  const accepted = harnessAccepted({ map, current, acceptHarness, amendments });
+  const accepted = harnessResult({ map, current, acceptHarness, amendments });
   return accepted.ok ? ok({ accepted: accepted.value, inputs: inputs.value }) : accepted;
 }
+
+export const checkResumable = ({ map, current, acceptHarness = null, amendments = '', settleOnly = false }) => (settleOnly ? settleCheck({ map, current }) : resumable({ map, current, acceptHarness, amendments }));
 
 const anyLaunching = map => Object.values(map.sessions ?? {}).some(s => s.status === 'launching');
 const acceptedInput = (map, current, f) => f in INPUT_FIELDS && (map.inputsAccepted ?? []).some(a => a.file === INPUT_FIELDS[f] && a.sha256 === current[f]);
@@ -140,17 +166,28 @@ function driftedField({ map, current }) {
  * The instrument inputs (quiet.json, package-flags.json) as the disk holds them against the run-map's pins (review N5). A content that differs is accepted only when a dated
  * `instrument | input:<file>:<12 hex>` line of amendments.md names it AND the series holds no data session yet; a content accepted before (`map.inputsAccepted`) stays accepted. -> `ok([newly accepted])` | `fail`.
  */
+const unchanged = (map, current, field, file) => same(map[field], current[field]) || (map.inputsAccepted ?? []).some(a => a.file === file && a.sha256 === current[field]);
+
+const namedInput = (named, file, hash12) => named.find(i => i.file === file && i.hash12 === hash12);
+
+/** One instrument input: `ok(null)` when it is as pinned or accepted before, `ok(entry)` when a dated line newly accepts it, `fail` when it differs and no line may. */
+function inputEntry({ map, current, named, field, file }) {
+  if (unchanged(map, current, field, file)) return ok(null);
+  const sha = current[field];
+  const hash12 = String(sha).slice(0, 12);
+  const line = namedInput(named, file, hash12);
+  if (!line) return fail(`${field} differs from the run-map (${String(map[field]).slice(0, 12)} -> ${hash12}): the series was started under another one, and amendments.md has no dated line \`YYYY-MM-DD | instrument | input:${file}:${hash12} | <reason, with its G-id>\``);
+  if (hasDataSession(map)) return fail(`${file} changed to ${hash12} after a data session exists in this series: an input amendment is for the instrument after the A/A and before pair 1 (contract section 10), so it is refused. Start a new series`);
+  return ok({ file, sha256: sha, hash12, date: line.date, reason: line.reason });
+}
+
 function inputsAccepted({ map, current, amendments }) {
   const named = parseAmendments(amendments ?? '').inputs;
   const accepted = [];
   for (const [field, file] of Object.entries(INPUT_FIELDS)) {
-    const sha = current[field];
-    if (same(map[field], sha) || (map.inputsAccepted ?? []).some(a => a.file === file && a.sha256 === sha)) continue;
-    const hash12 = String(sha).slice(0, 12);
-    const line = named.find(i => i.file === file && i.hash12 === hash12);
-    if (!line) return fail(`${field} differs from the run-map (${String(map[field]).slice(0, 12)} -> ${hash12}): the series was started under another one, and amendments.md has no dated line \`YYYY-MM-DD | instrument | input:${file}:${hash12} | <reason, with its G-id>\``);
-    if (hasDataSession(map)) return fail(`${file} changed to ${hash12} after a data session exists in this series: an input amendment is for the instrument after the A/A and before pair 1 (contract section 10), so it is refused. Start a new series`);
-    accepted.push({ file, sha256: sha, hash12, date: line.date, reason: line.reason });
+    const entry = inputEntry({ map, current, named, field, file });
+    if (!entry.ok) return entry;
+    if (entry.value) accepted.push(entry.value);
   }
   return ok(accepted);
 }

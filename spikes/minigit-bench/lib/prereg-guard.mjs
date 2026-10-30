@@ -64,11 +64,13 @@ async function remotePeel(repo, tag) {
 const blobAt = async (repo, rev, rel) => { const r = await git(repo, ['rev-parse', `${rev}:${INPUTS}/${rel}`]); return r.ok ? r.value.trim() : null; };
 const textAt = async (repo, rev, rel) => { const r = await git(repo, ['show', `${rev}:${INPUTS}/${rel}`]); return r.ok ? r.value : null; };
 
+/** The fields of the crosscheck policy that differ between two texts and are not free to change (`POLICY_FREE`). */
+const changedPolicyFields = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => !POLICY_FREE.includes(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+
 async function policyProblem(repo, commit) {
   const [tagged, head] = await Promise.all([textAt(repo, commit, 'crosscheck-policy.json'), textAt(repo, 'HEAD', 'crosscheck-policy.json')]);
   if (tagged === null || head === null) return null;
-  const [a, b] = [JSON.parse(tagged), JSON.parse(head)];
-  const fields = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => !POLICY_FREE.includes(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  const fields = changedPolicyFields(JSON.parse(tagged), JSON.parse(head));
   return fields.length > 0 ? `crosscheck-policy.json differs from the tag in ${fields.join(', ')}: only t2, t3 and their dated reason may change (S4's T3 commit)` : null;
 }
 
@@ -78,11 +80,18 @@ async function amendmentsProblem(repo, commit) {
   return head !== null && head.startsWith(tagged) ? null : 'amendments.md at HEAD is not the tagged text with lines appended (a registered amendment file is append-only)';
 }
 
+const hashMatches = (head, hash) => hash !== null && sha256(head.trim()) === hash.trim();
+
+/** The sentence for the seed file at HEAD (absent, or not the committed one), or null. */
+function seedFileProblem({ head, hash, requireSeed }) {
+  if (head === null) return requireSeed ? 'seed.txt is required for a data pair and is absent at HEAD: run seed-reveal after the A/A' : null;
+  return hashMatches(head, hash) ? null : 'seed.txt does not hash to seed.sha256';
+}
+
 async function seedProblem(repo, commit, requireSeed) {
   if (await blobAt(repo, commit, SEED_FILE) !== null) return 'seed.txt exists at the tagged commit: the seed must be revealed AFTER the tag';
   const [head, hash] = await Promise.all([textAt(repo, 'HEAD', SEED_FILE), textAt(repo, 'HEAD', 'seed.sha256')]);
-  if (head === null) return requireSeed ? 'seed.txt is required for a data pair and is absent at HEAD: run seed-reveal after the A/A' : null;
-  return hash !== null && sha256(head.trim()) === hash.trim() ? null : 'seed.txt does not hash to seed.sha256';
+  return seedFileProblem({ head, hash, requireSeed });
 }
 
 /** The registered files must not contradict each other: today, the SDK a C# prompt names against the pin. */
@@ -101,28 +110,39 @@ async function amendedInputProblem(repo, file) {
   return named ? null : `${file} differs from the tagged commit and no dated amendments.md line names it: add \`YYYY-MM-DD | instrument | input:${file}:${hash12} | <reason, with its G-id>\``;
 }
 
+/** The sentence for a registered file that is not the tagged one: deleted, differs, or an amendable input that needs its dated line. */
+const changedBlobProblem = (repo, f, head) => (head === null ? `${f} is deleted at HEAD` : AMENDABLE_INPUTS.includes(f) ? amendedInputProblem(repo, f) : `${f} differs from the tagged commit`);
+
+async function plainBlobProblem(repo, commit, f) {
+  const [tagged, head] = await Promise.all([blobAt(repo, commit, f), blobAt(repo, 'HEAD', f)]);
+  if (tagged === null) return `${f} is missing at the tagged commit`;
+  return head === tagged ? null : changedBlobProblem(repo, f, head);
+}
+
 async function blobProblems(repo, commit, requireSeed) {
   const special = new Set(['amendments.md', 'crosscheck-policy.json']);
-  const plain = await Promise.all(PREREG_FILES.filter(f => !special.has(f)).map(async f => {
-    const [tagged, head] = await Promise.all([blobAt(repo, commit, f), blobAt(repo, 'HEAD', f)]);
-    if (tagged === null) return `${f} is missing at the tagged commit`;
-    if (head === tagged) return null;
-    return head === null ? `${f} is deleted at HEAD` : AMENDABLE_INPUTS.includes(f) ? amendedInputProblem(repo, f) : `${f} differs from the tagged commit`;
-  }));
+  const plain = await Promise.all(PREREG_FILES.filter(f => !special.has(f)).map(f => plainBlobProblem(repo, commit, f)));
   return [...plain, await amendmentsProblem(repo, commit), await policyProblem(repo, commit), await seedProblem(repo, commit, requireSeed), ...await consistencyProblems(repo)].filter(Boolean);
 }
 
-async function paidProblems(repo, runMap) {
+/** The problems of the working tree under `spikes/`: it must be clean for a paid launch. */
+async function cleanTreeProblems(repo) {
   const status = await git(repo, ['status', '--porcelain', '--untracked-files=all', '--', 'spikes/']);
-  const problems = !status.ok ? [status.reason] : status.value.trim() === '' ? [] : [`the tree under spikes/ is not clean (${status.value.trim().split('\n').slice(0, 5).join('; ')})`];
-  const identity = await harnessIdentity(repo);
-  if (!identity.ok) return [...problems, identity.reason];
-  const accepted = identity.value === runMap.harnessIdentity || (runMap.harnessAccepted ?? []).includes(identity.value);
-  return accepted ? problems : [...problems, `harnessIdentity ${identity.value.slice(0, 12)} is not the run-map's ${String(runMap.harnessIdentity).slice(0, 12)} and no amendment accepted it (--accept-harness)`];
+  return !status.ok ? [status.reason] : status.value.trim() === '' ? [] : [`the tree under spikes/ is not clean (${status.value.trim().split('\n').slice(0, 5).join('; ')})`];
 }
 
-/** -> `ok(null)` | `fail(reason, { problems })`, every problem named (a file or a field). `paid` adds the clean-tree and harness checks. */
-export async function preregGuard({ repo, runMap, paid, requireSeed = false }) {
+/** The problems of the harness identity: it is the run-map's or an accepted one. */
+async function harnessProblems(repo, runMap) {
+  const identity = await harnessIdentity(repo);
+  if (!identity.ok) return [identity.reason];
+  const accepted = identity.value === runMap.harnessIdentity || (runMap.harnessAccepted ?? []).includes(identity.value);
+  return accepted ? [] : [`harnessIdentity ${identity.value.slice(0, 12)} is not the run-map's ${String(runMap.harnessIdentity).slice(0, 12)} and no amendment accepted it (--accept-harness)`];
+}
+
+const paidProblems = async (repo, runMap) => [...await cleanTreeProblems(repo), ...await harnessProblems(repo, runMap)];
+
+/** The `fail` for a tag that is not on origin, peels to another commit, or is not in this clone; null when the tag is as the run-map pinned it. */
+async function tagProblem(repo, runMap) {
   const peeled = await remotePeel(repo, runMap.preregTag);
   if (!peeled.ok) return fail(peeled.reason, { problems: [peeled.reason] });
   if (peeled.value !== runMap.preregCommit) {
@@ -130,7 +150,13 @@ export async function preregGuard({ repo, runMap, paid, requireSeed = false }) {
     return fail(why, { problems: [why] });
   }
   const local = await git(repo, ['cat-file', '-e', `${runMap.preregCommit}^{commit}`]);
-  if (!local.ok) return fail(`the tagged commit ${runMap.preregCommit.slice(0, 12)} is not in this clone: fetch the tag`, { problems: ['tagged commit not fetched'] });
+  return local.ok ? null : fail(`the tagged commit ${runMap.preregCommit.slice(0, 12)} is not in this clone: fetch the tag`, { problems: ['tagged commit not fetched'] });
+}
+
+/** -> `ok(null)` | `fail(reason, { problems })`, every problem named (a file or a field). `paid` adds the clean-tree and harness checks. */
+export async function preregGuard({ repo, runMap, paid, requireSeed = false }) {
+  const refused = await tagProblem(repo, runMap);
+  if (refused) return refused;
   const problems = [...await blobProblems(repo, runMap.preregCommit, requireSeed), ...(paid ? await paidProblems(repo, runMap) : [])];
   return problems.length === 0 ? ok(null) : fail(`the pre-registration guard refuses: ${problems.join('; ')}`, { problems });
 }
