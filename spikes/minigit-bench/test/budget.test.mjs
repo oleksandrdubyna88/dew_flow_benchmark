@@ -124,3 +124,18 @@ test('The_cap_is_soft_and_a_session_over_1_1_times_it_is_flagged_with_the_exact_
   assert.deepEqual(capStatus({ spentUsd: 0.21, capUsd: 0.2 }), { overCap: false, overshootUsd: 0.01, withinCap: false }, 'between 1.0 and 1.1 x the cap: over, but inside the series gate');
   assert.deepEqual(capStatus({ spentUsd: 0.2, capUsd: 0.2 }), { overCap: false, overshootUsd: 0, withinCap: true });
 });
+
+test('A_floored_settlement_charges_the_larger_of_the_parsed_usage_and_the_reservation_and_usage_without_a_model_is_priced_at_the_dearest_rates', () => {
+  const entry = { seq: 1, reserveUsd: 0.05 };
+  const at = openState();
+  const held = reserve(at, 0.05);
+  const big = settle({ state: held, entry, usage: { input_tokens: 200000, output_tokens: 1 }, model: 'claude-sonnet-5-5', table, cliVersion: '2.1.310', floor: true });
+  assert.ok(big.line.chargedUsd >= 0.4, 'a partial usage above the reservation is charged in full');
+  const small = settle({ state: held, entry, usage: { input_tokens: 10, output_tokens: 1 }, model: 'claude-sonnet-5-5', table, cliVersion: '2.1.310', floor: true });
+  assert.equal(small.line.chargedUsd, 0.05, 'a cut never charges less than it reserved');
+  const noModel = settle({ state: held, entry, usage: { input_tokens: 200000, output_tokens: 1 }, model: null, table, cliVersion: '2.1.310', floor: true });
+  assert.equal(noModel.line.priced.known, false);
+  assert.ok(noModel.line.chargedUsd >= big.line.chargedUsd, 'with no model the dearest known rates apply');
+  const none = settle({ state: held, entry, usage: null, model: null, table, cliVersion: '2.1.310', floor: true });
+  assert.equal(none.line.chargedUsd, 0.05, 'nothing parsed: the reservation');
+});

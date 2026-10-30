@@ -204,6 +204,50 @@ test('An_upstream_that_drops_the_connection_after_the_request_was_sent_answers_5
   }
 });
 
+/** An SSE `message_start` event carrying `usage` for `model`. */
+const messageStart = (model, usage) => `event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: { model, usage } })}\n\n`;
+
+test('A_stream_cut_after_message_start_is_charged_the_usage_already_parsed_never_less_than_the_reservation', async () => {
+  // the reviewer's probe: 200k Sonnet input tokens announced, then the connection is reset. The API bills what it read: 200k x the input rate
+  // is far above the 0.05 reservation, and throwing the parsed usage away undercounted the cell.
+  const stub = await stubUpstream((_q, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write(messageStart('claude-sonnet-5-5', { input_tokens: 200000, output_tokens: 1 })); setTimeout(() => res.socket.destroy(), 60); });
+  const b = await startBroker({ stub, capUsd: 10 });
+  try {
+    await viaSocket(b.socketPath).catch(() => {});
+    await b.broker.drain(3000);
+    const settled = b.lines.filter(l => l.event === 'settled');
+    assert.equal(settled.length, 1);
+    assert.equal(settled[0].priced.known, true, 'priced from the usage already parsed');
+    assert.ok(settled[0].chargedUsd >= 0.4, `charged ${settled[0].chargedUsd}: 200k Sonnet input tokens are at least 0.40`);
+    assert.equal(b.broker.summary().spentUsd, settled[0].chargedUsd);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
+test('A_stream_cut_after_a_small_message_start_is_charged_at_least_the_reservation_and_a_cut_with_an_unknown_model_at_the_dearest_rates', async () => {
+  const cut = model => async () => {
+    const stub = await stubUpstream((_q, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write(messageStart(model, { input_tokens: 10, output_tokens: 1 })); setTimeout(() => res.socket.destroy(), 60); });
+    const b = await startBroker({ stub, capUsd: 10 });
+    try {
+      await viaSocket(b.socketPath).catch(() => {});
+      await b.broker.drain(3000);
+      return b.lines.find(l => l.event === 'settled');
+    } finally {
+      await b.close();
+      await stub.close();
+    }
+  };
+  const small = await cut('claude-sonnet-5-5')();
+  assert.equal(small.priced.known, true);
+  assert.equal(small.chargedUsd, 0.05, 'ten tokens cost a fraction of a cent: the reservation is the floor');
+  const unknown = await cut('claude-not-in-the-table-9')();
+  assert.equal(unknown.priced.known, false);
+  assert.equal(unknown.priced.why, 'unpriced model: dearest known rates');
+  assert.ok(unknown.chargedUsd >= 0.05);
+});
+
 test('An_upstream_that_cannot_be_dialled_answers_502_and_charges_nothing_because_no_byte_was_sent', async () => {
   const stub = await stubUpstream(ok => ok);
   await stub.close();

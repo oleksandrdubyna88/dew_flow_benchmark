@@ -139,11 +139,11 @@ function makeLedger({ budget, prices, cliVersion, log }) {
         idleWaiters.add(done);
       });
     },
-    /** Settle once; a second call for the same entry is a no-op. */
-    settle(entry, model, usage, note, waive = null) {
+    /** Settle once; a second call for the same entry is a no-op. `floor`: charge at least the reservation (see budget.settle). */
+    settle(entry, model, usage, note, waive = null, floor = false) {
       if (entry.settled) return;
       entry.settled = true;
-      const r = settle({ state, entry, usage, model, table: prices, cliVersion, waive });
+      const r = settle({ state, entry, usage, model, table: prices, cliVersion, waive, floor });
       state = r.state;
       if (state.inFlight === 0) { idleWaiters.forEach(wake => wake()); idleWaiters.clear(); }
       emit({ seq: entry.seq, event: 'settled', ...r.line, elapsedMs: Date.now() - entry.startedAt, ...note });
@@ -156,14 +156,15 @@ function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) 
   const { entry } = opened;
   const headers = { ...forwardHeaders(req.headers, hostHeader(upstream)), authorization: `Bearer ${token}` };
   ledger.emit({ seq: entry.seq, event: 'forwarding', method: req.method, path: req.url, headerNames: names, reserveUsd: entry.reserveUsd, inFlight: opened.inFlight, reservedUsd: opened.reservedUsd });
+  const progress = { partial: null }; // set once the answer has started: reads what the usage parser has so far
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
-    upRes => answer(upRes, res, entry, ledger));
+    upRes => answer(upRes, res, entry, ledger, progress));
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
   let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
   up.on('finish', () => { sent = true; });
   up.on('error', e => {
     ledger.emit({ seq: entry.seq, event: 'upstream-error', code: e.code ?? e.message, requestSent: sent });
-    ledger.settle(entry, null, null, { error: e.code ?? e.message }, sent ? null : 'no byte was sent upstream');
+    settleOnError(ledger, entry, progress, { error: e.code ?? e.message }, sent ? null : 'no byte was sent upstream');
     if (!res.headersSent) res.writeHead(502, { connection: 'close' });
     res.end();
   });
@@ -171,8 +172,18 @@ function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) 
   req.pipe(up);
 }
 
+/**
+ * Settle a request that failed. Before any answer there is nothing parsed: the reservation (or 0 for a request provably never sent). After the answer began, the
+ * usage the parser already holds is priced and charged, never less than the reservation: the API bills what it read, and a reset must not erase it.
+ */
+function settleOnError(ledger, entry, progress, note, waive = null) {
+  const partial = progress.partial?.() ?? null;
+  if (partial === null) return ledger.settle(entry, null, null, note, waive);
+  return ledger.settle(entry, partial.model, partial.usage, { ...note, partialUsage: partial.usage !== null }, null, true);
+}
+
 /** Relay the upstream's answer: a 3xx is refused (502); otherwise status, headers and body as they arrive, usage parsed on the way. */
-function answer(upRes, res, entry, ledger) {
+function answer(upRes, res, entry, ledger, progress) {
   const status = upRes.statusCode ?? 0;
   if (status >= 300 && status < 400) {
     ledger.emit({ seq: entry.seq, event: 'redirect-refused', status, location: upRes.headers.location ?? null });
@@ -185,6 +196,7 @@ function answer(upRes, res, entry, ledger) {
   const sse = /text\/event-stream/.test(upRes.headers['content-type'] ?? '');
   const parser = parseSseUsage();
   const chunks = [];
+  progress.partial = () => (sse ? parser.result() : { model: null, usage: null });
   let clientClosedEarly = false;
   res.on('close', () => { if (!res.writableFinished) clientClosedEarly = true; }); // the upstream is billed whatever the client does: keep reading it
   res.writeHead(status, upRes.headers);
@@ -197,10 +209,12 @@ function answer(upRes, res, entry, ledger) {
     const { model, usage, apiError = false } = sse ? parser.result() : readJsonBody(chunks);
     ledger.settle(entry, model, usage, { status, sse, clientClosedEarly }, unbilledAnswer(status, apiError));
   });
-  upRes.on('error', e => {
-    ledger.settle(entry, null, null, { status, error: e.code ?? e.message, clientClosedEarly });
+  const failed = e => {
+    settleOnError(ledger, entry, progress, { status, error: e.code ?? e.message, clientClosedEarly });
     if (!res.writableFinished) res.destroy();
-  });
+  };
+  upRes.on('error', failed);
+  upRes.on('aborted', () => failed(new Error('aborted')));
 }
 
 /**

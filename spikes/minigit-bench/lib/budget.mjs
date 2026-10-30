@@ -49,10 +49,10 @@ const highEnd = priced => (typeof priced === 'number' ? priced : priced.high);
 
 /** `{ known: true, usd[, range] } | { known: false, usd, model, why } (an unpriced model, charged) | { known: false, why }` (nothing to charge but the reservation). An unsplit write is priced at the high end of its interval: a cap is never undercounted. */
 function pricedOf({ usage, model, table }) {
-  if (!model || !usage) return { known: false, why: 'no usage parsed' };
+  if (!usage) return { known: false, why: 'no usage parsed' };
   const tokens = tokensOf(usage);
   if (!tokens) return { known: false, why: 'the usage block holds a count that is not a count' };
-  const price = priceFor(table, model);
+  const price = model ? priceFor(table, model) : { known: false }; // usage with no model name is an unknown model: dearest rates
   // fail safe: a model the table does not hold is charged at the dearest known rate of every token class, flagged (`known: false` with its `usd`),
   // never at the reservation, which undercounted a 0.116565 request as 0.05. A cap must not err downwards.
   if (!price.known) return { known: false, usd: highEnd(priceUsage(dearestPrice(table), tokens)), model, why: 'unpriced model: dearest known rates' };
@@ -63,15 +63,17 @@ function pricedOf({ usage, model, table }) {
 /**
  * Settle one request -> `{ state, line }`: the reservation released, the charge added; `line` is the ledger's pricing part.
  * `waive` is the reason a request is known not to have been billed (the charge is then 0, recorded as known), or absent.
+ * `floor` is for a request the API may have billed in part (a stream cut after it began): the charge is then the larger of the usage already
+ * parsed, priced, and the reservation, so a partial usage never undercounts and a cut never charges less than it reserved.
  */
-export function settle({ state, entry, usage, model, table, cliVersion, waive = null }) {
+export function settle({ state, entry, usage, model, table, cliVersion, waive = null, floor = false }) {
   let priced;
   try {
     priced = waive === null ? pricedOf({ usage, model, table: asTheCliBills(table, cliVersion) }) : { known: true, usd: 0, why: waive };
   } catch (e) {
     priced = { known: false, why: `pricing failed: ${e.message}` }; // a pricing bug must cost a reservation, not the broker
   }
-  const chargedUsd = priced.usd ?? entry.reserveUsd;
+  const chargedUsd = floor ? Math.max(priced.usd ?? 0, entry.reserveUsd) : priced.usd ?? entry.reserveUsd;
   const next = Object.freeze({
     spentUsd: round9(state.spentUsd + chargedUsd), reservedUsd: Math.max(0, round9(state.reservedUsd - entry.reserveUsd)), inFlight: Math.max(0, state.inFlight - 1),
     largestChargeUsd: Math.max(state.largestChargeUsd, chargedUsd),

@@ -309,7 +309,9 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   total, never one bare count. It holds the cell's own budget: a request reserves the larger of the floor (0.05) and the largest charge
   settled so far in the cell (never sized from `max_tokens`, which the CLI sets to 32k-128k), is admitted while spend plus reservations plus
   its own stays within the cap, and settles priced from the parsed usage with `asTheCliBills`. The reservation is the charge only when nothing
-  parsed on a 2xx, a stream was cut, or a connection dropped after the request was sent; **an upstream error answer (status >= 400 with the API's
+  parsed on a 2xx, or a connection dropped before any answer after the request was sent. **A stream cut or reset after the answer began is charged the
+  usage already parsed** (`parser.result()`), priced (at the dearest known rates when the model is unknown or absent), and **never less than the
+  reservation** (`budget.settle` with `floor`; before: the parsed usage was thrown away, and 200k Sonnet input tokens followed by a reset cost 0.05 instead of 0.40); **an upstream error answer (status >= 400 with the API's
   JSON `type: "error"` body) and a dial that failed before the request was sent charge 0** (`priced: { known: true, usd: 0, why }`), so four
   `529` answers do not use the cap. A disconnecting client is still charged: `drain(timeoutMs)` waits (ceiling 120 s) until nothing is in
   flight, and the collection calls it before it writes `broker.json` and `meta.json`, recording `unsettledAtClose { count, reservedUsd }`. The
@@ -403,6 +405,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | An abandoned request is drained and priced before the ledger is read (before: recorded as 0 spent) | `broker.test.mjs`, `session-launch.test.mjs` |
 | A link planted at `box/out/audit.ndjson` is refused at every host-side read (before: its target was copied as the audit) | `agent-files-sites.test.mjs`, `agent-files.test.mjs` |
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
+| A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 
 #### The first re-smoke (2026-10-30, after the review fixes; NOT the committed fixture)
