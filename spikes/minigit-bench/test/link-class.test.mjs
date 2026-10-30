@@ -123,11 +123,62 @@ test('A_dotdot_after_a_link_is_never_inside_because_the_kernel_resolves_it_after
   const r = plantedIn(s, s.layout.work, 'evil', 'sub/../etc/passwd');
   assert.equal(r.severity, 'high', JSON.stringify(r));
   assert.match(r.why, /\.\./);
-  // the same with no link in the way is refused as well: the rule is about the string, not about what a lexical read happens to find
+  // with no link in the way the kernel and a lexical read agree, so a relative `..` that stays in the bind is inside (see the npm .bin test below)
   const plain = plantedIn(s, s.layout.work, 'plain', 'etc/../etc/passwd');
-  assert.equal(plain.severity, 'high', 'no `..` segment is accepted');
+  assert.equal(plain.severity, 'inside', JSON.stringify(plain));
+  // a `..` that leaves the bind it started in is high, even toward another bind of the same session
   const out = plantedIn(s, s.layout.out, 'up', '../work/etc/passwd');
-  assert.equal(out.severity, 'high', 'a relative `..` target is high');
+  assert.equal(out.severity, 'high', 'a relative `..` target that leaves its bind is high');
+  assert.match(out.why, /bind/);
+  // and the walk does not stop at the first `..`: `d` is a link, so `d/../f` is whatever the kernel finds above the link's TARGET
+  symlinkSync(tmpDir('lc-d5'), path.join(s.layout.work, 'd'));
+  writeFileSync(path.join(s.layout.work, 'f'), 'x');
+  const afterLink = plantedIn(s, s.layout.work, 'via-d', 'd/../f');
+  assert.equal(afterLink.severity, 'high', JSON.stringify(afterLink));
+  assert.match(afterLink.why, /link/);
+  // an absolute target with a `..` stays high: only a relative one is resolved from a directory the checks cover
+  const abs = plantedIn(s, s.layout.out, 'abs-dotdot', `${path.join(s.layout.work, 'etc')}/../etc/passwd`); // built as a string: path.join would normalise the `..` away
+  assert.equal(abs.severity, 'high', JSON.stringify(abs));
+});
+
+test('The_npm_bin_shape_is_inside_a_relative_dotdot_target_within_one_bind_when_no_directory_on_the_way_is_a_link', () => {
+  const s = session();
+  // what `npm install typescript` writes: node_modules/.bin/tsc -> ../typescript/bin/tsc
+  const pkg = path.join(s.layout.work, 'node_modules', 'typescript', 'bin');
+  mkdirSync(pkg, { recursive: true });
+  writeFileSync(path.join(pkg, 'tsc'), '#!/usr/bin/env node\n');
+  const r = plantedIn(s, path.join(s.layout.work, 'node_modules', '.bin'), 'tsc', '../typescript/bin/tsc');
+  assert.equal(r.severity, 'inside', JSON.stringify(r));
+  assert.equal(r.target, path.join(s.layout.work, 'node_modules', 'typescript', 'bin', 'tsc'), 'reported as the box path the kernel reaches');
+  // the same shape one directory deeper (scoped packages: .bin/x -> ../@scope/pkg/bin/x, and a `..` pair)
+  const deep = path.join(s.layout.work, 'node_modules', '@s', 'p', 'bin');
+  mkdirSync(deep, { recursive: true });
+  writeFileSync(path.join(deep, 'x'), 'x');
+  assert.equal(plantedIn(s, path.join(s.layout.work, 'node_modules', '.bin'), 'x', '../@s/p/bin/x').severity, 'inside');
+  assert.equal(plantedIn(s, deep, 'y', '../../../typescript/bin/tsc').severity, 'inside', 'three `..` from a deeper directory');
+  // the same shape with the directory a link instead of a real directory is high
+  const elsewhere = tmpDir('lc-d6');
+  mkdirSync(path.join(elsewhere, 'bin'));
+  writeFileSync(path.join(elsewhere, 'bin', 'tsc'), 'x');
+  symlinkSync(elsewhere, path.join(s.layout.work, 'node_modules', 'linked'));
+  assert.equal(plantedIn(s, path.join(s.layout.work, 'node_modules', '.bin'), 'bad', '../linked/bin/tsc').severity, 'high');
+  // and a target that is not there is dangling
+  assert.equal(plantedIn(s, path.join(s.layout.work, 'node_modules', '.bin'), 'gone', '../nothing/bin/x').severity, 'high');
+});
+
+test('A_relative_target_inside_the_box_tmp_is_inside_because_the_link_and_its_target_move_together_but_an_absolute_tmp_path_is_not', () => {
+  const s = session();
+  const dir = path.join(s.layout.tmp, 'claude-1000', 'work', 'sid');
+  mkdirSync(path.join(dir, 'a'), { recursive: true });
+  mkdirSync(path.join(dir, 'b'), { recursive: true });
+  writeFileSync(path.join(dir, 'b', 'f'), 'x');
+  const rel = plantedIn(s, path.join(dir, 'a'), 'l', '../b/f');
+  assert.equal(rel.severity, 'inside', JSON.stringify(rel));
+  assert.equal(rel.target, '/tmp/claude-1000/work/sid/b/f', 'reported in box paths');
+  assert.equal(plantedIn(s, path.join(dir, 'a'), 'm', 'x-gone').severity, 'high');
+  assert.equal(plantedIn(s, path.join(dir, 'a'), 'abs', '/tmp/claude-1000/work/sid/b/f').severity, 'high', 'the same file by its absolute box path is the HOST path for a host reader');
+  // out of the tmp bind by `..` is high
+  assert.equal(plantedIn(s, path.join(dir, 'a'), 'up', '../../../../../../work/x').severity, 'high');
 });
 
 test('A_target_under_the_box_tmp_is_never_inside_because_the_host_reads_an_absolute_tmp_as_its_own', () => {
