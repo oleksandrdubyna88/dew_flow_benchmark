@@ -89,7 +89,7 @@ test('The_refusals_name_what_to_do', async () => {
   const dir = series();
   const bad = await run(['run', '--series', dir, '--what', 'pair:9', '--dry-run']);
   assert.equal(bad.code, 4);
-  assert.match(bad.out, /--what aa \| pilot-node \| pair/);
+  assert.match(bad.out, /--what aa \| pilot-node \| rehearse-v2 \| pair/);
   assert.equal(parseWhat('pair:3').pair, 3);
   assert.equal(parseWhat('pair:4'), null);
   assert.deepEqual(parseWhat('aa'), { kind: 'aa' });

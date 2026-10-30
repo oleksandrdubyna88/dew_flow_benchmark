@@ -82,6 +82,7 @@ async function gates({ ctx, deps, step, state, h, say, signal }) {
   const pre = await deps.preflight();
   if (!pre.ok) return done(EXIT.halt, `the preflight refuses: ${pre.reason}`);
   if (signal?.aborted) return cancelled(ctx, 'in the gates');
+  if (ctx.kind === 'rehearsal') return null; // a rehearsal measures nothing and pays nothing: no quiet check, no spend gate
   const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null, cellIds: cellIdsOf(h), say, signal });
   if (signal?.aborted) return cancelled(ctx, 'in the quiet check');
   if (!quiet.ok) return done(EXIT.halt, quiet.reason, { verdict: quiet.verdict });
@@ -142,7 +143,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     if (!collected.ok) { failures.push(`collecting ${s.rid} failed: ${collected.reason}`); continue; }
     const { outcome, usd, costCaptured } = collected.value;
     if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
-    appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd, what: outcome.class, rid: s.rid, costCaptured, t: new Date(deps.now()).toISOString() });
+    appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd: ctx.kind === 'rehearsal' ? 0 : usd, what: outcome.class, rid: s.rid, costCaptured, t: new Date(deps.now()).toISOString() });
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity };
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [], workspaceExcluded: s.workspace.excludedDirs ?? null }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);
@@ -189,7 +190,8 @@ async function runScore({ ctx, deps, h, step, say, signal }) {
  */
 export async function runLoop({ ctx: given, deps, map, signal, say = () => {} }) {
   const h = holder({ ctx: given, map });
-  const ctx = { ...given, v1WorkOf: s => layoutPaths(given.sessionsRoot, finalSession(h.get(), given.pair, s.stack, 'v1').rid).work };
+  // the v1 tree a v2 phase starts from: the pair's final v1 session, or for the v2 rehearsal the A/A twin's
+  const ctx = { ...given, v1WorkOf: s => layoutPaths(given.sessionsRoot, given.kind === 'rehearsal' ? given.rehearsalOf : finalSession(h.get(), given.pair, s.stack, 'v1').rid).work };
   const state = { quiet: null, sampler: null, v1Quiet: h.get().pairs?.[ctx.pair]?.v1Quiet ?? null };
   for (let guard = 0; guard < 60; guard += 1) {
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };

@@ -5,6 +5,7 @@
 //   node spikes/minigit-bench/bare-runner.mjs snapshot --stack csharp|node [--register]         makes one cache snapshot (registries only, free); --register writes its record into inputs/cache-snapshots.json
 //   node spikes/minigit-bench/bare-runner.mjs seed-commit | seed-reveal                         the bare seed as commit-reveal
 //   node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what aa|pilot-node|pair:<k> [--dry-run] [--accept-noisy <reason>]    SPENDS MONEY (unless --dry-run)
+//   node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what rehearse-v2 [--dry-run]                                       FREE: the v2 path on an A/A twin's tree with a stub CLI and a fake token (G-14)
 //   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> [--what ...] [--accept-harness <identity> --amendment <date>] [--after-stop <rule> --reason <text>]
 //   node spikes/minigit-bench/bare-runner.mjs status --series <dir>
 //
@@ -26,6 +27,7 @@ import { buildRun, REPO, sampleOnceFor, SPIKE } from './lib/bare-config.mjs';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
 import { checkPins, recordAfterStop } from './lib/bare-pins.mjs';
+import { rehearsalRefusal, rehearseV2, twinOf } from './lib/rehearsal.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
 import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
 import { planSession, readRunMap } from './lib/run-map.mjs';
@@ -46,7 +48,7 @@ const defaults = {
 };
 
 const PAIR = /^pair:([1-3])$/;
-export const parseWhat = what => (what === 'aa' || what === 'pilot-node' ? { kind: what === 'aa' ? 'aa' : 'pilot' } : PAIR.test(what ?? '') ? { kind: 'data', pair: Number(PAIR.exec(what)[1]) } : null);
+export const parseWhat = what => (what === 'rehearse-v2' ? { kind: 'rehearsal' } : what === 'aa' || what === 'pilot-node' ? { kind: what === 'aa' ? 'aa' : 'pilot' } : PAIR.test(what ?? '') ? { kind: 'data', pair: Number(PAIR.exec(what)[1]) } : null);
 
 /** The fixed sessions of the A/A (two identical bare C# v1 twins on masks 0-5 and 8-13) or the Node pilot (one bare Node v1), planned once. */
 function planFixed(map, kind, random = () => randomBytes(4).toString('hex')) {
@@ -120,8 +122,10 @@ async function cmdRun(v, write, { resume }, seams = {}) {
   const read = readRunMap(path.join(seriesDir, 'run-map.json'));
   if (!v.series || !read.ok) { write(`usage error: --series <dir> with a run-map.json (${read.reason ?? 'missing'})`); return EXIT.config; }
   const what = parseWhat(v.what ?? whatOfMap(read.value));
-  if (!what) { write('usage error: --what aa | pilot-node | pair:<1-3>'); return EXIT.config; }
+  if (!what) { write('usage error: --what aa | pilot-node | rehearse-v2 | pair:<1-3>'); return EXIT.config; }
   const dry = v['dry-run'] === true;
+  const rehearsing = what.kind === 'rehearsal';
+  if (rehearsing && rehearsalRefusal(read.value)) { write(rehearsalRefusal(read.value)); return EXIT.config; }
   const inputsDir = v['inputs-dir'] ? path.resolve(v['inputs-dir']) : path.join(SPIKE, 'inputs');
   let map = read.value;
   if (!dry) {
@@ -134,9 +138,10 @@ async function cmdRun(v, write, { resume }, seams = {}) {
     map = pins.value.map;
     if (resume) map = recordAfterStop({ map, rule: v['after-stop'], reason: v.reason, runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson') });
   }
-  const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry, seams });
+  const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry && !rehearsing, seams }); // a rehearsal never reads the token file
   if (!built.ok) { write(`cannot start: ${built.reason}`); return EXIT.config; }
   const { ctx, deps, abort } = built.value;
+  if (dry && rehearsing) { write(`rehearse-v2: would rehearse the v2 path on the tree of twin ${twinOf(map).rid}: a v2 workspace filled from it, a stub CLI in the real box behind the real broker (a loopback stub upstream, a fake token), the real scorer at phase v2, then G-14; nothing is paid and no real token is read`); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
   if (dry) { dryRunLines({ map, ctx, what }).forEach(write); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
   const ctl = new AbortController();
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { abort.reason = sig; abort.exit = code; ctl.abort(); });
@@ -144,6 +149,11 @@ async function cmdRun(v, write, { resume }, seams = {}) {
     const settled = await reconcile({ ctx, deps, map, say: write });
     if (!settled.ok) { write(`resume: ${settled.reason}`); return settled.exit ?? EXIT.failed; }
     map = settled.value;
+  }
+  if (rehearsing) {
+    const rehearsed = await rehearseV2({ ctx, deps, map, signal: ctl.signal, say: write });
+    write(`${rehearsed.exit === EXIT.done ? 'done' : 'halted'}: ${rehearsed.message}`);
+    return rehearsed.exit;
   }
   if (what.kind !== 'data' && Object.values(map.sessions).every(s => s.kind !== what.kind)) map = planFixed(map, what.kind);
   const r = await runLoop({ ctx, deps: { ...deps, phase: deps.phase }, map, signal: ctl.signal, say: write });
