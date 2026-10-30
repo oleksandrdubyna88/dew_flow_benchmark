@@ -113,6 +113,16 @@ public sealed class StepRecoveryTests
     }
 
     [Fact]
+    public void A_wall_is_clamped_before_it_is_summed_so_none_throws_or_subtracts()
+    {
+        IReadOnlyList<TimingLine> Walls(params long[] walls) => [.. walls.Select((wall, index) => Ended(Step, index + 1, 0) with { WallSeconds = CapturedCount.Number(wall) })];
+
+        StepBudget.UsedSeconds(Walls(9_000_000_000_000_000_000, 9_000_000_000_000_000_000), Step).Should().Be(int.MaxValue, "a huge wall counts as the largest and the sum never overflows");
+        StepBudget.UsedSeconds(Walls(600, -3600), Step).Should().Be(600, "a negative wall counts as 0 and never subtracts from another attempt's");
+        StepBudget.RemainingSeconds(40, Walls(9_000_000_000_000_000_000), Step, 300).Should().Be(300);
+    }
+
+    [Fact]
     public void Timing_of_a_real_arm_reads_back_every_line()
     {
         var lines = TimingLines.Read(ModelArmsFixtures.Read("timing-arm-C.jsonl"));

@@ -6,10 +6,10 @@ namespace ModelArms.Core.Steps;
 /// chance to say something. A pure function of the timing lines; the shell's <c>used_seconds</c> read the same file the same way (<c>run-arm.sh</c> of the part-6 experiment).</summary>
 public static class StepBudget
 {
-    /// <summary>The sum of <c>wall_s</c> over the <c>end</c> lines of <paramref name="step"/> that were not limited and whose wall was captured. A start with no end spends nothing (the shell of part 5 guessed
+    /// <summary>The sum of <c>wall_s</c> over the <c>end</c> lines of <paramref name="step"/> that were not limited and whose wall was captured, each wall clamped to [0, int.MaxValue] BEFORE the sum — a negative wall counts as 0 and never subtracts, a huge one never overflows. A start with no end spends nothing (the shell of part 5 guessed
     /// from the stream file's mtime; this build does not), a <c>gate-wait</c> line spends nothing, and a wall that was not captured is not a wall of zero seconds.</summary>
     public static int UsedSeconds(IReadOnlyList<TimingLine> timing, string step) =>
-        (int)Math.Clamp(timing.OfType<TimingLine.End>().Where(end => end.Step == step && !end.Limited && end.WallSeconds.WasCaptured).Sum(end => end.WallSeconds.Value), 0, int.MaxValue);
+        (int)Math.Min(timing.OfType<TimingLine.End>().Where(end => end.Step == step && !end.Limited && end.WallSeconds.WasCaptured).Sum(end => Math.Clamp(end.WallSeconds.Value, 0, int.MaxValue)), int.MaxValue);
 
     /// <summary><c>max(minutes · 60 − used, floorSeconds)</c> (<c>run-arm.sh:84</c>): the floor is the configured minimum, 300 s by default.</summary>
     public static int RemainingSeconds(int minutes, IReadOnlyList<TimingLine> timing, string step, int floorSeconds) =>
