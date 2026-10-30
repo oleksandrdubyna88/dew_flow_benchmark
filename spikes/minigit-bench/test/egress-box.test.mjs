@@ -9,7 +9,7 @@ import { EGRESS_HOSTS } from '../lib/egress-hosts.mjs';
 import { brokerServer } from '../lib/broker.mjs';
 import { prices, fakeToken } from './broker-stub.mjs';
 import { envFor, hostHas, newSession, onHost, probeInit, TS_DIR } from './box-helpers.mjs';
-import { sandboxGate } from './helpers.mjs';
+import { hostLacks, sandboxGate } from './helpers.mjs';
 
 /** Whether the host reaches api.nuget.org:443 (the positive control of an allowed host). */
 async function hostHasNetwork() {
@@ -31,7 +31,7 @@ async function withProxy(allow, fn) {
 
 test('The_proxy_allows_only_the_listed_hosts_on_443', async t => {
   if (!sandboxGate(t)) return;
-  if (!await hostHasNetwork()) { t.skip('the host cannot reach https://api.nuget.org: the positive control of an allowed host is unavailable'); return; }
+  if (!await hostHasNetwork()) return hostLacks(t, 'the host cannot reach https://api.nuget.org: the positive control of an allowed host is unavailable');
   await withProxy(['api.nuget.org'], async ({ layout, lines }) => {
     const code = url => `curl -s -o /dev/null -m 20 -w '%{http_code}' ${url}; echo " rc=$?"`;
     const r = await probeInit(layout, [code('https://api.nuget.org/v3/index.json'), code('https://example.com/'), code('https://api.anthropic.com/')].join('\n'));
@@ -45,7 +45,7 @@ test('The_proxy_allows_only_the_listed_hosts_on_443', async t => {
 
 test('Plain_HTTP_is_refused_and_the_restore_does_not_need_it', async t => {
   if (!sandboxGate(t)) return;
-  if (!hostHas('dotnet') || !await hostHasNetwork()) { t.skip('needs dotnet on PATH and the network (api.nuget.org) on this host'); return; }
+  if (!hostHas('dotnet') || !await hostHasNetwork()) return hostLacks(t, 'needs dotnet on PATH and the network (api.nuget.org) on this host');
   await withProxy(EGRESS_HOSTS.bare, async ({ layout, lines }) => {
     writeProject(layout);
     const gets = "curl -s -o /dev/null -m 20 -w '%{http_code}' -x \"$HTTP_PROXY\" http://example.com/; echo ' via-proxy'; curl -s -o /dev/null -m 20 -w '%{http_code}' --noproxy '' http://127.0.0.1:3128/; echo ' direct'";
@@ -64,7 +64,7 @@ test('Plain_HTTP_is_refused_and_the_restore_does_not_need_it', async t => {
 
 test('Npm_and_dotnet_restore_through_the_proxy_from_inside_the_box', async t => {
   if (!sandboxGate(t)) return;
-  if (!hostHas('dotnet') || !hostHas('npm') || !await hostHasNetwork()) { t.skip('needs dotnet, npm and the network on this host'); return; }
+  if (!hostHas('dotnet') || !hostHas('npm') || !await hostHasNetwork()) return hostLacks(t, 'needs dotnet, npm and the network on this host');
   await withProxy(EGRESS_HOSTS.bare, async ({ layout, lines }) => {
     writeProject(layout);
     const script = [

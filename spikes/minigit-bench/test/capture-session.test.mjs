@@ -12,7 +12,7 @@ import { copyTranscripts, killTree, runCapture } from '../capture/capture-run.mj
 import { startSink } from '../capture/otlp-sink.mjs';
 import { sanitiseCapture } from '../capture/capture-files.mjs';
 import { defaultWorkRoot, heldoutSrcDir } from '../lib/heldout-run.mjs';
-import { spikeDir, tmpDir } from './helpers.mjs';
+import { hostLacks, spikeDir, tmpDir } from './helpers.mjs';
 import { parseLines } from './synth.mjs';
 
 const SESSION = path.join(spikeDir, 'capture', 'capture-session.mjs');
@@ -472,7 +472,7 @@ const openFdsOf = file => readdirSync('/proc/self/fd').flatMap(fd => {
 });
 
 test('The_sink_holds_one_append_mode_stream_while_it_runs_and_none_after_it_stops', async t => {
-  if (!existsSync('/proc/self/fdinfo')) { t.skip('/proc/self/fdinfo is missing: open descriptors cannot be inspected here'); return; }
+  if (!existsSync('/proc/self/fdinfo')) return hostLacks(t, '/proc/self/fdinfo is missing: open descriptors cannot be inspected here');
   const dir = tmpDir('sink');
   const sink = await startSink({ dir });
   const post = body => fetch(`http://127.0.0.1:${sink.port}/v1/logs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });

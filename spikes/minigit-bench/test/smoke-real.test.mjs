@@ -10,7 +10,7 @@ import { readSecretFile } from '../lib/secrets.mjs';
 import { scanSessionDir } from '../lib/session-scan.mjs';
 import { loadSmoke } from '../lib/smoke-load.mjs';
 import { SMOKE_ASSUMPTIONS, computeSmokeVerdicts } from '../lib/smoke-verdicts.mjs';
-import { spikeDir } from './helpers.mjs';
+import { hostLacks, spikeDir } from './helpers.mjs';
 
 const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
 const REQUIRED_HOLDS = ['B-R1', 'B-R2', 'B-N1', 'B-N2', 'B-S2', 'B-S3', 'B-$1', 'B-O1', 'B-T1', 'B-E1', 'B-A1', 'B-A3', 'B-K1', 'B-C1'];
@@ -59,7 +59,7 @@ test('A_token_file_with_anything_but_the_dummy_or_nothing_refutes_B_S3', () => {
 
 test('The_committed_smoke_fixture_holds_neither_the_real_token_nor_the_session_dummy', t => {
   const token = readSecretFile({ home: os.homedir(), parts: TOKEN_FILE_PARTS, label: 'token' });
-  if (!token.ok) { t.skip(`the operator's token file is unusable on this host (${token.reason}): the scan for it cannot run`); return; }
+  if (!token.ok) return hostLacks(t, `the operator's token file is unusable on this host (${token.reason}): the scan for it cannot run`);
   const smoke = loadSmoke(FIXTURE).value;
   const dummyHash = smoke.checks.tokenTxt.dummySha256;
   assert.match(dummyHash, /^[0-9a-f]{64}$/);

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { agentBoxPrefix } from '../lib/sandbox.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { TS_DIR, boxOptions, envFor, hostHas, newSession, probe, probeArgv } from './box-helpers.mjs';
-import { homeDir, sandboxGate } from './helpers.mjs';
+import { homeDir, hostLacks, sandboxGate } from './helpers.mjs';
 
 test('The_agent_box_has_no_operator_home_and_no_key', async t => {
   if (!sandboxGate(t)) return;
@@ -42,11 +42,11 @@ test('The_agent_box_has_no_windows_drive_and_no_interop', async t => {
   assert.match(r.out, /interop=\[\]/);
   assert.match(r.out, /No such file|cannot access/, '/run/WSL is absent');
   const whoami = '/mnt/c/Windows/System32/whoami.exe';
-  if (!existsSync(whoami)) { t.skip('/mnt/c is absent on this host: there is no Windows interop to refuse'); return; }
+  if (!existsSync(whoami)) return hostLacks(t, '/mnt/c is absent on this host: there is no Windows interop to refuse');
   const copy = path.join(layout.work, 'who.exe');
   copyFileSync(whoami, copy);
   const outside = await runBounded(copy, [], { timeoutMs: 20_000, cwd: layout.work });
-  if (!outside.ok || !outside.value.stdout.includes('\\')) { t.skip('the copy of whoami.exe prints no user name even outside the box: interop is off on this host'); return; }
+  if (!outside.ok || !outside.value.stdout.includes('\\')) return hostLacks(t, 'the copy of whoami.exe prints no user name even outside the box: interop is off on this host');
   const inside = await probe(layout, `chmod +x ${copy}; ${copy} 2>&1; echo "rc=$?"`);
   assert.equal(inside.out.includes('\\'), false, 'no Windows user name is printed inside');
   assert.match(inside.out, /rc=[1-9]/, 'the exe does not run to success (the interop handler dies on /proc/1/stat)');
@@ -78,7 +78,7 @@ test('The_agent_box_cannot_see_its_instruments_or_its_partner', async t => {
 
 test('The_bare_box_has_no_gh', async t => {
   if (!sandboxGate(t)) return;
-  if (!existsSync('/usr/bin/gh')) { t.skip('/usr/bin/gh is absent on this host: there is nothing to refuse'); return; }
+  if (!existsSync('/usr/bin/gh')) return hostLacks(t, '/usr/bin/gh is absent on this host: there is nothing to refuse');
   const layout = newSession();
   const r = await probe(layout, 'gh --version 2>&1; echo "rc=$?"; /usr/bin/gh --version 2>&1; echo "rc=$?"');
   assert.equal((r.out.match(/Permission denied/g) ?? []).length, 2, r.out);
@@ -90,7 +90,7 @@ test('The_bare_box_has_no_gh', async t => {
 
 test('The_toolchain_is_read_only_and_tsc_is_the_pinned_one', async t => {
   if (!sandboxGate(t)) return;
-  if (!existsSync(path.join(TS_DIR, 'node_modules', '.bin', 'tsc'))) { t.skip(`${TS_DIR} is absent: the preflight installs it (npm install --prefix, then chmod -R a-w)`); return; }
+  if (!existsSync(path.join(TS_DIR, 'node_modules', '.bin', 'tsc'))) return hostLacks(t, `${TS_DIR} is absent: the preflight installs it (npm install --prefix, then chmod -R a-w)`);
   const layout = newSession();
   const r = await probe(layout, `tsc --version; touch ${TS_DIR}/x 2>&1; echo "rc=$?"`, { over: { toolchains: [TS_DIR] }, env: envFor(layout, { tsDir: TS_DIR }) });
   assert.match(r.out, /7\.0\.2/);
@@ -102,7 +102,7 @@ test('The_toolchain_is_read_only_and_tsc_is_the_pinned_one', async t => {
 
 test('The_box_can_run_dotnet_and_reports_the_one_pinned_sdk', async t => {
   if (!sandboxGate(t)) return;
-  if (!hostHas('dotnet')) { t.skip('dotnet is not on PATH on this host'); return; }
+  if (!hostHas('dotnet')) return hostLacks(t, 'dotnet is not on PATH on this host');
   const layout = newSession();
   const r = await probe(layout, 'dotnet --list-sdks');
   assert.match(r.out, /^10\.0\.113 \[/m);

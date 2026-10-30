@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { bind, devProc, isolation, roBind, roRoot, scoreBoxArgv, scoreEnv, setenvAll, tmpfs } from '../lib/bwrap.mjs';
 import { runBounded } from '../lib/run.mjs';
 import { installShim } from '../lib/visible.mjs';
-import { sandboxGate, stubTrees, tmpDir } from './helpers.mjs';
+import { hostLacks, sandboxGate, stubTrees, tmpDir } from './helpers.mjs';
 
 const nodeToolchain = path.dirname(path.dirname(process.execPath));
 const uid = process.getuid();
@@ -155,7 +155,7 @@ async function listenOn(dir, name) {
 test('The_box_cannot_see_the_users_runtime_dir_where_the_session_bus_lives', async t => {
   if (!sandboxGate(t)) return;
   const runDir = `/run/user/${uid}`;
-  if (!existsSync(runDir)) { t.skip(`${runDir} does not exist on this host`); return; }
+  if (!existsSync(runDir)) return hostLacks(t, `${runDir} does not exist on this host`);
   const sock = await listenOn(runDir, `testsToDelete-mgb-test-${process.pid}.sock`);
   try {
     const command = `test -S ${sock.file} && echo VISIBLE || echo HIDDEN`;
@@ -171,12 +171,12 @@ test('The_box_cannot_see_the_users_runtime_dir_where_the_session_bus_lives', asy
 
 test('The_box_cannot_start_a_unit_on_the_hosts_user_manager', async t => {
   if (!sandboxGate(t)) return;
-  const host = await runBounded('systemd-run', ['--user', '--wait', '--pipe', 'true'], { timeoutMs: 20_000 });
-  if (!host.ok || host.value.code !== 0) { t.skip('the host has no working systemd user manager to escape through'); return; }
   const command = 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus XDG_RUNTIME_DIR=/run/user/$(id -u); systemd-run --user --wait --pipe true >/dev/null 2>&1; echo rc=$?';
+  assert.match((await probe(boxDirs(), command)).out, /rc=[1-9]/, 'inside the box `systemd-run --user true` fails');
+  const host = await runBounded('systemd-run', ['--user', '--wait', '--pipe', 'true'], { timeoutMs: 20_000 });
+  if (!host.ok || host.value.code !== 0) return hostLacks(t, 'the host has no working systemd user manager to escape through: the control is unavailable');
   const control = await probeArgv(withoutPair(scoreBoxArgv(boxDirs()), '--tmpfs', '/run'), command);
   assert.match(control, /rc=0/, 'control: without the tmpfs the box reaches the user manager');
-  assert.match((await probe(boxDirs(), command)).out, /rc=[1-9]/);
 });
 
 test('The_box_shows_only_its_own_bound_directories_under_tmp_and_var_tmp', async t => {
