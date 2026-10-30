@@ -582,7 +582,7 @@ written tmp + rename after every transition, so a crash resumes from what the fi
 |---|---|---|
 | CLI | `bare-runner.mjs` | `init`, `snapshot`, `seed-commit`, `seed-reveal`, `run`, `resume`, `status`; `--dry-run` on `init` and `run` writes, claims and spends nothing; re-executes itself under `taskset -c 6,7` (an env marker stops a loop), so its broker, receiver, proxy and sampler sit on core 3 |
 | Loop | `lib/bare-series.mjs` | the gates (guard, `retireStale`, preflight, quiet check, spend gate, in that order), launch, classify and charge, the score step, resume (`reconcile`) |
-| One phase | `lib/bare-phase.mjs` | layouts claimed, workspaces filled, caches seeded, canaries planted (manifest first) and unplanted in a `finally`, same-tick start behind `taskset -c <mask> nice -n 19`, the spawn stamped at the seam, `startSkewMs` |
+| One phase | `lib/bare-phase.mjs` | layouts claimed, workspaces filled, caches seeded, canaries planted (manifest first) and every started manifest unplanted in a `finally` that opens BEFORE the first planting, so a planting or a plan that throws leaves none (review G2), same-tick start behind `taskset -c <mask> nice -n 19`, the spawn stamped at the seam, `startSkewMs` |
 | Plan | `lib/bare-plan.mjs` | `ridOf` (`sha256('<seed>:bare:p<pair>:<stack>:<phase>:a<attempt>')[0:6]`), `maskFor` (0-5 / 8-13, swapped each pair, the seed decides pair 1), `firstStack` (a seeded bit per pair and phase), `promptFor` (reads `inputs/prompts-bare.json`), `bareSessionPlan` |
 | Outcome | `lib/bare-outcome.mjs` | the outcome table below, a pure function over records |
 | Schedule | `lib/bare-schedule.mjs` | the barrier and the void / re-run table below |

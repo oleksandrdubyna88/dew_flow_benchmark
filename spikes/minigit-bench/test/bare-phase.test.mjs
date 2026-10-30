@@ -105,3 +105,22 @@ test('A_phase_whose_workspace_fails_after_the_claim_releases_its_own_layout_so_i
   const again = await launchPhase({ ctx, items: items(ctx), deps: { spawn: () => ({}), maskCheckMs: 5, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => [], launchSession: async plan => ({ ok: true, value: { meta: { rid: plan.layout.rid }, exit: { code: 0 } } }) } });
   assert.equal(again.ok, true, `the second attempt claims the same rids (no EEXIST): ${again.reason}`);
 });
+
+test('Every_planted_canary_is_removed_when_planting_or_planning_a_later_session_throws', async () => {
+  // (a) the second session's planting throws after the first session's canaries are on disk
+  const a = context();
+  const dirA = path.join(a.home, '.claude', 'projects', 'p1');
+  let calls = 0;
+  const depsA = { spawn: () => ({}), maskCheckMs: 5, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => { if (calls++ === 1) throw new Error('the second planting failed'); return [dirA]; }, launchSession: async () => { throw new Error('never launched'); } };
+  await assert.rejects(launchPhase({ ctx: a, items: items(a), deps: depsA }), /second planting failed/);
+  assert.deepEqual(readdirSync(dirA).filter(f => f.startsWith('scratch-note-')), [], 'the first session\'s canaries are gone');
+  assert.deepEqual(readdirSync(path.join(dirA, 'memory')).filter(f => f.startsWith('scratch-note-')), []);
+  for (const i of items(a)) assert.equal(existsSync(path.join(a.sessionsRoot, i.rid)), false, 'nothing paid had started: the claimed layouts are released');
+  // (b) the plan of a session cannot be made (an unknown stack) after every canary is planted
+  const b = context();
+  const dirB = path.join(b.home, '.claude', 'projects', 'p1');
+  const bad = items(b).map((i, n) => (n === 1 ? { ...i, session: { ...i.session, stack: 'cobol' } } : i));
+  const depsB = { spawn: () => ({}), maskCheckMs: 5, procApi: { pids: () => [], read: () => '' }, listProjectDirs: () => [dirB], launchSession: async () => { throw new Error('never launched'); } };
+  await assert.rejects(launchPhase({ ctx: b, items: bad, deps: depsB }), /cobol/);
+  assert.deepEqual(readdirSync(dirB).filter(f => f.startsWith('scratch-note-')), [], 'a plan that throws leaves no canary in the operator\'s folders');
+});
