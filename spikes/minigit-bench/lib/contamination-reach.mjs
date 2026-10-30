@@ -2,6 +2,7 @@
 // paths a call reaches, each shell word resolved from the directory the `cd` segments before it left (contamination-cwd.mjs). A heredoc body is data, never a command (contamination-heredoc.mjs).
 import { findOutsideAccesses } from '../../policy-ab-quick/lib/leak.mjs';
 import { isRooted, resolvable, shellSteps, unquote } from './contamination-cwd.mjs';
+import { fedWalk } from './contamination-pipe.mjs';
 
 export const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 export const SEARCH_TOOLS = new Set(['Glob', 'Grep']);
@@ -53,14 +54,27 @@ const unplaced = (call, word) => ({ agent: call.agent, tool: call.tool, path: wo
 /** The relative word of a walking simple command whose directory is unknown (the conservative case), or undefined. */
 const lostWord = (step, walks, words) => (step.cwd === null && walks ? words[0] : undefined);
 
-/** The reaches of one simple command, its relative words resolved from the directory it runs in (leak.mjs: `cwd`, `paths`); each says whether THIS command walks. */
-function stepReaches(step, call, opts) {
-  const walks = segmentWalks(step.segment);
+/** What a pipe into a wrapped walker reaches when its producer cannot be resolved (it reads a file or a variable): anything, as a walk of `/` does. */
+const unknownProducer = call => ({ agent: call.agent, tool: call.tool, path: '|', resolved: '/', walks: true, excerpt: 'a pipe feeds a walker from an unknown producer' });
+
+const pieceOf = (step, call, words) => ({ agent: call.agent, tool: call.tool, input: { command: step.segment }, cwd: step.cwd, paths: step.cwd === null ? [] : words });
+
+/** The reaches of one simple command, its relative words resolved from the directory it runs in (leak.mjs: `cwd`, `paths`); each says whether THIS command walks (`forceWalk`: a walker it feeds through a pipe does). */
+function stepReaches(step, call, opts, forceWalk = false) {
+  const walks = forceWalk || segmentWalks(step.segment);
   const words = relativeWords(step, walks);
-  const piece = { agent: call.agent, tool: call.tool, input: { command: step.segment }, cwd: step.cwd, paths: step.cwd === null ? [] : words };
-  const found = findOutsideAccesses([piece], opts).filter(f => !isQuotedMark(step.segment, f)).map(f => ({ ...f, walks, resolved: walks ? fixedPrefix(f.resolved) : f.resolved }));
+  const found = findOutsideAccesses([pieceOf(step, call, words)], opts).filter(f => !isQuotedMark(step.segment, f)).map(f => ({ ...f, walks, resolved: walks ? fixedPrefix(f.resolved) : f.resolved }));
   const lost = lostWord(step, walks, words);
   return lost === undefined ? found : [...found, unplaced(call, lost)];
+}
+
+const ownReaches = (step, call, opts) => (step.cd || step.data !== undefined ? [] : stepReaches(step, call, opts));
+
+/** A wrapped walker that a pipe feeds (`echo / | xargs find`): its producers' paths are judged as a walk, and an unknown producer is high. */
+function pipedReaches(steps, i, call, opts) {
+  const fed = fedWalk(steps, i);
+  if (fed === null) return [];
+  return [...fed.listers.flatMap(producer => stepReaches(producer, call, opts, true)), ...(fed.unresolvable ? [unknownProducer(call)] : [])];
 }
 
 /**
@@ -70,5 +84,6 @@ function stepReaches(step, call, opts) {
 export function reachesOf(call, ctx) {
   const opts = { treeRoot: ctx.treeRoot, home: ctx.boxHome ?? ctx.home, flavour: 'posix', allow: ctx.allow ?? [], isLink: ctx.isLink };
   if (!SHELL_TOOLS.has(call.tool)) return findOutsideAccesses([call], opts).map(f => ({ ...f, walks: SEARCH_TOOLS.has(call.tool) }));
-  return shellSteps(String(call.input?.command ?? ''), ctx).filter(step => !step.cd && step.data === undefined).flatMap(step => stepReaches(step, call, opts));
+  const steps = shellSteps(String(call.input?.command ?? ''), ctx);
+  return steps.flatMap((step, i) => [...ownReaches(step, call, opts), ...pipedReaches(steps, i, call, opts)]);
 }

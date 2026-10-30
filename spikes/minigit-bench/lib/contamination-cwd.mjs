@@ -9,7 +9,8 @@ import path from 'node:path';
 import { PLACEHOLDER, stripData } from './contamination-heredoc.mjs';
 
 const posix = path.posix;
-const SEGMENT = /[;&|\n]+/;
+const SEPARATORS = /([;&|\n]+)/; // captured: the separator before a segment says whether a pipe feeds it
+const PIPE = /^\|&?\n*$/; // `|` and `|&`, not `||`, `&&`, `;` or a newline
 const OPAQUE = /[$*?[\]{}`()]/;
 const HOME_FORM = /^(\$\{?HOME\}?|~)(?=\/|$)/;
 const LEAD = /^[\s({]*/;
@@ -55,7 +56,7 @@ function closeScopes(state, closes) {
   return { cwd: state.saved[keep], saved: state.saved.slice(0, keep) };
 }
 
-/** One simple command: `{ segment, words, cwd, cd }` - `cwd` the directory it runs in, `cd` `{ to }` when it moves the directory (`to` null when unknown), else undefined. */
+/** One simple command: `{ segment, words, cwd, cd }` (`shellSteps` adds `piped`) - `cwd` the directory it runs in, `cd` `{ to }` when it moves the directory (`to` null when unknown), else undefined. */
 function stepOf(state, segment, ctx) {
   const opened = openScopes(state, segment);
   const words = wordsOf(segment.replace(LEAD, '').replace(TRAIL, ''));
@@ -67,6 +68,12 @@ function stepOf(state, segment, ctx) {
 /** A heredoc body is no command: a step with no words, in the directory it is written in. */
 const dataStep = (state, text) => ({ state, step: { segment: '', words: [], cwd: state.cwd, cd: undefined, data: text } });
 
+/** `[{ segment, piped }]`: the simple commands of a command line, `piped` when a single pipe (`|`, `|&`) stands before it, so the command before it feeds it. */
+function pieces(commands) {
+  const parts = commands.split(SEPARATORS);
+  return parts.filter((_, i) => i % 2 === 0).map((segment, k) => ({ segment, piped: k > 0 && PIPE.test(parts[2 * k - 1]) }));
+}
+
 /**
  * Every simple command of `text`, in order, each with the directory the commands before it left: the tree root to begin with (`ctx.treeRoot`). The heredoc bodies and here-string operands are not commands
  * (contamination-heredoc.mjs): a body is one `data` step.
@@ -75,11 +82,11 @@ export function shellSteps(text, ctx) {
   const { text: commands, data } = stripData(text);
   const steps = []; // built here and appended to in place: a copy per segment would make a command of 30,000 segments quadratic; the result is a new array, nothing outside is touched
   let state = { cwd: ctx.treeRoot, saved: [] };
-  for (const segment of commands.split(SEGMENT)) {
+  for (const { segment, piped } of pieces(commands)) {
     const body = PLACEHOLDER.exec(segment.trim());
     const next = body ? dataStep(state, data[Number(body[1])]) : stepOf(state, segment, ctx);
     state = next.state;
-    steps.push(next.step);
+    steps.push({ ...next.step, piped });
   }
   return steps;
 }
