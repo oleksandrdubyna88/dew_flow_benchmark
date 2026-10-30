@@ -658,16 +658,22 @@ under `// E3.S3` `typeof(RunArms)`; the module doc's *make*; `research/module_te
 not a map → 4); `ArmMap.Extend(map, arms, RandomNumberGenerator.GetBytes(8))`; when it changed, `ReplacePrivate(arms.map.json)` BEFORE the
 first folder. (5) Per arm, in order, `ArmMaker.MakeAsync`; the first `Stopped` ends the verb with its code. (6) 0.
 
-**`ArmMaker.MakeAsync(arm)`**: (a) the arm folder exists without the marker: its `out/timing.jsonl` (through `BoundedFile`) holds a
-`start` line → `Stopped(4, "<arm> has run (its timing has lines) but has no made marker — restore chain/made-<arm> or move its folder away;
-make never remakes an arm that ran")`; else removed whole (no link followed) and said. (b) `r/<token>` made exclusively (`KernelFacts.MakeFolder`
+**`ArmMaker.MakeAsync(arm)`**: (a) the arm folder exists without the marker: it is removed ONLY on positive evidence that it never ran
+(consult on 3.3) — `r/<token>` is a real folder (not a `ReparsePoint`; a link → `Stopped(4)` naming it, nothing removed) AND its
+`out/timing.jsonl` through `BoundedFile` is `Absent`, or is `Bytes` whose every line parses (`TimingLines.Read`, no `Other`) and none is a
+`start`. A `start` line → `Stopped(4, "<arm> has run (its timing has lines) but has no made marker — restore chain/made-<arm> or move its
+folder away; make never remakes an arm that ran")`; a timing `Refused` (a link, a FIFO, past 1 MiB) or holding a line that does not parse →
+`Stopped(4, "cannot tell whether <arm> ran (<the reason>) — move its folder away by hand")`, nothing removed. When removed: whole
+(`Directory.Delete(recursive)`, which does not descend through a link — tested on this runtime) and said. (b) `r/<token>` made exclusively (`KernelFacts.MakeFolder`
 on Linux, `0700`), then `out`, `notes`, `work`, `tmp`, and `coai-data/<side>` when coai is configured. (c) `BaseCopy.Copy(base, clone)`:
 folders, files (bytes, mode, modification time — the warm build is incremental on them, as `cp -a` kept them), links AS links (their text
 kept, never followed — a link to a folder is not entered); a FIFO, socket or device → `Stopped(3)` naming its path relative to `base`.
 (d) `ArmGit.NewBranchAsync(target.branch)` in the clone. (e) The warm build (lowered) into `out/prep-build.log`, created exclusively; not
 exit 0 → `Stopped(3, "warm build of <arm> failed (<exit or killed at its wall>) — see its out/prep-build.log")`, no marker. (f) coai
 configured: the settings file's bytes → `ReplacePrivate(CoaiSettings(side))`; `ReplacePrivate(McpCoai, McpConfig.Coai(coai, paths,
-input.Verb.Environment) + "\n")`. (g) `ReplacePrivate(McpNone, McpConfig.None() + "\n")`. (h) `chain/made-<arm>` LAST (`chain/` made when
+input.Verb.Environment) + "\n")` — `0600` keeps the key from OTHER users; the arm's own code runs as the same user and can read it, as
+the shell's could (the coai server it launches needs it): the module doc says so, and secrecy from the arm would need another identity
+(consult on 3.3). (g) `ReplacePrivate(McpNone, McpConfig.None() + "\n")`. (h) `chain/made-<arm>` LAST (`chain/` made when
 absent); print `arm <arm> made and built`. Every line through `map.Scrub`.
 
 **Scenarios.**
@@ -679,6 +685,9 @@ absent); print `arm <arm> made and built`. Every line through `map.Scrub`.
 | `MakeVerbTests.The_map_is_extended_for_new_arms_and_existing_tokens_are_kept` | map `{C1: t1}`; runs name C1 and C2 → `{C1: t1, C2: <new>}` in that order; a second `make` leaves the file's bytes unchanged | a re-minting plant: `Expected token of C1 to be "t1"` |
 | `MakeVerbTests.Mcp_coai_json_carrying_a_key_is_mode_0600` | harness `COAI_CREDS_KEY=k` → `mcp-coai.json` holds `k` at mode `0600`; the settings copy and the map `0600`; `k` in no output line (Linux; skipped elsewhere with the reason printed) | stub writes with the umask: `Expected mode to be UserRead, UserWrite, but found …` |
 | `MakeVerbTests.An_arm_that_has_run_is_never_remade_without_its_marker` | C1 folder with a `start` line in its timing, no marker → 4 naming C1; every file of the folder unchanged | stub removes it: `Expected exit 4, but found 0` |
+| `MakeVerbTests.An_arm_whose_timing_cannot_be_read_is_never_removed` | theory, C1's folder holds `arm/work.txt`, no marker, and `out/timing.jsonl` as: a link to a file; a FIFO (Linux); 2 MiB; a line `{not json`; → 4 naming `cannot tell`; `work.txt` and the timing unchanged | a plant that treats unreadable as empty: `Expected exit 4, but found 0` |
+| `MakeVerbTests.Removing_a_half_made_arm_follows_no_link_and_refuses_an_arm_folder_that_is_a_link` | C1's folder (no marker, no timing) holds a link to an outside folder, a nested folder holding a link to an outside file, a dangling link → removed; every outside sentinel's bytes and listing unchanged; then `r/<token>` itself a link to an outside folder → 4 naming it, the outside folder unchanged | a plant that enumerates and deletes targets: `Expected sentinel to exist` |
+| `ArmFilesTests.A_private_file_is_0600_from_its_creation_not_after_it` | Linux: `ReplacePrivate` with a seam that runs after the staging file is written and before the rename → the staging file's mode is `0600` at that moment (the default umask would make a create-then-chmod `0644` there); the final file `0600`; a failing rename's exception text lacks the bytes written | create-then-chmod plant: `Expected mode 0600, but found 0644` |
 | `MakeVerbTests.A_failed_warm_build_exits_3_and_leaves_no_marker` | the build shim exits 2 → 3; no `chain/made-C1`; stderr names C1 and `out/prep-build.log`, no token | marker-first plant: `Expected File.Exists(made) to be False` |
 | `MakeVerbTests.Every_tool_of_make_is_launched_by_its_resolved_path_under_a_built_environment` | as S2's scenario for the build and git: `$0` = the printed real path, the wrapper `<clone>/.agents/…/low-priority.mjs` with the `dotnet` shim's real path next, the names stripped; git's argv carries `-c core.fsmonitor=false` | `Expected names not to contain "GITHUB_TOKEN"` |
 | `MakeVerbTests.A_PATH_HOME_or_XDG_CONFIG_HOME_under_a_forbidden_root_is_refused_before_anything_is_made` | theory over the three, each under the root → 4; no map written, no `r/` folder | stub without the judge: `Expected exit 4` |
