@@ -4,7 +4,7 @@
 > document gate, the interim path of `common.plan-change-control`; verdict proceed, its six findings taken into the baseline; Narrowed:
 > no) after the stop of 2026-10-29 (`## Plan changes`, epoch 1: entries 1.1–1.3, closed) and the WHOLE plan's revision by the re-review
 > (its record is under `## Plan changes`; §11's last row says what changed) — E2 may start; PR #116 (E1) merged to `main` at `431e759`
-> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2).** Scope: a new self-contained module
+> (2026-10-30) as judged; E2 runs on its own branch `feat/model-arms-e2`, whose plan round passed the same day (the note under epoch 2); E2's stories are built — E2.S0–E2.S8 landed (E2.S8, `run-arm`, last, 2026-10-30; M1 observed), pending E2's coai code gate — a status change, not a plan change.** Scope: a new self-contained module
 > `tools/model-arms/` (two projects, a console `model-arms`), tests in `tests/Bench.Tests/ModelArms/`, three files moved out of `hosts/Cli`
 > into a shared host-support project, two widenings of the shared CLI launcher, one widening of `tests/FakeCli`, a `research/module_model_arms.md`
 > and the `research/module_tests.md` rows. It ports the RUN half of the owner's part-6 AND part-7 harness (four schemes: C, CR, SRS, CHH — the
