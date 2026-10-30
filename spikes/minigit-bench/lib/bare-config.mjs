@@ -93,7 +93,7 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid }) {
   const abort = { reason: null, exit: 130 };
   const ctx = {
     seriesDir, sessionsRoot: path.join(seriesDir, 's'), home, kind, pair, seed: kind === 'data' && existsSync(seedFile) ? readFileSync(seedFile, 'utf8').trim() : null,
-    inputsRoot: fetched.value.root, hashes: fetched.value.entries, snapshots, snapshotPackages: Object.values(registered).flatMap(r => r.packages ?? []),
+    inputsRoot: fetched.value.root, hashes: fetched.value.entries, snapshots, snapshotPackages: Object.values(registered).flatMap(r => r.packages ?? []), snapshotBytes: Object.values(registered).reduce((a, r) => a + (r.sizeBytes ?? 0), 0),
     packageRules: readJson(path.join(inputsDir, 'package-flags.json')).rules, claudeBinary: map.claude.path, cliVersion: map.pins.claude, nodeDir: path.dirname(path.dirname(process.execPath)),
     tsDir: path.join(home, ...stacks.value.typescriptToolchainDir), token: token.value, prices: policy.value.table, table: policy.value.table, policy: policy.value.policy,
     harnessSources: { boxInit: path.join(SPIKE, 'harness', 'box-init.mjs'), audit: path.join(SPIKE, '..', 'policy-ab-quick', 'hooks', 'audit.mjs') },

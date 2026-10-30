@@ -19,6 +19,12 @@ const SCORE = {
   upstream: [{ script: 'upstream/test-v1.sh', passed: 9, expectedTotal: 10 }],
 };
 
+function smokeViewsOf() {
+  const loaded = loadSmoke(FIXTURE);
+  const ctx = crosscheckPolicyFrom(spikeDir, {});
+  return smokeViews(loaded.value, ctx.value);
+}
+
 function smokeRecord(over = {}) {
   const loaded = loadSmoke(FIXTURE);
   assert.equal(loaded.ok, true, loaded.reason);
@@ -60,6 +66,20 @@ test('The_session_record_has_every_field_or_says_why', () => {
   assert.equal(r.process.compliance, NOT_BARE);
   assert.deepEqual(Object.keys(r.cost.checks.value), ['t1', 't2', 't3', 't4', 't5'], 'every cross-check is in the record');
   assert.equal(r.class, 'completed');
+});
+
+test('The_egress_record_carries_bytes_per_host_and_the_cache_growth_beside_it', () => {
+  const r = smokeRecord({ cacheGrowthBytes: 4321 });
+  assert.equal(r.egress.value.cacheGrowthBytes, 4321, 'cache bytes after minus the snapshot bytes, the cross-check of the download bytes');
+  assert.deepEqual(r.egress.value.bytes, {}, 'the committed smoke has no tunnel');
+  assert.equal(r.egress.value.bytesCaptured, true, 'no allowed host, so nothing is missing');
+  // a session whose allowed tunnels left no closed line has bytes NOT captured, which is not the same as zero bytes
+  const views = { ...smokeViewsOf(), egress: { allowed: { 'registry.npmjs.org': 2 }, refused: {}, nonConnect: 0, tlsRefused: {}, bytes: {} } };
+  const missing = smokeRecord({ views });
+  assert.equal(missing.egress.value.bytesCaptured, false);
+  const seen = smokeRecord({ views: { ...views, egress: { ...views.egress, bytes: { 'registry.npmjs.org': { up: 10, down: 99 } } } } });
+  assert.equal(seen.egress.value.bytesCaptured, true);
+  assert.deepEqual(smokeRecord({ cacheGrowthBytes: null }).egress.value.cacheGrowthBytes, null, 'unmeasured growth is null, never 0');
 });
 
 test('A_session_that_was_not_scored_says_so_with_a_reason_and_a_missing_view_is_not_zero', () => {

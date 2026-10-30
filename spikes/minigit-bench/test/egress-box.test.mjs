@@ -38,7 +38,11 @@ test('The_proxy_allows_only_the_listed_hosts_on_443', async t => {
     const [allowed, example, anthropic] = r.out.trim().split('\n');
     assert.match(allowed, /^200 rc=0$/, r.out);
     for (const refused of [example, anthropic]) assert.match(refused, /^000 rc=(7|56)$/, `a refused host fails the CONNECT: ${refused}`);
-    assert.deepEqual(egressSummary(lines), { allowed: { 'api.nuget.org': 1 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 0, tlsRefused: {} });
+    await new Promise(res => setTimeout(res, 300)); // the closed line follows the tunnel's close
+    const { bytes, ...counts } = egressSummary(lines);
+    assert.deepEqual(counts, { allowed: { 'api.nuget.org': 1 }, refused: { 'example.com': 1, 'api.anthropic.com': 1 }, nonConnect: 0, tlsRefused: {} });
+    assert.deepEqual(Object.keys(bytes), ['api.nuget.org'], 'bytes only for a tunnel that was piped');
+    assert.ok(bytes['api.nuget.org'].up > 0 && bytes['api.nuget.org'].down > 1000, `the index came down through the tunnel: ${JSON.stringify(bytes)}`);
     assert.ok(lines.filter(l => l.verdict === 'refused').every(l => l.status === 403));
   });
 });

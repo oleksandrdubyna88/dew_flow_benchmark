@@ -6,6 +6,7 @@ import { layoutPaths } from './sandbox.mjs';
 import { ok } from './result.mjs';
 import { cellOf, pairRecord, sessionRecord } from './bare-record.mjs';
 import { collectSession } from './bare-collect.mjs';
+import { treeSize } from './cache-snapshot.mjs';
 import { locOfTree } from './loc.mjs';
 import { packagesOf, readNpmPackages, readNugetPackages } from './packages.mjs';
 
@@ -15,6 +16,9 @@ const writeJson = (file, value) => {
   writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`);
   renameSync(tmp, file);
 };
+
+/** Cache bytes after the session minus the registered snapshot bytes (nuget + npm + the dotnet first-run part): the cross-check of the download bytes. `null` when the run knows no snapshot size. */
+const cacheGrowthOf = ({ ctx, layout }) => (ctx.snapshotBytes == null ? null : treeSize(layout.nuget) + treeSize(layout.npm) + treeSize(path.join(layout.home, '.dotnet')) - ctx.snapshotBytes);
 
 /** Rebuild and write one session's record from its directory. -> `ok(record)` | the collect's `fail`. `entry` is the run-map entry; `score` the session's score.json or null. */
 export function writeSessionRecord({ ctx, entry, score }) {
@@ -30,7 +34,7 @@ export function writeSessionRecord({ ctx, entry, score }) {
   const record = sessionRecord({
     ids: { pair: entry.pair, stack: entry.stack, phase: entry.phase, attempt: entry.attempt, rid: entry.rid, kind: entry.kind, label: entry.label },
     outcome, run: { ...entry.run, harnessIdentity: ctx.harnessIdentity, preregTag: ctx.preregTag, cliVersion: c.meta.cliVersion ?? ctx.cliVersion },
-    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta,
+    views: c.views, cost: c.cost, aliasRecord: c.alias, aliasCheck: c.aliasCheck, score, cacheGrowthBytes: cacheGrowthOf({ ctx, layout }), loc: existsSync(layout.work) ? locOfTree(layout.work) : null, packages, meta: c.meta,
   });
   writeJson(path.join(layout.dir, 'record.json'), record);
   return ok(record);

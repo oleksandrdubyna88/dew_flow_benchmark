@@ -64,7 +64,7 @@ const qualityPart = score => {
 };
 
 /** One session's record. `run` carries what the runner observed (mask, spawn stamp, skew, quiet, spin, harness identity, prereg tag, CLI version). */
-export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta }) {
+export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, aliasCheck, score, loc, packages, meta, cacheGrowthBytes = null }) {
   return {
     ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail,
     run: {
@@ -76,7 +76,7 @@ export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, ali
     time: timePart({ views, meta }),
     quality: qualityPart(score),
     loc: loc ? known(loc) : notCaptured('the tree was not counted'),
-    egress: known(views.egress),
+    egress: known({ ...views.egress, bytesCaptured: Object.keys(views.egress.allowed).every(h => h in views.egress.bytes), cacheGrowthBytes }),
     packages: packages ? known({ packages: packages.packages, added: packages.added, flagged: packages.flagged }) : notCaptured('the caches were not read'),
     process: { compliance: NOT_BARE, coaiRounds: NOT_BARE, codeRabbit: NOT_BARE, ciRuns: NOT_BARE, deliveredBy: NOT_BARE },
   };

@@ -126,6 +126,9 @@ function copyParts({ layout, capture, staging }) {
   return ok(null);
 }
 
+/** The bytes of every regular file under `root` (0 for an absent directory). */
+export const treeSize = root => (existsSync(root) ? sizeOf(root) : 0);
+
 const sizeOf = root => walk(root).reduce((a, { stat }) => a + (stat.isFile() ? stat.size : 0), 0);
 
 /**
