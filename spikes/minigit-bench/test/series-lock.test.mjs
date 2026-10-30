@@ -135,6 +135,7 @@ test('A_takeover_marker_another_owner_created_is_never_removed_not_when_it_is_go
   assert.equal(refused.ok, false);
   assert.match(refused.reason, new RegExp(`${LOCK_FILE}.takeover`));
   assert.match(refused.reason, /gone/);
+  assert.ok(refused.reason.includes(`rm ${markerOf(stale)}`), `the refusal prints the exact command that removes the marker: ${refused.reason}`);
   assert.equal(readFileSync(markerOf(stale), 'utf8'), owner(DEAD - 1, '9'), 'a marker whose owner is gone is named and left for the operator, never removed by a contender');
   const taken = tmpDir('lock-marker-taken');
   writeFileSync(lockOf(taken), owner(DEAD, '123'));

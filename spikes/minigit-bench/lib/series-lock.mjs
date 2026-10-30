@@ -81,7 +81,7 @@ function enterMarker({ file, marker, body, isAlive, retry }) {
   for (let n = 0; n < retry.tries; n += 1) {
     if (createExclusive(marker, body)) return ok(null);
     const held = goneOwner(marker, isAlive);
-    if (held) return fail(`${marker} was made by pid ${held.pid}, which is gone (a run killed while it took ${file}): it is not removed by another run. If no run is active, remove that file by hand`);
+    if (held) return fail(`${marker} was made by pid ${held.pid}, which is gone (a run killed while it took ${file}): it is not removed by another run. If no run is active, remove it: rm ${marker}`);
     sleepMs(retry.sleepMs);
   }
   return fail(`${file} is stale or free and another run is taking it over (it holds ${marker}): try again in a moment`);
@@ -90,7 +90,7 @@ function enterMarker({ file, marker, body, isAlive, retry }) {
 /** What a lock that exists says: a `fail` (a live owner, an unreadable file), or `null` (it was released, or it was stale and is removed): the caller tries to create it again. */
 function judgeLock({ file, isAlive, hooks, busy }) {
   const held = ownerOf(file);
-  if (held === null) return fail(`${file} exists and is unreadable: it may be a runner that is writing it, so it is left alone. If no run is active, remove it by hand`);
+  if (held === null) return fail(`${file} exists and is unreadable: it may be a runner that is writing it, so it is left alone. If no run is active, remove it: rm ${file}`);
   if (held.gone) return null; // released between our create and our read
   if (isAlive(held.pid, held.startTime)) return busy(held);
   hooks.afterStale?.(held);
