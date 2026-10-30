@@ -18,7 +18,7 @@ namespace ModelArms.Core.Steps;
 /// <b>The answer.</b> The shell's span — from the FIRST <c>{</c> to the LAST <c>}</c> of the text (<c>/\{[\s\S]*\}/</c>, greedy) — byte for byte, when it parses as a JSON object: comments, trailing commas and single quotes are refused, and so is
 /// a name defined twice at any depth (a verdict written twice has no single reading). Otherwise <c>{"verdict":"unparsed","raw":&lt;the whole text&gt;}</c>: the shell wrote an invalid span as it was, and a reader that then crashed on it is
 /// worse than an honest <c>unparsed</c>. A text with no braces, an empty text, two objects, a fence followed by prose with braces, an unbalanced brace and a span nested deeper than the reader allows are all <c>unparsed</c>; the raw text
-/// is never cut. The one change made to it is a lone surrogate, which the JSON writer writes as U+FFFD, because JSON text cannot hold one (the writer's behaviour, pinned by a test, not a measure of ours). Nothing in here throws on any text.
+/// is never cut. The only change made to it is a lone surrogate: an ESCAPED one (<c>\ud83d</c>) is already U+FFFD when <c>ClaudeResultEnvelope</c> decodes the text (<c>JsonStringText</c>), and a RAW one — only a hand-built envelope has one — is written by the JSON writer as U+FFFD, because JSON text cannot hold one. Nothing in here throws on any text.
 /// </para>
 /// Pure: it reads its one input and opens nothing. It validates no schema (<c>findings</c>, <c>severity</c>) — the fixer and the analysis read that.</summary>
 public static class ReviewAnswer
