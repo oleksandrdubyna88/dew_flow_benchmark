@@ -45,21 +45,28 @@ public static class RootFacts
     /// <summary>The host's answers about paths, for the deciders that judge them: where a path really is, whether a directory entry is there, whether it is an executable file.</summary>
     public static HostPaths Host { get; } = new(RealPathOf, KernelFacts.Present, IsExecutableFile);
 
-    /// <summary>Who owns <paramref name="path"/>, its mode, and what kind of file it is — all read by ONE <c>statx</c> call on ONE normalised path, so they
-    /// are facts of one inode. The path is made absolute and trimmed once, here (a NUL is refused first): the owner used to come from the kernel's reading of
+    /// <summary>Who owns <paramref name="path"/>, its mode, and what kind of file it is — on this host's trust road (<see cref="ReadFacts(string, PlatformRoad)"/>): by ONE <c>statx</c> call on ONE normalised path, so they
+    /// are facts of one inode, or by the runtime's own facts where no kernel reader was probed. The path is made absolute and trimmed once, here (a NUL is refused first): the owner used to come from the kernel's reading of
     /// the raw path and the mode from .NET's reading of the normalised one, and a <c>..</c> after a symbolic link climbs from the link's TARGET in the kernel's
     /// order but from the link's folder in .NET's, so the two could be two different files. A symbolic link at the path is refused; the facts of the file
     /// itself are what is judged. The path in the answer is the normalised one.</summary>
     public static Outcome<FileFacts> FileFacts(string path) => ReadFacts(path).ToOutcome();
 
     /// <summary><see cref="ReadFacts(string)"/> for a path that must be of the <paramref name="expected"/> kind.</summary>
-    public static FactsRead ReadFacts(string path, FileKind expected) => ReadFacts(path).MustBe(expected);
+    public static FactsRead ReadFacts(string path, FileKind expected) => ReadFacts(path, expected, PlatformFactsReader.CurrentRoad);
+
+    /// <summary><see cref="ReadFacts(string, PlatformRoad)"/> for a path that must be of the <paramref name="expected"/> kind, on the road handed in.</summary>
+    public static FactsRead ReadFacts(string path, FileKind expected, PlatformRoad road) => ReadFacts(path, road).MustBe(expected);
+
+    /// <summary>The facts of a trust path on this host's road.</summary>
+    public static FactsRead ReadFacts(string path) => ReadFacts(path, PlatformFactsReader.CurrentRoad);
 
     /// <summary>The facts of a trust path, with the cause of a failure kept: a path the check refuses to judge (a link, a NUL) is
-    /// <see cref="FactsRead.Refused"/>, a read the host could not make is <see cref="FactsRead.Unread"/>. The console exits 4 for the first and 3 for the second.</summary>
-    public static FactsRead ReadFacts(string path)
+    /// <see cref="FactsRead.Refused"/>, a read the host could not make is <see cref="FactsRead.Unread"/>. The console exits 4 for the first and 3 for the second. The ROAD decides who reads (E3.S0): <see cref="TrustRoad.Kernel"/> asks the kernel
+    /// (<c>statx</c>), <see cref="TrustRoad.Portable"/> asks the runtime (<see cref="PortableFacts"/>: mode, kind where it is told, a witness — never the owner), and <see cref="TrustRoad.NotPerformed"/> (Windows) reads nothing.</summary>
+    public static FactsRead ReadFacts(string path, PlatformRoad road)
     {
-        if (OperatingSystem.IsWindows())
+        if (road.Trust == TrustRoad.NotPerformed)
         {
             return new FactsRead.Unread($"the owner and mode of {path} are POSIX facts; RootTrust declares the check not performed on Windows");
         }
@@ -70,7 +77,7 @@ public static class RootFacts
         }
 
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        var read = KernelFacts.Read(full);
+        var read = road.Trust == TrustRoad.Kernel ? KernelFacts.Read(full) : PortableFacts.Read(full);
         return read is FactsRead.Read { Facts.Identity.Kind: FileKind.Link }
             ? new FactsRead.Refused(
                 $"{full} is a symbolic link to '{LinkTargetOf(full) ?? "?"}' — the trust check judges the file itself, not a link that can be re-pointed; put the real file here or pass its real path (D17)")

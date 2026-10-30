@@ -48,6 +48,7 @@ public static class ExperimentGate
     private static Task<Passage<ExperimentInput>> Admit(VerbInput input, GateSeams seams) =>
         Task.FromResult(NamedRoot(input))
             .Then(root => Present(input, root))
+            .Then(root => Said(input, root, seams))
             .Then(root => TrustedRoot(input, root, seams))
             .ThenAsync(judged => ReadExperiment(input, judged, seams))
             .Then(admitted => Needed(admitted))
@@ -79,6 +80,18 @@ public static class ExperimentGate
     /// <summary>Step 2: the root and its <c>experiment.json</c> exist.</summary>
     private static Passage<string> Present(VerbInput input, string root) =>
         Unmet(input, RootRequirements.ToRead, root, root);
+
+    /// <summary>Between steps 2 and 3: the road's one line — what this host did NOT verify (E3.S0) — printed ONCE, before any refusal it qualifies, when there is one. Nothing else prints it: not the judgement (it runs for the root and again for
+    /// <c>scenarios.json</c>), not an adapter. Windows' own <i>not performed</i> lines stay where they are.</summary>
+    private static Passage<string> Said(VerbInput input, string root, GateSeams seams)
+    {
+        if (seams.Road.Line is { Length: > 0 } line)
+        {
+            input.Error.WriteLine(line);
+        }
+
+        return new Passage<string>.Through(root);
+    }
 
     /// <summary>Step 3: the root and <c>experiment.json</c> are the operator's own and closed to group and others.</summary>
     private static Passage<Judged> TrustedRoot(VerbInput input, string root, GateSeams seams)
@@ -162,7 +175,7 @@ public static class ExperimentGate
     /// <summary>The second <c>stat</c>: the file just read is the file that was judged. Shared with the verbs that read a file the gate only judged. Off POSIX nothing was judged, so nothing is compared.</summary>
     internal static Passage<FileFacts> StillTheSame(VerbInput input, FileFacts judged, GateSeams seams)
     {
-        if (OperatingSystem.IsWindows())
+        if (seams.Road.Trust == TrustRoad.NotPerformed)
         {
             return new Passage<FileFacts>.Through(judged);
         }
@@ -187,12 +200,12 @@ public static class ExperimentGate
                 $"model-arms {input.Verb}: {System.IO.Path.GetFileName(judged.Path)} changed between its trust check and its read ({string.Join(", ", changes)}) — refused (D17)");
     }
 
-    /// <summary>D17 a over <paramref name="files"/>: off POSIX the printed line says the check was not performed and the walk goes on; on POSIX the
-    /// facts are read (a kernel read that fails stops with exit 3), a link or a file of the wrong kind is refused, and the owner and mode
-    /// are judged (exit 4, every problem printed). The answer is the facts that were read, in the order given.</summary>
+    /// <summary>D17 a over <paramref name="files"/>: on a <see cref="TrustRoad.NotPerformed"/> road (Windows) the printed line says the check was not performed and the walk goes on; on the others the
+    /// facts are read through the seam (a read that fails stops with exit 3), a link or a file of the wrong kind is refused, and the mode — and, on the kernel road, the owner — is judged (exit 4, every problem
+    /// printed). The answer is the facts that were read, in the order given.</summary>
     private static Passage<IReadOnlyList<FileFacts>> Judge(VerbInput input, string root, IReadOnlyList<Wanted> files, GateSeams seams)
     {
-        if (OperatingSystem.IsWindows())
+        if (seams.Road.Trust == TrustRoad.NotPerformed)
         {
             input.Error.WriteLine(((TrustAnswer.NotPerformed)RootTrust.Decide(TrustRoad.NotPerformed, 0, [], root)).Line);
             return new Passage<IReadOnlyList<FileFacts>>.Through([.. files.Select(file => new FileFacts(file.Path, null, UnixFileMode.None))]);
@@ -207,7 +220,7 @@ public static class ExperimentGate
 
         var unread = reads.OfType<FactsRead.Unread>().Select(read => read.Reason).ToList();
         var facts = reads.OfType<FactsRead.Read>().Select(read => read.Facts).ToList();
-        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(TrustRoad.Kernel, uid, facts, root))];
+        IReadOnlyList<string> refusals = [.. reads.OfType<FactsRead.Refused>().Select(read => read.Reason), .. ProblemsOf(RootTrust.Decide(seams.Road.Trust, uid, facts, root))];
         if (unread.Count > 0)
         {
             return Passage<IReadOnlyList<FileFacts>>.Stop(ExitCodes.Environment, [.. unread.Concat(refusals).Select(reason => $"model-arms {input.Verb}: {reason}")]);

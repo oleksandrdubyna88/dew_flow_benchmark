@@ -3,7 +3,9 @@ using FluentAssertions;
 using ModelArms.Core.Experiment;
 using Xunit;
 using ArmsProgram = ModelArms.Program;
+using ModelArmsApp = ModelArms;
 using FactsRead = ModelArms.Adapters.FactsRead;
+using RootFacts = ModelArms.Adapters.RootFacts;
 using GateSeams = ModelArms.GateSeams;
 using VerbInput = ModelArms.VerbInput;
 
@@ -483,6 +485,99 @@ public sealed partial class ModelArmsProgramTests
         lines[0].Should().Contain("statx: no such tool");
         lines[1].Should().Contain("symbolic link").And.Contain("experiment.json");
         passed.Calls.Should().BeEmpty();
+    }
+
+    // The portable road: the Mac's road is handed to the gate through its seams on this Linux host, so the units run here and the composition on a real Mac is unobserved (E3 §8 item 25).
+    private static GateSeams MacSeams(GateSeams? from = null) =>
+        (from ?? GateSeams.Real) with { Road = PlatformKit.MacRoad, ReadFacts = (path, kind) => RootFacts.ReadFacts(path, kind, PlatformKit.MacRoad) };
+
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static void Close(ExperimentRoot root, string rootMode)
+    {
+        File.SetUnixFileMode(root.Root, (UnixFileMode)Convert.ToInt32(rootMode, 8));
+        foreach (var file in new[] { "experiment.json", "scenarios.json" })
+        {
+            File.SetUnixFileMode(Path.Combine(root.Root, file), (UnixFileMode)Convert.ToInt32("600", 8));
+        }
+    }
+
+    private static async Task<(int Code, string Error)> ThroughValidateAsync(ExperimentRoot root, GateSeams seams)
+    {
+        var line = ModelArmsCommandLine.Split(["validate", "--experiment", root.Root]).Ok();
+        var error = new StringWriter();
+        var input = new VerbInput(
+            line.Verb, line.Positionals, Bench.Cli.CommandLine.Parse(line.Rest), new StringWriter(), error, root.Environment,
+            ModelArmsApp.ModuleFiles.Beside(AppContext.BaseDirectory), TestContext.Current.CancellationToken);
+
+        var code = await ModelArmsApp.ExperimentGate.RunAsync(input, admitted => ModelArmsApp.Verbs.ValidateVerb.RunAsync(admitted, seams), seams);
+        return (code, error.ToString());
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task On_the_portable_road_the_gate_prints_its_line_once_judges_the_mode_and_compares_the_witness()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "modes are POSIX");
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        Close(root, "700");
+
+        var good = await ThroughValidateAsync(root, MacSeams());
+
+        good.Code.Should().Be(0, good.Error);
+        var lines = good.Error.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        lines.Should().ContainSingle(line => line.Contains("NOT verified", StringComparison.Ordinal) && line.Contains("the owner", StringComparison.Ordinal));
+        lines[0].Should().Contain("NOT verified", "the line comes before any other gate line");
+
+        Close(root, "775");
+        var open = await ThroughValidateAsync(root, MacSeams());
+
+        open.Code.Should().Be(4);
+        open.Error.Should().Contain("775").And.Contain("chmod go-w");
+        open.Error.Split('\n', StringSplitOptions.RemoveEmptyEntries).Count(line => line.Contains("NOT verified", StringComparison.Ordinal)).Should().Be(1, "the line is once, and it qualifies the refusal");
+        open.Error.Should().StartWith("trust check on macOS 15: NOT verified");
+
+        Close(root, "700");
+        var experiment = Path.Combine(root.Root, "experiment.json");
+        var longer = MacSeams(GateSeams.Real with
+        {
+            AfterRead = _ =>
+            {
+                File.AppendAllText(experiment, "\n");
+                return Task.CompletedTask;
+            },
+        });
+
+        var swapped = await ThroughValidateAsync(root, longer);
+
+        swapped.Code.Should().Be(4);
+        swapped.Error.Should().Contain("changed between its trust check and its read (length");
+    }
+
+    [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public async Task On_the_portable_road_a_swap_the_witness_cannot_see_is_named_as_not_verified_not_as_no_change()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "modes are POSIX");
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        Close(root, "700");
+        var path = Path.Combine(root.Root, "experiment.json");
+        var seams = MacSeams(GateSeams.Real with
+        {
+            AfterRead = _ =>
+            {
+                var original = File.GetLastWriteTimeUtc(path);
+                var other = root.Write("other.json", new string('x', (int)new FileInfo(path).Length));
+                File.SetUnixFileMode(other, (UnixFileMode)Convert.ToInt32("600", 8));
+                File.SetLastWriteTimeUtc(other, original);
+                File.Move(other, path, overwrite: true);
+                return Task.CompletedTask;
+            },
+        });
+
+        var passed = await root.PassAsync(seams, "status");
+
+        passed.ExitCode.Should().Be(0, "a swap that keeps the length and the write time is invisible to the witness: " + passed.Error);
+        passed.Error.Should().Contain("inode and change time", "what passed is said to be unchecked — the honesty is the assertion");
     }
 
     private static async Task MakeFifoAsync(string path)
