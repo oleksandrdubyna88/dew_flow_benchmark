@@ -81,6 +81,9 @@ internal static class KernelFacts
         }
     }
 
+    /// <summary>Whether <see cref="ReadSmall"/> can run here: Linux on x86-64, the one platform whose open flags were probed.</summary>
+    public static bool CanReadSmall => OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64;
+
     /// <summary>The bytes of a SMALL regular file, read without ever waiting and without ever reading more than <paramref name="limit"/> bytes: the file is opened with <c>O_NOFOLLOW</c> (a link fails at the open with <c>ELOOP</c>: nothing outside the folder is opened, so a link to a FIFO with a blocked writer does not release it), <c>O_NONBLOCK</c> (a FIFO opens at once instead of waiting for a
     /// writer), <c>O_NOCTTY</c> and <c>O_CLOEXEC</c>; its kind is judged from the DESCRIPTOR's facts (<see cref="ReadOpen"/>: a FIFO, a device, a folder is refused before a byte is read), the path must still name the same inode (the same device-and-inode comparison the gate lock makes after its open, for a swap made AFTER the open), and the read stops at <c>limit + 1</c> bytes: a file bigger than the limit is refused, never read whole. A failure is a value; nothing here throws what the library below it throws.
     /// <para>
@@ -89,7 +92,7 @@ internal static class KernelFacts
     /// </para></summary>
     public static Outcome<byte[]> ReadSmall(string path, int limit)
     {
-        if (!OperatingSystem.IsLinux() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
+        if (!CanReadSmall)
         {
             return Outcome<byte[]>.Failure($"{path}: no probed non-blocking open on this platform — refused rather than assumed");
         }

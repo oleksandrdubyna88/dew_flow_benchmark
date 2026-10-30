@@ -154,8 +154,8 @@ public sealed class FileGateLock : IGateLock
     /// <summary>The words <c>status</c> prints for a lock somebody has, after <c>held</c>.</summary>
     public static string WhoHolds(string path) => GateHolderNote.Describe(path);
 
-    /// <summary>STUB (red first).</summary>
-    public string Describe(string path) => string.Empty;
+    /// <summary>The port's question, answered from the holder's note (<see cref="GateHolderNote"/>): <c>by pid N since &lt;utc&gt;</c> or <c>(holder unknown)</c>.</summary>
+    public string Describe(string path) => WhoHolds(path);
 
     private GateLockAnswer Opened(string path, FileMode mode, bool note)
     {

@@ -46,6 +46,9 @@ public sealed class GateStep
     /// is a wedged holder the operator should be told about. The wait is NOT the experiment file's to set yet — the arm's runner (E2.S8) passes the value it wants.</summary>
     public static readonly TimeSpan DefaultLockCeiling = TimeSpan.FromHours(6);
 
+    /// <summary>The longest ceiling a timer can carry: <c>CancelAfter</c> takes at most <c>uint.MaxValue - 1</c> milliseconds (about 49.7 days) and throws past it — and only when the timer fires under contention, so a larger value is refused HERE, where it is passed.</summary>
+    public static readonly TimeSpan MaxLockCeiling = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
     private readonly GateDeps _deps;
 
     /// <param name="runner">Runs the step under the lock.</param>
@@ -54,11 +57,12 @@ public sealed class GateStep
     /// <param name="wait">The wait of a blocked round, with the operator's stop as its token.</param>
     /// <param name="log">The verb's output.</param>
     /// <param name="map">The arm map the log is scrubbed through.</param>
-    /// <param name="lockCeiling">The longest this gate waits for the lock; positive.</param>
+    /// <param name="lockCeiling">The longest this gate waits for the lock; positive and at most <see cref="MaxLockCeiling"/>.</param>
     /// <param name="probe">A test's hand on the loop; production passes none.</param>
     public GateStep(StepRunner runner, IGateLock gateLock, TimeProvider clock, Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, TimeSpan lockCeiling, GateProbe? probe = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(lockCeiling, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(lockCeiling, MaxLockCeiling);
         _deps = new GateDeps(runner, gateLock, clock, wait, log, map, lockCeiling, probe ?? GateProbe.None);
     }
 
@@ -76,6 +80,9 @@ internal sealed class GateRun
 
     /// <summary>The longest text of a model's <c>why</c> or status put in a log line: the reasons are the model's, and a log line is one line.</summary>
     private const int ShownCharacters = 300;
+
+    /// <summary>The longest <c>why</c> that is WRITTEN DOWN — in the <c>gate-wait</c> line and the marker, which every later entry reads again: a model's reason is a stranger's text, and a few kilobytes say what it means.</summary>
+    private const int KeptCharacters = 2048;
 
     private readonly StepContext _context;
     private readonly GateDeps _deps;
@@ -116,26 +123,39 @@ internal sealed class GateRun
         while (true)
         {
             var ran = await RunLockedAsync(stopping);
-            if (ran is not StepOutcome.Done done)
+            if ((ran is StepOutcome.Done done ? await AfterStepAsync(done, stopping) : ran) is { } ended)
             {
-                return ran;
+                return ended;
             }
-
-            var judged = Judge();
-            if (!GateStatus.WaitAgain(judged.Reading, judged.Waits, Limits.GateTries))
-            {
-                return await FinalizedAsync(done, judged, stopping);
-            }
-
-            await RoundAsync(judged, stopping);
         }
     }
 
-    /// <summary>What <c>gate.json</c> says and how many blocked rounds this step has already spent, both read from the files — on EVERY entry, whatever the runner did.</summary>
-    private Judgement Judge()
+    /// <summary>The step is done: read its status, and either end (the status is judged final, or cannot be read) or decide a round and wait it out (null: the loop goes round). A status that is there and cannot be read — a link, a FIFO, a file past the
+    /// limit — is NOT read as <c>missing</c>: the shell's "missing" means the model wrote nothing and the gate finishes, and finishing on a file nobody could judge would let a blocked gate pass. It stops resumable (exit 5) naming the file; the next entry
+    /// judges again, so the operator fixes the file and runs the arm again.</summary>
+    private async Task<StepOutcome?> AfterStepAsync(StepOutcome.Done done, CancellationToken stopping)
     {
-        var reading = GateStatus.Read(_files.ReadText(_statusFile));
-        var judged = new Judgement(reading, GateStatus.WaitsSoFar(_files.ReadTiming(), _step));
+        var status = GateStatusFile.Read(_statusFile);
+        if (status is GateStatusFile.Answer.Refused refused)
+        {
+            return _log.Stop(_step, 5, $"{_step}: the gate's status cannot be judged — {refused.Reason}; fix or remove it and run me again");
+        }
+
+        var judged = Judge(status);
+        if (!GateStatus.WaitAgain(judged.Reading, judged.Waits, Limits.GateTries))
+        {
+            return await FinalizedAsync(done, judged, stopping);
+        }
+
+        await RoundAsync(judged, stopping);
+        return null;
+    }
+
+    /// <summary>What <c>gate.json</c> says and how many blocked rounds this step has already spent, both read from the files — on EVERY entry, whatever the runner did.</summary>
+    private Judgement Judge(GateStatusFile.Answer status)
+    {
+        var reading = GateStatus.Read(status is GateStatusFile.Answer.Text text ? Outcome<string>.Success(text.Value) : Outcome<string>.Failure("gate.json does not exist"));
+        var judged = new Judgement(reading with { Why = Clamped(reading.Why) }, GateStatus.WaitsSoFar(_files.ReadTiming(), _step));
         _deps.Probe.Reached(GatePoint.StatusRead);
         return judged;
     }
@@ -196,7 +216,7 @@ internal sealed class GateRun
     private async Task<LockAnswer> QueuedAsync(string path, CancellationToken stopping)
     {
         var ceiling = Said(_deps.LockCeiling);
-        _log.Line($"{_step}: the gate lock is held {FileGateLock.WhoHolds(path)} — waiting at most {ceiling} for it (a holder that keeps it longer is stuck, not queued; `model-arms gate-lock status` names it)");
+        _log.Line($"{_step}: the gate lock is held {_deps.Lock.Describe(path)} — waiting at most {ceiling} for it (a holder that keeps it longer is stuck, not queued; `model-arms gate-lock status` names it)");
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(stopping);
         limit.CancelAfter(_deps.LockCeiling);
         try
@@ -205,7 +225,7 @@ internal sealed class GateRun
         }
         catch (OperationCanceledException) when (!stopping.IsCancellationRequested)
         {
-            return new LockAnswer.CeilingPassed($"{_step} could not take the gate lock in {ceiling}: it is held {FileGateLock.WhoHolds(path)} — the lock is not broken; run me again to resume it");
+            return new LockAnswer.CeilingPassed($"{_step} could not take the gate lock in {ceiling}: it is held {_deps.Lock.Describe(path)} — the lock is not broken; run me again to resume it");
         }
     }
 
@@ -238,8 +258,13 @@ internal sealed class GateRun
         return await DerivedOutputs.WriteAsync(_context, regenerate.Outputs, _files, git, stopping) is Outcome<IReadOnlyList<DerivedOutput>>.Fail failed ? _log.Stop(_step, 5, failed.Reason) : null;
     }
 
+    /// <summary>At most <see cref="KeptCharacters"/> characters, never cut inside a surrogate pair.</summary>
+    private static string Clamped(string text) => Cut(text, KeptCharacters);
+
     /// <summary>A model's text as one short line of the log.</summary>
-    private static string Shown(string text) => ExecutableRule.Printable(text.Length <= ShownCharacters ? text : text[..ShownCharacters] + "…");
+    private static string Shown(string text) => ExecutableRule.Printable(text.Length <= ShownCharacters ? text : Cut(text, ShownCharacters) + "…");
+
+    private static string Cut(string text, int limit) => text.Length <= limit ? text : text[..(char.IsHighSurrogate(text[limit - 1]) ? limit - 1 : limit)];
 
     private static string Said(TimeSpan span) =>
         span >= TimeSpan.FromMinutes(1) ? $"{span.TotalMinutes.ToString("0.##", CultureInfo.InvariantCulture)} min"
