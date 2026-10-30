@@ -163,6 +163,44 @@ public sealed class GateLockHolderTests
     }
 
     [Fact]
+    public async Task A_note_that_is_a_link_to_an_outside_FIFO_is_not_opened_at_all_and_a_blocked_writer_stays_blocked()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        var fifo = Path.Combine(root.Temp, "outside-fifo");
+        mkfifo(fifo, Convert.ToUInt32("600", 8)).Should().Be(0);
+        var writer = Task.Run(() =>
+        {
+            using var stream = new FileStream(fifo, FileMode.Open, FileAccess.Write);
+        }, TestContext.Current.CancellationToken);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        writer.IsCompleted.Should().BeFalse("the writer waits in open(2) for a reader of the FIFO");
+        File.Delete(GateLockTestKit.HolderOf(root));
+        File.CreateSymbolicLink(GateLockTestKit.HolderOf(root), fifo);
+
+        try
+        {
+            GateHolderNote.Describe(GateLockTestKit.LockOf(root)).Should().Be("(holder unknown)");
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+
+            writer.IsCompleted.Should().BeFalse("a link is refused at the open (O_NOFOLLOW): nothing outside the root was opened, so nobody was released — opening the FIFO for reading would have paired with the writer");
+        }
+        finally
+        {
+            if (!writer.IsCompleted)
+            {
+                await Task.Run(() =>
+                {
+                    using var reader = new FileStream(fifo, FileMode.Open, FileAccess.Read);
+                }, TestContext.Current.CancellationToken);
+            }
+
+            await writer;
+        }
+    }
+
+    [Fact]
     public async Task A_note_that_is_a_FIFO_or_a_link_to_one_or_a_folder_returns_at_once_as_holder_unknown()
     {
         Posix();

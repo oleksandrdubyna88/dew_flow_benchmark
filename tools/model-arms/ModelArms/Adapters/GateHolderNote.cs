@@ -100,7 +100,7 @@ internal static class GateHolderNote
 
     private sealed record Raw(int Pid, long? StartTicks, string Since);
 
-    /// <summary>The note, read through <see cref="KernelFacts.ReadSmall"/>: opened without blocking, judged by the descriptor (a regular file, the same inode the path names, no link), never read past 4 KiB. Anything else, or text that is not
+    /// <summary>The note, read through <see cref="KernelFacts.ReadSmall"/>: opened without blocking, judged by the descriptor (a regular file, the same inode the path names; a link is refused at the open by O_NOFOLLOW), never read past 4 KiB. Anything else, or text that is not
     /// a note, is <c>null</c> — never an exception and never a wait.</summary>
     private static Raw? Read(string note)
     {

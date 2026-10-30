@@ -24,7 +24,12 @@ internal static class KernelFacts
     private const int AtFdCwd = -100;
     private const int AtSymlinkNoFollow = 0x100;
     private const int AtEmptyPath = 0x1000;
-    private const int OpenNonBlockCloseOnExec = 0x800 | 0x80000;
+    // x86-64 Linux, probed (octal in asm-generic: O_NOCTTY 0400, O_NONBLOCK 04000, O_NOFOLLOW 0400000, O_CLOEXEC 02000000). aarch64's O_NOFOLLOW differs (0100000), which the X64-only gate in ReadSmall refuses.
+    private const int OpenNoCtty = 0x100;
+    private const int OpenNonBlock = 0x800;
+    private const int OpenNoFollow = 0x20000;
+    private const int OpenCloseOnExec = 0x80000;
+    private const int OpenSmallFile = OpenNoCtty | OpenNonBlock | OpenNoFollow | OpenCloseOnExec;
     private const uint StatxBasicStats = 0x7ff;
 
     // The facts the module uses and the statx mask bit that says the kernel reported each (STATX_TYPE, _MODE, _UID, _INO, _CTIME).
@@ -76,9 +81,8 @@ internal static class KernelFacts
         }
     }
 
-    /// <summary>The bytes of a SMALL regular file, read without ever waiting and without ever reading more than <paramref name="limit"/> bytes: the file is opened non-blocking (a FIFO opens at once instead of waiting for a writer) and
-    /// close-on-exec, its kind is judged from the DESCRIPTOR's facts (<see cref="ReadOpen"/>: a FIFO, a device, a folder is refused before a byte is read), the path must still name the same inode with no link in the way (the same device-and-inode
-    /// comparison the gate lock makes after its open), and the read stops at <c>limit + 1</c> bytes: a file bigger than the limit is refused, never read whole. A failure is a value; nothing here throws what the library below it throws.
+    /// <summary>The bytes of a SMALL regular file, read without ever waiting and without ever reading more than <paramref name="limit"/> bytes: the file is opened with <c>O_NOFOLLOW</c> (a link fails at the open with <c>ELOOP</c>: nothing outside the folder is opened, so a link to a FIFO with a blocked writer does not release it), <c>O_NONBLOCK</c> (a FIFO opens at once instead of waiting for a
+    /// writer), <c>O_NOCTTY</c> and <c>O_CLOEXEC</c>; its kind is judged from the DESCRIPTOR's facts (<see cref="ReadOpen"/>: a FIFO, a device, a folder is refused before a byte is read), the path must still name the same inode (the same device-and-inode comparison the gate lock makes after its open, for a swap made AFTER the open), and the read stops at <c>limit + 1</c> bytes: a file bigger than the limit is refused, never read whole. A failure is a value; nothing here throws what the library below it throws.
     /// <para>
     /// Linux on x86-64 only: <c>O_NONBLOCK</c> (<c>0x800</c>) and <c>O_CLOEXEC</c> (<c>0x80000</c>) are the values probed on this host (kernel 6.18, x86-64), and they are not assumed for another architecture — any other platform is refused, so the
     /// caller says "unknown" and never reads.
@@ -92,7 +96,7 @@ internal static class KernelFacts
 
         try
         {
-            var fd = OpenCall(path, OpenNonBlockCloseOnExec);
+            var fd = OpenCall(path, OpenSmallFile);
             return fd < 0 ? Outcome<byte[]>.Failure($"{path}: {Marshal.GetLastPInvokeErrorMessage()}") : ReadDescriptor(fd, path, limit);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
@@ -104,12 +108,17 @@ internal static class KernelFacts
     private static Outcome<byte[]> ReadDescriptor(int fd, string path, int limit)
     {
         using var handle = new SafeFileHandle(fd, ownsHandle: true);
-        var held = ReadOpen(fd, path);
-        var named = Read(path);
-        return held is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } open } && named is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } there } && open.Device == there.Device && open.Inode == there.Inode
+        return SameRegularInode(ReadOpen(fd, path), Read(path))
             ? Bounded(handle, path, limit)
-            : Outcome<byte[]>.Failure($"{path} is not a regular file of its own (a link, a FIFO, a device, a folder, or swapped while it was opened)");
+            : Outcome<byte[]>.Failure($"{path} is not a regular file of its own (a FIFO, a device, a folder, or swapped while it was opened)");
     }
+
+    /// <summary>Both reads are of a regular file and of the same file: equal device and inode.</summary>
+    private static bool SameRegularInode(FactsRead held, FactsRead named) =>
+        held is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } open }
+        && named is FactsRead.Read { Facts.Identity: { Kind: FileKind.Regular } there }
+        && open.Device == there.Device
+        && open.Inode == there.Inode;
 
     /// <summary>At most <paramref name="limit"/> bytes: the read asks for one byte more, and a file that gives it is refused as too big — the file is never read past <c>limit + 1</c> bytes whatever its size.</summary>
     private static Outcome<byte[]> Bounded(SafeFileHandle handle, string path, int limit)
