@@ -22,7 +22,7 @@ namespace ModelArms;
 /// inode under the name: 101 of 1500 passed with both stats equal before the ctime. It does not close everything: inode numbers can be reused on some
 /// file systems, and a ctime narrows that but does not close it; a swap AFTER the second <c>stat</c> is not seen; and nothing above the root is
 /// judged, so whoever can write the root (only the operator, by D17) or ANY ANCESTOR of it can still swap the root or an ancestor and change what is
-/// read. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here (its facts travel on as <see cref="ExperimentInput.JudgedScenarios"/>) and read by the verb, which must
+/// read. <b>On the portable road</b> (macOS, FreeBSD, a Linux without <c>statx</c>; E3.S0) the second look compares the kind, mode, length and write time — there is no inode — and the road's one printed line says so. The gate reads <c>experiment.json</c> only; <c>scenarios.json</c> is judged here (its facts travel on as <see cref="ExperimentInput.JudgedScenarios"/>) and read by the verb, which must
 /// look at it again as this does — <c>validate</c> does, through <see cref="StillTheSame"/>.
 /// </para></summary>
 public static class ExperimentGate
