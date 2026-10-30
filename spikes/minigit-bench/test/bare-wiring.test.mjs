@@ -1,6 +1,7 @@
 // The real wiring of a bare run (bare-config.mjs, bare-runner.mjs), through `main` and `buildRun` themselves: nothing of the runner is replaced by a stub here, only the
 // paid model (never reached: no token file exists in the fake home) and the network (the fetched-inputs cache and a local bare origin). The review findings M1, M2, M3
 // and the guard were missed because the tests stubbed exactly this layer.
+import { realHome } from './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -256,4 +257,13 @@ test('A_halt_passed_with_after_stop_is_recorded_in_the_run_map_and_the_ledger_on
   const refused = await resume(w, ['--after-stop', 'stop: auth', '--reason', 'it was a typo']);
   assert.match(refused.out, /series stop cannot be passed/);
   assert.equal(stops().length, 1, 'a refused pass writes nothing');
+});
+
+test('A_paid_build_with_the_operators_real_home_is_refused_by_the_token_reader_before_any_file_is_looked_at', async () => {
+  const w = await wiring();
+  const build = home => buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: true, seams: { repo: w.repo, home } });
+  await assert.rejects(build(realHome), /test runner.*real home/s, 'the real home through the real wiring');
+  const fake = await build(w.home);
+  assert.equal(fake.ok, false, 'control: the fake home has no token file');
+  assert.match(fake.reason, /no token/);
 });

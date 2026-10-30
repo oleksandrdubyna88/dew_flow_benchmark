@@ -1,4 +1,5 @@
 // The CLI of the bare runner (E3b.S1): the re-exec onto the harness core, `status`, the dry runs that write and spend nothing, and the refusals.
+import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';

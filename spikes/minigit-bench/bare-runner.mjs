@@ -41,10 +41,13 @@ const OPTIONS = {
   'toolchains-dir': { type: 'string' }, register: { type: 'boolean' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
 };
 const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', 'T1 breach', 'T2 breach', 'second void: contaminated']);
-const home = os.homedir();
-const defaults = {
-  seriesRoot: path.join(home, 'rsd', 'minigit'), toolchainsDir: path.join(home, 'rsd', 'minigit', 'toolchains'), versionsDir: path.join(home, '.local', 'share', 'claude', 'versions'),
-  seedFile: path.join(home, 'rsd', 'minigit', 'seeds', 'bare.seed'), workRoot: path.join(home, 'rsd', 'minigit', 'snapshot-work'),
+/** The operator's default folders, read from the CURRENT home at each call (never captured when the module loads, so a test's fake HOME is honoured). */
+const defaults = () => {
+  const home = os.homedir();
+  return {
+    seriesRoot: path.join(home, 'rsd', 'minigit'), toolchainsDir: path.join(home, 'rsd', 'minigit', 'toolchains'), versionsDir: path.join(home, '.local', 'share', 'claude', 'versions'),
+    seedFile: path.join(home, 'rsd', 'minigit', 'seeds', 'bare.seed'), workRoot: path.join(home, 'rsd', 'minigit', 'snapshot-work'),
+  };
 };
 
 const PAIR = /^pair:([1-3])$/;
@@ -85,8 +88,8 @@ async function cmdInit(v, write) {
   const identity = await harnessIdentity(REPO);
   if (!commit.ok || commit.value.code !== 0 || !identity.ok) { write(`init: cannot read the tag or the harness identity: ${commit.reason ?? identity.reason ?? commit.value.stderr}`); return EXIT.config; }
   const plan = initPlan({
-    inputsDir, seriesRoot: path.resolve(v['series-root'] ?? defaults.seriesRoot), seriesId: v['series-id'] ?? makeSeriesId({ date: new Date(), rand: randomBytes(2).toString('hex') }),
-    versionsDir: v['versions-dir'] ?? defaults.versionsDir, toolchainsDir: v['toolchains-dir'] ?? defaults.toolchainsDir, facts: { preregTag: tags[0], preregCommit: commit.value.stdout.trim(), harnessIdentity: identity.value },
+    inputsDir, seriesRoot: path.resolve(v['series-root'] ?? defaults().seriesRoot), seriesId: v['series-id'] ?? makeSeriesId({ date: new Date(), rand: randomBytes(2).toString('hex') }),
+    versionsDir: v['versions-dir'] ?? defaults().versionsDir, toolchainsDir: v['toolchains-dir'] ?? defaults().toolchainsDir, facts: { preregTag: tags[0], preregCommit: commit.value.stdout.trim(), harnessIdentity: identity.value },
   });
   if (!plan.ok) { write(`init: ${plan.reason}`); return EXIT.config; }
   describePlan(plan.value).forEach(write);
@@ -105,7 +108,7 @@ async function cmdSnapshot(v, write) {
   if (!['csharp', 'node'].includes(v.stack)) { write('usage error: --stack csharp|node'); return EXIT.config; }
   const recipe = loadRecipe(JSON.parse(readFileSync(path.join(SPIKE, 'inputs', 'cache-recipe.json'), 'utf8')));
   if (!recipe.ok) { write(recipe.reason); return EXIT.config; }
-  const made = await makeSnapshot({ stack: v.stack, recipe: recipe.value, root: path.resolve(v['work-root'] ?? defaults.workRoot), out: path.resolve(v.out ?? defaults.toolchainsDir) });
+  const made = await makeSnapshot({ stack: v.stack, recipe: recipe.value, root: path.resolve(v['work-root'] ?? defaults().workRoot), out: path.resolve(v.out ?? defaults().toolchainsDir) });
   if (!made.ok) { write(`snapshot: ${made.reason}`); return EXIT.failed; }
   const s = made.value;
   write(`snapshot ${v.stack}: ${s.dir}\n  tree sha256 ${s.treeSha256}\n  size ${s.sizeBytes} bytes\n  parts ${JSON.stringify(s.parts)}\n  packages ${s.packages.length}\n  record ${JSON.stringify(snapshotRecord(s))}`);
@@ -196,8 +199,8 @@ export async function main(argv, write = line => process.stdout.write(`${line}\n
   try { values = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false }).values; } catch (e) { write(`usage error: ${e.message}`); return EXIT.config; }
   const table = {
     init: () => cmdInit(values, write), snapshot: () => cmdSnapshot(values, write), status: () => cmdStatus(values, write), run: () => cmdRun(values, write, { resume: false }, seams), resume: () => cmdRun(values, write, { resume: true }, seams),
-    'seed-commit': () => { const r = commitSeed({ seedFile: values['seed-file'] ?? defaults.seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${values['seed-file'] ?? defaults.seedFile} (mode 600)` : `seed-commit: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
-    'seed-reveal': () => { const r = revealSeed({ seedFile: values['seed-file'] ?? defaults.seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
+    'seed-commit': () => { const r = commitSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? `seed committed: its hash ${r.value.hash} is in inputs/seed.sha256; the seed itself is in ${values['seed-file'] ?? defaults().seedFile} (mode 600)` : `seed-commit: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
+    'seed-reveal': () => { const r = revealSeed({ seedFile: values['seed-file'] ?? defaults().seedFile, inputsDir: path.resolve(values['inputs-dir'] ?? path.join(SPIKE, 'inputs')) }); write(r.ok ? 'seed revealed to inputs/seed.txt: commit and push it before pair 1' : `seed-reveal: ${r.reason}`); return r.ok ? EXIT.done : EXIT.config; },
   };
   if (!Object.hasOwn(table, command ?? '')) { write(`usage error: the commands are ${Object.keys(table).join(', ')}`); return EXIT.config; }
   return table[command]();

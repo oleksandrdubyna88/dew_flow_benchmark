@@ -700,6 +700,14 @@ commit, then a new registration (review m7). The directories of the other two ru
 and the session record's `egress` leaf carries `bytes`, `bytesCaptured` and `cacheGrowthBytes`. `callsOf` lives in `lib/stream-calls.mjs`; the session loader is `loadSessionDir` in `lib/smoke-load.mjs` (one loader, every read through
 `lib/agent-files.mjs`, nothing required). Row 7 reads the broker's `reason`: only `cap` makes `killed: cap`; `path`, `body`, `busy` and a missing reason do not.
 
+**Test hygiene: no test reaches the operator's secrets (review N18).** `readSecretFile` (`lib/secrets.mjs`, the one reader of the token and the PAT) THROWS when it runs under the test runner
+(`NODE_TEST_CONTEXT`, which `node --test` sets, or `BENCH_UNDER_TEST`, which the fake-home helper sets) and `home` is the real account home (`os.userInfo().homedir`, canonical path, so a link or `/.` does not
+get round it). The test is on the home and runs before any file is looked at, so the refusal itself touches no secret. A test whose whole subject is the real token opts in by name with
+`allowRealSecretUnderTest(reason)`; today only `test/smoke-real.test.mjs` may (`test/secrets-opt-in.test.mjs` pins the list). Every test file that drives the runner, the series loop, the collector, the phase,
+`init` or the rehearsal imports `test/fake-home.mjs` FIRST: it gives the process a `testsToDelete-` HOME, USERPROFILE and XDG_CONFIG_HOME (an empty `.config`), and links in only the public fetched-inputs cache so a
+test does not clone it again. `bare-runner.mjs` reads the home at each call (`defaults()`), not when the module loads. Two files keep the real home on purpose, because the real scorer decrypts the held-out suite
+under it: `test/bare-e2e.test.mjs` and `test/rehearse-v2-e2e.test.mjs`; they build their own context with a fake token and import neither `main` nor `buildRun`, and `test/fake-home.test.mjs` checks both.
+
 **Not built.** `aa-verdicts` and `report` (E3b.S4 and S5). `--what rehearse-v2` IS built (review m4, below). The prior spend (`inputs/spend-prior.json`) is $0.8263 over eight paid instrument sessions (the token check, $0.010, is approximate), not the plan's about $0.43 (each figure is read from the section its heading names, so a mention of the same words elsewhere is never read; the second re-smoke is $0.109323; review m1). The "token check" session the review named is the section "The token check" above (the team lead supplied its figure and evidence).
 
 ## Entry points

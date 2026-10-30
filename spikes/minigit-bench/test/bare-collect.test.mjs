@@ -1,4 +1,5 @@
 // Collecting a session back from its directory and classifying how it ended (E3b.S1 steps 5 and 7), over the bare-smoke fixture laid out as a live session dir.
+import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,5 @@
 // One launch phase (E3b.S1 step 5): layouts, workspaces, seeded caches, canaries planted and unplanted, the same-tick start, the spawn stamp and the skew.
+import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';

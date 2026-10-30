@@ -1,5 +1,6 @@
 // The bare runner's loop (E3b.S1): the schedule driven for real over the run-map, with a fake launch that lays the bare-smoke fixture into each session's directory
 // (and variants of it) and a fake scorer. The gates, the barrier, the voids and the re-run, the stops, the spend gate, the scorer's halts and the resume are what is under test.
+import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

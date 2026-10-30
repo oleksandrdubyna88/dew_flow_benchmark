@@ -1,4 +1,5 @@
 // `init` (E3b.S1 step 1): everything the series is pinned to, and a dry run that writes nothing.
+import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
