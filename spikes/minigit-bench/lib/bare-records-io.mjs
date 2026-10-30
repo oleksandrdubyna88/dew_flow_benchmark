@@ -19,7 +19,7 @@ const writeJson = (file, value) => {
 export function writeSessionRecord({ ctx, entry, score }) {
   const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
   const collected = collectSession({
-    layout, plan: { token: ctx.token, dummy: entry.dummy }, launched: null, canaryTokens: entry.canaryTokens ?? [], aliasBaseline: ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(entry.rid),
+    layout, plan: { token: ctx.token, dummy: entry.dummy }, launched: null, canaryTokens: entry.canaryTokens ?? [], aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(entry.rid),
     retired: false, abortReason: entry.abortReason ?? null, partnerDirs: entry.partnerDirs ?? [], table: ctx.table, policy: ctx.policy, home: ctx.home,
   });
   if (!collected.ok) return collected;

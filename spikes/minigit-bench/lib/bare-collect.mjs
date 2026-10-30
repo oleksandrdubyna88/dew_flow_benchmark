@@ -38,7 +38,8 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   const views = smokeViews(loaded.value, { table, policy });
   const cost = sessionCost({ E: views.E, O: views.O, T: views.T, table });
   const alias = aliasRecord({ events });
-  const aliasCheck = alias.ok ? checkAliases(aliasBaseline, alias.value) : { verdict: 'stop', reasons: [alias.reason] };
+  const baseline = aliasBaseline ?? (alias.ok ? { aliases: alias.value.aliases, internal: alias.value.internal } : null); // the first session of a series SETS the baseline (D12)
+  const aliasCheck = alias.ok ? checkAliases(baseline, alias.value) : { verdict: 'stop', reasons: [alias.reason] };
   const scan = scanSessionDir(layout.dir, { real: plan.token, dummy: plan.dummy });
   const texts = evidenceTexts(layout);
   const ctx = { rid: layout.rid, treeRoot: layout.work, home, harnessPaths: [layout.harness, layout.net], partnerPaths: partnerDirs, arm: 'bare', ownSecrets: [plan.token, plan.dummy] };
@@ -50,5 +51,5 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   const recomputeUsd = cost.known ? cost.usd : null;
   const outcome = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
   const usd = Math.max(stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null }) ?? 0, sessionSpendUsd(brokerLines));
-  return { ok: true, value: { loaded: loaded.value, views, cost, alias, aliasCheck, outcome, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } } };
+  return { ok: true, value: { loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } } };
 }

@@ -105,7 +105,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     let collected;
     try {
       collected = collectSession({
-        layout: s.layout, plan: s.plan, launched: s.launched, canaryTokens: s.canary.tokens, aliasBaseline: ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(s.rid),
+        layout: s.layout, plan: s.plan, launched: s.launched, canaryTokens: s.canary.tokens, aliasBaseline: ctx.aliasStore ? ctx.aliasStore.get() : ctx.aliasBaseline, handVerdicts: ctx.handVerdictsFor(s.rid),
         abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), table: ctx.table, policy: ctx.policy, home: ctx.home,
       });
     } catch (e) {
@@ -113,6 +113,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     }
     if (!collected.ok) return done(EXIT.failed, `collecting ${s.rid} failed: ${collected.reason}`);
     const { outcome, usd } = collected.value;
+    if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
     appendLedger(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd, what: outcome.class, rid: s.rid, t: new Date(deps.now()).toISOString() });
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags };
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [] }));
