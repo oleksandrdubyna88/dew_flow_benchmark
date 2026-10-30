@@ -2,7 +2,7 @@
 //   quietWindow   one 60 s window of 5 s samples -> a `quietVerdict` (cpu-sampler.mjs)
 //   waitForQuiet  re-check every 60 s up to 30 min; not quiet by then -> the caller exits 3 (resumable) with the last verdict
 //   noisyOverride `--accept-noisy <reason>` starts anyway with the flag `started not quiet`, never for a v2 phase whose v1 was quiet
-import { quietVerdict } from './cpu-sampler.mjs';
+import { calibrateSpin, quietVerdict } from './cpu-sampler.mjs';
 import { fail, ok } from './result.mjs';
 
 const NUMERIC = Object.freeze(['windowMs', 'intervalMs', 'meanCpuMax', 'sampleCpuMax', 'foreignCpuMax', 'memAvailMinPct', 'spinMaxRatio', 'spinIterations', 'spinCalibrationRuns', 'recheckMs', 'maxWaitMs']);
@@ -46,4 +46,15 @@ export function noisyOverride({ phase, v1Quiet, reason }) {
   if (typeof reason !== 'string' || reason.trim() === '') return fail('--accept-noisy needs a reason');
   if (phase === 'v2' && v1Quiet === true) return fail('--accept-noisy is refused for a v2 phase whose v1 was quiet: the cell would hold one quiet and one loaded phase');
   return ok({ flags: ['started not quiet'], reason: reason.trim() });
+}
+
+/**
+ * `init`'s spin calibration (E3b.S2 step 4): ONE window checked on conditions (a) to (d) only (the spin condition is what is being calibrated), and the probes run only when it is quiet:
+ * a baseline taken on a loaded machine would make every later "quiet" verdict wrong. -> `ok({ calibration, window })` | `fail(reason, { verdict })`.
+ */
+export async function calibrateIfQuiet({ thresholds, sampleOnce, sleep, probe }) {
+  const window = await quietWindow({ thresholds: { ...thresholds, spinMaxRatio: Infinity, calibratedMs: 1 }, sampleOnce, sleep });
+  if (!window.quiet) return fail(`the machine is not quiet, so the spin probe is not calibrated: ${window.failures.map(f => `${f.condition} (${f.detail})`).join('; ')}`, { verdict: window });
+  const calibration = await calibrateSpin({ runs: thresholds.spinCalibrationRuns, probe });
+  return ok({ calibration, window });
 }

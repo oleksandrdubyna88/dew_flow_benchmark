@@ -27,6 +27,15 @@ export const REPO = path.resolve(SPIKE, '..', '..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
 
+/** One real sampler of this machine (no series cells, this process as the harness), for `init`'s calibration window. -> `async () => sample`. */
+export async function sampleOnceFor({ thresholds, probe }) {
+  let n = 0;
+  return createSampler({
+    procApi: realProcApi, readText: p => (existsSync(p) ? readFileSync(p, 'utf8') : ''), cellIds: [], harnessPids: [String(process.pid)], liveSessions: () => liveSessionDirs(path.join(os.homedir(), 'rsd', 'minigit')),
+    spin: () => probe(n++), now: Date.now, patterns: thresholds.agentPatterns,
+  });
+}
+
 /** The quiet check, sampler and spin probe of this machine: `{ quiet(arg), startSampler(arg), loadFlag() }`. */
 function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now }) {
   const calibratedMs = map.spin?.medianMs ?? 1;

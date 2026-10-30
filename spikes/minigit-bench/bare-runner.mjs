@@ -18,15 +18,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { calibrateSpin, spinProbe } from './lib/cpu-sampler.mjs';
+import { spinProbe } from './lib/cpu-sampler.mjs';
 import { EXIT, reconcile, runLoop } from './lib/bare-series.mjs';
 import { applyInit, describePlan, initPlan } from './lib/bare-init.mjs';
 import { maskFor, pilotRid, ridOf, seriesId as makeSeriesId } from './lib/bare-plan.mjs';
-import { buildRun, REPO, SPIKE } from './lib/bare-config.mjs';
+import { buildRun, REPO, sampleOnceFor, SPIKE } from './lib/bare-config.mjs';
 import { loadRecipe, makeSnapshot, registerSnapshot, snapshotRecord } from './lib/cache-snapshot.mjs';
 import { readLedger } from './lib/ledger.mjs';
 import { harnessIdentity } from './lib/prereg-guard.mjs';
-import { loadQuiet } from './lib/quiet.mjs';
+import { calibrateIfQuiet, loadQuiet } from './lib/quiet.mjs';
 import { checkResumable, planSession, readRunMap } from './lib/run-map.mjs';
 import { commitSeed, revealSeed } from './lib/seed.mjs';
 import { spendGate, spendTotals } from './lib/spend-gate.mjs';
@@ -89,7 +89,10 @@ async function cmdInit(v, write) {
   describePlan(plan.value).forEach(write);
   if (v['dry-run']) { write('dry run: nothing was written'); return EXIT.done; }
   const quiet = loadQuiet(JSON.parse(readFileSync(path.join(inputsDir, 'quiet.json'), 'utf8')));
-  const cal = await calibrateSpin({ runs: quiet.value.spinCalibrationRuns, probe: async i => { const r = await spinProbe({ iterations: quiet.value.spinIterations, cpu: quiet.value.spinCpus[i % 2] }); if (!r.ok) throw new Error(r.reason); return r.value; } });
+  const probe = async i => { const r = await spinProbe({ iterations: quiet.value.spinIterations, cpu: quiet.value.spinCpus[i % 2] }); if (!r.ok) throw new Error(r.reason); return r.value; };
+  const calibrated = await calibrateIfQuiet({ thresholds: quiet.value, sampleOnce: await sampleOnceFor({ thresholds: quiet.value, probe }), sleep: ms => new Promise(r => setTimeout(r, ms)), probe });
+  if (!calibrated.ok) { write(`init: ${calibrated.reason}`); return EXIT.halt; }
+  const cal = calibrated.value.calibration;
   const done = applyInit({ plan: plan.value, spin: cal });
   write(done.ok ? `init done: ${plan.value.seriesDir}; spin median ${cal.medianMs.toFixed(2)} ms (spread ${cal.spreadMs.toFixed(2)} ms over ${cal.runs} runs)` : `init: ${done.reason}`);
   return done.ok ? EXIT.done : EXIT.config;

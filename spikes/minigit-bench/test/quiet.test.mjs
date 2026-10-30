@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { cpusOfMask, createSampler, liveSessionDirs, phaseFlags, startPhaseSampler } from '../lib/cpu-sampler.mjs';
-import { loadQuiet, noisyOverride, quietWindow, waitForQuiet } from '../lib/quiet.mjs';
+import { calibrateIfQuiet, loadQuiet, noisyOverride, quietWindow, waitForQuiet } from '../lib/quiet.mjs';
 import { processStartTime, writeState } from '../lib/session-state.mjs';
 import { tmpDir } from './helpers.mjs';
 
@@ -164,4 +164,22 @@ test('A_sampler_that_throws_is_recorded_and_never_stops_the_phase', async () => 
   assert.match(done.error, /proc vanished/);
   assert.equal(done.samples, 0);
   assert.deepEqual(done.flags, [], 'no sample, no flag; the record says the sampler failed');
+});
+
+test('The_spin_probe_is_calibrated_only_on_a_quiet_machine', async () => {
+  const q = loadQuiet(QUIET_JSON).value;
+  const calm = async () => ({ hostCpus: 0.1, harnessCpus: 0.05, foreignAgents: [], memAvailablePct: 70, liveSessions: [], spinMs: 999 });
+  const busy = async () => ({ hostCpus: 6, harnessCpus: 0.05, foreignAgents: [], memAvailablePct: 70, liveSessions: [], spinMs: 999 });
+  let probes = 0;
+  const probe = async () => { probes += 1; return 20; };
+  const c = clock();
+  const loaded = await calibrateIfQuiet({ thresholds: q, sampleOnce: busy, sleep: c.sleep, probe });
+  assert.equal(loaded.ok, false);
+  assert.match(loaded.reason, /host-cpu/);
+  assert.equal(probes, 0, 'a baseline is never taken on a loaded machine');
+  const quiet = await calibrateIfQuiet({ thresholds: q, sampleOnce: calm, sleep: c.sleep, probe });
+  assert.equal(quiet.ok, true, quiet.reason);
+  assert.equal(quiet.value.calibration.medianMs, 20);
+  assert.equal(probes, q.spinCalibrationRuns);
+  assert.equal(quiet.value.window.quiet, true, 'the spin of the window itself (999 ms) did not count: it is the thing being calibrated');
 });
