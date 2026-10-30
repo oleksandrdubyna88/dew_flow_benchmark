@@ -1,0 +1,21 @@
+{"verdict": "fix-then-ready",
+ "findings": [
+  {"id": "R1", "severity": "major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "line": 258,
+   "summary": "D5 says a cancelled or stopped probe parks nothing and logs that it was cancelled, but the real ProcessLauncher never throws when the caller cancels. It still starts agy and returns TimedOut: true with Cancelled: true. Reading() turns that into CannotCheck(\"timed out after 30 s\"), so on a stopped round an explicitly spent agy key is parked on the error text with a note that is false. S42 stays green only because its fake launcher throws a TaskCanceledException, which no real launcher does.",
+   "fix": "In AgyQuotaProbe.ReadAsync, do not launch when ct is already cancelled, and treat result.Cancelled (or ct.IsCancellationRequested) as a cancellation: throw OperationCanceledException or return a cancelled reading that parks nothing. Change S42's fake launcher to answer the way ProcessLauncher does (TimedOut: true, Cancelled: true) so the test watches real behaviour."},
+  {"id": "R2", "severity": "major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "line": 161,
+   "summary": "AtomicFile.Write is called without a sharingRetry, so it tries the move once. This file is read with no lock on every CanRun, on every 10 s ProbeAsync refresh and by --providers in other processes. On Windows a move over a file a reader has open is refused (AtomicFile's own remarks, measured 2026-10-20), so a park is lost and a 'could not be remembered' notice appears. Every other file that gets polled (SessionStore, Escalations, ConsultHealth) passes AtomicFile.SharingRetry.",
+   "fix": "Call AtomicFile.Write(FilePath, json, AtomicFile.SharingRetry)."},
+  {"id": "R3", "severity": "minor", "file": "src_mcp/tests/AStructuredVerdictOutranksTheWordScanTests.cs", "line": 74,
+   "summary": "S3 cannot fail for the reason the plan gives. Its first case uses the AGY_1_3_3 reason, and that reason says 'Resets in 88h49m9s'. RetryLadder.ResetOutlasts therefore makes Hopeless true against the 10-minute budget even if the scheduler is wired as `limited.Spent == true`. As a result no test pins the `?? RateLimit.Hopeless(reason)` fallback, and the coder records that this break-it check was not run (§12.7).",
+   "fix": "Use an undecided reason that is hopeless by its words but names no reset (for example 'Individual quota reached.' with nothing after it, or codex's 'You've hit your usage limit'). Then confirm the test goes red with `limited.Spent == true`."},
+  {"id": "R4", "severity": "minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "line": 134,
+   "summary": "HeldFile.TakeWithin is a Thread.Sleep spin of up to 30 s, and AfterRoundAsync calls Apply on the round's async continuation. common.reliability says a blocking lock is never taken directly on an async worker thread. ConsultantPlaces wraps the same call in Task.Run for this reason.",
+   "fix": "In AfterRoundAsync, run Apply(changes) through Task.Run (or an async take), so that a contended lock does not hold a thread-pool thread."},
+  {"id": "R5", "severity": "minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "line": 257,
+   "summary": "All keys share one try around the loop. An exception or cancellation while deciding one key throws away every park and lift already decided for the other keys in the same round (codex, claude, kimi), and the keys after it are never judged. D5 only says that the cancelled probe's own key parks nothing.",
+   "fix": "Catch per key inside the loop: log it, skip that key, and still apply the changes the other keys produced in one locked write."},
+  {"id": "R6", "severity": "minor", "file": "research/module_runners.md", "line": 4455,
+   "summary": "The fix commits are not recorded. DeepseekRuntime's empty quota key is missing from the docs' list of empty-key runtimes and from §12. ADeepseekRowHasNoCodexQuotaTests and ACooldownFileThatCannotBeReadIsNotReplacedTests are missing from module_tests.md, which still says 'seven C# classes'. The second class's doc comment cites `notes/hreview.md`, which does not exist in the repository.",
+   "fix": "Add DeepSeek to the list of runtimes with an empty key and to §12. Add both classes to module_tests.md. Replace the `notes/hreview.md` reference with the reason itself or with a path in the repository."}
+ ]}

@@ -1,0 +1,160 @@
+{
+ "C1": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 119720,
+   "tokensOut": 5434
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 612136,
+   "tokensOut": 11341
+  }
+ ],
+ "CR1": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 123414,
+   "tokensOut": 4314
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 613977,
+   "tokensOut": 12755
+  }
+ ],
+ "SRS1": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 120949,
+   "tokensOut": 3372
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 631932,
+   "tokensOut": 33757
+  }
+ ],
+ "C2": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 156291,
+   "tokensOut": 41250
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 658794,
+   "tokensOut": 71035
+  }
+ ],
+ "CR2": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 119687,
+   "tokensOut": 3667
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 609162,
+   "tokensOut": 13583
+  }
+ ],
+ "SRS2": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 117877,
+   "tokensOut": 4240
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 623821,
+   "tokensOut": 15407
+  }
+ ],
+ "C3": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 118469,
+   "tokensOut": 3695
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 717820,
+   "tokensOut": 47557
+  },
+  {
+   "stage": "code",
+   "number": 2,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 613462,
+   "tokensOut": 8878
+  }
+ ],
+ "CR3": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 123632,
+   "tokensOut": 3705
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 606515,
+   "tokensOut": 13787
+  }
+ ],
+ "SRS3": [
+  {
+   "stage": "plan",
+   "number": 1,
+   "reviewers": "all 2 reviewers answered",
+   "tokensIn": 118961,
+   "tokensOut": 4102
+  },
+  {
+   "stage": "code",
+   "number": 1,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 613432,
+   "tokensOut": 14303
+  },
+  {
+   "stage": "code",
+   "number": 2,
+   "reviewers": "all 8 reviewers answered",
+   "tokensIn": 620285,
+   "tokensOut": 13814
+  }
+ ]
+}

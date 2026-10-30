@@ -1,0 +1,28 @@
+{"status": "proceed",
+ "why": "Plan round 1 and code round 1 both ended in verdict proceed; all 18 findings were rejected with reasons, no code change was needed.",
+ "rounds": [
+  {"stage": "plan", "round": 1, "verdict": "proceed", "asked": 2, "answered": 2,
+   "findings": [
+    {"severity": "Major", "file": "plan", "summary": "A recovered account stays parked when its only row is excluded (no lift path without a launch)", "decision": "reject", "reason": "Plan frozen; manual lift is out of scope by D12.", "fixedIn": null},
+    {"severity": "Major", "file": "plan", "summary": "The 16 KiB ceiling is not bounded for changing unknown model keys", "decision": "reject", "reason": "Plan frozen; entries expire by reset and each write drops expired ones.", "fixedIn": null},
+    {"severity": "Major", "file": "plan", "summary": "A standing cooldown excludes the row, so the success-based Lift is unreachable after a re-login", "decision": "reject", "reason": "Plan frozen; a try-now button is deferred by D12.", "fixedIn": null},
+    {"severity": "Major", "file": "plan", "summary": "The guess doubling is dead because a cooldown expiry resets the counter", "decision": "reject", "reason": "Plan frozen; 'doubling restarts after expiry' is a recorded decision (D5, S39). The code matches the plan.", "fixedIn": null},
+    {"severity": "Minor", "file": "plan", "summary": "S9 uses unprefixed keys while D3/S14/S34 use the antigravity/ prefix", "decision": "reject", "reason": "Plan frozen; a wording point in a scenario, no defect in the code.", "fixedIn": null}
+   ]},
+  {"stage": "code", "round": 1, "verdict": "proceed", "asked": 8, "answered": 8,
+   "findings": [
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/ReviewerRuntime.cs", "summary": "Quota keys are untyped strings across runtime boundaries", "decision": "reject", "reason": "Out of scope: D3 fixes string QuotaKeyOf; a key type is a redesign with no behaviour.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "The store also decides how a vendor's refusal is interpreted", "decision": "reject", "reason": "The plan's design (D5); the structured verdict is not bypassed (Rank 0 for Spent==true, Spent passed to ReadResetAsync).", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "A slow probe's park can overwrite a newer Ok's lift", "decision": "reject", "reason": "Outcomes carry no launch time, so order across rounds is unknowable; D5 rule spent-wins; bounded by the reset; a new feature.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "Sequential probes can hold the round open for 90 s", "decision": "reject", "reason": "D5 asks one call per key, each bounded at 30 s; parallel probes would share one read-only agy home; rare case.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Parse hides JSON errors as an empty report", "decision": "reject", "reason": "D6/S15 pin CannotCheck('no report in the answer'); the decision is the same for every cause.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "QuotaCooldowns depends on IProcessLauncher", "decision": "reject", "reason": "The plan's D5 signature and the recorded deviation 2; style preference.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Hardcoded model table drifts when models are added", "decision": "reject", "reason": "D3 decided one explicit, measured table; S14 pins it.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Bucket lookup for namespaced/unknown keys gives GroupMissing", "decision": "reject", "reason": "That is D3/D5/S14 as planned: unknown group, no probe, stated/guess for Spent==true, not parked when undecided. Both key shapes resolve the same ids.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "Lock/directory I/O exceptions can escape Mutate", "decision": "reject", "reason": "Already covered: FolderRefusal, Hold.Unusable/Busy mapped to Refused (S37), and AfterRoundAsync catches Exception.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "Vendor text is not truncated before it is combined into the note", "decision": "reject", "reason": "Wrong: VendorReason.Written caps it (SafetyCap), output is bounded by the launcher, the note is capped at 400.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/src/Server/PanelService.cs", "summary": "Every CanRun/ProbeAsync reads and parses the JSON file", "decision": "reject", "reason": "D4 decided: read on every decision, no cache (two processes, under 16 KiB).", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "The stored note bakes in a stale relative duration", "decision": "reject", "reason": "Wrong: the note holds absolute ISO UTC instants only; 'in N h' is computed live (CooldownSentences, cooldownWords.ts).", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "AgyError.Parse allocates for large stderr", "decision": "reject", "reason": "Bounded: only on a non-zero exit, stderr capped by the launcher; no measurement.", "fixedIn": null}
+   ]}
+ ]}

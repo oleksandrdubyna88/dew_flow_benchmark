@@ -1,0 +1,39 @@
+{
+ "note": "What each fixer did with each Haiku finding, read by hand from arms/<arm>/hfix.md (the fixer's own notes) and git log of the 4-hfix step; outcome = fixed | plan-amended (the plan text was changed, the code was right) | not-fixed (with the fixer's reason). 'tracedDefect' marks the three findings that name a defect Part 6 arms had shipped.",
+ "CHH1": {
+  "A1": {"outcome": "fixed", "commit": "d398446b", "tracedDefect": "DeepSeek inherits the codex quota key (C1 shipped it)"},
+  "A2": {"outcome": "fixed", "commit": "d398446b"},
+  "A3": {"outcome": "fixed", "commit": "d398446b"},
+  "A4": {"outcome": "fixed", "commit": "6777dbb0"},
+  "A5": {"outcome": "fixed", "commit": "4ed32b38"},
+  "A6": {"outcome": "fixed", "commit": "82f00c41"},
+  "A7": {"outcome": "plan-amended", "commit": "82f00c41"},
+  "A8": {"outcome": "fixed", "commit": "eb79feef"},
+  "F1": {"outcome": "fixed", "commit": "dd2d3cc3"},
+  "F2": {"outcome": "fixed", "commit": "6777dbb0"}
+ },
+ "CHH2": {
+  "A1": {"outcome": "fixed", "commit": "d0809c4d"},
+  "A2": {"outcome": "fixed", "commit": "d0809c4d", "tracedDefect": "a multi-line AGY_ERROR is not read (SRS2 and SRS3 shipped it; the Part 6 coai judge listed it as missed)"},
+  "A3": {"outcome": "fixed", "commit": "d0809c4d"},
+  "A4": {"outcome": "fixed", "commit": "d0809c4d"},
+  "A5": {"outcome": "not-fixed", "reason": "the plan names no change to the rounds block"},
+  "A6": {"outcome": "not-fixed", "reason": "the plan's D2 and its section 5 disagree; left for the owner"},
+  "F1": {"outcome": "fixed", "commit": "0bbb2bca"},
+  "F2": {"outcome": "fixed", "commit": "0bbb2bca"},
+  "F3": {"outcome": "fixed", "commit": "0bbb2bca"},
+  "F4": {"outcome": "not-fixed", "reason": "a rename would give two tests one name"},
+  "F5": {"outcome": "fixed", "commit": "0bbb2bca"},
+  "F6": {"outcome": "fixed", "commit": "0bbb2bca"}
+ },
+ "CHH3": {
+  "A1": {"outcome": "fixed", "commit": "6a0097f5", "tracedDefect": "FirstOf: a transient refusal before a hopeless one hides it (SRS2 shipped it)"},
+  "A2": {"outcome": "fixed", "commit": "6a0097f5"},
+  "A3": {"outcome": "fixed", "commit": "6a0097f5"},
+  "A4": {"outcome": "fixed", "commit": "6a0097f5"},
+  "A5": {"outcome": "fixed", "commit": "6a0097f5"},
+  "B1": {"outcome": "fixed", "commit": "6a0097f5"},
+  "B2": {"outcome": "fixed", "commit": "6a0097f5"},
+  "B3": {"outcome": "fixed", "commit": "6a0097f5"}
+ }
+}

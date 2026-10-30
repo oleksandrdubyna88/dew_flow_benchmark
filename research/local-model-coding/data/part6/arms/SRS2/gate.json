@@ -1,0 +1,34 @@
+{"status": "proceed",
+ "why": "plan round 1 and code round 1 both returned proceed; 1 of 18 code findings accepted and fixed (b45d1ea2); the final whole-suite run is recorded in gate.md / the final answer",
+ "rounds": [
+  {"stage": "plan", "round": 1, "verdict": "proceed", "asked": 2, "answered": 2,
+   "findings": [
+    {"severity": "Major", "file": "(plan)", "summary": "A cancelled agy probe suppresses an explicit spent-quota park", "decision": "reject", "reason": "Plan frozen; D5/S42 chose it and the code does exactly that.", "fixedIn": null},
+    {"severity": "Major", "file": "(plan)", "summary": "Fail-open read can erase valid cooldowns on a later write", "decision": "reject", "reason": "Plan frozen; carried to the code round, not raised again.", "fixedIn": null},
+    {"severity": "Major", "file": "(plan)", "summary": "--providers one-shot path not verified end to end", "decision": "reject", "reason": "Plan frozen.", "fixedIn": null},
+    {"severity": "Major", "file": "(plan)", "summary": "Lock contention / probes inside the lock", "decision": "reject", "reason": "Plan frozen; already covered (probes run before the lock).", "fixedIn": null},
+    {"severity": "Major", "file": "(plan)", "summary": "Bare agy model ids without a tier suffix become unknown families", "decision": "reject", "reason": "Plan frozen; also wrong: WithoutEffort leaves a bare id unchanged.", "fixedIn": null},
+    {"severity": "Minor", "file": "(plan)", "summary": "Badge and line disagree for up to 10 s after expiry", "decision": "reject", "reason": "Plan frozen; D9 'no ticking' is deliberate.", "fixedIn": null}
+   ]},
+  {"stage": "code", "round": 1, "verdict": "proceed", "asked": 8, "answered": 8,
+   "findings": [
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaReset.cs", "summary": "Quota source is an untyped string", "decision": "reject", "reason": "D4 fixes the wire strings; enum is a refactor with no behaviour.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "agy tables can silently disagree", "decision": "reject", "reason": "Cross-checked by S14/S43; no defect today.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Spent bucket without usable reset masked by another's reset", "decision": "reject", "reason": "Decided by D6/S40.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Probe stderr persisted and sent to the card", "decision": "reject", "reason": "S15 requires it; notes are redacted and capped.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs", "summary": "Probes sequential up to 90 s", "decision": "reject", "reason": "D5: one bounded probe per key; not asked.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Fraction complexity > 4", "decision": "reject", "reason": "Wrong: it is 4; CA1502 is for the security lane.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "TryGroups complexity > 4", "decision": "reject", "reason": "Wrong: it is 4.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Number complexity > 4", "decision": "reject", "reason": "Wrong: it is 4.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs", "summary": "Probe bypasses the invocation's launcher", "decision": "reject", "reason": "Wrong: invocation's own request is used; launcher injected per D5.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "Sync lock wait in async pipeline", "decision": "reject", "reason": "HeldFile.TakeWithin is D4; already off-thread.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs", "summary": "AskingOf probes for non-hopeless undecided", "decision": "reject", "reason": "Wrong: default ReadResetAsync is NoPark without launching.", "fixedIn": null},
+    {"severity": "Blocking", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "Wrong JSON offset with leading whitespace", "decision": "reject", "reason": "Wrong by arithmetic; pinned by a new green test.", "fixedIn": null},
+    {"severity": "Blocking", "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs", "summary": "Task.Run(Apply) exception escapes the round", "decision": "accept", "reason": "Real: ArgumentException from a NUL path escaped AfterRoundAsync (read path and write path).", "fixedIn": "b45d1ea2"},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "reset == now is unusable", "decision": "reject", "reason": "D6: not after now is no reset.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/QuotaCooldowns.cs", "summary": "WarnOnce only once ever", "decision": "reject", "reason": "D4/S19: once per process.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/AgyError.cs", "summary": "Allocations when parsing AGY_ERROR", "decision": "reject", "reason": "Speculative; once per refused launch.", "fixedIn": null},
+    {"severity": "Major", "file": "src_mcp/runners/Reviewers/QuotaCooldownsRound.cs", "summary": "Sequential probes (duplicate)", "decision": "reject", "reason": "As above.", "fixedIn": null},
+    {"severity": "Minor", "file": "src_mcp/runners/Reviewers/AgyQuotaReport.cs", "summary": "Multi-bucket note names one window", "decision": "reject", "reason": "Note shape fixed by S40.", "fixedIn": null}
+   ]}
+ ]}
