@@ -34,3 +34,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | G-13 | holds | d9de4b | /home/jinx/rsd/minigit/s-20261030-b82e/handcheck/G-13.txt | team lead (Opus 5.5)
 2026-10-30 | G-1 | holds | 078dcd | /home/jinx/rsd/minigit/s-20261030-b82e/handcheck/readback-pair1.txt | Opus judge (Opus 5.5)
 2026-10-30 | G-1 | holds | 14d81c | /home/jinx/rsd/minigit/s-20261030-b82e/handcheck/readback-pair1.txt | Opus judge (Opus 5.5)
+2026-10-30 | instrument | harness:198106f80a8b | instrument: G-8 an interpreter heredoc is code in its own language, not shell (TS v2 97168d, series b82e); the ledger charges once per series and rid; on top of the line before (E3b.S4)
