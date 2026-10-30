@@ -235,6 +235,39 @@ public sealed class FileGateLockTests
     }
 
     [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void A_held_lock_whose_file_system_lets_a_second_open_through_is_released_and_refused()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "the honour check is off Windows");
+        using var temp = new TempFolder();
+        var path = temp.Combine(".gate.lock");
+        var other = temp.File("elsewhere", "elsewhere");
+        var leaky = new FileGateLock(TimeProvider.System, Poll) { SecondOpen = _ => new FileStream(other, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite) };
+
+        var answer = leaky.Take(path, create: true, note: true);
+
+        answer.Should().BeOfType<GateLockAnswer.Unread>().Which.Reason.Should().Contain("not honoured").And.Contain(path);
+        File.Exists(GateHolderNote.PathFor(path)).Should().BeFalse("a lock that is not a lock leaves no holder note");
+        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            // the lock file opens again with no sharing: the refused lock was released
+        }
+
+        using var honest = Lock().Take(path, create: true, note: false).Should().BeOfType<GateLockAnswer.Held>().Subject.Handle;
+        honest.Should().NotBeNull("with the real second open the lock is honoured and held");
+    }
+
+    [Fact]
+    public void The_conflict_code_is_measured_not_tabled_off_windows()
+    {
+        var source = File.ReadAllText(Path.Combine(Cli.Repository.Root, "tools", "model-arms", "ModelArms", "Adapters", "FileGateLock.cs"));
+
+        source.Should().Contain("WindowsSharingViolation").And.Contain("WindowsLockViolation", "the scan must still find the two Windows literals it leaves alone");
+        source.Should().Contain("LockProbe.Measure(", "the conflict code of every other host is observed");
+        source.Should().NotContain("LinuxWouldBlock").And.NotMatchRegex(@"\b11\b", "no table entry and no bare 11: the number is what the host's own runtime answered");
+    }
+
+    [Fact]
     public void A_runtime_with_locking_off_would_make_the_lock_inert_and_the_refusal_says_so()
     {
         FileGateLock.Refusal.Should().Be("file locking is disabled in this runtime — the gate lock would be inert");

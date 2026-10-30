@@ -12,8 +12,7 @@ namespace Bench.Tests.ModelArms;
 /// to keep arms' files from running). The tools are used here only as an independent witness: they are not the subject.
 /// <para>
 /// What this does NOT prove: any file system but the ones this suite ran on (ext4 and the scratch tmpfs here; a file system that omits a basic field is refused, not
-/// observed), a libc older than glibc 2.28 or musl 1.1.24 (no <c>statx</c>: refused, not observed), macOS or FreeBSD (refused as unprobed; the platform test skips
-/// here), or Windows (the trust check is declared not performed).
+/// observed), a libc older than glibc 2.28 or musl 1.1.24 (no <c>statx</c>: refused, not observed), macOS or FreeBSD (they take the portable road, E3.S0, and never this reader), or Windows (the trust check is declared not performed).
 /// </para></summary>
 [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
 public sealed class KernelFactsTests
