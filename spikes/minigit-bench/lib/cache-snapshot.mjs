@@ -95,9 +95,10 @@ const fill = (argv, resolved) => argv.map(a => a.replace(/\{([A-Z_]+)\}/g, (m, n
 const unresolved = argv => argv.find(a => /\{[A-Z_]+\}/.test(a));
 
 /** Run one command in the box (the layout, the proxy and the env of a session, nothing of the model's). -> `ok({ code, stdout, stderr })` | `fail`. */
-async function inBox({ layout, nodeDir, command, timeoutMs, name }) {
+async function inBox({ layout, nodeDir, command, timeoutMs, name, env: extra = {} }) {
   const argv = agentBoxArgv({ layout, arm: 'bare', toolchains: [], claudeBinary: process.execPath, nodeDir, command });
-  const env = agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir });
+  let env;
+  try { env = agentEnv({ layout, dummyToken: dummyToken('snapshot'), cellId: `cell-${name}`, nodeDir, extra }); } catch (e) { return fail(`the recipe's environment is refused: ${e.message}`); }
   const r = await runBounded(argv[0], argv.slice(1), { env, timeoutMs });
   if (!r.ok) return r;
   if (r.value.timedOut) return fail(`\`${command.join(' ')}\` timed out after ${timeoutMs} ms`);
@@ -153,7 +154,7 @@ export async function makeSnapshot({ stack, recipe, root, out, nodeDir = path.di
 }
 
 async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
-  const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid };
+  const box = { layout, nodeDir, timeoutMs: recipe.stepTimeoutMs, name: layout.rid, env: spec.env ?? {} };
   const resolved = await resolveAll({ ...box, spec: spec.resolve });
   if (!resolved.ok) return resolved;
   const steps = [];
@@ -165,7 +166,7 @@ async function runRecipe({ stack, spec, recipe, layout, nodeDir, out }) {
     if (!ran.ok) return ran;
     const printed = ran.value.stdout.trim();
     if (step.expectStdout !== undefined && printed !== step.expectStdout) return fail(`the step \`${command.join(' ')}\` printed '${printed.slice(0, 80)}', the recipe pins '${step.expectStdout}': the toolchain is not the pinned one`);
-    steps.push({ argv: command, code: ran.value.code, stdout: printed.slice(0, 200) });
+    steps.push({ argv: command, code: ran.value.code, stdout: step.expectStdout === undefined ? null : printed.slice(0, 200) }); // only a pinned step's output is kept: the rest names the operator's home
   }
   return finishSnapshot({ stack, spec, layout, out, resolved: resolved.value, steps });
 }

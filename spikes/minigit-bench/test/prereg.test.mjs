@@ -17,7 +17,8 @@ import { spawnSync } from 'node:child_process';
 const REPO = path.resolve(spikeDir, '..', '..');
 const INPUTS = path.join(spikeDir, 'inputs');
 const read = name => readFileSync(path.join(INPUTS, name), 'utf8');
-const PARENT_COMMIT = '85c54b7';
+// The source commit is the one the committed files NAME (all three must agree): regenerating from a later main commit changes the files and needs no change here.
+const PARENT_COMMIT = /at `([0-9a-f]{40})`/.exec(readFileSync(path.join(INPUTS, 'prediction.md'), 'utf8'))[1];
 const ELISION = /\[…[^\]]*…\]/g;
 
 const parent = async () => {
@@ -163,4 +164,12 @@ test('The_prior_spend_is_read_from_its_evidence_and_counts_every_paid_instrument
     assert.ok(e.usd > 0 && e.what && e.evidence, JSON.stringify(e));
     assert.equal(existsSync(path.join(REPO, e.evidence.split(' (')[0])), true, `${e.evidence} exists`);
   }
+});
+
+test('The_three_quoting_files_name_the_same_main_commit', () => {
+  const named = {
+    prediction: /at `([0-9a-f]{40})`/.exec(read('prediction.md'))?.[1], contract: /at `([0-9a-f]{40})`/.exec(read('analysis-contract.md'))?.[1], prompts: JSON.parse(read('prompts-bare.json')).source.commit,
+  };
+  assert.ok(named.prediction && named.contract && named.prompts, JSON.stringify(named));
+  assert.equal(new Set(Object.values(named)).size, 1, `one commit for every quote: ${JSON.stringify(named)}`);
 });

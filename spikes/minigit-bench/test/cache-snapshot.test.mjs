@@ -152,5 +152,18 @@ test('A_step_that_prints_another_version_than_the_recipe_pins_makes_no_snapshot'
   const ok = await makeSnapshot({ stack: 'csharp', recipe: { ...recipe, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && echo 10.0.113'], expectStdout: '10.0.113' }], capture: { nuget: 'box/nuget' } } } }, root: homeDir('snap-root'), out });
   t.after(() => makeWritable(out));
   assert.equal(ok.ok, true, ok.reason);
-  assert.equal(ok.value.steps[0].stdout, '10.0.113', 'the version a step printed is kept in the record');
+  assert.equal(ok.value.steps[0].stdout, '10.0.113', 'the version a pinned step printed is kept in the record');
+  const unpinned = await makeSnapshot({ stack: 'csharp', recipe: { ...recipe, stacks: { csharp: { steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && echo /home/someone/private'] }], capture: { nuget: 'box/nuget' } } } }, root: homeDir('snap-root'), out: homeDir('snap-out') });
+  assert.equal(unpinned.value.steps[0].stdout, null, 'an unpinned step\'s output is not kept: it may name the operator\'s home');
+});
+
+test('A_recipe_may_set_environment_variables_for_its_steps_and_they_reach_the_box', async t => {
+  if (!sandboxGate(t)) return;
+  const out = homeDir('snap-out');
+  const recipe = { hosts: 'bare', stepTimeoutMs: 60_000, stacks: { csharp: { env: { FROM_RECIPE: 'yes-1' }, steps: [{ argv: ['sh', '-c', 'mkdir -p "$NUGET_PACKAGES" && printf %s "$FROM_RECIPE"'], expectStdout: 'yes-1' }], capture: { nuget: 'box/nuget' } } } };
+  const r = await makeSnapshot({ stack: 'csharp', recipe, root: homeDir('snap-root'), out });
+  t.after(() => makeWritable(out));
+  assert.equal(r.ok, true, r.reason);
+  const bad = await makeSnapshot({ stack: 'csharp', recipe: { ...recipe, stacks: { csharp: { ...recipe.stacks.csharp, env: { HOME: '/x' } } } }, root: homeDir('snap-root'), out: homeDir('snap-out') });
+  assert.equal(bad.ok, false, 'the recipe may only ADD keys: it cannot replace one the box owns');
 });

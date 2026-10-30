@@ -5,8 +5,14 @@
   "stepTimeoutMs": 900000,
   "stacks": {
     "csharp": {
+      "env": {
+        "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",
+        "DOTNET_CLI_USE_MSBUILD_SERVER": "0",
+        "MSBUILDDISABLENODEREUSE": "1",
+        "UseSharedCompilation": "false"
+      },
       "steps": [
-        { "argv": ["dotnet", "--version"], "expectStdout": "10.0.113" },
+        { "argv": ["dotnet", "--version"], "expectStdout": "10.0.114" },
         { "argv": ["dotnet", "new", "console", "--force", "--output", ".", "--name", "snapshotapp"] },
         { "argv": ["dotnet", "build", "--nologo"] }
       ],

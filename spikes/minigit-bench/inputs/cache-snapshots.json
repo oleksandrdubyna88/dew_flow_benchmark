@@ -31,5 +31,46 @@
       "TYPES_NODE": "26.6.6"
     },
     "madeOn": "2026-10-30"
+  },
+  "csharp": {
+    "treeSha256": "0a5733e2d4f1ee4a791a4ed2de0b88b276417ff383908af4b38a0c62625c49a8",
+    "parts": {
+      "nuget": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "dotnet": "b07e994ceef8c2f36ff224f4b782c189bb043bcfbd55cf4fc0829062839b4e47"
+    },
+    "sizeBytes": 1025,
+    "packages": [],
+    "resolved": {},
+    "steps": [
+      {
+        "argv": [
+          "dotnet",
+          "--version"
+        ],
+        "stdout": "10.0.114"
+      },
+      {
+        "argv": [
+          "dotnet",
+          "new",
+          "console",
+          "--force",
+          "--output",
+          ".",
+          "--name",
+          "snapshotapp"
+        ],
+        "stdout": null
+      },
+      {
+        "argv": [
+          "dotnet",
+          "build",
+          "--nologo"
+        ],
+        "stdout": null
+      }
+    ],
+    "madeOn": "2026-10-30"
   }
 }
