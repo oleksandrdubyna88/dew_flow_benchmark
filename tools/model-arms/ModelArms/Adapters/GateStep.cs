@@ -138,7 +138,7 @@ internal sealed class GateRun
         var status = GateStatusFile.Read(_statusFile);
         if (status is GateStatusFile.Answer.Refused refused)
         {
-            return _log.Stop(_step, 5, $"{_step}: the gate's status cannot be judged — {refused.Reason}; fix or remove it and run me again");
+            return _log.Stop(_step, 5, $"{_step}: the gate's status cannot be judged — {refused.Reason}; fix it and run me again (removing it finishes the gate as missing)");
         }
 
         var judged = Judge(status);
