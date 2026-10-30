@@ -56,6 +56,7 @@ public sealed class ArmPathsTests
         (nameof(ArmPaths.Tmp), Arm.Tmp, At("r/abc/tmp")),
         (nameof(ArmPaths.Worktrees), Arm.Worktrees, At("r/abc/wt")),
         (nameof(ArmPaths.Worktree), Arm.Worktree("t1"), At("r/abc/wt/t1")),
+        (nameof(ArmPaths.CoaiData), Arm.CoaiData, At("r/abc/coai-data")),
         (nameof(ArmPaths.CoaiSettings), Arm.CoaiSettings("side"), At("r/abc/coai-data/side/settings.json")),
         (nameof(ArmPaths.McpNone), Arm.McpNone, At("r/abc/mcp-none.json")),
         (nameof(ArmPaths.McpCoai), Arm.McpCoai, At("r/abc/mcp-coai.json")),
