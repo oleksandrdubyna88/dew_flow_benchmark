@@ -315,6 +315,22 @@ public sealed class ChecksVerbTests
         Directory.Exists(kit.Paths.ObjectiveFolder).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("0")]
+    [InlineData("12 34")]
+    public async Task A_pid_file_that_holds_no_pid_is_refused_because_liveness_cannot_be_told(string text)
+    {
+        using var kit = await ChecksKit.CreateAsync();
+        kit.Root.Write($"pids/{kit.Name}.pid", text);
+
+        var run = await kit.RunAsync();
+
+        run.Code.Should().Be(4, text);
+        run.Error.Should().Contain("holds no pid");
+        kit.Bench.Recorded().Should().BeEmpty("the arm's code is not run under a runner that may still be writing the clone");
+    }
+
     [Fact]
     public async Task The_objective_marker_is_written_after_objective_json_and_not_on_a_stop()
     {

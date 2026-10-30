@@ -50,16 +50,10 @@ internal static class ChecksReport
             : Outcome<GitFacts>.Success(new GitFacts(Value(head), Value(commits), Value(uncommitted), Value(numstat), Value(shortstat), present));
     }
 
-    /// <summary>Step 7's CTRF: <c>out/objective/&lt;ctrfFile&gt;</c> through the bounded road (64 MiB — the real one is 11.7 MB), as text; why it cannot be read otherwise — absent, a link, a FIFO, past the limit, a file name that is not one, not a CTRF object. The caller reads a failure as no tests and says why.</summary>
+    /// <summary>Step 7's CTRF: <c>out/objective/&lt;ctrfFile&gt;</c> through the bounded road (64 MiB — the real one is 11.7 MB), as text; why it cannot be read otherwise — absent, a link, a FIFO, past the limit, not a CTRF object. (The name is a plain file name: the experiment reader refuses a separator or a climbing segment in <c>suite.ctrfFile</c>.) The caller reads a failure as no tests and says why.</summary>
     public static Outcome<string> Ctrf(ChecksPlan plan)
     {
-        var file = plan.Input.Experiment.Target.Suite.CtrfFile;
-        if (file.Length == 0 || file is "." or ".." || file.AsSpan().IndexOfAny('/', '\\') >= 0)
-        {
-            return Outcome<string>.Failure($"suite.ctrfFile '{file}' is not a plain file name");
-        }
-
-        var path = Path.Combine(plan.Paths.ObjectiveFolder, file);
+        var path = Path.Combine(plan.Paths.ObjectiveFolder, plan.Input.Experiment.Target.Suite.CtrfFile);
         return BoundedFile.Read(path, CtrfLimit, PlatformFactsReader.CurrentRoad) switch
         {
             BoundedRead.Bytes bytes => Parsed(Encoding.UTF8.GetString(bytes.Value)),
