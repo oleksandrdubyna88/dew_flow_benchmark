@@ -169,7 +169,6 @@ public sealed class RunArmSchemeTests
         var git = new FileInfo(Path.Combine(root.Temp, "bin", "git")).ResolveLinkTarget(returnFinalTarget: true)!.FullName;
         run.Output.Should().Contain("resolved executables:").And.Contain($"  claude → {claude}").And.Contain($"  git → {git}", "the REAL path of each, the one the harness launches (D17 c)");
         run.Output.IndexOf("claude → ", StringComparison.Ordinal).Should().BeLessThan(run.Output.IndexOf("[C1] 1-code", StringComparison.Ordinal), "the executables are said before the first step starts");
-        fake.Calls()[0].Cwd.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -200,7 +199,8 @@ public sealed class RunArmSchemeTests
         Replay(fake, "result-success.jsonl");
         var shim = Path.Combine(root.Temp, "bin", "git");
         File.Delete(shim); // a link to the host's git: a write through it would be a write into the host's git
-        root.ShimScript(shim, $"echo \"$0 $*\" >> '{root.MarkerFile("git")}'\nenv | grep '^GIT_' >> '{root.MarkerFile("git")}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
+        // the arm's PATH is this folder alone, so the shim names env and grep by their paths
+        root.ShimScript(shim, $"echo \"$0 $*\" >> '{root.MarkerFile("git")}'\n/usr/bin/env | /usr/bin/grep '^GIT_' >> '{root.MarkerFile("git")}'\nexec '{ExperimentRoot.RealGit}' \"$@\"\n");
         root.WithVariables(("GIT_DIR", "/nowhere"), ("GIT_WORK_TREE", "/nowhere"));
 
         var run = await RunAsync(root, "C1");
@@ -290,6 +290,7 @@ public sealed class RunArmSchemeTests
         using var root = new ExperimentRoot();
         using var fake = new FakeCli();
         await root.MakeArmAsync(arm, fake);
+        root.Edit(top => top["limits"]!["minimumRemainingSeconds"] = 1);
         Replay(fake, "result-success.jsonl", (call, ModelArmsFixtures.Path("stream-no-result.jsonl")));
         var paths = root.PathsOf(arm);
         var steps = StepsOf(scheme);

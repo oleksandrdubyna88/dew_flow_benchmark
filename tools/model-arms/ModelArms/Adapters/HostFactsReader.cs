@@ -105,7 +105,7 @@ internal static class HostFactsReader
     /// <summary><c>scenarios.json</c> as the gate judged it: read at the path the gate read the facts of (<see cref="FileFacts.Path"/>, the normalised one), then stat-ed
     /// again — by the gate's own helper — and refused (exit 4) when it is no longer the file that was judged. The answer is what <see cref="ScenariosFile.Read"/> made of
     /// the text, or why the file could not be read at all.</summary>
-    private static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ScenariosAsync(ExperimentInput input, GateSeams seams)
+    internal static async Task<Passage<Outcome<IReadOnlyList<Scenario>>>> ScenariosAsync(ExperimentInput input, GateSeams seams)
     {
         if (input.JudgedScenarios is not [var judged])
         {

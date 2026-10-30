@@ -85,7 +85,7 @@ public static class Program
             "make" => NotBuilt(input, "E4.S4"),
             "lock" => NotBuilt(input, "E4.S1"),
             "unlock" => NotBuilt(input, "E4.S1"),
-            "run-arm" => NotBuilt(input, "E2.S7"),
+            "run-arm" => ExperimentGate.RunAsync(input, RunArmVerb.RunAsync),
             "run-all" => NotBuilt(input, "E4.S3"),
             "chain" => NotBuilt(input, "E4.S5"),
             "checks" => NotBuilt(input, "E5.S2"),
