@@ -109,7 +109,7 @@ public static class PrepBaseVerb
     private static Passage<int> Baselined(PrepBaseRun run, Measured measured)
     {
         var mtp = TestLogSummary.Read(Text(run, measured.SuiteLog), run.Target.Suite.NamePrefix);
-        var suite = SuiteOf(measured.Suite, measured.SuiteLog, mtp.Failed, mtp.Total);
+        var suite = SuiteOf(measured.Suite, measured.SuiteLog, [.. mtp.Failed.Distinct(StringComparer.Ordinal)], mtp.Total);
         var node = TsTestLog.Read(Text(run, measured.ExtensionLog));
         var extension = SuiteOf(measured.Extension, measured.ExtensionLog, node.Failed, node.Tests);
         var host = $"{Environment.MachineName} ({run.Facts.Host})";

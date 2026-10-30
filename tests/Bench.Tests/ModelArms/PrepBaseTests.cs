@@ -367,5 +367,11 @@ public sealed class PrepBaseTests
 
         await act.Should().ThrowAsync<OperationCanceledException>("the stop travels up to Main, which says to run the same command again");
         File.Exists(bench.BaselineFile).Should().BeFalse("a baseline exists only from two suites that completed");
+
+        bench.Say("suite.sleep", "0\n");
+        var again = await bench.PrepBaseAsync();
+
+        again.Code.Should().Be(0, $"the same command redoes it: {again.Error}");
+        Directory.EnumerateDirectories(bench.Root.Root, "prep-base.prev-*").Should().ContainSingle("the stopped attempt's half-made base and logs were put aside, not mixed with the new ones");
     }
 }
