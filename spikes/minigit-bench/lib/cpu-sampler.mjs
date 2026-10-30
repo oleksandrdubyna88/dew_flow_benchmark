@@ -194,16 +194,17 @@ const meminfoPct = text => {
 };
 
 /**
- * The sampler's one I/O object. Reads `/proc/stat`, `/proc/meminfo`, `/proc/pressure/cpu` through `readText(path)` and the process table through
+ * The sampler's one I/O object. `cellIds` is a list or a function returning one, read at every sample (a cell planned after the sampler was built is still ours). Reads `/proc/stat`, `/proc/meminfo`, `/proc/pressure/cpu` through `readText(path)` and the process table through
  * `procApi`; `liveSessions()` lists sessions of any series that are live; `spin()` resolves to one probe's ms. The baseline is read when it is
  * created, so every call of the returned `sample()` has a previous reading. -> `async sample() -> { t, hostCpus, perCpu, harnessCpus, foreignCpus,
  * foreignCpusLowerBound, foreignAgents, memAvailablePct, psiSomeAvg10, liveSessions, spinMs }`.
  */
-export async function createSampler({ procApi, readText, cellIds, harnessPids, liveSessions, spin, now, patterns, clockTicks = 100 }) {
+export async function createSampler({ procApi, readText, cellIds: cellIdsOf, harnessPids, liveSessions, spin, now, patterns, clockTicks = 100 }) {
   let prevStat = parseProcStat(readText('/proc/stat'));
   let prevProcs = readProcs(procApi);
   let prevTicks = new Map(prevProcs.map(p => [p.pid, p.ticks]));
   let prevAt = now();
+  const cellIds = () => (typeof cellIdsOf === 'function' ? cellIdsOf() : cellIdsOf);
   return async function sample() {
     const t = now();
     const stat = parseProcStat(readText('/proc/stat'));
@@ -211,10 +212,10 @@ export async function createSampler({ procApi, readText, cellIds, harnessPids, l
     const dtMs = t - prevAt;
     const busy = hostBusy(prevStat, stat);
     const harnessTicks = procs.filter(p => harnessPids.includes(p.pid)).reduce((a, p) => a + Math.max(0, p.ticks - (prevTicks.get(p.pid) ?? 0)), 0);
-    const foreign = foreignCpu({ procs, cellIds, harnessPids, prev: prevTicks, dtMs, clockTicks });
+    const foreign = foreignCpu({ procs, cellIds: cellIds(), harnessPids, prev: prevTicks, dtMs, clockTicks });
     const out = {
       t, hostCpus: busy.known ? busy.cpus : null, perCpu: busy.known ? busy.perCpu : null, harnessCpus: harnessTicks / clockTicks / (dtMs / 1000),
-      foreignCpus: foreign.cpus, foreignCpusLowerBound: true, foreignAgents: foreignAgents(procs, { patterns, cellIds }),
+      foreignCpus: foreign.cpus, foreignCpusLowerBound: true, foreignAgents: foreignAgents(procs, { patterns, cellIds: cellIds() }),
       memAvailablePct: meminfoPct(readText('/proc/meminfo')), psiSomeAvg10: Number(/some avg10=([\d.]+)/.exec(readText('/proc/pressure/cpu') ?? '')?.[1] ?? NaN),
       liveSessions: liveSessions(), spinMs: await spin(),
     };

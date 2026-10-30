@@ -39,19 +39,20 @@ export async function sampleOnceFor({ thresholds, probe }) {
 }
 
 /** The quiet check, sampler and spin probe of this machine: `{ quiet(arg), startSampler(arg), loadFlag() }`. */
-function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now }) {
+function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now, procApi = realProcApi }) {
   const calibratedMs = map.spin?.medianMs ?? 1;
   const t = { ...thresholds, calibratedMs };
   const cpus = thresholds.spinCpus ?? [6, 7];
   let probes = 0;
   const spin = async () => { const r = await spinProbe({ iterations: thresholds.spinIterations, cpu: cpus[probes++ % cpus.length] }); if (!r.ok) throw new Error(r.reason); return r.value; };
-  const build = () => createSampler({
-    procApi: realProcApi, readText: p => (existsSync(p) ? readFileSync(p, 'utf8') : ''), cellIds: Object.keys(map.sessions).map(rid => `cell-${rid}`), harnessPids: [String(process.pid)],
+  // `cellIds` are the cells of THIS phase, handed in by the loop from the live run-map: the map read at start holds none of the sessions planned since
+  const build = cellIds => createSampler({
+    procApi, readText: p => (existsSync(p) ? readFileSync(p, 'utf8') : ''), cellIds, harnessPids: [String(process.pid)],
     liveSessions: () => liveSessionDirs(rsdRoot), spin, now, patterns: thresholds.agentPatterns,
   });
   return {
-    async quiet({ phase, v1Quiet }) {
-      const sampler = await build();
+    async quiet({ phase, v1Quiet, cellIds = [] }) {
+      const sampler = await build(cellIds);
       const check = () => quietWindow({ thresholds: t, sampleOnce: sampler, sleep });
       const waited = await waitForQuiet({ check, maxWaitMs: thresholds.maxWaitMs, recheckMs: thresholds.recheckMs, now, sleep });
       if (waited.quiet) return ok({ quiet: true, flags: [], numbers: waited.verdict.numbers, waitedMs: waited.waitedMs });
@@ -59,12 +60,12 @@ function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now }) {
       const o = noisyOverride({ phase, v1Quiet, reason: acceptNoisy });
       return o.ok ? ok({ quiet: false, flags: o.value.flags, reason: o.value.reason, failures: waited.verdict.failures }) : o;
     },
-    startSampler({ pair, phase }) {
-      const ready = build();
+    startSampler({ pair, phase, cellIds = [] }) {
+      const ready = build(cellIds);
       return startPhaseSampler({ sample: async () => (await ready)(), file: path.join(seriesDir, 'pairs', `p${pair}-${phase}-cpu.ndjson`), intervalMs: thresholds.intervalMs, thresholds: t, sleep });
     },
-    async loadFlag() {
-      const sampler = await build();
+    async loadFlag({ cellIds = [] } = {}) {
+      const sampler = await build(cellIds);
       const v = await quietWindow({ thresholds: t, sampleOnce: sampler, sleep, windowMs: thresholds.intervalMs * 2 });
       return !v.quiet;
     },
@@ -73,7 +74,7 @@ function machine({ map, thresholds, seriesDir, rsdRoot, acceptNoisy, now }) {
 
 /**
  * `{ seriesDir, map, kind, pair, args, paid, seams }` -> `ok({ ctx, deps, abort })` | `fail`. `kind` is `data`, `aa` or `pilot`. Reads the registered inputs and the fetched inputs
- * cache; the token only when `paid`. `seams` (`{ repo, home }`) are for tests: a run uses this repository and the operator's home. The identity in `ctx` is the one the
+ * cache; the token only when `paid`. `seams` (`{ repo, home, procApi }`) are for tests: a run uses this repository, the operator's home and the host's process table. The identity in `ctx` is the one the
  * harness has on DISK now, and the guard reads the run-map from disk at every call, so an acceptance written after this call is seen.
  */
 export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams = {} }) {
@@ -111,7 +112,7 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams =
     handVerdictsFor: rid => handVerdictsFor(amendmentsText, rid),
     abortReason: () => abort.reason, abortExit: () => abort.exit, inputsDir,
   };
-  const mach = machine({ map, thresholds: quiet.value, seriesDir, rsdRoot, acceptNoisy: args.acceptNoisy, now: Date.now });
+  const mach = machine({ map, thresholds: quiet.value, seriesDir, rsdRoot, acceptNoisy: args.acceptNoisy, now: Date.now, procApi: seams.procApi });
   const deps = {
     guard: ({ paid: p, requireSeed }) => preregGuard({ repo, runMap: readRunMap(ctx.runMapFile).value ?? map, paid: p, requireSeed }),
     retireStale: () => retireStale({ root: ctx.sessionsRoot, now: Date.now(), endCell: a => endCell({ ...a, killTree, procApi: realProcApi }) }),
@@ -119,7 +120,7 @@ export async function buildRun({ seriesDir, map, kind, pair, args, paid, seams =
       const r = await preflight({ home, nodeDir: ctx.nodeDir, tsDir: ctx.tsDir, claudeBinary: ctx.claudeBinary, stacks: stacks.value, install: false });
       return r.ok ? ok(null) : fail(`${r.reason}: ${(r.problems ?? []).join('; ')}`);
     },
-    quiet: arg => mach.quiet(arg), startSampler: arg => mach.startSampler(arg), loadFlag: () => mach.loadFlag(), now: Date.now,
+    quiet: arg => mach.quiet(arg), startSampler: arg => mach.startSampler(arg), loadFlag: arg => mach.loadFlag(arg), now: Date.now,
     scoreSession: arg => scoreSession({ ...arg, sleep }), phase: { listProjectDirs: () => { const d = path.join(home, '.claude', 'projects'); return existsSync(d) ? readdirSync(d, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => path.join(d, e.name)) : []; } },
   };
   return ok({ ctx, deps, abort });

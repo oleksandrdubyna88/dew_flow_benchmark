@@ -13,6 +13,10 @@ import { harnessIdentity } from '../lib/prereg-guard.mjs';
 import { openSeries, readRunMap, writeRunMap } from '../lib/run-map.mjs';
 import { INPUTS, SEED, TAG, commit, fixture, sha256, write } from './prereg-fixtures.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
+import { context, sleep } from './bare-ctx.mjs';
+import { SCORE, lay } from './bare-fixture.mjs';
+import { ridOf } from '../lib/bare-plan.mjs';
+import { runLoop } from '../lib/bare-series.mjs';
 
 const REGISTERED = ['stacks.json', 'prices-2026-10-29.json', 'crosscheck-policy.json', 'quiet.json', 'package-flags.json'];
 const SNAPSHOTS = { csharp: { treeSha256: 'f'.repeat(64), parts: { nuget: 'a' }, packages: [] }, node: { treeSha256: '1'.repeat(64), parts: { npm: 'b' }, packages: [] } };
@@ -20,23 +24,25 @@ const AMENDMENTS = '# Dated amendments\n';
 const text = file => readFileSync(file, 'utf8');
 
 /** A git repo (tagged, with a bare origin), an inputs folder as a run reads it, a fake home with NO token and a series whose run-map pins exactly what is on disk. */
-async function wiring({ map: over = {}, amendments = AMENDMENTS } = {}) {
+async function wiring({ map: over = {}, amendments = AMENDMENTS, quiet = {} } = {}) {
   const repo = fixture();
+  const base = context();
   const inputs = tmpDir('inputs');
   for (const f of REGISTERED) cpSync(path.join(spikeDir, 'inputs', f), path.join(inputs, f));
-  writeFileSync(path.join(inputs, 'cache-snapshots.json'), JSON.stringify(SNAPSHOTS));
+  writeFileSync(path.join(inputs, 'quiet.json'), JSON.stringify({ ...JSON.parse(text(path.join(inputs, 'quiet.json'))), ...quiet }));
+  writeFileSync(path.join(inputs, 'cache-snapshots.json'), JSON.stringify({ csharp: { ...SNAPSHOTS.csharp, parts: base.snapshots.csharp.parts }, node: { ...SNAPSHOTS.node, parts: base.snapshots.node.parts } }));
   writeFileSync(path.join(inputs, 'seed.sha256'), `${sha256(SEED)}\n`);
   writeFileSync(path.join(inputs, 'seed.txt'), `${SEED}\n`);
   writeFileSync(path.join(inputs, 'amendments.md'), amendments);
   const stacks = JSON.parse(text(path.join(inputs, 'stacks.json')));
   const home = tmpDir('home');
   const seriesDir = path.join(tmpDir('rsd'), 's-20261030-ab12');
-  mkdirSync(seriesDir, { recursive: true });
+  for (const d of ['s', 'pairs', 'canaries']) mkdirSync(path.join(seriesDir, d), { recursive: true });
   const { sessions = {}, ...fields } = over;
   const map = { ...openSeries({
     seriesId: 's-20261030-ab12', seedSha256: sha256(SEED), harnessIdentity: (await harnessIdentity(repo.repo)).value, preregTag: TAG, preregCommit: repo.sha, pins: stacks.pins,
     stacksSha256: sha256(text(path.join(inputs, 'stacks.json'))), pricesFile: 'prices-2026-10-29.json', pricesSha256: sha256(text(path.join(inputs, 'prices-2026-10-29.json'))),
-    snapshots: { csharp: SNAPSHOTS.csharp.treeSha256, node: SNAPSHOTS.node.treeSha256 }, snapshotDirs: { csharp: '/nowhere/cs', node: '/nowhere/nd' },
+    snapshots: { csharp: SNAPSHOTS.csharp.treeSha256, node: SNAPSHOTS.node.treeSha256 }, snapshotDirs: { csharp: base.snapshots.csharp.dir, node: base.snapshots.node.dir },
     claude: { path: '/nowhere/claude-2.1.310', sha256: 'x', version: '2.1.310' }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 }, ...fields,
   }), sessions };
   writeRunMap(path.join(seriesDir, 'run-map.json'), map);
@@ -159,4 +165,49 @@ test('The_bare_budget_is_raised_once_by_the_worst_case_of_the_re_runs_of_a_pair_
   const notStarted = await budgetOf({ amendments: `${AMENDMENTS}${RAISE}\n`, map: {} });
   assert.equal(notStarted.ok, false);
   assert.match(notStarted.reason, /already started/, 'a pair that has not started has no re-runs to finish');
+});
+
+// ---- the sampler of a phase (review M1) ---------------------------------------------------------------------------------------------
+
+/** A process table with ONE busy process whose environment is `environ` (every read of its stat adds a CPU-second): the host side of the sampler, stubbed. */
+const busyHost = environ => {
+  let ticks = 0;
+  return {
+    pids: () => ['4242'],
+    read: (pid, file) => {
+      if (file === 'stat') return `${pid} (worker) S 1 1 1 0 0 0 0 0 0 0 ${(ticks += 100)} 0`;
+      return { cmdline: 'node\0worker.js', status: 'Uid:\t1000\t1000\nCpus_allowed_list:\t0-5\n', environ: environ.join('\0') }[file];
+    },
+    signal: () => {},
+  };
+};
+
+/** One v1 phase through the REAL buildRun wiring and runLoop; only the model (a stub launch), the scorer and the host's process table are replaced. Resolves to the v1 sessions' run-map entries. */
+async function onePhase({ environOf }) {
+  const w = await wiring({ quiet: { intervalMs: 20, spinIterations: 1000, windowMs: 100, recheckMs: 20 } });
+  const procApi = busyHost(environOf(ridOf({ seed: SEED, pair: 1, stack: 'csharp', phase: 'v1', attempt: 1 })));
+  const built = await buildRun({ seriesDir: w.seriesDir, map: readRunMap(w.runMapFile).value, kind: 'data', pair: 1, args: { inputsDir: w.inputs }, paid: false, seams: { repo: w.repo, home: w.home, procApi } });
+  assert.equal(built.ok, true, built.reason);
+  const { ctx, deps } = built.value;
+  const driven = {
+    ...deps, guard: async () => ({ ok: true }), retireStale: async () => {}, preflight: async () => ({ ok: true }), quiet: async () => ({ ok: true, value: { quiet: true, flags: [] } }),
+    scoreSession: async () => ({ kind: 'environment', reason: 'stop after the launch' }),
+    phase: {
+      maskCheckMs: 1, procApi, listProjectDirs: () => [], spawn: () => ({}),
+      launchSession: async (plan, d) => { d.spawnBox(['bwrap'], {}); lay(plan.layout, undefined); await sleep(250); return { ok: true, value: { meta: JSON.parse(readFileSync(plan.layout.files.meta, 'utf8')), exit: { code: 0, signal: null } } }; },
+    },
+  };
+  const r = await runLoop({ ctx: { ...ctx, ceilingUsd: 500, bareBudgetUsd: 40 }, deps: driven, map: readRunMap(w.runMapFile).value });
+  const samples = readFileSync(path.join(w.seriesDir, 'pairs', 'p1-v1-cpu.ndjson'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+  return { r, samples, map: readRunMap(w.runMapFile).value };
+}
+
+test('The_sampler_counts_the_cells_of_the_phase_as_ours_and_a_stranger_as_foreign', async () => {
+  const ours = await onePhase({ environOf: rid => [`BENCH_CELL=cell-${rid}`] });
+  assert.ok(ours.samples.length >= 2, `the phase sampler wrote ${ours.samples.length} samples`);
+  assert.ok(ours.samples.every(s => s.foreignCpus < 0.5), `a process of the phase's own cell is not foreign load: ${ours.samples.map(s => s.foreignCpus.toFixed(1)).join()}`);
+  assert.ok(Object.values(ours.map.sessions).every(s => !s.run.flags.includes('foreign load')), 'no foreign load flag on a quiet host');
+  const stranger = await onePhase({ environOf: () => ['BENCH_CELL=cell-someone-elses'] });
+  assert.ok(stranger.samples.some(s => s.foreignCpus > 1), 'control: the same process under another cell id IS foreign');
+  assert.ok(Object.values(stranger.map.sessions).every(s => s.run.flags.includes('foreign load')));
 });

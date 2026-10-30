@@ -654,7 +654,8 @@ from a main commit that holds the parent §4.3 amendment (it waits for PR #118);
 no foreign `claude -p` / `codex exec` (another user's process counts); `MemAvailable` at least 25 %; no live session of any series under `~/rsd/minigit/*/s/`; and the spin probe median within 1.30 x
 the idle median calibrated at `init`. Not quiet: re-checked every 60 s for 30 min, then exit 3 with the verdict (foreign cmdlines through `maskTokens`). `--accept-noisy <reason>` starts anyway with
 the flag `started not quiet` and is refused for a v2 phase whose v1 was quiet. During a phase the sampler appends a line every 5 s to `pairs/p<k>-<phase>-cpu.ndjson` and **flags**, never kills:
-`foreign load` (a 60 s mean over 1.0 CPU, or a foreign agent), `harness core contended` (the spin median). The foreign-CPU figure is a lower bound. The mask is observed on the cell's inner processes
+`foreign load` (a 60 s mean over 1.0 CPU, or a foreign agent), `harness core contended` (the spin median). The foreign-CPU figure is a lower bound. Which processes are OURS is decided by the cell ids of the live run-map, handed to the sampler by the loop at every phase (review M1; the first version read the map once at start, which holds none of
+the sessions planned since, so a phase's own cells counted as foreign load); `createSampler` takes a list or a function and reads it at every sample. The mask is observed on the cell's inner processes
 (`Cpus_allowed_list`); a miss is an instrument miss, not a class.
 
 **The cache snapshots** (`bare-runner.mjs snapshot --stack csharp|node`). One snapshot per stack, made once through `inputs/cache-recipe.json` inside an agent box behind the egress proxy with the bare

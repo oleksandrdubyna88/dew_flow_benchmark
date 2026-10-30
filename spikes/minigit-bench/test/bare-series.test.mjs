@@ -1,7 +1,7 @@
 // The bare runner's loop (E3b.S1): the schedule driven for real over the run-map, with a fake launch that lays the bare-smoke fixture into each session's directory
 // (and variants of it) and a fake scorer. The gates, the barrier, the voids and the re-run, the stops, the spend gate, the scorer's halts and the resume are what is under test.
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
@@ -11,33 +11,9 @@ import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
 import { openSeries, readRunMap, transition } from '../lib/run-map.mjs';
-import { STAGED } from '../lib/smoke-load.mjs';
+import { FIXTURE, SCORE, lay } from './bare-fixture.mjs';
 import { SEED, context, sleep } from './bare-ctx.mjs';
 import { spikeDir } from './helpers.mjs';
-
-const FIXTURE = path.join(spikeDir, 'test', 'fixtures', 'real', 'claude-2.1.310-bare-smoke');
-const SCORE = { build: { ok: true }, visible: [{ script: 'test-v1.sh', passed: 10, failed: 0, expectedTotal: 10, summaryCaptured: true, buildFailed: false, exitCode: 0, timedOut: false, signal: null }],
-  heldout: { known: true, primary100: true, totals: { total: 29, passed: 29, failed: 0, blocked: 0, percent: 100 }, defects: 0, latency: { known: false, why: 'stub' } }, upstream: [] };
-
-/** The fixture laid into a session's directory; `variant` 'upstream' ends the session on a 529 (a registered void). */
-function lay(layout, variant) {
-  for (const [rel, flat] of Object.entries(STAGED)) {
-    if (!existsSync(path.join(FIXTURE, flat))) continue;
-    mkdirSync(path.dirname(path.join(layout.dir, rel)), { recursive: true });
-    copyFileSync(path.join(FIXTURE, flat), path.join(layout.dir, rel));
-  }
-  cpSync(path.join(FIXTURE, 'transcripts'), layout.transcripts, { recursive: true });
-  if (variant === 'upstream') {
-    const lines = readFileSync(layout.files.stream, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
-    const i = lines.findLastIndex(e => e.type === 'result');
-    lines[i] = { ...lines[i], is_error: true, api_error_status: 529 };
-    writeFileSync(layout.files.stream, `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
-    appendFileSync(layout.files.brokerLog, `${JSON.stringify({ t: '2026-10-30T10:30:00Z', seq: 99, event: 'forwarding' })}\n${JSON.stringify({ t: '2026-10-30T10:30:01Z', seq: 99, event: 'settled', status: 529, usage: null, chargedUsd: 0 })}\n`);
-  }
-  if (variant === 'auth') {
-    appendFileSync(layout.files.brokerLog, `${JSON.stringify({ t: '2026-10-30T10:30:00Z', seq: 99, event: 'forwarding' })}\n${JSON.stringify({ t: '2026-10-30T10:30:01Z', seq: 99, event: 'settled', status: 401, usage: null, chargedUsd: 0 })}\n`);
-  }
-}
 
 function harness(over = {}) {
   const base = context();

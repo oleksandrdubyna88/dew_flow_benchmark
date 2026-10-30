@@ -50,6 +50,9 @@ function fixedStep(map) {
   return unscored.length > 0 ? { action: 'score', sessions: unscored.map(s => ({ stack: s.stack, phase: s.phase, attempt: s.attempt, rid: s.rid })) } : { action: 'done' };
 }
 
+/** The cell ids of every session the live run-map holds: what the sampler must count as ours (the map the run started from holds none of the sessions planned since). */
+const cellIdsOf = h => Object.keys(h.get().sessions).map(rid => `cell-${rid}`);
+
 function ledgerKind(ctx, outcome) {
   if (ctx.kind !== 'data') return ctx.kind;
   return outcome.data ? 'data' : 'void';
@@ -58,13 +61,13 @@ function ledgerKind(ctx, outcome) {
 // ---- the gates ------------------------------------------------------------------------------------------------------------------
 
 /** -> `null` (go) or a `{ exit, message }`. */
-async function gates({ ctx, deps, step, state }) {
+async function gates({ ctx, deps, step, state, h }) {
   const guard = await deps.guard({ paid: true, requireSeed: ctx.kind === 'data' });
   if (!guard.ok) return done(EXIT.config, guard.reason);
   await deps.retireStale();
   const pre = await deps.preflight();
   if (!pre.ok) return done(EXIT.halt, `the preflight refuses: ${pre.reason}`);
-  const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null });
+  const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null, cellIds: cellIdsOf(h) });
   if (!quiet.ok) return done(EXIT.halt, quiet.reason, { verdict: quiet.verdict });
   state.quiet = quiet.value;
   const gate = spendGate({ ledger: readLedger(ctx.ledgerFile), liveUsd: 0, caps: step.sessions.map(() => ctx.caps.capUsd), ceilingUsd: ctx.ceilingUsd, bareBudgetUsd: ctx.bareBudgetUsd });
@@ -80,12 +83,12 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
       h.apply(planSession(h.get(), { rid: item.rid, pair: ctx.pair, ...item.session, kind: ctx.kind, label: step.label, mask: item.mask }));
     }
   }
-  const stopped = await gates({ ctx, deps, step, state });
+  const stopped = await gates({ ctx, deps, step, state, h });
   if (stopped) return stopped;
   if (step.phase === 'v2' && h.get().pairs?.[ctx.pair]?.barrierAtMs === undefined) h.commit({ ...h.get(), pairs: { ...(h.get().pairs ?? {}), [ctx.pair]: { barrierAtMs: deps.now() } } });
   for (const item of items) h.apply(transition(h.get(), item.rid, 'launching', { startedAt: new Date(deps.now()).toISOString() }));
   say(`launching ${items.map(i => `${i.rid} (mask ${i.mask})`).join(' and ')}`);
-  const sampler = deps.startSampler({ pair: ctx.pair, phase: step.phase });
+  const sampler = deps.startSampler({ pair: ctx.pair, phase: step.phase, cellIds: cellIdsOf(h) });
   let phase;
   try {
     phase = await launchPhase({ ctx, items, deps: deps.phase, signal });
@@ -133,7 +136,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
 async function runScore({ ctx, deps, h, step, say }) {
   const first = firstStack({ seed: ctx.seed ?? '', pair: ctx.pair, phase: step.sessions[0].phase });
   const ordered = [...step.sessions].sort((a, b) => (a.stack === first ? -1 : b.stack === first ? 1 : 0));
-  const flag = await deps.loadFlag();
+  const flag = await deps.loadFlag({ cellIds: cellIdsOf(h) });
   for (const ref of ordered) {
     const entry = ref.rid ? h.get().sessions[ref.rid] : Object.values(h.get().sessions).find(s => s.pair === ctx.pair && s.stack === ref.stack && s.phase === ref.phase && s.attempt === ref.attempt && s.kind === ctx.kind);
     const layout = layoutPaths(ctx.sessionsRoot, entry.rid);
