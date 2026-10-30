@@ -157,12 +157,16 @@ public sealed class FileGateLock : IGateLock
     private GateLockAnswer Opened(string path, FileMode mode, bool note)
     {
         AfterJudged?.Invoke(path);
-        var stream = Open(path, mode);
-        if (stream is null)
-        {
-            return mode == FileMode.Open && !Path.Exists(path) ? new GateLockAnswer.Absent() : new GateLockAnswer.Busy();
-        }
+        return Open(path, mode) is { } stream ? VerifiedOrHeld(stream, path, note) : NotTaken(path, mode);
+    }
 
+    /// <summary>No stream: an existing file that is gone is <c>Absent</c>; anything else — another holder, a create that lost the race — is <c>Busy</c> and is judged again on the next try.</summary>
+    private static GateLockAnswer NotTaken(string path, FileMode mode) =>
+        mode == FileMode.Open && !Path.Exists(path) ? new GateLockAnswer.Absent() : new GateLockAnswer.Busy();
+
+    /// <summary>The opened file is compared with the path; a mismatch drops it and answers the refusal, else it is the held lock (and, for a holder, its note).</summary>
+    private GateLockAnswer VerifiedOrHeld(FileStream stream, string path, bool note)
+    {
         AfterOpened?.Invoke(path);
         return Verified(stream, path) is { } refused ? Dropped(stream, refused) : new GateLockAnswer.Held(new HeldLock(stream, path, note ? _clock.GetUtcNow() : null));
     }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using FluentAssertions;
+using ModelArms.Adapters;
 using Xunit;
 
 namespace Bench.Tests.ModelArms;
@@ -18,6 +19,9 @@ public sealed class GateLockHolderTests
 
     [DllImport("libc", SetLastError = true)]
     private static extern int kill(int pid, int signal);
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int mkfifo([MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint mode);
 
     private static void Posix() => Assert.SkipWhen(OperatingSystem.IsWindows(), "the holder helper, /proc and signals are Linux's");
 
@@ -60,9 +64,9 @@ public sealed class GateLockHolderTests
     }
 
     [Theory]
-    [InlineData("a dead pid", 2000000000, "2026-10-30T08:00:00Z")]
-    [InlineData("a live pid that started at another time", 0, "2000-01-01T00:00:00Z")]
-    public async Task A_sidecar_that_does_not_name_a_live_holder_prints_holder_unknown_and_never_overrules_the_lock(string why, int pid, string startedUtc)
+    [InlineData("a dead pid", 2000000000, 0)]
+    [InlineData("a live pid whose kernel start time is not the one the note recorded", 0, 1)]
+    public async Task A_sidecar_that_does_not_name_a_live_holder_prints_holder_unknown_and_never_overrules_the_lock(string why, int pid, int ticksOff)
     {
         Posix();
         using var root = new ExperimentRoot();
@@ -70,10 +74,120 @@ public sealed class GateLockHolderTests
         held.Should().NotBeNull();
         var note = Sidecar(root);
         note["pid"] = pid == 0 ? Environment.ProcessId : pid;
-        note["started_utc"] = startedUtc;
+        note["start_ticks"] = RealTicks() + ticksOff;
         File.WriteAllText(GateLockTestKit.HolderOf(root), note.ToJsonString());
 
         (await GateLockTestKit.StatusAsync(root)).Should().Be($"{HeldLine} (holder unknown)", why);
+    }
+
+    /// <summary>The kernel's start time of this process, read from the function that computes it (never guessed); a null is a failed assertion.</summary>
+    private static long RealTicks()
+    {
+        var ticks = GateHolderNote.StartTicksOf(Environment.ProcessId);
+        ticks.Should().NotBeNull("the kernel names a start time for a live process (field 22 of /proc/<pid>/stat)");
+        return ticks!.Value;
+    }
+
+    [Fact]
+    public async Task A_note_that_names_the_live_pid_and_the_kernels_start_ticks_is_believed_whatever_a_clock_says()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        File.WriteAllText(GateLockTestKit.HolderOf(root), new JsonObject { ["pid"] = Environment.ProcessId, ["start_ticks"] = RealTicks(), ["since_utc"] = "2026-10-30T08:00:00Z" }.ToJsonString());
+
+        (await GateLockTestKit.StatusAsync(root)).Should().Be($"{HeldLine} by pid {Environment.ProcessId} since 2026-10-30T08:00:00Z", "the start time is the kernel's integer, the same for every reader — no two clock readings are compared");
+    }
+
+    [Fact]
+    public void A_live_holder_is_named_by_every_read_not_by_most_of_them()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+
+        var misses = Enumerable.Range(0, 300).Count(_ => !GateHolderNote.Describe(GateLockTestKit.LockOf(root)).StartsWith("by pid ", StringComparison.Ordinal));
+
+        misses.Should().Be(0, "a live holder that started near a second boundary used to read as unknown in about 1 of 30 reads (Process.StartTime drifts between two readings of one pid)");
+    }
+
+    [Theory]
+    [InlineData("123 (bash) S 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 987654 1 2 3", 987654L)]
+    [InlineData("123 (my proc) S 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 555 1 2 3", 555L)]
+    [InlineData("123 (a) b) S 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 42 1 2 3", 42L)]
+    [InlineData("123 ((x) S 9 8 7) R 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 77 1", 77L)]
+    [InlineData("123 (bash) S 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 12", 12L)]
+    [InlineData("123 (bash) S 1 2 3", null)]
+    [InlineData("123 (bash) S 1 123 123 0 -1 4194304 1 0 0 0 1 2 0 0 20 0 1 0 notanumber 1", null)]
+    [InlineData("123 bash S 1 123", null)]
+    [InlineData("", null)]
+    public void The_start_time_is_field_22_of_the_stat_line_read_after_the_last_closing_parenthesis(string stat, long? expected)
+    {
+        GateHolderNote.StartTicksFrom(stat).Should().Be(expected, "the command name (field 2) may hold spaces and parentheses, so the fields are counted after the LAST ')'");
+    }
+
+    [Fact]
+    public async Task A_note_far_bigger_than_a_note_is_not_read_and_reads_as_holder_unknown()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        var valid = new JsonObject { ["pid"] = Environment.ProcessId, ["start_ticks"] = RealTicks(), ["since_utc"] = "2026-10-30T08:00:00Z" }.ToJsonString();
+        await using (var stream = new FileStream(GateLockTestKit.HolderOf(root), FileMode.Create, FileAccess.Write))
+        {
+            await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes(valid), TestContext.Current.CancellationToken);
+            await stream.WriteAsync(new byte[10 * 1024 * 1024].Select(_ => (byte)' ').ToArray(), TestContext.Current.CancellationToken);
+        }
+
+        GateHolderNote.Describe(GateLockTestKit.LockOf(root)).Should().Be("(holder unknown)", "a valid note with ten megabytes of blanks after it is not a note: the reader reads at most 4 KiB and says unknown");
+    }
+
+    [Fact]
+    public async Task A_huge_note_costs_the_reader_a_bounded_amount_of_memory()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        await using (var stream = new FileStream(GateLockTestKit.HolderOf(root), FileMode.Create, FileAccess.Write))
+        {
+            stream.SetLength(200L * 1024 * 1024);
+        }
+
+        GateHolderNote.Describe(GateLockTestKit.LockOf(root));
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var said = GateHolderNote.Describe(GateLockTestKit.LockOf(root));
+        var spent = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        said.Should().Be("(holder unknown)");
+        spent.Should().BeLessThan(256 * 1024, "a 200 MB sparse note must not be read into memory (it cost 1 GB of RSS, and 1.2–3 GB gave an OutOfMemoryException exit 3)");
+    }
+
+    [Fact]
+    public async Task A_note_that_is_a_FIFO_or_a_link_to_one_or_a_folder_returns_at_once_as_holder_unknown()
+    {
+        Posix();
+        using var root = new ExperimentRoot();
+        using var held = GateLockTestKit.Lock().TryAcquire(GateLockTestKit.LockOf(root));
+        var note = GateLockTestKit.HolderOf(root);
+        var fifo = Path.Combine(root.Temp, "fifo");
+        mkfifo(fifo, Convert.ToUInt32("600", 8)).Should().Be(0);
+
+        foreach (var plant in new Action[]
+                 {
+                     () => { File.Delete(note); mkfifo(note, Convert.ToUInt32("600", 8)); },
+                     () => { File.Delete(note); File.CreateSymbolicLink(note, fifo); },
+                     () => { File.Delete(note); Directory.CreateDirectory(note); },
+                 })
+        {
+            plant();
+            var task = Task.Run(() => GateHolderNote.Describe(GateLockTestKit.LockOf(root)), TestContext.Current.CancellationToken);
+            (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken))).Should().BeSameAs(task, "reading a FIFO would wait for a writer for ever: the note is opened without blocking and its kind is judged from the descriptor");
+            (await task).Should().Be("(holder unknown)");
+            if (Directory.Exists(note))
+            {
+                Directory.Delete(note);
+            }
+        }
     }
 
     [Fact]
