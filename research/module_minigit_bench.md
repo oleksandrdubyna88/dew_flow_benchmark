@@ -403,7 +403,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A link planted at `box/out/audit.ndjson` is refused at every host-side read (before: its target was copied as the audit) | `agent-files-sites.test.mjs`, `agent-files.test.mjs` |
 | The box holds only the dummy even when the operator's own environment carries a real-looking token | `agent-box-token.test.mjs` |
 
-#### The re-smoke (2026-10-30, after the review fixes; NOT the committed fixture)
+#### The first re-smoke (2026-10-30, after the review fixes; NOT the committed fixture)
 
 `smoke-session.mjs --out ~/rsd/minigit/smoke/20261030T002834Z`, once, cap $0.20: envelope **$0.171801** (pilot spend), the broker's ledger
 $0.105236, wall 23 s, outcome `ok`. It showed what the fixes were for and two things that stop it replacing the fixture:
@@ -420,7 +420,24 @@ $0.105236, wall 23 s, outcome `ok`. It showed what the fixes were for and two th
   holds `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-4-5-20251001` and `claude-fable-5-1`. The broker therefore charged that
   request the reservation (0.05) instead of its price (the envelope's `modelUsage` says 0.116565), T5 broke (B 0.105236 against E 0.171801)
   and B-$1 is refuted. The row has to be read from the pricing page, not fitted from one observation; until it exists, an unpriced model
-  makes the broker UNDERcount a cell, which is the direction a cap must not err in.
+  makes the broker UNDERcount a cell, which is the direction a cap must not err in. **Fixed afterwards:** `claude-opus-4-8` is the CLI's
+  refusal-fallback model (stream subtype `model_refusal_fallback`) and now has a row (read from the pricing page 2026-10-30, and equal to
+  that run's own `modelUsage` figure 0.116565 exactly); and a model the table does not hold is charged at the dearest known rate of every token
+  class (`priced { known: false, usd, model, why: 'unpriced model: dearest known rates' }`, listed in `meta.broker.unpricedModels`), never at the
+  reservation. The in-model credential probe is **retired**: the models refuse it even framed as a test, it is not reworded, and B-S3b is
+  `not exercised` by design (B-S3 with its positive control covers the CLI's environ from the host).
+
+#### The second re-smoke (2026-10-30, `20261030T004243Z`; NOT yet the committed fixture)
+
+Same command, cap $0.20, the retired probe replaced by tool and subagent work: envelope **$0.109323**, the broker's ledger $0.1093233 (equal), O
+equal, 5 requests through the broker, none refused, wall 11 s, outcome `ok`. Held: B-R1, B-R2, B-N1 (12 refused `api.anthropic.com`, nothing
+allowed, no `tls-refused`), B-N2, B-S2, **B-$1 (T5)**, B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1, B-C1; B-S3b and B-K2 `not exercised`
+(by design; the session ended by itself). **B-S3 was refuted by one finding of the link scan, not by a token:** 8 samples, real token 0 times in
+every cmdline and environ, 32 dummy hits (the positive control), 0 real-token hits over 32 files, and ONE symlink in the tree, made by the CLI
+itself: `box/tmp/claude-<uid>/<box-work>/<session>/tasks/<agent id>.output` -> the subagent's own transcript under `box/config/projects/…/subagents/`
+(a target inside the session dir). The scan's rule is that any link in the agent-writable tree is a high-severity finding, so it counted;
+whether a link whose target resolves INSIDE the session dir should be reported without refuting B-S3 is a decision for the plan owner, so the
+fixture was not replaced.
 
 #### The network facts N-1…N-16 (observed 2026-10-29, this machine, CLI 2.1.310)
 
