@@ -104,24 +104,24 @@ internal static class GateHolderNote
     }
 
     /// <summary>The words <c>status</c> adds after <c>held</c> for a lock somebody has: <c>by pid N since &lt;utc&gt;</c> when the note is a regular file naming a live process that started at the time it says, else <c>(holder unknown)</c>.</summary>
-    public static string Describe(string lockPath) => Describe(lockPath, PlatformFactsReader.CurrentRoad.Holder);
+    public static string Describe(string lockPath) => Describe(lockPath, PlatformFactsReader.CurrentRoad);
 
     /// <summary><see cref="Describe(string)"/> with the road that believes the note handed in.</summary>
-    public static string Describe(string lockPath, HolderRoad road) =>
+    public static string Describe(string lockPath, PlatformRoad road) =>
         Believed(PathFor(lockPath), road) is { } note ? $"by pid {note.Pid} since {note.Since}" : "(holder unknown)";
 
     private sealed record Note(int Pid, string Since);
 
-    private static Note? Believed(string note, HolderRoad road) =>
-        Read(note) is { } read && IsLiveAndStartedThen(read, road) ? new Note(read.Pid, read.Since) : null;
+    private static Note? Believed(string note, PlatformRoad road) =>
+        Read(note, road.Bounded) is { } read && IsLiveAndStartedThen(read, road.Holder) ? new Note(read.Pid, read.Since) : null;
 
     /// <summary>What a note says, as parsed: the pid, the kernel's start ticks (Linux writers), the start second (every writer) and the acquisition time.</summary>
     internal sealed record Raw(int Pid, long? StartTicks, long? StartUnix, string Since);
 
     /// <summary>The note, read through <see cref="KernelFacts.ReadSmall"/>: opened without blocking, judged by the descriptor (a regular file, the same inode the path names; a link is refused at the open by O_NOFOLLOW), never read past 4 KiB. Anything else, or text that is not
     /// a note, is <c>null</c> — never an exception and never a wait.</summary>
-    private static Raw? Read(string note) =>
-        BoundedFile.Read(note, NoteLimit, PlatformFactsReader.CurrentRoad.Bounded) is BoundedRead.Bytes bytes ? Parsed(bytes.Value) : null;
+    private static Raw? Read(string note, BoundedRoad road) =>
+        BoundedFile.Read(note, NoteLimit, road) is BoundedRead.Bytes bytes ? Parsed(bytes.Value) : null;
 
     private static Raw? Parsed(byte[] bytes)
     {

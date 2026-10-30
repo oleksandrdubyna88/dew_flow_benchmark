@@ -32,8 +32,8 @@ public sealed class BoundedFileTests
         return path;
     }
 
-    /// <summary>Frees the thread a Portable read left in its open: a writer arriving makes the open return, and its close ends the read.</summary>
-    private static void Release(string fifo) => Task.Run(() => new FileStream(fifo, FileMode.Open, FileAccess.Write).Dispose());
+    /// <summary>Frees the thread a Portable read left in its open: a non-blocking read-write open of a FIFO never waits, and makes a reader's blocked open return.</summary>
+    private static void Release(string fifo) => PlatformKit.ReleaseFifo(fifo);
 
     [Theory]
     [InlineData(BoundedRoad.Kernel)]
@@ -100,5 +100,49 @@ public sealed class BoundedFileTests
         BoundedFile.Read(link, 10, BoundedRoad.Portable).Should().BeOfType<BoundedRead.Refused>().Which.Reason.Should().Contain("link");
         BoundedFile.Read(over, 10, BoundedRoad.Portable).Should().BeOfType<BoundedRead.Refused>().Which.Reason.Should().Contain("bigger");
         BoundedFile.Read(exact, 10, BoundedRoad.Portable).Should().BeOfType<BoundedRead.Bytes>().Which.Value.Should().HaveCount(10);
+    }
+
+    [Theory]
+    [InlineData(BoundedRoad.Kernel)]
+    [InlineData(BoundedRoad.Portable)]
+    public void A_file_in_a_folder_the_user_may_not_search_is_refused_naming_it_never_absent_and_never_a_throw(BoundedRoad road)
+    {
+        if (road == BoundedRoad.Kernel)
+        {
+            Linux();
+        }
+
+        Assert.SkipWhen(RootFacts.CurrentUid() == 0, "root searches a mode 000 folder");
+        using var temp = new TempFolder();
+        var notes = temp.Folder("notes");
+        var status = temp.File("""{"status":"proceed"}""", "notes", "gate.json");
+        var note = temp.File("""{"pid":1}""", "notes", ".gate.lock.holder");
+        File.SetUnixFileMode(notes, UnixFileMode.None);
+
+        var read = () => BoundedFile.Read(status, 100, road);
+        var answer = read.Should().NotThrow("C16 never throws: a model-made folder it may not search is a refusal").Subject;
+
+        answer.Should().BeOfType<BoundedRead.Refused>("a file nobody could look at is not a file the model did not write").Which.Reason.Should().Contain(status).And.Contain("cannot be looked at");
+        GateStatusFile.Read(status, road).Should().BeOfType<GateStatusFile.Answer.Refused>().Which.Reason.Should().Contain(status);
+        GateHolderNote.Describe(Path.Combine(notes, ".gate.lock"), road == BoundedRoad.Kernel ? PlatformKit.LinuxRoad : PlatformKit.MacRoad)
+            .Should().Be("(holder unknown)", "the note is a hint: an unsearchable folder names no holder and throws nothing");
+        note.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void On_the_portable_road_the_ceiling_covers_the_whole_read_the_link_check_included()
+    {
+        using var temp = new TempFolder();
+        var file = temp.File("plain", "plain");
+        var watch = Stopwatch.StartNew();
+
+        var answer = BoundedFile.Read(file, 100, BoundedRoad.Portable, TimeSpan.FromMilliseconds(300), _ =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(4));
+            return null;
+        });
+
+        answer.Should().BeOfType<BoundedRead.Refused>("a stalled file system can stall the path's own check as well as the open").Which.Reason.Should().Contain("was not read within");
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3));
     }
 }

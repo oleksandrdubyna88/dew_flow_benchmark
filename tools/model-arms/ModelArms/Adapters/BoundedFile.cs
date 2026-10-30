@@ -38,16 +38,29 @@ internal static class BoundedFile
     public static BoundedRead Read(string path, int limit, BoundedRoad road) => Read(path, limit, road, OpenCeiling);
 
     /// <summary>The same with the ceiling handed in: a test that plants a FIFO does not wait the production five seconds for each.</summary>
-    internal static BoundedRead Read(string path, int limit, BoundedRoad road, TimeSpan ceiling) =>
-        Judged(path) ?? (road == BoundedRoad.Kernel ? Kernel(path, limit) : Portable(path, limit, ceiling));
+    internal static BoundedRead Read(string path, int limit, BoundedRoad road, TimeSpan ceiling) => Read(path, limit, road, ceiling, Judged);
 
-    /// <summary>The answer the path alone decides, or <c>null</c> when the file must be opened: a link is refused (nothing it names is read), a path that names nothing is absent.</summary>
-    private static BoundedRead? Judged(string path) =>
-        IsLink(path) ? new BoundedRead.Refused($"{path} is a link — what it names is not read (D17)")
-        : !Path.Exists(path) ? new BoundedRead.Absent()
-        : null;
+    /// <summary>The same with the path's own judgement handed in: the only way a test can make the link check stall, to see the ceiling cover it.</summary>
+    internal static BoundedRead Read(string path, int limit, BoundedRoad road, TimeSpan ceiling, Func<string, BoundedRead?> judge) =>
+        road == BoundedRoad.Kernel ? judge(path) ?? Kernel(path, limit) : Portable(path, limit, ceiling, judge);
 
-    /// <summary>True for a symbolic link, a dangling one included: the file's own attributes say so (<c>ReparsePoint</c>) without reading what it names. A path that names nothing reads as <c>-1</c>, which is no link.</summary>
+    /// <summary>The answer the path alone decides, or <c>null</c> when the file must be opened: a link is refused (nothing it names is read), a path that names nothing is absent, and a path the host cannot look at (a parent folder the user may not search) is
+    /// <see cref="BoundedRead.Refused"/> — never absent, never a throw: C16 answers for every input.</summary>
+    private static BoundedRead? Judged(string path)
+    {
+        try
+        {
+            return IsLink(path) ? new BoundedRead.Refused($"{path} is a link — what it names is not read (D17)")
+                : !Path.Exists(path) ? new BoundedRead.Absent()
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new BoundedRead.Refused($"{path} cannot be looked at: {ex.Message}");
+        }
+    }
+
+    /// <summary>True for a symbolic link, a dangling one included: the file's own attributes say so (<c>ReparsePoint</c>) without reading what it names. A path that names nothing reads as <c>-1</c>, which is no link; a folder the user may not search makes the runtime throw, which <see cref="Judged"/> turns into a refusal.</summary>
     private static bool IsLink(string path)
     {
         var attributes = new FileInfo(path).Attributes;
@@ -57,33 +70,34 @@ internal static class BoundedFile
     private static BoundedRead Kernel(string path, int limit) =>
         KernelFacts.ReadSmall(path, limit).Match<BoundedRead>(bytes => new BoundedRead.Bytes(bytes), reason => new BoundedRead.Refused(reason));
 
-    private static BoundedRead Portable(string path, int limit, TimeSpan ceiling)
+    /// <summary>The WHOLE read on a background thread under the ceiling — the path's own check, the folder test and the open and read alike, because a stalled file system stalls any of them and the refusal's words say so.</summary>
+    private static BoundedRead Portable(string path, int limit, TimeSpan ceiling, Func<string, BoundedRead?> judge)
     {
-        if (Directory.Exists(path))
-        {
-            return new BoundedRead.Refused($"{path} is not a regular file (D17)");
-        }
-
         var done = new TaskCompletionSource<BoundedRead>(TaskCreationOptions.RunContinuationsAsynchronously);
-        new Thread(() => done.SetResult(OpenedAndRead(path, limit))) { IsBackground = true, Name = "bounded-file-read" }.Start();
+        new Thread(() => done.SetResult(Whole(path, limit, judge))) { IsBackground = true, Name = "bounded-file-read" }.Start();
         return done.Task.Wait(ceiling)
             ? done.Task.Result
             : new BoundedRead.Refused($"{path} was not read within {ceiling.TotalSeconds:0.##} s — a FIFO with no writer, or a stalled file system; not read (D17)");
     }
 
-    /// <summary>The thread's whole work. A detached edge: nothing here may escape as an exception — an unhandled one on this thread would end the process — so every failure of the open or the read is a refusal with its words.</summary>
-    private static BoundedRead OpenedAndRead(string path, int limit)
+    /// <summary>The thread's whole work. A detached edge: nothing here may escape as an exception — an unhandled one on this thread would end the process — so every failure is a refusal with its words.</summary>
+    private static BoundedRead Whole(string path, int limit, Func<string, BoundedRead?> judge)
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            var read = ReadUpTo(stream, limit + 1);
-            return read.Length > limit ? new BoundedRead.Refused($"{path} is bigger than {limit} bytes") : new BoundedRead.Bytes(read);
+            return judge(path) ?? (Directory.Exists(path) ? new BoundedRead.Refused($"{path} is not a regular file (D17)") : OpenedAndRead(path, limit));
         }
         catch (Exception ex)
         {
             return new BoundedRead.Refused($"{path} cannot be read: {ex.Message}");
         }
+    }
+
+    private static BoundedRead OpenedAndRead(string path, int limit)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var read = ReadUpTo(stream, limit + 1);
+        return read.Length > limit ? new BoundedRead.Refused($"{path} is bigger than {limit} bytes") : new BoundedRead.Bytes(read);
     }
 
     private static byte[] ReadUpTo(Stream stream, int count)
