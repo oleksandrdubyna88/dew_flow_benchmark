@@ -3,9 +3,9 @@
 One bare session through the agent box, the egress proxy and the credential broker (E2.S2), kept sanitised as a replay fixture. Every figure below is computed by `lib/smoke-verdicts.mjs`; nothing is typed.
 
 - Command: `node spikes/minigit-bench/smoke-session.mjs --out ~/rsd/minigit/smoke/<UTC stamp>`
-- Session id: a4a25228-6d5a-407b-bbaa-5ec7f9b11e63
-- Envelope cost: $0.10932329999999998 - listed as pilot spend (parent plan section 13); the broker's ledger: $0.1093233
-- Outcome: ok; wall 11077 ms; stopped: no
+- Session id: 58c84da7-01db-4212-8770-753c821372e8
+- Envelope cost: $0.10893829999999999 - listed as pilot spend (parent plan section 13); the broker's ledger: $0.1089383
+- Outcome: ok; wall 15673 ms; stopped: no
 - Verdicts: 16 holds, 2 not exercised
 
 ## Verdicts
@@ -15,16 +15,16 @@ One bare session through the agent box, the egress proxy and the credential brok
 |---|---|---|---|
 | B-R1 | the init read-back matches every field of step 6 | holds | every checked field matched (cwd, tools, mcp_servers, permissionMode, version, apiKeySource, memory path, model) |
 | B-R2 | init.tools lacks exactly INIT_UNREPORTED | holds | --tools asked for 8, init reported 7; not reported: TodoWrite (INIT_UNREPORTED: TodoWrite) |
-| B-N1 | every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report | holds | allowed: {}; refused: {"api.anthropic.com":12}; allowed outside the bare list: none; refused outside KNOWN_REFUSED: none |
+| B-N1 | every allowed CONNECT names a host of EGRESS_HOSTS.bare; every refused host is in KNOWN_REFUSED or is named in the report | holds | allowed: {}; refused: {"api.anthropic.com":13}; allowed outside the bare list: none; refused outside KNOWN_REFUSED: none |
 | B-N2 | the proxy log holds no non-CONNECT line from the CLI; the only plain-HTTP traffic is the box's own loopback | holds | 0 non-CONNECT line(s) at the proxy |
 | B-S2 | every API call went through the broker: broker.ndjson holds every api_request O saw, the broker refused none of the CLI's own bodies (0 `body` refusals: it sends no server tool), and api.anthropic.com was never allowed | holds | O saw 5 api_request record(s); the broker forwarded 5 and settled 5; refused by reason {"cap":0,"path":0,"body":0} (a `body` refusal is the CLI's own request carrying a server tool, a connector or a URL source); api.anthropic.com allowed at the proxy: false |
-| B-S3 | the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree | holds | 8 samples: real in cmdline 0, in environ 0; positive control: dummy in environ 32; real-token hits over 33 file(s): 0; links or pipes in the tree: 0; 1 link(s) inside the agent-writable tree (not a finding) |
+| B-S3 | the host side held no real token in the box: counted 0 times in cmdline and environ over at least 5 samples, the dummy seen in an environ at least once (the positive control), and no file of the session dir holds it and no link or pipe sits in the agent-written tree | holds | 12 samples: real in cmdline 0, in environ 0; positive control: dummy in environ 48; real-token hits over 32 file(s): 0; links or pipes in the tree: 0; 1 link(s) inside the agent-writable tree (not a finding) |
 | B-S3b | the in-box half: the CLI's own environ, read by the session's Bash, held the dummy (RETIRED: not exercised by design, see its row) | not exercised | models refuse the probe (smoke 20261030T002834Z, Opus 5.5 then fallback Opus 4.8); B-S3 with its positive control covers the CLI's environ from the host; token.txt absent |
-| B-$1 | B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O's usd | holds | T5 pass: the broker's ledger 0.1093233 against total_cost_usd 0.1093233 (limit 0.000001); 5 request(s) forwarded, 0 refused; B 0.10932330000000001, O 0.10932329999999998; models charged at the dearest known rates (unpriced): none |
+| B-$1 | B.spentUsd = E.total_cost_usd within $0.000001 (T5), and B = O's usd | holds | T5 pass: the broker's ledger 0.1089383 against total_cost_usd 0.1089383 (limit 0.000001); 5 request(s) forwarded, 0 refused; B 0.10893829999999999, O 0.10893829999999999; models charged at the dearest known rates (unpriced): none |
 | B-O1 | OTel records reached the receiver through the socket; T2 passes | holds | 5 api_request record(s) decoded; T2 pass |
 | B-T1 | box/config/projects holds main and one subagent transcript; T3 and T4 pass under crosscheck-policy.json | holds | 1 main and 1 subagent transcript file(s); T3 pass, T4 pass |
-| B-E1 | an envelope; T1 passes; cost at most $0.20 | holds | total_cost_usd 0.10932329999999998 (cap 0.2, the 1.1 x gate 0.22000000000000003); T1 pass |
-| B-A1 | audit Pre/Post pair by tool_use_id; partition sums to the wall to the ms; unpaired is empty | holds | 8 audit record(s); unpaired 0; partition sums to 7550 ms of a 7550 ms wall |
+| B-E1 | an envelope; T1 passes; cost at most $0.20 | holds | total_cost_usd 0.10893829999999999 (cap 0.2, the 1.1 x gate 0.22000000000000003); T1 pass |
+| B-A1 | audit Pre/Post pair by tool_use_id; partition sums to the wall to the ms; unpaired is empty | holds | 8 audit record(s); unpaired 0; partition sums to 12042 ms of a 12042 ms wall |
 | B-A2 | the PostToolUse payload carries duration_ms | holds | 3 of 3 PostToolUse record(s) carry duration_ms; where absent, spans come from the Pre/Post timestamps (E1's method) beside O's tool_result.duration_ms |
 | B-A3 | every O api_request carries effort, the child's (by agent_id) is high, and SubagentStart carries the same agent_id | holds | 5 api_request record(s), efforts high; 2 from a subagent (by agent_id); SubagentStart records 1; every child joined: true |
 | B-H1 | hook events still carry no timestamp (E1 A-H1) | holds | 16 hook event(s), 0 with a timestamp; 3 hook tool_use_id(s), 0 not in the stream |

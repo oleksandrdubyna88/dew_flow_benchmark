@@ -1,7 +1,7 @@
 {
   "allowed": {},
   "refused": {
-    "api.anthropic.com": 12
+    "api.anthropic.com": 13
   },
   "nonConnect": 0,
   "tlsRefused": {}

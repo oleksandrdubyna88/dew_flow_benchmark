@@ -4,20 +4,20 @@
     "equalsDummy": false
   },
   "realTokenScan": {
-    "scanned": 33,
+    "scanned": 32,
     "hits": [],
     "tooLarge": [],
     "links": [],
     "insideLinks": [
       {
-        "link": "/tmp/claude-1000/-home-user-rsd-minigit-smoke-20261030T004243Z-box-work/a4a25228-6d5a-407b-bbaa-5ec7f9b11e63/tasks/a1e2c2da446a22040.output",
-        "target": "/home/user/rsd/minigit/smoke/20261030T004243Z/box/config/projects/-home-user-rsd-minigit-smoke-20261030T004243Z-box-work/a4a25228-6d5a-407b-bbaa-5ec7f9b11e63/subagents/agent-a1e2c2da446a22040.jsonl"
+        "link": "/tmp/claude-1000/-home-user-rsd-minigit-smoke-20261030T051710Z-box-work/58c84da7-01db-4212-8770-753c821372e8/tasks/a12e9b83e677fe412.output",
+        "target": "/home/user/rsd/minigit/smoke/20261030T051710Z/box/config/projects/-home-user-rsd-minigit-smoke-20261030T051710Z-box-work/58c84da7-01db-4212-8770-753c821372e8/subagents/agent-a12e9b83e677fe412.jsonl"
       }
     ]
   },
   "positiveControl": {
-    "samples": 8,
-    "dummyInEnviron": 32
+    "samples": 12,
+    "dummyInEnviron": 48
   },
   "survivors": 0,
   "statePhase": "closed",

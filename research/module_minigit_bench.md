@@ -388,7 +388,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
 
 #### The bare-session smoke (2026-10-30, CLI 2.1.310)
 
-> **Replaced 2026-10-30.** The numbers in this subsection are the FIRST smoke's (envelope $0.114845). Its fixture was replaced the same day by the second re-smoke `20261030T004243Z` (below), which is what `test/fixtures/real/claude-2.1.310-bare-smoke/` and its `SMOKE.md` hold now. "Smoke 1" in the tables below is the first smoke, "smoke 2" the refused-probe run, "smoke 3" the committed one.
+> **Replaced 2026-10-30.** The numbers in this subsection are the FIRST smoke's (envelope $0.114845). Its fixture was replaced the same day by the second re-smoke `20261030T004243Z` (below, "smoke 3") and again after the last review round by the third re-smoke `20261030T051710Z` ("smoke 4", below), which is what `test/fixtures/real/claude-2.1.310-bare-smoke/` and its `SMOKE.md` hold now. "Smoke 1" in the tables below is the first smoke, "smoke 2" the refused-probe run, "smoke 3" the second re-smoke (its fixture replaced), "smoke 4" the committed one.
 
 `node spikes/minigit-bench/smoke-session.mjs --out ~/rsd/minigit/smoke/<UTC stamp>`, once, then `sanitise` and `verdicts`. The
 fixture is `test/fixtures/real/claude-2.1.310-bare-smoke/`; `SMOKE.md` there is computed (`lib/smoke-verdicts.mjs`), never typed.
@@ -467,13 +467,25 @@ $0.105236, wall 23 s, outcome `ok`. It showed what the fixes were for and two th
   reservation. The in-model credential probe is **retired**: the models refuse it even framed as a test, it is not reworded, and B-S3b is
   `not exercised` by design (B-S3 with its positive control covers the CLI's environ from the host).
 
-#### The second re-smoke (2026-10-30, `20261030T004243Z`; the committed fixture, "smoke 3")
+#### The second re-smoke (2026-10-30, `20261030T004243Z`; "smoke 3", its fixture since replaced by smoke 4)
 
 Same command, cap $0.20, the retired probe replaced by tool and subagent work: envelope **$0.109323**, the broker's ledger $0.1093233 (equal), O
 equal, 5 requests through the broker, none refused, wall 11 s, outcome `ok`. Held: B-R1, B-R2, B-N1 (12 refused `api.anthropic.com`, nothing
 allowed, no `tls-refused`), B-N2, B-S2, **B-$1 (T5)**, B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1, B-C1; B-S3b and B-K2 `not exercised`
 (by design; the session ended by itself). **B-S3 held after the link rule below**: 8 samples, real token 0 times in every cmdline and environ, 32 dummy hits (the positive control), 0
 real-token hits over 33 files, 0 links or pipes in the tree, and 1 link inside the agent-writable tree.
+
+#### The third re-smoke (2026-10-30, `20261030T051710Z`; the committed fixture, "smoke 4")
+
+Run after the last review round (the body check, the seal, the link rule, the scan in windows and the rest of that round), once, cap $0.20, through
+`smoke-session.mjs --out ~/rsd/minigit/smoke/20261030T051710Z`: envelope **$0.1089383** (pilot spend), the broker's ledger $0.1089383 (equal), O equal,
+5 requests forwarded and settled, **0 refused of any reason (`{"cap":0,"path":0,"body":0}`): the CLI's own requests carry no server tool, connector,
+container or URL source, so the body check did not touch them**; wall 15.7 s, outcome `ok`. Verdicts: **16 holds, 2 not exercised** (B-S3b retired by
+design; B-K2 because the session ended by itself): B-R1, B-R2, B-N1 (13 refused `api.anthropic.com`, nothing allowed, no `tls-refused`), B-N2, B-S2 (now
+also 0 `body` refusals), B-S3 (12 samples, real token 0 times in every cmdline and environ, 48 dummy hits as the positive control, 0 real-token hits
+over 32 files, 0 links or pipes, 1 link inside the agent-writable tree: the CLI's own `tasks/<id>.output`, which meets the four conditions of the link
+rule), B-$1 (T5: B = E = O), B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1, B-C1. The raw session directory stays outside git; the fixture is its
+fail-closed sanitised copy (no token, no account or organisation id, no operator name, paths as `/home/user/…`), and `SMOKE.md` is recomputed from it.
 
 **Dated note on B-S3 and links (2026-10-30, run `20261030T004243Z`).** The first scan of this run refuted B-S3 on one symlink, made by the CLI
 itself: `/tmp/claude-<uid>/<box-work>/<session>/tasks/<agent id>.output` -> the subagent's own transcript under `box/config/projects/…/subagents/`.
@@ -493,7 +505,7 @@ read. The run was re-scanned from its raw directory (no new paid session) and th
 
 #### The network facts N-1…N-16 (observed 2026-10-29, this machine, CLI 2.1.310)
 
-Copied from the spec's section *The network decision* (`todo/PLAN_minigit_stack_bench_E2.md`, `## E2.S2`), with the date they were taken and what has re-verified them since. A fact marked *test* is held by a test that runs in the box on every complete run; *smoke 1* is the first smoke (its fixture has been replaced), *smoke 2* the first re-smoke after the review fixes (artefacts outside git: the model refused the in-box probe), and *smoke 3* the second re-smoke `20261030T004243Z`, **the committed fixture**: it holds B-R1, B-R2, B-N1, B-N2, B-S2, B-S3, B-$1, B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1 and B-C1, so every row marked as verified by one of those verdicts is also verified by smoke 3 (B-S3b and B-K2 are `not exercised`).
+Copied from the spec's section *The network decision* (`todo/PLAN_minigit_stack_bench_E2.md`, `## E2.S2`), with the date they were taken and what has re-verified them since. A fact marked *test* is held by a test that runs in the box on every complete run; *smoke 1* is the first smoke (its fixture has been replaced), *smoke 2* the first re-smoke after the review fixes (artefacts outside git: the model refused the in-box probe), and *smoke 3* the second re-smoke `20261030T004243Z` (fixture since replaced), and *smoke 4* the third re-smoke `20261030T051710Z`, **the committed fixture**: it holds B-R1, B-R2, B-N1, B-N2, B-S2, B-S3, B-$1, B-O1, B-T1, B-E1, B-A1, B-A2, B-A3, B-H1, B-K1 and B-C1, so every row marked as verified by one of those verdicts is also verified by smoke 4 (B-S3b and B-K2 are `not exercised`); a row that cites smoke 3 was true of that run and is true of this one for the same verdicts.
 
 | # | Claim | Result (2026-10-29) | Re-verified |
 |---|---|---|---|
