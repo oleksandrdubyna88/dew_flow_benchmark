@@ -250,12 +250,13 @@ public sealed class MakeVerbTests
         MakeKit.Put(kit.Layout.Made("C1"), "made\n");
         var before = MakeKit.Describe(paths.Folder);
         var said = new List<string>();
-        var maker = new ArmMaker(kit.Root.ExperimentOf(), kit.Layout, kit.ReadMap(), new ToolPaths(string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty), new TargetTools(kit.Root.Environment), kit.Root.Environment, PlatformKit.LinuxRoad, said.Add);
+        var dotnet = Path.Combine(kit.Root.Temp, "bin", "dotnet");
+        var maker = new ArmMaker(kit.Root.ExperimentOf(), kit.Layout, kit.ReadMap(), new ToolPaths(ExperimentRoot.RealGit, dotnet, PinnedConsumer.NodePath, dotnet, string.Empty, string.Empty, string.Empty), new TargetTools(kit.Root.Environment), kit.Root.Environment, PlatformKit.LinuxRoad, said.Add);
 
         var outcome = await maker.MakeAsync("C1", Ct);
 
-        outcome.Should().BeOfType<MakeOutcome.Stopped>().Which.Should().Match<MakeOutcome.Stopped>(stopped => stopped.ExitCode == 4 && stopped.Why.Contains("made already", StringComparison.Ordinal));
         MakeKit.Describe(paths.Folder).Should().Equal(before, "the chain's Make(arm) calls this unit: an arm with its marker is whole, and nothing of it is removed — the verb's own filter is not the only guard");
+        outcome.Should().BeOfType<MakeOutcome.Stopped>().Which.Should().Match<MakeOutcome.Stopped>(stopped => stopped.ExitCode == 4 && stopped.Why.Contains("made already", StringComparison.Ordinal));
         said.Should().BeEmpty();
     }
 
