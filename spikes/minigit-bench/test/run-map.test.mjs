@@ -209,3 +209,17 @@ test('A_harness_change_after_a_data_session_exists_is_refused_even_with_its_line
   assert.equal(again.ok, true, 'an identity accepted before the data sessions needs no flag and no line again');
   assert.equal(again.value.accepted, null);
 });
+
+// ---- settle-only on a stopped series (review N12) -------------------------------------------------------------------------------------
+
+test('Settle_only_is_allowed_on_a_stopped_series_and_does_not_need_the_harness_to_be_the_pinned_one', () => {
+  const stopped = markStopped(series(), { rule: 'stop: auth', reason: 'x', at: 't' });
+  assert.equal(checkResumable({ map: stopped, current: current() }).ok, false, 'control: a plain resume is refused');
+  const settle = checkResumable({ map: stopped, current: current(), settleOnly: true });
+  assert.equal(settle.ok, true, settle.reason);
+  const moved = checkResumable({ map: stopped, current: { ...current(), harnessIdentity: '9'.repeat(64) }, settleOnly: true });
+  assert.equal(moved.ok, true, 'settling reads evidence and launches nothing: a reader fix after the data sessions must not leave a paid session uncharged');
+  assert.deepEqual([moved.value.accepted, moved.value.inputs], [null, []], 'and it accepts nothing');
+  assert.equal(checkResumable({ map: stopped, current: { ...current(), pricesSha256: '0'.repeat(64) }, settleOnly: true }).ok, false, 'the prices still must be the pinned ones: they decide what the session cost');
+  assert.equal(checkResumable({ map: stopped, current: { ...current(), seedSha256: '0'.repeat(64) }, settleOnly: true }).ok, false, 'every other pin is still checked');
+});

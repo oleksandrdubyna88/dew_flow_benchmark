@@ -58,8 +58,9 @@ const cellIdsOf = h => Object.keys(h.get().sessions).map(rid => `cell-${rid}`);
 /** The `void: contaminated` sessions of the whole series: the second one stops it (registered series stop; analysis contract section 9). */
 const contaminatedVoids = map => Object.values(map.sessions).filter(s => s.class === 'void: contaminated').length;
 
-function ledgerKind(ctx, outcome) {
-  if (ctx.kind !== 'data') return ctx.kind;
+/** The ledger kind of a session: its OWN kind (a resume or a settle-only may run under another `--what`), and `data` or `void` for a data-pair session. */
+function ledgerKind(kind, outcome) {
+  if (kind !== 'data') return kind;
   return outcome.data ? 'data' : 'void';
 }
 
@@ -154,7 +155,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     if (!collected.ok) { failures.push(`collecting ${s.rid} failed: ${collected.reason}`); continue; }
     const { outcome, usd, costCaptured } = collected.value;
     if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
-    appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd: ctx.kind === 'rehearsal' ? 0 : usd, what: outcome.class, rid: s.rid, costCaptured, t: new Date(deps.now()).toISOString() });
+    appendChargeOnce(ctx.ledgerFile, { kind: ledgerKind(h.get().sessions[s.rid].kind, outcome), usd: h.get().sessions[s.rid].kind === 'rehearsal' ? 0 : usd, what: outcome.class, rid: s.rid, costCaptured, t: new Date(deps.now()).toISOString() });
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity, inputs: ctx.inputHashes ?? null };
     const stopRules = [...(outcome.stop ? [{ rule: outcome.class, detail: outcome.detail }] : []), ...collected.value.seriesStops];
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [], workspaceExcluded: s.workspace.excludedDirs ?? null, ...(stopRules.length > 0 ? { stopRules } : {}) }));
@@ -277,9 +278,9 @@ function rebuildMissingRecords({ ctx, h, plan, say }) {
 
 /**
  * Before a resumed run continues (step 11): unplant every canary of the manifests first, retire stale sessions, then settle each `launching` session by what its directory
- * says (adopt a finished launch, charge and void a cut-short one, plan again one that never paid). -> `ok(map)` | `fail`.
+ * says (adopt a finished launch, charge and void a cut-short one, plan again one that never paid). `settleOnly` (resume --settle-only, review N12) tolerates a stopped series. -> `ok(map)` | `fail`.
  */
-export async function reconcile({ ctx, deps, map, say = () => {} }) {
+export async function reconcile({ ctx, deps, map, say = () => {}, settleOnly = false }) {
   unplantAll({ manifests: manifestsOf(ctx), home: ctx.home, roots: [ctx.sessionsRoot] });
   await deps.retireStale();
   const h = holder({ ctx, map });
@@ -299,7 +300,7 @@ export async function reconcile({ ctx, deps, map, say = () => {} }) {
     const launched = a.action === 'adopt' ? ok({ meta: JSON.parse(readFileSync(layout.files.meta, 'utf8')) }) : null;
     const item = { rid: a.rid, session: { stack: entry.stack, phase: entry.phase, attempt: entry.attempt }, layout, plan: { token: ctx.token, dummy: entry.dummy }, launched, canary: { tokens: entry.canaryTokens ?? [] }, workspace: { flags: entry.workspaceFlags ?? [] }, mask: entry.mask, maskObserved: null, stampMs: entry.run?.spawnStampMs ?? null };
     const stopped = await settleSessions({ ctx: { ...ctx, abortExit: () => EXIT.halt, abortReason: () => null }, deps, h, phase: { sessions: [item], startSkewMs: null }, state: { quiet: null, sampler: null }, signal: null, say });
-    if (stopped) return fail(stopped.message, { exit: stopped.exit, map: h.get() });
+    if (stopped && !(settleOnly && stopped.exit === EXIT.stop)) return fail(stopped.message, { exit: stopped.exit, map: h.get() }); // settle-only on a stopped series: the stop is known, the charge is the point
   }
   return ok(h.get());
 }

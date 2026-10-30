@@ -74,12 +74,12 @@ function recordInputs({ map, inputs, runMapFile, ledgerFile, now }) {
  * The pin check of a run or a resume: the run-map's caps and budgets against the registered ones (review m2); what is on disk against the run-map; a series stop refuses; a changed harness is accepted only through `acceptHarness` and a dated
  * amendment line, and then recorded; a changed quiet.json or package-flags.json likewise through a dated `input:` line, before any data session (review N5). -> `ok({ map, current })` | `fail(reason)`.
  */
-export async function checkPins({ map, inputsDir, repo, acceptHarness = null, runMapFile, ledgerFile, now = Date.now }) {
+export async function checkPins({ map, inputsDir, repo, acceptHarness = null, settleOnly = false, runMapFile, ledgerFile, now = Date.now }) {
   const limits = limitsProblem(map);
   if (limits) return fail(limits);
   const current = await currentFromDisk({ map, inputsDir, repo });
   const amendments = readIf(path.join(inputsDir, 'amendments.md'))?.toString('utf8') ?? '';
-  const checked = checkResumable({ map, current, acceptHarness, amendments });
+  const checked = checkResumable({ map, current, acceptHarness, amendments, settleOnly });
   if (!checked.ok) return fail(checked.reason);
   const harness = checked.value.accepted ? recordAcceptance({ map, accepted: checked.value.accepted, runMapFile, ledgerFile, now }) : map;
   return ok({ map: recordInputs({ map: harness, inputs: checked.value.inputs ?? [], runMapFile, ledgerFile, now }), current });

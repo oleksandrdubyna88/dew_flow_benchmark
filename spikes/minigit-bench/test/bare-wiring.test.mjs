@@ -39,14 +39,14 @@ async function wiring({ map: over = {}, amendments = AMENDMENTS, quiet = {} } = 
   const home = tmpDir('home');
   const seriesDir = path.join(tmpDir('rsd'), 's-20261030-ab12');
   for (const d of ['s', 'pairs', 'canaries']) mkdirSync(path.join(seriesDir, d), { recursive: true });
-  const { sessions = {}, ...fields } = over;
+  const { sessions = {}, stopped = null, ...fields } = over;
   const map = { ...openSeries({
     seriesId: 's-20261030-ab12', seedSha256: sha256(SEED), harnessIdentity: (await harnessIdentity(repo.repo)).value, preregTag: TAG, preregCommit: repo.sha, pins: stacks.pins,
     stacksSha256: sha256(text(path.join(inputs, 'stacks.json'))), pricesFile: 'prices-2026-10-29.json', pricesSha256: sha256(text(path.join(inputs, 'prices-2026-10-29.json'))),
     quietSha256: sha256(text(path.join(inputs, 'quiet.json'))), packageFlagsSha256: sha256(text(path.join(inputs, 'package-flags.json'))),
     snapshots: { csharp: SNAPSHOTS.csharp.treeSha256, node: SNAPSHOTS.node.treeSha256 }, snapshotDirs: { csharp: base.snapshots.csharp.dir, node: base.snapshots.node.dir },
     claude: { path: '/nowhere/claude-2.1.310', sha256: 'x', version: '2.1.310' }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: { medianMs: 20 }, ...fields,
-  }), sessions };
+  }), sessions, stopped };
   writeRunMap(path.join(seriesDir, 'run-map.json'), map);
   return { ...repo, inputs, home, seriesDir, map, runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson') };
 }
@@ -306,4 +306,24 @@ test('An_input_amendment_after_a_data_session_exists_is_refused_by_resume', asyn
   assert.equal(r.code, 4);
   assert.match(r.out, /data session exists.*before pair 1/s);
   assert.equal(readRunMap(w.runMapFile).value.inputsAccepted, undefined, 'a refused amendment writes nothing');
+});
+
+test('Resume_settle_only_is_not_refused_on_a_stopped_series_launches_nothing_and_a_plain_resume_is_refused', async () => {
+  const w = await wiring({ map: { stopped: { rule: 'stop: auth', reason: '{}', at: 't' } } });
+  const plain = await resume(w);
+  assert.equal(plain.code, 4);
+  assert.match(plain.out, /the series is stopped \(stop: auth\).*NEW series/s);
+  const tokenDir = path.join(w.home, '.config', 'minigit-bench');
+  mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
+  writeFileSync(path.join(tokenDir, 'claude-oauth-token'), 'sk-ant-fake-wiring-token-0123456789\n', { mode: 0o600 }); // settling scans the evidence for the real token, so the run reads it (a fake one, in a fake home)
+  const before = readRunMap(w.runMapFile).value;
+  const settle = await resume(w, ['--settle-only']);
+  assert.equal(settle.code, 0, settle.out);
+  assert.match(settle.out, /settle-only: .*nothing was launched/);
+  assert.match(settle.out, /series remains stopped \(stop: auth\)/);
+  assert.deepEqual(readRunMap(w.runMapFile).value.sessions, before.sessions);
+  const run = async extra => { const lines = []; const code = await main(['run', '--series', w.seriesDir, '--what', 'pair:1', '--inputs-dir', w.inputs, ...extra], l => lines.push(l), { repo: w.repo, home: w.home }); return { code, out: lines.join('\n') }; };
+  const misuse = await run(['--settle-only']);
+  assert.equal(misuse.code, 4, '--settle-only belongs to resume');
+  assert.match(misuse.out, /--settle-only/);
 });

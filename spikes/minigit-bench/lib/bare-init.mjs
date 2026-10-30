@@ -1,13 +1,14 @@
 // `bare-runner.mjs init` (E3b.S1 step 1): everything a series is pinned to, gathered, checked and written ONCE. `initPlan` computes it and writes nothing
 // (`--dry-run` prints it); `applyInit` writes: the pinned CLI copy (every session runs that copy, never the PATH symlink, so an auto-update of the operator's CLI cannot change
-// the treatment), `run-map.json`, the ledger seeded with the prior spend (in the $500 ceiling, not in the $40) and the series directories.
+// the treatment), `run-map.json`, the ledger seeded with the prior spend (in the $500 ceiling, not in the $40) and the spend of every earlier series under the runs root (in both) and the series directories.
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { treeHash } from './cache-snapshot.mjs';
 import { appendLedger, priorLines, readLedger } from './ledger.mjs';
 import { fail, ok } from './result.mjs';
 import { openSeries, writeRunMap } from './run-map.mjs';
+import { LEDGER_KINDS } from './spend-gate.mjs';
 import { BARE_CAPS } from './bare-plan.mjs';
 
 const sha256File = file => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -28,6 +29,31 @@ function snapshotsOf({ inputsDir, toolchainsDir, verify }) {
     out[stack] = { dir, treeSha256: r.treeSha256, parts: r.parts, sizeBytes: r.sizeBytes ?? null };
   }
   return ok(out);
+}
+
+/**
+ * The spend lines of every EARLIER series under the runs root, to be carried into a new series' ledger (review N12): the $40 and the $500 are the bare arm's and the project's, not one
+ * series', so a new series (after a stop, say) starts with what the earlier ones spent. Each line keeps its kind (an A/A or data line counts in the $40 too) and is tagged `fromSeries`;
+ * event lines are not spend, and an earlier series' `prior` lines are the registered prior spend, which the new series seeds itself (counting them again would double them).
+ * A series directory whose ledger is absent, unreadable or holds a line of an unknown kind is a refusal naming it: a spend nobody can read is a spend nobody can count.
+ */
+function earlierSpend({ seriesRoot, seriesId }) {
+  const names = existsSync(seriesRoot) ? readdirSync(seriesRoot).filter(n => SERIES.test(n) && n !== seriesId && statSync(path.join(seriesRoot, n)).isDirectory()).sort() : [];
+  const lines = [];
+  for (const name of names) {
+    const file = path.join(seriesRoot, name, 'ledger.ndjson');
+    if (!existsSync(file)) return fail(`the earlier series ${name} has no ledger.ndjson: its spend cannot be counted, so a new series is not started over it`);
+    let ledger;
+    try { ledger = readLedger(file); } catch (e) { return fail(`the ledger of the earlier series ${name} is unreadable (${e.message}): its spend cannot be counted`); }
+    const bad = ledger.find(l => l.event === undefined && !LEDGER_KINDS.includes(l.kind));
+    if (bad) return fail(`the ledger of the earlier series ${name} holds a line of kind '${bad.kind}': the legal kinds are ${LEDGER_KINDS.join(', ')}`);
+    for (const l of ledger.filter(x => x.event === undefined && x.kind !== 'prior')) {
+      // a line this series itself CARRIED from another (`fromSeries`) is a copy: its origin series is read on its own, and counting both would double it; a copy whose origin directory is gone stays
+      if (l.fromSeries === undefined) lines.push({ ...l, fromSeries: name });
+      else if (!names.includes(l.fromSeries) && !lines.some(x => x.fromSeries === l.fromSeries && x.rid === l.rid)) lines.push(l);
+    }
+  }
+  return ok({ lines, series: names });
 }
 
 /**
@@ -57,8 +83,10 @@ export function initPlan({ inputsDir, seriesRoot, seriesId, versionsDir, toolcha
     snapshots: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.treeSha256])), snapshotDirs: Object.fromEntries(Object.entries(snaps.value).map(([s, v]) => [s, v.dir])),
     claude: { path: copy.to, sha256: copy.sha256, version: pin }, caps: BARE_CAPS, bareBudgetUsd: 40, ceilingUsd: 500, spin: null,
   });
-  const prior = priorLines(readJson(path.join(inputsDir, 'spend-prior.json')));
-  return ok({ seriesDir, runMap, copy, prior, dirs: ['s', 'pairs', 'canaries'].map(d => path.join(seriesDir, d)) });
+  const earlier = earlierSpend({ seriesRoot, seriesId });
+  if (!earlier.ok) return earlier;
+  const prior = [...priorLines(readJson(path.join(inputsDir, 'spend-prior.json'))), ...earlier.value.lines];
+  return ok({ seriesDir, runMap, copy, prior, earlier: { series: earlier.value.series, lines: earlier.value.lines.length }, dirs: ['s', 'pairs', 'canaries'].map(d => path.join(seriesDir, d)) });
 }
 
 /** The plan as lines for `--dry-run`: all of it, nothing written. */
@@ -68,7 +96,8 @@ export const describePlan = plan => [
   `prereg tag ${plan.runMap.preregTag} -> ${plan.runMap.preregCommit.slice(0, 12)}; harness identity ${plan.runMap.harnessIdentity.slice(0, 12)}; seed hash ${plan.runMap.seedSha256.slice(0, 12)}`,
   `snapshots ${Object.entries(plan.runMap.snapshots).map(([s, h]) => `${s} ${h.slice(0, 12)}`).join(', ')}`,
   `caps $${plan.runMap.caps.capUsd} / ${plan.runMap.caps.wallMs / 60000} min wall / ${plan.runMap.caps.stallMs / 60000} min stall; bare budget $${plan.runMap.bareBudgetUsd}, ceiling $${plan.runMap.ceilingUsd}`,
-  `ledger seeded with ${plan.prior.length} prior line(s), $${plan.prior.reduce((a, l) => a + l.usd, 0).toFixed(4)} (in the ceiling, not in the bare budget)`,
+  `ledger seeded with ${plan.prior.length - plan.earlier.lines} prior line(s), $${plan.prior.filter(l => l.kind === 'prior').reduce((a, l) => a + l.usd, 0).toFixed(4)} (in the ceiling, not in the bare budget)`,
+  `and ${plan.earlier.lines} spend line(s) of ${plan.earlier.series.length} earlier series, $${plan.prior.filter(l => l.kind !== 'prior').reduce((a, l) => a + l.usd, 0).toFixed(4)} (kept as they were earned: bare lines count in the $40 and in the $500)`,
   `spin probe: calibrated at init on a quiet machine (${plan.runMap.spin ? `median ${plan.runMap.spin.medianMs} ms` : 'not yet'})`,
 ];
 

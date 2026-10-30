@@ -7,6 +7,7 @@
 //   node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what aa|pilot-node|pair:<k> [--dry-run] [--accept-noisy <reason>]    SPENDS MONEY (unless --dry-run)
 //   node spikes/minigit-bench/bare-runner.mjs run --series <dir> --what rehearse-v2 [--dry-run]                                       FREE: the v2 path on an A/A twin's tree with a stub CLI and a fake token (G-14)
 //   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> [--what ...] [--accept-harness <identity> --amendment <date>] [--after-stop <rule> --reason <text>]
+//   node spikes/minigit-bench/bare-runner.mjs resume --series <dir> --settle-only                          settles and charges what a stopped series left launching; launches nothing
 //   node spikes/minigit-bench/bare-runner.mjs status --series <dir>
 //
 // Exit codes: 0 done | 2 a series stop, or the spend gate | 3 a resumable halt (the machine not quiet, the preflight, a scorer environment failure or timeout) | 4 usage or
@@ -38,7 +39,7 @@ import { runBounded } from './lib/run.mjs';
 
 const OPTIONS = {
   series: { type: 'string' }, what: { type: 'string' }, 'dry-run': { type: 'boolean' }, 'accept-noisy': { type: 'string' }, 'accept-harness': { type: 'string' }, amendment: { type: 'string' },
-  'after-stop': { type: 'string' }, reason: { type: 'string' }, stack: { type: 'string' }, 'series-id': { type: 'string' }, 'series-root': { type: 'string' }, 'versions-dir': { type: 'string' },
+  'after-stop': { type: 'string' }, reason: { type: 'string' }, 'settle-only': { type: 'boolean' }, stack: { type: 'string' }, 'series-id': { type: 'string' }, 'series-root': { type: 'string' }, 'versions-dir': { type: 'string' },
   'toolchains-dir': { type: 'string' }, register: { type: 'boolean' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
 };
 /** The series stops `--after-stop` cannot pass: the stop classes, a breach of any check under a `stop` policy (one list with `collectSession`'s, review N3) and the second contaminated void. */
@@ -123,10 +124,12 @@ async function cmdSnapshot(v, write) {
 async function cmdRun(v, write, { resume }, seams = {}) {
   const early = resume ? afterStopRefusal(v) : null;
   if (early) { write(early); return EXIT.config; }
+  const settleOnly = v['settle-only'] === true;
+  if (settleOnly && !resume) { write('usage error: --settle-only belongs to resume: it settles and charges the sessions a stopped series left launching, and launches nothing'); return EXIT.config; }
   const seriesDir = path.resolve(v.series ?? '');
   const read = readRunMap(path.join(seriesDir, 'run-map.json'));
   if (!v.series || !read.ok) { write(`usage error: --series <dir> with a run-map.json (${read.reason ?? 'missing'})`); return EXIT.config; }
-  const what = parseWhat(v.what ?? whatOfMap(read.value));
+  const what = parseWhat(v.what ?? whatOfMap(read.value)) ?? (settleOnly ? { kind: 'aa', pair: 0 } : null); // settle-only launches nothing: its `--what` decides nothing
   if (!what) { write('usage error: --what aa | pilot-node | rehearse-v2 | pair:<1-3>'); return EXIT.config; }
   const dry = v['dry-run'] === true;
   const rehearsing = what.kind === 'rehearsal';
@@ -137,6 +140,7 @@ async function cmdRun(v, write, { resume }, seams = {}) {
     // the pins are read from DISK now and compared with the run-map (step 11), at every paid run and resume, before anything is built or read
     const pins = await checkPins({
       map, inputsDir, repo: seams.repo ?? REPO, acceptHarness: v['accept-harness'] ? { identity: v['accept-harness'], amendmentDate: v.amendment } : null,
+      settleOnly,
       runMapFile: path.join(seriesDir, 'run-map.json'), ledgerFile: path.join(seriesDir, 'ledger.ndjson'),
     });
     if (!pins.ok) { write(`${resume ? 'resume' : 'run'} refused: ${pins.reason}`); return EXIT.config; }
@@ -151,9 +155,14 @@ async function cmdRun(v, write, { resume }, seams = {}) {
   const ctl = new AbortController();
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { abort.reason = sig; abort.exit = code; ctl.abort(); });
   if (resume) {
-    const settled = await reconcile({ ctx, deps, map, say: write });
+    const waiting = Object.values(map.sessions).filter(s => s.status === 'launching').map(s => s.rid);
+    const settled = await reconcile({ ctx, deps, map, say: write, settleOnly });
     if (!settled.ok) { write(`resume: ${settled.reason}`); return settled.exit ?? EXIT.failed; }
     map = settled.value;
+    if (settleOnly) {
+      write(`settle-only: ${waiting.length === 0 ? 'no session was launching' : `settled ${waiting.map(rid => `${rid} (${map.sessions[rid].status}${map.sessions[rid].class ? `, ${map.sessions[rid].class}` : ''})`).join(', ')}`}; nothing was launched${map.stopped ? `; the series remains stopped (${map.stopped.rule}): start a new series` : ''}`);
+      return EXIT.done;
+    }
   }
   if (rehearsing) {
     const rehearsed = await rehearseV2({ ctx, deps, map, signal: ctl.signal, say: write });

@@ -13,7 +13,7 @@ import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
 import { layoutPaths } from '../lib/sandbox.mjs';
-import { openSeries, readRunMap, transition } from '../lib/run-map.mjs';
+import { markStopped, openSeries, readRunMap, transition } from '../lib/run-map.mjs';
 import { FIXTURE, SCORE, lay } from './bare-fixture.mjs';
 import { SEED, context, sleep } from './bare-ctx.mjs';
 import { spikeDir } from './helpers.mjs';
@@ -604,4 +604,21 @@ test('A_session_record_names_the_hashes_of_the_quiet_and_package_flag_files_that
   const none = JSON.parse(readFileSync(path.join(bare.ctx.sessionsRoot, rid('csharp', 'v1', 1), 'record.json'), 'utf8'));
   assert.equal(none.run.inputs.known, false, 'a run that recorded none says so with a reason, never a blank');
   assert.ok(none.run.inputs.why);
+});
+
+test('Settle_only_settles_and_charges_a_session_left_launching_in_a_stopped_series_and_launches_nothing', async () => {
+  const first = firstStack({ seed: SEED, pair: 1, phase: 'v1' });
+  const partner = first === 'csharp' ? 'node' : 'csharp';
+  const t = harness({ variants: { [rid(first, 'v1', 1)]: 'auth', [rid(partner, 'v1', 1)]: 'corrupt' } });
+  await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  // a map from before a stop waited for its last session: the stop is on it and a session is still launching
+  const stopped = markStopped(readRunMap(t.ctx.runMapFile).value, { rule: 'stop: auth', reason: '{}', at: 't' });
+  assert.equal(stopped.sessions[rid(partner, 'v1', 1)].status, 'launching');
+  lay(layoutPaths(t.ctx.sessionsRoot, rid(partner, 'v1', 1)), undefined); // its evidence is readable now
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map: stopped, settleOnly: true });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.equal(settled.value.sessions[rid(partner, 'v1', 1)].status, 'ran', 'the session is settled');
+  assert.equal(settled.value.stopped.rule, 'stop: auth', 'and the series stays stopped');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort(), 'both sessions are charged: the $40 and the $500 see all of it');
+  assert.equal(t.launched.length, 2, 'nothing was launched');
 });

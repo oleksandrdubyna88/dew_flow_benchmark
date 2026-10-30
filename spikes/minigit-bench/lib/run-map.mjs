@@ -92,7 +92,8 @@ function harnessAccepted({ map, current, acceptHarness, amendments }) {
  * stacks file, the prices, a snapshot, the prereg tag or the seed hash that differs is a refusal naming it; a changed quiet.json or package-flags.json only through a dated `input:` line and before any data session; a changed harness identity is accepted
  * only through `acceptHarness` and a dated amendment line (an identity accepted before, in `map.harnessAccepted`, needs no flag again). -> `ok({ accepted })` (`accepted` is the harness acceptance for the ledger, or null).
  */
-export function checkResumable({ map, current, acceptHarness = null, amendments = '' }) {
+export function checkResumable({ map, current, acceptHarness = null, amendments = '', settleOnly = false }) {
+  if (settleOnly) return settleCheck({ map, current });
   if (map.stopped) return fail(`the series is stopped (${map.stopped.rule}): resume is refused for good: a series stop is final for its series. Fix the named cause and start a NEW series (init, then an A/A that is GO)`);
   const field = PINNED_FIELDS.find(f => !same(map[f], current[f]));
   if (field) return fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`);
@@ -101,6 +102,16 @@ export function checkResumable({ map, current, acceptHarness = null, amendments 
   if (map.harnessIdentity === current.harnessIdentity || (map.harnessAccepted ?? []).includes(current.harnessIdentity)) return ok({ accepted: null, inputs: inputs.value });
   const accepted = harnessAccepted({ map, current, acceptHarness, amendments });
   return accepted.ok ? ok({ accepted: accepted.value, inputs: inputs.value }) : accepted;
+}
+
+/**
+ * `resume --settle-only` (review N12): settles and charges the sessions a stopped series left `launching`, and launches nothing, so it is allowed on a stopped series and accepts nothing (no harness,
+ * no input amendment). It reads evidence a run already paid for, so a reader fix after the data sessions must not leave a paid session uncharged (the harness identity is not compared); every OTHER pin is,
+ * because the prices, the snapshots and the seed decide what a session cost and how it is read.
+ */
+function settleCheck({ map, current }) {
+  const field = [...PINNED_FIELDS, ...Object.keys(INPUT_FIELDS)].find(f => !same(map[f], current[f]) && !(f in INPUT_FIELDS && (map.inputsAccepted ?? []).some(a => a.file === INPUT_FIELDS[f] && a.sha256 === current[f])));
+  return field ? fail(`${field} differs from the run-map (${JSON.stringify(map[field]).slice(0, 80)} -> ${JSON.stringify(current[field]).slice(0, 80)}): the series was started under another one`) : ok({ accepted: null, inputs: [] });
 }
 
 /**

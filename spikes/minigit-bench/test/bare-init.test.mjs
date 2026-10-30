@@ -2,13 +2,14 @@
 import './fake-home.mjs'; // first: the runner reads os.homedir(); a fake HOME keeps every test off the operator's files (N18)
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { applyInit, describePlan, initPlan } from '../lib/bare-init.mjs';
 import { treeHash } from '../lib/cache-snapshot.mjs';
-import { readLedger } from '../lib/ledger.mjs';
+import { appendLedger, readLedger } from '../lib/ledger.mjs';
 import { readRunMap } from '../lib/run-map.mjs';
+import { spendGate, spendTotals } from '../lib/spend-gate.mjs';
 import { spikeDir, tmpDir } from './helpers.mjs';
 
 const put = (p, t) => { mkdirSync(path.dirname(p), { recursive: true }); writeFileSync(p, t); };
@@ -79,4 +80,67 @@ test('Init_refuses_what_is_missing_or_does_not_match_naming_it', () => {
   assert.match(applyInit({ plan: planned.value, spin: null }).reason, /not the pinned CLI/);
   const v = setup();
   assert.match(initPlan({ ...v, inputsDir: tmpDir('bare-inputs') }).reason, /stacks\.json does not exist/, 'an inputs dir with no stacks.json is a refusal, never a default');
+});
+
+// ---- spend across series (review N12) --------------------------------------------------------------------------------------------
+
+/** An earlier series initialised in the same runs root, with the spend lines it earned. */
+function earlierSeries(s, id, lines) {
+  const planned = initPlan({ ...s, seriesId: id });
+  assert.equal(planned.ok, true, planned.reason);
+  assert.equal(applyInit({ plan: planned.value, spin: { medianMs: 20, spreadMs: 1 } }).ok, true);
+  for (const l of lines) appendLedger(path.join(s.seriesRoot, id, 'ledger.ndjson'), l);
+}
+
+test('Init_of_a_new_series_seeds_the_spend_of_every_earlier_series_so_the_40_and_the_500_hold_across_series', () => {
+  const s = setup();
+  earlierSeries(s, 's-20261029-aaaa', [{ kind: 'aa', usd: 11.5, what: 'completed', rid: 'r1' }, { kind: 'aa', usd: 10, what: 'completed', rid: 'r2' }, { event: 'accept-harness', to: 'x' }]);
+  earlierSeries(s, 's-20261030-bbbb', [{ kind: 'data', usd: 8, what: 'completed', rid: 'r3' }, { kind: 'void', usd: 2, what: 'void: upstream', rid: 'r4' }, { kind: 'rehearsal', usd: 0, what: 'completed', rid: 'r5' }]);
+  mkdirSync(path.join(s.seriesRoot, 'seeds'), { recursive: true });
+  mkdirSync(path.join(s.seriesRoot, 'toolchains'), { recursive: true }); // folders of the runs root that are not series
+  const planned = initPlan({ ...s, seriesId: 's-20261031-cccc' });
+  assert.equal(planned.ok, true, planned.reason);
+  applyInit({ plan: planned.value, spin: { medianMs: 20, spreadMs: 1 } });
+  const ledger = readLedger(path.join(s.seriesRoot, 's-20261031-cccc', 'ledger.ndjson'));
+  const carried = ledger.filter(l => l.fromSeries !== undefined);
+  assert.deepEqual(carried.map(l => [l.fromSeries, l.rid, l.kind, l.usd]), [['s-20261029-aaaa', 'r1', 'aa', 11.5], ['s-20261029-aaaa', 'r2', 'aa', 10], ['s-20261030-bbbb', 'r3', 'data', 8], ['s-20261030-bbbb', 'r4', 'void', 2], ['s-20261030-bbbb', 'r5', 'rehearsal', 0]], 'every earlier spend line, its kind kept, tagged with its series; no event line');
+  assert.equal(ledger.filter(l => l.kind === 'prior').length, JSON.parse(readFileSync(path.join(spikeDir, 'inputs', 'spend-prior.json'), 'utf8')).length, 'the registered prior spend is seeded once, not once per series');
+  const totals = spendTotals(ledger);
+  assert.ok(Math.abs(totals.bareUsd - 31.5) < 1e-9, `the earlier series' bare spend counts in the $40: ${totals.bareUsd}`);
+  const gate = spendGate({ ledger, liveUsd: 0, caps: [6, 6], ceilingUsd: 500, bareBudgetUsd: 40 });
+  assert.equal(gate.stop, true, 'a new series cannot spend the $40 again');
+  assert.deepEqual(gate.stoppedBy, ['the bare budget']);
+  const first = setup();
+  const fresh = initPlan({ ...first, seriesId: 's-20261031-cccc' });
+  assert.equal(spendGate({ ledger: fresh.value.prior, liveUsd: 0, caps: [6, 6], ceilingUsd: 500, bareBudgetUsd: 40 }).stop, false, 'control: with no earlier series the gate lets a pair start');
+  assert.match(describePlan(planned.value).join('\n'), /5 spend line\(s\) of 2 earlier series/);
+});
+
+test('Init_refuses_when_an_earlier_series_ledger_is_missing_or_unreadable_naming_it', () => {
+  const s = setup();
+  earlierSeries(s, 's-20261029-aaaa', [{ kind: 'aa', usd: 1, what: 'completed', rid: 'r1' }]);
+  const file = path.join(s.seriesRoot, 's-20261029-aaaa', 'ledger.ndjson');
+  writeFileSync(file, `${readFileSync(file, 'utf8')}{ not json\n`);
+  const corrupt = initPlan({ ...s, seriesId: 's-20261031-cccc' });
+  assert.equal(corrupt.ok, false);
+  assert.match(corrupt.reason, /ledger of the earlier series s-20261029-aaaa is unreadable/);
+  const t = setup();
+  mkdirSync(path.join(t.seriesRoot, 's-20261029-dddd'), { recursive: true });
+  const missing = initPlan({ ...t, seriesId: 's-20261031-cccc' });
+  assert.equal(missing.ok, false);
+  assert.match(missing.reason, /s-20261029-dddd.*no ledger/s);
+  const u = setup();
+  earlierSeries(u, 's-20261029-aaaa', [{ kind: 'mystery', usd: 1, what: 'x', rid: 'r1' }]);
+  assert.match(initPlan({ ...u, seriesId: 's-20261031-cccc' }).reason, /s-20261029-aaaa.*kind 'mystery'/s, 'a line of a kind the gate does not know cannot be counted');
+});
+
+test('A_line_an_earlier_series_carried_is_counted_once_and_kept_when_its_origin_series_is_gone', () => {
+  const s = setup();
+  earlierSeries(s, 's-20261029-aaaa', [{ kind: 'aa', usd: 3, what: 'completed', rid: 'r1' }]);
+  earlierSeries(s, 's-20261030-bbbb', [{ kind: 'data', usd: 2, what: 'completed', rid: 'r2' }]); // its ledger already holds aaaa's r1 as a copy
+  const both = initPlan({ ...s, seriesId: 's-20261031-cccc' }).value.prior.filter(l => l.kind !== 'prior');
+  assert.deepEqual(both.map(l => [l.fromSeries, l.rid, l.usd]), [['s-20261029-aaaa', 'r1', 3], ['s-20261030-bbbb', 'r2', 2]], 'r1 once: from its own series, not again as bbbb\'s copy');
+  rmSync(path.join(s.seriesRoot, 's-20261029-aaaa'), { recursive: true, force: true });
+  const gone = initPlan({ ...s, seriesId: 's-20261031-cccc' }).value.prior.filter(l => l.kind !== 'prior');
+  assert.deepEqual(gone.map(l => [l.fromSeries, l.rid, l.usd]), [['s-20261029-aaaa', 'r1', 3], ['s-20261030-bbbb', 'r2', 2]], 'the copy keeps the spend when the origin directory was removed');
 });
