@@ -40,7 +40,7 @@ const OPTIONS = {
   'after-stop': { type: 'string' }, reason: { type: 'string' }, stack: { type: 'string' }, 'series-id': { type: 'string' }, 'series-root': { type: 'string' }, 'versions-dir': { type: 'string' },
   'toolchains-dir': { type: 'string' }, register: { type: 'boolean' }, 'inputs-dir': { type: 'string' }, 'seed-file': { type: 'string' }, out: { type: 'string' }, 'work-root': { type: 'string' },
 };
-const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', 'T1 breach', 'second void: contaminated']);
+const SERIES_STOPS = Object.freeze(['stop: security', 'stop: auth', 'stop: alias drift', 'T1 breach', 'T2 breach', 'second void: contaminated']);
 const home = os.homedir();
 const defaults = {
   seriesRoot: path.join(home, 'rsd', 'minigit'), toolchainsDir: path.join(home, 'rsd', 'minigit', 'toolchains'), versionsDir: path.join(home, '.local', 'share', 'claude', 'versions'),

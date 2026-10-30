@@ -226,7 +226,7 @@ number of accepted sessions per stack and phase is reported. Acceptance is a lab
    missing cells.
 4. A phase admitted within a limit can settle above it by at most the soft-cap overshoot, which the 1.1 factor budgets.
 
-**Series stops** (recorded in the run-map as `stopped` with the rule `T1 breach`, `stop: alias drift`, `stop: security`, `stop: auth` or `second void: contaminated`; a T1 breach keeps the session's class and adds the flag `T1 breach`; resume refused until the named fix and, for the first four, a new A/A that is GO): a T1 breach; `stop: alias drift`; `stop: security`; `stop: auth`; and the second
+**Series stops** (recorded in the run-map as `stopped` with the rule `T1 breach`, `stop: alias drift`, `stop: security`, `stop: auth`, `T2 breach` or `second void: contaminated`; a T1 breach keeps the session's class and adds the flag `T1 breach`; a T2 breach is a series stop only when `crosscheck-policy.json` has `t2: stop` (the fallback of section 11), keeps the class and adds the flag `T2 breach`, and under `t2: otel-incomplete` is the flag `otel incomplete` alone; resume refused until the named fix and, for the first four, a new A/A that is GO): a T1 breach; `stop: alias drift`; `stop: security`; `stop: auth`; and the second
 `void: contaminated` of the series. **Resumable halts** (exit 3): `void: rate limit` (the subscription's usage window), the quiet wait timing out, a scorer environment failure, and
 `scorer-timeout`.
 

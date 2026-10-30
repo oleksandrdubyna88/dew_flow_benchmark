@@ -456,3 +456,17 @@ test('A_record_rebuilt_later_keeps_the_run_maps_class_and_reports_a_new_hand_ver
   const plain = writeSessionRecord({ ctx: t.ctx, entry, score: null });
   assert.deepEqual(plain.value.discrepancies, [], 'control: nothing to report when the recomputed class is the run-map\'s');
 });
+
+test('A_T2_breach_stops_the_series_when_the_policy_makes_t2_the_stop_and_only_then', async () => {
+  const armed = harness({ variants: { [rid('node', 'v1', 1)]: 't2' }, ctx: { policy: { ...harness().ctx.policy, t2: 'stop' } } });
+  const r = await runLoop({ ctx: armed.ctx, deps: armed.deps, map: armed.map });
+  assert.equal(r.exit, EXIT.stop, r.message);
+  assert.match(r.message, /T2 breach/);
+  assert.equal(readRunMap(armed.ctx.runMapFile).value.stopped.rule, 'T2 breach', 'the pre-registered fallback: when T\'s coverage is not established, T2 is the stop');
+  const rec = JSON.parse(readFileSync(path.join(armed.ctx.sessionsRoot, rid('node', 'v1', 1), 'record.json'), 'utf8'));
+  assert.ok(rec.flags.includes('T2 breach') && rec.flags.includes('otel incomplete'));
+  assert.equal(armed.launched.length, 2, 'nothing launches after the stop');
+  const registered = harness({ variants: { [rid('node', 'v1', 1)]: 't2' } });
+  const r2 = await runLoop({ ctx: registered.ctx, deps: registered.deps, map: registered.map });
+  assert.equal(r2.exit, EXIT.done, 'control: under the registered policy (t2 otel-incomplete) the same breach is a flag and the cell stays');
+});

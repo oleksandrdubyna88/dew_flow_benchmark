@@ -30,6 +30,11 @@ export function lay(layout, variant) {
     lines[i] = { ...lines[i], total_cost_usd: lines[i].total_cost_usd + 1 };
     writeFileSync(layout.files.stream, `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
   }
+  if (variant === 't2') { // half of the OTel records never arrived: O does not match the envelope
+    const file = path.join(layout.otel, 'otel-raw.ndjson');
+    const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    writeFileSync(file, `${rows.slice(0, Math.ceil(rows.length / 2)).join('\n')}\n`);
+  }
   if (variant === 'corrupt') writeFileSync(layout.files.stream, 'this is not json\n'); // a collection that cannot read its evidence
   if (variant === 'auth') {
     appendFileSync(layout.files.brokerLog, `${JSON.stringify({ t: '2026-10-30T10:30:00Z', seq: 99, event: 'forwarding' })}\n${JSON.stringify({ t: '2026-10-30T10:30:01Z', seq: 99, event: 'settled', status: 401, usage: null, chargedUsd: 0 })}\n`);

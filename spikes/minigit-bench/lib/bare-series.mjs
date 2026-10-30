@@ -147,9 +147,9 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     const run = { mask: s.mask, maskObserved: s.maskObserved?.observed, spawnStampMs: s.stampMs, startSkewMs: phase.startSkewMs, quiet: state.quiet ?? null, spin: ctx.spin ?? null, flags, harnessIdentity: ctx.harnessIdentity };
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [], workspaceExcluded: s.workspace.excludedDirs ?? null }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);
-    if (!outcome.data || collected.value.t1Stop) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null }); // a void has nothing to score; a session that stops the series is kept as it is
+    if (!outcome.data || collected.value.seriesStops.length > 0) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null }); // a void has nothing to score; a session that stops the series is kept as it is
     if (outcome.stop) stops.push({ rid: s.rid, rule: outcome.class, detail: outcome.detail });
-    if (collected.value.t1Stop) stops.push({ rid: s.rid, ...collected.value.t1Stop });
+    for (const stop of collected.value.seriesStops) stops.push({ rid: s.rid, ...stop });
   }
   if (stops.length === 0 && contaminatedVoids(h.get()) >= 2) stops.push({ rid: phase.sessions.map(x => x.rid).join(', '), rule: 'second void: contaminated', detail: { voids: contaminatedVoids(h.get()) } });
   const unread = failures.length > 0 ? `; ${failures.join('; ')} (those sessions stay launching and are settled by resume)` : '';
