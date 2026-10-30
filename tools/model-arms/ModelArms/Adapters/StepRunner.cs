@@ -70,13 +70,17 @@ public class StepProbe
     }
 }
 
-/// <summary>One step, end to end (plan §4.5, D6–D9, D21). STUB: the run does nothing.</summary>
+/// <summary>One step, end to end (plan §4.5, D6–D9, D21; <c>run-arm.sh:76-126</c>): recover from what the step left, prepare and launch an attempt, classify it from the files it wrote, wait out a limit and resume the SAME session,
+/// derive the outputs, write <c>.done</c>. The flow itself is <c>StepRun</c> (one per call) and <c>StepAttempt</c> (one per attempt); this type is the contract the gate step and <c>run-arm</c> hold.
+/// <para>
+/// Residual: the runner is one process per arm; two runners over one arm's folder are not supported (the gate's lock is a different thing).
+/// </para></summary>
 public sealed class StepRunner(ICliAgentTranscripts cli, ISessionTranscripts transcripts, TimeProvider clock, Func<TimeSpan, CancellationToken, Task> wait, TextWriter log, ArmMap map, StepProbe probe)
 {
-    private readonly object[] _held = [cli, transcripts, clock, wait, log, map, probe];
+    private readonly StepDeps _deps = new(cli, transcripts, clock, wait, log, map, probe);
 
-    public StepEntry Recover(StepContext context) => new StepEntry.Skip();
+    /// <summary>Step 1's decision over the step's files — the gate step asks it too (E2.S7). Nothing is launched.</summary>
+    public StepEntry Recover(StepContext context) => new StepRun(context, _deps).Recover();
 
-    public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping) =>
-        Task.FromResult<StepOutcome>(new StepOutcome.Done(new StepEnd.Finished(), false, false));
+    public Task<StepOutcome> RunAsync(StepContext context, CancellationToken stopping) => new StepRun(context, _deps).RunAsync(stopping);
 }

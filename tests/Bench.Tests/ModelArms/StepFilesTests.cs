@@ -85,6 +85,7 @@ public sealed class StepFilesTests
             files.WriteOnce(paths.Done(Step), "one");
             var again = () => files.WriteOnce(paths.Done(Step), "two");
             again.Should().Throw<IOException>("an artefact is committed once: the runtime refuses to move a staged file over it");
+            Directory.EnumerateFiles(paths.Out, "*.staging-*").Should().BeEmpty("a refused write removes what it staged");
             File.ReadAllText(paths.Done(Step)).Should().Be("one");
 
             files.Replace(paths.Session(Step), "a");
@@ -133,7 +134,7 @@ public sealed class StepFilesTests
                 second.Should().Throw<IOException>("the stream of an attempt is created new, never reopened");
             }
 
-            files.Tail(paths.Stderr(Step, 1), 10).Should().Be("789\nabcdef\n");
+            files.Tail(paths.Stderr(Step, 1), 10).Should().Be("89\nabcdef\n");
             files.Tail(paths.Stderr(Step, 1), 4000).Should().Be("0123456789\nabcdef\n");
         }
     }
