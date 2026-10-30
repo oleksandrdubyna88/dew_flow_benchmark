@@ -453,6 +453,9 @@ public sealed class StepContractTests
     [InlineData("notes/ x.md", "notes/ x.md")]
     [InlineData("notes/x.md ", "notes/x.md ")]
     [InlineData("notes/a\tb.md", "notes/a\\u0009b.md")]
+    [InlineData("notes/a\u2028b.md", "notes/a\\u2028b.md")]
+    [InlineData("notes/a\u2029b.md", "notes/a\\u2029b.md")]
+    [InlineData("notes/a\u00A0b.md", "notes/a\\u00A0b.md")]
     public void An_output_path_segment_with_a_control_or_format_character_or_an_edge_space_is_refused_and_echoed_escaped(string path, string echoed)
     {
         PosixPaths();
@@ -486,6 +489,8 @@ public sealed class StepContractTests
     [InlineData("work/batches.json")]
     [InlineData("work/t1.md")]
     [InlineData("notes/t1-code.md")]
+    [InlineData("notes/t12-code.md")]
+    [InlineData("notes/T1-code.md")]
     public void A_binding_cannot_name_a_file_the_task_pipeline_writes_in_a_scheme_that_runs_it(string path)
     {
         PosixPaths();
@@ -494,6 +499,32 @@ public sealed class StepContractTests
 
         HasLine(reason, "schemes.SRS", $"{path} is a file of the task pipeline");
         Lines(reason).Should().NotContain(line => line.StartsWith("schemes.CR ", StringComparison.Ordinal), "CR runs no pipeline");
+    }
+
+    [Theory]
+    [InlineData("work/summary.md")]
+    [InlineData("notes/hfix-code.md")]
+    [InlineData("work/t1/x.md")]
+    public void A_binding_that_only_looks_like_a_task_file_is_accepted(string path)
+    {
+        PosixPaths();
+
+        var outcome = ExperimentFile.Read(Edited(root => Step(root, "hreview")["outputs"]!["X"] = path), Loc);
+
+        outcome.Failed().Should().BeFalse($"{path} is no file of the pipeline: its ids are t<n>{(outcome.Failed() ? ", and the reason was: " + outcome.Reason() : string.Empty)}");
+        outcome.Ok().Steps[new("hreview")].Outputs.Should().Contain(new OutputBinding("X", path));
+    }
+
+    [Theory]
+    [InlineData("t1", true)]
+    [InlineData("t12", true)]
+    [InlineData("T1", false)]
+    [InlineData("t", false)]
+    [InlineData("t1\n", false)]
+    [InlineData("summary", false)]
+    public void A_task_id_is_t_and_a_number(string id, bool expected)
+    {
+        TaskIds.IsTaskId(id).Should().Be(expected);
     }
 
     [Fact]
@@ -547,6 +578,8 @@ public sealed class StepContractTests
         root => Scheme(root, "C").Add("5-coder:taskCode"),
         root => Step(root, "hreview")["outputs"]!["X"] = "work/tasks.json",
         root => Step(root, "code")["outputs"]!["CODE_NOTES"] = "notes/a\nb.md",
+        root => root["schemes"]!["Z\n"] = new JsonArray("1-code:code"),
+        root => root["runs"]!["part9\n"] = root["runs"]!["part7"]!.DeepClone(),
         root => Step(root, "fix")["outputs"]!["CODE_NOTES"] = "notes/fix2.md",
         root => root["tasks"]!["outputs"]!["HREVIEW_NOTES"] = "notes/hreview.md",
         root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json",
@@ -585,7 +618,7 @@ public sealed class StepContractTests
     /// path with nothing after it and fails.</summary>
     private static bool FollowsItsPath(string line)
     {
-        var path = Regex.Match(line, @"^[A-Za-z0-9_.\[\]]+", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)).Value;
+        var path = Regex.Match(line, @"^[A-Za-z0-9_.\[\]\\]+", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)).Value;
         return path.Length > 0 && path.Length < line.Length && line[path.Length] is ' ' or ':';
     }
 }
