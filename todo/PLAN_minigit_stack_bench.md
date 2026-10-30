@@ -77,7 +77,10 @@ first unit test (§12, T-A1).
 - Which arm leads each block: one of the six three-block patterns in which each arm leads at least once, chosen by the
   seed through `drawOrder`'s seeded hash (`spikes/policy-ab-quick/lib/order.mjs:4`) — not `drawBlocks`' independent flips
   (`order.mjs:10-16`), which give one arm all three leads with probability 1/4. A = process, B = bare.
-- `seed.txt` = `mg-` + 16 random hex, committed **after** `prediction.md` and before the draw.
+- `seed.txt` = `mg-` + 16 random hex, committed **after** `prediction.md` and before the draw. The bare arm (D20) has its
+  own seed, committed as a sha256 with its pre-registration and revealed after its A/A
+  ([PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md), E3b.S3–S4); the process draw gets its own
+  seed in E3.
 - CPU: the VM shows 14 vCPUs as 7 cores × 2 SMT threads (`lscpu -e`: core n = CPUs 2n, 2n+1 — the hypervisor's
   topology, not physical cores). The two cells of a pair get `taskset` masks **0-5** and **8-13** (three cores each);
   core 3 (CPUs 6-7) is left to the harness, coai, the vendor CLIs and the OS. Masks swap between blocks — with three
@@ -358,7 +361,8 @@ Bash and PowerShell, and must stay byte-equal for adapter-check; nobody answers 
 (D17). Session persistence ON (transcripts are
 the third count). Env: the scrub, plus `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`,
 `CLAUDE_CODE_ENABLE_TELEMETRY=1` with OTLP to the local receiver, `MSBUILDDISABLENODEREUSE=1`, `UseSharedCompilation=false`,
-`DOTNET_CLI_USE_MSBUILD_SERVER=0` (no cell builds on its partner's node), `BENCH_CELL=<id>` (the janitor's marker),
+`DOTNET_CLI_USE_MSBUILD_SERVER=0` (process arm, decided in E3; the bare arm keeps the build servers at their defaults, as
+banteg ran, registered in E3b.S3 — each box's own pid namespace already keeps a cell off its partner's node, E3b.S1), `BENCH_CELL=<id>` (the janitor's marker),
 `GIT_TERMINAL_PROMPT=0` (a missing credential fails, never hangs), `GIT_CONFIG_GLOBAL=<session>/gitconfig`; process arm
 `GH_TOKEN`, `GH_CONFIG_DIR=<session>/gh`, `GH_PROMPT_DISABLED=1`, and the session gitconfig carries
 `credential.https://github.com.helper = !gh auth git-credential` plus the fixed bench author — so `git push` inside the
@@ -494,6 +498,10 @@ src_mcp/core/Rounds/RoundMachine.cs:404-416`); `contaminated` (a
   v2 (the barrier holds the partner's v2 meanwhile only if both v1s voided). A re-run is paired with a re-run of the
   partner only if the partner also voided, otherwise it runs alone and is labelled `ran unpaired`. A second void of the same
   session leaves the cell missing, reported as such. Void spend counts against the ceiling (§13).
+- **Registered extensions, bare arm (D20):** E3b.S3's analysis contract adds `void: upstream` (a session ended by a final
+  5xx/529), `void: harness` for an interrupted or disposed launch, and `stop: auth` (a 401/403 — the credential, not the
+  stack), and classes a session by how it ENDED (a transient cap refusal or upstream 429 is a flag). The process arm adopts
+  or declines them in E3.S3.
 
 **Prediction (to be committed verbatim, written 2026-10-29 before any cell):**
 *(The ranges below are descriptive expectations about medians and ratios, stated before the run — not effect sizes
@@ -559,7 +567,12 @@ only if data + void + pilot spend + the live O sum of running sessions + **1.1 �
 (fast, provisional); the stop rule reads settled figures, each the larger of the CLI's total and the published recompute
 (§9); the report shows both. At the top of prediction 3 ($70 per process cell) the series needs ≈ $40 + 6 × $70 + $20 ≈
 $480 — inside $500. If even $500 refuses a pair, the series stops there and the report says which cells are missing and
-reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and Actions on public repos do not bill this ceiling.
+reports the process arm at the n it reached (§11). **Bare budget (D20, E3b §5):** the bare arm — A/A, Node pilot, three
+pairs and their re-runs — stops at **$40**; E1/E2's ≈ $0.43 instrument spend counts in the $500, not in the $40. It may be
+raised only to finish the re-runs of a pair already started, by at most their worst case. The squeeze, stated: if the bare
+arm uses its whole $40 and process cells cost prediction 3's top ($70), the 1.1 × gate refuses the v2 phase of the third
+process pair (≈ $430 settled + 1.1 × 2 × $35 > $500) and the process arm reports at n = 2. coai vendors, CodeRabbit and
+Actions on public repos do not bill this ceiling.
 
 ## 14. Growth
 
