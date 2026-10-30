@@ -113,6 +113,75 @@ public sealed class GateStepInputTests
         new FileInfo(bench.Paths.Timing).Length.Should().BeLessThan(16 * 1024);
     }
 
+    private static byte[] Bom(string json) => [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes(json)];
+
+    /// <summary>A gate whose status file holds exactly <paramref name="bytes"/>; the first wait rewrites it to proceed, so a gate that waits finishes.</summary>
+    private static async Task<(StepOutcome Outcome, StepBench Bench)> RunWithAsync(byte[] bytes)
+    {
+        var bench = new StepBench();
+        bench.Replays("result-success.jsonl");
+        File.WriteAllBytes(StatusPath(bench), bytes);
+        var rig = new GateRig();
+        rig.WhenWaiting(bench, _ => bench.WriteStatus("proceed"));
+        return (await rig.Gate(bench).RunAsync(bench.GateContext(), Ct), bench);
+    }
+
+    [Theory]
+    [InlineData("""{"status":"blocked","why":"x"}""", "a UTF-8 byte order mark")]
+    [InlineData("{\r\n  \"status\": \"blocked\",\r\n  \"why\": \"x\"\r\n}\r\n", "CRLF line ends")]
+    public async Task A_blocked_status_is_read_as_blocked_whatever_wraps_it(string json, string wrapped)
+    {
+        var (outcome, bench) = await RunWithAsync(wrapped.Contains("byte order mark", StringComparison.Ordinal) ? Bom(json) : System.Text.Encoding.UTF8.GetBytes(json));
+        using (bench)
+        {
+            outcome.IsDone();
+            bench.GateWaits().Should().HaveCount(1, $"a blocked status behind {wrapped} is a blocked gate, never a missing one");
+            bench.Waits.Recorded.Should().HaveCount(1);
+        }
+    }
+
+    [Fact]
+    public async Task A_proceed_status_behind_a_byte_order_mark_is_read_as_proceed()
+    {
+        var (outcome, bench) = await RunWithAsync(Bom("""{"status":"proceed"}"""));
+        using (bench)
+        {
+            outcome.IsDone();
+            bench.Waits.Recorded.Should().BeEmpty();
+            bench.LogLines.Last().Should().EndWith("gate status proceed");
+        }
+    }
+
+    [Theory]
+    [InlineData("UTF-16 little endian", new byte[] { 0xFF, 0xFE, 0x7B, 0x00 }, "UTF-16")]
+    [InlineData("UTF-16 big endian", new byte[] { 0xFE, 0xFF, 0x00, 0x7B }, "UTF-16")]
+    [InlineData("a trailing NUL", new byte[] { 0x7B, 0x7D, 0x00 }, "NUL")]
+    public async Task A_status_that_is_not_UTF_8_text_is_refused_by_name_and_never_read_as_missing(string what, byte[] bytes, string named)
+    {
+        var (outcome, bench) = await RunWithAsync(bytes);
+        using (bench)
+        {
+            outcome.IsStopped(5).Why.Should().Contain(named, what);
+            bench.GateWaits().Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public void The_portable_read_takes_a_byte_order_mark_off_and_refuses_UTF_16_and_a_NUL_as_the_kernel_road_does()
+    {
+        using var bench = new StepBench();
+        var withBom = bench.Write("x", "portable", "bom.json");
+        File.WriteAllBytes(withBom, Bom("""{"status":"blocked"}"""));
+        var utf16 = bench.Write("x", "portable", "utf16.json");
+        File.WriteAllBytes(utf16, [0xFF, 0xFE, 0x7B, 0x00]);
+        var nul = bench.Write("x", "portable", "nul.json");
+        File.WriteAllBytes(nul, [0x7B, 0x00]);
+
+        GateStatusFile.ReadFallback(withBom, 1000).Should().Be(new GateStatusFile.Answer.Text("""{"status":"blocked"}"""));
+        GateStatusFile.ReadFallback(utf16, 1000).Should().BeOfType<GateStatusFile.Answer.Refused>().Which.Reason.Should().Contain("UTF-16");
+        GateStatusFile.ReadFallback(nul, 1000).Should().BeOfType<GateStatusFile.Answer.Refused>().Which.Reason.Should().Contain("NUL");
+    }
+
     [Fact]
     public async Task The_bounded_read_that_off_Linux_x64_takes_over_refuses_a_link_a_folder_and_a_file_past_the_limit_and_reads_the_rest()
     {
