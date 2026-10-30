@@ -1,0 +1,10 @@
+{
+  "decidedOn": "2026-10-30",
+  "reason": "The package flag rules of E3b.S1 step 9, registered with the bare pre-registration. A package a session pulled that is named like the task, a TypeScript that is not the pinned one, another TypeScript runner or compiler, or a .NET runtime pack off the 10.0 band is FLAGGED (never a class): the model may have swapped the stack under test. Each flag is read by hand in the pair-1 read-back.",
+  "rules": [
+    { "id": "minigit-name", "ecosystem": "any", "nameRegex": "mini-?git", "nameRegexFlags": "i" },
+    { "id": "typescript-not-pinned", "ecosystem": "npm", "nameRegex": "^typescript$", "versionNotRegex": "^7\\.0\\.2$" },
+    { "id": "other-ts-runner-or-compiler", "ecosystem": "npm", "nameRegex": "^(tsx|ts-node|esbuild|@swc/.+)$" },
+    { "id": "dotnet-pack-off-the-10-band", "ecosystem": "nuget", "nameRegex": "^microsoft\\.(netcore|aspnetcore)\\.app\\.", "versionNotRegex": "^10\\.0\\." }
+  ]
+}
