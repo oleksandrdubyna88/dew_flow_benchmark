@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Bench.Domain;
@@ -40,22 +38,19 @@ public sealed record ArmMap
 
     /// <summary>The map as an indented JSON object of strings in insertion order, like the shell's map but not byte-identical
     /// (tokens, indent and file name differ).</summary>
-    public string ToJson()
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true, NewLine = "\n" }))
-        {
-            writer.WriteStartObject();
-            foreach (var (arm, token) in Entries)
+    public string ToJson() =>
+        JsonText.Write(
+            new JsonWriterOptions { Indented = true, NewLine = "\n" },
+            writer =>
             {
-                writer.WriteString(arm, token);
-            }
+                writer.WriteStartObject();
+                foreach (var (arm, token) in Entries)
+                {
+                    writer.WriteString(arm, token);
+                }
 
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
+                writer.WriteEndObject();
+            });
 
     /// <summary>The existing map plus a fresh token for each arm not yet in it. An existing entry is never
     /// touched, an arm absent from <paramref name="arms"/> is kept, and a draw that collides with a token already
