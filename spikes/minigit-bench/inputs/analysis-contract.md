@@ -259,7 +259,7 @@ scorer (`--what rehearse-v2`); then one bare Node v1 alone (`--what pilot-node`)
 | G-11 ‡ | the quiet check passed; the sampler and the spin probe wrote every 5 s; `maskObserved` true for every cell | the contention control is not in force | fix; A/A again |
 | G-12 ‡ | the cap stops a session that reaches it, at settled spend ≥ $6 | the cap failed | **stop**; fix |
 | G-13 ‡ | each session's class read by hand against its stream and broker log — a dated line | the classifier misreads an ending | fix, re-classify |
-| G-14 | the v2 rehearsal: the v2 workspace is the v1 tree minus the stack's exclusion (C#: `bin/ obj/ node_modules/`; TypeScript: `node_modules/` only; section 1) plus the v2 inputs; the stub v2 session's records are complete; `score.json` at v2 has every step known | the v2 path is broken | fix, rehearse again (free) |
+| G-14 | the v2 rehearsal, for BOTH stacks (the TypeScript v2 on the A/A twin's tree too: no Node tree exists before the pilot, so the twin's `bin/` and `obj/` are what the TypeScript rule keeps): the v2 workspace is the v1 tree minus the stack's exclusion (C#: `bin/ obj/ node_modules/`; TypeScript: `node_modules/` only; section 1) plus the v2 inputs; the stub v2 session's records are complete; `score.json` at v2 has every step known | the v2 path is broken | fix, rehearse again (free) |
 
 **GO** = every G `holds` (G-6 `explained` counts as holds; G-9 never gates), except these, which may be **`not exercised`**, each with its replacing evidence named in `AA.md`:
 **G-4's subagent half** → the E2.S2 smoke fixture's B-T1 on the same CLI; **G-12** (no twin reached the cap) → E2.S2's broker proof P-6 and the budget tests green at the run's harness

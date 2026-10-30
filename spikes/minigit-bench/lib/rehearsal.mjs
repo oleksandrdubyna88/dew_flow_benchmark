@@ -73,11 +73,30 @@ export function g14Verdict({ stack, twinWork, v2Work, hashes, record, score }) {
   return { holds: checks.every(c => c.ok), checks };
 }
 
-// ---- the run ----------------------------------------------------------------------------------------------------------------------
+/** The stacks whose v2 path G-14 rehearses, in the order they are reported: BOTH, because their v2 workspaces leave out different directories (contract sections 1 and 10). */
+export const REHEARSED_STACKS = Object.freeze(['csharp', 'node']);
 
 /**
- * Run the rehearsal over the real wiring (`ctx`, `deps` from `buildRun`): plan one `rehearsal` session (C#, v2) whose v1 tree is the twin's, run the loop with the stub CLI and a fake token,
- * compute G-14, write `<series>/rehearsal-v2.json`. -> `{ exit, message, verdict?, map }`. The loop's quiet check and spend gate are skipped for this kind (nothing is measured or paid).
+ * G-14 over both stacks (review N16): `rehearsals` is `[{ stack, holds, checks }]` (one `g14Verdict` each). It holds only when EVERY stack was rehearsed and each holds; a stack that was not
+ * rehearsed is a refused check naming it. -> `{ holds, stacks: { [stack]: { holds, checks } }, checks: [{ id: '<stack> <check>', ok, detail }] }`.
+ */
+export function g14Both({ rehearsals }) {
+  const stacks = Object.fromEntries(REHEARSED_STACKS.map(stack => {
+    const found = rehearsals.find(r => r.stack === stack);
+    return [stack, found ? { holds: found.holds, checks: found.checks } : { holds: false, checks: [{ id: 'rehearsed', ok: false, detail: `the ${stack} v2 was not rehearsed: G-14 needs both stacks' v2 paths` }] }];
+  }));
+  return { holds: REHEARSED_STACKS.every(s => stacks[s].holds), stacks, checks: REHEARSED_STACKS.flatMap(s => stacks[s].checks.map(c => ({ ...c, id: `${s} ${c.id}` }))) };
+}
+
+// ---- the run ----------------------------------------------------------------------------------------------------------------------
+
+const MASKS = Object.freeze({ csharp: '0-5', node: '8-13' });
+
+/**
+ * Run the rehearsal over the real wiring (`ctx`, `deps` from `buildRun`): one `rehearsal` session per stack (C# and TypeScript, v2, started together on the two masks) whose v1 tree is the twin's, run
+ * the loop with the stub CLI and a fake token, compute G-14 for each stack and for both, write `<series>/rehearsal-v2.json`. The TypeScript v2 is rehearsed on the twin's tree too (no Node tree exists
+ * before the pilot, which runs after the rehearsal): the twin's `bin/` and `obj/` are what the TypeScript rule KEEPS, and `node_modules/` is what both leave out. A session of an earlier attempt that is still
+ * `planned` is reused (review N15). -> `{ exit, message, verdict?, map }`. The loop's quiet check and spend gate are skipped for this kind (nothing is measured or paid).
  */
 export async function rehearseV2({ ctx, deps, map, say = () => {}, signal, random = () => randomBytes(4).toString('hex') }) {
   const twin = twinOf(map);
@@ -86,12 +105,16 @@ export async function rehearseV2({ ctx, deps, map, say = () => {}, signal, rando
   mkdirSync(dir, { recursive: true });
   const stub = await stubUpstream(sseAnswer(chunksOf(sseBody(), 3), 20));
   try {
-    // a rehearsal that stopped before it launched (the gates, say) leaves its session `planned`: the next run REUSES it (review N15), so a rid is not planned per attempt and no leftover is launched
-    const waiting = Object.values(map.sessions).find(s => s.kind === 'rehearsal' && s.status === 'planned');
-    const rid = waiting?.rid ?? pilotRid(random());
-    const planned = waiting ? ok(map) : planSession(map, { rid, pair: 0, stack: 'csharp', phase: 'v2', attempt: 1, kind: 'rehearsal', label: 'paired', mask: '0-5', twin: `rehearse-${twin.rid}` });
-    if (!planned.ok) return { exit: EXIT.failed, message: planned.reason, map };
-    if (!waiting) writeRunMap(ctx.runMapFile, planned.value);
+    // a rehearsal that stopped before it launched (the gates, say) leaves its sessions `planned`: the next run REUSES them (review N15), so a rid is not planned per attempt and no leftover is launched
+    let planned = ok(map);
+    const rids = {};
+    for (const stack of REHEARSED_STACKS) {
+      const waiting = Object.values(planned.value.sessions).find(x => x.kind === 'rehearsal' && x.stack === stack && x.status === 'planned');
+      rids[stack] = waiting?.rid ?? pilotRid(random());
+      if (!waiting) planned = planSession(planned.value, { rid: rids[stack], pair: 0, stack, phase: 'v2', attempt: 1, kind: 'rehearsal', label: 'paired', mask: MASKS[stack], twin: `rehearse-${twin.rid}` });
+      if (!planned.ok) return { exit: EXIT.failed, message: planned.reason, map };
+    }
+    if (planned.value !== map) writeRunMap(ctx.runMapFile, planned.value);
     const rehearsalCtx = {
       ...ctx, kind: 'rehearsal', pair: 0, rehearsalOf: twin.rid, token: `sk-ant-fake-${randomBytes(8).toString('hex')}`, claudeBinary: stubClaude(dir), aliasStore: null, aliasBaseline: null,
       handVerdictsFor: () => [], planOver: { upstream: stub.upstream, tickMs: 500, sampleMs: 500, settleMs: 500, graceMs: 2000 },
@@ -99,13 +122,16 @@ export async function rehearseV2({ ctx, deps, map, say = () => {}, signal, rando
     const rehearsalDeps = { ...deps, phase: { ...deps.phase, listProjectDirs: () => [] } };
     const r = await runLoop({ ctx: rehearsalCtx, deps: rehearsalDeps, map: planned.value, signal, say });
     if (r.exit !== EXIT.done) return r;
-    const record = readSessionRecord(rehearsalCtx, rid);
-    const scorePath = path.join(rehearsalCtx.sessionsRoot, rid, 'score', 'score.json');
-    const score = (() => { try { return JSON.parse(readFileSync(scorePath, 'utf8')); } catch { return null; } })();
-    const verdict = g14Verdict({ stack: 'csharp', twinWork: layoutPaths(ctx.sessionsRoot, twin.rid).work, v2Work: layoutPaths(ctx.sessionsRoot, rid).work, hashes: ctx.hashes, record, score });
-    writeJson(path.join(ctx.seriesDir, 'rehearsal-v2.json'), { rid, twin: twin.rid, ...verdict, at: new Date().toISOString() });
+    const rehearsals = REHEARSED_STACKS.map(stack => {
+      const rid = rids[stack];
+      const scorePath = path.join(rehearsalCtx.sessionsRoot, rid, 'score', 'score.json');
+      const score = (() => { try { return JSON.parse(readFileSync(scorePath, 'utf8')); } catch { return null; } })();
+      return { stack, rid, ...g14Verdict({ stack, twinWork: layoutPaths(ctx.sessionsRoot, twin.rid).work, v2Work: layoutPaths(ctx.sessionsRoot, rid).work, hashes: ctx.hashes, record: readSessionRecord(rehearsalCtx, rid), score }) };
+    });
+    const verdict = g14Both({ rehearsals });
+    writeJson(path.join(ctx.seriesDir, 'rehearsal-v2.json'), { twin: twin.rid, rids, ...verdict, at: new Date().toISOString() });
     for (const c of verdict.checks) say(`G-14 ${c.id}: ${c.ok ? 'holds' : 'REFUTED'}: ${c.detail}`);
-    return { exit: verdict.holds ? EXIT.done : EXIT.failed, message: verdict.holds ? 'G-14 holds: the v2 path ran end to end for free' : 'G-14 is refuted: fix the v2 path and rehearse again (free)', verdict, map: r.map };
+    return { exit: verdict.holds ? EXIT.done : EXIT.failed, message: verdict.holds ? "G-14 holds: both stacks' v2 paths ran end to end for free" : 'G-14 is refuted: fix the v2 path and rehearse again (free)', verdict, map: r.map };
   } finally {
     await stub.close();
   }

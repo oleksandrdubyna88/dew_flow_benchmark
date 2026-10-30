@@ -164,7 +164,7 @@ async function runCommand(v, write, { resume }, seams = {}) {
   const built = await buildRun({ seriesDir, map, kind: what.kind, pair: what.pair ?? 0, args: { inputsDir: v['inputs-dir'] ? inputsDir : undefined, acceptNoisy: v['accept-noisy'] }, paid: !dry && !rehearsing, seams }); // a rehearsal never reads the token file
   if (!built.ok) { write(`cannot start: ${built.reason}`); return EXIT.config; }
   const { ctx, deps, abort } = built.value;
-  if (dry && rehearsing) { write(`rehearse-v2: would rehearse the v2 path on the tree of twin ${twinOf(map).rid}: a v2 workspace filled from it, a stub CLI in the real box behind the real broker (a loopback stub upstream, a fake token), the real scorer at phase v2, then G-14; nothing is paid and no real token is read`); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
+  if (dry && rehearsing) { write(`rehearse-v2: would rehearse the v2 path on the tree of twin ${twinOf(map).rid} for BOTH stacks (C#: bin/ obj/ node_modules/ left out; TypeScript: node_modules/ only): a v2 workspace per stack filled from it, a stub CLI in the real box behind the real broker (a loopback stub upstream, a fake token), the real scorer at phase v2, then G-14; nothing is paid and no real token is read`); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
   if (dry) { dryRunLines({ map, ctx, what }).forEach(write); write('dry run: nothing was claimed, started or spent'); return EXIT.done; }
   const ctl = new AbortController();
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { abort.reason = sig; abort.exit = code; ctl.abort(); });

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { main } from '../bare-runner.mjs';
 import { EXIT } from '../lib/bare-series.mjs';
-import { g14Verdict, rehearsalRefusal, rehearseV2, twinOf } from '../lib/rehearsal.mjs';
+import { g14Both, g14Verdict, rehearsalRefusal, rehearseV2, twinOf } from '../lib/rehearsal.mjs';
 import { openSeries, planSession, readRunMap, transition, writeRunMap } from '../lib/run-map.mjs';
 import { fillV1, fillV2 } from '../lib/workspace.mjs';
 import { sha256Of } from '../lib/inputs.mjs';
@@ -105,11 +105,12 @@ test('A_rehearsal_needs_an_A_A_twin_and_names_the_one_it_uses', async () => {
   const dry = await run(['run', '--series', s.dir, '--what', 'rehearse-v2', '--dry-run', '--inputs-dir', inputsDir()]);
   assert.equal(dry.code, 0, dry.out);
   assert.match(dry.out, /rehearse-v2: would rehearse the v2 path on the tree of twin aaaaaa/);
+  assert.match(dry.out, /BOTH stacks \(C#: bin\/ obj\/ node_modules\/ left out; TypeScript: node_modules\/ only\)/);
   assert.match(dry.out, /stub CLI .* nothing is paid/);
   assert.deepEqual(readdirSync(s.dir).sort(), before, 'a dry run writes nothing');
 });
 
-test('A_rehearsal_that_stopped_at_the_gates_leaves_one_planned_session_and_the_next_run_reuses_it', async () => {
+test('A_rehearsal_that_stopped_at_the_gates_leaves_one_planned_session_per_stack_and_the_next_run_reuses_them', async () => {
   const s = series({ twin: true });
   const ctx = { seriesDir: s.dir, sessionsRoot: path.join(s.dir, 's'), runMapFile: path.join(s.dir, 'run-map.json'), ledgerFile: path.join(s.dir, 'ledger.ndjson'), kind: 'aa', pair: 0, home: tmpDir('home'), caps: { capUsd: 6, wallMs: 1, stallMs: 1 }, harnessIdentity: 'a'.repeat(64) };
   const deps = { guard: async () => ({ ok: false, reason: 'the tag is not on origin' }), retireStale: async () => {}, preflight: async () => ({ ok: true }), now: Date.now, phase: {} };
@@ -117,11 +118,25 @@ test('A_rehearsal_that_stopped_at_the_gates_leaves_one_planned_session_and_the_n
   const first = await rehearse(s.map);
   assert.equal(first.exit, EXIT.config, first.message);
   const planned = () => Object.values(readRunMap(ctx.runMapFile).value.sessions).filter(x => x.kind === 'rehearsal');
-  assert.equal(planned().length, 1);
-  assert.equal(planned()[0].status, 'planned');
-  const firstRid = planned()[0].rid;
+  assert.deepEqual(planned().map(x => [x.stack, x.phase, x.status]).sort(), [['csharp', 'v2', 'planned'], ['node', 'v2', 'planned']], 'one session per stack: both v2 paths are rehearsed');
+  const firstRids = planned().map(x => x.rid).sort();
   const again = await rehearse(readRunMap(ctx.runMapFile).value);
   assert.equal(again.exit, EXIT.config, again.message);
-  assert.equal(planned().length, 1, 'the still-planned session is reused: no second rid, no leftover');
-  assert.equal(planned()[0].rid, firstRid, 'the same rid');
+  assert.deepEqual(planned().map(x => x.rid).sort(), firstRids, 'the still-planned sessions are reused: no second rid, no leftover');
+});
+
+test('G14_needs_both_stacks_and_names_the_one_that_was_not_rehearsed_or_that_fails', () => {
+  const rehearsal = (stack, over = {}) => ({ stack, ...verdict(trees(stack)), ...over });
+  const both = g14Both({ rehearsals: [rehearsal('csharp'), rehearsal('node')] });
+  assert.equal(both.holds, true, JSON.stringify(both));
+  assert.deepEqual(Object.keys(both.stacks).sort(), ['csharp', 'node']);
+  assert.deepEqual(both.checks.map(c => c.id), ['csharp workspace', 'csharp record', 'csharp score', 'node workspace', 'node record', 'node score'], 'every check is named by its stack');
+  const oneOnly = g14Both({ rehearsals: [rehearsal('csharp')] });
+  assert.equal(oneOnly.holds, false, 'G-14 needs both stacks');
+  assert.match(oneOnly.checks.find(c => !c.ok).detail, /node v2 was not rehearsed/);
+  const nodeBroke = g14Both({ rehearsals: [rehearsal('csharp'), rehearsal('node', { holds: false, checks: [{ id: 'workspace', ok: false, detail: 'bin/ of the twin is missing from the v2 workspace' }, { id: 'record', ok: true, detail: 'x' }, { id: 'score', ok: true, detail: 'x' }] })] });
+  assert.equal(nodeBroke.holds, false);
+  assert.equal(nodeBroke.stacks.csharp.holds, true);
+  assert.equal(nodeBroke.stacks.node.holds, false);
+  assert.match(nodeBroke.checks.find(c => !c.ok).detail, /bin\/ of the twin/);
 });
