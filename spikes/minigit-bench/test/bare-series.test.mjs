@@ -226,3 +226,16 @@ test('A_record_carries_the_harness_identity_that_ran_the_session_even_when_it_is
   assert.equal(rebuilt.ok, true, rebuilt.reason);
   assert.equal(rebuilt.value.run.harnessIdentity.value, t.ctx.harnessIdentity, 'a later harness (an accepted fix) does not rewrite what ran then');
 });
+
+test('Whether_the_v1_phase_started_quiet_is_kept_in_the_run_map_so_the_noisy_rule_for_v2_survives_a_resume', async () => {
+  const seen = [];
+  const t = harness({ quiet: async arg => { seen.push(`${arg.phase}:${arg.v1Quiet}`); return arg.phase === 'v1' ? { ok: true, value: { quiet: true, flags: [] } } : { ok: false, reason: 'the machine is loaded now' }; } });
+  const first = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(first.exit, EXIT.halt, first.message);
+  assert.deepEqual(seen, ['v1:null', 'v2:true']);
+  assert.equal(readRunMap(t.ctx.runMapFile).value.pairs[1].v1Quiet, true, 'written with the phase, so a crash cannot lose it');
+  seen.length = 0;
+  const resumed = await runLoop({ ctx: t.ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value });
+  assert.equal(resumed.exit, EXIT.halt);
+  assert.deepEqual(seen, ['v2:true'], 'a fresh process reads it from the run-map: --accept-noisy is still refused for this v2');
+});

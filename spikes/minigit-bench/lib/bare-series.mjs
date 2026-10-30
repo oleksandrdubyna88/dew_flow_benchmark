@@ -58,6 +58,12 @@ function ledgerKind(ctx, outcome) {
   return outcome.data ? 'data' : 'void';
 }
 
+/** Whether the v1 phase started quiet, kept in the run-map (`pairs[k].v1Quiet`): `--accept-noisy` is refused for a v2 whose v1 was quiet, and a resume is a new process. */
+function rememberV1Quiet({ ctx, h, quiet }) {
+  const pairs = h.get().pairs ?? {};
+  h.commit({ ...h.get(), pairs: { ...pairs, [ctx.pair]: { ...(pairs[ctx.pair] ?? {}), v1Quiet: quiet } } });
+}
+
 // ---- the gates ------------------------------------------------------------------------------------------------------------------
 
 /** -> `null` (go) or a `{ exit, message }`. */
@@ -70,6 +76,7 @@ async function gates({ ctx, deps, step, state, h, say }) {
   const quiet = await deps.quiet({ phase: step.phase, v1Quiet: state.v1Quiet ?? null, cellIds: cellIdsOf(h), say });
   if (!quiet.ok) return done(EXIT.halt, quiet.reason, { verdict: quiet.verdict });
   state.quiet = quiet.value;
+  if (step.phase === 'v1') rememberV1Quiet({ ctx, h, quiet: quiet.value.quiet });
   const gate = spendGate({ ledger: readLedger(ctx.ledgerFile), liveUsd: 0, caps: step.sessions.map(() => ctx.caps.capUsd), ceilingUsd: ctx.ceilingUsd, bareBudgetUsd: ctx.bareBudgetUsd });
   return gate.stop ? done(EXIT.stop, `the spend gate stops the phase (${gate.stoppedBy.join(', ')}): ${gate.lines.join(' | ')}`, { gate }) : null;
 }
@@ -85,7 +92,7 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
   }
   const stopped = await gates({ ctx, deps, step, state, h, say });
   if (stopped) return stopped;
-  if (step.phase === 'v2' && h.get().pairs?.[ctx.pair]?.barrierAtMs === undefined) h.commit({ ...h.get(), pairs: { ...(h.get().pairs ?? {}), [ctx.pair]: { barrierAtMs: deps.now() } } });
+  if (step.phase === 'v2' && h.get().pairs?.[ctx.pair]?.barrierAtMs === undefined) h.commit({ ...h.get(), pairs: { ...(h.get().pairs ?? {}), [ctx.pair]: { ...(h.get().pairs?.[ctx.pair] ?? {}), barrierAtMs: deps.now() } } });
   for (const item of items) h.apply(transition(h.get(), item.rid, 'launching', { startedAt: new Date(deps.now()).toISOString() }));
   say(`launching ${items.map(i => `${i.rid} (mask ${i.mask})`).join(' and ')}`);
   const sampler = deps.startSampler({ pair: ctx.pair, phase: step.phase, cellIds: cellIdsOf(h) });
@@ -159,7 +166,7 @@ async function runScore({ ctx, deps, h, step, say }) {
 export async function runLoop({ ctx: given, deps, map, signal, say = () => {} }) {
   const h = holder({ ctx: given, map });
   const ctx = { ...given, v1WorkOf: s => layoutPaths(given.sessionsRoot, finalSession(h.get(), given.pair, s.stack, 'v1').rid).work };
-  const state = { quiet: null, sampler: null, v1Quiet: null };
+  const state = { quiet: null, sampler: null, v1Quiet: h.get().pairs?.[ctx.pair]?.v1Quiet ?? null };
   for (let guard = 0; guard < 60; guard += 1) {
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get());
     if (step.action === 'done') {
