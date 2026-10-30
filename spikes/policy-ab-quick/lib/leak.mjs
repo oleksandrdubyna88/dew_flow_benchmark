@@ -7,7 +7,8 @@ const posix = path.posix;
 const SHELL = new Set(['Bash', 'PowerShell']);
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'NotebookEdit']);
 const SEARCH_TOOLS = new Set(['Glob', 'Grep']);
-const TAIL = '[^\\s"\'`;|&<>()]*';
+const TAIL_CHAR = '[^\\s"\'`;|&<>()]';
+const TAIL = `${TAIL_CHAR}*`;
 const PATTERNS = [
   new RegExp(`[A-Za-z]:[\\\\/]${TAIL}`, 'g'),
   new RegExp(`(?<![\\w.:/\\\\-])/[a-zA-Z]/${TAIL}`, 'g'),
@@ -16,7 +17,7 @@ const PATTERNS = [
   new RegExp('(?<![\\w./\\\\])\\.\\.(?=\\s|$|["\'])', 'g'),
 ];
 const POSIX_PATTERNS = [
-  new RegExp(`(?<![\\w.:/\\\\'"\x60}-])/${TAIL.replace('*', '+')}`, 'g'), // absolute: not inside a URL, a word or a regex
+  new RegExp(`(?<![\\w.:/\\\\'"\x60}-])/${TAIL_CHAR}+`, 'g'), // absolute: not inside a URL, a word or a regex
   new RegExp('(?<=^|\\s)/(?=\\s|$)', 'g'), // a lone `/`
   new RegExp(`(?:\\$\\{?HOME\\}?|(?<![\\w.])~)(?=[/\\s"'\x60;|&)]|$)${TAIL}`, 'g'),
   new RegExp(`(?<![\\w.])(?:\\.\\.[/])+${TAIL}`, 'g'),

@@ -73,7 +73,7 @@ const ruleN1 = v => {
 
 const ruleS2 = v => {
   const o = liveSumOf(v.apiRecords.map(r => ({ ...r, receivedAt: 0 }))).requests;
-  const apiAllowed = Object.keys(v.egress.allowed).includes('api.anthropic.com');
+  const apiAllowed = Object.hasOwn(v.egress.allowed, 'api.anthropic.com');
   const bodyRefused = v.B.refusedByReason.body + v.B.refusedByReason.busy;
   return verdictOf(o > 0 && v.B.forwarded >= o && !apiAllowed && bodyRefused === 0, `O saw ${o} api_request record(s); the broker forwarded ${v.B.forwarded} and settled ${v.B.settled.length}; refused by reason ${JSON.stringify(v.B.refusedByReason)} (a \`body\` refusal is the CLI's own request carrying a server tool, a connector or a URL source); api.anthropic.com allowed at the proxy: ${apiAllowed}`);
 };

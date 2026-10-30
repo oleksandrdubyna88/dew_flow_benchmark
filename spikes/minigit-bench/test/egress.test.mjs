@@ -35,7 +35,7 @@ test('The_connect_decision_is_exact_and_deny_by_default', () => {
 });
 
 test('No_arm_lists_the_API_host_and_the_lists_come_from_one_module', async () => {
-  for (const [arm, hosts] of Object.entries(EGRESS_HOSTS)) assert.equal(hosts.includes('api.anthropic.com'), false, arm);
+  for (const [arm, hosts] of Object.entries(EGRESS_HOSTS)) assert.equal(new Set(hosts).has('api.anthropic.com'), false, arm);
   const { readFileSync, readdirSync } = await import('node:fs');
   const lib = path.join(import.meta.dirname, '..', 'lib');
   for (const f of ['egress.mjs', 'sandbox.mjs']) {
