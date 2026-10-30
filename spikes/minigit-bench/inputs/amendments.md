@@ -21,3 +21,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | G-13 | holds | 5f55d0 | /home/jinx/rsd/minigit/s-20261030-bf89/handcheck/G-13.txt | team lead (Opus 5.5)
 2026-10-30 | G-13 | holds | 586c41 | /home/jinx/rsd/minigit/s-20261030-bf89/handcheck/G-13.txt | team lead (Opus 5.5)
 2026-10-30 | G-13 | holds | 98ee3c | /home/jinx/rsd/minigit/s-20261030-bf89/handcheck/G-13.txt | team lead (Opus 5.5)
+2026-10-30 | instrument | harness:179624f5fec2 | instrument: G-6 wall is spawn to process exit; the 3 s harness settle is no longer in the wall (A/A bf89); on top of the line before (E3b.S4)
