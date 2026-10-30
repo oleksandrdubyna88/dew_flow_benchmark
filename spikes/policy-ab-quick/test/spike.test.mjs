@@ -53,13 +53,13 @@ test('settings overlay keeps project keys, adds arm B guard, refuses double wiri
 });
 
 test('child env drops session vars and pins git; the arm does not change it', () => {
-  const parent = { Path: 'C:\\a;C:\\gh;C:\\b', CLAUDECODE: '1', CLAUDE_CODE_SSE_PORT: '5', ANTHROPIC_MODEL: 'x', ANTHROPIC_DEFAULT_OPUS_MODEL: 'y', SUBAGENT_MODEL_GUARD: 'off', ANTHROPIC_API_KEY: 'k', GH_TOKEN: 't' };
-  const hasGh = dir => dir === 'C:\\gh';
+  const parent = { Path: ['/a', '/gh', '/b'].join(path.delimiter), CLAUDECODE: '1', CLAUDE_CODE_SSE_PORT: '5', ANTHROPIC_MODEL: 'x', ANTHROPIC_DEFAULT_OPUS_MODEL: 'y', SUBAGENT_MODEL_GUARD: 'off', ANTHROPIC_API_KEY: 'k', GH_TOKEN: 't' };
+  const hasGh = dir => dir === '/gh';
   const a = buildChildEnv(parent, { arm: 'A', emptyGitConfig: 'E', hasGh });
   const b = buildChildEnv(parent, { arm: 'B', emptyGitConfig: 'E', hasGh });
   assert.ok(!('SUBAGENT_MODEL_GUARD' in a) && !('SUBAGENT_MODEL_GUARD' in b), 'a parent opt-out is dropped and never re-added');
   for (const e of [a, b]) {
-    assert.equal(e.Path, ['C:\\a', 'C:\\b'].join(path.delimiter));
+    assert.equal(e.Path, ['/a', '/b'].join(path.delimiter));
     assert.equal(e.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS, '1');
     assert.equal(e.GIT_CONFIG_GLOBAL, 'E');
     assert.equal(e.GIT_CONFIG_NOSYSTEM, '1');

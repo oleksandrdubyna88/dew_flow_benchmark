@@ -1,0 +1,13 @@
+{"t":"2026-10-30T05:17:17.770Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:18.027Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:18.781Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:19.296Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:19.972Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:21.305Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:21.320Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:22.726Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:22.997Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:23.504Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:23.981Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:25.011Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}
+{"t":"2026-10-30T05:17:30.157Z","verdict":"refused","host":"api.anthropic.com","port":443,"status":403,"why":"api.anthropic.com is not on the arm's host list"}

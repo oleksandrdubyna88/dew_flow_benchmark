@@ -1,6 +1,6 @@
 # PLAN — minigit on two stacks: C# / .NET 10 against Node 26 + TypeScript 7, bare and under the family's full process
 
-> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2–E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
+> Status: **in progress — E1 (the measurement instruments) implemented 2026-10-29; E2.S1–S2 (process fixes, the agent sandbox, broker and launch) implemented 2026-10-30; E2.S3–S4, E3, E4 open.** Scope: a new spike `spikes/minigit-bench/` in this repository
 > (reusing `spikes/policy-ab-quick/`), one public GitHub **fork** `oleksandrdubyna88/minigit-bench` of
 > `mame/ai-coding-lang-bench` with four template branches (one per arm × stack), two token rows and one snapshot branch in `dew_flow_conventions`, and the series'
 > record under `research/minigit/`. Nothing in the C# `bench` product changes.
@@ -18,7 +18,7 @@ The question this plan answers, and nothing wider:
 > On the minigit task (SPEC-v1 then SPEC-v2), with **Claude Code** (Opus team lead, effort `high`), how do **C# 14 /
 > .NET 10** and **TypeScript 7.0.2 on Node 26** compare in **correctly counted** cost, decomposed wall time, and
 > **held-out** correctness — (a) for a bare agent with the upstream prompt, and (b) for the same task done end to end
-> under this family's full process (conventions, coai gates, Sonnet coders, PR, CI, CodeRabbit, merge)?
+> under this family's full process (conventions, coai gates, Sonnet coders, PR, CI, merge; no CodeRabbit, D19)?
 
 It is not a replication of banteg's run (other agent, other model, other date); only ratios are compared with it, with
 that caveat in the same sentence.
@@ -44,7 +44,7 @@ first unit test (§12, T-A1).
 |---|---|---|
 | D1 | Two arms: **PROCESS** (full family process) and **BARE** (Claude Code alone, upstream prompt) | operator: bare arm yes |
 | D2 | 3 runs per stack per arm = 12 cells, each cell two sessions (v1, then v2 from that cell's v1 result) | operator: 3 runs |
-| D3 | Process arm works in **one public GitHub fork**, `oleksandrdubyna88/minigit-bench`, with the real PR → CI → `sleep 300` → CodeRabbit → merge cycle. Four template branches, one per arm × stack: `template/process-csharp`, `template/process-node`, `template/bare-csharp`, `template/bare-node`. Every session runs on its own base `run/<rid>/main`. One fork and not two: GitHub allows one fork of a repository per account (verified 2026-10-29: a second `gh repo fork --fork-name` renamed the first). Consultants (consult `5dd114fe`) preferred one repository anyway: configuration is symmetric by construction, and public read exposure is the same either way. What is lost is the per-repo write boundary between the stacks, which the audit covers | operator: "2 public repos", then "forks", then "4 branches, one per arm" |
+| D3 | Process arm works in **one public GitHub fork**, `oleksandrdubyna88/minigit-bench`, with the real PR → CI → `sleep 300` → merge (no CodeRabbit, D19) cycle. Four template branches, one per arm × stack: `template/process-csharp`, `template/process-node`, `template/bare-csharp`, `template/bare-node`. Every session runs on its own base `run/<rid>/main`. One fork and not two: GitHub allows one fork of a repository per account (verified 2026-10-29: a second `gh repo fork --fork-name` renamed the first). Consultants (consult `5dd114fe`) preferred one repository anyway: configuration is symmetric by construction, and public read exposure is the same either way. What is lost is the per-repo write boundary between the stacks, which the audit covers | operator: "2 public repos", then "forks", then "4 branches, one per arm" |
 | D4 | TypeScript **7.0.2**, run by Node 26's native type stripping, `tsc --noEmit` as the type gate. ESLint cannot parse `.ts` through TS 7: `typescript@7.0.2` exports only `./lib/version.cjs` and `./unstable/*`, no classic compiler API (checked: `npm view typescript@7.0.2 exports`), and `typescript-eslint` accepts only `typescript <6.1.0`. So the lint parser gets a **private nested typescript 6.0.3 through npm `overrides`**, used for parsing only, without type information; `tsc`, the type gate and the runtime stay on 7.0.2. Recorded deviation (V12) | operator (TS 7.0.2); the lint shape verified 2026-10-29 |
 | D5 | Fully autonomous: nobody answers; `COAI_ON_EXHAUSTED=good_enough`; decisions recorded by the agent | operator |
 | D6 | Spend ceiling **$500** for everything — data, void, pilot (the operator chose $400 and pre-authorised a raise to $500 for the case where $400 cannot cover three process pairs; the ceiling is set at $500 from the start so no mid-series stop is needed) | operator, 2026-10-29 |
@@ -60,6 +60,11 @@ first unit test (§12, T-A1).
 | D16 | Claude authentication for every session is **one** method, chosen by the operator before P0: a subscription OAuth token from `claude setup-token` passed as `CLAUDE_CODE_OAUTH_TOKEN`, or an API key. **Decided: the operator's own current Claude subscription**, through a `claude setup-token` token passed as `CLAUDE_CODE_OAUTH_TOKEN`. The token was partly visible in a screenshot in the planning conversation; the operator accepted that risk on 2026-10-29 and kept it (it lives in `~/.config/minigit-bench/claude-oauth-token`, mode 600, directory 700). It is the only credential in the sandbox besides the PAT; the token scan (§7.6) covers its shape (`sk-ant-…`). So every cost is a list-price API-equivalent estimate (§9), and a rate-limit void means the subscription's usage window, not a spend limit | judge review M1; operator, 2026-10-29 |
 | D17 | Effort `high` is pinned in the session's own `--settings` file (`effortLevel` and `modelSettings.{opus,sonnet,fable}.effortLevel`), because `--setting-sources project` and the fresh `CLAUDE_CONFIG_DIR` exclude the user settings where `high` lives today; children's effort is read back from the audit | judge review M2, verified in `~/.claude/settings.json` |
 | D18 | **The task inputs have no licence.** SPEC-v1/v2 and test-v1/v2 were written by Yusuke Endoh (`mame/ai-coding-lang-bench`), banteg's fork is byte-identical, and neither repository carries a licence (checked by `gh api …/license`, the clones and their history). The operator's decision: the files live **only inside the GitHub fork**, relying on GitHub ToS D.5 (public repositories may be viewed and forked on GitHub). Our three test fixes live there too, on a branch `inputs`. `dew_flow_benchmark`, which is not a fork, holds only their hashes and `UPSTREAM.md`; the harness fetches the files from the fork at a pinned sha into a local cache and verifies them. The ToS grants viewing and forking; the fixes inside the fork are the operator's call, recorded here | operator, 2026-10-29; consult `31e740fc` |
+| D19 | **No CodeRabbit in the series** (operator, 2026-10-29: "not needed"). Every CodeRabbit item elsewhere in this plan is void: the process arm's PR cycle is PR → CI → `sleep 300` → read CI → merge; the templates ship no `.coderabbit.yaml` and no `coderabbit-review.yml`; the CodeRabbit review item is dropped and the 300 s item now reads CI (the checklist is k/17); `coderabbit_wait` stays an empty category; P0 and P1 check no CodeRabbit review. The family rule asks for a reviewer bot only "where the repository has one configured", and the fork has none | operator, 2026-10-29 |
+| D20 | **The bare arm runs first** (operator, 2026-10-29): first C# vs TS results in hours, not days. E2.S1 and E2.S2 (process fixes, agent sandbox) are built first and a thin bare-arm runner is pulled forward from E3.S1; the three bare pairs run, after the pre-registration is committed, before the process arm is built. Deviation from §4.1's blocks: the bare pairs do not share time windows with the process pairs, so the process-vs-bare comparison (the interaction) is weaker and the report says so; the C#/TS comparison inside the bare arm keeps its concurrent pairs. Stories: [PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md) (E3b.S1–S5: the thin runner, the machine-quiet check, the bare pre-registration, the bare A/A and Node pilot, the three bare pairs) | operator, 2026-10-29 |
+| D21 | **The fork's `data` branch holds upstream's generated solutions** (JavaScript, TypeScript, C … — no C#), one `git fetch` away from any session that reaches GitHub, and the same branch is public in `mame/ai-coding-lang-bench`. So the agent box's network is restricted by host, not only audited: the bare arm reaches no GitHub at all; the process arm reaches GitHub and its other reads are audited (§7). Verified 2026-10-29 | E2 stories review |
+| D22 | **The agent box has its own network namespace; egress only through a host-side HTTP CONNECT proxy** with a per-arm host list (bare: `api.anthropic.com`, `registry.npmjs.org`, `api.nuget.org`; process: plus the GitHub hosts S4 settles). In-box forwarders map 127.0.0.1:3128 → the proxy socket and 127.0.0.1:4318 → the OTel receiver socket; `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY=127.0.0.1,localhost` steer claude, node, npm and dotnet. This SUPERSEDES §7.1's shared-network text, its abstract-socket and loopback allow-lists and the resolv.conf bind: in its own namespace the box reaches no host listener and needs no DNS. In the bare arm GitHub (D21's `data` branch included) is PREVENTED, not audited. Verified 2026-10-29 by the E2.S2 design run ($0.112, pilot spend): isolation with controls, the API, OTel (sum = envelope), npm and dotnet restore through the proxy, the token on no command line. Children's effort (D17) is read from O, joined through the audit's agent_id | E2.S2 spec (Fable) |
+| D23 | **The real Claude token never enters the box: a host-side credential broker signs the API traffic** (plan gate E2, 2026-10-29; consult `526c5f3f`; proven by the E2.S2 broker probes, $0.018). The box gets `ANTHROPIC_BASE_URL=http://127.0.0.1:8787` and a per-session DUMMY `CLAUDE_CODE_OAUTH_TOKEN`; the broker overwrites `Authorization` with the file token, forwards `anthropic-beta` verbatim (the OAuth capability), allows no redirect, and holds the cell's own budget (reservations, 429 at the cap) — so a direct Bash call to the API is metered and capped, and its ledger is a 4th cost view `B` (crosscheck T5: B = E). `api.anthropic.com` is on no CONNECT list. This supersedes D16's "passed as `CLAUDE_CODE_OAUTH_TOKEN`" for the box: the token is read from the file by the broker only. The process arm's PAT gets the same shape in S4 | plan gate E2; consult; E2.S2 spec (Fable) |
 
 ## 4. Design
 
@@ -87,14 +92,20 @@ first unit test (§12, T-A1).
 | Instructions | the template's AGENTS.md → ENTRY → pinned conventions; all hooks | none |
 | MCP | coai (plan gate, code gate, consult, ask_consultants) | none (`--strict-mcp-config`, empty) |
 | GitHub | fine-grained PAT for this one repo; Contents/PR RW, Actions/Checks/Statuses R; **no Workflows** | none; `gh` hidden inside the sandbox (`--ro-bind /dev/null /usr/bin/gh`) — PATH is not filtered, because `gh` lives in `/usr/bin` beside bash, git, make and dotnet, and `env.mjs`'s `filterPath` would drop the whole directory |
-| Toolchain | per template (`package.json`, `global.json`) | the same versions pre-installed read-only: dotnet 10.0.113, node 26.x, and `typescript@7.0.2` on PATH; the npm registry and nuget.org are reachable and are not counted as contamination |
+| Toolchain | per template (`package.json`, `global.json`) | the same versions pre-installed read-only: dotnet 10.0.114, node 26.x, and `typescript@7.0.2` on PATH; the npm registry and nuget.org are reachable and are not counted as contamination |
 | Done when | merged into the run base with green required checks, or the session ends | the session ends |
 | Session cap | $35, wall 240 min | $6, wall 60 min |
 
 ### 4.3 Prompts (byte-identical across stacks except `{STACK}` and `{STACK_SENTENCE}`)
 
-Stack sentences: C# — *"Use C# 14 on .NET 10 (SDK 10.0.113 is installed)."* TS — *"Use TypeScript run directly by Node 26
+Stack sentences: C# — *"Use C# 14 on .NET 10 (SDK 10.0.114 is installed)."* TS — *"Use TypeScript run directly by Node 26
 (native type stripping, no build step), with `tsc --noEmit` as the type check."*
+
+**Amendment 2026-10-30 (SDK pin).** An unattended apt upgrade on the series host moved the .NET SDK from 10.0.113 to
+10.0.114 (runtime 10.0.14) at 06:19 (`/var/log/apt/history.log`); 10.0.113 is no longer installed. The pin, the C# stack
+sentence above, `global.json` and every check now name 10.0.114, the newest .NET 10 SDK — the experiment's aim. Rows that
+record 2026-10-29 measurements keep 10.0.113. Before any paid minigit session the pre-registration quotes this text; the
+operator holds the `dotnet-*` packages for the series, and the preflight refuses a session whose SDK differs from the pin.
 
 **Process, v1:**
 
@@ -198,14 +209,13 @@ only then is the code shown, to separate product from harness defects. A case cl
 
 ### 5.4 Process compliance (process arm, read from GitHub, coai.db and the stream — never from the agent's summary)
 
-18 items: plan file with status line; `rules.mjs check/explain/read` before the first edit; worktree before the first
+17 items (one dropped by D19): plan file with status line; `rules.mjs check/explain/read` before the first edit; worktree before the first
 product edit; a `review_plan` round reached `proceed` before any `review_code`; last `review_code` verdict `proceed`;
 every finding resolved, every rejection reasoned; ≥1 Sonnet coder child and ≥1 Opus judge child; a test written before the
 source it covers; unit tests ran in CI; `research/module_tests.md` updated and a scenario test runs the built CLI;
 `research/architecture.md` or README updated; every commit on the base came through a merged PR with no bypass and green
-required checks; push CI green on the base tip; ≥300 s between PR open and the first CodeRabbit read; a CodeRabbit
-review exists, is a substantive review (not a rate-limit, skip or timeout notice — flagged `coderabbit degraded` otherwise),
-and every thread is resolved; inputs unchanged; `.github/` required jobs intact; conventions pin unchanged.
+required checks; push CI green on the base tip; ≥300 s between PR open and the first read of CI (D19: no CodeRabbit);
+inputs unchanged; `.github/` required jobs intact; conventions pin unchanged.
 Recorded, not scored: consultant calls, providers answered per round (<5 flagged `incomplete review`). C#-only items
 (logging, leftovers helper) are excluded from the cross-stack score. **Hand check:** at least 20 verdicts, stratified so
 every item and every process cell appears, plus every "not met" (which can make it more than 20); any disagreement above
@@ -241,7 +251,7 @@ stack files differ only between `# --- stack:begin/end ---` markers; its output 
   agent land the work in several PRs, as the family's process would; a required acceptance step would turn every PR
   before the last red and force one PR — a distortion of the treatment. The prompt's own done-criterion (the tests pass
   on the base) and the scorer still hold the agent to them.
-- **C# only:** `global.json` (sdk 10.0.113, `rollForward: disable`, MTP runner), `Directory.Build.props` (from
+- **C# only:** `global.json` (sdk 10.0.114, `rollForward: disable`, MTP runner), `Directory.Build.props` (from
   `wsl_care`), `Directory.Build.rsp` (`-nr:false`), `Directory.Packages.props` (xunit.v3, FluentAssertions 7.2.2 for tests;
   no Serilog), `nuget.config`, empty `minigit.slnx`, `scripts/run-tests.sh`.
 - **Node only:** `package.json` (`type: module`, `engines.node >=26`, devDeps typescript 7.0.2, eslint, @types/node),
@@ -360,7 +370,7 @@ the third count). Env: the scrub, plus `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_DISABLE
 `credential.https://github.com.helper = !gh auth git-credential` plus the fixed bench author — so `git push` inside the
 sandbox authenticates with the session's PAT and nothing else (read-back: a `git push --dry-run` from the sandbox
 succeeds in P0). Auto-update off; no warm-up. `preflight.mjs` refuses to start unless `dotnet --list-sdks` shows exactly
-the `global.json` SDK (10.0.113, `rollForward: disable`) and `node --version` is the pinned 26.x.
+the `global.json` SDK (10.0.114, `rollForward: disable`) and `node --version` is the pinned 26.x.
 
 **Read-back before the first paid turn counts:** init event (model, tools, `mcp_servers[].status`: coai connected in the
 process arm, none in bare, permission mode), `argv.json`, settings/mcp hashes, `coai-mcp --providers` with the exact env
@@ -504,7 +514,7 @@ claimed as findings.)*
 5. Quality: every bare session passes the visible tests; bare held-out median `percent` ≥ 90 % in both stacks with at least
    one bare failure; no process cell has more held-out `defects` than the worst bare cell of its stack; no stack difference
    > 1 `defect`.
-6. Delivery: ≥5 of 6 process cells deliver both phases; ≤1 session capped or on call_human; compliance median ≥14/18,
+6. Delivery: ≥5 of 6 process cells deliver both phases; ≤1 session capped or on call_human; compliance median ≥13/17,
    most often missed: test-first order, `sleep 300`, worktree-first.
 7. Surprises named in advance: TS costing ≥ C# in ≥2 bare pairs; process scoring below bare on held-out; any process session
    hitting its cap.
@@ -512,7 +522,7 @@ claimed as findings.)*
 **Reported per session:** arm, stack, block, rid, outcome, cost (headline, CLI, per model), tokens per model and kind,
 first-turn cache read (warmth flag), wall / API / active / each partition category, turns (checked against assistant
 messages), children per model and max concurrent, coai rounds / findings / providers answered, CodeRabbit findings, CI runs
-and red runs, build ok, visible / held-out / upstream-original scores, product and test LOC, latency, compliance k/18,
+and red runs, build ok, visible / held-out / upstream-original scores, product and test LOC, latency, compliance k/17,
 flags (fallback, void, contamination, CPU pressure).
 
 **Per stack × arm:** median and range (n = 3). **Language effect:** the C#/TS ratio within each concurrent pair (three
@@ -535,7 +545,7 @@ value of the process on real work, or any mechanism.
 | V6 | Contamination across runs (public repos, disk, CodeRabbit learnings, memory, consultants) | §7, D14, D15 |
 | V7 | CPU contention in pairs | `taskset` masks 0-5 / 8-13 swapped per block, one core left to the harness, CPU and PSI sampled every 5 s |
 | V8 | Prompt-cache warmth across sessions | No warm-up; simultaneous starts, so both stacks of a pair meet the same cache state; first-turn cache read flagged per session. An idle gap cannot clear it: the CLI's main session writes 1-hour cache entries (`tests/Bench.Tests/Fixtures/probes/claude-2.1.258-*.ndjson`: `ephemeral_1h_input_tokens` 89,541, 5m 0) |
-| V15 | `make` is not installed on the series machine (checked 2026-10-29): a tree that builds through a Makefile scores BUILD FAILED, while `build.sh` works. Both stacks get the same prompt ("include a Makefile or build script") | Install `make` before the series, or record per cell which build path the agent chose; decided in E3's preflight |
+| V15 | **Resolved 2026-10-29: the operator installed GNU Make 4.4.1.** Was: `make` is not installed on the series machine (checked 2026-10-29): a tree that builds through a Makefile scores BUILD FAILED, while `build.sh` works. Both stacks get the same prompt ("include a Makefile or build script") | Install `make` before the series, or record per cell which build path the agent chose; decided in E3's preflight |
 | V16 | The time partition classifies one Bash call as one category: `sleep 300 && dotnet build` counts its 300 s as `build_test` (a build anywhere in a chain wins) | A documented limit of per-call classification; the report shows the count of mixed chains per cell |
 | V9 | dotnet start-up cost inside the agent's own test loops | API vs tool time, per-invocation latency. *"Part of C#'s tool time is runtime start-up."* |
 | V10 | coai vendor variance (near-disjoint findings between identical runs: `dew_flow_connect_other_ais · research/RESULTS_prompt_measurement.md:21-39`) | Pinned coai sha and settings snapshot, empty `commands` list recorded, providers answered per round; vibe 3.0.2 is a version coai has not measured — recorded |
@@ -566,7 +576,7 @@ reports the process arm at the n it reached (§11). coai vendors, CodeRabbit and
 | Public PRs and `run/*` branches in the fork | 12 process session bases + smoke + pilot + re-runs ≈ 20, and ≈ 12–40 PRs; four `template/*` branches and `inputs` | kept permanently: the audit trail |
 | coai session dirs per session | ≤ 20 MB each, inside the session dir | with the session dir |
 | Vendor CLI stores (`~/.codex` …) | a few MB per session | not pruned by this plan — a decision: they are the operator's stores, written by the operator's own tools; their growth per session is measured and named in the report |
-| Credentials: two fine-grained PATs, two deploy keys (the rulesets' only bypass actors), CodeRabbit app access | live for the series only | **teardown** after the last cell is scored and archived: revoke both PATs, delete both deploy keys, remove the bypass actor from every ruleset, record the completion with dates in the report; the rulesets themselves stay, now with no bypass |
+| Credentials: one fine-grained PAT (the fork), one deploy key (the rulesets' only bypass actor), CodeRabbit app access | live for the series only | **teardown** after the last cell is scored and archived: revoke both PATs, delete both deploy keys, remove the bypass actor from every ruleset, record the completion with dates in the report; the rulesets themselves stay, now with no bypass |
 | In-flight state | a session interrupted mid-run leaves its dir and possibly an open PR | `series.mjs --resume` re-runs void and never-started sessions; `voids.mjs` marks it; an open PR of a void session is closed by the harness with a comment |
 
 ## 15. Build order
@@ -667,7 +677,7 @@ would exceed Q goes to the operator. Template symmetry (E2) gets a strict spec w
 conventions rows and branch, GitHub provisioning, env export and report rendering are ordinary work. Nothing here or in
 a stories document names a held-out case, reference or mutant in clear (§5.1).
 
-Cornerstones: 1 of 2 — E1.S3
+Cornerstones: 2 of 2 — E1.S3, E2.S2
 
 ### E1 — Measurement instruments: held-out suite and scorer, counters and the time partition (§15 steps 2–3 · 4 stories)
 
@@ -690,6 +700,9 @@ Cornerstones: 1 of 2 — E1.S3
 
 ### E2 — Isolation and the treatment, pinned: process fixes, both sandboxes, bridge, templates (§15 steps 1, 4–6a · 4 stories)
 
+- **Stories:** [PLAN_minigit_stack_bench_E2.md](PLAN_minigit_stack_bench_E2.md) — E2.S1–E2.S4; cornerstone **E2.S2**
+  (`model: fable`, the agent sandbox and launch; its text is an Opus draft for Fable to rewrite before any code).
+
 - **Goal:** what a session can reach, what it received and what each stack was given are proven — prevented where
   possible, audited where not (§7.3) — from one template source differing only inside marked regions.
 - **Scope:** §8's `policy-ab-quick` changes; §7.1 `sandbox.mjs`; §7.2 coai's own bwrap and `coai-bridge.mjs`; §7.3–7.7
@@ -707,6 +720,7 @@ Cornerstones: 1 of 2 — E1.S3
 
 ### E3 — Runner, compliance checker, pre-registration, pilot: P0, smoke, A/A, P1, draw (§15 steps 6b–10 · 4 stories)
 
+- **Bare first (D20):** the thin bare runner, the machine-quiet check, the bare-scope pre-registration, the bare A/A and Node pilot and the three bare pairs are [PLAN_minigit_stack_bench_E3_bare.md](PLAN_minigit_stack_bench_E3_bare.md) (E3b.S1–S5, unmarked: the ledger is full). This epic's own stories keep the process arm and generalize E3b.S1's code; the boundary table is in both.
 - **Goal:** one path runs a cell under the plan's pair, barrier, order, stop and void rules; proven on void spend first.
 - **Scope:** §4.1–4.3 blocks, `drawOrder`, barrier, `taskset`, `cpu-sampler`, prompts; §8 `series`, `preflight`, session
   verbs, `argv`, `retire`; §5.4 `checklist.json`, `github.mjs`, the 18-item checker and its hand-check protocol; §11.1
@@ -714,17 +728,17 @@ Cornerstones: 1 of 2 — E1.S3
 - **Depends on:** E1 and E2 complete; the $500 ceiling counts the pilot (§13).
 - **Done when:** T-G1, T-V1, T-R1 green; a dry cell on a stub directory emits every §11 field or "not captured"; the
   pre-registration is committed before the first paid session; P0 passes every step-8 check on both process templates; the smoke lists
-  5 vendors through the bridge; A/A and P1 meet every step-9 condition; dated instrument-only amendments; the draw.
-- S1 — series driver and session verbs: blocks, barrier, draw, masks, voids, re-runs, resume, spend (T-G1, T-V1, T-R1).
+  5 vendors through the bridge; P1 meets every step-9 condition (the A/A's are E3b.S4's); dated instrument-only amendments; the draw.
+- S1 — series driver for the process arm: blocks, draw, process session verbs — generalizing E3b.S1's pair, barrier, mask, void, re-run, resume and spend-gate code, never a second copy (T-G1, T-V1, T-R1 extended).
 - S2 — the compliance checker over GitHub, `coai.db` and the stream, with the stratified hand-check protocol (§5.4).
-- S3 — pre-registration committed; P0 (no model) on both process templates; the ≈ $0.10 model smoke through the bridge.
-- S4 — A/A, P1 (process Node v1), the pilot v2 base, the bare Node v1; dated amendments; `seed.txt`; the draw.
+- S3 — the pre-registration's process scope (the 17-item `checklist.json`, the process prompts) added as a dated amendment to E3b.S3's bare-scope commit; P0 (no model) on both process templates; the ≈ $0.10 model smoke through the bridge.
+- S4 — P1 (process Node v1) and the pilot v2 base (the A/A, the bare Node v1 and `seed.txt` moved to E3b.S4, D20); T3 re-decided for the process arm; dated amendments; the process draw.
 - **Cornerstone areas:** the go/no-go criteria of P0, the smoke, the A/A and P1 — what each must show, what a miss
   means, what is amended and what stops (the no-stack-tuning rule). Running them, the driver and the checker are ordinary.
 
 ### E4 — Series, hand checks, report, teardown and promotion (§15 steps 11–12 · 3 stories)
 
-- **Goal:** the twelve cells run under the pre-registered contract and the report says no more than §11 licenses.
+- **Goal:** the six process cells run under the pre-registered contract (the six bare cells ran in E3b, D20) and the report, over all twelve, says no more than §11 licenses.
 - **Scope:** §4.1 three blocks with the stop rules of §13, §9 T3 (once the pilot showed T's coverage) and D12; §11.1
   re-runs; the by-hand read-back of one cell per arm and stack in block 1 (§8); the blind hand classing of every failing
   held-out case (§5.3), the ≥ 20-verdict compliance hand check (§5.4); `report.mjs` → `research/minigit/series-<date>.md`
@@ -734,7 +748,7 @@ Cornerstones: 1 of 2 — E1.S3
 - **Done when:** every §17 box is checked; every cell appears with its outcome, delivered or not; T1–T4 breaches are
   reported with what was done; spend ≤ $500 or the stop and missing cells named; PATs revoked, deploy keys deleted, no
   bypass actor left; session directories archived, `retire.mjs` run; the suite's case list published beside the report.
-- S1 — the three blocks with stop rules and re-runs, and the block-1 by-hand read-back.
+- S1 — the three process pairs with stop rules and re-runs, and the by-hand read-back of one process cell per stack (the bare read-back is E3b.S5's).
 - S2 — hand checks: blind classing of failing held-out cases, compliance verdicts, the checker fixed before any number.
-- S3 — the report and data JSON, credential teardown, archive and retire, promotion of this plan and its stories files.
+- S3 — the report and data JSON (superseding E3b.S5's interim bare record, which it links), credential teardown, archive and retire, promotion of this plan and its stories files.
 - **Cornerstone areas:** none new — the report renders what E1 and E3 fixed; rendering, teardown, promotion are ordinary.

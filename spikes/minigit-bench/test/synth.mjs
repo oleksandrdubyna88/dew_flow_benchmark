@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spikeDir } from './helpers.mjs';
+import { hostLacks, spikeDir } from './helpers.mjs';
 
 export const TWO_CHILDREN = fileURLToPath(new URL('../../../tests/Bench.Tests/Fixtures/scouts/claude-2.1.289-two-children-models.ndjson', import.meta.url));
 export const REFUSAL_FALLBACK = fileURLToPath(new URL('../../../tests/Bench.Tests/Fixtures/scouts/claude-2.1.289-model-refusal-fallback.ndjson', import.meta.url));
@@ -19,8 +19,7 @@ export const hasCapture = () => existsSync(path.join(CAPTURE_DIR, 'CAPTURE.md'))
 /** A test that needs the capture calls this first: it skips with the one reason until the capture is committed. */
 export function captureGate(t) {
   if (hasCapture()) return true;
-  t.skip(SKIP_CAPTURE);
-  return false;
+  return hostLacks(t, SKIP_CAPTURE);
 }
 
 /** The stream's assistant events as transcript files: main -> `<sid>.jsonl`, each child -> `<sid>/subagents/agent-<id>.jsonl`. */

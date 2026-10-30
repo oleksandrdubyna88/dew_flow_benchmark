@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -301,4 +302,37 @@ test('The_receiver_env_is_the_one_the_capture_prescribes', () => {
     OTEL_LOG_TOOL_DETAILS: '1', OTEL_LOG_USER_PROMPTS: '0',
   });
   assert.ok(Object.isFrozen(env));
+});
+
+test('The_receiver_also_listens_on_a_socket', async () => {
+  const dir = tmpDir('recv-sock');
+  const socketPath = path.join(dir, 'o.sock');
+  const rx = await startReceiver({ dir: path.join(dir, 'out'), socketPath });
+  try {
+    assert.equal(statSync(socketPath).mode & 0o777, 0o600, 'the socket is private to the operator');
+    const body = payloadText([{ name: 'api_request', tsMs: T0, attrs: apiAttrs() }]);
+    const viaPort = await post(`http://127.0.0.1:${rx.port}`, '/v1/logs', body);
+    assert.equal(viaPort.status, 200);
+    const status = await new Promise((resolve, reject) => {
+      const req = http.request({ socketPath, path: '/v1/logs', method: 'POST', headers: { 'content-type': 'application/json' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', reject);
+      req.end(body);
+    });
+    assert.equal(status, 200, 'a POST through the socket lands too');
+    const records = parseLines(readFileSync(path.join(dir, 'out', 'otel.ndjson'), 'utf8'));
+    assert.equal(records.length, 2, 'one record through the port, one through the socket');
+    assert.equal(rx.liveSum().requests, 1, 'the same request id is one request however it arrived');
+  } finally {
+    await rx.close();
+  }
+  assert.equal(existsSync(socketPath), false, 'close() removes the socket file');
+});
+
+test('A_receiver_without_a_socket_path_behaves_as_before', async () => {
+  const rx = await startReceiver({ dir: tmpDir('recv-plain') });
+  try {
+    assert.equal(rx.socketPath, null);
+  } finally {
+    await rx.close();
+  }
 });

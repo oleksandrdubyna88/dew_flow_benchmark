@@ -1,5 +1,6 @@
-// T1-T4: the Claude counters checked against each other. Pure: a `stop` is a value the caller acts on; nothing here exits a process.
+// T1-T5: the Claude counters checked against each other. Pure: a `stop` is a value the caller acts on; nothing here exits a process.
 //   T1  E against itself          T2  O (all sources) against E          T3  T at the CLI's rates against O's cost
+//   T5  the broker's ledger B against E (E2.S2 D-17): both price the same tokens from the same table
 //   T4  T's input/cache tokens against the O records T names (E cannot be cut by source, so T is never compared with E).
 // The join (A-J1) and T3's output source (A-T2) are read from the policy file, so the capture's result is a one-line change there.
 import { sumSources } from './otel-decode.mjs';
@@ -12,10 +13,11 @@ const T2_MIN_TOKENS = 100;
 const T2_COST_REL = 0.01;
 const T3_REL = 0.02; // ScoutCost.cs:187
 const T4_REL = 0.001;
+const T5_ABS = 0.000001;
 const JOIN_SOURCES = Object.freeze(['main', 'subagent']);
 
 const LEGAL = Object.freeze({
-  t1: ['stop', 'investigate'], t2: ['otel-incomplete', 'stop'], t3: ['investigate', 'stop', 'fallback-t2'],
+  t1: ['stop', 'investigate'], t5: ['stop', 'investigate'], t2: ['otel-incomplete', 'stop'], t3: ['investigate', 'stop', 'fallback-t2'],
   t3OutputSource: ['transcript', 'otel'], join: ['request_id', 'query_source'],
 });
 
@@ -215,9 +217,22 @@ function t4(T, O, M, policy) {
   });
 }
 
-/** The four checks and the join that fed T3/T4. `cliVersion` selects the CLI-billed rates (none = published). */
-export function crosscheck({ E, O, T, table, policy, cliVersion }) {
+// ---- T5 ---------------------------------------------------------------------------------------------------------------------
+
+/** B (the broker's ledger, `brokerView`) against E. With an unsettled request B is the price of what a stopped session did spend, not a comparison. */
+function t5(E, B, policy) {
+  if (!E?.known) return unchecked('T5', 'no envelope');
+  if (!B?.present) return unchecked('T5', 'no broker ledger');
+  if (B.unsettled > 0) return unchecked('T5', `${B.unsettled} request(s) never settled: the session was stopped mid-request, so B (${fmt(B.spentUsd)}) is the price of what it did spend and E is not comparable`);
+  return decided('T5', {
+    computed: B.spentUsd, reference: E.totalCostUsd, threshold: T5_ABS, pass: Math.abs(B.spentUsd - E.totalCostUsd) <= T5_ABS, onBreach: policy.t5,
+    detail: `the broker's ledger ${fmt(B.spentUsd)} against total_cost_usd ${fmt(E.totalCostUsd)} (limit ${T5_ABS}); ${B.forwarded} request(s) forwarded, ${B.refused} refused`,
+  });
+}
+
+/** The five checks and the join that fed T3/T4. `cliVersion` selects the CLI-billed rates (none = published). `B` is the broker's ledger (optional). */
+export function crosscheck({ E, O, T, B = null, table, policy, cliVersion }) {
   const M = matchTO(T, O, policy.join);
   const join = { by: M.by, matched: M.matched.length, unmatchedT: M.unmatchedT.length, unmatchedO: M.unmatchedO };
-  return { t1: t1(E, policy), t2: t2(E, O, policy), t3: t3(T, O, M, table, policy, cliVersion), t4: t4(T, O, M, policy), join };
+  return { t1: t1(E, policy), t2: t2(E, O, policy), t3: t3(T, O, M, table, policy, cliVersion), t4: t4(T, O, M, policy), t5: t5(E, B, policy), join };
 }

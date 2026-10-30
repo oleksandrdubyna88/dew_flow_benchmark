@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ledgerSummary, readLedger, roundsSpans, UNKNOWN_SUBSCRIPTION } from '../lib/coai-usage.mjs';
-import { siblingCheckout, spikeDir, tmpDir } from './helpers.mjs';
+import { hostLacks, siblingCheckout, spikeDir, tmpDir } from './helpers.mjs';
 import { READER_FIELDS } from '../lib/coai-usage.mjs';
 
 const fixture = name => readFileSync(path.join(spikeDir, 'test', 'fixtures', name), 'utf8');
@@ -272,13 +272,12 @@ const coaiSource = () => process.env.COAI_SRC ?? siblingCheckout('dew_flow_conne
 
 test('The_rounds_columns_the_reader_selects_exist_in_coais_own_schema', t => {
   const root = coaiSource();
-  if (root === null) { t.skip('there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the rounds columns are checked against the copied DDL only'); return; }
+  if (root === null) return hostLacks(t, 'there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the rounds columns are checked against the copied DDL only');
   const schema = path.join(root, 'src_mcp/src/Store/Schema.cs');
   let text;
   try { text = readFileSync(schema, 'utf8'); } catch (e) {
     if (e.code !== 'ENOENT') throw e;
-    t.skip(`${schema} is not checked out here, so the rounds columns are checked against the copied DDL only`);
-    return;
+    return hostLacks(t, `${schema} is not checked out here, so the rounds columns are checked against the copied DDL only`);
   }
   const table = /CREATE TABLE IF NOT EXISTS rounds \(([\s\S]*?)\n\s*\);/.exec(text)?.[1] ?? '';
   for (const column of ['stage', 'number', 'verdict', 'started_utc', 'completed_utc']) assert.match(table, new RegExp(`\\b${column}\\b`));
@@ -286,13 +285,12 @@ test('The_rounds_columns_the_reader_selects_exist_in_coais_own_schema', t => {
 
 test('The_ledger_fields_the_reader_uses_exist_in_coais_own_UsageEntry', t => {
   const root = coaiSource();
-  if (root === null) { t.skip('there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the ledger field names are checked against the reader\'s own list only'); return; }
+  if (root === null) return hostLacks(t, 'there is no sibling dew_flow_connect_other_ais checkout (and no COAI_SRC), so the ledger field names are checked against the reader\'s own list only');
   const file = path.join(root, 'src_mcp/runners/Reviewers/UsageLedger.cs');
   let text;
   try { text = readFileSync(file, 'utf8'); } catch (e) {
     if (e.code !== 'ENOENT') throw e;
-    t.skip(`${file} is not checked out here, so the ledger field names are checked against the reader's own list only`);
-    return;
+    return hostLacks(t, `${file} is not checked out here, so the ledger field names are checked against the reader's own list only`);
   }
   const record = /public sealed record UsageEntry\(([\s\S]*?^ {4}\S[^\n]*\)\s*$)/m.exec(text)?.[1] ?? '';
   assert.notEqual(record, '', 'UsageEntry record not found');

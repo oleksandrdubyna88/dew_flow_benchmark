@@ -12,7 +12,7 @@ import { copyTranscripts, killTree, runCapture } from '../capture/capture-run.mj
 import { startSink } from '../capture/otlp-sink.mjs';
 import { sanitiseCapture } from '../capture/capture-files.mjs';
 import { defaultWorkRoot, heldoutSrcDir } from '../lib/heldout-run.mjs';
-import { spikeDir, tmpDir } from './helpers.mjs';
+import { hostLacks, spikeDir, tmpDir } from './helpers.mjs';
 import { parseLines } from './synth.mjs';
 
 const SESSION = path.join(spikeDir, 'capture', 'capture-session.mjs');
@@ -384,15 +384,15 @@ test('A_spawn_error_followed_by_a_close_settles_once_and_closes_the_descriptors_
 test('A_kill_that_fails_for_a_reason_other_than_a_gone_group_is_logged_and_never_thrown', () => {
   const logged = [];
   const denied = () => { throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' }); };
-  assert.doesNotThrow(() => killTree({ pid: 4242 }, { kill: denied, log: line => logged.push(line) }));
+  assert.doesNotThrow(() => killTree({ pid: 4242 }, { procs: () => [], kill: denied, log: line => logged.push(line) }));
   assert.equal(logged.length, 1);
   assert.match(logged[0], /EPERM/);
   const gone = () => { throw Object.assign(new Error('no such process'), { code: 'ESRCH' }); };
-  assert.doesNotThrow(() => killTree({ pid: 4242 }, { kill: gone, log: line => logged.push(line) }));
+  assert.doesNotThrow(() => killTree({ pid: 4242 }, { procs: () => [], kill: gone, log: line => logged.push(line) }));
   assert.equal(logged.length, 1, 'a group that is already gone is the goal, not a problem');
   const calls = [];
-  killTree({ pid: 4242 }, { kill: (pid, sig) => calls.push([pid, sig]) });
-  assert.deepEqual(calls, [[-4242, 'SIGKILL']]);
+  killTree({ pid: 4242 }, { procs: () => [], kill: (pid, sig) => calls.push([pid, sig]) });
+  assert.deepEqual(calls, [[-4242, 'SIGKILL'], [4242, 'SIGKILL']], 'the group, then the pid (the one shared kill)');
 });
 
 function configWith(build) {
@@ -472,7 +472,7 @@ const openFdsOf = file => readdirSync('/proc/self/fd').flatMap(fd => {
 });
 
 test('The_sink_holds_one_append_mode_stream_while_it_runs_and_none_after_it_stops', async t => {
-  if (!existsSync('/proc/self/fdinfo')) { t.skip('/proc/self/fdinfo is missing: open descriptors cannot be inspected here'); return; }
+  if (!existsSync('/proc/self/fdinfo')) return hostLacks(t, '/proc/self/fdinfo is missing: open descriptors cannot be inspected here');
   const dir = tmpDir('sink');
   const sink = await startSink({ dir });
   const post = body => fetch(`http://127.0.0.1:${sink.port}/v1/logs`, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
