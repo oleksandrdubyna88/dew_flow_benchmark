@@ -1,7 +1,8 @@
 // The cell's own budget, held by the credential broker (E2.S2 D-17). Pure: state in, state out.
 // A request is admitted only while settled spend + every in-flight reservation + its own reservation stays within the cap; it reserves
 // `reserveUsd` until it settles; settlement prices the parsed usage with the SAME table E1's views use (asTheCliBills), so a disagreement
-// between the broker's ledger and the envelope is a bug report. Nothing parsed or priced charges the reservation, never 0.
+// between the broker's ledger and the envelope is a bug report. Nothing parsed or priced charges the reservation, never 0 - except a request
+// the broker KNOWS was not billed (`waive`: an API error answer, or a dial that failed before a byte was sent), which charges 0 and says why.
 // The cap is SOFT (D-17a): the real cost is known only at settlement, so concurrent requests can settle above the cap; the overshoot is
 // recorded and a session over 1.1 x the cap is flagged, never counted as within budget.
 import { asTheCliBills, priceFor, priceUsage } from './prices.mjs';
@@ -51,11 +52,14 @@ function pricedOf({ usage, model, table }) {
   return typeof priced === 'number' ? { known: true, usd: priced } : { known: true, usd: priced.high, range: priced };
 }
 
-/** Settle one request -> `{ state, line }`: the reservation released, the charge added; `line` is the ledger's pricing part. */
-export function settle({ state, entry, usage, model, table, cliVersion }) {
+/**
+ * Settle one request -> `{ state, line }`: the reservation released, the charge added; `line` is the ledger's pricing part.
+ * `waive` is the reason a request is known not to have been billed (the charge is then 0, recorded as known), or absent.
+ */
+export function settle({ state, entry, usage, model, table, cliVersion, waive = null }) {
   let priced;
   try {
-    priced = pricedOf({ usage, model, table: asTheCliBills(table, cliVersion) });
+    priced = waive === null ? pricedOf({ usage, model, table: asTheCliBills(table, cliVersion) }) : { known: true, usd: 0, why: waive };
   } catch (e) {
     priced = { known: false, why: `pricing failed: ${e.message}` }; // a pricing bug must cost a reservation, not the broker
   }

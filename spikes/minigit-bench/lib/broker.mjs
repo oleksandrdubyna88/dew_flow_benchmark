@@ -49,15 +49,18 @@ export function parseSseUsage() {
   };
 }
 
-/** `{ model, usage }` from a non-streaming JSON body; nulls when it is not one. */
-function usageOfJson(chunks) {
+/** `{ model, usage, apiError }` from a non-streaming JSON body; `apiError` is true for the API's own error shape (`type: "error"`). */
+function readJsonBody(chunks) {
   try {
     const j = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    return { model: j.model ?? null, usage: j.usage ?? null };
+    return { model: j.model ?? null, usage: j.usage ?? null, apiError: j.type === 'error' };
   } catch {
-    return { model: null, usage: null };
+    return { model: null, usage: null, apiError: false };
   }
 }
+
+/** The reason a finished answer was not billed, or null: an error status with the API's JSON error body (an overloaded or rate-limited call is free). */
+const unbilledAnswer = (status, apiError) => (status >= 400 && apiError ? 'upstream error' : null);
 
 /** The ledger read out of `broker.ndjson` lines: the 4th cost view `B`, beside E, O and T. */
 export function brokerView(lines) {
@@ -111,10 +114,10 @@ function makeLedger({ budget, prices, cliVersion, log }) {
       return { entry: { seq, reserveUsd: budget.reserveUsd, startedAt: Date.now(), settled: false }, inFlight: state.inFlight, reservedUsd: state.reservedUsd };
     },
     /** Settle once; a second call for the same entry is a no-op. */
-    settle(entry, model, usage, note) {
+    settle(entry, model, usage, note, waive = null) {
       if (entry.settled) return;
       entry.settled = true;
-      const r = settle({ state, entry, usage, model, table: prices, cliVersion });
+      const r = settle({ state, entry, usage, model, table: prices, cliVersion, waive });
       state = r.state;
       emit({ seq: entry.seq, event: 'settled', ...r.line, elapsedMs: Date.now() - entry.startedAt, ...note });
     },
@@ -129,9 +132,11 @@ function relay({ ledger, upstream, token, timeoutMs }, req, res, opened, names) 
   const up = (upstream.tls ? https : http).request({ host: upstream.host, port: upstream.port, method: req.method, path: req.url, headers, timeout: timeoutMs },
     upRes => answer(upRes, res, entry, ledger));
   up.on('timeout', () => up.destroy(new Error('ETIMEDOUT')));
+  let sent = false; // the request is fully handed to the socket: from here the API may have it whole and may bill it
+  up.on('finish', () => { sent = true; });
   up.on('error', e => {
-    ledger.emit({ seq: entry.seq, event: 'upstream-error', code: e.code ?? e.message });
-    ledger.settle(entry, null, null, { error: e.code ?? e.message });
+    ledger.emit({ seq: entry.seq, event: 'upstream-error', code: e.code ?? e.message, requestSent: sent });
+    ledger.settle(entry, null, null, { error: e.code ?? e.message }, sent ? null : 'no byte was sent upstream');
     if (!res.headersSent) res.writeHead(502, { connection: 'close' });
     res.end();
   });
@@ -162,8 +167,8 @@ function answer(upRes, res, entry, ledger) {
   });
   upRes.on('end', () => {
     if (!clientClosedEarly) res.end();
-    const { model, usage } = sse ? parser.result() : usageOfJson(chunks);
-    ledger.settle(entry, model, usage, { status, sse, clientClosedEarly });
+    const { model, usage, apiError = false } = sse ? parser.result() : readJsonBody(chunks);
+    ledger.settle(entry, model, usage, { status, sse, clientClosedEarly }, unbilledAnswer(status, apiError));
   });
   upRes.on('error', e => {
     ledger.settle(entry, null, null, { status, error: e.code ?? e.message, clientClosedEarly });

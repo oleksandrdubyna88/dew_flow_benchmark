@@ -54,6 +54,16 @@ test('Nothing_parsed_or_priced_is_charged_the_reservation_never_zero', () => {
   }
 });
 
+test('A_waived_settlement_charges_nothing_releases_the_reservation_and_says_why', () => {
+  const state = reserve(openState(), 0.05);
+  const r = settle({ state, entry: { reserveUsd: 0.05 }, usage: null, model: null, table, cliVersion: '2.1.310', waive: 'upstream error' });
+  assert.deepEqual(r.line.priced, { known: true, usd: 0, why: 'upstream error' });
+  assert.equal(r.line.chargedUsd, 0);
+  assert.deepEqual(r.state, { spentUsd: 0, reservedUsd: 0, inFlight: 0 });
+  const unwaived = settle({ state, entry: { reserveUsd: 0.05 }, usage: null, model: null, table, cliVersion: '2.1.310' });
+  assert.equal(unwaived.line.chargedUsd, 0.05, 'control: the same settlement without a waiver still charges the reservation');
+});
+
 test('An_unsplit_cache_write_is_charged_at_the_upper_bound', () => {
   const usage = { input_tokens: 2, cache_creation_input_tokens: 1000, output_tokens: 4 };
   const r = settle({ state: reserve(openState(), 0.05), entry: { reserveUsd: 0.05 }, usage, model: 'claude-sonnet-5-5', table, cliVersion: '2.1.310' });

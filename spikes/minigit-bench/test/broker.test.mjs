@@ -163,7 +163,8 @@ test('Nothing_parsed_is_charged_the_reservation_never_zero', async () => {
   }
 });
 
-test('An_upstream_that_fails_answers_502_and_settles_the_reservation', async () => {
+test('An_upstream_that_drops_the_connection_after_the_request_was_sent_answers_502_and_keeps_the_reservation_as_the_charge', async () => {
+  // the request reached the upstream whole, so the API may have started billing it: the reservation stands (it is not a dial failure)
   const stub = await stubUpstream((_q, res) => res.destroy());
   const b = await startBroker({ stub });
   try {
@@ -172,9 +173,66 @@ test('An_upstream_that_fails_answers_502_and_settles_the_reservation', async () 
     assert.ok(b.lines.some(l => l.event === 'upstream-error'));
     assert.equal(b.broker.summary().inFlight, 0, 'nothing is left reserved');
     assert.equal(b.broker.summary().spentUsd, 0.05);
+    assert.equal(b.lines.find(l => l.event === 'settled').priced.known, false);
   } finally {
     await b.close();
     await stub.close();
+  }
+});
+
+test('An_upstream_that_cannot_be_dialled_answers_502_and_charges_nothing_because_no_byte_was_sent', async () => {
+  const stub = await stubUpstream(ok => ok);
+  await stub.close();
+  const b = await startBroker({ stub: { ...stub, upstream: { host: '127.0.0.1', port: 1, tls: false } } });
+  try {
+    for (let i = 0; i < 6; i += 1) assert.equal((await viaSocket(b.socketPath)).status, 502);
+    assert.equal(b.broker.summary().spentUsd, 0, 'six refused dials cost nothing');
+    assert.equal(b.broker.summary().inFlight, 0);
+    assert.equal(b.broker.summary().reservedUsd, 0);
+    assert.equal(b.broker.summary().refused, 0, 'and the cap was never used up');
+    const settled = b.lines.filter(l => l.event === 'settled');
+    assert.equal(settled.length, 6);
+    assert.deepEqual(settled[0].priced, { known: true, usd: 0, why: 'no byte was sent upstream' });
+  } finally {
+    await b.close();
+  }
+});
+
+test('Four_upstream_529s_do_not_use_the_cap_and_the_fifth_request_is_still_forwarded', async () => {
+  const overloaded = { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } };
+  const stub = await stubUpstream((_q, res) => json(res, 529, overloaded));
+  const b = await startBroker({ stub, capUsd: 0.2, reserveUsd: 0.05 });
+  try {
+    for (let i = 0; i < 5; i += 1) assert.equal((await viaSocket(b.socketPath)).status, 529, `request ${i + 1} was forwarded and answered 529`);
+    await sleep(50);
+    assert.equal(b.broker.summary().spentUsd, 0, 'an error the API refused to bill is charged nothing');
+    assert.equal(b.broker.summary().refused, 0);
+    assert.equal(stub.seen.length, 5);
+    assert.deepEqual(b.lines.find(l => l.event === 'settled').priced, { known: true, usd: 0, why: 'upstream error' });
+    assert.equal(b.lines.find(l => l.event === 'settled').status, 529);
+  } finally {
+    await b.close();
+    await stub.close();
+  }
+});
+
+test('An_error_status_without_a_json_error_body_and_a_2xx_with_nothing_parsed_keep_the_reservation', async () => {
+  const bodies = [
+    [500, 'text/html', '<html>bad gateway</html>'],
+    [500, 'application/json', '{"message":"no type field"}'],
+    [200, 'application/json', '{"type":"error","error":{"type":"x"}}'],
+    [200, 'text/event-stream', 'event: ping\ndata: {"type":"ping"}\n\n'],
+  ];
+  for (const [status, type, body] of bodies) {
+    const stub = await stubUpstream((_q, res) => { res.writeHead(status, { 'content-type': type }); res.end(body); });
+    const b = await startBroker({ stub });
+    try {
+      await viaSocket(b.socketPath);
+      assert.equal(b.broker.summary().spentUsd, 0.05, `${status} ${type} ${body.slice(0, 20)}`);
+    } finally {
+      await b.close();
+      await stub.close();
+    }
   }
 });
 
