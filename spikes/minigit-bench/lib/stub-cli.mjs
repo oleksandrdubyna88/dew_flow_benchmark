@@ -36,7 +36,28 @@ export const apiAttrs = (over = {}) => ({
   duration_ms: 1500, query_source: 'main', request_id: 'req_1', 'session.id': 'sess-1', ...over,
 });
 
-const STUB = otlpBody => `#!/usr/bin/env node
+/** What the stub's one request costs, as the stub upstream answers it (`stub-upstream.mjs`): the stream, the OTel record, the transcript message and the envelope all carry these numbers. */
+const STUB_REQUEST = Object.freeze({ id: 'req_stub_1', model: 'claude-sonnet-5-5', input: 2, output: 4, cacheRead: 0, cacheWrite1h: 2297, costUsd: 0.009232 });
+
+/** The OTel api_request record of the stub's one request: the same request id and tokens as its transcript message, so T3 and T4 check a stub session as they check a real one. */
+const stubApiAttrs = () => apiAttrs({
+  request_id: STUB_REQUEST.id, model: STUB_REQUEST.model, input_tokens: STUB_REQUEST.input, output_tokens: STUB_REQUEST.output, cache_read_tokens: STUB_REQUEST.cacheRead,
+  cache_creation_tokens: STUB_REQUEST.cacheWrite1h, cost_usd: STUB_REQUEST.costUsd, 'session.id': 'stub-session',
+});
+
+/** The main session's transcript line for that request (the shape of a real 2.1.310 transcript's assistant event): `requestId` joins it to the OTel record, the usage matches it, with the 5m/1h split. */
+const stubTranscriptLine = () => ({
+  type: 'assistant', requestId: STUB_REQUEST.id, timestamp: new Date().toISOString(), sessionId: 'stub-session',
+  message: {
+    id: 'msg_stub_1', model: STUB_REQUEST.model, role: 'assistant',
+    usage: {
+      input_tokens: STUB_REQUEST.input, cache_creation_input_tokens: STUB_REQUEST.cacheWrite1h, cache_read_input_tokens: STUB_REQUEST.cacheRead, output_tokens: STUB_REQUEST.output,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: STUB_REQUEST.cacheWrite1h },
+    },
+  },
+});
+
+const STUB = (otlpBody, transcriptLine) => `#!/usr/bin/env node
 const fs = require('node:fs'); const http = require('node:http');
 const argv = process.argv.slice(2);
 const tools = argv[argv.indexOf('--tools') + 1].split(',').filter(t => t !== 'TodoWrite').map(t => (t === 'Agent' ? 'Task' : t));
@@ -51,7 +72,7 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
   const r = await post(process.env.ANTHROPIC_BASE_URL + '/v1/messages?beta=true', '{"model":"claude-sonnet-5-5","stream":true}', { authorization: 'Bearer ' + process.env.CLAUDE_CODE_OAUTH_TOKEN, 'anthropic-beta': 'oauth-2025-04-20' });
   await post(process.env.OTEL_EXPORTER_OTLP_ENDPOINT + '/v1/logs', ${JSON.stringify(otlpBody)}, {});
   fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p', { recursive: true });
-  fs.writeFileSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p/stub-session.jsonl', '{"type":"assistant"}\\n');
+  fs.writeFileSync(process.env.CLAUDE_CONFIG_DIR + '/projects/-p/stub-session.jsonl', ${JSON.stringify(transcriptLine)} + '\\n');
   say({ type: 'assistant', message: { id: 'm1', model: 'claude-sonnet-5-5', usage: { input_tokens: 2, output_tokens: 4 } } });
   // a COMPLETE envelope (usage and modelUsage, the numbers the stub upstream answers with): T1 can run on it, so the series' fail-closed rule (review MINOR-7: a completed session with an unreadable envelope stops a series whose t1 policy is stop) has nothing to stop on
   say({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.009232, duration_ms: 50, duration_api_ms: 46, num_turns: 1, result: 'status ' + r.status,
@@ -63,6 +84,6 @@ const post = (url, body, headers) => new Promise((resolve, reject) => {
 /** Write the stub into `dir` and return its path (executable). */
 export function stubClaude(dir, name = 'claude-stub') {
   const file = path.join(dir, name);
-  writeFileSync(file, STUB(JSON.stringify(otlpPayload([{ name: 'api_request', tsMs: Date.now(), attrs: apiAttrs({ request_id: 'req_stub_1' }) }]))), { mode: 0o755 });
+  writeFileSync(file, STUB(JSON.stringify(otlpPayload([{ name: 'api_request', tsMs: Date.now(), attrs: stubApiAttrs() }])), JSON.stringify(stubTranscriptLine())), { mode: 0o755 });
   return file;
 }

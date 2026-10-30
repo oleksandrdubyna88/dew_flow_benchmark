@@ -64,6 +64,7 @@ test('A_stub_pair_runs_end_to_end', { timeout: 1_800_000 }, async t => {
     assert.equal(rec.quality.buildOk.known, true, 'the real scorer ran and its result is in the record');
     assert.equal(rec.cost.brokerUsd.known, true);
     assert.equal(rec.process.compliance, 'n/a (bare)');
+    assert.deepEqual(['t3', 't4'].map(k => rec.cost.checks.value[k].status), ['pass', 'pass'], 'the stub CLI writes the transcript its OTel record matches: T3 and T4 check the stub session as they check a real one, under the registered t3 = stop');
     const dir = path.join(ctx.sessionsRoot, s.rid);
     assert.deepEqual(readdirSync(path.join(dir, 'net')).filter(f => f.endsWith('.sock')), [], 'no socket is left');
     assert.equal(cellProcesses(`cell-${s.rid}`, realProcApi).pids.length, 0, 'no cell process is left');
