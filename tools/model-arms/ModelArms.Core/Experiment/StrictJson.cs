@@ -21,6 +21,13 @@ internal sealed class StrictJson
 
     public void Add(string problem) => _problems.Add(problem);
 
+    private readonly HashSet<string> _refusedFields = new(StringComparer.Ordinal);
+
+    /// <summary>The names of the output bindings a refusal was already recorded for. A <c>notes</c>, <c>verdict</c> or <c>status</c> that names one says nothing more: one cause, one sentence.</summary>
+    public IReadOnlySet<string> RefusedFields => _refusedFields;
+
+    public void RefuseField(string field) => _refusedFields.Add(field);
+
     /// <summary>A stand-in for a sha that did not parse. Never observable: a file that left any problem builds nothing.</summary>
     private static readonly CommitSha Unread =
         CommitSha.Parse(new string('0', CommitSha.Length)) is Outcome<CommitSha>.Ok ok ? ok.Value : throw new InvalidOperationException("forty zeros are a sha");

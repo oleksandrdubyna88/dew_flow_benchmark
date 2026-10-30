@@ -161,6 +161,32 @@ public sealed record ArmPaths(string Root, string Token)
 
     public string BatchesJson => Under("work", "batches.json");
 
+    /// <summary>Whether <paramref name="relativePath"/> (under the arm folder, forward slashes) is a file the task pipeline writes: <c>work/tasks.json</c>, <c>work/batches.json</c>, a task's
+    /// brief or its notes. The shapes are read from the members that spell them (<see cref="TasksJson"/>, <see cref="BatchesJson"/>, <see cref="TaskBrief"/>, <see cref="TaskNotes"/>) with a
+    /// stand-in task id, so a path spelled there once is spelled nowhere else. Compared without regard to case, so it fails closed on a host whose file system ignores it.</summary>
+    public static bool IsPipelineFile(string relativePath) =>
+        PipelineNames.Contains(relativePath, StringComparer.OrdinalIgnoreCase) || PipelineShapes.Any(shape => shape.Matches(relativePath));
+
+    private const string StandIn = "{id}";
+
+    private static readonly ArmPaths Sample = new("root", "token");
+
+    private static readonly string[] PipelineNames = [Relative(Sample.TasksJson), Relative(Sample.BatchesJson)];
+
+    private static readonly PipelineShape[] PipelineShapes = [PipelineShape.Of(Relative(Sample.TaskBrief(StandIn))), PipelineShape.Of(Relative(Sample.TaskNotes(StandIn)))];
+
+    private static string Relative(string path) => Path.GetRelativePath(Sample.Folder, path).Replace('\\', '/');
+
+    /// <summary>A path with one task id in it: what comes before the id and what comes after.</summary>
+    private sealed record PipelineShape(string Prefix, string Suffix)
+    {
+        public static PipelineShape Of(string spelled) => new(spelled[..spelled.IndexOf(StandIn, StringComparison.Ordinal)], spelled[(spelled.IndexOf(StandIn, StringComparison.Ordinal) + StandIn.Length)..]);
+
+        public bool Matches(string path) =>
+            path.Length > Prefix.Length + Suffix.Length && path.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && path.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase)
+            && !path[Prefix.Length..^Suffix.Length].Contains('/', StringComparison.Ordinal);
+    }
+
     /// <summary>A name that is exactly one path segment; anything else is a caller's bug, not an operator's mistake.</summary>
     internal static string Segment(string value, string what) =>
         value.Length == 0 || value is "." or ".." || value.AsSpan().IndexOfAny('/', '\\') >= 0

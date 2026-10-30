@@ -39,8 +39,15 @@ internal static class TaskSection
     [
         .. Problem("split", tasks.Split, StepKind.Session, "the split is a session step", steps),
         .. Problem("splitFix", tasks.SplitFix, StepKind.Session, "the split fix is a session step", steps),
+        .. SameStep(tasks),
         .. Problem("taskCode", tasks.TaskCode, StepKind.TaskCode, "the task coder is a taskCode step", steps),
     ];
+
+    /// <summary>The split fix appends to the split's notes; it is not the split. One step in both places would hold the split's outputs twice in what a brief may see.</summary>
+    private static IEnumerable<string> SameStep(TaskLimits tasks) =>
+        tasks.Split.Value.Length > 0 && tasks.Split == tasks.SplitFix
+            ? [$"tasks.splitFix is '{tasks.SplitFix}' — the split fix is a step of its own, not the split"]
+            : [];
 
     private static IEnumerable<string> Problem(string member, StepId id, StepKind kind, string role, IReadOnlyDictionary<StepId, StepSpec> steps) =>
         id.Value.Length == 0

@@ -78,7 +78,6 @@ internal static partial class RunSection
     /// <summary>The rules across runs: an arm is in one round of one run, and a closed arm is an arm some run names.</summary>
     private static IEnumerable<string> Across(IReadOnlyList<RunSpec> runs)
     {
-        var everyArm = runs.SelectMany(Arms).ToHashSet(StringComparer.Ordinal);
         return
         [
             .. runs.SelectMany(run => Arms(run).GroupBy(arm => arm, StringComparer.Ordinal).Where(group => group.Count() > 1)
@@ -87,13 +86,25 @@ internal static partial class RunSection
                 .Select(arm => (Arm: arm, Earlier: runs.Take(index).Where(earlier => Arms(earlier).Contains(arm, StringComparer.Ordinal)).Take(1).ToList()))
                 .Where(found => found.Earlier.Count > 0)
                 .Select(found => $"runs.{run.Name} — arm {found.Arm} is already in run {found.Earlier[0].Name}")),
-            .. runs.SelectMany(run => run.ClosedArms.Select((arm, index) => (Arm: arm, Index: index)).Where(closed => !everyArm.Contains(closed.Arm))
-                .Select(closed => $"runs.{run.Name}.closedArms[{closed.Index}] names '{closed.Arm}', which no run names")),
+            .. runs.SelectMany((run, index) => run.ClosedArms.Select((arm, at) => ClosedProblem(runs, run, index, arm, at)).Where(problem => problem.Length > 0)),
         ];
+    }
+
+    /// <summary>A run closes the arms of EARLIER runs: the folders its own arms' work could otherwise reach. An arm of this run or of a later one is no such folder yet; an arm no run names is none.</summary>
+    private static string ClosedProblem(IReadOnlyList<RunSpec> runs, RunSpec run, int index, string arm, int at)
+    {
+        var where = $"runs.{run.Name}.closedArms[{at}] names '{arm}'";
+        return runs.Take(index).Any(earlier => Arms(earlier).Contains(arm, StringComparer.Ordinal))
+            ? string.Empty
+            : Arms(run).Contains(arm, StringComparer.Ordinal)
+                ? $"{where}, an arm of this run"
+                : runs.Skip(index + 1).FirstOrDefault(later => Arms(later).Contains(arm, StringComparer.Ordinal)) is { } owner
+                    ? $"{where}, an arm of a later run {owner.Name}"
+                    : $"{where}, which no run names";
     }
 
     private static IEnumerable<string> Arms(RunSpec run) => run.Rounds.SelectMany(round => round);
 
-    [GeneratedRegex("^[A-Za-z0-9-]+$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[A-Za-z0-9-]+\z", RegexOptions.CultureInvariant)]
     private static partial Regex RunName();
 }

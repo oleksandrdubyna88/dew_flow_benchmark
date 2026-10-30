@@ -49,9 +49,13 @@ public static class ExecutableRule
     public static IReadOnlyList<string> ForbiddenRoots(string source, string root) =>
         [.. new[] { source, root }.Where(candidate => candidate.Length > 0)];
 
-    /// <summary>The text with every NUL character written as the two characters <c>\0</c>: a raw NUL in a sentence ends the line in many terminals and logs.
+    /// <summary>The text with every NUL character written as the two characters <c>\0</c>, and every other control or format character as <c>\uXXXX</c>: a raw NUL in a sentence ends the line in many terminals and logs.
     /// Every sentence that echoes input the operator typed goes through this.</summary>
-    public static string Printable(string text) => text.Replace("\0", "\\0", StringComparison.Ordinal);
+    public static string Printable(string text) => string.Concat(text.Select(Escaped));
+
+    /// <summary>A NUL is <c>\0</c>; any other control or format character (a newline, a tab, U+200B) is <c>\uXXXX</c>, so a sentence stays one line and shows what it refused.</summary>
+    private static string Escaped(char c) =>
+        c == '\0' ? "\\0" : char.IsControl(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format ? $"\\u{(int)c:X4}" : c.ToString();
 
     /// <summary>A forbidden root as a sentence names it. A root holding a NUL cannot be compared, so it counts as containing the executable (fail closed)
     /// and the sentence says that, rather than printing a root that looks ordinary.</summary>

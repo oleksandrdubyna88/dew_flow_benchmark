@@ -19,7 +19,7 @@ internal static class StepSection
         var path = $"steps.{id}";
         var step = json.Object(node, path, Members, Required);
         var spec = Specified(json, id, step, path);
-        foreach (var refusal in Refusals(spec, path))
+        foreach (var refusal in Refusals(spec, path, json.RefusedFields))
         {
             json.Add(refusal);
         }
@@ -27,17 +27,15 @@ internal static class StepSection
         return spec;
     }
 
-    /// <summary>The outputs a member <c>outputs</c> of <paramref name="parent"/> declares, each through <see cref="OutputBinding.Parse"/>; a binding that does not parse is recorded at
-    /// <c>path.outputs.FIELD</c> and left out, and two fields naming one file are recorded at <c>path.outputs</c>. The <c>tasks</c> block reads its outputs the same way.</summary>
+    /// <summary>The outputs a member <c>outputs</c> of <paramref name="parent"/> declares. A name every brief is filled with is refused (<see cref="BriefFields.FixedNames"/>), the rest go
+    /// through <see cref="OutputBinding.Parse"/>; a binding refused is recorded at <c>path.outputs.FIELD</c>, its name kept in <see cref="StrictJson.RefusedFields"/> and the binding left
+    /// out, and two fields naming one file are recorded at <c>path.outputs</c>. The <c>tasks</c> block reads its outputs the same way.</summary>
     public static IReadOnlyList<OutputBinding> Bindings(StrictJson json, JsonObject parent, string path)
     {
-        var parsed = json.TextMap(parent, path, "outputs").Select(pair => (pair.Key, Outcome: OutputBinding.Parse(pair.Key, pair.Value))).ToList();
+        var parsed = json.TextMap(parent, path, "outputs").Select(pair => (pair.Key, Outcome: Binding(pair.Key, pair.Value))).ToList();
         foreach (var (field, outcome) in parsed)
         {
-            if (outcome is Outcome<OutputBinding>.Fail fail)
-            {
-                json.Add($"{ExecutableRule.Printable(StrictJson.Join(path + ".outputs", field))}: {fail.Reason}");
-            }
+            Refuse(json, path, field, outcome);
         }
 
         IReadOnlyList<OutputBinding> outputs = [.. parsed.Select(pair => pair.Outcome).OfType<Outcome<OutputBinding>.Ok>().Select(ok => ok.Value)];
@@ -47,6 +45,20 @@ internal static class StepSection
         }
 
         return outputs;
+    }
+
+    private static Outcome<OutputBinding> Binding(string field, string text) =>
+        BriefFields.FixedNames.Contains(field, StringComparer.Ordinal)
+            ? Outcome<OutputBinding>.Failure($"{field} is a field every brief is filled with — a binding cannot replace it")
+            : OutputBinding.Parse(field, text);
+
+    private static void Refuse(StrictJson json, string path, string field, Outcome<OutputBinding> outcome)
+    {
+        if (outcome is Outcome<OutputBinding>.Fail fail)
+        {
+            json.Add($"{ExecutableRule.Printable(StrictJson.Join(path + ".outputs", field))}: {fail.Reason}");
+            json.RefuseField(field);
+        }
     }
 
     private static StepSpec Specified(StrictJson json, StepId id, JsonObject step, string path) =>
@@ -80,11 +92,11 @@ internal static class StepSection
         outputs.GroupBy(binding => binding.RelativePath, StringComparer.OrdinalIgnoreCase)
             .SelectMany(group => group.Skip(1).Select(later => $"{path}.outputs — {group.First().Field} and {later.Field} both name {later.RelativePath}"));
 
-    private static IEnumerable<string> Refusals(StepSpec spec, string path) =>
+    private static IEnumerable<string> Refusals(StepSpec spec, string path, IReadOnlySet<string> refused) =>
     [
         .. ModePairing(spec, path),
-        .. Naming(spec, path, "verdict", StepKind.Review, spec.Verdict, "a review step names the output its last result's JSON block is written to"),
-        .. Naming(spec, path, "status", StepKind.Gate, spec.Status, "a gate step names the output it reads status from"),
+        .. Naming(spec, path, "verdict", StepKind.Review, spec.Verdict, "a review step names the output its last result's JSON block is written to", refused),
+        .. Naming(spec, path, "status", StepKind.Gate, spec.Status, "a gate step names the output it reads status from", refused),
         .. TaskCode(spec, path),
     ];
 
@@ -100,17 +112,17 @@ internal static class StepSection
 
     /// <summary>A <c>verdict</c> (review) or <c>status</c> (gate): required for its kind and naming one of the step's own outputs, refused on any other kind. A <c>taskCode</c> step
     /// is refused its bindings once, by <see cref="TaskCode"/>.</summary>
-    private static IEnumerable<string> Naming(StepSpec spec, string path, string member, StepKind kind, string value, string why) =>
+    private static IEnumerable<string> Naming(StepSpec spec, string path, string member, StepKind kind, string value, string why, IReadOnlySet<string> refused) =>
         spec.Kind == kind
-            ? Named(spec, path, member, value, why)
+            ? Named(spec, path, member, value, why, refused)
             : value.Length > 0 && spec.Kind != StepKind.TaskCode
                 ? [$"{path}.{member} — only a {StepKinds.Key(kind)} step has a {member} (this step's kind is {StepKinds.Key(spec.Kind)})"]
                 : [];
 
-    private static IEnumerable<string> Named(StepSpec spec, string path, string member, string value, string why) =>
+    private static IEnumerable<string> Named(StepSpec spec, string path, string member, string value, string why, IReadOnlySet<string> refused) =>
         value.Length == 0
             ? [$"{path}.{member} is missing — {why}"]
-            : spec.Outputs.Any(binding => string.Equals(binding.Field, value, StringComparison.Ordinal))
+            : refused.Contains(value) || spec.Outputs.Any(binding => string.Equals(binding.Field, value, StringComparison.Ordinal))
                 ? []
                 : [$"{path}.{member} is '{value}' — not one of the step's outputs ({spec.FieldList})"];
 

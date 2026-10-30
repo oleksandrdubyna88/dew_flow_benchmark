@@ -36,12 +36,13 @@ internal static partial class FlowSection
     public static void Check(StrictJson json, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, bool tasksDeclared, IReadOnlyList<Scheme> schemes)
     {
         var usesBlock = tasksDeclared || schemes.Any(scheme => scheme.Entries.OfType<SchemeEntry.Tasks>().Any());
+        var noteable = SchemeChecks.Noteable(steps, tasks, json.RefusedFields);
         IEnumerable<string> problems =
         [
             .. FieldsBoundTwice(steps),
             .. usesBlock ? TaskSection.Problems(tasks, steps) : [],
-            .. steps.Values.SelectMany(spec => Unbound(spec, SchemeChecks.AllFields(steps, tasks), steps)),
-            .. schemes.SelectMany(scheme => SchemeChecks.Problems(scheme, steps, tasks)),
+            .. steps.Values.SelectMany(spec => Unbound(spec, SchemeChecks.AllFields(steps, tasks), steps, json.RefusedFields)),
+            .. schemes.SelectMany(scheme => SchemeChecks.Problems(scheme, steps, tasks, noteable)),
         ];
         foreach (var problem in problems)
         {
@@ -54,15 +55,22 @@ internal static partial class FlowSection
             .GroupBy(bound => bound.Field, StringComparer.Ordinal)
             .SelectMany(group => group.Skip(1).Select(later => $"steps.{later.Id}.outputs — {group.Key} is already bound by step {group.First().Id}"));
 
-    /// <summary>A <c>notes</c> no step and no tasks block binds, and a <c>diffFrom</c> that is no step id. Whether either holds at the position a scheme places the step is the scheme's.</summary>
-    private static IEnumerable<string> Unbound(StepSpec spec, IReadOnlyList<string> fields, IReadOnlyDictionary<StepId, StepSpec> steps) =>
+    /// <summary>A <c>notes</c> no step and no tasks block binds, or one that names a verdict, and a <c>diffFrom</c> that is no step id. Whether either holds at the position a scheme places
+    /// the step is the scheme's. A <c>notes</c> that names a binding already refused says nothing more.</summary>
+    private static IEnumerable<string> Unbound(StepSpec spec, IReadOnlyList<string> fields, IReadOnlyDictionary<StepId, StepSpec> steps, IReadOnlySet<string> refused) =>
     [
-        .. UnboundNotes(spec, fields),
+        .. UnusableNotes(spec, fields, steps, refused),
         .. UndefinedDiffFrom(spec, steps),
     ];
 
-    private static IEnumerable<string> UnboundNotes(StepSpec spec, IReadOnlyList<string> fields) =>
-        spec.Notes.Length > 0 && !fields.Contains(spec.Notes) ? [$"steps.{spec.Id}.notes is '{spec.Notes}' — no step binds it"] : [];
+    private static IEnumerable<string> UnusableNotes(StepSpec spec, IReadOnlyList<string> fields, IReadOnlyDictionary<StepId, StepSpec> steps, IReadOnlySet<string> refused) =>
+        spec.Notes.Length == 0 || refused.Contains(spec.Notes) ? [] : NotesProblem(spec, fields, steps);
+
+    /// <summary>The verdict is the runner's output: a notes file is one the MODEL writes, so a notes naming a verdict would have the model write over what the runner derives.</summary>
+    private static IEnumerable<string> NotesProblem(StepSpec spec, IReadOnlyList<string> fields, IReadOnlyDictionary<StepId, StepSpec> steps) =>
+        steps.Values.FirstOrDefault(other => other.Verdict == spec.Notes) is { } owner
+            ? [$"steps.{spec.Id}.notes is '{spec.Notes}' — the verdict of step {owner.Id}, which the runner writes; notes are a file the model writes"]
+            : fields.Contains(spec.Notes) ? [] : [$"steps.{spec.Id}.notes is '{spec.Notes}' — no step binds it"];
 
     private static IEnumerable<string> UndefinedDiffFrom(StepSpec spec, IReadOnlyDictionary<StepId, StepSpec> steps) =>
         spec.DiffFrom.Length > 0 && !steps.ContainsKey(new StepId(spec.DiffFrom))
@@ -102,23 +110,23 @@ internal static partial class FlowSection
         var match = EntryPattern().Match(text);
         if (!match.Success)
         {
-            json.Add($"{where} is '{text}' — an entry is \"tasks\" or \"<file name>:<step id>\", such as \"1-code:code\"");
+            json.Add($"{where} is '{ExecutableRule.Printable(text)}' — an entry is \"tasks\" or \"<file name>:<step id>\", such as \"1-code:code\"");
             return null;
         }
 
         var id = new StepId(match.Groups["id"].Value);
         if (!steps.ContainsKey(id))
         {
-            json.Add($"{where} is '{text}' — step id '{id}' is not defined under steps (defined: {string.Join(", ", steps.Keys)})");
+            json.Add($"{where} is '{ExecutableRule.Printable(text)}' — step id '{id}' is not defined under steps (defined: {string.Join(", ", steps.Keys)})");
             return null;
         }
 
         return new SchemeEntry.Step(match.Groups["name"].Value, id);
     }
 
-    [GeneratedRegex("^[A-Za-z]+$")]
+    [GeneratedRegex(@"^[A-Za-z]+\z", RegexOptions.CultureInvariant)]
     private static partial Regex SchemeName();
 
-    [GeneratedRegex("^(?<name>[0-9]+[a-z]?-[A-Za-z0-9-]+):(?<id>[A-Za-z][A-Za-z0-9]*)$")]
+    [GeneratedRegex(@"^(?<name>[0-9]+[a-z]?-[A-Za-z0-9-]+):(?<id>[A-Za-z][A-Za-z0-9]*)\z", RegexOptions.CultureInvariant)]
     private static partial Regex EntryPattern();
 }

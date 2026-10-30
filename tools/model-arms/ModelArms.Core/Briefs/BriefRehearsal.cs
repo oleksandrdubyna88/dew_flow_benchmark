@@ -21,16 +21,15 @@ public static class BriefRehearsal
     public static IReadOnlyList<string> StemsUsed(Experiment.Experiment experiment) =>
         [.. experiment.Schemes.SelectMany(scheme => SchemePositions.Steps(scheme, experiment.Tasks)).SelectMany(placed => StemOf(experiment, placed.Id)).Distinct(StringComparer.Ordinal)];
 
-    /// <summary>Every problem the rehearsal found, each once: a template that could not be read, then the refusal of each fill, naming the template, the scheme, the position and
-    /// the step. A stem without an entry in <paramref name="templates"/> was not read and is not rehearsed.</summary>
+    /// <summary>Every problem the rehearsal found, each once: the refusal of each fill, and a template that could not be read at each position that needs it, naming the template, the
+    /// scheme, the position and (for an unreadable one) the step. A stem without an entry in <paramref name="templates"/> was not read and is not rehearsed.</summary>
     public static IReadOnlyList<string> Problems(
         Experiment.Experiment experiment, RootPaths root, int scenarioCount, IReadOnlyDictionary<string, Outcome<string>> templates)
     {
         var arms = ArmsOf(experiment);
         var map = ArmMap.Extend(ArmMap.Empty, arms, Tokens());
-        var unreadable = templates.Values.OfType<Outcome<string>.Fail>().Select(fail => fail.Reason);
         var refused = experiment.Schemes.SelectMany(scheme => Refusals(experiment, scheme, arms, map, root, scenarioCount, templates));
-        return [.. unreadable.Concat(refused).Distinct(StringComparer.Ordinal)];
+        return [.. refused.Distinct(StringComparer.Ordinal)];
     }
 
     private static IEnumerable<string> Refusals(
@@ -61,9 +60,13 @@ public static class BriefRehearsal
         var spec = experiment.Steps[placed.Id];
         var name = BriefTemplates.NameOf(spec.Brief).Match(file => file, _ => spec.Brief);
         var fields = BriefFields.For(spec, SchemePositions.Visible(scheme, placed.Position, placed.Id, experiment.Steps, experiment.Tasks), experiment.Tasks, paths, facts);
-        return templates.GetValueOrDefault(spec.Brief) is Outcome<string>.Ok template && BriefFiller.Fill(template.Value, fields, guard, name) is Outcome<string>.Fail fail
-            ? $"{name} at schemes.{scheme.Name}[{placed.Position}] ({placed.Label}): {fail.Reason}"
-            : string.Empty;
+        var where = $"{name} at schemes.{scheme.Name}[{placed.Position}] ({placed.Label}):";
+        return templates.GetValueOrDefault(spec.Brief) switch
+        {
+            Outcome<string>.Ok template when BriefFiller.Fill(template.Value, fields, guard, name) is Outcome<string>.Fail fail => $"{where} {fail.Reason}",
+            Outcome<string>.Fail unreadable => $"{where} step {placed.Id}: {unreadable.Reason}",
+            _ => string.Empty,
+        };
     }
 
     private static IEnumerable<string> StemOf(Experiment.Experiment experiment, StepId id) =>
