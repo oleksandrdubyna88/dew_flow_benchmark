@@ -1056,6 +1056,24 @@ portable road, S0); Windows (the shims are POSIX: the verb scenarios skip there 
     `BoundedFile` answers a path it cannot look at as `Refused`, never absent and never a throw, and its portable ceiling covers the path's own check and
     the folder test too; `GateHolderNote.Describe` takes the lock's `PlatformRoad` and reads the note on it; `KernelFacts.ReadSmall` has one structural
     caller; the gate and `HostFactsReader` read the root's own files through `BoundedFile` (1 MiB); `LockProbe`'s inert failure names the folder.
+27. **E3.S1's files and one fixture's name, found while building it (2026-10-30; each keeps the spec's behaviour).** (a) Two internal helpers beside the six files —
+    `Checks/JsLog.cs` (a log read as JavaScript reads it: every line terminator — `\r`, U+2028, U+2029 — becomes `\n` before a multiline pattern runs, and JavaScript's
+    `\s` is spelled out, because .NET's `ECMAScript` option differs from the shell's engine in both) and `Checks/ObjectiveJson.cs` (the `Utf8JsonWriter` options) — and two internal
+    records in `ObjectiveReport.cs`; the public surface is C13 exactly. (b) The oracle runs the extract as `node -` with the script on stdin: the extract is named
+    `objective-checks-reader.mjs` as the spec says, but its body is the shell's CommonJS (`require`), which a file with that extension refuses; stdin is how the shell ran it.
+    (c) The oracle's world holds seven scenarios (passed, failed, mixed, absent, and a `node` one of passed, failed, absent) where the spec says two `cs` and one `node`, so
+    every outcome of `passing` is in the byte comparison.
+28. **E3.S1's reading choices, each inside C13's words.** `ObjectiveFacts.Present` is keyed by scenario id (an id with no entry reads as not present); the shortstat is
+    trimmed (the shell's `git()` trimmed it); a CTRF the caller could not read (`Ctrf` a failed outcome) and one that is not a CTRF (`CtrfScenarios.Tests` Failure) are both
+    read as no tests, and `checks` says why (S5 calls `CtrfScenarios.Tests` itself); a numstat line of fewer than three fields is not a row; a count too large for
+    `long` reads as not captured. The residuals the shell's own code has and the port does not copy are in the module doc (an id JavaScript would re-order as an array index,
+    a pattern character in a name, a character outside printable BMP text in the bytes).
+29. **E3.S1's tests beyond the table, and what the table's fixtures could not be.** One test more than the spec's fourteen (`A_line_ends_where_javascript_ends_it`, from 27 (a)).
+    Part 6's C1 run had no failing test and no indented `✔` line, so `mtp.log` carries two WRITTEN `failed …` records and `node.log` two WRITTEN `✖` lines (one twice) and three
+    indented `✔` lines — said in the test class's comment, as the spec asks for the `failed` and `✖` ones; the MTP summary lines stay C1's (`failed: 0`). `ctrf.json`'s
+    `summary` is recomputed for its sixteen tests and its `extra` dropped. `research/module_tests.md` has no row of S1's own (its flows are verbs): the `checks` row names the
+    pure half's tests and stays *not covered*. A one-off run of the three parsers over all twelve part-6 arms' own logs and CTRF reports (outside the repository,
+    read-only, not kept as a test) agreed with each arm's recorded `objective.json` on every count, failed list and scenario.
 
 ## 9. Growth
 

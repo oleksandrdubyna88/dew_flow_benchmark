@@ -1575,6 +1575,93 @@ that `File.GetUnixFileMode` reads the file the link judgement saw; `EACCES` on `
 
 ## The objective readers and the report (E3.S1)
 
+Story E3.S1: the pure half of the parent's §4.9 — what `checks` (E3.S5) will make of the logs, the CTRF report and the diff its tools leave behind, and the one file the part-6/7 judges read, `objective.json`, **in the shell's shape** (`objective-checks.sh:27-67`). Nothing here reads a file or starts a process: the caller gathers the facts and hands them in. All of it is in `ModelArms.Core.Checks`: five public static classes, the records they read and write, and two internal helpers:
+
+| Type | What it holds | The shell's lines |
+|---|---|---|
+| `TestLogSummary.Read(log, namePrefix) → MtpSummary(Total, Succeeded, Skipped, Failed)` | the three counts of the MTP summary (`total: N`, `succeeded: N`, `skipped: N`, the first match ANYWHERE in the log) and every `failed <name>` record, in log order, the prefix taken off once | `:33-34`, `:56` |
+| `TsTestLog.Read(log) → NodeTestLog(Tests, Failed, Passed)` | the FIRST `ℹ tests N`, the names printed `✖ <name> (<digit>` at a line start (each once, first-seen order), the names printed `✔ <name> (<digit>` after any blanks (a set) | `:35-36`, `:58` |
+| `CtrfScenarios.Tests(ctrf)`, `.Passing(scenario, tests, node)` | `results.tests[]` as `CtrfTest(Name, Status)`, or the reason the text is not a CTRF report; per scenario `passed` · `failed` · `absent` · the distinct statuses joined by `+` | `:38-47` |
+| `DiffStats.Rows(numstat)`, `.Split(rows)` | the numstat rows (a binary file's `-` is 0) and `ChangedLines(Tests, Src, Docs)` by the shell's three rules, verbatim | `:51`, `:62-63` |
+| `ObjectiveReport.Write(facts)`, `.Summary(facts)` | `objective.json` and the one-line summary | `:53-67` |
+| `ObjectiveFacts`, `StageExits` | the records the caller fills in (C13) | — |
+| `JsLog`, `ObjectiveJson` (internal) | the JavaScript-faithful reading of a log; the writer | — |
+
+**What the report is.** The members of the shell's object in the shell's order — `arm`, `head`, `commits`, `uncommittedFiles`, `build`, `format`, `mcp {exit, total, passed, skipped, failedNew, failedBaseline}`, `ts {exit, total, failedNew}`, `scenarios {<id>: {name, present, passing}}` (in `scenarios.json` order), `scenariosPresentCount`, `scenariosPassingCount`,
+`diff {shortstat, changedLines {tests, src, docs}, files}` — then the one additive member, **`stepsOnDeadline`** (D8: the steps whose `.done` says `hard-deadline`; always written, `[]` says none), last. Text: two-space indent, `\n` line ends, no trailing newline. `failedNew` and `failedBaseline` keep the log's order; `mcp.failedNew` filters `Baseline.McpFailed`, `ts.failedNew` filters `Baseline.TsFailed`.
+`Summary` is the shell's line: `{"arm","build","format","mcpNewFailures","tsNewFailures","scenarios":"<present>/<count> present, <passing> passing","stat"}`, compact.
+
+**Absent is not zero (E3 §8 item 10).** A total the log does not carry is `CapturedCount.Unavailable` and is written `null` — the shell's `NaN`. An exit that was not recorded (a tool killed at its wall, a re-read of logs nobody ran) is written `null` and makes `build` / `format` `false`: nothing passes for want of a number. `commits` is `null` when git did not say. The shell's `PARSE_ONLY` set every exit to 0 and so claimed a build passed;
+this cannot.
+
+**Settled once, in `JsLog`, instead of at every pattern.** The shell's readers are JavaScript regexes. A pattern here is `RegexOptions.ECMAScript | Multiline`, so `\d`, `\w` and `\b` are ASCII as in JavaScript. Two things .NET's engine does differently are fixed in one place: (1) a LINE ends at `\n`, `\r`, U+2028 or U+2029 in JavaScript and only at `\n` in .NET — a runner's progress line ending in `\r` would hide
+the record after it — so a log is read after `JsLog.Lines` has made every terminator a `\n` (a capture never holds a terminator in either engine, so no name changes); (2) JavaScript's `\s` includes the Unicode spaces (a no-break space, U+FEFF) and .NET's `ECMAScript` `\s` does not, so `\S` and the leading blanks of the `✔` pattern are spelled out (`JsLog.NonBlank`, `JsLog.Blank`). The leading `\s*` of the `✔` pattern
+(which in JavaScript may run over blank lines) is read per line: the same names are captured.
+
+**A scenario name is a literal, matched as a whole word** (E3 §8 item 13): `\b` + `Regex.Escape(name)` + `\b`, ECMAScript — `Foo` is in `Ns.Foo(x: 1)` and not in `FooBar`; `A.B` is not in `AxB`; a space or a `+` in a name is a space and a plus. The shell built an unescaped `RegExp`; the two agree for every identifier. `\b` keeps its JavaScript meaning, so a name that ENDS in a non-word character (`…)`) is found only before a word character —
+the shell's own behaviour, kept. A `node` scenario is read from the extension's log, never from the CTRF.
+
+**A CTRF that is not one is a refusal with a reason** (E3 §8 item 14): not valid JSON (cut short), not an object, no `results` object, no `results.tests` array, a test without a string `name` and `status`. The shell's `JSON.parse` crashed and wrote no report. `ObjectiveReport` reads such a report (and a CTRF the caller could not read — `Ctrf` is `Outcome<string>`) as NO tests, so every `cs` scenario is `absent`; saying why is `checks`' line (E3.S5), which
+calls `CtrfScenarios.Tests` itself.
+
+**The writer escapes, and a string is a value.** `Utf8JsonWriter` with the relaxed encoder `McpConfig` uses: an arm names files, tests and scenarios, and one holding a quote or `"},"x":{"` cannot end its own string or add a member. The residual is `McpConfig`'s, said there: the PARSED value equals the input for every well-formed string, and the BYTES equal `JSON.stringify`'s for printable BMP text; a character outside the BMP (an emoji), DEL and a C1 control are written as escapes where
+`JSON.stringify` writes them raw. A lone surrogate cannot come from a log decoded as UTF-8 and is not defended against here (the writer would refuse it).
+
+**What is NOT read here.** A file or git (S5 gathers the facts: the logs through `BoundedFile`, the numstat through `ArmGit`); `stages.json` (S5); the analysis half's readers (E6). The facts' `Present` is keyed by scenario id; an id with no entry reads as not present. The shortstat is trimmed, as the shell's `git()` trimmed it.
+
+### The proof: the shell's own reader, run as the oracle
+
+`ObjectiveReportTests.The_report_of_a_real_arm_round_trips_the_shells_shape` runs the shell's reader (`Fixtures/model-arms/objective/objective-checks-reader.mjs`: the heredoc of `objective-checks.sh`, lines 27-67, VERBATIM; the pinned file's sha256 is the parent's §2, `7e18ae7d…92ea`, and the extract's own, `285d0113…d42b`, is asserted by the test) over a world the test builds (`ObjectiveBench` in `ShellObjectiveReader.cs`): a temporary git
+repository laid out as the coai target (`src_mcp/tests/ATests.cs`, `src_vs_code/src/test/a.test.ts`, a source file, a document, a binary, a tool; a base commit, then two), the root's `baseline.json` (`BaselineFile.Write`; its failures overlap the logs') and `scenarios.json` (seven scenarios: passed, failed, mixed, absent, and a `node` scenario each of passed, failed, absent), and an arm's `out/objective/` holding the three recorded fixtures under the shell's
+names. The reader runs as the shell ran it — `node - <O> <E> C1 <base> 0 0 1 0 0` with the script on stdin (the extract is named `.mjs`, but the script is CommonJS: `require`, which an `.mjs` file would refuse), node by its resolved path, cwd the repository, a PATH holding only the host's git. The port's `Write` over the same inputs — the facts gathered by the test with the real git, as `checks` will — **equals the oracle's text byte for byte** with
+`,\n  "stepsOnDeadline": []` inserted before the final `\n}`; `Summary` equals the oracle's stdout line. The part-6/7 judges (`judge-abs.sh`, `judge-coai.sh`, the coai-findings judge) read only `objective.json`, so this round trip stands for them (D28).
+
+**Fixtures** (`Fixtures/model-arms/objective/`, `-text`, recorded bytes): `mtp.log` and `node.log` are real lines of part-6 C1's `mcp-tests.log` and `ts-tests.log` (the arm's token replaced by `0123456789ab`) with what C1's run did not have WRITTEN in, and the tests say so: two `failed CoaiMcp.Tests.<Class>.<Method> (12ms)` records in the shape of the real `skipped` records (the summary lines are C1's: `failed: 0` beside two failed records is the fixture's, and the shell never
+reads that line); two `✖` lines in the node runner's shape, one printed twice, and three `✔` lines with leading spaces (C1's log has none; the shell's pattern allows them). `ctrf.json` is C1's CTRF envelope — twelve of its tests (their file paths token-replaced) and four written for the scenarios (passed, failed, and a mixed pair); its `summary` is recomputed for the sixteen tests and its `extra` dropped. `objective-part6-C1.json` is C1's `out/objective.json`, copied as it is: no token in it
+(checked), its sha256 asserted by the shape test.
+
+### Tests (E3.S1)
+
+`ObjectiveParsersTests` (9) and `ObjectiveReportTests` (6); `ShellObjectiveReader.cs` holds the kit (`ObjectiveBench` the oracle world, `ObjectiveFactsKit` the facts' defaults and the report's readers). The pure list names `TestLogSummary`, `TsTestLog`, `CtrfScenarios`, `DiffStats` and `ObjectiveReport` under `// E3.S1`.
+
+| Test | What it holds |
+|---|---|
+| `The_mtp_summary_reads_total_succeeded_skipped_and_every_failed_name` | 13894 / 13777 / 117; the two failed names without the prefix, in log order |
+| `The_node_log_reads_passed_failed_and_the_count` | the FIRST `ℹ tests` (6540, not 4); each failed name once; a `✔` line that starts with spaces is passed |
+| `Ctrf_decides_passed_failed_absent_and_mixed_per_scenario` | `passed`, `failed`, `absent`, `passed+failed`; a node scenario from the node log |
+| `New_failures_exclude_the_baseline` | `failedNew` / `failedBaseline` of the report, both suites |
+| `Changed_lines_split_into_tests_src_and_docs` | 12 / 6 / 3, five files in order, the binary row 0 |
+| `A_total_the_log_does_not_carry_is_unavailable_never_zero` | the three counts and the node count not captured; the report writes `null` |
+| `A_scenario_name_is_a_whole_word_and_never_a_pattern` | `Foo` / `FooBar` / `Ns.Foo(x: 1)`; `A.B` / `AxB`; a space; a `+` |
+| `A_ctrf_that_is_not_a_ctrf_object_is_refused_with_its_reason` | `[]`, `{}`, `{"results":{}}`, a test without a status, a cut-short object: each a Failure naming why; an empty `tests` array is a report; the scenario then reads `absent` |
+| `A_line_ends_where_javascript_ends_it` | a lone `\r`, U+2028 and U+2029 end a line as they do in the shell's engine (the same four patterns, run in node, give the same names) |
+| `The_report_of_a_real_arm_round_trips_the_shells_shape` | the oracle, byte for byte |
+| `The_shape_is_the_part6_arms_every_member_in_its_order` | the member paths (name, nesting, order, JSON kind; the scenario map's entries read once) equal part 6's C1 report's, plus `stepsOnDeadline` last |
+| `Steps_that_ended_on_a_deadline_are_listed_under_stepsOnDeadline` | `"stepsOnDeadline": [\n    "3-fix"\n  ]\n}`; an empty list is `[]` |
+| `The_summary_line_is_the_shells` | equals the oracle's stdout line |
+| `Arm_written_strings_are_escaped_and_parse_back_exactly` | scenario names, ids, numstat paths, log-derived names and a step stem holding `"`, `\`, a newline, a tab, U+0001, `ё`, an emoji and `"},"x":{"`: the text parses, its member paths equal the shape test's, every string reads back equal |
+| `Unknown_exits_are_null_and_never_pass` | every exit unknown → `build` and `format` `false`, `mcp.exit` / `ts.exit` / `commits` `null`; the same facts with exits of 0 pass |
+
+**Red first**, against stubs of the C13 signatures (every return the stub's: `Unavailable` counts, `Success([])`, `"absent"`, zeros, `"{}"`, `""`): all fifteen red on an ASSERTION — e.g. `Expected log.Tests.WasCaptured to be True, but found False.`; `Expected value to be 12, but found 0`; `Expected PassingOf("Foo", …) to be "passed" … but "absent"`; `Expected … Strings(report, "mcp", "failedNew") to be equal to {"A"}, but found empty collection`; the oracle test `Expected string to be the same string … differ at index 1` (the stub's `{}`). Two rows were green against that stub for
+their first half (the stub already said "not captured"): their named stub, `Number(0)`, is the sixth break-it below.
+
+**Break-its**, each planted in the finished code (the plant script copies the file and restores the copy; `git diff` empty afterwards), observed red, restored: (1) `TsTestLog` takes the LAST `ℹ tests` → `The_node_log_reads_passed_failed_and_the_count`: `Expected log.Tests.Value to be 6540L … but found 4L`, and the oracle test red (`"total": 4`); (2) `Regex.Escape` removed → `A_scenario_name_is_a_whole_word_and_never_a_pattern`: `Expected PassingOf("A.B", …) to be "absent" … but "passed"`;
+(3) `Unavailable` written as 0 (and an unknown exit passing) → `A_total_the_log_does_not_carry_is_unavailable_never_zero`: `Expected … Value(parsed, "mcp", "total") to be "null" … but "0"`, and `Unknown_exits_are_null_and_never_pass`: `Expected … Value(report, "build") to be "false" … but "true"`; (4) indent 1 → the oracle test: `differ on line 2 and column 2 (index 3)`, `"{\n "arm"`; (5) strings written raw → `Arm_written_strings_are_escaped_and_parse_back_exactly`: `JsonReaderException : 'u' is invalid after a value`
+(and the oracle test red); (6) every failure new (the baseline ignored) → `New_failures_exclude_the_baseline`: `… to be equal to {"A"}, but {"A", "B"} contains 1 item(s) too many`; (7) the readers' no-match answer `Number(0)` → `A_total_the_log_does_not_carry_is_unavailable_never_zero`: `Expected boolean to be False, but found True`.
+
+**One run against the real record, not kept as a test** (it read `/home/jinx/git/coai-exp2`, outside this repository): the three parsers over all twelve part-6 arms' own `mcp-tests.log`, `ts-tests.log` and CTRF (up to 11.7 MB) agree with each arm's recorded `objective.json` on every count, every failed list and every one of the 43 scenarios' `passing` (names with spaces, `—`, `…` and parentheses among them).
+
+### Not proven (said, not hidden)
+
+That the shell's patterns match every line another version of the test runners prints (the readers port the shell's patterns, not the runners' grammars); that the facts `checks` will gather (E3.S5) are the facts the test gathers; the report where the shell's own code is wrong for the input — a scenario name holding a pattern character (matched as a literal here, E3 §8 item 13), an id that JavaScript would re-order because it reads as an array index (`"10"` before `"2"`; ids here keep `scenarios.json`'s
+order), a lone surrogate; `changedLines` on a target whose layout is not the coai target's (the three rules are the shell's, so another target's `src` reads 0 — a configurable split is the analysis plan's question, E3 §8 item 12); the bytes of a report whose strings hold a character outside printable BMP text (parsed equal, not byte equal). A one-run proof against the twelve recorded arms is a statement, not a test.
+
+### Deviations from the story (also E3 §8 items 27–29)
+
+1. Two internal helpers beside the story's six files — `JsLog.cs` (the JavaScript-faithful line and blank rules, `Count`) and `ObjectiveJson.cs` (the writer) — and two internal records in `ObjectiveReport.cs` (`ObjectiveReading`, `ScenarioRow`), so each file stays small and no pattern repeats the settlement; the public surface is C13 exactly.
+2. The oracle runs the extract as `node -` with the script on stdin, not as a file argument: the story names the extract `objective-checks-reader.mjs`, but its body is the shell's CommonJS (`require`), which a file with that extension would refuse; stdin is also exactly how the shell ran it. The oracle's world has seven scenarios (the story's: two `cs`, one `node`) so every outcome of `passing` is in the byte comparison.
+3. `PinnedConsumer.NodePath` exposes the resolved `node` the helper already held, for the oracle kit; the module's `PinnedConsumer` is otherwise unchanged. `A_line_ends_where_javascript_ends_it` is one test beyond the story's fourteen; the story's *Done when* counts thirteen for its fourteen rows.
+
 ## The target's tools and prep-base (E3.S2)
 
 ## make (E3.S3)
