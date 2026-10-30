@@ -38,13 +38,11 @@ internal static class SchemeChecks
             : [];
     }
 
-    private static IEnumerable<string> DiffFrom(Scheme scheme, PlacedStep placed, StepSpec spec, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks)
-    {
-        if (spec.DiffFrom.Length == 0 || !steps.TryGetValue(new StepId(spec.DiffFrom), out var source))
-        {
-            return [];
-        }
+    private static IEnumerable<string> DiffFrom(Scheme scheme, PlacedStep placed, StepSpec spec, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks) =>
+        spec.DiffFrom.Length > 0 && steps.TryGetValue(new StepId(spec.DiffFrom), out var source) ? Misplaced(scheme, placed, spec, source, tasks) : [];
 
+    private static IEnumerable<string> Misplaced(Scheme scheme, PlacedStep placed, StepSpec spec, StepSpec source, TaskLimits tasks)
+    {
         var before = SchemePositions.Steps(scheme, tasks).Where(other => other.Position <= placed.Position).Any(other => other.Id == source.Id);
         return !before
             ? [$"{Where(scheme, placed)} diffFrom {spec.DiffFrom} is not placed at or before this position"]

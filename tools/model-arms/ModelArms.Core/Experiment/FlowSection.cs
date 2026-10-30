@@ -8,7 +8,7 @@ namespace ModelArms.Core.Experiment;
 /// step are <see cref="StepSection"/>'s, those of one scheme <see cref="SchemeChecks"/>'.</summary>
 internal static partial class FlowSection
 {
-    /// <summary>The steps, keyed by identity, each read by <see cref="StepSection"/>; then the one rule across them: a field is bound by at most one step.</summary>
+    /// <summary>The steps, keyed by identity, each read by <see cref="StepSection"/>.</summary>
     public static IReadOnlyDictionary<StepId, StepSpec> Steps(StrictJson json, JsonObject top)
     {
         var steps = new Dictionary<StepId, StepSpec>();
@@ -25,24 +25,20 @@ internal static partial class FlowSection
             }
         }
 
-        foreach (var problem in FieldsBoundTwice(steps))
-        {
-            json.Add(problem);
-        }
-
         return steps;
     }
 
     public static IReadOnlyList<Scheme> Schemes(StrictJson json, JsonObject top, IReadOnlyDictionary<StepId, StepSpec> steps) =>
         [.. json.MapMember(top, string.Empty, "schemes").Select(member => Scheme(json, member.Key, member.Value, steps))];
 
-    /// <summary>The rules that need more than one step or a whole scheme, recorded once the members are read: the ids of the tasks block (checked when the block is declared or a scheme
-    /// has a tasks entry), a <c>notes</c> or a <c>diffFrom</c> that names nothing, and each scheme's own rules.</summary>
+    /// <summary>The rules that need more than one step or a whole scheme, recorded once the members are read: a field bound by two steps, the ids of the tasks block (checked when the block
+    /// is declared or a scheme has a tasks entry), a <c>notes</c> or a <c>diffFrom</c> that names nothing, and each scheme's own rules.</summary>
     public static void Check(StrictJson json, IReadOnlyDictionary<StepId, StepSpec> steps, TaskLimits tasks, bool tasksDeclared, IReadOnlyList<Scheme> schemes)
     {
         var usesBlock = tasksDeclared || schemes.Any(scheme => scheme.Entries.OfType<SchemeEntry.Tasks>().Any());
         IEnumerable<string> problems =
         [
+            .. FieldsBoundTwice(steps),
             .. usesBlock ? TaskSection.Problems(tasks, steps) : [],
             .. steps.Values.SelectMany(spec => Unbound(spec, SchemeChecks.AllFields(steps, tasks), steps)),
             .. schemes.SelectMany(scheme => SchemeChecks.Problems(scheme, steps, tasks)),
