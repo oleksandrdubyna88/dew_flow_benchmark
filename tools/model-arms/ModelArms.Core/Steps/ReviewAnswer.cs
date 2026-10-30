@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -19,7 +18,7 @@ namespace ModelArms.Core.Steps;
 /// <b>The answer.</b> The shell's span — from the FIRST <c>{</c> to the LAST <c>}</c> of the text (<c>/\{[\s\S]*\}/</c>, greedy) — byte for byte, when it parses as a JSON object: comments, trailing commas and single quotes are refused, and so is
 /// a name defined twice at any depth (a verdict written twice has no single reading). Otherwise <c>{"verdict":"unparsed","raw":&lt;the whole text&gt;}</c>: the shell wrote an invalid span as it was, and a reader that then crashed on it is
 /// worse than an honest <c>unparsed</c>. A text with no braces, an empty text, two objects, a fence followed by prose with braces, an unbalanced brace and a span nested deeper than the reader allows are all <c>unparsed</c>; the raw text
-/// is never cut. The one change made to it is a lone surrogate, replaced by U+FFFD, because JSON text cannot hold one. Nothing in here throws on any text.
+/// is never cut. The one change made to it is a lone surrogate, which the JSON writer writes as U+FFFD, because JSON text cannot hold one (the writer's behaviour, pinned by a test, not a measure of ours). Nothing in here throws on any text.
 /// </para>
 /// Pure: it reads its one input and opens nothing. It validates no schema (<c>findings</c>, <c>severity</c>) — the fixer and the analysis read that.</summary>
 public static class ReviewAnswer
@@ -63,8 +62,5 @@ public static class ReviewAnswer
     }
 
     private static string Unparsed(string text) =>
-        new JsonObject { ["verdict"] = "unparsed", ["raw"] = WithoutLoneSurrogates(text) }.ToJsonString(Readable);
-
-    /// <summary>The text with each lone surrogate replaced by U+FFFD (the UTF-8 encoder's own replacement); a well-formed text comes back unchanged.</summary>
-    private static string WithoutLoneSurrogates(string text) => Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(text));
+        new JsonObject { ["verdict"] = "unparsed", ["raw"] = text }.ToJsonString(Readable);
 }

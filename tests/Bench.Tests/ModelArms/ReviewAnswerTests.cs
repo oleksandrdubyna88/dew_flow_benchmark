@@ -279,7 +279,7 @@ public sealed class ReviewAnswerTests
         new(false, CapturedCount.Unavailable("no api_error_status"), string.Empty, text, [], "success", 1);
 
     /// <summary>Given a result text with a lone surrogate (the envelope is a public record, so one can be built that no line could produce), Then nothing throws: the text has no span — or a span that cannot be parsed —
-    /// and the answer is an <c>unparsed</c> in which the lone surrogate is replaced by U+FFFD, the one change made to the raw text, because JSON text cannot hold one.</summary>
+    /// and the answer is an <c>unparsed</c> in which the lone surrogate is written as U+FFFD — the one change made to the raw text, made by the JSON writer because JSON text cannot hold one.</summary>
     [Fact]
     public void A_lone_surrogate_in_the_result_never_throws()
     {
