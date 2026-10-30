@@ -1,4 +1,5 @@
 using FluentAssertions;
+using ModelArms.Adapters;
 using ModelArms.Core.Experiment;
 using Xunit;
 
@@ -76,6 +77,22 @@ public sealed class PlatformRoadsTests
         {
             var act = () => PlatformRoads.Of(row.Host);
             act.Should().NotThrow($"{row.Row} is a road, never a throw");
+        }
+    }
+
+    [Fact]
+    public void This_hosts_facts_name_it_and_its_road_is_the_tables_row_for_them()
+    {
+        var facts = PlatformFactsReader.Current();
+
+        facts.Windows.Should().Be(OperatingSystem.IsWindows());
+        facts.Linux.Should().Be(OperatingSystem.IsLinux());
+        facts.Description.Should().NotBeNullOrWhiteSpace();
+        PlatformFactsReader.CurrentRoad.Should().BeEquivalentTo(PlatformRoads.Of(facts), "the road is the table's row for the facts the host reported, computed once");
+        if (OperatingSystem.IsLinux())
+        {
+            facts.StatxAvailable.Should().Be(KernelFacts.StatxProbe().Match(available => available, _ => false), "statx counts as available only where a statx of / returned 0");
+            KernelFacts.StatxProbe().Match(available => available, _ => false).Should().BeTrue("this suite's Linux hosts answer statx; a seccomp-filtered one would take the portable road, said in the line");
         }
     }
 }

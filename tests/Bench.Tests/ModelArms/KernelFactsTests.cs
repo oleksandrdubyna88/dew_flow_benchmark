@@ -161,4 +161,21 @@ public sealed class KernelFactsTests
         source.Should().Contain("Classified(", "the scan must still find the classification it forbids the errno read in favour of");
         source.Should().NotContain("AlreadyExists").And.NotContain("== 17", "mkdir's failure is classified by the entry's presence, not by EEXIST's number");
     }
+
+    [Fact]
+    public void Present_on_the_runtimes_road_says_what_the_kernels_does_for_a_dangling_link_a_file_and_nothing()
+    {
+        Linux();
+        using var temp = new TempFolder();
+        var file = temp.File("{}", "f.json");
+        var dangling = temp.Combine("dangling");
+        File.CreateSymbolicLink(dangling, temp.Combine("nowhere"));
+
+        foreach (var statx in new[] { true, false })
+        {
+            KernelFacts.Present(dangling, statx).Ok().Should().BeTrue($"statx {statx}: a dangling link is a directory entry");
+            KernelFacts.Present(file, statx).Ok().Should().BeTrue($"statx {statx}");
+            KernelFacts.Present(temp.Combine("absent"), statx).Ok().Should().BeFalse($"statx {statx}");
+        }
+    }
 }
