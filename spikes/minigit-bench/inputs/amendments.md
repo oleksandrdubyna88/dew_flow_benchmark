@@ -7,3 +7,4 @@ Dated amendments; instrument only after the A/A (parent §11). By-hand verdicts:
 2026-10-30 | instrument | harness:500e09206354 | instrument: G-8 TS toolchain/own box paths false positive fixed, skeleton narrowed (B1), box home (M1); aa-verdicts G-6/G-12 per contract (E3b.S4)
 2026-10-30 | instrument | harness:ee66350f9112 | instrument: G-8 contamination scan follows a symbolic link a walk goes through (link-out, link-walk); on top of the line before (E3b.S4)
 2026-10-30 | instrument | harness:20ee8034dddc | instrument: G-8 link-out and link-walk are high only for a target under a protected root, on the scale of outside-path; on top of the line before (E3b.S4)
+2026-10-30 | instrument | harness:de9091b54e2b | instrument: G-8 link rules resolve a script's symlink from the directory a cd moved to; on top of the line before (E3b.S4)
