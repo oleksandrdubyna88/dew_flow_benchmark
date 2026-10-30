@@ -81,3 +81,17 @@ test('Settle_only_is_described_as_the_code_does_it', () => {
   assert.match(text, /It accepts no harness change and no input amendment/);
 });
 
+test('Section_9_says_T5_is_investigate_and_fixed_and_names_the_series_stops_the_code_has', () => {
+  const text = section9();
+  assert.doesNotMatch(text, /T5 under `t5: stop`/, 'T5\'s registered policy is investigate: no sentence makes it a stop');
+  assert.match(text, /T5's registered policy is `investigate`, and it cannot change \(section 11/);
+  const policy = JSON.parse(read('crosscheck-policy.json'));
+  assert.equal(policy.t5, 'investigate', 'and the registered policy file says so');
+  for (const rule of ['`stop: alias drift`', '`stop: security`', '`stop: auth`', '`T1 breach`', '`T2 breach`', '`T3 breach`', '`T<n> unchecked`', '`second void: contaminated`']) assert.ok(text.includes(rule), `the stop list names ${rule}`);
+  assert.equal(CHECK_STOP_RULES.includes('T5 breach'), true, 'the generic rule in the code still covers T5 (it is not removed, only not registered as a stop)');
+});
+
+test('The_amendments_header_lists_every_line_format_the_runner_reads_including_the_budget_raise', () => {
+  const header = squash(read('amendments.md'));
+  for (const part of ['By-hand verdicts: `YYYY-MM-DD | G-<n> | holds|refuted|explained | <rid> | <evidence path> | <who>`', 'Instrument lines: `YYYY-MM-DD | instrument | harness:', 'Input lines', '`YYYY-MM-DD | budget-raise | pair:<k> | n:<re-runs> | usd:<n x 1.1 x 6> | <reason>`']) assert.ok(header.includes(part), `the header has ${part}`);
+});
