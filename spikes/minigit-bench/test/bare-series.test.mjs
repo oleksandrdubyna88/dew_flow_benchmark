@@ -1,15 +1,16 @@
 // The bare runner's loop (E3b.S1): the schedule driven for real over the run-map, with a fake launch that lays the bare-smoke fixture into each session's directory
 // (and variants of it) and a fake scorer. The gates, the barrier, the voids and the re-run, the stops, the spend gate, the scorer's halts and the resume are what is under test.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { crosscheckPolicyFrom } from '../capture/policy-input.mjs';
 import { aliasRecord } from '../lib/aliases.mjs';
-import { ridOf } from '../lib/bare-plan.mjs';
+import { firstStack, ridOf } from '../lib/bare-plan.mjs';
 import { EXIT, dirFacts, reconcile, runLoop } from '../lib/bare-series.mjs';
 import { writeSessionRecord } from '../lib/bare-records-io.mjs';
 import { readLedger } from '../lib/ledger.mjs';
+import { layoutPaths } from '../lib/sandbox.mjs';
 import { openSeries, readRunMap, transition } from '../lib/run-map.mjs';
 import { FIXTURE, SCORE, lay } from './bare-fixture.mjs';
 import { SEED, context, sleep } from './bare-ctx.mjs';
@@ -272,4 +273,53 @@ test('An_abort_before_the_loop_starts_launches_nothing', async () => {
   assert.equal(r.exit, 130);
   assert.deepEqual(t.launched, []);
   assert.deepEqual(t.events.filter(e => e.startsWith('guard')), [], 'not even the gates ran');
+});
+
+// ---- every session of a phase is settled before the loop acts on a stop (review M8, G1) ------------------------------------------------
+
+test('A_stop_in_the_first_session_of_a_phase_does_not_leave_its_partner_uncharged_and_unrecorded', async () => {
+  const first = firstStack({ seed: SEED, pair: 1, phase: 'v1' });
+  const partner = first === 'csharp' ? 'node' : 'csharp';
+  const t = harness({ variants: { [rid(first, 'v1', 1)]: 'auth' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.stop, r.message);
+  const map = readRunMap(t.ctx.runMapFile).value;
+  assert.equal(map.stopped.rule, 'stop: auth');
+  assert.equal(map.sessions[rid(first, 'v1', 1)].status, 'ran');
+  assert.equal(map.sessions[rid(partner, 'v1', 1)].status, 'ran', 'the partner ran in the same phase: it is settled, not left launching');
+  assert.equal(map.sessions[rid(partner, 'v1', 1)].class, 'completed');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort(), 'both sessions were paid for, both are charged');
+});
+
+test('A_collection_failure_of_one_session_leaves_it_recoverable_and_does_not_block_its_partner', async () => {
+  const first = firstStack({ seed: SEED, pair: 1, phase: 'v1' });
+  const partner = first === 'csharp' ? 'node' : 'csharp';
+  const t = harness({ variants: { [rid(first, 'v1', 1)]: 'corrupt' } });
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map });
+  assert.equal(r.exit, EXIT.failed, r.message);
+  assert.match(r.message, new RegExp(rid(first, 'v1', 1)));
+  let map = readRunMap(t.ctx.runMapFile).value;
+  assert.equal(map.sessions[rid(partner, 'v1', 1)].status, 'ran', 'the partner was collected, charged and recorded though its partner failed');
+  assert.equal(map.sessions[rid(first, 'v1', 1)].status, 'launching', 'the failed one waits for resume');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid), [rid(partner, 'v1', 1)], 'no charge for what could not be read');
+  // the evidence is repaired (a reader fix, say) and the run resumes: the session is adopted and charged once, the partner is not charged again
+  lay(layoutPaths(t.ctx.sessionsRoot, rid(first, 'v1', 1)), undefined);
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  map = settled.value;
+  assert.equal(map.sessions[rid(first, 'v1', 1)].status, 'ran');
+  assert.deepEqual(readLedger(t.ctx.ledgerFile).map(l => l.rid).sort(), [rid('csharp', 'v1', 1), rid('node', 'v1', 1)].sort());
+});
+
+test('Resume_writes_the_record_of_a_void_session_that_ended_but_whose_record_was_not_written', async () => {
+  const t = harness({ variants: { [rid('csharp', 'v1', 1)]: 'upstream' } });
+  const first = await runLoop({ ctx: t.ctx, deps: t.deps, map: t.map, signal: undefined });
+  assert.equal(first.exit, EXIT.done, first.message);
+  const record = path.join(t.ctx.sessionsRoot, rid('csharp', 'v1', 1), 'record.json');
+  assert.equal(existsSync(record), true);
+  rmSync(record);
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map: readRunMap(t.ctx.runMapFile).value });
+  assert.equal(settled.ok, true, settled.reason);
+  assert.equal(existsSync(record), true, 'a crash between the transition and the record write is repaired before the schedule advances');
+  assert.equal(readLedger(t.ctx.ledgerFile).filter(l => l.rid === rid('csharp', 'v1', 1)).length, 1, 'and nothing is charged twice');
 });

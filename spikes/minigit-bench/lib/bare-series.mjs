@@ -116,9 +116,14 @@ async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
   return settleSessions({ ctx, deps, h, phase: phase.value, state, signal, say });
 }
 
-/** Classify, charge and persist every session of a finished phase; a `stop:` class ends the series here. */
+/**
+ * Classify, charge and persist EVERY session of a finished phase, then act: a `stop:` class ends the series only after all of them are settled (the partner of a stopped session was
+ * paid for too), and a session whose evidence cannot be read does not block the others: it stays `launching`, uncharged, and `reconcile` adopts it on resume (review M8, G1).
+ */
 async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
   const flags = [...(state.quiet?.flags ?? []), ...(state.sampler?.flags ?? []), ...(phase.startSkewMs > 5000 ? ['start skew'] : [])];
+  const failures = [];
+  const stops = [];
   for (const s of phase.sessions) {
     let collected;
     try {
@@ -127,9 +132,10 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
         abortReason: signal?.aborted ? ctx.abortReason() : null, partnerDirs: phase.sessions.filter(x => x !== s).map(x => x.layout.dir), table: ctx.table, policy: ctx.policy, home: ctx.home,
       });
     } catch (e) {
-      return done(EXIT.failed, `collecting ${s.rid} failed: ${e.message}`);
+      failures.push(`collecting ${s.rid} failed: ${e.message}`);
+      continue;
     }
-    if (!collected.ok) return done(EXIT.failed, `collecting ${s.rid} failed: ${collected.reason}`);
+    if (!collected.ok) { failures.push(`collecting ${s.rid} failed: ${collected.reason}`); continue; }
     const { outcome, usd } = collected.value;
     if (ctx.aliasStore) ctx.aliasStore.update(collected.value.alias, collected.value.aliasCheck);
     appendLedger(ctx.ledgerFile, { kind: ledgerKind(ctx, outcome), usd, what: outcome.class, rid: s.rid, t: new Date(deps.now()).toISOString() });
@@ -137,11 +143,15 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
     h.apply(transition(h.get(), s.rid, 'ran', { class: outcome.class, data: outcome.data, usd, run, dummy: s.plan.dummy, canaryTokens: s.canary.tokens, abortReason: signal?.aborted ? ctx.abortReason() : null, workspaceFlags: s.workspace.flags ?? [] }));
     say(`${s.rid} (${s.session.stack} ${s.session.phase}): ${outcome.class}, $${usd.toFixed(4)}`);
     if (!outcome.data) writeSessionRecord({ ctx, entry: h.get().sessions[s.rid], score: null });
-    if (outcome.stop) {
-      h.commit(markStopped(h.get(), { rule: outcome.class, reason: JSON.stringify(outcome.detail), at: new Date(deps.now()).toISOString() }));
-      return done(EXIT.stop, `${outcome.class} in ${s.rid}: the series stops`);
-    }
+    if (outcome.stop) stops.push({ rid: s.rid, outcome });
   }
+  const unread = failures.length > 0 ? `; ${failures.join('; ')} (those sessions stay launching and are settled by resume)` : '';
+  if (stops.length > 0) {
+    const [first] = stops;
+    h.commit(markStopped(h.get(), { rule: first.outcome.class, reason: JSON.stringify(first.outcome.detail), at: new Date(deps.now()).toISOString() }));
+    return done(EXIT.stop, `${stops.map(x => `${x.outcome.class} in ${x.rid}`).join(', ')}: the series stops${unread}`);
+  }
+  if (failures.length > 0) return done(EXIT.failed, failures.join('; '));
   return signal?.aborted ? done(ctx.abortExit(), 'cancelled; the sessions that ran are recorded as interrupted harness voids') : null;
 }
 
@@ -202,6 +212,16 @@ export function dirFacts(ctx, rid) {
 
 const manifestsOf = ctx => (existsSync(path.join(ctx.seriesDir, 'canaries')) ? readdirSync(path.join(ctx.seriesDir, 'canaries')).map(f => path.join(ctx.seriesDir, 'canaries', f)) : []);
 
+/** A void session that ended (`ran`, no data) has its record written at settle time; a crash between the transition and that write is repaired here, before the schedule advances. */
+function rebuildMissingRecords({ ctx, h, plan, say }) {
+  for (const a of plan.filter(x => x.action === 'rebuild-record')) {
+    const entry = h.get().sessions[a.rid];
+    if (entry.data === true || entry.status !== 'ran' || existsSync(path.join(ctx.sessionsRoot, a.rid, 'record.json'))) continue;
+    const written = writeSessionRecord({ ctx, entry, score: null });
+    say(`${a.rid}: the record of an ended void session was missing and is rebuilt${written.ok ? '' : ` (failed: ${written.reason})`}`);
+  }
+}
+
 /**
  * Before a resumed run continues (step 11): unplant every canary of the manifests first, retire stale sessions, then settle each `launching` session by what its directory
  * says (adopt a finished launch, charge and void a cut-short one, plan again one that never paid). -> `ok(map)` | `fail`.
@@ -211,7 +231,9 @@ export async function reconcile({ ctx, deps, map, say = () => {} }) {
   await deps.retireStale();
   const h = holder({ ctx, map });
   const dirs = Object.fromEntries(Object.keys(map.sessions).map(rid => [rid, dirFacts(ctx, rid)]));
-  const actions = resumePlan(map, dirs).filter(a => a.action === 'adopt' || a.action === 'void-interrupted' || a.action === 'reset');
+  const plan = resumePlan(map, dirs);
+  rebuildMissingRecords({ ctx, h, plan, say });
+  const actions = plan.filter(a => a.action === 'adopt' || a.action === 'void-interrupted' || a.action === 'reset');
   for (const a of actions) {
     if (a.action === 'reset') { h.apply(transition(h.get(), a.rid, 'planned')); say(`${a.rid}: ${a.reason}`); continue; }
     const entry = h.get().sessions[a.rid];

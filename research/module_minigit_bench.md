@@ -632,7 +632,9 @@ adds; a refusal without it is `unknown` and never a cap. Flags, never classes: `
 | a void `a2` | that cell is `missing` and its v2 never runs |
 | one v2 void / both v2 void | that v2 `a2` alone / the v2 re-run pair |
 
-A `stop:` class halts the series; the session is kept. A void session is not scored (there is nothing to score); the barrier waits only for data sessions.
+A `stop:` class halts the series; the session is kept. Every session of the phase is collected, charged and recorded BEFORE the loop acts on a stop (the partner of a stopped session was paid for too; review M8). A session whose
+evidence cannot be read (a corrupt stream, say) does not block its partner: it stays `launching`, uncharged, the run exits 5 naming it, and `resume` adopts it once the cause is fixed (review G1); `resume` also rebuilds the record of an
+ended void session whose record write a crash cut off. A void session is not scored (there is nothing to score); the barrier waits only for data sessions.
 
 **Resume** (`bare-runner.mjs resume`). First every canary of the manifests is unplanted, then `retireStale` runs, then each `launching` session is settled by what its directory says: `meta.json`
 present means the launch ended (adopted), paid work without it is a `void: harness` charged its settled spend plus unsettled requests at the reservation, nothing paid means planned
