@@ -1,0 +1,1090 @@
+{
+  "C1": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 8.401958775000002,
+        "byModel": {
+          "haiku": 0.00031707500000000005,
+          "sonnet": 8.401641700000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3998,
+        "model": "sonnet"
+      },
+      "2-review": {
+        "kind": "review",
+        "cost": 5.2962357749999995,
+        "byModel": {
+          "haiku": 0.00028337500000000004,
+          "opus": 5.295952399999999
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 941,
+        "model": "opus"
+      },
+      "3-fix": {
+        "kind": "fix",
+        "cost": 1.9286473000000004,
+        "byModel": {
+          "sonnet": 1.9286473000000004
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1574,
+        "model": "sonnet"
+      },
+      "4-gate": {
+        "kind": "gate",
+        "cost": 0.8422796,
+        "byModel": {
+          "sonnet": 0.8422796
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1003,
+        "model": "sonnet"
+      }
+    },
+    "cost": 16.47,
+    "active_min": 125,
+    "span_min": 796,
+    "attempts": 7,
+    "foreign": []
+  },
+  "CR1": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 9.705142175,
+        "byModel": {
+          "haiku": 0.00031837500000000003,
+          "sonnet": 9.7048238
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3467,
+        "model": "sonnet"
+      },
+      "2-hreview": {
+        "kind": "hreview",
+        "cost": 1.096418045,
+        "byModel": {
+          "haiku": 1.096418045
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1459,
+        "model": "haiku"
+      },
+      "3-review": {
+        "kind": "review",
+        "cost": 2.5826063999999995,
+        "byModel": {
+          "opus": 2.5826063999999995
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 296,
+        "model": "opus"
+      },
+      "4-fix": {
+        "kind": "fix",
+        "cost": 1.2314802999999999,
+        "byModel": {
+          "sonnet": 1.2314802999999999
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1043,
+        "model": "sonnet"
+      },
+      "5-gate": {
+        "kind": "gate",
+        "cost": 0.9042604,
+        "byModel": {
+          "sonnet": 0.9042604
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 884,
+        "model": "sonnet"
+      }
+    },
+    "cost": 15.52,
+    "active_min": 119,
+    "span_min": 779,
+    "attempts": 9,
+    "foreign": []
+  },
+  "SRS1": {
+    "steps": {
+      "1-split": {
+        "kind": "split",
+        "cost": 3.33136613,
+        "byModel": {
+          "haiku": 0.00028943,
+          "sonnet": 3.3310767
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 855,
+        "model": "sonnet"
+      },
+      "2-t1-code": {
+        "kind": "t-code",
+        "cost": 0.4475938100000001,
+        "byModel": {
+          "haiku": 0.4475938100000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1655,
+        "model": "haiku"
+      },
+      "2-t2-code": {
+        "kind": "t-code",
+        "cost": 0.7343682950000001,
+        "byModel": {
+          "haiku": 0.7343682950000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1674,
+        "model": "haiku"
+      },
+      "2-t3-code": {
+        "kind": "t-code",
+        "cost": 0.506733175,
+        "byModel": {
+          "haiku": 0.506733175
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1616,
+        "model": "haiku"
+      },
+      "2-t4-code": {
+        "kind": "t-code",
+        "cost": 0.7456354850000002,
+        "byModel": {
+          "haiku": 0.7456354850000002
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1311,
+        "model": "haiku"
+      },
+      "2-t5-code": {
+        "kind": "t-code",
+        "cost": 0.55024429,
+        "byModel": {
+          "haiku": 0.55024429
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1068,
+        "model": "haiku"
+      },
+      "2-t6-code": {
+        "kind": "t-code",
+        "cost": 0.414477505,
+        "byModel": {
+          "haiku": 0.414477505
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 697,
+        "model": "haiku"
+      },
+      "2-t7-code": {
+        "kind": "t-code",
+        "cost": 0.46228421,
+        "byModel": {
+          "haiku": 0.46228421
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 271,
+        "model": "haiku"
+      },
+      "3-hreview": {
+        "kind": "hreview",
+        "cost": 1.2150434600000002,
+        "byModel": {
+          "haiku": 1.2150434600000002
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1854,
+        "model": "haiku"
+      },
+      "4-review": {
+        "kind": "review",
+        "cost": 3.4010936000000003,
+        "byModel": {
+          "opus": 3.4010936000000003
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 581,
+        "model": "opus"
+      },
+      "5-fix": {
+        "kind": "fix",
+        "cost": 1.6673586,
+        "byModel": {
+          "sonnet": 1.6673586
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1170,
+        "model": "sonnet"
+      },
+      "6-gate": {
+        "kind": "gate",
+        "cost": 1.164736,
+        "byModel": {
+          "sonnet": 1.164736
+        },
+        "attempts": 2,
+        "sessions": 1,
+        "wall_s": 1371,
+        "model": "sonnet"
+      }
+    },
+    "cost": 14.64,
+    "active_min": 235,
+    "span_min": 862,
+    "attempts": 19,
+    "foreign": []
+  },
+  "C2": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 8.235152500000002,
+        "byModel": {
+          "haiku": 0.00023810000000000001,
+          "sonnet": 8.234914400000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3165,
+        "model": "sonnet"
+      },
+      "2-review": {
+        "kind": "review",
+        "cost": 4.459307,
+        "byModel": {
+          "haiku": 0.0002044,
+          "opus": 4.4591026
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3000,
+        "model": "opus"
+      },
+      "3-fix": {
+        "kind": "fix",
+        "cost": 1.084888,
+        "byModel": {
+          "haiku": 0.00021930000000000002,
+          "sonnet": 1.0846687000000002
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1607,
+        "model": "sonnet"
+      },
+      "4-gate": {
+        "kind": "gate",
+        "cost": 1.0979972999999996,
+        "byModel": {
+          "haiku": 0.00032669999999999997,
+          "sonnet": 1.0976705999999996
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1664,
+        "model": "sonnet"
+      }
+    },
+    "cost": 14.88,
+    "active_min": 157,
+    "span_min": 157,
+    "attempts": 4,
+    "foreign": []
+  },
+  "CR2": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 7.821289399999998,
+        "byModel": {
+          "haiku": 0.00023860000000000003,
+          "sonnet": 7.821050799999998
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3094,
+        "model": "sonnet"
+      },
+      "2-hreview": {
+        "kind": "hreview",
+        "cost": 0.8438303100000001,
+        "byModel": {
+          "haiku": 0.8438303100000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1213,
+        "model": "haiku"
+      },
+      "3-review": {
+        "kind": "review",
+        "cost": 4.7557936000000005,
+        "byModel": {
+          "haiku": 0.0002034,
+          "opus": 4.7555902
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 880,
+        "model": "opus"
+      },
+      "4-fix": {
+        "kind": "fix",
+        "cost": 1.3939475000000006,
+        "byModel": {
+          "haiku": 0.0002198,
+          "sonnet": 1.3937277000000006
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1169,
+        "model": "sonnet"
+      },
+      "5-gate": {
+        "kind": "gate",
+        "cost": 1.0640536,
+        "byModel": {
+          "haiku": 0.0003287,
+          "sonnet": 1.0637249
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1077,
+        "model": "sonnet"
+      }
+    },
+    "cost": 15.88,
+    "active_min": 124,
+    "span_min": 124,
+    "attempts": 5,
+    "foreign": []
+  },
+  "SRS2": {
+    "steps": {
+      "1-split": {
+        "kind": "split",
+        "cost": 3.0484616999999994,
+        "byModel": {
+          "haiku": 0.0003018,
+          "sonnet": 3.0481598999999995
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 772,
+        "model": "sonnet"
+      },
+      "2-t1-code": {
+        "kind": "t-code",
+        "cost": 0.18707915000000003,
+        "byModel": {
+          "haiku": 0.18707915000000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1290,
+        "model": "haiku"
+      },
+      "2-t2-code": {
+        "kind": "t-code",
+        "cost": 0.35854585000000005,
+        "byModel": {
+          "haiku": 0.35854585000000005
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1980,
+        "model": "haiku"
+      },
+      "2-t3-code": {
+        "kind": "t-code",
+        "cost": 0.5852802300000002,
+        "byModel": {
+          "haiku": 0.5852802300000002
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1344,
+        "model": "haiku"
+      },
+      "2-t4-code": {
+        "kind": "t-code",
+        "cost": 1.1729788700000003,
+        "byModel": {
+          "haiku": 1.1729788700000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1151,
+        "model": "haiku"
+      },
+      "2-t5-code": {
+        "kind": "t-code",
+        "cost": 0.29676411999999996,
+        "byModel": {
+          "haiku": 0.29676411999999996
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1179,
+        "model": "haiku"
+      },
+      "2-t6-code": {
+        "kind": "t-code",
+        "cost": 0.26561665,
+        "byModel": {
+          "haiku": 0.26561665
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 362,
+        "model": "haiku"
+      },
+      "2-t7-code": {
+        "kind": "t-code",
+        "cost": 0.8861696700000001,
+        "byModel": {
+          "haiku": 0.8861696700000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 992,
+        "model": "haiku"
+      },
+      "3-hreview": {
+        "kind": "hreview",
+        "cost": 2.1963890800000008,
+        "byModel": {
+          "haiku": 2.1963890800000008
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1369,
+        "model": "haiku"
+      },
+      "4-review": {
+        "kind": "review",
+        "cost": 4.7560327,
+        "byModel": {
+          "haiku": 0.0002059,
+          "opus": 4.7558267999999995
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 879,
+        "model": "opus"
+      },
+      "5-fix": {
+        "kind": "fix",
+        "cost": 2.0084670000000004,
+        "byModel": {
+          "haiku": 0.00021920000000000002,
+          "sonnet": 2.0082478000000004
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1379,
+        "model": "sonnet"
+      },
+      "6-gate": {
+        "kind": "gate",
+        "cost": 1.7650833000000001,
+        "byModel": {
+          "haiku": 0.00032690000000000003,
+          "sonnet": 1.7647564
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1177,
+        "model": "sonnet"
+      }
+    },
+    "cost": 17.53,
+    "active_min": 231,
+    "span_min": 190,
+    "attempts": 12,
+    "foreign": []
+  },
+  "C3": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 8.423829,
+        "byModel": {
+          "haiku": 0.0002379,
+          "sonnet": 8.4235911
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 4004,
+        "model": "sonnet"
+      },
+      "2-review": {
+        "kind": "review",
+        "cost": 4.2486926,
+        "byModel": {
+          "haiku": 0.0002044,
+          "opus": 4.248488200000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 927,
+        "model": "opus"
+      },
+      "3-fix": {
+        "kind": "fix",
+        "cost": 0.7356027,
+        "byModel": {
+          "haiku": 0.0002177,
+          "sonnet": 0.7353850000000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1386,
+        "model": "sonnet"
+      },
+      "4-gate": {
+        "kind": "gate",
+        "cost": 1.6731893000000007,
+        "byModel": {
+          "haiku": 0.0003259,
+          "sonnet": 1.6728634000000007
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 2216,
+        "model": "sonnet"
+      }
+    },
+    "cost": 15.08,
+    "active_min": 142,
+    "span_min": 142,
+    "attempts": 4,
+    "foreign": []
+  },
+  "CR3": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 9.7826458,
+        "byModel": {
+          "haiku": 0.00023860000000000003,
+          "sonnet": 9.7824072
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3883,
+        "model": "sonnet"
+      },
+      "2-hreview": {
+        "kind": "hreview",
+        "cost": 1.22714014,
+        "byModel": {
+          "haiku": 1.22714014
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1692,
+        "model": "haiku"
+      },
+      "3-review": {
+        "kind": "review",
+        "cost": 4.340213199999999,
+        "byModel": {
+          "haiku": 0.0002034,
+          "opus": 4.340009799999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1443,
+        "model": "opus"
+      },
+      "4-fix": {
+        "kind": "fix",
+        "cost": 1.1796731999999999,
+        "byModel": {
+          "haiku": 0.0002198,
+          "sonnet": 1.1794533999999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1310,
+        "model": "sonnet"
+      },
+      "5-gate": {
+        "kind": "gate",
+        "cost": 0.9609171,
+        "byModel": {
+          "haiku": 0.0003287,
+          "sonnet": 0.9605883999999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1615,
+        "model": "sonnet"
+      }
+    },
+    "cost": 17.49,
+    "active_min": 166,
+    "span_min": 169,
+    "attempts": 5,
+    "foreign": []
+  },
+  "SRS3": {
+    "steps": {
+      "1-split": {
+        "kind": "split",
+        "cost": 3.7017944,
+        "byModel": {
+          "haiku": 0.0003018,
+          "sonnet": 3.7014926
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1013,
+        "model": "sonnet"
+      },
+      "2-t1-code": {
+        "kind": "t-code",
+        "cost": 0.20635538,
+        "byModel": {
+          "haiku": 0.20635538
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 736,
+        "model": "haiku"
+      },
+      "2-t2-code": {
+        "kind": "t-code",
+        "cost": 0.33765931,
+        "byModel": {
+          "haiku": 0.33765931
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 690,
+        "model": "haiku"
+      },
+      "2-t3-code": {
+        "kind": "t-code",
+        "cost": 0.35644086999999997,
+        "byModel": {
+          "haiku": 0.35644086999999997
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 855,
+        "model": "haiku"
+      },
+      "2-t4-code": {
+        "kind": "t-code",
+        "cost": 0.4432390000000001,
+        "byModel": {
+          "haiku": 0.4432390000000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1552,
+        "model": "haiku"
+      },
+      "2-t5-code": {
+        "kind": "t-code",
+        "cost": 0.6379330000000002,
+        "byModel": {
+          "haiku": 0.6379330000000002
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 2140,
+        "model": "haiku"
+      },
+      "2-t6-code": {
+        "kind": "t-code",
+        "cost": 0.5298831700000001,
+        "byModel": {
+          "haiku": 0.5298831700000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 648,
+        "model": "haiku"
+      },
+      "2-t7-code": {
+        "kind": "t-code",
+        "cost": 0.3828006899999999,
+        "byModel": {
+          "haiku": 0.3828006899999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 486,
+        "model": "haiku"
+      },
+      "3-hreview": {
+        "kind": "hreview",
+        "cost": 5.353198980000001,
+        "byModel": {
+          "haiku": 1.5656908800000005,
+          "opus": 2.8427923999999996,
+          "sonnet": 0.9447156999999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1878,
+        "model": "haiku"
+      },
+      "4-review": {
+        "kind": "review",
+        "cost": 3.9769638,
+        "byModel": {
+          "haiku": 0.0002044,
+          "opus": 3.9767594
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1563,
+        "model": "opus"
+      },
+      "5-fix": {
+        "kind": "fix",
+        "cost": 1.1852637000000006,
+        "byModel": {
+          "haiku": 0.0002202,
+          "sonnet": 1.1850435000000006
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1857,
+        "model": "sonnet"
+      },
+      "6-gate": {
+        "kind": "gate",
+        "cost": 2.0008952,
+        "byModel": {
+          "haiku": 0.0003279,
+          "sonnet": 2.0005673
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1473,
+        "model": "sonnet"
+      }
+    },
+    "cost": 19.11,
+    "active_min": 248,
+    "span_min": 228,
+    "attempts": 12,
+    "foreign": [
+      {
+        "step": "3-hreview",
+        "model": "opus",
+        "cost": 2.84
+      },
+      {
+        "step": "3-hreview",
+        "model": "sonnet",
+        "cost": 0.94
+      }
+    ]
+  },
+  "CHH1": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 9.469642699999993,
+        "byModel": {
+          "haiku": 0.00023810000000000001,
+          "sonnet": 9.469404599999992
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3986,
+        "model": "sonnet"
+      },
+      "2-hA": {
+        "kind": "hA",
+        "cost": 0.6241407300000003,
+        "byModel": {
+          "haiku": 0.6241407300000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 426,
+        "model": "haiku"
+      },
+      "3-hB": {
+        "kind": "hB",
+        "cost": 0.42446290000000003,
+        "byModel": {
+          "haiku": 0.42446290000000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 336,
+        "model": "haiku"
+      },
+      "4-hfix": {
+        "kind": "hfix",
+        "cost": 4.0090515,
+        "byModel": {
+          "haiku": 0.0002282,
+          "sonnet": 4.0088232999999995
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3501,
+        "model": "sonnet"
+      },
+      "5-review": {
+        "kind": "review",
+        "cost": 5.3894879300000005,
+        "byModel": {
+          "haiku": 0.00019053,
+          "opus": 5.3892974
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1601,
+        "model": "opus"
+      },
+      "6-fix": {
+        "kind": "fix",
+        "cost": 2.26407853,
+        "byModel": {
+          "haiku": 0.00020493,
+          "sonnet": 2.2638736
+        },
+        "attempts": 14,
+        "sessions": 1,
+        "wall_s": 1933,
+        "model": "sonnet"
+      },
+      "7-gate": {
+        "kind": "gate",
+        "cost": 1.3435589749999999,
+        "byModel": {
+          "haiku": 0.000405675,
+          "sonnet": 1.3431532999999998
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1113,
+        "model": "sonnet"
+      }
+    },
+    "cost": 23.52,
+    "active_min": 215,
+    "span_min": 410,
+    "attempts": 20,
+    "foreign": []
+  },
+  "CHH2": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 8.399489299999997,
+        "byModel": {
+          "haiku": 0.00023850000000000002,
+          "sonnet": 8.399250799999999
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 4133,
+        "model": "sonnet"
+      },
+      "2-hA": {
+        "kind": "hA",
+        "cost": 0.56202321,
+        "byModel": {
+          "haiku": 0.56202321
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 571,
+        "model": "haiku"
+      },
+      "3-hB": {
+        "kind": "hB",
+        "cost": 0.32571986999999997,
+        "byModel": {
+          "haiku": 0.32571986999999997
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 288,
+        "model": "haiku"
+      },
+      "4-hfix": {
+        "kind": "hfix",
+        "cost": 2.5255032000000006,
+        "byModel": {
+          "haiku": 0.0002308,
+          "sonnet": 2.525272400000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1359,
+        "model": "sonnet"
+      },
+      "5-review": {
+        "kind": "review",
+        "cost": 6.323360875000001,
+        "byModel": {
+          "haiku": 0.000414875,
+          "opus": 6.322946000000002
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1593,
+        "model": "opus"
+      },
+      "6-fix": {
+        "kind": "fix",
+        "cost": 1.443572675,
+        "byModel": {
+          "haiku": 0.00029847500000000003,
+          "sonnet": 1.4432742000000003
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1314,
+        "model": "sonnet"
+      },
+      "7-gate": {
+        "kind": "gate",
+        "cost": 1.15097093,
+        "byModel": {
+          "haiku": 0.0003139300000000001,
+          "sonnet": 1.1506569999999998
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1062,
+        "model": "sonnet"
+      }
+    },
+    "cost": 20.73,
+    "active_min": 172,
+    "span_min": 178,
+    "attempts": 7,
+    "foreign": []
+  },
+  "CHH3": {
+    "steps": {
+      "1-code": {
+        "kind": "code",
+        "cost": 9.4244009,
+        "byModel": {
+          "haiku": 0.00023820000000000002,
+          "sonnet": 9.4241627
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 3223,
+        "model": "sonnet"
+      },
+      "2-hA": {
+        "kind": "hA",
+        "cost": 0.21127085,
+        "byModel": {
+          "haiku": 0.21127085
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 181,
+        "model": "haiku"
+      },
+      "3-hB": {
+        "kind": "hB",
+        "cost": 0.5697447200000001,
+        "byModel": {
+          "haiku": 0.5697447200000001
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 432,
+        "model": "haiku"
+      },
+      "4-hfix": {
+        "kind": "hfix",
+        "cost": 2.4276818000000007,
+        "byModel": {
+          "haiku": 0.0002301,
+          "sonnet": 2.4274517000000007
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1680,
+        "model": "sonnet"
+      },
+      "5-review": {
+        "kind": "review",
+        "cost": 4.896287574999999,
+        "byModel": {
+          "haiku": 0.000282375,
+          "opus": 4.8960051999999985
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 988,
+        "model": "opus"
+      },
+      "6-fix": {
+        "kind": "fix",
+        "cost": 1.00030433,
+        "byModel": {
+          "haiku": 0.00020522999999999998,
+          "sonnet": 1.0000991
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1121,
+        "model": "sonnet"
+      },
+      "7-gate": {
+        "kind": "gate",
+        "cost": 1.2428434299999997,
+        "byModel": {
+          "haiku": 0.00031373,
+          "sonnet": 1.2425296999999997
+        },
+        "attempts": 1,
+        "sessions": 1,
+        "wall_s": 1989,
+        "model": "sonnet"
+      }
+    },
+    "cost": 19.77,
+    "active_min": 160,
+    "span_min": 160,
+    "attempts": 7,
+    "foreign": []
+  }
+}

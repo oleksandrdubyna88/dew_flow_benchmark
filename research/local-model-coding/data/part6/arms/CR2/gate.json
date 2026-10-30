@@ -1,0 +1,26 @@
+{"status":"proceed","why":"plan round proceed (6 rejected, plan frozen); code round 1 proceed with 8 of 8 reviewers, 1 of 16 findings accepted (docs, 4a045a85); final suite 13,767 of 13,886 passed, 118 skipped, 1 known environmental failure (socket path length)",
+ "rounds":[
+ {"stage":"plan","round":1,"verdict":"proceed","asked":2,"answered":2,"findings":[
+  {"severity":"Major","file":"plan §4/S42","summary":"no RoundEngine-level check that results survive a cancelled probe","decision":"reject","reason":"plan frozen for this change","fixedIn":null},
+  {"severity":"Major","file":"plan D4","summary":"missing vs unreadable cooldown file","decision":"reject","reason":"plan frozen; code already separates them (ebbf6b30)","fixedIn":null},
+  {"severity":"Minor","file":"plan §7/§12","summary":"DoD says all scenarios red first, §12 records exceptions","decision":"reject","reason":"plan frozen for this change","fixedIn":null},
+  {"severity":"Major","file":"plan D5/S41","summary":"parks on refusal text although gauge says Available","decision":"reject","reason":"plan frozen; recorded design decision","fixedIn":null},
+  {"severity":"Major","file":"plan D12","summary":"consultation/question rows not tracked","decision":"reject","reason":"plan frozen; D12 names them out of scope","fixedIn":null},
+  {"severity":"Minor","file":"plan D9/S31","summary":"blank cooldown line up to 10 s after expiry","decision":"reject","reason":"plan frozen for this change","fixedIn":null}]},
+ {"stage":"code","round":1,"verdict":"proceed","asked":8,"answered":8,"findings":[
+  {"severity":"Blocking","file":"plan §12","summary":"stories 2-4 coded before tests","decision":"reject","reason":"process history; recorded in §12; reds seen against stubs","fixedIn":null},
+  {"severity":"Major","file":"research/architecture.md","summary":"new cooldown wire member not in architecture.md","decision":"accept","reason":"architecture.md documents --providers members","fixedIn":"4a045a85"},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/ReviewerExecutor.cs","summary":"bool? Spent vs no-null doctrine","decision":"reject","reason":"plan D1 mandates the tri-state","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"malformed/oversized file overwritten under lock","decision":"reject","reason":"plan §8/S19 torn file overwritten by next park; I/O-unreadable refuses","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"30 s per spent key after round","decision":"reject","reason":"plan §8 probe budget","fixedIn":null},
+  {"severity":"Minor","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"read guard 256 KiB vs 16 KiB budget","decision":"reject","reason":"16 KiB is the write budget","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"sync I/O inside Task.Run","decision":"reject","reason":"covered by first review R4","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/AntigravityRuntime.cs","summary":"runtime launches /quota probe","decision":"reject","reason":"plan D3/D6 seam","fixedIn":null},
+  {"severity":"Minor","file":"src_mcp/src/Server/ServerJsonContext.cs","summary":"CooldownReport not registered","decision":"reject","reason":"covered transitively","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/src/Server/PanelService.cs","summary":"auth outranks cooling in ExcludedFrom","decision":"reject","reason":"deliberate; actionable cause first","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"CancellationToken.None on Apply","decision":"reject","reason":"decided in R4","fixedIn":null},
+  {"severity":"Minor","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"JsonException under lock drops entries","decision":"reject","reason":"same as torn file, plan §8","fixedIn":null},
+  {"severity":"Minor","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"raw vendor reason stored","decision":"reject","reason":"already redacted and capped","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"uncached read per decision","decision":"reject","reason":"plan D4","fixedIn":null},
+  {"severity":"Major","file":"src_mcp/runners/Reviewers/QuotaCooldowns.cs","summary":"sequential probes","decision":"reject","reason":"plan §8","fixedIn":null},
+  {"severity":"Minor","file":"src_mcp/runners/Reviewers/QuotaWords.cs","summary":"hours/minutes jump in time left","decision":"reject","reason":"plan: rounded up","fixedIn":null}]}]}
