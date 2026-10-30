@@ -78,7 +78,9 @@ test('The_registered_prompts_differ_only_in_the_stack_slots', () => {
     assert.equal(REGISTERED.prompts.csharp[phase].text.replaceAll(REGISTERED.slots.csharp.STACK_SENTENCE, '{S}').replaceAll('C#', '{L}'),
       REGISTERED.prompts.node[phase].text.replaceAll(REGISTERED.slots.node.STACK_SENTENCE, '{S}').replaceAll('TypeScript', '{L}'), 'equal once the two slots are blanked');
   }
-  assert.match(REGISTERED.slots.csharp.STACK_SENTENCE, /^Use C# 14 on \.NET 10 \(SDK 10\.0\.113 is installed\)\.$/);
+  // the SDK the sentence names is the pinned one, read from stacks.json, so an amended pin cannot leave a stale expectation here
+  const sdk = JSON.parse(readFileSync(path.join(spikeDir, 'inputs/stacks.json'), 'utf8')).pins.dotnetSdk;
+  assert.equal(REGISTERED.slots.csharp.STACK_SENTENCE, `Use C# 14 on .NET 10 (SDK ${sdk} is installed).`);
   assert.match(REGISTERED.slots.node.STACK_SENTENCE, /^Use TypeScript run directly by Node 26 \(native type stripping, no build step\), with `tsc --noEmit` as the type check\.$/);
 });
 
