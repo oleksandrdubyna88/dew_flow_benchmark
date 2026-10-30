@@ -100,4 +100,13 @@ public sealed class BriefFieldsTests
         BriefRehearsal.Problems(BriefExample.Experiment, new RootPaths("/e"), 1, templates).Should().BeEmpty("the example places every field before the step that reads it");
         BriefRehearsal.StemsUsed(BriefExample.Experiment).Should().BeEquivalentTo(BriefTemplates.Shipped);
     }
+
+    [Fact]
+    public void The_fixed_names_are_exactly_the_fields_a_brief_is_filled_with_besides_its_bindings()
+    {
+        var filled = BriefExample.Fields("SRS", 0, "taskCode").Keys.Concat(BriefExample.Fields("SRS", 0, "splitFix").Keys).ToHashSet(StringComparer.Ordinal);
+        var bound = BriefExample.Experiment.Steps.Values.SelectMany(step => step.Outputs).Select(binding => binding.Field).ToHashSet(StringComparer.Ordinal);
+
+        filled.Except(bound).Should().BeEquivalentTo(BriefFields.FixedNames, "the list is derived from what the filler really builds, task fields and PROBLEMS included");
+    }
 }

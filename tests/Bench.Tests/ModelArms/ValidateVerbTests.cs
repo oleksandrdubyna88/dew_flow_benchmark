@@ -256,7 +256,7 @@ public sealed class ValidateVerbTests
     }
 
     [Fact]
-    public async Task A_template_the_schemes_use_that_cannot_be_found_is_refused_naming_it()
+    public async Task An_override_with_a_field_no_step_provides_is_refused_naming_it_and_its_position()
     {
         Posix();
         using var root = await new ExperimentRoot().WithTargetAsync();
@@ -266,6 +266,19 @@ public sealed class ValidateVerbTests
 
         code.Should().Be(4);
         error.Should().Contain("gate.template.md at schemes.C[3] (4-gate):").And.Contain("{{NO_SUCH_FIELD}}");
+    }
+
+    [Fact]
+    public async Task A_step_whose_brief_stem_exists_nowhere_is_refused_naming_the_template_the_step_and_its_position()
+    {
+        Posix();
+        using var root = await new ExperimentRoot().WithTargetAsync();
+        root.Edit(top => top["steps"]!["code"]!["brief"] = "nowhere");
+
+        var (code, _, error) = await RunAsync(root);
+
+        code.Should().Be(4);
+        error.Should().Contain("nowhere.template.md at schemes.C[0] (1-code): step code:").And.Contain("no brief template 'nowhere.template.md'");
     }
 
     [Fact]

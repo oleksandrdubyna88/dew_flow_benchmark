@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FluentAssertions;
+using ModelArms.Core.Briefs;
 using ModelArms.Core.Experiment;
 using Xunit;
 
@@ -108,6 +109,9 @@ public sealed class StepContractTests
     [InlineData("notes//x.md")]
     [InlineData("notes/./x.md")]
     [InlineData("C:/notes/x.md")]
+    [InlineData("Notes/x.md")]
+    [InlineData("NOTES/x.md")]
+    [InlineData("Work/x.md")]
     public void Every_output_is_a_relative_path_under_notes_or_work(string path)
     {
         PosixPaths();
@@ -131,14 +135,14 @@ public sealed class StepContractTests
     }
 
     [Fact]
-    public void Two_fields_of_one_step_naming_one_path_are_refused_without_regard_to_case()
+    public void Two_fields_of_one_step_naming_one_path_are_refused_without_regard_to_case_after_the_folder()
     {
         PosixPaths();
         OutputBinding.Parse("X", "work/a/b.md").Ok().RelativePath.Should().Be("work/a/b.md", "the value is kept as written, and it is the destination");
 
-        var reason = Refused(root => Step(root, "code")["outputs"]!["CODE_TWO"] = "Notes/Code.md");
+        var reason = Refused(root => Step(root, "code")["outputs"]!["CODE_TWO"] = "notes/Code.md");
 
-        HasLine(reason, "steps.code.outputs", "CODE_NOTES and CODE_TWO both name Notes/Code.md");
+        HasLine(reason, "steps.code.outputs", "CODE_NOTES and CODE_TWO both name notes/Code.md");
     }
 
     [Fact]
@@ -277,11 +281,11 @@ public sealed class StepContractTests
         experiment.Steps[new("splitFix")].Notes.Should().Be("SPLIT_NOTES", "the split fix appends to the split's notes, and the file is accepted");
         experiment.Steps[new("splitFix")].Outputs.Should().BeEmpty();
 
-        var late = Refused(root => Step(root, "code")["notes"] = "REVIEW");
+        var late = Refused(root => Step(root, "code")["notes"] = "FIX_NOTES");
 
         foreach (var scheme in new[] { "C", "CR", "CHH" })
         {
-            HasLine(late, $"schemes.{scheme}[0] (1-code):", "notes REVIEW is bound by no step at or before this position (visible: CODE_NOTES)");
+            HasLine(late, $"schemes.{scheme}[0] (1-code):", "notes FIX_NOTES is bound by no step at or before this position (visible: CODE_NOTES)");
         }
 
         var nowhere = Refused(root => Step(root, "code")["notes"] = "NOPE");
@@ -320,7 +324,7 @@ public sealed class StepContractTests
         ExperimentFile.Read(Edited(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json"), Loc).Failed().Should().BeTrue(
             "two producers of one file would make the fixer read one verdict twice");
         HasLine(Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json"), "schemes.CHH", "notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)");
-        HasLine(Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "Notes/HA.json"), "schemes.CHH", "notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)");
+        HasLine(Refused(root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/HA.json"), "schemes.CHH", "notes/hA.json is written by two of its producers: 2-hA (HA_JSON) and 3-hB (HB_JSON)");
         HasLine(
             Refused(root => root["tasks"]!["outputs"]!["TASK_NOTES"] = "notes/hreview.md"),
             "schemes.SRS",
@@ -377,6 +381,134 @@ public sealed class StepContractTests
         Accepted(root => Step(root, "taskCode")["snapshot"] = false).Steps[new("taskCode")].Snapshot.Should().BeFalse();
     }
 
+    [Fact]
+    public void The_split_fix_is_a_step_of_its_own_not_the_split()
+    {
+        PosixPaths();
+
+        var reason = Refused(root => root["tasks"]!["splitFix"] = "split");
+
+        HasLine(reason, "tasks.splitFix", "is 'split' — the split fix is a step of its own, not the split");
+        Lines(reason).Should().ContainSingle("one cause, one sentence: Visible would hold SPLIT_NOTES twice");
+    }
+
+    [Fact]
+    public void A_notes_never_names_a_verdict_the_runner_writes()
+    {
+        PosixPaths();
+
+        HasLine(Refused(root => Step(root, "fix")["notes"] = "REVIEW"), "steps.fix.notes", "is 'REVIEW' — the verdict of step review, which the runner writes; notes are a file the model writes");
+        HasLine(Refused(root => Step(root, "hfix")["notes"] = "HA_JSON"), "steps.hfix.notes", "is 'HA_JSON' — the verdict of step hA, which the runner writes; notes are a file the model writes");
+        var own = Refused(root => Step(root, "review")["notes"] = "REVIEW");
+        HasLine(own, "steps.review.notes", "is 'REVIEW' — the verdict of step review, which the runner writes; notes are a file the model writes");
+        Lines(own).Should().ContainSingle("one cause, one sentence: no second line from the scheme positions");
+    }
+
+    [Fact]
+    public void A_binding_cannot_replace_a_field_every_brief_is_filled_with()
+    {
+        PosixPaths();
+        var names = BriefFields.FixedNames;
+        names.Should().Contain(["PLAN", "NOTES", "WORK", "TASK_BRIEF", "PROBLEMS"], "the scan must still reach the list, or it proves nothing");
+
+        foreach (var name in names)
+        {
+            HasLine(Refused(root => Step(root, "code")["outputs"]![name] = "notes/p.md"), $"steps.code.outputs.{name}", $"{name} is a field every brief is filled with — a binding cannot replace it");
+            HasLine(Refused(root => root["tasks"]!["outputs"]![name] = "notes/p.md"), $"tasks.outputs.{name}", $"{name} is a field every brief is filled with — a binding cannot replace it");
+        }
+    }
+
+    [Fact]
+    public void Diff_from_inside_one_tasks_entry_follows_the_blocks_order()
+    {
+        PosixPaths();
+
+        var reason = Refused(root =>
+        {
+            Step(root, "split")["diffFrom"] = "splitFix";
+            Step(root, "splitFix")["snapshot"] = true;
+        });
+
+        HasLine(reason, "schemes.SRS[0] (split):", "diffFrom splitFix is not placed at or before this position");
+        Accepted(root =>
+        {
+            Step(root, "splitFix")["diffFrom"] = "split";
+            Step(root, "split")["snapshot"] = true;
+        }).Steps[new("splitFix")].DiffFrom.Should().Be("split", "the split runs before its fix");
+    }
+
+    [Fact]
+    public void A_name_that_ends_in_a_newline_is_not_a_run_a_scheme_or_an_entry()
+    {
+        PosixPaths();
+
+        Refused(root => root["runs"]!["part9\n"] = root["runs"]!["part7"]!.DeepClone()).Should().Contain("a run name is letters, digits and dashes");
+        Refused(root => root["schemes"]!["Z\n"] = new JsonArray("1-code:code")).Should().Contain("a scheme name is letters only");
+        HasLine(Refused(root => Scheme(root, "C")[1] = "2-review:review\n"), "schemes.C[1]", "an entry is \"tasks\" or \"<file name>:<step id>\"");
+    }
+
+    [Theory]
+    [InlineData("notes/a\nb.md", "notes/a\\u000Ab.md")]
+    [InlineData("notes/a\u200Bb.md", "notes/a\\u200Bb.md")]
+    [InlineData("notes/ x.md", "notes/ x.md")]
+    [InlineData("notes/x.md ", "notes/x.md ")]
+    [InlineData("notes/a\tb.md", "notes/a\\u0009b.md")]
+    public void An_output_path_segment_with_a_control_or_format_character_or_an_edge_space_is_refused_and_echoed_escaped(string path, string echoed)
+    {
+        PosixPaths();
+
+        var reason = Refused(root => Step(root, "code")["outputs"]!["CODE_NOTES"] = path);
+
+        HasLine(reason, "steps.code.outputs.CODE_NOTES", $"'{echoed}' is not an output path");
+        Lines(reason).Should().ContainSingle("the control character is escaped, so the sentence stays one line");
+    }
+
+    [Fact]
+    public void A_closed_arm_is_an_arm_of_an_earlier_run_never_of_this_one_or_a_later_one()
+    {
+        PosixPaths();
+
+        HasLine(Refused(root => root["runs"]!["part7"]!["closedArms"]!.AsArray().Add("CHH1")), "runs.part7.closedArms[9]", "names 'CHH1', an arm of this run");
+        HasLine(Refused(root => root["runs"]!["part6"]!["closedArms"] = new JsonArray("CHH1")), "runs.part6.closedArms[0]", "names 'CHH1', an arm of a later run part7");
+    }
+
+    [Fact]
+    public void A_taskCode_step_runs_only_inside_a_tasks_entry()
+    {
+        PosixPaths();
+
+        HasLine(Refused(root => Scheme(root, "C").Add("5-coder:taskCode")), "schemes.C[4] (5-coder):", "a taskCode step runs only inside a tasks entry");
+        Accepted(_ => { }).Schemes.Single(scheme => scheme.Name == "SRS").Entries[0].Should().BeOfType<SchemeEntry.Tasks>("the example places its task coder through the block");
+    }
+
+    [Theory]
+    [InlineData("work/tasks.json")]
+    [InlineData("work/batches.json")]
+    [InlineData("work/t1.md")]
+    [InlineData("notes/t1-code.md")]
+    public void A_binding_cannot_name_a_file_the_task_pipeline_writes_in_a_scheme_that_runs_it(string path)
+    {
+        PosixPaths();
+
+        var reason = Refused(root => Step(root, "hreview")["outputs"]!["X"] = path);
+
+        HasLine(reason, "schemes.SRS", $"{path} is a file of the task pipeline");
+        Lines(reason).Should().NotContain(line => line.StartsWith("schemes.CR ", StringComparison.Ordinal), "CR runs no pipeline");
+    }
+
+    [Fact]
+    public void A_binding_that_does_not_parse_is_one_sentence_and_the_names_that_depend_on_it_say_nothing_more()
+    {
+        PosixPaths();
+
+        var gate = Refused(root => Step(root, "gate")["outputs"]!["GATE_JSON"] = "tmp/x");
+        HasLine(gate, "steps.gate.outputs.GATE_JSON", "is not an output path");
+        Lines(gate).Should().ContainSingle("gate.status names the refused field: no second line says it is not one of the outputs");
+
+        var notes = Refused(root => Step(root, "hreview")["outputs"]!["HREVIEW_NOTES"] = "tmp/x");
+        Lines(notes).Should().ContainSingle("hreview.notes names the refused field: no second line says no step binds it, and no scheme line says it is not visible");
+    }
+
     private static readonly Regex DottedPath = new(@"^(schema|rounds|steps|schemes|tasks|runs)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     /// <summary>One edit per sentence family of the table, run through one helper. A sentence that is not produced is not judged here — each scenario above pins that its edit IS
@@ -394,7 +526,7 @@ public sealed class StepContractTests
         root => Scheme(root, "SRS").Add("tasks"),
         root => Step(root, "code")["outputs"]!["CODE_NOTES"] = "tmp/x.md",
         root => Step(root, "code")["outputs"]!["code_notes"] = "notes/x.md",
-        root => Step(root, "code")["outputs"]!["CODE_TWO"] = "Notes/Code.md",
+        root => Step(root, "code")["outputs"]!["CODE_TWO"] = "notes/Code.md",
         root => Step(root, "review").Remove("verdict"),
         root => Step(root, "gate").Remove("status"),
         root => Step(root, "code")["verdict"] = "CODE_NOTES",
@@ -406,7 +538,15 @@ public sealed class StepContractTests
         root => Step(root, "hfix")["diffFrom"] = "review",
         root => Step(root, "hfix")["diffFrom"] = "hB",
         root => Step(root, "code")["notes"] = "NOPE",
-        root => Step(root, "code")["notes"] = "REVIEW",
+        root => Step(root, "code")["notes"] = "FIX_NOTES",
+        root => Step(root, "fix")["notes"] = "REVIEW",
+        root => root["tasks"]!["splitFix"] = "split",
+        root => Step(root, "code")["outputs"]!["PLAN"] = "notes/p.md",
+        root => Step(root, "split")["diffFrom"] = "splitFix",
+        root => root["runs"]!["part6"]!["closedArms"] = new JsonArray("CHH1"),
+        root => Scheme(root, "C").Add("5-coder:taskCode"),
+        root => Step(root, "hreview")["outputs"]!["X"] = "work/tasks.json",
+        root => Step(root, "code")["outputs"]!["CODE_NOTES"] = "notes/a\nb.md",
         root => Step(root, "fix")["outputs"]!["CODE_NOTES"] = "notes/fix2.md",
         root => root["tasks"]!["outputs"]!["HREVIEW_NOTES"] = "notes/hreview.md",
         root => Step(root, "hB")["outputs"]!["HB_JSON"] = "notes/hA.json",

@@ -20,6 +20,9 @@ public sealed record BriefFacts(string Plan, string Base, string Branch, int Sce
 /// of a field is not an error: the shell passed every path to every template, and so does this.</summary>
 public static class BriefFields
 {
+    /// <summary>The names every brief is filled with whatever the bindings say.</summary>
+    public static IReadOnlyList<string> FixedNames { get; } = [];
+
     /// <summary>The fields of the brief of <paramref name="spec"/>: one per visible binding, then the facts and <c>NOTES</c> and the fields of a task or of a split fix. The facts
     /// come last and win: a binding named like a fact would otherwise silently replace it.</summary>
     public static IReadOnlyDictionary<string, string> For(StepSpec spec, IReadOnlyList<OutputBinding> visible, TaskLimits tasks, ArmPaths paths, BriefFacts facts)
