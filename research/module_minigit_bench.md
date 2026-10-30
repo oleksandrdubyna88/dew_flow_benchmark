@@ -362,7 +362,7 @@ whole path on 2026-10-30 (see "The bare-session smoke" below).
   listed in `streamed`; a file over 8 GiB, or one that grew past that while it was read, is a high-severity finding of kind `unscanned` that refutes
   B-S3 and stays in `tooLarge`; the one thing a window cannot see is a token broken by more whitespace than the overlap; a link or pipe in the tree
   is a high-severity finding), `lib/agent-files.mjs` (below), `lib/token-txt.mjs`, `lib/smoke-load.mjs` (`stageSmoke`: the session dir into the
-  capture-shaped layout, `loadSmoke`: a staged or sanitised directory as the verdict rules read it) and `lib/smoke-run.mjs` (`runSmoke`: the
+  capture-shaped layout, `loadSmoke`: a staged or sanitised directory as the verdict rules read it; both read through the one reader, so a link or a pipe in the directory is refused, not followed) and `lib/smoke-run.mjs` (`runSmoke`: the
   preflight, the layout, one launch and `checks.json`; the CLI `smoke-session.mjs` wraps it).
 - **What the agent can write, and what is host-owned** (review of 2026-10-30). The agent is a process that can run arbitrary code in the box,
   so it can write its own instruments: it can `POST` fake OTel records to `127.0.0.1:4318` (the in-box door to the host's receiver, which
@@ -438,6 +438,7 @@ at the proxy and nothing else, 8 audit records with `duration_ms` on every `Post
 | A parent directory swapped for a link between the lstat walk and the open is caught by the descriptor's path, in the reader and in the session scan (before: the file outside the tree was read) | `agent-files.test.mjs`, `agent-files-sites.test.mjs` |
 | A token in a file over the whole-read limit is found at its exact offset once, on a window boundary too (before: the file was listed in `tooLarge`, the scan was clean and B-S3 could hold); a file nobody can scan is a high finding; the scan keeps one file at a time | `session-scan.test.mjs` |
 | B-K2 holds only on an O record after the stop; a broker settlement after it is reported apart and never makes the verdict | `smoke-k2.test.mjs` |
+| `loadSmoke` reads through the one reader: a link among a smoke directory's files or transcripts is refused and its target is not read (before: `readFileSync` followed it) | `agent-files-sites.test.mjs` |
 | A stream reset after `message_start` (200k Sonnet input tokens) is charged 0.40, not the 0.05 reservation; a cut after a small usage is charged at least the reservation; usage with an unknown model is charged at the dearest rates | `broker.test.mjs`, `budget.test.mjs` |
 | A link is `inside` only with no `..` in its target, no link in the path before the last component, and a target under a bind whose box and host paths are the same (before: `sub -> /tmp`, `evil -> sub/../etc/passwd` was `inside`, and so was an absolute `/tmp/...` target, which is the host's `/tmp` for a host reader) | `link-class.test.mjs` |
 

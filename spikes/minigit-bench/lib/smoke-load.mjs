@@ -1,6 +1,6 @@
 // The bare-session smoke as files: staging a session directory into the flat, capture-shaped layout (so E1's loaders and the sanitiser read
 // it) and loading it back. I/O at the edge; the verdicts over what is loaded are pure (smoke-verdicts.mjs).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { agentEntries, readAgentFileUnder } from './agent-files.mjs';
 import { fail, ok } from './result.mjs';
@@ -12,9 +12,6 @@ export const STAGED = Object.freeze({
   'readback.json': 'readback.json', 'checks.json': 'checks.json', 'egress.json': 'egress.json', 'broker.json': 'broker.json', 'stderr.txt': 'stderr.txt',
 });
 export const REQUIRED_STAGED = Object.freeze(['stream.ndjson', 'otlp-raw.ndjson', 'argv.json', 'meta.json', 'broker.ndjson', 'egress.ndjson', 'readback.json', 'checks.json']);
-
-/** Every file under `dir` (absolute), for the loader of a sanitised fixture, which holds regular files only. */
-const walk = dir => (existsSync(dir) ? agentEntries(dir).map(e => path.join(dir, e.rel)) : []);
 
 /** The `{ rel, dest, required }` rows of what a session dir stages: the named files, then every file under `transcripts/`. A non-regular transcript entry is `odd`. */
 function stagingPlan(from) {
@@ -47,7 +44,12 @@ export function stageSmoke(from, to) {
   return ok(present.map(r => r.dest));
 }
 
-const readText = (dir, name) => (existsSync(path.join(dir, name)) ? readFileSync(path.join(dir, name), 'utf8') : '');
+/** `{ text }` of a file under `dir` read through the one reader (`''` when absent), or `{ refused }` naming a link, a pipe, a link among its directories or an oversize file. */
+function readText(dir, name) {
+  const r = readAgentFileUnder(dir, name);
+  if (r === null) return { text: '' };
+  return r.unreadable ? { refused: `${name}: ${r.unreadable}` } : { text: r.toString('utf8') };
+}
 
 function parseLines(name, text) {
   const out = [];
@@ -58,16 +60,24 @@ function parseLines(name, text) {
   return ok(out);
 }
 
-/** A staged (or sanitised) smoke directory as the verdict rules read it. */
+/** A staged (or sanitised) smoke directory as the verdict rules read it. Every read goes through lib/agent-files.mjs: a link or a pipe is refused, never followed. */
 export function loadSmoke(dir) {
   const missing = REQUIRED_STAGED.filter(f => !existsSync(path.join(dir, f)));
   if (missing.length > 0) return fail(`${dir} lacks ${missing.join(', ')}`);
   const names = ['stream.ndjson', 'stream.stamped.ndjson', 'otlp-raw.ndjson', 'broker.ndjson', 'egress.ndjson', 'audit.ndjson', 'watchdog.ndjson'];
-  const parsed = names.map(n => [n, parseLines(n, readText(dir, n))]);
+  const jsonNames = ['meta.json', 'argv.json', 'readback.json', 'checks.json'];
+  const reads = [...names, ...jsonNames].map(n => [n, readText(dir, n)]);
+  const tdir = path.join(dir, 'transcripts');
+  const entries = existsSync(tdir) ? agentEntries(tdir) : [];
+  const transcriptReads = entries.map(e => [path.join('transcripts', e.rel), e.kind === 'file' ? readText(dir, path.join('transcripts', e.rel)) : { refused: `transcripts/${e.rel}: ${e.kind}` }]);
+  const refused = [...reads, ...transcriptReads].filter(([, r]) => r.refused).map(([, r]) => r.refused);
+  if (refused.length > 0) return fail(`the smoke directory holds path(s) that are not plain regular files (${refused.join('; ')}): nothing was loaded`);
+  const text = Object.fromEntries(reads.map(([n, r]) => [n, r.text]));
+  const parsed = names.map(n => [n, parseLines(n, text[n])]);
   const bad = parsed.find(([, p]) => !p.ok);
   if (bad) return bad[1];
   const [events, stamped, sink, brokerLines, egressLines, audit, watchdog] = parsed.map(([, p]) => p.value);
-  const transcripts = walk(path.join(dir, 'transcripts')).map(f => ({ relPath: path.relative(path.join(dir, 'transcripts'), f).split(path.sep).join('/'), text: readFileSync(f, 'utf8') }));
-  const json = n => JSON.parse(readText(dir, n) || 'null');
+  const transcripts = transcriptReads.map(([rel, r]) => ({ relPath: path.relative('transcripts', rel).split(path.sep).join('/'), text: r.text }));
+  const json = n => JSON.parse(text[n] || 'null');
   return ok({ events, stamped, sink, brokerLines, egressLines, audit, watchdog, transcripts, hooks: [], meta: json('meta.json'), argv: json('argv.json'), readback: json('readback.json'), checks: json('checks.json') });
 }

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { readCaptureFiles } from '../capture/capture-files.mjs';
 import { scanSessionDir } from '../lib/session-scan.mjs';
-import { stageSmoke } from '../lib/smoke-load.mjs';
+import { loadSmoke, stageSmoke } from '../lib/smoke-load.mjs';
 import { tokenTxtFact } from '../lib/token-txt.mjs';
 import { copyTranscripts } from '../lib/transcripts.mjs';
 import { fakeToken } from './broker-stub.mjs';
@@ -135,4 +135,28 @@ test('The_scan_uses_no_byte_of_a_file_whose_parent_directory_was_swapped_for_a_l
   const found = scan.links.find(l => l.rel === path.join('box', 'out', 'd', 'f.txt'));
   assert.equal(found?.severity, 'high', JSON.stringify(scan.links));
   assert.equal(found.kind, 'swapped');
+});
+
+test('Loading_a_smoke_directory_reads_through_the_one_reader_so_a_link_among_its_files_or_transcripts_is_refused_not_followed', () => {
+  const stage = () => {
+    const dir = sessionDir();
+    const to = path.join(tmpDir('af-load'), 's');
+    assert.equal(stageSmoke(dir, to).ok, true);
+    return to;
+  };
+  assert.equal(loadSmoke(stage()).ok, true, 'control: a regular directory loads');
+  const target = decoy();
+  const viaTranscript = stage();
+  write(path.join(viaTranscript, 'transcripts', 'main.jsonl'), '{}\n');
+  rmSync(path.join(viaTranscript, 'transcripts', 'main.jsonl'));
+  symlinkSync(target, path.join(viaTranscript, 'transcripts', 'main.jsonl'));
+  const a = loadSmoke(viaTranscript);
+  assert.equal(a.ok, false, 'a linked transcript is refused');
+  assert.equal(JSON.stringify(a).includes('HOST-DECOY'), false, 'and its target was not read');
+  const viaNamed = stage();
+  rmSync(path.join(viaNamed, 'audit.ndjson'), { force: true });
+  symlinkSync(target, path.join(viaNamed, 'audit.ndjson'));
+  const b = loadSmoke(viaNamed);
+  assert.equal(b.ok, false, 'a linked audit.ndjson is refused');
+  assert.equal(JSON.stringify(b).includes('HOST-DECOY'), false);
 });
