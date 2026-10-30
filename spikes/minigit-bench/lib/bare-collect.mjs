@@ -1,5 +1,6 @@
 // Reading a finished (or cut-short) session back and classifying how it ENDED (E3b.S1 steps 5, 7): the evidence files of its directory, the scans that decide
 // `stop: security` and `void: contaminated`, the alias check, E1's views and the cost, then `bareOutcome`. No model call and no write: the runner writes.
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkAliases, aliasRecord } from './aliases.mjs';
@@ -53,7 +54,13 @@ export function collectSession({ layout, plan, launched, canaryTokens = [], alia
   const classed = bareOutcome({ meta, events, brokerLines, aliasCheck, scan: { hits: scan.hits.length }, contamination, handVerdicts, retired, abortReason, recomputeUsd });
   // T1 (the envelope disagrees with itself) under policy `stop` is a SERIES stop beside the class (registered, review M4): the class is how the session ended and stays, the flag says why the series stopped
   const t1Stop = views.c.t1.verdict === 'stop' ? { rule: 'T1 breach', detail: views.c.t1.detail } : null;
-  const outcome = t1Stop ? { ...classed, flags: [...classed.flags, 'T1 breach'] } : classed;
-  const usd = Math.max(stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null }) ?? 0, sessionSpendUsd(brokerLines));
-  return ok({ loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, t1Stop, usd, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } });
+  const t2 = views.c.t2;
+  const t2Incomplete = t2.status === 'breach' || (t2.status === 'unchecked' && /otel|lower bound/.test(t2.why ?? '')); // T2: O is not the envelope, or is incomplete: a flag, never a class; the cell stays and is marked
+  const figure = stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: meta.broker?.spentUsd ?? null });
+  const measured = stopRuleFigure({ envelopeUsd: meta.envelopeCostUsd ?? null, recomputeUsd, brokerUsd: null }); // the broker figure of a session with no meta is a synthetic 0 (`disposedMeta`)
+  // A spend of 0 is a MEASUREMENT only when some basis exists: a figure, or a broker ledger that saw no request. With neither, 0 is a gap in the evidence and is flagged, never silent.
+  const costCaptured = measured !== null || existsSync(layout.files.brokerLog);
+  const outcome = { ...classed, flags: [...classed.flags, ...(t1Stop ? ['T1 breach'] : []), ...(t2Incomplete ? ['otel incomplete'] : []), ...(costCaptured ? [] : ['cost not captured'])] };
+  const usd = Math.max(figure ?? 0, sessionSpendUsd(brokerLines));
+  return ok({ loaded: loaded.value, views, cost, alias, aliasCheck, baselineWas: aliasBaseline, outcome, t1Stop, usd, costCaptured, meta, scan: { scanned: scan.scanned, tooLarge: scan.tooLarge, hits: scan.hits.length } });
 }

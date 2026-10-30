@@ -165,3 +165,28 @@ test('model_api_is_the_partitions_model_category_so_a_killed_session_without_an_
   assert.equal(whole.time.descriptive.value.durationApiMs.known, true);
   assert.equal(whole.time.descriptive.value.durationApiMs.value, views.E.durationApiMs);
 });
+
+test('The_record_says_how_many_children_ran_at_once_and_what_it_could_not_capture', () => {
+  const views = smokeViewsOf();
+  const agent = (id, startMs, endMs) => ({ id, agentId: id, startMs, endMs, requestedModel: 'sonnet', resolvedModel: 'claude-sonnet-5-5' });
+  const many = smokeRecord({ views: { ...views, agents: [agent('a', 0, 100), agent('b', 50, 150), agent('c', 60, 70), agent('d', 200, 300)] } });
+  assert.equal(many.time.children.value.launched, 4);
+  assert.equal(many.time.children.value.maxConcurrent, 3, 'a, b and c overlap between 60 and 70');
+  const open = smokeRecord({ views: { ...views, agents: [agent('a', 0, null), agent('b', 10, 20)] } });
+  assert.equal(open.time.children.value.maxConcurrent, 2, 'a child that never reported an end is open to the end of the session');
+  assert.equal(open.time.children.value.openEnded, 1, 'and the record says one end was not captured');
+  assert.equal(smokeRecord({ views: { ...views, agents: [] } }).time.children.value.maxConcurrent, 0);
+});
+
+test('A_stamp_that_was_never_taken_and_a_session_that_was_not_cut_short_are_not_captured_never_null_as_known', () => {
+  const noStamp = smokeRecord({ run: { mask: '0-5', maskObserved: true, spawnStampMs: null, startSkewMs: null, quiet: null, spin: null, harnessIdentity: 'a'.repeat(64), preregTag: 't', cliVersion: '2.1.310' } });
+  assert.equal(noStamp.run.spawnStampMs.known, false);
+  assert.match(noStamp.run.spawnStampMs.why, /no spawn/);
+  const whole = smokeRecord();
+  assert.equal(whole.cost.censoredAtUsd.known, false, 'a completed session is not censored: that is a reason, not a known null');
+  assert.match(whole.cost.censoredAtUsd.why, /not cut short/);
+  const killed = smokeRecord({ outcome: { class: 'killed: wall', data: true, flags: [], detail: {}, censoredAtUsd: 2.5 } });
+  assert.deepEqual([killed.cost.censoredAtUsd.known, killed.cost.censoredAtUsd.value], [true, 2.5]);
+  const noFigure = smokeRecord({ outcome: { class: 'killed: wall', data: true, flags: [], detail: {}, censoredAtUsd: null } });
+  assert.equal(noFigure.cost.censoredAtUsd.known, false, 'a kill with no cost figure of any basis has no censoring point to state');
+});

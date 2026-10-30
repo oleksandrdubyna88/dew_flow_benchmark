@@ -136,3 +136,33 @@ test('A_canary_or_a_credential_in_an_evidence_file_over_16_MiB_is_found_not_skip
   appendFileSync(path.join(credential.work, 'big.log'), `ghp_${'a1B2'.repeat(9)}`);
   assert.ok(['void: contaminated', 'stop: security'].includes(collect(credential).outcome.class), 'a GitHub token shape in a big file is a hit too');
 });
+
+test('A_session_with_no_cost_evidence_of_any_kind_is_flagged_not_silently_charged_zero', () => {
+  const empty = layoutPaths(tmpDir('series'), 'abc123');
+  mkdirSync(empty.dir, { recursive: true });
+  const r = collect(empty, { aliasBaseline: { aliases: {}, internal: {} } });
+  assert.equal(r.usd, 0);
+  assert.equal(r.costCaptured, false, 'no envelope, no broker log: the 0 is a gap in the evidence, not a measurement');
+  assert.ok(r.outcome.flags.includes('cost not captured'), r.outcome.flags.join());
+  const logged = layoutPaths(tmpDir('series'), 'abc123');
+  mkdirSync(logged.dir, { recursive: true });
+  writeFileSync(logged.files.brokerLog, '');
+  const known = collect(logged, { aliasBaseline: { aliases: {}, internal: {} } });
+  assert.equal(known.costCaptured, true, 'an empty broker log is a ledger that saw no request: a known zero');
+  assert.ok(!known.outcome.flags.includes('cost not captured'));
+  assert.equal(collect(sessionFromFixture()).costCaptured, true);
+});
+
+test('A_T2_breach_marks_the_session_otel_incomplete_as_a_flag', () => {
+  const layout = sessionFromFixture();
+  const { table, policy } = ctx();
+  const dropped = path.join(layout.otel, 'otel-raw.ndjson');
+  const lines = readFileSync(dropped, 'utf8').split('\n').filter(Boolean);
+  writeFileSync(dropped, `${lines.slice(0, Math.ceil(lines.length / 2)).join('\n')}\n`); // half of the OTel records never arrived
+  const r = collectSession({ layout, plan: PLAN, launched: null, aliasBaseline: baselineOf(layout), table, policy });
+  assert.equal(r.ok, true, r.reason);
+  assert.notEqual(r.value.views.c.t2.status, 'pass', 'half of the OTel records are gone: T2 does not pass');
+  assert.ok(r.value.outcome.flags.includes('otel incomplete'));
+  assert.equal(r.value.outcome.class, 'completed', 'a flag never changes the class');
+  assert.ok(!collect(sessionFromFixture()).outcome.flags.includes('otel incomplete'), 'control: the whole record set has no such flag');
+});

@@ -19,7 +19,7 @@ const costPart = ({ outcome, views, cost, meta }) => {
     cliTotalUsd: E.known ? known(E.totalCostUsd) : notCaptured(E.why),
     brokerUsd: B?.present ? known(B.spentUsd) : notCaptured('no broker ledger'),
     stopRuleUsd: maybe(stopRuleFigure({ envelopeUsd: E.known ? E.totalCostUsd : null, recomputeUsd: cost.known ? cost.usd : null, brokerUsd: B?.present ? B.spentUsd : null }), 'no cost figure of any basis'),
-    censoredAtUsd: known(outcome.censoredAtUsd ?? null),
+    censoredAtUsd: outcome.class.startsWith('killed') ? maybe(outcome.censoredAtUsd, 'a killed session with no cost figure of any basis') : notCaptured('not censored: the session was not cut short'),
     perModel: cost.known && cost.perModel ? known(cost.perModel) : notCaptured(cost.known ? 'the cost view has no per-model split' : cost.why),
     tokens: E.known ? known(Object.fromEntries(Object.entries(E.perModel).map(([m, l]) => [m, { input: l.input, output: l.output, cacheRead: l.cacheRead, cacheWrite: l.cacheWrite ?? null }]))) : notCaptured(E.why),
     firstTurnCacheRead: maybe(views.S.messages.find(m => m.source === 'main')?.cacheRead, 'no main assistant message in the stream'),
@@ -27,6 +27,16 @@ const costPart = ({ outcome, views, cost, meta }) => {
     metaBrokerOvershootUsd: maybe(meta.broker?.overshootUsd, 'the launch recorded no overshoot'),
   };
 };
+
+/** The most children that ran at once, from their reported start and end (ms). A child with no reported end is open to the end of the session and counted in `openEnded`; one with no start is `unknownStart` and not counted. */
+function concurrency(agents) {
+  const timed = agents.filter(a => finite(a.startMs));
+  const edges = timed.flatMap(a => [[a.startMs, 1], [finite(a.endMs) ? a.endMs : Infinity, -1]]).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  let now = 0;
+  let max = 0;
+  for (const [, d] of edges) { now += d; max = Math.max(max, now); }
+  return { maxConcurrent: max, openEnded: timed.filter(a => !finite(a.endMs)).length, unknownStart: agents.length - timed.length };
+}
 
 const timePart = ({ views, meta }) => {
   const E = views.E;
@@ -43,7 +53,7 @@ const timePart = ({ views, meta }) => {
     partition: part.known ? known({ categories: part.categories, unattributed: part.unattributed, waits: part.waits }) : notCaptured(part.why),
     descriptive: part.known ? known({ build_test: part.categories.build_test, other_tool: part.categories.other_tool, durationApiMs: E.known ? maybe(E.durationApiMs, 'the envelope carries no duration_api_ms') : notCaptured(E.why), note: 'descriptive only: a chained Bash call counts as its highest category (V16)' }) : notCaptured(part.why),
     turns: E.known ? known({ envelope: E.numTurns, assistantMessages: assistant, agree: E.numTurns === assistant }) : notCaptured(E.why),
-    children: known({ launched: views.agents.length, perModel: Object.fromEntries(Object.entries(Object.groupBy(views.agents, a => a.resolvedModel ?? a.requestedModel ?? 'unresolved')).map(([m, l]) => [m, l.length])) }),
+    children: known({ launched: views.agents.length, ...concurrency(views.agents), perModel: Object.fromEntries(Object.entries(Object.groupBy(views.agents, a => a.resolvedModel ?? a.requestedModel ?? 'unresolved')).map(([m, l]) => [m, l.length])) }),
   };
 };
 
@@ -69,7 +79,7 @@ export function sessionRecord({ ids, outcome, run, views, cost, aliasRecord, ali
   return {
     ids, class: outcome.class, data: outcome.data, flags: outcome.flags, detail: outcome.detail, discrepancies,
     run: {
-      mask: known(run.mask), maskObserved: run.maskObserved === undefined ? notCaptured('the sampler did not observe the mask') : known(run.maskObserved), spawnStampMs: known(run.spawnStampMs),
+      mask: known(run.mask), maskObserved: run.maskObserved === undefined ? notCaptured('the sampler did not observe the mask') : known(run.maskObserved), spawnStampMs: maybe(run.spawnStampMs, 'no spawn was stamped: the launch ended before the box was spawned'),
       startSkewMs: maybe(run.startSkewMs, 'a session run alone has no partner to skew against'), quiet: maybe(run.quiet, 'no quiet record'), spin: maybe(run.spin, 'no spin record'),
       harnessIdentity: known(run.harnessIdentity), preregTag: known(run.preregTag), cliVersion: known(run.cliVersion),
     },
