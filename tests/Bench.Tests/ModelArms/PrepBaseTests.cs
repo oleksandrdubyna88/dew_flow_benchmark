@@ -367,15 +367,24 @@ public sealed class PrepBaseTests
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var running = ModelArmsApp.Program.RunAsync(["prep-base", "--experiment", bench.Root.Root], new StringWriter(), new StringWriter(), bench.Root.Environment, stop.Token);
 
-        // The stop lands when the suite shim has STARTED (it recorded itself, then sleeps), not on a timer a loaded machine can beat.
-        var started = DateTime.UtcNow;
-        while (!bench.Recorded().Any(call => IsSuite(call)) && DateTime.UtcNow - started < TimeSpan.FromSeconds(120))
+        try
         {
-            await Task.Delay(50, TestContext.Current.CancellationToken);
+            // The stop lands when the suite shim has STARTED (it recorded itself, then sleeps), not on a timer a loaded machine can beat.
+            var started = DateTime.UtcNow;
+            while (!bench.Recorded().Any(call => IsSuite(call)) && DateTime.UtcNow - started < TimeSpan.FromSeconds(120))
+            {
+                await Task.Delay(50, TestContext.Current.CancellationToken);
+            }
+
+            bench.Recorded().Should().Contain(call => IsSuite(call), "the suite must have started before the stop, or the test proves another stop");
+        }
+        finally
+        {
+            // Whatever happened above, the verb is stopped and awaited before the scratch folder goes: it never runs on into a folder being removed.
+            await stop.CancelAsync();
+            await Task.WhenAny(running, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
         }
 
-        bench.Recorded().Should().Contain(call => IsSuite(call), "the suite must have started before the stop, or the test proves another stop");
-        await stop.CancelAsync();
         var act = () => running;
 
         await act.Should().ThrowAsync<OperationCanceledException>("the stop travels up to Main, which says to run the same command again");

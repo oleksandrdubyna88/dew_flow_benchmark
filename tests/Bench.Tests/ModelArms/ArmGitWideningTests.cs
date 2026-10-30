@@ -320,6 +320,7 @@ public sealed class ArmGitWideningTests : IDisposable
     private const string CleanOnly = "clean";
     private const string WithProcessAndRequired = "process";
     private const string NamedWithEquals = "equals";
+    private const string EmptyName = "empty";
 
     /// <summary>Plants a filter driver the clone names, proves it live with the host's git, and leaves the dirty file ready.</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
@@ -327,7 +328,7 @@ public sealed class ArmGitWideningTests : IDisposable
     {
         var clone = await ClonedAsync();
         var program = PlantProgram("filter");
-        var driver = plant == NamedWithEquals ? "a=b" : "x";
+        var driver = plant switch { NamedWithEquals => "a=b", EmptyName => string.Empty, _ => "x" };
         AppendConfig(Path.Combine(clone, ".git"), $"[filter \"{driver}\"]\n\tclean = {program}\n" + (plant == WithProcessAndRequired ? $"\tprocess = {program}\n\trequired = true\n" : string.Empty));
         AppendAttributes(Path.Combine(clone, ".git"), $"* filter={driver}\n");
         await ProveLiveAsync(clone, Path.Combine(clone, "a.txt"), "status", "--porcelain");
@@ -338,6 +339,7 @@ public sealed class ArmGitWideningTests : IDisposable
     [InlineData(CleanOnly)]
     [InlineData(WithProcessAndRequired)]
     [InlineData(NamedWithEquals)]
+    [InlineData(EmptyName)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task A_filter_driver_the_clone_names_never_runs_for_the_count(string plant)
     {
@@ -353,6 +355,7 @@ public sealed class ArmGitWideningTests : IDisposable
     [InlineData(CleanOnly)]
     [InlineData(WithProcessAndRequired)]
     [InlineData(NamedWithEquals)]
+    [InlineData(EmptyName)]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task A_filter_driver_the_clone_names_never_runs_for_a_new_branch(string plant)
     {

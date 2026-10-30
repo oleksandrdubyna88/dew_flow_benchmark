@@ -166,13 +166,13 @@ public sealed partial class ArmGit(string git, string workingDirectory, IReadOnl
         };
     }
 
-    /// <summary>For each filter driver named by a key (<c>filter.&lt;driver&gt;.&lt;variable&gt;</c>; the driver may hold dots, <c>=</c>, quotes or spaces — the key is used verbatim): <c>clean</c>, <c>smudge</c> and <c>process</c> empty and <c>required</c> false, as four
+    /// <summary>For each filter driver named by a key (<c>filter.&lt;driver&gt;.&lt;variable&gt;</c>; the driver may be EMPTY (<c>[filter ""]</c> is the key <c>filter..clean</c>) and may hold dots, <c>=</c>, quotes or spaces — the key is used verbatim): <c>clean</c>, <c>smudge</c> and <c>process</c> empty and <c>required</c> false, as four
     /// <c>GIT_CONFIG_KEY_n</c>/<c>VALUE_n</c> pairs counted by <c>GIT_CONFIG_COUNT</c>. Environment variables, not <c>-c</c>: <c>-c</c> splits at the first <c>=</c>, so a driver named <c>a=b</c> slips past it.</summary>
     private IReadOnlyDictionary<string, string> Neutralised(string names)
     {
         var drivers = names.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Select(name => name.LastIndexOf('.') is var last && last > Filter.Length ? name[Filter.Length..last] : string.Empty)
-            .Where(driver => driver.Length > 0)
+            .Select(name => name.LastIndexOf('.') is var last && last >= Filter.Length ? name[Filter.Length..last] : null)
+            .OfType<string>()
             .Distinct(StringComparer.Ordinal)
             .ToList();
         var launched = new Dictionary<string, string>(_environment, StringComparer.Ordinal);
