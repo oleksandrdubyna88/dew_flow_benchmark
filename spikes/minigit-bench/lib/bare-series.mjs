@@ -98,14 +98,20 @@ async function gates({ ctx, deps, step, state, h, say, signal }) {
 
 // ---- a launch step --------------------------------------------------------------------------------------------------------------
 
-async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
-  const items = ctx.kind === 'data' ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
-  for (const item of items) {
+/** The sessions of a launch step, planned in the run-map when they are new, and only those still `planned`: a session that already ended (its partner was reset by a resume) is never launched again (`ran -> launching` is not a transition). */
+function planItems({ ctx, h, step }) {
+  const all = ctx.kind === 'data' ? itemsOf({ ctx, step }) : step.sessions.map(s => ({ session: s, rid: s.rid, mask: h.get().sessions[s.rid].mask }));
+  for (const item of all) {
     if (h.get().sessions[item.rid] === undefined) {
       h.apply(planSession(h.get(), { rid: item.rid, pair: ctx.pair, ...item.session, kind: ctx.kind, label: step.label, mask: item.mask }));
     }
   }
-  const stopped = await gates({ ctx, deps, step, state, h, say, signal });
+  return all.filter(item => h.get().sessions[item.rid].status === 'planned');
+}
+
+async function runLaunch({ ctx, deps, h, step, state, signal, say }) {
+  const items = planItems({ ctx, h, step });
+  const stopped = await gates({ ctx, deps, step: { ...step, sessions: items.map(i => i.session) }, state, h, say, signal });
   if (stopped) return stopped;
   if (step.phase === 'v2' && h.get().pairs?.[ctx.pair]?.barrierAtMs === undefined) h.commit({ ...h.get(), pairs: { ...(h.get().pairs ?? {}), [ctx.pair]: { ...(h.get().pairs?.[ctx.pair] ?? {}), barrierAtMs: deps.now() } } });
   for (const item of items) h.apply(transition(h.get(), item.rid, 'launching', { startedAt: new Date(deps.now()).toISOString() }));
@@ -132,6 +138,17 @@ function pendingStops(map) {
 }
 
 const unsettledOf = map => Object.values(map.sessions).filter(s => s.status === 'launching').map(s => s.rid);
+
+/**
+ * A series stop an ended session carries is recorded as soon as no session is unsettled (review MINOR-2), and the loop looks at the top of every pass and a resume at its end: a resume that plans an unread
+ * partner again (nothing paid) never goes through `settleSessions`, which is where the stop was recorded, so the stop would be lost and the partner launched and paid for. -> the stops now recorded (`[]` for none).
+ */
+function recordWaitingStop({ h, deps }) {
+  const stops = pendingStops(h.get());
+  if (stops.length === 0 || unsettledOf(h.get()).length > 0 || h.get().stopped) return [];
+  h.commit(markStopped(h.get(), { rule: stops[0].rule, reason: JSON.stringify(stops[0].detail), at: new Date(deps.now()).toISOString() }));
+  return stops;
+}
 
 /**
  * Classify, charge and persist EVERY session of a finished phase, then act. A series stop is persisted ONLY when no session of the map is still `launching` (review C1): a stopped
@@ -165,10 +182,7 @@ async function settleSessions({ ctx, deps, h, phase, state, signal, say }) {
   }
   const stops = pendingStops(h.get());
   const waiting = unsettledOf(h.get());
-  if (stops.length > 0 && waiting.length === 0 && !h.get().stopped) {
-    const [first] = stops;
-    h.commit(markStopped(h.get(), { rule: first.rule, reason: JSON.stringify(first.detail), at: new Date(deps.now()).toISOString() }));
-  }
+  recordWaitingStop({ h, deps });
   if (h.get().stopped && waiting.length === 0) return done(EXIT.stop, `${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}: the series stops${failures.length > 0 ? `; ${failures.join('; ')}` : ''}`);
   if (failures.length > 0) {
     const pending = stops.length > 0 ? `; a series stop is waiting (${stops.map(x => `${x.rule} in ${x.rid}`).join(', ')}): it is recorded when every session is settled, so resume settles ${waiting.join(', ')} first` : '';
@@ -233,6 +247,7 @@ export async function runLoop({ ctx: given, deps, map, signal, say = () => {} })
   const state = { quiet: null, sampler: null, v1Quiet: h.get().pairs?.[ctx.pair]?.v1Quiet ?? null };
   for (let guard = 0; guard < 60; guard += 1) {
     if (signal?.aborted) return { ...cancelled(ctx, 'between steps'), map: h.get() };
+    recordWaitingStop({ h, deps });
     if (h.get().stopped) return { ...done(EXIT.stop, `the series is stopped (${h.get().stopped.rule}): nothing more is launched. A stop is final for its series: fix the named cause and start a new series (init, then an A/A that is GO)`), map: h.get() };
     applyHandVerdicts({ ctx, h, say });
     const step = ctx.kind === 'data' ? nextStep(pairState(h.get(), ctx.pair)) : fixedStep(h.get(), ctx.kind);
@@ -326,6 +341,7 @@ export async function reconcile({ ctx, deps, map, say = () => {}, settleOnly = f
     const failed = await settleLaunching({ ctx, deps, h, a, settleOnly, say });
     if (failed) return failed;
   }
+  recordWaitingStop({ h, deps }); // a reset partner never reaches `settleSessions`: the stop its partner carries is recorded here
   return ok(h.get());
 }
 

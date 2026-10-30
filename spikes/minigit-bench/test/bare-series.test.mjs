@@ -685,6 +685,64 @@ test('A_session_directory_with_a_state_file_nobody_can_read_is_no_live_owner_and
   assert.equal(r.ok, true, r.reason);
 });
 
+/** A pair's v1 phase cut short by a crash: the first session ended (`ran`, with what the settle recorded), its partner was left `launching` with no directory (nothing paid). */
+async function endedAndUnreadPartner(t, { kind = 'data', stopRules } = {}) {
+  const { planSession, writeRunMap } = await import('../lib/run-map.mjs');
+  const pair = kind === 'data' ? 1 : 0;
+  const ids = kind === 'data' ? [rid('csharp', 'v1', 1), rid('node', 'v1', 1)] : ['aatwin1', 'aatwin2'];
+  const stacks = kind === 'data' ? ['csharp', 'node'] : ['csharp', 'csharp'];
+  let map = t.map;
+  ids.forEach((id, i) => { map = planSession(map, { rid: id, pair, stack: stacks[i], phase: 'v1', attempt: 1, kind, label: 'paired', mask: ['0-5', '8-13'][i], dummy: 'sk-ant-oat01-dummy-resume' }).value; });
+  for (const id of ids) map = transition(map, id, 'launching').value;
+  map = transition(map, ids[0], 'ran', { class: 'completed', data: true, usd: 1, run: { mask: '0-5', flags: [] }, dummy: 'sk-ant-oat01-dummy-resume', canaryTokens: [], ...(stopRules ? { stopRules } : {}) }).value;
+  mkdirSync(path.join(t.ctx.sessionsRoot, ids[0]), { recursive: true });
+  const layout = layoutPaths(t.ctx.sessionsRoot, ids[0]);
+  lay(layout, undefined);
+  mkdirSync(layout.work, { recursive: true });
+  writeFileSync(path.join(layout.work, 'Program.cs'), 'class P {}\n'); // the v1 tree the v2 phase starts from
+  writeRunMap(t.ctx.runMapFile, map);
+  return { map, ids };
+}
+
+test('A_series_stop_an_ended_session_carries_is_recorded_when_resume_resets_its_unread_partner_and_nothing_is_launched', async () => {
+  for (const kind of ['data', 'aa']) {
+    const t = harness();
+    t.ctx.kind = kind;
+    t.ctx.pair = kind === 'data' ? 1 : 0;
+    const { map, ids } = await endedAndUnreadPartner(t, { kind, stopRules: [{ rule: 'T5 unchecked', detail: 'no broker ledger' }] });
+    const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+    assert.equal(settled.ok, true, `${kind}: ${settled.reason}`);
+    assert.equal(settled.value.sessions[ids[1]].status, 'planned', `${kind}: the unread partner paid nothing and is planned again`);
+    assert.equal(settled.value.stopped?.rule, 'T5 unchecked', `${kind}: the waiting stop is recorded at the end of the resume, because no session is left unsettled`);
+    const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: settled.value });
+    assert.equal(r.exit, EXIT.stop, `${kind}: ${r.message}`);
+    assert.deepEqual(t.launched, [], `${kind}: the stop comes before any launch`);
+    assert.equal(readRunMap(t.ctx.runMapFile).value.stopped?.rule, 'T5 unchecked', `${kind}: and it is on disk`);
+  }
+});
+
+test('A_loop_that_starts_with_a_waiting_stop_and_nothing_unsettled_records_it_before_the_first_launch', async () => {
+  const t = harness();
+  const { map, ids } = await endedAndUnreadPartner(t, { stopRules: [{ rule: 'T1 breach', detail: 'x' }] });
+  const planned = transition(map, ids[1], 'planned').value; // what a resume that did not record the stop would hand the loop
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: planned });
+  assert.equal(r.exit, EXIT.stop, r.message);
+  assert.match(r.message, /T1 breach/);
+  assert.deepEqual(t.launched, []);
+  assert.equal(readRunMap(t.ctx.runMapFile).value.stopped?.rule, 'T1 breach');
+});
+
+test('A_pair_whose_first_session_ended_and_whose_partner_was_reset_launches_only_the_partner_and_does_not_crash_on_ran_to_launching', async () => {
+  const t = harness();
+  const { map, ids } = await endedAndUnreadPartner(t);
+  const settled = await reconcile({ ctx: t.ctx, deps: t.deps, map });
+  assert.equal(settled.ok, true, settled.reason);
+  const r = await runLoop({ ctx: t.ctx, deps: t.deps, map: settled.value });
+  assert.equal(r.exit, EXIT.done, r.message);
+  assert.equal(t.launched.includes(ids[0]), false, 'the session that ended is not launched again');
+  assert.equal(t.launched[0], ids[1], 'only its partner is launched in the v1 phase');
+});
+
 // ---- the fixed lists and the rehearsal (review N15) ---------------------------------------------------------------------------------------
 
 test('A_fixed_list_run_launches_only_the_sessions_of_its_own_kind', async () => {
